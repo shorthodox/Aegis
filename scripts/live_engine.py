@@ -235,24 +235,44 @@ def load_backtest_results(json_path: Path) -> Dict[str, Dict[str, Any]]:
     with open(json_path, 'r') as f:
         data = json.load(f)
 
+    # --- NORMALIZATION START ---
+    # Handle the case where the JSON is a dictionary instead of a list
+    if isinstance(data, dict):
+        # Check if it's a map of symbols, e.g., {"BTC/USDT": {"mode": "balanced", ...}}
+        if any(isinstance(v, dict) for v in data.values()):
+            data = [{"symbol": k, **v} for k, v in data.items()]
+        else:
+            # It's a single result object, wrap it in a list
+            data = [data]
+    # --- NORMALIZATION END ---
+
     if not isinstance(data, list):
-        raise TypeError(f"Expected list, got {type(data)}")
+        raise TypeError(f"Expected list or dict, got {type(data)}")
 
     symbol_entries: Dict[str, List[Dict]] = {}
     for entry in data:
         if not isinstance(entry, dict):
             continue
+            
         symbol = entry.get("symbol")
         if not symbol:
             continue
+            
         mode = entry.get("mode")
         if not mode:
             continue
+            
+        # Extract performance metrics
         net_return = entry.get("net_return_pct", 0.0)
         max_dd = entry.get("max_drawdown_pct", 0.0)
+        
+        # Calculate MAR (Managed Account Ratio) to rank the "best" settings
         safe_dd = max(max_dd, 0.1)
         mar = net_return / safe_dd
+        
+        # Retrieve baseline parameters from the global MODE_PARAMS
         params = MODE_PARAMS.get(mode, MODE_PARAMS["balanced"])
+        
         symbol_entries.setdefault(symbol, []).append({
             "mode": mode,
             "mar": mar,
@@ -268,12 +288,13 @@ def load_backtest_results(json_path: Path) -> Dict[str, Dict[str, Any]]:
             "risk_pct": params["risk_pct"],
         })
 
+    # Select the best performing mode (highest MAR) for each unique token
     best_per_token = {}
     for sym, entries in symbol_entries.items():
         best = max(entries, key=lambda x: x["mar"])
         best_per_token[sym] = best
 
-    logger.info(f"Loaded {len(best_per_token)} tokens (only those found in backtest JSON)")
+    logger.info(f"Loaded {len(best_per_token)} tokens from {json_path.name}")
     return best_per_token
 
 # -------------------------------------------------------------------
