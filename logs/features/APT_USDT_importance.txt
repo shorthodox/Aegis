@@ -1,0 +1,12 @@
+Feature importance (gain) for APT/USDT
+==================================================
+efficiency_ratio_10                 : 94.953293
+linreg_r2_14                        : 23.133265
+volatility_regime                   : 8.949069
+bb_width_percentile                 : 7.287722
+williams_r                          : 5.831175
+price_zscore_200                    : 5.724458
+keltner_width                       : 5.330862
+adx_14                              : 4.833109
+ichimoku_chikou                     : 4.814398
+btc_corr_24h                        : 4.741468

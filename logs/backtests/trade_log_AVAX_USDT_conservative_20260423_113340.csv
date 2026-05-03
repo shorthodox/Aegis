@@ -1,0 +1,11 @@
+symbol,mode,candle_index,timestamp,direction,prob,base_threshold,adjusted_threshold,expected_net_pct,confidence_level,vol_regime,trend_strength,trend_aligned,volume_condition,size_tier,size_factor,entry_price,exit_price,pnl,return_pct,decision
+AVAX/USDT,conservative,570,2026-01-13 03:00:00,long,0.7666,0.45,0.594,0.8543,normal,normal,normal,False,low,full,1.0,13.59,0.0,0.0,0.0,taken
+AVAX/USDT,conservative,657,2026-01-16 18:00:00,long,0.7756,0.45,0.459,0.5753,normal,low,strong,True,normal,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+AVAX/USDT,conservative,1253,2026-02-10 14:00:00,long,0.754,0.45,0.5832,0.8211,normal,low,normal,False,high,full,1.0,8.76,0.0,0.0,0.0,taken
+AVAX/USDT,conservative,1259,2026-02-10 20:00:00,long,0.7567,0.45,0.5832,0.7335,normal,low,normal,False,high,full,1.0,8.7,0.0,0.0,0.0,taken
+AVAX/USDT,conservative,1271,2026-02-11 08:00:00,long,0.8024,0.45,0.5346,0.9514,very_high,low,normal,False,low,full,1.0,8.55,0.0,0.0,0.0,taken
+AVAX/USDT,conservative,1273,2026-02-11 10:00:00,long,0.8176,0.45,0.4374,0.9742,very_high,low,normal,False,high,full,1.0,8.53,0.0,0.0,0.0,taken
+AVAX/USDT,conservative,1307,2026-02-12 20:00:00,long,0.7938,0.45,0.486,1.123,normal,normal,normal,False,high,full,1.0,8.7,0.0,0.0,0.0,taken
+AVAX/USDT,conservative,1679,2026-02-28 08:00:00,long,0.796,0.45,0.3825,1.1091,normal,normal,strong,True,normal,full,1.0,8.49,0.0,0.0,0.0,taken
+AVAX/USDT,conservative,1681,2026-02-28 10:00:00,long,0.7972,0.45,0.3825,1.1702,normal,normal,strong,True,normal,full,1.0,8.51,0.0,0.0,0.0,taken
+AVAX/USDT,conservative,1683,2026-02-28 12:00:00,long,0.7773,0.45,0.3443,1.0633,normal,normal,strong,True,high,full,1.0,8.51,0.0,0.0,0.0,taken

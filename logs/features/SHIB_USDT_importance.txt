@@ -1,0 +1,22 @@
+Feature importance (gain) for SHIB/USDT
+==================================================
+efficiency_ratio_10                 : 86.375908
+rsi_14                              : 14.270402
+ret_12h                             : 12.533502
+williams_r                          : 12.491486
+linreg_slope_14                     : 8.193663
+ichimoku_tenkan                     : 7.739424
+low                                 : 7.657242
+ichimoku_chikou                     : 7.092528
+volatility_regime                   : 6.916982
+adx_14                              : 6.771619
+vwap                                : 6.573817
+macd_hist                           : 6.384564
+bb_width_percentile                 : 6.122694
+acc_dist                            : 6.087795
+dist_vwap                           : 6.029333
+volume_atr_efficiency               : 5.930594
+btc_dist_ema200                     : 5.896250
+price_zscore_200                    : 5.892339
+cmf_20                              : 5.627525
+atr_14                              : 5.568463

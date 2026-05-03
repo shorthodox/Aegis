@@ -1,0 +1,11 @@
+Feature importance (gain) for NIGHT/USDT
+==================================================
+efficiency_ratio_10                 : 18.595001
+linreg_r2_14                        : 11.668140
+ema_21                              : 10.525351
+ichimoku_kijun                      : 9.530912
+bb_width_percentile                 : 9.039790
+keltner_lower                       : 8.834022
+choppiness                          : 8.644163
+keltner_upper                       : 7.907990
+vwap                                : 6.498436

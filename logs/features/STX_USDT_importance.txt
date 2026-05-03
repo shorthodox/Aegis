@@ -1,0 +1,16 @@
+Feature importance (gain) for STX/USDT
+==================================================
+efficiency_ratio_10                 : 124.298027
+linreg_r2_14                        : 29.501696
+choppiness                          : 15.916517
+volatility_regime                   : 14.307586
+keltner_width                       : 11.746982
+dist_ema_9                          : 11.348392
+keltner_upper                       : 10.677202
+dist_vwap                           : 9.695974
+keltner_lower                       : 9.244657
+ema_200                             : 8.871347
+ichimoku_chikou                     : 8.820915
+force_index                         : 8.173063
+stoch_k                             : 8.171529
+btc_corr_24h                        : 7.363235

@@ -1,0 +1,15 @@
+Feature importance (gain) for BNB/USDT
+==================================================
+efficiency_ratio_10                 : 55.569492
+linreg_r2_14                        : 15.483076
+volatility_regime                   : 8.206406
+williams_r                          : 5.011709
+market_phase                        : 4.912444
+dist_ema_9                          : 4.099942
+ichimoku_chikou                     : 3.946356
+linreg_slope_14                     : 3.913747
+ichimoku_tenkan                     : 3.364029
+atr_14                              : 3.209135
+adx_14                              : 3.189393
+acc_dist                            : 2.992327
+cmf_20                              : 2.534437

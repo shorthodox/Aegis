@@ -1,0 +1,8 @@
+symbol,mode,candle_index,timestamp,direction,prob,base_threshold,adjusted_threshold,expected_net_pct,confidence_level,vol_regime,trend_strength,trend_aligned,volume_condition,size_tier,size_factor,entry_price,exit_price,pnl,return_pct,decision
+STX/USDT,aggressive,330,2026-01-03 03:00:00,long,0.6575,0.2,0.1301,1.2049,normal,high,strong,True,high,full,1.0,0.2931,0.0,0.0,0.0,taken
+STX/USDT,aggressive,332,2026-01-03 05:00:00,long,0.6641,0.2,0.1301,1.2933,normal,high,strong,True,high,full,1.0,0.2983,0.0,0.0,0.0,taken
+STX/USDT,aggressive,334,2026-01-03 07:00:00,long,0.6614,0.2,0.1301,1.3125,normal,high,strong,True,high,full,1.0,0.2961,0.0,0.0,0.0,taken
+STX/USDT,aggressive,1063,2026-02-02 16:00:00,long,0.6546,0.2,0.1301,1.9302,normal,high,strong,True,high,full,1.0,0.2856,0.0,0.0,0.0,taken
+STX/USDT,aggressive,1065,2026-02-02 18:00:00,long,0.6662,0.2,0.1301,2.3087,normal,high,strong,True,high,full,1.0,0.2925,0.0,0.0,0.0,taken
+STX/USDT,aggressive,1067,2026-02-02 20:00:00,long,0.668,0.2,0.1301,2.1843,normal,high,strong,True,high,full,1.0,0.2908,0.0,0.0,0.0,taken
+STX/USDT,aggressive,1069,2026-02-02 22:00:00,long,0.6704,0.2,0.1301,2.3397,normal,high,strong,True,high,full,1.0,0.2916,0.0,0.0,0.0,taken

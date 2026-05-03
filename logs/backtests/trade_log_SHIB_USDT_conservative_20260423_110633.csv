@@ -1,0 +1,7 @@
+symbol,mode,candle_index,timestamp,direction,prob,base_threshold,adjusted_threshold,expected_net_pct,confidence_level,vol_regime,trend_strength,trend_aligned,volume_condition,size_tier,size_factor,entry_price,exit_price,pnl,return_pct,decision
+SHIB/USDT,conservative,335,2026-01-03 07:00:00,long,0.8081,0.45,0.2195,1.5444,very_high,high,strong,True,high,full,1.0,8e-06,0.0,0.0,0.0,taken
+SHIB/USDT,conservative,337,2026-01-03 09:00:00,long,0.8232,0.45,0.3787,1.3518,very_high,high,normal,False,low,full,1.0,8e-06,0.0,0.0,0.0,taken
+SHIB/USDT,conservative,339,2026-01-03 11:00:00,long,0.7994,0.45,0.3576,1.1315,normal,high,strong,True,low,full,1.0,8e-06,0.0,0.0,0.0,taken
+SHIB/USDT,conservative,341,2026-01-03 13:00:00,long,0.8312,0.45,0.2438,1.0954,very_high,high,strong,True,normal,full,1.0,8e-06,0.0,0.0,0.0,taken
+SHIB/USDT,conservative,343,2026-01-03 15:00:00,long,0.8267,0.45,0.4455,0.9703,very_high,normal,normal,False,low,full,1.0,8e-06,0.0,0.0,0.0,taken
+SHIB/USDT,conservative,2726,2026-04-12 22:00:00,long,0.7793,0.45,0.5832,0.376,normal,low,normal,False,high,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered

@@ -1,0 +1,32 @@
+Feature importance (gain) for FET/USDT
+==================================================
+efficiency_ratio_10                 : 116.313576
+linreg_r2_14                        : 19.066519
+volatility_regime                   : 14.521317
+close                               : 13.557766
+open                                : 11.150715
+low                                 : 10.578143
+adx_14                              : 10.487817
+ichimoku_chikou                     : 10.284970
+trend_regime                        : 9.998154
+ichimoku_kijun                      : 8.591831
+high                                : 8.346985
+obv                                 : 8.326880
+ema_200                             : 7.997911
+keltner_lower                       : 7.925252
+btc_dist_ema200                     : 7.336966
+vwap                                : 7.220950
+choppiness                          : 7.096584
+ichimoku_senkou_a                   : 7.066306
+dist_ema_100                        : 7.044602
+keltner_width                       : 7.035694
+ichimoku_senkou_b                   : 6.886406
+mfi_14                              : 6.868691
+dist_vwap                           : 6.858971
+williams_r                          : 6.764091
+volatility_skew                     : 6.546978
+dist_ema_21                         : 6.440737
+aroon_up                            : 6.429990
+price_zscore_200                    : 6.422702
+aroon_osc                           : 6.163149
+acc_dist                            : 6.084424

@@ -1,0 +1,2 @@
+symbol,mode,candle_index,timestamp,direction,prob,base_threshold,adjusted_threshold,expected_net_pct,confidence_level,vol_regime,trend_strength,trend_aligned,volume_condition,size_tier,size_factor,entry_price,exit_price,pnl,return_pct,decision
+OP/USDT,balanced,2811,2026-04-16 11:00:00,long,0.7001,0.3,0.324,0.7745,normal,normal,normal,False,high,full,1.0,0.1231,0.0,0.0,0.0,taken

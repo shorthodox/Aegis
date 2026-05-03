@@ -1,0 +1,32 @@
+Feature importance (gain) for BCH/USDT
+==================================================
+efficiency_ratio_10                 : 83.067200
+linreg_r2_14                        : 23.479584
+ichimoku_tenkan                     : 11.485451
+close                               : 10.903377
+volatility_regime                   : 10.747426
+macd                                : 10.397477
+dist_ema_21                         : 10.179674
+choppiness                          : 9.767628
+dist_ema_9                          : 9.754016
+low                                 : 9.619504
+high                                : 9.361867
+vi_minus                            : 9.186516
+dist_ema_50                         : 9.175326
+open                                : 8.958731
+ichimoku_chikou                     : 7.925299
+williams_r                          : 7.877837
+linreg_slope_14                     : 7.853474
+ultimate_osc                        : 7.591910
+historical_volatility               : 7.067581
+aroon_down                          : 6.968003
+macd_signal                         : 6.864868
+ema_9                               : 6.820479
+ichimoku_kijun                      : 6.622889
+ema_200                             : 6.600082
+keltner_width                       : 6.589348
+price_zscore_200                    : 6.558894
+atr_14                              : 6.512336
+macd_hist                           : 6.394773
+ichimoku_senkou_b                   : 6.128427
+ret_24h                             : 5.996821

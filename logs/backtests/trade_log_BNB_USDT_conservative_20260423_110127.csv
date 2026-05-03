@@ -1,0 +1,15 @@
+symbol,mode,candle_index,timestamp,direction,prob,base_threshold,adjusted_threshold,expected_net_pct,confidence_level,vol_regime,trend_strength,trend_aligned,volume_condition,size_tier,size_factor,entry_price,exit_price,pnl,return_pct,decision
+BNB/USDT,conservative,339,2026-01-03 11:00:00,long,0.7568,0.1,0.132,0.0303,normal,normal,normal,False,low,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+BNB/USDT,conservative,1324,2026-02-13 12:00:00,long,0.7756,0.45,0.459,0.5902,normal,low,strong,True,normal,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+BNB/USDT,conservative,1325,2026-02-13 13:00:00,long,0.7778,0.45,0.4131,0.6264,normal,low,strong,True,high,full,1.0,598.65,0.0,0.0,0.0,taken
+BNB/USDT,conservative,1472,2026-02-19 16:00:00,long,0.7581,0.1,0.0765,0.4628,normal,normal,strong,True,high,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+BNB/USDT,conservative,1473,2026-02-19 17:00:00,long,0.7717,0.1,0.085,0.5538,normal,normal,strong,True,normal,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+BNB/USDT,conservative,1479,2026-02-19 23:00:00,long,0.7541,0.1,0.132,0.4948,normal,normal,normal,False,low,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+BNB/USDT,conservative,1612,2026-02-25 12:00:00,long,0.7516,0.1,0.108,0.5243,normal,normal,normal,False,high,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+BNB/USDT,conservative,1683,2026-02-28 11:00:00,long,0.7685,0.45,0.4131,0.6951,normal,high,normal,False,high,full,1.0,594.56,0.0,0.0,0.0,taken
+BNB/USDT,conservative,2586,2026-04-07 02:00:00,long,0.7716,0.45,0.5049,0.1852,normal,high,normal,False,low,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+BNB/USDT,conservative,2587,2026-04-07 03:00:00,long,0.7652,0.45,0.5049,0.157,normal,high,normal,False,low,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+BNB/USDT,conservative,2588,2026-04-07 04:00:00,long,0.777,0.45,0.3576,0.1748,normal,high,strong,True,low,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+BNB/USDT,conservative,2590,2026-04-07 06:00:00,long,0.7817,0.45,0.5049,0.1826,normal,high,normal,False,low,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+BNB/USDT,conservative,2730,2026-04-13 02:00:00,long,0.7672,0.1,0.132,0.0966,normal,normal,normal,False,low,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+BNB/USDT,conservative,2813,2026-04-16 13:00:00,long,0.7542,0.1,0.108,0.1335,normal,normal,normal,False,high,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered

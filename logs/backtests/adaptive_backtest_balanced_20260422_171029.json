@@ -1,0 +1,16 @@
+[
+  {
+    "symbol": "BTC/USDT",
+    "mode": "balanced",
+    "total_trades": 29,
+    "win_rate": 100.0,
+    "profit_factor": 10.0,
+    "net_return_pct": 63.35,
+    "max_drawdown_pct": 0.0,
+    "avg_trade_return_pct": 1.95,
+    "sharpe_ratio": 384.949,
+    "skipped_cost": 193,
+    "skipped_threshold": 0,
+    "trade_log": [
+      {
+        "timestamp": 

@@ -1,0 +1,32 @@
+Feature importance (gain) for FIL/USDT
+==================================================
+efficiency_ratio_10                 : 23.356571
+linreg_r2_14                        : 7.955667
+williams_r                          : 5.345213
+volatility_regime                   : 5.230174
+dist_ema_21                         : 5.171847
+close                               : 5.039490
+macd_hist                           : 4.811930
+ema_50_200_cross                    : 4.753963
+keltner_lower                       : 4.724326
+ichimoku_chikou                     : 4.605891
+low                                 : 4.491765
+keltner_upper                       : 4.400925
+linreg_slope_14                     : 4.375824
+ichimoku_kijun                      : 4.109020
+obv                                 : 3.866247
+vwap                                : 3.638359
+atr_14                              : 3.605691
+ichimoku_senkou_a                   : 3.441559
+dist_ema_9                          : 3.373310
+aroon_up                            : 3.309156
+btc_dist_ema200                     : 3.276337
+acc_dist                            : 3.114898
+dist_vwap                           : 2.971356
+dist_ema_200                        : 2.932737
+mfi_14                              : 2.912212
+btc_corr_24h                        : 2.822759
+vi_minus                            : 2.776635
+keltner_width                       : 2.672154
+aroon_osc                           : 2.487837
+historical_volatility               : 2.378454

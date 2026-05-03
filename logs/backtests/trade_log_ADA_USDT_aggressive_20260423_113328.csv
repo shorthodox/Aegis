@@ -1,0 +1,8 @@
+symbol,mode,candle_index,timestamp,direction,prob,base_threshold,adjusted_threshold,expected_net_pct,confidence_level,vol_regime,trend_strength,trend_aligned,volume_condition,size_tier,size_factor,entry_price,exit_price,pnl,return_pct,decision
+ADA/USDT,aggressive,2426,2026-03-31 11:00:00,long,0.6766,0.162,0.1239,0.691,normal,normal,strong,True,high,full,1.0,0.2411,0.0,0.0,0.0,taken
+ADA/USDT,aggressive,2429,2026-03-31 14:00:00,long,0.6601,0.162,0.1487,0.7995,normal,high,normal,False,high,full,1.0,0.2399,0.0,0.0,0.0,taken
+ADA/USDT,aggressive,2474,2026-04-02 11:00:00,long,0.6518,0.162,0.1515,0.7942,normal,normal,strong,True,low,full,1.0,0.2369,0.0,0.0,0.0,taken
+ADA/USDT,aggressive,2775,2026-04-15 00:00:00,long,0.6649,0.162,0.1287,0.7639,normal,high,strong,True,low,full,1.0,0.2405,0.0,0.0,0.0,taken
+ADA/USDT,aggressive,2777,2026-04-15 02:00:00,long,0.6601,0.162,0.1287,0.7572,normal,high,strong,True,low,full,1.0,0.2397,0.0,0.0,0.0,taken
+ADA/USDT,aggressive,2791,2026-04-15 16:00:00,long,0.6571,0.162,0.1239,0.52,normal,normal,strong,True,high,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+ADA/USDT,aggressive,2792,2026-04-15 17:00:00,long,0.6623,0.162,0.1239,0.5728,normal,normal,strong,True,high,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered

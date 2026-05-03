@@ -1,0 +1,506 @@
+{
+  "timestamp": "2026-04-22T17:06:36.189554",
+  "config": {
+    "data_hours": 3000,
+    "min_trades": 10,
+    "min_profit_factor": 1.2,
+    "min_regime_candles": 100
+  },
+  "results": [
+    {
+      "symbol": "BTC/USDT",
+      "regime_thresholds": [
+        {
+          "volatility": "normal",
+          "volume": "normal",
+          "optimal_threshold_pct": 0.3
+        },
+        {
+          "volatility": "normal",
+          "volume": "high",
+          "optimal_threshold_pct": 0.1
+        },
+        {
+          "volatility": "high",
+          "volume": "high",
+          "optimal_threshold_pct": 0.1
+        }
+      ]
+    },
+    {
+      "symbol": "ETH/USDT",
+      "regime_thresholds": [
+        {
+          "volatility": "any",
+          "volume": "any",
+          "optimal_threshold_pct": 0.1,
+          "note": "fallback (overall)"
+        }
+      ]
+    },
+    {
+      "symbol": "SOL/USDT",
+      "regime_thresholds": [
+        {
+          "volatility": "normal",
+          "volume": "normal",
+          "optimal_threshold_pct": 0.6
+        }
+      ]
+    },
+    {
+      "symbol": "BNB/USDT",
+      "regime_thresholds": [
+        {
+          "volatility": "normal",
+          "volume": "normal",
+          "optimal_threshold_pct": 0.1
+        },
+        {
+          "volatility": "normal",
+          "volume": "high",
+          "optimal_threshold_pct": 0.1
+        }
+      ]
+    },
+    {
+      "symbol": "XRP/USDT",
+      "regime_thresholds": [
+        {
+          "volatility": "normal",
+          "volume": "normal",
+          "optimal_threshold_pct": 0.1
+        },
+        {
+          "volatility": "normal",
+          "volume": "high",
+          "optimal_threshold_pct": 0.1
+        }
+      ]
+    },
+    {
+      "symbol": "ASTER/USDT",
+      "regime_thresholds": [
+        {
+          "volatility": "normal",
+          "volume": "normal",
+          "optimal_threshold_pct": 0.1
+        },
+        {
+          "volatility": "normal",
+          "volume": "high",
+          "optimal_threshold_pct": 0.1
+        }
+      ]
+    },
+    {
+      "symbol": "RENDER/USDT",
+      "regime_thresholds": [
+        {
+          "volatility": "normal",
+          "volume": "normal",
+          "optimal_threshold_pct": 0.1
+        }
+      ]
+    },
+    {
+      "symbol": "AVAX/USDT",
+      "regime_thresholds": [
+        {
+          "volatility": "any",
+          "volume": "any",
+          "optimal_threshold_pct": 0.45,
+          "note": "fallback (overall)"
+        }
+      ]
+    },
+    {
+      "symbol": "LTC/USDT",
+      "regime_thresholds": [
+        {
+          "volatility": "any",
+          "volume": "any",
+          "optimal_threshold_pct": 0.1,
+          "note": "fallback (overall)"
+        }
+      ]
+    },
+    {
+      "symbol": "BCH/USDT",
+      "regime_thresholds": [
+        {
+          "volatility": "normal",
+          "volume": "normal",
+          "optimal_threshold_pct": 0.3
+        },
+        {
+          "volatility": "normal",
+          "volume": "high",
+          "optimal_threshold_pct": 0.35
+        },
+        {
+          "volatility": "high",
+          "volume": "high",
+          "optimal_threshold_pct": 0.45
+        }
+      ]
+    },
+    {
+      "symbol": "SHIB/USDT",
+      "regime_thresholds": [
+        {
+          "volatility": "any",
+          "volume": "any",
+          "optimal_threshold_pct": 0.1,
+          "note": "fallback (overall)"
+        }
+      ]
+    },
+    {
+      "symbol": "TON/USDT",
+      "regime_thresholds": [
+        {
+          "volatility": "normal",
+          "volume": "normal",
+          "optimal_threshold_pct": 0.1
+        },
+        {
+          "volatility": "normal",
+          "volume": "high",
+          "optimal_threshold_pct": 0.1
+        }
+      ]
+    },
+    {
+      "symbol": "ICP/USDT",
+      "regime_thresholds": [
+        {
+          "volatility": "normal",
+          "volume": "low",
+          "optimal_threshold_pct": 0.25
+        },
+        {
+          "volatility": "normal",
+          "volume": "normal",
+          "optimal_threshold_pct": 0.1
+        },
+        {
+          "volatility": "normal",
+          "volume": "high",
+          "optimal_threshold_pct": 0.1
+        },
+        {
+          "volatility": "high",
+          "volume": "high",
+          "optimal_threshold_pct": 0.1
+        }
+      ]
+    },
+    {
+      "symbol": "ARB/USDT",
+      "regime_thresholds": [
+        {
+          "volatility": "low",
+          "volume": "normal",
+          "optimal_threshold_pct": 0.5
+        },
+        {
+          "volatility": "normal",
+          "volume": "low",
+          "optimal_threshold_pct": 0.1
+        },
+        {
+          "volatility": "normal",
+          "volume": "normal",
+          "optimal_threshold_pct": 0.1
+        },
+        {
+          "volatility": "normal",
+          "volume": "high",
+          "optimal_threshold_pct": 0.1
+        },
+        {
+          "volatility": "high",
+          "volume": "high",
+          "optimal_threshold_pct": 0.1
+        }
+      ]
+    },
+    {
+      "symbol": "FIL/USDT",
+      "regime_thresholds": [
+        {
+          "volatility": "normal",
+          "volume": "low",
+          "optimal_threshold_pct": 0.1
+        },
+        {
+          "volatility": "normal",
+          "volume": "normal",
+          "optimal_threshold_pct": 0.5
+        },
+        {
+          "volatility": "normal",
+          "volume": "high",
+          "optimal_threshold_pct": 0.1
+        },
+        {
+          "volatility": "high",
+          "volume": "high",
+          "optimal_threshold_pct": 0.1
+        }
+      ]
+    },
+    {
+      "symbol": "VET/USDT",
+      "regime_thresholds": [
+        {
+          "volatility": "any",
+          "volume": "any",
+          "optimal_threshold_pct": 0.1,
+          "note": "fallback (overall)"
+        }
+      ]
+    },
+    {
+      "symbol": "INJ/USDT",
+      "regime_thresholds": [
+        {
+          "volatility": "any",
+          "volume": "any",
+          "optimal_threshold_pct": 0.1,
+          "note": "fallback (overall)"
+        }
+      ]
+    },
+    {
+      "symbol": "TIA/USDT",
+      "regime_thresholds": [
+        {
+          "volatility": "normal",
+          "volume": "low",
+          "optimal_threshold_pct": 0.1
+        },
+        {
+          "volatility": "normal",
+          "volume": "normal",
+          "optimal_threshold_pct": 0.1
+        },
+        {
+          "volatility": "normal",
+          "volume": "high",
+          "optimal_threshold_pct": 0.6
+        },
+        {
+          "volatility": "high",
+          "volume": "high",
+          "optimal_threshold_pct": 0.1
+        }
+      ]
+    },
+    {
+      "symbol": "FET/USDT",
+      "regime_thresholds": [
+        {
+          "volatility": "any",
+          "volume": "any",
+          "optimal_threshold_pct": 0.1,
+          "note": "fallback (overall)"
+        }
+      ]
+    },
+    {
+      "symbol": "THETA/USDT",
+      "regime_thresholds": [
+        {
+          "volatility": "normal",
+          "volume": "normal",
+          "optimal_threshold_pct": 1.0
+        },
+        {
+          "volatility": "normal",
+          "volume": "high",
+          "optimal_threshold_pct": 0.75
+        }
+      ]
+    },
+    {
+      "symbol": "GRT/USDT",
+      "regime_thresholds": [
+        {
+          "volatility": "low",
+          "volume": "normal",
+          "optimal_threshold_pct": 0.1
+        },
+        {
+          "volatility": "normal",
+          "volume": "low",
+          "optimal_threshold_pct": 0.75
+        },
+        {
+          "volatility": "normal",
+          "volume": "normal",
+          "optimal_threshold_pct": 0.75
+        },
+        {
+          "volatility": "normal",
+          "volume": "high",
+          "optimal_threshold_pct": 0.5
+        },
+        {
+          "volatility": "high",
+          "volume": "normal",
+          "optimal_threshold_pct": 1.0
+        },
+        {
+          "volatility": "high",
+          "volume": "high",
+          "optimal_threshold_pct": 0.1
+        }
+      ]
+    },
+    {
+      "symbol": "PYTH/USDT",
+      "regime_thresholds": [
+        {
+          "volatility": "normal",
+          "volume": "low",
+          "optimal_threshold_pct": 0.45
+        },
+        {
+          "volatility": "normal",
+          "volume": "normal",
+          "optimal_threshold_pct": 0.6
+        },
+        {
+          "volatility": "normal",
+          "volume": "high",
+          "optimal_threshold_pct": 0.75
+        },
+        {
+          "volatility": "high",
+          "volume": "high",
+          "optimal_threshold_pct": 0.1
+        }
+      ]
+    },
+    {
+      "symbol": "ONDO/USDT",
+      "regime_thresholds": [
+        {
+          "volatility": "low",
+          "volume": "low",
+          "optimal_threshold_pct": 0.1
+        },
+        {
+          "volatility": "normal",
+          "volume": "low",
+          "optimal_threshold_pct": 0.5
+        },
+        {
+          "volatility": "normal",
+          "volume": "normal",
+          "optimal_threshold_pct": 0.6
+        },
+        {
+          "volatility": "normal",
+          "volume": "high",
+          "optimal_threshold_pct": 0.1
+        },
+        {
+          "volatility": "high",
+          "volume": "high",
+          "optimal_threshold_pct": 0.1
+        }
+      ]
+    },
+    {
+      "symbol": "PEPE/USDT",
+      "regime_thresholds": [
+        {
+          "volatility": "any",
+          "volume": "any",
+          "optimal_threshold_pct": 0.1,
+          "note": "fallback (overall)"
+        }
+      ]
+    },
+    {
+      "symbol": "FLOKI/USDT",
+      "regime_thresholds": [
+        {
+          "volatility": "normal",
+          "volume": "high",
+          "optimal_threshold_pct": 0.1
+        }
+      ]
+    },
+    {
+      "symbol": "BONK/USDT",
+      "regime_thresholds": [
+        {
+          "volatility": "any",
+          "volume": "any",
+          "optimal_threshold_pct": 0.75,
+          "note": "fallback (overall)"
+        }
+      ]
+    },
+    {
+      "symbol": "ENA/USDT",
+      "regime_thresholds": [
+        {
+          "volatility": "normal",
+          "volume": "low",
+          "optimal_threshold_pct": 0.1
+        },
+        {
+          "volatility": "normal",
+          "volume": "normal",
+          "optimal_threshold_pct": 0.1
+        },
+        {
+          "volatility": "normal",
+          "volume": "high",
+          "optimal_threshold_pct": 0.6
+        }
+      ]
+    },
+    {
+      "symbol": "SKY/USDT",
+      "regime_thresholds": [
+        {
+          "volatility": "low",
+          "volume": "low",
+          "optimal_threshold_pct": 0.1
+        },
+        {
+          "volatility": "normal",
+          "volume": "low",
+          "optimal_threshold_pct": 0.3
+        },
+        {
+          "volatility": "normal",
+          "volume": "normal",
+          "optimal_threshold_pct": 0.35
+        },
+        {
+          "volatility": "normal",
+          "volume": "high",
+          "optimal_threshold_pct": 0.1
+        }
+      ]
+    },
+    {
+      "symbol": "TRUMP/USDT",
+      "regime_thresholds": [
+        {
+          "volatility": "any",
+          "volume": "any",
+          "optimal_threshold_pct": 0.1,
+          "note": "fallback (overall)"
+        }
+      ]
+    }
+  ]
+}

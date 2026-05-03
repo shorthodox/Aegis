@@ -1,0 +1,11 @@
+symbol,mode,candle_index,timestamp,direction,prob,base_threshold,adjusted_threshold,expected_net_pct,confidence_level,vol_regime,trend_strength,trend_aligned,volume_condition,size_tier,size_factor,entry_price,exit_price,pnl,return_pct,decision
+ETH/USDT,balanced,1753,2026-03-03 10:00:00,long,0.705,0.27,0.3029,0.7192,normal,low,strong,True,low,full,1.0,1958.05,0.0,0.0,0.0,taken
+ETH/USDT,balanced,1757,2026-03-03 14:00:00,long,0.7199,0.27,0.2066,0.8998,normal,normal,strong,True,high,full,1.0,1942.78,0.0,0.0,0.0,taken
+ETH/USDT,balanced,1777,2026-03-04 10:00:00,long,0.7068,0.27,0.2066,0.8831,normal,normal,strong,True,high,full,1.0,2072.34,0.0,0.0,0.0,taken
+ETH/USDT,balanced,1900,2026-03-09 13:00:00,long,0.7001,0.27,0.2479,0.8607,normal,high,normal,False,high,full,1.0,2018.16,0.0,0.0,0.0,taken
+ETH/USDT,balanced,2006,2026-03-13 23:00:00,long,0.7239,0.27,0.2146,1.0143,normal,high,strong,True,low,full,1.0,2092.22,0.0,0.0,0.0,taken
+ETH/USDT,balanced,2141,2026-03-19 14:00:00,long,0.7008,0.27,0.2066,0.7189,normal,normal,strong,True,high,full,1.0,2121.68,0.0,0.0,0.0,taken
+ETH/USDT,balanced,2411,2026-03-30 20:00:00,long,0.7028,0.27,0.3029,0.5206,normal,high,normal,False,low,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+ETH/USDT,balanced,2413,2026-03-30 22:00:00,long,0.7025,0.27,0.3029,0.512,normal,high,normal,False,low,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+ETH/USDT,balanced,2583,2026-04-07 00:00:00,long,0.7115,0.27,0.2754,0.4173,normal,high,normal,False,normal,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+ETH/USDT,balanced,2597,2026-04-07 14:00:00,long,0.7049,0.27,0.2479,0.4034,normal,high,normal,False,high,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered

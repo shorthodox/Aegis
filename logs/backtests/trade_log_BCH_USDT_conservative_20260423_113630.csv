@@ -1,0 +1,25 @@
+symbol,mode,candle_index,timestamp,direction,prob,base_threshold,adjusted_threshold,expected_net_pct,confidence_level,vol_regime,trend_strength,trend_aligned,volume_condition,size_tier,size_factor,entry_price,exit_price,pnl,return_pct,decision
+BCH/USDT,conservative,28,2025-12-21 13:00:00,long,0.7672,0.3,0.255,0.6227,normal,normal,strong,True,normal,full,1.0,577.9,0.0,0.0,0.0,taken
+BCH/USDT,conservative,30,2025-12-21 15:00:00,long,0.7817,0.3,0.255,0.6328,normal,normal,strong,True,normal,full,1.0,579.8,0.0,0.0,0.0,taken
+BCH/USDT,conservative,122,2025-12-25 11:00:00,long,0.7698,0.45,0.3576,0.6237,normal,high,strong,True,low,full,1.0,586.7,0.0,0.0,0.0,taken
+BCH/USDT,conservative,635,2026-01-15 20:00:00,long,0.7697,0.45,0.3576,1.3227,normal,high,strong,True,low,full,1.0,581.2,0.0,0.0,0.0,taken
+BCH/USDT,conservative,637,2026-01-15 22:00:00,long,0.7621,0.45,0.3576,1.25,normal,high,strong,True,low,full,1.0,586.0,0.0,0.0,0.0,taken
+BCH/USDT,conservative,748,2026-01-20 13:00:00,long,0.8082,0.45,0.2195,0.5424,very_high,high,strong,True,high,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+BCH/USDT,conservative,751,2026-01-20 16:00:00,long,0.7866,0.45,0.4131,0.5072,normal,high,normal,False,high,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+BCH/USDT,conservative,752,2026-01-20 17:00:00,long,0.7716,0.45,0.4131,0.4764,normal,high,normal,False,high,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+BCH/USDT,conservative,753,2026-01-20 18:00:00,long,0.7577,0.45,0.4131,0.426,normal,high,normal,False,high,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+BCH/USDT,conservative,759,2026-01-21 00:00:00,long,0.7552,0.45,0.2926,0.6589,normal,high,strong,True,high,full,1.0,581.6,0.0,0.0,0.0,taken
+BCH/USDT,conservative,875,2026-01-25 20:00:00,long,0.7503,0.3,0.2295,0.3907,normal,normal,strong,True,high,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+BCH/USDT,conservative,876,2026-01-25 21:00:00,long,0.7761,0.3,0.2295,0.4661,normal,normal,strong,True,high,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+BCH/USDT,conservative,877,2026-01-25 22:00:00,long,0.7793,0.3,0.2295,0.4655,normal,normal,strong,True,high,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+BCH/USDT,conservative,878,2026-01-25 23:00:00,long,0.7703,0.45,0.4131,0.4903,normal,high,normal,False,high,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+BCH/USDT,conservative,1145,2026-02-06 02:00:00,long,0.7546,0.45,0.2926,3.4456,normal,high,strong,True,high,full,1.0,448.5,0.0,0.0,0.0,taken
+BCH/USDT,conservative,1307,2026-02-12 20:00:00,long,0.8139,0.3,0.297,0.9607,very_high,normal,normal,False,low,full,1.0,500.6,0.0,0.0,0.0,taken
+BCH/USDT,conservative,1310,2026-02-12 23:00:00,long,0.7662,0.45,0.4131,0.9137,normal,high,normal,False,high,full,1.0,503.0,0.0,0.0,0.0,taken
+BCH/USDT,conservative,1316,2026-02-13 05:00:00,long,0.7757,0.3,0.396,0.8231,normal,normal,normal,False,low,full,1.0,509.5,0.0,0.0,0.0,taken
+BCH/USDT,conservative,1318,2026-02-13 07:00:00,long,0.7657,0.45,0.5049,0.6742,normal,low,strong,True,low,full,1.0,512.2,0.0,0.0,0.0,taken
+BCH/USDT,conservative,1320,2026-02-13 09:00:00,long,0.7766,0.45,0.5049,0.6785,normal,low,strong,True,low,full,1.0,519.3,0.0,0.0,0.0,taken
+BCH/USDT,conservative,1323,2026-02-13 12:00:00,long,0.7522,0.3,0.255,0.6787,normal,normal,strong,True,normal,full,1.0,526.2,0.0,0.0,0.0,taken
+BCH/USDT,conservative,1680,2026-02-28 09:00:00,long,0.7779,0.3,0.2805,0.9705,normal,normal,strong,True,low,full,1.0,442.6,0.0,0.0,0.0,taken
+BCH/USDT,conservative,1682,2026-02-28 11:00:00,long,0.783,0.3,0.255,1.0435,normal,normal,strong,True,normal,full,1.0,445.2,0.0,0.0,0.0,taken
+BCH/USDT,conservative,2120,2026-03-18 17:00:00,long,0.7532,0.45,0.2926,0.4487,normal,high,strong,True,high,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered

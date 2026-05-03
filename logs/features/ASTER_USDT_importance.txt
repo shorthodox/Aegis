@@ -1,0 +1,30 @@
+Feature importance (gain) for ASTER/USDT
+==================================================
+efficiency_ratio_10                 : 35.876804
+linreg_r2_14                        : 11.024760
+ema_9                               : 6.062811
+volatility_regime                   : 5.918664
+low                                 : 5.330505
+close                               : 4.513227
+market_phase                        : 4.449370
+ichimoku_chikou                     : 4.302401
+high                                : 4.180601
+ichimoku_tenkan                     : 4.157115
+open                                : 3.819355
+dist_vwap                           : 3.744774
+obv                                 : 3.196762
+keltner_lower                       : 3.106075
+ichimoku_senkou_b                   : 3.085920
+ultimate_osc                        : 3.073458
+btc_dist_ema200                     : 3.019229
+price_zscore_200                    : 2.983848
+macd_hist                           : 2.982053
+williams_r                          : 2.918463
+ema_21                              : 2.863836
+choppiness                          : 2.795936
+vwap                                : 2.561465
+stoch_d                             : 2.515019
+cmf_20                              : 2.291218
+historical_volatility               : 2.277757
+bb_width_percentile                 : 2.246112
+dist_ema_200                        : 2.124830

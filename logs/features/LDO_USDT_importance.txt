@@ -1,0 +1,24 @@
+Feature importance (gain) for LDO/USDT
+==================================================
+efficiency_ratio_10                 : 98.550369
+linreg_r2_14                        : 28.649422
+volatility_regime                   : 13.317102
+bb_width_percentile                 : 8.668011
+macd                                : 8.444533
+ichimoku_chikou                     : 8.122526
+williams_r                          : 7.663708
+keltner_width                       : 7.355616
+acc_dist                            : 7.191508
+linreg_slope_14                     : 7.099710
+ichimoku_tenkan                     : 6.946814
+vwap                                : 6.904867
+obv                                 : 6.725771
+ema_200                             : 6.687932
+ema_50_200_cross                    : 6.574521
+macd_signal                         : 6.507490
+force_index                         : 6.276621
+ret_24h                             : 5.842086
+market_phase                        : 5.779785
+historical_volatility               : 5.775059
+btc_corr_24h                        : 5.682171
+btc_dist_ema200                     : 5.289547

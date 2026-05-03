@@ -1,0 +1,26 @@
+symbol,mode,candle_index,timestamp,direction,prob,base_threshold,adjusted_threshold,expected_net_pct,confidence_level,vol_regime,trend_strength,trend_aligned,volume_condition,size_tier,size_factor,entry_price,exit_price,pnl,return_pct,decision
+AVAX/USDT,balanced,232,2025-12-30 00:00:00,long,0.7133,0.3,0.396,0.5308,normal,normal,normal,False,low,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+AVAX/USDT,balanced,571,2026-01-13 03:00:00,long,0.7666,0.3,0.396,0.9493,normal,normal,normal,False,low,full,1.0,13.59,0.0,0.0,0.0,taken
+AVAX/USDT,balanced,581,2026-01-13 13:00:00,long,0.7078,0.3,0.2295,0.3191,normal,normal,strong,True,high,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+AVAX/USDT,balanced,583,2026-01-13 15:00:00,long,0.7003,0.3,0.2295,0.5321,normal,normal,strong,True,high,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+AVAX/USDT,balanced,657,2026-01-16 17:00:00,long,0.7368,0.3,0.2754,0.5365,normal,low,strong,True,high,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+AVAX/USDT,balanced,658,2026-01-16 18:00:00,long,0.7756,0.3,0.306,0.6513,normal,low,strong,True,normal,full,1.0,13.37,0.0,0.0,0.0,taken
+AVAX/USDT,balanced,801,2026-01-22 17:00:00,long,0.7059,0.3,0.36,0.4353,normal,normal,normal,False,normal,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+AVAX/USDT,balanced,1254,2026-02-10 14:00:00,long,0.754,0.3,0.3888,0.9097,normal,low,normal,False,high,full,1.0,8.76,0.0,0.0,0.0,taken
+AVAX/USDT,balanced,1258,2026-02-10 18:00:00,long,0.7408,0.3,0.432,0.8903,normal,low,normal,False,normal,full,1.0,8.71,0.0,0.0,0.0,taken
+AVAX/USDT,balanced,1260,2026-02-10 20:00:00,long,0.7567,0.3,0.3888,0.8165,normal,low,normal,False,high,full,1.0,8.7,0.0,0.0,0.0,taken
+AVAX/USDT,balanced,1272,2026-02-11 08:00:00,long,0.8024,0.3,0.3564,1.0647,very_high,low,normal,False,low,full,1.0,8.55,0.0,0.0,0.0,taken
+AVAX/USDT,balanced,1274,2026-02-11 10:00:00,long,0.8176,0.3,0.2916,1.0935,very_high,low,normal,False,high,full,1.0,8.53,0.0,0.0,0.0,taken
+AVAX/USDT,balanced,1276,2026-02-11 12:00:00,long,0.7158,0.3,0.3366,0.6699,normal,low,strong,True,low,full,1.0,8.59,0.0,0.0,0.0,taken
+AVAX/USDT,balanced,1308,2026-02-12 20:00:00,long,0.7965,0.3,0.324,1.2597,normal,normal,normal,False,high,full,1.0,8.7,0.0,0.0,0.0,taken
+AVAX/USDT,balanced,1328,2026-02-13 16:00:00,long,0.7097,0.3,0.2295,0.64,normal,normal,strong,True,high,full,1.0,9.19,0.0,0.0,0.0,taken
+AVAX/USDT,balanced,1485,2026-02-20 05:00:00,long,0.7329,0.3,0.2295,0.5709,normal,normal,strong,True,high,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+AVAX/USDT,balanced,1486,2026-02-20 06:00:00,long,0.7386,0.3,0.306,0.5219,normal,low,strong,True,normal,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+AVAX/USDT,balanced,1680,2026-02-28 08:00:00,long,0.8044,0.3,0.1912,1.2713,very_high,normal,strong,True,normal,full,1.0,8.49,0.0,0.0,0.0,taken
+AVAX/USDT,balanced,1682,2026-02-28 10:00:00,long,0.7998,0.3,0.255,1.3121,normal,normal,strong,True,normal,full,1.0,8.51,0.0,0.0,0.0,taken
+AVAX/USDT,balanced,1684,2026-02-28 12:00:00,long,0.7773,0.3,0.2295,1.1779,normal,normal,strong,True,high,full,1.0,8.51,0.0,0.0,0.0,taken
+AVAX/USDT,balanced,2338,2026-03-27 18:00:00,long,0.74,0.3,0.2167,0.8502,normal,high,strong,True,normal,full,1.0,8.72,0.0,0.0,0.0,taken
+AVAX/USDT,balanced,2413,2026-03-30 21:00:00,long,0.7229,0.3,0.3366,0.6891,normal,high,normal,False,low,full,1.0,8.85,0.0,0.0,0.0,taken
+AVAX/USDT,balanced,2415,2026-03-30 23:00:00,long,0.7165,0.3,0.396,0.5478,normal,normal,normal,False,low,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+AVAX/USDT,balanced,2431,2026-03-31 15:00:00,long,0.7008,0.3,0.2754,0.698,normal,high,normal,False,high,full,1.0,8.74,0.0,0.0,0.0,taken
+AVAX/USDT,balanced,2491,2026-04-03 03:00:00,long,0.7084,0.3,0.3366,0.5369,normal,low,strong,True,low,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered

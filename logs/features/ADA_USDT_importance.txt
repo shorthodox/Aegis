@@ -1,0 +1,17 @@
+Feature importance (gain) for ADA/USDT
+==================================================
+efficiency_ratio_10                 : 110.621063
+linreg_r2_14                        : 26.386873
+volatility_regime                   : 12.487202
+williams_r                          : 12.025196
+ichimoku_senkou_a                   : 10.240570
+ichimoku_chikou                     : 9.785033
+vwap                                : 9.358735
+ichimoku_kijun                      : 8.964175
+ema_100                             : 8.579550
+volume_zscore                       : 8.522255
+acc_dist                            : 8.237322
+historical_volatility               : 7.594714
+keltner_width                       : 7.591966
+price_zscore_200                    : 7.454129
+adx_14                              : 7.322603

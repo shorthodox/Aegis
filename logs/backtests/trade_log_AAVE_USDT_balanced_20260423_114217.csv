@@ -1,0 +1,7 @@
+symbol,mode,candle_index,timestamp,direction,prob,base_threshold,adjusted_threshold,expected_net_pct,confidence_level,vol_regime,trend_strength,trend_aligned,volume_condition,size_tier,size_factor,entry_price,exit_price,pnl,return_pct,decision
+AAVE/USDT,balanced,460,2026-01-08 13:00:00,long,0.7058,0.3,0.324,0.8059,normal,normal,normal,False,high,full,1.0,162.2,0.0,0.0,0.0,taken
+AAVE/USDT,balanced,1336,2026-02-14 01:00:00,long,0.7399,0.3,0.2805,1.1779,normal,normal,strong,True,low,full,1.0,119.93,0.0,0.0,0.0,taken
+AAVE/USDT,balanced,1338,2026-02-14 03:00:00,long,0.775,0.3,0.396,1.2787,normal,normal,normal,False,low,full,1.0,120.37,0.0,0.0,0.0,taken
+AAVE/USDT,balanced,2052,2026-03-15 21:00:00,long,0.7141,0.3,0.396,0.63,normal,normal,normal,False,low,full,1.0,115.96,0.0,0.0,0.0,taken
+AAVE/USDT,balanced,2252,2026-03-24 05:00:00,long,0.7321,0.3,0.324,0.636,normal,normal,normal,False,high,full,1.0,108.99,0.0,0.0,0.0,taken
+AAVE/USDT,balanced,2910,2026-04-20 15:00:00,long,0.7372,0.3,0.2295,1.7546,normal,normal,strong,True,high,full,1.0,87.24,0.0,0.0,0.0,taken

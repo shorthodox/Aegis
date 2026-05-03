@@ -1,0 +1,22 @@
+Feature importance (gain) for SOL/USDT
+==================================================
+efficiency_ratio_10                 : 94.539322
+linreg_r2_14                        : 17.404434
+volatility_regime                   : 12.617474
+dist_ema_9                          : 8.585320
+choppiness                          : 8.518085
+ema_50                              : 8.109741
+ichimoku_chikou                     : 7.773051
+bb_width_percentile                 : 7.737807
+acc_dist                            : 7.707644
+volume                              : 7.641012
+atr_14                              : 7.484948
+force_index                         : 7.459609
+ichimoku_senkou_b                   : 7.059923
+keltner_upper                       : 6.736408
+ema_100                             : 6.700314
+ema_9                               : 6.629921
+vwap                                : 6.353497
+keltner_lower                       : 6.139261
+macd_hist                           : 5.642134
+adx_14                              : 5.377048

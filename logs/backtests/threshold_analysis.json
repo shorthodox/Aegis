@@ -1,0 +1,2674 @@
+{
+  "timestamp": "2026-04-22T16:41:21.421581",
+  "data_hours": 3000,
+  "thresholds_tested": [
+    0.1,
+    0.15,
+    0.2,
+    0.25,
+    0.3,
+    0.35,
+    0.4,
+    0.45,
+    0.5,
+    0.6,
+    0.75,
+    1.0
+  ],
+  "min_trades_required": 20,
+  "recommendations": {
+    "conservative": {
+      "recommended_threshold_pct": 0.1,
+      "total_trades_across_symbols": 54,
+      "average_win_rate_pct": 47.01,
+      "average_profit_factor": 300.754,
+      "total_return_across_symbols_pct": 69.87
+    },
+    "balanced": {
+      "recommended_threshold_pct": 0.1,
+      "total_trades_across_symbols": 208,
+      "average_win_rate_pct": 66.08,
+      "average_profit_factor": 304.614,
+      "total_return_across_symbols_pct": 289.78
+    },
+    "aggressive": {
+      "recommended_threshold_pct": 0.15,
+      "total_trades_across_symbols": 493,
+      "average_win_rate_pct": 65.18,
+      "average_profit_factor": 6.115,
+      "total_return_across_symbols_pct": 664.3
+    }
+  },
+  "full_results": [
+    {
+      "symbol": "BTC/USDT",
+      "results": {
+        "conservative": [
+          {
+            "threshold": 0.1,
+            "trades": 14,
+            "win_rate": 100.0,
+            "total_return": 19.26,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.15,
+            "trades": 13,
+            "win_rate": 100.0,
+            "total_return": 18.65,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.2,
+            "trades": 13,
+            "win_rate": 100.0,
+            "total_return": 18.65,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.25,
+            "trades": 13,
+            "win_rate": 100.0,
+            "total_return": 18.65,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.3,
+            "trades": 13,
+            "win_rate": 100.0,
+            "total_return": 18.65,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.35,
+            "trades": 13,
+            "win_rate": 100.0,
+            "total_return": 18.65,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.4,
+            "trades": 13,
+            "win_rate": 100.0,
+            "total_return": 18.65,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.45,
+            "trades": 13,
+            "win_rate": 100.0,
+            "total_return": 18.65,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.5,
+            "trades": 11,
+            "win_rate": 100.0,
+            "total_return": 16.43,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.6,
+            "trades": 7,
+            "win_rate": 100.0,
+            "total_return": 11.24,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.75,
+            "trades": 4,
+            "win_rate": 100.0,
+            "total_return": 6.91,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 1.0,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          }
+        ],
+        "balanced": [
+          {
+            "threshold": 0.1,
+            "trades": 65,
+            "win_rate": 86.15,
+            "total_return": 64.55,
+            "profit_factor": 5.916
+          },
+          {
+            "threshold": 0.15,
+            "trades": 63,
+            "win_rate": 85.71,
+            "total_return": 63.37,
+            "profit_factor": 5.826
+          },
+          {
+            "threshold": 0.2,
+            "trades": 59,
+            "win_rate": 88.14,
+            "total_return": 63.97,
+            "profit_factor": 6.864
+          },
+          {
+            "threshold": 0.25,
+            "trades": 56,
+            "win_rate": 89.29,
+            "total_return": 63.35,
+            "profit_factor": 7.581
+          },
+          {
+            "threshold": 0.3,
+            "trades": 51,
+            "win_rate": 88.24,
+            "total_return": 58.11,
+            "profit_factor": 7.036
+          },
+          {
+            "threshold": 0.35,
+            "trades": 45,
+            "win_rate": 86.67,
+            "total_return": 51.38,
+            "profit_factor": 6.337
+          },
+          {
+            "threshold": 0.4,
+            "trades": 38,
+            "win_rate": 89.47,
+            "total_return": 48.54,
+            "profit_factor": 8.168
+          },
+          {
+            "threshold": 0.45,
+            "trades": 33,
+            "win_rate": 87.88,
+            "total_return": 42.05,
+            "profit_factor": 7.209
+          },
+          {
+            "threshold": 0.5,
+            "trades": 32,
+            "win_rate": 87.5,
+            "total_return": 40.61,
+            "profit_factor": 6.997
+          },
+          {
+            "threshold": 0.6,
+            "trades": 21,
+            "win_rate": 100.0,
+            "total_return": 37.12,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.75,
+            "trades": 8,
+            "win_rate": 100.0,
+            "total_return": 15.48,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 1.0,
+            "trades": 3,
+            "win_rate": 100.0,
+            "total_return": 6.01,
+            "profit_factor": 999
+          }
+        ],
+        "aggressive": [
+          {
+            "threshold": 0.1,
+            "trades": 127,
+            "win_rate": 75.59,
+            "total_return": 134.15,
+            "profit_factor": 3.504
+          },
+          {
+            "threshold": 0.15,
+            "trades": 125,
+            "win_rate": 75.2,
+            "total_return": 132.45,
+            "profit_factor": 3.472
+          },
+          {
+            "threshold": 0.2,
+            "trades": 123,
+            "win_rate": 75.61,
+            "total_return": 132.58,
+            "profit_factor": 3.533
+          },
+          {
+            "threshold": 0.25,
+            "trades": 123,
+            "win_rate": 75.61,
+            "total_return": 132.65,
+            "profit_factor": 3.535
+          },
+          {
+            "threshold": 0.3,
+            "trades": 119,
+            "win_rate": 75.63,
+            "total_return": 130.69,
+            "profit_factor": 3.564
+          },
+          {
+            "threshold": 0.35,
+            "trades": 110,
+            "win_rate": 76.36,
+            "total_return": 127.16,
+            "profit_factor": 3.731
+          },
+          {
+            "threshold": 0.4,
+            "trades": 102,
+            "win_rate": 79.41,
+            "total_return": 130.78,
+            "profit_factor": 4.341
+          },
+          {
+            "threshold": 0.45,
+            "trades": 94,
+            "win_rate": 79.79,
+            "total_return": 124.28,
+            "profit_factor": 4.449
+          },
+          {
+            "threshold": 0.5,
+            "trades": 86,
+            "win_rate": 80.23,
+            "total_return": 117.51,
+            "profit_factor": 4.566
+          },
+          {
+            "threshold": 0.6,
+            "trades": 63,
+            "win_rate": 85.71,
+            "total_return": 105.13,
+            "profit_factor": 6.619
+          },
+          {
+            "threshold": 0.75,
+            "trades": 46,
+            "win_rate": 82.61,
+            "total_return": 74.99,
+            "profit_factor": 5.371
+          },
+          {
+            "threshold": 1.0,
+            "trades": 17,
+            "win_rate": 100.0,
+            "total_return": 46.6,
+            "profit_factor": 999
+          }
+        ]
+      }
+    },
+    {
+      "symbol": "ETH/USDT",
+      "results": {
+        "conservative": [
+          {
+            "threshold": 0.1,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.15,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.2,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.25,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.3,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.35,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.4,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.45,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.5,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.6,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.75,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 1.0,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          }
+        ],
+        "balanced": [
+          {
+            "threshold": 0.1,
+            "trades": 10,
+            "win_rate": 90.0,
+            "total_return": 16.42,
+            "profit_factor": 11.706
+          },
+          {
+            "threshold": 0.15,
+            "trades": 10,
+            "win_rate": 90.0,
+            "total_return": 16.42,
+            "profit_factor": 11.706
+          },
+          {
+            "threshold": 0.2,
+            "trades": 10,
+            "win_rate": 90.0,
+            "total_return": 16.42,
+            "profit_factor": 11.706
+          },
+          {
+            "threshold": 0.25,
+            "trades": 10,
+            "win_rate": 90.0,
+            "total_return": 16.42,
+            "profit_factor": 11.706
+          },
+          {
+            "threshold": 0.3,
+            "trades": 10,
+            "win_rate": 90.0,
+            "total_return": 16.42,
+            "profit_factor": 11.706
+          },
+          {
+            "threshold": 0.35,
+            "trades": 10,
+            "win_rate": 90.0,
+            "total_return": 16.42,
+            "profit_factor": 11.706
+          },
+          {
+            "threshold": 0.4,
+            "trades": 10,
+            "win_rate": 90.0,
+            "total_return": 16.42,
+            "profit_factor": 11.706
+          },
+          {
+            "threshold": 0.45,
+            "trades": 8,
+            "win_rate": 100.0,
+            "total_return": 16.6,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.5,
+            "trades": 8,
+            "win_rate": 100.0,
+            "total_return": 16.6,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.6,
+            "trades": 6,
+            "win_rate": 100.0,
+            "total_return": 13.39,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.75,
+            "trades": 4,
+            "win_rate": 100.0,
+            "total_return": 9.34,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 1.0,
+            "trades": 1,
+            "win_rate": 100.0,
+            "total_return": 2.43,
+            "profit_factor": 999
+          }
+        ],
+        "aggressive": [
+          {
+            "threshold": 0.1,
+            "trades": 64,
+            "win_rate": 67.19,
+            "total_return": 55.49,
+            "profit_factor": 2.196
+          },
+          {
+            "threshold": 0.15,
+            "trades": 64,
+            "win_rate": 67.19,
+            "total_return": 55.49,
+            "profit_factor": 2.196
+          },
+          {
+            "threshold": 0.2,
+            "trades": 64,
+            "win_rate": 67.19,
+            "total_return": 55.49,
+            "profit_factor": 2.196
+          },
+          {
+            "threshold": 0.25,
+            "trades": 64,
+            "win_rate": 67.19,
+            "total_return": 55.49,
+            "profit_factor": 2.196
+          },
+          {
+            "threshold": 0.3,
+            "trades": 64,
+            "win_rate": 67.19,
+            "total_return": 55.49,
+            "profit_factor": 2.196
+          },
+          {
+            "threshold": 0.35,
+            "trades": 64,
+            "win_rate": 67.19,
+            "total_return": 55.49,
+            "profit_factor": 2.196
+          },
+          {
+            "threshold": 0.4,
+            "trades": 63,
+            "win_rate": 68.25,
+            "total_return": 57.17,
+            "profit_factor": 2.278
+          },
+          {
+            "threshold": 0.45,
+            "trades": 58,
+            "win_rate": 67.24,
+            "total_return": 52.15,
+            "profit_factor": 2.214
+          },
+          {
+            "threshold": 0.5,
+            "trades": 53,
+            "win_rate": 67.92,
+            "total_return": 50.48,
+            "profit_factor": 2.284
+          },
+          {
+            "threshold": 0.6,
+            "trades": 45,
+            "win_rate": 66.67,
+            "total_return": 42.8,
+            "profit_factor": 2.205
+          },
+          {
+            "threshold": 0.75,
+            "trades": 34,
+            "win_rate": 67.65,
+            "total_return": 36.51,
+            "profit_factor": 2.344
+          },
+          {
+            "threshold": 1.0,
+            "trades": 14,
+            "win_rate": 85.71,
+            "total_return": 31.71,
+            "profit_factor": 7.247
+          }
+        ]
+      }
+    },
+    {
+      "symbol": "SOL/USDT",
+      "results": {
+        "conservative": [
+          {
+            "threshold": 0.1,
+            "trades": 5,
+            "win_rate": 100.0,
+            "total_return": 9.26,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.15,
+            "trades": 5,
+            "win_rate": 100.0,
+            "total_return": 9.26,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.2,
+            "trades": 5,
+            "win_rate": 100.0,
+            "total_return": 9.26,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.25,
+            "trades": 5,
+            "win_rate": 100.0,
+            "total_return": 9.26,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.3,
+            "trades": 5,
+            "win_rate": 100.0,
+            "total_return": 9.26,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.35,
+            "trades": 5,
+            "win_rate": 100.0,
+            "total_return": 9.26,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.4,
+            "trades": 5,
+            "win_rate": 100.0,
+            "total_return": 9.26,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.45,
+            "trades": 5,
+            "win_rate": 100.0,
+            "total_return": 9.26,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.5,
+            "trades": 5,
+            "win_rate": 100.0,
+            "total_return": 9.26,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.6,
+            "trades": 5,
+            "win_rate": 100.0,
+            "total_return": 9.26,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.75,
+            "trades": 2,
+            "win_rate": 100.0,
+            "total_return": 4.62,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 1.0,
+            "trades": 2,
+            "win_rate": 100.0,
+            "total_return": 4.62,
+            "profit_factor": 999
+          }
+        ],
+        "balanced": [
+          {
+            "threshold": 0.1,
+            "trades": 30,
+            "win_rate": 100.0,
+            "total_return": 66.74,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.15,
+            "trades": 30,
+            "win_rate": 100.0,
+            "total_return": 66.74,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.2,
+            "trades": 30,
+            "win_rate": 100.0,
+            "total_return": 66.74,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.25,
+            "trades": 30,
+            "win_rate": 100.0,
+            "total_return": 66.74,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.3,
+            "trades": 30,
+            "win_rate": 100.0,
+            "total_return": 66.74,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.35,
+            "trades": 30,
+            "win_rate": 100.0,
+            "total_return": 66.74,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.4,
+            "trades": 30,
+            "win_rate": 100.0,
+            "total_return": 66.74,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.45,
+            "trades": 30,
+            "win_rate": 100.0,
+            "total_return": 66.74,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.5,
+            "trades": 30,
+            "win_rate": 100.0,
+            "total_return": 66.74,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.6,
+            "trades": 29,
+            "win_rate": 96.55,
+            "total_return": 61.16,
+            "profit_factor": 35.015
+          },
+          {
+            "threshold": 0.75,
+            "trades": 25,
+            "win_rate": 100.0,
+            "total_return": 57.58,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 1.0,
+            "trades": 8,
+            "win_rate": 100.0,
+            "total_return": 21.29,
+            "profit_factor": 999
+          }
+        ],
+        "aggressive": [
+          {
+            "threshold": 0.1,
+            "trades": 58,
+            "win_rate": 91.38,
+            "total_return": 146.06,
+            "profit_factor": 15.991
+          },
+          {
+            "threshold": 0.15,
+            "trades": 58,
+            "win_rate": 91.38,
+            "total_return": 146.06,
+            "profit_factor": 15.991
+          },
+          {
+            "threshold": 0.2,
+            "trades": 58,
+            "win_rate": 91.38,
+            "total_return": 146.06,
+            "profit_factor": 15.991
+          },
+          {
+            "threshold": 0.25,
+            "trades": 58,
+            "win_rate": 91.38,
+            "total_return": 146.06,
+            "profit_factor": 15.991
+          },
+          {
+            "threshold": 0.3,
+            "trades": 58,
+            "win_rate": 91.38,
+            "total_return": 146.06,
+            "profit_factor": 15.991
+          },
+          {
+            "threshold": 0.35,
+            "trades": 58,
+            "win_rate": 91.38,
+            "total_return": 146.06,
+            "profit_factor": 15.991
+          },
+          {
+            "threshold": 0.4,
+            "trades": 58,
+            "win_rate": 91.38,
+            "total_return": 146.06,
+            "profit_factor": 15.991
+          },
+          {
+            "threshold": 0.45,
+            "trades": 57,
+            "win_rate": 92.98,
+            "total_return": 147.83,
+            "profit_factor": 19.541
+          },
+          {
+            "threshold": 0.5,
+            "trades": 55,
+            "win_rate": 92.73,
+            "total_return": 144.18,
+            "profit_factor": 19.084
+          },
+          {
+            "threshold": 0.6,
+            "trades": 52,
+            "win_rate": 94.23,
+            "total_return": 142.36,
+            "profit_factor": 24.262
+          },
+          {
+            "threshold": 0.75,
+            "trades": 47,
+            "win_rate": 97.87,
+            "total_return": 140.18,
+            "profit_factor": 69.259
+          },
+          {
+            "threshold": 1.0,
+            "trades": 36,
+            "win_rate": 100.0,
+            "total_return": 115.27,
+            "profit_factor": 999
+          }
+        ]
+      }
+    },
+    {
+      "symbol": "BNB/USDT",
+      "results": {
+        "conservative": [
+          {
+            "threshold": 0.1,
+            "trades": 9,
+            "win_rate": 88.89,
+            "total_return": 6.33,
+            "profit_factor": 5.842
+          },
+          {
+            "threshold": 0.15,
+            "trades": 8,
+            "win_rate": 87.5,
+            "total_return": 5.73,
+            "profit_factor": 5.382
+          },
+          {
+            "threshold": 0.2,
+            "trades": 5,
+            "win_rate": 80.0,
+            "total_return": 3.86,
+            "profit_factor": 3.954
+          },
+          {
+            "threshold": 0.25,
+            "trades": 5,
+            "win_rate": 80.0,
+            "total_return": 3.86,
+            "profit_factor": 3.954
+          },
+          {
+            "threshold": 0.3,
+            "trades": 5,
+            "win_rate": 80.0,
+            "total_return": 3.86,
+            "profit_factor": 3.954
+          },
+          {
+            "threshold": 0.35,
+            "trades": 5,
+            "win_rate": 80.0,
+            "total_return": 3.86,
+            "profit_factor": 3.954
+          },
+          {
+            "threshold": 0.4,
+            "trades": 5,
+            "win_rate": 80.0,
+            "total_return": 3.86,
+            "profit_factor": 3.954
+          },
+          {
+            "threshold": 0.45,
+            "trades": 5,
+            "win_rate": 80.0,
+            "total_return": 3.86,
+            "profit_factor": 3.954
+          },
+          {
+            "threshold": 0.5,
+            "trades": 4,
+            "win_rate": 100.0,
+            "total_return": 5.26,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.6,
+            "trades": 2,
+            "win_rate": 100.0,
+            "total_return": 2.8,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.75,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 1.0,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          }
+        ],
+        "balanced": [
+          {
+            "threshold": 0.1,
+            "trades": 37,
+            "win_rate": 89.19,
+            "total_return": 31.56,
+            "profit_factor": 7.128
+          },
+          {
+            "threshold": 0.15,
+            "trades": 30,
+            "win_rate": 86.67,
+            "total_return": 26.7,
+            "profit_factor": 6.185
+          },
+          {
+            "threshold": 0.2,
+            "trades": 25,
+            "win_rate": 88.0,
+            "total_return": 24.89,
+            "profit_factor": 7.31
+          },
+          {
+            "threshold": 0.25,
+            "trades": 17,
+            "win_rate": 94.12,
+            "total_return": 22.3,
+            "profit_factor": 15.333
+          },
+          {
+            "threshold": 0.3,
+            "trades": 17,
+            "win_rate": 94.12,
+            "total_return": 22.3,
+            "profit_factor": 15.333
+          },
+          {
+            "threshold": 0.35,
+            "trades": 17,
+            "win_rate": 94.12,
+            "total_return": 22.3,
+            "profit_factor": 15.333
+          },
+          {
+            "threshold": 0.4,
+            "trades": 16,
+            "win_rate": 93.75,
+            "total_return": 21.03,
+            "profit_factor": 14.518
+          },
+          {
+            "threshold": 0.45,
+            "trades": 15,
+            "win_rate": 100.0,
+            "total_return": 22.73,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.5,
+            "trades": 13,
+            "win_rate": 100.0,
+            "total_return": 19.84,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.6,
+            "trades": 5,
+            "win_rate": 100.0,
+            "total_return": 7.76,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.75,
+            "trades": 1,
+            "win_rate": 100.0,
+            "total_return": 1.68,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 1.0,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          }
+        ],
+        "aggressive": [
+          {
+            "threshold": 0.1,
+            "trades": 105,
+            "win_rate": 74.29,
+            "total_return": 71.98,
+            "profit_factor": 2.842
+          },
+          {
+            "threshold": 0.15,
+            "trades": 100,
+            "win_rate": 76.0,
+            "total_return": 73.74,
+            "profit_factor": 3.072
+          },
+          {
+            "threshold": 0.2,
+            "trades": 88,
+            "win_rate": 78.41,
+            "total_return": 73.09,
+            "profit_factor": 3.473
+          },
+          {
+            "threshold": 0.25,
+            "trades": 73,
+            "win_rate": 75.34,
+            "total_return": 60.56,
+            "profit_factor": 3.157
+          },
+          {
+            "threshold": 0.3,
+            "trades": 64,
+            "win_rate": 73.44,
+            "total_return": 52.45,
+            "profit_factor": 2.934
+          },
+          {
+            "threshold": 0.35,
+            "trades": 54,
+            "win_rate": 75.93,
+            "total_return": 51.49,
+            "profit_factor": 3.433
+          },
+          {
+            "threshold": 0.4,
+            "trades": 43,
+            "win_rate": 81.4,
+            "total_return": 50.62,
+            "profit_factor": 4.59
+          },
+          {
+            "threshold": 0.45,
+            "trades": 36,
+            "win_rate": 86.11,
+            "total_return": 50.11,
+            "profit_factor": 6.58
+          },
+          {
+            "threshold": 0.5,
+            "trades": 29,
+            "win_rate": 89.66,
+            "total_return": 44.9,
+            "profit_factor": 8.956
+          },
+          {
+            "threshold": 0.6,
+            "trades": 24,
+            "win_rate": 95.83,
+            "total_return": 43.42,
+            "profit_factor": 22.14
+          },
+          {
+            "threshold": 0.75,
+            "trades": 15,
+            "win_rate": 93.33,
+            "total_return": 26.01,
+            "profit_factor": 13.665
+          },
+          {
+            "threshold": 1.0,
+            "trades": 1,
+            "win_rate": 100.0,
+            "total_return": 2.17,
+            "profit_factor": 999
+          }
+        ]
+      }
+    },
+    {
+      "symbol": "XRP/USDT",
+      "results": {
+        "conservative": [
+          {
+            "threshold": 0.1,
+            "trades": 16,
+            "win_rate": 81.25,
+            "total_return": 17.2,
+            "profit_factor": 4.697
+          },
+          {
+            "threshold": 0.15,
+            "trades": 16,
+            "win_rate": 81.25,
+            "total_return": 17.2,
+            "profit_factor": 4.697
+          },
+          {
+            "threshold": 0.2,
+            "trades": 16,
+            "win_rate": 81.25,
+            "total_return": 17.2,
+            "profit_factor": 4.697
+          },
+          {
+            "threshold": 0.25,
+            "trades": 16,
+            "win_rate": 81.25,
+            "total_return": 17.2,
+            "profit_factor": 4.697
+          },
+          {
+            "threshold": 0.3,
+            "trades": 16,
+            "win_rate": 81.25,
+            "total_return": 17.2,
+            "profit_factor": 4.697
+          },
+          {
+            "threshold": 0.35,
+            "trades": 16,
+            "win_rate": 81.25,
+            "total_return": 17.2,
+            "profit_factor": 4.697
+          },
+          {
+            "threshold": 0.4,
+            "trades": 16,
+            "win_rate": 81.25,
+            "total_return": 17.2,
+            "profit_factor": 4.697
+          },
+          {
+            "threshold": 0.45,
+            "trades": 16,
+            "win_rate": 81.25,
+            "total_return": 17.2,
+            "profit_factor": 4.697
+          },
+          {
+            "threshold": 0.5,
+            "trades": 16,
+            "win_rate": 81.25,
+            "total_return": 17.2,
+            "profit_factor": 4.697
+          },
+          {
+            "threshold": 0.6,
+            "trades": 16,
+            "win_rate": 81.25,
+            "total_return": 17.2,
+            "profit_factor": 4.697
+          },
+          {
+            "threshold": 0.75,
+            "trades": 10,
+            "win_rate": 90.0,
+            "total_return": 14.25,
+            "profit_factor": 10.002
+          },
+          {
+            "threshold": 1.0,
+            "trades": 2,
+            "win_rate": 100.0,
+            "total_return": 4.11,
+            "profit_factor": 999
+          }
+        ],
+        "balanced": [
+          {
+            "threshold": 0.1,
+            "trades": 42,
+            "win_rate": 100.0,
+            "total_return": 70.32,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.15,
+            "trades": 42,
+            "win_rate": 100.0,
+            "total_return": 70.32,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.2,
+            "trades": 42,
+            "win_rate": 100.0,
+            "total_return": 70.32,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.25,
+            "trades": 42,
+            "win_rate": 100.0,
+            "total_return": 70.32,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.3,
+            "trades": 40,
+            "win_rate": 100.0,
+            "total_return": 68.17,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.35,
+            "trades": 37,
+            "win_rate": 100.0,
+            "total_return": 64.78,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.4,
+            "trades": 35,
+            "win_rate": 100.0,
+            "total_return": 62.24,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.45,
+            "trades": 31,
+            "win_rate": 100.0,
+            "total_return": 56.91,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.5,
+            "trades": 29,
+            "win_rate": 100.0,
+            "total_return": 54.36,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.6,
+            "trades": 26,
+            "win_rate": 100.0,
+            "total_return": 49.12,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.75,
+            "trades": 22,
+            "win_rate": 95.45,
+            "total_return": 38.53,
+            "profit_factor": 21.899
+          },
+          {
+            "threshold": 1.0,
+            "trades": 4,
+            "win_rate": 100.0,
+            "total_return": 8.72,
+            "profit_factor": 999
+          }
+        ],
+        "aggressive": [
+          {
+            "threshold": 0.1,
+            "trades": 77,
+            "win_rate": 93.51,
+            "total_return": 135.46,
+            "profit_factor": 15.285
+          },
+          {
+            "threshold": 0.15,
+            "trades": 77,
+            "win_rate": 93.51,
+            "total_return": 135.46,
+            "profit_factor": 15.285
+          },
+          {
+            "threshold": 0.2,
+            "trades": 77,
+            "win_rate": 93.51,
+            "total_return": 135.46,
+            "profit_factor": 15.285
+          },
+          {
+            "threshold": 0.25,
+            "trades": 74,
+            "win_rate": 93.24,
+            "total_return": 131.9,
+            "profit_factor": 14.96
+          },
+          {
+            "threshold": 0.3,
+            "trades": 72,
+            "win_rate": 94.44,
+            "total_return": 132.14,
+            "profit_factor": 17.313
+          },
+          {
+            "threshold": 0.35,
+            "trades": 70,
+            "win_rate": 94.29,
+            "total_return": 129.46,
+            "profit_factor": 16.982
+          },
+          {
+            "threshold": 0.4,
+            "trades": 68,
+            "win_rate": 94.12,
+            "total_return": 126.81,
+            "profit_factor": 16.655
+          },
+          {
+            "threshold": 0.45,
+            "trades": 63,
+            "win_rate": 93.65,
+            "total_return": 118.86,
+            "profit_factor": 15.674
+          },
+          {
+            "threshold": 0.5,
+            "trades": 60,
+            "win_rate": 93.33,
+            "total_return": 115.23,
+            "profit_factor": 15.226
+          },
+          {
+            "threshold": 0.6,
+            "trades": 52,
+            "win_rate": 88.46,
+            "total_return": 91.87,
+            "profit_factor": 8.369
+          },
+          {
+            "threshold": 0.75,
+            "trades": 34,
+            "win_rate": 100.0,
+            "total_return": 82.5,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 1.0,
+            "trades": 26,
+            "win_rate": 100.0,
+            "total_return": 64.76,
+            "profit_factor": 999
+          }
+        ]
+      }
+    },
+    {
+      "symbol": "ADA/USDT",
+      "results": {
+        "conservative": [
+          {
+            "threshold": 0.1,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.15,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.2,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.25,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.3,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.35,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.4,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.45,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.5,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.6,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.75,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 1.0,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          }
+        ],
+        "balanced": [
+          {
+            "threshold": 0.1,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.15,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.2,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.25,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.3,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.35,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.4,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.45,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.5,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.6,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.75,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 1.0,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          }
+        ],
+        "aggressive": [
+          {
+            "threshold": 0.1,
+            "trades": 6,
+            "win_rate": 66.67,
+            "total_return": 5.08,
+            "profit_factor": 2.146
+          },
+          {
+            "threshold": 0.15,
+            "trades": 6,
+            "win_rate": 66.67,
+            "total_return": 5.08,
+            "profit_factor": 2.146
+          },
+          {
+            "threshold": 0.2,
+            "trades": 6,
+            "win_rate": 66.67,
+            "total_return": 5.08,
+            "profit_factor": 2.146
+          },
+          {
+            "threshold": 0.25,
+            "trades": 6,
+            "win_rate": 66.67,
+            "total_return": 5.08,
+            "profit_factor": 2.146
+          },
+          {
+            "threshold": 0.3,
+            "trades": 6,
+            "win_rate": 66.67,
+            "total_return": 5.08,
+            "profit_factor": 2.146
+          },
+          {
+            "threshold": 0.35,
+            "trades": 6,
+            "win_rate": 66.67,
+            "total_return": 5.08,
+            "profit_factor": 2.146
+          },
+          {
+            "threshold": 0.4,
+            "trades": 6,
+            "win_rate": 66.67,
+            "total_return": 5.08,
+            "profit_factor": 2.146
+          },
+          {
+            "threshold": 0.45,
+            "trades": 6,
+            "win_rate": 66.67,
+            "total_return": 5.08,
+            "profit_factor": 2.146
+          },
+          {
+            "threshold": 0.5,
+            "trades": 6,
+            "win_rate": 66.67,
+            "total_return": 5.08,
+            "profit_factor": 2.146
+          },
+          {
+            "threshold": 0.6,
+            "trades": 5,
+            "win_rate": 60.0,
+            "total_return": 3.15,
+            "profit_factor": 1.709
+          },
+          {
+            "threshold": 0.75,
+            "trades": 4,
+            "win_rate": 75.0,
+            "total_return": 5.21,
+            "profit_factor": 3.197
+          },
+          {
+            "threshold": 1.0,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          }
+        ]
+      }
+    },
+    {
+      "symbol": "AVAX/USDT",
+      "results": {
+        "conservative": [
+          {
+            "threshold": 0.1,
+            "trades": 10,
+            "win_rate": 100.0,
+            "total_return": 17.82,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.15,
+            "trades": 10,
+            "win_rate": 100.0,
+            "total_return": 17.82,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.2,
+            "trades": 10,
+            "win_rate": 100.0,
+            "total_return": 17.82,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.25,
+            "trades": 10,
+            "win_rate": 100.0,
+            "total_return": 17.82,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.3,
+            "trades": 10,
+            "win_rate": 100.0,
+            "total_return": 17.82,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.35,
+            "trades": 10,
+            "win_rate": 100.0,
+            "total_return": 17.82,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.4,
+            "trades": 10,
+            "win_rate": 100.0,
+            "total_return": 17.82,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.45,
+            "trades": 10,
+            "win_rate": 100.0,
+            "total_return": 17.82,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.5,
+            "trades": 10,
+            "win_rate": 100.0,
+            "total_return": 17.82,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.6,
+            "trades": 9,
+            "win_rate": 100.0,
+            "total_return": 16.57,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.75,
+            "trades": 8,
+            "win_rate": 100.0,
+            "total_return": 14.97,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 1.0,
+            "trades": 4,
+            "win_rate": 100.0,
+            "total_return": 8.08,
+            "profit_factor": 999
+          }
+        ],
+        "balanced": [
+          {
+            "threshold": 0.1,
+            "trades": 22,
+            "win_rate": 95.45,
+            "total_return": 37.12,
+            "profit_factor": 24.391
+          },
+          {
+            "threshold": 0.15,
+            "trades": 22,
+            "win_rate": 95.45,
+            "total_return": 37.12,
+            "profit_factor": 24.391
+          },
+          {
+            "threshold": 0.2,
+            "trades": 22,
+            "win_rate": 95.45,
+            "total_return": 37.12,
+            "profit_factor": 24.391
+          },
+          {
+            "threshold": 0.25,
+            "trades": 22,
+            "win_rate": 95.45,
+            "total_return": 37.12,
+            "profit_factor": 24.391
+          },
+          {
+            "threshold": 0.3,
+            "trades": 22,
+            "win_rate": 95.45,
+            "total_return": 37.12,
+            "profit_factor": 24.391
+          },
+          {
+            "threshold": 0.35,
+            "trades": 21,
+            "win_rate": 95.24,
+            "total_return": 35.95,
+            "profit_factor": 23.655
+          },
+          {
+            "threshold": 0.4,
+            "trades": 21,
+            "win_rate": 95.24,
+            "total_return": 35.95,
+            "profit_factor": 23.655
+          },
+          {
+            "threshold": 0.45,
+            "trades": 20,
+            "win_rate": 100.0,
+            "total_return": 37.54,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.5,
+            "trades": 20,
+            "win_rate": 100.0,
+            "total_return": 37.54,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.6,
+            "trades": 15,
+            "win_rate": 100.0,
+            "total_return": 29.62,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.75,
+            "trades": 11,
+            "win_rate": 100.0,
+            "total_return": 22.75,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 1.0,
+            "trades": 6,
+            "win_rate": 100.0,
+            "total_return": 12.93,
+            "profit_factor": 999
+          }
+        ],
+        "aggressive": [
+          {
+            "threshold": 0.1,
+            "trades": 51,
+            "win_rate": 90.2,
+            "total_return": 96.21,
+            "profit_factor": 9.311
+          },
+          {
+            "threshold": 0.15,
+            "trades": 51,
+            "win_rate": 90.2,
+            "total_return": 96.21,
+            "profit_factor": 9.311
+          },
+          {
+            "threshold": 0.2,
+            "trades": 51,
+            "win_rate": 90.2,
+            "total_return": 96.21,
+            "profit_factor": 9.311
+          },
+          {
+            "threshold": 0.25,
+            "trades": 51,
+            "win_rate": 90.2,
+            "total_return": 96.21,
+            "profit_factor": 9.311
+          },
+          {
+            "threshold": 0.3,
+            "trades": 51,
+            "win_rate": 90.2,
+            "total_return": 96.21,
+            "profit_factor": 9.311
+          },
+          {
+            "threshold": 0.35,
+            "trades": 51,
+            "win_rate": 90.2,
+            "total_return": 96.21,
+            "profit_factor": 9.311
+          },
+          {
+            "threshold": 0.4,
+            "trades": 50,
+            "win_rate": 90.0,
+            "total_return": 94.61,
+            "profit_factor": 9.173
+          },
+          {
+            "threshold": 0.45,
+            "trades": 50,
+            "win_rate": 90.0,
+            "total_return": 94.61,
+            "profit_factor": 9.173
+          },
+          {
+            "threshold": 0.5,
+            "trades": 45,
+            "win_rate": 88.89,
+            "total_return": 85.98,
+            "profit_factor": 8.415
+          },
+          {
+            "threshold": 0.6,
+            "trades": 39,
+            "win_rate": 87.18,
+            "total_return": 74.45,
+            "profit_factor": 7.431
+          },
+          {
+            "threshold": 0.75,
+            "trades": 29,
+            "win_rate": 93.1,
+            "total_return": 66.42,
+            "profit_factor": 13.079
+          },
+          {
+            "threshold": 1.0,
+            "trades": 17,
+            "win_rate": 88.24,
+            "total_return": 39.55,
+            "profit_factor": 8.192
+          }
+        ]
+      }
+    },
+    {
+      "symbol": "LINK/USDT",
+      "results": {
+        "conservative": [
+          {
+            "threshold": 0.1,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.15,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.2,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.25,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.3,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.35,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.4,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.45,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.5,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.6,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.75,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 1.0,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          }
+        ],
+        "balanced": [
+          {
+            "threshold": 0.1,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.15,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.2,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.25,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.3,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.35,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.4,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.45,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.5,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.6,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.75,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 1.0,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          }
+        ],
+        "aggressive": [
+          {
+            "threshold": 0.1,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.15,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.2,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.25,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.3,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.35,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.4,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.45,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.5,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.6,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.75,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 1.0,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          }
+        ]
+      }
+    },
+    {
+      "symbol": "DOT/USDT",
+      "results": {
+        "conservative": [
+          {
+            "threshold": 0.1,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.15,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.2,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.25,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.3,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.35,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.4,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.45,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.5,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.6,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.75,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 1.0,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          }
+        ],
+        "balanced": [
+          {
+            "threshold": 0.1,
+            "trades": 2,
+            "win_rate": 100.0,
+            "total_return": 3.07,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.15,
+            "trades": 2,
+            "win_rate": 100.0,
+            "total_return": 3.07,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.2,
+            "trades": 2,
+            "win_rate": 100.0,
+            "total_return": 3.07,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.25,
+            "trades": 2,
+            "win_rate": 100.0,
+            "total_return": 3.07,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.3,
+            "trades": 2,
+            "win_rate": 100.0,
+            "total_return": 3.07,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.35,
+            "trades": 1,
+            "win_rate": 100.0,
+            "total_return": 1.89,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.4,
+            "trades": 1,
+            "win_rate": 100.0,
+            "total_return": 1.89,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.45,
+            "trades": 1,
+            "win_rate": 100.0,
+            "total_return": 1.89,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.5,
+            "trades": 1,
+            "win_rate": 100.0,
+            "total_return": 1.89,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.6,
+            "trades": 1,
+            "win_rate": 100.0,
+            "total_return": 1.89,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 0.75,
+            "trades": 1,
+            "win_rate": 100.0,
+            "total_return": 1.89,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 1.0,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          }
+        ],
+        "aggressive": [
+          {
+            "threshold": 0.1,
+            "trades": 12,
+            "win_rate": 91.67,
+            "total_return": 19.81,
+            "profit_factor": 9.678
+          },
+          {
+            "threshold": 0.15,
+            "trades": 12,
+            "win_rate": 91.67,
+            "total_return": 19.81,
+            "profit_factor": 9.678
+          },
+          {
+            "threshold": 0.2,
+            "trades": 12,
+            "win_rate": 91.67,
+            "total_return": 19.81,
+            "profit_factor": 9.678
+          },
+          {
+            "threshold": 0.25,
+            "trades": 12,
+            "win_rate": 91.67,
+            "total_return": 19.81,
+            "profit_factor": 9.678
+          },
+          {
+            "threshold": 0.3,
+            "trades": 12,
+            "win_rate": 91.67,
+            "total_return": 19.81,
+            "profit_factor": 9.678
+          },
+          {
+            "threshold": 0.35,
+            "trades": 12,
+            "win_rate": 91.67,
+            "total_return": 19.81,
+            "profit_factor": 9.678
+          },
+          {
+            "threshold": 0.4,
+            "trades": 11,
+            "win_rate": 90.91,
+            "total_return": 18.28,
+            "profit_factor": 9.006
+          },
+          {
+            "threshold": 0.45,
+            "trades": 10,
+            "win_rate": 90.0,
+            "total_return": 16.72,
+            "profit_factor": 8.325
+          },
+          {
+            "threshold": 0.5,
+            "trades": 10,
+            "win_rate": 90.0,
+            "total_return": 16.72,
+            "profit_factor": 8.324
+          },
+          {
+            "threshold": 0.6,
+            "trades": 7,
+            "win_rate": 85.71,
+            "total_return": 11.7,
+            "profit_factor": 6.125
+          },
+          {
+            "threshold": 0.75,
+            "trades": 3,
+            "win_rate": 100.0,
+            "total_return": 7.41,
+            "profit_factor": 999
+          },
+          {
+            "threshold": 1.0,
+            "trades": 1,
+            "win_rate": 100.0,
+            "total_return": 2.44,
+            "profit_factor": 999
+          }
+        ]
+      }
+    },
+    {
+      "symbol": "NEAR/USDT",
+      "results": {
+        "conservative": [
+          {
+            "threshold": 0.1,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.15,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.2,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.25,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.3,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.35,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.4,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.45,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.5,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.6,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.75,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 1.0,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          }
+        ],
+        "balanced": [
+          {
+            "threshold": 0.1,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.15,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.2,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.25,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.3,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.35,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.4,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.45,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.5,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.6,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.75,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 1.0,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          }
+        ],
+        "aggressive": [
+          {
+            "threshold": 0.1,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.15,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.2,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.25,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.3,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.35,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.4,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.45,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.5,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.6,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 0.75,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          },
+          {
+            "threshold": 1.0,
+            "trades": 0,
+            "win_rate": 0,
+            "total_return": 0,
+            "profit_factor": 0
+          }
+        ]
+      }
+    }
+  ]
+}

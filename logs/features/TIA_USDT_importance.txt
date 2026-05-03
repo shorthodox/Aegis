@@ -1,0 +1,32 @@
+Feature importance (gain) for TIA/USDT
+==================================================
+efficiency_ratio_10                 : 74.641068
+linreg_r2_14                        : 19.282576
+volatility_regime                   : 8.695149
+bb_width_percentile                 : 7.280957
+ema_100                             : 7.112154
+close                               : 6.689303
+ichimoku_chikou                     : 6.683436
+btc_dist_ema200                     : 5.864987
+ema_50                              : 5.593162
+vwap                                : 5.575305
+williams_r                          : 5.558894
+keltner_lower                       : 5.362664
+low                                 : 5.169459
+keltner_width                       : 5.006403
+adx_14                              : 4.833219
+ichimoku_senkou_a                   : 4.704783
+price_zscore_200                    : 4.665745
+volume_zscore                       : 4.627691
+historical_volatility               : 4.413369
+ichimoku_senkou_b                   : 4.249660
+choppiness                          : 4.238155
+dist_ema_200                        : 4.220253
+ret_24h                             : 3.942287
+mfi_14                              : 3.896527
+volatility_skew                     : 3.877028
+atr_14                              : 3.803784
+aroon_osc                           : 3.668443
+btc_corr_24h                        : 3.650831
+macd_signal                         : 3.588771
+cmf_20                              : 3.587924

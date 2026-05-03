@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Math | Aegis-1 Engine</title>
+    <link rel="stylesheet" href="../styles/main.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- MathJax for LaTeX rendering -->
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/bundle/tex-mml-chtml.js"></script>
+</head>
+<body>
+
+    <!-- Fixed Glass Header (same as index.html & pricing.html) -->
+    <header class="fixed-header">
+        <div class="logo">⚡ AEGIS <span>v1.0</span></div>
+        <div class="nav-links-centered">
+            <a href="index.html" class="nav-link">Home</a>
+            <a href="index.html#sentinel" class="nav-link">Sentinel</a>
+            <a href="index.html#cockpit" class="nav-link">Cockpit</a>
+            <a href="index.html#security" class="nav-link">Security</a>
+            <a href="pricing.html" class="nav-link">Pricing</a>
+            <a href="logic.html" class="nav-link active">The Math</a>
+        </div>
+        <button id="portalBtn" class="portal-btn">Client Login</button>
+    </header>
+
+    <!-- Main content: The Math article -->
+    <article class="static-container math-article">
+        <h1 class="gradient-text">The Physics of Aegis-1</h1>
+        <p class="hero-sub">How we transform market entropy into actionable probability.</p>
+
+        <div class="math-block">
+            <h3>1. Ensemble AI (XGBoost)</h3>
+            <p>Aegis-1 doesn't follow a single "strategy." It uses an <strong>Extreme Gradient Boosting</strong> classifier that optimizes a differentiable loss function. Every 5 minutes, it recalibrates based on 24 technical dimensions.</p>
+        </div>
+
+        <div class="math-block">
+            <h3>2. Smart Position Sizing</h3>
+            <p>To avoid the "Risk of Ruin," we suggest a trade size \(S\) using the Aegis-1 Sizing Formula:</p>
+            <div class="equation">
+                $$S = \frac{C \cdot R}{L} \cdot w$$
+            </div>
+            <ul class="math-legend">
+                <li><strong>\(C\):</strong> Current Capital (Input in Dashboard)</li>
+                <li><strong>\(R\):</strong> Risk Percentage (User-defined, e.g., 2%)</li>
+                <li><strong>\(L\):</strong> Stop-Loss Distance (Calculated via Volatility)</li>
+                <li><strong>\(w\):</strong> AI Confidence Weight (0.5 to 1.0)</li>
+            </ul>
+        </div>
+
+        <div class="math-block">
+            <h3>3. Sentiment Deceleration</h3>
+            <p>The <strong>Emergency Brake</strong> isn't a manual switch—it's a VADER-calculated binary gate. If the news sentiment score hits <span class="danger-text">-0.90</span>, the engine overrides the AI and sets trade suggestions to zero.</p>
+        </div>
+    </article>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>© 2025 AEGIS v1.0 — Sovereign Intelligence Terminal</p>
+    </footer>
+
+    <!-- Login Modal (shared across all pages) -->
+    <div id="loginModal" class="modal" style="display: none;">
+        <div class="modal-card">
+            <span class="close-modal">&times;</span>
+            <h3>Welcome to Aegis</h3>
+            <p>Sign in to access the Sovereign Terminal</p>
+            <button id="modalLoginBtn" class="btn-primary-glow" style="margin: 1rem 0;"><i class="fab fa-google"></i> Sign in with Google</button>
+            <div class="security-badge"><i class="fas fa-lock"></i> Secure encrypted connection · SOC 2 Type II</div>
+        </div>
+    </div>
+
+    <!-- Shared landing.js handles auth state, modal, and portal button -->
+    <script type="module" src="../scripts/landing.js"></script>
+</body>
+</html>

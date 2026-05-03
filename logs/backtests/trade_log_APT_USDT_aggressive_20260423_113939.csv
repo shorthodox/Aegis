@@ -1,0 +1,13 @@
+symbol,mode,candle_index,timestamp,direction,prob,base_threshold,adjusted_threshold,expected_net_pct,confidence_level,vol_regime,trend_strength,trend_aligned,volume_condition,size_tier,size_factor,entry_price,exit_price,pnl,return_pct,decision
+APT/USDT,aggressive,32,2025-12-21 17:00:00,long,0.6508,0.2,0.24,0.9668,normal,normal,normal,False,normal,full,1.0,1.576,0.0,0.0,0.0,taken
+APT/USDT,aggressive,34,2025-12-21 19:00:00,long,0.6584,0.2,0.17,1.0629,normal,normal,strong,True,normal,full,1.0,1.576,0.0,0.0,0.0,taken
+APT/USDT,aggressive,36,2025-12-21 21:00:00,long,0.6795,0.2,0.17,1.1903,normal,normal,strong,True,normal,full,1.0,1.552,0.0,0.0,0.0,taken
+APT/USDT,aggressive,50,2025-12-22 11:00:00,long,0.6503,0.2,0.17,1.0526,normal,normal,strong,True,normal,full,1.0,1.646,0.0,0.0,0.0,taken
+APT/USDT,aggressive,52,2025-12-22 13:00:00,long,0.6518,0.2,0.264,0.9826,normal,normal,normal,False,low,full,1.0,1.632,0.0,0.0,0.0,taken
+APT/USDT,aggressive,54,2025-12-22 15:00:00,long,0.6509,0.2,0.216,0.9153,normal,normal,normal,False,high,full,1.0,1.649,0.0,0.0,0.0,taken
+APT/USDT,aggressive,66,2025-12-23 03:00:00,long,0.6525,0.2,0.24,0.9386,normal,normal,normal,False,normal,full,1.0,1.599,0.0,0.0,0.0,taken
+APT/USDT,aggressive,97,2025-12-24 10:00:00,long,0.6654,0.2,0.264,0.7667,normal,normal,normal,False,low,full,1.0,1.572,0.0,0.0,0.0,taken
+APT/USDT,aggressive,100,2025-12-24 13:00:00,long,0.6533,0.2,0.3168,0.7217,normal,low,normal,False,low,full,1.0,1.568,0.0,0.0,0.0,taken
+APT/USDT,aggressive,111,2025-12-25 00:00:00,long,0.651,0.2,0.17,0.9118,normal,normal,strong,True,normal,full,1.0,1.627,0.0,0.0,0.0,taken
+APT/USDT,aggressive,114,2025-12-25 03:00:00,long,0.651,0.2,0.187,0.9464,normal,normal,strong,True,low,full,1.0,1.649,0.0,0.0,0.0,taken
+APT/USDT,aggressive,754,2026-01-20 19:00:00,long,0.6666,0.2,0.2244,1.2941,normal,high,normal,False,low,full,1.0,1.547,0.0,0.0,0.0,taken

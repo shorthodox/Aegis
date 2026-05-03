@@ -1,0 +1,15 @@
+Feature importance (gain) for LTC/USDT
+==================================================
+efficiency_ratio_10                 : 132.727554
+linreg_r2_14                        : 33.342289
+volatility_regime                   : 13.032850
+dist_ema_9                          : 10.269779
+williams_r                          : 10.069919
+ichimoku_chikou                     : 8.908881
+choppiness                          : 8.756514
+ichimoku_senkou_a                   : 8.655131
+bb_width_percentile                 : 8.196110
+ichimoku_kijun                      : 7.656486
+dist_ema_21                         : 7.411410
+market_phase                        : 6.675530
+adx_14                              : 6.491753

@@ -1,0 +1,8 @@
+Feature importance (gain) for WLFI/USDT
+==================================================
+efficiency_ratio_10                 : 31.650705
+linreg_r2_14                        : 6.184033
+volatility_regime                   : 3.302174
+btc_dist_ema200                     : 3.224372
+adx_14                              : 3.048022
+ichimoku_chikou                     : 1.841502

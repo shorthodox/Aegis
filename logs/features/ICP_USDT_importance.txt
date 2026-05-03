@@ -1,0 +1,17 @@
+Feature importance (gain) for ICP/USDT
+==================================================
+efficiency_ratio_10                 : 89.065567
+linreg_r2_14                        : 20.252987
+williams_r                          : 8.876456
+choppiness                          : 6.522747
+adx_14                              : 5.836215
+macd_hist                           : 5.710683
+bb_width_percentile                 : 5.696710
+ichimoku_chikou                     : 5.659596
+volatility_regime                   : 5.549946
+keltner_upper                       : 5.409736
+ema_200                             : 5.253707
+dist_ema_9                          : 5.049380
+ichimoku_senkou_b                   : 4.925727
+ema_21                              : 4.907125
+historical_volatility               : 3.996823

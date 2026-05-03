@@ -1,0 +1,32 @@
+Feature importance (gain) for ENA/USDT
+==================================================
+efficiency_ratio_10                 : 85.759460
+linreg_r2_14                        : 24.644117
+volatility_regime                   : 13.563441
+dist_ema_9                          : 9.957514
+williams_r                          : 9.774943
+ichimoku_senkou_a                   : 8.488062
+ema_200                             : 8.325692
+ichimoku_chikou                     : 7.854570
+ema_100                             : 7.618057
+ichimoku_senkou_b                   : 7.145535
+cmf_20                              : 7.090961
+vwap                                : 7.049511
+dist_ema_200                        : 7.045439
+keltner_width                       : 7.008919
+ret_12h                             : 6.937358
+dist_ema_100                        : 6.864801
+low                                 : 6.752847
+close                               : 6.479696
+dist_vwap                           : 6.334657
+atr_14                              : 6.260854
+volatility_skew                     : 6.178710
+macd                                : 6.074026
+keltner_lower                       : 6.013945
+macd_hist                           : 5.997158
+adx_14                              : 5.940492
+bb_width_percentile                 : 5.810384
+aroon_up                            : 5.696138
+aroon_down                          : 5.694378
+price_zscore_200                    : 5.645904
+btc_dist_ema200                     : 5.627831

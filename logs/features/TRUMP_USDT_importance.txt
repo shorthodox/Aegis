@@ -1,0 +1,31 @@
+Feature importance (gain) for TRUMP/USDT
+==================================================
+efficiency_ratio_10                 : 11.383910
+volatility_regime                   : 4.393804
+ichimoku_tenkan                     : 2.857289
+ichimoku_chikou                     : 2.847716
+linreg_r2_14                        : 2.648216
+dist_ema_21                         : 2.448204
+dist_vwap                           : 2.392423
+ichimoku_senkou_b                   : 2.387004
+ema_9                               : 2.158765
+vwap                                : 1.991694
+choppiness                          : 1.980214
+williams_r                          : 1.979376
+btc_dist_ema200                     : 1.842580
+acc_dist                            : 1.818416
+ema_200                             : 1.806532
+obv                                 : 1.798489
+btc_corr_24h                        : 1.740952
+aroon_osc                           : 1.732569
+historical_volatility               : 1.724410
+adx_14                              : 1.714168
+dist_ema_9                          : 1.577674
+dist_ema_50                         : 1.575023
+price_zscore_200                    : 1.568975
+cmf_20                              : 1.547918
+macd                                : 1.411706
+volatility_skew                     : 1.356901
+macd_hist                           : 1.334889
+volume_zscore                       : 1.256136
+volume_atr_efficiency               : 1.186265

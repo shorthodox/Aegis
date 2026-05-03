@@ -1,0 +1,16 @@
+Feature importance (gain) for RENDER/USDT
+==================================================
+efficiency_ratio_10                 : 126.113396
+linreg_r2_14                        : 49.874359
+dist_ema_9                          : 15.568400
+volatility_regime                   : 13.427926
+williams_r                          : 12.819185
+dist_ema_21                         : 11.891203
+ichimoku_chikou                     : 10.385497
+keltner_width                       : 10.149139
+ret_24h                             : 9.588031
+ema_200                             : 8.827136
+volume_atr_efficiency               : 8.821981
+cmf_20                              : 8.649164
+aroon_osc                           : 8.022395
+atr_14                              : 7.655784

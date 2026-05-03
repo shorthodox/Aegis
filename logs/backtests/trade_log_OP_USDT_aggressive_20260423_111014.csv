@@ -1,0 +1,6 @@
+symbol,mode,candle_index,timestamp,direction,prob,base_threshold,adjusted_threshold,expected_net_pct,confidence_level,vol_regime,trend_strength,trend_aligned,volume_condition,size_tier,size_factor,entry_price,exit_price,pnl,return_pct,decision
+OP/USDT,aggressive,877,2026-01-25 21:00:00,long,0.66,0.2,0.17,1.3241,normal,normal,strong,True,normal,full,1.0,0.2851,0.0,0.0,0.0,taken
+OP/USDT,aggressive,1985,2026-03-13 01:00:00,long,0.6514,0.2,0.153,0.912,normal,normal,strong,True,high,full,1.0,0.1226,0.0,0.0,0.0,taken
+OP/USDT,aggressive,2156,2026-03-20 04:00:00,long,0.6531,0.2,0.2244,0.4807,normal,low,strong,True,low,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+OP/USDT,aggressive,2789,2026-04-15 13:00:00,long,0.6713,0.2,0.153,0.7942,normal,normal,strong,True,high,full,1.0,0.1157,0.0,0.0,0.0,taken
+OP/USDT,aggressive,2811,2026-04-16 11:00:00,long,0.7001,0.2,0.216,1.0959,normal,normal,normal,False,high,full,1.0,0.1231,0.0,0.0,0.0,taken

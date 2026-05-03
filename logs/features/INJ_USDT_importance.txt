@@ -1,0 +1,17 @@
+Feature importance (gain) for INJ/USDT
+==================================================
+efficiency_ratio_10                 : 99.352432
+linreg_r2_14                        : 15.856206
+volatility_regime                   : 9.900733
+williams_r                          : 8.447563
+dist_ema_9                          : 8.184490
+ema_200                             : 7.989589
+ichimoku_chikou                     : 7.207867
+bb_width_percentile                 : 7.169501
+macd                                : 7.115032
+obv                                 : 7.066969
+vwap                                : 6.397244
+aroon_up                            : 6.382685
+macd_signal                         : 6.361588
+adx_14                              : 6.170828
+btc_dist_ema200                     : 5.948245

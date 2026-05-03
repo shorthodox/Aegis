@@ -1,0 +1,9 @@
+Feature importance (gain) for SEI/USDT
+==================================================
+efficiency_ratio_10                 : 150.803085
+linreg_r2_14                        : 29.242353
+dist_ema_9                          : 18.885025
+btc_corr_24h                        : 16.284794
+volatility_regime                   : 14.960882
+historical_volatility               : 9.679661
+adx_14                              : 7.605255

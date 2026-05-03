@@ -1,0 +1,2 @@
+symbol,mode,candle_index,timestamp,direction,prob,base_threshold,adjusted_threshold,expected_net_pct,confidence_level,vol_regime,trend_strength,trend_aligned,volume_condition,size_tier,size_factor,entry_price,exit_price,pnl,return_pct,decision
+AAVE/USDT,conservative,1338,2026-02-14 02:00:00,long,0.8037,0.45,0.4455,1.3408,very_high,normal,normal,False,low,full,1.0,120.01,0.0,0.0,0.0,taken

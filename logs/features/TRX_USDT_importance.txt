@@ -1,0 +1,28 @@
+Feature importance (gain) for TRX/USDT
+==================================================
+efficiency_ratio_10                 : 120.761047
+linreg_r2_14                        : 46.245522
+choppiness                          : 30.934898
+high                                : 23.498741
+williams_r                          : 22.876734
+dist_ema_9                          : 21.845543
+volatility_regime                   : 18.189526
+low                                 : 17.259247
+ichimoku_tenkan                     : 13.694911
+ema_9                               : 12.984032
+market_phase                        : 11.984529
+ema_100                             : 11.592752
+ema_200                             : 11.113752
+ichimoku_chikou                     : 11.030373
+keltner_lower                       : 10.763421
+acc_dist                            : 10.414995
+vwap                                : 10.202665
+macd_hist                           : 9.963393
+dist_vwap                           : 9.695930
+aroon_down                          : 9.688565
+ema_50                              : 9.586558
+macd                                : 9.341190
+close                               : 7.960119
+price_zscore_200                    : 7.172404
+historical_volatility               : 6.933056
+volume_zscore                       : 6.684314

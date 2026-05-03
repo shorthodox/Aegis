@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pricing | AEGIS v1.0</title>
+    <link rel="stylesheet" href="../styles/main.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+
+    <!-- Fixed Glass Header (same as index.html) -->
+    <header class="fixed-header">
+        <div class="logo">⚡ AEGIS <span>v1.0</span></div>
+        <div class="nav-links-centered">
+            <a href="index.html" class="nav-link">Home</a>
+            <a href="index.html#sentinel" class="nav-link">Sentinel</a>
+            <a href="index.html#cockpit" class="nav-link">Cockpit</a>
+            <a href="index.html#security" class="nav-link">Security</a>
+            <a href="pricing.html" class="nav-link active">Pricing</a>
+        </div>
+        <button id="portalBtn" class="portal-btn">Client Login</button>
+    </header>
+
+    <!-- Pricing Section -->
+    <section class="pricing-hero">
+        <div class="pricing-header">
+            <h1 class="gradient-text">Choose Your Edge</h1>
+            <p class="hero-sub">Every plan includes <strong>Aegis‑1 Executive Guidance</strong>: step‑by‑step execution playbooks and real‑time risk filters.</p>
+        </div>
+
+        <div class="pricing-grid floating-cards">
+            <!-- Explorer Trial Card -->
+            <div class="price-card trial-card">
+                <div class="badge-trial"><i class="fas fa-flask"></i> 72H ACCESS</div>
+                <h3>Explorer Trial</h3>
+                <div class="price">$0 <span>/ 3 Days</span></div>
+                <p class="card-desc">Experience the accuracy of Aegis‑1 with zero risk.</p>
+                <ul class="features-list">
+                    <li><i class="fas fa-check-circle"></i> 3-4 Core Tokens</li>
+                    <li><i class="fas fa-clock"></i> 15m & 30m Timeframes</li>
+                    <li><i class="fas fa-book-open"></i> Standard Execution Guidance</li>
+                    <li><i class="fas fa-chart-simple"></i> Paper Trading Enabled</li>
+                </ul>
+                <a href="dashboard.html" class="btn-outline"><i class="fas fa-rocket"></i> Start Free Trial</a>
+                <p class="tiny-note">*No credit card required</p>
+            </div>
+
+            <!-- Basic Explorer Card -->
+            <div class="price-card">
+                <h3>Basic Explorer</h3>
+                <div class="price">$3.60 <span>(₹299) /mo</span></div>
+                <p class="card-desc">Affordable institutional‑grade data for retail traders.</p>
+                <ul class="features-list">
+                    <li><i class="fas fa-check-circle"></i> 3-4 Core Tokens</li>
+                    <li><i class="fas fa-clock"></i> 15m & 30m Timeframes</li>
+                    <li><i class="fas fa-chart-line"></i> <strong>Smart Capital Management</strong></li>
+                    <li><i class="fas fa-book-open"></i> Standard Execution Guidance</li>
+                </ul>
+                <a href="#" class="btn-outline">Get Basic</a>
+            </div>
+
+            <!-- Pro Quant Card (Featured) -->
+            <div class="price-card pro featured">
+                <div class="best-value"><i class="fas fa-crown"></i> MOST POWERFUL</div>
+                <h3>Pro Quant</h3>
+                <div class="price">$24.00 <span>(₹1,999) /mo</span></div>
+                <p class="card-desc">The full high‑frequency engine for serious capital.</p>
+                <ul class="features-list">
+                    <li><i class="fas fa-check-circle"></i> <strong>Full 58‑Token Fleet</strong></li>
+                    <li><i class="fas fa-chart-line"></i> <strong>All Timeframes (1m to 1d)</strong></li>
+                    <li><i class="fas fa-bell"></i> Priority Emergency Brake Alerts</li>
+                    <li><i class="fas fa-gem"></i> <strong>VIP Execution Guidance</strong></li>
+                    <li><i class="fab fa-telegram"></i> Telegram Signal Sync</li>
+                </ul>
+                <a href="#" class="btn-pro"><i class="fas fa-unlock-alt"></i> Go Pro Access</a>
+            </div>
+        </div>
+
+        <div class="guidance-teaser">
+            <p>🛡️ <strong>The Aegis‑1 Promise:</strong> We don't just give signals. We tell you <u>exactly</u> how to enter, when to sit on your hands, and which common retail traps to avoid.</p>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>© 2025 AEGIS v1.0 — Sovereign Intelligence Terminal</p>
+    </footer>
+
+    <!-- Login Modal (shared across all pages) -->
+    <div id="loginModal" class="modal" style="display: none;">
+        <div class="modal-card">
+            <span class="close-modal">&times;</span>
+            <h3>Welcome to Aegis</h3>
+            <p>Sign in to access the Sovereign Terminal</p>
+            <button id="modalLoginBtn" class="btn-primary-glow" style="margin: 1rem 0;"><i class="fab fa-google"></i> Sign in with Google</button>
+            <div class="security-badge"><i class="fas fa-lock"></i> Secure encrypted connection · SOC 2 Type II</div>
+        </div>
+    </div>
+
+    <!-- Shared landing.js handles auth state, modal, and portal button -->
+    <script type="module" src="../scripts/landing.js"></script>
+</body>
+</html>

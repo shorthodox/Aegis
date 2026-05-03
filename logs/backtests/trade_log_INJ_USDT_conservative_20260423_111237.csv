@@ -1,0 +1,10 @@
+symbol,mode,candle_index,timestamp,direction,prob,base_threshold,adjusted_threshold,expected_net_pct,confidence_level,vol_regime,trend_strength,trend_aligned,volume_condition,size_tier,size_factor,entry_price,exit_price,pnl,return_pct,decision
+INJ/USDT,conservative,2054,2026-03-15 22:00:00,long,0.7519,0.45,0.486,0.4272,normal,normal,normal,False,high,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+INJ/USDT,conservative,2770,2026-04-14 18:00:00,long,0.7739,0.45,0.486,0.5425,normal,normal,normal,False,high,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+INJ/USDT,conservative,2772,2026-04-14 20:00:00,long,0.7732,0.45,0.594,0.5302,normal,normal,normal,False,low,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+INJ/USDT,conservative,2775,2026-04-14 23:00:00,long,0.7751,0.45,0.594,0.559,normal,normal,normal,False,low,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+INJ/USDT,conservative,2780,2026-04-15 04:00:00,long,0.7571,0.45,0.3443,0.4107,normal,normal,strong,True,high,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+INJ/USDT,conservative,2781,2026-04-15 05:00:00,long,0.7828,0.45,0.594,0.4272,normal,normal,normal,False,low,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+INJ/USDT,conservative,2785,2026-04-15 09:00:00,long,0.7739,0.45,0.7128,0.3376,normal,low,normal,False,low,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+INJ/USDT,conservative,2786,2026-04-15 10:00:00,long,0.7666,0.45,0.594,0.3452,normal,normal,normal,False,low,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+INJ/USDT,conservative,2788,2026-04-15 12:00:00,long,0.7569,0.45,0.3443,0.3551,normal,normal,strong,True,high,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered

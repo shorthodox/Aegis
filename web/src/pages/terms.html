@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AEGIS v1.0 | Terms of Service</title>
+    <link rel="stylesheet" href="../styles/main.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+
+    <!-- Fixed Glass Header (consistent with index.html) -->
+    <header class="fixed-header">
+        <div class="logo">⚡ AEGIS <span>v1.0</span></div>
+        <div class="nav-links-centered">
+            <a href="index.html" class="nav-link">Home</a>
+            <a href="index.html#sentinel" class="nav-link">Sentinel</a>
+            <a href="index.html#cockpit" class="nav-link">Cockpit</a>
+            <a href="index.html#security" class="nav-link">Security</a>
+            <a href="pricing.html" class="nav-link">Pricing</a>
+        </div>
+        <button id="portalBtn" class="portal-btn">Client Login</button>
+    </header>
+
+    <!-- Main content with sticky sidebar + terms content -->
+    <div class="disclosure-layout" style="display: flex; gap: 2rem; align-items: flex-start; max-width: 1300px; margin: 120px auto 2rem; padding: 0 2rem;">
+        
+        <!-- Sticky Quick Jump Sidebar -->
+        <aside class="disclosure-sidebar">
+            <h3><i class="fas fa-gavel"></i> Quick Jump</h3>
+            <ul>
+                <li><a href="#eligibility">📋 Eligibility</a></li>
+                <li><a href="#subscription">💳 Subscription Policy</a></li>
+                <li><a href="#security">🔐 Account Security</a></li>
+                <li><a href="#termination">⛔ Termination</a></li>
+            </ul>
+        </aside>
+
+        <!-- Terms Content -->
+        <div class="math-article" style="flex: 1;">
+            <div class="math-block">
+                <h1>Terms of Service</h1>
+                <p><strong>Last Updated:</strong> <span id="terms-last-updated">April 15, 2025</span> | <strong>Version:</strong> <span id="terms-version">1.2.0</span></p>
+                <p>By accessing or using AEGIS v1.0 (“the Platform”), you agree to be bound by these Terms.</p>
+            </div>
+
+            <div id="eligibility" class="math-block">
+                <h2><i class="fas fa-user-check"></i> 1. User Eligibility</h2>
+                <p>You must be at least <strong>18 years old</strong> to use the Platform. By registering, you confirm that you are of legal age and have the capacity to enter into binding financial agreements.</p>
+            </div>
+
+            <div id="subscription" class="math-block">
+                <h2><i class="fas fa-credit-card"></i> 2. Subscription Policy</h2>
+                <p>The Platform offers two tiers:</p>
+                <ul>
+                    <li><strong>Basic ($3.60/month)</strong> – includes up to <strong>5 token signals</strong> (BTC, ETH, SOL, BNB, XRP) plus daily AI digest.</li>
+                    <li><strong>Pro ($24.00/month)</strong> – full access to all <strong>58 tokens</strong>, real‑time signals, API/webhook, and priority support.</li>
+                </ul>
+                <p><strong>72‑Hour Free Trial:</strong> New users receive a 3‑day trial of the Pro tier. After the trial, you must subscribe to continue receiving signals beyond the Basic limits. All payments are processed securely; no refunds are provided for partial months.</p>
+            </div>
+
+            <div id="security" class="math-block">
+                <h2><i class="fas fa-lock"></i> 3. Account Security</h2>
+                <p>You are solely responsible for safeguarding your JWT tokens, passwords, and any other login credentials. The Platform uses industry‑standard encryption, but we cannot be held liable for unauthorized access caused by your failure to protect your credentials. Immediately notify support if you suspect a breach.</p>
+            </div>
+
+            <div id="termination" class="math-block">
+                <h2><i class="fas fa-ban"></i> 4. Termination</h2>
+                <p>We reserve the right to suspend or terminate your account if you violate these Terms or engage in abusive behaviour (e.g., signal reverse‑engineering, excessive API abuse). You may cancel your subscription at any time via your dashboard.</p>
+            </div>
+
+            <div class="math-block">
+                <p><i class="fas fa-gavel"></i> These Terms are governed by the laws of India. Any disputes shall be resolved in the courts of Dehradun, Uttarakhand.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login Modal (shared across all pages) -->
+    <div id="loginModal" class="modal" style="display: none;">
+        <div class="modal-card">
+            <span class="close-modal">&times;</span>
+            <h3>Welcome to Aegis</h3>
+            <p>Sign in to access the Sovereign Terminal</p>
+            <button id="modalLoginBtn" class="btn-primary-glow" style="margin: 1rem 0;"><i class="fab fa-google"></i> Sign in with Google</button>
+            <div class="security-badge"><i class="fas fa-lock"></i> Secure encrypted connection · SOC 2 Type II</div>
+        </div>
+    </div>
+
+    <!-- Footer with Terms & Conditions links (consistent with other pages) -->
+    <footer class="footer">
+        <div class="footer-links">
+            <a href="terms.html" class="active">Terms of Service</a>
+            <span class="separator">•</span>
+            <a href="conditions.html">Conditions of Use</a>
+            <span class="separator">•</span>
+            <a href="risk-disclosure.html">Risk Disclosure</a>
+        </div>
+        <p>© 2025 AEGIS v1.0 — Sovereign Intelligence Terminal</p>
+    </footer>
+
+    <!-- Shared auth script (landing.js) handles portal button & modal -->
+    <script type="module" src="../scripts/landing.js"></script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+symbol,mode,candle_index,timestamp,direction,prob,base_threshold,adjusted_threshold,expected_net_pct,confidence_level,vol_regime,trend_strength,trend_aligned,volume_condition,size_tier,size_factor,entry_price,exit_price,pnl,return_pct,decision
+BTC/USDT,conservative,222,2025-12-29 14:00:00,long,0.774,0.45,0.2926,0.4593,normal,high,strong,True,high,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+BTC/USDT,conservative,228,2025-12-29 20:00:00,long,0.7669,0.45,0.4131,0.3791,normal,high,normal,False,high,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+BTC/USDT,conservative,235,2025-12-30 03:00:00,long,0.7585,0.3,0.36,0.1452,normal,normal,normal,False,normal,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+BTC/USDT,conservative,275,2025-12-31 19:00:00,long,0.7642,0.3,0.324,0.0803,normal,normal,normal,False,high,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+BTC/USDT,conservative,1308,2026-02-12 20:00:00,long,0.7901,0.3,0.255,0.9617,normal,normal,strong,True,normal,full,1.0,65428.56,0.0,0.0,0.0,taken
+BTC/USDT,conservative,1311,2026-02-12 23:00:00,long,0.788,0.3,0.36,0.9452,normal,normal,normal,False,normal,full,1.0,66272.17,0.0,0.0,0.0,taken
+BTC/USDT,conservative,1328,2026-02-13 16:00:00,long,0.7601,0.45,0.4131,0.5414,normal,low,strong,True,high,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+BTC/USDT,conservative,1329,2026-02-13 17:00:00,long,0.7522,0.3,0.255,0.548,normal,normal,strong,True,normal,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+BTC/USDT,conservative,1330,2026-02-13 18:00:00,long,0.7702,0.3,0.255,0.6119,normal,normal,strong,True,normal,full,1.0,69129.99,0.0,0.0,0.0,taken
+BTC/USDT,conservative,1887,2026-03-08 23:00:00,long,0.7711,0.3,0.36,0.5837,normal,normal,normal,False,normal,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+BTC/USDT,conservative,1889,2026-03-09 01:00:00,long,0.7531,0.3,0.324,0.5908,normal,normal,normal,False,high,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+BTC/USDT,conservative,1897,2026-03-09 09:00:00,long,0.7775,0.45,0.2926,0.9,normal,high,strong,True,high,full,1.0,67981.02,0.0,0.0,0.0,taken
+BTC/USDT,conservative,1900,2026-03-09 12:00:00,long,0.7663,0.45,0.459,0.7543,normal,high,normal,False,normal,full,1.0,68151.93,0.0,0.0,0.0,taken
+BTC/USDT,conservative,1988,2026-03-13 04:00:00,long,0.7659,0.45,0.7128,0.554,normal,low,normal,False,low,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+BTC/USDT,conservative,2006,2026-03-13 22:00:00,long,0.7584,0.45,0.3576,0.6973,normal,high,strong,True,low,full,1.0,70814.0,0.0,0.0,0.0,taken
+BTC/USDT,conservative,2008,2026-03-14 00:00:00,long,0.7543,0.3,0.2805,0.6471,normal,normal,strong,True,low,full,1.0,70631.97,0.0,0.0,0.0,taken
+BTC/USDT,conservative,2266,2026-03-24 18:00:00,long,0.773,0.45,0.3251,0.4972,normal,high,strong,True,normal,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered

@@ -1,0 +1,32 @@
+Feature importance (gain) for AVAX/USDT
+==================================================
+efficiency_ratio_10                 : 25.606533
+volatility_regime                   : 7.297346
+ema_21                              : 5.298551
+ichimoku_chikou                     : 4.753240
+choppiness                          : 4.581458
+historical_volatility               : 4.424543
+linreg_r2_14                        : 4.418458
+dist_ema_9                          : 4.412385
+ichimoku_kijun                      : 4.327538
+ema_50                              : 4.157537
+ema_200                             : 3.900380
+dist_vwap                           : 3.811389
+rsi_14                              : 3.526690
+adx_14                              : 3.450206
+macd                                : 3.419045
+keltner_upper                       : 3.403130
+btc_dist_ema200                     : 3.398755
+ichimoku_senkou_b                   : 3.162022
+ema_100                             : 3.153109
+atr_14                              : 3.057450
+acc_dist                            : 2.927445
+keltner_width                       : 2.903963
+dist_ema_200                        : 2.863185
+market_phase                        : 2.808481
+williams_r                          : 2.792231
+ultimate_osc                        : 2.696386
+dist_ema_50                         : 2.662018
+price_zscore_200                    : 2.573490
+cmf_20                              : 2.561721
+volume_zscore                       : 2.302492

@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AEGIS v1.0 | Sovereign Intelligence</title>
+    <link rel="stylesheet" href="../styles/main.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        /* ===== KEEP EXISTING OVERRIDES (header, hero, etc.) ===== */
+        .fixed-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.8rem 2rem;
+            background: rgba(10, 10, 12, 0.8);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(0, 242, 255, 0.2);
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 1000;
+        }
+        .logo {
+            font-size: 1.3rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #fff, var(--primary-cyan, #00f2ff));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            opacity: 1;
+            visibility: visible;
+            width: auto;
+        }
+        .nav-links-centered {
+            display: flex;
+            gap: 2rem;
+            flex: 1;
+            justify-content: center;
+        }
+        .nav-link {
+            color: var(--dim, #94a3b8);
+            text-decoration: none;
+            font-weight: 500;
+            transition: 0.2s;
+            font-size: 0.9rem;
+        }
+        .nav-link:hover, .nav-link.active {
+            color: var(--primary-cyan, #00f2ff);
+        }
+        .portal-btn {
+            background: rgba(0, 242, 255, 0.1);
+            border: 1px solid rgba(0, 242, 255, 0.3);
+            border-radius: 40px;
+            padding: 0.4rem 1.2rem;
+            color: var(--primary-cyan, #00f2ff);
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+            white-space: nowrap;
+        }
+        .portal-btn:hover {
+            background: rgba(0, 242, 255, 0.2);
+            box-shadow: 0 0 12px rgba(0,242,255,0.3);
+        }
+        .hero-section {
+            min-height: 90vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 6rem 2rem;
+            text-align: center;
+        }
+        .hero-content {
+            max-width: 800px;
+        }
+        .math-block {
+            background: rgba(0,0,0,0.4);
+            backdrop-filter: blur(8px);
+            border-radius: 32px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            border: 1px solid rgba(0,242,255,0.2);
+        }
+        .equation {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.4rem;
+            color: var(--primary-cyan, #00f2ff);
+            text-shadow: 0 0 8px rgba(0,242,255,0.3);
+            margin: 1rem 0;
+        }
+        .hero-cta {
+            margin-top: 2rem;
+        }
+        body {
+            padding-top: 80px;
+            overflow-y: auto;
+        }
+        .feature-section, .plans-section {
+            scroll-margin-top: 80px;
+        }
+
+        /* ===== NEW MODAL STYLES (3‑STEP ONBOARDING) ===== */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(12px);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto;
+        }
+        .modal.active {
+            display: flex;
+        }
+        .modal-card {
+            max-width: 520px;
+            width: 90%;
+            background: #050505;
+            backdrop-filter: blur(20px);
+            border-radius: 32px;
+            border: 1px solid transparent;
+            background-clip: padding-box;
+            box-shadow: 0 25px 40px -12px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05);
+            position: relative;
+            padding: 2rem;
+            max-height: 90vh;
+            overflow-y: auto;
+            pointer-events: auto;
+        }
+        .modal-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 32px;
+            padding: 1px;
+            background: linear-gradient(135deg, rgba(0,242,255,0.3), rgba(0,242,255,0), rgba(255,255,255,0.05));
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
+        }
+        .close-modal {
+            position: absolute;
+            top: 1rem;
+            right: 1.5rem;
+            font-size: 1.8rem;
+            cursor: pointer;
+            color: var(--dim, #94a3b8);
+            z-index: 1001;
+            pointer-events: auto;
+            transition: 0.2s;
+        }
+        .close-modal:hover {
+            color: var(--primary-cyan, #00f2ff);
+        }
+        /* Step container */
+        .step {
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+        }
+        .step.active {
+            display: block;
+            opacity: 1;
+        }
+        /* Step 1 – Entry */
+        .modal-logo {
+            font-size: 2rem;
+            font-weight: 800;
+            text-align: center;
+            margin-bottom: 1.5rem;
+            background: linear-gradient(135deg, #fff, var(--primary-cyan));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        .provider-btn {
+            width: 100%;
+            padding: 0.8rem;
+            border-radius: 48px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(0, 242, 255, 0.3);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            transition: 0.2s;
+            margin-bottom: 1rem;
+        }
+        .provider-btn:hover {
+            background: rgba(0,242,255,0.1);
+            box-shadow: 0 0 12px rgba(0,242,255,0.2);
+        }
+        .divider {
+            text-align: center;
+            margin: 1rem 0;
+            color: var(--dim);
+            font-size: 0.8rem;
+            position: relative;
+        }
+        .divider::before,
+        .divider::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: 40%;
+            height: 1px;
+            background: rgba(255,255,255,0.1);
+        }
+        .divider::before { left: 0; }
+        .divider::after { right: 0; }
+        .auth-input {
+            width: 100%;
+            background: rgba(0,0,0,0.5);
+            border: 1px solid rgba(255,255,255,0.15);
+            padding: 0.8rem 1rem;
+            border-radius: 12px;
+            color: white;
+            margin: 0.6rem 0;
+            font-size: 0.95rem;
+            font-family: 'JetBrains Mono', monospace;
+            transition: 0.2s;
+        }
+        .auth-input:focus {
+            outline: none;
+            border-color: var(--primary-cyan);
+            box-shadow: 0 0 0 2px rgba(0,242,255,0.2);
+        }
+        .auth-submit-btn {
+            width: 100%;
+            background: linear-gradient(95deg, var(--primary-cyan, #00f2ff), #00a1b0);
+            border: none;
+            padding: 0.8rem;
+            border-radius: 48px;
+            font-weight: 800;
+            font-size: 1rem;
+            color: #050505;
+            cursor: pointer;
+            margin-top: 1rem;
+            transition: 0.2s;
+        }
+        .auth-submit-btn:hover {
+            filter: brightness(1.05);
+            transform: scale(1.01);
+            box-shadow: 0 0 16px var(--primary-cyan);
+        }
+        /* Step 2 – OTP squares */
+        .otp-container {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin: 1.5rem 0;
+        }
+        .otp-digit {
+            width: 50px;
+            height: 60px;
+            background: rgba(0,0,0,0.5);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 12px;
+            color: white;
+            font-size: 1.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            text-align: center;
+            transition: 0.2s;
+        }
+        .otp-digit:focus {
+            outline: none;
+            border-color: var(--primary-cyan);
+            box-shadow: 0 0 0 2px rgba(0,242,255,0.2);
+        }
+        /* Step 3 – Profile upload & password fields */
+        .profile-upload {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        .avatar-upload {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            border: 1px dashed rgba(255,255,255,0.3);
+            background: rgba(0,0,0,0.4);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: 0.2s;
+            margin-bottom: 0.5rem;
+        }
+        .avatar-upload:hover {
+            border-color: var(--primary-cyan);
+            background: rgba(0,242,255,0.05);
+        }
+        .avatar-upload i {
+            font-size: 2rem;
+            color: var(--dim);
+        }
+        .avatar-upload span {
+            font-size: 0.7rem;
+            color: var(--dim);
+            text-align: center;
+            padding: 0 5px;
+        }
+        .upload-hint {
+            font-size: 0.65rem;
+            color: var(--dim);
+            text-align: center;
+            margin-top: 0.5rem;
+        }
+        .labeled-input {
+            margin-bottom: 1rem;
+        }
+        .labeled-input label {
+            display: block;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--dim);
+            margin-bottom: 0.3rem;
+        }
+        .skip-link {
+            text-align: center;
+            margin-top: 1rem;
+        }
+        .skip-link a {
+            color: var(--dim);
+            font-size: 0.8rem;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .skip-link a:hover {
+            color: var(--primary-cyan);
+        }
+        .security-badge {
+            margin-top: 1.5rem;
+            text-align: center;
+            font-size: 0.65rem;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        @media (max-width: 768px) {
+            .otp-digit { width: 40px; height: 50px; font-size: 1.2rem; }
+            .modal-card { padding: 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Fixed Glass Header (identical) -->
+    <header class="fixed-header">
+        <div class="logo"></div>
+        <div class="nav-links-centered">
+            <a href="#" class="nav-link active">Home</a>
+            <a href="#sentinel" class="nav-link">Sentinel</a>
+            <a href="#cockpit" class="nav-link">Cockpit</a>
+            <a href="pricing.html" class="nav-link">Pricing</a>
+        </div>
+        <button id="portalBtn" class="portal-btn">Client Login</button>
+    </header>
+
+    <!-- Hero Section (unchanged) -->
+    <section class="hero-section">
+        <div class="hero-content">
+            <div class="math-block">
+                <h2 class="gradient-text">The Math of Conviction</h2>
+                <div class="equation">Stop-Loss = Entry − (1.5 × ATR)</div>
+                <div class="equation">Take-Profit = Entry + (3.0 × Risk)</div>
+                <p class="hero-sub">Quantitative edge, executed with precision.</p>
+            </div>
+            <div class="hero-cta">
+                <button id="heroMathBtn" class="btn-primary-glow">⚡ Enter Terminal</button>
+                <p class="hero-footnote">No credit card • 72‑hour Pro trial</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Feature sections (exactly as before – keep your content) -->
+    <section id="sentinel" class="feature-section">...</section>
+    <section id="cockpit" class="feature-section alt">...</section>
+    <section id="security" class="feature-section">...</section>
+    <section class="feature-section alt">...</section>
+    <section id="plans" class="plans-section">...</section>
+
+    <!-- ========== 3‑STEP ONBOARDING MODAL (with password fields) ========== -->
+    <div id="loginModal" class="modal">
+        <div class="modal-card">
+            <!-- Close button with inline styles to guarantee clickability -->
+            <span class="close-modal" style="position: absolute; top: 1rem; right: 1.5rem; font-size: 1.8rem; cursor: pointer; color: var(--dim, #94a3b8); z-index: 1001; pointer-events: auto;">&times;</span>
+
+            <!-- Step 1: Email / Google -->
+            <div id="step1" class="step active">
+                <div class="modal-logo">⚡ AEGIS</div>
+                <button id="googleStepBtn" class="provider-btn"><i class="fab fa-google"></i> Continue with Google</button>
+                <div class="divider">or</div>
+                <input type="email" id="emailInput" class="auth-input" placeholder="Email address">
+                <button id="continueToOtpBtn" class="auth-submit-btn">Continue</button>
+            </div>
+
+            <!-- Step 2: OTP Verification -->
+            <div id="step2" class="step">
+                <h3 style="text-align:center; margin-bottom:1rem;">Enter verification code</h3>
+                <p style="text-align:center; color:var(--dim); font-size:0.8rem;">We sent a 6‑digit code to <span id="otpEmailDisplay"></span></p>
+                <div class="otp-container" id="otpContainer">
+                    <input type="text" maxlength="1" class="otp-digit" data-idx="0">
+                    <input type="text" maxlength="1" class="otp-digit" data-idx="1">
+                    <input type="text" maxlength="1" class="otp-digit" data-idx="2">
+                    <input type="text" maxlength="1" class="otp-digit" data-idx="3">
+                    <input type="text" maxlength="1" class="otp-digit" data-idx="4">
+                    <input type="text" maxlength="1" class="otp-digit" data-idx="5">
+                </div>
+                <button id="backToEmailBtn" class="auth-secondary-btn" style="margin-top:0.5rem;">← Back</button>
+            </div>
+
+            <!-- Step 3: Onboarding (Profile + Password) -->
+            <div id="step3" class="step">
+                <h3 style="text-align:center; margin-bottom:1rem;">Complete your account</h3>
+                <div class="profile-upload">
+                    <div id="avatarUpload" class="avatar-upload">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <span>Upload Photo</span>
+                    </div>
+                    <div class="upload-hint">300x300px min. JPG, GIF, PNG. Max 4MB.</div>
+                    <input type="file" id="avatarFile" accept="image/jpeg,image/png,image/gif" style="display:none;">
+                </div>
+                <div class="labeled-input">
+                    <label>Full name</label>
+                    <input type="text" id="fullName" class="auth-input" placeholder="e.g., Satoshi Nakamoto">
+                </div>
+                <div class="labeled-input">
+                    <label>Your location</label>
+                    <input type="text" id="location" class="auth-input" placeholder="City, Country">
+                </div>
+                <div class="labeled-input">
+                    <label>Password *</label>
+                    <input type="password" id="regPassword" class="auth-input" placeholder="Create a password">
+                </div>
+                <div class="labeled-input">
+                    <label>Confirm password *</label>
+                    <input type="password" id="regConfirmPassword" class="auth-input" placeholder="Confirm your password">
+                </div>
+                <button id="completeOnboarding" class="auth-submit-btn">Create Account</button>
+                <div class="skip-link"><a href="#" id="skipOnboarding">Cancel</a></div>
+            </div>
+
+            <div class="security-badge"><i class="fas fa-lock"></i> Secure encrypted connection · SOC 2 Type II</div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div class="footer-links">
+            <a href="terms.html">Terms of Service</a>
+            <span class="separator">•</span>
+            <a href="conditions.html">Conditions of Use</a>
+            <span class="separator">•</span>
+            <a href="risk-disclosure.html">Risk Disclosure</a>
+        </div>
+        <p>© 2025 AEGIS v1.0 — Sovereign Intelligence Terminal</p>
+    </footer>
+
+    <!-- ONLY ONE SCRIPT – landing.js handles all modal + auth logic -->
+    <script type="module" src="../scripts/landing.js"></script>
+</body>
+</html>

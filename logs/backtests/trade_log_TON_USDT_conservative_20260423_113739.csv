@@ -1,0 +1,14 @@
+symbol,mode,candle_index,timestamp,direction,prob,base_threshold,adjusted_threshold,expected_net_pct,confidence_level,vol_regime,trend_strength,trend_aligned,volume_condition,size_tier,size_factor,entry_price,exit_price,pnl,return_pct,decision
+TON/USDT,conservative,1715,2026-03-01 20:00:00,long,0.7631,0.09,0.0689,1.1924,normal,normal,strong,True,high,full,1.0,1.197,0.0,0.0,0.0,taken
+TON/USDT,conservative,1777,2026-03-04 10:00:00,long,0.7531,0.405,0.3718,0.7947,normal,low,strong,True,high,full,1.0,1.292,0.0,0.0,0.0,taken
+TON/USDT,conservative,1779,2026-03-04 12:00:00,long,0.7625,0.09,0.0765,0.8806,normal,normal,strong,True,normal,full,1.0,1.298,0.0,0.0,0.0,taken
+TON/USDT,conservative,1781,2026-03-04 14:00:00,long,0.7808,0.09,0.0689,1.0282,normal,normal,strong,True,high,full,1.0,1.297,0.0,0.0,0.0,taken
+TON/USDT,conservative,1783,2026-03-04 16:00:00,long,0.7722,0.405,0.4544,1.0671,normal,high,normal,False,low,full,1.0,1.294,0.0,0.0,0.0,taken
+TON/USDT,conservative,2060,2026-03-16 05:00:00,long,0.7546,0.09,0.0689,0.3686,normal,normal,strong,True,high,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+TON/USDT,conservative,2239,2026-03-23 16:00:00,long,0.7887,0.405,0.2634,0.7164,normal,high,strong,True,high,full,1.0,1.298,0.0,0.0,0.0,taken
+TON/USDT,conservative,2241,2026-03-23 18:00:00,long,0.752,0.09,0.0842,0.5776,normal,normal,strong,True,low,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+TON/USDT,conservative,2242,2026-03-23 19:00:00,long,0.7558,0.09,0.0842,0.5641,normal,normal,strong,True,low,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+TON/USDT,conservative,2243,2026-03-23 20:00:00,long,0.7625,0.09,0.0842,0.5754,normal,normal,strong,True,low,cost_filtered,0.0,0.0,0.0,0.0,0.0,cost_filtered
+TON/USDT,conservative,2339,2026-03-27 20:00:00,long,0.7528,0.405,0.4131,0.6099,normal,high,normal,False,normal,full,1.0,1.22,0.0,0.0,0.0,taken
+TON/USDT,conservative,2660,2026-04-10 05:00:00,long,0.7601,0.405,0.4544,1.06,normal,high,normal,False,low,full,1.0,1.258,0.0,0.0,0.0,taken
+TON/USDT,conservative,2686,2026-04-11 07:00:00,long,0.7705,0.405,0.3718,0.7292,normal,high,normal,False,high,full,1.0,1.336,0.0,0.0,0.0,taken

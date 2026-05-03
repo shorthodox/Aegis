@@ -1,0 +1,32 @@
+Feature importance (gain) for ARB/USDT
+==================================================
+efficiency_ratio_10                 : 43.463573
+volatility_regime                   : 7.201989
+vwap                                : 6.044850
+linreg_r2_14                        : 5.404471
+rsi_14                              : 5.346262
+macd                                : 5.171550
+ichimoku_kijun                      : 4.842495
+keltner_lower                       : 4.839476
+ema_200                             : 4.671185
+choppiness                          : 4.615273
+ichimoku_chikou                     : 4.399661
+high                                : 4.245886
+btc_dist_ema200                     : 4.151904
+keltner_upper                       : 4.106458
+low                                 : 4.035313
+dist_vwap                           : 4.030068
+ichimoku_senkou_a                   : 3.981805
+historical_volatility               : 3.898322
+ret_12h                             : 3.856499
+obv                                 : 3.809597
+bb_width_percentile                 : 3.785187
+adx_14                              : 3.761265
+aroon_up                            : 3.709009
+macd_hist                           : 3.616019
+force_index                         : 3.527083
+keltner_width                       : 3.526111
+dist_ema_200                        : 3.406974
+atr_14                              : 3.379940
+mfi_14                              : 3.176068
+aroon_down                          : 3.174052

@@ -1,0 +1,46 @@
+# Data & ML
+pandas
+numpy
+xgboost
+scikit-learn
+pandas-ta
+
+# APIs & Exchange
+ccxt
+python-dotenv
+requests
+
+# Messaging & Bot
+python-telegram-bot
+twilio  # For WhatsApp integration
+
+# Firebase
+firebase-admin
+
+# Utilities
+pyyaml
+schedule
+
+# Web / API
+fastapi
+pydantic
+uvicorn
+fastapi-mail
+authlib
+PyJWT
+bcrypt
+
+# Async & HTTP
+aiohttp
+
+# NLP & Sentiment
+vaderSentiment
+feedparser
+
+# ML Utilities & Dev
+joblib
+optuna
+shap
+
+# Optional / other utilities used in scripts
+pyttsx3

@@ -1,0 +1,26 @@
+Feature importance (gain) for AAVE/USDT
+==================================================
+efficiency_ratio_10                 : 55.262611
+linreg_r2_14                        : 12.791588
+volatility_regime                   : 8.481066
+force_index                         : 6.472069
+ema_100                             : 5.973955
+linreg_slope_14                     : 5.830325
+ichimoku_chikou                     : 5.541777
+keltner_lower                       : 5.526901
+dist_ema_9                          : 5.505132
+ichimoku_kijun                      : 5.459406
+williams_r                          : 5.370481
+keltner_width                       : 5.154863
+vwap                                : 5.144535
+btc_dist_ema200                     : 5.072668
+dist_vwap                           : 4.958545
+bb_width_percentile                 : 4.933725
+macd_signal                         : 4.862695
+ichimoku_senkou_a                   : 4.824338
+btc_corr_24h                        : 4.812417
+obv                                 : 4.647026
+adx_14                              : 4.606822
+dist_ema_200                        : 4.221797
+dist_ema_100                        : 4.040298
+ret_12h                             : 3.653480

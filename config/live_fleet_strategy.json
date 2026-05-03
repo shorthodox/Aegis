@@ -1,0 +1,182 @@
+{
+  "generated_at": "2026-04-23T11:43:33.268716",
+  "description": "Best mode per token based on MAR ratio (Return/MaxDD) with >=15 trades",
+  "fleet": {
+    "XRP/USDT": {
+      "mode": "balanced",
+      "mar": 544.3,
+      "metrics": {
+        "net_return_pct": 54.43,
+        "max_drawdown_pct": 0.0,
+        "total_trades": 26,
+        "win_rate": 100.0,
+        "profit_factor": 54.43
+      }
+    },
+    "BCH/USDT": {
+      "mode": "conservative",
+      "mar": 247.0,
+      "metrics": {
+        "net_return_pct": 24.7,
+        "max_drawdown_pct": 0.0,
+        "total_trades": 15,
+        "win_rate": 100.0,
+        "profit_factor": 24.7
+      }
+    },
+    "ICP/USDT": {
+      "mode": "balanced",
+      "mar": 128.197,
+      "metrics": {
+        "net_return_pct": 319.21,
+        "max_drawdown_pct": 2.49,
+        "total_trades": 73,
+        "win_rate": 98.63,
+        "profit_factor": 64.299
+      }
+    },
+    "ARB/USDT": {
+      "mode": "balanced",
+      "mar": 286.477,
+      "metrics": {
+        "net_return_pct": 1375.09,
+        "max_drawdown_pct": 4.8,
+        "total_trades": 168,
+        "win_rate": 94.05,
+        "profit_factor": 12.102
+      }
+    },
+    "FIL/USDT": {
+      "mode": "aggressive",
+      "mar": 229.719,
+      "metrics": {
+        "net_return_pct": 2244.35,
+        "max_drawdown_pct": 9.77,
+        "total_trades": 164,
+        "win_rate": 86.59,
+        "profit_factor": 6.312
+      }
+    },
+    "BTC/USDT": {
+      "mode": "balanced",
+      "mar": 386.2,
+      "metrics": {
+        "net_return_pct": 38.62,
+        "max_drawdown_pct": 0.0,
+        "total_trades": 21,
+        "win_rate": 100.0,
+        "profit_factor": 38.62
+      }
+    },
+    "SOL/USDT": {
+      "mode": "aggressive",
+      "mar": 55.246,
+      "metrics": {
+        "net_return_pct": 249.16,
+        "max_drawdown_pct": 4.51,
+        "total_trades": 52,
+        "win_rate": 94.23,
+        "profit_factor": 16.276
+      }
+    },
+    "AVAX/USDT": {
+      "mode": "balanced",
+      "mar": 325.3,
+      "metrics": {
+        "net_return_pct": 32.53,
+        "max_drawdown_pct": 0.0,
+        "total_trades": 16,
+        "win_rate": 100.0,
+        "profit_factor": 32.53
+      }
+    },
+    "SHIB/USDT": {
+      "mode": "aggressive",
+      "mar": 42.262,
+      "metrics": {
+        "net_return_pct": 143.69,
+        "max_drawdown_pct": 3.4,
+        "total_trades": 40,
+        "win_rate": 95.0,
+        "profit_factor": 15.365
+      }
+    },
+    "TON/USDT": {
+      "mode": "balanced",
+      "mar": 429.1,
+      "metrics": {
+        "net_return_pct": 42.91,
+        "max_drawdown_pct": 0.0,
+        "total_trades": 20,
+        "win_rate": 100.0,
+        "profit_factor": 42.91
+      }
+    },
+    "ETH/USDT": {
+      "mode": "aggressive",
+      "mar": 3.023,
+      "metrics": {
+        "net_return_pct": 38.27,
+        "max_drawdown_pct": 12.66,
+        "total_trades": 45,
+        "win_rate": 66.67,
+        "profit_factor": 2.105
+      }
+    },
+    "BNB/USDT": {
+      "mode": "aggressive",
+      "mar": 20.698,
+      "metrics": {
+        "net_return_pct": 46.57,
+        "max_drawdown_pct": 2.25,
+        "total_trades": 24,
+        "win_rate": 95.83,
+        "profit_factor": 26.457
+      }
+    },
+    "LTC/USDT": {
+      "mode": "aggressive",
+      "mar": 10.523,
+      "metrics": {
+        "net_return_pct": 129.75,
+        "max_drawdown_pct": 12.33,
+        "total_trades": 49,
+        "win_rate": 87.76,
+        "profit_factor": 7.082
+      }
+    },
+    "AAVE/USDT": {
+      "mode": "aggressive",
+      "mar": 1232.7,
+      "metrics": {
+        "net_return_pct": 123.27,
+        "max_drawdown_pct": 0.0,
+        "total_trades": 28,
+        "win_rate": 100.0,
+        "profit_factor": 123.27
+      }
+    },
+    "VET/USDT": {
+      "mode": "aggressive",
+      "mar": 26.581,
+      "metrics": {
+        "net_return_pct": 75.49,
+        "max_drawdown_pct": 2.84,
+        "total_trades": 32,
+        "win_rate": 93.75,
+        "profit_factor": 15.172
+      }
+    },
+    "INJ/USDT": {
+      "mode": "aggressive",
+      "mar": 3.939,
+      "metrics": {
+        "net_return_pct": 25.8,
+        "max_drawdown_pct": 6.55,
+        "total_trades": 24,
+        "win_rate": 75.0,
+        "profit_factor": 2.805
+      }
+    }
+  }
+}

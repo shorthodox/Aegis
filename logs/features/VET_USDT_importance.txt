@@ -1,0 +1,20 @@
+Feature importance (gain) for VET/USDT
+==================================================
+efficiency_ratio_10                 : 106.291862
+linreg_r2_14                        : 31.147770
+dist_ema_21                         : 10.599042
+volatility_regime                   : 8.670382
+close                               : 7.454972
+ema_200                             : 7.327497
+ichimoku_chikou                     : 7.135017
+low                                 : 6.962961
+vwap                                : 6.781494
+ichimoku_kijun                      : 6.738714
+acc_dist                            : 6.735885
+williams_r                          : 6.686204
+dist_ema_9                          : 6.586481
+price_zscore_200                    : 6.585592
+dist_ema_200                        : 6.503892
+dist_ema_100                        : 6.390979
+dist_vwap                           : 6.208437
+adx_14                              : 5.626281

@@ -1,0 +1,14 @@
+# Save this in a new file: config/symbols.py
+TOP_100_TOKENS = [
+    'BTC/USDT', 'ETH/USDT', 'XRP/USDT', 'BNB/USDT', 'SOL/USDT', 'TRX/USDT', 
+    'DOGE/USDT', 'HYPE/USDT', 'ADA/USDT', 'BCH/USDT', 'LINK/USDT', 'XMR/USDT', 
+    'XLM/USDT', 'CC/USDT', 'ZEC/USDT', 'LTC/USDT', 'AVAX/USDT', 'HBAR/USDT', 
+    'SUI/USDT', 'SHIB/USDT', 'TON/USDT', 'CRO/USDT', 'TAO/USDT', 'WLFI/USDT', 
+    'MNT/USDT', 'DOT/USDT', 'UNI/USDT', 'PI/USDT', 'SKY/USDT', 'OKB/USDT', 
+    'NEAR/USDT', 'ASTER/USDT', 'PEPE/USDT', 'AAVE/USDT', 'ICP/USDT', 'ETC/USDT', 
+    'BGB/USDT', 'ONDO/USDT', 'DEXE/USDT', 'KCS/USDT', 'ENA/USDT', 'POL/USDT', 
+    'ALGO/USDT', 'KAS/USDT', 'RENDER/USDT', 'ATOM/USDT', 'QNT/USDT', 'WLD/USDT', 
+    'GT/USDT', 'MORPHO/USDT', 'ARB/USDT', 'APT/USDT', 'FIL/USDT', 'FLR/USDT', 
+    'TRUMP/USDT', 'JUP/USDT', 'NIGHT/USDT', 'SUN/USDT'
+    # ... You can add more up to 100 here
+]

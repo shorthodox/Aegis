@@ -1,0 +1,17 @@
+symbol,mode,candle_index,timestamp,direction,prob,base_threshold,adjusted_threshold,expected_net_pct,confidence_level,vol_regime,trend_strength,trend_aligned,volume_condition,size_tier,size_factor,entry_price,exit_price,pnl,return_pct,decision
+XRP/USDT,conservative,587,2026-01-13 19:00:00,long,0.7952,0.1,0.0765,0.7117,normal,normal,strong,True,high,full,1.0,2.1397,0.0,0.0,0.0,taken
+XRP/USDT,conservative,589,2026-01-13 21:00:00,long,0.7538,0.45,0.5049,0.7171,normal,high,normal,False,low,full,1.0,2.1206,0.0,0.0,0.0,taken
+XRP/USDT,conservative,1311,2026-02-12 23:00:00,long,0.7561,0.1,0.132,1.0187,normal,normal,normal,False,low,full,1.0,1.3635,0.0,0.0,0.0,taken
+XRP/USDT,conservative,1330,2026-02-13 18:00:00,long,0.7711,0.1,0.085,0.8666,normal,normal,strong,True,normal,full,1.0,1.4156,0.0,0.0,0.0,taken
+XRP/USDT,conservative,1353,2026-02-14 17:00:00,long,0.7604,0.1,0.085,0.6907,normal,normal,strong,True,normal,full,1.0,1.4734,0.0,0.0,0.0,taken
+XRP/USDT,conservative,1358,2026-02-14 22:00:00,long,0.7581,0.1,0.0935,0.7847,normal,normal,strong,True,low,full,1.0,1.5009,0.0,0.0,0.0,taken
+XRP/USDT,conservative,1360,2026-02-15 00:00:00,long,0.7843,0.45,0.2926,0.94,normal,high,strong,True,high,full,1.0,1.5218,0.0,0.0,0.0,taken
+XRP/USDT,conservative,1362,2026-02-15 02:00:00,long,0.7667,0.45,0.3251,0.9079,normal,high,strong,True,normal,full,1.0,1.528,0.0,0.0,0.0,taken
+XRP/USDT,conservative,1364,2026-02-15 04:00:00,long,0.76,0.45,0.2926,1.0012,normal,high,strong,True,high,full,1.0,1.5459,0.0,0.0,0.0,taken
+XRP/USDT,conservative,1585,2026-02-24 09:00:00,long,0.7676,0.1,0.132,0.7822,normal,normal,normal,False,low,full,1.0,1.3318,0.0,0.0,0.0,taken
+XRP/USDT,conservative,1587,2026-02-24 11:00:00,long,0.7549,0.1,0.0935,0.6991,normal,normal,strong,True,low,full,1.0,1.3334,0.0,0.0,0.0,taken
+XRP/USDT,conservative,1591,2026-02-24 15:00:00,long,0.7573,0.1,0.0765,0.763,normal,normal,strong,True,high,full,1.0,1.3516,0.0,0.0,0.0,taken
+XRP/USDT,conservative,1593,2026-02-24 17:00:00,long,0.7508,0.1,0.085,0.6881,normal,normal,strong,True,normal,full,1.0,1.3596,0.0,0.0,0.0,taken
+XRP/USDT,conservative,1595,2026-02-24 19:00:00,long,0.7634,0.1,0.0935,0.7221,normal,normal,strong,True,low,full,1.0,1.3559,0.0,0.0,0.0,taken
+XRP/USDT,conservative,1597,2026-02-24 21:00:00,long,0.779,0.1,0.132,0.7638,normal,normal,normal,False,low,full,1.0,1.3519,0.0,0.0,0.0,taken
+XRP/USDT,conservative,1599,2026-02-24 23:00:00,long,0.7849,0.1,0.132,0.7526,normal,normal,normal,False,low,full,1.0,1.3482,0.0,0.0,0.0,taken

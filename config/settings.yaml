@@ -1,0 +1,21 @@
+subscriptions:
+  basic:
+    price: 299
+    trial_days: 3
+    timeframes: ["1h", "4h", "1d"]
+  pro:
+    price: 999
+    trial_days: 3
+    timeframes: ["1m", "5m", "15m", "1h", "4h", "1d"]
+    features: ["whale_tracking", "capital_management", "sentiment_analysis"]
+
+risk_modes:
+  safe:
+    target_profit: "1-2%"
+    max_allocation: 0.05 # 5% of capital
+  moderate:
+    target_profit: "2-3%"
+    max_allocation: 0.15 # 15% of capital
+  hrhp:
+    target_profit: "4-5%"
+    max_allocation: 0.30 # 30% of capital
