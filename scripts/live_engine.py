@@ -213,17 +213,15 @@ def flush_dns_caches():
 # -------------------------------------------------------------------
 # Backtest file discovery & JSON loader
 # -------------------------------------------------------------------
-def get_latest_backtest_file(directory: Path) -> Optional[Path]:
-    if not directory.exists():
-        logger.error(f"Directory not found: {directory}")
+def get_latest_backtest_file(directory):
+    # Convert the string to a Path object
+    dir_path = Path(directory)
+    
+    # Now .exists() will work correctly
+    if not dir_path.exists():
+        # Handle the missing directory appropriately
+        print(f"[ERROR] Directory not found: {dir_path}")
         return None
-    files = list(directory.glob("cost_aware_backtest_*.json"))
-    if not files:
-        logger.error(f"No cost_aware_backtest files found in {directory}")
-        return None
-    latest = max(files, key=lambda f: f.stat().st_mtime)
-    logger.info(f"Latest backtest file: {latest.name}")
-    return latest
 
 def load_backtest_results(json_path: Path) -> Dict[str, Dict[str, Any]]:
     with open(json_path, 'r') as f:
