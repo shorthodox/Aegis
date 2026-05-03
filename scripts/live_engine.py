@@ -1511,7 +1511,7 @@ async def main():
     flush_dns_caches()
 
     args = parse_arguments()
-    backtest_dir = Path(r"D:\Content\Animesh\bots\ai_signal_bot\logs\backtests")
+    backtest_dir = os.path.join(os.getcwd(), "logs", "backtests")
     if not backtest_dir.exists():
         logger.error(f"Backtest directory not found: {backtest_dir}")
         return
