@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.encoders import jsonable_encoder
+from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel, EmailStr, SecretStr
 import jwt
 import bcrypt
@@ -31,7 +32,7 @@ load_dotenv()
 # Security: JWT & Algorithm must be from environment
 # -------------------------------------------------------------------
 SECRET_KEY = os.getenv("JWT_SECRET_KEY")
-ALGORITHM = os.getenv("ALGORITHM", "HS256")  # fallback for backward compatibility, but production must set it
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
 if not SECRET_KEY:
     raise RuntimeError("JWT_SECRET_KEY environment variable is not set. Please define it in Railway.")
 
@@ -151,6 +152,10 @@ async def run_engine_background():
     from scripts.live_engine import LiveEngine, automated_setup
     import argparse
 
+    # Log BASE_URL at engine startup to verify environment variable
+    base_url = os.getenv("BASE_URL", "http://localhost:8000")
+    print(f"🚀 Engine background task starting. BASE_URL = {base_url}")
+
     # Build a dummy argparse namespace with default values
     args = argparse.Namespace()
     args.capital = 10000.0
@@ -206,6 +211,19 @@ async def run_engine_background():
         # Engine stops, but FastAPI continues; you may want to log or attempt restart later
 
 # -------------------------------------------------------------------
+# Middleware to support proxy headers (X-Forwarded-Proto)
+# -------------------------------------------------------------------
+class ProxyHeadersMiddleware(BaseHTTPMiddleware):
+    """Update request scheme from X-Forwarded-Proto header when behind a reverse proxy."""
+    async def dispatch(self, request: Request, call_next):
+        forwarded_proto = request.headers.get("X-Forwarded-Proto")
+        if forwarded_proto:
+            # Override the request's URL scheme
+            request.scope["scheme"] = forwarded_proto
+        response = await call_next(request)
+        return response
+
+# -------------------------------------------------------------------
 # FastAPI app (lifespan runs engine as background task)
 # -------------------------------------------------------------------
 @asynccontextmanager
@@ -216,6 +234,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Aegis-1 by Gatekeeper", lifespan=lifespan)
 
+# Add proxy headers middleware FIRST (so that OAuth and redirects see correct scheme)
+app.add_middleware(ProxyHeadersMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -223,6 +244,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# -------------------------------------------------------------------
+# Root redirect – send users to the main frontend
+# -------------------------------------------------------------------
+@app.get("/")
+async def root_redirect():
+    return RedirectResponse(url="/web/index.html")
 
 # -------------------------------------------------------------------
 # Auth helpers (JWT)
@@ -574,14 +602,15 @@ async def verify_otp(request: OTPVerifyRequest):
     return {"success": True, "message": "OTP verified successfully. You may now complete registration."}
 
 # -------------------------------------------------------------------
-# Serve static frontend files
+# Serve static frontend files (robust path)
 # -------------------------------------------------------------------
-# Ensure the 'web' directory exists (optional, but safe)
 web_dir = Path(__file__).parent / "web"
-if web_dir.exists():
-    app.mount("/web", StaticFiles(directory=str(web_dir), html=True), name="web")
-else:
-    print("⚠️ Warning: 'web' directory not found, static assets will not be served.")
+if not web_dir.exists():
+    print(f"⚠️ Warning: 'web' directory not found at {web_dir}, creating empty directory to avoid errors.")
+    web_dir.mkdir(parents=True, exist_ok=True)
+    # Create a minimal index.html to inform about missing static files
+    (web_dir / "index.html").write_text("<html><body><h1>Aegis‑1</h1><p>Static files missing. Please upload the frontend.</p></body></html>")
+app.mount("/web", StaticFiles(directory=str(web_dir), html=True), name="web")
 
 if __name__ == "__main__":
     # Always pull the PORT from the environment in production
