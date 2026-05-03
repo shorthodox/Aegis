@@ -233,21 +233,35 @@ def get_latest_backtest_file(directory):
 
 def load_backtest_results(json_path: Path) -> Dict[str, Dict[str, Any]]:
     with open(json_path, 'r') as f:
-        data = json.load(f)
+        try:
+            data = json.load(f)
+        except json.JSONDecodeError:
+            logger.error(f"Failed to decode JSON: {json_path}")
+            return {}
 
-    # --- NORMALIZATION START ---
-    # Handle the case where the JSON is a dictionary instead of a list
+    # --- ENHANCED NORMALIZATION ---
     if isinstance(data, dict):
-        # Check if it's a map of symbols, e.g., {"BTC/USDT": {"mode": "balanced", ...}}
-        if any(isinstance(v, dict) for v in data.values()):
-            data = [{"symbol": k, **v} for k, v in data.items()]
+        new_data = []
+        # If it's a symbol map: {"BTC/USDT": {"net_return": 10}, "version": "1.0"}
+        for k, v in data.items():
+            if isinstance(v, dict):
+                # Only unpack if v is actually a dictionary
+                new_data.append({"symbol": k, **v})
+            elif k == "symbol":
+                # If the dict itself is the result: {"symbol": "BTC", "mar": 2}
+                new_data = [data]
+                break
+        
+        if new_data:
+            data = new_data
         else:
-            # It's a single result object, wrap it in a list
+            # Fallback for simple flat dictionaries
             data = [data]
-    # --- NORMALIZATION END ---
 
     if not isinstance(data, list):
-        raise TypeError(f"Expected list or dict, got {type(data)}")
+        logger.error(f"Unexpected data format in {json_path.name}: {type(data)}")
+        return {}
+    # --- END NORMALIZATION ---
 
     symbol_entries: Dict[str, List[Dict]] = {}
     for entry in data:
@@ -262,15 +276,10 @@ def load_backtest_results(json_path: Path) -> Dict[str, Dict[str, Any]]:
         if not mode:
             continue
             
-        # Extract performance metrics
         net_return = entry.get("net_return_pct", 0.0)
         max_dd = entry.get("max_drawdown_pct", 0.0)
+        mar = net_return / max(max_dd, 0.1)
         
-        # Calculate MAR (Managed Account Ratio) to rank the "best" settings
-        safe_dd = max(max_dd, 0.1)
-        mar = net_return / safe_dd
-        
-        # Retrieve baseline parameters from the global MODE_PARAMS
         params = MODE_PARAMS.get(mode, MODE_PARAMS["balanced"])
         
         symbol_entries.setdefault(symbol, []).append({
@@ -278,9 +287,6 @@ def load_backtest_results(json_path: Path) -> Dict[str, Dict[str, Any]]:
             "mar": mar,
             "net_return_pct": net_return,
             "max_drawdown_pct": max_dd,
-            "total_trades": entry.get("total_trades", 0),
-            "win_rate": entry.get("win_rate", 0.0),
-            "profit_factor": entry.get("profit_factor"),
             "final_threshold": entry.get("final_threshold", 0.30),
             "entry_prob_threshold": params["entry_prob"],
             "atr_sl": params["atr_sl"],
@@ -288,13 +294,12 @@ def load_backtest_results(json_path: Path) -> Dict[str, Dict[str, Any]]:
             "risk_pct": params["risk_pct"],
         })
 
-    # Select the best performing mode (highest MAR) for each unique token
     best_per_token = {}
     for sym, entries in symbol_entries.items():
         best = max(entries, key=lambda x: x["mar"])
         best_per_token[sym] = best
 
-    logger.info(f"Loaded {len(best_per_token)} tokens from {json_path.name}")
+    logger.info(f"Successfully loaded {len(best_per_token)} tokens from {json_path.name}")
     return best_per_token
 
 # -------------------------------------------------------------------
