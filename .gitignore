@@ -1,6 +1,11 @@
-﻿__pycache__/
+__pycache__/
 .venv/
 .env
-.json
-backtests/
-logs/
+
+# Ignore general log noise
+logs/*.log
+
+# ALLOW the specific backtest data needed for cloud initialization
+!logs/
+!logs/backtests/
+!logs/backtests/*.json
