@@ -12,9 +12,9 @@ from fastapi import FastAPI, HTTPException, Depends, status, WebSocket, WebSocke
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.responses import RedirectResponse, JSONResponse, FileResponse
 from fastapi.encoders import jsonable_encoder
-from starlette.middleware.base import BaseHTTPMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from pydantic import BaseModel, EmailStr, SecretStr
 import jwt
 import bcrypt
@@ -211,31 +211,18 @@ async def run_engine_background():
         # Engine stops, but FastAPI continues; you may want to log or attempt restart later
 
 # -------------------------------------------------------------------
-# Middleware to support proxy headers (X-Forwarded-Proto)
-# -------------------------------------------------------------------
-class ProxyHeadersMiddleware(BaseHTTPMiddleware):
-    """Update request scheme from X-Forwarded-Proto header when behind a reverse proxy."""
-    async def dispatch(self, request: Request, call_next):
-        forwarded_proto = request.headers.get("X-Forwarded-Proto")
-        if forwarded_proto:
-            # Override the request's URL scheme
-            request.scope["scheme"] = forwarded_proto
-        response = await call_next(request)
-        return response
-
-# -------------------------------------------------------------------
 # FastAPI app (lifespan runs engine as background task)
 # -------------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Start the engine in a background task (non‑blocking)
+    # Start the engine in a background task (non‑blocking) – this allows Railway healtcheck to pass immediately
     asyncio.create_task(run_engine_background())
-    yield
+    yield  # App is now ready to serve requests
 
 app = FastAPI(title="Aegis-1 by Gatekeeper", lifespan=lifespan)
 
-# Add proxy headers middleware FIRST (so that OAuth and redirects see correct scheme)
-app.add_middleware(ProxyHeadersMiddleware)
+# Add proxy headers middleware (from uvicorn) to handle X-Forwarded-Proto from Railway's load balancer
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
 
 app.add_middleware(
     CORSMiddleware,
@@ -251,6 +238,27 @@ app.add_middleware(
 @app.get("/")
 async def root_redirect():
     return RedirectResponse(url="/web/index.html")
+
+# -------------------------------------------------------------------
+# Serve favicon.ico and other root-level static files from /web folder
+# -------------------------------------------------------------------
+@app.get("/favicon.ico")
+async def favicon():
+    web_dir = Path(__file__).parent / "web"
+    favicon_path = web_dir / "favicon.ico"
+    if favicon_path.exists():
+        return FileResponse(favicon_path)
+    # Fallback: 204 No Content (avoid 404)
+    return Response(status_code=204)
+
+# (Optional) Also serve robots.txt or other root files if needed
+@app.get("/robots.txt")
+async def robots():
+    web_dir = Path(__file__).parent / "web"
+    robots_path = web_dir / "robots.txt"
+    if robots_path.exists():
+        return FileResponse(robots_path)
+    return Response(status_code=204)
 
 # -------------------------------------------------------------------
 # Auth helpers (JWT)
