@@ -358,17 +358,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // ========== WebSocket ==========
+    // ========== WebSocket with dynamic URL and secure protocol ==========
     function connectWebSocket() {
         if (ws && ws.readyState === WebSocket.OPEN) return;
-        const wsUrl = `ws://127.0.0.1:8000/ws/dashboard`;
+
+        // Dynamically determine WebSocket URL based on current page location
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws/dashboard`;
+        
         console.log(`🔄 Connecting WebSocket to ${wsUrl}`);
         ws = new WebSocket(wsUrl);
+        
         ws.onopen = () => { 
             setStatus(true, 'Live'); 
             reconnectAttempts = 0;
             console.log('✅ WebSocket connected');
         };
+        
         ws.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
@@ -406,16 +412,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.error('WebSocket message error:', err);
             }
         };
+        
         ws.onclose = (event) => {
             setStatus(false, 'Reconnecting...');
-            console.warn(`WebSocket closed: code=${event.code}, reason=${event.reason}`);
+            console.error(`❌ WebSocket closed: code=${event.code}, reason=${event.reason}, wasClean=${event.wasClean}`);
             const delay = Math.min(30000, 1000 * Math.pow(2, reconnectAttempts));
             reconnectAttempts++;
             setTimeout(connectWebSocket, delay);
         };
+        
         ws.onerror = (err) => {
-            console.error('WebSocket error:', err);
+            console.error('🚨 WebSocket error:', err);
             setStatus(false, 'Error');
+            // Note: onerror may be followed by onclose, so avoid immediate reconnect here
         };
     }
 
