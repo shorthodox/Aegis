@@ -214,12 +214,22 @@ def flush_dns_caches():
 # Backtest file discovery & JSON loader
 # -------------------------------------------------------------------
 def get_latest_backtest_file(directory):
-    # Fix: Convert the incoming string to a Path object
-    dir_path = Path(directory) 
-    
+    """Return the most recently modified .json file in the directory, or None."""
+    dir_path = Path(directory)
     if not dir_path.exists():
-        print(f"[ERROR] Directory not found: {dir_path}")
+        logger.warning(f"Backtest directory does not exist: {dir_path}")
         return None
+
+    # Find all .json files
+    json_files = list(dir_path.glob("*.json"))
+    if not json_files:
+        logger.warning(f"No JSON files found in {dir_path}")
+        return None
+
+    # Return the most recent file by modification time
+    latest = max(json_files, key=lambda f: f.stat().st_mtime)
+    logger.info(f"Latest backtest file: {latest}")
+    return latest
 
 def load_backtest_results(json_path: Path) -> Dict[str, Dict[str, Any]]:
     with open(json_path, 'r') as f:
@@ -1439,20 +1449,48 @@ class LiveEngine:
         logger.info("Engine stopped")
 
 # -------------------------------------------------------------------
-# Automated setup (unchanged)
+# Automated setup (with fallback to default configs)
 # -------------------------------------------------------------------
 def automated_setup(backtest_dir: Path, args: argparse.Namespace) -> Tuple[List[TokenConfig], float, float, int, bool, float, Optional[str]]:
+    # Ensure backtest directory exists (create if missing)
+    backtest_dir.mkdir(parents=True, exist_ok=True)
+
     json_path = get_latest_backtest_file(backtest_dir)
     if not json_path:
-        logger.error("No backtest JSON found. Run cost_aware_backtester.py first.")
-        sys.exit(1)
-    logger.info(f"Using backtest file: {json_path.name}")
+        logger.warning("No backtest JSON found. Using default configuration for all tokens.")
+        # Fallback: create default TokenConfig for every symbol in FLEET using balanced mode
+        configs = []
+        for symbol in FLEET:
+            configs.append(TokenConfig(
+                symbol=symbol,
+                mode="balanced",
+                base_threshold=0.30,  # default threshold
+                entry_prob_threshold=MODE_PARAMS["balanced"]["entry_prob"],
+                atr_sl=MODE_PARAMS["balanced"]["atr_sl"],
+                atr_tp=MODE_PARAMS["balanced"]["atr_tp"],
+                risk_pct=MODE_PARAMS["balanced"]["risk_pct"] * 100,  # convert to percentage
+                optimizer_thresholds={},
+            ))
+        capital = args.capital if args.capital else DEFAULT_CAPITAL
+        risk_pct = args.risk if args.risk else DEFAULT_RISK_PCT
+        max_pos = args.max_position if args.max_position else DEFAULT_MAX_POSITION
+        if max_pos <= 0 or max_pos > capital:
+            max_pos = capital
+        tf_choice = args.timeframe if args.timeframe else DEFAULT_SCAN_TIMEFRAME
+        tf_map = {'1m': 60, '5m': 300, '15m': 900, '30m': 1800, '1h': 3600, '1d': 86400, '1w': 604800, '1M': 2592000}
+        scan_seconds = tf_map.get(tf_choice, 60)
+        alpha_mode = args.alpha_mode if args.alpha_mode else DEFAULT_ALPHA_MODE
+        alpha_risk = args.alpha_risk if args.alpha_risk else DEFAULT_ALPHA_RISK_PCT
+        proxy_url = args.proxy if hasattr(args, 'proxy') else None
+        logger.info(f"Using default configs for {len(configs)} tokens (no backtest file)")
+        return configs, capital, max_pos, scan_seconds, alpha_mode, alpha_risk, proxy_url
 
+    logger.info(f"Using backtest file: {json_path.name}")
     best_per_token = load_backtest_results(json_path)
 
     if not best_per_token:
-        logger.error("No valid tokens found in backtest JSON.")
-        sys.exit(1)
+        logger.error("No valid tokens found in backtest JSON. Falling back to default configuration.")
+        return automated_setup(backtest_dir, args)  # recursive fallback (will use default)
 
     configs = []
     for symbol, info in best_per_token.items():
@@ -1501,16 +1539,14 @@ def parse_arguments():
     return parser.parse_args()
 
 # -------------------------------------------------------------------
-# Main entry point
+# Main entry point (environment-aware path)
 # -------------------------------------------------------------------
 async def main():
     flush_dns_caches()
 
     args = parse_arguments()
-    backtest_dir = os.path.join(os.getcwd(), "logs", "backtests")
-    if not backtest_dir.exists():
-        logger.error(f"Backtest directory not found: {backtest_dir}")
-        return
+    # Use dynamic path based on root_dir
+    backtest_dir = root_dir / "logs" / "backtests"
 
     configs, capital, max_pos, scan_seconds, alpha_mode, alpha_risk, proxy_url = automated_setup(backtest_dir, args)
     if not configs:
