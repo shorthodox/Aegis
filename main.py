@@ -28,7 +28,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # -------------------------------------------------------------------
-# Firebase Admin SDK – idempotent initialization (safe for --reload)
+# Security: JWT & Algorithm must be from environment
+# -------------------------------------------------------------------
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")  # fallback for backward compatibility, but production must set it
+if not SECRET_KEY:
+    raise RuntimeError("JWT_SECRET_KEY environment variable is not set. Please define it in Railway.")
+
+# -------------------------------------------------------------------
+# Firebase Admin SDK – check path existence before initializing
 # -------------------------------------------------------------------
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -37,8 +45,12 @@ FIREBASE_CREDENTIALS_PATH = os.getenv("FIREBASE_CREDENTIALS")
 if not FIREBASE_CREDENTIALS_PATH:
     raise RuntimeError("FIREBASE_CREDENTIALS environment variable not set (should be a file path)")
 
+cred_path = Path(FIREBASE_CREDENTIALS_PATH)
+if not cred_path.exists():
+    raise RuntimeError(f"Firebase credentials file not found at {cred_path}")
+
 if not firebase_admin._apps:
-    cred = credentials.Certificate(FIREBASE_CREDENTIALS_PATH)
+    cred = credentials.Certificate(str(cred_path))
     firebase_admin.initialize_app(cred)
     print("🔥 Firebase initialized.")
 else:
@@ -132,12 +144,14 @@ class LiveState:
 LIVE_STATE = LiveState()
 
 # -------------------------------------------------------------------
-# Engine runner as a background task (non‑blocking)
+# Engine runner as a background task (non‑blocking) with error handling
 # -------------------------------------------------------------------
 async def run_engine_background():
     """Run the live engine in the background without blocking startup."""
     from scripts.live_engine import LiveEngine, automated_setup
     import argparse
+
+    # Build a dummy argparse namespace with default values
     args = argparse.Namespace()
     args.capital = 10000.0
     args.risk = 2.0
@@ -147,8 +161,14 @@ async def run_engine_background():
     args.alpha_mode = False
     args.proxy = None
 
-    backtest_dir = os.path.join(os.getcwd(), "logs", "backtests")
-    configs, capital, max_pos, scan_seconds, alpha_mode, alpha_risk, proxy = automated_setup(backtest_dir, args)
+    # Use relative path consistent with project root (Linux container safe)
+    backtest_dir = Path(__file__).parent / "logs" / "backtests"
+
+    try:
+        configs, capital, max_pos, scan_seconds, alpha_mode, alpha_risk, proxy = automated_setup(backtest_dir, args)
+    except Exception as e:
+        print(f"❌ automated_setup failed: {e}")
+        return  # Engine cannot start, but FastAPI stays online
 
     engine = LiveEngine(
         token_configs=configs,
@@ -164,17 +184,26 @@ async def run_engine_background():
     # Start the background state updater
     async def update_state():
         while True:
-            LIVE_STATE.data["tickers"] = engine.live_prices.copy()
-            LIVE_STATE.data["signals"] = engine.last_signals.copy()
-            LIVE_STATE.data["open_trades"] = [asdict(t) for t in engine.wallet.open_trades.values()]
-            LIVE_STATE.data["balance"] = engine.wallet.balance
-            LIVE_STATE.data["alpha_mode"] = engine.alpha_mode
-            if hasattr(engine, 'bootstrap_total'):
-                LIVE_STATE.data["warmup_progress"] = f"{engine.bootstrap_done}/{engine.bootstrap_total}"
+            try:
+                LIVE_STATE.data["tickers"] = engine.live_prices.copy()
+                LIVE_STATE.data["signals"] = engine.last_signals.copy()
+                LIVE_STATE.data["open_trades"] = [asdict(t) for t in engine.wallet.open_trades.values()]
+                LIVE_STATE.data["balance"] = engine.wallet.balance
+                LIVE_STATE.data["alpha_mode"] = engine.alpha_mode
+                if hasattr(engine, 'bootstrap_total'):
+                    LIVE_STATE.data["warmup_progress"] = f"{engine.bootstrap_done}/{engine.bootstrap_total}"
+            except Exception as e:
+                print(f"State update error: {e}")
             await asyncio.sleep(1)
 
     asyncio.create_task(update_state())
-    await engine.run()   # This runs the main engine loop (blocks this task but not the whole app)
+
+    # Run the engine (may throw exceptions, but we catch them here to keep API alive)
+    try:
+        await engine.run()
+    except Exception as e:
+        print(f"⚠️ LiveEngine crashed: {e}")
+        # Engine stops, but FastAPI continues; you may want to log or attempt restart later
 
 # -------------------------------------------------------------------
 # FastAPI app (lifespan runs engine as background task)
@@ -198,8 +227,6 @@ app.add_middleware(
 # -------------------------------------------------------------------
 # Auth helpers (JWT)
 # -------------------------------------------------------------------
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
-ALGORITHM = "HS256"
 security = HTTPBearer()
 
 def hash_password(password: str) -> str:
@@ -209,12 +236,14 @@ def verify_password(password: str, hash_: str) -> bool:
     return bcrypt.checkpw(password.encode(), hash_.encode())
 
 def create_token(email: str) -> str:
-    expire = datetime.utcnow() + timedelta(days=7)
+    expire = datetime.now(timezone.utc) + timedelta(days=7)
     payload = {"sub": email, "exp": expire}
+    assert SECRET_KEY is not None, "SECRET_KEY must be set"
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 def decode_token(token: str) -> Optional[str]:
     try:
+        assert SECRET_KEY is not None, "SECRET_KEY must be set"
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload.get("sub")
     except:
@@ -271,8 +300,10 @@ def get_or_create_user_from_oauth(email: str, name: str, provider: str, social_i
     return {"email": email, "plan": user["plan"], "trial_end": user["trial_end"]}
 
 # -------------------------------------------------------------------
-# OAuth routes (lazy init)
+# OAuth routes – Dynamic redirect URI based on BASE_URL
 # -------------------------------------------------------------------
+BASE_URL = os.getenv("BASE_URL", "http://localhost:8000").rstrip('/')
+
 @app.get("/auth/{provider}")
 async def oauth_login(request: Request, provider: str):
     if OAuth is None:
@@ -283,7 +314,7 @@ async def oauth_login(request: Request, provider: str):
     client = oauth.create_client(provider)
     if client is None:
         raise HTTPException(status_code=400, detail=f"OAuth provider '{provider}' is not configured")
-    redirect_uri = f"http://localhost:8000/auth/{provider}/callback"
+    redirect_uri = f"{BASE_URL}/auth/{provider}/callback"
     return await client.authorize_redirect(request, redirect_uri)
 
 @app.get("/auth/{provider}/callback")
@@ -545,7 +576,12 @@ async def verify_otp(request: OTPVerifyRequest):
 # -------------------------------------------------------------------
 # Serve static frontend files
 # -------------------------------------------------------------------
-app.mount("/web", StaticFiles(directory="web", html=True), name="web")
+# Ensure the 'web' directory exists (optional, but safe)
+web_dir = Path(__file__).parent / "web"
+if web_dir.exists():
+    app.mount("/web", StaticFiles(directory=str(web_dir), html=True), name="web")
+else:
+    print("⚠️ Warning: 'web' directory not found, static assets will not be served.")
 
 if __name__ == "__main__":
     # Always pull the PORT from the environment in production
