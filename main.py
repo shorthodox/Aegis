@@ -147,7 +147,7 @@ async def run_engine_background():
     args.alpha_mode = False
     args.proxy = None
 
-    backtest_dir = Path(r"D:\Content\Animesh\bots\ai_signal_bot\logs\backtests")
+    backtest_dir = os.path.join(os.getcwd(), "logs", "backtests")
     configs, capital, max_pos, scan_seconds, alpha_mode, alpha_risk, proxy = automated_setup(backtest_dir, args)
 
     engine = LiveEngine(
