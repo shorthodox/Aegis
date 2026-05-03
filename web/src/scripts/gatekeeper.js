@@ -1,5 +1,5 @@
 // ============================================================
-// Aegis‑1 Gatekeeper – Auth + Firestore (Streamlined)
+// Aegis‑1 Gatekeeper – Sovereign Onboarding (Triple‑Step)
 // ============================================================
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
 import {
@@ -14,7 +14,9 @@ import {
   fetchSignInMethodsForEmail, updateProfile
 } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
 
-// Firebase Configuration
+// -------------------------------------------------------------------
+// Firebase Configuration (with Realtime Database URL)
+// -------------------------------------------------------------------
 const firebaseConfig = {
   apiKey: "AIzaSyDtudUL2sE1_fKbzIro5d2IP0-M2dYI6x4",
   authDomain: "aegis-d78e1.firebaseapp.com",
@@ -22,8 +24,14 @@ const firebaseConfig = {
   storageBucket: "aegis-d78e1.firebasestorage.app",
   messagingSenderId: "623998601232",
   appId: "1:623998601232:web:288a89514d84ac3573a295",
-  measurementId: "G-V6RWEEWT7L"
+  measurementId: "G-V6RWEEWT7L",
+  databaseURL: "https://aegis-d78e1-default-rtdb.asia-southeast1.firebasedatabase.app"
 };
+
+// -------------------------------------------------------------------
+// API Base URL – dynamic, falls back to current origin
+// -------------------------------------------------------------------
+const API_BASE_URL = window.location.origin; // e.g., https://gatekeeper.sbs or http://localhost:8000
 
 let firebaseApp;
 if (!globalThis._firebaseApp) {
@@ -37,29 +45,51 @@ export const auth = getAuth(firebaseApp);
 export const db = getFirestore(firebaseApp);
 export { onAuthStateChanged, signInWithPopup };
 
-// ---- OAuth Providers (Google only exported, others kept for internal use) ----
+// -------------------------------------------------------------------
+// OAuth Providers (Google only exported)
+// -------------------------------------------------------------------
 export const googleProvider = new GoogleAuthProvider();
 
-// Microsoft and Apple providers are kept for backend compatibility (not exported)
+// Microsoft and Apple providers kept for internal use (not exported)
 const microsoftProvider = new OAuthProvider('microsoft.com');
 const appleProvider = new OAuthProvider('apple.com');
 
-// ---- Helper: extract token from URL (for custom backend) ----
+// -------------------------------------------------------------------
+// Helper: extract token from URL (for custom backend)
+// -------------------------------------------------------------------
 export function extractTokenFromHash() {
-  const hash = window.location.hash.substring(1);
-  const params = new URLSearchParams(hash);
-  const token = params.get('token');
-  if (token) {
-    localStorage.setItem('access_token', token);
-    window.history.replaceState({}, document.title, window.location.pathname);
-    return token;
+  try {
+    const hash = window.location.hash.substring(1);
+    const params = new URLSearchParams(hash);
+    const token = params.get('token');
+    if (token) {
+      localStorage.setItem('access_token', token);
+      window.history.replaceState({}, document.title, window.location.pathname);
+      console.log("✅ JWT extracted from URL and stored");
+      return token;
+    }
+    return null;
+  } catch (error) {
+    console.error("❌ extractTokenFromHash error:", error.name, error.message);
+    return null;
   }
-  return null;
 }
 extractTokenFromHash();
 
 export function getJWTToken() {
   return localStorage.getItem('access_token');
+}
+
+// Check JWT expiration (returns true if token is expired)
+function isJWTExpired(token) {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const exp = payload.exp * 1000; // convert to milliseconds
+    return Date.now() >= exp;
+  } catch (e) {
+    console.warn("JWT parse error, assuming expired:", e);
+    return true;
+  }
 }
 
 export async function getFirebaseIdToken() {
@@ -75,24 +105,33 @@ export async function getFirebaseIdToken() {
 
 export async function getCurrentUserToken() {
   const jwt = getJWTToken();
-  if (jwt) return jwt;
+  if (jwt && !isJWTExpired(jwt)) {
+    return jwt;
+  } else if (jwt) {
+    console.log("Stored JWT expired, clearing and falling back to Firebase");
+    localStorage.removeItem('access_token');
+  }
   return await getFirebaseIdToken();
 }
 
-// ---- User document management ----
+// -------------------------------------------------------------------
+// User document management (with setupComplete flag and type enforcement)
+// -------------------------------------------------------------------
 export async function ensureUserDocument(user) {
   if (!user) return null;
   const userDocRef = doc(db, "users", user.uid);
   try {
     const docSnap = await getDoc(userDocRef);
     if (!docSnap.exists()) {
+      // Enforce correct types for numeric fields
       const userData = {
         email: user.email,
         displayName: user.displayName || "",
         photoURL: user.photoURL || "",
         plan: "trial",
-        capital: 10000,
-        risk_pct: 2,
+        capital: 10000,          // number
+        risk_pct: 2,             // number
+        setupComplete: false,
         join_date: serverTimestamp(),
         lastLogin: serverTimestamp()
       };
@@ -100,8 +139,17 @@ export async function ensureUserDocument(user) {
       console.log("✅ New user document created for:", user.uid);
       return userData;
     } else {
+      // Update lastLogin
       await updateDoc(userDocRef, { lastLogin: serverTimestamp() });
-      return docSnap.data();
+      const data = docSnap.data();
+      // Ensure numeric fields are numbers (defensive)
+      if (typeof data.capital !== 'number') {
+        await updateDoc(userDocRef, { capital: Number(data.capital) || 10000 });
+      }
+      if (typeof data.risk_pct !== 'number') {
+        await updateDoc(userDocRef, { risk_pct: Number(data.risk_pct) || 2 });
+      }
+      return data;
     }
   } catch (error) {
     console.error("ensureUserDocument error:", error);
@@ -124,19 +172,49 @@ export async function updateUserSetting(user, field, value) {
   if (!user) return;
   const userDocRef = doc(db, "users", user.uid);
   try {
-    await updateDoc(userDocRef, { [field]: value });
-    console.log(`✅ Updated ${field} to ${value}`);
+    // Type safety for capital and risk_pct
+    let finalValue = value;
+    if (field === 'capital' || field === 'risk_pct') {
+      finalValue = Number(value);
+      if (isNaN(finalValue)) finalValue = field === 'capital' ? 10000 : 2;
+    }
+    await updateDoc(userDocRef, { [field]: finalValue });
+    console.log(`✅ Updated ${field} to ${finalValue}`);
   } catch (error) {
     console.error(`updateUserSetting (${field}) error:`, error);
   }
 }
 
-// ---- Logout function ----
+// -------------------------------------------------------------------
+// Step 3: Onboarding – save profile and mark setupComplete
+// -------------------------------------------------------------------
+export async function updateUserOnboarding(uid, data) {
+  if (!uid) return { success: false, error: "No user ID provided" };
+  const userDocRef = doc(db, "users", uid);
+  try {
+    const updateData = {
+      fullName: data.fullName || "",
+      location: data.location || "",
+      avatarUrl: data.avatarUrl || null,
+      setupComplete: true
+    };
+    await updateDoc(userDocRef, updateData);
+    console.log("✅ Onboarding data saved for:", uid);
+    return { success: true };
+  } catch (error) {
+    console.error("updateUserOnboarding error:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+// -------------------------------------------------------------------
+// Logout – clears both Firebase session and local JWT
+// -------------------------------------------------------------------
 export async function logout() {
   try {
     await signOut(auth);
-    localStorage.clear();
-    console.log("✅ User signed out successfully");
+    localStorage.removeItem('access_token');
+    console.log("✅ User signed out, JWT cleared");
     return { success: true };
   } catch (error) {
     console.error("Logout error:", error);
@@ -144,19 +222,76 @@ export async function logout() {
   }
 }
 
-// ---- Google Sign‑in (only exported social provider) ----
+// -------------------------------------------------------------------
+// Social Login (only Google exported) with enhanced error handling
+// -------------------------------------------------------------------
 export async function signInWithGoogle() {
   try {
     const result = await signInWithPopup(auth, googleProvider);
+    console.log("Google sign-in successful, user:", result.user.email);
     await ensureUserDocument(result.user);
     return { success: true, user: result.user };
   } catch (error) {
-    console.error("Google login error:", error);
+    let friendlyMsg = "Google login failed. ";
+    switch (error.code) {
+      case 'auth/popup-closed-by-user':
+        friendlyMsg += "Popup closed before completing sign-in.";
+        break;
+      case 'auth/network-request-failed':
+        friendlyMsg += "Network error. Check your connection.";
+        break;
+      default:
+        friendlyMsg += error.message;
+    }
+    console.error("❌ Google login error:", error.code, error.message);
+    return { success: false, error: friendlyMsg };
+  }
+}
+
+// -------------------------------------------------------------------
+// Email OTP (backend endpoints) – using dynamic BASE_URL
+// -------------------------------------------------------------------
+export async function sendEmailOTP(email) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/send-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    const data = await response.json();
+    if (response.ok && data.success) {
+      return { success: true, message: data.message };
+    } else {
+      return { success: false, error: data.detail || "Failed to send OTP" };
+    }
+  } catch (error) {
+    console.error("sendEmailOTP error:", error);
     return { success: false, error: error.message };
   }
 }
 
-// ---- Email/Password (Sign In & Register) ----
+export async function verifyEmailOTP(email, otp) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, otp })
+    });
+    const data = await response.json();
+    if (response.ok && data.success) {
+      return { success: true, message: data.message };
+    } else {
+      return { success: false, error: data.detail || "Invalid OTP" };
+    }
+  } catch (error) {
+    console.error("verifyEmailOTP error:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+// -------------------------------------------------------------------
+// Legacy methods (kept for backward compatibility, not exported)
+// -------------------------------------------------------------------
 export async function signInWithEmail(email, password) {
   try {
     const result = await signInWithEmailAndPassword(auth, email, password);
@@ -187,13 +322,11 @@ export async function registerWithEmail(email, password, displayName = "") {
   }
 }
 
-// ---- Passwordless Email Link (Magic Link) ----
-const actionCodeSettings = {
-  url: window.location.href,
-  handleCodeInApp: true
-};
-
 export async function sendMagicLink(email) {
+  const actionCodeSettings = {
+    url: window.location.href,
+    handleCodeInApp: true
+  };
   try {
     await sendSignInLinkToEmail(auth, email, actionCodeSettings);
     window.localStorage.setItem('emailForSignIn', email);
@@ -206,9 +339,7 @@ export async function sendMagicLink(email) {
 export async function completeMagicLinkSignIn() {
   if (isSignInWithEmailLink(auth, window.location.href)) {
     let email = window.localStorage.getItem('emailForSignIn');
-    if (!email) {
-      email = window.prompt('Please provide your email for confirmation');
-    }
+    if (!email) email = window.prompt('Please provide your email for confirmation');
     try {
       const result = await signInWithEmailLink(auth, email, window.location.href);
       window.localStorage.removeItem('emailForSignIn');
@@ -218,13 +349,11 @@ export async function completeMagicLinkSignIn() {
       return { success: false, error: error.message };
     }
   }
-  return null; // not a magic link sign-in
+  return null;
 }
 
-// ---- Phone Number (OTP) ----
 let recaptchaVerifier = null;
 let confirmationResult = null;
-
 export function setupRecaptcha(containerId) {
   if (!recaptchaVerifier) {
     recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
@@ -234,25 +363,20 @@ export function setupRecaptcha(containerId) {
   }
   return recaptchaVerifier;
 }
-
 export async function sendPhoneOTP(phoneNumber, recaptchaContainerId) {
   try {
     const verifier = setupRecaptcha(recaptchaContainerId);
     confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, verifier);
     return { success: true, message: "OTP sent!" };
   } catch (error) {
-    console.error("OTP send error:", error);
     let msg = "Failed to send OTP. ";
     if (error.code === 'auth/invalid-phone-number') msg += "Invalid phone number.";
     else msg += error.message;
     return { success: false, error: msg };
   }
 }
-
 export async function verifyPhoneOTP(code) {
-  if (!confirmationResult) {
-    return { success: false, error: "No OTP request active. Please request a new code." };
-  }
+  if (!confirmationResult) return { success: false, error: "No OTP request active." };
   try {
     const result = await confirmationResult.confirm(code);
     await ensureUserDocument(result.user);
@@ -262,7 +386,6 @@ export async function verifyPhoneOTP(code) {
   }
 }
 
-// ---- Helper: Check existing account (for linking) ----
 export async function checkAccountExists(email) {
   try {
     const methods = await fetchSignInMethodsForEmail(auth, email);
@@ -272,14 +395,14 @@ export async function checkAccountExists(email) {
   }
 }
 
-// ---- Plan & token visibility ----
+// -------------------------------------------------------------------
+// Plan & token visibility (dashboard helpers)
+// -------------------------------------------------------------------
 export function validateAccess(userPlan, joinDate) {
   if (!joinDate) return { valid: false, plan: 'basic' };
   const now = new Date();
   const trialEnd = new Date(joinDate.getTime() + 72 * 60 * 60 * 1000);
-  if (userPlan === 'trial' && now > trialEnd) {
-    return { valid: false, plan: 'basic', expired: true };
-  }
+  if (userPlan === 'trial' && now > trialEnd) return { valid: false, plan: 'basic', expired: true };
   return { valid: true, plan: userPlan, trialEnd };
 }
 
