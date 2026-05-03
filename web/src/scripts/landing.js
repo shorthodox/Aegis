@@ -1,4 +1,4 @@
-// AEGIS v1.0 – Sovereign Terminal Core (WebSocket Client – fixed)
+// AEGIS v1.0 – Sovereign Terminal Core (Production‑Ready for Railway)
 import { 
     auth, db, ensureUserDocument, subscribeUserSettings, updateUserSetting,
     getCurrentUserToken, logout, isTokenVisible, getUpgradeModal
@@ -56,13 +56,22 @@ document.addEventListener('DOMContentLoaded', () => {
     let btcSignalSafe = false;
     let ws = null;
     let reconnectAttempts = 0;
-    let currentSignals = new Map();      // symbol -> signal object
+    let currentSignals = new Map();      // symbol (normalized with '/') -> signal object
     let selectedTrade = null;
     let activeTrades = new Map();         // from Firestore (user executed trades)
     let unsubscribeTrades = null;
-    let currentPrices = new Map();        // symbol -> latest price
+    let currentPrices = new Map();        // symbol (normalized with '/') -> latest price
     let unsubscribeSettings = null;
-    let firstDataReceived = false;        // to remove spinner once
+    let engineConnected = false;           // WebSocket open state
+    let firstSignalsReceived = false;      // at least one signal packet arrived
+
+    // ========== Symbol Normalization ==========
+    // Backend sends symbols with '/' (e.g., "BTC/USDT"). Ensure all keys use this format.
+    function normalizeSymbol(sym) {
+        if (!sym) return sym;
+        // Replace any underscore with slash (e.g., "BTC_USDT" → "BTC/USDT")
+        return String(sym).replace(/_/g, '/');
+    }
 
     // ========== Helper: ATR ==========
     function getATR(price) { return price * 0.015; }
@@ -71,6 +80,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function setStatus(connected, message = '') {
         if (statusDot) statusDot.className = connected ? 'ws-dot connected' : 'ws-dot disconnected';
         if (statusText) statusText.innerText = message || (connected ? 'Live' : 'Connecting...');
+        engineConnected = connected;
+        if (connected) {
+            // Force UI redraw to show "Synchronizing..." instead of connection error
+            renderAllSignals();
+        }
     }
 
     // ========== Simulator Update ==========
@@ -184,7 +198,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderTradesTable() {
         if (!tradesTbody) return;
         if (activeTrades.size === 0) {
-            tradesTbody.innerHTML = '<table><td colspan="7" style="text-align:center;">No active trades</td></tr>';
+            tradesTbody.innerHTML = '</td><td colspan="7" style="text-align:center;">No active trades</td></tr>';
             return;
         }
         let html = '';
@@ -312,62 +326,79 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderAllSignals() {
         if (!signalGrid) return;
         const trialValid = (userPlan === 'trial' && trialActive);
-        // Fallback: if no signals yet but userPlan is known, show the Big 5 (or waiting message)
-        if (currentSignals.size === 0) {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                signalGrid.innerHTML = '<div class="loading-spinner">Engine warming up, signals incoming...</div>';
+
+        // No data yet – distinguish between connection problem and engine warmup
+        if (!firstSignalsReceived) {
+            if (engineConnected) {
+                signalGrid.innerHTML = '<div class="loading-spinner">⚡ Synchronizing with Engine... (signals incoming)</div>';
             } else {
-                signalGrid.innerHTML = '<div class="loading-spinner">Waiting for engine connection...</div>';
+                signalGrid.innerHTML = '<div class="loading-spinner">❌ Waiting for engine connection...</div>';
             }
             return;
         }
+
+        if (currentSignals.size === 0) {
+            signalGrid.innerHTML = '<div class="loading-spinner">📡 No signal data yet. Engine may be warming up.</div>';
+            return;
+        }
+
         signalGrid.innerHTML = '';
-        for (let [sym, sig] of currentSignals) {
+        for (let [rawSym, sig] of currentSignals.entries()) {
+            const sym = normalizeSymbol(rawSym);
             const price = currentPrices.get(sym) || 0;
             const visible = isTokenVisible(sym, userPlan, trialValid);
             signalGrid.appendChild(renderSignalCard(sym, price, sig, !visible));
         }
     }
 
-    // ========== WebSocket (hardened URL) ==========
+    // ========== WebSocket (dynamic URL with protocol detection) ==========
     function connectWebSocket() {
         if (ws && ws.readyState === WebSocket.OPEN) return;
-        const wsUrl = `ws://127.0.0.1:8000/ws/dashboard`;
+
+        // Determine secure protocol based on page origin
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws/dashboard`;
         console.log(`🔄 Connecting WebSocket to ${wsUrl}`);
+
         ws = new WebSocket(wsUrl);
         ws.onopen = () => { 
             setStatus(true, 'Live'); 
             reconnectAttempts = 0;
             console.log('✅ WebSocket connected');
-            firstDataReceived = false;
+            // Reset data on reconnect to avoid stale signals
+            firstSignalsReceived = false;
+            currentSignals.clear();
+            currentPrices.clear();
             renderAllSignals();
         };
         ws.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
                 console.log('📡 Aegis Data Received:', data);
-                // Remove spinner on first data arrival
-                if (!firstDataReceived && (Object.keys(data.tickers || {}).length > 0 || Object.keys(data.signals || {}).length > 0)) {
-                    firstDataReceived = true;
+                // Mark that we have received at least one data packet
+                if (!firstSignalsReceived && (Object.keys(data.tickers || {}).length > 0 || Object.keys(data.signals || {}).length > 0)) {
+                    firstSignalsReceived = true;
                 }
-                // Update warmup status
+                // Warmup status
                 if (data.warmup) {
                     warmupActive = data.warmup !== 'Active' && !data.warmup.includes('Active');
                     if (warmupSpan) warmupSpan.innerText = data.warmup;
                 }
-                // Update alpha mode
+                // Alpha mode
                 alphaMode = data.alpha_mode || false;
                 if (alphaToggleDiv) {
                     alphaToggleDiv.innerText = alphaMode ? '⚡ ON' : 'OFF';
                     alphaToggleDiv.classList.toggle('active', alphaMode);
                 }
-                // Update tickers
+                // Tickers: normalize keys and store
                 for (const [sym, price] of Object.entries(data.tickers || {})) {
-                    currentPrices.set(sym, price);
+                    const norm = normalizeSymbol(sym);
+                    currentPrices.set(norm, price);
                 }
-                // Update signals
+                // Signals: normalize keys and store enriched object
                 for (const [sym, sig] of Object.entries(data.signals || {})) {
-                    currentSignals.set(sym, {
+                    const norm = normalizeSymbol(sym);
+                    currentSignals.set(norm, {
                         ai_prob: sig.ai_prob || 0,
                         signal: sig.signal || 'WAITING',
                         signal_strength: sig.signal_strength || 'HOLD',
@@ -375,12 +406,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         risk_pct: sig.risk_pct || 2
                     });
                 }
-                // BTC safety flag
+                // BTC safety
                 const btcSig = currentSignals.get('BTC/USDT');
                 if (btcSig) {
                     btcSignalSafe = (btcSig.signal === 'BUY' || btcSig.signal === 'STRONG_BUY');
                 }
-                // Render UI
+                // Refresh UI
                 renderAllSignals();
                 updateSafetyBrake();
                 renderTradesTable();
@@ -390,7 +421,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         ws.onclose = (event) => {
             setStatus(false, 'Reconnecting...');
-            console.warn(`WebSocket closed: code=${event.code}, reason=${event.reason}`);
+            console.warn(`WebSocket closed: code=${event.code}, reason=${event.reason}, wasClean=${event.wasClean}`);
             const delay = Math.min(30000, 1000 * Math.pow(2, reconnectAttempts));
             reconnectAttempts++;
             setTimeout(connectWebSocket, delay);
@@ -485,7 +516,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (alphaConfirm) {
         alphaConfirm.addEventListener('click', async () => {
             const token = await getCurrentUserToken();
-            if (token) await fetch('/alpha/toggle', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
+            if (token) {
+                // Relative path (works on any origin)
+                const response = await fetch('/alpha/toggle', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) {
+                    console.warn('Alpha toggle failed:', response.status);
+                }
+            }
             const modal = document.getElementById('alpha-modal');
             if (modal) {
                 modal.style.display = 'none';
@@ -514,7 +554,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-    // Also close when clicking outside
     window.addEventListener('click', (e) => {
         if (e.target === loginModal) {
             loginModal.style.display = 'none';
