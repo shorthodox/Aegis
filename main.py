@@ -548,4 +548,7 @@ async def verify_otp(request: OTPVerifyRequest):
 app.mount("/web", StaticFiles(directory="web", html=True), name="web")
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    # Always pull the PORT from the environment in production
+    port = int(os.environ.get("PORT", 8080))
+    # Host MUST be 0.0.0.0 for Railway to route external traffic
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
