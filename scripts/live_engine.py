@@ -214,12 +214,10 @@ def flush_dns_caches():
 # Backtest file discovery & JSON loader
 # -------------------------------------------------------------------
 def get_latest_backtest_file(directory):
-    # Convert the string to a Path object
-    dir_path = Path(directory)
+    # Fix: Convert the incoming string to a Path object
+    dir_path = Path(directory) 
     
-    # Now .exists() will work correctly
     if not dir_path.exists():
-        # Handle the missing directory appropriately
         print(f"[ERROR] Directory not found: {dir_path}")
         return None
 
