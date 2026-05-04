@@ -235,29 +235,62 @@ app.add_middleware(
 )
 
 # -------------------------------------------------------------------
-# Root redirect – send users to the main frontend
+# Root redirect – send users to the actual frontend (nested inside web/scr/pages)
+# Use absolute path to construct the static directory and redirect accordingly.
 # -------------------------------------------------------------------
+# Determine the absolute path of the current file's directory
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# The frontend files are located in web/scr/pages (assuming 'scr' is the correct folder name)
+# If your actual folder name is different (e.g., 'src'), change it here.
+FRONTEND_ROOT = os.path.join(BASE_DIR, "web", "scr", "pages")
+FRONTEND_ROOT_PATH = Path(FRONTEND_ROOT)
+
+# Ensure the directory exists; if not, create it with a fallback index.html
+if not FRONTEND_ROOT_PATH.exists():
+    print(f"⚠️ Warning: Frontend directory not found at {FRONTEND_ROOT_PATH}. Creating it.")
+    FRONTEND_ROOT_PATH.mkdir(parents=True, exist_ok=True)
+    (FRONTEND_ROOT_PATH / "index.html").write_text(
+        "<html><body><h1>Aegis‑1</h1><p>Frontend files missing. Please upload the correct static files to web/scr/pages/</p></body></html>"
+    )
+
+# Mount the deep directory to the /web prefix
+app.mount("/web", StaticFiles(directory=str(FRONTEND_ROOT_PATH), html=True), name="web")
+
 @app.get("/")
 async def root_redirect():
+    # Redirect to the actual index.html inside the nested structure
     return RedirectResponse(url="/web/index.html")
 
 # -------------------------------------------------------------------
-# Serve favicon.ico and other root-level static files from /web folder
+# Diagnostic endpoint: list files inside the frontend directory
+# -------------------------------------------------------------------
+@app.get("/debug-files")
+async def debug_files():
+    try:
+        files = os.listdir(FRONTEND_ROOT_PATH)
+        return JSONResponse(content={
+            "frontend_root": str(FRONTEND_ROOT_PATH),
+            "files": files,
+            "exists": FRONTEND_ROOT_PATH.exists(),
+            "is_dir": FRONTEND_ROOT_PATH.is_dir() if FRONTEND_ROOT_PATH.exists() else False,
+        })
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+# -------------------------------------------------------------------
+# Serve favicon.ico and other root-level static files from the same frontend directory
 # -------------------------------------------------------------------
 @app.get("/favicon.ico")
 async def favicon():
-    web_dir = Path(__file__).parent / "web"
-    favicon_path = web_dir / "favicon.ico"
+    favicon_path = FRONTEND_ROOT_PATH / "favicon.ico"
     if favicon_path.exists():
         return FileResponse(favicon_path)
-    # Fallback: 204 No Content (avoid 404)
     return Response(status_code=204)
 
-# (Optional) Also serve robots.txt or other root files if needed
 @app.get("/robots.txt")
 async def robots():
-    web_dir = Path(__file__).parent / "web"
-    robots_path = web_dir / "robots.txt"
+    robots_path = FRONTEND_ROOT_PATH / "robots.txt"
     if robots_path.exists():
         return FileResponse(robots_path)
     return Response(status_code=204)
@@ -610,17 +643,6 @@ async def verify_otp(request: OTPVerifyRequest):
         raise HTTPException(status_code=400, detail="Invalid OTP. Please try again.")
     otp_store.pop(email, None)
     return {"success": True, "message": "OTP verified successfully. You may now complete registration."}
-
-# -------------------------------------------------------------------
-# Serve static frontend files (robust path)
-# -------------------------------------------------------------------
-web_dir = Path(__file__).parent / "web"
-if not web_dir.exists():
-    print(f"⚠️ Warning: 'web' directory not found at {web_dir}, creating empty directory to avoid errors.")
-    web_dir.mkdir(parents=True, exist_ok=True)
-    # Create a minimal index.html to inform about missing static files
-    (web_dir / "index.html").write_text("<html><body><h1>Aegis‑1</h1><p>Static files missing. Please upload the frontend.</p></body></html>")
-app.mount("/web", StaticFiles(directory=str(web_dir), html=True), name="web")
 
 if __name__ == "__main__":
     # Always pull the PORT from the environment in production
