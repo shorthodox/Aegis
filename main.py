@@ -235,61 +235,73 @@ app.add_middleware(
 )
 
 # -------------------------------------------------------------------
-# Root redirect – send users to the actual frontend (nested inside web/src/pages)
-# Use absolute path to construct the static directory and redirect accordingly.
+# Static Files: serve the entire 'web' folder under '/web' prefix
 # -------------------------------------------------------------------
-# Determine the absolute path of the current file's directory
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+WEB_ROOT = os.path.join(BASE_DIR, "web")
+WEB_ROOT_PATH = Path(WEB_ROOT)
 
-# The frontend files are located in web/src/pages (as per the GitHub structure)
-FRONTEND_ROOT = os.path.join(BASE_DIR, "web", "src", "pages")
-FRONTEND_ROOT_PATH = Path(FRONTEND_ROOT)
-
-# Ensure the directory exists; if not, create it with a fallback index.html
-if not FRONTEND_ROOT_PATH.exists():
-    print(f"⚠️ Warning: Frontend directory not found at {FRONTEND_ROOT_PATH}. Creating it.")
-    FRONTEND_ROOT_PATH.mkdir(parents=True, exist_ok=True)
-    (FRONTEND_ROOT_PATH / "index.html").write_text(
-        "<html><body><h1>Aegis‑1</h1><p>Frontend files missing. Please upload the correct static files to web/src/pages/</p></body></html>"
+# Ensure the web directory exists (create with minimal fallback if missing)
+if not WEB_ROOT_PATH.exists():
+    print(f"⚠️ Warning: 'web' directory not found at {WEB_ROOT_PATH}. Creating it with fallback structure.")
+    WEB_ROOT_PATH.mkdir(parents=True, exist_ok=True)
+    # Create a minimal src/pages/index.html to avoid 404 on root redirect
+    pages_dir = WEB_ROOT_PATH / "src" / "pages"
+    pages_dir.mkdir(parents=True, exist_ok=True)
+    (pages_dir / "index.html").write_text(
+        "<html><body><h1>Aegis‑1</h1><p>Frontend files missing. Please upload the correct static files to 'web/src/pages/'</p></body></html>"
+    )
+    (pages_dir / "dashboard.html").write_text(
+        "<html><body><h1>Dashboard unavailable</h1><p>Static files not found.</p></body></html>"
     )
 
-# Mount the deep directory to the /web prefix
-app.mount("/web", StaticFiles(directory=str(FRONTEND_ROOT_PATH), html=True), name="web")
-
-@app.get("/")
-async def root_redirect():
-    # Redirect to the actual index.html inside the nested structure
-    return RedirectResponse(url="/web/index.html")
+# Mount the entire web directory – all subfolders (src, styles, scripts) become accessible
+app.mount("/web", StaticFiles(directory=str(WEB_ROOT_PATH), html=True), name="web")
 
 # -------------------------------------------------------------------
-# Diagnostic endpoint: list files inside the frontend directory
+# Redirects for convenient access to the frontend pages
+# -------------------------------------------------------------------
+@app.get("/")
+async def root_redirect():
+    return RedirectResponse(url="/web/src/pages/index.html")
+
+@app.get("/dashboard")
+async def dashboard_redirect():
+    return RedirectResponse(url="/web/src/pages/dashboard.html")
+
+# -------------------------------------------------------------------
+# Diagnostic endpoint: list the contents of the web root (for debugging)
 # -------------------------------------------------------------------
 @app.get("/debug-files")
 async def debug_files():
     try:
-        files = os.listdir(FRONTEND_ROOT_PATH)
+        # Show the whole web root structure (top level)
+        top_files = os.listdir(WEB_ROOT_PATH) if WEB_ROOT_PATH.exists() else []
+        # Also list src/pages if available
+        pages_path = WEB_ROOT_PATH / "src" / "pages"
+        pages_files = os.listdir(pages_path) if pages_path.exists() else []
         return JSONResponse(content={
-            "frontend_root": str(FRONTEND_ROOT_PATH),
-            "files": files,
-            "exists": FRONTEND_ROOT_PATH.exists(),
-            "is_dir": FRONTEND_ROOT_PATH.is_dir() if FRONTEND_ROOT_PATH.exists() else False,
+            "web_root": str(WEB_ROOT_PATH),
+            "top_level": top_files,
+            "src_pages_files": pages_files,
+            "exists": WEB_ROOT_PATH.exists(),
         })
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 # -------------------------------------------------------------------
-# Serve favicon.ico and other root-level static files from the same frontend directory
+# Serve favicon.ico and other root-level static files from the web root
 # -------------------------------------------------------------------
 @app.get("/favicon.ico")
 async def favicon():
-    favicon_path = FRONTEND_ROOT_PATH / "favicon.ico"
+    favicon_path = WEB_ROOT_PATH / "favicon.ico"
     if favicon_path.exists():
         return FileResponse(favicon_path)
     return Response(status_code=204)
 
 @app.get("/robots.txt")
 async def robots():
-    robots_path = FRONTEND_ROOT_PATH / "robots.txt"
+    robots_path = WEB_ROOT_PATH / "robots.txt"
     if robots_path.exists():
         return FileResponse(robots_path)
     return Response(status_code=204)
@@ -411,7 +423,8 @@ async def oauth_callback(request: Request, provider: str):
         return JSONResponse(content={"error": "Email not provided"}, status_code=400)
     user = get_or_create_user_from_oauth(email, name, provider, sub)
     jwt_token = create_token(email)
-    return RedirectResponse(f"/web/dashboard.html#token={jwt_token}")
+    # Redirect to the actual dashboard page (inside src/pages)
+    return RedirectResponse(f"/web/src/pages/dashboard.html#token={jwt_token}")
 
 # -------------------------------------------------------------------
 # Pydantic models
