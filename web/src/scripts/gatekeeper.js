@@ -426,9 +426,14 @@ export function startTrialCountdown(trialEnd, displayElement) {
 
 const BIG5 = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT"];
 export function isTokenVisible(symbol, userPlan, trialActive = true) {
+  // Pro users see everything
   if (userPlan === 'pro') return true;
-  if (userPlan === 'trial' && trialActive) return true;
-  return BIG5.includes(symbol);
+
+  // Trial users within the 72h window see only the BIG5 sample tokens
+  if (userPlan === 'trial' && trialActive) return BIG5.includes(symbol);
+
+  // Non-subscribed or expired trial users see no signals
+  return false;
 }
 
 export function getUpgradeModal() {
