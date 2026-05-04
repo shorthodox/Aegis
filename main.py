@@ -493,7 +493,8 @@ async def get_me(email: str = Depends(get_current_user)):
 # Subscription & plan limits
 # -------------------------------------------------------------------
 BASIC_TOKENS = ["BTC/USDT", "ETH/USDT", "SHIB/USDT", "LTC/USDT", "DOGE/USDT"]
-BASIC_TIMEFRAMES = ["5m", "15m", "1h"]
+# Basic users: 3‑day trial -> limited timeframes (30m, 1h)
+BASIC_TIMEFRAMES = ["30m", "1h"]
 
 def get_user_plan(email: str) -> str:
     user_doc = get_user_doc(email)
