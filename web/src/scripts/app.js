@@ -592,7 +592,10 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log("Attaching logout listener");
         logoutBtn.addEventListener('click', handleLogout);
     } else {
-        console.warn("Logout button not found in DOM");
+        if (!window.__logoutWarned) {
+            console.warn("Logout button not found in DOM");
+            window.__logoutWarned = true;
+        }
     }
     
     // Initial suggested size calculation
