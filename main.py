@@ -235,15 +235,14 @@ app.add_middleware(
 )
 
 # -------------------------------------------------------------------
-# Root redirect – send users to the actual frontend (nested inside web/scr/pages)
+# Root redirect – send users to the actual frontend (nested inside web/src/pages)
 # Use absolute path to construct the static directory and redirect accordingly.
 # -------------------------------------------------------------------
 # Determine the absolute path of the current file's directory
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# The frontend files are located in web/scr/pages (assuming 'scr' is the correct folder name)
-# If your actual folder name is different (e.g., 'src'), change it here.
-FRONTEND_ROOT = os.path.join(BASE_DIR, "web", "scr", "pages")
+# The frontend files are located in web/src/pages (as per the GitHub structure)
+FRONTEND_ROOT = os.path.join(BASE_DIR, "web", "src", "pages")
 FRONTEND_ROOT_PATH = Path(FRONTEND_ROOT)
 
 # Ensure the directory exists; if not, create it with a fallback index.html
@@ -251,7 +250,7 @@ if not FRONTEND_ROOT_PATH.exists():
     print(f"⚠️ Warning: Frontend directory not found at {FRONTEND_ROOT_PATH}. Creating it.")
     FRONTEND_ROOT_PATH.mkdir(parents=True, exist_ok=True)
     (FRONTEND_ROOT_PATH / "index.html").write_text(
-        "<html><body><h1>Aegis‑1</h1><p>Frontend files missing. Please upload the correct static files to web/scr/pages/</p></body></html>"
+        "<html><body><h1>Aegis‑1</h1><p>Frontend files missing. Please upload the correct static files to web/src/pages/</p></body></html>"
     )
 
 # Mount the deep directory to the /web prefix
