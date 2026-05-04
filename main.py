@@ -12,7 +12,7 @@ from fastapi import FastAPI, HTTPException, Depends, status, WebSocket, WebSocke
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse, JSONResponse, FileResponse, Response
+from fastapi.responses import RedirectResponse, JSONResponse, FileResponse
 from fastapi.encoders import jsonable_encoder
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from pydantic import BaseModel, EmailStr, SecretStr
@@ -173,6 +173,8 @@ async def run_engine_background():
         configs, capital, max_pos, scan_seconds, alpha_mode, alpha_risk, proxy = automated_setup(backtest_dir, args)
     except Exception as e:
         print(f"❌ automated_setup failed: {e}")
+        # Add a short delay to avoid log flooding if the failure repeats in a loop
+        await asyncio.sleep(1)
         return  # Engine cannot start, but FastAPI stays online
 
     engine = LiveEngine(
@@ -215,7 +217,7 @@ async def run_engine_background():
 # -------------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Start the engine in a background task (non‑blocking) – this allows Railway healtcheck to pass immediately
+    # Start the engine in a background task (non‑blocking) – allows Railway healthcheck to pass immediately
     asyncio.create_task(run_engine_background())
     yield  # App is now ready to serve requests
 
