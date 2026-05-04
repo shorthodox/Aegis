@@ -1,7 +1,9 @@
 // AEGIS v1.0 – Sovereign Terminal Core (Production‑Ready for Railway)
 import { 
     auth, db, ensureUserDocument, subscribeUserSettings, updateUserSetting,
-    getCurrentUserToken, logout, isTokenVisible, getUpgradeModal
+    getCurrentUserToken, logout, isTokenVisible, getUpgradeModal,
+    registerWithEmail, signInWithEmail, sendPhoneOTP, verifyPhoneOTP, signInWithGoogle,
+    setupRecaptcha, checkAccountExists, updateUserOnboarding
 } from './gatekeeper.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
 import { collection, addDoc, onSnapshot, doc, updateDoc, query, where } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js";
@@ -488,6 +490,76 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ========== Event Listeners ==========
+    // --- Modal controls (signup/login) ---
+    const portalBtn = document.getElementById('portalBtn');
+    const heroMathBtn = document.getElementById('heroMathBtn');
+    const loginModalEl = document.getElementById('loginModal');
+    const step1El = document.getElementById('step1');
+    const step2El = document.getElementById('step2');
+    const step3El = document.getElementById('step3');
+    const continueToOtpBtnEl = document.getElementById('continueToOtpBtn');
+    const backToEmailBtnEl = document.getElementById('backToEmailBtn');
+    const completeOnboardingBtn = document.getElementById('completeOnboarding');
+    const googleStepBtnEl = document.getElementById('googleStepBtn');
+    const emailInputEl = document.getElementById('emailInput');
+    const otpContainerEl = document.getElementById('otpContainer');
+    const otpInputs = document.querySelectorAll('.otp-digit');
+    const otpEmailDisplayEl = document.getElementById('otpEmailDisplay');
+    const fullNameEl = document.getElementById('fullName');
+    const locationEl = document.getElementById('location');
+    const regPasswordEl = document.getElementById('regPassword');
+    const regConfirmPasswordEl = document.getElementById('regConfirmPassword');
+    const avatarFileEl = document.getElementById('avatarFile');
+
+    let modalAuthMode = 'register'; // 'register' or 'login'
+    let modalUsePhone = false;
+    let pendingPhone = null;
+
+    function showModalStep(n) {
+        step1El.classList.remove('active');
+        step2El.classList.remove('active');
+        step3El.classList.remove('active');
+        if (n === 1) step1El.classList.add('active');
+        if (n === 2) step2El.classList.add('active');
+        if (n === 3) step3El.classList.add('active');
+    }
+
+    function openAuthModal() {
+        if (loginModalEl) {
+            loginModalEl.style.display = 'flex';
+            lockBodyScroll();
+            showModalStep(1);
+        }
+    }
+
+    function closeAuthModal() {
+        if (loginModalEl) {
+            loginModalEl.style.display = 'none';
+            unlockBodyScroll();
+        }
+    }
+
+    if (portalBtn) portalBtn.addEventListener('click', openAuthModal);
+    if (heroMathBtn) heroMathBtn.addEventListener('click', openAuthModal);
+
+    // Google button
+    if (googleStepBtnEl) {
+        googleStepBtnEl.addEventListener('click', async () => {
+            try {
+                const res = await signInWithGoogle();
+                if (res && res.success) {
+                    // Redirect existing users to dashboard; new users continue to pricing
+                    // We cannot reliably detect 'new' here, so send to dashboard for now
+                    window.location.replace('/web/src/pages/dashboard.html');
+                } else {
+                    alert(res.error || 'Google sign-in failed');
+                }
+            } catch (err) {
+                console.error('Google sign-in error:', err);
+                alert('Google sign-in error: ' + (err.message || err));
+            }
+        });
+    }
     if (capitalInput) capitalInput.addEventListener('change', () => { if (currentUser) updateUserSetting(currentUser, 'capital', parseFloat(capitalInput.value)); });
     if (riskSelect) riskSelect.addEventListener('change', () => { if (currentUser) updateUserSetting(currentUser, 'risk_pct', parseInt(riskSelect.value)); });
     if (simRiskSlider) simRiskSlider.addEventListener('input', () => { riskPercentDisplay.innerText = simRiskSlider.value + '%'; updateSimulation(); });
@@ -567,7 +639,140 @@ document.addEventListener('DOMContentLoaded', () => {
             unlockBodyScroll();
         }
     });
-    
+    // ========== Auth modal interactions ==========
+    if (backToEmailBtnEl) backToEmailBtnEl.addEventListener('click', () => showModalStep(1));
+
+    if (continueToOtpBtnEl) {
+        continueToOtpBtnEl.addEventListener('click', async () => {
+            const val = (emailInputEl && emailInputEl.value || '').trim();
+            if (!val) { alert('Enter an email or phone number'); return; }
+
+            // Simple phone detection: starts with + or digits and contains no @
+            const looksLikePhone = /^\+?\d[\d\s().-]{6,}$/.test(val) && !val.includes('@');
+            if (looksLikePhone) {
+                // Phone OTP flow
+                modalUsePhone = true;
+                pendingPhone = val;
+                try {
+                    setupRecaptcha && setupRecaptcha('recaptcha-container');
+                    const r = await sendPhoneOTP(val, 'recaptcha-container');
+                    if (!r.success) throw new Error(r.error || 'Failed to send OTP');
+                    otpEmailDisplayEl.innerText = val;
+                    showModalStep(2);
+                    // focus first OTP input
+                    if (otpInputs && otpInputs[0]) otpInputs[0].focus();
+                } catch (err) {
+                    console.error('sendPhoneOTP error:', err);
+                    alert('Failed to send OTP: ' + (err.message || err));
+                }
+                return;
+            }
+
+            // Email path – check if account exists to choose login vs register
+            modalUsePhone = false;
+            try {
+                const existsResp = await checkAccountExists(val);
+                if (existsResp && existsResp.exists) {
+                    modalAuthMode = 'login';
+                } else {
+                    modalAuthMode = 'register';
+                }
+                // Pre-fill Step3 fields
+                if (fullNameEl) fullNameEl.value = '';
+                if (locationEl) locationEl.value = '';
+                showModalStep(3);
+            } catch (err) {
+                console.error('Account check failed:', err);
+                alert('Account check failed: ' + (err.message || err));
+            }
+        });
+    }
+
+    // OTP input wiring (auto-advance)
+    if (otpInputs && otpInputs.length) {
+        otpInputs.forEach((inp, idx) => {
+            inp.addEventListener('input', () => {
+                const v = inp.value.replace(/[^0-9]/g, ''); inp.value = v;
+                if (v && idx + 1 < otpInputs.length) otpInputs[idx + 1].focus();
+                // if last and filled, attempt verify
+                const completed = Array.from(otpInputs).every(i => i.value.trim().length === 1);
+                if (completed) {
+                    const code = Array.from(otpInputs).map(i => i.value).join('');
+                    (async () => {
+                        try {
+                            const resp = await verifyPhoneOTP(code);
+                            if (resp && resp.success) {
+                                // After successful phone verification, redirect to pricing for onboarding
+                                closeAuthModal();
+                                window.location.replace('/web/src/pages/pricing.html');
+                            } else {
+                                alert(resp.error || 'Invalid OTP');
+                            }
+                        } catch (err) {
+                            console.error('verifyPhoneOTP error:', err);
+                            alert('OTP verification failed: ' + (err.message || err));
+                        }
+                    })();
+                }
+            });
+            inp.addEventListener('keydown', (ev) => {
+                if (ev.key === 'Backspace' && !inp.value && idx > 0) {
+                    otpInputs[idx - 1].focus();
+                }
+            });
+        });
+    }
+
+    // Complete onboarding / register or login
+    if (completeOnboardingBtn) {
+        completeOnboardingBtn.addEventListener('click', async () => {
+            const email = emailInputEl && emailInputEl.value && emailInputEl.value.trim();
+            const pwd = regPasswordEl && regPasswordEl.value;
+            const pwd2 = regConfirmPasswordEl && regConfirmPasswordEl.value;
+            const name = fullNameEl && fullNameEl.value.trim();
+            const loc = locationEl && locationEl.value.trim();
+            if (!email) { alert('Email required'); return; }
+            if (!pwd || pwd.length < 6) { alert('Password must be at least 6 characters'); return; }
+            if (pwd !== pwd2) { alert('Passwords do not match'); return; }
+
+            if (modalAuthMode === 'login') {
+                try {
+                    const r = await signInWithEmail(email, pwd);
+                    if (r && r.success) {
+                        closeAuthModal();
+                        window.location.replace('/web/src/pages/dashboard.html');
+                    } else {
+                        alert(r.error || 'Login failed');
+                    }
+                } catch (err) {
+                    console.error('Login error:', err);
+                    alert('Login error: ' + (err.message || err));
+                }
+                return;
+            }
+
+            // Register flow
+            try {
+                const res = await registerWithEmail(email, pwd, name || '');
+                if (res && res.success) {
+                    // Save onboarding metadata
+                    try {
+                        await updateUserOnboarding(res.user.uid, { fullName: name, location: loc, avatarUrl: null });
+                    } catch (e) {
+                        console.warn('Onboarding save failed:', e);
+                    }
+                    closeAuthModal();
+                    // Redirect newly registered users to pricing to pick a plan
+                    window.location.replace('/web/src/pages/pricing.html');
+                } else {
+                    alert(res.error || 'Registration failed');
+                }
+            } catch (err) {
+                console.error('Registration error:', err);
+                alert('Registration error: ' + (err.message || err));
+            }
+        });
+    }
     if (logoutBtn) {
         console.log("Attaching logout listener");
         logoutBtn.addEventListener('click', handleLogout);
