@@ -120,13 +120,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const riskReward = 3;
         const riskPercentOfBalance = (riskAmount / balance) * 100;
         const gaugePercent = Math.min(100, (riskPercentOfBalance / 10) * 100);
-        riskGaugeFill.style.width = `${gaugePercent}%`;
-        posUnitsSpan.innerText = positionUnits.toFixed(4);
-        notionalSpan.innerText = `$${notionalValue.toFixed(2)}`;
-        marginSpan.innerText = `$${marginRequired.toFixed(2)}`;
-        liquidationSpan.innerText = `$${liquidationPrice.toFixed(4)}`;
-        rrRatioSpan.innerText = riskReward.toFixed(2);
-        suggestedSpan.innerText = `$${notionalValue.toFixed(2)}`;
+        if (riskGaugeFill) riskGaugeFill.style.width = `${gaugePercent}%`;
+        if (posUnitsSpan) posUnitsSpan.innerText = Number(positionUnits || 0).toFixed(4);
+        if (notionalSpan) notionalSpan.innerText = `$${Number(notionalValue || 0).toFixed(2)}`;
+        if (marginSpan) marginSpan.innerText = `$${Number(marginRequired || 0).toFixed(2)}`;
+        if (liquidationSpan) liquidationSpan.innerText = `$${Number(liquidationPrice || 0).toFixed(4)}`;
+        if (rrRatioSpan) rrRatioSpan.innerText = Number(riskReward).toFixed(2);
+        if (suggestedSpan) suggestedSpan.innerText = `$${Number(notionalValue || 0).toFixed(2)}`;
     }
 
     // ========== Pre-fill Simulator ==========
@@ -198,24 +198,26 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderTradesTable() {
         if (!tradesTbody) return;
         if (activeTrades.size === 0) {
-            tradesTbody.innerHTML = '</td><td colspan="7" style="text-align:center;">No active trades</td></tr>';
+            tradesTbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No active trades</td></tr>';
             return;
         }
         let html = '';
         for (let [id, trade] of activeTrades.entries()) {
-            const currentPrice = currentPrices.get(trade.symbol) || trade.entryPrice;
+            const currentPrice = currentPrices.get(trade.symbol) || trade.entryPrice || 0;
             let pnl = 0;
-            if (trade.side === 'LONG') pnl = (currentPrice - trade.entryPrice) * trade.positionUnits;
-            else pnl = (trade.entryPrice - currentPrice) * trade.positionUnits;
+            const entryPrice = Number(trade.entryPrice || 0);
+            const positionUnits = Number(trade.positionUnits || 0);
+            if (trade.side === 'LONG') pnl = (currentPrice - entryPrice) * positionUnits;
+            else pnl = (entryPrice - currentPrice) * positionUnits;
             const pnlClass = pnl >= 0 ? 'pnl-positive' : 'pnl-negative';
             html += `
                 <tr data-trade-id="${id}">
                     <td>${trade.symbol}</td>
                     <td>${trade.side}</td>
-                    <td>${trade.entryPrice.toFixed(4)}</td>
-                    <td>${trade.stopLoss.toFixed(4)}</td>
-                    <td>${trade.takeProfit.toFixed(4)}</td>
-                    <td class="${pnlClass}">$${pnl.toFixed(2)}</td>
+                    <td>${entryPrice.toFixed(4)}</td>
+                    <td>${Number(trade.stopLoss || 0).toFixed(4)}</td>
+                    <td>${Number(trade.takeProfit || 0).toFixed(4)}</td>
+                    <td class="${pnlClass}">$${Number(pnl).toFixed(2)}</td>
                     <td><button class="close-trade-btn" data-id="${id}">Close</button></td>
                 </tr>
             `;
