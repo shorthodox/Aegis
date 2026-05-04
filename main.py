@@ -18,6 +18,8 @@ from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from pydantic import BaseModel, EmailStr, SecretStr
 import jwt
 import bcrypt
+import hmac
+import hashlib
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType, NameEmail
 import uvicorn
 from dataclasses import asdict
@@ -659,6 +661,72 @@ async def verify_otp(request: OTPVerifyRequest):
         raise HTTPException(status_code=400, detail="Invalid OTP. Please try again.")
     otp_store.pop(email, None)
     return {"success": True, "message": "OTP verified successfully. You may now complete registration."}
+
+
+# -------------------------------------------------------------------
+# Lemon Squeezy Webhook (secure HMAC SHA256 verification)
+# -------------------------------------------------------------------
+@app.post("/lemonsqueezy-webhook")
+async def lemonsqueezy_webhook(request: Request):
+    # Ensure secret is configured
+    secret = os.getenv("LEMON_SQUEEZY_WEBHOOK_SECRET")
+    if not secret:
+        print("❌ Webhook secret not configured: LEMON_SQUEEZY_WEBHOOK_SECRET")
+        raise HTTPException(status_code=500, detail="Webhook secret not configured")
+
+    # Read raw request body for signature verification
+    body = await request.body()
+
+    # Retrieve signature header (support both common casings)
+    header_sig = request.headers.get("X-Signature") or request.headers.get("x-signature") or ""
+    header_sig = header_sig.strip()
+    # Support a prefix like 'sha256=...' if present
+    if header_sig.startswith("sha256="):
+        header_sig = header_sig.split("=", 1)[1]
+
+    # Compute HMAC SHA256 of the raw body using the configured secret
+    expected_sig = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+
+    # Safe compare to avoid timing attacks
+    if not hmac.compare_digest(expected_sig, header_sig):
+        print("❌ Webhook signature mismatch")
+        raise HTTPException(status_code=401, detail="Invalid signature")
+
+    # Parse JSON payload
+    try:
+        payload = json.loads(body.decode('utf-8'))
+    except Exception as e:
+        print(f"❌ Webhook: failed to parse JSON: {e}")
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+    # Determine event name (be flexible with keys)
+    event = payload.get('event') or payload.get('type') or (payload.get('data') or {}).get('type') or ''
+    attrs = (payload.get('data') or {}).get('attributes') or {}
+    email = attrs.get('user_email') or attrs.get('customer_email') or attrs.get('email')
+
+    if not email:
+        print(f"❌ Webhook: {event} missing user email in payload")
+        raise HTTPException(status_code=400, detail="Missing user email in payload")
+
+    # Map events to plan changes
+    try:
+        user_ref = db.collection('users').document(email)
+        if event in ('subscription_created', 'subscription_resumed'):
+            user_ref.update({'plan': 'pro'})
+            print(f"✅ Webhook: {event} processed for {email}")
+        elif event == 'subscription_cancelled':
+            user_ref.update({'plan': 'basic'})
+            print(f"✅ Webhook: {event} processed for {email} -> basic")
+        elif event == 'subscription_expired':
+            user_ref.update({'plan': 'trial'})
+            print(f"✅ Webhook: {event} processed for {email} -> trial")
+        else:
+            print(f"ℹ️ Webhook: unhandled event '{event}' for {email}")
+    except Exception as e:
+        print(f"❌ Webhook: failed to update user {email}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update user plan")
+
+    return JSONResponse(content={"status": "ok"})
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
