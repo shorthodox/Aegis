@@ -219,7 +219,7 @@ async def run_engine_background():
 async def lifespan(app: FastAPI):
     # Start the engine in a background task (non‑blocking) – allows Railway healthcheck to pass immediately
     asyncio.create_task(run_engine_background())
-    yield  # App is now ready to serve requests
+    yield
 
 app = FastAPI(title="Aegis-1 by Gatekeeper", lifespan=lifespan)
 
@@ -236,26 +236,29 @@ app.add_middleware(
 
 # -------------------------------------------------------------------
 # Static Files: serve the entire 'web' folder under '/web' prefix
+# This makes everything inside web/ accessible, e.g.:
+#   /web/src/pages/index.html
+#   /web/src/scripts/gatekeeper.js
+#   /web/src/styles/main.css
 # -------------------------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 WEB_ROOT = os.path.join(BASE_DIR, "web")
 WEB_ROOT_PATH = Path(WEB_ROOT)
 
-# Ensure the web directory exists (create with minimal fallback if missing)
 if not WEB_ROOT_PATH.exists():
-    print(f"⚠️ Warning: 'web' directory not found at {WEB_ROOT_PATH}. Creating it with fallback structure.")
+    print(f"⚠️ Warning: 'web' directory not found at {WEB_ROOT_PATH}. Creating fallback structure.")
     WEB_ROOT_PATH.mkdir(parents=True, exist_ok=True)
-    # Create a minimal src/pages/index.html to avoid 404 on root redirect
+    # Create minimal fallback files
     pages_dir = WEB_ROOT_PATH / "src" / "pages"
+    scripts_dir = WEB_ROOT_PATH / "src" / "scripts"
+    styles_dir = WEB_ROOT_PATH / "src" / "styles"
     pages_dir.mkdir(parents=True, exist_ok=True)
-    (pages_dir / "index.html").write_text(
-        "<html><body><h1>Aegis‑1</h1><p>Frontend files missing. Please upload the correct static files to 'web/src/pages/'</p></body></html>"
-    )
-    (pages_dir / "dashboard.html").write_text(
-        "<html><body><h1>Dashboard unavailable</h1><p>Static files not found.</p></body></html>"
-    )
+    scripts_dir.mkdir(parents=True, exist_ok=True)
+    styles_dir.mkdir(parents=True, exist_ok=True)
+    (pages_dir / "index.html").write_text("<html><body><h1>Aegis‑1</h1><p>Frontend files missing. Please upload the correct static files to 'web/src/pages/'</p></body></html>")
+    (pages_dir / "dashboard.html").write_text("<html><body><h1>Dashboard unavailable</h1><p>Static files not found.</p></body></html>")
 
-# Mount the entire web directory – all subfolders (src, styles, scripts) become accessible
+# Mount the entire web folder – all subfolders (src/pages, src/scripts, src/styles) are served
 app.mount("/web", StaticFiles(directory=str(WEB_ROOT_PATH), html=True), name="web")
 
 # -------------------------------------------------------------------
@@ -270,20 +273,21 @@ async def dashboard_redirect():
     return RedirectResponse(url="/web/src/pages/dashboard.html")
 
 # -------------------------------------------------------------------
-# Diagnostic endpoint: list the contents of the web root (for debugging)
+# Diagnostic endpoint: list web root structure (for debugging)
 # -------------------------------------------------------------------
 @app.get("/debug-files")
 async def debug_files():
     try:
-        # Show the whole web root structure (top level)
         top_files = os.listdir(WEB_ROOT_PATH) if WEB_ROOT_PATH.exists() else []
-        # Also list src/pages if available
         pages_path = WEB_ROOT_PATH / "src" / "pages"
-        pages_files = os.listdir(pages_path) if pages_path.exists() else []
+        scripts_path = WEB_ROOT_PATH / "src" / "scripts"
+        styles_path = WEB_ROOT_PATH / "src" / "styles"
         return JSONResponse(content={
             "web_root": str(WEB_ROOT_PATH),
             "top_level": top_files,
-            "src_pages_files": pages_files,
+            "pages_files": os.listdir(pages_path) if pages_path.exists() else [],
+            "scripts_files": os.listdir(scripts_path) if scripts_path.exists() else [],
+            "styles_files": os.listdir(styles_path) if styles_path.exists() else [],
             "exists": WEB_ROOT_PATH.exists(),
         })
     except Exception as e:
@@ -423,7 +427,7 @@ async def oauth_callback(request: Request, provider: str):
         return JSONResponse(content={"error": "Email not provided"}, status_code=400)
     user = get_or_create_user_from_oauth(email, name, provider, sub)
     jwt_token = create_token(email)
-    # Redirect to the actual dashboard page (inside src/pages)
+    # Redirect to the dashboard page inside src/pages
     return RedirectResponse(f"/web/src/pages/dashboard.html#token={jwt_token}")
 
 # -------------------------------------------------------------------
@@ -657,7 +661,5 @@ async def verify_otp(request: OTPVerifyRequest):
     return {"success": True, "message": "OTP verified successfully. You may now complete registration."}
 
 if __name__ == "__main__":
-    # Always pull the PORT from the environment in production
     port = int(os.environ.get("PORT", 8080))
-    # Host MUST be 0.0.0.0 for Railway to route external traffic
     uvicorn.run("main:app", host="0.0.0.0", port=port)
