@@ -18,8 +18,6 @@ from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from pydantic import BaseModel, EmailStr, SecretStr
 import jwt
 import bcrypt
-import hmac
-import hashlib
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType, NameEmail
 import uvicorn
 from dataclasses import asdict
@@ -455,6 +453,14 @@ class OTPVerifyRequest(BaseModel):
     email: EmailStr
     otp: str
 
+
+class Review(BaseModel):
+    name: str
+    email: EmailStr
+    rating: int
+    message: Optional[str] = None
+    product: Optional[str] = None
+
 # -------------------------------------------------------------------
 # Email/Password User API
 # -------------------------------------------------------------------
@@ -592,6 +598,52 @@ async def send_feedback(fb: Feedback):
     await fastmail.send_message(message)
     return {"status": "sent"}
 
+
+# -------------------------------------------------------------------
+# Reviews endpoint – save to Firestore with email fallback
+# -------------------------------------------------------------------
+@app.post("/reviews")
+async def submit_review(review: Review):
+    # Validate rating
+    try:
+        rating = int(review.rating)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Rating must be an integer 1-5")
+    if rating < 1 or rating > 5:
+        raise HTTPException(status_code=400, detail="Rating must be between 1 and 5")
+
+    review_doc = {
+        "name": review.name,
+        "email": review.email,
+        "rating": rating,
+        "message": review.message or "",
+        "product": review.product or "",
+        "created_at": datetime.now(timezone.utc),
+    }
+
+    # Try to save to Firestore; on failure, fallback to emailing the review
+    try:
+        db.collection('reviews').add(review_doc)
+        print(f"✅ Review saved to Firestore: {review.email}")
+        return {"status": "saved", "method": "firestore"}
+    except Exception as e:
+        print(f"❌ Failed to save review to Firestore: {e}. Falling back to email.")
+        owner_email = os.getenv('MAIL_OWNER', 'owner@aegis.com')
+        try:
+            message = MessageSchema(
+                subject=f"New Review from {review.name}",
+                recipients=[NameEmail(name="Owner", email=owner_email)],
+                body=(f"Name: {review.name}\nEmail: {review.email}\nRating: {rating}\nProduct: {review.product or ''}\n\n"
+                      f"Message:\n{review.message or ''}"),
+                subtype=MessageType.plain,
+            )
+            await fastmail.send_message(message)
+            print("✅ Review emailed to owner as fallback")
+            return {"status": "saved", "method": "email_fallback"}
+        except Exception as e2:
+            print(f"❌ Failed to send review email fallback: {e2}")
+            raise HTTPException(status_code=500, detail="Failed to save review or send fallback email")
+
 # -------------------------------------------------------------------
 # OTP Endpoints (in‑memory store, fixed timezone)
 # -------------------------------------------------------------------
@@ -662,72 +714,7 @@ async def verify_otp(request: OTPVerifyRequest):
         raise HTTPException(status_code=400, detail="Invalid OTP. Please try again.")
     otp_store.pop(email, None)
     return {"success": True, "message": "OTP verified successfully. You may now complete registration."}
-
-
-# -------------------------------------------------------------------
-# Lemon Squeezy Webhook (secure HMAC SHA256 verification)
-# -------------------------------------------------------------------
-@app.post("/lemonsqueezy-webhook")
-async def lemonsqueezy_webhook(request: Request):
-    # Ensure secret is configured
-    secret = os.getenv("LEMON_SQUEEZY_WEBHOOK_SECRET")
-    if not secret:
-        print("❌ Webhook secret not configured: LEMON_SQUEEZY_WEBHOOK_SECRET")
-        raise HTTPException(status_code=500, detail="Webhook secret not configured")
-
-    # Read raw request body for signature verification
-    body = await request.body()
-
-    # Retrieve signature header (support both common casings)
-    header_sig = request.headers.get("X-Signature") or request.headers.get("x-signature") or ""
-    header_sig = header_sig.strip()
-    # Support a prefix like 'sha256=...' if present
-    if header_sig.startswith("sha256="):
-        header_sig = header_sig.split("=", 1)[1]
-
-    # Compute HMAC SHA256 of the raw body using the configured secret
-    expected_sig = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
-
-    # Safe compare to avoid timing attacks
-    if not hmac.compare_digest(expected_sig, header_sig):
-        print("❌ Webhook signature mismatch")
-        raise HTTPException(status_code=401, detail="Invalid signature")
-
-    # Parse JSON payload
-    try:
-        payload = json.loads(body.decode('utf-8'))
-    except Exception as e:
-        print(f"❌ Webhook: failed to parse JSON: {e}")
-        raise HTTPException(status_code=400, detail="Invalid JSON payload")
-
-    # Determine event name (be flexible with keys)
-    event = payload.get('event') or payload.get('type') or (payload.get('data') or {}).get('type') or ''
-    attrs = (payload.get('data') or {}).get('attributes') or {}
-    email = attrs.get('user_email') or attrs.get('customer_email') or attrs.get('email')
-
-    if not email:
-        print(f"❌ Webhook: {event} missing user email in payload")
-        raise HTTPException(status_code=400, detail="Missing user email in payload")
-
-    # Map events to plan changes
-    try:
-        user_ref = db.collection('users').document(email)
-        if event in ('subscription_created', 'subscription_resumed'):
-            user_ref.update({'plan': 'pro'})
-            print(f"✅ Webhook: {event} processed for {email}")
-        elif event == 'subscription_cancelled':
-            user_ref.update({'plan': 'basic'})
-            print(f"✅ Webhook: {event} processed for {email} -> basic")
-        elif event == 'subscription_expired':
-            user_ref.update({'plan': 'trial'})
-            print(f"✅ Webhook: {event} processed for {email} -> trial")
-        else:
-            print(f"ℹ️ Webhook: unhandled event '{event}' for {email}")
-    except Exception as e:
-        print(f"❌ Webhook: failed to update user {email}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to update user plan")
-
-    return JSONResponse(content={"status": "ok"})
+# Lemon Squeezy webhook support removed — endpoint intentionally deleted
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
