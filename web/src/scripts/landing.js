@@ -457,8 +457,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ========== Auth Init ==========
     onAuthStateChanged(auth, async (user) => {
+        // Only redirect unauthenticated users away when on protected pages
+        const isProtectedPage = document.body.classList.contains('dashboard-body') || window.location.pathname.includes('dashboard.html');
         if (!user) {
-            window.location.replace('./index.html');
+            if (isProtectedPage) {
+                window.location.replace('./index.html');
+            }
+            // If not on a protected page, allow public view without redirect
             return;
         }
         currentUser = user;
@@ -567,6 +572,9 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log("Attaching logout listener");
         logoutBtn.addEventListener('click', handleLogout);
     } else {
-        console.warn("Logout button not found in DOM");
+        if (!window.__logoutWarned) {
+            console.warn("Logout button not found in DOM");
+            window.__logoutWarned = true;
+        }
     }
 });
