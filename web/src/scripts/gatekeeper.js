@@ -308,11 +308,19 @@ export async function verifyEmailOTP(email, otp) {
 // -------------------------------------------------------------------
 export async function signInWithEmail(email, password) {
   try {
+    console.log("🔑 Attempting email sign-in:", email);
     const result = await signInWithEmailAndPassword(auth, email, password);
-    await ensureUserDocument(result.user);
+    console.log("✅ Firebase auth sign-in successful:", result.user.uid);
+    
+    // Verify Firestore document exists
+    console.log("📝 Verifying Firestore user document...");
+    const userData = await ensureUserDocument(result.user);
+    console.log("✅ Firestore document verified:", userData);
+    
     return { success: true, user: result.user };
   } catch (error) {
     let message = "Login failed. ";
+    console.error("❌ Sign-in error:", error.code, error.message);
     if (error.code === 'auth/wrong-password') message += "Incorrect password.";
     else if (error.code === 'auth/user-not-found') message += "No account found. Please register.";
     else message += error.message;
@@ -322,14 +330,24 @@ export async function signInWithEmail(email, password) {
 
 export async function registerWithEmail(email, password, displayName = "") {
   try {
+    console.log("📝 Attempting to register:", email);
     const result = await createUserWithEmailAndPassword(auth, email, password);
+    console.log("✅ Firebase auth account created:", result.user.uid);
+    
     if (displayName) {
       await updateProfile(result.user, { displayName: displayName });
+      console.log("✅ Display name updated:", displayName);
     }
-    await ensureUserDocument(result.user);
+    
+    // Ensure Firestore document is created
+    console.log("📝 Creating Firestore user document...");
+    const userData = await ensureUserDocument(result.user);
+    console.log("✅ Firestore document created/verified:", userData);
+    
     return { success: true, user: result.user };
   } catch (error) {
     let message = "Registration failed. ";
+    console.error("❌ Registration error:", error.code, error.message);
     if (error.code === 'auth/email-already-in-use') message += "Email already in use.";
     else message += error.message;
     return { success: false, error: message };
