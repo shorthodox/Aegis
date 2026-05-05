@@ -27,6 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusDot = document.getElementById('ws-status-dot');
     const statusText = document.getElementById('ws-status-text');
     const warmupSpan = document.getElementById('warmup-status');
+    const trialCountdownEl = document.getElementById('trialCountdown');
     const simSymbol = document.getElementById('sim-symbol');
     const simEntry = document.getElementById('sim-entry');
     const simBalance = document.getElementById('sim-balance');
@@ -327,6 +328,27 @@ document.addEventListener('DOMContentLoaded', () => {
         return card;
     }
 
+    function startTrialCountdown(endDate, element) {
+        if (!element || !endDate) return () => {};
+        function refresh() {
+            const now = new Date();
+            const diff = endDate.getTime() - now.getTime();
+            if (diff <= 0) {
+                element.innerText = 'Trial expired — upgrade to continue';
+                trialActive = false;
+                renderAllSignals();
+                return;
+            }
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            element.innerText = `Trial expires in ${days}d ${hours}h ${minutes}m`;
+        }
+        refresh();
+        const interval = setInterval(refresh, 60000);
+        return () => clearInterval(interval);
+    }
+
     function renderAllSignals() {
         if (!signalGrid) return;
         const trialValid = (userPlan === 'trial' && trialActive);
@@ -465,15 +487,17 @@ document.addEventListener('DOMContentLoaded', () => {
             if (isProtectedPage) {
                 window.location.replace('./index.html');
             }
-            // If not on a protected page, allow public view without redirect
             return;
         }
         currentUser = user;
         try {
             const userData = await ensureUserDocument(user);
             userPlan = userData.plan || 'trial';
-            const joinDate = userData.join_date?.toDate() || new Date();
-            trialActive = (userPlan === 'trial' && (Date.now() - joinDate < 72 * 3600000));
+            const trialEnd = userData.trial_end?.toDate ? userData.trial_end.toDate() : (userData.trial_end ? new Date(userData.trial_end) : null);
+            trialActive = (userPlan === 'trial' && trialEnd && Date.now() < trialEnd.getTime());
+            if (trialCountdownEl && trialEnd) {
+                startTrialCountdown(trialEnd, trialCountdownEl);
+            }
             unsubscribeSettings = subscribeUserSettings(user, (settings) => {
                 userSettings = settings;
                 if (capitalInput) capitalInput.value = settings.capital;
@@ -502,6 +526,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const completeOnboardingBtn = document.getElementById('completeOnboarding');
     const googleStepBtnEl = document.getElementById('googleStepBtn');
     const emailInputEl = document.getElementById('emailInput');
+    const onboardingTitleEl = document.getElementById('onboardingTitle');
     const otpContainerEl = document.getElementById('otpContainer');
     const otpInputs = document.querySelectorAll('.otp-digit');
     const otpEmailDisplayEl = document.getElementById('otpEmailDisplay');
@@ -674,8 +699,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const existsResp = await checkAccountExists(val);
                 if (existsResp && existsResp.exists) {
                     modalAuthMode = 'login';
+                    if (onboardingTitleEl) onboardingTitleEl.innerText = 'Sign in to your account';
+                    if (completeOnboardingBtn) completeOnboardingBtn.innerText = 'Sign In';
                 } else {
                     modalAuthMode = 'register';
+                    if (onboardingTitleEl) onboardingTitleEl.innerText = 'Create your free trial account';
+                    if (completeOnboardingBtn) completeOnboardingBtn.innerText = 'Create Account';
                 }
                 // Pre-fill Step3 fields
                 if (fullNameEl) fullNameEl.value = '';
@@ -734,6 +763,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!email) { alert('Email required'); return; }
             if (!pwd || pwd.length < 6) { alert('Password must be at least 6 characters'); return; }
             if (pwd !== pwd2) { alert('Passwords do not match'); return; }
+            if (modalAuthMode === 'login' && onboardingTitleEl) onboardingTitleEl.innerText = 'Sign in to your account';
+            if (modalAuthMode === 'register' && onboardingTitleEl) onboardingTitleEl.innerText = 'Create your free trial account';
 
             if (modalAuthMode === 'login') {
                 try {
