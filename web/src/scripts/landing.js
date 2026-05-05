@@ -535,6 +535,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const regPasswordEl = document.getElementById('regPassword');
     const regConfirmPasswordEl = document.getElementById('regConfirmPassword');
     const avatarFileEl = document.getElementById('avatarFile');
+    const profileFieldsSection = document.getElementById('profileFields');
+    const passwordConfirmSection = document.getElementById('passwordConfirmSection');
+    const avatarUploadSection = document.getElementById('avatarUploadSection');
+    const avatarUploadBtn = document.getElementById('avatarUpload');
+    const skipOnboardingLink = document.getElementById('skipOnboarding');
 
     let modalAuthMode = 'register'; // 'register' or 'login'
     let modalUsePhone = false;
@@ -549,10 +554,21 @@ document.addEventListener('DOMContentLoaded', () => {
         if (n === 3) step3El.classList.add('active');
     }
 
+    function setModalAuthMode(mode) {
+        modalAuthMode = mode;
+        const isLogin = mode === 'login';
+        if (onboardingTitleEl) onboardingTitleEl.innerText = isLogin ? 'Sign in to your account' : 'Create your free trial account';
+        if (completeOnboardingBtn) completeOnboardingBtn.innerText = isLogin ? 'Sign In' : 'Create Account';
+        if (profileFieldsSection) profileFieldsSection.style.display = isLogin ? 'none' : 'block';
+        if (avatarUploadSection) avatarUploadSection.style.display = isLogin ? 'none' : 'flex';
+        if (passwordConfirmSection) passwordConfirmSection.style.display = isLogin ? 'none' : 'block';
+    }
+
     function openAuthModal() {
         if (loginModalEl) {
             loginModalEl.style.display = 'flex';
             lockBodyScroll();
+            setModalAuthMode('register');
             showModalStep(1);
         }
     }
@@ -575,7 +591,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (res && res.success) {
                     // Redirect existing users to dashboard; new users continue to pricing
                     // We cannot reliably detect 'new' here, so send to dashboard for now
-                    window.location.replace('/web/src/pages/dashboard.html');
+                    window.location.replace('dashboard.html');
                 } else {
                     alert(res.error || 'Google sign-in failed');
                 }
@@ -583,6 +599,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.error('Google sign-in error:', err);
                 alert('Google sign-in error: ' + (err.message || err));
             }
+        });
+    }
+    if (avatarUploadBtn && avatarFileEl) {
+        avatarUploadBtn.addEventListener('click', () => avatarFileEl.click());
+    }
+    if (skipOnboardingLink) {
+        skipOnboardingLink.addEventListener('click', (event) => {
+            event.preventDefault();
+            closeAuthModal();
         });
     }
     if (capitalInput) capitalInput.addEventListener('change', () => { if (currentUser) updateUserSetting(currentUser, 'capital', parseFloat(capitalInput.value)); });
@@ -698,13 +723,9 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const existsResp = await checkAccountExists(val);
                 if (existsResp && existsResp.exists) {
-                    modalAuthMode = 'login';
-                    if (onboardingTitleEl) onboardingTitleEl.innerText = 'Sign in to your account';
-                    if (completeOnboardingBtn) completeOnboardingBtn.innerText = 'Sign In';
+                    setModalAuthMode('login');
                 } else {
-                    modalAuthMode = 'register';
-                    if (onboardingTitleEl) onboardingTitleEl.innerText = 'Create your free trial account';
-                    if (completeOnboardingBtn) completeOnboardingBtn.innerText = 'Create Account';
+                    setModalAuthMode('register');
                 }
                 // Pre-fill Step3 fields
                 if (fullNameEl) fullNameEl.value = '';
@@ -733,7 +754,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (resp && resp.success) {
                                 // After successful phone verification, redirect to pricing for onboarding
                                 closeAuthModal();
-                                window.location.replace('/web/src/pages/pricing.html');
+                                window.location.replace('pricing.html');
                             } else {
                                 alert(resp.error || 'Invalid OTP');
                             }
@@ -762,7 +783,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const loc = locationEl && locationEl.value.trim();
             if (!email) { alert('Email required'); return; }
             if (!pwd || pwd.length < 6) { alert('Password must be at least 6 characters'); return; }
-            if (pwd !== pwd2) { alert('Passwords do not match'); return; }
+            if (modalAuthMode === 'register' && pwd !== pwd2) { alert('Passwords do not match'); return; }
             if (modalAuthMode === 'login' && onboardingTitleEl) onboardingTitleEl.innerText = 'Sign in to your account';
             if (modalAuthMode === 'register' && onboardingTitleEl) onboardingTitleEl.innerText = 'Create your free trial account';
 
@@ -771,7 +792,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const r = await signInWithEmail(email, pwd);
                     if (r && r.success) {
                         closeAuthModal();
-                        window.location.replace('/web/src/pages/dashboard.html');
+                        window.location.replace('dashboard.html');
                     } else {
                         alert(r.error || 'Login failed');
                     }
@@ -794,7 +815,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     closeAuthModal();
                     // Redirect newly registered users to pricing to pick a plan
-                    window.location.replace('/web/src/pages/pricing.html');
+                    window.location.replace('pricing.html');
                 } else {
                     alert(res.error || 'Registration failed');
                 }
