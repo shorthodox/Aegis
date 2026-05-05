@@ -132,6 +132,9 @@ export async function ensureUserDocument(user) {
         capital: 10000,          // number
         risk_pct: 2,             // number
         setupComplete: false,
+        trial_end: serverTimestamp(),
+        trial_expired: false,
+        expiry_notice_sent: false,
         join_date: serverTimestamp(),
         lastLogin: serverTimestamp()
       };
@@ -398,12 +401,12 @@ export async function checkAccountExists(email) {
 // -------------------------------------------------------------------
 // Plan & token visibility (dashboard helpers)
 // -------------------------------------------------------------------
-export function validateAccess(userPlan, joinDate) {
-  if (!joinDate) return { valid: false, plan: 'basic' };
+export function validateAccess(userPlan, trialEnd) {
+  if (!trialEnd) return { valid: userPlan !== 'trial', plan: userPlan };
+  const normalizedTrialEnd = trialEnd instanceof Date ? trialEnd : (trialEnd.toDate ? trialEnd.toDate() : new Date(trialEnd));
   const now = new Date();
-  const trialEnd = new Date(joinDate.getTime() + 72 * 60 * 60 * 1000);
-  if (userPlan === 'trial' && now > trialEnd) return { valid: false, plan: 'basic', expired: true };
-  return { valid: true, plan: userPlan, trialEnd };
+  if (userPlan === 'trial' && now > normalizedTrialEnd) return { valid: false, plan: 'trial', expired: true, trialEnd: normalizedTrialEnd };
+  return { valid: true, plan: userPlan, trialEnd: normalizedTrialEnd };
 }
 
 export function startTrialCountdown(trialEnd, displayElement) {
@@ -425,9 +428,13 @@ export function startTrialCountdown(trialEnd, displayElement) {
 }
 
 const BIG5 = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT"];
+const BASIC_TOKENS = ["BTC/USDT", "ETH/USDT", "LTC/USDT", "DOGE/USDT"];
 export function isTokenVisible(symbol, userPlan, trialActive = true) {
   // Pro users see everything
   if (userPlan === 'pro') return true;
+
+  // Basic users have a limited toolkit
+  if (userPlan === 'basic') return BASIC_TOKENS.includes(symbol);
 
   // Trial users within the 72h window see only the BIG5 sample tokens
   if (userPlan === 'trial' && trialActive) return BIG5.includes(symbol);
