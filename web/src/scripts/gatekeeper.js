@@ -114,6 +114,17 @@ export async function getCurrentUserToken() {
   return await getFirebaseIdToken();
 }
 
+export async function fetchPaymentConfig() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/payment/config`);
+    if (!response.ok) return { cashfree: { enabled: false, environment: 'TEST' } };
+    return await response.json();
+  } catch (error) {
+    console.error('fetchPaymentConfig error:', error);
+    return { cashfree: { enabled: false, environment: 'TEST' } };
+  }
+}
+
 // -------------------------------------------------------------------
 // User document management (with setupComplete flag and type enforcement)
 // -------------------------------------------------------------------
