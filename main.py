@@ -7,8 +7,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Any, Optional, List, TYPE_CHECKING
 from contextlib import asynccontextmanager
+import inspect
 
-from fastapi import FastAPI, HTTPException, Depends, status, WebSocket, WebSocketDisconnect, Request
+from fastapi import FastAPI, HTTPException, Depends, status, WebSocket, WebSocketDisconnect, Request, BackgroundTasks
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -42,7 +43,7 @@ if not SECRET_KEY:
 CASHFREE_APP_ID = os.getenv("CASHFREE_APP_ID")
 CASHFREE_SECRET_KEY = os.getenv("CASHFREE_SECRET_KEY")
 CASHFREE_ENV = os.getenv("CASHFREE_ENV", "TEST").upper()
-CASHFREE_BASE_URL = "https://sandbox.cashfree.com" if CASHFREE_ENV == "TEST" else "https://www.cashfree.com"
+CASHFREE_BASE_URL = "https://sandbox.cashfree.com" if CASHFREE_ENV == "TEST" else "https://api.cashfree.com"
 CASHFREE_ENABLED = bool(CASHFREE_APP_ID and CASHFREE_SECRET_KEY)
 if CASHFREE_ENABLED:
     print(f"🔒 Cashfree payment gateway configured for {CASHFREE_ENV}")
@@ -158,6 +159,20 @@ class LiveState:
 LIVE_STATE = LiveState()
 
 # -------------------------------------------------------------------
+# OTP Store (in-memory)
+# -------------------------------------------------------------------
+otp_store: Dict[str, Dict] = {}
+
+def generate_otp() -> str:
+    return ''.join(random.choices(string.digits, k=6))
+
+def is_cooldown_active(email: str) -> bool:
+    if email not in otp_store:
+        return False
+    cooldown = otp_store[email].get("cooldown_until")
+    return bool(cooldown and datetime.now(timezone.utc) < cooldown)
+
+# -------------------------------------------------------------------
 # Engine runner as a background task (non‑blocking) with error handling
 # -------------------------------------------------------------------
 async def run_engine_background():
@@ -186,9 +201,8 @@ async def run_engine_background():
         configs, capital, max_pos, scan_seconds, alpha_mode, alpha_risk, proxy = automated_setup(backtest_dir, args)
     except Exception as e:
         print(f"❌ automated_setup failed: {e}")
-        # Add a short delay to avoid log flooding if the failure repeats in a loop
         await asyncio.sleep(1)
-        return  # Engine cannot start, but FastAPI stays online
+        return
 
     engine = LiveEngine(
         token_configs=configs,
@@ -218,27 +232,31 @@ async def run_engine_background():
 
     asyncio.create_task(update_state())
 
-    # Run the engine (may throw exceptions, but we catch them here to keep API alive)
+    # Run the engine
     try:
         await engine.run()
     except Exception as e:
         print(f"⚠️ LiveEngine crashed: {e}")
-        # Engine stops, but FastAPI continues; you may want to log or attempt restart later
 
 # -------------------------------------------------------------------
 # FastAPI app (lifespan runs engine as background task)
 # -------------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Start the engine in a background task (non‑blocking) – allows Railway healthcheck to pass immediately
-    asyncio.create_task(run_engine_background())
+    # Start background tasks
+    engine_task = asyncio.create_task(run_engine_background())
+    reminder_task = asyncio.create_task(check_and_send_trial_reminders())
+    subscription_task = asyncio.create_task(check_and_send_subscription_reminders())
     yield
+    # Cleanup if needed
+    engine_task.cancel()
+    reminder_task.cancel()
+    subscription_task.cancel()
 
 app = FastAPI(title="Aegis-1 by Gatekeeper", lifespan=lifespan)
 
-# Add proxy headers middleware (from uvicorn) to handle X-Forwarded-Proto from Railway's load balancer
+# Add middleware
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -249,10 +267,6 @@ app.add_middleware(
 
 # -------------------------------------------------------------------
 # Static Files: serve the entire 'web' folder under '/web' prefix
-# This makes everything inside web/ accessible, e.g.:
-#   /web/src/pages/index.html
-#   /web/src/scripts/gatekeeper.js
-#   /web/src/styles/main.css
 # -------------------------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 WEB_ROOT = os.path.join(BASE_DIR, "web")
@@ -261,7 +275,6 @@ WEB_ROOT_PATH = Path(WEB_ROOT)
 if not WEB_ROOT_PATH.exists():
     print(f"⚠️ Warning: 'web' directory not found at {WEB_ROOT_PATH}. Creating fallback structure.")
     WEB_ROOT_PATH.mkdir(parents=True, exist_ok=True)
-    # Create minimal fallback files
     pages_dir = WEB_ROOT_PATH / "src" / "pages"
     scripts_dir = WEB_ROOT_PATH / "src" / "scripts"
     styles_dir = WEB_ROOT_PATH / "src" / "styles"
@@ -271,11 +284,10 @@ if not WEB_ROOT_PATH.exists():
     (pages_dir / "index.html").write_text("<html><body><h1>Aegis‑1</h1><p>Frontend files missing. Please upload the correct static files to 'web/src/pages/'</p></body></html>")
     (pages_dir / "dashboard.html").write_text("<html><body><h1>Dashboard unavailable</h1><p>Static files not found.</p></body></html>")
 
-# Mount the entire web folder – all subfolders (src/pages, src/scripts, src/styles) are served
 app.mount("/web", StaticFiles(directory=str(WEB_ROOT_PATH), html=True), name="web")
 
 # -------------------------------------------------------------------
-# Redirects for convenient access to the frontend pages
+# Redirects
 # -------------------------------------------------------------------
 @app.get("/")
 async def root_redirect():
@@ -286,7 +298,7 @@ async def dashboard_redirect():
     return RedirectResponse(url="/web/src/pages/dashboard.html")
 
 # -------------------------------------------------------------------
-# Diagnostic endpoint: list web root structure (for debugging)
+# Diagnostic endpoint
 # -------------------------------------------------------------------
 @app.get("/debug-files")
 async def debug_files():
@@ -307,7 +319,7 @@ async def debug_files():
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 # -------------------------------------------------------------------
-# Serve favicon.ico and other root-level static files from the web root
+# Serve static files
 # -------------------------------------------------------------------
 @app.get("/favicon.ico")
 async def favicon():
@@ -368,9 +380,10 @@ def get_user_doc(email: str) -> Optional[Dict]:
     return None
 
 def create_user_doc(email: str, password_hash: Optional[str] = None,
-                    provider: Optional[str] = None, social_id: Optional[str] = None) -> Dict:
-    now = datetime.utcnow().isoformat()
-    trial_end = (datetime.utcnow() + timedelta(days=3)).isoformat()
+                    provider: Optional[str] = None, social_id: Optional[str] = None,
+                    full_name: Optional[str] = None, location: Optional[str] = None) -> Dict:
+    now = datetime.now(timezone.utc).isoformat()
+    trial_end = (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()
     user_data = {
         "email": email,
         "plan": "trial",
@@ -384,22 +397,37 @@ def create_user_doc(email: str, password_hash: Optional[str] = None,
         user_data["provider"] = provider
     if social_id:
         user_data["social_id"] = social_id
+    if full_name:
+        user_data["full_name"] = full_name
+    if location:
+        user_data["location"] = location
     db.collection("users").document(email).set(user_data)
-    return {"email": email, "plan": "trial", "trial_end": trial_end}
+    return {"email": email, "plan": "trial", "trial_end": trial_end, "full_name": full_name, "location": location}
 
 def update_last_login(email: str):
-    db.collection("users").document(email).update({"last_login": datetime.utcnow().isoformat()})
+    db.collection("users").document(email).update({"last_login": datetime.now(timezone.utc).isoformat()})
 
 def get_or_create_user_from_oauth(email: str, name: str, provider: str, social_id: str) -> Dict:
     user = get_user_doc(email)
     if not user:
-        user = create_user_doc(email, provider=provider, social_id=social_id)
+        user = create_user_doc(email, provider=provider, social_id=social_id, full_name=name)
     else:
         update_last_login(email)
     return {"email": email, "plan": user["plan"], "trial_end": user["trial_end"]}
 
+def is_trial_expired(email: str) -> bool:
+    user_doc = get_user_doc(email)
+    if not user_doc:
+        return True
+    if user_doc.get("plan") == "pro":
+        return False
+    trial_end = user_doc.get("trial_end")
+    if trial_end:
+        return datetime.utcnow() > datetime.fromisoformat(trial_end)
+    return True
+
 # -------------------------------------------------------------------
-# OAuth routes – Dynamic redirect URI based on BASE_URL
+# OAuth routes
 # -------------------------------------------------------------------
 BASE_URL = os.getenv("BASE_URL", "http://localhost:8000").rstrip('/')
 
@@ -440,7 +468,6 @@ async def oauth_callback(request: Request, provider: str):
         return JSONResponse(content={"error": "Email not provided"}, status_code=400)
     user = get_or_create_user_from_oauth(email, name, provider, sub)
     jwt_token = create_token(email)
-    # Redirect to the dashboard page inside src/pages
     return RedirectResponse(f"/web/src/pages/dashboard.html#token={jwt_token}")
 
 # -------------------------------------------------------------------
@@ -453,6 +480,12 @@ class UserRegister(BaseModel):
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+
+class UserProfileComplete(BaseModel):
+    email: EmailStr
+    full_name: str
+    location: str
+    password: Optional[str] = None
 
 class Feedback(BaseModel):
     name: str
@@ -471,7 +504,7 @@ class CashfreePaymentRequest(BaseModel):
     currency: str = "INR"
     email: EmailStr
     order_id: Optional[str] = None
-
+    customer_phone: Optional[str] = None
 
 class Review(BaseModel):
     name: str
@@ -481,17 +514,102 @@ class Review(BaseModel):
     product: Optional[str] = None
 
 # -------------------------------------------------------------------
-# Email/Password User API
+# Email configuration
 # -------------------------------------------------------------------
-@app.post("/auth/register")
-async def register(user: UserRegister):
-    existing = get_user_doc(user.email)
-    if existing:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    create_user_doc(user.email, password_hash=hash_password(user.password))
-    token = create_token(user.email)
-    return {"access_token": token, "token_type": "bearer"}
+conf = ConnectionConfig(
+    MAIL_USERNAME=os.getenv("MAIL_USERNAME", "your_email@gmail.com"),
+    MAIL_PASSWORD=SecretStr(os.getenv("MAIL_PASSWORD", "your_app_password")),
+    MAIL_FROM=os.getenv("MAIL_FROM", "noreply@aegis.com"),
+    MAIL_PORT=587,
+    MAIL_SERVER="smtp.gmail.com",
+    MAIL_STARTTLS=True,
+    MAIL_SSL_TLS=False,
+)
 
+fastmail = FastMail(conf)
+
+# -------------------------------------------------------------------
+# 3-Step Onboarding with OTP
+# -------------------------------------------------------------------
+@app.post("/auth/send-otp-for-registration")
+async def send_otp_for_registration(request: OTPSendRequest):
+    """Step 1: Send OTP for new registration"""
+    email = request.email
+    existing_user = get_user_doc(email)
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered. Please sign in.")
+    if is_cooldown_active(email):
+        raise HTTPException(status_code=429, detail="Too many requests. Please wait before requesting another OTP.")
+    otp = generate_otp()
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+    cooldown_until = datetime.now(timezone.utc) + timedelta(seconds=60)
+    otp_store[email] = {
+        "otp": otp,
+        "expires_at": expires_at,
+        "cooldown_until": cooldown_until
+    }
+    try:
+        message = MessageSchema(
+            subject="Your Aegis‑1 Verification Code",
+            recipients=[NameEmail(name=email, email=email)],
+            body=f"""
+            <html>
+            <body style="font-family: monospace; background: #0a0a0c; color: #00f2ff; padding: 20px;">
+                <h2>🔐 Aegis‑1 OTP</h2>
+                <p>Your verification code is:</p>
+                <h1 style="background: #1a1f2e; display: inline-block; padding: 12px 24px; border-radius: 12px;">{otp}</h1>
+                <p>This code expires in 5 minutes.</p>
+                <p>If you didn't request this, please ignore this email.</p>
+                <hr>
+                <small style="color: #6b7280;">Aegis‑1 Sovereign Terminal</small>
+            </body>
+            </html>
+            """,
+            subtype=MessageType.html,
+        )
+        await fastmail.send_message(message)
+    except Exception as e:
+        otp_store.pop(email, None)
+        print(f"Email sending failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send OTP email. Check email configuration.")
+    return {"success": True, "message": "OTP sent to your email address."}
+
+@app.post("/auth/verify-otp-for-registration")
+async def verify_otp_for_registration(request: OTPVerifyRequest):
+    """Step 2: Verify OTP"""
+    email = request.email
+    otp = request.otp
+    if email not in otp_store:
+        raise HTTPException(status_code=400, detail="No OTP request found. Please request a new OTP.")
+    record = otp_store[email]
+    if datetime.now(timezone.utc) > record["expires_at"]:
+        otp_store.pop(email, None)
+        raise HTTPException(status_code=400, detail="OTP has expired. Please request a new one.")
+    if record["otp"] != otp:
+        raise HTTPException(status_code=400, detail="Invalid OTP. Please try again.")
+    otp_store[email]["verified"] = True
+    return {"success": True, "message": "OTP verified successfully. Please complete your profile."}
+
+@app.post("/auth/complete-registration")
+async def complete_registration(profile: UserProfileComplete):
+    """Step 3: Complete profile with name, location, password"""
+    email = profile.email
+    if email not in otp_store or not otp_store[email].get("verified"):
+        raise HTTPException(status_code=400, detail="Please verify OTP first before completing registration.")
+    
+    existing_user = get_user_doc(email)
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered.")
+    
+    password_hash = hash_password(profile.password) if profile.password else None
+    user = create_user_doc(email, password_hash=password_hash, full_name=profile.full_name, location=profile.location)
+    otp_store.pop(email, None)
+    token = create_token(email)
+    return {"access_token": token, "token_type": "bearer", "user": user}
+
+# -------------------------------------------------------------------
+# Authentication endpoints
+# -------------------------------------------------------------------
 @app.post("/auth/login")
 async def login(user: UserLogin):
     user_doc = get_user_doc(user.email)
@@ -499,26 +617,59 @@ async def login(user: UserLogin):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if not verify_password(user.password, user_doc["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    plan = user_doc["plan"]
-    trial_end = user_doc.get("trial_end")
-    if plan == "trial" and trial_end and datetime.utcnow() > datetime.fromisoformat(trial_end):
-        raise HTTPException(status_code=403, detail="Trial expired. Upgrade to continue.")
+    
+    if is_trial_expired(user.email):
+        raise HTTPException(status_code=403, detail="Trial expired. Please subscribe to continue.")
+    
     update_last_login(user.email)
     token = create_token(user.email)
-    return {"access_token": token, "token_type": "bearer"}
+    return {"access_token": token, "token_type": "bearer", "plan": user_doc["plan"], "trial_end": user_doc.get("trial_end")}
+
+@app.post("/auth/google-login")
+async def google_login(request: Request):
+    """Alternative endpoint for frontend Google auth"""
+    data = await request.json()
+    email = data.get("email")
+    name = data.get("name")
+    if not email:
+        raise HTTPException(status_code=400, detail="Email required")
+    
+    user_doc = get_user_doc(email)
+    if not user_doc:
+        user_doc = create_user_doc(email, provider="google", full_name=name)
+    else:
+        update_last_login(email)
+    
+    if is_trial_expired(email):
+        raise HTTPException(status_code=403, detail="Trial expired. Please subscribe to continue.")
+    
+    token = create_token(email)
+    return {"access_token": token, "token_type": "bearer", "plan": user_doc["plan"], "trial_end": user_doc.get("trial_end")}
 
 @app.get("/auth/me")
 async def get_me(email: str = Depends(get_current_user)):
     user_doc = get_user_doc(email)
     if not user_doc:
         raise HTTPException(status_code=404)
-    return {"email": email, "plan": user_doc["plan"], "trial_end": user_doc.get("trial_end")}
+    return {
+        "email": email, 
+        "plan": user_doc["plan"], 
+        "trial_end": user_doc.get("trial_end"),
+        "full_name": user_doc.get("full_name"),
+        "location": user_doc.get("location")
+    }
 
 # -------------------------------------------------------------------
 # Subscription & plan limits
 # -------------------------------------------------------------------
-BASIC_TOKENS = ["BTC/USDT", "ETH/USDT", "SHIB/USDT", "LTC/USDT", "DOGE/USDT"]
-# Basic users: 3‑day trial -> limited timeframes (30m, 1h)
+BASIC_TOKENS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT"]
+PRO_TOKENS = []
+try:
+    from scripts.live_engine import FLEET
+    PRO_TOKENS = FLEET if isinstance(FLEET, list) else []
+except ImportError:
+    PRO_TOKENS = BASIC_TOKENS + ["ADA/USDT", "DOT/USDT", "DOGE/USDT", "MATIC/USDT", "AVAX/USDT", "LINK/USDT"]
+
 BASIC_TIMEFRAMES = ["30m", "1h"]
 
 def get_user_plan(email: str) -> str:
@@ -528,8 +679,7 @@ def get_user_plan(email: str) -> str:
 def get_allowed_tokens(email: str) -> List[str]:
     plan = get_user_plan(email)
     if plan == "pro":
-        from scripts.live_engine import FLEET
-        return FLEET
+        return PRO_TOKENS if PRO_TOKENS else BASIC_TOKENS + ["ADA/USDT", "DOT/USDT", "DOGE/USDT", "MATIC/USDT", "AVAX/USDT", "LINK/USDT"]
     else:
         return BASIC_TOKENS
 
@@ -539,6 +689,22 @@ def get_allowed_timeframes(email: str) -> List[str]:
         return ["1m","5m","15m","30m","1h","1d","1w","1M"]
     else:
         return BASIC_TIMEFRAMES
+
+@app.get("/user/limits")
+async def get_user_limits(email: str = Depends(get_current_user)):
+    user_doc = get_user_doc(email)
+    plan = user_doc["plan"] if user_doc else "trial"
+    trial_end = user_doc.get("trial_end") if user_doc else None
+    trial_expired = is_trial_expired(email) if trial_end else False
+    
+    return {
+        "plan": plan,
+        "allowed_tokens": get_allowed_tokens(email),
+        "is_trial": plan == "trial",
+        "trial_end": trial_end,
+        "trial_expired": trial_expired,
+        "alpha_mode_enabled": plan == "pro"
+    }
 
 @app.post("/upgrade")
 async def upgrade_plan(email: str = Depends(get_current_user)):
@@ -556,17 +722,338 @@ async def payment_config():
     }
 
 # -------------------------------------------------------------------
-# WebSocket dashboard – flat JSON structure (includes atr and risk_pct)
+# Cashfree Payment Integration
+# -------------------------------------------------------------------
+import hashlib
+import hmac
+import httpx
+
+def generate_cashfree_order_id(email: str) -> str:
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    random_str = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+    return f"ORDER_{timestamp}_{random_str}"
+
+@app.post("/payment/create-order")
+async def create_cashfree_order(request: CashfreePaymentRequest, email: str = Depends(get_current_user)):
+    if not CASHFREE_ENABLED:
+        raise HTTPException(status_code=503, detail="Payment system is not configured")
+    
+    if request.email != email:
+        raise HTTPException(status_code=403, detail="Email mismatch")
+    
+    order_id = request.order_id or generate_cashfree_order_id(email)
+    order_amount = request.amount
+    order_currency = request.currency
+    plan_type = "pro" if order_amount >= 24 else "basic"
+    
+    headers = {
+        "x-api-version": "2022-09-01",
+        "x-client-id": CASHFREE_APP_ID,
+        "x-client-secret": CASHFREE_SECRET_KEY,
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "order_id": order_id,
+        "order_amount": order_amount,
+        "order_currency": order_currency,
+        "order_note": f"Aegis-1 {plan_type.upper()} Subscription",
+        "customer_details": {
+            "customer_id": email,
+            "customer_email": email,
+            "customer_phone": request.customer_phone or "9999999999"
+        },
+        "order_expiry_time": (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
+        "payment_methods": "cc,dc,upi"
+    }
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(
+                f"{CASHFREE_BASE_URL}/pg/orders",
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+            result = response.json()
+            
+            if response.status_code == 200:
+                order_ref = db.collection("pending_orders").document(order_id)
+                order_ref.set({
+                    "email": email,
+                    "amount": order_amount,
+                    "plan": plan_type,
+                    "status": "pending",
+                            "created_at": datetime.now(timezone.utc).isoformat(),
+                    "order_id": order_id
+                })
+                
+                return {
+                    "success": True,
+                    "order_id": order_id,
+                    "payment_session_id": result.get("payment_session_id"),
+                    "redirect_url": result.get("payment_link", f"{CASHFREE_BASE_URL}/pg/orders/{order_id}")
+                }
+            else:
+                print(f"Cashfree order creation failed: {result}")
+                raise HTTPException(status_code=400, detail=f"Payment initialization failed: {result.get('message', 'Unknown error')}")
+        except Exception as e:
+            print(f"Cashfree API error: {e}")
+            raise HTTPException(status_code=500, detail=f"Payment gateway error: {str(e)}")
+
+@app.post("/payment/webhook")
+async def cashfree_webhook(request: Request):
+    try:
+        body = await request.body()
+        data = json.loads(body)
+        order_id = data.get("order", {}).get("order_id")
+        payment_status = data.get("order", {}).get("order_status")
+        
+        if payment_status == "PAID" and order_id:
+            order_ref = db.collection("pending_orders").document(order_id)
+
+            # Support both sync and async Firestore clients: .get() may return an awaitable
+            try:
+                order_get_result = order_ref.get()
+                if inspect.isawaitable(order_get_result):
+                    order_doc = await order_get_result
+                else:
+                    order_doc = order_get_result
+            except Exception as e:
+                print(f"Failed to fetch order document: {e}")
+                order_doc = None
+
+            if order_doc and getattr(order_doc, "exists", False):
+                # to_dict may not exist on some stub objects; call safely and ensure a dict
+                to_dict_fn = getattr(order_doc, "to_dict", None)
+                order_data = to_dict_fn() if callable(to_dict_fn) else {}
+                if not isinstance(order_data, dict):
+                    order_data = {}
+                email = order_data.get("email")
+                plan = order_data.get("plan")
+
+                if email and plan:
+                    try:
+                        user_update = db.collection("users").document(email).update({
+                            "plan": plan,
+                            "subscription_active": True,
+                            "subscription_start": datetime.now(timezone.utc).isoformat(),
+                            "subscription_end": (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+                        })
+                        if inspect.isawaitable(user_update):
+                            await user_update
+                    except Exception as e:
+                        print(f"Failed to update user subscription: {e}")
+
+                    try:
+                        order_update = order_ref.update({
+                            "status": "completed",
+                            "payment_data": data.get("payment"),
+                            "completed_at": datetime.now(timezone.utc).isoformat()
+                        })
+                        if inspect.isawaitable(order_update):
+                            await order_update
+                    except Exception as e:
+                        print(f"Failed to update order document: {e}")
+
+                    print(f"✅ Subscription upgraded for {email} to {plan}")
+                    await send_subscription_confirmation(email, plan)
+        
+        return JSONResponse({"status": "received"})
+    except Exception as e:
+        print(f"Webhook processing error: {e}")
+        return JSONResponse({"status": "error"}, status_code=500)
+
+async def send_subscription_confirmation(email: str, plan: str):
+    try:
+        message = MessageSchema(
+            subject=f"Aegis-1 Subscription Confirmed - {plan.upper()} Plan",
+            recipients=[NameEmail(name=email, email=email)],
+            body=f"""
+            <html>
+            <body style="font-family: monospace; background: #0a0a0c; color: #00f2ff; padding: 20px;">
+                <h2>✅ Subscription Activated</h2>
+                <p>Your Aegis-1 {plan.upper()} plan has been activated successfully.</p>
+                <p>You now have access to:</p>
+                <ul>
+                    <li>All 58 token signals</li>
+                    <li>Alpha Mode (unfiltered AI conviction)</li>
+                    <li>Real-time WebSocket feed</li>
+                    <li>Priority support</li>
+                </ul>
+                <p>Log in to your dashboard to start trading.</p>
+                <hr>
+                <small style="color: #6b7280;">Aegis‑1 Sovereign Terminal</small>
+            </body>
+            </html>
+            """,
+            subtype=MessageType.html,
+        )
+        await fastmail.send_message(message)
+        print(f"✅ Subscription confirmation sent to {email}")
+    except Exception as e:
+        print(f"Failed to send subscription confirmation: {e}")
+
+# -------------------------------------------------------------------
+# Email Notification Functions
+# -------------------------------------------------------------------
+async def send_trial_expiry_reminder(email: str, trial_end_date: datetime, hours_until: int):
+    try:
+        message = MessageSchema(
+            subject=f"Aegis-1 Trial Expiring in {hours_until} Hours",
+            recipients=[NameEmail(name=email, email=email)],
+            body=f"""
+            <html>
+            <body style="font-family: monospace; background: #0a0a0c; color: #00f2ff; padding: 20px;">
+                <h2>⏰ Trial Expiring Soon</h2>
+                <p>Your Aegis-1 trial will expire in {hours_until} hours on {trial_end_date.strftime('%B %d, %Y')}.</p>
+                <p>After expiry, you will only have access to 5 tokens (BTC, ETH, SOL, BNB, XRP).</p>
+                <p><strong>Upgrade to Pro for:</strong></p>
+                <ul>
+                    <li>All 58 token signals</li>
+                    <li>Alpha Mode (unfiltered AI conviction)</li>
+                    <li>Real-time WebSocket feed</li>
+                    <li>Priority support</li>
+                </ul>
+                <p><a href="{BASE_URL}/web/src/pages/pricing.html" style="color: #00f2ff;">Click here to upgrade now →</a></p>
+                <hr>
+                <small style="color: #6b7280;">Aegis‑1 Sovereign Terminal</small>
+            </body>
+            </html>
+            """,
+            subtype=MessageType.html,
+        )
+        await fastmail.send_message(message)
+        print(f"✅ Trial reminder sent to {email}")
+    except Exception as e:
+        print(f"Failed to send trial reminder: {e}")
+
+async def send_subscription_expiry_reminder(email: str, expiry_date: datetime, days_until: int):
+    try:
+        message = MessageSchema(
+            subject=f"Aegis-1 Subscription Expiring in {days_until} Days",
+            recipients=[NameEmail(name=email, email=email)],
+            body=f"""
+            <html>
+            <body style="font-family: monospace; background: #0a0a0c; color: #00f2ff; padding: 20px;">
+                <h2>📅 Subscription Renewal Notice</h2>
+                <p>Your Aegis-1 Pro subscription will expire in {days_until} days on {expiry_date.strftime('%B %d, %Y')}.</p>
+                <p><strong>Renew now to continue enjoying:</strong></p>
+                <ul>
+                    <li>All 58 token signals</li>
+                    <li>Alpha Mode (unfiltered AI conviction)</li>
+                    <li>Real-time WebSocket feed</li>
+                    <li>Priority support</li>
+                </ul>
+                <p><a href="{BASE_URL}/web/src/pages/pricing.html" style="color: #00f2ff;">Click here to renew →</a></p>
+                <hr>
+                <small style="color: #6b7280;">Aegis‑1 Sovereign Terminal</small>
+            </body>
+            </html>
+            """,
+            subtype=MessageType.html,
+        )
+        await fastmail.send_message(message)
+        print(f"✅ Subscription reminder sent to {email}")
+    except Exception as e:
+        print(f"Failed to send subscription reminder: {e}")
+
+# -------------------------------------------------------------------
+# Background Tasks for Reminders
+# -------------------------------------------------------------------
+async def check_and_send_trial_reminders():
+    while True:
+        try:
+            now = datetime.now(timezone.utc)
+            users_ref = db.collection("users")
+            query = users_ref.where("plan", "==", "trial").stream()
+            
+            for user_doc in query:
+                user_data = user_doc.to_dict() or {}
+                trial_end = user_data.get("trial_end")
+                
+                if trial_end:
+                    trial_end_date = datetime.fromisoformat(trial_end)
+                    if trial_end_date.tzinfo is None:
+                        trial_end_date = trial_end_date.replace(tzinfo=timezone.utc)
+                    hours_until_expiry = (trial_end_date - now).total_seconds() / 3600
+                    
+                    if 23 <= hours_until_expiry <= 25 and not user_data.get("reminder_24h_sent"):
+                        await send_trial_expiry_reminder(user_doc.id, trial_end_date, hours_until=24)
+                        user_doc.reference.update({"reminder_24h_sent": True})
+                    elif 0.5 <= hours_until_expiry <= 1.5 and not user_data.get("reminder_1h_sent"):
+                        await send_trial_expiry_reminder(user_doc.id, trial_end_date, hours_until=1)
+                        user_doc.reference.update({"reminder_1h_sent": True})
+            
+            await asyncio.sleep(3600)
+        except Exception as e:
+            print(f"Trial reminder check error: {e}")
+            await asyncio.sleep(3600)
+
+async def check_and_send_subscription_reminders():
+    while True:
+        try:
+            now = datetime.now(timezone.utc)
+            users_ref = db.collection("users")
+            query = users_ref.where("subscription_active", "==", True).stream()
+            
+            for user_doc in query:
+                user_data = user_doc.to_dict() or {}
+                sub_end = user_data.get("subscription_end")
+                
+                if sub_end:
+                    sub_end_date = datetime.fromisoformat(sub_end)
+                    if sub_end_date.tzinfo is None:
+                        sub_end_date = sub_end_date.replace(tzinfo=timezone.utc)
+                    days_until_expiry = (sub_end_date - now).days
+                    
+                    if days_until_expiry == 7 and not user_data.get("reminder_7d_sent"):
+                        await send_subscription_expiry_reminder(user_doc.id, sub_end_date, days_until=7)
+                        user_doc.reference.update({"reminder_7d_sent": True})
+                    elif days_until_expiry == 3 and not user_data.get("reminder_3d_sent"):
+                        await send_subscription_expiry_reminder(user_doc.id, sub_end_date, days_until=3)
+                        user_doc.reference.update({"reminder_3d_sent": True})
+                    elif days_until_expiry == 1 and not user_data.get("reminder_1d_sent"):
+                        await send_subscription_expiry_reminder(user_doc.id, sub_end_date, days_until=1)
+                        user_doc.reference.update({"reminder_1d_sent": True})
+            
+            await asyncio.sleep(86400)
+        except Exception as e:
+            print(f"Subscription reminder check error: {e}")
+            await asyncio.sleep(86400)
+
+# -------------------------------------------------------------------
+# WebSocket Dashboard with Plan Filtering
 # -------------------------------------------------------------------
 @app.websocket("/ws/dashboard")
 async def websocket_dashboard(websocket: WebSocket):
     await websocket.accept()
+    current_user_email = None
+    
     try:
+        # First message should contain auth token
+        data = await websocket.receive_text()
+        try:
+            auth_data = json.loads(data)
+            token = auth_data.get("token")
+            if token:
+                current_user_email = decode_token(token)
+                if not current_user_email:
+                    await websocket.send_json({"error": "Invalid token"})
+                    await websocket.close()
+                    return
+        except:
+            pass
+        
+        # Main message loop
         while True:
-            data = {
-                "tickers": LIVE_STATE.data["tickers"],
-                "signals": {
-                    sym: {
+            allowed_tokens = get_allowed_tokens(current_user_email) if current_user_email else BASIC_TOKENS
+            trial_expired = is_trial_expired(current_user_email) if current_user_email else False
+            
+            filtered_signals = {}
+            for sym, sig in LIVE_STATE.data["signals"].items():
+                if sym in allowed_tokens:
+                    filtered_signals[sym] = {
                         "ai_prob": sig.get("ai_prob", 0),
                         "signal": sig.get("signal", "WAITING"),
                         "threshold": sig.get("threshold", 0),
@@ -574,14 +1061,18 @@ async def websocket_dashboard(websocket: WebSocket):
                         "atr": sig.get("atr", 0),
                         "risk_pct": sig.get("risk_pct", 2),
                     }
-                    for sym, sig in LIVE_STATE.data["signals"].items()
-                },
+            
+            response_data = {
+                "tickers": {k: v for k, v in LIVE_STATE.data["tickers"].items() if k in allowed_tokens},
+                "signals": filtered_signals,
                 "open_trades": LIVE_STATE.data["open_trades"],
                 "balance": LIVE_STATE.data["balance"],
-                "alpha_mode": LIVE_STATE.data["alpha_mode"],
-                "warmup": LIVE_STATE.data["warmup_progress"]
+                "alpha_mode": LIVE_STATE.data["alpha_mode"] and (get_user_plan(current_user_email) == "pro" if current_user_email else False),
+                "warmup": LIVE_STATE.data["warmup_progress"],
+                "trial_expired": trial_expired if current_user_email else True,
+                "plan": get_user_plan(current_user_email) if current_user_email else "trial"
             }
-            clean_data = jsonable_encoder(data)
+            clean_data = jsonable_encoder(response_data)
             await websocket.send_json(clean_data)
             await asyncio.sleep(1)
     except WebSocketDisconnect:
@@ -590,10 +1081,14 @@ async def websocket_dashboard(websocket: WebSocket):
         print(f"WebSocket error: {e}")
 
 # -------------------------------------------------------------------
-# Alpha Mode toggle
+# Alpha Mode toggle (only for Pro users)
 # -------------------------------------------------------------------
 @app.post("/alpha/toggle")
 async def toggle_alpha_mode(email: str = Depends(get_current_user)):
+    user_plan = get_user_plan(email)
+    if user_plan != "pro":
+        raise HTTPException(status_code=403, detail="Alpha Mode is only available for Pro subscribers")
+    
     if LIVE_STATE.engine is None:
         raise HTTPException(status_code=503, detail="Engine not ready")
     new_state = not LIVE_STATE.engine.alpha_mode
@@ -602,38 +1097,24 @@ async def toggle_alpha_mode(email: str = Depends(get_current_user)):
     return {"alpha_mode": new_state}
 
 # -------------------------------------------------------------------
-# Email configuration (for OTP and feedback)
+# Feedback endpoint
 # -------------------------------------------------------------------
-conf = ConnectionConfig(
-    MAIL_USERNAME=os.getenv("MAIL_USERNAME", "your_email@gmail.com"),
-    MAIL_PASSWORD=SecretStr(os.getenv("MAIL_PASSWORD", "your_app_password")),
-    MAIL_FROM=os.getenv("MAIL_FROM", "noreply@aegis.com"),
-    MAIL_PORT=587,
-    MAIL_SERVER="smtp.gmail.com",
-    MAIL_STARTTLS=True,
-    MAIL_SSL_TLS=False,
-)
-
-fastmail = FastMail(conf)
-
 @app.post("/feedback")
 async def send_feedback(fb: Feedback):
     message = MessageSchema(
         subject=f"Feedback from {fb.name}",
-        recipients=[NameEmail(name="Owner", email="owner@aegis.com")],
+        recipients=[NameEmail(name="Animesh Kukreti", email="animeshkukreti60@gmail.com")],
         body=f"From: {fb.email}\n\n{fb.message}",
         subtype=MessageType.plain,
     )
     await fastmail.send_message(message)
     return {"status": "sent"}
 
-
 # -------------------------------------------------------------------
-# Reviews endpoint – save to Firestore with email fallback
+# Reviews endpoint
 # -------------------------------------------------------------------
 @app.post("/reviews")
 async def submit_review(review: Review):
-    # Validate rating
     try:
         rating = int(review.rating)
     except Exception:
@@ -650,43 +1131,30 @@ async def submit_review(review: Review):
         "created_at": datetime.now(timezone.utc),
     }
 
-    # Try to save to Firestore; on failure, fallback to emailing the review
     try:
         db.collection('reviews').add(review_doc)
         print(f"✅ Review saved to Firestore: {review.email}")
         return {"status": "saved", "method": "firestore"}
     except Exception as e:
         print(f"❌ Failed to save review to Firestore: {e}. Falling back to email.")
-        owner_email = os.getenv('MAIL_OWNER', 'owner@aegis.com')
         try:
             message = MessageSchema(
                 subject=f"New Review from {review.name}",
-                recipients=[NameEmail(name="Owner", email=owner_email)],
+                recipients=[NameEmail(name="Animesh Kukreti", email="animeshkukreti60@gmail.com")],
                 body=(f"Name: {review.name}\nEmail: {review.email}\nRating: {rating}\nProduct: {review.product or ''}\n\n"
                       f"Message:\n{review.message or ''}"),
                 subtype=MessageType.plain,
             )
             await fastmail.send_message(message)
-            print("✅ Review emailed to owner as fallback")
+            print("✅ Review emailed as fallback")
             return {"status": "saved", "method": "email_fallback"}
         except Exception as e2:
             print(f"❌ Failed to send review email fallback: {e2}")
             raise HTTPException(status_code=500, detail="Failed to save review or send fallback email")
 
 # -------------------------------------------------------------------
-# OTP Endpoints (in‑memory store, fixed timezone)
+# Legacy OTP endpoints (kept for compatibility)
 # -------------------------------------------------------------------
-otp_store: Dict[str, Dict] = {}
-
-def generate_otp() -> str:
-    return ''.join(random.choices(string.digits, k=6))
-
-def is_cooldown_active(email: str) -> bool:
-    if email not in otp_store:
-        return False
-    cooldown = otp_store[email].get("cooldown_until")
-    return bool(cooldown and datetime.now(timezone.utc) < cooldown)
-
 @app.post("/send-otp")
 async def send_otp(request: OTPSendRequest):
     email = request.email
@@ -744,6 +1212,9 @@ async def verify_otp(request: OTPVerifyRequest):
     otp_store.pop(email, None)
     return {"success": True, "message": "OTP verified successfully. You may now complete registration."}
 
+# -------------------------------------------------------------------
+# Main entry point
+# -------------------------------------------------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     uvicorn.run("main:app", host="0.0.0.0", port=port)
