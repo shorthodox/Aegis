@@ -714,7 +714,6 @@ async def verify_otp(request: OTPVerifyRequest):
         raise HTTPException(status_code=400, detail="Invalid OTP. Please try again.")
     otp_store.pop(email, None)
     return {"success": True, "message": "OTP verified successfully. You may now complete registration."}
-# Lemon Squeezy webhook support removed — endpoint intentionally deleted
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
