@@ -387,8 +387,9 @@
                 <div class="equation">Trusted Data • Probabilistic Signals • Deterministic Execution</div>
             </div>
             <div class="hero-cta">
-                <button id="heroMathBtn" class="btn-primary-glow">⚡ Try 72‑Hour Trial</button>
-                <p class="hero-footnote">No credit card • 72‑hour Pro trial • Cancel anytime</p>
+                <button id="heroMathBtn" class="btn-primary-glow">⚡ Start Your 3‑Day Trial</button>
+                <p class="hero-footnote">No credit card • 3‑day free trial • Limited sample signals</p>
+                <div id="trialCountdown" class="trial-countdown">Trial countdown will appear after login</div>
             </div>
         </div>
     </section>
@@ -446,7 +447,8 @@
                 <div class="modal-logo">⚡ AEGIS</div>
                 <button id="googleStepBtn" class="provider-btn"><i class="fab fa-google"></i> Continue with Google</button>
                 <div class="divider">or</div>
-                <input type="email" id="emailInput" class="auth-input" placeholder="Email address">
+                <input type="text" id="emailInput" class="auth-input" placeholder="Email or mobile number">
+                <p class="info-note">Use your email to sign in or register. Start with a phone number for mobile OTP.</p>
                 <button id="continueToOtpBtn" class="auth-submit-btn">Continue</button>
             </div>
 
@@ -467,7 +469,7 @@
 
             <!-- Step 3: Onboarding (Profile + Password) -->
             <div id="step3" class="step">
-                <h3 style="text-align:center; margin-bottom:1rem;">Complete your account</h3>
+                <h3 id="onboardingTitle" style="text-align:center; margin-bottom:1rem;">Complete your account</h3>
                 <div class="profile-upload">
                     <div id="avatarUpload" class="avatar-upload">
                         <i class="fas fa-cloud-upload-alt"></i>
