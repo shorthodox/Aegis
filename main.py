@@ -37,6 +37,19 @@ if not SECRET_KEY:
     raise RuntimeError("JWT_SECRET_KEY environment variable is not set. Please define it in Railway.")
 
 # -------------------------------------------------------------------
+# Cashfree payment gateway environment fields
+# -------------------------------------------------------------------
+CASHFREE_APP_ID = os.getenv("CASHFREE_APP_ID")
+CASHFREE_SECRET_KEY = os.getenv("CASHFREE_SECRET_KEY")
+CASHFREE_ENV = os.getenv("CASHFREE_ENV", "TEST").upper()
+CASHFREE_BASE_URL = "https://sandbox.cashfree.com" if CASHFREE_ENV == "TEST" else "https://www.cashfree.com"
+CASHFREE_ENABLED = bool(CASHFREE_APP_ID and CASHFREE_SECRET_KEY)
+if CASHFREE_ENABLED:
+    print(f"🔒 Cashfree payment gateway configured for {CASHFREE_ENV}")
+else:
+    print("⚠️ Cashfree payment gateway not configured. Set CASHFREE_APP_ID/CASHFREE_SECRET_KEY to enable.")
+
+# -------------------------------------------------------------------
 # Firebase Admin SDK – check path existence before initializing
 # -------------------------------------------------------------------
 import firebase_admin
@@ -453,6 +466,12 @@ class OTPVerifyRequest(BaseModel):
     email: EmailStr
     otp: str
 
+class CashfreePaymentRequest(BaseModel):
+    amount: float
+    currency: str = "INR"
+    email: EmailStr
+    order_id: Optional[str] = None
+
 
 class Review(BaseModel):
     name: str
@@ -525,6 +544,16 @@ def get_allowed_timeframes(email: str) -> List[str]:
 async def upgrade_plan(email: str = Depends(get_current_user)):
     db.collection("users").document(email).update({"plan": "pro"})
     return {"status": "upgraded to pro"}
+
+@app.get("/payment/config")
+async def payment_config():
+    return {
+        "cashfree": {
+            "enabled": CASHFREE_ENABLED,
+            "environment": CASHFREE_ENV,
+            "base_url": CASHFREE_BASE_URL
+        }
+    }
 
 # -------------------------------------------------------------------
 # WebSocket dashboard – flat JSON structure (includes atr and risk_pct)
