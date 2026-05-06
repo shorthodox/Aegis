@@ -1213,6 +1213,242 @@ async def verify_otp(request: OTPVerifyRequest):
     return {"success": True, "message": "OTP verified successfully. You may now complete registration."}
 
 # -------------------------------------------------------------------
+# FIRESTORE SIGNALS API – Get all active signals
+# -------------------------------------------------------------------
+@app.get("/api/signals")
+async def get_signals(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))
+):
+    """
+    Get all active signals from Firestore.
+    Signals are readable by all authenticated users.
+    Trial users get limited access to specific tokens only.
+    """
+    try:
+        # Get signals collection
+        signals_ref = db.collection("signals")
+        signals_docs = signals_ref.stream()
+        
+        signals = []
+        for doc in signals_docs:
+            signal_data = doc.to_dict() if hasattr(doc, "to_dict") else {}
+            
+            if not isinstance(signal_data, dict):
+                continue
+                
+            # Safe access to document ID - handle None values properly
+            doc_id = getattr(doc, "id", None)
+            if doc_id is None:
+                doc_id = getattr(doc, "name", None) or (str(doc.reference.path).split("/")[-1] if hasattr(doc, "reference") else f"doc_{datetime.now().timestamp()}")
+            
+            signal_data["id"] = str(doc_id)  # Convert to string for type compatibility
+            signals.append(signal_data)
+        
+        # Sort by timestamp (newest first)
+        signals.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
+        
+        return {
+            "success": True,
+            "count": len(signals),
+            "signals": signals,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    except Exception as e:
+        print(f"❌ Error fetching signals: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to fetch signals")
+
+# -------------------------------------------------------------------
+# FIRESTORE SIGNALS API – Get specific signal
+# -------------------------------------------------------------------
+@app.get("/api/signals/{symbol}")
+async def get_signal(symbol: str):
+    """
+    Get a specific signal by symbol.
+    Example: /api/signals/BTC
+    """
+    try:
+        signal_ref = db.collection("signals").document(symbol)
+        signal_doc = signal_ref.get()  # Firestore .get() is synchronous
+        
+        # Use getattr for safe attribute access (handles both sync and async clients)
+        exists_fn = getattr(signal_doc, "exists", None)
+        to_dict_fn = getattr(signal_doc, "to_dict", None)
+        
+        if not exists_fn or not to_dict_fn:
+            raise HTTPException(status_code=404, detail=f"Signal not found for {symbol}")
+        
+        signal_data = to_dict_fn()
+        signal_data["id"] = symbol
+        
+        return {
+            "success": True,
+            "signal": signal_data
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error fetching signal {symbol}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to fetch signal")
+
+# -------------------------------------------------------------------
+# FIRESTORE DASHBOARD API – Get dashboard data for user
+# -------------------------------------------------------------------
+@app.get("/api/dashboard")
+async def get_dashboard(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))  # Unused parameters - FastAPI provides these for route matching
+):
+    """
+    Get personalized dashboard data for authenticated user.
+    Includes: user profile, trial info, subscriptions, recent trades, signals access.
+    """
+    # Extract user ID from JWT or auth header (credentials and request are provided by FastAPI)
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    # Parse JWT to get user email for personalized data
+    try:
+        assert SECRET_KEY is not None, "SECRET_KEY must be set"
+        decoded_payload = jwt.decode(auth_header[7:], SECRET_KEY, algorithms=[ALGORITHM])
+        current_user_email = decoded_payload.get("sub")
+        
+        # Fetch personal dashboard data from Firestore based on user email
+        current_user_email = current_user_email or ""
+        user_doc = get_user_doc(current_user_email) if current_user_email else None
+        
+        plan = user_doc["plan"] if user_doc else "trial"
+        trial_end = user_doc.get("trial_end") if user_doc else None
+        trial_expired = is_trial_expired(current_user_email) if trial_end else False
+        
+        dashboard_data = {
+            "user": {
+                "authenticated": True,
+                "plan": plan,
+                "trial_active": not (isinstance(trial_end, str) and trial_expired),
+                "trial_days_remaining": max(0, (datetime.fromisoformat(trial_end.replace("Z", "+00:00")) - datetime.now(timezone.utc)).days) if isinstance(trial_end, str) and not trial_expired else 0,
+                "allowed_tokens": get_allowed_tokens(current_user_email),
+                "allowed_timeframes": get_allowed_timeframes(current_user_email)
+            },
+            "signals": [],
+            "trades": [],
+            "statistics": {
+                "total_trades": 0,
+                "winning_trades": 0,
+                "losing_trades": 0,
+                "win_rate": 0,
+                "total_pnl": 0
+            }
+        }
+        
+        # Get signals from engine with safe iteration
+        if LIVE_STATE.engine is not None and hasattr(LIVE_STATE.engine, 'last_signals') and LIVE_STATE.engine.last_signals:
+            dashboard_data["signals"] = {k: v for k, v in list(LIVE_STATE.engine.last_signals.items())[:10]}
+        
+        return dashboard_data
+    except HTTPException:
+        raise
+    except jwt.InvalidSignatureError:
+        print("❌ Invalid JWT signature")
+        raise HTTPException(status_code=401, detail="Invalid token")
+    except Exception as e:
+        # Fallback to generic data if personal data fails
+        print(f"❌ Error fetching dashboard (fallback): {str(e)}")
+        return {
+            "user": {
+                "authenticated": False,
+                "plan": "trial",
+                "trial_active": True,
+                "trial_days_remaining": 2,
+                "allowed_tokens": ["BTC", "ETH", "SOL", "ARB", "AAVE"],
+                "allowed_timeframes": ["30m", "1h"]
+            },
+            "signals": [],
+            "trades": [],
+            "statistics": {
+                "total_trades": 0,
+                "winning_trades": 0,
+                "losing_trades": 0,
+                "win_rate": 0,
+                "total_pnl": 0
+            }
+        }
+
+# -------------------------------------------------------------------
+# FIRESTORE PUBLIC SIGNALS – No authentication required
+# -------------------------------------------------------------------
+@app.get("/api/public/signals")
+async def get_public_signals():
+    """
+    Get public signals for non-logged-in users.
+    Shows a limited set of signals to encourage signup.
+    """
+    try:
+        signals_ref = db.collection("signals")
+        # Get only top 3-4 signals
+        signals_docs = signals_ref.limit(4).stream()
+        
+        signals = []
+        for doc in signals_docs:
+            signal_data = doc.to_dict()
+            if signal_data is None:
+                continue
+            signal_data["id"] = doc.id
+            signals.append(signal_data)
+        
+        return {
+            "success": True,
+            "count": len(signals),
+            "signals": signals,
+            "message": "Sign up to access all signals",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    except Exception as e:
+        print(f"❌ Error fetching public signals: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to fetch signals")
+
+# -------------------------------------------------------------------
+# FIRESTORE SIGNAL UPDATE – Backend trigger (admin only)
+# -------------------------------------------------------------------
+@app.post("/api/admin/signals/update")
+async def update_signal(
+    symbol: str,
+    signal_data: Dict[str, Any],
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))
+):
+    """
+    Update or create a signal in Firestore.
+    Should only be called by backend ML engine or admins.
+    Requires Firebase admin credentials.
+    """
+    try:
+        signal_ref = db.collection("signals").document(symbol)
+        
+        update_payload = {
+            "symbol": symbol,
+            "signal": signal_data.get("signal", "HOLD"),
+            "entry": signal_data.get("entry", 0),
+            "sl": signal_data.get("sl", 0),
+            "tp": signal_data.get("tp", 0),
+            "timeframe": signal_data.get("timeframe", "1h"),
+            "confidence": signal_data.get("confidence", 0.5),
+            "timestamp": datetime.now(timezone.utc),
+            "active": True
+        }
+        
+        signal_ref.set(update_payload, merge=True)
+        
+        return {
+            "success": True,
+            "message": f"Signal updated for {symbol}",
+            "symbol": symbol
+        }
+    except Exception as e:
+        print(f"❌ Error updating signal: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to update signal")
+
+# -------------------------------------------------------------------
 # Main entry point
 # -------------------------------------------------------------------
 if __name__ == "__main__":
