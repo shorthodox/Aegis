@@ -633,6 +633,56 @@
         </div>
     </div>
 
+    <!-- ========== TRIAL COUNTDOWN DISPLAY ========== -->
+    <div class="trial-countdown" id="trialCountdown" data-trial-countdown style="display: none;"></div>
+
+    <!-- ========== SCRIPTS ========== -->
+    <script type="module">
+        import { initAuthModal, openAuthModal, updateAuthButtonState, subscribeToAuthState } from '../scripts/auth-modal.js';
+        import { initializeTrialCountdown, getTrialRestrictions } from '../scripts/trial-countdown.js';
+        import { isUserAuthenticated } from '../scripts/auth.js';
+
+        // Initialize auth modal on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initialize modal
+            initAuthModal();
+            
+            // Set up portal button click
+            const portalBtn = document.getElementById('portalBtn');
+            if (portalBtn) {
+                portalBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    if (isUserAuthenticated()) {
+                        window.location.href = '/pages/dashboard.html';
+                    } else {
+                        openAuthModal();
+                    }
+                });
+            }
+            
+            // Subscribe to auth state changes
+            subscribeToAuthState((authState) => {
+                if (authState.authenticated) {
+                    console.log('✅ User authenticated:', authState.user.email);
+                    
+                    // Initialize trial countdown
+                    initializeTrialCountdown(authState.user.uid);
+                    
+                    // Update button state
+                    updateAuthButtonState();
+                    
+                    // Show trial info if applicable
+                    if (authState.userData?.trial?.active) {
+                        console.log('⏳ Trial user - Time remaining:', authState.userData.trial.allowedTokens);
+                    }
+                } else {
+                    console.log('❌ User not authenticated');
+                    updateAuthButtonState();
+                }
+            });
+        });
+    </script>
+
     <!-- Invisible container for Firebase phone reCAPTCHA (used by phone OTP flow) -->
     <div id="recaptcha-container" style="display:none;"></div>
 
@@ -642,6 +692,7 @@
             <span class="separator">•</span>
             <a href="conditions.html">Conditions of Use</a>
             <span class="separator">•</span>
+            <a href="risk-disclosure.html">Risk Disclosure</a>
         </div>
         <p>© 2025 AEGIS v1.0 — Sovereign Intelligence Terminal</p>
     </footer>
