@@ -91,11 +91,58 @@
         <p>© 2025 AEGIS v1.0 — Sovereign Intelligence Terminal</p>
     </footer>
 
-    <!-- Login Modal (shared across all pages) -->
-    <div id="loginModal" class="modal" style="display: none;">
-        <div class="modal-card">
-            <span class="close-modal">&times;</span>
-            <h3>Welcome to Aegis</h3>
+    <!-- Trial Countdown Display -->
+    <div class="trial-countdown" id="trialCountdown" data-trial-countdown style="display: none;"></div>
+
+    <!-- SCRIPTS -->
+    <script type="module">
+        import { initAuthModal, openAuthModal, updateAuthButtonState, subscribeToAuthState } from '../scripts/auth-modal.js';
+        import { initializeTrialCountdown } from '../scripts/trial-countdown.js';
+        import { isUserAuthenticated } from '../scripts/auth.js';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initialize auth modal
+            initAuthModal();
+            
+            // Portal button - navigate to dashboard if logged in, else open auth modal
+            const portalBtn = document.getElementById('portalBtn');
+            if (portalBtn) {
+                portalBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    if (isUserAuthenticated()) {
+                        window.location.href = '/pages/dashboard.html';
+                    } else {
+                        openAuthModal();
+                    }
+                });
+            }
+            
+            // Trial button - start free trial
+            const trialBtn = document.getElementById('trialBtn');
+            if (trialBtn) {
+                trialBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    if (isUserAuthenticated()) {
+                        window.location.href = '/pages/dashboard.html';
+                    } else {
+                        openAuthModal('landing');
+                    }
+                });
+            }
+            
+            // Subscribe to auth state
+            subscribeToAuthState((authState) => {
+                if (authState.authenticated) {
+                    console.log('✅ User authenticated');
+                    initializeTrialCountdown(authState.user.uid);
+                    updateAuthButtonState();
+                } else {
+                    updateAuthButtonState();
+                }
+            });
+        });
+    </script>
+
             <p>Sign in to access the Sovereign Terminal</p>
             <button id="modalLoginBtn" class="btn-primary-glow" style="margin: 1rem 0;"><i class="fab fa-google"></i> Sign in with Google</button>
             <div class="security-badge"><i class="fas fa-lock"></i> Secure encrypted connection · SOC 2 Type II</div>
