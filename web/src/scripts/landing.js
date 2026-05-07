@@ -835,3 +835,37 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 });
+
+// End of landing.js - AEGIS v1.0 Sovereign Terminal Core
+
+
+                 const cashfree = Cashfree({ mode: "sandbox" }); // or "production"
+
+async function payNow() {
+    // Create order with Cashfree API
+    const response = await fetch("/payments/create-order", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            amount: 999,
+            customer_email: currentUser?.email || "user@example.com",
+            customer_name: currentUser?.displayName || "Customer"
+        })
+    });
+
+    if (!response.ok) {
+        console.error("Order creation failed:", response.status);
+        return;
+    }
+
+    const orderData = await response.json();
+    const payment_session_id = orderData.payment_session_id;
+
+    // Redirect to Cashfree checkout
+    cashfree.checkout({
+        paymentSessionId: payment_session_id,
+        redirectTarget: "_self" 
+    });
+}
