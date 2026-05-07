@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AEGIS v1.0 | Sovereign Intelligence</title>
-    <link rel="stylesheet" href="../styles/main.css">
+    <link rel="stylesheet" href="/web/styles/main.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         /* ===== KEEP EXISTING OVERRIDES (header, hero, etc.) ===== */
@@ -21,6 +21,7 @@
             left: 0;
             width: 100%;
             z-index: 1000;
+            box-sizing: border-box;
         }
         .logo {
             font-size: 1.3rem;
@@ -96,12 +97,166 @@
         body {
             padding-top: 80px;
             overflow-y: auto;
+            background: #0a0a0c;
+            color: #e2e8f0;
         }
         .feature-section, .plans-section {
             scroll-margin-top: 80px;
         }
+        .feature-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 4rem 2rem;
+            text-align: center;
+        }
+        .section-title {
+            font-size: 2rem;
+            margin-bottom: 1.5rem;
+            background: linear-gradient(135deg, #fff, #00f2ff);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        .feature-stats {
+            display: flex;
+            justify-content: center;
+            gap: 3rem;
+            margin-top: 2rem;
+        }
+        .feature-stats div {
+            text-align: center;
+        }
+        .feature-stats strong {
+            font-size: 2rem;
+            color: #00f2ff;
+        }
+        .plans-grid {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            flex-wrap: wrap;
+            margin-top: 2rem;
+        }
+        .plan-card {
+            background: rgba(0,0,0,0.4);
+            backdrop-filter: blur(10px);
+            border-radius: 24px;
+            padding: 2rem;
+            width: 280px;
+            border: 1px solid rgba(255,255,255,0.08);
+            transition: 0.3s;
+        }
+        .plan-card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(0,242,255,0.3);
+            box-shadow: 0 10px 30px rgba(0,242,255,0.1);
+        }
+        .plan-card.featured {
+            border: 1px solid rgba(0,242,255,0.5);
+            background: rgba(0,242,255,0.05);
+        }
+        .plan-badge {
+            background: #00f2ff;
+            color: #050505;
+            padding: 0.2rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            display: inline-block;
+            margin-bottom: 1rem;
+        }
+        .plan-card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        .plan-price {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+        }
+        .plan-price span {
+            font-size: 0.8rem;
+            color: #94a3b8;
+        }
+        .plan-card ul {
+            list-style: none;
+            padding: 0;
+            margin: 1rem 0;
+        }
+        .plan-card li {
+            padding: 0.3rem 0;
+            color: #94a3b8;
+            font-size: 0.85rem;
+        }
+        .plan-card li i {
+            color: #00f2ff;
+            margin-right: 0.5rem;
+        }
+        .btn-pro, .btn-outline {
+            display: inline-block;
+            padding: 0.6rem 1.5rem;
+            border-radius: 40px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: 0.2s;
+            cursor: pointer;
+            width: 100%;
+            text-align: center;
+            box-sizing: border-box;
+        }
+        .btn-pro {
+            background: linear-gradient(95deg, #00f2ff, #00a1b0);
+            color: #050505;
+            border: none;
+        }
+        .btn-pro:hover {
+            filter: brightness(1.05);
+            transform: scale(1.02);
+        }
+        .btn-outline {
+            background: transparent;
+            border: 1px solid rgba(0,242,255,0.5);
+            color: #00f2ff;
+        }
+        .btn-outline:hover {
+            background: rgba(0,242,255,0.1);
+        }
+        .btn-primary-glow {
+            background: linear-gradient(95deg, #00f2ff, #00a1b0);
+            border: none;
+            padding: 0.8rem 2rem;
+            border-radius: 48px;
+            font-weight: 800;
+            font-size: 1rem;
+            color: #050505;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .btn-primary-glow:hover {
+            filter: brightness(1.05);
+            transform: scale(1.02);
+            box-shadow: 0 0 20px rgba(0,242,255,0.4);
+        }
+        .hero-footnote {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            margin-top: 1rem;
+        }
+        .trial-countdown {
+            background: rgba(0,242,255,0.1);
+            border: 1px solid rgba(0,242,255,0.3);
+            border-radius: 40px;
+            padding: 0.5rem 1rem;
+            font-size: 0.8rem;
+            color: #00f2ff;
+            margin-top: 1rem;
+            display: inline-block;
+        }
+        .alt {
+            background: rgba(0,0,0,0.2);
+        }
 
-        /* ===== NEW MODAL STYLES (3‑STEP ONBOARDING) ===== */
+        /* ===== MODAL STYLES (3‑STEP ONBOARDING) ===== */
         .modal {
             display: none;
             position: fixed;
@@ -161,7 +316,6 @@
         .close-modal:hover {
             color: var(--primary-cyan, #00f2ff);
         }
-        /* Step container */
         .step {
             display: none;
             opacity: 0;
@@ -171,7 +325,6 @@
             display: block;
             opacity: 1;
         }
-        /* Step 1 – Entry */
         .modal-logo {
             font-size: 2rem;
             font-weight: 800;
@@ -232,6 +385,7 @@
             font-size: 0.95rem;
             font-family: 'JetBrains Mono', monospace;
             transition: 0.2s;
+            box-sizing: border-box;
         }
         .auth-input:focus {
             outline: none;
@@ -256,7 +410,21 @@
             transform: scale(1.01);
             box-shadow: 0 0 16px var(--primary-cyan);
         }
-        /* Step 2 – OTP squares */
+        .auth-secondary-btn {
+            width: 100%;
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.2);
+            padding: 0.7rem;
+            border-radius: 48px;
+            font-weight: 600;
+            color: var(--dim);
+            cursor: pointer;
+            margin-top: 0.5rem;
+        }
+        .auth-secondary-btn:hover {
+            border-color: var(--primary-cyan);
+            color: var(--primary-cyan);
+        }
         .otp-container {
             display: flex;
             justify-content: center;
@@ -280,7 +448,6 @@
             border-color: var(--primary-cyan);
             box-shadow: 0 0 0 2px rgba(0,242,255,0.2);
         }
-        /* Step 3 – Profile upload & password fields */
         .profile-upload {
             display: flex;
             flex-direction: column;
@@ -357,28 +524,76 @@
             justify-content: center;
             gap: 6px;
         }
+        .info-note {
+            font-size: 0.7rem;
+            color: #6b7280;
+            text-align: center;
+            margin-top: 0.5rem;
+        }
+        
+        /* Footer Styles */
+        .footer {
+            text-align: center;
+            padding: 2rem;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            margin-top: 3rem;
+        }
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+        .footer-links a {
+            color: #6b7280;
+            text-decoration: none;
+            font-size: 0.8rem;
+        }
+        .footer-links a:hover {
+            color: #00f2ff;
+        }
+        .separator {
+            color: #374151;
+        }
+        .footer-proprietor {
+            font-size: 0.75rem;
+            color: #4b5563;
+            margin-bottom: 0.5rem;
+        }
+        .footer p {
+            font-size: 0.7rem;
+            color: #374151;
+        }
+        
         @media (max-width: 768px) {
             .otp-digit { width: 40px; height: 50px; font-size: 1.2rem; }
             .modal-card { padding: 1.5rem; }
+            .fixed-header { padding: 0.8rem 1rem; }
+            .nav-links-centered { gap: 1rem; }
+            .nav-link { font-size: 0.75rem; }
+            .portal-btn { padding: 0.3rem 0.8rem; font-size: 0.75rem; }
+            .plans-grid { gap: 1rem; }
+            .plan-card { width: 100%; max-width: 300px; }
         }
     </style>
 </head>
 <body>
 
-    <!-- Fixed Glass Header (identical) -->
+    <!-- Fixed Glass Header -->
     <header class="fixed-header">
-        <div class="logo"></div>
+        <div class="logo">⚡ AEGIS <span>v1.0</span></div>
         <div class="nav-links-centered">
-            <a href="#" class="nav-link active">Home</a>
+            <a href="/web/src/pages/index.html" class="nav-link active">Home</a>
             <a href="#sentinel" class="nav-link">Sentinel</a>
             <a href="#cockpit" class="nav-link">Cockpit</a>
-            <a href="pricing.html" class="nav-link">Pricing</a>
-            <a href="review.html" class="nav-link">Reviews</a>
+            <a href="/web/src/pages/pricing.html" class="nav-link">Pricing</a>
+            <a href="/web/src/pages/review.html" class="nav-link">Reviews</a>
         </div>
         <button id="portalBtn" class="portal-btn">Client Login</button>
     </header>
 
-    <!-- Hero Section (unchanged) -->
+    <!-- Hero Section -->
     <section class="hero-section">
         <div class="hero-content">
             <div class="math-block">
@@ -389,7 +604,7 @@
             <div class="hero-cta">
                 <button id="heroMathBtn" class="btn-primary-glow">⚡ Start Your 3‑Day Trial</button>
                 <p class="hero-footnote">No credit card • 3‑day free trial • Limited sample signals</p>
-                <div id="trialCountdown" class="trial-countdown">Trial countdown will appear after login</div>
+                <div id="trialCountdown" class="trial-countdown" style="display: none;"></div>
             </div>
         </div>
     </section>
@@ -493,7 +708,7 @@
                 </div>
                 <div style="max-width:280px; background:rgba(0,0,0,0.35); padding:1.2rem; border-radius:20px; border:1px solid rgba(255,255,255,0.08);">
                     <h4>Payment Ready</h4>
-                    <p style="color:var(--text-dim);">Cashfree payment integration support is prepared for future checkout flows.</p>
+                    <p style="color:var(--text-dim);">Cashfree payment integration support is prepared for checkout flows.</p>
                 </div>
             </div>
         </div>
@@ -503,7 +718,7 @@
         <div class="feature-container">
             <h2 class="section-title">Public Homepage Access</h2>
             <p style="color:var(--text-dim); max-width:900px; margin:0 auto;">
-                Visitors may review product capabilities, pricing, and trial details before signing in. No login is required to browse the bot’s business and feature overview.
+                Visitors may review product capabilities, pricing, and trial details before signing in. No login is required to browse the bot's business and feature overview.
             </p>
             <div style="display:flex; gap:1.2rem; justify-content:center; margin-top:1.5rem; flex-wrap:wrap;">
                 <div style="max-width:280px; background:rgba(0,0,0,0.35); padding:1.2rem; border-radius:20px; border:1px solid rgba(255,255,255,0.08);">
@@ -531,45 +746,44 @@
                     <h3>Explorer Trial</h3>
                     <div class="plan-price">$0 <span>/ 3 days</span></div>
                     <ul>
-                        <li>Sample of the full signal set</li>
-                        <li>Trial access to core tokens</li>
-                        <li>Simulator + risk guidance</li>
-                        <li>No credit card required</li>
+                        <li><i class="fas fa-check-circle"></i> Sample of the full signal set</li>
+                        <li><i class="fas fa-check-circle"></i> Trial access to core tokens</li>
+                        <li><i class="fas fa-check-circle"></i> Simulator + risk guidance</li>
+                        <li><i class="fas fa-check-circle"></i> No credit card required</li>
                     </ul>
-                    <a href="pricing.html" class="btn-pro">Start Free Trial</a>
+                    <a href="/web/src/pages/pricing.html" class="btn-pro">Start Free Trial</a>
                 </div>
                 <div class="plan-card">
                     <h3>Basic Explorer</h3>
                     <div class="plan-price">$3.60 <span>/ mo</span></div>
                     <ul>
-                        <li>3-4 curated tokens</li>
-                        <li>15m & 30m timeframes</li>
-                        <li>Smart capital management</li>
-                        <li>Monthly access via Cashfree</li>
+                        <li><i class="fas fa-check-circle"></i> 3-4 curated tokens</li>
+                        <li><i class="fas fa-check-circle"></i> 15m & 30m timeframes</li>
+                        <li><i class="fas fa-check-circle"></i> Smart capital management</li>
+                        <li><i class="fas fa-check-circle"></i> Monthly access via Cashfree</li>
                     </ul>
-                    <a href="pricing.html" class="btn-outline">Get Basic</a>
+                    <a href="/web/src/pages/pricing.html" class="btn-outline">Get Basic</a>
                 </div>
                 <div class="plan-card featured">
                     <div class="plan-badge">Most Powerful</div>
                     <h3>Pro Quant</h3>
                     <div class="plan-price">$24 <span>/ mo</span></div>
                     <ul>
-                        <li>Full 58-token fleet</li>
-                        <li>All timeframes</li>
-                        <li>Priority execution alerts</li>
-                        <li>Cashfree gateway ready</li>
+                        <li><i class="fas fa-check-circle"></i> Full 58-token fleet</li>
+                        <li><i class="fas fa-check-circle"></i> All timeframes</li>
+                        <li><i class="fas fa-check-circle"></i> Priority execution alerts</li>
+                        <li><i class="fas fa-check-circle"></i> Cashfree gateway ready</li>
                     </ul>
-                    <a href="pricing.html" class="btn-pro">Go Pro</a>
+                    <a href="/web/src/pages/pricing.html" class="btn-pro">Go Pro</a>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- ========== 3‑STEP ONBOARDING MODAL (with password fields) ========== -->
+    <!-- ========== 3‑STEP ONBOARDING MODAL ========== -->
     <div id="loginModal" class="modal">
         <div class="modal-card">
-            <!-- Close button with inline styles to guarantee clickability -->
-            <span class="close-modal" style="position: absolute; top: 1rem; right: 1.5rem; font-size: 1.8rem; cursor: pointer; color: var(--dim, #94a3b8); z-index: 1001; pointer-events: auto;">&times;</span>
+            <span class="close-modal">&times;</span>
 
             <!-- Step 1: Email / Google -->
             <div id="step1" class="step active">
@@ -593,7 +807,7 @@
                     <input type="text" maxlength="1" class="otp-digit" data-idx="4">
                     <input type="text" maxlength="1" class="otp-digit" data-idx="5">
                 </div>
-                <button id="backToEmailBtn" class="auth-secondary-btn" style="margin-top:0.5rem;">← Back</button>
+                <button id="backToEmailBtn" class="auth-secondary-btn">← Back</button>
             </div>
 
             <!-- Step 3: Onboarding (Profile + Password) -->
@@ -633,71 +847,25 @@
         </div>
     </div>
 
-    <!-- ========== TRIAL COUNTDOWN DISPLAY ========== -->
-    <div class="trial-countdown" id="trialCountdown" data-trial-countdown style="display: none;"></div>
-
-    <!-- ========== SCRIPTS ========== -->
-    <script type="module">
-        import { initAuthModal, openAuthModal, updateAuthButtonState, subscribeToAuthState } from '../scripts/auth-modal.js';
-        import { initializeTrialCountdown, getTrialRestrictions } from '../scripts/trial-countdown.js';
-        import { isUserAuthenticated } from '../scripts/auth.js';
-
-        // Initialize auth modal on page load
-        document.addEventListener('DOMContentLoaded', () => {
-            // Initialize modal
-            initAuthModal();
-            
-            // Set up portal button click
-            const portalBtn = document.getElementById('portalBtn');
-            if (portalBtn) {
-                portalBtn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    if (isUserAuthenticated()) {
-                        window.location.href = '/pages/dashboard.html';
-                    } else {
-                        openAuthModal();
-                    }
-                });
-            }
-            
-            // Subscribe to auth state changes
-            subscribeToAuthState((authState) => {
-                if (authState.authenticated) {
-                    console.log('✅ User authenticated:', authState.user.email);
-                    
-                    // Initialize trial countdown
-                    initializeTrialCountdown(authState.user.uid);
-                    
-                    // Update button state
-                    updateAuthButtonState();
-                    
-                    // Show trial info if applicable
-                    if (authState.userData?.trial?.active) {
-                        console.log('⏳ Trial user - Time remaining:', authState.userData.trial.allowedTokens);
-                    }
-                } else {
-                    console.log('❌ User not authenticated');
-                    updateAuthButtonState();
-                }
-            });
-        });
-    </script>
-
-    <!-- Invisible container for Firebase phone reCAPTCHA (used by phone OTP flow) -->
+    <!-- Invisible container for Firebase phone reCAPTCHA -->
     <div id="recaptcha-container" style="display:none;"></div>
 
+    <!-- Footer with Legal Compliance for Cashfree -->
     <footer class="footer">
         <div class="footer-links">
-            <a href="terms.html">Terms of Service</a>
+            <a href="/web/src/pages/terms.html">Terms of Service</a>
             <span class="separator">•</span>
-            <a href="conditions.html">Conditions of Use</a>
+            <a href="/web/src/pages/refund-policy.html">Refund Policy</a>
             <span class="separator">•</span>
-            <a href="risk-disclosure.html">Risk Disclosure</a>
+            <a href="/web/src/pages/risk-disclosure.html">Risk Disclosure</a>
+        </div>
+        <div class="footer-proprietor">
+            Proprietor: Animesh Kukreti | Dehradun, Uttarakhand, India
         </div>
         <p>© 2025 AEGIS v1.0 — Sovereign Intelligence Terminal</p>
     </footer>
 
-    <!-- ONLY ONE SCRIPT – landing.js handles all modal + auth logic -->
-    <script type="module" src="../scripts/landing.js"></script>
+    <!-- Main Script - landing.js handles all modal + auth logic -->
+    <script type="module" src="/web/src/scripts/landing.js"></script>
 </body>
 </html>
