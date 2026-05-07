@@ -3,12 +3,12 @@ import {
     auth, db, ensureUserDocument, subscribeUserSettings, updateUserSetting,
     getCurrentUserToken, logout, isTokenVisible, getUpgradeModal,
     registerWithEmail, signInWithEmail, sendPhoneOTP, verifyPhoneOTP, signInWithGoogle,
-    setupRecaptcha, checkAccountExists, updateUserOnboarding
+    setupRecaptcha, checkAccountExists, updateUserOnboarding, fetchPaymentConfig
 } from './gatekeeper.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
-import { collection, addDoc, onSnapshot, doc, updateDoc, query, where } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js";
+import { collection, addDoc, onSnapshot, doc, updateDoc, query, where, getDoc } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js";
 
-// Scroll lock helpers (for alpha modal)
+// Scroll lock helpers (for modals)
 function lockBodyScroll() {
     document.body.classList.add('modal-open');
 }
@@ -59,24 +59,22 @@ document.addEventListener('DOMContentLoaded', () => {
     let btcSignalSafe = false;
     let ws = null;
     let reconnectAttempts = 0;
-    let currentSignals = new Map();      // symbol (normalized with '/') -> signal object
+    let currentSignals = new Map();
     let selectedTrade = null;
-    let activeTrades = new Map();         // from Firestore (user executed trades)
+    let activeTrades = new Map();
     let unsubscribeTrades = null;
-    let currentPrices = new Map();        // symbol (normalized with '/') -> latest price
+    let currentPrices = new Map();
     let unsubscribeSettings = null;
-    let engineConnected = false;           // WebSocket open state
-    let firstSignalsReceived = false;      // at least one signal packet arrived
+    let engineConnected = false;
+    let firstSignalsReceived = false;
+    let cashfreeEnabled = false;
 
     // ========== Symbol Normalization ==========
-    // Backend sends symbols with '/' (e.g., "BTC/USDT"). Ensure all keys use this format.
     function normalizeSymbol(sym) {
         if (!sym) return sym;
-        // Replace any underscore with slash (e.g., "BTC_USDT" → "BTC/USDT")
         return String(sym).replace(/_/g, '/');
     }
 
-    // ========== Helper: ATR ==========
     function getATR(price) { return price * 0.015; }
 
     // ========== Connection Status ==========
@@ -84,10 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (statusDot) statusDot.className = connected ? 'ws-dot connected' : 'ws-dot disconnected';
         if (statusText) statusText.innerText = message || (connected ? 'Live' : 'Connecting...');
         engineConnected = connected;
-        if (connected) {
-            // Force UI redraw to show "Synchronizing..." instead of connection error
-            renderAllSignals();
-        }
+        if (connected) renderAllSignals();
     }
 
     // ========== Simulator Update ==========
@@ -120,7 +115,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const liquidationPrice = direction === 'LONG'
             ? entry - (entry / leverage) + (sl / leverage)
             : entry + (entry / leverage) - (sl / leverage);
-        const riskReward = 3;
+        const riskReward = Math.abs((tp - entry) / (entry - sl));
         const riskPercentOfBalance = (riskAmount / balance) * 100;
         const gaugePercent = Math.min(100, (riskPercentOfBalance / 10) * 100);
         if (riskGaugeFill) riskGaugeFill.style.width = `${gaugePercent}%`;
@@ -128,25 +123,25 @@ document.addEventListener('DOMContentLoaded', () => {
         if (notionalSpan) notionalSpan.innerText = `$${Number(notionalValue || 0).toFixed(2)}`;
         if (marginSpan) marginSpan.innerText = `$${Number(marginRequired || 0).toFixed(2)}`;
         if (liquidationSpan) liquidationSpan.innerText = `$${Number(liquidationPrice || 0).toFixed(4)}`;
-        if (rrRatioSpan) rrRatioSpan.innerText = Number(riskReward).toFixed(2);
+        if (rrRatioSpan) rrRatioSpan.innerText = riskReward.toFixed(2);
         if (suggestedSpan) suggestedSpan.innerText = `$${Number(notionalValue || 0).toFixed(2)}`;
     }
 
-    // ========== Pre-fill Simulator ==========
     function prefillTradeSim(symbol, price, signalObj) {
         const direction = (signalObj.signal === 'BUY' || signalObj.signal === 'STRONG_BUY') ? 'LONG' : 'SHORT';
         const atr = getATR(price);
         selectedTrade = { symbol, entryPrice: price, direction, atr, aiProb: signalObj.ai_prob, signal: signalObj.signal };
         simSymbol.value = symbol;
         simEntry.value = price;
-        directionBadge.className = `direction-badge ${direction === 'LONG' ? 'long' : 'short'}`;
-        directionBadge.innerText = direction;
+        if (directionBadge) {
+            directionBadge.className = `direction-badge ${direction === 'LONG' ? 'long' : 'short'}`;
+            directionBadge.innerText = direction;
+        }
         simSl.value = '';
         simTp.value = '';
         updateSimulation();
     }
 
-    // ========== Safety Brake ==========
     function updateSafetyBrake() {
         if (!executeBtn) return;
         const warmupOk = !warmupActive;
@@ -163,7 +158,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // ========== Execute Trade ==========
     async function executeTrade() {
         if (!selectedTrade || !currentUser || executeBtn.disabled) return;
         const entry = parseFloat(simEntry.value);
@@ -191,13 +185,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const tradesRef = collection(db, 'users', currentUser.uid, 'trades');
             await addDoc(tradesRef, tradeData);
             console.log('Trade executed');
+            alert('Trade executed successfully!');
         } catch (err) {
             console.error('Failed to save trade:', err);
             alert('Trade execution failed: ' + err.message);
         }
     }
 
-    // ========== Trades Table ==========
     function renderTradesTable() {
         if (!tradesTbody) return;
         if (activeTrades.size === 0) {
@@ -222,7 +216,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${Number(trade.takeProfit || 0).toFixed(4)}</td>
                     <td class="${pnlClass}">$${Number(pnl).toFixed(2)}</td>
                     <td><button class="close-trade-btn" data-id="${id}">Close</button></td>
-                </tr>
+                </table>
             `;
         }
         tradesTbody.innerHTML = html;
@@ -353,7 +347,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!signalGrid) return;
         const trialValid = (userPlan === 'trial' && trialActive);
 
-        // No data yet – distinguish between connection problem and engine warmup
         if (!firstSignalsReceived) {
             if (engineConnected) {
                 signalGrid.innerHTML = '<div class="loading-spinner">⚡ Synchronizing with Engine... (signals incoming)</div>';
@@ -377,11 +370,100 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // ========== WebSocket (dynamic URL with protocol detection) ==========
+    // ========== Cashfree Subscription Integration ==========
+    async function subscribeToPlan(planType) {
+        const amount = planType === 'pro' ? 24.00 : 3.60;
+        const planName = planType === 'pro' ? 'pro' : 'basic';
+        const token = await getCurrentUserToken();
+        
+        if (!token) {
+            alert('Please log in first');
+            openAuthModal();
+            return;
+        }
+        
+        if (!currentUser) {
+            alert('Please log in first');
+            openAuthModal();
+            return;
+        }
+        
+        try {
+            // Show loading state
+            const btn = document.querySelector(`[data-plan="${planType}"]`);
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+            }
+            
+            const response = await fetch('/create-subscription', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    plan_name: planName,
+                    amount: amount,
+                    email: currentUser.email,
+                    customer_phone: null
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok && data.success && data.sub_auth_url) {
+                // Redirect to Cashfree authorization page
+                window.location.href = data.sub_auth_url;
+            } else {
+                alert(data.detail || 'Failed to create subscription. Please try again.');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = planType === 'pro' ? 'Go Pro' : 'Get Basic';
+                }
+            }
+        } catch (error) {
+            console.error('Subscription error:', error);
+            alert('Network error. Please try again.');
+            const btn = document.querySelector(`[data-plan="${planType}"]`);
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = planType === 'pro' ? 'Go Pro' : 'Get Basic';
+            }
+        }
+    }
+
+    // Check subscription status from URL (after Cashfree redirect)
+    async function checkSubscriptionStatus() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const subscriptionId = urlParams.get('subscription_id');
+        const orderId = urlParams.get('order_id');
+        
+        if (subscriptionId || orderId) {
+            const token = await getCurrentUserToken();
+            if (token) {
+                try {
+                    const response = await fetch('/auth/me', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (response.ok) {
+                        const userData = await response.json();
+                        if (userData.plan === 'pro') {
+                            alert('🎉 Subscription activated successfully! You now have Pro access.');
+                            window.location.href = '/web/src/pages/dashboard.html';
+                        }
+                    }
+                } catch (e) {
+                    console.error('Status check error:', e);
+                }
+            }
+        }
+    }
+
+    // ========== WebSocket ==========
     function connectWebSocket() {
         if (ws && ws.readyState === WebSocket.OPEN) return;
 
-        // Determine secure protocol based on page origin
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${protocol}//${window.location.host}/ws/dashboard`;
         console.log(`🔄 Connecting WebSocket to ${wsUrl}`);
@@ -391,7 +473,6 @@ document.addEventListener('DOMContentLoaded', () => {
             setStatus(true, 'Live'); 
             reconnectAttempts = 0;
             console.log('✅ WebSocket connected');
-            // Reset data on reconnect to avoid stale signals
             firstSignalsReceived = false;
             currentSignals.clear();
             currentPrices.clear();
@@ -401,27 +482,22 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const data = JSON.parse(event.data);
                 console.log('📡 Aegis Data Received:', data);
-                // Mark that we have received at least one data packet
                 if (!firstSignalsReceived && (Object.keys(data.tickers || {}).length > 0 || Object.keys(data.signals || {}).length > 0)) {
                     firstSignalsReceived = true;
                 }
-                // Warmup status
                 if (data.warmup) {
                     warmupActive = data.warmup !== 'Active' && !data.warmup.includes('Active');
                     if (warmupSpan) warmupSpan.innerText = data.warmup;
                 }
-                // Alpha mode
                 alphaMode = data.alpha_mode || false;
                 if (alphaToggleDiv) {
                     alphaToggleDiv.innerText = alphaMode ? '⚡ ON' : 'OFF';
                     alphaToggleDiv.classList.toggle('active', alphaMode);
                 }
-                // Tickers: normalize keys and store
                 for (const [sym, price] of Object.entries(data.tickers || {})) {
                     const norm = normalizeSymbol(sym);
                     currentPrices.set(norm, price);
                 }
-                // Signals: normalize keys and store enriched object
                 for (const [sym, sig] of Object.entries(data.signals || {})) {
                     const norm = normalizeSymbol(sym);
                     currentSignals.set(norm, {
@@ -432,12 +508,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         risk_pct: sig.risk_pct || 2
                     });
                 }
-                // BTC safety
                 const btcSig = currentSignals.get('BTC/USDT');
                 if (btcSig) {
                     btcSignalSafe = (btcSig.signal === 'BUY' || btcSig.signal === 'STRONG_BUY');
                 }
-                // Refresh UI
                 renderAllSignals();
                 updateSafetyBrake();
                 renderTradesTable();
@@ -447,7 +521,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         ws.onclose = (event) => {
             setStatus(false, 'Reconnecting...');
-            console.warn(`WebSocket closed: code=${event.code}, reason=${event.reason}, wasClean=${event.wasClean}`);
+            console.warn(`WebSocket closed: code=${event.code}`);
             const delay = Math.min(30000, 1000 * Math.pow(2, reconnectAttempts));
             reconnectAttempts++;
             setTimeout(connectWebSocket, delay);
@@ -458,7 +532,6 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    // ========== Logout Handler ==========
     async function handleLogout() {
         console.log("🔴 Logout initiated");
         try {
@@ -481,7 +554,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ========== Auth Init ==========
     onAuthStateChanged(auth, async (user) => {
-        // Only redirect unauthenticated users away when on protected pages
         const isProtectedPage = document.body.classList.contains('dashboard-body') || window.location.pathname.includes('dashboard.html');
         if (!user) {
             if (isProtectedPage) {
@@ -508,112 +580,20 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             subscribeToTrades(user.uid);
             connectWebSocket();
+            
+            // Check payment config
+            const paymentConfig = await fetchPaymentConfig();
+            cashfreeEnabled = paymentConfig.cashfree?.enabled || false;
         } catch (err) {
             console.error('Auth init error:', err);
         }
     });
 
     // ========== Event Listeners ==========
-    // --- Modal controls (signup/login) ---
-    const portalBtn = document.getElementById('portalBtn');
-    const heroMathBtn = document.getElementById('heroMathBtn');
-    const loginModalEl = document.getElementById('loginModal');
-    const step1El = document.getElementById('step1');
-    const step2El = document.getElementById('step2');
-    const step3El = document.getElementById('step3');
-    const continueToOtpBtnEl = document.getElementById('continueToOtpBtn');
-    const backToEmailBtnEl = document.getElementById('backToEmailBtn');
-    const completeOnboardingBtn = document.getElementById('completeOnboarding');
-    const googleStepBtnEl = document.getElementById('googleStepBtn');
-    const emailInputEl = document.getElementById('emailInput');
-    const onboardingTitleEl = document.getElementById('onboardingTitle');
-    const otpContainerEl = document.getElementById('otpContainer');
-    const otpInputs = document.querySelectorAll('.otp-digit');
-    const otpEmailDisplayEl = document.getElementById('otpEmailDisplay');
-    const fullNameEl = document.getElementById('fullName');
-    const locationEl = document.getElementById('location');
-    const regPasswordEl = document.getElementById('regPassword');
-    const regConfirmPasswordEl = document.getElementById('regConfirmPassword');
-    const avatarFileEl = document.getElementById('avatarFile');
-    const profileFieldsSection = document.getElementById('profileFields');
-    const passwordConfirmSection = document.getElementById('passwordConfirmSection');
-    const avatarUploadSection = document.getElementById('avatarUploadSection');
-    const avatarUploadBtn = document.getElementById('avatarUpload');
-    const skipOnboardingLink = document.getElementById('skipOnboarding');
-
-    let modalAuthMode = 'register'; // 'register' or 'login'
-    let modalUsePhone = false;
-    let pendingPhone = null;
-
-    function showModalStep(n) {
-        step1El.classList.remove('active');
-        step2El.classList.remove('active');
-        step3El.classList.remove('active');
-        if (n === 1) step1El.classList.add('active');
-        if (n === 2) step2El.classList.add('active');
-        if (n === 3) step3El.classList.add('active');
-    }
-
-    function setModalAuthMode(mode) {
-        modalAuthMode = mode;
-        const isLogin = mode === 'login';
-        if (onboardingTitleEl) onboardingTitleEl.innerText = isLogin ? 'Sign in to your account' : 'Create your free trial account';
-        if (completeOnboardingBtn) completeOnboardingBtn.innerText = isLogin ? 'Sign In' : 'Create Account';
-        if (profileFieldsSection) profileFieldsSection.style.display = isLogin ? 'none' : 'block';
-        if (avatarUploadSection) avatarUploadSection.style.display = isLogin ? 'none' : 'flex';
-        if (passwordConfirmSection) passwordConfirmSection.style.display = isLogin ? 'none' : 'block';
-    }
-
-    function openAuthModal() {
-        if (loginModalEl) {
-            loginModalEl.style.display = 'flex';
-            lockBodyScroll();
-            setModalAuthMode('register');
-            showModalStep(1);
-        }
-    }
-
-    function closeAuthModal() {
-        if (loginModalEl) {
-            loginModalEl.style.display = 'none';
-            unlockBodyScroll();
-        }
-    }
-
-    if (portalBtn) portalBtn.addEventListener('click', openAuthModal);
-    if (heroMathBtn) heroMathBtn.addEventListener('click', openAuthModal);
-
-    // Google button
-    if (googleStepBtnEl) {
-        googleStepBtnEl.addEventListener('click', async () => {
-            try {
-                const res = await signInWithGoogle();
-                if (res && res.success) {
-                    // Redirect existing users to dashboard; new users continue to pricing
-                    // We cannot reliably detect 'new' here, so send to dashboard for now
-                    window.location.replace('dashboard.html');
-                } else {
-                    alert(res.error || 'Google sign-in failed');
-                }
-            } catch (err) {
-                console.error('Google sign-in error:', err);
-                alert('Google sign-in error: ' + (err.message || err));
-            }
-        });
-    }
-    if (avatarUploadBtn && avatarFileEl) {
-        avatarUploadBtn.addEventListener('click', () => avatarFileEl.click());
-    }
-    if (skipOnboardingLink) {
-        skipOnboardingLink.addEventListener('click', (event) => {
-            event.preventDefault();
-            closeAuthModal();
-        });
-    }
     if (capitalInput) capitalInput.addEventListener('change', () => { if (currentUser) updateUserSetting(currentUser, 'capital', parseFloat(capitalInput.value)); });
     if (riskSelect) riskSelect.addEventListener('change', () => { if (currentUser) updateUserSetting(currentUser, 'risk_pct', parseInt(riskSelect.value)); });
-    if (simRiskSlider) simRiskSlider.addEventListener('input', () => { riskPercentDisplay.innerText = simRiskSlider.value + '%'; updateSimulation(); });
-    if (simLeverageSlider) simLeverageSlider.addEventListener('input', () => { leverageDisplay.innerText = simLeverageSlider.value + 'x'; updateSimulation(); });
+    if (simRiskSlider) simRiskSlider.addEventListener('input', () => { if (riskPercentDisplay) riskPercentDisplay.innerText = simRiskSlider.value + '%'; updateSimulation(); });
+    if (simLeverageSlider) simLeverageSlider.addEventListener('input', () => { if (leverageDisplay) leverageDisplay.innerText = simLeverageSlider.value + 'x'; updateSimulation(); });
     if (simEntry) simEntry.addEventListener('input', updateSimulation);
     if (simSl) simSl.addEventListener('input', updateSimulation);
     if (simTp) simTp.addEventListener('input', updateSimulation);
@@ -629,7 +609,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
-    // Alpha modal with scroll lock
+    // Alpha modal
     if (alphaToggleDiv) {
         alphaToggleDiv.addEventListener('click', () => {
             const modal = document.getElementById('alpha-modal');
@@ -646,7 +626,6 @@ document.addEventListener('DOMContentLoaded', () => {
         alphaConfirm.addEventListener('click', async () => {
             const token = await getCurrentUserToken();
             if (token) {
-                // Relative path (works on any origin)
                 const response = await fetch('/alpha/toggle', {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -672,24 +651,134 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
-    // ========== Login modal close fix ==========
-    const loginModal = document.getElementById('loginModal');
-    const closeModalBtn = document.querySelector('.close-modal');
-    if (closeModalBtn) {
-        closeModalBtn.addEventListener('click', () => {
-            if (loginModal) {
-                loginModal.style.display = 'none';
-                unlockBodyScroll();
+    if (logoutBtn) {
+        console.log("Attaching logout listener");
+        logoutBtn.addEventListener('click', handleLogout);
+    }
+
+    // Pricing page subscription buttons
+    const trialBtn = document.getElementById('trialBtn');
+    const basicSubscribeBtn = document.querySelector('[data-plan="basic"]');
+    const proSubscribeBtn = document.querySelector('[data-plan="pro"]');
+    
+    if (trialBtn) {
+        trialBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (currentUser) {
+                window.location.href = '/web/src/pages/dashboard.html';
+            } else {
+                openAuthModal();
             }
         });
     }
-    window.addEventListener('click', (e) => {
-        if (e.target === loginModal) {
-            loginModal.style.display = 'none';
+    
+    if (basicSubscribeBtn) {
+        basicSubscribeBtn.addEventListener('click', () => subscribeToPlan('basic'));
+    }
+    
+    if (proSubscribeBtn) {
+        proSubscribeBtn.addEventListener('click', () => subscribeToPlan('pro'));
+    }
+
+    // ========== 3-Step Onboarding Modal ==========
+    const portalBtn = document.getElementById('portalBtn');
+    const heroMathBtn = document.getElementById('heroMathBtn');
+    const loginModalEl = document.getElementById('loginModal');
+    const step1El = document.getElementById('step1');
+    const step2El = document.getElementById('step2');
+    const step3El = document.getElementById('step3');
+    const continueToOtpBtnEl = document.getElementById('continueToOtpBtn');
+    const backToEmailBtnEl = document.getElementById('backToEmailBtn');
+    const completeOnboardingBtn = document.getElementById('completeOnboarding');
+    const googleStepBtnEl = document.getElementById('googleStepBtn');
+    const emailInputEl = document.getElementById('emailInput');
+    const onboardingTitleEl = document.getElementById('onboardingTitle');
+    const otpInputs = document.querySelectorAll('.otp-digit');
+    const otpEmailDisplayEl = document.getElementById('otpEmailDisplay');
+    const fullNameEl = document.getElementById('fullName');
+    const locationEl = document.getElementById('location');
+    const regPasswordEl = document.getElementById('regPassword');
+    const regConfirmPasswordEl = document.getElementById('regConfirmPassword');
+    const avatarFileEl = document.getElementById('avatarFile');
+    const profileFieldsSection = document.getElementById('profileFields');
+    const passwordConfirmSection = document.getElementById('passwordConfirmSection');
+    const avatarUploadSection = document.getElementById('avatarUploadSection');
+    const avatarUploadBtn = document.getElementById('avatarUpload');
+    const skipOnboardingLink = document.getElementById('skipOnboarding');
+
+    let modalAuthMode = 'register';
+    let modalUsePhone = false;
+    let pendingPhone = null;
+    let pendingEmail = null;
+
+    function showModalStep(n) {
+        if (step1El) step1El.classList.remove('active');
+        if (step2El) step2El.classList.remove('active');
+        if (step3El) step3El.classList.remove('active');
+        if (n === 1 && step1El) step1El.classList.add('active');
+        if (n === 2 && step2El) step2El.classList.add('active');
+        if (n === 3 && step3El) step3El.classList.add('active');
+    }
+
+    function setModalAuthMode(mode) {
+        modalAuthMode = mode;
+        const isLogin = mode === 'login';
+        if (onboardingTitleEl) onboardingTitleEl.innerText = isLogin ? 'Sign in to your account' : 'Create your free trial account';
+        if (completeOnboardingBtn) completeOnboardingBtn.innerText = isLogin ? 'Sign In' : 'Create Account';
+        if (profileFieldsSection) profileFieldsSection.style.display = isLogin ? 'none' : 'block';
+        if (avatarUploadSection) avatarUploadSection.style.display = isLogin ? 'none' : 'flex';
+        if (passwordConfirmSection) passwordConfirmSection.style.display = isLogin ? 'none' : 'block';
+    }
+
+    function openAuthModal() {
+        if (loginModalEl) {
+            loginModalEl.style.display = 'flex';
+            lockBodyScroll();
+            setModalAuthMode('register');
+            showModalStep(1);
+            if (emailInputEl) emailInputEl.value = '';
+            if (otpInputs) otpInputs.forEach(inp => inp.value = '');
+        }
+    }
+
+    function closeAuthModal() {
+        if (loginModalEl) {
+            loginModalEl.style.display = 'none';
             unlockBodyScroll();
         }
-    });
-    // ========== Auth modal interactions ==========
+    }
+
+    if (portalBtn) portalBtn.addEventListener('click', openAuthModal);
+    if (heroMathBtn) heroMathBtn.addEventListener('click', openAuthModal);
+
+    // Google button
+    if (googleStepBtnEl) {
+        googleStepBtnEl.addEventListener('click', async () => {
+            try {
+                const res = await signInWithGoogle();
+                if (res && res.success) {
+                    window.location.replace('dashboard.html');
+                } else {
+                    alert(res.error || 'Google sign-in failed');
+                }
+            } catch (err) {
+                console.error('Google sign-in error:', err);
+                alert('Google sign-in error: ' + (err.message || err));
+            }
+        });
+    }
+
+    if (avatarUploadBtn && avatarFileEl) {
+        avatarUploadBtn.addEventListener('click', () => avatarFileEl.click());
+    }
+
+    if (skipOnboardingLink) {
+        skipOnboardingLink.addEventListener('click', (event) => {
+            event.preventDefault();
+            closeAuthModal();
+        });
+    }
+
     if (backToEmailBtnEl) backToEmailBtnEl.addEventListener('click', () => showModalStep(1));
 
     if (continueToOtpBtnEl) {
@@ -697,19 +786,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const val = (emailInputEl && emailInputEl.value || '').trim();
             if (!val) { alert('Enter an email or phone number'); return; }
 
-            // Simple phone detection: starts with + or digits and contains no @
             const looksLikePhone = /^\+?\d[\d\s().-]{6,}$/.test(val) && !val.includes('@');
             if (looksLikePhone) {
-                // Phone OTP flow
                 modalUsePhone = true;
                 pendingPhone = val;
                 try {
-                    setupRecaptcha && setupRecaptcha('recaptcha-container');
+                    if (setupRecaptcha) setupRecaptcha('recaptcha-container');
                     const r = await sendPhoneOTP(val, 'recaptcha-container');
                     if (!r.success) throw new Error(r.error || 'Failed to send OTP');
-                    otpEmailDisplayEl.innerText = val;
+                    if (otpEmailDisplayEl) otpEmailDisplayEl.innerText = val;
                     showModalStep(2);
-                    // focus first OTP input
                     if (otpInputs && otpInputs[0]) otpInputs[0].focus();
                 } catch (err) {
                     console.error('sendPhoneOTP error:', err);
@@ -718,8 +804,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // Email path – check if account exists to choose login vs register
             modalUsePhone = false;
+            pendingEmail = val;
             try {
                 const existsResp = await checkAccountExists(val);
                 if (existsResp && existsResp.exists) {
@@ -727,7 +813,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     setModalAuthMode('register');
                 }
-                // Pre-fill Step3 fields
                 if (fullNameEl) fullNameEl.value = '';
                 if (locationEl) locationEl.value = '';
                 showModalStep(3);
@@ -738,13 +823,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // OTP input wiring (auto-advance)
+    // OTP input wiring
     if (otpInputs && otpInputs.length) {
         otpInputs.forEach((inp, idx) => {
             inp.addEventListener('input', () => {
                 const v = inp.value.replace(/[^0-9]/g, ''); inp.value = v;
                 if (v && idx + 1 < otpInputs.length) otpInputs[idx + 1].focus();
-                // if last and filled, attempt verify
                 const completed = Array.from(otpInputs).every(i => i.value.trim().length === 1);
                 if (completed) {
                     const code = Array.from(otpInputs).map(i => i.value).join('');
@@ -752,7 +836,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         try {
                             const resp = await verifyPhoneOTP(code);
                             if (resp && resp.success) {
-                                // After successful phone verification, redirect to pricing for onboarding
                                 closeAuthModal();
                                 window.location.replace('pricing.html');
                             } else {
@@ -781,11 +864,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const pwd2 = regConfirmPasswordEl && regConfirmPasswordEl.value;
             const name = fullNameEl && fullNameEl.value.trim();
             const loc = locationEl && locationEl.value.trim();
+            
             if (!email) { alert('Email required'); return; }
             if (!pwd || pwd.length < 6) { alert('Password must be at least 6 characters'); return; }
             if (modalAuthMode === 'register' && pwd !== pwd2) { alert('Passwords do not match'); return; }
-            if (modalAuthMode === 'login' && onboardingTitleEl) onboardingTitleEl.innerText = 'Sign in to your account';
-            if (modalAuthMode === 'register' && onboardingTitleEl) onboardingTitleEl.innerText = 'Create your free trial account';
 
             if (modalAuthMode === 'login') {
                 try {
@@ -807,14 +889,12 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const res = await registerWithEmail(email, pwd, name || '');
                 if (res && res.success) {
-                    // Save onboarding metadata
                     try {
                         await updateUserOnboarding(res.user.uid, { fullName: name, location: loc, avatarUrl: null });
                     } catch (e) {
                         console.warn('Onboarding save failed:', e);
                     }
                     closeAuthModal();
-                    // Redirect newly registered users to pricing to pick a plan
                     window.location.replace('pricing.html');
                 } else {
                     alert(res.error || 'Registration failed');
@@ -825,13 +905,45 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-    if (logoutBtn) {
-        console.log("Attaching logout listener");
-        logoutBtn.addEventListener('click', handleLogout);
-    } else {
-        if (!window.__logoutWarned) {
-            console.warn("Logout button not found in DOM");
-            window.__logoutWarned = true;
+
+    // Modal close handlers
+    const closeModalBtn = document.querySelector('.close-modal');
+    if (closeModalBtn) {
+        closeModalBtn.addEventListener('click', () => {
+            if (loginModalEl) {
+                loginModalEl.style.display = 'none';
+                unlockBodyScroll();
+            }
+        });
+    }
+    window.addEventListener('click', (e) => {
+        if (e.target === loginModalEl) {
+            loginModalEl.style.display = 'none';
+            unlockBodyScroll();
+        }
+    });
+
+    // Check subscription status on page load
+    checkSubscriptionStatus();
+
+    // Setup footer with legal info for Cashfree compliance
+    function setupFooter() {
+        const footer = document.querySelector('.footer');
+        if (footer && !footer.innerHTML.includes('Proprietor')) {
+            footer.innerHTML = `
+                <div class="footer-links">
+                    <a href="/web/src/pages/terms.html">Terms of Service</a>
+                    <span class="separator">•</span>
+                    <a href="/web/src/pages/refund-policy.html">Refund Policy</a>
+                    <span class="separator">•</span>
+                    <a href="/web/src/pages/risk-disclosure.html">Risk Disclosure</a>
+                </div>
+                <div class="footer-proprietor">
+                    Proprietor: Animesh Kukreti | Dehradun, Uttarakhand, India
+                </div>
+                <p>© 2025 AEGIS v1.0 — Sovereign Intelligence Terminal</p>
+            `;
         }
     }
+    setupFooter();
 });
