@@ -23,14 +23,6 @@ from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType,
 import uvicorn
 from dataclasses import asdict
 from dotenv import load_dotenv
-from cashfree_pg.api_client import Cashfree
-from cashfree_pg.models.create_order_request import CreateOrderRequest
-from cashfree_pg.models.customer_details import CustomerDetails
-
-# Initialize Cashfree
-Cashfree.XClientId = os.getenv("CASHFREE_APP_ID")
-Cashfree.XClientSecret = os.getenv("CASHFREE_SECRET_KEY")
-Cashfree.XEnvironment = Cashfree.SANDBOX if os.getenv("CASHFREE_ENV", "TEST").upper() == "TEST" else Cashfree.PRODUCTION
 
 # -------------------------------------------------------------------
 # Load environment variables FIRST
@@ -1476,19 +1468,7 @@ async def update_signal(
         response = Cashfree().PGCreateOrder(order_request)
         return {"payment_session_id": response.data.payment_session_id}
     except Exception as e:
-        return {"error": str(e)}
-
-
-    @app.post("/payments/webhook")
-    async def cashfree_webhook(request: Request):
-    # Verify the signature from Cashfree for security
-      data = await request.json()
-    if data['type'] == 'PAYMENT_SUCCESS_WEBHOOK':
-        email = data['data']['customer_details']['customer_email']
-        # Update Firestore instantly
-        db.collection("users").document(email).update({"plan": "pro"})
-        print(f"✅ User {email} upgraded to PRO via Cashfree.")
-    return {"status": "ok"}    
+        return {"error": str(e)}  
     
 
 
