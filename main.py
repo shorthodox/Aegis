@@ -26,6 +26,11 @@ from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType,
 import uvicorn
 from dataclasses import asdict
 from dotenv import load_dotenv
+from starlette.middleware.sessions import SessionMiddleware
+
+load_dotenv()
+
+app = FastAPI()
 
 # -------------------------------------------------------------------
 # Load environment variables FIRST
@@ -51,7 +56,14 @@ except ImportError:
 SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 if not SECRET_KEY:
-    raise RuntimeError("JWT_SECRET_KEY environment variable is not set. Please define it in Railway.")
+    raise RuntimeError("JWT_SECRET_KEY is missing. Add it to your local .env file or Railway variables.")
+if not ALGORITHM:
+    raise RuntimeError("ALGORITHM is missing. Add it to your local .env file or Railway variables.")
+
+app.add_middleware(
+    SessionMiddleware, 
+    secret_key=SECRET_KEY
+)
 
 # -------------------------------------------------------------------
 # Cashfree payment gateway environment fields
@@ -238,6 +250,16 @@ async def run_engine_background():
                 LIVE_STATE.data["alpha_mode"] = engine.alpha_mode
                 if hasattr(engine, 'bootstrap_total'):
                     LIVE_STATE.data["warmup_progress"] = f"{engine.bootstrap_done}/{engine.bootstrap_total}"
+                # --- write latest signals to a JSON file for frontend consumption ---
+                try:
+                    signals_dir = WEB_ROOT_PATH / 'src' / 'data'
+                    signals_dir.mkdir(parents=True, exist_ok=True)
+                    signals_file = signals_dir / 'live_signals.json'
+                    with open(signals_file, 'w', encoding='utf-8') as sf:
+                        # use default=str to ensure datetimes/objects are serializable
+                        json.dump(LIVE_STATE.data.get('signals', {}), sf, default=str)
+                except Exception as _e:
+                    print(f"⚠️ Failed to write live_signals.json: {_e}")
             except Exception as e:
                 print(f"State update error: {e}")
             await asyncio.sleep(1)
@@ -326,6 +348,23 @@ async def debug_files():
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
+
+security = HTTPBearer()
+
+@app.get("/api/signals")
+async def api_signals(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Return latest live signals to subscribed users only (plan == 'pro')."""
+    email = get_current_user(credentials)
+    user_doc = get_user_doc(email)
+    if not user_doc:
+        raise HTTPException(status_code=403, detail="User not found")
+    plan = user_doc.get('plan', 'trial')
+    if plan != 'pro':
+        raise HTTPException(status_code=403, detail="Subscription required to access signals")
+
+    signals = LIVE_STATE.data.get('signals', {})
+    return JSONResponse(content=signals)
+
 @app.get("/favicon.ico")
 async def favicon():
     favicon_path = WEB_ROOT_PATH / "favicon.ico"
@@ -343,7 +382,6 @@ async def robots():
 # -------------------------------------------------------------------
 # Auth helpers (JWT)
 # -------------------------------------------------------------------
-security = HTTPBearer()
 
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
