@@ -1,0 +1,41 @@
+query GetMyTradingStrategies @auth(level: USER) {
+  tradingStrategies(where: { userId: { eq_expr: "auth.uid" } }) {
+    id
+    name
+    status
+    createdAt
+  }
+}
+
+mutation CreateFinancialInstrument($symbol: String!, $name: String!, $type: String!, $exchange: String!, $description: String, $marketHours: String) @auth(level: USER) {
+  financialInstrument_insert(data: {
+    symbol: $symbol,
+    name: $name,
+    type: $type,
+    exchange: $exchange,
+    description: $description,
+    marketHours: $marketHours
+  })
+}
+
+query GetAllDataFeeds @auth(level: PUBLIC, insecureReason: "This operation is safe to expose to the public as it retrieves general data feed information.") {
+  dataFeeds {
+    id
+    name
+    provider
+    instrumentType
+    connectionStatus
+  }
+}
+
+mutation UpdateMyTradeOrder($orderId: String!, $status: String!) @auth(level: USER) {
+  tradeOrder_updateMany(
+    where: {
+      orderId: { eq: $orderId },
+      userId: { eq_expr: "auth.uid" }
+    },
+    data: {
+      status: $status
+    }
+  )
+}

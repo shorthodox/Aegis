@@ -1,0 +1,75 @@
+mutation SeedDatabase @transaction @auth(level: PUBLIC, insecureReason: "This is seed data and is safe to expose.") {
+  user1: user_insert(data: {
+    id: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    username: "testuser1",
+    email: "testuser1@example.com",
+    createdAt: "2023-01-01T10:00:00Z"
+  })
+  user2: user_insert(data: {
+    id: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12",
+    username: "testuser2",
+    email: "testuser2@example.com",
+    createdAt: "2023-01-01T11:00:00Z",
+    apiKey: "someAPIKey123",
+    preferences: "{\"theme\": \"dark\", \"notifications\": true}"
+  })
+  dataFeed1: dataFeed_insert(data: {
+    id: "b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13",
+    name: "AlphaVantage Feed",
+    provider: "AlphaVantage",
+    instrumentType: "STOCK",
+    connectionStatus: "CONNECTED",
+    apiKey: "alphavantagekey",
+    lastSyncTime: "2023-10-26T14:30:00Z"
+  })
+  financialInstrument1: financialInstrument_insert(data: {
+    id: "c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a14",
+    symbol: "AAPL",
+    name: "Apple Inc.",
+    type: "EQUITY",
+    exchange: "NASDAQ",
+    description: "Technology company",
+    marketHours: "9:30-16:00 ET"
+  })
+  strategy1: tradingStrategy_insert(data: {
+    id: "d0eebc99-9c0b-4ef8-bb6d-6bb9bd380a15",
+    userId_expr: "response.user1.id",
+    name: "Momentum Strategy",
+    strategyLogic: "Buy if price increases by 5% in a week, sell if decreases by 3%",
+    createdAt: "2023-02-15T09:00:00Z",
+    status: "ACTIVE",
+    description: "A simple momentum-based trading strategy.",
+    parameters: "{\"lookbackPeriod\": \"1w\", \"entryThreshold\": 0.05, \"exitThreshold\": 0.03}"
+  })
+  tradeOrder1: tradeOrder_insert(data: {
+    id: "e0eebc99-9c0b-4ef8-bb6d-6bb9bd380a16",
+    userId_expr: "response.user1.id",
+    financialInstrumentId_expr: "response.financialInstrument1.id",
+    tradingStrategyId_expr: "response.strategy1.id",
+    orderId: "ORDER-AAPL-001",
+    instrumentSymbol: "AAPL",
+    orderType: "BUY",
+    quantity: 10,
+    price: 150.00,
+    status: "FILLED",
+    createdAt: "2023-03-01T10:15:00Z",
+    executionPrice: 150.25,
+    executedAt: "2023-03-01T10:15:05Z",
+    strategyName: "Momentum Strategy"
+  })
+  backtestResult1: backtestResult_insert(data: {
+    id: "f0eebc99-9c0b-4ef8-bb6d-6bb9bd380a17",
+    userId_expr: "response.user1.id",
+    tradingStrategyId_expr: "response.strategy1.id",
+    strategyName: "Momentum Strategy",
+    startDate: "2023-01-01",
+    endDate: "2023-03-31",
+    initialCapital: 10000.00,
+    finalCapital: 11250.50,
+    pnl: 1250.50,
+    createdAt: "2023-04-01T08:00:00Z",
+    sharpeRatio: 1.2,
+    maxDrawdown: -0.08,
+    metrics: "{\"totalTrades\": 5, \"winningTrades\": 4}"
+  })
+}

@@ -1,0 +1,66 @@
+type User @table {
+  username: String!
+  email: String!
+  createdAt: Timestamp!
+  apiKey: String
+  preferences: String
+}
+
+type FinancialInstrument @table {
+  symbol: String!
+  name: String!
+  type: String!
+  exchange: String!
+  description: String
+  marketHours: String
+}
+
+type DataFeed @table {
+  name: String!
+  provider: String!
+  instrumentType: String!
+  connectionStatus: String!
+  apiKey: String
+  lastSyncTime: Timestamp
+}
+
+type TradingStrategy @table {
+  user: User!
+  name: String!
+  strategyLogic: String!
+  createdAt: Timestamp!
+  status: String!
+  description: String
+  parameters: String
+}
+
+type BacktestResult @table {
+  user: User!
+  tradingStrategy: TradingStrategy!
+  strategyName: String!
+  startDate: Date!
+  endDate: Date!
+  initialCapital: Float!
+  finalCapital: Float!
+  pnl: Float!
+  createdAt: Timestamp!
+  sharpeRatio: Float
+  maxDrawdown: Float
+  metrics: String
+}
+
+type TradeOrder @table {
+  user: User!
+  financialInstrument: FinancialInstrument!
+  tradingStrategy: TradingStrategy
+  orderId: String!
+  instrumentSymbol: String!
+  orderType: String!
+  quantity: Int!
+  price: Float!
+  status: String!
+  createdAt: Timestamp!
+  executionPrice: Float
+  executedAt: Timestamp
+  strategyName: String
+}

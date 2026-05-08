@@ -162,6 +162,15 @@ FLEET = [
 ]
 
 # -------------------------------------------------------------------
+# Helper: Normalize symbol (underscore -> slash)
+# -------------------------------------------------------------------
+def normalize_symbol(symbol: str) -> str:
+    """Convert symbol format: replace '_' with '/'."""
+    if not symbol:
+        return symbol
+    return symbol.replace('_', '/')
+
+# -------------------------------------------------------------------
 # Data classes
 # -------------------------------------------------------------------
 @dataclass
@@ -213,48 +222,85 @@ def flush_dns_caches():
 # -------------------------------------------------------------------
 # Backtest file discovery & JSON loader
 # -------------------------------------------------------------------
-def get_latest_backtest_file(directory: Path) -> Optional[Path]:
-    if not directory.exists():
-        logger.error(f"Directory not found: {directory}")
+def get_latest_backtest_file(directory):
+    """Return the most recently modified .json file in the directory, or None."""
+    dir_path = Path(directory)
+    if not dir_path.exists():
+        logger.warning(f"Backtest directory does not exist: {dir_path}")
         return None
-    files = list(directory.glob("cost_aware_backtest_*.json"))
-    if not files:
-        logger.error(f"No cost_aware_backtest files found in {directory}")
+
+    # Find all .json files
+    json_files = list(dir_path.glob("*.json"))
+    if not json_files:
+        logger.warning(f"No JSON files found in {dir_path}")
         return None
-    latest = max(files, key=lambda f: f.stat().st_mtime)
-    logger.info(f"Latest backtest file: {latest.name}")
+
+    # Return the most recent file by modification time
+    latest = max(json_files, key=lambda f: f.stat().st_mtime)
+    logger.info(f"Latest backtest file: {latest}")
     return latest
 
 def load_backtest_results(json_path: Path) -> Dict[str, Dict[str, Any]]:
     with open(json_path, 'r') as f:
-        data = json.load(f)
+        try:
+            data = json.load(f)
+        except json.JSONDecodeError:
+            logger.error(f"Failed to decode JSON: {json_path}")
+            return {}
+
+    # --- ENHANCED NORMALIZATION ---
+    if isinstance(data, dict):
+        new_data = []
+        # If it's a symbol map: {"BTC/USDT": {"net_return": 10}, "version": "1.0"}
+        for k, v in data.items():
+            if isinstance(v, dict):
+                # Only unpack if v is actually a dictionary
+                new_data.append({"symbol": k, **v})
+            elif k == "symbol":
+                # If the dict itself is the result: {"symbol": "BTC", "mar": 2}
+                new_data = [data]
+                break
+        
+        if new_data:
+            data = new_data
+        else:
+            # Fallback for simple flat dictionaries
+            data = [data]
 
     if not isinstance(data, list):
-        raise TypeError(f"Expected list, got {type(data)}")
+        logger.error(f"Unexpected data format in {json_path.name}: {type(data)}")
+        return {}
+    # --- END NORMALIZATION ---
 
     symbol_entries: Dict[str, List[Dict]] = {}
     for entry in data:
         if not isinstance(entry, dict):
             continue
+            
         symbol = entry.get("symbol")
         if not symbol:
             continue
+            
         mode = entry.get("mode")
         if not mode:
             continue
+            
         net_return = entry.get("net_return_pct", 0.0)
         max_dd = entry.get("max_drawdown_pct", 0.0)
-        safe_dd = max(max_dd, 0.1)
-        mar = net_return / safe_dd
-        params = MODE_PARAMS.get(mode, MODE_PARAMS["balanced"])
+        # SAFETY: prevent division by zero or extremely small values
+        safe_dd = max(float(max_dd), 0.1) if isinstance(max_dd, (int, float)) else 0.1
+        mar = float(net_return) / safe_dd if isinstance(net_return, (int, float)) else 0.0
+        
+        params = MODE_PARAMS.get(mode)
+        if params is None:
+            logger.warning(f"Unknown mode '{mode}' for {symbol}, falling back to 'balanced'")
+            params = MODE_PARAMS["balanced"]
+        
         symbol_entries.setdefault(symbol, []).append({
             "mode": mode,
             "mar": mar,
             "net_return_pct": net_return,
             "max_drawdown_pct": max_dd,
-            "total_trades": entry.get("total_trades", 0),
-            "win_rate": entry.get("win_rate", 0.0),
-            "profit_factor": entry.get("profit_factor"),
             "final_threshold": entry.get("final_threshold", 0.30),
             "entry_prob_threshold": params["entry_prob"],
             "atr_sl": params["atr_sl"],
@@ -267,7 +313,7 @@ def load_backtest_results(json_path: Path) -> Dict[str, Dict[str, Any]]:
         best = max(entries, key=lambda x: x["mar"])
         best_per_token[sym] = best
 
-    logger.info(f"Loaded {len(best_per_token)} tokens (only those found in backtest JSON)")
+    logger.info(f"Successfully loaded {len(best_per_token)} tokens from {json_path.name}")
     return best_per_token
 
 # -------------------------------------------------------------------
@@ -705,12 +751,16 @@ class MarketDataFetcher:
 # -------------------------------------------------------------------
 class SignalGenerator:
     def __init__(self, token_configs: List[TokenConfig], btc_model: Optional[xgb.XGBClassifier], alpha_risk_pct: float):
-        self.configs = {cfg.symbol: cfg for cfg in token_configs}
+        # Normalize symbols in configs (replace underscore with slash)
+        self.configs = {}
+        for cfg in token_configs:
+            norm_sym = normalize_symbol(cfg.symbol)
+            self.configs[norm_sym] = cfg
         self.btc_model = btc_model
         self.alpha_risk_pct = alpha_risk_pct
         self.regime_detector = RegimeDetector()
         self.threshold_engine = ThresholdEngine()
-        self.score_history: Dict[str, Deque[float]] = {cfg.symbol: deque(maxlen=5) for cfg in token_configs}
+        self.score_history: Dict[str, Deque[float]] = {norm_sym: deque(maxlen=5) for norm_sym in self.configs.keys()}
 
     def _align_features(self, df: pd.DataFrame, expected_features: List[str]) -> Optional[pd.DataFrame]:
         missing = [f for f in expected_features if f not in df.columns]
@@ -721,19 +771,22 @@ class SignalGenerator:
         return aligned
 
     async def compute_signal(self, symbol: str, fetcher: MarketDataFetcher, alpha_mode: bool, btc_healthy: bool = True) -> Optional[Dict]:
-        cfg = self.configs.get(symbol)
+        # Normalize incoming symbol (e.g., BTC_USDT -> BTC/USDT)
+        norm_sym = normalize_symbol(symbol)
+        cfg = self.configs.get(norm_sym)
         if not cfg:
+            logger.debug(f"No config for symbol {norm_sym} (original {symbol})")
             return None
 
         current_risk_pct = self.alpha_risk_pct if alpha_mode else cfg.risk_pct
 
-        df_1m = await fetcher.get_data(symbol, '1m', lookback_hours=2)
+        df_1m = await fetcher.get_data(norm_sym, '1m', lookback_hours=2)
         if df_1m.empty or len(df_1m) < 50:
-            logger.warning(f"{symbol}: insufficient 1m data")
+            logger.warning(f"{norm_sym}: insufficient 1m data")
             return None
         current_price = float(df_1m['close'].iloc[-1])
 
-        df_1h = await fetcher.get_data(symbol, '1h', lookback_hours=200)
+        df_1h = await fetcher.get_data(norm_sym, '1h', lookback_hours=200)
         if df_1h.empty or len(df_1h) < 100:
             return None
 
@@ -772,9 +825,9 @@ class SignalGenerator:
 
         latest_features = features_df.iloc[-1:].drop(columns=['timestamp', 'target'], errors='ignore')
 
-        model_path = MODEL_STORE / f"{symbol.replace('/', '_')}_model.json"
+        model_path = MODEL_STORE / f"{norm_sym.replace('/', '_')}_model.json"
         if not model_path.exists():
-            logger.warning(f"No model for {symbol}")
+            logger.warning(f"No model for {norm_sym}")
             return None
         model = xgb.XGBClassifier()
         model.load_model(str(model_path))
@@ -783,15 +836,15 @@ class SignalGenerator:
             expected_feature_names = model.get_booster().feature_names
             expected_features = list(expected_feature_names) if expected_feature_names else []
         except Exception as e:
-            logger.critical(f"Could not extract feature names from model for {symbol}: {e}")
+            logger.critical(f"Could not extract feature names from model for {norm_sym}: {e}")
             return None
         if not expected_features:
-            logger.critical(f"No expected features extracted from model for {symbol}")
+            logger.critical(f"No expected features extracted from model for {norm_sym}")
             return None
 
         aligned_features = self._align_features(latest_features, expected_features)
         if aligned_features is None:
-            logger.critical(f"Feature mismatch for {symbol}: cannot predict")
+            logger.critical(f"Feature mismatch for {norm_sym}: cannot predict")
             return None
 
         ai_prob = model.predict_proba(aligned_features)[0, 1]
@@ -818,11 +871,11 @@ class SignalGenerator:
             # Downgrade if volatility regime is 'low'
             if vol_regime == "low":
                 final_signal = "HOLD (LOW_VOL_ATTR)"
-                logger.debug(f"{symbol}: sell suppressed – low volatility")
+                logger.debug(f"{norm_sym}: sell suppressed – low volatility")
             # Downgrade if efficiency ratio < 0.3 (choppy)
             elif er < 0.3:
                 final_signal = "HOLD (CHOPPY)"
-                logger.debug(f"{symbol}: sell suppressed – choppy market (ER={er:.2f})")
+                logger.debug(f"{norm_sym}: sell suppressed – choppy market (ER={er:.2f})")
 
         # BTC safety downgrade for BUY signals (only when Alpha OFF)
         if not alpha_mode and not btc_healthy and base_signal in ("STRONG_BUY", "BUY"):
@@ -874,10 +927,10 @@ class SignalGenerator:
                     except Exception as e:
                         logger.warning(f"BTC model prediction error: {e}")
 
-        self.score_history[symbol].appendleft(ai_prob)
+        self.score_history[norm_sym].appendleft(ai_prob)
 
         return {
-            "symbol": symbol,
+            "symbol": norm_sym,
             "price": current_price,
             "ai_prob": ai_prob,
             "threshold": adj_thresh,
@@ -1443,20 +1496,50 @@ class LiveEngine:
         logger.info("Engine stopped")
 
 # -------------------------------------------------------------------
-# Automated setup (unchanged)
+# Automated setup (with fallback to default configs)
 # -------------------------------------------------------------------
 def automated_setup(backtest_dir: Path, args: argparse.Namespace) -> Tuple[List[TokenConfig], float, float, int, bool, float, Optional[str]]:
+    # Ensure backtest directory exists (create if missing)
+    backtest_dir.mkdir(parents=True, exist_ok=True)
+
     json_path = get_latest_backtest_file(backtest_dir)
     if not json_path:
-        logger.error("No backtest JSON found. Run cost_aware_backtester.py first.")
-        sys.exit(1)
-    logger.info(f"Using backtest file: {json_path.name}")
+        logger.critical("⚠️ No backtest JSON found. Switching to DEFAULT configuration for all tokens.")
+        # Fallback: create default TokenConfig for every symbol in FLEET using balanced mode
+        configs = []
+        # Safely retrieve balanced mode parameters, fallback to hardcoded values
+        balanced_params = MODE_PARAMS.get("balanced", {"entry_prob": 0.70, "risk_pct": 0.020, "atr_sl": 1.5, "atr_tp": 2.0})
+        for symbol in FLEET:
+            configs.append(TokenConfig(
+                symbol=symbol,
+                mode="balanced",
+                base_threshold=0.30,
+                entry_prob_threshold=balanced_params["entry_prob"],
+                atr_sl=balanced_params["atr_sl"],
+                atr_tp=balanced_params["atr_tp"],
+                risk_pct=float(balanced_params["risk_pct"] * 100),   # explicit float conversion
+                optimizer_thresholds={},
+            ))
+        capital = args.capital if args.capital else DEFAULT_CAPITAL
+        risk_pct = args.risk if args.risk else DEFAULT_RISK_PCT
+        max_pos = args.max_position if args.max_position else DEFAULT_MAX_POSITION
+        if max_pos <= 0 or max_pos > capital:
+            max_pos = capital
+        tf_choice = args.timeframe if args.timeframe else DEFAULT_SCAN_TIMEFRAME
+        tf_map = {'1m': 60, '5m': 300, '15m': 900, '30m': 1800, '1h': 3600, '1d': 86400, '1w': 604800, '1M': 2592000}
+        scan_seconds = tf_map.get(tf_choice, 60)
+        alpha_mode = args.alpha_mode if args.alpha_mode else DEFAULT_ALPHA_MODE
+        alpha_risk = args.alpha_risk if args.alpha_risk else DEFAULT_ALPHA_RISK_PCT
+        proxy_url = args.proxy if hasattr(args, 'proxy') else None
+        logger.info(f"Using default configs for {len(configs)} tokens (no backtest file)")
+        return configs, capital, max_pos, scan_seconds, alpha_mode, alpha_risk, proxy_url
 
+    logger.info(f"Using backtest file: {json_path.name}")
     best_per_token = load_backtest_results(json_path)
 
     if not best_per_token:
-        logger.error("No valid tokens found in backtest JSON.")
-        sys.exit(1)
+        logger.critical("⚠️ No valid tokens found in backtest JSON. Falling back to default configuration.")
+        return automated_setup(backtest_dir, args)  # recursive fallback (will use default)
 
     configs = []
     for symbol, info in best_per_token.items():
@@ -1505,16 +1588,14 @@ def parse_arguments():
     return parser.parse_args()
 
 # -------------------------------------------------------------------
-# Main entry point
+# Main entry point (environment-aware path)
 # -------------------------------------------------------------------
 async def main():
     flush_dns_caches()
 
     args = parse_arguments()
-    backtest_dir = Path(r"D:\Content\Animesh\bots\ai_signal_bot\logs\backtests")
-    if not backtest_dir.exists():
-        logger.error(f"Backtest directory not found: {backtest_dir}")
-        return
+    # Use dynamic path based on root_dir
+    backtest_dir = root_dir / "logs" / "backtests"
 
     configs, capital, max_pos, scan_seconds, alpha_mode, alpha_risk, proxy_url = automated_setup(backtest_dir, args)
     if not configs:

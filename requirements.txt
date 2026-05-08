@@ -44,3 +44,4 @@ shap
 
 # Optional / other utilities used in scripts
 pyttsx3
+

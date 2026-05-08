@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AEGIS v1.0 | Terms of Service</title>
-    <link rel="stylesheet" href="../styles/main.css">
+    <link rel="stylesheet" href="/web/src/styles/main.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
@@ -13,11 +13,11 @@
     <header class="fixed-header">
         <div class="logo">⚡ AEGIS <span>v1.0</span></div>
         <div class="nav-links-centered">
-            <a href="index.html" class="nav-link">Home</a>
-            <a href="index.html#sentinel" class="nav-link">Sentinel</a>
-            <a href="index.html#cockpit" class="nav-link">Cockpit</a>
-            <a href="index.html#security" class="nav-link">Security</a>
-            <a href="pricing.html" class="nav-link">Pricing</a>
+            <a href="/web/src/pages/index.html" class="nav-link">Home</a>
+            <a href="/web/src/pages/index.html#sentinel" class="nav-link">Sentinel</a>
+            <a href="/web/src/pages/index.html#cockpit" class="nav-link">Cockpit</a>
+            <a href="/web/src/pages/index.html#security" class="nav-link">Security</a>
+            <a href="/web/src/pages/pricing.html" class="nav-link">Pricing</a>
         </div>
         <button id="portalBtn" class="portal-btn">Client Login</button>
     </header>
@@ -29,10 +29,13 @@
         <aside class="disclosure-sidebar">
             <h3><i class="fas fa-gavel"></i> Quick Jump</h3>
             <ul>
+                <li><a href="#introduction">📜 Introduction</a></li>
                 <li><a href="#eligibility">📋 Eligibility</a></li>
-                <li><a href="#subscription">💳 Subscription Policy</a></li>
+                <li><a href="#subscription">💳 Subscription & Trial Policy</a></li>
+                <li><a href="#refunds">💰 Refund Policy</a></li>
                 <li><a href="#security">🔐 Account Security</a></li>
                 <li><a href="#termination">⛔ Termination</a></li>
+                <li><a href="#disclaimer">⚠️ Risk Disclaimer</a></li>
             </ul>
         </aside>
 
@@ -40,37 +43,69 @@
         <div class="math-article" style="flex: 1;">
             <div class="math-block">
                 <h1>Terms of Service</h1>
-                <p><strong>Last Updated:</strong> <span id="terms-last-updated">April 15, 2025</span> | <strong>Version:</strong> <span id="terms-version">1.2.0</span></p>
+                <p><strong>Last Updated:</strong> <span id="terms-last-updated">April 15, 2025</span> | <strong>Version:</strong> <span id="terms-version">2.0.0</span></p>
                 <p>By accessing or using AEGIS v1.0 (“the Platform”), you agree to be bound by these Terms.</p>
+                <p><strong>Owned and Operated by:</strong> Animesh Kukreti, Dehradun, Uttarakhand, India</p>
+            </div>
+
+            <div id="introduction" class="math-block">
+                <h2><i class="fas fa-info-circle"></i> 1. Introduction</h2>
+                <p>AEGIS v1.0 is a sovereign intelligence terminal providing AI-powered trading signals, risk management through "Sentinel", signal terminal "Cockpit", and unfiltered AI conviction through "Alpha Mode". The Platform is owned and operated by <strong>Animesh Kukreti</strong>, based in Dehradun, Uttarakhand, India.</p>
+                <p>These Terms constitute a legally binding agreement between you ("User", "You") and Animesh Kukreti ("Operator", "We", "Us", "Our") regarding your use of the Platform and any related services.</p>
             </div>
 
             <div id="eligibility" class="math-block">
-                <h2><i class="fas fa-user-check"></i> 1. User Eligibility</h2>
-                <p>You must be at least <strong>18 years old</strong> to use the Platform. By registering, you confirm that you are of legal age and have the capacity to enter into binding financial agreements.</p>
+                <h2><i class="fas fa-user-check"></i> 2. User Eligibility</h2>
+                <p>You must be at least <strong>18 years old</strong> to use the Platform. By registering, you confirm that you are of legal age and have the capacity to enter into binding financial agreements. The Platform is intended for users in jurisdictions where cryptocurrency trading is legal. You are solely responsible for complying with your local laws and regulations.</p>
             </div>
 
             <div id="subscription" class="math-block">
-                <h2><i class="fas fa-credit-card"></i> 2. Subscription Policy</h2>
+                <h2><i class="fas fa-credit-card"></i> 3. Subscription & Trial Policy</h2>
                 <p>The Platform offers two tiers:</p>
                 <ul>
-                    <li><strong>Basic ($3.60/month)</strong> – includes up to <strong>5 token signals</strong> (BTC, ETH, SOL, BNB, XRP) plus daily AI digest.</li>
-                    <li><strong>Pro ($24.00/month)</strong> – full access to all <strong>58 tokens</strong>, real‑time signals, API/webhook, and priority support.</li>
+                    <li><strong>Trial (72 hours)</strong> – full access to all Pro features for 72 hours, no payment required.</li>
+                    <li><strong>Pro ($24.00/month)</strong> – full access to all <strong>58 tokens</strong>, real‑time signals, API/webhook access, Alpha Mode (unfiltered AI conviction), and priority support.</li>
                 </ul>
-                <p><strong>72‑Hour Free Trial:</strong> New users receive a 3‑day trial of the Pro tier. After the trial, you must subscribe to continue receiving signals beyond the Basic limits. All payments are processed securely; no refunds are provided for partial months.</p>
+                <p><strong>72‑Hour Free Trial:</strong> New users receive a 3‑day trial of the Pro tier. Upon sign-up, a trial_end timestamp is set in Firestore. After 72 hours, access to Pro features (signals beyond BTC, ETH, SOL, BNB, XRP) will be restricted. The dashboard will display a countdown timer showing remaining trial time. A blurred overlay with a "Subscribe to Pro" button will appear for expired trials.</p>
+                <p><strong>Trial Extension:</strong> No trial extensions are granted unless provided at the sole discretion of the Operator.</p>
+            </div>
+
+            <div id="refunds" class="math-block">
+                <h2><i class="fas fa-money-bill-wave"></i> 4. Refund Policy</h2>
+                <p><strong>7-Day Refund Window:</strong> After your 72-hour trial period ends and you subscribe to the Pro plan, you have <strong>7 calendar days</strong> from the subscription date to request a full refund. To request a refund, contact support at <a href="mailto:animeshkukreti60@gmail.com">animeshkukreti60@gmail.com</a> with your account email and order details.</p>
+                <p><strong>No Refunds After 7 Days:</strong> After the 7-day refund window has passed, subscriptions are non-refundable. Partial months or unused periods will not be refunded.</p>
+                <p><strong>Refund Processing:</strong> Approved refunds will be processed within 5-10 business days to the original payment method used.</p>
+                <p><strong>Trial Period:</strong> No refunds are applicable during the free trial period as no payment has been collected.</p>
             </div>
 
             <div id="security" class="math-block">
-                <h2><i class="fas fa-lock"></i> 3. Account Security</h2>
-                <p>You are solely responsible for safeguarding your JWT tokens, passwords, and any other login credentials. The Platform uses industry‑standard encryption, but we cannot be held liable for unauthorized access caused by your failure to protect your credentials. Immediately notify support if you suspect a breach.</p>
+                <h2><i class="fas fa-lock"></i> 5. Account Security</h2>
+                <p>You are solely responsible for safeguarding your JWT tokens, passwords, and any other login credentials. The Platform uses industry‑standard encryption and implements 6-digit OTP verification for email authentication, but we cannot be held liable for unauthorized access caused by your failure to protect your credentials. Immediately notify support at <a href="mailto:animeshkukreti60@gmail.com">animeshkukreti60@gmail.com</a> if you suspect a breach.</p>
+                <p>We employ multi-factor authentication options including OTP-based verification for all sensitive account actions.</p>
             </div>
 
             <div id="termination" class="math-block">
-                <h2><i class="fas fa-ban"></i> 4. Termination</h2>
-                <p>We reserve the right to suspend or terminate your account if you violate these Terms or engage in abusive behaviour (e.g., signal reverse‑engineering, excessive API abuse). You may cancel your subscription at any time via your dashboard.</p>
+                <h2><i class="fas fa-ban"></i> 6. Termination</h2>
+                <p>We reserve the right to suspend or terminate your account without prior notice if you violate these Terms or engage in abusive behaviour (e.g., signal reverse‑engineering, excessive API abuse, scraping, or unauthorized sharing of credentials). You may cancel your subscription at any time via your dashboard or by contacting support. Upon termination, your access to the Platform will be immediately revoked, and any pending refunds will be processed according to the Refund Policy.</p>
+            </div>
+
+            <div id="disclaimer" class="math-block">
+                <h2><i class="fas fa-exclamation-triangle"></i> 7. Risk Disclaimer & Financial Warning</h2>
+                <p><strong>IMPORTANT:</strong> Cryptocurrency trading involves substantial risk of loss and is not suitable for all investors. The signals, predictions, and information provided by AEGIS v1.0 are for informational and educational purposes only and do not constitute financial advice, investment advice, or trading advice.</p>
+                <p>You should carefully consider your investment objectives, level of experience, and risk appetite before trading cryptocurrencies. Past performance is not indicative of future results. You are solely responsible for any trading decisions you make based on information from the Platform.</p>
+                <p>By using AEGIS v1.0, you acknowledge and agree that:</p>
+                <ul>
+                    <li>You understand the risks associated with cryptocurrency trading</li>
+                    <li>The Operator is not liable for any financial losses incurred</li>
+                    <li>You will not hold the Operator responsible for trading outcomes</li>
+                    <li>You should consult with a qualified financial advisor before trading</li>
+                </ul>
             </div>
 
             <div class="math-block">
-                <p><i class="fas fa-gavel"></i> These Terms are governed by the laws of India. Any disputes shall be resolved in the courts of Dehradun, Uttarakhand.</p>
+                <h2><i class="fas fa-gavel"></i> 8. Governing Law & Dispute Resolution</h2>
+                <p>These Terms are governed by the laws of India. Any disputes arising from or relating to these Terms or your use of the Platform shall be resolved exclusively in the courts of <strong>Dehradun, Uttarakhand, India</strong>. You consent to the personal jurisdiction of such courts and waive any objection based on forum non conveniens.</p>
+                <p><strong>Contact Information:</strong> For any questions about these Terms, contact Animesh Kukreti at <a href="mailto:animeshkukreti60@gmail.com">animeshkukreti60@gmail.com</a>.</p>
             </div>
         </div>
     </div>
@@ -80,25 +115,91 @@
         <div class="modal-card">
             <span class="close-modal">&times;</span>
             <h3>Welcome to Aegis</h3>
-            <p>Sign in to access the Sovereign Terminal</p>
-            <button id="modalLoginBtn" class="btn-primary-glow" style="margin: 1rem 0;"><i class="fab fa-google"></i> Sign in with Google</button>
-            <div class="security-badge"><i class="fas fa-lock"></i> Secure encrypted connection · SOC 2 Type II</div>
-        </div>
+            
     </div>
 
-    <!-- Footer with Terms & Conditions links (consistent with other pages) -->
+    <!-- Footer with legal links and contact information -->
     <footer class="footer">
         <div class="footer-links">
-            <a href="terms.html" class="active">Terms of Service</a>
+            <a href="/web/src/pages/terms.html">Terms of Service</a>
             <span class="separator">•</span>
-            <a href="conditions.html">Conditions of Use</a>
+            <a href="/web/src/pages/conditions.html">Conditions of Use</a>
             <span class="separator">•</span>
-            <a href="risk-disclosure.html">Risk Disclosure</a>
+            <a href="/web/src/pages/risk-disclosure.html">Risk Disclosure</a>
+            <span class="separator">•</span>
+            <a href="/web/src/pages/refund-policy.html">Refund Policy</a>
+            <span class="separator">•</span>
+            <a href="/web/src/pages/contact.html">Contact Us</a>
         </div>
-        <p>© 2025 AEGIS v1.0 — Sovereign Intelligence Terminal</p>
+        <div class="footer-contact" style="margin: 1rem 0 0.5rem; font-size: 0.85rem;">
+            📧 <a href="mailto:animeshkukreti60@gmail.com" style="color: #00f2ff;">animeshkukreti60@gmail.com</a>
+        </div>
+        <p>© 2025 AEGIS v1.0 — Sovereign Intelligence Terminal | Owned & Operated by Animesh Kukreti, Dehradun, Uttarakhand, India</p>
     </footer>
 
     <!-- Shared auth script (landing.js) handles portal button & modal -->
-    <script type="module" src="../scripts/landing.js"></script>
+    </div>
+    </div>
+
+    
+    
+    </div>
+
+    
+    <!-- ========== 3‑STEP ONBOARDING MODAL (with password fields) ========== -->
+    <div id="loginModal" class="modal">
+        <div class="modal-card">
+            <!-- Close button with inline styles to guarantee clickability -->
+            <span class="close-modal" style="position: absolute; top: 1rem; right: 1.5rem; font-size: 1.8rem; cursor: pointer; color: var(--dim, #94a3b8); z-index: 1001; pointer-events: auto;">&times;</span>
+
+            <!-- Step 1: Email / Google -->
+            <div id="step1" class="step active">
+                <div class="modal-logo">⚡ AEGIS</div>
+                <button id="googleStepBtn" class="provider-btn"><i class="fab fa-google"></i> Continue with Google</button>
+                <div class="divider">or</div>
+                <input type="text" id="emailInput" class="auth-input" placeholder="Email or mobile number">
+                <p class="info-note">Use your email to sign in or register. Start with a phone number for mobile OTP.</p>
+                <button id="continueToOtpBtn" class="auth-submit-btn">Continue</button>
+            </div>
+
+            <!-- Step 2: OTP Verification -->
+            <div id="step2" class="step">
+                <h3 style="text-align:center; margin-bottom:1rem;">Enter verification code</h3>
+                <p style="text-align:center; color:var(--dim); font-size:0.8rem;">We sent a 6‑digit code to <span id="otpEmailDisplay"></span></p>
+                <div class="otp-container" id="otpContainer">
+                    <input type="text" maxlength="1" class="otp-digit" data-idx="0">
+                    <input type="text" maxlength="1" class="otp-digit" data-idx="1">
+                    <input type="text" maxlength="1" class="otp-digit" data-idx="2">
+                    <input type="text" maxlength="1" class="otp-digit" data-idx="3">
+                    <input type="text" maxlength="1" class="otp-digit" data-idx="4">
+                    <input type="text" maxlength="1" class="otp-digit" data-idx="5">
+                </div>
+                <button id="backToEmailBtn" class="auth-secondary-btn" style="margin-top:0.5rem;">← Back</button>
+            </div>
+
+            <!-- Step 3: Onboarding (Profile + Password) -->
+            <div id="step3" class="step">
+                <h3 id="onboardingTitle" style="text-align:center; margin-bottom:1rem;">Complete your account</h3>
+                <div class="profile-upload" id="avatarUploadSection">
+                    <div id="avatarUpload" class="avatar-upload">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <span>Upload Photo</span>
+                    </div>
+                    <div class="upload-hint">300x300px min. JPG, GIF, PNG. Max 4MB.</div>
+                    <input type="file" id="avatarFile" accept="image/jpeg,image/png,image/gif" style="display:none;">
+                </div>
+                <div id="profileFields">
+                    <div class="labeled-input">
+                        <label>Full name</label>
+                        <input type="text" id="fullName" class="auth-input" placeholder="e.g., Satoshi Nakamoto">
+                    </div>
+                    <div class="labeled-input">
+                        <label>Your location</label>
+                        <input type="text" id="location" class="auth-input" placeholder="City, Country">
+                    </div>
+                </div>
+    </div>
+
+    <script type="module" src="/web/src/scripts/landing.js"></script>
 </body>
 </html>
