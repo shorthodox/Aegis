@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact AEGIS v1.0</title>
+    <link rel="stylesheet" href="/web/src/styles/main.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+
+    <header class="fixed-header">
+        <div class="logo">⚡ AEGIS <span>v1.0</span></div>
+        <div class="nav-links-centered">
+            <a href="/web/src/pages/index.html" class="nav-link">Home</a>
+            <a href="/web/src/pages/index.html#sentinel" class="nav-link">Sentinel</a>
+            <a href="/web/src/pages/index.html#cockpit" class="nav-link">Cockpit</a>
+            <a href="/web/src/pages/index.html#security" class="nav-link">Security</a>
+            <a href="/web/src/pages/pricing.html" class="nav-link">Pricing</a>
+        </div>
+        <button id="portalBtn" class="portal-btn">Client Login</button>
+    </header>
+
+    <main class="page-content" style="max-width: 900px; margin: 140px auto 3rem; padding: 0 2rem;">
+        <section class="math-block">
+            <h1><i class="fas fa-envelope"></i> Contact Information</h1>
+            <p>For support, billing, refunds, legal inquiries, or questions about AEGIS v1.0, contact the operator below.</p>
+        </section>
+
+        <section class="math-block">
+            <h2>Contact Details</h2>
+            <ul style="list-style: none; padding: 0;">
+                <li><strong>Name:</strong> Animesh Kukreti</li>
+                <li><strong>Location:</strong> Dehradun, Uttarakhand, India</li>
+                <li><strong>Email:</strong> <a href="mailto:animeshkukreti60@gmail.com">animeshkukreti60@gmail.com</a></li>
+                <li><strong>Business Hours:</strong> Monday–Friday, 10:00 AM to 6:00 PM IST</li>
+            </ul>
+        </section>
+
+        <section class="math-block">
+            <h2>How to Reach Us</h2>
+            <p>If you need help with your account, subscription, or refund request, please send an email with your registered account details and a short description of the issue.</p>
+            <p>For urgent billing or refund matters, include your order ID and the date of purchase in the subject line.</p>
+        </section>
+
+        <section class="math-block">
+            <p><strong>Legal Notice:</strong> By contacting us, you agree that the information you provide may be used to address your support request and may be stored in accordance with our privacy practices.</p>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <div class="footer-links">
+            <a href="/web/src/pages/terms.html">Terms of Service</a>
+            <span class="separator">•</span>
+            <a href="/web/src/pages/conditions.html">Conditions of Use</a>
+            <span class="separator">•</span>
+            <a href="/web/src/pages/risk-disclosure.html">Risk Disclosure</a>
+            <span class="separator">•</span>
+            <a href="/web/src/pages/contact.html" class="active">Contact Us</a>
+        </div>
+        <div class="footer-contact" style="margin: 1rem 0 0.5rem; font-size: 0.85rem;">
+            📧 <a href="mailto:animeshkukreti60@gmail.com" style="color: #00f2ff;">animeshkukreti60@gmail.com</a>
+        </div>
+        <p>© 2025 AEGIS v1.0 — Sovereign Intelligence Terminal</p>
+    </footer>
+    </div>
+    </div>
+
+    
+    
+    </div>
+
+    
+    <!-- ========== 3‑STEP ONBOARDING MODAL (with password fields) ========== -->
+    <div id="loginModal" class="modal">
+        <div class="modal-card">
+            <!-- Close button with inline styles to guarantee clickability -->
+            <span class="close-modal" style="position: absolute; top: 1rem; right: 1.5rem; font-size: 1.8rem; cursor: pointer; color: var(--dim, #94a3b8); z-index: 1001; pointer-events: auto;">&times;</span>
+
+            <!-- Step 1: Email / Google -->
+            <div id="step1" class="step active">
+                <div class="modal-logo">⚡ AEGIS</div>
+                <button id="googleStepBtn" class="provider-btn"><i class="fab fa-google"></i> Continue with Google</button>
+                <div class="divider">or</div>
+                <input type="text" id="emailInput" class="auth-input" placeholder="Email or mobile number">
+                <p class="info-note">Use your email to sign in or register. Start with a phone number for mobile OTP.</p>
+                <button id="continueToOtpBtn" class="auth-submit-btn">Continue</button>
+            </div>
+
+            <!-- Step 2: OTP Verification -->
+            <div id="step2" class="step">
+                <h3 style="text-align:center; margin-bottom:1rem;">Enter verification code</h3>
+                <p style="text-align:center; color:var(--dim); font-size:0.8rem;">We sent a 6‑digit code to <span id="otpEmailDisplay"></span></p>
+                <div class="otp-container" id="otpContainer">
+                    <input type="text" maxlength="1" class="otp-digit" data-idx="0">
+                    <input type="text" maxlength="1" class="otp-digit" data-idx="1">
+                    <input type="text" maxlength="1" class="otp-digit" data-idx="2">
+                    <input type="text" maxlength="1" class="otp-digit" data-idx="3">
+                    <input type="text" maxlength="1" class="otp-digit" data-idx="4">
+                    <input type="text" maxlength="1" class="otp-digit" data-idx="5">
+                </div>
+                <button id="backToEmailBtn" class="auth-secondary-btn" style="margin-top:0.5rem;">← Back</button>
+            </div>
+
+            <!-- Step 3: Onboarding (Profile + Password) -->
+            <div id="step3" class="step">
+                <h3 id="onboardingTitle" style="text-align:center; margin-bottom:1rem;">Complete your account</h3>
+                <div class="profile-upload" id="avatarUploadSection">
+                    <div id="avatarUpload" class="avatar-upload">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <span>Upload Photo</span>
+                    </div>
+                    <div class="upload-hint">300x300px min. JPG, GIF, PNG. Max 4MB.</div>
+                    <input type="file" id="avatarFile" accept="image/jpeg,image/png,image/gif" style="display:none;">
+                </div>
+                <div id="profileFields">
+                    <div class="labeled-input">
+                        <label>Full name</label>
+                        <input type="text" id="fullName" class="auth-input" placeholder="e.g., Satoshi Nakamoto">
+                    </div>
+                    <div class="labeled-input">
+                        <label>Your location</label>
+                        <input type="text" id="location" class="auth-input" placeholder="City, Country">
+                    </div>
+                </div>
+    </div>
+
+    <script type="module" src="/web/src/scripts/landing.js"></script>
+</body>
+</html>
