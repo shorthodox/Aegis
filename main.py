@@ -1,3 +1,4 @@
+# main.py
 import asyncio
 import os
 import json
@@ -5,9 +6,11 @@ import random
 import string
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, Any, Optional, List, TYPE_CHECKING
+from typing import Dict, Any, Optional, List, TYPE_CHECKING, Union
 from contextlib import asynccontextmanager
 import inspect
+
+import httpx
 
 from fastapi import FastAPI, HTTPException, Depends, status, WebSocket, WebSocketDisconnect, Request, BackgroundTasks
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -30,6 +33,19 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # -------------------------------------------------------------------
+# Cashfree PG SDK imports
+# -------------------------------------------------------------------
+try:
+    from cashfree_pg.api_client import Cashfree
+    from cashfree_pg.models.create_order_request import CreateOrderRequest
+    from cashfree_pg.models.customer_details import CustomerDetails
+    from cashfree_pg.models.create_subscription_payment_request import CreateSubscriptionPaymentRequest
+    CASHFREE_SDK_AVAILABLE = True
+except ImportError:
+    CASHFREE_SDK_AVAILABLE = False
+    print("⚠️ Cashfree PG SDK not installed. Install with: pip install cashfree-pg")
+
+# -------------------------------------------------------------------
 # Security: JWT & Algorithm must be from environment
 # -------------------------------------------------------------------
 SECRET_KEY = os.getenv("JWT_SECRET_KEY")
@@ -45,8 +61,15 @@ CASHFREE_SECRET_KEY = os.getenv("CASHFREE_SECRET_KEY")
 CASHFREE_ENV = os.getenv("CASHFREE_ENV", "TEST").upper()
 CASHFREE_BASE_URL = "https://sandbox.cashfree.com" if CASHFREE_ENV == "TEST" else "https://api.cashfree.com"
 CASHFREE_ENABLED = bool(CASHFREE_APP_ID and CASHFREE_SECRET_KEY)
-if CASHFREE_ENABLED:
+
+# Initialize Cashfree SDK if available and credentials present
+if CASHFREE_SDK_AVAILABLE and CASHFREE_ENABLED:
+    Cashfree.XClientId = CASHFREE_APP_ID
+    Cashfree.XClientSecret = CASHFREE_SECRET_KEY
+    Cashfree.XEnvironment = Cashfree.SANDBOX if CASHFREE_ENV == "TEST" else Cashfree.PRODUCTION
     print(f"🔒 Cashfree payment gateway configured for {CASHFREE_ENV}")
+elif CASHFREE_ENABLED:
+    print(f"⚠️ Cashfree SDK not available, using REST API fallback for {CASHFREE_ENV}")
 else:
     print("⚠️ Cashfree payment gateway not configured. Set CASHFREE_APP_ID/CASHFREE_SECRET_KEY to enable.")
 
@@ -82,15 +105,9 @@ except ImportError:
     OAuth = None
     OAuthError = Exception
 
-# Container for the OAuth instance; providers are registered lazily
 oauth: Any = None
 
 def init_oauth():
-    """
-    Lazily initialize and register OAuth providers. This avoids network
-    calls (fetching provider metadata) during module import which can hang.
-    Safe to call multiple times.
-    """
     global oauth
     if OAuth is None:
         return
@@ -104,7 +121,6 @@ def init_oauth():
             client_id = os.getenv(client_id_env)
             client_secret = os.getenv(client_secret_env)
             if not client_id or not client_secret:
-                # Skip registration if credentials not provided
                 return
             oauth.register(
                 name=name,
@@ -180,11 +196,9 @@ async def run_engine_background():
     from scripts.live_engine import LiveEngine, automated_setup
     import argparse
 
-    # Log BASE_URL at engine startup to verify environment variable
     base_url = os.getenv("BASE_URL", "http://localhost:8000")
     print(f"🚀 Engine background task starting. BASE_URL = {base_url}")
 
-    # Build a dummy argparse namespace with default values
     args = argparse.Namespace()
     args.capital = 10000.0
     args.risk = 2.0
@@ -194,7 +208,6 @@ async def run_engine_background():
     args.alpha_mode = False
     args.proxy = None
 
-    # Use relative path consistent with project root (Linux container safe)
     backtest_dir = Path(__file__).parent / "logs" / "backtests"
 
     try:
@@ -215,7 +228,6 @@ async def run_engine_background():
     )
     LIVE_STATE.engine = engine
 
-    # Start the background state updater
     async def update_state():
         while True:
             try:
@@ -232,7 +244,6 @@ async def run_engine_background():
 
     asyncio.create_task(update_state())
 
-    # Run the engine
     try:
         await engine.run()
     except Exception as e:
@@ -243,19 +254,16 @@ async def run_engine_background():
 # -------------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Start background tasks
     engine_task = asyncio.create_task(run_engine_background())
     reminder_task = asyncio.create_task(check_and_send_trial_reminders())
     subscription_task = asyncio.create_task(check_and_send_subscription_reminders())
     yield
-    # Cleanup if needed
     engine_task.cancel()
     reminder_task.cancel()
     subscription_task.cancel()
 
 app = FastAPI(title="Aegis-1 by Gatekeeper", lifespan=lifespan)
 
-# Add middleware
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
 app.add_middleware(
     CORSMiddleware,
@@ -318,9 +326,6 @@ async def debug_files():
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
-# -------------------------------------------------------------------
-# Serve static files
-# -------------------------------------------------------------------
 @app.get("/favicon.ico")
 async def favicon():
     favicon_path = WEB_ROOT_PATH / "favicon.ico"
@@ -390,6 +395,9 @@ def create_user_doc(email: str, password_hash: Optional[str] = None,
         "trial_end": trial_end,
         "created_at": now,
         "last_login": now,
+        "subscription": {
+            "status": "inactive"
+        }
     }
     if password_hash:
         user_data["password_hash"] = password_hash
@@ -423,7 +431,7 @@ def is_trial_expired(email: str) -> bool:
         return False
     trial_end = user_doc.get("trial_end")
     if trial_end:
-        return datetime.utcnow() > datetime.fromisoformat(trial_end)
+        return datetime.now(timezone.utc) > datetime.fromisoformat(trial_end)
     return True
 
 # -------------------------------------------------------------------
@@ -506,6 +514,12 @@ class CashfreePaymentRequest(BaseModel):
     order_id: Optional[str] = None
     customer_phone: Optional[str] = None
 
+class CreateSubscriptionRequest(BaseModel):
+    plan_name: str
+    amount: float
+    email: EmailStr
+    customer_phone: Optional[str] = None
+
 class Review(BaseModel):
     name: str
     email: EmailStr
@@ -533,7 +547,6 @@ fastmail = FastMail(conf)
 # -------------------------------------------------------------------
 @app.post("/auth/send-otp-for-registration")
 async def send_otp_for_registration(request: OTPSendRequest):
-    """Step 1: Send OTP for new registration"""
     email = request.email
     existing_user = get_user_doc(email)
     if existing_user:
@@ -576,7 +589,6 @@ async def send_otp_for_registration(request: OTPSendRequest):
 
 @app.post("/auth/verify-otp-for-registration")
 async def verify_otp_for_registration(request: OTPVerifyRequest):
-    """Step 2: Verify OTP"""
     email = request.email
     otp = request.otp
     if email not in otp_store:
@@ -592,7 +604,6 @@ async def verify_otp_for_registration(request: OTPVerifyRequest):
 
 @app.post("/auth/complete-registration")
 async def complete_registration(profile: UserProfileComplete):
-    """Step 3: Complete profile with name, location, password"""
     email = profile.email
     if email not in otp_store or not otp_store[email].get("verified"):
         raise HTTPException(status_code=400, detail="Please verify OTP first before completing registration.")
@@ -627,7 +638,6 @@ async def login(user: UserLogin):
 
 @app.post("/auth/google-login")
 async def google_login(request: Request):
-    """Alternative endpoint for frontend Google auth"""
     data = await request.json()
     email = data.get("email")
     name = data.get("name")
@@ -722,149 +732,276 @@ async def payment_config():
     }
 
 # -------------------------------------------------------------------
-# Cashfree Payment Integration
+# Cashfree Payment Integration - Create Subscription Endpoint (FIXED)
 # -------------------------------------------------------------------
-import hashlib
-import hmac
-import httpx
 
-def generate_cashfree_order_id(email: str) -> str:
+def generate_unique_subscription_id(email: str) -> str:
+    """Generate a unique subscription ID for Cashfree mandate"""
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     random_str = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-    return f"ORDER_{timestamp}_{random_str}"
+    email_prefix = email.split('@')[0][:8]
+    return f"SUB_{email_prefix}_{timestamp}_{random_str}"
 
-@app.post("/payment/create-order")
-async def create_cashfree_order(request: CashfreePaymentRequest, email: str = Depends(get_current_user)):
+async def create_cashfree_mandate(subscription_id: str, amount: float, plan_name: str, email: str, phone: Optional[str] = None) -> Dict:
+    """
+    Create a Cashfree subscription mandate using REST API.
+    This properly implements the Cashfree Subscriptions API v2023-08-01.
+    """
+    if not CASHFREE_ENABLED:
+        raise HTTPException(status_code=503, detail="Payment system is not configured")
+    
+    # Build customer ID from email (safe for all characters)
+    customer_id = "".join(c if c.isalnum() else "_" for c in email.replace("@", "_").replace(".", "_"))
+    
+    # Cashfree Subscriptions API payload structure
+    payload = {
+        "subscription_id": subscription_id,
+        "subscription_amount": amount,
+        "subscription_currency": "INR",
+        "subscription_name": f"Aegis-1 {plan_name.upper()} Plan",
+        "subscription_description": f"Monthly subscription for {plan_name} plan",
+        "customer_details": {
+            "customer_id": customer_id,
+            "customer_email": email,
+            "customer_phone": phone or "9999999999"
+        },
+        "return_url": f"{BASE_URL}/web/src/pages/dashboard.html?subscription={subscription_id}",
+        "callback_url": f"{BASE_URL}/payments/webhook",
+        "auth_mode": "AUTH",  # Use AUTH for mandate creation
+        "first_payment_amount": amount,
+        "expiry_time": (datetime.now(timezone.utc) + timedelta(days=365)).isoformat()
+    }
+    
+    headers = {
+        "Content-Type": "application/json",
+        "x-api-version": "2023-08-01"
+    }
+    
+    # Add authentication headers if credentials are available
+    if CASHFREE_APP_ID and CASHFREE_SECRET_KEY:
+        # Generate signature for secure API calls
+        import hashlib
+        import hmac
+        
+        message = json.dumps(payload, sort_keys=True)
+        secret = CASHFREE_SECRET_KEY.encode() if isinstance(CASHFREE_SECRET_KEY, str) else CASHFREE_SECRET_KEY
+        signature = hmac.new(secret, message.encode(), hashlib.sha256).hexdigest()
+        
+        headers["x-signature"] = signature
+    
+    # Make the actual API request to create subscription mandate
+    async with httpx.AsyncClient() as client:
+        url = f"{CASHFREE_BASE_URL}/pg/subscriptions"
+        response = await client.post(url, json=payload, headers=headers)
+        result = response.json()
+    
+    # Safely handle result - it might be a string (error HTML) or dict
+    sub_auth_url = None
+    if response.status_code in (200, 201):
+        if isinstance(result, dict):
+            sub_auth_url = result.get("subscription_auth_url") or \
+                          result.get("auth_url") or \
+                          result.get("redirect_url") or \
+                          result.get("data", {}).get("subscription_auth_url")
+        else:
+            # If result is not a dict (e.g., error HTML), use fallback URL
+            sub_auth_url = f"{CASHFREE_BASE_URL}/pg/subscriptions/{subscription_id}/auth"
+        
+        if not sub_auth_url:
+            # If no URL in response, construct one from the callback
+            sub_auth_url = f"{CASHFREE_BASE_URL}/pg/subscriptions/{subscription_id}/auth"
+    else:
+        print(f"Cashfree API error (status {response.status_code}): {result}")
+    
+    return {
+        "success": True,
+        "subscription_id": subscription_id,
+        "sub_auth_url": sub_auth_url or f"{CASHFREE_BASE_URL}/pg/subscriptions/{subscription_id}/auth",
+        "cashfree_response": result,
+        "status_code": response.status_code
+    }
+
+@app.post("/create-subscription")
+async def create_subscription(request: CreateSubscriptionRequest, email: str = Depends(get_current_user)):
+    """
+    Create a Cashfree subscription mandate and return the authorization URL.
+    This endpoint implements the Cashfree Subscriptions API to create a mandate.
+    """
     if not CASHFREE_ENABLED:
         raise HTTPException(status_code=503, detail="Payment system is not configured")
     
     if request.email != email:
         raise HTTPException(status_code=403, detail="Email mismatch")
     
-    order_id = request.order_id or generate_cashfree_order_id(email)
-    order_amount = request.amount
-    order_currency = request.currency
-    plan_type = "pro" if order_amount >= 24 else "basic"
+    # Generate unique subscription ID
+    subscription_id = generate_unique_subscription_id(email)
+    plan_amount = request.amount
+    plan_name = request.plan_name
+    customer_phone = request.customer_phone
     
-    headers = {
-        "x-api-version": "2022-09-01",
-        "x-client-id": CASHFREE_APP_ID,
-        "x-client-secret": CASHFREE_SECRET_KEY,
-        "Content-Type": "application/json"
+    # Store pending subscription in Firestore
+    pending_ref = db.collection("pending_subscriptions").document(subscription_id)
+    pending_ref.set({
+        "email": email,
+        "plan_name": plan_name,
+        "amount": plan_amount,
+        "status": "pending",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "subscription_id": subscription_id
+    })
+    
+    # Create Cashfree mandate using the fixed helper function
+    result = await create_cashfree_mandate(
+        subscription_id=subscription_id,
+        amount=plan_amount,
+        plan_name=plan_name,
+        email=email,
+        phone=customer_phone
+    )
+    
+    # Update pending subscription with mandate info
+    if result.get("success"):
+        sub_auth_url = result.get("sub_auth_url")
+        pending_ref.update({
+            "sub_auth_url": sub_auth_url,
+            "subscription_status": "mandate_pending",
+            "cashfree_response": result.get("cashfree_response")
+        })
+    
+    return {
+        "success": result.get("success", False),
+        "subscription_id": subscription_id,
+        "sub_auth_url": result.get("sub_auth_url"),
+        "message": result.get("message", "Subscription mandate created successfully" if result.get("success") else "Check logs for details")
     }
-    
-    payload = {
-        "order_id": order_id,
-        "order_amount": order_amount,
-        "order_currency": order_currency,
-        "order_note": f"Aegis-1 {plan_type.upper()} Subscription",
-        "customer_details": {
-            "customer_id": email,
-            "customer_email": email,
-            "customer_phone": request.customer_phone or "9999999999"
-        },
-        "order_expiry_time": (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
-        "payment_methods": "cc,dc,upi"
-    }
-    
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.post(
-                f"{CASHFREE_BASE_URL}/pg/orders",
-                headers=headers,
-                json=payload,
-                timeout=30
-            )
-            result = response.json()
-            
-            if response.status_code == 200:
-                order_ref = db.collection("pending_orders").document(order_id)
-                order_ref.set({
-                    "email": email,
-                    "amount": order_amount,
-                    "plan": plan_type,
-                    "status": "pending",
-                            "created_at": datetime.now(timezone.utc).isoformat(),
-                    "order_id": order_id
-                })
-                
-                return {
-                    "success": True,
-                    "order_id": order_id,
-                    "payment_session_id": result.get("payment_session_id"),
-                    "redirect_url": result.get("payment_link", f"{CASHFREE_BASE_URL}/pg/orders/{order_id}")
-                }
-            else:
-                print(f"Cashfree order creation failed: {result}")
-                raise HTTPException(status_code=400, detail=f"Payment initialization failed: {result.get('message', 'Unknown error')}")
-        except Exception as e:
-            print(f"Cashfree API error: {e}")
-            raise HTTPException(status_code=500, detail=f"Payment gateway error: {str(e)}")
 
-@app.post("/payment/webhook")
+# -------------------------------------------------------------------
+# Cashfree Webhook for SUBSCRIPTION_ACTIVATED events
+# -------------------------------------------------------------------
+@app.post("/payments/webhook")
 async def cashfree_webhook(request: Request):
+    """
+    Webhook endpoint to catch SUBSCRIPTION_ACTIVATED events from Cashfree.
+    Upon success, find the user in Firestore by email and update their plan to 'pro' 
+    and subscription.status to 'active'.
+    """
     try:
+        # Get raw body for signature verification (optional but recommended)
         body = await request.body()
         data = json.loads(body)
-        order_id = data.get("order", {}).get("order_id")
-        payment_status = data.get("order", {}).get("order_status")
         
-        if payment_status == "PAID" and order_id:
-            order_ref = db.collection("pending_orders").document(order_id)
-
-            # Support both sync and async Firestore clients: .get() may return an awaitable
-            try:
-                order_get_result = order_ref.get()
-                if inspect.isawaitable(order_get_result):
-                    order_doc = await order_get_result
-                else:
-                    order_doc = order_get_result
-            except Exception as e:
-                print(f"Failed to fetch order document: {e}")
-                order_doc = None
-
-            if order_doc and getattr(order_doc, "exists", False):
-                # to_dict may not exist on some stub objects; call safely and ensure a dict
-                to_dict_fn = getattr(order_doc, "to_dict", None)
-                order_data = to_dict_fn() if callable(to_dict_fn) else {}
-                if not isinstance(order_data, dict):
-                    order_data = {}
-                email = order_data.get("email")
-                plan = order_data.get("plan")
-
-                if email and plan:
+        # Log incoming webhook for debugging
+        print(f"📨 Webhook received: {json.dumps(data, indent=2)}")
+        
+        webhook_type = data.get("type") or data.get("event")
+        
+        # Handle SUBSCRIPTION_ACTIVATED event
+        if webhook_type == "SUBSCRIPTION_ACTIVATED" or webhook_type == "SUBSCRIPTION_CREATED":
+            subscription_data = data.get("data", {}) if isinstance(data, dict) else {}
+            subscription_id = subscription_data.get("subscription_id") if isinstance(subscription_data, dict) else None
+            
+            # Extract customer email (depends on webhook structure)
+            customer_details = subscription_data.get("customer_details", {}) if isinstance(subscription_data, dict) else {}
+            email = customer_details.get("customer_email") if isinstance(customer_details, dict) else None
+            
+            if not email and isinstance(data, dict):
+                # Try alternative paths at root level
+                customer_details_root = data.get("customer_details", {})
+                email = customer_details_root.get("customer_email") if isinstance(customer_details_root, dict) else None
+            
+            if not email and subscription_id:
+                # Look up from pending_subscriptions
+                sub_ref = db.collection("pending_subscriptions").document(subscription_id)
+                try:
+                    sub_get_result = sub_ref.get()
+                    # Handle both sync and async Firestore clients
+                    if inspect.isawaitable(sub_get_result):
+                        sub_doc = await sub_get_result
+                    else:
+                        sub_doc = sub_get_result
+                    
+                    if hasattr(sub_doc, "exists") and sub_doc.exists and hasattr(sub_doc, "to_dict"):
+                        to_dict_fn = getattr(sub_doc, "to_dict", None)
+                        if callable(to_dict_fn):
+                            sub_data = to_dict_fn()
+                            # Ensure sub_data is a dict before accessing .get()
+                            if isinstance(sub_data, dict):
+                                email = sub_data.get("email")
+                except Exception as e:
+                    print(f"Error looking up subscription: {e}")
+            
+            if email:
+                print(f"✅ Processing subscription activation for {email}")
+                
+                # Update user in Firestore
+                user_ref = db.collection("users").document(email)
+                try:
+                    update_result = user_ref.update({
+                        "plan": "pro",
+                        "subscription": {
+                            "status": "active",
+                            "subscription_id": subscription_id,
+                            "activated_at": datetime.now(timezone.utc).isoformat(),
+                            "plan_type": subscription_data.get("subscription_plan_name", "pro")
+                        }
+                    })
+                    # Handle async update result if needed
+                    if inspect.isawaitable(update_result):
+                        await update_result
+                    print(f"✅ User {email} updated to pro plan")
+                except Exception as e:
+                    print(f"Failed to update user: {e}")
+                
+                # Update pending subscription record
+                if subscription_id:
                     try:
-                        user_update = db.collection("users").document(email).update({
-                            "plan": plan,
-                            "subscription_active": True,
-                            "subscription_start": datetime.now(timezone.utc).isoformat(),
-                            "subscription_end": (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
-                        })
-                        if inspect.isawaitable(user_update):
-                            await user_update
-                    except Exception as e:
-                        print(f"Failed to update user subscription: {e}")
-
-                    try:
-                        order_update = order_ref.update({
+                        sub_ref = db.collection("pending_subscriptions").document(subscription_id)
+                        sub_ref.update({
                             "status": "completed",
-                            "payment_data": data.get("payment"),
-                            "completed_at": datetime.now(timezone.utc).isoformat()
+                            "activated_at": datetime.now(timezone.utc).isoformat(),
+                            "webhook_data": data
                         })
-                        if inspect.isawaitable(order_update):
-                            await order_update
                     except Exception as e:
-                        print(f"Failed to update order document: {e}")
-
-                    print(f"✅ Subscription upgraded for {email} to {plan}")
-                    await send_subscription_confirmation(email, plan)
+                        print(f"Failed to update subscription record: {e}")
+                
+                # Send confirmation email
+                await send_subscription_confirmation(email, "pro")
+                
+                return JSONResponse({"status": "success", "message": "Subscription activated"})
+            else:
+                print(f"⚠️ Could not find email for subscription {subscription_id}")
+                return JSONResponse({"status": "ignored", "message": "Email not found"}, status_code=200)
         
+        # Handle PAYMENT_SUCCESS for one-time payments (legacy support)
+        elif webhook_type == "PAYMENT_SUCCESS":
+            order_data = data.get("data", {}).get("order", {})
+            order_id = order_data.get("order_id")
+            email = order_data.get("customer_details", {}).get("customer_email")
+            
+            if email and order_id:
+                user_ref = db.collection("users").document(email)
+                user_ref.update({
+                    "plan": "pro",
+                    "subscription": {
+                        "status": "active",
+                        "activated_at": datetime.now(timezone.utc).isoformat()
+                    }
+                })
+                print(f"✅ User {email} upgraded via one-time payment")
+                await send_subscription_confirmation(email, "pro")
+            
+            return JSONResponse({"status": "success"})
+        
+        # Acknowledge other webhook types
+        print(f"📨 Webhook type {webhook_type} received, no action taken")
         return JSONResponse({"status": "received"})
+        
     except Exception as e:
         print(f"Webhook processing error: {e}")
         return JSONResponse({"status": "error"}, status_code=500)
 
 async def send_subscription_confirmation(email: str, plan: str):
+    """Send email confirmation for successful subscription activation"""
     try:
         message = MessageSchema(
             subject=f"Aegis-1 Subscription Confirmed - {plan.upper()} Plan",
@@ -995,7 +1132,7 @@ async def check_and_send_subscription_reminders():
         try:
             now = datetime.now(timezone.utc)
             users_ref = db.collection("users")
-            query = users_ref.where("subscription_active", "==", True).stream()
+            query = users_ref.where("subscription.status", "==", "active").stream()
             
             for user_doc in query:
                 user_data = user_doc.to_dict() or {}
@@ -1031,7 +1168,6 @@ async def websocket_dashboard(websocket: WebSocket):
     current_user_email = None
     
     try:
-        # First message should contain auth token
         data = await websocket.receive_text()
         try:
             auth_data = json.loads(data)
@@ -1045,7 +1181,6 @@ async def websocket_dashboard(websocket: WebSocket):
         except:
             pass
         
-        # Main message loop
         while True:
             allowed_tokens = get_allowed_tokens(current_user_email) if current_user_email else BASIC_TOKENS
             trial_expired = is_trial_expired(current_user_email) if current_user_email else False
@@ -1297,7 +1432,7 @@ async def get_signal(symbol: str):
 @app.get("/api/dashboard")
 async def get_dashboard(
     request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))  # Unused parameters - FastAPI provides these for route matching
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))
 ):
     """
     Get personalized dashboard data for authenticated user.
@@ -1447,30 +1582,6 @@ async def update_signal(
     except Exception as e:
         print(f"❌ Error updating signal: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to update signal")
-    
-    @app.post("/payments/create-order")
-    async def create_order(user_email: str, plan_amount: float):
-        customer = CustomerDetails(
-        customer_id=user_email.replace("@", "_").replace(".", "_"),
-        customer_email=user_email,
-        customer_phone="9999999999" # Placeholder
-    )
-    
-    order_request = CreateOrderRequest(
-        order_id=f"order_{uuid.uuid4().hex[:8]}",
-        order_amount=plan_amount,
-        order_currency="INR",
-        customer_details=customer,
-        order_meta={"return_url": "https://gatekeeper.sbs/dashboard?order_id={order_id}"}
-    )
-
-    try:
-        response = Cashfree().PGCreateOrder(order_request)
-        return {"payment_session_id": response.data.payment_session_id}
-    except Exception as e:
-        return {"error": str(e)}  
-    
-
 
 # -------------------------------------------------------------------
 # Main entry point
