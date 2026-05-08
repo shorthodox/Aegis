@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pricing | AEGIS v1.0</title>
-    <link rel="stylesheet" href="../styles/main.css">
+    <link rel="stylesheet" href="/web/src/styles/main.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
@@ -13,11 +13,11 @@
     <header class="fixed-header">
         <div class="logo">⚡ AEGIS <span>v1.0</span></div>
         <div class="nav-links-centered">
-            <a href="index.html" class="nav-link">Home</a>
-            <a href="index.html#sentinel" class="nav-link">Sentinel</a>
-            <a href="index.html#cockpit" class="nav-link">Cockpit</a>
-            <a href="index.html#security" class="nav-link">Security</a>
-            <a href="pricing.html" class="nav-link active">Pricing</a>
+            <a href="/web/src/pages/index.html" class="nav-link">Home</a>
+            <a href="/web/src/pages/index.html#sentinel" class="nav-link">Sentinel</a>
+            <a href="/web/src/pages/index.html#cockpit" class="nav-link">Cockpit</a>
+            <a href="/web/src/pages/index.html#security" class="nav-link">Security</a>
+            <a href="/web/src/pages/pricing.html" class="nav-link active">Pricing</a>
         </div>
         <button id="portalBtn" class="portal-btn">Client Login</button>
     </header>
@@ -143,40 +143,11 @@
         });
     </script>
     <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
-
-    
-                <div class="labeled-input">
-                    <label>Password *</label>
-                    <input type="password" id="regPassword" class="auth-input" placeholder="Create a password">
-                </div>
-                <div id="passwordConfirmSection" class="labeled-input">
-                    <label>Confirm password *</label>
-                    <input type="password" id="regConfirmPassword" class="auth-input" placeholder="Confirm your password">
-                </div>
-                <button id="completeOnboarding" class="auth-submit-btn">Create Account</button>
-                <div class="skip-link"><a href="#" id="skipOnboarding">Cancel</a></div>
-            </div>
-
-            <div class="security-badge"><i class="fas fa-lock"></i> Secure encrypted connection · SOC 2 Type II</div>
-        </div>
+    </div>
     </div>
 
     
     
-                <div class="labeled-input">
-                    <label>Password *</label>
-                    <input type="password" id="regPassword" class="auth-input" placeholder="Create a password">
-                </div>
-                <div id="passwordConfirmSection" class="labeled-input">
-                    <label>Confirm password *</label>
-                    <input type="password" id="regConfirmPassword" class="auth-input" placeholder="Confirm your password">
-                </div>
-                <button id="completeOnboarding" class="auth-submit-btn">Create Account</button>
-                <div class="skip-link"><a href="#" id="skipOnboarding">Cancel</a></div>
-            </div>
-
-            <div class="security-badge"><i class="fas fa-lock"></i> Secure encrypted connection · SOC 2 Type II</div>
-        </div>
     </div>
 
     
@@ -232,23 +203,9 @@
                         <input type="text" id="location" class="auth-input" placeholder="City, Country">
                     </div>
                 </div>
-                <div class="labeled-input">
-                    <label>Password *</label>
-                    <input type="password" id="regPassword" class="auth-input" placeholder="Create a password">
-                </div>
-                <div id="passwordConfirmSection" class="labeled-input">
-                    <label>Confirm password *</label>
-                    <input type="password" id="regConfirmPassword" class="auth-input" placeholder="Confirm your password">
-                </div>
-                <button id="completeOnboarding" class="auth-submit-btn">Create Account</button>
-                <div class="skip-link"><a href="#" id="skipOnboarding">Cancel</a></div>
-            </div>
-
-            <div class="security-badge"><i class="fas fa-lock"></i> Secure encrypted connection · SOC 2 Type II</div>
-        </div>
     </div>
 
     <!-- Shared landing.js handles auth state, modal, and portal button -->
-    <script type="module" src="../scripts/landing.js"></script>
+    <script type="module" src="/web/src/scripts/landing.js"></script>
 </body>
 </html>
