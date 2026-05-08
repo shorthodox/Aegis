@@ -852,43 +852,32 @@ class SignalGenerator:
 
         # ------------------------------------------------------------------
         # ASYMMETRIC SIGNAL LOGIC (Long bias unchanged, Shorts tougher)
-        # HOLD zone expanded to 0.20 – 0.60
         # ------------------------------------------------------------------
-        if ai_prob > 0.75:
-            base_signal = "STRONG_BUY"
-        elif ai_prob > 0.60:
+        if ai_prob >= 0.60:
             base_signal = "BUY"
         elif ai_prob > 0.20:
             base_signal = "HOLD"
-        elif ai_prob > 0.15:
-            base_signal = "SELL"
         else:
-            base_signal = "STRONG_SELL"
+            base_signal = "SELL"
 
         # --- SELLABILITY BRAKE (suppress sell signals in low vol or choppy market) ---
         final_signal = base_signal
-        if base_signal in ("SELL", "STRONG_SELL"):
+        if base_signal == "SELL":
             # Downgrade if volatility regime is 'low'
             if vol_regime == "low":
-                final_signal = "HOLD (LOW_VOL_ATTR)"
+                final_signal = "HOLD"
                 logger.debug(f"{norm_sym}: sell suppressed – low volatility")
             # Downgrade if efficiency ratio < 0.3 (choppy)
             elif er < 0.3:
-                final_signal = "HOLD (CHOPPY)"
+                final_signal = "HOLD"
                 logger.debug(f"{norm_sym}: sell suppressed – choppy market (ER={er:.2f})")
 
         # BTC safety downgrade for BUY signals (only when Alpha OFF)
-        if not alpha_mode and not btc_healthy and base_signal in ("STRONG_BUY", "BUY"):
-            final_signal = "HOLD (BTC_SHAKY)"
+        if not alpha_mode and not btc_healthy and base_signal == "BUY":
+            final_signal = "HOLD"
 
         # Map signal to strength for frontend / colour coding
-        signal_strength = "NONE"
-        if final_signal == "STRONG_BUY" or final_signal == "BUY":
-            signal_strength = "STRONG" if final_signal == "STRONG_BUY" else "NORMAL"
-        elif final_signal == "SELL" or final_signal == "STRONG_SELL":
-            signal_strength = "STRONG_SELL" if final_signal == "STRONG_SELL" else "SELL"
-        else:
-            signal_strength = "HOLD"
+        signal_strength = final_signal
 
         # ------------------------------------------------------------------
         # Legacy calculations (for completeness and compatibility)

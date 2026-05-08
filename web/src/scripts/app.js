@@ -106,7 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ========== Pre-fill Simulator ==========
     function prefillTradeSim(symbol, price, signalObj) {
-        const direction = (signalObj.signal === 'BUY' || signalObj.signal === 'STRONG_BUY') ? 'LONG' : 'SHORT';
+        const direction = signalObj.signal === 'SELL' ? 'SHORT' : 'LONG';
         const atr = signalObj.atr || getATR(price);
         selectedTrade = { symbol, entryPrice: price, direction, atr, aiProb: signalObj.confidence, signal: signalObj.signal };
         
