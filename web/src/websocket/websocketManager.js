@@ -28,8 +28,10 @@ export class WebSocketManager {
                 }
             }, 15000);
             
-            document.getElementById('ws-status-text').textContent = 'Connected Live';
-            document.getElementById('ws-status-dot').className = 'ws-dot pulse';
+            const statusText = document.getElementById('ws-status-text');
+            const statusDot = document.getElementById('ws-status-dot');
+            if (statusText) statusText.textContent = 'Connected Live';
+            if (statusDot) statusDot.className = 'ws-dot pulse';
         };
 
         this.ws.onmessage = (event) => {
@@ -54,8 +56,10 @@ export class WebSocketManager {
         this.ws.onclose = () => {
             console.log("WebSocket disconnected");
             clearInterval(this.pingInterval);
-            document.getElementById('ws-status-text').textContent = 'Disconnected';
-            document.getElementById('ws-status-dot').className = 'ws-dot disconnected';
+            const statusText = document.getElementById('ws-status-text');
+            const statusDot = document.getElementById('ws-status-dot');
+            if (statusText) statusText.textContent = 'Disconnected';
+            if (statusDot) statusDot.className = 'ws-dot disconnected';
             this.scheduleReconnect();
         };
 
@@ -69,7 +73,8 @@ export class WebSocketManager {
         const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), this.maxReconnectDelay);
         this.reconnectAttempts++;
         console.log(`Reconnecting in ${delay}ms...`);
-        document.getElementById('ws-status-text').textContent = `Reconnecting... (${this.reconnectAttempts})`;
+        const statusText = document.getElementById('ws-status-text');
+        if (statusText) statusText.textContent = `Reconnecting... (${this.reconnectAttempts})`;
         setTimeout(() => this.connect(), delay);
     }
 }
