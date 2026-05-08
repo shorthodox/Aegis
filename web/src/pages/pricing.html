@@ -143,14 +143,7 @@
         });
     </script>
     <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
-    </div>
-    </div>
 
-    
-    
-    </div>
-
-    
     <!-- ========== 3‑STEP ONBOARDING MODAL (with password fields) ========== -->
     <div id="loginModal" class="modal">
         <div class="modal-card">
@@ -202,10 +195,18 @@
                         <label>Your location</label>
                         <input type="text" id="location" class="auth-input" placeholder="City, Country">
                     </div>
+                    <div class="labeled-input">
+                        <label>Password</label>
+                        <input type="password" id="password" class="auth-input" placeholder="••••••••">
+                    </div>
+                    <div class="labeled-input">
+                        <label>Confirm Password</label>
+                        <input type="password" id="confirmPassword" class="auth-input" placeholder="••••••••">
+                    </div>
                 </div>
+                <button id="completeSignupBtn" class="auth-submit-btn" style="margin-top:1rem;">Create Account</button>
+            </div>
+        </div>
     </div>
-
-    <!-- Shared landing.js handles auth state, modal, and portal button -->
-    <script type="module" src="/web/src/scripts/landing.js"></script>
 </body>
 </html>
