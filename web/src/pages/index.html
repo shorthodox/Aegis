@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AEGIS v1.0 | Sovereign Intelligence</title>
-    <link rel="stylesheet" href="../styles/main.css">
+    <link rel="stylesheet" href="/web/src/styles/main.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
@@ -16,8 +16,8 @@
             <a href="#" class="nav-link active">Home</a>
             <a href="#sentinel" class="nav-link">Sentinel</a>
             <a href="#cockpit" class="nav-link">Cockpit</a>
-            <a href="pricing.html" class="nav-link">Pricing</a>
-            <a href="reviews.html" class="nav-link">Reviews</a>
+            <a href="/web/src/pages/pricing.html" class="nav-link">Pricing</a>
+            <a href="/web/src/pages/reviews.html" class="nav-link">Reviews</a>
         </div>
         <button id="portalBtn" class="portal-btn">Client Login</button>
     </header>
@@ -180,7 +180,7 @@
                         <li>Simulator + risk guidance</li>
                         <li>No credit card required</li>
                     </ul>
-                    <a href="pricing.html" class="btn-pro">Start Free Trial</a>
+                    <a href="/web/src/pages/pricing.html" class="btn-pro">Start Free Trial</a>
                 </div>
                 <div class="plan-card">
                     <h3>Basic Explorer</h3>
@@ -191,7 +191,7 @@
                         <li>Smart capital management</li>
                         <li>Monthly access via Cashfree</li>
                     </ul>
-                    <a href="pricing.html" class="btn-outline">Get Basic</a>
+                    <a href="/web/src/pages/pricing.html" class="btn-outline">Get Basic</a>
                 </div>
                 <div class="plan-card featured">
                     <div class="plan-badge">Most Powerful</div>
@@ -203,7 +203,7 @@
                         <li>Priority execution alerts</li>
                         <li>Cashfree gateway ready</li>
                     </ul>
-                    <a href="pricing.html" class="btn-pro">Go Pro</a>
+                    <a href="/web/src/pages/pricing.html" class="btn-pro">Go Pro</a>
                 </div>
             </div>
         </div>
@@ -261,20 +261,6 @@
                         <input type="text" id="location" class="auth-input" placeholder="City, Country">
                     </div>
                 </div>
-                <div class="labeled-input">
-                    <label>Password *</label>
-                    <input type="password" id="regPassword" class="auth-input" placeholder="Create a password">
-                </div>
-                <div id="passwordConfirmSection" class="labeled-input">
-                    <label>Confirm password *</label>
-                    <input type="password" id="regConfirmPassword" class="auth-input" placeholder="Confirm your password">
-                </div>
-                <button id="completeOnboarding" class="auth-submit-btn">Create Account</button>
-                <div class="skip-link"><a href="#" id="skipOnboarding">Cancel</a></div>
-            </div>
-
-            <div class="security-badge"><i class="fas fa-lock"></i> Secure encrypted connection · SOC 2 Type II</div>
-        </div>
     </div>
 
     <!-- ========== TRIAL COUNTDOWN DISPLAY ========== -->
@@ -332,16 +318,16 @@
 
     <footer class="footer">
         <div class="footer-links">
-            <a href="terms.html">Terms of Service</a>
+            <a href="/web/src/pages/terms.html">Terms of Service</a>
             <span class="separator">•</span>
-            <a href="conditions.html">Conditions of Use</a>
+            <a href="/web/src/pages/conditions.html">Conditions of Use</a>
             <span class="separator">•</span>
-            <a href="risk-disclosure.html">Risk Disclosure</a>
+            <a href="/web/src/pages/risk-disclosure.html">Risk Disclosure</a>
         </div>
         <p>© 2025 AEGIS v1.0 — Sovereign Intelligence Terminal</p>
     </footer>
 
     <!-- ONLY ONE SCRIPT – landing.js handles all modal + auth logic -->
-    <script type="module" src="../scripts/landing.js"></script>
+    <script type="module" src="/web/src/scripts/landing.js"></script>
 </body>
 </html>
