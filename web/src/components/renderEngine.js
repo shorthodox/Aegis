@@ -82,31 +82,32 @@ export class RenderEngine {
             const isRecent = timeAgoStr.includes('s') || timeAgoStr.includes('m ago');
             const rowAnim = isRecent ? 'animation: pulse-border 2s;' : '';
             
-            html += \`
-                <tr id="row-\${sig.pair.replace('/','-')}" style="border-bottom:1px solid #1a1f2e; \${rowAnim} transition: background 0.3s; cursor:pointer;" onmouseover="this.style.background='#0f141e'" onmouseout="this.style.background='transparent'" onclick='document.dispatchEvent(new CustomEvent("signalRowClicked", {detail: \${JSON.stringify(sig)}}))'>
-                    <td style="padding:1rem; font-weight:bold; color:#fff;">\${sig.pair}</td>
-                    <td style="padding:1rem; color:var(--dim);">\${sig.timeframe}</td>
-                    <td style="padding:1rem; font-weight:bold; \${sigClass}">\${sig.signal}</td>
-                    <td style="padding:1rem; color:#fff;">\${sig.entry ? sig.entry.toFixed(4) : '-'}</td>
-                    <td style="padding:1rem; color:#ff3333;">\${sig.sl ? sig.sl.toFixed(4) : '-'}</td>
-                    <td style="padding:1rem; color:#00ff88;">\${sig.tp ? sig.tp.toFixed(4) : '-'}</td>
+            const sigJsonStr = JSON.stringify(sig).replace(/'/g, "\\'");
+            html += `
+                <tr id="row-${sig.pair.replace('/', '-')}" style="border-bottom:1px solid #1a1f2e; ${rowAnim} transition: background 0.3s; cursor:pointer;" onmouseover="this.style.background='#0f141e'" onmouseout="this.style.background='transparent'" onclick='document.dispatchEvent(new CustomEvent("signalRowClicked", {detail: ${sigJsonStr}}))'>
+                    <td style="padding:1rem; font-weight:bold; color:#fff;">${sig.pair}</td>
+                    <td style="padding:1rem; color:var(--dim);">${sig.timeframe}</td>
+                    <td style="padding:1rem; font-weight:bold; ${sigClass}">${sig.signal}</td>
+                    <td style="padding:1rem; color:#fff;">${sig.entry ? sig.entry.toFixed(4) : '-'}</td>
+                    <td style="padding:1rem; color:#ff3333;">${sig.sl ? sig.sl.toFixed(4) : '-'}</td>
+                    <td style="padding:1rem; color:#00ff88;">${sig.tp ? sig.tp.toFixed(4) : '-'}</td>
                     <td style="padding:1rem;">
                         <div style="display:flex; align-items:center; gap:0.5rem;">
-                            <span style="color:\${confColor}; width:35px;">\${(sig.confidence * 100).toFixed(0)}%</span>
+                            <span style="color:${confColor}; width:35px;">${(sig.confidence * 100).toFixed(0)}%</span>
                             <div style="width:60px; height:6px; background:#1a1f2e; border-radius:3px; overflow:hidden;">
-                                <div style="width:\${sig.confidence*100}%; height:100%; background:\${confColor}; transition: width 0.5s;"></div>
+                                <div style="width:${sig.confidence*100}%; height:100%; background:${confColor}; transition: width 0.5s;"></div>
                             </div>
                         </div>
                     </td>
-                    <td style="padding:1rem; color:#fff;">\${sig.rr ? sig.rr.toFixed(2) : '-'}</td>
-                    <td style="padding:1rem; \${statClass}">\${sig.status}</td>
-                    <td style="padding:1rem; color:var(--dim); font-size:0.85rem;">\${timeAgoStr}</td>
+                    <td style="padding:1rem; color:#fff;">${sig.rr ? sig.rr.toFixed(2) : '-'}</td>
+                    <td style="padding:1rem; ${statClass}">${sig.status}</td>
+                    <td style="padding:1rem; color:var(--dim); font-size:0.85rem;">${timeAgoStr}</td>
                 </tr>
-            \`;
+            `;
         });
         
         if (!html) {
-            html = \`<tr><td colspan="10" style="text-align:center; padding: 2rem; color:var(--dim);">No signals matching criteria</td></tr>\`;
+            html = `<tr><td colspan="10" style="text-align:center; padding: 2rem; color:var(--dim);">No signals matching criteria</td></tr>`;
         }
         
         tbody.innerHTML = html;
@@ -139,13 +140,13 @@ export class RenderEngine {
         ]);
         
         let csvContent = "data:text/csv;charset=utf-8," 
-            + headers.join(",") + "\\n"
-            + rows.map(e => e.join(",")).join("\\n");
+            + headers.join(",") + "\n"
+            + rows.map(e => e.join(",")).join("\n");
             
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
-        link.setAttribute("download", \`aegis_signals_\${new Date().toISOString().split('T')[0]}.csv\`);
+        link.setAttribute("download", `aegis_signals_${new Date().toISOString().split('T')[0]}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
