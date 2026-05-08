@@ -96,9 +96,9 @@
 
     <!-- SCRIPTS -->
     <script type="module">
-        import { initAuthModal, openAuthModal, updateAuthButtonState, subscribeToAuthState } from '../scripts/auth-modal.js';
+        import { initAuthModal, openAuthModal, updateAuthButtonState } from '../scripts/auth-modal.js';
         import { initializeTrialCountdown } from '../scripts/trial-countdown.js';
-        import { isUserAuthenticated } from '../scripts/auth.js';
+        import { isUserAuthenticated, subscribeToAuthState } from '../scripts/auth.js';
 
         document.addEventListener('DOMContentLoaded', () => {
             // Initialize auth modal
