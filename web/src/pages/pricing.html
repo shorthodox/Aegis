@@ -96,51 +96,55 @@
 
     <!-- SCRIPTS -->
     <script type="module">
-        import { initAuthModal, openAuthModal, updateAuthButtonState } from '../scripts/auth-modal.js';
-        import { initializeTrialCountdown } from '../scripts/trial-countdown.js';
-        import { isUserAuthenticated, subscribeToAuthState } from '../scripts/auth.js';
+      import { initSignInUI, openSignInModal } from '../scripts/signin-ui.js';
+      import { initSignUpUI, openSignUpModal } from '../scripts/signup-ui.js';
+      import { isUserAuthenticated } from '../scripts/auth.js';
 
-        document.addEventListener('DOMContentLoaded', () => {
-            // Initialize auth modal
-            initAuthModal();
-            
-            // Portal button - navigate to dashboard if logged in, else open auth modal
-            const portalBtn = document.getElementById('portalBtn');
-            if (portalBtn) {
-                portalBtn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    if (isUserAuthenticated()) {
-                        window.location.href = '/pages/dashboard.html';
-                    } else {
-                        openAuthModal();
-                    }
-                });
+      document.addEventListener('DOMContentLoaded', () => {
+        // Initialize auth UIs
+        initSignInUI();
+        initSignUpUI();
+
+        // Portal button
+        const portalBtn = document.getElementById('portalBtn');
+        if (portalBtn) {
+          portalBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (isUserAuthenticated()) {
+              window.location.href = '/web/src/pages/dashboard.html';
+            } else {
+              openSignInModal();
             }
-            
-            // Trial button - start free trial
-            const trialBtn = document.getElementById('trialBtn');
-            if (trialBtn) {
-                trialBtn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    if (isUserAuthenticated()) {
-                        window.location.href = '/pages/dashboard.html';
-                    } else {
-                        openAuthModal('landing');
-                    }
-                });
+          });
+        }
+
+        // Trial button
+        const trialBtn = document.getElementById('trialBtn');
+        if (trialBtn) {
+          trialBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (isUserAuthenticated()) {
+              window.location.href = '/web/src/pages/dashboard.html';
+            } else {
+              openSignUpModal();
             }
-            
-            // Subscribe to auth state
-            subscribeToAuthState((authState) => {
-                if (authState.authenticated) {
-                    console.log('✅ User authenticated');
-                    initializeTrialCountdown(authState.user.uid);
-                    updateAuthButtonState();
-                } else {
-                    updateAuthButtonState();
-                }
-            });
+          });
+        }
+
+        // Plan buttons
+        document.querySelectorAll('[data-plan]').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (!isUserAuthenticated()) {
+              openSignInModal();
+            }
+          });
         });
+
+        // Listen for navigation events
+        window.addEventListener('openSignin', openSignInModal);
+        window.addEventListener('openSignup', openSignUpModal);
+      });
     </script>
     <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
 
