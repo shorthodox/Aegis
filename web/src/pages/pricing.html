@@ -20,6 +20,7 @@
             <a href="/web/src/pages/pricing.html" class="nav-link active">Pricing</a>
         </div>
         <button id="portalBtn" class="portal-btn">Client Login</button>
+        <button id="createAccountBtn" class="portal-btn" style="margin-left: 0.5rem; background: rgba(0, 242, 255, 0.2);">Create Account</button>
     </header>
 
     <!-- Pricing Section -->
@@ -114,6 +115,19 @@
               window.location.href = '/web/src/pages/dashboard.html';
             } else {
               openSignInModal();
+            }
+          });
+        }
+
+        // Create Account button
+        const createAccountBtn = document.getElementById('createAccountBtn');
+        if (createAccountBtn) {
+          createAccountBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (isUserAuthenticated()) {
+              window.location.href = '/web/src/pages/dashboard.html';
+            } else {
+              openSignUpModal();
             }
           });
         }
