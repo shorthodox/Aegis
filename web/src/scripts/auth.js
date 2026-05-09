@@ -1,3 +1,84 @@
+function createModalIfMissing() {
+  // ... (unchanged code) ...
+}
+
+function openModal() {
+  // ... (unchanged code) ...
+}
+
+function closeModal() {
+  // ... (unchanged code) ...
+}
+
+async function doLogin() {
+  console.log('DEBUG: doLogin function started.'); // ADD THIS LINE
+  const email = document.getElementById('simpleEmail')?.value?.trim();
+  const password = document.getElementById('simplePassword')?.value;
+  const errEl = document.getElementById('simpleAuthError');
+  if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+
+  console.log('DEBUG: Email and password retrieved:', email ? 'present' : 'missing', password ? 'present' : 'missing'); // ADD THIS LINE
+
+  if (!email || !password) {
+    if (errEl) { errEl.style.display = 'block'; errEl.textContent = 'Email and password are required'; }
+    console.log('DEBUG: Email or password missing. Returning.'); // ADD THIS LINE
+    return;
+  }
+
+  const btn = document.getElementById('simpleLoginSubmit');
+  try {
+    btn.disabled = true;
+    btn.innerText = 'Signing in...';
+    console.log('DEBUG: Attempting fetch to /auth/login'); // ADD THIS LINE
+    const resp = await fetch('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    console.log('DEBUG: Fetch response received:', resp.status); // ADD THIS LINE
+
+    const data = await resp.json().catch(() => ({}));
+    if (resp.ok && data.access_token) {
+      localStorage.setItem('access_token', data.access_token);
+      localStorage.setItem('authenticated', 'true');
+      closeModal();
+      // try to update any UI provided by auth-modal
+      try { const m = await import('./auth-modal.js'); if (m.updateAuthButtonState) m.updateAuthButtonState(); } catch(e) {}
+      window.location.reload();
+      return;
+    }
+    const message = data.detail || data.message || 'Invalid credentials';
+    if (errEl) { errEl.style.display = 'block'; errEl.textContent = message; }
+  } catch (err) {
+    console.error('DEBUG: Fetch caught an error:', err); // MODIFY THIS LINE
+    if (errEl) { errEl.style.display = 'block'; errEl.textContent = 'Network error'; }
+  } finally {
+    btn.disabled = false;
+    btn.innerText = 'Sign In';
+    console.log('DEBUG: doLogin function finished.'); // ADD THIS LINE
+  }
+}
+
+async function subscribeToPlan(planType) {
+  // ... (unchanged code) ...
+}
+
+function attachHandlers() {
+  // ... (unchanged code) ...
+}
+
+function portalClickHandler(e) {
+  // ... (unchanged code) ...
+}
+
+function trialClickHandler(e) {
+  // ... (unchanged code) ...
+}
+
+function planClickHandler(e) {
+  // ... (unchanged code) ...
+}
+
 // ============================================================
 // AEGIS Authentication Module – Mobile-First Design
 // Separate Login/Signup flows with multiple auth methods
@@ -5,8 +86,7 @@
 
 import { 
   auth, 
-  db, 
-  googleProvider 
+  db
 } from './gatekeeper.js';
 
 import {
@@ -19,8 +99,11 @@ import {
   updateProfile,
   fetchSignInMethodsForEmail,
   sendPasswordResetEmail,
-  onAuthStateChanged
+  onAuthStateChanged,
+  GoogleAuthProvider
 } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
+
+const googleProvider = new GoogleAuthProvider();
 
 import {
   doc,
@@ -42,6 +125,10 @@ let confirmationResult = null;
 // ============================================================
 export async function ensureUserDocumentV2(user, authMethod = 'email') {
   if (!user) return null;
+
+  // Using the db instance imported from gatekeeper.js
+  // The firebaseConfig should be properly initialized in gatekeeper.js
+  // Make sure gatekeeper.js has the correct Firestore configuration
   
   const userDocRef = doc(db, 'users', user.uid);
   const docSnap = await getDoc(userDocRef);
@@ -129,6 +216,10 @@ export async function ensureUserDocumentV2(user, authMethod = 'email') {
 export async function handleGoogleAuth() {
   try {
     console.log('🔐 Starting Google Auth...');
+    // Set scopes to help with popup/window.closed operations
+    googleProvider.addScope('email');
+    googleProvider.addScope('profile');
+    
     const result = await signInWithPopup(auth, googleProvider);
     const user = result.user;
     
@@ -144,6 +235,11 @@ export async function handleGoogleAuth() {
     return { success: true, user, message: 'Logged in successfully!' };
   } catch (error) {
     console.error('❌ Google Auth error:', error.code, error.message);
+    // COOP error handling: if the error is about window.closed being blocked
+    if (error.code === 'auth/popup-blocked' || error.message?.includes('window.closed')) {
+      console.error('⚠️ COOP/COEP Error detected. Make sure your server sends proper headers.');
+      console.error('Expected headers: Cross-Origin-Opener-Policy: same-origin-allow-popups, Cross-Origin-Embedder-Policy: unsafe-none');
+    }
     return { 
       success: false, 
       message: error.message || 'Google authentication failed'
@@ -426,5 +522,16 @@ export async function getUserData(userId) {
   } catch (error) {
     console.error('❌ Error fetching user data:', error);
     return null;
+  }
+}
+
+// Auto init
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('DEBUG: DOMContentLoaded fired, initializing simpleAuthModal.'); // ADD THIS LINE
+  createModalIfMissing();
+  attachHandlers();
+});
+
+export { openModal, closeModal, subscribeToPlan };   return null;
   }
 }

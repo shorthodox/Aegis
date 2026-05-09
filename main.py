@@ -1,6 +1,14 @@
-# main.py
-import asyncio
+# ===================================================================
+# main.py - CRITICAL: Load environment variables FIRST
+# ===================================================================
+from dotenv import load_dotenv
 import os
+
+# MUST BE FIRST LINE OF EXECUTION - loads all env vars before any other code
+load_dotenv()
+
+# Now safe to import libraries that might use environment variables
+import asyncio
 import json
 import random
 import string
@@ -25,12 +33,7 @@ import bcrypt
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType, NameEmail
 import uvicorn
 from dataclasses import asdict
-from dotenv import load_dotenv
-
-# -------------------------------------------------------------------
-# Load environment variables FIRST
-# -------------------------------------------------------------------
-load_dotenv()
+from starlette.middleware.sessions import SessionMiddleware
 
 # -------------------------------------------------------------------
 # Cashfree PG SDK imports
@@ -51,7 +54,9 @@ except ImportError:
 SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 if not SECRET_KEY:
-    raise RuntimeError("JWT_SECRET_KEY environment variable is not set. Please define it in Railway.")
+    raise RuntimeError("JWT_SECRET_KEY is missing. Add it to your local .env file or Railway variables.")
+if not ALGORITHM:
+    raise RuntimeError("ALGORITHM is missing. Add it to your local .env file or Railway variables.")
 
 # -------------------------------------------------------------------
 # Cashfree payment gateway environment fields
@@ -79,6 +84,7 @@ else:
 import firebase_admin
 from firebase_admin import credentials, firestore
 
+FIREBASE_PROJECT_ID = os.getenv("FIREBASE_PROJECT_ID", "aegis-d78e1")
 FIREBASE_CREDENTIALS_PATH = os.getenv("FIREBASE_CREDENTIALS")
 if not FIREBASE_CREDENTIALS_PATH:
     raise RuntimeError("FIREBASE_CREDENTIALS environment variable not set (should be a file path)")
@@ -89,8 +95,10 @@ if not cred_path.exists():
 
 if not firebase_admin._apps:
     cred = credentials.Certificate(str(cred_path))
-    firebase_admin.initialize_app(cred)
-    print("🔥 Firebase initialized.")
+    firebase_admin.initialize_app(cred, {
+        'projectId': FIREBASE_PROJECT_ID
+    })
+    print(f"🔥 Firebase initialized with project ID: {FIREBASE_PROJECT_ID}")
 else:
     print("☁️ Firebase already initialized, skipping.")
 
@@ -156,6 +164,25 @@ def init_oauth():
 
 if TYPE_CHECKING:
     from scripts.live_engine import LiveEngine
+
+# -------------------------------------------------------------------
+# Static assets root path used by background tasks and API routes
+# -------------------------------------------------------------------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+WEB_ROOT = os.path.join(BASE_DIR, "web")
+WEB_ROOT_PATH = Path(WEB_ROOT)
+
+if not WEB_ROOT_PATH.exists():
+    print(f"⚠️ Warning: 'web' directory not found at {WEB_ROOT_PATH}. Creating fallback structure.")
+    WEB_ROOT_PATH.mkdir(parents=True, exist_ok=True)
+    pages_dir = WEB_ROOT_PATH / "src" / "pages"
+    scripts_dir = WEB_ROOT_PATH / "src" / "scripts"
+    styles_dir = WEB_ROOT_PATH / "src" / "styles"
+    pages_dir.mkdir(parents=True, exist_ok=True)
+    scripts_dir.mkdir(parents=True, exist_ok=True)
+    styles_dir.mkdir(parents=True, exist_ok=True)
+    (pages_dir / "index.html").write_text("<html><body><h1>Aegis‑1</h1><p>Frontend files missing. Please upload the correct static files to 'web/src/pages/'</p></body></html>")
+    (pages_dir / "dashboard.html").write_text("<html><body><h1>Dashboard unavailable</h1><p>Static files not found.</p></body></html>")
 
 # -------------------------------------------------------------------
 # LiveState for global data (shared with engine and WebSocket)
@@ -238,6 +265,16 @@ async def run_engine_background():
                 LIVE_STATE.data["alpha_mode"] = engine.alpha_mode
                 if hasattr(engine, 'bootstrap_total'):
                     LIVE_STATE.data["warmup_progress"] = f"{engine.bootstrap_done}/{engine.bootstrap_total}"
+                # --- write latest signals to a JSON file for frontend consumption ---
+                try:
+                    signals_dir = WEB_ROOT_PATH / 'src' / 'data'
+                    signals_dir.mkdir(parents=True, exist_ok=True)
+                    signals_file = signals_dir / 'live_signals.json'
+                    with open(signals_file, 'w', encoding='utf-8') as sf:
+                        # use default=str to ensure datetimes/objects are serializable
+                        json.dump(LIVE_STATE.data.get('signals', {}), sf, default=str)
+                except Exception as _e:
+                    print(f"⚠️ Failed to write live_signals.json: {_e}")
             except Exception as e:
                 print(f"State update error: {e}")
             await asyncio.sleep(1)
@@ -272,25 +309,23 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=SECRET_KEY
+)
 
-# -------------------------------------------------------------------
-# Static Files: serve the entire 'web' folder under '/web' prefix
-# -------------------------------------------------------------------
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-WEB_ROOT = os.path.join(BASE_DIR, "web")
-WEB_ROOT_PATH = Path(WEB_ROOT)
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    """
+    Add critical security headers:
+    - Cross-Origin-Opener-Policy: same-origin-allow-popups - fixes 'window.closed' blocking
+    - Cross-Origin-Embedder-Policy: unsafe-none - allows third-party resources for popups
+    """
+    response = await call_next(request)
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin-allow-popups"
+    response.headers["Cross-Origin-Embedder-Policy"] = "unsafe-none"
+    return response
 
-if not WEB_ROOT_PATH.exists():
-    print(f"⚠️ Warning: 'web' directory not found at {WEB_ROOT_PATH}. Creating fallback structure.")
-    WEB_ROOT_PATH.mkdir(parents=True, exist_ok=True)
-    pages_dir = WEB_ROOT_PATH / "src" / "pages"
-    scripts_dir = WEB_ROOT_PATH / "src" / "scripts"
-    styles_dir = WEB_ROOT_PATH / "src" / "styles"
-    pages_dir.mkdir(parents=True, exist_ok=True)
-    scripts_dir.mkdir(parents=True, exist_ok=True)
-    styles_dir.mkdir(parents=True, exist_ok=True)
-    (pages_dir / "index.html").write_text("<html><body><h1>Aegis‑1</h1><p>Frontend files missing. Please upload the correct static files to 'web/src/pages/'</p></body></html>")
-    (pages_dir / "dashboard.html").write_text("<html><body><h1>Dashboard unavailable</h1><p>Static files not found.</p></body></html>")
 
 app.mount("/web", StaticFiles(directory=str(WEB_ROOT_PATH), html=True), name="web")
 
@@ -326,6 +361,23 @@ async def debug_files():
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
+
+security = HTTPBearer()
+
+@app.get("/api/signals")
+async def api_signals(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Return latest live signals to subscribed users only (plan == 'pro')."""
+    email = get_current_user(credentials)
+    user_doc = get_user_doc(email)
+    if not user_doc:
+        raise HTTPException(status_code=403, detail="User not found")
+    plan = user_doc.get('plan', 'trial')
+    if plan != 'pro':
+        raise HTTPException(status_code=403, detail="Subscription required to access signals")
+
+    signals = LIVE_STATE.data.get('signals', {})
+    return JSONResponse(content=signals)
+
 @app.get("/favicon.ico")
 async def favicon():
     favicon_path = WEB_ROOT_PATH / "favicon.ico"
@@ -343,7 +395,6 @@ async def robots():
 # -------------------------------------------------------------------
 # Auth helpers (JWT)
 # -------------------------------------------------------------------
-security = HTTPBearer()
 
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()

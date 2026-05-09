@@ -1,19 +1,19 @@
 export class AuthManager {
     static getToken() {
-        return localStorage.getItem('jwt_token') || sessionStorage.getItem('jwt_token');
+        return localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
     }
     
     static setToken(token, remember = true) {
         if (remember) {
-            localStorage.setItem('jwt_token', token);
+            localStorage.setItem('access_token', token);
         } else {
-            sessionStorage.setItem('jwt_token', token);
+            sessionStorage.setItem('access_token', token);
         }
     }
     
     static clearToken() {
-        localStorage.removeItem('jwt_token');
-        sessionStorage.removeItem('jwt_token');
+        localStorage.removeItem('access_token');
+        sessionStorage.removeItem('access_token');
     }
     
     static isAuthenticated() {

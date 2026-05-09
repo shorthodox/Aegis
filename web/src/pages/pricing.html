@@ -20,6 +20,7 @@
             <a href="/web/src/pages/pricing.html" class="nav-link active">Pricing</a>
         </div>
         <button id="portalBtn" class="portal-btn">Client Login</button>
+        <button id="createAccountBtn" class="portal-btn" style="margin-left: 0.5rem; background: rgba(0, 242, 255, 0.2);">Create Account</button>
     </header>
 
     <!-- Pricing Section -->
@@ -57,7 +58,7 @@
                     <li><i class="fas fa-chart-line"></i> <strong>Smart Capital Management</strong></li>
                     <li><i class="fas fa-book-open"></i> Standard Execution Guidance</li>
                 </ul>
-                <a href="#" class="btn-outline">Get Basic</a>
+                <a href="#" data-plan="basic" class="btn-outline">Get Basic</a>
             </div>
 
             <!-- Pro Quant Card (Featured) -->
@@ -73,7 +74,7 @@
                     <li><i class="fas fa-gem"></i> <strong>VIP Execution Guidance</strong></li>
                     <li><i class="fab fa-telegram"></i> Telegram Signal Sync</li>
                 </ul>
-                <a href="#" class="btn-pro"><i class="fas fa-unlock-alt"></i> Go Pro Access</a>
+                <a href="#" data-plan="pro" class="btn-pro"><i class="fas fa-unlock-alt"></i> Go Pro Access</a>
             </div>
         </div>
 
@@ -96,116 +97,79 @@
 
     <!-- SCRIPTS -->
     <script type="module">
-        import { initAuthModal, openAuthModal, updateAuthButtonState, subscribeToAuthState } from '../scripts/auth-modal.js';
-        import { initializeTrialCountdown } from '../scripts/trial-countdown.js';
-        import { isUserAuthenticated } from '../scripts/auth.js';
+      import { initSignInUI, openSignInModal } from '../scripts/signin-ui.js';
+      import { initSignUpUI, openSignUpModal } from '../scripts/signup-ui.js';
+      import { isUserAuthenticated } from '../scripts/auth.js';
 
-        document.addEventListener('DOMContentLoaded', () => {
-            // Initialize auth modal
-            initAuthModal();
-            
-            // Portal button - navigate to dashboard if logged in, else open auth modal
-            const portalBtn = document.getElementById('portalBtn');
-            if (portalBtn) {
-                portalBtn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    if (isUserAuthenticated()) {
-                        window.location.href = '/pages/dashboard.html';
-                    } else {
-                        openAuthModal();
-                    }
-                });
+      document.addEventListener('DOMContentLoaded', () => {
+        // Initialize auth UIs
+        initSignInUI();
+        initSignUpUI();
+
+        // Portal button
+        const portalBtn = document.getElementById('portalBtn');
+        if (portalBtn) {
+          portalBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (isUserAuthenticated()) {
+              window.location.href = '/web/src/pages/dashboard.html';
+            } else {
+              openSignInModal();
             }
-            
-            // Trial button - start free trial
-            const trialBtn = document.getElementById('trialBtn');
-            if (trialBtn) {
-                trialBtn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    if (isUserAuthenticated()) {
-                        window.location.href = '/pages/dashboard.html';
-                    } else {
-                        openAuthModal('landing');
-                    }
-                });
+          });
+        }
+
+        // Create Account button
+        const createAccountBtn = document.getElementById('createAccountBtn');
+        if (createAccountBtn) {
+          createAccountBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (isUserAuthenticated()) {
+              window.location.href = '/web/src/pages/dashboard.html';
+            } else {
+              openSignUpModal();
             }
-            
-            // Subscribe to auth state
-            subscribeToAuthState((authState) => {
-                if (authState.authenticated) {
-                    console.log('✅ User authenticated');
-                    initializeTrialCountdown(authState.user.uid);
-                    updateAuthButtonState();
-                } else {
-                    updateAuthButtonState();
-                }
-            });
+          });
+        }
+
+        // Trial button
+        const trialBtn = document.getElementById('trialBtn');
+        if (trialBtn) {
+          trialBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (isUserAuthenticated()) {
+              window.location.href = '/web/src/pages/dashboard.html';
+            } else {
+              openSignUpModal();
+            }
+          });
+        }
+
+        // Plan buttons
+        document.querySelectorAll('[data-plan]').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const plan = e.currentTarget.dataset.plan;
+            if (!isUserAuthenticated()) {
+              window.pendingPlan = plan;
+              openSignInModal();
+            } else {
+              if (window.AegisDashboard && window.AegisDashboard.subscribeToPlan) {
+                window.AegisDashboard.subscribeToPlan(plan);
+              } else {
+                console.error("AegisDashboard.subscribeToPlan is not available");
+              }
+            }
+          });
         });
+
+        // Listen for navigation events
+        window.addEventListener('openSignin', openSignInModal);
+        window.addEventListener('openSignup', openSignUpModal);
+      });
     </script>
     <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
-    </div>
-    </div>
 
-    
-    
-    </div>
-
-    
-    <!-- ========== 3‑STEP ONBOARDING MODAL (with password fields) ========== -->
-    <div id="loginModal" class="modal">
-        <div class="modal-card">
-            <!-- Close button with inline styles to guarantee clickability -->
-            <span class="close-modal" style="position: absolute; top: 1rem; right: 1.5rem; font-size: 1.8rem; cursor: pointer; color: var(--dim, #94a3b8); z-index: 1001; pointer-events: auto;">&times;</span>
-
-            <!-- Step 1: Email / Google -->
-            <div id="step1" class="step active">
-                <div class="modal-logo">⚡ AEGIS</div>
-                <button id="googleStepBtn" class="provider-btn"><i class="fab fa-google"></i> Continue with Google</button>
-                <div class="divider">or</div>
-                <input type="text" id="emailInput" class="auth-input" placeholder="Email or mobile number">
-                <p class="info-note">Use your email to sign in or register. Start with a phone number for mobile OTP.</p>
-                <button id="continueToOtpBtn" class="auth-submit-btn">Continue</button>
-            </div>
-
-            <!-- Step 2: OTP Verification -->
-            <div id="step2" class="step">
-                <h3 style="text-align:center; margin-bottom:1rem;">Enter verification code</h3>
-                <p style="text-align:center; color:var(--dim); font-size:0.8rem;">We sent a 6‑digit code to <span id="otpEmailDisplay"></span></p>
-                <div class="otp-container" id="otpContainer">
-                    <input type="text" maxlength="1" class="otp-digit" data-idx="0">
-                    <input type="text" maxlength="1" class="otp-digit" data-idx="1">
-                    <input type="text" maxlength="1" class="otp-digit" data-idx="2">
-                    <input type="text" maxlength="1" class="otp-digit" data-idx="3">
-                    <input type="text" maxlength="1" class="otp-digit" data-idx="4">
-                    <input type="text" maxlength="1" class="otp-digit" data-idx="5">
-                </div>
-                <button id="backToEmailBtn" class="auth-secondary-btn" style="margin-top:0.5rem;">← Back</button>
-            </div>
-
-            <!-- Step 3: Onboarding (Profile + Password) -->
-            <div id="step3" class="step">
-                <h3 id="onboardingTitle" style="text-align:center; margin-bottom:1rem;">Complete your account</h3>
-                <div class="profile-upload" id="avatarUploadSection">
-                    <div id="avatarUpload" class="avatar-upload">
-                        <i class="fas fa-cloud-upload-alt"></i>
-                        <span>Upload Photo</span>
-                    </div>
-                    <div class="upload-hint">300x300px min. JPG, GIF, PNG. Max 4MB.</div>
-                    <input type="file" id="avatarFile" accept="image/jpeg,image/png,image/gif" style="display:none;">
-                </div>
-                <div id="profileFields">
-                    <div class="labeled-input">
-                        <label>Full name</label>
-                        <input type="text" id="fullName" class="auth-input" placeholder="e.g., Satoshi Nakamoto">
-                    </div>
-                    <div class="labeled-input">
-                        <label>Your location</label>
-                        <input type="text" id="location" class="auth-input" placeholder="City, Country">
-                    </div>
-                </div>
-    </div>
-
-    <!-- Shared landing.js handles auth state, modal, and portal button -->
-    <script type="module" src="/web/src/scripts/landing.js"></script>
+    <!-- Lightweight server-backed login modal is injected by simple-auth-client.js -->
 </body>
 </html>

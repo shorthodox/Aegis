@@ -16,24 +16,51 @@ import {
 const firebaseConfig = {
   apiKey: "AIzaSyDtudUL2sE1_fKbzIro5d2IP0-M2dYI6x4",
   authDomain: "aegis-d78e1.firebaseapp.com",
-  projectId: "aegis-d78e1",
+  databaseURL: "https://aegis-d78e1-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "aegis-d78e1", // This is crucial for Firestore
   storageBucket: "aegis-d78e1.firebasestorage.app",
   messagingSenderId: "623998601232",
   appId: "1:623998601232:web:288a89514d84ac3573a295",
-  measurementId: "G-V6RWEEWT7L",
-  databaseURL: "https://aegis-d78e1-default-rtdb.asia-southeast1.firebasedatabase.app"
+  measurementId: "G-V6RWEEWT7L"
 };
 
+// -------------------------------------------------------------------
+// Initialize Firebase (Singleton pattern to prevent double initialization)
+// -------------------------------------------------------------------
 let firebaseApp;
+let db;
+let auth;
+
+// Check if Firebase is already initialized
 if (!globalThis._firebaseApp) {
-  firebaseApp = initializeApp(firebaseConfig);
-  globalThis._firebaseApp = firebaseApp;
+  try {
+    firebaseApp = initializeApp(firebaseConfig);
+    globalThis._firebaseApp = firebaseApp;
+    console.log('✅ Firebase initialized successfully');
+  } catch (error) {
+    console.error('❌ Firebase initialization error:', error);
+    throw error;
+  }
 } else {
   firebaseApp = globalThis._firebaseApp;
+  console.log('✅ Using existing Firebase instance');
 }
 
-export const auth = getAuth(firebaseApp);
-export const db = getFirestore(firebaseApp);
+// Initialize Firestore and Auth - with long polling to prevent offline errors
+try {
+  // Let SDK auto-select the default database, and enable long polling to handle ISP/firewall blocks
+  db = getFirestore(firebaseApp);
+  // Enable experimentalForceLongPolling to prevent 'Client is offline' errors from local ISP/firewall blocks
+  db.settings = { experimentalForceLongPolling: true };
+  auth = getAuth(firebaseApp);
+  console.log('✅ Firestore (default database, long polling enabled) and Auth initialized successfully');
+} catch (error) {
+  console.error('❌ Firestore/Auth initialization error:', error);
+  throw error;
+}
+
+// Export initialized instances
+export { auth, db };
 
 // -------------------------------------------------------------------
 // API Base URL
@@ -70,6 +97,7 @@ const PRO_TOKENS = []; // Will be populated from backend
 // Initialize Dashboard
 // -------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
+  if (!window.location.pathname.includes('dashboard.html')) return;
   initializeElements();
   attachEventListeners();
   checkAuthAndLoad();
