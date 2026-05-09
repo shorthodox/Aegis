@@ -23,7 +23,6 @@ cloudpickle==3.1.2
 coincurve==21.0.0
 colorama==0.4.6
 colorlog==6.10.1
-comtypes==1.4.16
 cryptography==46.0.7
 dnspython==2.8.0
 ecdsa==0.19.2
@@ -52,6 +51,7 @@ httptools==0.7.1
 httpx==0.28.1
 hyperframe==6.1.0
 idna==3.11
+itsdangerous==2.2.0
 Jinja2==3.1.6
 joblib==1.5.3
 joserfc==1.6.4
@@ -76,14 +76,11 @@ pydantic==2.13.3
 pydantic-settings==2.14.0
 pydantic_core==2.46.3
 PyJWT==2.12.1
-pypiwin32==223
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.2
 python-jose==3.5.0
 python-multipart==0.0.26
 python-telegram-bot==22.7
-pyttsx3==2.99
-pywin32==311
 PyYAML==6.0.3
 regex==2025.11.3
 requests==2.33.1
@@ -111,5 +108,5 @@ watchfiles==1.1.1
 websockets==16.0
 xgboost==3.2.0
 yarl==1.23.0
-itsdangerous>=2.1.2
+
 
