@@ -10,7 +10,9 @@ import {
   getAuth, onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
 
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+// -------------------------------------------------------------------
+// Firebase Configuration
+// -------------------------------------------------------------------
 const firebaseConfig = {
   apiKey: "AIzaSyDtudUL2sE1_fKbzIro5d2IP0-M2dYI6x4",
   authDomain: "aegis-d78e1.firebaseapp.com",
@@ -41,12 +43,24 @@ if (!globalThis._firebaseApp) {
   }
 } else {
   firebaseApp = globalThis._firebaseApp;
+  console.log('✅ Using existing Firebase instance');
 }
 
-export const auth = getAuth(firebaseApp);
-export const db = getFirestore(firebaseApp);
-// Enable experimentalForceLongPolling to prevent 'Client is offline' errors from ISP/firewall blocks
-db.settings = { experimentalForceLongPolling: true };
+// Initialize Firestore and Auth - with long polling to prevent offline errors
+try {
+  // Let SDK auto-select the default database, and enable long polling to handle ISP/firewall blocks
+  db = getFirestore(firebaseApp);
+  // Enable experimentalForceLongPolling to prevent 'Client is offline' errors from local ISP/firewall blocks
+  db.settings = { experimentalForceLongPolling: true };
+  auth = getAuth(firebaseApp);
+  console.log('✅ Firestore (default database, long polling enabled) and Auth initialized successfully');
+} catch (error) {
+  console.error('❌ Firestore/Auth initialization error:', error);
+  throw error;
+}
+
+// Export initialized instances
+export { auth, db };
 
 // -------------------------------------------------------------------
 // API Base URL
