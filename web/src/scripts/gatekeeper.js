@@ -46,11 +46,12 @@ if (!globalThis._firebaseApp) {
   console.log('✅ Using existing Firebase instance');
 }
 
-// Initialize Firestore and Auth
+// Initialize Firestore and Auth - with explicit database ID
 try {
-  db = getFirestore(firebaseApp);
+  // CHANGE: Explicitly specify the default database ID '(default)'
+  db = getFirestore(firebaseApp, '(default)');
   auth = getAuth(firebaseApp);
-  console.log('✅ Firestore and Auth initialized successfully');
+  console.log('✅ Firestore (with explicit default database) and Auth initialized successfully');
 } catch (error) {
   console.error('❌ Firestore/Auth initialization error:', error);
   throw error;
