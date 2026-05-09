@@ -30,12 +30,9 @@ from starlette.middleware.sessions import SessionMiddleware
 
 load_dotenv()
 
-app = FastAPI()
-
 # -------------------------------------------------------------------
 # Load environment variables FIRST
 # -------------------------------------------------------------------
-load_dotenv()
 
 # -------------------------------------------------------------------
 # Cashfree PG SDK imports
@@ -59,11 +56,6 @@ if not SECRET_KEY:
     raise RuntimeError("JWT_SECRET_KEY is missing. Add it to your local .env file or Railway variables.")
 if not ALGORITHM:
     raise RuntimeError("ALGORITHM is missing. Add it to your local .env file or Railway variables.")
-
-app.add_middleware(
-    SessionMiddleware, 
-    secret_key=SECRET_KEY
-)
 
 # -------------------------------------------------------------------
 # Cashfree payment gateway environment fields
@@ -168,6 +160,25 @@ def init_oauth():
 
 if TYPE_CHECKING:
     from scripts.live_engine import LiveEngine
+
+# -------------------------------------------------------------------
+# Static assets root path used by background tasks and API routes
+# -------------------------------------------------------------------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+WEB_ROOT = os.path.join(BASE_DIR, "web")
+WEB_ROOT_PATH = Path(WEB_ROOT)
+
+if not WEB_ROOT_PATH.exists():
+    print(f"⚠️ Warning: 'web' directory not found at {WEB_ROOT_PATH}. Creating fallback structure.")
+    WEB_ROOT_PATH.mkdir(parents=True, exist_ok=True)
+    pages_dir = WEB_ROOT_PATH / "src" / "pages"
+    scripts_dir = WEB_ROOT_PATH / "src" / "scripts"
+    styles_dir = WEB_ROOT_PATH / "src" / "styles"
+    pages_dir.mkdir(parents=True, exist_ok=True)
+    scripts_dir.mkdir(parents=True, exist_ok=True)
+    styles_dir.mkdir(parents=True, exist_ok=True)
+    (pages_dir / "index.html").write_text("<html><body><h1>Aegis‑1</h1><p>Frontend files missing. Please upload the correct static files to 'web/src/pages/'</p></body></html>")
+    (pages_dir / "dashboard.html").write_text("<html><body><h1>Dashboard unavailable</h1><p>Static files not found.</p></body></html>")
 
 # -------------------------------------------------------------------
 # LiveState for global data (shared with engine and WebSocket)
@@ -294,25 +305,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# -------------------------------------------------------------------
-# Static Files: serve the entire 'web' folder under '/web' prefix
-# -------------------------------------------------------------------
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-WEB_ROOT = os.path.join(BASE_DIR, "web")
-WEB_ROOT_PATH = Path(WEB_ROOT)
-
-if not WEB_ROOT_PATH.exists():
-    print(f"⚠️ Warning: 'web' directory not found at {WEB_ROOT_PATH}. Creating fallback structure.")
-    WEB_ROOT_PATH.mkdir(parents=True, exist_ok=True)
-    pages_dir = WEB_ROOT_PATH / "src" / "pages"
-    scripts_dir = WEB_ROOT_PATH / "src" / "scripts"
-    styles_dir = WEB_ROOT_PATH / "src" / "styles"
-    pages_dir.mkdir(parents=True, exist_ok=True)
-    scripts_dir.mkdir(parents=True, exist_ok=True)
-    styles_dir.mkdir(parents=True, exist_ok=True)
-    (pages_dir / "index.html").write_text("<html><body><h1>Aegis‑1</h1><p>Frontend files missing. Please upload the correct static files to 'web/src/pages/'</p></body></html>")
-    (pages_dir / "dashboard.html").write_text("<html><body><h1>Dashboard unavailable</h1><p>Static files not found.</p></body></html>")
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=SECRET_KEY
+)
 
 app.mount("/web", StaticFiles(directory=str(WEB_ROOT_PATH), html=True), name="web")
 
