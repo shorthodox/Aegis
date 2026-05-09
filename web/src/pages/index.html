@@ -802,9 +802,45 @@
     <script type="module" src="/web/src/scripts/landing.js"></script>
     <script type="module" src="/web/src/scripts/auth-modal.js"></script>
     <script type="module">
-      import { openAuthModal } from '/web/src/scripts/auth-modal.js';
-      document.getElementById('portalBtn')?.addEventListener('click', () => openAuthModal('landing'));
-      document.getElementById('heroMathBtn')?.addEventListener('click', () => openAuthModal('landing'));
+      import { initSignInUI, openSignInModal } from '/web/src/scripts/signin-ui.js';
+      import { initSignUpUI, openSignUpModal } from '/web/src/scripts/signup-ui.js';
+      import { isUserAuthenticated } from '/web/src/scripts/auth.js';
+
+      document.addEventListener('DOMContentLoaded', () => {
+        // Initialize both auth UIs
+        initSignInUI();
+        initSignUpUI();
+
+        // Portal button - navigate to dashboard if logged in, else open signin
+        const portalBtn = document.getElementById('portalBtn');
+        if (portalBtn) {
+          portalBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (isUserAuthenticated()) {
+              window.location.href = '/web/src/pages/dashboard.html';
+            } else {
+              openSignInModal();
+            }
+          });
+        }
+
+        // Hero button - open signup for new users
+        const heroBtn = document.getElementById('heroMathBtn');
+        if (heroBtn) {
+          heroBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (isUserAuthenticated()) {
+              window.location.href = '/web/src/pages/dashboard.html';
+            } else {
+              openSignUpModal();
+            }
+          });
+        }
+
+        // Listen for signin/signup navigation events
+        window.addEventListener('openSignin', openSignInModal);
+        window.addEventListener('openSignup', openSignUpModal);
+      });
     </script>
 </body>
 </html>
