@@ -14,7 +14,6 @@ import {
 const firebaseConfig = {
   apiKey: "AIzaSyDtudUL2sE1_fKbzIro5d2IP0-M2dYI6x4",
   authDomain: "aegis-d78e1.firebaseapp.com",
-  databaseURL: "https://aegis-d78e1-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "aegis-d78e1",
   storageBucket: "aegis-d78e1.firebasestorage.app",
   messagingSenderId: "623998601232",
