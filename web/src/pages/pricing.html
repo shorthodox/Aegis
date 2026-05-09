@@ -149,8 +149,16 @@
         document.querySelectorAll('[data-plan]').forEach(btn => {
           btn.addEventListener('click', (e) => {
             e.preventDefault();
+            const plan = e.currentTarget.dataset.plan;
             if (!isUserAuthenticated()) {
+              window.pendingPlan = plan;
               openSignInModal();
+            } else {
+              if (window.AegisDashboard && window.AegisDashboard.subscribeToPlan) {
+                window.AegisDashboard.subscribeToPlan(plan);
+              } else {
+                console.error("AegisDashboard.subscribeToPlan is not available");
+              }
             }
           });
         });
