@@ -5,8 +5,7 @@
 
 import { 
   auth, 
-  db, 
-  googleProvider 
+  db
 } from './gatekeeper.js';
 
 import {
@@ -19,8 +18,11 @@ import {
   updateProfile,
   fetchSignInMethodsForEmail,
   sendPasswordResetEmail,
-  onAuthStateChanged
+  onAuthStateChanged,
+  GoogleAuthProvider
 } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
+
+const googleProvider = new GoogleAuthProvider();
 
 import {
   doc,
