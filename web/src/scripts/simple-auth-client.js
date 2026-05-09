@@ -82,7 +82,7 @@ async function doLogin() {
       localStorage.setItem('authenticated', 'true');
       closeModal();
       // try to update any UI provided by auth-modal
-      try { const m = await import('./signin-ui.js'); if (m.updateSignInButtonState) m.updateSignInButtonState(); } catch(e) {}
+      try { const m = await import('./auth-modal.js'); if (m.updateAuthButtonState) m.updateAuthButtonState(); } catch(e) {}
       window.location.reload();
       return;
     }

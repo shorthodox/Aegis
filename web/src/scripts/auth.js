@@ -524,14 +524,3 @@ export async function getUserData(userId) {
     return null;
   }
 }
-
-// Auto init
-document.addEventListener('DOMContentLoaded', () => {
-  console.log('DEBUG: DOMContentLoaded fired, initializing simpleAuthModal.'); // ADD THIS LINE
-  createModalIfMissing();
-  attachHandlers();
-});
-
-export { openModal, closeModal, subscribeToPlan };   return null;
-  }
-}
