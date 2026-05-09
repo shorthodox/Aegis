@@ -1,3 +1,84 @@
+function createModalIfMissing() {
+  // ... (unchanged code) ...
+}
+
+function openModal() {
+  // ... (unchanged code) ...
+}
+
+function closeModal() {
+  // ... (unchanged code) ...
+}
+
+async function doLogin() {
+  console.log('DEBUG: doLogin function started.'); // ADD THIS LINE
+  const email = document.getElementById('simpleEmail')?.value?.trim();
+  const password = document.getElementById('simplePassword')?.value;
+  const errEl = document.getElementById('simpleAuthError');
+  if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+
+  console.log('DEBUG: Email and password retrieved:', email ? 'present' : 'missing', password ? 'present' : 'missing'); // ADD THIS LINE
+
+  if (!email || !password) {
+    if (errEl) { errEl.style.display = 'block'; errEl.textContent = 'Email and password are required'; }
+    console.log('DEBUG: Email or password missing. Returning.'); // ADD THIS LINE
+    return;
+  }
+
+  const btn = document.getElementById('simpleLoginSubmit');
+  try {
+    btn.disabled = true;
+    btn.innerText = 'Signing in...';
+    console.log('DEBUG: Attempting fetch to /auth/login'); // ADD THIS LINE
+    const resp = await fetch('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    console.log('DEBUG: Fetch response received:', resp.status); // ADD THIS LINE
+
+    const data = await resp.json().catch(() => ({}));
+    if (resp.ok && data.access_token) {
+      localStorage.setItem('access_token', data.access_token);
+      localStorage.setItem('authenticated', 'true');
+      closeModal();
+      // try to update any UI provided by auth-modal
+      try { const m = await import('./auth-modal.js'); if (m.updateAuthButtonState) m.updateAuthButtonState(); } catch(e) {}
+      window.location.reload();
+      return;
+    }
+    const message = data.detail || data.message || 'Invalid credentials';
+    if (errEl) { errEl.style.display = 'block'; errEl.textContent = message; }
+  } catch (err) {
+    console.error('DEBUG: Fetch caught an error:', err); // MODIFY THIS LINE
+    if (errEl) { errEl.style.display = 'block'; errEl.textContent = 'Network error'; }
+  } finally {
+    btn.disabled = false;
+    btn.innerText = 'Sign In';
+    console.log('DEBUG: doLogin function finished.'); // ADD THIS LINE
+  }
+}
+
+async function subscribeToPlan(planType) {
+  // ... (unchanged code) ...
+}
+
+function attachHandlers() {
+  // ... (unchanged code) ...
+}
+
+function portalClickHandler(e) {
+  // ... (unchanged code) ...
+}
+
+function trialClickHandler(e) {
+  // ... (unchanged code) ...
+}
+
+function planClickHandler(e) {
+  // ... (unchanged code) ...
+}
+
 // ============================================================
 // AEGIS Authentication Module – Mobile-First Design
 // Separate Login/Signup flows with multiple auth methods
@@ -442,3 +523,12 @@ export async function getUserData(userId) {
     return null;
   }
 }
+
+// Auto init
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('DEBUG: DOMContentLoaded fired, initializing simpleAuthModal.'); // ADD THIS LINE
+  createModalIfMissing();
+  attachHandlers();
+});
+
+export { openModal, closeModal, subscribeToPlan };
