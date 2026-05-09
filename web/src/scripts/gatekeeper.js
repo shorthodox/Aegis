@@ -21,8 +21,8 @@ const firebaseConfig = {
   projectId: "aegis-d78e1",
   storageBucket: "aegis-d78e1.firebasestorage.app",
   messagingSenderId: "623998601232",
-  appId: "1:623998601232:web:e084edadb1fef0cd73a295",
-  measurementId: "G-B75WNF0MSK"
+  appId: "1:623998601232:web:288a89514d84ac3573a295",
+  measurementId: "G-V6RWEEWT7L"
 };
 
 let firebaseApp;
