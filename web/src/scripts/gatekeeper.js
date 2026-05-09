@@ -47,7 +47,7 @@ if (!globalThis._firebaseApp) {
 // Initialize Firestore and Auth - with explicit database ID
 try {
   // CHANGE: Explicitly specify the default database ID '(default)'
-  db = getFirestore(firebaseApp, '(default)');
+  db = getFirestore(firebaseApp);
   auth = getAuth(firebaseApp);
   console.log('✅ Firestore (with explicit default database) and Auth initialized successfully');
 } catch (error) {
