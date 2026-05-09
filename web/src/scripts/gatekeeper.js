@@ -70,6 +70,7 @@ const PRO_TOKENS = []; // Will be populated from backend
 // Initialize Dashboard
 // -------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
+  if (!window.location.pathname.includes('dashboard.html')) return;
   initializeElements();
   attachEventListeners();
   checkAuthAndLoad();
