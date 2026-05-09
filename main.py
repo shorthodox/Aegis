@@ -34,6 +34,8 @@ from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType,
 import uvicorn
 from dataclasses import asdict
 from starlette.middleware.sessions import SessionMiddleware
+from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 # -------------------------------------------------------------------
 # Cashfree PG SDK imports
@@ -200,6 +202,7 @@ class LiveState:
         self.engine: Optional['LiveEngine'] = None
 
 LIVE_STATE = LiveState()
+    
 
 # -------------------------------------------------------------------
 # OTP Store (in-memory)
@@ -309,6 +312,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        # These headers allow the Google Auth popup to talk back to your site
+        response.headers["Cross-Origin-Opener-Policy"] = "same-origin-allow-popups"
+        response.headers["Cross-Origin-Embedder-Policy"] = "unsafe-none"
+        return response
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
@@ -1652,5 +1665,6 @@ async def update_signal(
 # Main entry point
 # -------------------------------------------------------------------
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))
-    uvicorn.run("main:app", host="0.0.0.0", port=port)
+    import uvicorn
+    # The --proxy-headers and --forwarded-allow-ips are critical for Railway WSS
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, proxy_headers=True, forwarded_allow_ips="*")
