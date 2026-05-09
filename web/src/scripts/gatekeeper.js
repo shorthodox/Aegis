@@ -13,15 +13,16 @@ import {
 // -------------------------------------------------------------------
 // Firebase Configuration
 // -------------------------------------------------------------------
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyDtudUL2sE1_fKbzIro5d2IP0-M2dYI6x4",
   authDomain: "aegis-d78e1.firebaseapp.com",
-  projectId: "Aegis",
+  databaseURL: "https://aegis-d78e1-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "aegis-d78e1",
   storageBucket: "aegis-d78e1.firebasestorage.app",
   messagingSenderId: "623998601232",
-  appId: "1:623998601232:web:288a89514d84ac3573a295",
-  measurementId: "G-V6RWEEWT7L",
-  databaseURL: "https://aegis-d78e1-default-rtdb.asia-southeast1.firebasedatabase.app"
+  appId: "1:623998601232:web:e084edadb1fef0cd73a295",
+  measurementId: "G-B75WNF0MSK"
 };
 
 let firebaseApp;
