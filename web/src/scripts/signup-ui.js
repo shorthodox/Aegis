@@ -203,7 +203,7 @@ async function performEmailSignup(e) {
       showSuccess('Account created! Welcome to AEGIS! Redirecting...');
       setTimeout(() => {
         closeSignUpModal();
-        window.location.href = '/web/src/pages/dashboard.html';
+        window.location.href = '/web/src/pages/pricing.html';
       }, 1500);
     } else {
       console.error('❌ Signup failed:', result.message);
@@ -222,10 +222,26 @@ async function performGoogleSignup() {
   try {
     const result = await handleGoogleAuth();
     if (result.success) {
-      showSuccess('Account created with Google!');
+      showSuccess('Google Auth successful!');
       setTimeout(() => {
         closeSignUpModal();
-        window.location.href = '/web/src/pages/dashboard.html';
+        
+        const userData = result.userData || {};
+        if (userData.isNewUser) {
+          window.location.href = '/web/src/pages/pricing.html';
+          return;
+        }
+        
+        const plan = userData.plan || 'trial';
+        const trialEnd = userData.trial?.endDate ? new Date(userData.trial.endDate) : null;
+        
+        if (plan !== 'pro' && plan !== 'basic' && (!trialEnd || new Date() > trialEnd)) {
+          // No active plan and trial is expired/missing
+          window.location.href = '/web/src/pages/pricing.html';
+        } else {
+          // Has active plan or active trial
+          window.location.href = '/web/src/pages/dashboard.html';
+        }
       }, 1000);
     } else {
       showError('signupFormError', result.message);
