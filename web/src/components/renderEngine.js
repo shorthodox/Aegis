@@ -14,7 +14,17 @@ export class RenderEngine {
     initTable() {
         const planType = AuthManager.getPlanType();
         let allowedTimeframes = ['1m','3m','5m','15m','30m','1h','4h','1d'];
-        if (planType === 'free_trial' || planType === 'basic') {
+        
+        // Use token-based hasAccess if available, else fallback to old logic
+        const data = AuthManager.getUserData();
+        if (data) {
+            if (!AuthManager.hasAccess('extended_timeframes')) {
+                allowedTimeframes = ['15m', '30m'];
+                if (!allowedTimeframes.includes(this.signalStore.timeframe)) {
+                    this.signalStore.timeframe = '15m';
+                }
+            }
+        } else if (planType === 'free_trial' || planType === 'basic') {
             allowedTimeframes = ['15m', '30m'];
             // ensure current timeframe is valid
             if (!allowedTimeframes.includes(this.signalStore.timeframe)) {
@@ -72,8 +82,16 @@ export class RenderEngine {
         const container = document.getElementById('signalCardsContainer');
         if (!container) return;
         
-        const subStatus = AuthManager.getSubscriptionStatus();
-        if (subStatus === 'expired') {
+        const data = AuthManager.getUserData();
+        let accessExpired = false;
+        if (data) {
+            accessExpired = !AuthManager.hasAccess('signals');
+        } else {
+            const subStatus = AuthManager.getSubscriptionStatus();
+            accessExpired = subStatus === 'expired';
+        }
+
+        if (accessExpired) {
             container.innerHTML = `
                 <div class="col-span-full flex flex-col items-center justify-center py-16 px-4 bg-red-900/10 border border-red-500/20 rounded-2xl">
                     <i class="fas fa-lock text-4xl text-red-500 mb-4"></i>
@@ -85,7 +103,7 @@ export class RenderEngine {
             return;
         }
 
-        const planType = AuthManager.getPlanType();
+        const planType = data ? data.plan_type : AuthManager.getPlanType();
         if (planType === 'free_trial' || planType === 'basic') {
             const allowed = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ARB/USDT', 'AAVE/USDT'];
             signals = signals.filter(s => allowed.includes(s.pair));
