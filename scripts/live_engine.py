@@ -1114,17 +1114,25 @@ class LiveEngine:
             return
         symbols = [cfg.symbol for cfg in self.token_configs]
         try:
+            # First try fetching only our symbols (more efficient but fails if one is invalid)
             tickers = await self.fetcher.exchange.fetch_tickers(symbols)
-            for sym in symbols:
-                ticker = tickers.get(sym)
-                if ticker and 'last' in ticker and ticker['last'] is not None:
-                    price = float(ticker['last'])
-                    if sym in self.live_prices:
-                        self.prev_prices[sym] = self.live_prices[sym]
-                    self.live_prices[sym] = price
         except Exception as e:
-            self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] ⚠️ Ticker fetch error: {e}")
-            logger.warning(f"Ticker fetch error: {e}")
+            logger.warning(f"Ticker fetch error with specific symbols ({e}), falling back to fetch all...")
+            try:
+                # Fallback: fetch all tickers and filter
+                tickers = await self.fetcher.exchange.fetch_tickers()
+            except Exception as e_all:
+                self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] ⚠️ Ticker fetch fallback error: {e_all}")
+                logger.warning(f"Ticker fetch fallback error: {e_all}")
+                return
+
+        for sym in symbols:
+            ticker = tickers.get(sym)
+            if ticker and 'last' in ticker and ticker['last'] is not None:
+                price = float(ticker['last'])
+                if sym in self.live_prices:
+                    self.prev_prices[sym] = self.live_prices[sym]
+                self.live_prices[sym] = price
 
     async def _run_ticker_loop(self):
         while not self._shutdown_event.is_set():
