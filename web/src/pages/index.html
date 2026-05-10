@@ -865,16 +865,12 @@
             }
         }
 
-        // Hero button - open signup for new users
+        // Hero button - direct to pricing
         const heroBtn = document.getElementById('heroMathBtn');
         if (heroBtn) {
           heroBtn.addEventListener('click', (e) => {
             e.preventDefault();
-            if (isUserAuthenticated()) {
-              window.location.href = '/web/src/pages/dashboard.html';
-            } else {
-              openSignUpModal();
-            }
+            window.location.href = '/web/src/pages/pricing.html';
           });
         }
 
