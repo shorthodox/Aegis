@@ -392,6 +392,19 @@ async def api_signals(credentials: HTTPAuthorizationCredentials = Depends(securi
     signals = LIVE_STATE.data.get('signals', {})
     return JSONResponse(content=signals)
 
+@app.get("/api/public/signals")
+async def api_public_signals():
+    """Return latest live signals publicly (for dashboard display)."""
+    signals = LIVE_STATE.data.get('signals', {})
+    warmup = LIVE_STATE.data.get('warmup_progress', '0/0')
+    alpha_mode = LIVE_STATE.data.get('alpha_mode', False)
+    return JSONResponse(content={
+        'signals': signals,
+        'warmup': warmup,
+        'alpha_mode': alpha_mode,
+        'timestamp': datetime.now(timezone.utc).isoformat()
+    })
+
 @app.get("/favicon.ico")
 async def favicon():
     favicon_path = WEB_ROOT_PATH / "favicon.ico"
