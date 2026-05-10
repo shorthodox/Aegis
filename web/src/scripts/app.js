@@ -236,7 +236,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!user && jwt) {
             try {
-                const resp = await fetch('/auth/me', { headers: { 'Authorization': `Bearer ${jwt}` } });
+                const resp = await fetch('/auth/me', { 
+                    method: 'GET',
+                    headers: { 
+                        'Authorization': `Bearer ${jwt}`,
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    } 
+                });
                 if (!resp.ok) console.warn('Could not fetch /auth/me');
             } catch (err) {}
             wsManager.connect();
