@@ -444,7 +444,9 @@ export async function handleLogout() {
     await signOut(auth);
     AuthManager.clearToken();
     localStorage.removeItem('authenticated');
+    localStorage.removeItem('userSession');
     console.log('✅ Logout successful');
+    window.location.href = '/web/src/pages/index.html';
     return { success: true };
   } catch (error) {
     console.error('❌ Logout error:', error);
@@ -503,7 +505,7 @@ export function subscribeToAuthState(callback) {
 // HELPER: Check if User is Authenticated
 // ============================================================
 export function isUserAuthenticated() {
-  return localStorage.getItem('authenticated') === 'true' && auth.currentUser;
+  return localStorage.getItem('authenticated') === 'true' || localStorage.getItem('userSession') || !!AuthManager.getToken();
 }
 
 // ============================================================
