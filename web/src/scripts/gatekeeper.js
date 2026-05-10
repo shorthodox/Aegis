@@ -647,7 +647,7 @@ window.AegisDashboard = {
   subscribeToPlan: async (planType) => {
     const amount = planType === 'pro' ? 24.00 : 3.60;
     const planName = planType === 'pro' ? 'pro' : 'basic';
-    const token = localStorage.getItem('access_token');
+    const token = AuthManager.getToken();
     
     if (!token) {
       alert('Please log in first');
