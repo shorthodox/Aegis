@@ -162,7 +162,7 @@ export async function ensureUserDocumentV2(user, authMethod = 'email') {
       trial: {
         active: true,
         startDate: serverTimestamp(),
-        endDate: serverTimestamp(), // Will be set by backend
+        endDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
         expiryNotified: false,
         allowedTokens: ['BTC', 'ETH', 'SOL', 'ARB', 'AAVE'], // 5 tokens max
         allowedTimeframes: ['30m', '1h']
