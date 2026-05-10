@@ -4,6 +4,7 @@
 
 import { db } from './gatekeeper.js';
 import { doc, getDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js";
+import { AuthManager } from '../auth/authManager.js';
 
 // ============================================================
 // STATE
@@ -41,6 +42,47 @@ export async function getUserTrialInfo(userId) {
   if (!userId) return null;
   
   try {
+    const jwtData = AuthManager.getUserData();
+    
+    // First, try to use JWT as the source of truth
+    if (jwtData && jwtData.plan_type) {
+        if (jwtData.plan_type === 'active' || jwtData.plan_type === 'pro') {
+            return {
+                active: true,
+                plan: jwtData.plan_type,
+                display: 'Premium Active',
+                expired: false,
+                days: 999, hours: 23, minutes: 59, seconds: 59,
+                allowedTokens: [],
+                allowedTimeframes: ['1m','3m','5m','15m','30m','1h','4h','1d']
+            };
+        }
+        
+        if (jwtData.plan_type === 'free_trial' || jwtData.plan_type === 'trial') {
+            if (!jwtData.trial_start) {
+                return { active: false, message: 'Trial not active' };
+            }
+            
+            const trialStartMs = (typeof jwtData.trial_start === 'number' && jwtData.trial_start < 10000000000) 
+                ? jwtData.trial_start * 1000 
+                : new Date(jwtData.trial_start).getTime();
+                
+            // 24 hours expiry
+            const expiryDate = new Date(trialStartMs + 24 * 60 * 60 * 1000);
+            const timeInfo = formatTimeRemaining(expiryDate);
+            
+            return {
+                active: !timeInfo.expired,
+                ...timeInfo,
+                allowedTokens: ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ARB/USDT', 'AAVE/USDT'],
+                allowedTimeframes: ['15m', '30m'],
+                plan: jwtData.plan_type,
+                trialEndDate: expiryDate
+            };
+        }
+    }
+
+    // Fallback: Use Firestore userDoc (original logic)
     const userDocRef = doc(db, 'users', userId);
     const userDoc = await getDoc(userDocRef);
     
