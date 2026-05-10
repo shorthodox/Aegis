@@ -273,10 +273,12 @@ document.addEventListener('DOMContentLoaded', () => {
             await ensureUserDocument(user);
             initializeTrialCountdown(user.uid);
             unsubscribeSettings = subscribeUserSettings(user, (settings) => {
-                if (document.getElementById('user-capital')) document.getElementById('user-capital').value = settings.capital;
-                if (document.getElementById('risk-level')) document.getElementById('risk-level').value = settings.risk_pct;
-                if (document.getElementById('sim-balance')) document.getElementById('sim-balance').value = settings.capital;
-                if (document.getElementById('sim-risk-slider')) document.getElementById('sim-risk-slider').value = settings.risk_pct;
+                const capital = settings.capital ?? 10000;
+                const risk_pct = settings.risk_pct ?? 2.0;
+                if (document.getElementById('user-capital')) document.getElementById('user-capital').value = capital;
+                if (document.getElementById('risk-level')) document.getElementById('risk-level').value = risk_pct;
+                if (document.getElementById('sim-balance')) document.getElementById('sim-balance').value = capital;
+                if (document.getElementById('sim-risk-slider')) document.getElementById('sim-risk-slider').value = risk_pct;
                 updateSimulation();
             });
             subscribeToTrades(user.uid);
@@ -339,4 +341,29 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('click', (e) => {
         if (e.target === loginModal) { loginModal.style.display = 'none'; unlockBodyScroll(); }
     });
+
+    // ========== Mobile Menu Logic ==========
+    const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+    const closeMenuBtn = document.getElementById('closeMenuBtn');
+    const sidebar = document.getElementById('sidebar');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+    function toggleSidebar() {
+        if (sidebar) sidebar.classList.toggle('-translate-x-full');
+        if (sidebarOverlay) sidebarOverlay.classList.toggle('hidden');
+    }
+
+    if (mobileMenuBtn) mobileMenuBtn.addEventListener('click', toggleSidebar);
+    if (closeMenuBtn) closeMenuBtn.addEventListener('click', toggleSidebar);
+    if (sidebarOverlay) sidebarOverlay.addEventListener('click', toggleSidebar);
+
+    const mobileStatusBtn = document.getElementById('mobileStatusBtn');
+    const statusDropdown = document.getElementById('statusDropdown');
+    
+    if (mobileStatusBtn && statusDropdown) {
+        mobileStatusBtn.addEventListener('click', () => {
+            statusDropdown.classList.toggle('hidden');
+            statusDropdown.classList.toggle('flex');
+        });
+    }
 });
