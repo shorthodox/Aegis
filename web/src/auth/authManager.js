@@ -88,6 +88,52 @@ export class AuthManager {
         }
     }
 
+    static getUserData() {
+        const token = this.getToken();
+        if (!token) return null;
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            return {
+                trial_start: payload.trial_start,
+                plan_type: payload.plan_type,
+                status: payload.status
+            };
+        } catch (e) {
+            console.error('Failed to decode token payload', e);
+            return null;
+        }
+    }
+
+    static hasAccess(feature) {
+        const data = this.getUserData();
+        if (!data) return false;
+        
+        let hasBaseAccess = false;
+        if (data.plan_type === 'active' || data.plan_type === 'pro') {
+            hasBaseAccess = true;
+        } else if (data.plan_type === 'free_trial') {
+            if (data.trial_start) {
+                const trialStartMs = (typeof data.trial_start === 'number' && data.trial_start < 10000000000) 
+                    ? data.trial_start * 1000 
+                    : new Date(data.trial_start).getTime();
+                
+                const hoursSinceStart = (Date.now() - trialStartMs) / (1000 * 60 * 60);
+                if (hoursSinceStart < 24) {
+                    hasBaseAccess = true;
+                }
+            }
+        }
+        
+        if (!hasBaseAccess) return false;
+        
+        if (feature === 'signals') return true;
+        if (feature === 'extended_timeframes') {
+            return data.plan_type === 'active' || data.plan_type === 'pro';
+        }
+        
+        return false;
+    }
+
     static getSubscriptionStatus() {
         const user = this.getUser();
         if (!user) return 'expired';
@@ -95,7 +141,12 @@ export class AuthManager {
         // If pro, they have full access
         if (user.plan === 'pro') return 'active';
         
-        // If trial, check if it's valid
+        // Use new token-based logic if available
+        if (this.getUserData()?.plan_type) {
+             return this.hasAccess('signals') ? 'active' : 'expired';
+        }
+        
+        // Fallback to local storage validity
         if (this.isTrialValid()) {
             return 'active';
         }
