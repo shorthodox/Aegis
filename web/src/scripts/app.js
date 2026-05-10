@@ -9,6 +9,7 @@ import { AuthManager } from '../auth/authManager.js';
 import { SignalStore } from '../stores/signalStore.js';
 import { WebSocketManager } from '../websocket/websocketManager.js';
 import { RenderEngine } from '../components/renderEngine.js';
+import { initializeTrialCountdown } from './trial-countdown.js';
 
 // Scroll lock helpers
 function lockBodyScroll() { document.body.classList.add('modal-open'); }
@@ -254,6 +255,7 @@ document.addEventListener('DOMContentLoaded', () => {
         currentUser = user;
         try {
             await ensureUserDocument(user);
+            initializeTrialCountdown(user.uid);
             unsubscribeSettings = subscribeUserSettings(user, (settings) => {
                 if (document.getElementById('user-capital')) document.getElementById('user-capital').value = settings.capital;
                 if (document.getElementById('risk-level')) document.getElementById('risk-level').value = settings.risk_pct;
