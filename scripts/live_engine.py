@@ -1528,7 +1528,32 @@ def automated_setup(backtest_dir: Path, args: argparse.Namespace) -> Tuple[List[
 
     if not best_per_token:
         logger.critical("⚠️ No valid tokens found in backtest JSON. Falling back to default configuration.")
-        return automated_setup(backtest_dir, args)  # recursive fallback (will use default)
+        configs = []
+        balanced_params = MODE_PARAMS.get("balanced", {"entry_prob": 0.70, "risk_pct": 0.020, "atr_sl": 1.5, "atr_tp": 2.0})
+        for symbol in FLEET:
+            configs.append(TokenConfig(
+                symbol=symbol,
+                mode="balanced",
+                base_threshold=0.30,
+                entry_prob_threshold=balanced_params["entry_prob"],
+                atr_sl=balanced_params["atr_sl"],
+                atr_tp=balanced_params["atr_tp"],
+                risk_pct=float(balanced_params["risk_pct"] * 100),
+                optimizer_thresholds={},
+            ))
+        capital = args.capital if args.capital else DEFAULT_CAPITAL
+        risk_pct = args.risk if args.risk else DEFAULT_RISK_PCT
+        max_pos = args.max_position if args.max_position else DEFAULT_MAX_POSITION
+        if max_pos <= 0 or max_pos > capital:
+            max_pos = capital
+        tf_choice = args.timeframe if args.timeframe else DEFAULT_SCAN_TIMEFRAME
+        tf_map = {'1m': 60, '5m': 300, '15m': 900, '30m': 1800, '1h': 3600, '1d': 86400, '1w': 604800, '1M': 2592000}
+        scan_seconds = tf_map.get(tf_choice, 60)
+        alpha_mode = args.alpha_mode if args.alpha_mode else DEFAULT_ALPHA_MODE
+        alpha_risk = args.alpha_risk if args.alpha_risk else DEFAULT_ALPHA_RISK_PCT
+        proxy_url = args.proxy if hasattr(args, 'proxy') else None
+        logger.info(f"Using default configs for {len(configs)} tokens (fallback from empty backtest)")
+        return configs, capital, max_pos, scan_seconds, alpha_mode, alpha_risk, proxy_url
 
     configs = []
     for symbol, info in best_per_token.items():
