@@ -10,6 +10,8 @@ import {
   getAuth, onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
 
+import { AuthManager } from '../auth/authManager.js';
+
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyDtudUL2sE1_fKbzIro5d2IP0-M2dYI6x4",
@@ -731,9 +733,50 @@ function setupFooter() {
 }
 
 // -------------------------------------------------------------------
+// Missing User/Settings Utilities for app.js
+// -------------------------------------------------------------------
+export async function ensureUserDocument(user) {
+    if (!user) return null;
+    const userDocRef = doc(db, 'users', user.uid);
+    const docSnap = await getDoc(userDocRef);
+    if (!docSnap.exists()) {
+        await setDoc(userDocRef, {
+            uid: user.uid,
+            email: user.email || '',
+            joinDate: serverTimestamp(),
+            lastLogin: serverTimestamp()
+        });
+    } else {
+        await updateDoc(userDocRef, { lastLogin: serverTimestamp() });
+    }
+}
+
+export function subscribeUserSettings(user, callback) {
+    if (!user) return () => {};
+    const ref = doc(db, 'users', user.uid, 'preferences', 'settings');
+    return onSnapshot(ref, (docSnap) => {
+        if (docSnap.exists()) {
+            callback(docSnap.data());
+        } else {
+            callback({ capital: 10000, risk_pct: 1 });
+        }
+    });
+}
+
+export async function updateUserSetting(user, key, value) {
+    if (!user) return;
+    const ref = doc(db, 'users', user.uid, 'preferences', 'settings');
+    await setDoc(ref, { [key]: value }, { merge: true });
+}
+
+export function getCurrentUserToken() {
+    return AuthManager.getToken();
+}
+
+// -------------------------------------------------------------------
 // Export for module usage
 // -------------------------------------------------------------------
 export { 
   currentUser, currentUserData, userPlan, trialActive, allowedTokens,
-  getUpgradeModal, showUpgradeModal
+  getUpgradeModal, showUpgradeModal, handleLogout as logout
 };
