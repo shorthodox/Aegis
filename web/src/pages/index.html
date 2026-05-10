@@ -803,7 +803,7 @@
     <script type="module">
       import { initSignInUI, openSignInModal } from '/web/src/scripts/signin-ui.js';
       import { initSignUpUI, openSignUpModal } from '/web/src/scripts/signup-ui.js';
-      import { isUserAuthenticated } from '/web/src/scripts/auth.js';
+      import { isUserAuthenticated, handleLogout } from '/web/src/scripts/auth.js';
       import { SignalStore } from '/web/src/stores/signalStore.js';
       import { WebSocketManager } from '/web/src/websocket/websocketManager.js';
 
@@ -825,28 +825,44 @@
 
         // Portal button - navigate to dashboard if logged in, else open signin
         const portalBtn = document.getElementById('portalBtn');
-        if (portalBtn) {
-          portalBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            if (isUserAuthenticated()) {
-              window.location.href = '/web/src/pages/dashboard.html';
-            } else {
-              openSignInModal();
-            }
-          });
-        }
-
-        // Create Account button
         const createAccountBtn = document.getElementById('createAccountBtn');
-        if (createAccountBtn) {
-          createAccountBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            if (isUserAuthenticated()) {
-              window.location.href = '/web/src/pages/dashboard.html';
-            } else {
-              openSignUpModal();
+        
+        if (isUserAuthenticated()) {
+            if (portalBtn) {
+                portalBtn.innerText = 'Dashboard';
+                portalBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    window.location.href = '/web/src/pages/dashboard.html';
+                });
             }
-          });
+            if (createAccountBtn) {
+                createAccountBtn.innerText = 'Sign Out';
+                createAccountBtn.style.background = 'transparent';
+                createAccountBtn.style.borderColor = 'rgba(255, 100, 100, 0.5)';
+                createAccountBtn.style.color = 'rgb(255, 100, 100)';
+                createAccountBtn.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    try {
+                        await handleLogout();
+                        window.location.reload();
+                    } catch (err) {
+                        console.error('Logout failed:', err);
+                    }
+                });
+            }
+        } else {
+            if (portalBtn) {
+                portalBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    openSignInModal();
+                });
+            }
+            if (createAccountBtn) {
+                createAccountBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    openSignUpModal();
+                });
+            }
         }
 
         // Hero button - open signup for new users
