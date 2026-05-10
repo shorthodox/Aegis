@@ -134,9 +134,11 @@ export class AuthManager {
         let hasBaseAccess = false;
         if (data.plan_type === 'active' || data.plan_type === 'pro' || data.status === 'active') {
             hasBaseAccess = true;
-        } else if (data.plan_type === 'free_trial' && data.status !== 'expired') {
-            // Trust the status/plan_type from token instead of hardcoded 24-hour limit
-            hasBaseAccess = true;
+        } else if (data.plan_type === 'free_trial') {
+            // Check validity against the trial_end_timestamp or token status
+            if (this.isTrialValid() || data.status === 'active') {
+                hasBaseAccess = true;
+            }
         }
         
         if (!hasBaseAccess) return false;
@@ -150,20 +152,20 @@ export class AuthManager {
     }
 
     static getSubscriptionStatus() {
-        // Prioritize decoded JWT as single source of truth
-        const tokenData = this.getUserData();
-        if (tokenData) {
-            return this.hasAccess('signals') ? 'active' : 'expired';
+        // Prioritize actual trial end date stored in the user profile/localStorage
+        if (this.isTrialValid()) {
+            return 'active';
         }
-        
-        // Fallbacks
+
         const user = this.getUser();
         if (user && (user.plan === 'pro' || user.plan === 'active')) {
             return 'active';
         }
         
-        if (this.isTrialValid()) {
-            return 'active';
+        // Fallback to decoded JWT logic
+        const tokenData = this.getUserData();
+        if (tokenData) {
+            return this.hasAccess('signals') ? 'active' : 'expired';
         }
         
         return 'expired';
