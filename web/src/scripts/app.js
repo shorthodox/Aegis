@@ -271,8 +271,19 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ========== Event Listeners ==========
-    document.getElementById('capitalInput')?.addEventListener('change', (e) => {
+    document.getElementById('user-capital')?.addEventListener('input', (e) => {
         if (currentUser) updateUserSetting(currentUser, 'capital', parseFloat(e.target.value));
+        const simBal = document.getElementById('sim-balance');
+        if (simBal) simBal.value = e.target.value;
+        updateSimulation();
+    });
+
+    document.getElementById('risk-level')?.addEventListener('change', (e) => {
+        if (currentUser) updateUserSetting(currentUser, 'risk_pct', parseFloat(e.target.value));
+        const simRisk = document.getElementById('sim-risk-slider');
+        if (simRisk) simRisk.value = e.target.value;
+        if (document.getElementById('risk-percent-display')) document.getElementById('risk-percent-display').innerText = e.target.value + '%';
+        updateSimulation();
     });
     
     document.getElementById('sim-risk-slider')?.addEventListener('input', (e) => { 
