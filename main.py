@@ -102,7 +102,7 @@ if not firebase_admin._apps:
 else:
     print("☁️ Firebase already initialized, skipping.")
 
-db = firestore.client()
+db = firestore.client(database_id="default")
 
 # -------------------------------------------------------------------
 # OAuth (Authlib) - lazy initialization
