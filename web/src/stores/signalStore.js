@@ -4,6 +4,41 @@ export class SignalStore {
         this.timeframe = localStorage.getItem('selected_timeframe') || '15m';
         this.listeners = [];
         this.searchQuery = "";
+        this.fetchInterval = null;
+        this.startAutoFetch();
+    }
+
+    startAutoFetch() {
+        // Fetch signals every 2 seconds from public endpoint
+        this.fetchInterval = setInterval(() => this.fetchLiveSignals(), 2000);
+        // Also fetch immediately on init
+        this.fetchLiveSignals();
+    }
+
+    async fetchLiveSignals() {
+        try {
+            const response = await fetch('/api/public/signals');
+            if (response.ok) {
+                const data = await response.json();
+                if (data.signals && typeof data.signals === 'object') {
+                    this.updateMultiple(data.signals);
+                }
+                // Notify listeners of warmup status
+                if (data.warmup) {
+                    const event = new CustomEvent('warmupUpdate', { detail: { warmup: data.warmup } });
+                    document.dispatchEvent(event);
+                }
+            }
+        } catch (err) {
+            console.debug('Failed to fetch live signals:', err);
+        }
+    }
+
+    stopAutoFetch() {
+        if (this.fetchInterval) {
+            clearInterval(this.fetchInterval);
+            this.fetchInterval = null;
+        }
     }
 
     setTimeframe(tf) {
