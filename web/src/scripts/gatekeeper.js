@@ -170,6 +170,12 @@ async function loadUserFromBackend(token) {
       trialEnd = userData.trial_end ? new Date(userData.trial_end) : null;
       trialActive = userPlan === 'trial' && trialEnd && new Date() < trialEnd;
 
+      // If user has no active plan and trial is expired, redirect to pricing
+      if (userPlan !== 'pro' && userPlan !== 'basic' && !trialActive) {
+        window.location.href = '/web/src/pages/pricing.html';
+        return;
+      }
+
       await loadUserLimits();
       updateUI();
       startWebSocket(token);
