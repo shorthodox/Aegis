@@ -34,6 +34,28 @@ from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType,
 import uvicorn
 from dataclasses import asdict
 from starlette.middleware.sessions import SessionMiddleware
+import numpy as np
+
+# -------------------------------------------------------------------
+# Helper: Recursively convert numpy types to native Python types
+# -------------------------------------------------------------------
+def numpy_to_native(obj):
+    if isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {k: numpy_to_native(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [numpy_to_native(v) for v in obj]
+    elif hasattr(obj, "item"):
+        try:
+            return obj.item()
+        except Exception:
+            pass
+    return obj
 
 # -------------------------------------------------------------------
 # Cashfree PG SDK imports
@@ -272,7 +294,8 @@ async def run_engine_background():
                     signals_file = signals_dir / 'live_signals.json'
                     with open(signals_file, 'w', encoding='utf-8') as sf:
                         # use default=str to ensure datetimes/objects are serializable
-                        json.dump(LIVE_STATE.data.get('signals', {}), sf, default=str)
+                        safe_signals = numpy_to_native(LIVE_STATE.data.get('signals', {}))
+                        json.dump(safe_signals, sf, default=str)
                 except Exception as _e:
                     print(f"⚠️ Failed to write live_signals.json: {_e}")
                 
@@ -292,6 +315,9 @@ async def run_engine_background():
                         sig_data = sig.copy() if isinstance(sig, dict) else asdict(sig) if hasattr(sig, '__dataclass_fields__') else dict(sig)
                         sig_data['symbol'] = sym
                         sig_data['timestamp'] = now_str
+                        
+                        # Fix numpy serialization here
+                        sig_data = numpy_to_native(sig_data)
                         
                         batch.set(sig_ref, sig_data, merge=True)
                         count += 1
@@ -421,13 +447,13 @@ async def api_signals(credentials: HTTPAuthorizationCredentials = Depends(securi
     if plan != 'pro':
         raise HTTPException(status_code=403, detail="Subscription required to access signals")
 
-    signals = LIVE_STATE.data.get('signals', {})
+    signals = numpy_to_native(LIVE_STATE.data.get('signals', {}))
     return JSONResponse(content=signals)
 
 @app.get("/api/public/signals")
 async def api_public_signals():
     """Return latest live signals publicly (for dashboard display)."""
-    signals = LIVE_STATE.data.get('signals', {})
+    signals = numpy_to_native(LIVE_STATE.data.get('signals', {}))
     warmup = LIVE_STATE.data.get('warmup_progress', '0/0')
     alpha_mode = LIVE_STATE.data.get('alpha_mode', False)
     return JSONResponse(content={
