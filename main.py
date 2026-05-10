@@ -450,16 +450,43 @@ async def api_signals(credentials: HTTPAuthorizationCredentials = Depends(securi
     signals = numpy_to_native(LIVE_STATE.data.get('signals', {}))
     return JSONResponse(content=signals)
 
+from fastapi import Header
+
 @app.get("/api/public/signals")
-async def api_public_signals():
+async def api_public_signals(authorization: Optional[str] = Header(None)):
     """Return latest live signals publicly (for dashboard display)."""
+    subscription_active = False
+    trial_end = None
+    plan = "trial"
+
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split("Bearer ")[1]
+        try:
+            email = decode_token(token)
+            if email:
+                user_doc = get_user_doc(email)
+                if user_doc:
+                    plan = user_doc.get("plan", "trial")
+                    trial_end = user_doc.get("trial_end")
+                    if plan in ["pro", "active"]:
+                        subscription_active = True
+                    elif trial_end:
+                        if datetime.now(timezone.utc) <= datetime.fromisoformat(trial_end):
+                            subscription_active = True
+        except Exception:
+            pass
+
     signals = numpy_to_native(LIVE_STATE.data.get('signals', {}))
     warmup = LIVE_STATE.data.get('warmup_progress', '0/0')
     alpha_mode = LIVE_STATE.data.get('alpha_mode', False)
+    
     return JSONResponse(content={
         'signals': signals,
         'warmup': warmup,
         'alpha_mode': alpha_mode,
+        'subscription_active': subscription_active,
+        'trial_end': trial_end,
+        'plan': plan,
         'timestamp': datetime.now(timezone.utc).isoformat()
     })
 
