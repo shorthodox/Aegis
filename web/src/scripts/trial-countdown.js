@@ -42,84 +42,54 @@ function formatTimeRemaining(expiryDate) {
 // ============================================================
 export async function getUserTrialInfo(userId) {
   if (!userId) return null;
-  
   const now = Date.now();
   
-  // 1. Fetch user data (Cache to prevent spamming from 1-second interval)
-  if (!cachedTrialInfo || now - lastFetchTime > 60000) { // Refresh every 1 minute
+  // 1. Ensure absolute URL and Auth Header consistency
+  if (!cachedTrialInfo || now - lastFetchTime > 60000) {
       try {
           const authHeader = AuthManager.getAuthHeader();
-          if (authHeader) {
-              const userResponse = await fetch('/user/limits', {
-                  headers: { 'Authorization': authHeader }
-              });
-              if (userResponse.ok) {
-                  const userData = await userResponse.json();
-                  
-                  // Update global AuthManager
-                  const existingUser = AuthManager.getUser() || {};
-                  AuthManager.setUser({ ...existingUser, ...userData });
-                  
-                  cachedTrialInfo = userData;
-                  lastFetchTime = now;
+          if (!authHeader) {
+              console.warn("Auth token missing - delaying trial check...");
+              return null; // Don't trigger 'expired' yet if we're just waiting for auth
+          }
+
+          // FIX: Use the correct base API path to avoid 404s
+          const userResponse = await fetch('/api/public/signals', {
+              headers: { 'Authorization': authHeader }
+          });
+
+          if (userResponse.ok) {
+              const userData = await userResponse.json();
+              cachedTrialInfo = userData;
+              lastFetchTime = now;
+              // Persist for refresh resilience
+              if (userData.trial_end) {
+                  localStorage.setItem('trial_end_timestamp', userData.trial_end);
               }
           }
       } catch (err) {
-          console.error("Failed to fetch user limits for countdown:", err);
+          console.error("Fetch failed, falling back to local storage:", err);
       }
   }
 
-  // 2. Parse Cached Metadata
+  // 2. Resilience Logic: Check multiple sources before deciding 'Expired'
   const jwtData = AuthManager.getUserData() || {};
-  const isPro = jwtData.plan_type === 'active' || jwtData.plan_type === 'pro' || 
-                (cachedTrialInfo && (cachedTrialInfo.plan === 'active' || cachedTrialInfo.plan === 'pro'));
-                
-  if (isPro) {
-      return {
-          active: true,
-          plan: 'active',
-          display: 'Premium Active',
-          expired: false,
-          days: 999, hours: 23, minutes: 59, seconds: 59,
-          allowedTokens: [],
-          allowedTimeframes: ['1m','3m','5m','15m','30m','1h','4h','1d']
-      };
+  let trialEnd = cachedTrialInfo?.trial_end || localStorage.getItem('trial_end_timestamp');
+
+  // If we have NO data yet, assume it's loading, NOT expired
+  if (!trialEnd && !cachedTrialInfo) {
+      return { active: true, display: "Loading...", expired: false };
   }
 
-  // Fallback to local storage timestamp if fetch failed
-  let trialEnd = null;
-  if (cachedTrialInfo && cachedTrialInfo.trial_end) {
-      trialEnd = new Date(cachedTrialInfo.trial_end).getTime();
-  } else {
-      const storedTrialEnd = localStorage.getItem('trial_end_timestamp');
-      if (storedTrialEnd && storedTrialEnd !== 'null' && storedTrialEnd !== 'undefined') {
-          trialEnd = new Date(storedTrialEnd).getTime();
-      }
-  }
-
-  if (cachedTrialInfo?.trial_expired) {
-      return { active: false, expired: true, display: 'Trial Expired' };
-  }
-
-  if (!trialEnd) {
-      // Missing trial_end but we know they are on a trial
-      if (jwtData.plan_type === 'free_trial' || jwtData.plan_type === 'trial' || cachedTrialInfo?.is_trial) {
-          return { active: true, display: 'Trial Active', expired: false, days: 1, hours: 0, minutes: 0, seconds: 0 };
-      }
-      return null;
-  }
-
-  // 3. Calculate remaining time locally against the clock
   const expiryDate = new Date(trialEnd);
   const timeInfo = formatTimeRemaining(expiryDate);
-  
+
+  // 3. Final decision: Only trigger expired if current time is strictly past expiry
   return {
       active: !timeInfo.expired,
       ...timeInfo,
-      allowedTokens: ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ARB/USDT', 'AAVE/USDT'],
-      allowedTimeframes: ['15m', '30m'],
-      plan: 'trial',
-      trialEndDate: expiryDate
+      allowedTokens: ['BTC/USDT', 'ETH/USDT', 'SOL/USDT'],
+      plan: 'trial'
   };
 }
 
