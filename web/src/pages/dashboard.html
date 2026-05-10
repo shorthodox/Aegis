@@ -32,7 +32,7 @@
         <aside class="sidebar">
             <div class="sidebar-header">
                 <div class="logo">⚡ AEGIS <span>v1.0</span></div>
-                <div class="version-badge">SOVEREIGN</div>
+                <div class="version-badge" id="planBadge">SOVEREIGN</div>
             </div>
 
             <div class="user-stats">
@@ -74,7 +74,9 @@
         <section class="main-content">
             <header class="content-header">
                 <h2><i class="fas fa-waveform"></i> Fleet Monitor</h2>
+                <div class="trial-countdown" style="display: none; padding: 0.5rem 1rem; border-radius: 8px; border: 1px solid transparent;"></div>
             </header>
+            <div id="trialBanner" class="trial-banner" style="display: none; background: rgba(255, 140, 0, 0.15); border: 1px solid rgba(255, 140, 0, 0.4); padding: 10px; margin: 0 1rem 1rem 1rem; border-radius: 8px; text-align: center; color: #ff8c00;"></div>
 
             <div id="signal-grid" class="signal-grid">
                 <div class="loading-spinner">Authenticating & connecting engine...</div>
