@@ -275,6 +275,33 @@ async def run_engine_background():
                         json.dump(LIVE_STATE.data.get('signals', {}), sf, default=str)
                 except Exception as _e:
                     print(f"⚠️ Failed to write live_signals.json: {_e}")
+                
+                # --- write latest signals to Firebase Firestore ---
+                try:
+                    batch = db.batch()
+                    count = 0
+                    now_str = datetime.now(timezone.utc).isoformat()
+                    for sym, sig in LIVE_STATE.data.get('signals', {}).items():
+                        doc_id = sym.replace('/', '_')
+                        sig_ref = db.collection("signals").document(doc_id)
+                        
+                        # Use dict if object, otherwise copy if it's already dict
+                        sig_data = sig.copy() if isinstance(sig, dict) else asdict(sig) if hasattr(sig, '__dataclass_fields__') else dict(sig)
+                        sig_data['symbol'] = sym
+                        sig_data['timestamp'] = now_str
+                        
+                        batch.set(sig_ref, sig_data, merge=True)
+                        count += 1
+                        
+                        if count >= 450:
+                            batch.commit()
+                            batch = db.batch()
+                            count = 0
+                    
+                    if count > 0:
+                        batch.commit()
+                except Exception as _e:
+                    print(f"⚠️ Failed to write signals to Firestore: {_e}")
             except Exception as e:
                 print(f"State update error: {e}")
             await asyncio.sleep(1)
