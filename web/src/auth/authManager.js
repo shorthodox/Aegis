@@ -167,19 +167,20 @@ export class AuthManager {
     }
 
     static getSubscriptionStatus() {
+        const user = this.getUser();
+        
+        // Immediately return active if the user has a pro/active plan
+        if (user && (user.plan === 'pro' || user.plan === 'active')) {
+            return 'active';
+        }
+
         // Prioritize actual trial end date stored in the user profile/localStorage
         if (this.isTrialValid()) {
             return 'active';
         }
 
-        const user = this.getUser();
-        if (user) {
-            if (user.plan === 'pro' || user.plan === 'active') {
-                return 'active';
-            }
-            if ((user.plan === 'trial' || user.plan === 'free_trial') && user.trial_expired === false) {
-                return 'active';
-            }
+        if (user && (user.plan === 'trial' || user.plan === 'free_trial') && user.trial_expired === false) {
+            return 'active';
         }
         
         // Fallback to decoded JWT logic
