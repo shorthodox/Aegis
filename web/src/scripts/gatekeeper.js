@@ -155,6 +155,7 @@ async function loadUserFromBackend(token) {
   try {
     const response = await fetch(`${API_BASE_URL}/auth/me`, {
       method: 'GET',
+      credentials: 'include',
       headers: { 
         'Authorization': `Bearer ${token}`,
         'Accept': 'application/json',
