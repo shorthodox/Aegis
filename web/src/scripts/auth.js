@@ -193,7 +193,7 @@ export async function ensureUserDocumentV2(user, authMethod = 'email') {
     
     await setDoc(userDocRef, userData);
     console.log('✅ New user document created:', user.uid);
-    return userData;
+    return { ...userData, isNewUser: true };
   } else {
     // EXISTING USER - UPDATE LOGIN METHOD & LAST LOGIN
     const existingData = docSnap.data();
@@ -208,7 +208,7 @@ export async function ensureUserDocumentV2(user, authMethod = 'email') {
     });
     
     console.log('✅ Existing user login updated:', user.uid);
-    return existingData;
+    return { ...existingData, isNewUser: false };
   }
 }
 
@@ -226,7 +226,7 @@ export async function handleGoogleAuth() {
     const user = result.user;
     
     // Create/update user document
-    await ensureUserDocumentV2(user, 'google');
+    const userData = await ensureUserDocumentV2(user, 'google');
     
     // Store token
     const idToken = await user.getIdToken();
@@ -234,7 +234,7 @@ export async function handleGoogleAuth() {
     localStorage.setItem('authenticated', 'true');
     
     console.log('✅ Google Auth successful:', user.email);
-    return { success: true, user, message: 'Logged in successfully!' };
+    return { success: true, user, message: 'Logged in successfully!', userData };
   } catch (error) {
     console.error('❌ Google Auth error:', error.code, error.message);
     // COOP error handling: if the error is about window.closed being blocked
@@ -281,7 +281,7 @@ export async function handleEmailSignup(email, password, displayName) {
     });
     
     // Create user document in Firestore
-    await ensureUserDocumentV2(user, 'email');
+    const userData = await ensureUserDocumentV2(user, 'email');
     
     // Store token
     const idToken = await user.getIdToken();
@@ -289,7 +289,7 @@ export async function handleEmailSignup(email, password, displayName) {
     localStorage.setItem('authenticated', 'true');
     
     console.log('✅ Email signup successful:', email);
-    return { success: true, user, message: 'Account created successfully!' };
+    return { success: true, user, message: 'Account created successfully!', userData };
   } catch (error) {
     console.error('❌ Email signup error:', error.code, error.message);
     return { 
@@ -313,7 +313,7 @@ export async function handleEmailLogin(email, password) {
     const user = userCredential.user;
     
     // Update user document
-    await ensureUserDocumentV2(user, 'email');
+    const userData = await ensureUserDocumentV2(user, 'email');
     
     // Store token
     const idToken = await user.getIdToken();
@@ -321,7 +321,7 @@ export async function handleEmailLogin(email, password) {
     localStorage.setItem('authenticated', 'true');
     
     console.log('✅ Email login successful:', email);
-    return { success: true, user, message: 'Logged in successfully!' };
+    return { success: true, user, message: 'Logged in successfully!', userData };
   } catch (error) {
     console.error('❌ Email login error:', error.code, error.message);
     
