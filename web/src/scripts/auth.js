@@ -231,6 +231,7 @@ export async function handleGoogleAuth() {
     // Store token
     const idToken = await user.getIdToken();
     AuthManager.setToken(idToken);
+    AuthManager.setUser(userData);
     localStorage.setItem('authenticated', 'true');
     
     console.log('✅ Google Auth successful:', user.email);
@@ -286,6 +287,7 @@ export async function handleEmailSignup(email, password, displayName) {
     // Store token
     const idToken = await user.getIdToken();
     AuthManager.setToken(idToken);
+    AuthManager.setUser(userData);
     localStorage.setItem('authenticated', 'true');
     
     console.log('✅ Email signup successful:', email);
@@ -318,6 +320,7 @@ export async function handleEmailLogin(email, password) {
     // Store token
     const idToken = await user.getIdToken();
     AuthManager.setToken(idToken);
+    AuthManager.setUser(userData);
     localStorage.setItem('authenticated', 'true');
     
     console.log('✅ Email login successful:', email);
