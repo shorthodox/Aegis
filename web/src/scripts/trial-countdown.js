@@ -67,8 +67,13 @@ export async function getUserTrialInfo(userId) {
                 ? jwtData.trial_start * 1000 
                 : new Date(jwtData.trial_start).getTime();
                 
-            // 24 hours expiry
-            const expiryDate = new Date(trialStartMs + 24 * 60 * 60 * 1000);
+            let trialEndMs = trialStartMs + 24 * 60 * 60 * 1000;
+            const storedTrialEnd = localStorage.getItem('trial_end_timestamp');
+            if (storedTrialEnd) {
+                trialEndMs = new Date(storedTrialEnd).getTime();
+            }
+            
+            const expiryDate = new Date(trialEndMs);
             const timeInfo = formatTimeRemaining(expiryDate);
             
             return {
@@ -167,6 +172,11 @@ async function updateTrialDisplay() {
   if (!currentUserId) return;
   
   const trialInfo = await getUserTrialInfo(currentUserId);
+
+  if (trialInfo?.expired && !window.trialExpiredTriggered) {
+      window.trialExpiredTriggered = true;
+      document.dispatchEvent(new CustomEvent('trialExpired', { detail: { userId: currentUserId } }));
+  }
   
   // Find countdown element on page
   const countdownElements = document.querySelectorAll('.trial-countdown, [data-trial-countdown]');
@@ -288,6 +298,12 @@ export function stopTrialCountdown() {
     clearInterval(trialCheckInterval);
     trialCheckInterval = null;
   }
+  currentUserId = null;
+  window.trialExpiredTriggered = false;
+  
+  // Clean up any stray UI elements or listeners if necessary
+  const countdownElements = document.querySelectorAll('.trial-countdown, [data-trial-countdown]');
+  countdownElements.forEach(el => el.style.display = 'none');
 }
 
 // ============================================================
