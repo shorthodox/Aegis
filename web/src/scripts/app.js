@@ -34,29 +34,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Try to fetch protected signals JSON for subscribed users
-    async function fetchProtectedSignals() {
-        try {
-            const token = AuthManager.getToken();
-            if (!token) return;
-            const resp = await fetch('/api/signals', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (resp.ok) {
-                const json = await resp.json();
-                if (json && typeof json === 'object') {
-                    signalStore.updateMultiple(json);
-                }
-            } else {
-                // Not subscribed or unauthorized
-                console.debug('Protected signals not available:', resp.status);
-            }
-        } catch (err) {
-            console.error('Failed to fetch protected signals:', err);
+    // Listen for warmup updates from the public signals endpoint
+    document.addEventListener('warmupUpdate', (e) => {
+        if (e.detail.warmup && document.getElementById('warmup-status')) {
+            document.getElementById('warmup-status').innerText = e.detail.warmup;
         }
-    }
-
-    fetchProtectedSignals();
+    });
 
     // ========== Simulator Global State ==========
     let currentUser = null;
