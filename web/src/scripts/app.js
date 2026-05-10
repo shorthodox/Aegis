@@ -16,6 +16,28 @@ function lockBodyScroll() { document.body.classList.add('modal-open'); }
 function unlockBodyScroll() { document.body.classList.remove('modal-open'); }
 
 document.addEventListener('DOMContentLoaded', () => {
+    // ========== Trial Persistence Fallback ==========
+    const TRIAL_DURATION_HR = 72;
+    let trialStart = localStorage.getItem('trial_start');
+
+    if (!trialStart && AuthManager.isAuthenticated()) {
+        // Initialize local trial start if missing
+        trialStart = Date.now();
+        localStorage.setItem('trial_start', trialStart);
+    }
+
+    if (trialStart) {
+        const remainingMs = (TRIAL_DURATION_HR * 60 * 60 * 1000) - (Date.now() - parseInt(trialStart));
+        if (remainingMs <= 0) {
+            window.dispatchEvent(new Event('aegis:auth:expired'));
+        } else {
+            // Ensure AuthManager treats this as valid if it checks
+            if (!localStorage.getItem('trial_end_timestamp')) {
+                localStorage.setItem('trial_end_timestamp', new Date(parseInt(trialStart) + (TRIAL_DURATION_HR * 60 * 60 * 1000)).toISOString());
+            }
+        }
+    }
+
     // ========== Modules ==========
     const signalStore = new SignalStore();
     const renderEngine = new RenderEngine('signal-grid', signalStore);
