@@ -439,7 +439,7 @@ def decode_token(token: str) -> Optional[str]:
     # Try decoding as Firebase token first
     try:
         decoded_token = firebase_auth.verify_id_token(token)
-        return decoded_token.get("email")
+        return decoded_token.get("uid")
     except Exception:
         # Fallback to custom JWT
         try:
