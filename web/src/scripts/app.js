@@ -229,10 +229,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ========== Auth Init ==========
     onAuthStateChanged(auth, async (user) => {
-        const jwt = AuthManager.getToken();
+        let jwt = AuthManager.getToken();
+        
+        // Validate state
+        const isAuth = AuthManager.isAuthenticated();
+        const isTrialValid = AuthManager.isTrialValid();
+
         if (!user && !jwt) {
             wsManager.connect();
             return;
+        }
+
+        // Token refresh logic
+        if (isAuth && !AuthManager.isTokenValid() && isTrialValid) {
+            const refreshed = await AuthManager.refreshToken();
+            if (refreshed) {
+                jwt = AuthManager.getToken();
+                console.log('Token successfully refreshed');
+            } else {
+                console.warn('Token refresh failed');
+            }
         }
 
         if (!user && jwt) {
