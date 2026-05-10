@@ -1,3 +1,5 @@
+import { AuthManager } from '../auth/authManager.js';
+
 export class RenderEngine {
     constructor(containerId, signalStore) {
         this.container = document.getElementById(containerId);
@@ -10,19 +12,37 @@ export class RenderEngine {
     }
 
     initTable() {
+        const planType = AuthManager.getPlanType();
+        let allowedTimeframes = ['1m','3m','5m','15m','30m','1h','4h','1d'];
+        if (planType === 'free_trial' || planType === 'basic') {
+            allowedTimeframes = ['15m', '30m'];
+            // ensure current timeframe is valid
+            if (!allowedTimeframes.includes(this.signalStore.timeframe)) {
+                this.signalStore.timeframe = '15m';
+            }
+        }
+
         this.container.innerHTML = `
-            <div class="table-controls" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem; gap: 1rem; flex-wrap: wrap;">
-                <div class="timeframe-selector" style="display:flex; gap:0.5rem; background: rgba(0,0,0,0.5); padding:0.5rem; border-radius:12px; border:1px solid rgba(255,255,255,0.1);">
-                    ${['1m','3m','5m','15m','30m','1h','4h','1d'].map(tf => 
-                        `<button class="tf-btn ${this.signalStore.timeframe === tf ? 'active' : ''}" data-tf="${tf}">${tf}</button>`
-                    ).join('')}
+            <div class="flex flex-col gap-4 mb-6">
+                <!-- Search Bar at the Top -->
+                <div class="relative w-full">
+                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><i class="fas fa-search"></i></span>
+                    <input type="text" id="signalSearch" placeholder="Search pairs... (e.g. BTC/USDT)" class="w-full bg-black/60 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:outline-none focus:border-cyan focus:ring-1 focus:ring-cyan transition-all font-mono">
                 </div>
-                <div class="signal-filters" style="display:flex; gap:1rem;">
-                    <input type="text" id="signalSearch" placeholder="Search pairs..." class="sidebar-input" style="width:200px; margin-bottom:0;">
-                    <button id="exportCsvBtn" class="btn-primary-glow" style="padding: 0.5rem 1rem;"><i class="fas fa-download"></i> Export CSV</button>
+                
+                <!-- Timeframe Bar and Controls -->
+                <div class="flex flex-wrap justify-between items-center gap-4 bg-black/40 p-2 rounded-xl border border-white/5">
+                    <div class="flex gap-2 overflow-x-auto custom-scrollbar pb-1">
+                        ${allowedTimeframes.map(tf => 
+                            `<button class="tf-btn px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${this.signalStore.timeframe === tf ? 'bg-cyan text-black shadow-[0_0_10px_rgba(0,242,255,0.4)]' : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'}" data-tf="${tf}">${tf}</button>`
+                        ).join('')}
+                    </div>
+                    <button id="exportCsvBtn" class="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 px-4 py-1.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap"><i class="fas fa-download"></i> Export CSV</button>
                 </div>
             </div>
-            <div id="signalCardsContainer" class="signal-grid"></div>
+            
+            <!-- Signal Grid -->
+            <div id="signalCardsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"></div>
         `;
 
         // Event listeners
@@ -52,44 +72,75 @@ export class RenderEngine {
         const container = document.getElementById('signalCardsContainer');
         if (!container) return;
         
+        const subStatus = AuthManager.getSubscriptionStatus();
+        if (subStatus === 'expired') {
+            container.innerHTML = `
+                <div class="col-span-full flex flex-col items-center justify-center py-16 px-4 bg-red-900/10 border border-red-500/20 rounded-2xl">
+                    <i class="fas fa-lock text-4xl text-red-500 mb-4"></i>
+                    <h3 class="text-xl font-bold text-white mb-2">Access Expired</h3>
+                    <p class="text-gray-400 text-center max-w-md">Your trial or subscription has expired. Please upgrade your plan to restore real-time fleet monitoring.</p>
+                    <a href="/web/src/pages/pricing.html" class="mt-6 px-6 py-2 bg-gradient-to-r from-red-600 to-orange hover:from-red-500 hover:to-orange rounded font-bold text-white shadow-[0_0_15px_rgba(255,140,0,0.4)]">Upgrade Now</a>
+                </div>
+            `;
+            return;
+        }
+
+        const planType = AuthManager.getPlanType();
+        if (planType === 'free_trial' || planType === 'basic') {
+            const allowed = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ARB/USDT', 'AAVE/USDT'];
+            signals = signals.filter(s => allowed.includes(s.pair));
+        }
+        
         let html = '';
         signals.forEach(sig => {
-            const sigClass = sig.signal === 'BUY' ? 'signal-buy' : (sig.signal === 'SELL' ? 'signal-avoid' : 'signal-hold');
-            const confColor = sig.confidence > 0.8 ? 'var(--success-green)' : (sig.confidence > 0.5 ? 'var(--warning-orange)' : 'var(--danger-red)');
+            // Tailwind adapted styling for signal cards
+            const sigClass = sig.signal.includes('BUY') ? 'bg-cyan/20 text-cyan border-cyan/50' : (sig.signal.includes('SELL') ? 'bg-red-500/20 text-red-400 border-red-500/50' : 'bg-gray-500/20 text-gray-400 border-gray-500/50');
+            const confColor = sig.confidence > 0.8 ? 'text-green-400' : (sig.confidence > 0.5 ? 'text-orange' : 'text-red-400');
             const timeAgoStr = this.timeAgo(sig.time);
             const isRecent = timeAgoStr.includes('s') || timeAgoStr.includes('m ago');
-            const rowAnim = isRecent ? 'animation: pulse-border 2s;' : '';
+            const rowAnim = isRecent ? 'animate-pulse shadow-[0_0_15px_rgba(255,255,255,0.1)]' : '';
             
             const sigJsonStr = JSON.stringify(sig).replace(/'/g, "\\'");
             
             html += `
-                <div class="signal-card" style="${rowAnim}" onclick='document.dispatchEvent(new CustomEvent("signalRowClicked", {detail: ${sigJsonStr}}))'>
-                    <div class="card-header">
-                        <span class="symbol">${sig.pair}</span>
-                        <span class="signal-tag ${sigClass}">${sig.signal}</span>
+                <div class="bg-black/60 border border-white/10 rounded-xl p-4 cursor-pointer hover:border-cyan/50 hover:bg-white/5 transition-all flex flex-col gap-3 ${rowAnim}" onclick='document.dispatchEvent(new CustomEvent("signalRowClicked", {detail: ${sigJsonStr}}))'>
+                    <div class="flex justify-between items-center">
+                        <span class="font-bold text-lg font-mono text-white">${sig.pair}</span>
+                        <span class="px-2 py-0.5 rounded text-xs font-bold border ${sigClass}">${sig.signal}</span>
                     </div>
-                    <div class="price-row">
-                        <span>Timeframe</span>
-                        <span style="color: var(--text-dim);">${sig.timeframe}</span>
+                    
+                    <div class="flex justify-between items-center text-sm">
+                        <span class="text-gray-500">Entry</span>
+                        <span class="font-mono text-white">${sig.entry ? sig.entry.toFixed(4) : '-'}</span>
                     </div>
-                    <div class="price-row">
-                        <span>Entry Price</span>
-                        <span>${sig.entry ? sig.entry.toFixed(4) : '-'}</span>
+                    
+                    <div class="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-white/5">
+                        <div class="flex flex-col">
+                            <span class="text-gray-500">Stop Loss</span>
+                            <span class="font-mono text-red-400">${sig.sl ? sig.sl.toFixed(4) : '-'}</span>
+                        </div>
+                        <div class="flex flex-col text-right">
+                            <span class="text-gray-500">Take Profit</span>
+                            <span class="font-mono text-green-400">${sig.tp ? sig.tp.toFixed(4) : '-'}</span>
+                        </div>
                     </div>
-                    <div class="price-row" style="margin-top: 0.8rem;">
-                        <span style="color: ${confColor}; font-weight: bold;">AI Conviction: ${(sig.confidence * 100).toFixed(0)}%</span>
-                        <span style="color: var(--text-dim);">${timeAgoStr}</span>
-                    </div>
-                    <div class="sl-tp">
-                        <span>SL: ${sig.sl ? sig.sl.toFixed(4) : '-'}</span>
-                        <span>TP: ${sig.tp ? sig.tp.toFixed(4) : '-'}</span>
+
+                    <div class="flex justify-between items-end mt-1 pt-3 border-t border-white/5">
+                        <div class="flex flex-col">
+                            <span class="text-[10px] uppercase tracking-wider text-gray-500">AI Conviction</span>
+                            <span class="font-bold font-mono ${confColor}">${(sig.confidence * 100).toFixed(0)}%</span>
+                        </div>
+                        <span class="text-xs text-gray-500 font-mono">${timeAgoStr}</span>
                     </div>
                 </div>
             `;
         });
         
         if (!html) {
-            html = `<div style="grid-column: 1 / -1; text-align:center; padding: 2rem; color:var(--text-dim);">No signals matching criteria</div>`;
+            html = `<div class="col-span-full flex flex-col items-center justify-center py-12 px-4 bg-black/40 border border-white/5 rounded-xl">
+                <i class="fas fa-search text-2xl text-gray-600 mb-3"></i>
+                <span class="text-gray-400 text-sm">No active signals found matching your criteria.</span>
+            </div>`;
         }
         
         container.innerHTML = html;
