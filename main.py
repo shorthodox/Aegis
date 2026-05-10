@@ -34,8 +34,6 @@ from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType,
 import uvicorn
 from dataclasses import asdict
 from starlette.middleware.sessions import SessionMiddleware
-from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
 
 # -------------------------------------------------------------------
 # Cashfree PG SDK imports
@@ -84,7 +82,7 @@ else:
 # Firebase Admin SDK – check path existence before initializing
 # -------------------------------------------------------------------
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials, firestore, auth as firebase_auth
 
 FIREBASE_PROJECT_ID = os.getenv("FIREBASE_PROJECT_ID", "aegis-d78e1")
 FIREBASE_CREDENTIALS_PATH = os.getenv("FIREBASE_CREDENTIALS")
@@ -202,7 +200,6 @@ class LiveState:
         self.engine: Optional['LiveEngine'] = None
 
 LIVE_STATE = LiveState()
-    
 
 # -------------------------------------------------------------------
 # OTP Store (in-memory)
@@ -312,16 +309,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
-        response = await call_next(request)
-        # These headers allow the Google Auth popup to talk back to your site
-        response.headers["Cross-Origin-Opener-Policy"] = "same-origin-allow-popups"
-        response.headers["Cross-Origin-Embedder-Policy"] = "unsafe-none"
-        return response
-
-app.add_middleware(SecurityHeadersMiddleware)
 
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
@@ -436,12 +423,18 @@ def create_token(email: str) -> str:
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 def decode_token(token: str) -> Optional[str]:
+    # Try decoding as Firebase token first
     try:
-        assert SECRET_KEY is not None, "SECRET_KEY must be set"
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload.get("sub")
-    except:
-        return None
+        decoded_token = firebase_auth.verify_id_token(token)
+        return decoded_token.get("email")
+    except Exception:
+        # Fallback to custom JWT
+        try:
+            assert SECRET_KEY is not None, "SECRET_KEY must be set"
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            return payload.get("sub")
+        except:
+            return None
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
     email = decode_token(credentials.credentials)
@@ -1665,6 +1658,5 @@ async def update_signal(
 # Main entry point
 # -------------------------------------------------------------------
 if __name__ == "__main__":
-    import uvicorn
-    # The --proxy-headers and --forwarded-allow-ips are critical for Railway WSS
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, proxy_headers=True, forwarded_allow_ips="*")
+    port = int(os.environ.get("PORT", 8080))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
