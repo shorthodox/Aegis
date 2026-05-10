@@ -278,10 +278,13 @@ async def run_engine_background():
                 
                 # --- write latest signals to Firebase Firestore ---
                 try:
+                    signals_data = LIVE_STATE.data.get('signals', {})
+                    if signals_data:
+                        print(f"[PRODUCER] Attempting to push {len(signals_data)} signals to Firestore...")
                     batch = db.batch()
                     count = 0
                     now_str = datetime.now(timezone.utc).isoformat()
-                    for sym, sig in LIVE_STATE.data.get('signals', {}).items():
+                    for sym, sig in signals_data.items():
                         doc_id = sym.replace('/', '_')
                         sig_ref = db.collection("signals").document(doc_id)
                         
@@ -294,14 +297,16 @@ async def run_engine_background():
                         count += 1
                         
                         if count >= 450:
-                            batch.commit()
+                            results = batch.commit()
+                            print(f"[PRODUCER SUCCESS] Batch committed {count} signals. Last commit timestamp: {results[-1].update_time if results else 'N/A'}")
                             batch = db.batch()
                             count = 0
                     
                     if count > 0:
-                        batch.commit()
+                        results = batch.commit()
+                        print(f"[PRODUCER SUCCESS] Batch committed {count} signals. Last commit timestamp: {results[-1].update_time if results else 'N/A'}")
                 except Exception as _e:
-                    print(f"⚠️ Failed to write signals to Firestore: {_e}")
+                    print(f"[PRODUCER ERROR] ⚠️ Failed to write signals to Firestore: {_e}")
             except Exception as e:
                 print(f"State update error: {e}")
             await asyncio.sleep(1)
