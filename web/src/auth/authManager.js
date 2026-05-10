@@ -12,8 +12,8 @@ export class AuthManager {
     }
     
     static clearToken() {
-        localStorage.removeItem('access_token');
-        sessionStorage.removeItem('access_token');
+        localStorage.clear();
+        sessionStorage.clear();
     }
     
     static isAuthenticated() {
@@ -72,24 +72,22 @@ export class AuthManager {
     }
 
     static isTrialValid() {
-        const trialEnd = localStorage.getItem('trial_end_timestamp');
-        
-        if (!trialEnd || trialEnd === 'null' || trialEnd === 'undefined') {
-            const user = this.getUser();
-            if (user && (user.plan === 'free_trial' || user.plan === 'trial')) {
-                return user.trial_expired === false;
-            }
-            const tokenData = this.getUserData();
-            if (tokenData && tokenData.plan_type === 'free_trial') {
-                return tokenData.status === 'active';
-            }
-            return false;
+        // Exclusively use server response data
+        const user = this.getUser();
+        if (user) {
+            if (user.plan === 'pro' || user.plan === 'active' || user.subscription_active) return true;
+            if (user.trial_expired === false) return true;
+            if (user.trial_expired === true) return false;
         }
         
-        const endDate = new Date(trialEnd);
-        if (isNaN(endDate.getTime())) return false;
+        const tokenData = this.getUserData();
+        if (tokenData) {
+            if (tokenData.plan_type === 'pro' || tokenData.plan_type === 'active' || tokenData.status === 'active') return true;
+            if (tokenData.status === 'expired') return false;
+        }
         
-        return new Date() < endDate;
+        // Default to active while loading/fetching real state
+        return true;
     }
 
     static isTokenValid() {
@@ -192,4 +190,3 @@ export class AuthManager {
         return 'expired';
     }
 }
-
