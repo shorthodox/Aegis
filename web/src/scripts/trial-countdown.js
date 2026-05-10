@@ -27,16 +27,9 @@ function formatTimeRemaining(expiryDate) {
   const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
   const seconds = Math.floor((diff % (1000 * 60)) / 1000);
   
-  let display = '';
-  if (days > 0) {
-    display = `${days}d ${hours}h remaining`;
-  } else if (hours > 0) {
-    display = `${hours}h ${minutes}m remaining`;
-  } else if (minutes > 0) {
-    display = `${minutes}m ${seconds}s remaining`;
-  } else {
-    display = `${seconds}s remaining`;
-  }
+  const pad = (num) => num.toString().padStart(2, '0');
+  const displayHours = (days * 24) + hours;
+  const display = `${pad(displayHours)}:${pad(minutes)}:${pad(seconds)}`;
   
   return { expired: false, display, days, hours, minutes, seconds };
 }
@@ -139,6 +132,7 @@ async function updateTrialDisplay() {
   countdownElements.forEach(element => {
     if (trialInfo?.active) {
       element.innerHTML = `
+        <span class="sovereign-badge">SOVEREIGN</span>
         <i class="fas fa-hourglass-end"></i>
         Free Trial: <strong>${trialInfo.display}</strong>
       `;
@@ -377,6 +371,24 @@ style.textContent = `
   @keyframes slideOut {
     from { opacity: 1; transform: translateY(0); }
     to { opacity: 0; transform: translateY(20px); }
+  }
+  .sovereign-badge {
+    display: inline-block;
+    background: rgba(0, 242, 255, 0.15);
+    color: var(--neon-blue, #00f2ff);
+    border: 1px solid var(--neon-blue, #00f2ff);
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: bold;
+    letter-spacing: 1px;
+    margin-right: 10px;
+    animation: pulseBadge 2s infinite;
+  }
+  @keyframes pulseBadge {
+    0% { box-shadow: 0 0 0 0 rgba(0, 242, 255, 0.4); }
+    70% { box-shadow: 0 0 0 6px rgba(0, 242, 255, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(0, 242, 255, 0); }
   }
 `;
 document.head.appendChild(style);
