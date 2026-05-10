@@ -154,7 +154,12 @@ function isJWTExpired(token) {
 async function loadUserFromBackend(token) {
   try {
     const response = await fetch(`${API_BASE_URL}/auth/me`, {
-      headers: { 'Authorization': `Bearer ${token}` }
+      method: 'GET',
+      headers: { 
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
     });
 
     if (response.ok) {
