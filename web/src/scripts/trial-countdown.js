@@ -81,7 +81,7 @@ export async function getUserTrialInfo(userId) {
 }
 
 // ============================================================
-// INITIALIZE TRIAL COUNTDOWN DISPLAY
+// INITIALIZE TRIAL COUNTDOWN & WARMUP DISPLAY
 // ============================================================
 export function initializeTrialCountdown(userId) {
   currentUserId = userId;
@@ -93,7 +93,36 @@ export function initializeTrialCountdown(userId) {
   if (trialCheckInterval) clearInterval(trialCheckInterval);
   trialCheckInterval = setInterval(updateTrialDisplay, 1000);
   
+  // Listen for warmup updates from engine
+  document.addEventListener('warmupUpdate', (e) => {
+    if (e.detail.warmup) {
+      updateWarmupDisplay(e.detail.warmup);
+    }
+  });
+  
   console.log('✅ Trial countdown initialized');
+}
+
+// ============================================================
+// UPDATE WARMUP STATUS DISPLAY
+// ============================================================
+function updateWarmupDisplay(warmupStatus) {
+  const warmupElement = document.getElementById('warmup-status');
+  if (warmupElement) {
+    warmupElement.innerText = warmupStatus;
+    // Color code the warmup status
+    const [done, total] = warmupStatus.split('/').map(x => parseInt(x.trim()));
+    if (done && total) {
+      const percentage = (done / total) * 100;
+      if (percentage < 30) {
+        warmupElement.style.color = '#ff6b6b';
+      } else if (percentage < 70) {
+        warmupElement.style.color = '#ffa500';
+      } else {
+        warmupElement.style.color = '#51cf66';
+      }
+    }
+  }
 }
 
 // ============================================================
