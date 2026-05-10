@@ -72,24 +72,62 @@ export async function getUserTrialInfo(userId) {
       }
   }
 
-  // 2. Resilience Logic: Check multiple sources before deciding 'Expired'
+  // 2. Prioritize definitive subscription status from server or token
+  if (cachedTrialInfo) {
+      if (cachedTrialInfo.subscription_active || cachedTrialInfo.plan === 'pro' || cachedTrialInfo.plan === 'active') {
+          return {
+              active: true,
+              plan: cachedTrialInfo.plan || 'pro',
+              display: 'Premium Active',
+              expired: false,
+              days: 999, hours: 23, minutes: 59, seconds: 59,
+              allowedTokens: [],
+              allowedTimeframes: ['1m','3m','5m','15m','30m','1h','4h','1d']
+          };
+      }
+  }
+
   const jwtData = AuthManager.getUserData() || {};
+  if (jwtData.plan_type === 'pro' || jwtData.plan_type === 'active') {
+      return {
+          active: true,
+          plan: jwtData.plan_type,
+          display: 'Premium Active',
+          expired: false,
+          days: 999, hours: 23, minutes: 59, seconds: 59,
+          allowedTokens: [],
+          allowedTimeframes: ['1m','3m','5m','15m','30m','1h','4h','1d']
+      };
+  }
+
+  // 3. Resilience Logic: Check multiple sources before deciding 'Expired'
   let trialEnd = cachedTrialInfo?.trial_end || localStorage.getItem('trial_end_timestamp');
 
   // If we have NO data yet, assume it's loading, NOT expired
   if (!trialEnd && !cachedTrialInfo) {
       return { active: true, display: "Loading...", expired: false };
   }
+  
+  if (!trialEnd || trialEnd === 'null' || trialEnd === 'undefined') {
+      // If we got here, server responded but didn't provide a trial_end and we aren't Pro
+      return { active: false, expired: true, display: 'Trial Expired' };
+  }
 
   const expiryDate = new Date(trialEnd);
+  if (isNaN(expiryDate.getTime())) {
+      return { active: false, expired: true, display: 'Trial Expired' };
+  }
+  
   const timeInfo = formatTimeRemaining(expiryDate);
 
-  // 3. Final decision: Only trigger expired if current time is strictly past expiry
+  // 4. Final decision: Only trigger expired if current time is strictly past expiry
   return {
       active: !timeInfo.expired,
       ...timeInfo,
-      allowedTokens: ['BTC/USDT', 'ETH/USDT', 'SOL/USDT'],
-      plan: 'trial'
+      allowedTokens: ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ARB/USDT', 'AAVE/USDT'],
+      allowedTimeframes: ['15m', '30m'],
+      plan: 'trial',
+      trialEndDate: expiryDate
   };
 }
 
