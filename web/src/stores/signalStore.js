@@ -1,3 +1,5 @@
+import { AuthManager } from '../auth/authManager.js';
+
 export class SignalStore {
     constructor() {
         this.signals = {}; // Map of pair -> signal object
@@ -17,14 +19,39 @@ export class SignalStore {
 
     async fetchLiveSignals() {
         try {
-            const response = await fetch('/api/public/signals');
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            const authHeader = AuthManager.getAuthHeader();
+            if (authHeader) {
+                headers['Authorization'] = authHeader;
+            }
+
+            // Using authenticated endpoint
+            const response = await fetch('/api/user/signals', {
+                method: 'GET',
+                headers: headers
+            });
+            
+            if (response.status === 401 || response.status === 403) {
+                // Dispatch event to show expired UI
+                window.dispatchEvent(new Event('aegis:auth:expired'));
+                return;
+            }
+
             if (response.ok) {
                 const data = await response.json();
+                
+                if (data.expired) {
+                    window.dispatchEvent(new Event('aegis:auth:expired'));
+                    return;
+                }
+
                 if (data.signals && typeof data.signals === 'object') {
                     this.updateMultiple(data.signals);
                 }
                 // Notify listeners of warmup status
-                if (data.warmup) {
+                if (data.warmup !== undefined) {
                     const event = new CustomEvent('warmupUpdate', { detail: { warmup: data.warmup } });
                     document.dispatchEvent(event);
                 }
@@ -96,3 +123,4 @@ export class SignalStore {
         this.listeners.forEach(cb => cb(sorted));
     }
 }
+
