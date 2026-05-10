@@ -29,15 +29,15 @@ export class AuthManager {
         localStorage.setItem('user_profile', JSON.stringify(userData));
         if (userData) {
             let endDate = null;
-            if (userData.trial && userData.trial.endDate) {
+            if (userData.trial && userData.trial.endDate !== undefined && userData.trial.endDate !== null) {
                 endDate = userData.trial.endDate;
-            } else if (userData.trial_end) {
+            } else if (userData.trial_end !== undefined && userData.trial_end !== null) {
                 endDate = userData.trial_end;
-            } else if (userData.trialEnd) {
+            } else if (userData.trialEnd !== undefined && userData.trialEnd !== null) {
                 endDate = userData.trialEnd;
             }
             
-            if (endDate) {
+            if (endDate && String(endDate) !== 'null') {
                 // Support both Firestore Timestamp and ISO String
                 if (typeof endDate === 'object' && endDate.seconds) {
                     endDate = new Date(endDate.seconds * 1000).toISOString();
@@ -47,7 +47,7 @@ export class AuthManager {
                 localStorage.setItem('trial_end_timestamp', endDate);
                 console.log('[AuthManager] trial_end_timestamp updated:', endDate);
             } else {
-                console.warn('[AuthManager] No trial end date found in userData:', userData);
+                console.warn('[AuthManager] No valid trial end date found in userData:', userData);
             }
         }
     }
@@ -73,8 +73,23 @@ export class AuthManager {
 
     static isTrialValid() {
         const trialEnd = localStorage.getItem('trial_end_timestamp');
-        if (!trialEnd) return false;
-        return new Date() < new Date(trialEnd);
+        
+        if (!trialEnd || trialEnd === 'null' || trialEnd === 'undefined') {
+            const user = this.getUser();
+            if (user && (user.plan === 'free_trial' || user.plan === 'trial')) {
+                return user.trial_expired === false;
+            }
+            const tokenData = this.getUserData();
+            if (tokenData && tokenData.plan_type === 'free_trial') {
+                return tokenData.status === 'active';
+            }
+            return false;
+        }
+        
+        const endDate = new Date(trialEnd);
+        if (isNaN(endDate.getTime())) return false;
+        
+        return new Date() < endDate;
     }
 
     static isTokenValid() {
@@ -158,8 +173,13 @@ export class AuthManager {
         }
 
         const user = this.getUser();
-        if (user && (user.plan === 'pro' || user.plan === 'active')) {
-            return 'active';
+        if (user) {
+            if (user.plan === 'pro' || user.plan === 'active') {
+                return 'active';
+            }
+            if ((user.plan === 'trial' || user.plan === 'free_trial') && user.trial_expired === false) {
+                return 'active';
+            }
         }
         
         // Fallback to decoded JWT logic
@@ -171,3 +191,4 @@ export class AuthManager {
         return 'expired';
     }
 }
+
