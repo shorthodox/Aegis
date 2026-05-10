@@ -27,13 +27,28 @@ export class AuthManager {
 
     static setUser(userData) {
         localStorage.setItem('user_profile', JSON.stringify(userData));
-        if (userData && userData.trial && userData.trial.endDate) {
-            // Support both Firestore Timestamp and ISO String
-            let endDate = userData.trial.endDate;
-            if (typeof endDate === 'object' && endDate.seconds) {
-                endDate = new Date(endDate.seconds * 1000).toISOString();
+        if (userData) {
+            let endDate = null;
+            if (userData.trial && userData.trial.endDate) {
+                endDate = userData.trial.endDate;
+            } else if (userData.trial_end) {
+                endDate = userData.trial_end;
+            } else if (userData.trialEnd) {
+                endDate = userData.trialEnd;
             }
-            localStorage.setItem('trial_end_timestamp', endDate);
+            
+            if (endDate) {
+                // Support both Firestore Timestamp and ISO String
+                if (typeof endDate === 'object' && endDate.seconds) {
+                    endDate = new Date(endDate.seconds * 1000).toISOString();
+                } else if (typeof endDate === 'number') { // Support ms timestamp
+                    endDate = new Date(endDate).toISOString();
+                }
+                localStorage.setItem('trial_end_timestamp', endDate);
+                console.log('[AuthManager] trial_end_timestamp updated:', endDate);
+            } else {
+                console.warn('[AuthManager] No trial end date found in userData:', userData);
+            }
         }
     }
 
@@ -43,9 +58,17 @@ export class AuthManager {
     }
 
     static getPlanType() {
+        const tokenData = this.getUserData();
+        if (tokenData && tokenData.plan_type) {
+            return tokenData.plan_type;
+        }
+        
         const user = this.getUser();
-        if (!user) return 'free_trial';
-        return user.plan || 'free_trial';
+        if (user && user.plan) {
+            return user.plan;
+        }
+        
+        return 'free_trial';
     }
 
     static isTrialValid() {
@@ -59,8 +82,8 @@ export class AuthManager {
         if (!token) return false;
         try {
             const payload = JSON.parse(atob(token.split('.')[1]));
-            // Add a 5 minute buffer for token expiration
-            return payload.exp * 1000 > Date.now() + 300000;
+            // Add a small 10 second buffer for token expiration instead of 5 minutes
+            return payload.exp * 1000 > Date.now() + 10000;
         } catch (e) {
             return false;
         }
@@ -109,19 +132,11 @@ export class AuthManager {
         if (!data) return false;
         
         let hasBaseAccess = false;
-        if (data.plan_type === 'active' || data.plan_type === 'pro') {
+        if (data.plan_type === 'active' || data.plan_type === 'pro' || data.status === 'active') {
             hasBaseAccess = true;
-        } else if (data.plan_type === 'free_trial') {
-            if (data.trial_start) {
-                const trialStartMs = (typeof data.trial_start === 'number' && data.trial_start < 10000000000) 
-                    ? data.trial_start * 1000 
-                    : new Date(data.trial_start).getTime();
-                
-                const hoursSinceStart = (Date.now() - trialStartMs) / (1000 * 60 * 60);
-                if (hoursSinceStart < 24) {
-                    hasBaseAccess = true;
-                }
-            }
+        } else if (data.plan_type === 'free_trial' && data.status !== 'expired') {
+            // Trust the status/plan_type from token instead of hardcoded 24-hour limit
+            hasBaseAccess = true;
         }
         
         if (!hasBaseAccess) return false;
@@ -135,18 +150,18 @@ export class AuthManager {
     }
 
     static getSubscriptionStatus() {
-        const user = this.getUser();
-        if (!user) return 'expired';
-        
-        // If pro, they have full access
-        if (user.plan === 'pro') return 'active';
-        
-        // Use new token-based logic if available
-        if (this.getUserData()?.plan_type) {
-             return this.hasAccess('signals') ? 'active' : 'expired';
+        // Prioritize decoded JWT as single source of truth
+        const tokenData = this.getUserData();
+        if (tokenData) {
+            return this.hasAccess('signals') ? 'active' : 'expired';
         }
         
-        // Fallback to local storage validity
+        // Fallbacks
+        const user = this.getUser();
+        if (user && (user.plan === 'pro' || user.plan === 'active')) {
+            return 'active';
+        }
+        
         if (this.isTrialValid()) {
             return 'active';
         }
