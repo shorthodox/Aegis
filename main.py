@@ -523,6 +523,19 @@ def is_trial_expired(email: str) -> bool:
 # -------------------------------------------------------------------
 BASE_URL = os.getenv("BASE_URL", "http://localhost:8000").rstrip('/')
 
+@app.get("/auth/me")
+async def get_me(user_id: str = Depends(get_current_user)):
+    user_doc = get_user_doc(user_id)
+    if not user_doc:
+        raise HTTPException(status_code=404)
+    return {
+        "email": user_doc.get("email", user_id), 
+        "plan": user_doc.get("plan", "trial"), 
+        "trial_end": user_doc.get("trial_end"),
+        "full_name": user_doc.get("full_name"),
+        "location": user_doc.get("location")
+    }
+
 @app.get("/auth/{provider}")
 async def oauth_login(request: Request, provider: str):
     if OAuth is None:
@@ -740,18 +753,7 @@ async def google_login(request: Request):
     token = create_token(email)
     return {"access_token": token, "token_type": "bearer", "plan": user_doc["plan"], "trial_end": user_doc.get("trial_end")}
 
-@app.get("/auth/me")
-async def get_me(email: str = Depends(get_current_user)):
-    user_doc = get_user_doc(email)
-    if not user_doc:
-        raise HTTPException(status_code=404)
-    return {
-        "email": email, 
-        "plan": user_doc["plan"], 
-        "trial_end": user_doc.get("trial_end"),
-        "full_name": user_doc.get("full_name"),
-        "location": user_doc.get("location")
-    }
+
 
 # -------------------------------------------------------------------
 # Subscription & plan limits
