@@ -7,9 +7,11 @@
 :root {
     --bg-deep: #050505;
     --bg-void: #0a0a0c;
-    --glass-bg: rgba(10, 10, 12, 0.65);
+    --glass-bg: rgba(15, 23, 42, 0.8);
     --glass-border: rgba(0, 242, 255, 0.12);
     --primary-cyan: #00f2ff;
+    --neon-blue: #00f2ff;
+    --warning-orange: #ff8c00;
     --risk-orange: #ff8c00;
     --text-white: #ffffff;
     --text-dim: #94a3b8;
@@ -42,14 +44,20 @@ body {
 body.dashboard-body {
     overflow: hidden;
     height: 100vh;
-    padding-top: 5rem;
+    padding-top: 0; /* Remove top padding since we hide the top nav */
+}
+
+/* Hide landing page nav elements on the dashboard to prevent clutter/duplicates */
+body.dashboard-body .brand-logo,
+body.dashboard-body .glass-nav {
+    display: none !important;
 }
 
 /* DASHBOARD LAYOUT – GRID */
 .dashboard-layout {
     display: grid;
-    grid-template-columns: 280px 1fr;
-    height: calc(100vh - 5rem);
+    grid-template-columns: 300px 1fr;
+    height: 100vh;
     width: 100%;
     overflow: hidden;
 }
@@ -292,8 +300,8 @@ body.dashboard-body {
     background: var(--glass-bg);
     backdrop-filter: blur(12px);
     border-radius: 20px;
-    border: 1px solid var(--glass-border);
-    padding: 1rem;
+    border: 1px solid var(--neon-blue);
+    padding: 16px;
     transition: all 0.2s ease;
     cursor: pointer;
     position: relative;
