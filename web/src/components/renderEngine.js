@@ -13,6 +13,7 @@ export class RenderEngine {
 
     initTable() {
         const planType = AuthManager.getPlanType();
+        const allTimeframes = ['1m','3m','5m','15m','30m','1h','4h','1d'];
         let allowedTimeframes = ['1m','3m','5m','15m','30m','1h','4h','1d'];
         
         // Use token-based hasAccess if available, else fallback to old logic
@@ -37,17 +38,22 @@ export class RenderEngine {
                 <!-- Search Bar at the Top -->
                 <div class="relative w-full">
                     <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><i class="fas fa-search"></i></span>
-                    <input type="text" id="signalSearch" placeholder="Search pairs... (e.g. BTC/USDT)" class="w-full bg-black/60 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:outline-none focus:border-cyan focus:ring-1 focus:ring-cyan transition-all font-mono">
+                    <input type="text" id="signalSearch" placeholder="Search pairs... (e.g. BTC/USDT)" class="w-full bg-black/60 border border-white/10 rounded-xl pl-10 pr-4 py-3 min-h-[44px] text-white focus:outline-none focus:border-cyan focus:ring-1 focus:ring-cyan transition-all font-mono">
                 </div>
                 
                 <!-- Timeframe Bar and Controls -->
                 <div class="flex flex-wrap justify-between items-center gap-4 bg-black/40 p-2 rounded-xl border border-white/5">
-                    <div class="flex gap-2 overflow-x-auto custom-scrollbar pb-1">
-                        ${allowedTimeframes.map(tf => 
-                            `<button class="tf-btn px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${this.signalStore.timeframe === tf ? 'bg-cyan text-black shadow-[0_0_10px_rgba(0,242,255,0.4)]' : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'}" data-tf="${tf}">${tf}</button>`
-                        ).join('')}
+                    <div class="flex gap-2 overflow-x-auto custom-scrollbar pb-1 w-full lg:w-auto" style="-webkit-overflow-scrolling: touch;">
+                        ${allTimeframes.map(tf => {
+                            const isAllowed = allowedTimeframes.includes(tf);
+                            const isActive = this.signalStore.timeframe === tf;
+                            const activeClasses = isActive ? 'bg-cyan text-black shadow-[0_0_10px_rgba(0,242,255,0.4)]' : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white';
+                            const lockClasses = !isAllowed ? 'opacity-50 blur-[0.5px] pointer-events-none relative' : '';
+                            const lockIcon = !isAllowed ? `<i class="fas fa-lock absolute -top-1 -right-1 text-[10px] text-orange"></i>` : '';
+                            return `<button class="tf-btn px-4 py-1.5 min-h-[44px] rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeClasses} ${lockClasses}" data-tf="${tf}">${tf}${lockIcon}</button>`;
+                        }).join('')}
                     </div>
-                    <button id="exportCsvBtn" class="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 px-4 py-1.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap"><i class="fas fa-download"></i> Export CSV</button>
+                    <button id="exportCsvBtn" class="flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 px-4 py-1.5 min-h-[44px] rounded-lg text-sm font-bold transition-all whitespace-nowrap w-full lg:w-auto"><i class="fas fa-download"></i> Export CSV</button>
                 </div>
             </div>
             
@@ -59,9 +65,16 @@ export class RenderEngine {
         const tfBtns = this.container.querySelectorAll('.tf-btn');
         tfBtns.forEach(btn => {
             btn.addEventListener('click', (e) => {
-                tfBtns.forEach(b => b.classList.remove('active'));
-                e.target.classList.add('active');
-                this.signalStore.setTimeframe(e.target.dataset.tf);
+                e.preventDefault();
+                tfBtns.forEach(b => {
+                    b.classList.remove('bg-cyan', 'text-black', 'shadow-[0_0_10px_rgba(0,242,255,0.4)]');
+                    if (!b.classList.contains('pointer-events-none')) {
+                        b.classList.add('bg-white/5', 'text-gray-400');
+                    }
+                });
+                e.currentTarget.classList.remove('bg-white/5', 'text-gray-400');
+                e.currentTarget.classList.add('bg-cyan', 'text-black', 'shadow-[0_0_10px_rgba(0,242,255,0.4)]');
+                this.signalStore.setTimeframe(e.currentTarget.dataset.tf);
             });
         });
 
