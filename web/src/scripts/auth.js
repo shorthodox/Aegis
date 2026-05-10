@@ -89,6 +89,8 @@ import {
   db
 } from './gatekeeper.js';
 
+import { AuthManager } from '../auth/authManager.js';
+
 import {
   signInWithPopup,
   signInWithEmailAndPassword,
@@ -221,7 +223,6 @@ export async function handleGoogleAuth() {
     googleProvider.addScope('profile');
     
     const result = await signInWithPopup(auth, googleProvider);
-    console.log('✅ Google Auth popup successful');
     const user = result.user;
     
     // Create/update user document
@@ -229,7 +230,7 @@ export async function handleGoogleAuth() {
     
     // Store token
     const idToken = await user.getIdToken();
-    localStorage.setItem('access_token', idToken);
+    AuthManager.setToken(idToken);
     localStorage.setItem('authenticated', 'true');
     
     console.log('✅ Google Auth successful:', user.email);
@@ -284,7 +285,7 @@ export async function handleEmailSignup(email, password, displayName) {
     
     // Store token
     const idToken = await user.getIdToken();
-    localStorage.setItem('access_token', idToken);
+    AuthManager.setToken(idToken);
     localStorage.setItem('authenticated', 'true');
     
     console.log('✅ Email signup successful:', email);
@@ -316,7 +317,7 @@ export async function handleEmailLogin(email, password) {
     
     // Store token
     const idToken = await user.getIdToken();
-    localStorage.setItem('access_token', idToken);
+    AuthManager.setToken(idToken);
     localStorage.setItem('authenticated', 'true');
     
     console.log('✅ Email login successful:', email);
@@ -417,7 +418,7 @@ export async function verifyPhoneOTP(otpCode) {
     
     // Store token
     const idToken = await user.getIdToken();
-    localStorage.setItem('access_token', idToken);
+    AuthManager.setToken(idToken);
     localStorage.setItem('authenticated', 'true');
     
     confirmationResult = null;
@@ -441,7 +442,7 @@ export async function handleLogout() {
   try {
     console.log('👋 Logging out...');
     await signOut(auth);
-    localStorage.removeItem('access_token');
+    AuthManager.clearToken();
     localStorage.removeItem('authenticated');
     console.log('✅ Logout successful');
     return { success: true };
