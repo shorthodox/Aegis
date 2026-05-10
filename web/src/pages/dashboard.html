@@ -354,5 +354,42 @@
     </script>
     <script type="module" src="/web/src/scripts/trial-countdown.js"></script>
     <script type="module" src="/web/src/scripts/app.js"></script>
+    
+    <script type="module">
+        import { AuthManager } from '/web/src/auth/authManager.js';
+        
+        async function fetchFreshLimits() {
+            try {
+                const response = await fetch('/user/limits', {
+                    headers: { 'Authorization': AuthManager.getAuthHeader() }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Fallback for null trial_end when is_trial is true
+                    if (data.is_trial && !data.trial_end) {
+                        const fallbackDate = new Date();
+                        fallbackDate.setHours(fallbackDate.getHours() + 24);
+                        data.trial_end = fallbackDate.toISOString();
+                    }
+                    
+                    // Update user profile in localStorage
+                    const existingUser = AuthManager.getUser() || {};
+                    const mergedUser = { ...existingUser, ...data };
+                    AuthManager.setUser(mergedUser);
+                    
+                    // Dispatch event for UI sync
+                    window.dispatchEvent(new Event('aegis:auth:sync'));
+                }
+            } catch (err) {
+                console.error('Failed to sync limits:', err);
+            }
+        }
+        
+        // Run immediately on dashboard load if authenticated
+        if (AuthManager.isAuthenticated()) {
+            fetchFreshLimits();
+        }
+    </script>
 </body>
 </html>
