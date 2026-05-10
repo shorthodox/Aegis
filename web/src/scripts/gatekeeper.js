@@ -126,7 +126,7 @@ async function checkAuthAndLoad() {
 
   // Check if token is expired
   if (isJWTExpired(token)) {
-    localStorage.removeItem('access_token');
+    AuthManager.clearToken();
     redirectToLogin();
     return;
   }
@@ -153,6 +153,7 @@ function isJWTExpired(token) {
 
 async function loadUserFromBackend(token) {
   try {
+    console.log('Sending token to backend. Token:', token, 'Header: Bearer', token);
     const response = await fetch(`${API_BASE_URL}/auth/me`, {
       method: 'GET',
       credentials: 'include',
@@ -169,7 +170,7 @@ async function loadUserFromBackend(token) {
       currentUserData = userData;
       userPlan = userData.plan || 'trial';
       trialEnd = userData.trial_end ? new Date(userData.trial_end) : null;
-      trialActive = userPlan === 'trial' && trialEnd && new Date() < trialEnd;
+      trialActive = userPlan === 'trial' && (trialEnd === null || new Date() < trialEnd);
 
       // If user has no active plan and trial is expired, redirect to pricing
       if (userPlan !== 'pro' && userPlan !== 'basic' && !trialActive) {
@@ -187,10 +188,11 @@ async function loadUserFromBackend(token) {
         showUpgradePrompt();
       }
     } else if (response.status === 401) {
-      localStorage.removeItem('access_token');
+      AuthManager.clearToken();
       redirectToLogin();
     } else {
-      console.error('Failed to load user data:', response.status);
+      const errorText = await response.text();
+      console.error('Failed to load user data:', response.status, errorText);
       redirectToLogin();
     }
   } catch (error) {
