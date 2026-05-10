@@ -238,6 +238,7 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const resp = await fetch('/auth/me', { 
                     method: 'GET',
+                    credentials: 'include',
                     headers: { 
                         'Authorization': `Bearer ${jwt}`,
                         'Accept': 'application/json',
