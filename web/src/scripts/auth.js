@@ -221,6 +221,7 @@ export async function handleGoogleAuth() {
     googleProvider.addScope('profile');
     
     const result = await signInWithPopup(auth, googleProvider);
+    console.log('✅ Google Auth popup successful');
     const user = result.user;
     
     // Create/update user document
