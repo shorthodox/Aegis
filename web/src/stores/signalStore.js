@@ -27,8 +27,8 @@ export class SignalStore {
                 headers['Authorization'] = authHeader;
             }
 
-            // Using authenticated endpoint
-            const response = await fetch('/api/user/signals', {
+            // Using public endpoint with Authorization header
+            const response = await fetch('/api/public/signals', {
                 method: 'GET',
                 headers: headers
             });
@@ -123,4 +123,3 @@ export class SignalStore {
         this.listeners.forEach(cb => cb(sorted));
     }
 }
-
