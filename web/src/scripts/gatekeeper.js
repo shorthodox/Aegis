@@ -118,7 +118,7 @@ function attachEventListeners() {
 // Authentication & User Data
 // -------------------------------------------------------------------
 async function checkAuthAndLoad() {
-  const token = localStorage.getItem('access_token');
+  const token = AuthManager.getToken();
   if (!token) {
     redirectToLogin();
     return;
@@ -136,11 +136,18 @@ async function checkAuthAndLoad() {
 
 function isJWTExpired(token) {
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+    const payload = JSON.parse(jsonPayload);
+    if (!payload.exp) return false;
     const exp = payload.exp * 1000;
     return Date.now() >= exp;
   } catch (e) {
-    return true;
+    console.error("isJWTExpired error:", e);
+    return false; // Let the backend API decide if token is valid
   }
 }
 
@@ -181,7 +188,7 @@ async function loadUserFromBackend(token) {
 }
 
 async function loadUserLimits() {
-  const token = localStorage.getItem('access_token');
+  const token = AuthManager.getToken();
   if (!token) return;
 
   try {
@@ -689,7 +696,7 @@ async function handleLogout() {
     if (tradesUnsubscribe) tradesUnsubscribe();
     
     // Clear local storage
-    localStorage.removeItem('access_token');
+    AuthManager.clearToken();
     
     // Sign out from Firebase
     await signOut(auth);
