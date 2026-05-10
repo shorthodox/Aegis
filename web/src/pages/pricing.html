@@ -99,7 +99,7 @@
     <script type="module">
       import { initSignInUI, openSignInModal } from '../scripts/signin-ui.js';
       import { initSignUpUI, openSignUpModal } from '../scripts/signup-ui.js';
-      import { isUserAuthenticated } from '../scripts/auth.js';
+      import { isUserAuthenticated, handleLogout } from '../scripts/auth.js';
 
       document.addEventListener('DOMContentLoaded', () => {
         // Initialize auth UIs
@@ -108,28 +108,44 @@
 
         // Portal button
         const portalBtn = document.getElementById('portalBtn');
-        if (portalBtn) {
-          portalBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            if (isUserAuthenticated()) {
-              window.location.href = '/web/src/pages/dashboard.html';
-            } else {
-              openSignInModal();
-            }
-          });
-        }
-
-        // Create Account button
         const createAccountBtn = document.getElementById('createAccountBtn');
-        if (createAccountBtn) {
-          createAccountBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            if (isUserAuthenticated()) {
-              window.location.href = '/web/src/pages/dashboard.html';
-            } else {
-              openSignUpModal();
+        
+        if (isUserAuthenticated()) {
+            if (portalBtn) {
+                portalBtn.innerText = 'Dashboard';
+                portalBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    window.location.href = '/web/src/pages/dashboard.html';
+                });
             }
-          });
+            if (createAccountBtn) {
+                createAccountBtn.innerText = 'Sign Out';
+                createAccountBtn.style.background = 'transparent';
+                createAccountBtn.style.borderColor = 'rgba(255, 100, 100, 0.5)';
+                createAccountBtn.style.color = 'rgb(255, 100, 100)';
+                createAccountBtn.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    try {
+                        await handleLogout();
+                        window.location.reload();
+                    } catch (err) {
+                        console.error('Logout failed:', err);
+                    }
+                });
+            }
+        } else {
+            if (portalBtn) {
+                portalBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    openSignInModal();
+                });
+            }
+            if (createAccountBtn) {
+                createAccountBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    openSignUpModal();
+                });
+            }
         }
 
         // Trial button
