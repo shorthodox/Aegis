@@ -11,6 +11,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
 
 import { AuthManager } from '../auth/authManager.js';
+import { isTrialExpired, stopTrialCountdown } from './trial-countdown.js';
 
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
@@ -266,13 +267,34 @@ function startWebSocket(token) {
 
   ws = new WebSocket(wsUrl);
 
+  // Global trial expired listener to snap connections shut instantly
+  document.addEventListener('trialExpired', () => {
+      console.warn("Global Trial Expiration caught! Suspending engine WebSockets...");
+      if (ws) {
+          ws.close();
+      }
+      stopTrialCountdown();
+  });
+
   ws.onopen = () => {
     console.log('✅ WebSocket connected');
     ws.send(JSON.stringify({ token }));
   };
 
-  ws.onmessage = (event) => {
+  ws.onmessage = async (event) => {
     try {
+      // Intercept with absolute trial check
+      if (AuthManager.getUser()) {
+          const expired = await isTrialExpired(AuthManager.getUser().uid);
+          if (expired && AuthManager.getPlanType() !== 'pro') {
+              console.warn(`[Aegis] Operation halted. Trial expired.`);
+              stopTrialCountdown();
+              document.dispatchEvent(new CustomEvent('trialExpired', { detail: { userId: AuthManager.getUser().uid } }));
+              if (ws) ws.close();
+              return;
+          }
+      }
+
       const data = JSON.parse(event.data);
       updateDashboardData(data);
     } catch (e) {
