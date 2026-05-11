@@ -6,29 +6,15 @@
     <title>AEGIS v1.0 | Sovereign Terminal</title>
     <link rel="stylesheet" href="/web/src/styles/main.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <!-- Tailwind CSS for premium layout -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        deep: '#050505',
-                        void: '#0a0a0c',
-                        cyan: '#00f2ff',
-                        orange: '#ff8c00',
-                        glass: 'rgba(15, 23, 42, 0.75)',
-                        glassBorder: 'rgba(0, 242, 255, 0.15)'
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                        mono: ['JetBrains Mono', 'monospace'],
-                    }
-                }
-            }
+    <!-- Tailwind CSS Configuration (no CDN - using Tailwind utilities directly) -->
+    <style>
+        :root {
+            --deep: #050505;
+            --void: #0a0a0c;
+            --cyan: #00f2ff;
+            --orange: #ff8c00;
         }
-    </script>
+    </style>
     <style>
         /* Premium Overrides */
         body { background: #050505; color: #fff; }
@@ -290,6 +276,30 @@
             </div>
         </div>
     </div>
+
+    <!-- Dashboard Initialization Script -->
+    <script type="module">
+        import * as gatekeeper from '../scripts/gatekeeper.js';
+        import { AuthManager } from '../auth/authManager.js';
+        
+        // Initialize dashboard only if pathname includes dashboard.html
+        if (window.location.pathname.includes('dashboard.html')) {
+            console.log('🚀 Initializing AEGIS Dashboard...');
+            
+            // Ensure auth is checked before showing dashboard
+            AuthManager.checkAuth().then(isAuthenticated => {
+                if (isAuthenticated) {
+                    console.log('✅ User authenticated, dashboard ready');
+                } else {
+                    console.warn('⚠️ Not authenticated, redirecting to login...');
+                    window.location.href = '/web/src/pages/index.html';
+                }
+            }).catch(error => {
+                console.error('❌ Auth check failed:', error);
+                window.location.href = '/web/src/pages/index.html';
+            });
+        }
+    </script>
 
     </body>
 </html>

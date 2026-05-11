@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Refund Policy | AEGIS v1.0</title>
+    <link rel="stylesheet" href="/web/src/styles/main.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        .fixed-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.8rem 2rem;
+            background: rgba(10, 10, 12, 0.8);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(0, 242, 255, 0.2);
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 1000;
+            box-sizing: border-box;
+        }
+        .logo {
+            font-size: 1.3rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #fff, var(--primary-cyan, #00f2ff));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            opacity: 1;
+            visibility: visible;
+            width: auto;
+        }
+        .nav-links-centered {
+            display: flex;
+            gap: 2rem;
+            flex: 1;
+            justify-content: center;
+        }
+        .nav-link {
+            color: var(--dim, #94a3b8);
+            text-decoration: none;
+            font-weight: 500;
+            transition: 0.2s;
+            font-size: 0.9rem;
+        }
+        .nav-link:hover, .nav-link.active {
+            color: var(--primary-cyan, #00f2ff);
+        }
+        .portal-btn {
+            background: rgba(0, 242, 255, 0.1);
+            border: 1px solid rgba(0, 242, 255, 0.3);
+            border-radius: 40px;
+            padding: 0.4rem 1.2rem;
+            color: var(--primary-cyan, #00f2ff);
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+            white-space: nowrap;
+        }
+        .portal-btn:hover {
+            background: rgba(0, 242, 255, 0.2);
+            box-shadow: 0 0 12px rgba(0,242,255,0.3);
+        }
+        body {
+            padding-top: 80px;
+            overflow-y: auto;
+            background: #0a0a0c;
+            color: #e2e8f0;
+        }
+        .content-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 4rem 2rem;
+        }
+        .section-title {
+            font-size: 2rem;
+            margin: 2rem 0 1rem 0;
+            color: #00f2ff;
+        }
+        .subsection-title {
+            font-size: 1.3rem;
+            margin: 1.5rem 0 0.8rem 0;
+            color: #e2e8f0;
+        }
+        .policy-text {
+            line-height: 1.8;
+            color: #94a3b8;
+            margin-bottom: 1rem;
+        }
+        .policy-list {
+            margin: 1rem 0 1rem 2rem;
+            color: #94a3b8;
+        }
+        .policy-list li {
+            margin-bottom: 0.8rem;
+            line-height: 1.6;
+        }
+        .footer {
+            text-align: center;
+            padding: 3rem 2rem;
+            border-top: 1px solid rgba(0, 242, 255, 0.2);
+            margin-top: 3rem;
+            color: #64748b;
+            font-size: 0.9rem;
+        }
+        .footer-links {
+            margin-bottom: 1rem;
+        }
+        .footer-links a {
+            color: #00f2ff;
+            text-decoration: none;
+            margin: 0 0.5rem;
+        }
+        .footer-links a:hover {
+            text-decoration: underline;
+        }
+        .separator {
+            color: #475569;
+            margin: 0 0.5rem;
+        }
+        .footer-proprietor {
+            margin: 1rem 0;
+            font-size: 0.85rem;
+            color: #64748b;
+        }
+    </style>
+</head>
+<body>
+    <!-- Fixed Glass Header -->
+    <header class="fixed-header">
+        <div class="logo">⚡ AEGIS <span>v1.0</span></div>
+        <div class="nav-links-centered">
+            <a href="/web/src/pages/index.html" class="nav-link">Home</a>
+            <a href="/web/src/pages/pricing.html" class="nav-link">Pricing</a>
+        </div>
+        <button id="portalBtn" class="portal-btn">Client Login</button>
+    </header>
+
+    <!-- Content -->
+    <div class="content-container">
+        <h1 class="section-title">Refund Policy</h1>
+        
+        <div class="policy-text">
+            <p><strong>Last Updated: May 11, 2026</strong></p>
+        </div>
+
+        <h2 class="subsection-title">1. Refund Eligibility</h2>
+        <p class="policy-text">
+            AEGIS v1.0 offers refunds under the following circumstances:
+        </p>
+        <ul class="policy-list">
+            <li>If you request a refund within 7 days of your first subscription payment, you are eligible for a full refund, provided you have not accessed the Pro or Basic plan features beyond initial setup.</li>
+            <li>If the service is unavailable for more than 48 consecutive hours due to our infrastructure failure, you are entitled to a pro-rata refund for the affected period.</li>
+            <li>If the subscription was charged in error (duplicate charges, unauthorized transactions), a full refund will be issued.</li>
+        </ul>
+
+        <h2 class="subsection-title">2. Trial Refund Policy</h2>
+        <p class="policy-text">
+            The 72-hour Explorer Trial is completely free and does not require a refund process. No payment method is charged during the trial period.
+        </p>
+
+        <h2 class="subsection-title">3. How to Request a Refund</h2>
+        <p class="policy-text">
+            To request a refund, please:
+        </p>
+        <ul class="policy-list">
+            <li>Email support@aegis-trading.io with your account email and transaction ID</li>
+            <li>Provide a clear reason for your refund request</li>
+            <li>Include any relevant screenshots or documentation</li>
+            <li>Allow 5-7 business days for processing</li>
+        </ul>
+
+        <h2 class="subsection-title">4. Refund Processing Timeline</h2>
+        <p class="policy-text">
+            Once approved, refunds are processed through the original payment method:
+        </p>
+        <ul class="policy-list">
+            <li>Credit/Debit Card: 5-10 business days</li>
+            <li>Digital Wallets (Cashfree, UPI): 2-3 business days</li>
+            <li>Bank Transfers: 5-7 business days</li>
+        </ul>
+
+        <h2 class="subsection-title">5. Non-Refundable Situations</h2>
+        <p class="policy-text">
+            The following situations are NOT eligible for refunds:
+        </p>
+        <ul class="policy-list">
+            <li>Refund requests made after 7 days of the initial subscription payment</li>
+            <li>Trading losses incurred using AEGIS signals (signals are advisory only)</li>
+            <li>Requests due to user error or misuse of the platform</li>
+            <li>Changes of mind after the 7-day window has passed</li>
+            <li>Cancellation of recurring subscriptions (use the dashboard to cancel future renewals)</li>
+        </ul>
+
+        <h2 class="subsection-title">6. Subscription Cancellation</h2>
+        <p class="policy-text">
+            You can cancel your subscription at any time through your dashboard. Cancellation takes effect at the end of your current billing cycle. No refunds are issued for partially used months, but you will not be charged for future periods.
+        </p>
+
+        <h2 class="subsection-title">7. Cashfree Payment Disputes</h2>
+        <p class="policy-text">
+            If you believe your payment was processed incorrectly, you can file a dispute directly with Cashfree:
+        </p>
+        <ul class="policy-list">
+            <li>Log into your Cashfree account</li>
+            <li>Navigate to Transaction History</li>
+            <li>Click "Dispute" on the relevant transaction</li>
+            <li>Provide supporting documentation</li>
+        </ul>
+
+        <h2 class="subsection-title">8. Contact Us</h2>
+        <p class="policy-text">
+            For any refund inquiries or disputes, contact our support team:
+        </p>
+        <ul class="policy-list">
+            <li><strong>Email:</strong> support@aegis-trading.io</li>
+            <li><strong>Response Time:</strong> Within 24-48 hours</li>
+        </ul>
+
+        <p class="policy-text" style="margin-top: 2rem; font-size: 0.85rem; color: #64748b;">
+            <strong>Disclaimer:</strong> AEGIS v1.0 is provided for educational and advisory purposes only. Trading involves substantial risk of loss. Past performance is not indicative of future results. Please trade responsibly and only risk capital you can afford to lose.
+        </p>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-links">
+            <a href="/web/src/pages/terms.html">Terms of Service</a>
+            <span class="separator">•</span>
+            <a href="/web/src/pages/refund-policy.html">Refund Policy</a>
+            <span class="separator">•</span>
+            <a href="/web/src/pages/risk-disclosure.html">Risk Disclosure</a>
+        </div>
+        <div class="footer-proprietor">
+            Proprietor: Animesh Kukreti | Dehradun, Uttarakhand, India
+        </div>
+        <p>© 2025 AEGIS v1.0 — Sovereign Intelligence Terminal</p>
+    </footer>
+
+    <script type="module">
+      import { isUserAuthenticated } from '../scripts/auth.js';
+      
+      document.addEventListener('DOMContentLoaded', () => {
+        const portalBtn = document.getElementById('portalBtn');
+        if (isUserAuthenticated()) {
+          portalBtn.innerText = 'Dashboard';
+          portalBtn.addEventListener('click', () => {
+            window.location.href = '/web/src/pages/dashboard.html';
+          });
+        } else {
+          portalBtn.addEventListener('click', () => {
+            window.location.href = '/web/src/pages/index.html';
+          });
+        }
+      });
+    </script>
+</body>
+</html>
