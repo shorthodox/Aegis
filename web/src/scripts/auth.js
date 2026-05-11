@@ -41,6 +41,7 @@ async function doLogin() {
     if (resp.ok && data.access_token) {
       localStorage.setItem('access_token', data.access_token);
       localStorage.setItem('authenticated', 'true');
+      AuthManager.setToken(data.access_token);  // Add this to match Firebase handlers
       closeModal();
       // try to update any UI provided by auth-modal
       try { const m = await import('./auth-modal.js'); if (m.updateAuthButtonState) m.updateAuthButtonState(); } catch(e) {}
