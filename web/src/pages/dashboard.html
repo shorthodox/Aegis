@@ -471,6 +471,7 @@
     <script type="module">
         import * as gatekeeper from '../scripts/gatekeeper.js';
         import { AuthManager } from '../auth/authManager.js';
+        import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
         
         // Initialize dashboard only if pathname includes dashboard.html
         if (window.location.pathname.includes('dashboard.html')) {
@@ -493,8 +494,32 @@
                 console.warn('⚠️ Dashboard auth bypass enabled. Skipping redirect for local testing.');
             }
 
-            try {
-                const isAuthenticated = bypassAuth ? true : await AuthManager.checkAuth();
+            // Wait for Firebase auth state
+            const checkAuth = () => {
+                const localToken = localStorage.getItem('access_token');
+                const isAuth = localStorage.getItem('authenticated') === 'true';
+                return localToken && isAuth;
+            };
+
+            let authResolved = false;
+            let isAuthenticated = false;
+
+            onAuthStateChanged(gatekeeper.auth, (user) => {
+                if (authResolved) return; // Prevent multiple calls
+                authResolved = true;
+
+                if (user) {
+                    console.log('✅ Firebase user authenticated:', user.email);
+                    isAuthenticated = true;
+                } else {
+                    console.log('⚠️ No Firebase user, checking localStorage fallback');
+                    isAuthenticated = checkAuth();
+                }
+
+                if (bypassAuth) {
+                    isAuthenticated = true;
+                }
+
                 if (isAuthenticated) {
                     console.log('✅ User authenticated, dashboard ready');
                     // Dashboard initialization will continue via gatekeeper.js
@@ -503,10 +528,7 @@
                     console.warn('🔍 Dashboard auth failure details:', { isAuth, tokenValid, authTokenPresent: !!authToken });
                     window.location.href = '/web/src/pages/index.html';
                 }
-            } catch (error) {
-                console.error('❌ Auth check failed:', error);
-                window.location.href = '/web/src/pages/index.html';
-            }
+            });
         }
     </script>
 
