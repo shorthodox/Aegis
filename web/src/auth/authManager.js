@@ -189,4 +189,20 @@ export class AuthManager {
         
         return 'expired';
     }
+
+    /**
+     * Helper method to check if user is fully authenticated and has valid token
+     * Returns a Promise for backward compatibility with async code
+     * @returns {Promise<boolean>}
+     */
+    static async checkAuth() {
+        const isAuth = this.isAuthenticated();
+        const isTokenOk = this.isTokenValid();
+        return isAuth && isTokenOk;
+    }
+}
+
+// Make AuthManager globally available for non-module scripts
+if (typeof window !== 'undefined') {
+    window.AuthManager = AuthManager;
 }
