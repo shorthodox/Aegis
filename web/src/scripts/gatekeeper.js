@@ -118,15 +118,34 @@ function attachEventListeners() {
 // Authentication & User Data
 // -------------------------------------------------------------------
 async function checkAuthAndLoad() {
-  const token = localStorage.getItem('access_token');
+  const token = AuthManager.getToken();
+  const bypassAuth = localStorage.getItem('dashboardAuthBypass') === 'true' || window.location.search.includes('bypassAuth=true');
+
+  console.log('gatekeeper.checkAuthAndLoad:', {
+    tokenPresent: !!token,
+    tokenMasked: token ? `${token.slice(0, 10)}...` : null,
+    bypassAuth
+  });
+
   if (!token) {
+    if (bypassAuth) {
+      console.warn('gatekeeper: no auth token found, bypassing redirect for local testing');
+      return;
+    }
+    console.warn('gatekeeper: no auth token found, redirecting to login');
     redirectToLogin();
     return;
   }
 
   // Check if token is expired
   if (isJWTExpired(token)) {
+    if (bypassAuth) {
+      console.warn('gatekeeper: auth token expired, bypassing redirect for local testing');
+      return;
+    }
+    console.warn('gatekeeper: auth token expired, clearing token and redirecting to login');
     localStorage.removeItem('access_token');
+    localStorage.removeItem('authToken');
     redirectToLogin();
     return;
   }
@@ -169,6 +188,7 @@ async function loadUserFromBackend(token) {
       }
     } else if (response.status === 401) {
       localStorage.removeItem('access_token');
+      localStorage.removeItem('authToken');
       redirectToLogin();
     } else {
       console.error('Failed to load user data:', response.status);
@@ -181,7 +201,7 @@ async function loadUserFromBackend(token) {
 }
 
 async function loadUserLimits() {
-  const token = localStorage.getItem('access_token');
+  const token = AuthManager.getToken();
   if (!token) return;
 
   try {
@@ -402,7 +422,7 @@ function renderTrades(trades) {
 // Firestore Real-time Listeners
 // -------------------------------------------------------------------
 function setupFirestoreListeners() {
-  const token = localStorage.getItem('access_token');
+  const token = AuthManager.getToken();
   if (!token) return;
 
   // Listen to signals collection
@@ -465,7 +485,7 @@ async function toggleAlphaMode() {
     return;
   }
 
-  const token = localStorage.getItem('access_token');
+  const token = AuthManager.getToken();
   if (!token) return;
 
   try {
@@ -500,7 +520,7 @@ async function toggleAlphaMode() {
 // User Settings
 // -------------------------------------------------------------------
 async function saveUserSettings() {
-  const token = localStorage.getItem('access_token');
+  const token = AuthManager.getToken();
   if (!token) return;
 
   const newCapital = parseFloat(capitalInput?.value);
@@ -626,7 +646,7 @@ window.AegisDashboard = {
   subscribeToPlan: async (planType) => {
     const amount = planType === 'pro' ? 24.00 : 3.60;
     const planName = planType === 'pro' ? 'pro' : 'basic';
-    const token = localStorage.getItem('access_token');
+    const token = AuthManager.getToken();
     
     if (!token) {
       alert('Please log in first');
@@ -690,6 +710,7 @@ async function handleLogout() {
     
     // Clear local storage
     localStorage.removeItem('access_token');
+    localStorage.removeItem('authToken');
     
     // Sign out from Firebase
     await signOut(auth);
