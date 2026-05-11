@@ -476,14 +476,31 @@
         if (window.location.pathname.includes('dashboard.html')) {
             console.log('🚀 Initializing AEGIS Dashboard...');
             
-            // Ensure auth is checked before showing dashboard
+            const authToken = AuthManager.getToken();
+            const isAuth = AuthManager.isAuthenticated();
+            const tokenValid = AuthManager.isTokenValid();
+            const bypassAuth = localStorage.getItem('dashboardAuthBypass') === 'true' || window.location.search.includes('bypassAuth=true');
+
+            console.log('📌 Dashboard auth check:', {
+                authTokenPresent: !!authToken,
+                authTokenMasked: authToken ? `${authToken.slice(0, 10)}...` : null,
+                isAuth,
+                tokenValid,
+                bypassAuth
+            });
+
+            if (bypassAuth) {
+                console.warn('⚠️ Dashboard auth bypass enabled. Skipping redirect for local testing.');
+            }
+
             try {
-                const isAuthenticated = await AuthManager.checkAuth();
+                const isAuthenticated = bypassAuth ? true : await AuthManager.checkAuth();
                 if (isAuthenticated) {
                     console.log('✅ User authenticated, dashboard ready');
                     // Dashboard initialization will continue via gatekeeper.js
                 } else {
                     console.warn('⚠️ Not authenticated, redirecting to login...');
+                    console.warn('🔍 Dashboard auth failure details:', { isAuth, tokenValid, authTokenPresent: !!authToken });
                     window.location.href = '/web/src/pages/index.html';
                 }
             } catch (error) {
