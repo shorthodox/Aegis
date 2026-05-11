@@ -13,6 +13,7 @@ let currentUserId = null;
 let trialCheckInterval = null;
 let cachedTrialInfo = null;
 let lastFetchTime = 0;
+let explicitTrialStart = null;
 
 // ============================================================
 // HELPER: Format Time Remaining
@@ -87,6 +88,47 @@ export async function getUserTrialInfo(userId) {
       }
   }
 
+  // 3. Use explicit trial start if available, otherwise fallback to cached or token values
+  let trialStart = null;
+  if (explicitTrialStart) {
+      trialStart = explicitTrialStart;
+  } else {
+      const tokenData = AuthManager.getUserData();
+      if (tokenData?.trial_start) {
+          trialStart = new Date(tokenData.trial_start);
+      } else if (localStorage.getItem('trial_start_timestamp')) {
+          trialStart = new Date(localStorage.getItem('trial_start_timestamp'));
+      }
+  }
+
+  let trialEnd = null;
+  if (trialStart && !isNaN(trialStart.getTime())) {
+      trialEnd = new Date(trialStart.getTime() + 3 * 24 * 60 * 60 * 1000);
+      localStorage.setItem('trial_end_timestamp', trialEnd.toISOString());
+  }
+
+  if (!trialEnd) {
+      trialEnd = cachedTrialInfo?.trial_end ? new Date(cachedTrialInfo.trial_end) : null;
+  }
+
+  if (!trialEnd || Number.isNaN(trialEnd.getTime())) {
+      if (!cachedTrialInfo && !trialStart) {
+          return { active: true, display: 'Loading...', expired: false };
+      }
+      return { active: false, expired: true, display: 'Trial Expired' };
+  }
+
+  const timeInfo = formatTimeRemaining(trialEnd);
+
+  return {
+      active: !timeInfo.expired,
+      ...timeInfo,
+      allowedTokens: ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ARB/USDT', 'AAVE/USDT'],
+      allowedTimeframes: ['15m', '30m'],
+      plan: 'trial',
+      trialEndDate: trialEnd
+  };
+
   const jwtData = AuthManager.getUserData() || {};
   if (jwtData.plan_type === 'pro' || jwtData.plan_type === 'active') {
       return {
@@ -132,13 +174,40 @@ export async function getUserTrialInfo(userId) {
 }
 
 // ============================================================
+// FETCH TRIAL START FROM FIRESTORE
+// ============================================================
+export async function fetchTrialStartFromFirestore(userId) {
+  if (!userId) return null;
+  try {
+    const userDocRef = doc(db, 'users', userId);
+    const userDoc = await getDoc(userDocRef);
+    if (!userDoc.exists()) return null;
+    const data = userDoc.data();
+    const trialStart = data?.trial?.startDate || data?.trial_start || data?.trialStart;
+    if (!trialStart) return null;
+    return trialStart.toDate ? trialStart.toDate() : new Date(trialStart);
+  } catch (error) {
+    console.error('Error fetching trial start from Firestore:', error);
+    return null;
+  }
+}
+
+// ============================================================
 // INITIALIZE TRIAL COUNTDOWN & WARMUP DISPLAY
 // ============================================================
-export function initializeTrialCountdown(userId) {
+export async function initializeTrialCountdown(userId, trialStart = null) {
   currentUserId = userId;
-  
+  if (trialStart) {
+    explicitTrialStart = trialStart instanceof Date ? trialStart : new Date(trialStart);
+    if (!Number.isNaN(explicitTrialStart.getTime())) {
+      localStorage.setItem('trial_start_timestamp', explicitTrialStart.toISOString());
+      const trialEnd = new Date(explicitTrialStart.getTime() + 3 * 24 * 60 * 60 * 1000);
+      localStorage.setItem('trial_end_timestamp', trialEnd.toISOString());
+    }
+  }
+
   // Update countdown immediately
-  updateTrialDisplay();
+  await updateTrialDisplay();
   
   // Update every second
   if (trialCheckInterval) clearInterval(trialCheckInterval);
@@ -189,8 +258,13 @@ async function updateTrialDisplay() {
       document.dispatchEvent(new CustomEvent('trialExpired', { detail: { userId: currentUserId } }));
   }
   
-  // Find countdown element on page
-  const countdownElements = document.querySelectorAll('.trial-countdown, [data-trial-countdown]');
+  // Find countdown elements on page
+  const countdownElements = Array.from(document.querySelectorAll('.trial-countdown, [data-trial-countdown]'));
+  const countdownDisplay = document.getElementById('countdown-display');
+  
+  if (countdownDisplay) {
+    countdownElements.push(countdownDisplay);
+  }
   
   countdownElements.forEach(element => {
     if (trialInfo?.active) {

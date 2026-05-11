@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
@@ -214,7 +214,64 @@
         .confidence-fill { height: 100%; background: linear-gradient(to right, #00f2ff, #2563eb); transition: width 0.3s; }
         .signal-meta { display: flex; justify-content: space-between; font-size: 0.75rem; color: #9ca3af; }
         .no-signals { text-align: center; padding: 2rem; color: #9ca3af; }
-        .upgrade-link { color: #00f2ff; text-decoration: none; font-weight: bold; }
+                .upgrade-link { color: #00f2ff; text-decoration: none; font-weight: bold; }
+        .countdown-display {
+            margin: 1rem auto;
+            max-width: 980px;
+            padding: 1rem 1.25rem;
+            border: 1px solid rgba(0, 242, 255, 0.15);
+            border-radius: 1rem;
+            background: rgba(2, 16, 39, 0.88);
+            color: #e2e8f0;
+            font-size: 0.95rem;
+            text-align: center;
+            box-shadow: 0 18px 45px rgba(0, 0, 0, 0.35);
+        }
+        .access-expired-card {
+            max-width: 980px;
+            margin: 1.5rem auto;
+            padding: 2rem 1.5rem;
+            border: 1px solid rgba(239, 68, 68, 0.25);
+            border-radius: 1rem;
+            background: rgba(15, 23, 42, 0.96);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+            text-align: center;
+            color: #f8fafc;
+        }
+        .access-expired-card h2 {
+            margin-bottom: 0.75rem;
+            font-size: 1.75rem;
+            letter-spacing: 0.03em;
+        }
+        .access-expired-card p {
+            color: #cbd5e1;
+            margin-bottom: 1.5rem;
+            line-height: 1.7;
+        }
+        .access-expired-card .expired-actions {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 1rem;
+        }
+        .access-expired-card .expired-actions a {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 150px;
+            padding: 0.85rem 1.2rem;
+            border-radius: 0.85rem;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.05);
+            color: #ffffff;
+            text-decoration: none;
+            font-weight: 600;
+            transition: background 0.2s ease;
+        }
+        .access-expired-card .expired-actions a:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+        .visible { display: block !important; }
 
         /* Responsive utility helpers */
         @media (min-width: 1024px) {
@@ -291,7 +348,7 @@
                     <i class="fas fa-hourglass-half text-gray-400"></i>
                     <span class="text-gray-400 uppercase text-xs tracking-wider">Warmup</span>
                 </div>
-                <span id="warmup-status" class="text-white font-bold hud-glow ml-2">—</span>
+                <span id="warmup-status" class="text-white font-bold hud-glow ml-2">â€”</span>
             </div>
 
             <div class="flex items-center justify-between lg:justify-start gap-2 bg-black/40 px-4 py-2 min-h-[44px] rounded-lg border border-white/5 cursor-pointer hover:bg-white/5 transition-colors" id="alphaToggleContainer">
@@ -317,10 +374,9 @@
         <i class="fas fa-hourglass-half"></i> Trial active - <span id="trial-countdown">Loading...</span> remaining
     </div>
 
-    <div class="flex flex-1 overflow-hidden relative">
-        <!-- SIDEBAR -->
+    <div id="dashboard-main-content">`n        <div id="countdown-display" class="countdown-display">Loading countdown...</div>`n        <div class="dashboard-layout">`n        <!-- SIDEBAR -->
         <div id="sidebarOverlay" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 hidden lg:hidden"></div>
-        <aside id="sidebar" class="fixed lg:relative w-full sm:w-80 h-full glass-panel border-r border-white/10 flex flex-col z-40 shrink-0 transform -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out bg-deep/95 lg:bg-transparent">
+        <aside id="sidebar" class="sidebar glass-panel border-r border-white/10 flex flex-col z-40 shrink-0 bg-deep/95 lg:bg-transparent">
             
             <div class="flex items-center justify-between lg:hidden p-4 border-b border-white/10">
                 <span class="font-bold text-cyan tracking-wider">MENU</span>
@@ -366,7 +422,7 @@
                     </div>
                     <div class="flex justify-between items-center bg-black/40 px-2 py-1.5 rounded border border-white/5">
                         <span class="text-xs text-gray-500">Direction</span>
-                        <span id="direction-badge" class="text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-400">—</span>
+                        <span id="direction-badge" class="text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-400">â€”</span>
                     </div>
                     <div class="flex justify-between items-center">
                         <span class="text-xs text-gray-500">Entry (USDT)</span>
@@ -422,8 +478,7 @@
             <!-- Signals Section -->
             <div class="p-5 border-b border-white/10">
                 <h3 class="text-xs uppercase tracking-widest text-gray-500 mb-4 font-bold flex items-center gap-2"><i class="fas fa-chart-line"></i> Live Signals</h3>
-                <div id="signalsContainer" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                    <!-- Signals will be rendered here -->
+                <div id="signalsContainer" class="signals-grid grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">`n                    <!-- Signals will be rendered here -->
                 </div>
             </div>
 
@@ -473,6 +528,16 @@
             </div>
         </main>
     </div>
+    </div>
+
+    <div id="access-expired-card" class="access-expired-card hidden">
+        <h2>Access Expired</h2>
+        <p>Your 3-day trial has ended. Upgrade now to continue using the Sovereign Dashboard and live signal feed.</p>
+        <div class="expired-actions">
+            <a href="/web/src/pages/pricing.html">Upgrade Now</a>
+            <a href="/web/src/pages/index.html">Return Home</a>
+        </div>
+    </div>
 
     <!-- Alpha Modal -->
     <div id="alpha-modal" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm hidden">
@@ -493,7 +558,7 @@
         <div class="modal-card">
             <span class="close-modal" style="position: absolute; top: 1rem; right: 1.5rem; font-size: 1.8rem; cursor: pointer; color: var(--dim, #94a3b8); z-index: 1001; pointer-events: auto;">&times;</span>
             <div id="step1" class="step active">
-                <div class="modal-logo">⚡ AEGIS</div>
+                <div class="modal-logo">âš¡ AEGIS</div>
                 <button id="googleStepBtn" class="provider-btn"><i class="fab fa-google"></i> Continue with Google</button>
                 <div class="divider">or</div>
                 <input type="text" id="emailInput" class="auth-input" placeholder="Email or mobile number">
@@ -511,7 +576,7 @@
                     <input type="text" maxlength="1" class="otp-digit" data-idx="4">
                     <input type="text" maxlength="1" class="otp-digit" data-idx="5">
                 </div>
-                <button id="backToEmailBtn" class="auth-secondary-btn" style="margin-top:0.5rem;">← Back</button>
+                <button id="backToEmailBtn" class="auth-secondary-btn" style="margin-top:0.5rem;">â† Back</button>
             </div>
             <div id="step3" class="step">
                 <h3 id="onboardingTitle" style="text-align:center; margin-bottom:1rem;">Complete your account</h3>
@@ -527,70 +592,9 @@
         </div>
     </div>
 
-    <!-- Dashboard Initialization Script -->
-    <script type="module">
-        import * as gatekeeper from '../scripts/gatekeeper.js';
-        import { AuthManager } from '../auth/authManager.js';
-        import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
-        
-        // Initialize dashboard only if pathname includes dashboard.html
-        if (window.location.pathname.includes('dashboard.html')) {
-            console.log('🚀 Initializing AEGIS Dashboard...');
-            
-            const authToken = AuthManager.getToken();
-            const isAuth = AuthManager.isAuthenticated();
-            const tokenValid = AuthManager.isTokenValid();
-            const bypassAuth = localStorage.getItem('dashboardAuthBypass') === 'true' || window.location.search.includes('bypassAuth=true');
-
-            console.log('📌 Dashboard auth check:', {
-                authTokenPresent: !!authToken,
-                authTokenMasked: authToken ? `${authToken.slice(0, 10)}...` : null,
-                isAuth,
-                tokenValid,
-                bypassAuth
-            });
-
-            if (bypassAuth) {
-                console.warn('⚠️ Dashboard auth bypass enabled. Skipping redirect for local testing.');
-            }
-
-            // Wait for Firebase auth state
-            const checkAuth = () => {
-                const localToken = localStorage.getItem('access_token');
-                const isAuth = localStorage.getItem('authenticated') === 'true';
-                return localToken && isAuth;
-            };
-
-            let authResolved = false;
-            let isAuthenticated = false;
-
-            onAuthStateChanged(gatekeeper.auth, (user) => {
-                if (authResolved) return; // Prevent multiple calls
-                authResolved = true;
-
-                if (user) {
-                    console.log('✅ Firebase user authenticated:', user.email);
-                    isAuthenticated = true;
-                } else {
-                    console.log('⚠️ No Firebase user, checking localStorage fallback');
-                    isAuthenticated = checkAuth();
-                }
-
-                if (bypassAuth) {
-                    isAuthenticated = true;
-                }
-
-                if (isAuthenticated) {
-                    console.log('✅ User authenticated, dashboard ready');
-                    // Dashboard initialization will continue via gatekeeper.js
-                } else {
-                    console.warn('⚠️ Not authenticated, redirecting to login...');
-                    console.warn('🔍 Dashboard auth failure details:', { isAuth, tokenValid, authTokenPresent: !!authToken });
-                    window.location.href = '/web/src/pages/index.html';
-                }
-            });
-        }
-    </script>
-
+    <script type="module" src="../scripts/dashboard.js"></script>`n`n    </body>`n</html>`n
     </body>
 </html>
+
+
+

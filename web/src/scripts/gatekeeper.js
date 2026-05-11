@@ -177,38 +177,15 @@ async function loadUserFromBackend(token) {
       currentUser = { email: userData.email, token };
       currentUserData = userData;
       userPlan = userData.plan || 'trial';
-
-      // Fetch trial_start from Firestore
-      if (currentUser.email) {
-        try {
-          const userDocRef = doc(db, 'users', currentUser.email);
-          const userDoc = await getDoc(userDocRef);
-          if (userDoc.exists()) {
-            const firestoreData = userDoc.data();
-            const trialStart = firestoreData.trial?.startDate;
-            if (trialStart) {
-              const trialStartDate = trialStart.toDate ? trialStart.toDate() : new Date(trialStart);
-              trialEnd = new Date(trialStartDate.getTime() + 3 * 24 * 60 * 60 * 1000); // 3 days from start
-              trialActive = userPlan === 'trial' && new Date() < trialEnd;
-            }
-          }
-        } catch (firestoreError) {
-          console.error('Error fetching trial data from Firestore:', firestoreError);
-          // Fallback to backend trial_end if available
-          trialEnd = userData.trial_end ? new Date(userData.trial_end) : null;
-          trialActive = userPlan === 'trial' && trialEnd && new Date() < trialEnd;
-        }
-      } else {
-        // Fallback if no email
-        trialEnd = userData.trial_end ? new Date(userData.trial_end) : null;
-        trialActive = userPlan === 'trial' && trialEnd && new Date() < trialEnd;
-      }
+      trialEnd = userData.trial_end ? new Date(userData.trial_end) : null;
+      trialActive = userPlan === 'trial' && trialEnd && new Date() < trialEnd;
 
       await loadUserLimits();
       updateUI();
       startWebSocket(token);
       setupFirestoreListeners();
       startTrialCountdown();
+      document.dispatchEvent(new CustomEvent('dashboardUserLoaded', { detail: { userData: currentUserData } }));
       
       if (userPlan !== 'pro') {
         showUpgradePrompt();
