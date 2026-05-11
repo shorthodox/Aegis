@@ -196,8 +196,25 @@
         .hover\:shadow-\[0_0_15px_rgba\(0\,242\,255\,0\.4\)\]:hover { box-shadow: 0 0 15px rgba(0, 242, 255, 0.4); }
         .hover\:shadow-none:hover { box-shadow: none; }
 
-        /* Hide old nav on dashboard */
-        .dashboard-body .brand-logo, .dashboard-body .glass-nav { display: none !important; }
+        /* Signal Cards */
+        .signal-card { background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 0.5rem; padding: 1rem; margin-bottom: 0.5rem; }
+        .signal-card.buy { border-color: rgba(16, 185, 129, 0.3); }
+        .signal-card.sell { border-color: rgba(239, 68, 68, 0.3); }
+        .signal-card.neutral { border-color: rgba(255, 255, 255, 0.08); }
+        .signal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+        .signal-symbol { font-weight: bold; color: #00f2ff; }
+        .signal-timeframe { font-size: 0.75rem; color: #9ca3af; }
+        .signal-badge { padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem; font-weight: bold; }
+        .signal-badge.buy { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+        .signal-badge.sell { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+        .signal-badge.neutral { background: rgba(255, 255, 255, 0.1); color: #d1d5db; }
+        .signal-details { display: flex; flex-direction: column; gap: 0.5rem; }
+        .signal-confidence { display: flex; align-items: center; gap: 0.5rem; }
+        .confidence-bar { flex: 1; height: 4px; background: rgba(255, 255, 255, 0.1); border-radius: 2px; overflow: hidden; }
+        .confidence-fill { height: 100%; background: linear-gradient(to right, #00f2ff, #2563eb); transition: width 0.3s; }
+        .signal-meta { display: flex; justify-content: space-between; font-size: 0.75rem; color: #9ca3af; }
+        .no-signals { text-align: center; padding: 2rem; color: #9ca3af; }
+        .upgrade-link { color: #00f2ff; text-decoration: none; font-weight: bold; }
 
         /* Responsive utility helpers */
         @media (min-width: 1024px) {
@@ -261,9 +278,9 @@
             <i class="fas fa-chevron-down text-xs text-gray-500"></i>
         </button>
 
-        <div id="statusDropdown" class="hidden lg:flex absolute lg:relative top-full right-4 lg:right-0 mt-2 lg:mt-0 bg-void/95 lg:bg-transparent border border-white/10 lg:border-none rounded-xl p-4 lg:p-0 flex-col lg:flex-row items-stretch lg:items-center gap-4 lg:gap-6 text-sm font-mono shadow-2xl lg:shadow-none backdrop-blur-xl lg:backdrop-blur-none z-50">
+        <div id="statusDropdown" class="hidden lg:flex absolute lg:relative top-full right-4 lg:right-0 mt-2 lg:mt-0 bg-void/95 lg:bg-transparent border border-white/10 lg:border-none rounded-xl p-4 lg:p-0 grid lg:grid-cols-3 gap-4 lg:gap-6 text-sm font-mono shadow-2xl lg:shadow-none backdrop-blur-xl lg:backdrop-blur-none z-50">
             <!-- Connection Status (Mobile inside dropdown) -->
-            <div id="ws-status-mobile" class="lg:hidden flex items-center gap-2 text-xs font-mono text-gray-400 pb-3 border-b border-white/5">
+            <div id="ws-status-mobile" class="lg:hidden flex items-center gap-2 text-xs font-mono text-gray-400 pb-3 border-b border-white/5 col-span-full">
                 <span class="status-dot text-yellow-500 bg-current" id="ws-status-dot-inner"></span>
                 <span id="ws-status-text-inner">INITIALIZING...</span>
             </div>
@@ -294,6 +311,11 @@
             </div>
         </div>
     </header>
+
+    <!-- Trial Banner -->
+    <div id="trialBanner" class="bg-orange/10 border-b border-orange/20 px-4 py-2 text-center text-sm text-orange hidden">
+        <i class="fas fa-hourglass-half"></i> Trial active - <span id="trial-countdown">Loading...</span> remaining
+    </div>
 
     <div class="flex flex-1 overflow-hidden relative">
         <!-- SIDEBAR -->
@@ -393,6 +415,44 @@
                         <button id="execute-trade-btn" class="w-full py-3 min-h-[44px] rounded-lg font-bold uppercase tracking-wider bg-gradient-to-r from-cyan to-blue-600 text-white hover:shadow-[0_0_15px_rgba(0,242,255,0.4)] transition-all">
                             Execute Trade
                         </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Signals Section -->
+            <div class="p-5 border-b border-white/10">
+                <h3 class="text-xs uppercase tracking-widest text-gray-500 mb-4 font-bold flex items-center gap-2"><i class="fas fa-chart-line"></i> Live Signals</h3>
+                <div id="signalsContainer" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    <!-- Signals will be rendered here -->
+                </div>
+            </div>
+
+            <!-- Positions Section -->
+            <div class="p-5 border-b border-white/10">
+                <h3 class="text-xs uppercase tracking-widest text-gray-500 mb-4 font-bold flex items-center gap-2"><i class="fas fa-list"></i> Open Positions</h3>
+                <div id="positionsContainer" class="space-y-2">
+                    <!-- Positions will be rendered here -->
+                </div>
+            </div>
+
+            <!-- Balance Displays -->
+            <div class="p-5">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="glass-panel p-4 text-center">
+                        <div class="text-xs text-gray-400 uppercase tracking-wider">Balance</div>
+                        <div id="balanceDisplay" class="text-2xl font-mono text-cyan hud-glow">$0.00</div>
+                    </div>
+                    <div class="glass-panel p-4 text-center">
+                        <div class="text-xs text-gray-400 uppercase tracking-wider">Capital</div>
+                        <div id="capitalDisplay" class="text-2xl font-mono text-white">$10,000</div>
+                    </div>
+                    <div class="glass-panel p-4 text-center">
+                        <div class="text-xs text-gray-400 uppercase tracking-wider">Risk</div>
+                        <div id="riskDisplay" class="text-2xl font-mono text-orange">2%</div>
+                    </div>
+                    <div class="glass-panel p-4 text-center">
+                        <div class="text-xs text-gray-400 uppercase tracking-wider">Plan</div>
+                        <div id="planBadge" class="text-sm font-bold text-cyan">TRIAL</div>
                     </div>
                 </div>
             </div>
