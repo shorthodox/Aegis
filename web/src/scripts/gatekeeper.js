@@ -107,6 +107,8 @@ function initializeElements() {
 
 function attachEventListeners() {
   if (alphaToggleBtn) alphaToggleBtn.addEventListener('click', toggleAlphaMode);
+  const alphaToggleContainer = document.getElementById('alphaToggleContainer');
+  if (alphaToggleContainer) alphaToggleContainer.addEventListener('click', toggleAlphaMode);
   if (upgradeBtn) upgradeBtn.addEventListener('click', () => {
     window.location.href = '/web/src/pages/pricing.html';
   });
@@ -165,6 +167,7 @@ function isJWTExpired(token) {
 
 async function loadUserFromBackend(token) {
   try {
+    // First, get user data from backend
     const response = await fetch(`${API_BASE_URL}/auth/me`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
@@ -174,8 +177,32 @@ async function loadUserFromBackend(token) {
       currentUser = { email: userData.email, token };
       currentUserData = userData;
       userPlan = userData.plan || 'trial';
-      trialEnd = userData.trial_end ? new Date(userData.trial_end) : null;
-      trialActive = userPlan === 'trial' && trialEnd && new Date() < trialEnd;
+
+      // Fetch trial_start from Firestore
+      if (currentUser.email) {
+        try {
+          const userDocRef = doc(db, 'users', currentUser.email);
+          const userDoc = await getDoc(userDocRef);
+          if (userDoc.exists()) {
+            const firestoreData = userDoc.data();
+            const trialStart = firestoreData.trial?.startDate;
+            if (trialStart) {
+              const trialStartDate = trialStart.toDate ? trialStart.toDate() : new Date(trialStart);
+              trialEnd = new Date(trialStartDate.getTime() + 3 * 24 * 60 * 60 * 1000); // 3 days from start
+              trialActive = userPlan === 'trial' && new Date() < trialEnd;
+            }
+          }
+        } catch (firestoreError) {
+          console.error('Error fetching trial data from Firestore:', firestoreError);
+          // Fallback to backend trial_end if available
+          trialEnd = userData.trial_end ? new Date(userData.trial_end) : null;
+          trialActive = userPlan === 'trial' && trialEnd && new Date() < trialEnd;
+        }
+      } else {
+        // Fallback if no email
+        trialEnd = userData.trial_end ? new Date(userData.trial_end) : null;
+        trialActive = userPlan === 'trial' && trialEnd && new Date() < trialEnd;
+      }
 
       await loadUserLimits();
       updateUI();
@@ -259,7 +286,17 @@ function updateUI() {
 // -------------------------------------------------------------------
 // WebSocket Connection
 // -------------------------------------------------------------------
+let reconnectAttempts = 0;
+const maxReconnectAttempts = 10;
+const baseReconnectDelay = 1000; // 1 second
+
 function startWebSocket(token) {
+  if (reconnectAttempts >= maxReconnectAttempts) {
+    console.error('Max WebSocket reconnection attempts reached');
+    updateConnectionStatus('DISCONNECTED', 'red');
+    return;
+  }
+
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const wsUrl = `${wsProtocol}//${window.location.host}/ws/dashboard`;
 
@@ -267,13 +304,35 @@ function startWebSocket(token) {
 
   ws.onopen = () => {
     console.log('✅ WebSocket connected');
-    ws.send(JSON.stringify({ token }));
+    reconnectAttempts = 0; // Reset on successful connection
+    updateConnectionStatus('CONNECTED', 'green');
+    ws.send(JSON.stringify({ token, type: 'auth' }));
+    
+    // Start heartbeat
+    startHeartbeat();
   };
 
   ws.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
-      updateDashboardData(data);
+      
+      if (data.type === 'pong') {
+        // Handle pong response
+        console.log('🏓 WebSocket pong received');
+        return;
+      }
+      
+      if (data.type === 'error') {
+        console.error('WebSocket error message:', data.message);
+        return;
+      }
+      
+      if (data.type === 'signals' || data.type === 'update') {
+        updateDashboardData(data);
+      } else {
+        // Handle other message types
+        updateDashboardData(data);
+      }
     } catch (e) {
       console.error('WebSocket parse error:', e);
     }
@@ -281,12 +340,53 @@ function startWebSocket(token) {
 
   ws.onerror = (error) => {
     console.error('WebSocket error:', error);
+    updateConnectionStatus('ERROR', 'red');
   };
 
-  ws.onclose = () => {
-    console.log('WebSocket disconnected, reconnecting in 3s...');
-    setTimeout(() => startWebSocket(token), 3000);
+  ws.onclose = (event) => {
+    console.log(`WebSocket disconnected (code: ${event.code}, reason: ${event.reason}), reconnecting...`);
+    updateConnectionStatus('RECONNECTING', 'yellow');
+    
+    // Stop heartbeat
+    stopHeartbeat();
+    
+    // Exponential backoff for reconnection
+    const delay = Math.min(baseReconnectDelay * Math.pow(2, reconnectAttempts), 30000); // Max 30 seconds
+    reconnectAttempts++;
+    
+    setTimeout(() => startWebSocket(token), delay);
   };
+}
+
+let heartbeatInterval = null;
+
+function startHeartbeat() {
+  if (heartbeatInterval) clearInterval(heartbeatInterval);
+  heartbeatInterval = setInterval(() => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'ping' }));
+    }
+  }, 30000); // Send ping every 30 seconds
+}
+
+function stopHeartbeat() {
+  if (heartbeatInterval) {
+    clearInterval(heartbeatInterval);
+    heartbeatInterval = null;
+  }
+}
+
+function updateConnectionStatus(status, color) {
+  const statusDots = document.querySelectorAll('#ws-status-dot, #ws-status-dot-mobile, #ws-status-dot-inner');
+  const statusTexts = document.querySelectorAll('#ws-status-text, #ws-status-text-inner');
+  
+  statusDots.forEach(dot => {
+    dot.className = `status-dot text-${color}-500 bg-current`;
+  });
+  
+  statusTexts.forEach(text => {
+    text.textContent = status;
+  });
 }
 
 function updateDashboardData(data) {
@@ -351,6 +451,7 @@ function renderSignals(signals) {
 
   signalsContainer.innerHTML = filteredEntries.map(([symbol, signal]) => {
     const signalType = signal.signal || 'WAITING';
+    const timeframe = signal.timeframe || '1h'; // Default to 1h if not provided
     const signalClass = getSignalClass(signalType);
     const confidence = (signal.ai_prob || 0) * 100;
     
@@ -358,6 +459,7 @@ function renderSignals(signals) {
       <div class="signal-card ${signalClass}">
         <div class="signal-header">
           <span class="signal-symbol">${symbol}</span>
+          <span class="signal-timeframe">${timeframe}</span>
           <span class="signal-badge ${signalClass}">${signalType}</span>
         </div>
         <div class="signal-details">
@@ -500,6 +602,10 @@ async function toggleAlphaMode() {
     if (response.ok) {
       const data = await response.json();
       currentAlphaMode = data.alpha_mode;
+      
+      // Update UI theme/state for Alpha Mode
+      updateAlphaTheme(currentAlphaMode);
+      
       if (alphaStatus) {
         alphaStatus.textContent = currentAlphaMode ? 'ACTIVE' : 'STANDBY';
         alphaStatus.className = currentAlphaMode ? 'alpha-active' : 'alpha-standby';
@@ -513,6 +619,21 @@ async function toggleAlphaMode() {
     }
   } catch (error) {
     console.error('Toggle alpha error:', error);
+  }
+}
+
+function updateAlphaTheme(isActive) {
+  const body = document.body;
+  if (isActive) {
+    body.classList.add('alpha-mode-active');
+    // Add alpha-specific styling
+    body.style.setProperty('--accent-color', 'var(--orange)');
+    body.style.setProperty('--glow-color', 'rgba(255, 140, 0, 0.6)');
+  } else {
+    body.classList.remove('alpha-mode-active');
+    // Reset to default
+    body.style.setProperty('--accent-color', 'var(--cyan)');
+    body.style.setProperty('--glow-color', 'rgba(0, 242, 255, 0.6)');
   }
 }
 
@@ -566,7 +687,7 @@ function startTrialCountdown() {
   
   if (userPlan !== 'pro' && trialEnd && trialActive) {
     updateTrialTimer();
-    countdownInterval = setInterval(updateTrialTimer, 60000);
+    countdownInterval = setInterval(updateTrialTimer, 1000); // Update every second
   }
 }
 
@@ -586,11 +707,18 @@ function updateTrialTimer() {
     return;
   }
   
-  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
   const minutes = Math.floor((diff % (3600000)) / 60000);
+  const seconds = Math.floor((diff % 60000) / 1000);
+  
+  const countdownElement = document.getElementById('trial-countdown');
+  if (countdownElement) {
+    countdownElement.textContent = `${days}d ${hours}h ${minutes}m ${seconds}s`;
+  }
   
   if (trialBanner && userPlan !== 'pro') {
-    trialBanner.innerHTML = `<i class="fas fa-hourglass-half"></i> Trial expires in ${hours}h ${minutes}m | <a href="/web/src/pages/pricing.html">Upgrade to Pro →</a>`;
+    trialBanner.innerHTML = `<i class="fas fa-hourglass-half"></i> Trial expires in ${days}d ${hours}h ${minutes}m ${seconds}s | <a href="/web/src/pages/pricing.html">Upgrade to Pro →</a>`;
   }
 }
 
