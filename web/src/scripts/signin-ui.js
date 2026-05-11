@@ -175,23 +175,7 @@ async function performEmailSignin(e) {
       showSuccess('Sign in successful!');
       setTimeout(() => {
         closeSignInModal();
-        
-        const userData = result.userData || {};
-        if (userData.isNewUser) {
-          window.location.href = '/web/src/pages/pricing.html';
-          return;
-        }
-        
-        const plan = userData.plan || 'trial';
-        const trialEnd = userData.trial?.endDate ? new Date(userData.trial.endDate) : null;
-        
-        if (plan !== 'pro' && plan !== 'basic' && (!trialEnd || new Date() > trialEnd)) {
-          // No active plan and trial is expired/missing
-          window.location.href = '/web/src/pages/pricing.html';
-        } else {
-          // Has active plan or active trial
-          window.location.href = '/web/src/pages/dashboard.html';
-        }
+        window.location.href = '/web/src/pages/dashboard.html';
       }, 1000);
     } else {
       showError('signinFormError', result.message);
@@ -211,23 +195,7 @@ async function performGoogleSignin() {
       showSuccess('Google sign in successful!');
       setTimeout(() => {
         closeSignInModal();
-        
-        const userData = result.userData || {};
-        if (userData.isNewUser) {
-          window.location.href = '/web/src/pages/pricing.html';
-          return;
-        }
-        
-        const plan = userData.plan || 'trial';
-        const trialEnd = userData.trial?.endDate ? new Date(userData.trial.endDate) : null;
-        
-        if (plan !== 'pro' && plan !== 'basic' && (!trialEnd || new Date() > trialEnd)) {
-          // No active plan and trial is expired/missing
-          window.location.href = '/web/src/pages/pricing.html';
-        } else {
-          // Has active plan or active trial
-          window.location.href = '/web/src/pages/dashboard.html';
-        }
+        window.location.href = '/web/src/pages/dashboard.html';
       }, 1000);
     } else {
       showError('signinFormError', result.message);
