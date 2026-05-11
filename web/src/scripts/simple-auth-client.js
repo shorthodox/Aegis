@@ -97,7 +97,7 @@ async function doLogin() {
 }
 
 async function subscribeToPlan(planType) {
-  const token = localStorage.getItem('access_token');
+  const token = localStorage.getItem('access_token') || localStorage.getItem('authToken');
   if (!token) {
     openModal();
     return;
@@ -153,7 +153,7 @@ function attachHandlers() {
 
 function portalClickHandler(e) {
   e.preventDefault();
-  const token = localStorage.getItem('access_token');
+  const token = localStorage.getItem('access_token') || localStorage.getItem('authToken');
   if (token) {
     window.location.href = '/web/src/pages/dashboard.html';
   } else {
@@ -163,7 +163,7 @@ function portalClickHandler(e) {
 
 function trialClickHandler(e) {
   e.preventDefault();
-  const token = localStorage.getItem('access_token');
+  const token = localStorage.getItem('access_token') || localStorage.getItem('authToken');
   if (token) {
     window.location.href = '/web/src/pages/dashboard.html';
   } else {
