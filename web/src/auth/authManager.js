@@ -1,19 +1,26 @@
 export class AuthManager {
     static getToken() {
-        return localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+        return localStorage.getItem('access_token') ||
+               localStorage.getItem('authToken') ||
+               sessionStorage.getItem('access_token') ||
+               sessionStorage.getItem('authToken');
     }
 
     static setToken(token, remember = true) {
         if (remember) {
             localStorage.setItem('access_token', token);
+            localStorage.setItem('authToken', token);
         } else {
             sessionStorage.setItem('access_token', token);
+            sessionStorage.setItem('authToken', token);
         }
     }
     
     static clearToken() {
-        localStorage.clear();
-        sessionStorage.clear();
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('authToken');
+        sessionStorage.removeItem('access_token');
+        sessionStorage.removeItem('authToken');
     }
     
     static isAuthenticated() {
