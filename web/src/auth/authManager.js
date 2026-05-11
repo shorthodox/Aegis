@@ -94,10 +94,13 @@ export class AuthManager {
         const token = this.getToken();
         if (!token) return false;
         try {
-            const payload = JSON.parse(atob(token.split('.')[1]));
+            const base64Url = token.split('.')[1];
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            const payload = JSON.parse(atob(base64));
             // Add a small 10 second buffer for token expiration instead of 5 minutes
             return payload.exp * 1000 > Date.now() + 10000;
         } catch (e) {
+            console.error('Token validation failed:', e);
             return false;
         }
     }
@@ -128,7 +131,9 @@ export class AuthManager {
         const token = this.getToken();
         if (!token) return null;
         try {
-            const payload = JSON.parse(atob(token.split('.')[1]));
+            const base64Url = token.split('.')[1];
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            const payload = JSON.parse(atob(base64));
             return {
                 trial_start: payload.trial_start,
                 plan_type: payload.plan_type,
