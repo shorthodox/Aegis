@@ -287,17 +287,19 @@
             console.log('🚀 Initializing AEGIS Dashboard...');
             
             // Ensure auth is checked before showing dashboard
-            AuthManager.checkAuth().then(isAuthenticated => {
+            try {
+                const isAuthenticated = await AuthManager.checkAuth();
                 if (isAuthenticated) {
                     console.log('✅ User authenticated, dashboard ready');
+                    // Dashboard initialization will continue via gatekeeper.js
                 } else {
                     console.warn('⚠️ Not authenticated, redirecting to login...');
                     window.location.href = '/web/src/pages/index.html';
                 }
-            }).catch(error => {
+            } catch (error) {
                 console.error('❌ Auth check failed:', error);
                 window.location.href = '/web/src/pages/index.html';
-            });
+            }
         }
     </script>
 
