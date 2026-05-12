@@ -181,6 +181,22 @@ function attachEventListeners() {
       }
     });
   }
+
+  const simSelect = document.getElementById('sim-symbol');
+  if (simSelect) {
+    simSelect.addEventListener('change', (e) => {
+      const sym = e.target.value;
+      if (sym && window.latestSignals) {
+        // Find the corresponding signal (try 1h timeframe first, then fallback)
+        const key1h = `${sym}_1h`;
+        const key15m = `${sym}_15m`;
+        if (window.latestSignals[key1h] || window.latestSignals[key15m]) {
+          const timeframe = window.latestSignals[key1h] ? '1h' : '15m';
+          window.selectSignal(sym, timeframe);
+        }
+      }
+    });
+  }
 }
 
 function filterAndRenderSignals() {
