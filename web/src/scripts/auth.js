@@ -42,10 +42,11 @@ async function doLogin() {
       localStorage.setItem('access_token', data.access_token);
       localStorage.setItem('authenticated', 'true');
       AuthManager.setToken(data.access_token);  // Add this to match Firebase handlers
+      if (data.user) {
+        AuthManager.setUser(data.user); // CRITICAL: This enables isTrialValid()
+      }
       closeModal();
-      // try to update any UI provided by auth-modal
-      try { const m = await import('./auth-modal.js'); if (m.updateAuthButtonState) m.updateAuthButtonState(); } catch(e) {}
-      window.location.reload();
+      window.location.href = '/web/src/pages/dashboard.html';
       return;
     }
     const message = data.detail || data.message || 'Invalid credentials';

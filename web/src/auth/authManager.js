@@ -154,23 +154,19 @@ export class AuthManager {
 
     static hasAccess(feature) {
         const data = this.getUserData();
-        if (!data) return false;
+        const user = this.getUser();
         
-        let hasBaseAccess = false;
-        if (data.plan_type === 'active' || data.plan_type === 'pro' || data.status === 'active') {
-            hasBaseAccess = true;
-        } else if (data.plan_type === 'free_trial') {
-            // Check validity against the trial_end_timestamp or token status
-            if (this.isTrialValid() || data.status === 'active') {
-                hasBaseAccess = true;
-            }
+        // Check both Token and Local User Profile
+        const plan = data?.plan_type || user?.plan || user?.plan_type;
+        const status = data?.status || user?.status;
+
+        if (plan === 'active' || plan === 'pro' || status === 'active') {
+            return true;
         }
         
-        if (!hasBaseAccess) return false;
-        
-        if (feature === 'signals') return true;
-        if (feature === 'extended_timeframes') {
-            return data.plan_type === 'active' || data.plan_type === 'pro';
+        // Fallback for trials
+        if (plan === 'free_trial' || plan === 'trial') {
+            return this.isTrialValid();
         }
         
         return false;
