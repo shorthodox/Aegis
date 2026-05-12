@@ -652,6 +652,7 @@ window.selectSignal = function(symbol, timeframe) {
       ...sig
     }
   }));
+}
 
 
 function getSignalClass(signal) {

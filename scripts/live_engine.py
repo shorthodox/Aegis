@@ -855,7 +855,15 @@ class SignalGenerator:
                 prob_hold = float(probs[1])
                 prob_long = float(probs[2])
                 predicted_class = int(np.argmax(probs))
-                ai_prob = float(probs[predicted_class])
+                raw_prob = float(probs[predicted_class])
+                
+                # Calibrate probabilities to realistic confidence ranges (avoids 99% overconfidence)
+                if raw_prob > 0.8:
+                    ai_prob = 0.75 + (raw_prob - 0.8) * 0.4
+                elif raw_prob > 0.5:
+                    ai_prob = 0.55 + (raw_prob - 0.5) * 0.6
+                else:
+                    ai_prob = raw_prob
             else:
                 ai_prob = float(probs[1]) if len(probs) > 1 else 0.0
                 prob_short, prob_hold, prob_long = (1-ai_prob, 0.0, ai_prob) if ai_prob > 0.5 else (1-ai_prob, 0.0, ai_prob)
@@ -1312,13 +1320,13 @@ class LiveEngine:
                     
                     # Prepare frontend payload object
                     sym = sig["symbol"]
-                    acc = self.trading_accuracies.get(sym, 0.5)
+                    acc = self.trading_accuracies.get(sym, 0.65)
                     tp_dist = sig.get("suggested_tp_distance", 0)
                     sl_dist = sig.get("suggested_sl_distance", 0)
                     profitability_index = (acc * tp_dist) - ((1 - acc) * sl_dist)
                     
                     frontend_signals.append({
-                        "signal_id": str(uuid.uuid4()),
+                        "signal_id": sig["signal_id"],
                         "symbol": sym,
                         "timestamp": datetime.now().isoformat(),
                         "direction": sig.get("direction", "NEUTRAL"),

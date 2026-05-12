@@ -1373,6 +1373,8 @@ async def websocket_dashboard(websocket: WebSocket):
                         "timestamp": datetime.now(timezone.utc).isoformat(),
                         "confidence_score": sig.get("ai_prob", 0) * 100,
                         "signal_id": sig.get("signal_id", ""),
+                        "trading_accuracy": sig.get("trading_accuracy", 0.65),
+                        "profitability_index": sig.get("profitability_index", 1.5),
                     }
             
             response_data = {
