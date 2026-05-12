@@ -432,6 +432,32 @@ body.dashboard-body .glass-nav {
 .delta-up { color: var(--success-green); }
 .delta-down { color: var(--danger-red); }
 
+/* Signal Card Price Styles */
+.price-container {
+    display: flex;
+    align-items: center;
+    font-weight: bold;
+    font-size: 1.1em;
+}
+
+.price-up {
+    color: #26a69a; /* Green */
+}
+
+.price-up::after {
+    content: ' ▲';
+    font-size: 0.8em;
+}
+
+.price-down {
+    color: #ef5350; /* Red */
+}
+
+.price-down::after {
+    content: ' ▼';
+    font-size: 0.8em;
+}
+
 .sl-tp {
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.7rem;

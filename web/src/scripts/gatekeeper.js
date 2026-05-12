@@ -468,6 +468,31 @@ function updateDashboardData(data) {
     balanceDisplay.textContent = `$${data.balance.toFixed(2)}`;
   }
 
+  // Handle live prices if provided
+  if (data.tickers) {
+    window.previousTickers = window.currentTickers || {};
+    window.currentTickers = data.tickers;
+    
+    Object.entries(data.tickers).forEach(([sym, price]) => {
+      const priceDisplays = document.querySelectorAll(`.live-price[data-symbol="${sym}"]`);
+      priceDisplays.forEach(priceDisplay => {
+          const currentPrice = parseFloat(price);
+          const previousPrice = parseFloat(window.previousTickers[sym] || currentPrice);
+          
+          // Format based on price size
+          const priceStr = currentPrice < 0.01 ? currentPrice.toFixed(6) : currentPrice.toFixed(4);
+          priceDisplay.textContent = `$${priceStr}`;
+          
+          priceDisplay.classList.remove('price-up', 'price-down');
+          if (currentPrice > previousPrice) {
+            priceDisplay.classList.add('price-up');
+          } else if (currentPrice < previousPrice) {
+            priceDisplay.classList.add('price-down');
+          }
+      });
+    });
+  }
+
   // Update signals with plan filtering
   if (signalsContainer && data.signals) {
     // Populate window.latestSignals from WebSocket
@@ -584,7 +609,7 @@ function renderSignals(signals) {
     }
 
     return `
-      <div class="signal-card ${signalClass} cursor-pointer hover:shadow-[0_0_15px_rgba(0,242,255,0.2)] transition-all ${matchClasses}" onclick="window.selectSignal('${symbol}', '${timeframe}')">
+      <div class="signal-card ${signalClass} cursor-pointer hover:shadow-[0_0_15px_rgba(0,242,255,0.2)] transition-all ${matchClasses}" onclick="window.selectSignal('${symbol}', '${timeframe}')" data-symbol="${symbol}">
         <div class="signal-header flex justify-between items-center">
           <div class="flex items-center">
             <span class="signal-symbol font-bold">${symbol}</span>
@@ -592,7 +617,10 @@ function renderSignals(signals) {
             ${directionBadge}
             ${matchBadge}
           </div>
-          <span class="signal-badge ${signalClass}">${signalType}</span>
+          <div class="flex items-center gap-3">
+            <div class="price-container text-sm hidden md:flex"><span class="live-price" data-symbol="${symbol}">${window.currentTickers && window.currentTickers[symbol] ? '$' + parseFloat(window.currentTickers[symbol]).toFixed(4) : '-'}</span></div>
+            <span class="signal-badge ${signalClass}">${signalType}</span>
+          </div>
         </div>
         <div class="signal-details mt-3">
           <div class="signal-confidence flex justify-between items-center mb-2">
