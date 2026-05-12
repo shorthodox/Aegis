@@ -1,11 +1,16 @@
 Feature importance (gain) for SUI/USDT
 ==================================================
-efficiency_ratio_10                 : 157.526489
-linreg_r2_14                        : 35.924465
-williams_r                          : 17.046019
-volatility_regime                   : 16.082699
-vwap                                : 13.146065
-ichimoku_tenkan                     : 11.076689
-ichimoku_chikou                     : 10.652597
-keltner_width                       : 9.722590
-ichimoku_senkou_a                   : 9.684358
+efficiency_ratio_10                 : 132.611069
+linreg_r2_14                        : 58.128780
+volatility_regime                   : 19.565336
+choppiness                          : 14.821212
+adx_14                              : 12.138522
+trend_regime                        : 11.212768
+bb_width_percentile                 : 11.032939
+williams_r                          : 10.487164
+ichimoku_tenkan                     : 9.352141
+ichimoku_chikou                     : 8.683229
+btc_dist_ema200                     : 8.462127
+price_zscore_200                    : 7.771070
+vwap                                : 7.527179
+ichimoku_senkou_a                   : 7.433373

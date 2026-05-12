@@ -3,6 +3,40 @@ import numpy as np
 from typing import Optional, Tuple, List
 
 # ------------------------------------------------------------------
+# Data Cleaning (fix inf/NaN issues for XGBoost)
+# ------------------------------------------------------------------
+def clean_infinite_values(df: pd.DataFrame, max_value: float = 1e6, fill_method: str = 'zero') -> pd.DataFrame:
+    """
+    Replace infinite values with NaN, then fill NaNs.
+    Prevents XGBoost error: "Input data contains `inf` or a value too large, while `missing` is not set"
+    
+    Args:
+        df: Input dataframe
+        max_value: Clip absolute values above this threshold
+        fill_method: 'zero' (fill 0) or 'mean' (fill with column mean)
+    
+    Returns:
+        Cleaned dataframe
+    """
+    df = df.copy()
+    
+    # Replace inf with NaN
+    df.replace([np.inf, -np.inf], np.nan, inplace=True)
+    
+    # Clip extreme values
+    numeric_cols = df.select_dtypes(include=[np.number]).columns
+    for col in numeric_cols:
+        df[col] = df[col].clip(-max_value, max_value)
+    
+    # Fill NaNs
+    if fill_method == 'mean':
+        df[numeric_cols] = df[numeric_cols].fillna(df[numeric_cols].mean())
+    else:  # zero
+        df[numeric_cols] = df[numeric_cols].fillna(0)
+    
+    return df
+
+# ------------------------------------------------------------------
 # Core Indicators (reusable)
 # ------------------------------------------------------------------
 
@@ -92,6 +126,7 @@ def compute_bollinger_width_percentile(df: pd.DataFrame, lookback: int = 252) ->
     return percentile.fillna(0.5)
 
 def compute_fvg_distance(df: pd.DataFrame) -> pd.Series:
+    """Fair Value Gap distance (replaced inf with 1e6 to avoid XGBoost errors)."""
     fvg_high = pd.Series(index=df.index, dtype=float)
     fvg_low = pd.Series(index=df.index, dtype=float)
     for i in range(2, len(df)-1):
@@ -103,8 +138,9 @@ def compute_fvg_distance(df: pd.DataFrame) -> pd.Series:
             fvg_low.iloc[i] = df['low'].iloc[i-2]
     distance = pd.Series(index=df.index, dtype=float).fillna(0.0)
     current_price = df['close']
+    MAX_DIST = 1e6  # Use large finite value instead of inf
     for i in range(len(df)):
-        best_dist = float('inf')
+        best_dist = MAX_DIST
         for j in range(max(0, i-50), min(len(df), i+50)):
             if not pd.isna(fvg_low.iloc[j]) and not pd.isna(fvg_high.iloc[j]):
                 if current_price.iloc[i] < fvg_low.iloc[j]:
@@ -115,7 +151,7 @@ def compute_fvg_distance(df: pd.DataFrame) -> pd.Series:
                     dist = 0.0
                 if dist < best_dist:
                     best_dist = dist
-        distance.iloc[i] = best_dist if best_dist != float('inf') else 0.0
+        distance.iloc[i] = best_dist if best_dist != MAX_DIST else 0.0
     return distance
 
 def compute_volume_volatility_efficiency(df: pd.DataFrame) -> pd.Series:
@@ -323,13 +359,47 @@ def add_news_features(df: pd.DataFrame, news_df: Optional[pd.DataFrame]) -> pd.D
 # ------------------------------------------------------------------
 # Target Creation (for supervised learning)
 # ------------------------------------------------------------------
-def add_target(df: pd.DataFrame, forward_hours: int = 1) -> pd.DataFrame:
+def add_target(df: pd.DataFrame, forward_hours: int = 24, atr_multiplier: float = 2.0) -> pd.DataFrame:
     """
-    Create binary target: 1 if future close > current close, else 0.
-    forward_hours: number of hours to look ahead (1 = next candle).
+    Create triple-barrier targets:
+    2 = Buy (upper barrier hit first),
+    0 = Sell (lower barrier hit first),
+    1 = Hold (no barrier hit before the time barrier).
     """
-    future_return = df['close'].shift(-forward_hours) / df['close'] - 1
-    df['target'] = (future_return > 0).astype(int)
+    df = df.copy()
+    if 'atr_14' not in df.columns:
+        df['atr_14'] = compute_atr(df, 14)
+
+    upper_barrier = df['close'] + atr_multiplier * df['atr_14']
+    lower_barrier = df['close'] - atr_multiplier * df['atr_14']
+
+    targets = np.full(len(df), np.nan)
+    for i in range(len(df) - forward_hours):
+        if pd.isna(upper_barrier.iloc[i]) or pd.isna(lower_barrier.iloc[i]):
+            continue
+
+        window = df.iloc[i + 1: i + forward_hours + 1]
+        hit_up = window[window['high'] >= upper_barrier.iloc[i]]
+        hit_down = window[window['low'] <= lower_barrier.iloc[i]]
+
+        up_idx = hit_up.index[0] if not hit_up.empty else None
+        down_idx = hit_down.index[0] if not hit_down.empty else None
+
+        if up_idx is not None and down_idx is not None:
+            if up_idx < down_idx:
+                targets[i] = 2
+            elif down_idx < up_idx:
+                targets[i] = 0
+            else:
+                targets[i] = 1
+        elif up_idx is not None:
+            targets[i] = 2
+        elif down_idx is not None:
+            targets[i] = 0
+        else:
+            targets[i] = 1
+
+    df['target'] = pd.Series(targets, index=df.index)
     return df
 
 # ------------------------------------------------------------------
@@ -371,6 +441,8 @@ def prepare_features(df: pd.DataFrame,
     df['cmf_20'] = compute_cmf(df, 20)
     df['vol_velocity'] = df['volume'].pct_change(3)
     df['volume_zscore'] = (df['volume'] - df['volume'].rolling(20).mean()) / df['volume'].rolling(20).std()
+    df['relative_volume'] = df['volume'] / (df['volume'].rolling(20, min_periods=1).mean() + 1e-9)
+    df['rolling_volatility'] = df['log_returns'].rolling(24, min_periods=1).std()
     df['obv'] = df['close'].diff().apply(np.sign).mul(df['volume']).fillna(0).cumsum()
     df['acc_dist'] = compute_accumulation_distribution(df)
 
@@ -436,6 +508,11 @@ def prepare_features(df: pd.DataFrame,
 
     # ----- Cleanup: drop rows with essential NaNs -----
     required_cols = ['atr_14', 'rsi_14', 'adx_14', 'volume_atr_efficiency', 'volatility_regime']
+    if add_target_flag:
+        required_cols.append('target')
     df = df.dropna(subset=required_cols).reset_index(drop=True)
+
+    # ----- Clean infinite values for XGBoost -----
+    df = clean_infinite_values(df, max_value=1e6, fill_method='zero')
 
     return df

@@ -1,20 +1,19 @@
 Feature importance (gain) for SKY/USDT
 ==================================================
-efficiency_ratio_10                 : 72.093269
-linreg_r2_14                        : 17.054461
-dist_ema_9                          : 9.604093
-volatility_regime                   : 7.220795
-ichimoku_kijun                      : 7.143707
-macd_signal                         : 6.198981
-ichimoku_chikou                     : 5.929040
-ema_50                              : 5.736576
-choppiness                          : 5.194936
-dist_vwap                           : 5.170347
-ichimoku_tenkan                     : 5.103946
-force_index                         : 4.825440
-macd_hist                           : 4.694130
-williams_r                          : 4.437251
-ichimoku_senkou_a                   : 4.232808
-bb_width_percentile                 : 4.097262
-obv                                 : 4.053359
-volume_zscore                       : 3.380934
+efficiency_ratio_10                 : 139.048859
+linreg_r2_14                        : 57.758511
+volatility_regime                   : 19.106951
+trend_regime                        : 12.075994
+dist_ema_9                          : 11.760730
+choppiness                          : 9.718374
+adx_14                              : 9.103083
+atr_14                              : 8.716845
+williams_r                          : 8.201814
+ichimoku_kijun                      : 7.115188
+dist_vwap                           : 6.626616
+force_index                         : 5.999701
+ichimoku_chikou                     : 5.834871
+ema_50                              : 5.655729
+macd_hist                           : 5.471871
+dist_ema_100                        : 4.798502
+btc_corr_24h                        : 3.679908

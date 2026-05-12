@@ -1,13 +1,9 @@
 Feature importance (gain) for ETH/USDT
 ==================================================
-efficiency_ratio_10                 : 81.113792
-linreg_r2_14                        : 15.509007
-volatility_regime                   : 10.809623
-bb_width_percentile                 : 8.104469
-dist_ema_9                          : 6.173180
-williams_r                          : 5.653163
-acc_dist                            : 5.494908
-atr_14                              : 5.109354
-choppiness                          : 4.772462
-ichimoku_chikou                     : 4.732534
-adx_14                              : 4.256398
+efficiency_ratio_10                 : 139.195663
+linreg_r2_14                        : 24.879211
+volatility_regime                   : 19.560802
+bb_width_percentile                 : 11.004262
+atr_14                              : 7.635269
+ichimoku_chikou                     : 5.582675
+ichimoku_senkou_a                   : 5.505507

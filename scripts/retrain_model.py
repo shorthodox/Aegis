@@ -42,6 +42,32 @@ from src.ml.predictor import Predictor
 warnings.filterwarnings("ignore", message="Model file not found")
 warnings.filterwarnings("ignore", category=UserWarning)
 
+# ✅ Data Validation for XGBoost (prevent inf/NaN errors)
+def validate_data_for_xgboost(X: pd.DataFrame, y: np.ndarray, fold_num: int = 0) -> bool:
+    """
+    Validate that data is safe for XGBoost training.
+    Returns True if valid, False otherwise (and prints warning).
+    """
+    # Check for inf values
+    if np.isinf(X.values).any():
+        inf_cols = [col for col in X.columns if np.isinf(X[col]).any()]
+        print(f"   ⚠️ FOLD {fold_num}: Found inf values in columns: {inf_cols[:5]}")
+        return False
+    
+    # Check for NaN values
+    if X.isnull().any().any():
+        nan_cols = X.columns[X.isnull().any()].tolist()
+        print(f"   ⚠️ FOLD {fold_num}: Found NaN values in columns: {nan_cols[:5]}")
+        return False
+    
+    # Check for non-numeric values that slipped through
+    if not X.dtypes.apply(lambda x: np.issubdtype(x, np.number)).all():
+        bad_cols = X.columns[~X.dtypes.apply(lambda x: np.issubdtype(x, np.number))].tolist()
+        print(f"   ⚠️ FOLD {fold_num}: Non-numeric columns: {bad_cols}")
+        return False
+    
+    return True
+
 # ------------------------------
 # FLEET DEFINITION (58 tokens)
 # ------------------------------
@@ -91,11 +117,17 @@ def create_triple_barrier_labels(df: pd.DataFrame, atr_multiplier: float,
                                  efficiency_ratio: Optional[pd.Series] = None,
                                  trend_regime: Optional[pd.Series] = None) -> pd.Series:
     """
-    Labels: 1 if price hits upper barrier first, 0 if lower barrier first or no hit.
+    Labels for 3-class classification:
+    - 0 = SELL (lower barrier hit first)
+    - 1 = HOLD (no barrier hit within lookahead)
+    - 2 = BUY (upper barrier hit first)
     Uses adaptive volatility threshold and efficiency filter.
     """
+    if df is None or df.empty:
+        return pd.Series(dtype=int)
+
     base_vol_threshold = 0.8
-    labels = pd.Series(index=df.index, dtype=float)
+    labels = pd.Series(1, index=df.index, dtype=int)
     atr = compute_atr(df, period=14)   # use imported compute_atr
 
     for i in range(len(df) - 1):
@@ -103,12 +135,13 @@ def create_triple_barrier_labels(df: pd.DataFrame, atr_multiplier: float,
         if trend_regime is not None and trend_regime.iloc[i] == 1:
             vol_threshold = 0.6   # trending markets need less vol
 
+        # Low efficiency or volatility → HOLD (class 1)
         if volatility_regime is not None and volatility_regime.iloc[i] < vol_threshold:
-            labels.iloc[i] = 0
+            labels.iloc[i] = 1
             continue
 
         if efficiency_ratio is not None and efficiency_ratio.iloc[i] < 0.3:
-            labels.iloc[i] = 0
+            labels.iloc[i] = 1
             continue
 
         entry_price = df.iloc[i]['close']
@@ -123,14 +156,13 @@ def create_triple_barrier_labels(df: pd.DataFrame, atr_multiplier: float,
             high = df.iloc[i + j]['high']
             low = df.iloc[i + j]['low']
             if high >= upper:
-                hit = 1
+                hit = 2  # BUY signal
                 break
             if low <= lower:
-                hit = 0
+                hit = 0  # SELL signal
                 break
-        labels.iloc[i] = hit if hit is not None else 0
 
-    labels.iloc[-1] = 0
+        labels.iloc[i] = hit if hit is not None else 1  # 1 = HOLD (default)
     return labels
 
 # ------------------------------
@@ -141,11 +173,45 @@ def prune_features_by_shap(model: xgb.Booster, X: pd.DataFrame, threshold: float
     Compute SHAP values on a subset of data, drop features with mean |SHAP| below threshold.
     Returns list of features to keep.
     """
+    def _mean_abs_shap_array(arr: np.ndarray) -> np.ndarray:
+        arr = np.asarray(arr)
+        if arr.ndim == 1:
+            return np.abs(arr)
+        if arr.ndim == 2:
+            if arr.shape[1] == X.shape[1]:
+                return np.abs(arr).mean(axis=0)
+            if arr.shape[0] == X.shape[1]:
+                return np.abs(arr).mean(axis=1)
+            # fallback: choose dimension that matches feature count
+            for axis in (0, 1):
+                candidate = np.abs(arr).mean(axis=axis)
+                if candidate.shape[0] == X.shape[1]:
+                    return candidate
+            raise ValueError(f"Cannot infer feature axis from SHAP array shape {arr.shape}")
+        if arr.ndim == 3:
+            if arr.shape[2] == X.shape[1]:
+                return np.mean(np.abs(arr), axis=(0, 1))
+            if arr.shape[1] == X.shape[1]:
+                return np.mean(np.abs(arr), axis=(0, 2))
+            if arr.shape[0] == X.shape[1]:
+                return np.mean(np.abs(arr), axis=(1, 2))
+            raise ValueError(f"Cannot infer feature axis from SHAP array shape {arr.shape}")
+        raise ValueError(f"Unsupported SHAP array ndim {arr.ndim}")
+
     sample_size = min(500, len(X))
     X_sample = X.sample(n=sample_size, random_state=42)
     explainer = shap.TreeExplainer(model)
     shap_values = explainer.shap_values(X_sample)
-    mean_abs_shap = np.abs(shap_values).mean(axis=0)
+
+    if isinstance(shap_values, list):
+        class_importances = [_mean_abs_shap_array(vals) for vals in shap_values]
+        mean_abs_shap = np.mean(class_importances, axis=0)
+    else:
+        mean_abs_shap = _mean_abs_shap_array(shap_values)
+
+    if mean_abs_shap.shape[0] != len(X.columns):
+        raise ValueError(f"SHAP importance length {mean_abs_shap.shape[0]} does not match feature count {len(X.columns)}")
+
     feature_importance = pd.Series(mean_abs_shap, index=X.columns)
     keep_features = feature_importance[feature_importance > threshold].index.tolist()
     dropped = feature_importance[feature_importance <= threshold].index.tolist()
@@ -159,6 +225,9 @@ def prune_features_by_shap(model: xgb.Booster, X: pd.DataFrame, threshold: float
 def smooth_labels(y: np.ndarray, smoothing: float = 0.05) -> np.ndarray:
     """
     Convert 0/1 hard labels to soft labels: 0 -> smoothing, 1 -> 1 - smoothing.
+
+    NOTE: This helper is for binary soft-labeling only. XGBoost multi-class
+    objectives require discrete target values in [0, num_class).
     """
     return np.where(y == 1, 1.0 - smoothing, smoothing)
 
@@ -174,8 +243,7 @@ def time_series_cv_score(X, y, params, n_splits=5):
     for train_idx, val_idx in tscv.split(X):
         X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
         y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
-        y_train_smooth = smooth_labels(y_train.values)
-        dtrain = xgb.DMatrix(X_train, label=y_train_smooth)
+        dtrain = xgb.DMatrix(X_train, label=y_train.values)
         dval = xgb.DMatrix(X_val, label=y_val.values)
         model = xgb.train(params, dtrain, num_boost_round=100, evals=[(dval, 'eval')],
                           early_stopping_rounds=20, verbose_eval=False)
@@ -186,15 +254,21 @@ def time_series_cv_score(X, y, params, n_splits=5):
     return np.mean(scores)
 
 # ------------------------------
-# OPTUNA OBJECTIVE FUNCTION
+# OPTUNA OBJECTIVE FUNCTION (3-CLASS: Sell/Hold/Buy)
 # ------------------------------
-def objective(trial, X_train, y_train, X_val, y_val, scale_pos_weight, feature_names):
+def objective(trial, X_train, y_train, X_val, y_val, feature_names):
     """
-    Optuna objective for hyperparameter tuning.
+    Optuna objective for hyperparameter tuning (multi-class classification).
+    Classes: 0=SELL, 1=HOLD, 2=BUY
     """
+    if np.any(np.isnan(y_train)) or np.any(np.isnan(y_val)):
+        raise ValueError("Optuna objective received NaN labels")
+    if np.any((y_train < 0) | (y_train >= 3)):
+        raise ValueError(f"Invalid label values in objective: {np.unique(y_train)}")
     params = {
-        'objective': 'binary:logistic',
-        'eval_metric': 'logloss',
+        'objective': 'multi:softprob',
+        'eval_metric': 'mlogloss',
+        'num_class': 3,
         'max_depth': trial.suggest_int('max_depth', 3, 8),
         'learning_rate': trial.suggest_float('learning_rate', 0.005, 0.05, log=True),
         'subsample': trial.suggest_float('subsample', 0.6, 0.9),
@@ -203,9 +277,9 @@ def objective(trial, X_train, y_train, X_val, y_val, scale_pos_weight, feature_n
         'reg_lambda': trial.suggest_float('reg_lambda', 1, 20, log=True),
         'reg_alpha': trial.suggest_float('reg_alpha', 0, 10),
         'min_child_weight': trial.suggest_int('min_child_weight', 5, 20),
-        'scale_pos_weight': scale_pos_weight,
         'seed': 42,
-        'tree_method': 'hist'
+        'tree_method': 'hist',
+        'missing': np.nan
     }
     dtrain = xgb.DMatrix(X_train, label=y_train, feature_names=feature_names)
     dval = xgb.DMatrix(X_val, label=y_val, feature_names=feature_names)
@@ -298,6 +372,69 @@ def log_feature_importance(model, feature_names: List[str], symbol: str):
             f.write(f"{name:35} : {imp:.6f}\n")
     print(f"   📊 Feature importance saved to {output_file}")
 
+# ==============================
+# RISK THRESHOLDS & CONFIDENCE SCORING
+# ==============================
+def evaluate_prediction_risk(pred_probs: np.ndarray, symbol: str) -> dict:
+    """
+    Evaluate prediction confidence and risk metrics.
+    Returns dict with risk level and thresholds for each signal.
+    
+    Classes: 0=SELL, 1=HOLD, 2=BUY
+    High Risk: confidence < 50% → Not suitable for trading
+    Medium Risk: 50-70% → Trade with caution
+    Low Risk: > 70% → Suitable for trading
+    """
+    max_prob = np.max(pred_probs)
+    pred_class = np.argmax(pred_probs)
+    
+    # Determine risk level
+    if max_prob < 0.50:
+        risk_level = "VERY_HIGH"
+        suitable = False
+        confidence = max_prob * 100
+    elif max_prob < 0.60:
+        risk_level = "HIGH"
+        suitable = False
+        confidence = max_prob * 100
+    elif max_prob < 0.70:
+        risk_level = "MEDIUM"
+        suitable = True
+        confidence = max_prob * 100
+    else:
+        risk_level = "LOW"
+        suitable = True
+        confidence = max_prob * 100
+    
+    signal_names = {0: "SELL", 1: "HOLD", 2: "BUY"}
+    
+    return {
+        "signal": signal_names[int(pred_class)],
+        "class": pred_class,
+        "confidence": confidence,
+        "risk_level": risk_level,
+        "suitable_for_trading": suitable,
+        "sell_prob": pred_probs[0] * 100,
+        "hold_prob": pred_probs[1] * 100,
+        "buy_prob": pred_probs[2] * 100
+    }
+
+def print_risk_assessment(risk_dict: dict):
+    """Pretty print risk assessment with visual indicators."""
+    signal = risk_dict["signal"]
+    conf = risk_dict["confidence"]
+    risk = risk_dict["risk_level"]
+    suitable = risk_dict["suitable_for_trading"]
+    
+    # Color coding for terminal
+    signal_color = "🟢" if signal == "BUY" else "🔴" if signal == "SELL" else "🟡"
+    risk_color = "🟢" if risk == "LOW" else "🟡" if risk == "MEDIUM" else "🔴"
+    suitable_marker = "✅" if suitable else "⚠️"
+    
+    print(f"      Signal: {signal_color} {signal} (confidence: {conf:.1f}%)")
+    print(f"      Risk: {risk_color} {risk} | Suitable: {suitable_marker}")
+    print(f"      Probabilities → SELL: {risk_dict['sell_prob']:.1f}% | HOLD: {risk_dict['hold_prob']:.1f}% | BUY: {risk_dict['buy_prob']:.1f}%")
+
 # ------------------------------
 # TRAIN A SINGLE TOKEN (with all upgrades)
 # ------------------------------
@@ -355,6 +492,10 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             trend_regime=df['trend_regime']
         )
         df['target'] = labels
+        df['target'] = df['target'].fillna(1).astype(int)
+        if not df['target'].isin([0, 1, 2]).all():
+            bad_vals = df.loc[~df['target'].isin([0, 1, 2]), 'target'].unique().tolist()
+            raise ValueError(f"Invalid target labels found: {bad_vals}")
 
         if len(df) < 200:
             print(f"⚠️ Too few samples ({len(df)}), skipping")
@@ -363,10 +504,10 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         feature_cols = [c for c in df.columns if c not in ['timestamp', 'target']]
         y = df['target'].to_numpy().astype(int)
 
-        class_counts = np.bincount(y)
-        scale_pos_weight = class_counts[0] / class_counts[1] if len(class_counts) > 1 and class_counts[1] > 0 else 1.0
-        print(f"⚖️ Class imbalance: zeros={class_counts[0]}, ones={class_counts[1]}")
-        print(f"   scale_pos_weight = {scale_pos_weight:.2f}")
+        # Class distribution reporting (3-class: 0=SELL, 1=HOLD, 2=BUY)
+        class_counts = np.bincount(y, minlength=3)
+        print(f"⚖️ Class distribution:")
+        print(f"   SELL (0): {class_counts[0]} samples | HOLD (1): {class_counts[1]} samples | BUY (2): {class_counts[2]} samples")
 
         # Time‑series cross‑validation (5 folds)
         tscv = TimeSeriesSplit(n_splits=5)
@@ -383,33 +524,43 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             X_val = val_df[feature_cols]
             y_val = val_df['target'].to_numpy().astype(int)
 
-            # Apply label smoothing to training targets
-            y_train_smooth = smooth_labels(y_train, smoothing=0.05)
+            # ✅ Validate data before training
+            if not validate_data_for_xgboost(X_train, y_train, fold):
+                print(f"   ❌ SKIPPING FOLD {fold+1} - invalid data")
+                continue
+            if not validate_data_for_xgboost(X_val, y_val, fold):
+                print(f"   ❌ SKIPPING FOLD {fold+1} - invalid validation data")
+                continue
+
+            # XGBoost multi-class requires discrete labels in [0, num_class).
+            # Do not use soft label values here.
+            y_train_labels = y_train
 
             # Optuna hyperparameter optimization (only on first fold to save time)
             if fold == 0:
                 study = optuna.create_study(direction='minimize', sampler=optuna.samplers.TPESampler(seed=42))
-                study.optimize(lambda trial: objective(trial, X_train, y_train_smooth, X_val, y_val,
-                                                       scale_pos_weight, feature_cols),
+                study.optimize(lambda trial: objective(trial, X_train, y_train, X_val, y_val, feature_cols),
                                n_trials=30, show_progress_bar=False)
                 best_params = study.best_params
                 print(f"   Best params: {best_params}")
                 best_params.update({
-                    'objective': 'binary:logistic',
-                    'eval_metric': 'logloss',
-                    'scale_pos_weight': scale_pos_weight,
+                    'objective': 'multi:softprob',
+                    'eval_metric': 'mlogloss',
+                    'num_class': 3,
                     'seed': 42,
-                    'tree_method': 'hist'
+                    'tree_method': 'hist',
+                    'missing': np.nan
                 })
 
-            # Train model with best params on this fold
-            dtrain = xgb.DMatrix(X_train, label=y_train_smooth, feature_names=feature_cols)
+            # Train model with discrete labels for multi-class classification
+            dtrain = xgb.DMatrix(X_train, label=y_train_labels, feature_names=feature_cols)
             dval = xgb.DMatrix(X_val, label=y_val, feature_names=feature_cols)
             model = xgb.train(best_params, dtrain, num_boost_round=500,
                               evals=[(dval, 'eval')], early_stopping_rounds=50, verbose_eval=False)
-            pred = model.predict(dval)
+            pred_probs = model.predict(dval)  # (n_samples, 3) for 3-class
+            pred = np.argmax(pred_probs, axis=1)  # Get class with highest probability
             from sklearn.metrics import accuracy_score
-            acc = accuracy_score(y_val, pred > 0.5)
+            acc = accuracy_score(y_val, pred)
             fold_scores.append(acc)
             best_models.append(model)
 
@@ -420,10 +571,9 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         print("   Retraining on full dataset with SHAP pruning...")
         X_full = df[feature_cols]
         y_full = np.array(df['target'].values.astype(int))
-        y_full_smooth = smooth_labels(y_full, smoothing=0.05)
 
         # Train a preliminary model to compute SHAP importance
-        dtrain_full = xgb.DMatrix(X_full, label=y_full_smooth, feature_names=feature_cols)
+        dtrain_full = xgb.DMatrix(X_full, label=y_full, feature_names=feature_cols)
         temp_model = xgb.train(best_params, dtrain_full, num_boost_round=100, verbose_eval=False)
         keep_features = prune_features_by_shap(temp_model, X_full, threshold=0.01)
         if len(keep_features) < len(feature_cols):
@@ -432,7 +582,7 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
 
         # Final training on full data with pruned features
         X_full_pruned = X_full[feature_cols]
-        dtrain_final = xgb.DMatrix(X_full_pruned, label=y_full_smooth, feature_names=feature_cols)
+        dtrain_final = xgb.DMatrix(X_full_pruned, label=y_full, feature_names=feature_cols)
         final_model = xgb.train(best_params, dtrain_final, num_boost_round=500, verbose_eval=False)
 
         # Evaluate on last 20% (out‑of‑sample)
@@ -440,9 +590,19 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         X_test = X_full_pruned.iloc[split:]
         y_test = np.array(y_full[split:])
         dtest = xgb.DMatrix(X_test, feature_names=feature_cols)
-        test_pred = final_model.predict(dtest)
-        test_acc = accuracy_score(y_test, test_pred > 0.5)
+        test_pred_probs = final_model.predict(dtest)  # (n_samples, 3)
+        test_pred = np.argmax(test_pred_probs, axis=1)  # Get class predictions
+        test_acc = accuracy_score(y_test, test_pred)
         print(f"   Out‑of‑sample accuracy (last 20%): {test_acc:.4f}")
+
+        # ✅ Risk Assessment on Test Set
+        print(f"\n   📊 Risk Assessment Summary:")
+        risk_summaries = []
+        for i in range(min(5, len(test_pred_probs))):  # Show first 5 samples
+            risk_dict = evaluate_prediction_risk(test_pred_probs[i], symbol)
+            risk_summaries.append(risk_dict)
+            suitable = "✅ SUITABLE" if risk_dict["suitable_for_trading"] else "⚠️ NOT SUITABLE"
+            print(f"      Sample {i+1}: {risk_dict['signal']} ({risk_dict['confidence']:.0f}%) [{risk_dict['risk_level']}] {suitable}")
 
         # Save model
         store_dir = Path(root_dir) / "src" / "ml" / "model_store"
@@ -462,7 +622,18 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             "best_params": best_params,
             "model_path": str(model_path),
             "atr_multiplier": atr_mult,
-            "scale_pos_weight": scale_pos_weight
+            "class_distribution": {
+                "sell": int(class_counts[0]),
+                "hold": int(class_counts[1]),
+                "buy": int(class_counts[2])
+            },
+            "risk_thresholds": {
+                "very_high_risk": "confidence < 50% - NOT SUITABLE FOR TRADING",
+                "high_risk": "50% ≤ confidence < 60% - NOT SUITABLE FOR TRADING",
+                "medium_risk": "60% ≤ confidence < 70% - TRADE WITH CAUTION",
+                "low_risk": "confidence ≥ 70% - SUITABLE FOR TRADING"
+            },
+            "sample_predictions": risk_summaries if risk_summaries else []
         }
 
     except Exception as e:
@@ -510,6 +681,17 @@ def train_fleet(hours: int = 5000):
         print(f"📈 Average cross‑validation accuracy: {avg_cv_acc:.2%}")
         print(f"💾 Models saved in: {Path(root_dir) / 'src' / 'ml' / 'model_store'}")
         print(f"📊 Feature importance logs: logs/features/")
+        
+        print(f"\n🎯 RISK THRESHOLDS (Applied to all models):")
+        print(f"   🟢 LOW RISK: Confidence ≥ 70% → ✅ SUITABLE FOR TRADING")
+        print(f"   🟡 MEDIUM RISK: 60% ≤ Confidence < 70% → ⚠️ TRADE WITH CAUTION")
+        print(f"   🔴 HIGH RISK: 50% ≤ Confidence < 60% → ❌ NOT SUITABLE")
+        print(f"   🔴 VERY HIGH RISK: Confidence < 50% → ❌ NOT SUITABLE")
+        
+        print(f"\n📊 SIGNALS (3-CLASS CLASSIFICATION):")
+        print(f"   🟢 BUY (Class 2): Upper barrier hit → Strong upside potential")
+        print(f"   🟡 HOLD (Class 1): No barrier hit → Wait for better entry")
+        print(f"   🔴 SELL (Class 0): Lower barrier hit → Strong downside risk")
     else:
         print("❌ No models were trained. Check errors above.")
 

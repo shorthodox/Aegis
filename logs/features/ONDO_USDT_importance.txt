@@ -1,18 +1,13 @@
 Feature importance (gain) for ONDO/USDT
 ==================================================
-efficiency_ratio_10                 : 39.092091
-linreg_r2_14                        : 8.875575
-volatility_regime                   : 5.836814
-ema_200                             : 4.861927
-dist_ema_9                          : 4.740878
-ichimoku_chikou                     : 4.289810
-dist_ema_21                         : 4.133960
-ema_100                             : 3.945147
-ema_50                              : 3.737659
-force_index                         : 3.684248
-choppiness                          : 3.602612
-historical_volatility               : 3.550137
-bb_width_percentile                 : 3.442127
-acc_dist                            : 3.360169
-macd_hist                           : 3.304803
-stoch_d                             : 3.121933
+efficiency_ratio_10                 : 131.706406
+linreg_r2_14                        : 27.331394
+volatility_regime                   : 18.321209
+dist_ema_9                          : 10.711709
+ichimoku_senkou_a                   : 8.833811
+ema_200                             : 8.738914
+ichimoku_chikou                     : 8.707315
+ema_100                             : 8.444224
+adx_14                              : 8.341892
+vwap                                : 7.749429
+rolling_volatility                  : 7.020522

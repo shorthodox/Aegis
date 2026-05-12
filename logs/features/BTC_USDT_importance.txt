@@ -1,17 +1,15 @@
 Feature importance (gain) for BTC/USDT
 ==================================================
-efficiency_ratio_10                 : 93.929161
-volatility_regime                   : 19.003525
-linreg_r2_14                        : 15.594861
-choppiness                          : 12.189235
-bb_width_percentile                 : 8.491819
-atr_14                              : 8.481107
-ichimoku_chikou                     : 7.582839
-volume_atr_efficiency               : 6.930284
-ichimoku_senkou_a                   : 6.581295
-ema_50                              : 6.299630
-ichimoku_kijun                      : 6.287548
-ichimoku_senkou_b                   : 6.285587
-acc_dist                            : 6.081531
-aroon_down                          : 5.991230
-cmf_20                              : 5.095277
+efficiency_ratio_10                 : 128.563507
+linreg_r2_14                        : 45.433647
+volatility_regime                   : 33.327873
+atr_14                              : 19.695036
+dist_ema_21                         : 18.067930
+bb_width_percentile                 : 18.014597
+dist_ema_9                          : 13.919403
+choppiness                          : 11.704867
+obv                                 : 10.593495
+ichimoku_chikou                     : 10.397992
+ichimoku_senkou_b                   : 9.763426
+ema_50                              : 9.303527
+ichimoku_senkou_a                   : 9.291580

@@ -1,11 +1,13 @@
 Feature importance (gain) for NEAR/USDT
 ==================================================
-efficiency_ratio_10                 : 141.664841
-linreg_r2_14                        : 51.196072
-ret_12h                             : 19.430843
-volatility_regime                   : 19.058901
-aroon_up                            : 10.079717
-obv                                 : 8.999673
-ichimoku_chikou                     : 8.674697
-btc_corr_24h                        : 8.482553
-price_zscore_200                    : 8.413944
+efficiency_ratio_10                 : 60.285351
+linreg_r2_14                        : 10.071385
+volatility_regime                   : 7.798581
+choppiness                          : 4.196956
+williams_r                          : 3.515121
+adx_14                              : 2.947539
+aroon_up                            : 2.505951
+btc_corr_24h                        : 2.472726
+vwap                                : 2.397115
+bb_width_percentile                 : 2.216672
+ichimoku_chikou                     : 2.113996

@@ -1,8 +1,10 @@
 Feature importance (gain) for JUP/USDT
 ==================================================
-efficiency_ratio_10                 : 58.599514
-volatility_regime                   : 7.959017
-linreg_r2_14                        : 7.112561
-dist_vwap                           : 5.310224
-adx_14                              : 4.332212
-dist_ema_100                        : 3.653350
+efficiency_ratio_10                 : 165.093323
+linreg_r2_14                        : 39.303638
+volatility_regime                   : 21.289394
+adx_14                              : 12.571485
+dist_vwap                           : 12.198749
+bb_width_percentile                 : 12.094950
+dist_ema_100                        : 9.282213
+ichimoku_chikou                     : 7.556505

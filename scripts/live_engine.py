@@ -15,6 +15,7 @@ import os
 import subprocess
 import sys
 import threading
+import uuid
 import time
 import random
 import shutil
@@ -847,43 +848,83 @@ class SignalGenerator:
             logger.critical(f"Feature mismatch for {norm_sym}: cannot predict")
             return None
 
-        ai_prob = model.predict_proba(aligned_features)[0, 1]
-        ai_prob = float(ai_prob)
+        try:
+            probs = model.predict_proba(aligned_features)[0]
+            if len(probs) >= 3:
+                prob_short = float(probs[0])
+                prob_hold = float(probs[1])
+                prob_long = float(probs[2])
+                predicted_class = int(np.argmax(probs))
+                ai_prob = float(probs[predicted_class])
+            else:
+                ai_prob = float(probs[1]) if len(probs) > 1 else 0.0
+                prob_short, prob_hold, prob_long = (1-ai_prob, 0.0, ai_prob) if ai_prob > 0.5 else (1-ai_prob, 0.0, ai_prob)
+                predicted_class = 2 if ai_prob >= 0.5 else 0
+        except Exception as e:
+            ai_prob = 0.0
+            prob_short, prob_hold, prob_long = 0.0, 1.0, 0.0
+            predicted_class = 1
 
-        # ------------------------------------------------------------------
-        # ASYMMETRIC SIGNAL LOGIC (Long bias unchanged, Shorts tougher)
-        # ------------------------------------------------------------------
-        if ai_prob >= 0.60:
-            base_signal = "BUY"
-        elif ai_prob > 0.20:
-            base_signal = "HOLD"
+        atr_val = df_1h['atr'].iloc[-1] if not pd.isna(df_1h['atr'].iloc[-1]) else current_price * 0.01
+
+        # Alpha Risk Monitor logic
+        atr_series = df_1h['atr'].dropna()
+        atr_mean = atr_series.mean() if len(atr_series) > 0 else atr_val
+        market_regime = vol_regime
+        alpha_risk_level = "NORMAL"
+        if atr_val > 3 * atr_mean:
+            market_regime = "CRITICAL_VOLATILITY"
+            alpha_risk_level = "CRITICAL"
+        elif atr_val > 2 * atr_mean:
+            market_regime = "HIGH_VOLATILITY"
+            alpha_risk_level = "HIGH"
+
+        # Volatility Tax Thresholds
+        req_confidence = 0.75 if market_regime in ["CRITICAL_VOLATILITY", "HIGH_VOLATILITY"] else 0.65
+
+        # Conviction Spread
+        conviction_spread = ai_prob - prob_hold
+
+        # Direction logic: Class 2 = LONG, Class 0 = SHORT, Class 1 = NEUTRAL.
+        base_signal = "NEUTRAL"
+        if market_regime == "CRITICAL_VOLATILITY":
+            base_signal = "NEUTRAL"
+        elif predicted_class == 2 and ai_prob >= req_confidence and conviction_spread > 0.15:
+            base_signal = "LONG"
+        elif predicted_class == 0 and ai_prob >= req_confidence and conviction_spread > 0.15:
+            base_signal = "SHORT"
+
+        # BTC safety downgrade for LONG signals (only when Alpha OFF)
+        if not alpha_mode and not btc_healthy and base_signal == "LONG":
+            base_signal = "NEUTRAL"
+
+        # SL/TP Logic based on asset classification
+        heavy_caps = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT"]
+        atr_multiplier = 1.2 if norm_sym in heavy_caps else 1.8
+        
+        suggested_sl_distance = atr_multiplier * atr_val
+        suggested_tp_distance = RR_RATIO * suggested_sl_distance
+
+        if base_signal == "LONG":
+            suggested_sl = current_price - suggested_sl_distance
+            suggested_tp = current_price + suggested_tp_distance
+            final_signal = "BUY"
+            signal_strength = "STRONG_BUY" if ai_prob > 0.8 else "BUY"
+        elif base_signal == "SHORT":
+            suggested_sl = current_price + suggested_sl_distance
+            suggested_tp = current_price - suggested_tp_distance
+            final_signal = "SELL"
+            signal_strength = "STRONG_SELL" if ai_prob > 0.8 else "SELL"
         else:
-            base_signal = "SELL"
-
-        # --- SELLABILITY BRAKE (suppress sell signals in low vol or choppy market) ---
-        final_signal = base_signal
-        if base_signal == "SELL":
-            # Downgrade if volatility regime is 'low'
-            if vol_regime == "low":
-                final_signal = "HOLD"
-                logger.debug(f"{norm_sym}: sell suppressed – low volatility")
-            # Downgrade if efficiency ratio < 0.3 (choppy)
-            elif er < 0.3:
-                final_signal = "HOLD"
-                logger.debug(f"{norm_sym}: sell suppressed – choppy market (ER={er:.2f})")
-
-        # BTC safety downgrade for BUY signals (only when Alpha OFF)
-        if not alpha_mode and not btc_healthy and base_signal == "BUY":
+            suggested_sl = current_price
+            suggested_tp = current_price
             final_signal = "HOLD"
-
-        # Map signal to strength for frontend / colour coding
-        signal_strength = final_signal
+            signal_strength = "HOLD"
 
         # ------------------------------------------------------------------
         # Legacy calculations (for completeness and compatibility)
         # ------------------------------------------------------------------
         base = cfg.base_threshold
-        atr_val = df_1h['atr'].iloc[-1] if not pd.isna(df_1h['atr'].iloc[-1]) else current_price * 0.01
         adj_thresh, _ = self.threshold_engine.compute(
             base=base, prob=ai_prob, vol_regime=vol_regime, volume_condition=volume_cond,
             trend_aligned=trend_aligned, atr=atr_val, price=current_price,
@@ -927,7 +968,7 @@ class SignalGenerator:
             "signal": final_signal,
             "signal_strength": signal_strength,
             "btc_ai": btc_ai,
-            "btc_filter_ok": not (not alpha_mode and not btc_healthy and base_signal in ("STRONG_BUY", "BUY")),
+            "btc_filter_ok": not (not alpha_mode and not btc_healthy and final_signal in ("STRONG_BUY", "BUY")),
             "vol_regime": vol_regime,
             "volume_cond": volume_cond,
             "trend_aligned": trend_aligned,
@@ -937,6 +978,12 @@ class SignalGenerator:
             "atr_sl": cfg.atr_sl,
             "atr_tp": RR_RATIO * cfg.atr_sl,
             "efficiency_ratio": er,               # added for UI / debugging
+            "direction": base_signal,             # LONG/SHORT/NEUTRAL
+            "suggested_sl": suggested_sl,
+            "suggested_tp": suggested_tp,
+            "suggested_sl_distance": suggested_sl_distance,
+            "suggested_tp_distance": suggested_tp_distance,
+            "alpha_risk_level": alpha_risk_level,
         }
 
 # -------------------------------------------------------------------
@@ -954,6 +1001,19 @@ class LiveEngine:
         self.scan_interval = scan_interval_seconds
         self.alpha_mode = alpha_mode
         self.alpha_risk_pct = alpha_risk_pct
+        self.trading_accuracies = {}
+
+        # Load backtest summary for trading accuracy
+        summary_file = LOGS_DIR / "backtests" / "signal_analysis_summary.json"
+        if summary_file.exists():
+            try:
+                with open(summary_file, 'r') as f:
+                    summary_data = json.load(f)
+                for item in summary_data.get("best_by_accuracy", []):
+                    if len(item) >= 3:
+                        self.trading_accuracies[item[0]] = float(item[2])
+            except Exception as e:
+                logger.error(f"Error loading accuracy data: {e}")
 
         # Warm‑up timer (only for Alpha OFF)
         self.engine_start_time = time.time()
@@ -1011,6 +1071,15 @@ class LiveEngine:
             except Exception as e:
                 logger.warning(f"Voice announcement failed: {e}")
         await asyncio.to_thread(_speak)
+
+    def sync_to_dashboard(self, signals_list):
+        output_file = root_dir / "web" / "current_signals.json"
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with open(output_file, 'w') as f:
+                json.dump({"signals": signals_list}, f, indent=2)
+        except Exception as e:
+            logger.error(f"Failed to sync dashboard: {e}")
 
     # --------------------------------------------------------------
     # Keyboard listener – added 'C' for reset
@@ -1234,9 +1303,37 @@ class LiveEngine:
             self.signal_gen.alpha_risk_pct = self.alpha_risk_pct
             tasks = [self.signal_gen.compute_signal(cfg.symbol, self.fetcher, self.alpha_mode, btc_safe) for cfg in self.token_configs]
             signals = await asyncio.gather(*tasks)
+            frontend_signals = []
             for sig in signals:
                 if sig:
+                    if "signal_id" not in sig:
+                        sig["signal_id"] = str(uuid.uuid4())
                     self.last_signals[sig["symbol"]] = sig
+                    
+                    # Prepare frontend payload object
+                    sym = sig["symbol"]
+                    acc = self.trading_accuracies.get(sym, 0.5)
+                    tp_dist = sig.get("suggested_tp_distance", 0)
+                    sl_dist = sig.get("suggested_sl_distance", 0)
+                    profitability_index = (acc * tp_dist) - ((1 - acc) * sl_dist)
+                    
+                    frontend_signals.append({
+                        "signal_id": str(uuid.uuid4()),
+                        "symbol": sym,
+                        "timestamp": datetime.now().isoformat(),
+                        "direction": sig.get("direction", "NEUTRAL"),
+                        "confidence": sig["ai_prob"],
+                        "entry_price": sig["price"],
+                        "suggested_sl": sig.get("suggested_sl"),
+                        "suggested_tp": sig.get("suggested_tp"),
+                        "alpha_risk_level": sig.get("alpha_risk_level", "NORMAL"),
+                        "trading_accuracy": acc,
+                        "profitability_index": profitability_index
+                    })
+            
+            # Push signals to dashboard
+            if frontend_signals:
+                self.sync_to_dashboard(frontend_signals)
 
             # CONVICTION-BASED EXITS
             for sig in signals:

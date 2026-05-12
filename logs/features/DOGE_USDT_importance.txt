@@ -1,17 +1,19 @@
 Feature importance (gain) for DOGE/USDT
 ==================================================
-efficiency_ratio_10                 : 24.330564
-volatility_regime                   : 4.123107
-linreg_r2_14                        : 3.640639
-ichimoku_chikou                     : 3.080915
-ema_50                              : 2.720446
-vwap                                : 2.692579
-acc_dist                            : 2.380372
-ichimoku_tenkan                     : 2.378824
-obv                                 : 2.030925
-historical_volatility               : 2.002789
-dist_vwap                           : 1.990318
-volume_atr_efficiency               : 1.987230
-ichimoku_senkou_a                   : 1.928419
-adx_14                              : 1.891609
-volume_zscore                       : 1.638956
+efficiency_ratio_10                 : 146.830490
+linreg_r2_14                        : 29.097286
+volatility_regime                   : 28.126133
+ichimoku_tenkan                     : 14.535935
+bb_width_percentile                 : 12.775448
+trend_regime                        : 11.543815
+dist_ema_9                          : 11.518939
+ichimoku_chikou                     : 11.107716
+ema_50                              : 10.700574
+ichimoku_senkou_a                   : 10.595614
+choppiness                          : 10.334738
+dist_vwap                           : 9.902995
+rolling_volatility                  : 9.352559
+keltner_lower                       : 9.295874
+dist_ema_100                        : 8.472339
+adx_14                              : 8.281101
+vwap                                : 7.859681

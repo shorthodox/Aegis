@@ -114,9 +114,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ========== Pre-fill Simulator ==========
     function prefillTradeSim(symbol, price, signalObj) {
-        const direction = signalObj.signal === 'SELL' ? 'SHORT' : 'LONG';
+        const direction = signalObj.direction || (signalObj.signal === 'SELL' ? 'SHORT' : 'LONG');
         const atr = signalObj.atr || getATR(price);
-        selectedTrade = { symbol, entryPrice: price, direction, atr, aiProb: signalObj.confidence, signal: signalObj.signal };
+        selectedTrade = { 
+            symbol, 
+            entryPrice: price, 
+            direction, 
+            atr, 
+            aiProb: signalObj.confidence || signalObj.ai_prob, 
+            signal: signalObj.signal,
+            signalId: signalObj.signal_id
+        };
         
         if (document.getElementById('sim-symbol')) document.getElementById('sim-symbol').value = symbol;
         if (document.getElementById('sim-entry')) document.getElementById('sim-entry').value = price;
@@ -156,7 +164,8 @@ document.addEventListener('DOMContentLoaded', () => {
             notionalValue: notional,
             status: 'open',
             openTime: new Date(),
-            userId: currentUser.uid
+            userId: currentUser.uid,
+            signalId: selectedTrade.signalId || null
         };
         try {
             const tradesRef = collection(db, 'users', currentUser.uid, 'trades');

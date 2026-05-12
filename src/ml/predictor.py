@@ -64,15 +64,22 @@ class Predictor:
         self.load_model()
 
     def load_model(self):
-        """Load XGBoost model from JSON file in model_store."""
-        model_filename = f"{self.symbol.replace('/', '_')}_model.json"
-        model_path = model_store / model_filename
-        if model_path.exists():
+        """Load XGBoost model from JSON or BIN file in model_store."""
+        model_filename_json = f"{self.symbol.replace('/', '_')}_model.json"
+        model_filename_bin = f"{self.symbol.replace('/', '_')}_model.bin"
+        model_path_json = model_store / model_filename_json
+        model_path_bin = model_store / model_filename_bin
+
+        if model_path_json.exists():
             self.model = xgb.XGBClassifier()
-            self.model.load_model(str(model_path))
-            logger.info(f"✅ Model loaded: {model_path}")
+            self.model.load_model(str(model_path_json))
+            logger.info(f"✅ Model loaded: {model_path_json}")
+        elif model_path_bin.exists():
+            self.model = xgb.XGBClassifier()
+            self.model.load_model(str(model_path_bin))
+            logger.info(f"✅ Model loaded: {model_path_bin}")
         else:
-            logger.warning(f"⚠️ Model not found: {model_path}")
+            logger.warning(f"⚠️ Model not found: {model_path_json} or {model_path_bin}")
 
     def fetch_live_data(self, timeframe: str = '1h', limit: int = 5000) -> Optional[pd.DataFrame]:
         """
@@ -223,7 +230,12 @@ class Predictor:
         if expected is not None:
             X = X.reindex(columns=list(expected), fill_value=0)
 
-        return self.model.predict_proba(X)[:, 1]
+        y_proba = self.model.predict_proba(X)
+        if y_proba.ndim == 1:
+            return y_proba
+        if y_proba.shape[1] == 2:
+            return y_proba[:, 1]
+        return y_proba
 
     def predict_realtime(self) -> float:
         """Convenience method: fetch latest data and return current signal probability."""
@@ -231,5 +243,9 @@ class Predictor:
         if df is None or df.empty:
             return 0.5
         last_row = df.iloc[[-1]]
-        prob = self.predict(last_row)[0]
-        return prob
+        prediction = self.predict(last_row)
+        if isinstance(prediction, np.ndarray):
+            if prediction.ndim == 2 and prediction.shape[1] >= 3:
+                return float(prediction[0, 2])
+            return float(prediction[0])
+        return float(prediction)

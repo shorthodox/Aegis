@@ -1,17 +1,15 @@
 Feature importance (gain) for XRP/USDT
 ==================================================
-efficiency_ratio_10                 : 50.278431
-linreg_r2_14                        : 9.236131
-volatility_regime                   : 7.489690
-bb_width_percentile                 : 4.772089
-mfi_14                              : 3.768468
-acc_dist                            : 3.451595
-adx_14                              : 3.275623
-volatility_skew                     : 3.210120
-ichimoku_senkou_b                   : 3.118291
-historical_volatility               : 3.019706
-price_zscore_200                    : 2.979689
-ichimoku_chikou                     : 2.875140
-stoch_k                             : 2.805260
-vwap                                : 2.768616
-btc_dist_ema200                     : 2.700686
+efficiency_ratio_10                 : 55.566593
+linreg_r2_14                        : 8.082148
+volatility_regime                   : 6.578883
+choppiness                          : 2.587274
+bb_width_percentile                 : 2.493999
+ichimoku_chikou                     : 2.408444
+low                                 : 2.371400
+dist_ema_9                          : 2.331489
+adx_14                              : 2.319844
+ichimoku_senkou_a                   : 2.230300
+keltner_width                       : 1.776969
+vwap                                : 1.710034
+rolling_volatility                  : 1.698974

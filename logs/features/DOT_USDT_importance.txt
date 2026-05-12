@@ -1,22 +1,9 @@
 Feature importance (gain) for DOT/USDT
 ==================================================
-efficiency_ratio_10                 : 13.368948
-linreg_r2_14                        : 4.912235
-volatility_regime                   : 3.348050
-ichimoku_tenkan                     : 3.173834
-ichimoku_chikou                     : 2.739894
-choppiness                          : 2.558960
-ichimoku_senkou_a                   : 2.505351
-vwap                                : 2.311976
-williams_r                          : 2.248111
-obv                                 : 2.098724
-aroon_osc                           : 2.067248
-bb_width_percentile                 : 2.061426
-dist_ema_9                          : 2.042586
-keltner_width                       : 1.914283
-acc_dist                            : 1.884845
-price_zscore_200                    : 1.862784
-adx_14                              : 1.851850
-force_index                         : 1.808052
-volatility_kurt                     : 1.573211
-volume_zscore                       : 1.423756
+efficiency_ratio_10                 : 174.309570
+linreg_r2_14                        : 34.596855
+volatility_regime                   : 20.062235
+adx_14                              : 12.299573
+keltner_lower                       : 10.388597
+ichimoku_chikou                     : 10.099105
+vwap                                : 8.496737

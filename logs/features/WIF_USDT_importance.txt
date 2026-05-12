@@ -1,11 +1,20 @@
 Feature importance (gain) for WIF/USDT
 ==================================================
-efficiency_ratio_10                 : 96.714302
-linreg_r2_14                        : 16.449125
-volatility_regime                   : 8.997014
-ret_12h                             : 6.254152
-dist_ema_9                          : 5.775547
-atr_14                              : 5.576239
-keltner_width                       : 5.122670
-williams_r                          : 5.018529
-ichimoku_chikou                     : 4.482468
+efficiency_ratio_10                 : 108.252098
+linreg_r2_14                        : 29.999229
+volatility_regime                   : 11.174921
+dist_ema_9                          : 8.633389
+dist_ema_21                         : 8.290236
+choppiness                          : 7.967090
+williams_r                          : 7.543523
+ret_12h                             : 7.002323
+ichimoku_senkou_a                   : 6.854832
+atr_14                              : 6.679530
+ema_100                             : 6.138679
+ichimoku_chikou                     : 6.042625
+adx_14                              : 5.814195
+bb_width_percentile                 : 5.800361
+btc_corr_24h                        : 5.598742
+aroon_osc                           : 5.593543
+vwap                                : 5.568396
+btc_dist_ema200                     : 5.486477

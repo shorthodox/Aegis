@@ -1,11 +1,15 @@
 Feature importance (gain) for TAO/USDT
 ==================================================
-efficiency_ratio_10                 : 137.290787
-linreg_r2_14                        : 56.094452
-choppiness                          : 15.981974
-volatility_regime                   : 11.197824
-williams_r                          : 10.811709
-bb_width_percentile                 : 9.837086
-adx_14                              : 9.508806
-price_zscore_200                    : 7.508659
-ichimoku_chikou                     : 6.367345
+efficiency_ratio_10                 : 107.793274
+linreg_r2_14                        : 40.621445
+volatility_regime                   : 11.551631
+williams_r                          : 11.521599
+trend_regime                        : 11.334217
+adx_14                              : 10.561149
+choppiness                          : 8.128592
+dist_ema_21                         : 7.132612
+price_zscore_200                    : 5.609727
+vwap                                : 5.515031
+ema_200                             : 5.465317
+ichimoku_chikou                     : 5.401869
+btc_dist_ema200                     : 5.087930

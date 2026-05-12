@@ -1,23 +1,6 @@
 Feature importance (gain) for OP/USDT
 ==================================================
-efficiency_ratio_10                 : 118.169350
-linreg_r2_14                        : 30.680456
-volatility_regime                   : 15.408493
-obv                                 : 11.419192
-high                                : 10.482052
-ichimoku_chikou                     : 9.231504
-bb_width_percentile                 : 9.103099
-vwap                                : 8.991486
-dist_vwap                           : 8.933497
-historical_volatility               : 8.807027
-ema_50                              : 8.687059
-williams_r                          : 8.534451
-atr_14                              : 8.504521
-adx_14                              : 8.503942
-macd                                : 8.430484
-price_zscore_200                    : 8.017809
-macd_signal                         : 7.858598
-cmf_20                              : 7.827353
-dist_ema_100                        : 7.741323
-btc_dist_ema200                     : 7.440799
-volatility_skew                     : 7.159917
+efficiency_ratio_10                 : 137.361832
+linreg_r2_14                        : 28.509769
+volatility_regime                   : 17.173851
+trend_regime                        : 11.701216

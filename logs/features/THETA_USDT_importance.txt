@@ -1,15 +1,12 @@
 Feature importance (gain) for THETA/USDT
 ==================================================
-efficiency_ratio_10                 : 101.821785
-linreg_r2_14                        : 24.444998
-dist_ema_9                          : 9.131382
-volatility_regime                   : 8.201264
-dist_ema_21                         : 8.136460
-choppiness                          : 7.004136
-ichimoku_chikou                     : 6.691368
-acc_dist                            : 6.365860
-bb_width_percentile                 : 6.270362
-ema_50                              : 6.225049
-vwap                                : 5.975529
-price_zscore_200                    : 5.252762
-btc_4h_return                       : 4.581794
+efficiency_ratio_10                 : 110.401588
+linreg_r2_14                        : 16.735842
+volatility_regime                   : 7.771079
+dist_ema_9                          : 5.248513
+williams_r                          : 4.818941
+vwap                                : 4.556406
+bb_width_percentile                 : 4.504468
+ichimoku_chikou                     : 4.429007
+trend_regime                        : 4.389937
+adx_14                              : 3.839545

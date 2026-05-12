@@ -17,7 +17,26 @@ if root_dir not in sys.path:
     sys.path.insert(0, root_dir)
 
 from src.ml.predictor import Predictor
-from src.ml.feature_engine import prepare_features
+from src.ml.feature_engine import prepare_features, compute_atr
+
+# -------------------------------------------------------------------
+# ATR Multiplier for Triple Barriers
+# -------------------------------------------------------------------
+def get_atr_multiplier(symbol: str) -> float:
+    """
+    ATR multipliers for triple barriers (aligned with retrain_model.py).
+    Heavy caps use 1.2x ATR.
+    Low-accuracy assets (like SUI, DOT) get wider barriers (1.8x) to avoid stop-outs.
+    Others use 1.5x.
+    """
+    high_cap = ['BTC/USDT', 'ETH/USDT', 'BNB/USDT']
+    low_accuracy = ['SUI/USDT', 'DOT/USDT', 'SEI/USDT', 'KAS/USDT']
+    if symbol in high_cap:
+        return 1.2
+    elif symbol in low_accuracy:
+        return 1.8
+    else:
+        return 1.5
 
 # -------------------------------------------------------------------
 # CONFIGURATION
@@ -61,6 +80,8 @@ class SignalAnalyzer:
         self.symbol = symbol
         self.lookahead = lookahead
         self.predictor = Predictor(symbol)
+        self.btc_predictor = Predictor('BTC/USDT')
+        self.multiplier = get_atr_multiplier(symbol)
 
     def fetch_and_prepare_data(self, hours: int = DATA_HOURS) -> Optional[pd.DataFrame]:
         """Fetch OHLCV, BTC data, news, apply feature engineering, return DataFrame with 'prob'."""
@@ -84,152 +105,275 @@ class SignalAnalyzer:
             news_df = pd.DataFrame({'timestamp': df['timestamp'], 'sentiment': 0.0})
 
         print(f"   Applying feature engineering...")
-        df = prepare_features(df, btc_df=btc_df, news_df=news_df)
+        df = prepare_features(
+            df,
+            btc_df=btc_df,
+            news_df=news_df,
+            add_target_flag=True,
+            forward_hours=self.lookahead
+        )
         if df is None or df.empty:
             return None
 
         # Generate predictions
         print(f"   Generating predictions...")
-        df['prob'] = self.predictor.predict(df)
+        predictions = self.predictor.predict(df)
+        if isinstance(predictions, np.ndarray) and predictions.ndim > 1:
+            df['prob'] = [row.tolist() for row in predictions]
+        else:
+            df['prob'] = predictions
+
+        # Generate BTC predictions for correlation guard
+        print(f"   Generating BTC predictions...")
+        # Filter btc_df to match df's timestamps to ensure same length
+        btc_df_filtered = btc_df[btc_df['timestamp'].isin(df['timestamp'])].copy()
+        btc_features = prepare_features(
+            btc_df_filtered,
+            btc_df=btc_df_filtered,
+            news_df=news_df,
+            add_target_flag=False,
+            forward_hours=self.lookahead
+        )
+        if btc_features is not None and not btc_features.empty:
+            # Ensure btc_features matches df's timestamps exactly
+            btc_features = btc_features[btc_features['timestamp'].isin(df['timestamp'])]
+            btc_predictions = self.btc_predictor.predict(btc_features)
+            # Map btc_predictions to df by timestamp to handle any order differences
+            btc_prob_series = pd.Series(index=btc_features['timestamp'], data=[row.tolist() for row in btc_predictions])
+            df['btc_prob'] = df['timestamp'].map(btc_prob_series)
+        else:
+            df['btc_prob'] = [[0.0, 1.0, 0.0]] * len(df)  # neutral
+
         return df
 
     def analyze_signals(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """Iterate over DataFrame, generate signals, compute metrics."""
+        """Iterate over DataFrame, generate signals, compute metrics using triple-barrier evaluation."""
         if df is None or len(df) < self.lookahead + 1:
             return {}
+
+        df = df.copy()
+        df['atr_ratio'] = df['atr_14'] / df['close']
+        atr_mean = df['atr_ratio'].rolling(100, min_periods=1).mean()
+        atr_std = df['atr_ratio'].rolling(100, min_periods=1).std().fillna(0)
+        df['alpha_risk_flag'] = np.where(
+            df['atr_ratio'] > atr_mean + 2 * atr_std,
+            'HIGH_RISK_VOLATILITY',
+            'NORMAL'
+        )
 
         stats = {
             "symbol": self.symbol,
             "total_signals": 0,
-            "buy_signals": 0,
-            "sell_signals": 0,
+            "predicted_buy": 0,
+            "predicted_sell": 0,
+            "predicted_hold": 0,
+            "actual_buy": 0,
+            "actual_sell": 0,
+            "actual_hold": 0,
             "correct_buy": 0,
             "correct_sell": 0,
+            "correct_hold": 0,
             "sum_return_buy": 0.0,
             "sum_return_sell": 0.0,
+            "sum_return_hold": 0.0,
             "sum_mfe_buy": 0.0,
             "sum_mfe_sell": 0.0,
+            "sum_mfe_hold": 0.0,
             "sum_mae_buy": 0.0,
             "sum_mae_sell": 0.0,
+            "sum_mae_hold": 0.0,
             "sum_prob_buy": 0.0,
             "sum_prob_sell": 0.0,
-            # Detailed list of signals (optional, for debugging)
-            "signals": []   # each entry: index, timestamp, direction, prob, future_return, mfe_pct, mae_pct, correct
+            "sum_prob_hold": 0.0,
+            "alpha_risk_signals": 0,
+            "time_to_upper": [],
+            "time_to_lower": [],
+            "signals": []
         }
 
         for i in range(len(df) - self.lookahead):
             row = df.iloc[i]
             prob = row['prob']
-            if pd.isna(prob):
+            if prob is None or (isinstance(prob, float) and np.isnan(prob)):
                 continue
 
-            direction = None
-            if prob > BUY_THRESHOLD:
-                direction = 'BUY'
-            elif prob < SELL_THRESHOLD:
-                direction = 'SELL'
+            if isinstance(prob, np.ndarray):
+                proba = prob.tolist()
+            elif isinstance(prob, (list, tuple)):
+                proba = list(prob)
             else:
+                proba = [1 - float(prob), 0.0, float(prob)]
+
+            if len(proba) < 3:
+                proba = (proba + [0.0, 0.0, 0.0])[:3]
+
+            sell_prob, hold_prob, buy_prob = proba[0], proba[1], proba[2]
+
+            # Dynamic threshold based on volatility
+            threshold = 0.75 if row['alpha_risk_flag'] == 'HIGH_RISK_VOLATILITY' else 0.65
+
+            # BTC correlation guard
+            btc_prob = row.get('btc_prob', [0.0, 1.0, 0.0])
+            if isinstance(btc_prob, np.ndarray):
+                btc_proba = btc_prob.tolist()
+            elif isinstance(btc_prob, (list, tuple)):
+                btc_proba = list(btc_prob)
+            else:
+                btc_proba = [1 - float(btc_prob), 0.0, float(btc_prob)]
+            if len(btc_proba) < 3:
+                btc_proba = (btc_proba + [0.0, 0.0, 0.0])[:3]
+            btc_sell_prob, btc_hold_prob, btc_buy_prob = btc_proba
+
+            # Signal trigger with conviction spread
+            predicted = 'HOLD'
+            if buy_prob > threshold and (buy_prob - hold_prob) >= 0.20 and btc_buy_prob > 0.55:
+                predicted = 'BUY'
+            elif sell_prob > threshold and btc_sell_prob < 0.45:
+                predicted = 'SELL'
+
+            # Compute actual outcome using triple barriers
+            entry = row['close']
+            atr_val = row['atr_14']
+            if atr_val == 0 or np.isnan(atr_val):
+                atr_val = entry * 0.001
+            upper = entry + self.multiplier * atr_val
+            lower = entry - self.multiplier * atr_val
+
+            window = df.iloc[i+1 : i+self.lookahead+1]
+            if len(window) < self.lookahead:
                 continue
 
-            # Entry price = current close
+            hit_upper = False
+            hit_lower = False
+            time_to_hit = None
+            for j in range(1, min(self.lookahead, len(df) - i)):
+                wrow = df.iloc[i + j]
+                if wrow['high'] >= upper:
+                    hit_upper = True
+                    time_to_hit = j
+                    break
+                if wrow['low'] <= lower:
+                    hit_lower = True
+                    time_to_hit = j
+                    break
+
+            if hit_upper and not hit_lower:
+                actual = 'BUY'
+                stats['time_to_upper'].append(time_to_hit)
+            elif hit_lower and not hit_upper:
+                actual = 'SELL'
+                stats['time_to_lower'].append(time_to_hit)
+            else:
+                actual = 'HOLD'
+
+            if actual == 'BUY':
+                stats['actual_buy'] += 1
+            elif actual == 'SELL':
+                stats['actual_sell'] += 1
+            else:
+                stats['actual_hold'] += 1
+
+            if predicted == 'BUY':
+                stats['predicted_buy'] += 1
+            elif predicted == 'SELL':
+                stats['predicted_sell'] += 1
+            else:
+                stats['predicted_hold'] += 1
+
             entry = row['close']
             if entry <= 0:
                 continue
 
-            # Look ahead window
-            window = df.iloc[i+1 : i+self.lookahead+1]
-            if len(window) < self.lookahead:
-                continue   # insufficient data
-
             future_close = window['close'].iloc[-1]
             future_return = (future_close - entry) / entry
+            max_high = window['high'].max()
+            min_low = window['low'].min()
 
-            # MFE and MAE (as percentages)
-            if direction == 'BUY':
-                max_high = window['high'].max()
-                min_low = window['low'].min()
+            if actual == 'BUY':
                 mfe_pct = (max_high - entry) / entry
                 mae_pct = (entry - min_low) / entry
-                correct = future_return > 0
-            else:  # SELL
-                max_high = window['high'].max()
-                min_low = window['low'].min()
-                mfe_pct = (entry - min_low) / entry   # favorable move down
-                mae_pct = (max_high - entry) / entry  # adverse move up
-                correct = future_return < 0
-
-            # Accumulate stats
-            stats["total_signals"] += 1
-            if direction == 'BUY':
-                stats["buy_signals"] += 1
-                stats["sum_return_buy"] += future_return
-                stats["sum_mfe_buy"] += mfe_pct
-                stats["sum_mae_buy"] += mae_pct
-                stats["sum_prob_buy"] += prob
-                if correct:
-                    stats["correct_buy"] += 1
+            elif actual == 'SELL':
+                mfe_pct = (entry - min_low) / entry
+                mae_pct = (max_high - entry) / entry
             else:
-                stats["sell_signals"] += 1
-                stats["sum_return_sell"] += future_return
-                stats["sum_mfe_sell"] += mfe_pct
-                stats["sum_mae_sell"] += mae_pct
-                stats["sum_prob_sell"] += prob
-                if correct:
-                    stats["correct_sell"] += 1
+                mfe_pct = (max_high - entry) / entry
+                mae_pct = (entry - min_low) / entry
 
-            # Optional: store individual signal (reduce memory if many signals)
-            if stats["total_signals"] <= 1000:   # limit for JSON size
-                stats["signals"].append({
-                    "timestamp": str(row['timestamp']),
-                    "direction": direction,
-                    "prob": round(prob, 4),
-                    "future_return_pct": round(future_return * 100, 2),
-                    "mfe_pct": round(mfe_pct * 100, 2),
-                    "mae_pct": round(mae_pct * 100, 2),
-                    "correct": correct
+            correct = predicted == actual
+            stats['total_signals'] += 1
+            if predicted == 'BUY':
+                stats['correct_buy'] += int(correct)
+                stats['sum_return_buy'] += future_return
+                stats['sum_mfe_buy'] += mfe_pct
+                stats['sum_mae_buy'] += mae_pct
+                stats['sum_prob_buy'] += buy_prob
+            elif predicted == 'SELL':
+                stats['correct_sell'] += int(correct)
+                stats['sum_return_sell'] += future_return
+                stats['sum_mfe_sell'] += mfe_pct
+                stats['sum_mae_sell'] += mae_pct
+                stats['sum_prob_sell'] += sell_prob
+            else:
+                stats['correct_hold'] += int(correct)
+                stats['sum_return_hold'] += future_return
+                stats['sum_mfe_hold'] += mfe_pct
+                stats['sum_mae_hold'] += mae_pct
+                stats['sum_prob_hold'] += hold_prob
+
+            if row['alpha_risk_flag'] == 'HIGH_RISK_VOLATILITY':
+                stats['alpha_risk_signals'] += 1
+
+            if stats['total_signals'] <= 1000:
+                stats['signals'].append({
+                    'timestamp': str(row['timestamp']),
+                    'predicted': predicted,
+                    'actual': actual,
+                    'prob_sell': round(sell_prob, 4),
+                    'prob_hold': round(hold_prob, 4),
+                    'prob_buy': round(buy_prob, 4),
+                    'future_return_pct': round(future_return * 100, 2),
+                    'mfe_pct': round(mfe_pct * 100, 2),
+                    'mae_pct': round(mae_pct * 100, 2),
+                    'correct': correct,
+                    'alpha_risk': row['alpha_risk_flag']
                 })
 
-        # Compute aggregated metrics
-        if stats["total_signals"] == 0:
+        if stats['total_signals'] == 0:
             return stats
 
-        # Overall accuracy
-        total_correct = stats["correct_buy"] + stats["correct_sell"]
-        stats["accuracy"] = round(total_correct / stats["total_signals"], 4) if stats["total_signals"] > 0 else 0.0
+        stats['accuracy'] = round(
+            (stats['correct_buy'] + stats['correct_sell'] + stats['correct_hold']) / stats['total_signals'],
+            4
+        )
+        stats['hold_frequency'] = round(stats['predicted_hold'] / stats['total_signals'], 4)
 
-        # Buy accuracy
-        if stats["buy_signals"] > 0:
-            stats["buy_accuracy"] = round(stats["correct_buy"] / stats["buy_signals"], 4)
-            stats["avg_return_buy"] = round(stats["sum_return_buy"] / stats["buy_signals"], 6)
-            stats["avg_mfe_buy"] = round(stats["sum_mfe_buy"] / stats["buy_signals"], 6)
-            stats["avg_mae_buy"] = round(stats["sum_mae_buy"] / stats["buy_signals"], 6)
-            stats["avg_prob_buy"] = round(stats["sum_prob_buy"] / stats["buy_signals"], 4)
-        else:
-            stats["buy_accuracy"] = 0.0
-            stats["avg_return_buy"] = 0.0
-            stats["avg_mfe_buy"] = 0.0
-            stats["avg_mae_buy"] = 0.0
-            stats["avg_prob_buy"] = 0.0
+        for label in ['buy', 'sell', 'hold']:
+            count = stats[f'predicted_{label}']
+            correct = stats[f'correct_{label}']
+            stats[f'{label}_accuracy'] = round(correct / count, 4) if count > 0 else 0.0
+            stats[f'avg_return_{label}'] = round(stats[f'sum_return_{label}'] / count, 6) if count > 0 else 0.0
+            stats[f'avg_mfe_{label}'] = round(stats[f'sum_mfe_{label}'] / count, 6) if count > 0 else 0.0
+            stats[f'avg_mae_{label}'] = round(stats[f'sum_mae_{label}'] / count, 6) if count > 0 else 0.0
+            stats[f'avg_prob_{label}'] = round(stats[f'sum_prob_{label}'] / count, 4) if count > 0 else 0.0
 
-        if stats["sell_signals"] > 0:
-            stats["sell_accuracy"] = round(stats["correct_sell"] / stats["sell_signals"], 4)
-            stats["avg_return_sell"] = round(stats["sum_return_sell"] / stats["sell_signals"], 6)
-            stats["avg_mfe_sell"] = round(stats["sum_mfe_sell"] / stats["sell_signals"], 6)
-            stats["avg_mae_sell"] = round(stats["sum_mae_sell"] / stats["sell_signals"], 6)
-            stats["avg_prob_sell"] = round(stats["sum_prob_sell"] / stats["sell_signals"], 4)
-        else:
-            stats["sell_accuracy"] = 0.0
-            stats["avg_return_sell"] = 0.0
-            stats["avg_mfe_sell"] = 0.0
-            stats["avg_mae_sell"] = 0.0
-            stats["avg_prob_sell"] = 0.0
+        stats['bullish_strength'] = stats['avg_prob_buy']
+        stats['bearish_strength'] = stats['avg_prob_sell']
+        stats['actual_hold_ratio'] = round(stats['actual_hold'] / stats['total_signals'], 4)
+        stats['high_risk_ratio'] = round(stats['alpha_risk_signals'] / stats['total_signals'], 4)
 
-        # Bullish strength vs bearish strength: average probability of buy vs sell signals
-        stats["bullish_strength"] = stats["avg_prob_buy"]
-        stats["bearish_strength"] = stats["avg_prob_sell"]
+        # Trading accuracy (BUY + SELL signals only)
+        trading_signals = stats['predicted_buy'] + stats['predicted_sell']
+        correct_trading = stats['correct_buy'] + stats['correct_sell']
+        stats['trading_accuracy'] = round(correct_trading / trading_signals, 4) if trading_signals > 0 else 0.0
 
-        # Remove detailed signals list from final JSON if too large (optional)
-        # We keep it for now but it may be trimmed later.
+        # Exit metrics
+        stats['avg_time_to_upper'] = round(np.mean(stats['time_to_upper']), 2) if stats['time_to_upper'] else 0.0
+        stats['avg_time_to_lower'] = round(np.mean(stats['time_to_lower']), 2) if stats['time_to_lower'] else 0.0
+
+        # Safety score
+        stats['safety_score'] = round(stats['avg_mae_buy'] / stats['avg_mfe_buy'], 4) if stats['avg_mfe_buy'] > 0 else 0.0
+        stats['alpha_stability'] = 'STABLE' if stats['safety_score'] <= 2.0 else 'UNSTABLE_ALPHA'
+
         return stats
 
 # -------------------------------------------------------------------
@@ -271,7 +415,9 @@ def run_signal_analysis(lookahead: int = LOOKAHEAD_CANDLES, hours: int = DATA_HO
             print(f"   ⚠️ {symbol} – no signals generated.")
             continue
         all_results.append(stats)
-        print(f"   ✅ {symbol} – Signals: {stats['total_signals']} (Buy: {stats['buy_signals']}, Sell: {stats['sell_signals']}) | Accuracy: {stats['accuracy']*100:.1f}%")
+        print(
+            f"   ✅ {symbol} – Total: {stats['total_signals']} | Buy: {stats['predicted_buy']} | Sell: {stats['predicted_sell']} | Hold: {stats['predicted_hold']} | Accuracy: {stats['accuracy']*100:.1f}% | Trading Acc: {stats.get('trading_accuracy', 0)*100:.1f}% | Stability: {stats.get('alpha_stability', 'UNKNOWN')}"
+        )
 
     # Save full results
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -295,21 +441,23 @@ def run_signal_analysis(lookahead: int = LOOKAHEAD_CANDLES, hours: int = DATA_HO
         return
 
     # Sort by accuracy
-    sorted_by_acc = sorted(all_results, key=lambda x: x["accuracy"], reverse=True)
+    sorted_by_acc = sorted([r for r in all_results if r.get('alpha_stability') != 'UNSTABLE_ALPHA'], key=lambda x: x["accuracy"], reverse=True)
     # Sort by average return (buy)
-    sorted_by_return = sorted(all_results, key=lambda x: x.get("avg_return_buy", 0), reverse=True)
+    sorted_by_return = sorted([r for r in all_results if r.get('alpha_stability') != 'UNSTABLE_ALPHA'], key=lambda x: x.get("avg_return_buy", 0), reverse=True)
 
     print("\n" + "=" * 80)
-    print("🏆 BEST SYMBOLS BY ACCURACY (overall)")
+    print("🏆 BEST SYMBOLS BY ACCURACY (overall) - STABLE ALPHA ONLY")
     print("=" * 80)
     for i, res in enumerate(sorted_by_acc[:10], 1):
-        print(f"{i:2}. {res['symbol']:12} | Accuracy: {res['accuracy']*100:5.1f}% | Signals: {res['total_signals']:4} | Buy acc: {res['buy_accuracy']*100:5.1f}% | Sell acc: {res['sell_accuracy']*100:5.1f}%")
+        print(
+            f"{i:2}. {res['symbol']:12} | Accuracy: {res['accuracy']*100:5.1f}% | Trading Acc: {res.get('trading_accuracy', 0)*100:5.1f}% | Total: {res['total_signals']:4} | Buy acc: {res['buy_accuracy']*100:5.1f}% | Sell acc: {res['sell_accuracy']*100:5.1f}% | Hold acc: {res['hold_accuracy']*100:5.1f}% | Safety: {res.get('safety_score', 0):.2f}"
+        )
 
     print("\n" + "=" * 80)
     print("📈 BEST SYMBOLS BY AVERAGE BUY RETURN")
     print("=" * 80)
     for i, res in enumerate(sorted_by_return[:10], 1):
-        if res["buy_signals"] > 0:
+        if res.get("predicted_buy", 0) > 0:
             print(f"{i:2}. {res['symbol']:12} | Avg Return: {res['avg_return_buy']*100:6.2f}% | MFE: {res['avg_mfe_buy']*100:6.2f}% | MAE: {res['avg_mae_buy']*100:6.2f}%")
 
     print("\n" + "=" * 80)
@@ -325,15 +473,28 @@ def run_signal_analysis(lookahead: int = LOOKAHEAD_CANDLES, hours: int = DATA_HO
     for res in all_results[:10]:
         print(f"{res['symbol']:12} | Bullish strength: {res['bullish_strength']:.3f} | Bearish strength: {res['bearish_strength']:.3f}")
 
+    # Unstable alpha warning
+    unstable = [r for r in all_results if r.get('alpha_stability') == 'UNSTABLE_ALPHA']
+    if unstable:
+        print("\n" + "=" * 80)
+        print("⚠️ UNSTABLE ALPHA TOKENS (SUPPRESSED FROM RANKINGS)")
+        print("=" * 80)
+        for res in unstable:
+            print(f"{res['symbol']:12} | Safety Score: {res.get('safety_score', 0):.2f} | MAE/MFE Ratio > 2.0")
+
     # Save a simplified best/worst summary
     summary = {
         "timestamp": timestamp,
         "lookahead": lookahead,
-        "buy_threshold": BUY_THRESHOLD,
-        "sell_threshold": SELL_THRESHOLD,
-        "best_by_accuracy": [(r["symbol"], r["accuracy"]) for r in sorted_by_acc[:10]],
-        "best_by_buy_return": [(r["symbol"], r["avg_return_buy"]) for r in sorted_by_return[:10] if r["buy_signals"] > 0],
-        "worst_by_accuracy": [(r["symbol"], r["accuracy"]) for r in sorted_by_acc[-5:]]
+        "buy_threshold": "dynamic (0.65-0.75)",
+        "sell_threshold": "dynamic (0.65-0.75)",
+        "conviction_spread": 0.20,
+        "btc_guard_buy": 0.55,
+        "btc_guard_sell": 0.45,
+        "best_by_accuracy": [(r["symbol"], r["accuracy"], r.get("trading_accuracy", 0), r.get("safety_score", 0), r.get("avg_time_to_upper", 0), r.get("avg_time_to_lower", 0)) for r in sorted_by_acc[:10]],
+        "best_by_buy_return": [(r["symbol"], r["avg_return_buy"]) for r in sorted_by_return[:10] if r.get("predicted_buy", 0) > 0],
+        "worst_by_accuracy": [(r["symbol"], r["accuracy"]) for r in sorted_by_acc[-5:]],
+        "unstable_alpha": [r["symbol"] for r in all_results if r.get('alpha_stability') == 'UNSTABLE_ALPHA']
     }
     summary_path = BACKTEST_DIR / "signal_analysis_summary.json"
     with open(summary_path, "w") as f:

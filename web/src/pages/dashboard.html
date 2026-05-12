@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
@@ -6,301 +6,25 @@
     <title>AEGIS v1.0 | Sovereign Terminal</title>
     <link rel="stylesheet" href="/web/src/styles/main.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <!-- Tailwind CSS Configuration (no CDN - using Tailwind utilities directly) -->
+    <!-- Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        deep: '#050505',
+                        void: '#0a0a0c',
+                        cyan: { DEFAULT: '#00f2ff' },
+                        orange: { DEFAULT: '#ff8c00' }
+                    }
+                }
+            }
+        }
+    </script>
     <style>
-        :root {
-            --deep: #050505;
-            --void: #0a0a0c;
-            --cyan: #00f2ff;
-            --orange: #ff8c00;
-        }
-    </style>
-    <style>
-        /* Premium Overrides */
-        body { background: var(--deep); color: #fff; margin: 0; }
-        .dashboard-body { min-height: 100dvh; }
-
-        .glass-panel {
-            background: var(--glass-bg, rgba(15, 23, 42, 0.6));
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-        }
-        .hud-glow { text-shadow: 0 0 10px rgba(0, 242, 255, 0.6); }
-        .alpha-glow { box-shadow: 0 0 15px rgba(255, 140, 0, 0.4); }
-        .status-dot { height: 8px; width: 8px; border-radius: 50%; display: inline-block; box-shadow: 0 0 8px currentColor; }
-
-        /* Tailwind utility fallback definitions */
-        .flex { display: flex; }
-        .flex-col { flex-direction: column; }
-        .flex-1 { flex: 1 1 0%; }
-        .items-center { align-items: center; }
-        .items-stretch { align-items: stretch; }
-        .justify-between { justify-content: space-between; }
-        .justify-start { justify-content: flex-start; }
-        .justify-center { justify-content: center; }
-        .gap-2 { gap: 0.5rem; }
-        .gap-3 { gap: 0.75rem; }
-        .gap-4 { gap: 1rem; }
-        .space-y-2 > * + * { margin-top: 0.5rem; }
-        .space-y-3 > * + * { margin-top: 0.75rem; }
-        .space-y-4 > * + * { margin-top: 1rem; }
-        .grid { display: grid; }
-        .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        .w-full { width: 100%; }
-        .w-24 { width: 6rem; }
-        .w-px { width: 1px; }
-        .max-w-sm { max-width: 24rem; }
-        .h-full { height: 100%; }
-        .h-6 { height: 1.5rem; }
-        .h-1 { height: 0.25rem; }
-        .h-\[100dvh\] { height: 100dvh; }
-        .min-h-\[44px\] { min-height: 44px; }
-        .min-w-\[44px\] { min-width: 44px; }
-        .p-3 { padding: 0.75rem; }
-        .p-4 { padding: 1rem; }
-        .p-5 { padding: 1.25rem; }
-        .p-6 { padding: 1.5rem; }
-        .px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
-        .px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
-        .px-4 { padding-left: 1rem; padding-right: 1rem; }
-        .pl-7 { padding-left: 1.75rem; }
-        .pr-3 { padding-right: 0.75rem; }
-        .py-0\.5 { padding-top: 0.125rem; padding-bottom: 0.125rem; }
-        .py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
-        .py-1\.5 { padding-top: 0.375rem; padding-bottom: 0.375rem; }
-        .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
-        .py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
-        .pt-2 { padding-top: 0.5rem; }
-        .pb-1 { padding-bottom: 0.25rem; }
-        .pb-2 { padding-bottom: 0.5rem; }
-        .pb-3 { padding-bottom: 0.75rem; }
-        .mt-2 { margin-top: 0.5rem; }
-        .mt-4 { margin-top: 1rem; }
-        .mb-1 { margin-bottom: 0.25rem; }
-        .mb-2 { margin-bottom: 0.5rem; }
-        .mb-4 { margin-bottom: 1rem; }
-        .mb-6 { margin-bottom: 1.5rem; }
-        .ml-2 { margin-left: 0.5rem; }
-        .rounded { border-radius: 0.25rem; }
-        .rounded-lg { border-radius: 0.5rem; }
-        .rounded-xl { border-radius: 0.75rem; }
-        .rounded-2xl { border-radius: 1rem; }
-        .rounded-full { border-radius: 9999px; }
-        .border { border-width: 1px; border-style: solid; }
-        .border-b { border-bottom-width: 1px; }
-        .border-t { border-top-width: 1px; }
-        .border-r { border-right-width: 1px; }
-        .border-white\/10 { border-color: rgba(255, 255, 255, 0.1); }
-        .border-white\/5 { border-color: rgba(255, 255, 255, 0.05); }
-        .border-cyan\/30 { border-color: rgba(0, 242, 255, 0.3); }
-        .border-orange\/50 { border-color: rgba(255, 140, 0, 0.5); }
-        .border-green-500\/30 { border-color: rgba(16, 185, 129, 0.3); }
-        .border-red-500\/30 { border-color: rgba(239, 68, 68, 0.3); }
-        .bg-current { background-color: currentColor; }
-        .shrink-0 { flex-shrink: 0; }
-        .z-30 { z-index: 30; }
-        .z-40 { z-index: 40; }
-        .z-50 { z-index: 50; }
-        .z-\[100\] { z-index: 100; }
-        .bg-black\/40 { background-color: rgba(0, 0, 0, 0.4); }
-        .bg-black\/50 { background-color: rgba(0, 0, 0, 0.5); }
-        .bg-black\/80 { background-color: rgba(0, 0, 0, 0.8); }
-        .bg-void { background-color: var(--void); }
-        .bg-void\/95 { background-color: rgba(10, 10, 12, 0.95); }
-        .bg-deep\/95 { background-color: rgba(5, 5, 5, 0.95); }
-        .bg-white\/10 { background-color: rgba(255, 255, 255, 0.1); }
-        .bg-cyan\/20 { background-color: rgba(0, 242, 255, 0.2); }
-        .bg-gray-800 { background-color: #1f2937; }
-        .bg-green-900\/20 { background-color: rgba(4, 120, 87, 0.2); }
-        .bg-orange\/20 { background-color: rgba(255, 140, 0, 0.2); }
-        .bg-red-900\/20 { background-color: rgba(127, 29, 29, 0.2); }
-        .text-cyan { color: var(--cyan); }
-        .text-orange { color: var(--orange); }
-        .text-gray-200 { color: #e5e7eb; }
-        .text-gray-300 { color: #d1d5db; }
-        .text-gray-400 { color: #9ca3af; }
-        .text-gray-500 { color: #6b7280; }
-        .text-green-400 { color: #34d399; }
-        .text-red-400 { color: #f87171; }
-        .text-white { color: #ffffff; }
-        .text-transparent { color: transparent; }
-        .text-yellow-500 { color: #f59e0b; }
-        .text-xs { font-size: 0.75rem; line-height: 1rem; }
-        .text-sm { font-size: 0.875rem; line-height: 1.25rem; }
-        .text-xl { font-size: 1.25rem; line-height: 1.75rem; }
-        .text-3xl { font-size: 1.875rem; line-height: 2.25rem; }
-        .text-4xl { font-size: 2.25rem; line-height: 2.5rem; }
-        .uppercase { text-transform: uppercase; }
-        .font-bold { font-weight: 700; }
-        .font-black { font-weight: 900; }
-        .font-sans { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-        .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; }
-        .tracking-tight { letter-spacing: -0.025em; }
-        .tracking-wider { letter-spacing: 0.08em; }
-        .tracking-widest { letter-spacing: 0.16em; }
-        .text-right { text-align: right; }
-        .text-center { text-align: center; }
-        .hidden { display: none !important; }
-        .block { display: block; }
-        .inline-block { display: inline-block; }
-        .cursor-pointer { cursor: pointer; }
-        .overflow-auto { overflow: auto; }
-        .overflow-hidden { overflow: hidden; }
-        .overflow-y-auto { overflow-y: auto; }
-        .relative { position: relative; }
-        .absolute { position: absolute; }
-        .fixed { position: fixed; }
-        .inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
-        .left-0 { left: 0; }
-        .right-4 { right: 1rem; }
-        .top-0 { top: 0; }
-        .top-full { top: 100%; }
-        .top-1\/2 { top: 50%; }
-        .transform { transform: translate(0, 0); }
-        .-translate-x-full { transform: translateX(-100%); }
-        .-translate-y-1\/2 { transform: translateY(-50%); }
-        .translate-x-0 { transform: translateX(0); }
-        .min-h-\[44px\] { min-height: 44px; }
-        .min-w-\[44px\] { min-width: 44px; }
-        .w-\[80px\] { width: 80px; }
-        .shadow-2xl { box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25); }
-        .shadow-\[0_0_15px_rgba\(0\,242\,255\,0\.4\)\] { box-shadow: 0 0 15px rgba(0, 242, 255, 0.4); }
-        .shadow-\[0_0_40px_rgba\(255\,140\,0\,0\.2\)\] { box-shadow: 0 0 40px rgba(255, 140, 0, 0.2); }
-        .transition-all { transition: all 0.2s ease-in-out; }
-        .transition-colors { transition: color 0.2s ease-in-out, background-color 0.2s ease-in-out, border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out; }
-        .transition-transform { transition: transform 0.2s ease-in-out; }
-        .duration-300 { transition-duration: 300ms; }
-        .ease-in-out { transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
-        .bg-clip-text { -webkit-background-clip: text; background-clip: text; }
-        .accent-cyan { accent-color: var(--cyan); }
-        .focus\:outline-none:focus { outline: none; }
-        .focus\:border-cyan:focus { border-color: var(--cyan); }
-        .focus\:ring-1:focus { box-shadow: 0 0 0 1px rgba(0, 242, 255, 0.4); }
-        .text-gray-300 { color: #d1d5db; }
-        .bg-gradient-to-r { background-image: linear-gradient(to right, var(--gradient-from, #ffffff), var(--gradient-to, var(--cyan))); }
-        .from-white { --gradient-from: #ffffff; }
-        .from-cyan { --gradient-from: var(--cyan); }
-        .from-orange { --gradient-from: var(--orange); }
-        .to-cyan { --gradient-to: var(--cyan); }
-        .to-blue-600 { --gradient-to: #2563eb; }
-        .to-red-600 { --gradient-to: #ef4444; }
-        .to-red-500 { --gradient-to: #f43f5e; }
-        .hover\:text-cyan:hover { color: var(--cyan); }
-        .hover\:text-white:hover { color: #ffffff; }
-        .hover\:bg-white\/5:hover { background-color: rgba(255, 255, 255, 0.05); }
-        .hover\:bg-white\/20:hover { background-color: rgba(255, 255, 255, 0.2); }
-        .hover\:from-orange:hover { --gradient-from: var(--orange); }
-        .hover\:to-red-500:hover { --gradient-to: #f43f5e; }
-        .hover\:shadow-\[0_0_15px_rgba\(0\,242\,255\,0\.4\)\]:hover { box-shadow: 0 0 15px rgba(0, 242, 255, 0.4); }
-        .hover\:shadow-none:hover { box-shadow: none; }
-
-        /* Signal Cards */
-        .signal-card { background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 0.5rem; padding: 1rem; margin-bottom: 0.5rem; }
-        .signal-card.buy { border-color: rgba(16, 185, 129, 0.3); }
-        .signal-card.sell { border-color: rgba(239, 68, 68, 0.3); }
-        .signal-card.neutral { border-color: rgba(255, 255, 255, 0.08); }
-        .signal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
-        .signal-symbol { font-weight: bold; color: #00f2ff; }
-        .signal-timeframe { font-size: 0.75rem; color: #9ca3af; }
-        .signal-badge { padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem; font-weight: bold; }
-        .signal-badge.buy { background: rgba(16, 185, 129, 0.2); color: #34d399; }
-        .signal-badge.sell { background: rgba(239, 68, 68, 0.2); color: #f87171; }
-        .signal-badge.neutral { background: rgba(255, 255, 255, 0.1); color: #d1d5db; }
-        .signal-details { display: flex; flex-direction: column; gap: 0.5rem; }
-        .signal-confidence { display: flex; align-items: center; gap: 0.5rem; }
-        .confidence-bar { flex: 1; height: 4px; background: rgba(255, 255, 255, 0.1); border-radius: 2px; overflow: hidden; }
-        .confidence-fill { height: 100%; background: linear-gradient(to right, #00f2ff, #2563eb); transition: width 0.3s; }
-        .signal-meta { display: flex; justify-content: space-between; font-size: 0.75rem; color: #9ca3af; }
-        .no-signals { text-align: center; padding: 2rem; color: #9ca3af; }
-                .upgrade-link { color: #00f2ff; text-decoration: none; font-weight: bold; }
-        .countdown-display {
-            margin: 1rem auto;
-            max-width: 980px;
-            padding: 1rem 1.25rem;
-            border: 1px solid rgba(0, 242, 255, 0.15);
-            border-radius: 1rem;
-            background: rgba(2, 16, 39, 0.88);
-            color: #e2e8f0;
-            font-size: 0.95rem;
-            text-align: center;
-            box-shadow: 0 18px 45px rgba(0, 0, 0, 0.35);
-        }
-        .access-expired-card {
-            max-width: 980px;
-            margin: 1.5rem auto;
-            padding: 2rem 1.5rem;
-            border: 1px solid rgba(239, 68, 68, 0.25);
-            border-radius: 1rem;
-            background: rgba(15, 23, 42, 0.96);
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
-            text-align: center;
-            color: #f8fafc;
-        }
-        .access-expired-card h2 {
-            margin-bottom: 0.75rem;
-            font-size: 1.75rem;
-            letter-spacing: 0.03em;
-        }
-        .access-expired-card p {
-            color: #cbd5e1;
-            margin-bottom: 1.5rem;
-            line-height: 1.7;
-        }
-        .access-expired-card .expired-actions {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-            gap: 1rem;
-        }
-        .access-expired-card .expired-actions a {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 150px;
-            padding: 0.85rem 1.2rem;
-            border-radius: 0.85rem;
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            background: rgba(255, 255, 255, 0.05);
-            color: #ffffff;
-            text-decoration: none;
-            font-weight: 600;
-            transition: background 0.2s ease;
-        }
-        .access-expired-card .expired-actions a:hover {
-            background: rgba(255, 255, 255, 0.12);
-        }
         .visible { display: block !important; }
-
-        /* Responsive utility helpers */
-        @media (min-width: 1024px) {
-            .lg\:hidden { display: none !important; }
-            .lg\:block { display: block !important; }
-            .lg\:flex { display: flex !important; }
-            .lg\:relative { position: relative !important; }
-            .lg\:items-center { align-items: center !important; }
-            .lg\:justify-start { justify-content: flex-start !important; }
-            .lg\:mt-0 { margin-top: 0 !important; }
-            .lg\:p-0 { padding: 0 !important; }
-            .lg\:px-6 { padding-left: 1.5rem !important; padding-right: 1.5rem !important; }
-            .lg\:backdrop-blur-none { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
-            .lg\:bg-transparent { background: transparent !important; }
-            .lg\:border-none { border: none !important; }
-            .lg\:shadow-none { box-shadow: none !important; }
-            .lg\:translate-x-0 { transform: translateX(0) !important; }
-            .lg\:overflow-hidden { overflow: hidden !important; }
-        }
-        @media (min-width: 640px) {
-            .sm\:inline-block { display: inline-block !important; }
-            .sm\:w-80 { width: 20rem !important; }
-        }
-
-        /* Scrollbar styling */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(0, 242, 255, 0.3); }
     </style>
 </head>
 <body class="dashboard-body flex flex-col h-[100dvh] font-sans antialiased text-gray-200 overflow-auto lg:overflow-hidden">
@@ -335,7 +59,7 @@
             <i class="fas fa-chevron-down text-xs text-gray-500"></i>
         </button>
 
-        <div id="statusDropdown" class="hidden lg:flex absolute lg:relative top-full right-4 lg:right-0 mt-2 lg:mt-0 bg-void/95 lg:bg-transparent border border-white/10 lg:border-none rounded-xl p-4 lg:p-0 grid lg:grid-cols-3 gap-4 lg:gap-6 text-sm font-mono shadow-2xl lg:shadow-none backdrop-blur-xl lg:backdrop-blur-none z-50">
+        <div id="statusDropdown" class="hidden lg:flex items-center gap-3 text-sm font-mono z-50">
             <!-- Connection Status (Mobile inside dropdown) -->
             <div id="ws-status-mobile" class="lg:hidden flex items-center gap-2 text-xs font-mono text-gray-400 pb-3 border-b border-white/5 col-span-full">
                 <span class="status-dot text-yellow-500 bg-current" id="ws-status-dot-inner"></span>
@@ -343,28 +67,22 @@
             </div>
             
             <!-- HUD Indicators -->
-            <div class="flex items-center justify-between lg:justify-start gap-2 bg-black/40 px-4 py-2 min-h-[44px] rounded-lg border border-white/5">
-                <div class="flex items-center gap-2">
-                    <i class="fas fa-hourglass-half text-gray-400"></i>
-                    <span class="text-gray-400 uppercase text-xs tracking-wider">Warmup</span>
-                </div>
-                <span id="warmup-status" class="text-white font-bold hud-glow ml-2">â€”</span>
+            <div class="flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded-full border border-white/10">
+                <i class="fas fa-hourglass-half text-gray-400 text-xs"></i>
+                <span class="text-gray-400 uppercase text-[10px] tracking-wider hidden xl:inline">Warmup</span>
+                <span id="warmup-status" class="text-white font-bold text-xs hud-glow ml-1">—</span>
             </div>
 
-            <div class="flex items-center justify-between lg:justify-start gap-2 bg-black/40 px-4 py-2 min-h-[44px] rounded-lg border border-white/5 cursor-pointer hover:bg-white/5 transition-colors" id="alphaToggleContainer">
-                <div class="flex items-center gap-2">
-                    <i class="fas fa-shield-alt text-gray-400"></i>
-                    <span class="text-gray-400 uppercase text-xs tracking-wider">Alpha Mode</span>
-                </div>
-                <span id="alphaToggle" class="text-orange font-bold alpha-glow px-2 py-0.5 rounded bg-orange/20 border border-orange/50 transition-all ml-2">OFF</span>
+            <div class="flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded-full border border-white/10 cursor-pointer hover:bg-white/10 transition-colors" id="alphaToggleContainer">
+                <i class="fas fa-shield-alt text-gray-400 text-xs"></i>
+                <span class="text-gray-400 uppercase text-[10px] tracking-wider hidden xl:inline">Alpha Mode</span>
+                <span id="alphaToggle" class="text-orange font-bold text-xs alpha-glow px-1.5 py-0.5 rounded bg-orange/20 border border-orange/50 transition-all ml-1">OFF</span>
             </div>
             
-            <div class="flex items-center justify-between lg:justify-start gap-2 bg-black/40 px-4 py-2 min-h-[44px] rounded-lg border border-white/5">
-                <div class="flex items-center gap-2">
-                    <i class="fas fa-clock text-gray-400"></i>
-                    <span class="text-gray-400 uppercase text-xs tracking-wider">System</span>
-                </div>
-                <span id="last-updated" class="text-cyan font-bold hud-glow ml-2">LIVE</span>
+            <div class="flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded-full border border-white/10">
+                <i class="fas fa-clock text-gray-400 text-xs"></i>
+                <span class="text-gray-400 uppercase text-[10px] tracking-wider hidden xl:inline">System</span>
+                <span id="last-updated" class="text-cyan font-bold text-xs hud-glow ml-1">LIVE</span>
             </div>
         </div>
     </header>
@@ -373,162 +91,368 @@
     <div id="trialBanner" class="bg-orange/10 border-b border-orange/20 px-4 py-2 text-center text-sm text-orange hidden">
         <i class="fas fa-hourglass-half"></i> Trial active - <span id="trial-countdown">Loading...</span> remaining
     </div>
-
-    <div id="dashboard-main-content">`n        <div id="countdown-display" class="countdown-display">Loading countdown...</div>`n        <div class="dashboard-layout">`n        <!-- SIDEBAR -->
+    <div id="dashboard-main-content" class="flex-1 flex overflow-hidden relative w-full h-[calc(100dvh-73px)]">
+        <!-- Sidebar Overlay for Mobile -->
         <div id="sidebarOverlay" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 hidden lg:hidden"></div>
-        <aside id="sidebar" class="sidebar glass-panel border-r border-white/10 flex flex-col z-40 shrink-0 bg-deep/95 lg:bg-transparent">
-            
+
+        <!-- Sidebar Navigation -->
+        <aside id="sidebar" class="sidebar fixed inset-y-0 left-0 z-40 w-[280px] transform -translate-x-full lg:translate-x-0 lg:static transition-transform duration-300 ease-in-out glass-panel border-r border-white/10 flex flex-col bg-deep/95 lg:bg-transparent h-full shrink-0">
+            <!-- Mobile Header -->
             <div class="flex items-center justify-between lg:hidden p-4 border-b border-white/10">
                 <span class="font-bold text-cyan tracking-wider">MENU</span>
                 <button id="closeMenuBtn" class="text-gray-400 hover:text-white min-h-[44px] min-w-[44px]"><i class="fas fa-times text-xl"></i></button>
             </div>
-            
-            <!-- User Capital & Risk -->
-            <div class="p-5 border-b border-white/10">
-                <h3 class="text-xs uppercase tracking-widest text-gray-500 mb-4 font-bold flex items-center gap-2"><i class="fas fa-wallet"></i> Capital Management</h3>
-                <div class="space-y-4">
-                    <div>
-                        <label class="text-xs text-gray-400 mb-1 block">Account Capital (USDT)</label>
-                        <div class="relative">
-                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
-                            <input type="number" id="user-capital" class="w-full bg-black/50 border border-white/10 rounded-lg pl-7 pr-3 py-2 min-h-[44px] text-white focus:outline-none focus:border-cyan focus:ring-1 focus:ring-cyan transition-all font-mono" value="10000">
-                        </div>
-                    </div>
-                    <div>
-                        <label class="text-xs text-gray-400 mb-1 block">Risk Per Trade</label>
-                        <select id="risk-level" class="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 min-h-[44px] text-white focus:outline-none focus:border-cyan appearance-none font-mono">
-                            <option value="1">1.0%</option>
-                            <option value="2" selected>2.0%</option>
-                            <option value="5">5.0%</option>
-                        </select>
-                    </div>
-                    <div class="pt-2">
-                        <label class="text-xs text-gray-400 mb-1 block">Suggested Position Size</label>
-                        <div id="suggested-amount" class="text-3xl font-mono text-cyan hud-glow tracking-tight">$0.00</div>
-                    </div>
-                </div>
-            </div>
 
-            <!-- Execution Cockpit -->
-            <div class="p-5 flex-1 overflow-y-auto">
-                <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-xs uppercase tracking-widest text-gray-500 font-bold flex items-center gap-2"><i class="fas fa-crosshairs"></i> Execution Cockpit</h3>
-                </div>
+            <!-- Navigation Rooms -->
+            <div class="p-4 flex-1 overflow-y-auto space-y-4">
+                <h3 class="text-xs uppercase tracking-widest text-gray-500 mb-2 font-bold px-2">Navigation</h3>
                 
-                <div class="space-y-3 font-mono text-sm">
-                    <div class="flex flex-col">
-                        <label class="text-xs text-gray-500">Symbol</label>
-                        <input type="text" id="sim-symbol" readonly placeholder="Select a signal" class="bg-black/40 border border-white/5 rounded px-2 py-1.5 text-cyan outline-none w-full">
-                    </div>
-                    <div class="flex justify-between items-center bg-black/40 px-2 py-1.5 rounded border border-white/5">
-                        <span class="text-xs text-gray-500">Direction</span>
-                        <span id="direction-badge" class="text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-400">â€”</span>
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <span class="text-xs text-gray-500">Entry (USDT)</span>
-                        <input type="number" id="sim-entry" step="0.01" value="0" class="w-24 bg-black/40 border border-white/10 rounded px-2 py-1 text-right outline-none focus:border-cyan">
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <span class="text-xs text-gray-500">Balance</span>
-                        <input type="number" id="sim-balance" step="100" value="10000" class="w-24 bg-black/40 border border-white/10 rounded px-2 py-1 text-right outline-none focus:border-cyan hidden">
-                        <span class="text-gray-300">$10,000</span>
-                    </div>
-                    <div class="pt-2 pb-1 border-t border-white/5">
-                        <div class="flex justify-between mb-1">
-                            <span class="text-xs text-gray-500">Risk Limit</span>
-                            <span id="risk-percent-display" class="text-xs text-gray-300">2.0%</span>
-                        </div>
-                        <input type="range" id="sim-risk-slider" min="0.5" max="10" step="0.1" value="2" class="w-full accent-cyan min-h-[44px]">
-                    </div>
-                    <div class="pb-2 border-b border-white/5">
-                        <div class="flex justify-between mb-1">
-                            <span class="text-xs text-gray-500">Leverage</span>
-                            <span id="leverage-display" class="text-xs text-gray-300">1x</span>
-                        </div>
-                        <input type="range" id="sim-leverage" min="1" max="50" step="1" value="1" class="w-full accent-cyan min-h-[44px]">
-                    </div>
-                    
-                    <div class="grid grid-cols-2 gap-2 pt-2">
-                        <div>
-                            <label class="text-[10px] text-gray-500 block">Stop Loss</label>
-                            <input type="number" id="sim-sl" step="0.01" value="0" class="w-full bg-red-900/20 border border-red-500/30 rounded px-2 py-2 min-h-[44px] text-red-400 outline-none">
+                <a href="#room-signals" onclick="switchRoom('signals')" class="nav-room block glass-panel p-4 rounded-xl text-white border-cyan/50 shadow-[0_0_15px_rgba(0,242,255,0.2)] hover:border-cyan/50 hover:shadow-[0_0_15px_rgba(0,242,255,0.2)] transition-all group min-h-[44px]" data-room="signals">
+                    <div class="flex items-center gap-3">
+                        <div class="icon-container w-10 h-10 rounded-full bg-cyan/10 flex items-center justify-center text-cyan group-hover:bg-cyan/20 transition-colors">
+                            <i class="fas fa-satellite-dish"></i>
                         </div>
                         <div>
-                            <label class="text-[10px] text-gray-500 block">Take Profit</label>
-                            <input type="number" id="sim-tp" step="0.01" value="0" class="w-full bg-green-900/20 border border-green-500/30 rounded px-2 py-2 min-h-[44px] text-green-400 outline-none">
+                            <div class="font-bold uppercase tracking-wider text-sm">Signals</div>
+                            <div class="text-xs text-gray-400">Live intelligence</div>
                         </div>
                     </div>
+                </a>
 
-                    <div class="bg-black/50 border border-white/5 rounded p-3 mt-4 space-y-2 text-xs">
-                        <div class="flex justify-between"><span class="text-gray-500">Pos. Size</span><span id="pos-units" class="text-white">0.00</span></div>
-                        <div class="flex justify-between"><span class="text-gray-500">Notional</span><span id="notional" class="text-white">$0.00</span></div>
-                        <div class="flex justify-between"><span class="text-gray-500">Margin</span><span id="margin" class="text-white">$0.00</span></div>
-                        <div class="flex justify-between"><span class="text-gray-500">Liq. Price</span><span id="liquidation" class="text-orange">$0.00</span></div>
-                        <div class="flex justify-between"><span class="text-gray-500">Risk/Reward</span><span id="rr-ratio" class="text-cyan">0.00</span></div>
+                <a href="#room-terminal" onclick="switchRoom('terminal')" class="nav-room block glass-panel p-4 rounded-xl text-gray-400 hover:text-white hover:border-orange/50 hover:shadow-[0_0_15px_rgba(255,140,0,0.2)] transition-all group min-h-[44px]" data-room="terminal">
+                    <div class="flex items-center gap-3">
+                        <div class="icon-container w-10 h-10 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-orange/20 transition-colors">
+                            <i class="fas fa-terminal"></i>
+                        </div>
+                        <div>
+                            <div class="font-bold uppercase tracking-wider text-sm">Terminal</div>
+                            <div class="text-xs text-gray-500">Execution cockpit</div>
+                        </div>
                     </div>
+                </a>
 
-                    <div class="mt-4">
-                        <button id="execute-trade-btn" class="w-full py-3 min-h-[44px] rounded-lg font-bold uppercase tracking-wider bg-gradient-to-r from-cyan to-blue-600 text-white hover:shadow-[0_0_15px_rgba(0,242,255,0.4)] transition-all">
-                            Execute Trade
-                        </button>
+                <a href="#room-analytics" onclick="switchRoom('analytics')" class="nav-room block glass-panel p-4 rounded-xl text-gray-400 hover:text-white hover:border-white/30 transition-all group min-h-[44px]" data-room="analytics">
+                    <div class="flex items-center gap-3">
+                        <div class="icon-container w-10 h-10 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-white/10 transition-colors">
+                            <i class="fas fa-chart-pie"></i>
+                        </div>
+                        <div>
+                            <div class="font-bold uppercase tracking-wider text-sm">Analytics</div>
+                            <div class="text-xs text-gray-500">Positions & Ledger</div>
+                        </div>
                     </div>
-                </div>
+                </a>
+
+                <a href="#room-settings" onclick="switchRoom('settings')" class="nav-room block glass-panel p-4 rounded-xl text-gray-400 hover:text-white hover:border-white/30 transition-all group min-h-[44px]" data-room="settings">
+                    <div class="flex items-center gap-3">
+                        <div class="icon-container w-10 h-10 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-white/10 transition-colors">
+                            <i class="fas fa-cog"></i>
+                        </div>
+                        <div>
+                            <div class="font-bold uppercase tracking-wider text-sm">Settings</div>
+                            <div class="text-xs text-gray-500">System config</div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+            
+            <div class="p-4 border-t border-white/10">
+                 <div class="glass-panel p-3 rounded-xl text-center">
+                     <div class="text-[10px] text-gray-400 uppercase tracking-widest">Aegis Core</div>
+                     <div class="text-xs text-cyan font-bold mt-1"><i class="fas fa-shield-alt"></i> SECURE</div>
+                 </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 overflow-y-auto p-4 lg:p-6 space-y-6 relative h-full w-full">
+            <div id="countdown-display" class="countdown-display w-full max-w-none mx-0 mb-4 lg:mb-6">Loading countdown...</div>
+            
+            <!-- ROOM: SIGNALS -->
+            <div id="room-signals" class="room-section active">
+                 <div class="flex flex-col lg:flex-row lg:items-center justify-between border-b border-white/10 mb-6 pb-3 gap-4">
+                     <h2 class="text-xl lg:text-2xl font-black uppercase tracking-widest text-white flex items-center gap-3">
+                         <i class="fas fa-satellite-dish text-cyan"></i> Live Signals
+                     </h2>
+                     
+                     <div class="flex items-center gap-3">
+                         <!-- Strategy Matchmaker -->
+                         <select id="strategy-matchmaker" class="bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 min-h-[36px] text-xs font-bold text-gray-400 focus:outline-none focus:border-cyan appearance-none cursor-pointer hover:text-white transition-colors">
+                             <option value="">Select Risk Profile</option>
+                             <option value="conservative">Conservative (1:1)</option>
+                             <option value="balanced">Balanced (1:1.5)</option>
+                             <option value="aggressive">Aggressive (1:2)</option>
+                             <option value="sniper">Sniper (1:3)</option>
+                         </select>
+                         
+                         <!-- Timeframe Selector -->
+                         <div class="flex items-center gap-1 bg-black/40 p-1 rounded-lg border border-white/10 text-[10px] sm:text-xs font-mono overflow-x-auto" id="timeframe-selector">
+                             <button class="tf-btn px-2 sm:px-3 py-1.5 rounded text-gray-500 hover:text-white cursor-pointer" data-tf="1m" data-pro="true">1m <i class="fas fa-lock text-[8px] ml-0.5"></i></button>
+                             <button class="tf-btn px-2 sm:px-3 py-1.5 rounded text-gray-500 hover:text-white cursor-pointer" data-tf="5m" data-pro="true">5m <i class="fas fa-lock text-[8px] ml-0.5"></i></button>
+                             <button class="tf-btn px-2 sm:px-3 py-1.5 rounded text-gray-400 hover:text-white cursor-pointer" data-tf="15m">15m</button>
+                             <button class="tf-btn px-2 sm:px-3 py-1.5 rounded text-gray-400 hover:text-white cursor-pointer" data-tf="30m">30m</button>
+                             <button class="tf-btn px-2 sm:px-3 py-1.5 rounded bg-cyan/20 text-cyan font-bold cursor-pointer" data-tf="1h">1h</button>
+                             <button class="tf-btn px-2 sm:px-3 py-1.5 rounded text-gray-500 hover:text-white cursor-pointer" data-tf="4h" data-pro="true">4h <i class="fas fa-lock text-[8px] ml-0.5"></i></button>
+                             <button class="tf-btn px-2 sm:px-3 py-1.5 rounded text-gray-500 hover:text-white cursor-pointer" data-tf="1d" data-pro="true">1d <i class="fas fa-lock text-[8px] ml-0.5"></i></button>
+                             <button class="tf-btn px-2 sm:px-3 py-1.5 rounded text-gray-500 hover:text-white cursor-pointer" data-tf="1w" data-pro="true">1w <i class="fas fa-lock text-[8px] ml-0.5"></i></button>
+                         </div>
+                     </div>
+                 </div>
+                 
+                 <!-- Responsive Grid: 1 col on mobile, 2 or 3 on desktop -->
+                 <div id="signalsContainer" class="signals-grid grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
+                      <!-- Signals will be rendered here -->
+                 </div>
             </div>
 
-            <!-- Signals Section -->
-            <div class="p-5 border-b border-white/10">
-                <h3 class="text-xs uppercase tracking-widest text-gray-500 mb-4 font-bold flex items-center gap-2"><i class="fas fa-chart-line"></i> Live Signals</h3>
-                <div id="signalsContainer" class="signals-grid grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">`n                    <!-- Signals will be rendered here -->
-                </div>
+            <!-- ROOM: TERMINAL -->
+            <div id="room-terminal" class="room-section hidden">
+                 <h2 class="text-xl lg:text-2xl font-black uppercase tracking-widest text-white mb-6 border-b border-white/10 pb-3 flex items-center gap-3"><i class="fas fa-terminal text-orange"></i> Execution Terminal</h2>
+                 
+                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                     <!-- Capital Management -->
+                     <div class="glass-panel p-5 rounded-xl border-t-2 border-t-cyan h-fit">
+                         <h3 class="text-xs uppercase tracking-widest text-gray-500 mb-4 font-bold flex items-center gap-2"><i class="fas fa-wallet"></i> Capital Management</h3>
+                         <div class="space-y-4">
+                             <div>
+                                 <label class="text-xs text-gray-400 mb-1 block">Account Capital (USDT)</label>
+                                 <div class="relative">
+                                     <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                                     <input type="number" id="user-capital" class="w-full bg-black/50 border border-white/10 rounded-lg pl-7 pr-3 py-2 min-h-[44px] text-white focus:outline-none focus:border-cyan focus:ring-1 focus:ring-cyan transition-all font-mono" value="10000">
+                                 </div>
+                             </div>
+                             <div>
+                                 <label class="text-xs text-gray-400 mb-1 block">Risk Per Trade</label>
+                                 <select id="risk-level" class="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 min-h-[44px] text-white focus:outline-none focus:border-cyan appearance-none font-mono">
+                                     <option value="1">1.0%</option>
+                                     <option value="2" selected>2.0%</option>
+                                     <option value="5">5.0%</option>
+                                 </select>
+                             </div>
+                             <div class="pt-2">
+                                 <label class="text-xs text-gray-400 mb-1 block">Suggested Position Size</label>
+                                 <div id="suggested-amount" class="text-3xl font-mono text-cyan hud-glow tracking-tight">$0.00</div>
+                             </div>
+                         </div>
+                     </div>
+
+                     <!-- Execution Cockpit -->
+                     <div class="glass-panel p-5 rounded-xl border-t-2 border-t-orange">
+                         <h3 class="text-xs uppercase tracking-widest text-gray-500 mb-4 font-bold flex items-center gap-2"><i class="fas fa-crosshairs"></i> Trade Setup</h3>
+                         <div class="space-y-3 font-mono text-sm">
+                             <div class="flex flex-col">
+                                 <label class="text-xs text-gray-500">Symbol</label>
+                                 <select id="sim-symbol" class="bg-black/40 border border-white/5 rounded px-2 py-1.5 min-h-[44px] text-cyan outline-none w-full appearance-none cursor-pointer focus:border-cyan">
+                                     <option value="">Select a signal...</option>
+                                 </select>
+                             </div>
+                             <div class="flex justify-between items-center bg-black/40 px-2 py-1.5 min-h-[44px] rounded border border-white/5">
+                                 <span class="text-xs text-gray-500">Direction</span>
+                                 <span id="direction-badge" class="text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-400">—</span>
+                             </div>
+                             <div class="flex justify-between items-center bg-black/40 px-2 py-1.5 min-h-[44px] rounded border border-white/5">
+                                 <span class="text-xs text-gray-500">Entry (USDT)</span>
+                                 <input type="number" id="sim-entry" step="0.01" value="0" class="w-24 bg-transparent text-right outline-none text-white focus:text-cyan">
+                             </div>
+                             <div class="flex justify-between items-center hidden">
+                                 <span class="text-xs text-gray-500">Balance</span>
+                                 <input type="number" id="sim-balance" step="100" value="10000" class="w-24 bg-black/40 border border-white/10 rounded px-2 py-1 text-right outline-none focus:border-cyan">
+                             </div>
+                             <div class="pt-2 pb-1 border-t border-white/5 mt-4">
+                                 <div class="flex justify-between mb-2">
+                                     <span class="text-xs text-gray-500">Risk Limit</span>
+                                     <span id="risk-percent-display" class="text-xs text-gray-300">2.0%</span>
+                                 </div>
+                                 <input type="range" id="sim-risk-slider" min="0.5" max="10" step="0.1" value="2" class="w-full accent-cyan min-h-[44px]">
+                             </div>
+                             <div class="pb-2 border-b border-white/5">
+                                 <div class="flex justify-between mb-2">
+                                     <span class="text-xs text-gray-500">Leverage</span>
+                                     <span id="leverage-display" class="text-xs text-gray-300">1x</span>
+                                 </div>
+                                 <input type="range" id="sim-leverage" min="1" max="50" step="1" value="1" class="w-full accent-cyan min-h-[44px]">
+                             </div>
+                             
+                             <div class="grid grid-cols-2 gap-3 pt-2">
+                                 <div>
+                                     <label class="text-[10px] text-gray-500 block mb-1">Stop Loss</label>
+                                     <input type="number" id="sim-sl" step="0.01" value="0" class="w-full bg-red-900/20 border border-red-500/30 rounded px-2 py-2 min-h-[44px] text-red-400 outline-none">
+                                 </div>
+                                 <div>
+                                     <label class="text-[10px] text-gray-500 block mb-1">Take Profit</label>
+                                     <input type="number" id="sim-tp" step="0.01" value="0" class="w-full bg-green-900/20 border border-green-500/30 rounded px-2 py-2 min-h-[44px] text-green-400 outline-none">
+                                 </div>
+                             </div>
+
+                             <div class="bg-black/50 border border-white/5 rounded p-4 mt-4 space-y-3 text-xs">
+                                 <div class="flex justify-between"><span class="text-gray-500">Pos. Size</span><span id="pos-units" class="text-white font-bold">0.00</span></div>
+                                 <div class="flex justify-between"><span class="text-gray-500">Notional</span><span id="notional" class="text-white font-bold">$0.00</span></div>
+                                 <div class="flex justify-between"><span class="text-gray-500">Margin</span><span id="margin" class="text-white font-bold">$0.00</span></div>
+                                 <div class="flex justify-between"><span class="text-gray-500">Liq. Price</span><span id="liquidation" class="text-orange font-bold">$0.00</span></div>
+                                 <div class="flex justify-between"><span class="text-gray-500">Risk/Reward</span><span id="rr-ratio" class="text-cyan font-bold">0.00</span></div>
+                             </div>
+
+                             <div class="mt-6">
+                                 <button id="execute-trade-btn" class="w-full py-3 min-h-[44px] rounded-lg font-black uppercase tracking-wider bg-gradient-to-r from-cyan to-blue-600 text-white hover:shadow-[0_0_15px_rgba(0,242,255,0.4)] transition-all">
+                                     Execute Trade
+                                 </button>
+                             </div>
+                         </div>
+                     </div>
+                 </div>
             </div>
 
-            <!-- Positions Section -->
-            <div class="p-5 border-b border-white/10">
-                <h3 class="text-xs uppercase tracking-widest text-gray-500 mb-4 font-bold flex items-center gap-2"><i class="fas fa-list"></i> Open Positions</h3>
-                <div id="positionsContainer" class="space-y-2">
-                    <!-- Positions will be rendered here -->
-                </div>
+            <!-- ROOM: ANALYTICS -->
+            <div id="room-analytics" class="room-section hidden space-y-6">
+                 <h2 class="text-xl lg:text-2xl font-black uppercase tracking-widest text-white mb-6 border-b border-white/10 pb-3 flex items-center gap-3"><i class="fas fa-chart-pie text-blue-400"></i> Analytics</h2>
+                 
+                 <!-- Balance Displays -->
+                 <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                     <div class="glass-panel p-4 text-center rounded-xl">
+                         <div class="text-xs text-gray-400 uppercase tracking-wider">Balance</div>
+                         <div id="balanceDisplay" class="text-2xl font-mono text-cyan hud-glow">$0.00</div>
+                     </div>
+                     <div class="glass-panel p-4 text-center rounded-xl">
+                         <div class="text-xs text-gray-400 uppercase tracking-wider">Capital</div>
+                         <div id="capitalDisplay" class="text-2xl font-mono text-white">$10,000</div>
+                     </div>
+                     <div class="glass-panel p-4 text-center rounded-xl">
+                         <div class="text-xs text-gray-400 uppercase tracking-wider">Risk</div>
+                         <div id="riskDisplay" class="text-2xl font-mono text-orange">2%</div>
+                     </div>
+                     <div class="glass-panel p-4 text-center rounded-xl">
+                         <div class="text-xs text-gray-400 uppercase tracking-wider">Plan</div>
+                         <div id="planBadge" class="text-sm font-bold text-cyan mt-1">TRIAL</div>
+                     </div>
+                 </div>
+
+                 <!-- Open Positions -->
+                 <div class="glass-panel p-5 rounded-xl">
+                     <h3 class="text-xs uppercase tracking-widest text-gray-500 mb-4 font-bold flex items-center gap-2"><i class="fas fa-list"></i> Open Positions</h3>
+                     <div id="positionsContainer" class="space-y-3">
+                         <!-- Positions will be rendered here -->
+                     </div>
+                 </div>
+
+                 <!-- Active Executions Ledger -->
+                 <div class="ledger-section glass-panel rounded-xl overflow-hidden mt-0 border border-white/10">
+                     <div class="ledger-header bg-black/40 p-4 border-b border-white/10 font-bold"><i class="fas fa-list-ul mr-2 text-gray-400"></i> Active Executions</div>
+                     <div style="overflow-x: auto;">
+                         <table class="trades-table w-full text-left" id="trades-table">
+                             <thead class="text-xs text-gray-400 border-b border-white/5 bg-black/20">
+                                 <tr>
+                                     <th class="p-3 font-normal">Symbol</th>
+                                     <th class="p-3 font-normal">Side</th>
+                                     <th class="p-3 font-normal">Entry</th>
+                                     <th class="p-3 font-normal">SL</th>
+                                     <th class="p-3 font-normal">TP</th>
+                                     <th class="p-3 font-normal">PnL (Live)</th>
+                                     <th class="p-3 font-normal">Action</th>
+                                 </tr>
+                             </thead>
+                             <tbody id="trades-tbody" class="text-sm font-mono divide-y divide-white/5">
+                                 <tr><td colspan="7" class="p-6 text-center text-gray-500">No active trades</td></tr>
+                             </tbody>
+                         </table>
+                     </div>
+                 </div>
             </div>
 
-            <!-- Balance Displays -->
-            <div class="p-5">
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div class="glass-panel p-4 text-center">
-                        <div class="text-xs text-gray-400 uppercase tracking-wider">Balance</div>
-                        <div id="balanceDisplay" class="text-2xl font-mono text-cyan hud-glow">$0.00</div>
-                    </div>
-                    <div class="glass-panel p-4 text-center">
-                        <div class="text-xs text-gray-400 uppercase tracking-wider">Capital</div>
-                        <div id="capitalDisplay" class="text-2xl font-mono text-white">$10,000</div>
-                    </div>
-                    <div class="glass-panel p-4 text-center">
-                        <div class="text-xs text-gray-400 uppercase tracking-wider">Risk</div>
-                        <div id="riskDisplay" class="text-2xl font-mono text-orange">2%</div>
-                    </div>
-                    <div class="glass-panel p-4 text-center">
-                        <div class="text-xs text-gray-400 uppercase tracking-wider">Plan</div>
-                        <div id="planBadge" class="text-sm font-bold text-cyan">TRIAL</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Active Executions Ledger -->
-            <div class="ledger-section">
-                <div class="ledger-header"><i class="fas fa-list-ul"></i> Active Executions</div>
-                <div style="overflow-x: auto;">
-                    <table class="trades-table" id="trades-table">
-                        <thead>
-                            <tr><th>Symbol</th><th>Side</th><th>Entry</th><th>SL</th><th>TP</th><th>PnL (Live)</th><th>Action</th></tr>
-                        </thead>
-                        <tbody id="trades-tbody">
-                            <tr><td colspan="7">No active trades</td></tr>
-                        </tbody>
-                    </table>
-                </div>
+            <!-- ROOM: SETTINGS -->
+            <div id="room-settings" class="room-section hidden">
+                 <h2 class="text-xl lg:text-2xl font-black uppercase tracking-widest text-white mb-6 border-b border-white/10 pb-3 flex items-center gap-3"><i class="fas fa-cog text-gray-400"></i> Settings</h2>
+                 <div class="glass-panel p-5 rounded-xl max-w-2xl">
+                     <p class="text-gray-400 text-sm mb-6">System configuration and preferences.</p>
+                     <div class="space-y-4">
+                         <div class="flex items-center justify-between p-4 bg-black/40 rounded-lg border border-white/5">
+                             <div>
+                                 <div class="text-sm font-bold text-white">Notifications</div>
+                                 <div class="text-xs text-gray-500">Push alerts for signals</div>
+                             </div>
+                             <input type="checkbox" class="accent-cyan w-5 h-5" checked>
+                         </div>
+                         <div class="flex items-center justify-between p-4 bg-black/40 rounded-lg border border-white/5 opacity-50">
+                             <div>
+                                 <div class="text-sm font-bold text-white">Dark Mode</div>
+                                 <div class="text-xs text-gray-500">Sovereign terminal theme is forced</div>
+                             </div>
+                             <input type="checkbox" class="accent-cyan w-5 h-5" checked disabled>
+                         </div>
+                         <div class="flex items-center justify-between p-4 bg-black/40 rounded-lg border border-white/5">
+                             <div>
+                                 <div class="text-sm font-bold text-white">Sound Alerts</div>
+                                 <div class="text-xs text-gray-500">Audio queues for trade execution</div>
+                             </div>
+                             <input type="checkbox" class="accent-cyan w-5 h-5">
+                         </div>
+                     </div>
+                 </div>
             </div>
         </main>
     </div>
-    </div>
+
+    <script>
+        function switchRoom(roomName) {
+            // Hide all rooms
+            document.querySelectorAll('.room-section').forEach(el => {
+                el.classList.add('hidden');
+                el.classList.remove('active');
+            });
+            // Show target room
+            const target = document.getElementById('room-' + roomName);
+            if (target) {
+                target.classList.remove('hidden');
+                target.classList.add('active');
+            }
+            
+            // Update nav styles
+            document.querySelectorAll('.nav-room').forEach(el => {
+                el.classList.remove('border-cyan/50', 'shadow-[0_0_15px_rgba(0,242,255,0.2)]', 'text-white');
+                el.classList.add('text-gray-400', 'border-transparent');
+                
+                const iconContainer = el.querySelector('.icon-container');
+                if (iconContainer) {
+                    iconContainer.classList.remove('bg-cyan/10', 'text-cyan', 'bg-orange/10', 'text-orange', 'bg-blue-400/10', 'text-blue-400');
+                    iconContainer.classList.add('bg-white/5');
+                }
+            });
+            
+            const activeNav = document.querySelector('.nav-room[data-room="' + roomName + '"]');
+            if (activeNav) {
+                activeNav.classList.add('border-cyan/50', 'shadow-[0_0_15px_rgba(0,242,255,0.2)]', 'text-white');
+                activeNav.classList.remove('text-gray-400', 'border-transparent');
+                
+                const iconContainer = activeNav.querySelector('.icon-container');
+                if (iconContainer) {
+                    iconContainer.classList.remove('bg-white/5');
+                    if(roomName === 'signals') iconContainer.classList.add('bg-cyan/10', 'text-cyan');
+                    else if(roomName === 'terminal') iconContainer.classList.add('bg-orange/10', 'text-orange');
+                    else iconContainer.classList.add('bg-blue-400/10', 'text-blue-400');
+                }
+            }
+
+            // Auto-close sidebar on mobile
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            if (window.innerWidth < 1024 && sidebar && overlay) {
+                sidebar.classList.add('-translate-x-full');
+                overlay.classList.add('hidden');
+            }
+        }
+
+        // Add listener to switch to terminal when a signal card is clicked
+        document.addEventListener('DOMContentLoaded', () => {
+            const signalsContainer = document.getElementById('signalsContainer');
+            if (signalsContainer) {
+                signalsContainer.addEventListener('click', (e) => {
+                    const card = e.target.closest('.signal-card');
+                    if (card) {
+                        setTimeout(() => switchRoom('terminal'), 50);
+                    }
+                });
+            }
+        });
+    </script>    </div>
 
     <div id="access-expired-card" class="access-expired-card hidden">
         <h2>Access Expired</h2>
@@ -592,7 +516,7 @@
         </div>
     </div>
 
-    <script type="module" src="../scripts/dashboard.js"></script>`n`n    </body>`n</html>`n
+    <script type="module" src="../scripts/dashboard.js"></script>
     </body>
 </html>
 

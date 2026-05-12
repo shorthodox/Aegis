@@ -46,6 +46,9 @@ if (!globalThis._firebaseApp) {
 export const auth = getAuth(firebaseApp);
 export const db = getFirestore(firebaseApp, "default");
 
+// Global timeframe state
+export let currentTimeframe = '1h';
+
 // -------------------------------------------------------------------
 // API Base URL
 // -------------------------------------------------------------------
@@ -107,13 +110,105 @@ function initializeElements() {
 
 function attachEventListeners() {
   if (alphaToggleBtn) alphaToggleBtn.addEventListener('click', toggleAlphaMode);
-  const alphaToggleContainer = document.getElementById('alphaToggleContainer');
-  if (alphaToggleContainer) alphaToggleContainer.addEventListener('click', toggleAlphaMode);
+  // Alpha toggle is handled via modal now
   if (upgradeBtn) upgradeBtn.addEventListener('click', () => {
     window.location.href = '/web/src/pages/pricing.html';
   });
   if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
   if (saveSettingsBtn) saveSettingsBtn.addEventListener('click', saveUserSettings);
+
+  // Alpha Modal bindings
+  const alphaToggleContainer = document.getElementById('alphaToggleContainer');
+  const alphaModal = document.getElementById('alpha-modal');
+  const alphaConfirm = document.getElementById('alpha-confirm');
+  const alphaCancel = document.getElementById('alpha-cancel');
+
+  if (alphaToggleContainer && alphaModal) {
+    alphaToggleContainer.addEventListener('click', () => {
+      alphaModal.classList.remove('hidden');
+    });
+  }
+  if (alphaCancel && alphaModal) {
+    alphaCancel.addEventListener('click', () => {
+      alphaModal.classList.add('hidden');
+    });
+  }
+  if (alphaConfirm && alphaModal) {
+    alphaConfirm.addEventListener('click', () => {
+      alphaModal.classList.add('hidden');
+      toggleAlphaMode();
+    });
+  }
+
+  // Timeframe listeners
+  const tfBtns = document.querySelectorAll('.tf-btn');
+  tfBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const tf = btn.getAttribute('data-tf');
+      const requiresPro = btn.getAttribute('data-pro') === 'true';
+
+      if (requiresPro && userPlan !== 'pro') {
+        showUpgradeModal();
+        return;
+      }
+
+      currentTimeframe = tf;
+      
+      // Update UI active state
+      tfBtns.forEach(b => {
+        b.classList.remove('bg-cyan/20', 'text-cyan', 'font-bold');
+        if (!b.classList.contains('cursor-not-allowed')) {
+            b.classList.add('text-gray-400');
+            b.classList.remove('text-white');
+        }
+      });
+      
+      btn.classList.add('bg-cyan/20', 'text-cyan', 'font-bold');
+      btn.classList.remove('text-gray-400', 'text-gray-500');
+
+      // Re-render signals from memory
+      if (typeof window.latestSignals !== 'undefined' && Object.keys(window.latestSignals).length > 0) {
+        filterAndRenderSignals();
+      }
+    });
+  });
+
+  const strategySelect = document.getElementById('strategy-matchmaker');
+  if (strategySelect) {
+    strategySelect.addEventListener('change', () => {
+      if (typeof window.latestSignals !== 'undefined' && Object.keys(window.latestSignals).length > 0) {
+        filterAndRenderSignals();
+      }
+    });
+  }
+}
+
+function filterAndRenderSignals() {
+  const currentSignals = {};
+  const strategySelect = document.getElementById('strategy-matchmaker');
+  const currentStrategy = strategySelect ? strategySelect.value : '';
+
+  Object.values(window.latestSignals || {}).forEach(sig => {
+    if (sig.timeframe === currentTimeframe) {
+      let isMatch = true;
+      if (currentStrategy) {
+        const acc = (sig.trading_accuracy || 0.5); // Provide fallback if no accuracy data
+        if (currentStrategy === 'conservative') {
+          if (acc <= 0.75) isMatch = false;
+        } else if (currentStrategy === 'balanced') {
+          if (acc <= 0.60 || acc > 0.75) isMatch = false;
+        } else if (currentStrategy === 'aggressive') {
+          if (acc < 0.50 || acc > 0.70) isMatch = false;
+        } else if (currentStrategy === 'sniper') {
+          if (acc <= 0.40) isMatch = false;
+        }
+      }
+      if (isMatch) {
+        currentSignals[sig.symbol] = sig;
+      }
+    }
+  });
+  renderSignals(currentSignals);
 }
 
 // -------------------------------------------------------------------
@@ -157,7 +252,9 @@ async function checkAuthAndLoad() {
 
 function isJWTExpired(token) {
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const payload = JSON.parse(atob(base64));
     const exp = payload.exp * 1000;
     return Date.now() >= exp;
   } catch (e) {
@@ -184,12 +281,8 @@ async function loadUserFromBackend(token) {
       updateUI();
       startWebSocket(token);
       setupFirestoreListeners();
-      startTrialCountdown();
-      document.dispatchEvent(new CustomEvent('dashboardUserLoaded', { detail: { userData: currentUserData } }));
       
-      if (userPlan !== 'pro') {
-        showUpgradePrompt();
-      }
+      document.dispatchEvent(new CustomEvent('dashboardUserLoaded', { detail: { userData: currentUserData } }));
     } else if (response.status === 401) {
       localStorage.removeItem('access_token');
       localStorage.removeItem('authToken');
@@ -240,23 +333,10 @@ function updateUI() {
     }
   }
 
-  // Update trial banner
-  if (trialBanner) {
-    if (userPlan === 'pro') {
-      trialBanner.style.display = 'none';
-    } else if (trialActive && trialEnd) {
-      trialBanner.style.display = 'block';
-      trialBanner.innerHTML = `<i class="fas fa-hourglass-half"></i> Trial active until ${trialEnd.toLocaleDateString()} | <a href="/web/src/pages/pricing.html">Upgrade to Pro →</a>`;
-    } else if (!trialActive && userPlan !== 'pro') {
-      trialBanner.style.display = 'block';
-      trialBanner.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Your trial has expired. <a href="/web/src/pages/pricing.html">Subscribe now →</a>';
-      trialBanner.classList.add('expired');
-    }
-  }
-
-  // Update alpha mode visibility (Pro only)
+  // We leave trial banner manipulation to trial-countdown.js
+  // Update alpha mode visibility (Pro only - or available for all if requested)
   if (alphaToggleBtn) {
-    alphaToggleBtn.style.display = userPlan === 'pro' ? 'flex' : 'none';
+    alphaToggleBtn.style.display = 'flex';
   }
 }
 
@@ -374,7 +454,29 @@ function updateDashboardData(data) {
 
   // Update signals with plan filtering
   if (signalsContainer && data.signals) {
-    renderSignals(data.signals);
+    // Populate window.latestSignals from WebSocket
+    Object.entries(data.signals).forEach(([sym, sig]) => {
+      const key = `${sym}_1h`; // Defaulting to 1h for ws
+      window.latestSignals = window.latestSignals || {};
+      window.latestSignals[key] = {
+        symbol: sym,
+        signal: sig.signal || 'WAITING',
+        ai_prob: sig.ai_prob || sig.confidence || 0,
+        signal_strength: sig.signal_strength || 'NORMAL',
+        risk_pct: sig.risk_pct || 2,
+        atr: sig.atr || 0,
+        timeframe: '1h',
+        direction: sig.direction || "NEUTRAL",
+        entry_price: sig.entry_price || 0,
+        sl: sig.sl || 0,
+        tp: sig.tp || 0,
+        confidence_score: sig.confidence_score || 0,
+        signal_id: sig.signal_id || "",
+        trading_accuracy: sig.trading_accuracy || 0.5,
+        profitability_index: sig.profitability_index || 0
+      };
+    });
+    filterAndRenderSignals();
   }
 
   // Update open trades
@@ -426,32 +528,74 @@ function renderSignals(signals) {
     return;
   }
 
+  // Populate simulation select dropdown
+  const simSelect = document.getElementById('sim-symbol');
+  if (simSelect) {
+    const currentSelection = simSelect.value;
+    simSelect.innerHTML = '<option value="">Select a signal...</option>' + 
+      filteredEntries.map(([sym]) => `<option value="${sym}">${sym}</option>`).join('');
+    if (filteredEntries.some(([sym]) => sym === currentSelection)) {
+      simSelect.value = currentSelection;
+    }
+  }
+
+  const strategySelect = document.getElementById('strategy-matchmaker');
+  const isStrategyActive = strategySelect && strategySelect.value !== '';
+
   signalsContainer.innerHTML = filteredEntries.map(([symbol, signal]) => {
     const signalType = signal.signal || 'WAITING';
     const timeframe = signal.timeframe || '1h'; // Default to 1h if not provided
     const signalClass = getSignalClass(signalType);
     const confidence = (signal.ai_prob || 0) * 100;
     
+    let directionBadge = '';
+    if (signal.direction === 'LONG') {
+      directionBadge = '<span class="bg-green-500/20 text-green-400 border border-green-500/50 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider">LONG</span>';
+    } else if (signal.direction === 'SHORT') {
+      directionBadge = '<span class="bg-red-500/20 text-red-400 border border-red-500/50 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider">SHORT</span>';
+    }
+
+    const slStr = signal.sl ? signal.sl.toFixed(4) : '-';
+    const tpStr = signal.tp ? signal.tp.toFixed(4) : '-';
+    const entryStr = signal.entry_price ? signal.entry_price.toFixed(4) : '-';
+    const profIndex = (signal.profitability_index || 0).toFixed(2);
+
+    let matchClasses = '';
+    let matchBadge = '';
+    if (isStrategyActive) {
+      matchClasses = 'border-cyan shadow-[0_0_15px_rgba(0,242,255,0.4)]';
+      matchBadge = '<span class="bg-cyan/20 text-cyan border border-cyan/50 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider animate-pulse">ALPHA MATCH</span>';
+    }
+
     return `
-      <div class="signal-card ${signalClass}">
-        <div class="signal-header">
-          <span class="signal-symbol">${symbol}</span>
-          <span class="signal-timeframe">${timeframe}</span>
+      <div class="signal-card ${signalClass} cursor-pointer hover:shadow-[0_0_15px_rgba(0,242,255,0.2)] transition-all ${matchClasses}" onclick="window.selectSignal('${symbol}', '${timeframe}')">
+        <div class="signal-header flex justify-between items-center">
+          <div class="flex items-center">
+            <span class="signal-symbol font-bold">${symbol}</span>
+            <span class="signal-timeframe text-xs text-gray-500 ml-2">${timeframe}</span>
+            ${directionBadge}
+            ${matchBadge}
+          </div>
           <span class="signal-badge ${signalClass}">${signalType}</span>
         </div>
-        <div class="signal-details">
-          <div class="signal-confidence">
-            <div class="confidence-bar">
-              <div class="confidence-fill" style="width: ${confidence}%"></div>
+        <div class="signal-details mt-3">
+          <div class="signal-confidence flex justify-between items-center mb-2">
+            <div class="confidence-bar flex-1 h-1.5 bg-black/50 rounded overflow-hidden mr-3">
+              <div class="confidence-fill h-full bg-current" style="width: ${confidence}%"></div>
             </div>
-            <span>AI: ${confidence.toFixed(1)}%</span>
+            <span class="text-xs font-mono">AI: ${confidence.toFixed(1)}%</span>
           </div>
-          <div class="signal-meta">
+          <div class="signal-meta grid grid-cols-2 gap-2 mt-3 text-xs text-gray-400">
             <span class="signal-strength ${signal.signal_strength?.toLowerCase()}">
               <i class="fas fa-bolt"></i> ${signal.signal_strength || 'NORMAL'}
             </span>
-            <span class="signal-risk">
-              <i class="fas fa-shield-alt"></i> Risk: ${signal.risk_pct || 2}%
+            <span class="signal-risk flex justify-between items-center">
+              <span><i class="fas fa-shield-alt"></i> Risk: ${signal.risk_pct || 2}%</span>
+              <span class="text-orange font-bold px-1 rounded bg-orange/10 border border-orange/20" title="Profitability Index">PI: ${profIndex}</span>
+            </span>
+            <span class="col-span-2 text-cyan font-mono bg-black/30 p-1.5 rounded flex justify-between">
+               <span>Entry: ${entryStr}</span>
+               <span>SL: ${slStr} | TP: ${tpStr}</span>
             </span>
           </div>
         </div>
@@ -459,6 +603,56 @@ function renderSignals(signals) {
     `;
   }).join('');
 }
+
+window.selectSignal = function(symbol, timeframe) {
+  const key = `${symbol}_${timeframe}`;
+  const sig = window.latestSignals && window.latestSignals[key];
+  if (!sig) return;
+
+  const simSelect = document.getElementById('sim-symbol');
+  const simEntry = document.getElementById('sim-entry');
+  const simSl = document.getElementById('sim-sl');
+  const simTp = document.getElementById('sim-tp');
+  const directionBadge = document.getElementById('direction-badge');
+
+  if (simSelect) {
+    if (!Array.from(simSelect.options).some(opt => opt.value === symbol)) {
+       const newOpt = document.createElement('option');
+       newOpt.value = symbol;
+       newOpt.textContent = symbol;
+       simSelect.appendChild(newOpt);
+    }
+    simSelect.value = symbol;
+  }
+  if (simEntry) simEntry.value = sig.entry_price || 0;
+  if (simSl) simSl.value = sig.sl || 0;
+  if (simTp) simTp.value = sig.tp || 0;
+  
+  if (directionBadge) {
+    directionBadge.textContent = sig.direction || 'NEUTRAL';
+    if (sig.direction === 'LONG') {
+      directionBadge.className = 'text-xs px-2 py-0.5 rounded bg-green-500/20 text-green-400 font-bold border border-green-500/30';
+    } else if (sig.direction === 'SHORT') {
+      directionBadge.className = 'text-xs px-2 py-0.5 rounded bg-red-500/20 text-red-400 font-bold border border-red-500/30';
+    } else {
+      directionBadge.className = 'text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-400';
+    }
+  }
+
+  if (typeof window.calculatePosition === 'function') {
+    window.calculatePosition();
+  }
+
+  // Dispatch event for app.js to catch
+  document.dispatchEvent(new CustomEvent('signalRowClicked', {
+    detail: {
+      pair: symbol,
+      entry: sig.entry_price || 0,
+      signal_id: sig.signal_id,
+      ...sig
+    }
+  }));
+
 
 function getSignalClass(signal) {
   const s = String(signal).toUpperCase();
@@ -505,30 +699,50 @@ function setupFirestoreListeners() {
   if (!token) return;
 
   // Listen to signals collection
-  const signalsQuery = query(collection(db, 'signals'), orderBy('timestamp', 'desc'), limit(50));
+  const signalsQuery = query(collection(db, 'signals'), orderBy('timestamp', 'desc'), limit(150));
   
+  window.latestSignals = {}; // Accumulate signals to prevent flickering
   signalsUnsubscribe = onSnapshot(signalsQuery, (snapshot) => {
-    const signals = {};
-    snapshot.forEach(doc => {
-      const data = doc.data();
-      const symbol = data.symbol || doc.id;
-      
-      // Apply plan filtering
-      if (userPlan !== 'pro' && !allowedTokens.includes(symbol)) {
-        return;
+    snapshot.docChanges().forEach(change => {
+      if (change.type === 'added' || change.type === 'modified') {
+        const data = change.doc.data();
+        const symbol = data.symbol || change.doc.id;
+        const tf = data.timeframe || '1h';
+        const key = `${symbol}_${tf}`;
+        
+        // Apply plan filtering
+        if (userPlan !== 'pro' && !allowedTokens.includes(symbol)) {
+          return;
+        }
+        
+        window.latestSignals[key] = {
+          symbol: symbol,
+          signal: data.signal || 'WAITING',
+          ai_prob: data.ai_prob || data.confidence || 0,
+          signal_strength: data.signal_strength || 'NORMAL',
+          risk_pct: data.risk_pct || 2,
+          atr: data.atr || 0,
+          timeframe: tf,
+          direction: data.direction || "NEUTRAL",
+          entry_price: data.entry_price || 0,
+          sl: data.sl || 0,
+          tp: data.tp || 0,
+          confidence_score: (data.ai_prob || data.confidence || 0) * 100,
+          signal_id: data.signal_id || "",
+          trading_accuracy: data.trading_accuracy || 0.5,
+          profitability_index: data.profitability_index || 0
+        };
+      } else if (change.type === 'removed') {
+        const data = change.doc.data();
+        const symbol = data.symbol || change.doc.id;
+        const tf = data.timeframe || '1h';
+        const key = `${symbol}_${tf}`;
+        delete window.latestSignals[key];
       }
-      
-      signals[symbol] = {
-        signal: data.signal || 'WAITING',
-        ai_prob: data.ai_prob || data.confidence || 0,
-        signal_strength: data.signal_strength || 'NORMAL',
-        risk_pct: data.risk_pct || 2,
-        atr: data.atr || 0
-      };
     });
     
-    if (Object.keys(signals).length > 0) {
-      renderSignals(signals);
+    if (Object.keys(window.latestSignals).length > 0) {
+      filterAndRenderSignals();
     }
   }, (error) => {
     console.error('Signals listener error:', error);
@@ -559,7 +773,9 @@ function setupFirestoreListeners() {
 // Alpha Mode Toggle (Pro only)
 // -------------------------------------------------------------------
 async function toggleAlphaMode() {
-  if (userPlan !== 'pro') {
+  const isSubActive = AuthManager.getSubscriptionStatus() === 'active';
+  
+  if (userPlan !== 'pro' && !isSubActive) {
     showUpgradeModal();
     return;
   }
@@ -656,48 +872,7 @@ async function saveUserSettings() {
   }
 }
 
-// -------------------------------------------------------------------
-// Trial Countdown
-// -------------------------------------------------------------------
-function startTrialCountdown() {
-  if (countdownInterval) clearInterval(countdownInterval);
-  
-  if (userPlan !== 'pro' && trialEnd && trialActive) {
-    updateTrialTimer();
-    countdownInterval = setInterval(updateTrialTimer, 1000); // Update every second
-  }
-}
-
-function updateTrialTimer() {
-  if (!trialEnd) return;
-  
-  const now = new Date();
-  const diff = trialEnd - now;
-  
-  if (diff <= 0) {
-    if (countdownInterval) clearInterval(countdownInterval);
-    trialActive = false;
-    updateUI();
-    if (trialBanner) {
-      trialBanner.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Your trial has expired. <a href="/web/src/pages/pricing.html">Subscribe now →</a>';
-    }
-    return;
-  }
-  
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-  const minutes = Math.floor((diff % (3600000)) / 60000);
-  const seconds = Math.floor((diff % 60000) / 1000);
-  
-  const countdownElement = document.getElementById('trial-countdown');
-  if (countdownElement) {
-    countdownElement.textContent = `${days}d ${hours}h ${minutes}m ${seconds}s`;
-  }
-  
-  if (trialBanner && userPlan !== 'pro') {
-    trialBanner.innerHTML = `<i class="fas fa-hourglass-half"></i> Trial expires in ${days}d ${hours}h ${minutes}m ${seconds}s | <a href="/web/src/pages/pricing.html">Upgrade to Pro →</a>`;
-  }
-}
+// Trial countdown logic removed from here as it is managed in trial-countdown.js
 
 // -------------------------------------------------------------------
 // Upgrade Modal & Cashfree Integration

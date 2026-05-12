@@ -74,6 +74,15 @@ def simulate_trades_for_threshold(df, min_net_profit_pct):
     for i in range(len(df) - MAX_HOLD_CANDLES - 1):
         row = df.iloc[i]
         prob = row['prob']
+        if isinstance(prob, (list, tuple, np.ndarray)):
+            if len(prob) >= 3:
+                prob = float(prob[2])
+            elif len(prob) == 2:
+                prob = float(prob[1])
+            elif len(prob) == 1:
+                prob = float(prob[0])
+            else:
+                continue
         if pd.isna(prob):
             continue
 
@@ -180,7 +189,11 @@ def optimize_token(symbol):
     if df is None or df.empty:
         return {"symbol": symbol, "error": "Feature engineering failed"}
 
-    df['prob'] = predictor.predict(df)
+    predictions = predictor.predict(df)
+    if isinstance(predictions, np.ndarray) and predictions.ndim > 1:
+        df['prob'] = [row.tolist() for row in predictions]
+    else:
+        df['prob'] = predictions
     df['atr_14'] = compute_atr(df, 14)
 
     # Rolling volume percentile (no lookahead)

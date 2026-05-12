@@ -1,0 +1,206 @@
+{
+  "timestamp": "20260513_010907",
+  "lookahead": 24,
+  "buy_threshold": "dynamic (0.65-0.75)",
+  "sell_threshold": "dynamic (0.65-0.75)",
+  "conviction_spread": 0.2,
+  "btc_guard_buy": 0.55,
+  "btc_guard_sell": 0.45,
+  "best_by_accuracy": [
+    [
+      "NIGHT/USDT",
+      0.1705,
+      0.9511,
+      0.2202,
+      6.2,
+      7.25
+    ],
+    [
+      "WLFI/USDT",
+      0.1429,
+      0.5517,
+      0.3012,
+      6.5,
+      6.33
+    ],
+    [
+      "FIL/USDT",
+      0.1232,
+      0.7083,
+      0.151,
+      6.37,
+      6.45
+    ],
+    [
+      "RENDER/USDT",
+      0.1215,
+      0.7701,
+      0.1696,
+      6.27,
+      6.26
+    ],
+    [
+      "SUI/USDT",
+      0.1193,
+      0.8664,
+      0.2335,
+      7.5,
+      7.77
+    ],
+    [
+      "NEAR/USDT",
+      0.1146,
+      0.5911,
+      0.1366,
+      6.28,
+      6.59
+    ],
+    [
+      "XRP/USDT",
+      0.1129,
+      0.8851,
+      0.2905,
+      6.36,
+      6.41
+    ],
+    [
+      "BONK/USDT",
+      0.1101,
+      0.8283,
+      0.2009,
+      6.26,
+      6.7
+    ],
+    [
+      "SEI/USDT",
+      0.1012,
+      0.8125,
+      0.2615,
+      7.57,
+      7.83
+    ],
+    [
+      "LTC/USDT",
+      0.0996,
+      0.7386,
+      0.1224,
+      6.72,
+      6.43
+    ]
+  ],
+  "best_by_buy_return": [
+    [
+      "TIA/USDT",
+      0.12458
+    ],
+    [
+      "DOT/USDT",
+      0.099897
+    ],
+    [
+      "PEPE/USDT",
+      0.075869
+    ],
+    [
+      "APT/USDT",
+      0.075353
+    ],
+    [
+      "ENA/USDT",
+      0.073334
+    ],
+    [
+      "ICP/USDT",
+      0.063406
+    ],
+    [
+      "TON/USDT",
+      0.063142
+    ],
+    [
+      "WIF/USDT",
+      0.062489
+    ],
+    [
+      "PYTH/USDT",
+      0.058196
+    ],
+    [
+      "FET/USDT",
+      0.05443
+    ]
+  ],
+  "worst_by_accuracy": [
+    [
+      "ETH/USDT",
+      0.0383
+    ],
+    [
+      "BNB/USDT",
+      0.0371
+    ],
+    [
+      "OP/USDT",
+      0.0363
+    ],
+    [
+      "GRT/USDT",
+      0.0363
+    ],
+    [
+      "TRX/USDT",
+      0.0359
+    ]
+  ],
+  "unstable_alpha": [],
+  "all_trading_accuracies": {
+    "BTC/USDT": 0.8712,
+    "ETH/USDT": 0.784,
+    "SOL/USDT": 0.9268,
+    "BNB/USDT": 0.7176,
+    "XRP/USDT": 0.8851,
+    "ASTER/USDT": 0.8783,
+    "SUI/USDT": 0.8664,
+    "TAO/USDT": 0.7551,
+    "RENDER/USDT": 0.7701,
+    "ADA/USDT": 0.8086,
+    "AVAX/USDT": 0.6928,
+    "LINK/USDT": 0.4977,
+    "TRX/USDT": 0.7294,
+    "DOT/USDT": 0.92,
+    "NEAR/USDT": 0.5911,
+    "LTC/USDT": 0.7386,
+    "BCH/USDT": 0.6567,
+    "SHIB/USDT": 0.839,
+    "TON/USDT": 0.869,
+    "ICP/USDT": 0.8565,
+    "HBAR/USDT": 0.8392,
+    "APT/USDT": 0.8608,
+    "ARB/USDT": 0.8438,
+    "OP/USDT": 0.7143,
+    "STX/USDT": 0.6511,
+    "FIL/USDT": 0.7083,
+    "AAVE/USDT": 0.6247,
+    "VET/USDT": 0.6399,
+    "INJ/USDT": 0.64,
+    "TIA/USDT": 0.7308,
+    "SEI/USDT": 0.8125,
+    "FET/USDT": 0.9067,
+    "THETA/USDT": 0.6713,
+    "GRT/USDT": 0.7917,
+    "LDO/USDT": 0.6167,
+    "PYTH/USDT": 0.9152,
+    "JUP/USDT": 0.6967,
+    "ONDO/USDT": 0.8762,
+    "PEPE/USDT": 0.7124,
+    "DOGE/USDT": 0.7122,
+    "WIF/USDT": 0.796,
+    "FLOKI/USDT": 0.6507,
+    "BONK/USDT": 0.8283,
+    "WLFI/USDT": 0.5517,
+    "ENA/USDT": 0.9145,
+    "SKY/USDT": 0.8994,
+    "TRUMP/USDT": 0.8732,
+    "NIGHT/USDT": 0.9511
+  }
+}

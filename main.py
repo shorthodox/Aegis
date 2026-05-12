@@ -1366,6 +1366,13 @@ async def websocket_dashboard(websocket: WebSocket):
                         "signal_strength": sig.get("signal_strength", "NONE"),
                         "atr": sig.get("atr", 0),
                         "risk_pct": sig.get("risk_pct", 2),
+                        "direction": sig.get("direction", "NEUTRAL"),
+                        "entry_price": sig.get("price", 0.0),
+                        "sl": sig.get("suggested_sl"),
+                        "tp": sig.get("suggested_tp"),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "confidence_score": sig.get("ai_prob", 0) * 100,
+                        "signal_id": sig.get("signal_id", ""),
                     }
             
             response_data = {

@@ -1,10 +1,15 @@
 Feature importance (gain) for LINK/USDT
 ==================================================
-efficiency_ratio_10                 : 132.787872
-linreg_r2_14                        : 37.945236
-dist_ema_9                          : 14.545818
-williams_r                          : 10.985212
-volatility_regime                   : 10.694777
-force_index                         : 8.246308
-cmf_20                              : 7.829953
-ichimoku_chikou                     : 7.800100
+efficiency_ratio_10                 : 158.711334
+linreg_r2_14                        : 57.338078
+ret_12h                             : 20.410498
+choppiness                          : 18.453438
+volatility_regime                   : 16.191538
+dist_ema_9                          : 12.937322
+williams_r                          : 11.796579
+rsi_14                              : 11.193924
+linreg_slope_14                     : 10.751237
+bb_width_percentile                 : 10.463934
+force_index                         : 9.317713
+vwap                                : 8.456985
+ichimoku_chikou                     : 7.833855
