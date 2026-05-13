@@ -15,6 +15,28 @@ const TrialManager = (() => {
   let cachedTrialInfo = null;
   let lastFetchTime = 0;
   let explicitTrialStart = null;
+  let authRetryCount = 0;
+  let maxAuthRetries = 3;
+  let loadingStartTime = null;
+  let loadingTimeoutMs = 5000; // 5 second timeout for loading state
+  let networkErrorState = false;
+
+  // ============================================================
+  // HELPER: Validate ISO String
+  // ============================================================
+  function isValidISOString(str) {
+    if (typeof str !== 'string') return false;
+    if (str === 'null' || str === 'undefined') return false;
+    try {
+      const date = new Date(str);
+      // Check if date is valid and string matches ISO format
+      if (Number.isNaN(date.getTime())) return false;
+      // Verify it's a valid ISO string by attempting to parse it
+      return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(str);
+    } catch {
+      return false;
+    }
+  }
 
   // ============================================================
   // HELPER: Format Time Remaining
@@ -46,35 +68,90 @@ const TrialManager = (() => {
     if (!userId) return null;
     const now = Date.now();
 
-    // 1. Ensure absolute URL and Auth Header consistency
+    // Initialize loading timeout on first call
+    if (!loadingStartTime && !cachedTrialInfo) {
+      loadingStartTime = now;
+    }
+
+    // 1. Ensure absolute URL and Auth Header consistency with retry logic
     if (!cachedTrialInfo || now - lastFetchTime > 60000) {
       try {
         const authHeader = AuthManager.getAuthHeader();
         if (!authHeader) {
-          console.warn("Auth token missing - delaying trial check...");
-          return null; // Don't trigger 'expired' yet if we're just waiting for auth
+          // Auth not available yet - implement retry with timeout
+          if (authRetryCount < maxAuthRetries) {
+            authRetryCount++;
+            console.warn(`Auth token missing (retry ${authRetryCount}/${maxAuthRetries}) - delaying trial check...`);
+            
+            // If loading timeout exceeded, return auth error state
+            if (loadingStartTime && (now - loadingStartTime) > loadingTimeoutMs) {
+              console.error('Auth timeout exceeded - returning auth error state');
+              return {
+                active: false,
+                expired: false,
+                authError: true,
+                display: 'Authentication Error',
+                message: 'Failed to authenticate. Please refresh or try again.'
+              };
+            }
+            return null;
+          } else {
+            // Max retries exceeded
+            console.error('Max auth retries exceeded - returning auth error state');
+            return {
+              active: false,
+              expired: false,
+              authError: true,
+              display: 'Authentication Error',
+              message: 'Unable to verify trial status. Please refresh.'
+            };
+          }
         }
+
+        // Reset retry count on successful auth header retrieval
+        authRetryCount = 0;
 
         // Fetch correct user profile data from auth/me
         const userResponse = await fetch('/auth/me', {
-          headers: { 'Authorization': authHeader }
+          headers: { 'Authorization': authHeader },
+          timeout: 5000 // 5 second fetch timeout
         });
 
         if (userResponse.ok) {
           const userData = await userResponse.json();
           cachedTrialInfo = userData;
           lastFetchTime = now;
+          loadingStartTime = null; // Reset loading timer on successful fetch
+          networkErrorState = false;
+          
           // Persist for refresh resilience
-          if (userData.trial_end) {
+          if (userData.trial_end && isValidISOString(userData.trial_end)) {
             localStorage.setItem('trial_end_timestamp', userData.trial_end);
           }
         } else if (userResponse.status === 401) {
           console.warn('Auth token returned 401 - will use cached/local trial data');
+          networkErrorState = false;
         } else {
           console.warn('Failed to fetch auth profile:', userResponse.status);
+          // Mark network error state after timeout
+          if (loadingStartTime && (now - loadingStartTime) > loadingTimeoutMs) {
+            networkErrorState = true;
+          }
         }
       } catch (err) {
         console.error("Fetch failed, falling back to local storage:", err);
+        // If loading timeout exceeded and we have a network error, set offline state
+        if (loadingStartTime && (now - loadingStartTime) > loadingTimeoutMs) {
+          networkErrorState = true;
+          return {
+            active: false,
+            expired: false,
+            networkError: true,
+            display: 'Offline Mode',
+            message: 'Network error. Using cached data. Please retry.',
+            allowRetry: true
+          };
+        }
       }
     }
 
@@ -112,10 +189,13 @@ const TrialManager = (() => {
       trialStart = explicitTrialStart;
     } else {
       const tokenData = AuthManager.getUserData();
-      if (tokenData?.trial_start) {
+      if (tokenData?.trial_start && isValidISOString(tokenData.trial_start)) {
         trialStart = new Date(tokenData.trial_start);
-      } else if (localStorage.getItem('trial_start_timestamp')) {
-        trialStart = new Date(localStorage.getItem('trial_start_timestamp'));
+      } else {
+        const localTrialStart = localStorage.getItem('trial_start_timestamp');
+        if (isValidISOString(localTrialStart)) {
+          trialStart = new Date(localTrialStart);
+        }
       }
     }
 
@@ -126,20 +206,46 @@ const TrialManager = (() => {
     }
 
     if (!trialEnd) {
-      let cachedEnd = cachedTrialInfo?.trial_end || localStorage.getItem('trial_end_timestamp');
-      if (cachedEnd && cachedEnd !== 'null' && cachedEnd !== 'undefined') {
+      const cachedEnd = cachedTrialInfo?.trial_end || localStorage.getItem('trial_end_timestamp');
+      // Strict validation: check it's a valid ISO string before creating Date
+      if (isValidISOString(cachedEnd)) {
         trialEnd = new Date(cachedEnd);
       }
     }
 
+    // 4. If no trial end found and no cached info, implement 5-second timeout before returning error
     if (!trialEnd || Number.isNaN(trialEnd.getTime())) {
       if (!cachedTrialInfo && !trialStart) {
-        return { active: true, display: 'Loading...', expired: false };
+        // Check if we've been loading for too long
+        if (loadingStartTime && (now - loadingStartTime) > loadingTimeoutMs) {
+          console.warn('Loading timeout exceeded - returning noTrial state');
+          loadingStartTime = null;
+          return {
+            active: false,
+            expired: false,
+            noTrial: true,
+            display: 'No Active Trial',
+            message: 'Unable to verify trial status. Please upgrade to continue.'
+          };
+        }
+        // Still within loading timeout
+        return {
+          active: true,
+          display: 'Loading...',
+          expired: false,
+          isLoading: true
+        };
       }
-      return { active: false, expired: false, noTrial: true, display: 'No Active Trial' };
+      return {
+        active: false,
+        expired: false,
+        noTrial: true,
+        display: 'No Active Trial'
+      };
     }
 
     const timeInfo = formatTimeRemaining(trialEnd);
+    loadingStartTime = null; // Clear loading state once we have data
 
     return {
       active: !timeInfo.expired,
@@ -214,7 +320,39 @@ const TrialManager = (() => {
     }
 
     countdownElements.forEach(element => {
-      if (trialInfo?.active) {
+      if (trialInfo?.isLoading) {
+        // Loading state
+        element.innerHTML = `
+          <span class="sovereign-badge">SOVEREIGN</span>
+          <i class="fas fa-spinner" style="animation: spin 1s linear infinite;"></i>
+          ${trialInfo.display}
+        `;
+        element.style.display = 'block';
+        element.style.background = 'rgba(100, 150, 255, 0.1)';
+        element.style.borderColor = 'rgba(100, 150, 255, 0.3)';
+      } else if (trialInfo?.authError) {
+        // Auth error state
+        element.innerHTML = `
+          <i class="fas fa-exclamation-circle"></i>
+          ${trialInfo.display}
+          <button onclick="location.reload()" style="margin-left: 10px; padding: 4px 8px; cursor: pointer;">Retry</button>
+        `;
+        element.style.display = 'block';
+        element.style.background = 'rgba(255, 100, 100, 0.15)';
+        element.style.borderColor = 'rgba(255, 100, 100, 0.4)';
+        element.style.color = '#ff6464';
+      } else if (trialInfo?.networkError) {
+        // Network error state with retry button
+        element.innerHTML = `
+          <i class="fas fa-wifi-off"></i>
+          ${trialInfo.display}
+          <button onclick="location.reload()" style="margin-left: 10px; padding: 4px 8px; cursor: pointer;">Retry</button>
+        `;
+        element.style.display = 'block';
+        element.style.background = 'rgba(255, 140, 0, 0.15)';
+        element.style.borderColor = 'rgba(255, 140, 0, 0.4)';
+        element.style.color = '#ff8c00';
+      } else if (trialInfo?.active) {
         element.innerHTML = `
           <span class="sovereign-badge">SOVEREIGN</span>
           <i class="fas fa-hourglass-end"></i>
@@ -262,6 +400,12 @@ const TrialManager = (() => {
   // INITIALIZE TRIAL COUNTDOWN & WARMUP DISPLAY
   // ============================================================
   async function initializeTrialCountdown(userId, trialStart = null) {
+    // Inject required CSS for animations
+    injectLoadingStyles();
+    
+    // Reset state in case of re-initialization
+    resetTrialState();
+    
     currentUserId = userId;
     if (trialStart) {
       explicitTrialStart = trialStart instanceof Date ? trialStart : new Date(trialStart);
@@ -363,6 +507,43 @@ const TrialManager = (() => {
   }
 
   // ============================================================
+  // RESET STATE FOR MANUAL RETRY
+  // ============================================================
+  function resetTrialState() {
+    authRetryCount = 0;
+    loadingStartTime = null;
+    networkErrorState = false;
+    cachedTrialInfo = null;
+    lastFetchTime = 0;
+    console.log('✅ Trial state reset - retrying...');
+  }
+
+  // ============================================================
+  // INJECT LOADING ANIMATION STYLES
+  // ============================================================
+  function injectLoadingStyles() {
+    if (document.getElementById('trial-countdown-styles')) return;
+    
+    const style = document.createElement('style');
+    style.id = 'trial-countdown-styles';
+    style.textContent = `
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      @keyframes slideIn {
+        from { transform: translateX(400px); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+      @keyframes slideOut {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(400px); opacity: 0; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  // ============================================================
   // CLEANUP
   // ============================================================
   function stopTrialCountdown() {
@@ -372,6 +553,11 @@ const TrialManager = (() => {
     }
     currentUserId = null;
     window.trialExpiredTriggered = false;
+
+    // Reset state variables
+    authRetryCount = 0;
+    loadingStartTime = null;
+    networkErrorState = false;
 
     // Clean up any stray UI elements or listeners if necessary
     const countdownElements = document.querySelectorAll('.trial-countdown, [data-trial-countdown]');
@@ -499,6 +685,8 @@ const TrialManager = (() => {
     getTrialRestrictions,
     checkAndSendTrialExpiryNotification,
     stopTrialCountdown,
+    resetTrialState,
+    injectLoadingStyles,
     addTrialBadgeToUI,
     canAccessSignal,
     filterSignalsForUser,
@@ -513,6 +701,8 @@ export const isTrialExpired = TrialManager.isTrialExpired;
 export const getTrialRestrictions = TrialManager.getTrialRestrictions;
 export const checkAndSendTrialExpiryNotification = TrialManager.checkAndSendTrialExpiryNotification;
 export const stopTrialCountdown = TrialManager.stopTrialCountdown;
+export const resetTrialState = TrialManager.resetTrialState;
+export const injectLoadingStyles = TrialManager.injectLoadingStyles;
 export const addTrialBadgeToUI = TrialManager.addTrialBadgeToUI;
 export const canAccessSignal = TrialManager.canAccessSignal;
 export const filterSignalsForUser = TrialManager.filterSignalsForUser;
