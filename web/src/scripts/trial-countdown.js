@@ -6,8 +6,6 @@ import { db } from './gatekeeper.js';
 import { doc, getDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js";
 import { AuthManager } from '../auth/authManager.js';
 
-const AUTH_ME_URL = 'https://gatekeeper.sbs/auth/me';
-
 const TrialManager = (() => {
   // ============================================================
   // STATE
@@ -58,17 +56,9 @@ const TrialManager = (() => {
         }
 
         // Fetch correct user profile data from auth/me
-        const userResponse = await fetch(AUTH_ME_URL, {
+        const userResponse = await fetch('/auth/me', {
           headers: { 'Authorization': authHeader }
         });
-
-        if (userResponse.status === 401) {
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('authToken');
-          console.warn('Auth expired while checking trial status, redirecting to login');
-          window.location.href = '/login.html';
-          return null;
-        }
 
         if (userResponse.ok) {
           const userData = await userResponse.json();
@@ -78,6 +68,8 @@ const TrialManager = (() => {
           if (userData.trial_end) {
             localStorage.setItem('trial_end_timestamp', userData.trial_end);
           }
+        } else if (userResponse.status === 401) {
+          console.warn('Auth token returned 401 - will use cached/local trial data');
         } else {
           console.warn('Failed to fetch auth profile:', userResponse.status);
         }
@@ -174,7 +166,7 @@ const TrialManager = (() => {
       return trialStart.toDate ? trialStart.toDate() : new Date(trialStart);
     } catch (error) {
       console.error('Error fetching trial start from Firestore:', error);
-      return { error: true, message: 'Failed to fetch trial start from Firestore' };
+      return null;
     }
   }
 
