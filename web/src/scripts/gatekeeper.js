@@ -87,7 +87,17 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!window.location.pathname.includes('dashboard.html')) return;
   initializeElements();
   attachEventListeners();
-  checkAuthAndLoad();
+  onAuthStateChanged(auth, async (user) => {
+    if (user) {
+      console.log("Firebase user detected:", user.uid);
+      // If user exists, proceed to load data
+      const token = await user.getIdToken();
+      await loadUserFromBackend(token);
+    } else {
+      // No Firebase user, fallback to manual token check
+      checkAuthAndLoad(); 
+    }
+  });
   setupFooter();
 });
 
