@@ -949,14 +949,15 @@ function renderSignals(signals) {
   console.log('renderSignals - Filtered entries count:', filteredEntries.length);
 
   if (filteredEntries.length === 0) {
-    const trialExpired = window.trialExpiredTriggered === true;
+    const trialExpired = userPlan === 'expired' || userPlan === 'none' || window.trialExpiredTriggered === true;
+    const trialActivePlan = userPlan === 'trial' || userPlan === 'trial-active' || trialActive;
 
-    if (!trialExpired) {
+    if (trialActivePlan && !trialExpired) {
       signalsContainer.innerHTML = `
         <div class="no-signals">
           <i class="fas fa-chart-line"></i>
-          <p>Getting your trial signals ready...</p>
-          <p class="text-sm text-gray-400 mt-2">Switch between 15m, 30m and 1h to refresh the dashboard.</p>
+          <p>Preparing your trial token cards...</p>
+          <p class="text-sm text-gray-400 mt-2">Try refreshing or switching between 15m, 30m and 1h.</p>
         </div>
       `;
       return;

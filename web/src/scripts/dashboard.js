@@ -33,9 +33,9 @@ function clearExpiredView() {
 }
 
 async function initializeDashboard(event) {
-  if (initialized) return;
-
   clearExpiredView();
+
+  if (initialized) return;
 
   if (!window.location.pathname.includes('dashboard.html')) return;
 
@@ -47,6 +47,14 @@ async function initializeDashboard(event) {
 
   initialized = true;
   const trialStart = await fetchTrialStartFromFirestore(userId);
+  if (trialStart?.error) {
+    console.error('Dashboard init failed on trial fetch:', trialStart.message);
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('authToken');
+    window.location.href = '/login.html';
+    return;
+  }
+
   await initializeTrialCountdown(userId, trialStart);
 
   document.addEventListener('trialExpired', () => {
