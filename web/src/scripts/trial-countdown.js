@@ -59,103 +59,122 @@ const TrialManager = (() => {
     const display = `${pad(displayHours)}:${pad(minutes)}:${pad(seconds)}`;
 
     return { expired: false, display, days, hours, minutes, seconds };
+  }  // ============================================================
+  // HELPER: Validate JWT Expiry
+  // ============================================================
+  function isJWTExpired(token) {
+    if (!token) return true;
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return Date.now() >= payload.exp * 1000;
+    } catch {
+      return true;
+    }
   }
 
   // ============================================================
-  // HELPER: Get User Trial Info
+  // HELPER: Get User Trial Info (Stale-While-Revalidate)
   // ============================================================
   async function getUserTrialInfo(userId) {
     if (!userId) return null;
     const now = Date.now();
 
-    // Initialize loading timeout on first call
-    if (!loadingStartTime && !cachedTrialInfo) {
-      loadingStartTime = now;
+    // Stale-While-Revalidate: Quickly assemble a state from cache
+    let cachedState = null;
+    const jwtData = AuthManager.getUserData() || {};
+    const localEndStr = cachedTrialInfo?.trial_end || localStorage.getItem('trial_end_timestamp');
+    
+    if (cachedTrialInfo?.subscription_active || cachedTrialInfo?.plan === 'pro' || cachedTrialInfo?.plan === 'active' || 
+        jwtData.plan_type === 'pro' || jwtData.plan_type === 'active') {
+      cachedState = {
+        active: true,
+        plan: cachedTrialInfo?.plan || jwtData.plan_type || 'pro',
+        display: 'Premium Active',
+        expired: false,
+        days: 999, hours: 23, minutes: 59, seconds: 59,
+        allowedTokens: [],
+        allowedTimeframes: ['1m', '3m', '5m', '15m', '30m', '1h', '4h', '1d']
+      };
+    } else if (isValidISOString(localEndStr)) {
+      const trialEnd = new Date(localEndStr);
+      if (!isNaN(trialEnd.getTime())) {
+        const timeInfo = formatTimeRemaining(trialEnd);
+        cachedState = {
+          active: !timeInfo.expired,
+          ...timeInfo,
+          allowedTokens: ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ARB/USDT', 'AAVE/USDT'],
+          allowedTimeframes: ['15m', '30m'],
+          plan: 'trial',
+          trialEndDate: trialEnd
+        };
+      }
     }
 
-    // 1. Ensure absolute URL and Auth Header consistency with retry logic
+    // Trigger background fetch if cache is old or missing
     if (!cachedTrialInfo || now - lastFetchTime > 60000) {
-      try {
-        const authHeader = AuthManager.getAuthHeader();
-        if (!authHeader) {
-          // Auth not available yet - implement retry with timeout
-          if (authRetryCount < maxAuthRetries) {
-            authRetryCount++;
-            console.warn(`Auth token missing (retry ${authRetryCount}/${maxAuthRetries}) - delaying trial check...`);
-            
-            // If loading timeout exceeded, return auth error state
-            if (loadingStartTime && (now - loadingStartTime) > loadingTimeoutMs) {
-              console.error('Auth timeout exceeded - returning auth error state');
-              return {
-                active: false,
-                expired: false,
-                authError: true,
-                display: 'Authentication Error',
-                message: 'Failed to authenticate. Please refresh or try again.'
-              };
+      // Don't await the fetch if we have a cached state (stale-while-revalidate)
+      const fetchPromise = (async () => {
+        try {
+          let authHeader = AuthManager.getAuthHeader();
+          let token = AuthManager.getToken();
+          
+          // Token Expiry Validation & Silent Refresh
+          if (token && isJWTExpired(token)) {
+             console.warn('JWT expired, attempting silent refresh via Firebase...');
+             const { getAuth } = await import("https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js");
+             const auth = getAuth();
+             if (auth.currentUser) {
+                token = await auth.currentUser.getIdToken(true);
+                authHeader = `Bearer ${token}`;
+                localStorage.setItem('access_token', token);
+             } else {
+                throw new Error("Cannot refresh token, no Firebase user");
+             }
+          }
+
+          if (!authHeader) {
+            throw new Error("Missing auth header"); // Immediately fallback
+          }
+
+          const userResponse = await fetch('/auth/me', {
+            headers: { 'Authorization': authHeader },
+            timeout: 5000
+          });
+
+          if (userResponse.ok) {
+            const userData = await userResponse.json();
+            cachedTrialInfo = userData;
+            lastFetchTime = Date.now();
+            if (userData.trial_end && isValidISOString(userData.trial_end)) {
+              localStorage.setItem('trial_end_timestamp', userData.trial_end);
             }
-            return null;
+            // If we are relying on a background update and it succeeds, we could dispatch an event, 
+            // but the next interval tick (1s) will pick up cachedTrialInfo.
           } else {
-            // Max retries exceeded
-            console.error('Max auth retries exceeded - returning auth error state');
-            return {
+             throw new Error(`HTTP Error ${userResponse.status}`);
+          }
+        } catch (err) {
+          console.warn("Background fetch failed, relying on cache:", err);
+          // Prefer cache on failure: We only trigger error state if there's NO cachedState
+          if (!cachedState) {
+            cachedState = {
               active: false,
               expired: false,
               authError: true,
               display: 'Authentication Error',
-              message: 'Unable to verify trial status. Please refresh.'
+              message: 'Unable to verify trial status. Please login again.'
             };
           }
         }
+      })();
 
-        // Reset retry count on successful auth header retrieval
-        authRetryCount = 0;
-
-        // Fetch correct user profile data from auth/me
-        const userResponse = await fetch('/auth/me', {
-          headers: { 'Authorization': authHeader },
-          timeout: 5000 // 5 second fetch timeout
-        });
-
-        if (userResponse.ok) {
-          const userData = await userResponse.json();
-          cachedTrialInfo = userData;
-          lastFetchTime = now;
-          loadingStartTime = null; // Reset loading timer on successful fetch
-          networkErrorState = false;
-          
-          // Persist for refresh resilience
-          if (userData.trial_end && isValidISOString(userData.trial_end)) {
-            localStorage.setItem('trial_end_timestamp', userData.trial_end);
-          }
-        } else if (userResponse.status === 401) {
-          console.warn('Auth token returned 401 - will use cached/local trial data');
-          networkErrorState = false;
-        } else {
-          console.warn('Failed to fetch auth profile:', userResponse.status);
-          // Mark network error state after timeout
-          if (loadingStartTime && (now - loadingStartTime) > loadingTimeoutMs) {
-            networkErrorState = true;
-          }
-        }
-      } catch (err) {
-        console.error("Fetch failed, falling back to local storage:", err);
-        // If loading timeout exceeded and we have a network error, set offline state
-        if (loadingStartTime && (now - loadingStartTime) > loadingTimeoutMs) {
-          networkErrorState = true;
-          return {
-            active: false,
-            expired: false,
-            networkError: true,
-            display: 'Offline Mode',
-            message: 'Network error. Using cached data. Please retry.',
-            allowRetry: true
-          };
-        }
+      // If we don't have ANY cached state, we MUST wait for the network to resolve
+      if (!cachedState) {
+         await fetchPromise;
       }
     }
 
-    // 2. Prioritize definitive subscription status from server or token
+    // After attempting fetch or utilizing cache:
     if (cachedTrialInfo) {
       if (cachedTrialInfo.subscription_active || cachedTrialInfo.plan === 'pro' || cachedTrialInfo.plan === 'active') {
         return {
@@ -170,90 +189,16 @@ const TrialManager = (() => {
       }
     }
 
-    const jwtData = AuthManager.getUserData() || {};
-    if (jwtData.plan_type === 'pro' || jwtData.plan_type === 'active') {
-      return {
-        active: true,
-        plan: jwtData.plan_type,
-        display: 'Premium Active',
-        expired: false,
-        days: 999, hours: 23, minutes: 59, seconds: 59,
-        allowedTokens: [],
-        allowedTimeframes: ['1m', '3m', '5m', '15m', '30m', '1h', '4h', '1d']
-      };
+    if (cachedState) {
+       return cachedState;
     }
 
-    // 3. Use explicit trial start if available, otherwise fallback to cached or token values
-    let trialStart = null;
-    if (explicitTrialStart) {
-      trialStart = explicitTrialStart;
-    } else {
-      const tokenData = AuthManager.getUserData();
-      if (tokenData?.trial_start && isValidISOString(tokenData.trial_start)) {
-        trialStart = new Date(tokenData.trial_start);
-      } else {
-        const localTrialStart = localStorage.getItem('trial_start_timestamp');
-        if (isValidISOString(localTrialStart)) {
-          trialStart = new Date(localTrialStart);
-        }
-      }
-    }
-
-    let trialEnd = null;
-    if (trialStart && !isNaN(trialStart.getTime())) {
-      trialEnd = new Date(trialStart.getTime() + 3 * 24 * 60 * 60 * 1000);
-      localStorage.setItem('trial_end_timestamp', trialEnd.toISOString());
-    }
-
-    if (!trialEnd) {
-      const cachedEnd = cachedTrialInfo?.trial_end || localStorage.getItem('trial_end_timestamp');
-      // Strict validation: check it's a valid ISO string before creating Date
-      if (isValidISOString(cachedEnd)) {
-        trialEnd = new Date(cachedEnd);
-      }
-    }
-
-    // 4. If no trial end found and no cached info, implement 5-second timeout before returning error
-    if (!trialEnd || Number.isNaN(trialEnd.getTime())) {
-      if (!cachedTrialInfo && !trialStart) {
-        // Check if we've been loading for too long
-        if (loadingStartTime && (now - loadingStartTime) > loadingTimeoutMs) {
-          console.warn('Loading timeout exceeded - returning noTrial state');
-          loadingStartTime = null;
-          return {
-            active: false,
-            expired: false,
-            noTrial: true,
-            display: 'No Active Trial',
-            message: 'Unable to verify trial status. Please upgrade to continue.'
-          };
-        }
-        // Still within loading timeout
-        return {
-          active: true,
-          display: 'Loading...',
-          expired: false,
-          isLoading: true
-        };
-      }
-      return {
-        active: false,
-        expired: false,
-        noTrial: true,
-        display: 'No Active Trial'
-      };
-    }
-
-    const timeInfo = formatTimeRemaining(trialEnd);
-    loadingStartTime = null; // Clear loading state once we have data
-
+    // Ultimate fallback if ALL sources are empty and network failed
     return {
-      active: !timeInfo.expired,
-      ...timeInfo,
-      allowedTokens: ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ARB/USDT', 'AAVE/USDT'],
-      allowedTimeframes: ['15m', '30m'],
-      plan: 'trial',
-      trialEndDate: trialEnd
+      active: false,
+      expired: false,
+      noTrial: true,
+      display: 'No Active Trial'
     };
   }
 
@@ -262,18 +207,33 @@ const TrialManager = (() => {
   // ============================================================
   async function fetchTrialStartFromFirestore(userId) {
     if (!userId) return null;
-    try {
-      const userDocRef = doc(db, 'users', userId);
-      const userDoc = await getDoc(userDocRef);
-      if (!userDoc.exists()) return null;
-      const data = userDoc.data();
-      const trialStart = data?.trial?.startDate || data?.trial_start || data?.trialStart || data?.joinDate;
-      if (!trialStart) return null;
-      return trialStart.toDate ? trialStart.toDate() : new Date(trialStart);
-    } catch (error) {
-      console.error('Error fetching trial start from Firestore:', error);
-      return null;
-    }
+    return new Promise(async (resolve) => {
+      try {
+        const { getAuth, onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js");
+        const auth = getAuth();
+        onAuthStateChanged(auth, async (user) => {
+          if (!user) {
+             resolve(null);
+             return;
+          }
+          try {
+            const userDocRef = doc(db, 'users', userId);
+            const userDoc = await getDoc(userDocRef);
+            if (!userDoc.exists()) resolve(null);
+            const data = userDoc.data();
+            const trialStart = data?.trial?.startDate || data?.trial_start || data?.trialStart || data?.joinDate;
+            if (!trialStart) resolve(null);
+            resolve(trialStart.toDate ? trialStart.toDate() : new Date(trialStart));
+          } catch (error) {
+            console.error('Error fetching trial start from Firestore:', error);
+            resolve(null);
+          }
+        });
+      } catch (err) {
+        console.error("Auth module load error:", err);
+        resolve(null);
+      }
+    });
   }
 
   // ============================================================

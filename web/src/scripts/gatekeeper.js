@@ -1205,6 +1205,14 @@ function setupFirestoreListeners() {
     }
   }, (error) => {
     console.error('Signals listener error:', error);
+    if (error.code === 'permission-denied') {
+      if (!trialActive && userPlan !== 'pro') {
+        if (signalsContainer) {
+          signalsContainer.innerHTML = '<div class="no-signals"><i class="fas fa-lock text-red-500 mb-2 text-2xl"></i><p>Please upgrade to view signals.</p></div>';
+        }
+        showUpgradePrompt();
+      }
+    }
   });
 
   // Listen to user's trades if exists
@@ -1224,6 +1232,14 @@ function setupFirestoreListeners() {
       renderTrades(trades);
     }, (error) => {
       console.error('Trades listener error:', error);
+      if (error.code === 'permission-denied') {
+        if (!trialActive && userPlan !== 'pro') {
+          if (positionsContainer) {
+            positionsContainer.innerHTML = '<div class="no-trades"><i class="fas fa-lock text-red-500 mb-2 text-2xl"></i><p>Please upgrade to view trades.</p></div>';
+          }
+          showUpgradePrompt();
+        }
+      }
     });
   }
 }
