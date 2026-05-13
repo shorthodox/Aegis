@@ -35,6 +35,8 @@ function clearExpiredView() {
 async function initializeDashboard(event) {
   if (initialized) return;
 
+  clearExpiredView();
+
   if (!window.location.pathname.includes('dashboard.html')) return;
 
   const userId = event?.detail?.userData?.uid || await waitForUserId();

@@ -937,9 +937,9 @@ function renderSignals(signals) {
   
   // Filter signals based on user's allowed tokens
   const filteredEntries = signalEntries.filter(([symbol]) => {
-    if (userPlan === 'pro') {
-      console.log(`renderSignals - Allowing ${symbol} for pro user`);
-      return true;
+    if (userPlan === 'pro' || trialActive) {
+      console.log(`renderSignals - Allowing ${symbol} for ${userPlan || 'trial-active'} user`);
+      return allowedTokens.includes(symbol);
     }
     const allowed = allowedTokens.includes(symbol);
     console.log(`renderSignals - ${symbol} allowed:`, allowed);
@@ -949,6 +949,19 @@ function renderSignals(signals) {
   console.log('renderSignals - Filtered entries count:', filteredEntries.length);
 
   if (filteredEntries.length === 0) {
+    const trialExpired = window.trialExpiredTriggered === true;
+
+    if (!trialExpired) {
+      signalsContainer.innerHTML = `
+        <div class="no-signals">
+          <i class="fas fa-chart-line"></i>
+          <p>Getting your trial signals ready...</p>
+          <p class="text-sm text-gray-400 mt-2">Switch between 15m, 30m and 1h to refresh the dashboard.</p>
+        </div>
+      `;
+      return;
+    }
+
     signalsContainer.innerHTML = `
       <div class="no-signals">
         <i class="fas fa-chart-line"></i>
