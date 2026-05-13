@@ -386,6 +386,21 @@ body.dashboard-body .glass-nav {
     box-shadow: 0 8px 20px rgba(0,242,255,0.1);
 }
 
+.signal-card.bullish {
+    border-color: var(--success-green);
+    box-shadow: 0 0 15px rgba(0, 255, 136, 0.1);
+}
+
+.signal-card.bearish {
+    border-color: var(--danger-red);
+    box-shadow: 0 0 15px rgba(255, 0, 85, 0.1);
+}
+
+.signal-card.hold {
+    border-color: var(--hold-grey);
+    box-shadow: 0 0 15px rgba(107, 114, 128, 0.1);
+}
+
 .signal-card.neutral {
     opacity: 0.75;
     filter: grayscale(0.2);
@@ -1978,11 +1993,72 @@ body.modal-open {
     }
 }
 
-/* DISCLOSURE SIDEBAR */
-.disclosure-sidebar {
-    position: sticky;
-    top: 100px;
-    width: 260px;
+/* Signal History Table */
+.signal-history-table th,
+.signal-history-table td {
+    padding: 12px;
+    text-align: left;
+}
+
+.signal-history-table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+/* Paper Trading Styles */
+.paper-trade-active {
+    border-color: var(--primary-cyan) !important;
+    box-shadow: 0 0 20px rgba(0, 242, 255, 0.3) !important;
+}
+
+.paper-trade-pnl-positive {
+    color: var(--success-green);
+}
+
+.paper-trade-pnl-negative {
+    color: var(--danger-red);
+}
+
+/* Mobile Optimizations */
+@media (max-width: 1023px) {
+    .sidebar {
+        transform: translateX(-100%);
+    }
+    
+    .sidebar.open {
+        transform: translateX(0);
+    }
+    
+    .alpha-modal,
+    .confirmation-modal,
+    #paperTradeModal {
+        margin: 1rem;
+        max-width: calc(100vw - 2rem);
+    }
+    
+    .tf-btn {
+        min-height: 44px;
+        padding: 8px 12px;
+    }
+    
+    .nav-room {
+        min-height: 60px;
+        padding: 16px;
+    }
+}
+
+/* Touch targets for mobile */
+@media (max-width: 768px) {
+    button,
+    .nav-room,
+    .tf-btn,
+    .signal-card {
+        min-height: 44px;
+    }
+    
+    .signal-card {
+        padding: 20px;
+    }
+}
     background: rgba(15, 17, 21, 0.75);
     backdrop-filter: blur(16px);
     border-radius: 24px;

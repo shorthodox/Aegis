@@ -80,6 +80,253 @@ let capitalInput, riskInput, saveSettingsBtn;
 const BIG5_TOKENS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT"];
 const PRO_TOKENS = []; // Will be populated from backend
 
+// Global state for new features
+let signalHistory = [];
+let paperTrades = [];
+let signalDebounceMap = new Map(); // Track last signal time per symbol
+let currentRiskProfile = 'balanced';
+
+// -------------------------------------------------------------------
+// Subscription & Trial Locking
+// -------------------------------------------------------------------
+function showSubscriptionExpiredOverlay() {
+  const overlay = document.getElementById('subscriptionExpiredOverlay');
+  const mainContent = document.getElementById('dashboard-main-content');
+  
+  if (overlay) overlay.classList.remove('hidden');
+  if (mainContent) mainContent.classList.add('hidden');
+  
+  // Disable all interactive elements
+  document.querySelectorAll('button, input, select, .signal-card').forEach(el => {
+    if (!el.closest('#subscriptionExpiredOverlay')) {
+      el.disabled = true;
+      el.style.pointerEvents = 'none';
+      el.style.opacity = '0.5';
+    }
+  });
+}
+
+// -------------------------------------------------------------------
+// Signal History Management
+// -------------------------------------------------------------------
+function addSignalToHistory(signal) {
+  const historyEntry = {
+    symbol: signal.symbol,
+    signal: signal.signal,
+    entry_price: signal.entry_price,
+    sl: signal.sl,
+    tp: signal.tp,
+    timestamp: new Date().toISOString(),
+    signal_id: signal.signal_id
+  };
+  
+  signalHistory.unshift(historyEntry);
+  
+  // Keep only last 100 entries
+  if (signalHistory.length > 100) {
+    signalHistory = signalHistory.slice(0, 100);
+  }
+  
+  updateSignalHistoryUI();
+  saveSignalHistoryToStorage();
+}
+
+function updateSignalHistoryUI() {
+  const tbody = document.getElementById('signalHistoryTbody');
+  if (!tbody) return;
+  
+  if (signalHistory.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-gray-500">No signal history available</td></tr>';
+    return;
+  }
+  
+  tbody.innerHTML = signalHistory.map(entry => {
+    const signalClass = getSignalClass(entry.signal);
+    const timestamp = new Date(entry.timestamp).toLocaleString();
+    
+    return `
+      <tr class="hover:bg-white/5">
+        <td class="p-3 font-bold">${entry.symbol}</td>
+        <td class="p-3">
+          <span class="signal-badge ${signalClass} text-xs">${entry.signal}</span>
+        </td>
+        <td class="p-3 font-mono">${entry.entry_price ? '$' + entry.entry_price.toFixed(4) : '-'}</td>
+        <td class="p-3 font-mono">${entry.tp ? '$' + entry.tp.toFixed(4) : '-'}</td>
+        <td class="p-3 text-xs text-gray-400">${timestamp}</td>
+        <td class="p-3">
+          <button onclick="initiatePaperTrade('${entry.symbol}', ${entry.entry_price || 0}, ${entry.sl || 0}, ${entry.tp || 0})" 
+                  class="text-xs bg-cyan/20 hover:bg-cyan/40 text-cyan border border-cyan/50 px-2 py-1 rounded transition-colors">
+            Paper Trade
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function saveSignalHistoryToStorage() {
+  try {
+    localStorage.setItem('signalHistory', JSON.stringify(signalHistory));
+  } catch (e) {
+    console.warn('Failed to save signal history to localStorage:', e);
+  }
+}
+
+function loadSignalHistoryFromStorage() {
+  try {
+    const stored = localStorage.getItem('signalHistory');
+    if (stored) {
+      signalHistory = JSON.parse(stored);
+      updateSignalHistoryUI();
+    }
+  } catch (e) {
+    console.warn('Failed to load signal history from localStorage:', e);
+  }
+}
+
+function clearSignalHistory() {
+  signalHistory = [];
+  updateSignalHistoryUI();
+  localStorage.removeItem('signalHistory');
+}
+
+// -------------------------------------------------------------------
+// Paper Trading System
+// -------------------------------------------------------------------
+function initiatePaperTrade(symbol, entryPrice, sl, tp) {
+  const modal = document.getElementById('paperTradeModal');
+  const symbolSpan = document.getElementById('paperTradeSymbol');
+  
+  if (modal && symbolSpan) {
+    symbolSpan.textContent = symbol;
+    modal.classList.remove('hidden');
+    
+    // Store trade data for confirmation
+    modal._tradeData = { symbol, entryPrice, sl, tp };
+  }
+}
+
+function startPaperTrade(symbol, entryPrice, sl, tp) {
+  const trade = {
+    id: Date.now().toString(),
+    symbol,
+    entryPrice,
+    sl,
+    tp,
+    startTime: new Date(),
+    currentPrice: entryPrice,
+    pnl: 0,
+    status: 'active'
+  };
+  
+  paperTrades.push(trade);
+  updatePaperTradesUI();
+  
+  // Auto-fill terminal
+  autoFillTerminal(trade);
+  
+  // Switch to terminal room
+  if (typeof switchRoom === 'function') {
+    switchRoom('terminal');
+  }
+}
+
+function updatePaperTradesUI() {
+  // Update any UI elements showing paper trades
+  console.log('Paper trades updated:', paperTrades.length);
+}
+
+function autoFillTerminal(trade) {
+  const symbolSelect = document.getElementById('sim-symbol');
+  const entryInput = document.getElementById('sim-entry');
+  const slInput = document.getElementById('sim-sl');
+  const tpInput = document.getElementById('sim-tp');
+  
+  if (symbolSelect) {
+    // Add option if not exists
+    let option = Array.from(symbolSelect.options).find(opt => opt.value === trade.symbol);
+    if (!option) {
+      option = document.createElement('option');
+      option.value = trade.symbol;
+      option.textContent = trade.symbol;
+      symbolSelect.appendChild(option);
+    }
+    symbolSelect.value = trade.symbol;
+  }
+  
+  if (entryInput) entryInput.value = trade.entryPrice.toFixed(4);
+  if (slInput) slInput.value = trade.sl.toFixed(4);
+  if (tpInput) tpInput.value = trade.tp.toFixed(4);
+  
+  // Trigger calculations
+  if (typeof window.calculatePosition === 'function') {
+    window.calculatePosition();
+  }
+}
+
+// -------------------------------------------------------------------
+// Signal Debouncing & Risk-Based Sorting
+// -------------------------------------------------------------------
+function shouldShowSignal(symbol, signalData) {
+  const now = Date.now();
+  const lastSignalTime = signalDebounceMap.get(symbol) || 0;
+  const debouncePeriod = 300000; // 5 minutes
+  
+  if (now - lastSignalTime < debouncePeriod) {
+    console.log(`Signal for ${symbol} debounced (last signal ${Math.round((now - lastSignalTime) / 1000)}s ago)`);
+    return false;
+  }
+  
+  signalDebounceMap.set(symbol, now);
+  return true;
+}
+
+function sortSignalsByRisk(signals) {
+  if (!Array.isArray(signals)) return signals;
+  
+  const riskWeights = {
+    conservative: { ai_prob: 0.75, risk_pct: 0.015 },
+    balanced: { ai_prob: 0.65, risk_pct: 0.025 },
+    aggressive: { ai_prob: 0.55, risk_pct: 0.035 },
+    sniper: { ai_prob: 0.45, risk_pct: 0.045 }
+  };
+  
+  const weights = riskWeights[currentRiskProfile] || riskWeights.balanced;
+  
+  return signals.sort((a, b) => {
+    const scoreA = (a.ai_prob || 0) * weights.ai_prob + (1 / (a.risk_pct || 0.02)) * weights.risk_pct;
+    const scoreB = (b.ai_prob || 0) * weights.ai_prob + (1 / (b.risk_pct || 0.02)) * weights.risk_pct;
+    return scoreB - scoreA; // Higher score first
+  });
+}
+
+// -------------------------------------------------------------------
+// Mobile Optimization
+// -------------------------------------------------------------------
+function setupMobileOptimizations() {
+  const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+  const closeMenuBtn = document.getElementById('closeMenuBtn');
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  
+  if (mobileMenuBtn && sidebar && overlay) {
+    mobileMenuBtn.addEventListener('click', () => {
+      sidebar.classList.remove('-translate-x-full');
+      overlay.classList.remove('hidden');
+    });
+    
+    closeMenuBtn?.addEventListener('click', () => {
+      sidebar.classList.add('-translate-x-full');
+      overlay.classList.add('hidden');
+    });
+    
+    overlay.addEventListener('click', () => {
+      sidebar.classList.add('-translate-x-full');
+      overlay.classList.add('hidden');
+    });
+  }
+}
+
 // -------------------------------------------------------------------
 // Initialize Dashboard
 // -------------------------------------------------------------------
@@ -87,6 +334,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!window.location.pathname.includes('dashboard.html')) return;
   initializeElements();
   attachEventListeners();
+  loadSignalHistoryFromStorage();
   onAuthStateChanged(auth, async (user) => {
     if (user) {
       console.log("Firebase user detected:", user.uid);
@@ -150,6 +398,36 @@ function attachEventListeners() {
     });
   }
 
+  // Paper Trade Modal bindings
+  const paperTradeConfirm = document.getElementById('paperTradeConfirm');
+  const paperTradeCancel = document.getElementById('paperTradeCancel');
+  const paperTradeModal = document.getElementById('paperTradeModal');
+
+  if (paperTradeConfirm && paperTradeModal) {
+    paperTradeConfirm.addEventListener('click', () => {
+      if (paperTradeModal._tradeData) {
+        const { symbol, entryPrice, sl, tp } = paperTradeModal._tradeData;
+        startPaperTrade(symbol, entryPrice, sl, tp);
+        paperTradeModal.classList.add('hidden');
+      }
+    });
+  }
+  if (paperTradeCancel && paperTradeModal) {
+    paperTradeCancel.addEventListener('click', () => {
+      paperTradeModal.classList.add('hidden');
+    });
+  }
+
+  // Clear History Button
+  const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+  if (clearHistoryBtn) {
+    clearHistoryBtn.addEventListener('click', () => {
+      if (confirm('Are you sure you want to clear all signal history?')) {
+        clearSignalHistory();
+      }
+    });
+  }
+
   // Timeframe listeners
   const tfBtns = document.querySelectorAll('.tf-btn');
   tfBtns.forEach(btn => {
@@ -185,7 +463,8 @@ function attachEventListeners() {
 
   const strategySelect = document.getElementById('strategy-matchmaker');
   if (strategySelect) {
-    strategySelect.addEventListener('change', () => {
+    strategySelect.addEventListener('change', (e) => {
+      currentRiskProfile = e.target.value;
       if (typeof window.latestSignals !== 'undefined' && Object.keys(window.latestSignals).length > 0) {
         filterAndRenderSignals();
       }
@@ -207,6 +486,9 @@ function attachEventListeners() {
       }
     });
   }
+
+  // Setup mobile optimizations
+  setupMobileOptimizations();
 }
 
 function filterAndRenderSignals() {
@@ -216,6 +498,11 @@ function filterAndRenderSignals() {
 
   Object.values(window.latestSignals || {}).forEach(sig => {
     if (sig.timeframe === currentTimeframe) {
+      // Apply debouncing
+      if (!shouldShowSignal(sig.symbol, sig)) {
+        return;
+      }
+      
       let isMatch = true;
       if (currentStrategy) {
         const acc = (sig.trading_accuracy || 0.5); // Provide fallback if no accuracy data
@@ -234,7 +521,15 @@ function filterAndRenderSignals() {
       }
     }
   });
-  renderSignals(currentSignals);
+  
+  // Sort signals by risk profile
+  const sortedSignals = sortSignalsByRisk(Object.values(currentSignals));
+  const sortedSignalsObj = {};
+  sortedSignals.forEach(sig => {
+    sortedSignalsObj[sig.symbol] = sig;
+  });
+  
+  renderSignals(sortedSignalsObj);
 }
 
 // -------------------------------------------------------------------
@@ -274,6 +569,11 @@ async function checkAuthAndLoad() {
   }
 
   await loadUserFromBackend(token);
+  
+  // Check for trial expiration after loading user data
+  if (userPlan === 'trial' && !trialActive) {
+    showSubscriptionExpiredOverlay();
+  }
 }
 
 function isJWTExpired(token) {
@@ -357,6 +657,22 @@ function updateUI() {
       planBadge.innerHTML = '<i class="fas fa-clock"></i> TRIAL EXPIRED';
       planBadge.className = 'plan-badge expired';
     }
+  }
+
+  // Update Aegis logo click handler
+  const aegisLogoBtn = document.getElementById('aegis-logo-btn');
+  if (aegisLogoBtn) {
+    aegisLogoBtn.addEventListener('click', () => {
+      window.location.href = '/web/src/index.html';
+    });
+  }
+
+  // Update return home button
+  const returnHomeBtn = document.getElementById('returnHomeBtn');
+  if (returnHomeBtn) {
+    returnHomeBtn.addEventListener('click', () => {
+      window.location.href = '/web/src/index.html';
+    });
   }
 
   // We leave trial banner manipulation to trial-countdown.js
@@ -597,6 +913,7 @@ function renderSignals(signals) {
     const signalType = signal.signal || 'WAITING';
     const timeframe = signal.timeframe || '1h'; // Default to 1h if not provided
     const signalClass = getSignalClass(signalType);
+    const cardTypeClass = getSignalCardType(signal.direction);
     const confidence = (signal.ai_prob || 0) * 100;
     
     let directionBadge = '';
@@ -619,7 +936,7 @@ function renderSignals(signals) {
     }
 
     return `
-      <div class="signal-card ${signalClass} cursor-pointer hover:shadow-[0_0_15px_rgba(0,242,255,0.2)] transition-all ${matchClasses}" onclick="window.selectSignal('${symbol}', '${timeframe}')" data-symbol="${symbol}">
+      <div class="signal-card ${cardTypeClass} cursor-pointer hover:shadow-[0_0_15px_rgba(0,242,255,0.2)] transition-all ${matchClasses}" onclick="window.selectSignal('${symbol}', '${timeframe}')" data-symbol="${symbol}">
         <div class="signal-header flex justify-between items-center">
           <div class="flex items-center">
             <span class="signal-symbol font-bold">${symbol}</span>
@@ -662,6 +979,9 @@ window.selectSignal = function(symbol, timeframe) {
   const key = `${symbol}_${timeframe}`;
   const sig = window.latestSignals && window.latestSignals[key];
   if (!sig) return;
+
+  // Add to signal history
+  addSignalToHistory(sig);
 
   const simSelect = document.getElementById('sim-symbol');
   const simEntry = document.getElementById('sim-entry');
@@ -711,9 +1031,15 @@ window.selectSignal = function(symbol, timeframe) {
 
 function getSignalClass(signal) {
   const s = String(signal).toUpperCase();
-  if (s.includes('BUY')) return 'buy';
-  if (s.includes('SELL')) return 'sell';
+  if (s.includes('BUY') || s.includes('LONG')) return 'buy';
+  if (s.includes('SELL') || s.includes('SHORT')) return 'sell';
   return 'neutral';
+}
+
+function getSignalCardType(direction) {
+  if (direction === 'LONG') return 'bullish';
+  if (direction === 'SHORT') return 'bearish';
+  return 'hold';
 }
 
 function renderTrades(trades) {
@@ -1124,6 +1450,9 @@ export async function updateUserSetting(user, key, value) {
     const ref = doc(db, 'users', user.uid, 'preferences', 'settings');
     await setDoc(ref, { [key]: value }, { merge: true });
 }
+
+// Expose functions globally for HTML access
+window.initiatePaperTrade = initiatePaperTrade;
 
 export function getCurrentUserToken() {
     return AuthManager.getToken();
