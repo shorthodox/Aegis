@@ -987,11 +987,15 @@ class SignalGenerator:
             "atr_tp": RR_RATIO * cfg.atr_sl,
             "efficiency_ratio": er,               # added for UI / debugging
             "direction": base_signal,             # LONG/SHORT/NEUTRAL
-            "suggested_sl": suggested_sl,
-            "suggested_tp": suggested_tp,
+            "entry_price": current_price,
+            "sl": suggested_sl,
+            "tp": suggested_tp,
             "suggested_sl_distance": suggested_sl_distance,
             "suggested_tp_distance": suggested_tp_distance,
             "alpha_risk_level": alpha_risk_level,
+            "signal_id": str(uuid.uuid4()),
+            "trading_accuracy": ai_prob,  # Using ai_prob as trading accuracy
+            "profitability_index": expected_net_pct / 100 if expected_net_pct else 0.0,
         }
 
 # -------------------------------------------------------------------

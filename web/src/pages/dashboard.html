@@ -154,6 +154,13 @@
                         </div>
                     </div>
                 </a>
+                
+                <div class="mt-8">
+                    <h3 class="text-xs uppercase tracking-widest text-gray-500 mb-2 font-bold px-2">Listed Signals</h3>
+                    <div id="sidebar-signals-list" class="space-y-2 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar">
+                        <!-- Listed Signals dynamically populated here -->
+                    </div>
+                </div>
             </div>
             
             <div class="p-4 border-t border-white/10">
@@ -460,6 +467,18 @@
         <div class="expired-actions">
             <a href="/web/src/pages/pricing.html">Upgrade Now</a>
             <a href="/web/src/pages/index.html">Return Home</a>
+        </div>
+    </div>
+
+    <!-- Trade Confirmation Modal -->
+    <div id="trade-confirmation-modal" class="confirmation-modal fixed inset-0 z-[150] flex items-center justify-center bg-black/80 backdrop-blur-md hidden">
+        <div class="bg-void border border-white/10 p-6 rounded-2xl max-w-sm w-full shadow-[0_0_40px_rgba(0,242,255,0.15)] text-center relative overflow-hidden">
+            <h3 class="text-xl font-black tracking-tight text-white mb-2 uppercase">Trade On This Token?</h3>
+            <p id="confirm-token-symbol" class="text-3xl font-mono text-cyan mb-6">TOKEN</p>
+            <div class="flex gap-4">
+                <button id="confirm-trade-yes" class="flex-1 bg-green-600/20 hover:bg-green-600/40 text-green-400 border border-green-500/50 font-bold py-3 rounded-xl transition-all shadow-[0_0_15px_rgba(0,255,136,0.1)] hover:shadow-[0_0_20px_rgba(0,255,136,0.3)]">YES</button>
+                <button id="confirm-trade-no" class="flex-1 bg-red-600/20 hover:bg-red-600/40 text-red-400 border border-red-500/50 font-bold py-3 rounded-xl transition-all shadow-[0_0_15px_rgba(255,0,85,0.1)] hover:shadow-[0_0_20px_rgba(255,0,85,0.3)]">NO</button>
+            </div>
         </div>
     </div>
 

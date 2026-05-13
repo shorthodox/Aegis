@@ -17,6 +17,10 @@ service cloud.firestore {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
     }
+
+      match /trades/{tradeId} {
+        allow read: if request.auth != null;
+    }
     
     // Signals collection - readable by all authenticated users (write only by admins)
     match /signals/{symbol} {
