@@ -603,10 +603,19 @@ async function loadUserFromBackend(token) {
       trialEnd = userData.trial_end ? new Date(userData.trial_end) : null;
       trialActive = userPlan === 'trial' && trialEnd && new Date() < trialEnd;
 
+      // Grant Trial Access: Explicitly set allowedTokens for trial users
+      if (userPlan === 'trial' || trialActive) {
+        allowedTokens = BIG5_TOKENS;
+      }
+
       await loadUserLimits();
       updateUI();
       startWebSocket(token);
       setupFirestoreListeners();
+      
+      // Debug Logging: Print final allowedTokens list
+      console.log('loadUserFromBackend - Final allowedTokens:', allowedTokens);
+      console.log('loadUserFromBackend - User plan:', userPlan, 'Trial active:', trialActive);
       
       document.dispatchEvent(new CustomEvent('dashboardUserLoaded', { detail: { userData: currentUserData } }));
     } else if (response.status === 401) {
@@ -634,13 +643,26 @@ async function loadUserLimits() {
 
     if (response.ok) {
       const limits = await response.json();
-      allowedTokens = limits.allowed_tokens || BIG5_TOKENS;
+      // Handle Missing Data: Only override allowedTokens if backend provides them AND user is not in trial
+      if (limits.allowed_tokens && (userPlan !== 'trial' && !trialActive)) {
+        allowedTokens = limits.allowed_tokens;
+      }
+      // For trial users or if no tokens provided, keep the BIG5_TOKENS set in loadUserFromBackend
       return limits;
+    } else {
+      // Handle Missing Data: Fallback for authenticated users if backend fails
+      console.warn('Backend failed to provide limits, using fallback for authenticated user');
+      if (userPlan !== 'trial' && !trialActive) {
+        allowedTokens = BIG5_TOKENS;
+      }
     }
   } catch (error) {
     console.error('Load limits error:', error);
+    // Handle Missing Data: Fallback for authenticated users if request fails
+    if (userPlan !== 'trial' && !trialActive) {
+      allowedTokens = BIG5_TOKENS;
+    }
   }
-  allowedTokens = BIG5_TOKENS;
   return null;
 }
 
@@ -878,11 +900,23 @@ function renderSignals(signals) {
 
   const signalEntries = Object.entries(signals);
   
+  // Debug Logging: Check filter logic
+  console.log('renderSignals - Total signals:', signalEntries.length);
+  console.log('renderSignals - User plan:', userPlan, 'Trial active:', trialActive);
+  console.log('renderSignals - Allowed tokens:', allowedTokens);
+  
   // Filter signals based on user's allowed tokens
   const filteredEntries = signalEntries.filter(([symbol]) => {
-    if (userPlan === 'pro') return true;
-    return allowedTokens.includes(symbol);
+    if (userPlan === 'pro') {
+      console.log(`renderSignals - Allowing ${symbol} for pro user`);
+      return true;
+    }
+    const allowed = allowedTokens.includes(symbol);
+    console.log(`renderSignals - ${symbol} allowed:`, allowed);
+    return allowed;
   });
+
+  console.log('renderSignals - Filtered entries count:', filteredEntries.length);
 
   if (filteredEntries.length === 0) {
     signalsContainer.innerHTML = `
