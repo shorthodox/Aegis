@@ -77,7 +77,7 @@ let capitalInput, riskInput, saveSettingsBtn;
 // -------------------------------------------------------------------
 // Token Lists
 // -------------------------------------------------------------------
-const BIG5_TOKENS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT"];
+const BIG5_TOKENS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "ARB/USDT", "AAVE/USDT"];
 const PRO_TOKENS = []; // Will be populated from backend
 
 // Global state for new features
@@ -606,6 +606,7 @@ async function loadUserFromBackend(token) {
       // Grant Trial Access: Explicitly set allowedTokens for trial users
       if (userPlan === 'trial' || trialActive) {
         allowedTokens = BIG5_TOKENS;
+        localStorage.setItem('cachedAllowedTokens', JSON.stringify(allowedTokens));
       }
 
       await loadUserLimits();
@@ -645,7 +646,8 @@ async function loadUserLimits() {
       const limits = await response.json();
       // Handle Missing Data: Only override allowedTokens if backend provides them AND user is not in trial
       if (limits.allowed_tokens && (userPlan !== 'trial' && !trialActive)) {
-        allowedTokens = limits.allowed_tokens;
+        allowedTokens = limits.allowed_tokens.length > 0 ? limits.allowed_tokens : BIG5_TOKENS;
+        localStorage.setItem('cachedAllowedTokens', JSON.stringify(allowedTokens));
       }
       // For trial users or if no tokens provided, keep the BIG5_TOKENS set in loadUserFromBackend
       return limits;

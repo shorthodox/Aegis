@@ -84,6 +84,35 @@ const TrialManager = (() => {
     const jwtData = AuthManager.getUserData() || {};
     const localEndStr = cachedTrialInfo?.trial_end || localStorage.getItem('trial_end_timestamp');
     
+    let cachedTokens = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ARB/USDT', 'AAVE/USDT'];
+    try {
+        const storedTokens = localStorage.getItem('cachedAllowedTokens');
+        if (storedTokens) {
+            const parsed = JSON.parse(storedTokens);
+            if (Array.isArray(parsed) && parsed.length > 0) cachedTokens = parsed;
+        }
+    } catch (e) {}
+
+    if (cachedTrialInfo && cachedTrialInfo._error === 'network') {
+        return {
+          active: false,
+          expired: false,
+          networkError: true,
+          display: 'Connection Error',
+          allowedTokens: cachedTokens
+        };
+    }
+    if (cachedTrialInfo && cachedTrialInfo._error === 'auth') {
+        return {
+          active: false,
+          expired: false,
+          authError: true,
+          display: 'Authentication Error',
+          message: 'Unable to verify trial status. Please login again.',
+          allowedTokens: cachedTokens
+        };
+    }
+
     if (cachedTrialInfo?.subscription_active || cachedTrialInfo?.plan === 'pro' || cachedTrialInfo?.plan === 'active' || 
         jwtData.plan_type === 'pro' || jwtData.plan_type === 'active') {
       cachedState = {
@@ -92,7 +121,7 @@ const TrialManager = (() => {
         display: 'Premium Active',
         expired: false,
         days: 999, hours: 23, minutes: 59, seconds: 59,
-        allowedTokens: [],
+        allowedTokens: cachedTokens,
         allowedTimeframes: ['1m', '3m', '5m', '15m', '30m', '1h', '4h', '1d']
       };
     } else if (isValidISOString(localEndStr)) {
@@ -102,7 +131,7 @@ const TrialManager = (() => {
         cachedState = {
           active: !timeInfo.expired,
           ...timeInfo,
-          allowedTokens: ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ARB/USDT', 'AAVE/USDT'],
+          allowedTokens: cachedTokens,
           allowedTimeframes: ['15m', '30m'],
           plan: 'trial',
           trialEndDate: trialEnd
@@ -110,15 +139,24 @@ const TrialManager = (() => {
       }
     }
 
+    if (!cachedState) {
+      cachedState = {
+        active: true,
+        isLoading: true,
+        display: 'Loading...',
+        allowedTokens: cachedTokens,
+        allowedTimeframes: ['15m', '30m'],
+        plan: 'trial'
+      };
+    }
+
     // Trigger background fetch if cache is old or missing
     if (!cachedTrialInfo || now - lastFetchTime > 60000) {
-      // Don't await the fetch if we have a cached state (stale-while-revalidate)
       const fetchPromise = (async () => {
         try {
           let authHeader = AuthManager.getAuthHeader();
           let token = AuthManager.getToken();
           
-          // Token Expiry Validation & Silent Refresh
           if (token && isJWTExpired(token)) {
              console.warn('JWT expired, attempting silent refresh via Firebase...');
              const { getAuth } = await import("https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js");
@@ -128,13 +166,11 @@ const TrialManager = (() => {
                 authHeader = `Bearer ${token}`;
                 localStorage.setItem('access_token', token);
              } else {
-                throw new Error("Cannot refresh token, no Firebase user");
+                throw new Error("Cannot refresh token");
              }
           }
 
-          if (!authHeader) {
-            throw new Error("Missing auth header"); // Immediately fallback
-          }
+          if (!authHeader) throw new Error("Missing auth header");
 
           const userResponse = await fetch('/auth/me', {
             headers: { 'Authorization': authHeader },
@@ -145,61 +181,28 @@ const TrialManager = (() => {
             const userData = await userResponse.json();
             cachedTrialInfo = userData;
             lastFetchTime = Date.now();
+            networkErrorState = false;
             if (userData.trial_end && isValidISOString(userData.trial_end)) {
               localStorage.setItem('trial_end_timestamp', userData.trial_end);
             }
-            // If we are relying on a background update and it succeeds, we could dispatch an event, 
-            // but the next interval tick (1s) will pick up cachedTrialInfo.
           } else {
+             if (userResponse.status >= 400 && userResponse.status < 600) {
+                 networkErrorState = true;
+             }
              throw new Error(`HTTP Error ${userResponse.status}`);
           }
         } catch (err) {
-          console.warn("Background fetch failed, relying on cache:", err);
-          // Prefer cache on failure: We only trigger error state if there's NO cachedState
-          if (!cachedState) {
-            cachedState = {
-              active: false,
-              expired: false,
-              authError: true,
-              display: 'Authentication Error',
-              message: 'Unable to verify trial status. Please login again.'
-            };
+          console.warn("Background fetch failed:", err);
+          if (networkErrorState) {
+              cachedTrialInfo = { _error: 'network' };
+          } else {
+              cachedTrialInfo = { _error: 'auth' };
           }
         }
       })();
-
-      // If we don't have ANY cached state, we MUST wait for the network to resolve
-      if (!cachedState) {
-         await fetchPromise;
-      }
     }
 
-    // After attempting fetch or utilizing cache:
-    if (cachedTrialInfo) {
-      if (cachedTrialInfo.subscription_active || cachedTrialInfo.plan === 'pro' || cachedTrialInfo.plan === 'active') {
-        return {
-          active: true,
-          plan: cachedTrialInfo.plan || 'pro',
-          display: 'Premium Active',
-          expired: false,
-          days: 999, hours: 23, minutes: 59, seconds: 59,
-          allowedTokens: [],
-          allowedTimeframes: ['1m', '3m', '5m', '15m', '30m', '1h', '4h', '1d']
-        };
-      }
-    }
-
-    if (cachedState) {
-       return cachedState;
-    }
-
-    // Ultimate fallback if ALL sources are empty and network failed
-    return {
-      active: false,
-      expired: false,
-      noTrial: true,
-      display: 'No Active Trial'
-    };
+    return cachedState;
   }
 
   // ============================================================
@@ -366,6 +369,28 @@ const TrialManager = (() => {
     // Reset state in case of re-initialization
     resetTrialState();
     
+    let authWaitElapsed = 0;
+    while (!AuthManager.getAuthHeader() && authWaitElapsed < 10000) {
+      await new Promise(r => setTimeout(r, 500));
+      authWaitElapsed += 500;
+    }
+
+    if (!AuthManager.getAuthHeader()) {
+      console.warn("Auth timeout reached, defaulting to Restricted Trial");
+      const countdownElements = document.querySelectorAll('.trial-countdown, [data-trial-countdown], #countdown-display');
+      countdownElements.forEach(element => {
+        element.innerHTML = `
+          <i class="fas fa-exclamation-triangle"></i>
+          Restricted Trial - Sign in to access full features
+        `;
+        element.style.display = 'block';
+        element.style.background = 'rgba(255, 140, 0, 0.15)';
+        element.style.borderColor = 'rgba(255, 140, 0, 0.4)';
+        element.style.color = '#ff8c00';
+      });
+      return;
+    }
+
     currentUserId = userId;
     if (trialStart) {
       explicitTrialStart = trialStart instanceof Date ? trialStart : new Date(trialStart);
@@ -378,6 +403,15 @@ const TrialManager = (() => {
 
     // Update countdown immediately
     await updateTrialDisplay();
+
+    // Hide "Preparing your trial token cards" once trial data is loaded and countdown starts
+    const signalsContainer = document.getElementById('signalsContainer');
+    if (signalsContainer) {
+        const noSignalsDiv = signalsContainer.querySelector('.no-signals');
+        if (noSignalsDiv && noSignalsDiv.textContent.includes('Preparing your trial token cards')) {
+            noSignalsDiv.style.display = 'none';
+        }
+    }
 
     // Update every second
     if (trialCheckInterval) clearInterval(trialCheckInterval);
