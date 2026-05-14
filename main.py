@@ -101,28 +101,35 @@ else:
     print("⚠️ Cashfree payment gateway not configured. Set CASHFREE_APP_ID/CASHFREE_SECRET_KEY to enable.")
 
 # -------------------------------------------------------------------
-# Firebase Admin SDK – check path existence before initializing
+# SOVEREIGN FIREBASE INITIALIZATION
+# Supports both Railway (JSON string in env) and local (file path)
 # -------------------------------------------------------------------
 import firebase_admin
 from firebase_admin import credentials, firestore, auth as firebase_auth
 
 FIREBASE_PROJECT_ID = os.getenv("FIREBASE_PROJECT_ID", "aegis-d78e1")
-FIREBASE_CREDENTIALS_PATH = os.getenv("FIREBASE_CREDENTIALS")
-if not FIREBASE_CREDENTIALS_PATH:
-    raise RuntimeError("FIREBASE_CREDENTIALS environment variable not set (should be a file path)")
+cred_json = os.getenv("FIREBASE_CREDENTIALS")
 
-cred_path = Path(FIREBASE_CREDENTIALS_PATH)
-if not cred_path.exists():
-    raise RuntimeError(f"Firebase credentials file not found at {cred_path}")
+if cred_json:
+    try:
+        # Load credentials directly from the Railway environment variable (JSON string)
+        cred_dict = json.loads(cred_json)
+        cred = credentials.Certificate(cred_dict)
+        print("🔥 Firebase initialized via Environment Variable")
+    except Exception as e:
+        print(f"❌ Failed to parse FIREBASE_CREDENTIALS JSON: {e}")
+        raise
+else:
+    # Fallback for local development
+    cred_path = 'config/serviceAccountKey.json'
+    if os.path.exists(cred_path):
+        cred = credentials.Certificate(cred_path)
+        print(f"🔥 Firebase initialized via local file: {cred_path}")
+    else:
+        raise RuntimeError("Firebase credentials not found in ENV or at config/serviceAccountKey.json")
 
 if not firebase_admin._apps:
-    cred = credentials.Certificate(str(cred_path))
-    firebase_admin.initialize_app(cred, {
-        'projectId': FIREBASE_PROJECT_ID
-    })
-    print(f"🔥 Firebase initialized with project ID: {FIREBASE_PROJECT_ID}")
-else:
-    print("☁️ Firebase already initialized, skipping.")
+    firebase_admin.initialize_app(cred)
 
 db = firestore.client(database_id="default")
 
@@ -311,13 +318,32 @@ async def run_engine_background():
                         doc_id = sym.replace('/', '_')
                         sig_ref = db.collection("signals").document(doc_id)
                         
-                        # Use dict if object, otherwise copy if it's already dict
-                        sig_data = sig.copy() if isinstance(sig, dict) else asdict(sig) if hasattr(sig, '__dataclass_fields__') else dict(sig)
+                        # Convert signals to a plain dictionary safely
+                        if isinstance(sig, dict):
+                            sig_data = sig.copy()
+                        elif hasattr(sig, 'dict') and callable(sig.dict):
+                            sig_data = sig.dict()
+                        elif hasattr(sig, '__dataclass_fields__'):
+                            sig_data = asdict(sig)
+                        elif hasattr(sig, '__dict__'):
+                            sig_data = vars(sig).copy()
+                        else:
+                            try:
+                                sig_data = dict(sig)
+                            except Exception:
+                                sig_data = {'value': sig}
+
+                        # Ensure sig_data is a dict before setting keys
+                        if not isinstance(sig_data, dict):
+                            sig_data = {'value': sig_data}
+                        
                         sig_data['symbol'] = sym
                         sig_data['timestamp'] = now_str
                         
                         # Fix numpy serialization here
                         sig_data = numpy_to_native(sig_data)
+                        if not isinstance(sig_data, dict):
+                            sig_data = {'value': sig_data, 'symbol': sym, 'timestamp': now_str}
                         
                         batch.set(sig_ref, sig_data, merge=True)
                         count += 1
