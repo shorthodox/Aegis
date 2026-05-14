@@ -163,19 +163,104 @@ document.addEventListener('DOMContentLoaded', () => {
             positionUnits,
             notionalValue: notional,
             status: 'open',
-            openTime: new Date(),
+            openTime: new Date().toISOString(),
             userId: currentUser.uid,
             signalId: selectedTrade.signalId || null
         };
+        
+        // Save to localStorage for immediate simulation in Analytics
+        localStorage.setItem('analyticsActiveTrade', JSON.stringify(tradeData));
+        
         try {
             const tradesRef = collection(db, 'users', currentUser.uid, 'trades');
             await addDoc(tradesRef, tradeData);
-            console.log('Trade executed');
+            console.log('Trade executed and stored to Firestore');
+            
+            // Redirect to Analytics Room
+            if (typeof window.switchRoom === 'function') {
+                window.switchRoom('analytics');
+                updateAnalyticsSimulation(); // Immediately show it
+            }
         } catch (err) {
             console.error('Failed to save trade:', err);
             alert('Trade execution failed: ' + err.message);
         }
     }
+
+    // ========== Live P/L Simulation (Analytics Room) ==========
+    function updateAnalyticsSimulation() {
+        const positionsContainer = document.getElementById('positionsContainer');
+        if (!positionsContainer) return;
+        
+        const storedTradeStr = localStorage.getItem('analyticsActiveTrade');
+        if (!storedTradeStr) {
+            // Keep existing UI if we already have trades fetched from Firestore, or show empty
+            if (positionsContainer.innerHTML.trim() === '' || positionsContainer.innerHTML.includes('simulated-trade')) {
+                positionsContainer.innerHTML = '<div class="text-gray-500 text-sm text-center py-4">No simulated trades active.</div>';
+            }
+            return;
+        }
+        
+        const trade = JSON.parse(storedTradeStr);
+        
+        // Mock price fluctuation logic
+        const sideMultiplier = trade.side === 'LONG' ? 1 : -1;
+        // Generate a random fluctuation between -0.2% and +0.8%
+        const randomPercent = (Math.random() * 1.0 - 0.2) / 100;
+        const currentSimPrice = trade.entryPrice * (1 + (randomPercent * sideMultiplier));
+        
+        const priceDiff = currentSimPrice - trade.entryPrice;
+        const pnl = priceDiff * trade.positionUnits * sideMultiplier;
+        const pnlPercent = trade.notionalValue > 0 ? (pnl / (trade.notionalValue / trade.leverage)) * 100 : 0;
+        
+        const pnlColor = pnl >= 0 ? 'text-green-400' : 'text-red-400';
+        
+        positionsContainer.innerHTML = `
+            <div class="simulated-trade glass-panel p-4 rounded-xl border border-white/10 hover:border-cyan/30 transition-colors">
+                <div class="flex justify-between items-center mb-3">
+                    <div class="flex items-center gap-3">
+                        <div class="font-bold text-lg text-white">${trade.symbol}</div>
+                        <span class="text-xs px-2 py-0.5 rounded ${trade.side === 'LONG' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}">${trade.side} ${trade.leverage}x</span>
+                    </div>
+                    <div class="text-right">
+                        <div class="font-mono ${pnlColor} font-bold text-lg transition-colors duration-500">
+                            ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)} (${pnl >= 0 ? '+' : ''}${pnlPercent.toFixed(2)}%)
+                        </div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm mt-4">
+                    <div>
+                        <div class="text-gray-500 text-xs uppercase">Entry Price</div>
+                        <div class="font-mono text-white mt-1">$${trade.entryPrice.toFixed(4)}</div>
+                    </div>
+                    <div>
+                        <div class="text-gray-500 text-xs uppercase">Current Price</div>
+                        <div class="font-mono text-cyan mt-1 transition-colors duration-500">$${currentSimPrice.toFixed(4)}</div>
+                    </div>
+                    <div>
+                        <div class="text-gray-500 text-xs uppercase">Position Size</div>
+                        <div class="font-mono text-white mt-1">$${trade.notionalValue.toFixed(2)}</div>
+                    </div>
+                    <div>
+                        <div class="text-gray-500 text-xs uppercase">Margin</div>
+                        <div class="font-mono text-white mt-1">$${(trade.notionalValue / trade.leverage).toFixed(2)}</div>
+                    </div>
+                </div>
+                <div class="mt-4 border-t border-white/10 pt-4 text-right">
+                   <button id="closeSimTradeBtn" class="bg-red-500/20 text-red-400 hover:bg-red-500/40 border border-red-500/30 px-4 py-1.5 rounded text-xs uppercase tracking-wider font-bold transition-all">Close Position</button>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('closeSimTradeBtn')?.addEventListener('click', () => {
+            localStorage.removeItem('analyticsActiveTrade');
+            updateAnalyticsSimulation();
+        });
+    }
+    
+    // Start interval for simulation
+    setInterval(updateAnalyticsSimulation, 2000);
+    updateAnalyticsSimulation();
 
     // ========== Trades Table (Firestore) ==========
     function renderTradesTable() {

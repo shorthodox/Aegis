@@ -18,20 +18,11 @@ service cloud.firestore {
       }
     }
 
-    service cloud.firestore {
-  match /databases/{database}/documents {
     match /trades/{tradeId} {
       // Allow the user to read documents only if their auth email matches the document's email field
       allow read: if request.auth != null && request.auth.token.email == resource.data.email;
-      
       // Add similar logic for write operations if needed
       allow write: if request.auth != null && request.auth.token.email == request.resource.data.email;
-    }
-  }
-}
-
-      match /trades/{tradeId} {
-        allow read: if request.auth != null;
     }
     
     // Signals collection - readable by all authenticated users (write only by admins)
@@ -63,5 +54,3 @@ service cloud.firestore {
     }
   }
 }
-
-

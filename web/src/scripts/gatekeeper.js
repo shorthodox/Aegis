@@ -498,11 +498,10 @@ function filterAndRenderSignals() {
 
   Object.values(window.latestSignals || {}).forEach(sig => {
     if (sig.timeframe === currentTimeframe) {
-      // Apply debouncing
-      if (!shouldShowSignal(sig.symbol, sig)) {
-        return;
-      }
-      
+      // Debouncing should not hide signals from the UI
+      // If UI flickering is an issue, we should debounce the render function itself, 
+      // not drop the signals from the array.
+
       let isMatch = true;
       if (currentStrategy) {
         const acc = (sig.trading_accuracy || 0.5); // Provide fallback if no accuracy data
@@ -601,7 +600,9 @@ async function loadUserFromBackend(token) {
       currentUserData = userData;
       userPlan = userData.plan || 'trial';
       trialEnd = userData.trial_end ? new Date(userData.trial_end) : null;
-      trialActive = userPlan === 'trial' && trialEnd && new Date() < trialEnd;
+      
+      const isActive = userData.trial_active ?? true; // Default to true if null
+      trialActive = isActive;
 
       // Grant Trial Access: Explicitly set allowedTokens for trial users
       if (userPlan === 'trial' || trialActive) {
@@ -932,14 +933,17 @@ function renderSignals(signals) {
 
   const signalEntries = Object.entries(signals);
   
+  // Treat null trialActive as true if user is on trial plan
+  const effectiveTrialActive = (trialActive === null && userPlan === 'trial') ? true : trialActive;
+
   // Debug Logging: Check filter logic
   console.log('renderSignals - Total signals:', signalEntries.length);
-  console.log('renderSignals - User plan:', userPlan, 'Trial active:', trialActive);
+  console.log('renderSignals - User plan:', userPlan, 'Effective trial active:', effectiveTrialActive);
   console.log('renderSignals - Allowed tokens:', allowedTokens);
   
   // Filter signals based on user's allowed tokens
   const filteredEntries = signalEntries.filter(([symbol]) => {
-    if (userPlan === 'pro' || trialActive) {
+    if (userPlan === 'pro' || effectiveTrialActive) {
       console.log(`renderSignals - Allowing ${symbol} for ${userPlan || 'trial-active'} user`);
       return allowedTokens.includes(symbol);
     }
@@ -951,15 +955,15 @@ function renderSignals(signals) {
   console.log('renderSignals - Filtered entries count:', filteredEntries.length);
 
   if (filteredEntries.length === 0) {
-    const trialExpired = userPlan === 'expired' || userPlan === 'none' || window.trialExpiredTriggered === true;
-    const trialActivePlan = userPlan === 'trial' || userPlan === 'trial-active' || trialActive;
+    const isExplicitlyExpired = userPlan === 'expired' || userPlan === 'none' || window.trialExpiredTriggered === true;
+    const isTrialPlan = userPlan === 'trial' || userPlan === 'trial-active' || effectiveTrialActive;
 
-    if (trialActivePlan && !trialExpired) {
+    if (!isExplicitlyExpired && isTrialPlan) {
       signalsContainer.innerHTML = `
         <div class="no-signals">
           <i class="fas fa-chart-line"></i>
           <p>Preparing your trial token cards...</p>
-          <p class="text-sm text-gray-400 mt-2">Try refreshing or switching between 15m, 30m and 1h.</p>
+          <p class="text-sm text-gray-400 mt-2">Loading data or verifying access...</p>
         </div>
       `;
       return;
@@ -1097,6 +1101,11 @@ window.selectSignal = function(symbol, timeframe) {
     window.calculatePosition();
   }
 
+  // Switch to the terminal tab
+  if (typeof window.switchRoom === 'function') {
+    window.switchRoom('terminal');
+  }
+
   // Dispatch event for app.js to catch
   document.dispatchEvent(new CustomEvent('signalRowClicked', {
     detail: {
@@ -1176,14 +1185,13 @@ function setupFirestoreListeners() {
           return;
         }
         
-        window.latestSignals[key] = {
+        const signalObj = {
           symbol: symbol,
           signal: data.signal || 'WAITING',
           ai_prob: data.ai_prob || data.confidence || 0,
           signal_strength: data.signal_strength || 'NORMAL',
           risk_pct: data.risk_pct || 2,
           atr: data.atr || 0,
-          timeframe: tf,
           direction: data.direction || "NEUTRAL",
           entry_price: data.entry_price || 0,
           sl: data.sl || 0,
@@ -1193,12 +1201,32 @@ function setupFirestoreListeners() {
           trading_accuracy: data.trading_accuracy || 0.5,
           profitability_index: data.profitability_index || 0
         };
+
+        if (userPlan === 'trial' || trialActive) {
+          const trialTimeframes = ['15m', '30m', '1h'];
+          trialTimeframes.forEach(trialTf => {
+            const key = `${symbol}_${trialTf}`;
+            window.latestSignals[key] = { ...signalObj, timeframe: trialTf };
+          });
+        } else {
+          const key = `${symbol}_${tf}`;
+          window.latestSignals[key] = { ...signalObj, timeframe: tf };
+        }
       } else if (change.type === 'removed') {
         const data = change.doc.data();
         const symbol = data.symbol || change.doc.id;
-        const tf = data.timeframe || '1h';
-        const key = `${symbol}_${tf}`;
-        delete window.latestSignals[key];
+        
+        if (userPlan === 'trial' || trialActive) {
+          const trialTimeframes = ['15m', '30m', '1h'];
+          trialTimeframes.forEach(trialTf => {
+            const key = `${symbol}_${trialTf}`;
+            delete window.latestSignals[key];
+          });
+        } else {
+          const tf = data.timeframe || '1h';
+          const key = `${symbol}_${tf}`;
+          delete window.latestSignals[key];
+        }
       }
     });
     

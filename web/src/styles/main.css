@@ -2141,6 +2141,8 @@ body.modal-open {
         padding: 20px;
     }
 }
+
+.disclosure-sidebar {
     background: rgba(15, 17, 21, 0.75);
     backdrop-filter: blur(16px);
     border-radius: 24px;

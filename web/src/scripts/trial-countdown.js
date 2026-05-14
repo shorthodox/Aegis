@@ -98,8 +98,8 @@ const TrialManager = (() => {
           active: false,
           expired: false,
           networkError: true,
-          display: 'Connection Error',
-          allowedTokens: cachedTokens
+          display: 'Connection Error - Access Restricted',
+          allowedTokens: []
         };
     }
     if (cachedTrialInfo && cachedTrialInfo._error === 'auth') {
@@ -107,9 +107,9 @@ const TrialManager = (() => {
           active: false,
           expired: false,
           authError: true,
-          display: 'Authentication Error',
+          display: 'Authentication Error - Access Restricted',
           message: 'Unable to verify trial status. Please login again.',
-          allowedTokens: cachedTokens
+          allowedTokens: []
         };
     }
 
@@ -128,24 +128,37 @@ const TrialManager = (() => {
       const trialEnd = new Date(localEndStr);
       if (!isNaN(trialEnd.getTime())) {
         const timeInfo = formatTimeRemaining(trialEnd);
-        cachedState = {
-          active: !timeInfo.expired,
-          ...timeInfo,
-          allowedTokens: cachedTokens,
-          allowedTimeframes: ['15m', '30m'],
-          plan: 'trial',
-          trialEndDate: trialEnd
-        };
+        if (timeInfo.expired) {
+          // Clean up localStorage for expired trials (fail-closed)
+          localStorage.removeItem('trial_end_timestamp');
+          cachedState = {
+            active: false,
+            expired: true,
+            display: 'Trial Expired',
+            allowedTokens: [],
+            allowedTimeframes: [],
+            plan: 'trial'
+          };
+        } else {
+          cachedState = {
+            active: true,
+            ...timeInfo,
+            allowedTokens: cachedTokens,
+            allowedTimeframes: ['15m', '30m'],
+            plan: 'trial',
+            trialEndDate: trialEnd
+          };
+        }
       }
     }
 
     if (!cachedState) {
       cachedState = {
-        active: true,
+        active: false,
         isLoading: true,
-        display: 'Loading...',
-        allowedTokens: cachedTokens,
-        allowedTimeframes: ['15m', '30m'],
+        display: 'Verifying Trial Status...',
+        allowedTokens: [],
+        allowedTimeframes: [],
         plan: 'trial'
       };
     }
