@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,18 +11,22 @@
         .footer-links {
             margin-bottom: 1rem;
         }
+
         .footer-links a {
             color: #00f2ff;
             text-decoration: none;
             margin: 0 0.5rem;
         }
+
         .footer-links a:hover {
             text-decoration: underline;
         }
+
         .separator {
             color: #475569;
             margin: 0 0.5rem;
         }
+
         .footer-proprietor {
             margin: 1rem 0;
             font-size: 0.85rem;
@@ -29,6 +34,7 @@
         }
     </style>
 </head>
+
 <body>
 
     <!-- Fixed Glass Header (same as index.html) -->
@@ -44,8 +50,11 @@
         <div id="authButtonContainer" style="display:flex; align-items:center; gap:0.5rem;">
             <button id="portalBtn" class="portal-btn">Portal</button>
             <button id="dashboardBtn" class="portal-btn" style="display:none;">Dashboard</button>
-            <button id="signOutBtn" class="portal-btn" style="display:none; background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.15); color: #fff;">Sign Out</button>
-            <button id="createAccountBtn" class="portal-btn" style="margin-left: 0.5rem; background: rgba(0, 242, 255, 0.2);">Create Account</button>
+            <button id="signOutBtn" class="portal-btn"
+                style="display:none; background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.15); color: #fff;">Sign
+                Out</button>
+            <button id="createAccountBtn" class="portal-btn"
+                style="margin-left: 0.5rem; background: rgba(0, 242, 255, 0.2);">Create Account</button>
         </div>
     </header>
 
@@ -53,7 +62,9 @@
     <section class="pricing-hero">
         <div class="pricing-header">
             <h1 class="gradient-text">Choose Your Edge</h1>
-            <p class="hero-sub">Every plan includes <strong>Aegis‑1 Executive Guidance</strong>: step‑by‑step execution playbooks and real‑time risk filters. Cashfree payment gateway support is prepared for checkout integration.</p>
+            <p class="hero-sub">Every plan includes <strong>Aegis‑1 Executive Guidance</strong>: step‑by‑step execution
+                playbooks and real‑time risk filters. Cashfree payment gateway support is prepared for checkout
+                integration.</p>
         </div>
 
         <div class="pricing-grid floating-cards">
@@ -109,7 +120,8 @@
         </div>
 
         <div class="guidance-teaser">
-            <p>🛡️ <strong>The Aegis‑1 Promise:</strong> We don't just give signals. We tell you <u>exactly</u> how to enter, when to sit on your hands, and which common retail traps to avoid.</p>
+            <p>🛡️ <strong>The Aegis‑1 Promise:</strong> We don't just give signals. We tell you <u>exactly</u> how to
+                enter, when to sit on your hands, and which common retail traps to avoid.</p>
         </div>
     </section>
 
@@ -125,7 +137,7 @@
         <div class="footer-proprietor">
             Proprietor: Animesh Kukreti | Dehradun, Uttarakhand, India
         </div>
-        <p>© 2025 AEGIS v1.0 — Sovereign Intelligence Terminal</p>
+        <p>© 2026 AEGIS v1.0 — Sovereign Intelligence Terminal</p>
     </footer>
 
     <!-- Trial Countdown Display -->
@@ -133,116 +145,117 @@
 
     <!-- SCRIPTS -->
     <script type="module">
-      import { initSignInUI, openSignInModal } from '../scripts/signin-ui.js';
-      import { initSignUpUI, openSignUpModal } from '../scripts/signup-ui.js';
-      import { isUserAuthenticated, handleLogout } from '../scripts/auth.js';
+        import { initSignInUI, openSignInModal } from '../scripts/signin-ui.js';
+        import { initSignUpUI, openSignUpModal } from '../scripts/signup-ui.js';
+        import { isUserAuthenticated, handleLogout } from '../scripts/auth.js';
 
-      document.addEventListener('DOMContentLoaded', () => {
-        // Initialize auth UIs
-        initSignInUI();
-        initSignUpUI();
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initialize auth UIs
+            initSignInUI();
+            initSignUpUI();
 
-        function hasAuthToken() {
-          return !!localStorage.getItem('authToken') || !!localStorage.getItem('access_token') || localStorage.getItem('authenticated') === 'true';
-        }
-
-        const portalBtn = document.getElementById('portalBtn');
-        const dashboardBtn = document.getElementById('dashboardBtn');
-        const signOutBtn = document.getElementById('signOutBtn');
-        const createAccountBtn = document.getElementById('createAccountBtn');
-        const loggedIn = hasAuthToken() || isUserAuthenticated();
-
-        const showElement = (el) => { if (el) el.style.display = 'inline-flex'; };
-        const hideElement = (el) => { if (el) el.style.display = 'none'; };
-
-        if (loggedIn) {
-            hideElement(portalBtn);
-            hideElement(createAccountBtn);
-            showElement(dashboardBtn);
-            showElement(signOutBtn);
-        } else {
-            showElement(portalBtn);
-            showElement(createAccountBtn);
-            hideElement(dashboardBtn);
-            hideElement(signOutBtn);
-        }
-
-        if (portalBtn) {
-            portalBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                openSignInModal();
-            });
-        }
-
-        if (dashboardBtn) {
-            dashboardBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                window.location.href = '/web/src/pages/dashboard.html';
-            });
-        }
-
-        if (signOutBtn) {
-            signOutBtn.addEventListener('click', async (e) => {
-                e.preventDefault();
-                localStorage.removeItem('authToken');
-                localStorage.removeItem('access_token');
-                localStorage.removeItem('authenticated');
-                localStorage.removeItem('userSession');
-                localStorage.removeItem('refresh_token');
-                try {
-                    await handleLogout();
-                } catch (err) {
-                    console.warn('Logout failed during sign out:', err);
-                }
-                window.location.href = '/web/src/pages/index.html';
-            });
-        }
-
-        if (createAccountBtn) {
-            createAccountBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                openSignUpModal();
-            });
-        }
-
-        // Trial button
-        const trialBtn = document.getElementById('trialBtn');
-        if (trialBtn) {
-          trialBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            if (isUserAuthenticated()) {
-              window.location.href = '/web/src/pages/dashboard.html';
-            } else {
-              openSignUpModal();
+            function hasAuthToken() {
+                return !!localStorage.getItem('authToken') || !!localStorage.getItem('access_token') || localStorage.getItem('authenticated') === 'true';
             }
-          });
-        }
 
-        // Plan buttons
-        document.querySelectorAll('[data-plan]').forEach(btn => {
-          btn.addEventListener('click', (e) => {
-            e.preventDefault();
-            const plan = e.currentTarget.dataset.plan;
-            if (!isUserAuthenticated()) {
-              window.pendingPlan = plan;
-              openSignInModal();
+            const portalBtn = document.getElementById('portalBtn');
+            const dashboardBtn = document.getElementById('dashboardBtn');
+            const signOutBtn = document.getElementById('signOutBtn');
+            const createAccountBtn = document.getElementById('createAccountBtn');
+            const loggedIn = hasAuthToken() || isUserAuthenticated();
+
+            const showElement = (el) => { if (el) el.style.display = 'inline-flex'; };
+            const hideElement = (el) => { if (el) el.style.display = 'none'; };
+
+            if (loggedIn) {
+                hideElement(portalBtn);
+                hideElement(createAccountBtn);
+                showElement(dashboardBtn);
+                showElement(signOutBtn);
             } else {
-              if (window.AegisDashboard && window.AegisDashboard.subscribeToPlan) {
-                window.AegisDashboard.subscribeToPlan(plan);
-              } else {
-                console.error("AegisDashboard.subscribeToPlan is not available");
-              }
+                showElement(portalBtn);
+                showElement(createAccountBtn);
+                hideElement(dashboardBtn);
+                hideElement(signOutBtn);
             }
-          });
+
+            if (portalBtn) {
+                portalBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    openSignInModal();
+                });
+            }
+
+            if (dashboardBtn) {
+                dashboardBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    window.location.href = '/web/src/pages/dashboard.html';
+                });
+            }
+
+            if (signOutBtn) {
+                signOutBtn.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    localStorage.removeItem('authToken');
+                    localStorage.removeItem('access_token');
+                    localStorage.removeItem('authenticated');
+                    localStorage.removeItem('userSession');
+                    localStorage.removeItem('refresh_token');
+                    try {
+                        await handleLogout();
+                    } catch (err) {
+                        console.warn('Logout failed during sign out:', err);
+                    }
+                    window.location.href = '/web/src/pages/index.html';
+                });
+            }
+
+            if (createAccountBtn) {
+                createAccountBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    openSignUpModal();
+                });
+            }
+
+            // Trial button
+            const trialBtn = document.getElementById('trialBtn');
+            if (trialBtn) {
+                trialBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    if (isUserAuthenticated()) {
+                        window.location.href = '/web/src/pages/dashboard.html';
+                    } else {
+                        openSignUpModal();
+                    }
+                });
+            }
+
+            // Plan buttons
+            document.querySelectorAll('[data-plan]').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const plan = e.currentTarget.dataset.plan;
+                    if (!isUserAuthenticated()) {
+                        window.pendingPlan = plan;
+                        openSignInModal();
+                    } else {
+                        if (window.AegisDashboard && window.AegisDashboard.subscribeToPlan) {
+                            window.AegisDashboard.subscribeToPlan(plan);
+                        } else {
+                            console.error("AegisDashboard.subscribeToPlan is not available");
+                        }
+                    }
+                });
+            });
+
+            // Listen for navigation events
+            window.addEventListener('openSignin', openSignInModal);
+            window.addEventListener('openSignup', openSignUpModal);
         });
-
-        // Listen for navigation events
-        window.addEventListener('openSignin', openSignInModal);
-        window.addEventListener('openSignup', openSignUpModal);
-      });
     </script>
     <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
 
     <!-- Lightweight server-backed login modal is injected by simple-auth-client.js -->
 </body>
+
 </html>

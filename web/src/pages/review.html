@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,6 +8,7 @@
     <link rel="stylesheet" href="/web/src/styles/main.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
+
 <body>
     <header class="fixed-header">
         <div class="logo">⚡ AEGIS <span>v1.0</span></div>
@@ -21,10 +23,12 @@
     <section class="feature-section" style="padding-top:120px;">
         <div class="feature-container">
             <h1 class="section-title">Share your experience</h1>
-            <p style="color:var(--text-dim); max-width:760px; margin:0 auto 1.5rem;">We value honest feedback. Your ratings help us improve Aegis‑1 and prioritise features.</p>
+            <p style="color:var(--text-dim); max-width:760px; margin:0 auto 1.5rem;">We value honest feedback. Your
+                ratings help us improve Aegis‑1 and prioritise features.</p>
 
             <div style="max-width:720px; margin: 0 auto;">
-                <form id="reviewForm" class="modal-card" style="background:transparent; border:none; padding:1.5rem; max-width:720px;">
+                <form id="reviewForm" class="modal-card"
+                    style="background:transparent; border:none; padding:1.5rem; max-width:720px;">
                     <div class="labeled-input">
                         <label>Name</label>
                         <input type="text" id="reviewName" class="auth-input" placeholder="Your name" required>
@@ -45,7 +49,8 @@
                     </div>
                     <div class="labeled-input">
                         <label>Message</label>
-                        <textarea id="reviewMessage" class="auth-input" rows="6" placeholder="Tell us what you liked or what we can improve"></textarea>
+                        <textarea id="reviewMessage" class="auth-input" rows="6"
+                            placeholder="Tell us what you liked or what we can improve"></textarea>
                     </div>
                     <div style="text-align:right;">
                         <button id="submitReview" class="auth-submit-btn" type="submit">Submit Review</button>
@@ -57,38 +62,42 @@
     </section>
 
     <footer class="footer">
-        <p>© 2025 AEGIS v1.0 — Sovereign Intelligence Terminal</p>
+        <p>© 2026 AEGIS v1.0 — Sovereign Intelligence Terminal</p>
     </footer>
 
     <script type="module" src="/web/src/scripts/reviews.js"></script>
     </div>
     </div>
 
-    
-    
+
+
     </div>
 
-    
+
     <!-- ========== 3‑STEP ONBOARDING MODAL (with password fields) ========== -->
     <div id="loginModal" class="modal">
         <div class="modal-card">
             <!-- Close button with inline styles to guarantee clickability -->
-            <span class="close-modal" style="position: absolute; top: 1rem; right: 1.5rem; font-size: 1.8rem; cursor: pointer; color: var(--dim, #94a3b8); z-index: 1001; pointer-events: auto;">&times;</span>
+            <span class="close-modal"
+                style="position: absolute; top: 1rem; right: 1.5rem; font-size: 1.8rem; cursor: pointer; color: var(--dim, #94a3b8); z-index: 1001; pointer-events: auto;">&times;</span>
 
             <!-- Step 1: Email / Google -->
             <div id="step1" class="step active">
                 <div class="modal-logo">⚡ AEGIS</div>
-                <button id="googleStepBtn" class="provider-btn"><i class="fab fa-google"></i> Continue with Google</button>
+                <button id="googleStepBtn" class="provider-btn"><i class="fab fa-google"></i> Continue with
+                    Google</button>
                 <div class="divider">or</div>
                 <input type="text" id="emailInput" class="auth-input" placeholder="Email or mobile number">
-                <p class="info-note">Use your email to sign in or register. Start with a phone number for mobile OTP.</p>
+                <p class="info-note">Use your email to sign in or register. Start with a phone number for mobile OTP.
+                </p>
                 <button id="continueToOtpBtn" class="auth-submit-btn">Continue</button>
             </div>
 
             <!-- Step 2: OTP Verification -->
             <div id="step2" class="step">
                 <h3 style="text-align:center; margin-bottom:1rem;">Enter verification code</h3>
-                <p style="text-align:center; color:var(--dim); font-size:0.8rem;">We sent a 6‑digit code to <span id="otpEmailDisplay"></span></p>
+                <p style="text-align:center; color:var(--dim); font-size:0.8rem;">We sent a 6‑digit code to <span
+                        id="otpEmailDisplay"></span></p>
                 <div class="otp-container" id="otpContainer">
                     <input type="text" maxlength="1" class="otp-digit" data-idx="0">
                     <input type="text" maxlength="1" class="otp-digit" data-idx="1">
@@ -121,7 +130,8 @@
                         <input type="text" id="location" class="auth-input" placeholder="City, Country">
                     </div>
                 </div>
-    </div>
+            </div>
 
-    </body>
+</body>
+
 </html>
