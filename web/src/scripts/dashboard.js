@@ -217,7 +217,7 @@ function initializeLogoClickHandler() {
 // ============================================================
 async function updateTokenMovement() {
   try {
-    const response = await fetch('web/src/data/live_signals.json');
+    const response = await fetch('/web/src/data/live_signals.json');
     if (!response.ok) throw new Error('Network response was not ok');
     
     const data = await response.json();
