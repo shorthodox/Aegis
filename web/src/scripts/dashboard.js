@@ -235,16 +235,71 @@ async function updateTokenMovement() {
   }
 }
 
+async function setupTrialNonBlocking(userId) {
+  if (!userId) return;
+  
+  const cacheKey = `trialStart_${userId}`;
+  let trialStart = localStorage.getItem(cacheKey);
+  
+  try {
+    // 1. Check local caching
+    if (trialStart) {
+      console.log('⚡ Using cached trial start time');
+      initializeTrialCountdown(userId, trialStart);
+    }
+    
+    // 2. Fetch from Firestore (revalidate)
+    const freshTrialStart = await fetchTrialStartFromFirestore(userId);
+    
+    if (freshTrialStart && freshTrialStart !== trialStart) {
+      localStorage.setItem(cacheKey, freshTrialStart);
+      initializeTrialCountdown(userId, freshTrialStart);
+    }
+  } catch (trialErr) {
+    console.error('Failed to fetch trial data, using fallback:', trialErr);
+    // 4. Error Handling: fallback to grace period or last known
+    if (!trialStart) {
+      console.log('🛡️ Initiating 24h grace period due to network error');
+      const fallbackStart = new Date().toISOString(); 
+      localStorage.setItem(cacheKey, fallbackStart);
+      initializeTrialCountdown(userId, fallbackStart);
+    }
+  }
+}
+
 async function initializeDashboard(event) {
   clearExpiredView();
 
   if (initialized) return;
-
   if (!window.location.pathname.includes('dashboard.html')) return;
+  
+  initialized = true;
+  initializeLogoClickHandler();
+
+  // Always start fetching token movement data instantly, regardless of trial status
+  updateTokenMovement();
+  setInterval(updateTokenMovement, 30000);
+
+  document.addEventListener('trialExpired', () => {
+    console.log('🔒 Trial expired event triggered');
+    setExpiredView();
+  });
 
   try {
-    const userId = event?.detail?.userData?.uid || await waitForAuthStateChange();
-    if (!userId) {
+    // 3. Auth Optimization: Use cached userId if available to start immediately
+    const eventUid = event?.detail?.userData?.uid;
+    const cachedUid = localStorage.getItem('cached_uid');
+    const initialUid = eventUid || cachedUid;
+    
+    if (initialUid) {
+      // 2. Non-Blocking Fetch: fire and forget
+      setupTrialNonBlocking(initialUid);
+    }
+
+    // Await true auth state
+    const realUserId = eventUid || await waitForAuthStateChange();
+    
+    if (!realUserId) {
       console.warn('Dashboard countdown: could not resolve current user UID');
       const countdownDisplay = document.getElementById('countdown-display');
       if (countdownDisplay) {
@@ -260,29 +315,14 @@ async function initializeDashboard(event) {
       return;
     }
 
-    initialized = true;
+    // Cache the real user ID
+    localStorage.setItem('cached_uid', realUserId);
     
-    // Initialize logo click handler
-    initializeLogoClickHandler();
-    
-    // Wrap trial fetch in try/catch to allow updateTokenMovement to run even on failure
-    let trialStart = null;
-    try {
-      trialStart = await fetchTrialStartFromFirestore(userId);
-      await initializeTrialCountdown(userId, trialStart);
-    } catch (trialErr) {
-      console.error('Failed to fetch or initialize trial countdown:', trialErr);
-      // Trial initialization failed, but dashboard will continue
+    // If we didn't have an initial UID or it changed, run the setup again
+    if (realUserId !== initialUid) {
+      setupTrialNonBlocking(realUserId);
     }
 
-    // Always start fetching token movement data, regardless of trial status
-    await updateTokenMovement();
-    setInterval(updateTokenMovement, 30000);
-
-    document.addEventListener('trialExpired', () => {
-      console.log('🔒 Trial expired event triggered');
-      setExpiredView();
-    });
   } catch (err) {
     console.error('Error initializing dashboard:', err);
     const signalsContainer = document.getElementById('signalsContainer');
@@ -294,14 +334,6 @@ async function initializeDashboard(event) {
             <button onclick="location.reload()" style="margin-top: 10px; padding: 4px 12px; background: rgba(255,0,0,0.2); border-radius: 4px; color: white;">Retry</button>
           </div>
         `;
-    }
-    const countdownDisplay = document.getElementById('countdown-display');
-    if (countdownDisplay) {
-        countdownDisplay.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Error loading trial data`;
-        countdownDisplay.style.display = 'block';
-        countdownDisplay.style.background = 'rgba(255, 0, 85, 0.15)';
-        countdownDisplay.style.color = '#ff0055';
-        countdownDisplay.style.borderColor = 'rgba(255, 0, 85, 0.4)';
     }
   }
 }
