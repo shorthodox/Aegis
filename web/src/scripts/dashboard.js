@@ -61,20 +61,34 @@ function createExpiredCard() {
         <p style="color: #ccc; margin: 1rem 0; font-size: 1.1rem;">
           Your free trial has expired. Subscribe now to continue accessing premium signals and trading features.
         </p>
-        <button onclick="handleSubscribeClick()" style="
-          margin-top: 2rem;
-          padding: 12px 32px;
-          background: linear-gradient(135deg, #6c63ff, #0f3cff);
-          border: 2px solid #0f3cff;
-          color: white;
-          border-radius: 8px;
-          font-size: 1.1rem;
-          font-weight: bold;
-          cursor: pointer;
-          transition: all 0.3s ease;
-        " onmouseover="this.style.boxShadow='0 0 20px rgba(111, 99, 255, 0.5)'" onmouseout="this.style.boxShadow='none'">
-          Subscribe Now
-        </button>
+        <div style="display: flex; gap: 1rem; justify-content: center; margin-top: 2rem; flex-wrap: wrap;">
+          <button onclick="handleSubscribeClick()" style="
+            padding: 12px 32px;
+            background: linear-gradient(135deg, #6c63ff, #0f3cff);
+            border: 2px solid #0f3cff;
+            color: white;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+          " onmouseover="this.style.boxShadow='0 0 20px rgba(111, 99, 255, 0.5)'" onmouseout="this.style.boxShadow='none'">
+            Subscribe Now
+          </button>
+          <button onclick="window.location.href='/web/src/pages/index.html'" style="
+            padding: 12px 32px;
+            background: transparent;
+            border: 2px solid rgba(255,255,255,0.2);
+            color: white;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+          " onmouseover="this.style.borderColor='rgba(255,255,255,0.5)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.2)'">
+            Return Home
+          </button>
+        </div>
         <p style="color: #999; margin-top: 2rem; font-size: 0.9rem;">
           All features are locked until you subscribe
         </p>
@@ -165,8 +179,7 @@ function unblockFeatures() {
 // SUBSCRIBE BUTTON HANDLER
 // ============================================================
 function handleSubscribeClick() {
-  // Navigate to subscription page or open subscription modal
-  window.location.href = '/pricing.html' || '/subscribe.html';
+  window.location.href = '/web/src/pages/pricing.html';
 }
 
 // ============================================================
@@ -206,7 +219,7 @@ function initializeLogoClickHandler() {
     logoElement.style.cursor = 'pointer';
     logoElement.addEventListener('click', (e) => {
       e.preventDefault();
-      window.location.href = '/index.html';
+      window.location.href = '/web/src/pages/index.html';
     });
     console.log('✅ Logo click handler initialized');
   }

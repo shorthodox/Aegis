@@ -381,18 +381,28 @@ function setupMobileOptimizations() {
   const sidebar = document.getElementById('sidebar');
   const overlay = document.getElementById('sidebarOverlay');
   
+  // Note: app.js also has a toggle logic for this. To avoid conflicts,
+  // we just use a unified toggle if this runs, or let app.js handle it.
+  // We'll safely use toggle here as well if app.js isn't loaded.
   if (mobileMenuBtn && sidebar && overlay) {
-    mobileMenuBtn.addEventListener('click', () => {
-      sidebar.classList.remove('-translate-x-full');
-      overlay.classList.remove('hidden');
+    // Remove old listeners by cloning (optional) or just use toggle
+    // It's safer to remove the duplicate logic from here since app.js handles it perfectly,
+    // but we'll leave the toggle in case gatekeeper is used standalone.
+    mobileMenuBtn.addEventListener('click', (e) => {
+      // Prevent double firing if app.js also catches it
+      e.stopImmediatePropagation();
+      sidebar.classList.toggle('-translate-x-full');
+      overlay.classList.toggle('hidden');
     });
     
-    closeMenuBtn?.addEventListener('click', () => {
+    closeMenuBtn?.addEventListener('click', (e) => {
+      e.stopImmediatePropagation();
       sidebar.classList.add('-translate-x-full');
       overlay.classList.add('hidden');
     });
     
-    overlay.addEventListener('click', () => {
+    overlay.addEventListener('click', (e) => {
+      e.stopImmediatePropagation();
       sidebar.classList.add('-translate-x-full');
       overlay.classList.add('hidden');
     });
