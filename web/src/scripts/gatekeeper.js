@@ -87,6 +87,40 @@ let signalDebounceMap = new Map(); // Track last signal time per symbol
 let currentRiskProfile = 'balanced';
 
 // -------------------------------------------------------------------
+// Signal Status Determination
+// -------------------------------------------------------------------
+function getSignalStatus(signal) {
+  /**
+   * Determine if signal is Active, Expired, or Stopped Out based on current price.
+   * - ACTIVE: Signal is still valid
+   * - EXPIRED: Target price has been hit (success)
+   * - STOPPED_OUT: Stop loss has been hit (failure)
+   */
+  if (!signal || !window.currentTickers) return 'ACTIVE';
+  
+  const currentPrice = window.currentTickers[signal.symbol];
+  if (currentPrice === undefined) return 'ACTIVE';
+  
+  const tp = parseFloat(signal.tp) || 0;
+  const sl = parseFloat(signal.sl) || 0;
+  
+  if (tp <= 0 || sl <= 0) return 'ACTIVE';
+  
+  // For LONG positions: expired if current price >= tp
+  if (signal.direction === 'LONG') {
+    if (currentPrice >= tp) return 'EXPIRED';
+    if (currentPrice <= sl) return 'STOPPED_OUT';
+  }
+  // For SHORT positions: expired if current price <= tp
+  else if (signal.direction === 'SHORT') {
+    if (currentPrice <= tp) return 'EXPIRED';
+    if (currentPrice >= sl) return 'STOPPED_OUT';
+  }
+  
+  return 'ACTIVE';
+}
+
+// -------------------------------------------------------------------
 // Subscription & Trial Locking
 // -------------------------------------------------------------------
 function showSubscriptionExpiredOverlay() {
@@ -110,6 +144,7 @@ function showSubscriptionExpiredOverlay() {
 // Signal History Management
 // -------------------------------------------------------------------
 function addSignalToHistory(signal) {
+  const status = getSignalStatus(signal);
   const historyEntry = {
     symbol: signal.symbol,
     signal: signal.signal,
@@ -117,7 +152,9 @@ function addSignalToHistory(signal) {
     sl: signal.sl,
     tp: signal.tp,
     timestamp: new Date().toISOString(),
-    signal_id: signal.signal_id
+    signal_id: signal.signal_id,
+    status: status,
+    direction: signal.direction || 'NEUTRAL'
   };
   
   signalHistory.unshift(historyEntry);
@@ -136,13 +173,33 @@ function updateSignalHistoryUI() {
   if (!tbody) return;
   
   if (signalHistory.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-gray-500">No signal history available</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-gray-500">No signal history available</td></tr>';
     return;
   }
   
+  // Update signal statuses based on current prices
+  signalHistory.forEach(entry => {
+    if (!entry.status || entry.status === 'ACTIVE') {
+      entry.status = getSignalStatus(entry);
+    }
+  });
+  
   tbody.innerHTML = signalHistory.map(entry => {
-    const signalClass = getSignalClass(entry.signal);
+    const signalClass = getSignalClass(entry.signal, entry.status);
     const timestamp = new Date(entry.timestamp).toLocaleString();
+    const status = entry.status || 'ACTIVE';
+    
+    // Determine status badge styling
+    let statusBadgeClass = 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/50';
+    let statusText = 'ACTIVE';
+    
+    if (status === 'EXPIRED') {
+      statusBadgeClass = 'bg-green-500/20 text-green-400 border border-green-500/50';
+      statusText = '✓ TARGET HIT';
+    } else if (status === 'STOPPED_OUT') {
+      statusBadgeClass = 'bg-red-500/20 text-red-400 border border-red-500/50';
+      statusText = '✗ STOPPED OUT';
+    }
     
     return `
       <tr class="hover:bg-white/5">
@@ -153,6 +210,9 @@ function updateSignalHistoryUI() {
         <td class="p-3 font-mono">${entry.entry_price ? '$' + entry.entry_price.toFixed(4) : '-'}</td>
         <td class="p-3 font-mono">${entry.tp ? '$' + entry.tp.toFixed(4) : '-'}</td>
         <td class="p-3 text-xs text-gray-400">${timestamp}</td>
+        <td class="p-3">
+          <span class="text-xs font-bold px-2 py-1 rounded ${statusBadgeClass}">${statusText}</span>
+        </td>
         <td class="p-3">
           <button onclick="initiatePaperTrade('${entry.symbol}', ${entry.entry_price || 0}, ${entry.sl || 0}, ${entry.tp || 0})" 
                   class="text-xs bg-cyan/20 hover:bg-cyan/40 text-cyan border border-cyan/50 px-2 py-1 rounded transition-colors">
@@ -856,7 +916,7 @@ function updateDashboardData(data) {
         trialTimeframes.forEach(tf => {
           const key = `${sym}_${tf}`;
           window.latestSignals = window.latestSignals || {};
-          window.latestSignals[key] = {
+          const signalObj = {
             symbol: sym,
             signal: sig.signal || 'WAITING',
             ai_prob: sig.ai_prob || sig.confidence || 0,
@@ -873,13 +933,16 @@ function updateDashboardData(data) {
             trading_accuracy: sig.trading_accuracy || 0.5,
             profitability_index: sig.profitability_index || 0
           };
+          // Determine and set signal status
+          signalObj.status = getSignalStatus(signalObj);
+          window.latestSignals[key] = signalObj;
         });
       } else {
         // For pro users, use the actual timeframe from data or default to 1h
         const tf = sig.timeframe || '1h';
         const key = `${sym}_${tf}`;
         window.latestSignals = window.latestSignals || {};
-        window.latestSignals[key] = {
+        const signalObj = {
           symbol: sym,
           signal: sig.signal || 'WAITING',
           ai_prob: sig.ai_prob || sig.confidence || 0,
@@ -896,6 +959,9 @@ function updateDashboardData(data) {
           trading_accuracy: sig.trading_accuracy || 0.5,
           profitability_index: sig.profitability_index || 0
         };
+        // Determine and set signal status
+        signalObj.status = getSignalStatus(signalObj);
+        window.latestSignals[key] = signalObj;
       }
     });
     filterAndRenderSignals();
@@ -996,9 +1062,21 @@ function renderSignals(signals) {
   signalsContainer.innerHTML = filteredEntries.map(([symbol, signal]) => {
     const signalType = signal.signal || 'WAITING';
     const timeframe = signal.timeframe || '1h'; // Default to 1h if not provided
-    const signalClass = getSignalClass(signalType);
+    const signalStatus = signal.status || getSignalStatus(signal);
+    const signalClass = getSignalClass(signalType, signalStatus);
     const cardTypeClass = getSignalCardType(signal.direction);
     const confidence = (signal.ai_prob || 0) * 100;
+    
+    // Determine status badge
+    let statusBadge = '';
+    let statusIndicator = '';
+    if (signalStatus === 'EXPIRED') {
+      statusBadge = '<span class="bg-green-500/20 text-green-400 border border-green-500/50 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider">✓ TARGET HIT</span>';
+      statusIndicator = ' opacity-60';
+    } else if (signalStatus === 'STOPPED_OUT') {
+      statusBadge = '<span class="bg-red-500/20 text-red-400 border border-red-500/50 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider">✗ STOPPED OUT</span>';
+      statusIndicator = ' opacity-50';
+    }
     
     let directionBadge = '';
     if (signal.direction === 'LONG') {
@@ -1020,12 +1098,13 @@ function renderSignals(signals) {
     }
 
     return `
-      <div class="signal-card ${cardTypeClass} cursor-pointer hover:shadow-[0_0_15px_rgba(0,242,255,0.2)] transition-all ${matchClasses}" onclick="window.selectSignal('${symbol}', '${timeframe}')" data-symbol="${symbol}">
+      <div class="signal-card ${cardTypeClass}${statusIndicator} cursor-pointer hover:shadow-[0_0_15px_rgba(0,242,255,0.2)] transition-all ${matchClasses}" onclick="window.selectSignal('${symbol}', '${timeframe}')" data-symbol="${symbol}" data-status="${signalStatus}">
         <div class="signal-header flex justify-between items-center">
           <div class="flex items-center">
             <span class="signal-symbol font-bold">${symbol}</span>
             <span class="signal-timeframe text-xs text-gray-500 ml-2">${timeframe}</span>
             ${directionBadge}
+            ${statusBadge}
             ${matchBadge}
           </div>
           <div class="flex items-center gap-3">
@@ -1118,8 +1197,14 @@ window.selectSignal = function(symbol, timeframe) {
 }
 
 
-function getSignalClass(signal) {
+function getSignalClass(signal, status) {
   const s = String(signal).toUpperCase();
+  
+  // If signal is expired or stopped out, use neutral/expired styling
+  if (status === 'EXPIRED' || status === 'STOPPED_OUT') {
+    return 'expired';
+  }
+  
   if (s.includes('BUY') || s.includes('LONG')) return 'buy';
   if (s.includes('SELL') || s.includes('SHORT')) return 'sell';
   return 'neutral';
