@@ -79,6 +79,15 @@ export class AuthManager {
     }
 
     static isTrialValid() {
+        // Retrieve the trial_end_timestamp from localStorage.
+        const trialEndStr = localStorage.getItem('trial_end_timestamp');
+        if (trialEndStr && trialEndStr !== 'null') {
+            const trialEnd = new Date(trialEndStr).getTime();
+            if (Date.now() > trialEnd) {
+                return false;
+            }
+        }
+
         // Exclusively use server response data
         const user = this.getUser();
         if (user) {
@@ -93,8 +102,8 @@ export class AuthManager {
             if (tokenData.status === 'expired') return false;
         }
         
-        // Default to active while loading/fetching real state
-        return true;
+        // Strict security posture: Default to inactive/expired state instead of active
+        return false;
     }
 
     static isTokenValid() {
