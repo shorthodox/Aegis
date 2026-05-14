@@ -1465,7 +1465,7 @@ async function saveUserSettings() {
 // Trial countdown logic removed from here as it is managed in trial-countdown.js
 
 // -------------------------------------------------------------------
-// Upgrade Modal & Cashfree Integration
+// Upgrade Modal & Paddle Integration
 // -------------------------------------------------------------------
 function showUpgradePrompt() {
   if (userPlan === 'pro') return;
@@ -1511,11 +1511,11 @@ function getUpgradeModal() {
   return modal;
 }
 
-// Cashfree Subscription Integration
+// Paddle Subscription Integration
 window.AegisDashboard = {
   subscribeToPlan: async (planType) => {
-    const amount = planType === 'pro' ? 24.00 : 3.60;
     const planName = planType === 'pro' ? 'pro' : 'basic';
+    const priceId = planType === 'pro' ? 'YOUR_PRO_PRICE_ID' : 'YOUR_BASIC_PRICE_ID';
     const token = AuthManager.getToken();
     
     if (!token) {
@@ -1531,27 +1531,48 @@ window.AegisDashboard = {
       });
       const userData = await userResponse.json();
       
-      const response = await fetch(`${API_BASE_URL}/create-subscription`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          plan_name: planName,
-          amount: amount,
-          email: userData.email,
-          customer_phone: null
-        })
-      });
+      // Initialize Paddle if not already initialized
+      if (typeof Paddle !== 'undefined' && !window.paddleInitialized) {
+        Paddle.Environment.set("sandbox"); // remove or change in prod
+        Paddle.Initialize({ 
+          token: 'YOUR_VENDOR_TOKEN',
+          eventCallback: async function(data) {
+            if (data.name === "checkout.completed") {
+              try {
+                // Update Firestore user status
+                if (currentUser && currentUser.uid) {
+                  const userDocRef = doc(db, 'users', currentUser.uid);
+                  await updateDoc(userDocRef, { 
+                    plan: planName,
+                    subscriptionStatus: 'active',
+                    trialActive: false
+                  });
+                }
+                
+                // Clear expired view if it exists
+                if (typeof window.clearExpiredView === 'function') {
+                  window.clearExpiredView();
+                }
+
+                alert('Payment successful! Your subscription is now active.');
+                window.location.reload();
+              } catch (err) {
+                console.error("Error updating subscription status:", err);
+              }
+            }
+          }
+        });
+        window.paddleInitialized = true;
+      }
       
-      const data = await response.json();
-      
-      if (response.ok && data.success && data.sub_auth_url) {
-        // Redirect to Cashfree authorization page
-        window.location.href = data.sub_auth_url;
+      // Open Paddle Checkout
+      if (typeof Paddle !== 'undefined') {
+        Paddle.Checkout.open({
+          items: [{ priceId: priceId, quantity: 1 }],
+          customer: { email: userData.email }
+        });
       } else {
-        alert(data.detail || 'Failed to create subscription. Please try again.');
+        alert('Payment gateway failed to load. Please refresh the page.');
       }
     } catch (error) {
       console.error('Subscription error:', error);
