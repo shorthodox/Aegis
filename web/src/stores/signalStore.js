@@ -91,7 +91,7 @@ export class SignalStore {
                 this.signals[pair] = {
                     pair: pair,
                     signal: data.signal || "WAITING",
-                    entry: data.entry || 0,
+                    entry: data.price || data.entry_price || data.entry || 0,
                     sl: data.sl || 0,
                     tp: data.tp || 0,
                     status: data.status || "OPEN",

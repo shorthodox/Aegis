@@ -52,7 +52,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Listen to row clicks for simulation
     document.addEventListener('signalRowClicked', (e) => {
         const sig = e.detail;
-        prefillTradeSim(sig.pair, sig.entry, sig);
+        if (window.confirm(`Initiate paper trade simulation for ${sig.pair} at entry $${sig.entry}?`)) {
+            if (typeof window.switchRoom === 'function') window.switchRoom('terminal');
+            prefillTradeSim(sig.pair, sig.entry, sig);
+        }
     });
 
     // ========== Helper ==========
@@ -203,11 +206,10 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const trade = JSON.parse(storedTradeStr);
         
-        // Mock price fluctuation logic
+        // Use real price from SignalStore instead of mock fluctuation
         const sideMultiplier = trade.side === 'LONG' ? 1 : -1;
-        // Generate a random fluctuation between -0.2% and +0.8%
-        const randomPercent = (Math.random() * 1.0 - 0.2) / 100;
-        const currentSimPrice = trade.entryPrice * (1 + (randomPercent * sideMultiplier));
+        const currentSignal = signalStore.signals[trade.symbol];
+        const currentSimPrice = currentSignal && currentSignal.entry ? currentSignal.entry : trade.entryPrice;
         
         const priceDiff = currentSimPrice - trade.entryPrice;
         const pnl = priceDiff * trade.positionUnits * sideMultiplier;
