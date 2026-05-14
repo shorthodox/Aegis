@@ -62,6 +62,18 @@ let currentUserData = null;
 let userPlan = 'trial';
 let trialEnd = null;
 let trialActive = true;
+
+// Listen for trial expiration from dashboard countdown
+document.addEventListener('trialExpired', () => {
+    trialActive = false;
+    if (userPlan === 'trial') {
+        allowedTokens = [];
+        localStorage.setItem('cachedAllowedTokens', JSON.stringify([]));
+        if (typeof showSubscriptionExpiredOverlay === 'function') {
+            showSubscriptionExpiredOverlay();
+        }
+    }
+});
 let allowedTokens = [];
 let ws = null;
 let signalsUnsubscribe = null;
@@ -662,7 +674,7 @@ async function loadUserFromBackend(token) {
       trialEnd = userData.trial_end ? new Date(userData.trial_end) : null;
       
       const isActive = userData.trial_active ?? true; // Default to true if null
-      trialActive = isActive;
+      trialActive = typeof AuthManager !== 'undefined' ? AuthManager.isTrialValid() : isActive;
 
       // Grant Trial Access: Explicitly set allowedTokens for trial users
       if (userPlan === 'trial' || trialActive) {
@@ -999,8 +1011,8 @@ function renderSignals(signals) {
 
   const signalEntries = Object.entries(signals);
   
-  // Treat null trialActive as true if user is on trial plan
-  const effectiveTrialActive = (trialActive === null && userPlan === 'trial') ? true : trialActive;
+  // Strict check using AuthManager
+  const effectiveTrialActive = typeof AuthManager !== 'undefined' ? AuthManager.isTrialValid() : ((trialActive === null && userPlan === 'trial') ? true : trialActive);
 
   // Debug Logging: Check filter logic
   console.log('renderSignals - Total signals:', signalEntries.length);
