@@ -226,8 +226,56 @@ function initializeLogoClickHandler() {
 }
 
 // ============================================================
-// FETCH AND UPDATE TOKEN MOVEMENT DATA
+// FETCH AND UPDATE TOKEN MOVEMENT DATA (LIVE MARKET CARDS)
 // ============================================================
+let lastTokenHTML = '';
+let previousCardPrices = {};
+
+function fetchLiveMarketData() {
+  try {
+    // Utilize the live WebSocket data stream provided by gatekeeper.js
+    if (!window.currentTickers) return;
+    
+    const container = document.getElementById('market-token-cards');
+    if (!container) return;
+
+    // Display a curated list of top tokens
+    const priorityTokens = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT'];
+    let html = '';
+
+    priorityTokens.forEach(sym => {
+      const currentPrice = window.currentTickers[sym] ? parseFloat(window.currentTickers[sym]) : null;
+      const prevPrice = previousCardPrices[sym] || currentPrice;
+      
+      let priceStr = 'Loading...';
+      let colorClass = 'text-white';
+      
+      if (currentPrice) {
+        priceStr = `$${currentPrice > 1 ? currentPrice.toFixed(2) : currentPrice.toFixed(4)}`;
+        if (currentPrice > prevPrice) colorClass = 'text-green-400';
+        else if (currentPrice < prevPrice) colorClass = 'text-red-400';
+        
+        // Cache for next comparison
+        previousCardPrices[sym] = currentPrice;
+      }
+      
+      html += `
+        <div class="glass-panel p-4 rounded-xl flex flex-col justify-center border-l-2 border-cyan/50 hover:bg-white/5 transition-colors cursor-pointer shadow-lg">
+          <span class="text-[10px] text-gray-500 font-bold uppercase tracking-widest">${sym}</span>
+          <span class="text-xl font-mono ${colorClass} mt-1 transition-colors duration-300">${priceStr}</span>
+        </div>
+      `;
+    });
+
+    // Only update DOM if structure changed (to prevent animation clipping) or just use innerHTML for simplicity as values are atomic
+    if (html !== lastTokenHTML) {
+      container.innerHTML = html;
+      lastTokenHTML = html;
+    }
+  } catch (err) {
+    console.error('Failed to update token market cards:', err);
+  }
+}
 async function setupTrialNonBlocking(userId) {
   if (!userId) return;
   
@@ -270,9 +318,8 @@ async function initializeDashboard(event) {
   initializeLogoClickHandler();
   initializeTerminalListeners();
 
-  // Always start fetching token movement data instantly, regardless of trial status
-
-
+  // Always start polling token movement data instantly to keep cards live
+  setInterval(fetchLiveMarketData, 2000);
   document.addEventListener('trialExpired', () => {
     console.log('🔒 Trial expired event triggered');
     setExpiredView();
@@ -582,4 +629,3 @@ function initializeTerminalListeners() {
         if (modal) modal.classList.add('hidden');
     });
 }
-
