@@ -45,6 +45,7 @@ function clearExpiredView() {
 }
 
 // ============================================================
+// ============================================================
 // CREATE EXPIRED/SUBSCRIPTION ENDED CARD
 // ============================================================
 function createExpiredCard() {
@@ -62,7 +63,7 @@ function createExpiredCard() {
           Your free trial has expired. Subscribe now to continue accessing premium signals and trading features.
         </p>
         <div style="display: flex; gap: 1rem; justify-content: center; margin-top: 2rem; flex-wrap: wrap;">
-          <button onclick="handleSubscribeClick()" style="
+          <button id="expired-subscribe-btn" style="
             padding: 12px 32px;
             background: linear-gradient(135deg, #6c63ff, #0f3cff);
             border: 2px solid #0f3cff;
@@ -75,7 +76,7 @@ function createExpiredCard() {
           " onmouseover="this.style.boxShadow='0 0 20px rgba(111, 99, 255, 0.5)'" onmouseout="this.style.boxShadow='none'">
             Subscribe Now
           </button>
-          <button onclick="window.location.href='/web/src/pages/index.html'" style="
+          <button id="expired-home-btn" style="
             padding: 12px 32px;
             background: transparent;
             border: 2px solid rgba(255,255,255,0.2);
@@ -95,7 +96,6 @@ function createExpiredCard() {
       </div>
     `;
     expiredCard.style.cssText = `
-      display: none;
       position: fixed;
       top: 0;
       left: 0;
@@ -108,6 +108,20 @@ function createExpiredCard() {
       justify-content: center;
     `;
     document.body.appendChild(expiredCard);
+
+    const subscribeBtn = document.getElementById('expired-subscribe-btn');
+    if (subscribeBtn) {
+      subscribeBtn.addEventListener('click', () => {
+        window.location.href = '/web/src/pages/pricing.html';
+      });
+    }
+
+    const homeBtn = document.getElementById('expired-home-btn');
+    if (homeBtn) {
+      homeBtn.addEventListener('click', () => {
+        window.location.href = '/web/src/pages/index.html';
+      });
+    }
   }
 
   return expiredCard;
@@ -136,7 +150,8 @@ function blockAllFeatures() {
   // Disable all interactive elements in dashboard
   const interactiveElements = document.querySelectorAll('button, a, input[type="checkbox"], [onclick]');
   interactiveElements.forEach(el => {
-    if (!el.id || !el.id.includes('expired')) {
+    const isExpiredElement = el.closest('#access-expired-card') !== null || (el.id && el.id.includes('expired'));
+    if (!isExpiredElement) {
       el.style.pointerEvents = 'none';
       el.style.opacity = '0.3';
     }
@@ -173,13 +188,6 @@ function unblockFeatures() {
   });
 
   console.log('✅ All features unlocked - subscription active');
-}
-
-// ============================================================
-// SUBSCRIBE BUTTON HANDLER
-// ============================================================
-function handleSubscribeClick() {
-  window.location.href = '/web/src/pages/pricing.html';
 }
 
 // ============================================================
@@ -290,7 +298,7 @@ async function setupTrialNonBlocking(userId) {
   }
 }
 
-async function initializeDashboard(event) {
+async function initDashboard(event) {
   clearExpiredView();
 
   if (initialized) return;
@@ -354,15 +362,16 @@ async function initializeDashboard(event) {
           <div class="no-signals" style="color: #ff3333; border-color: #ff3333;">
             <i class="fas fa-exclamation-triangle"></i>
             <p>Error loading dashboard components.</p>
-            <button onclick="location.reload()" style="margin-top: 10px; padding: 4px 12px; background: rgba(255,0,0,0.2); border-radius: 4px; color: white;">Retry</button>
+            <button id="retry-dashboard-btn" style="margin-top: 10px; padding: 4px 12px; background: rgba(255,0,0,0.2); border-radius: 4px; color: white;">Retry</button>
           </div>
         `;
+      document.getElementById('retry-dashboard-btn')?.addEventListener('click', () => location.reload());
     }
   }
 }
 
-window.addEventListener('DOMContentLoaded', initializeDashboard);
-document.addEventListener('dashboardUserLoaded', initializeDashboard);
+window.addEventListener('DOMContentLoaded', initDashboard);
+document.addEventListener('dashboardUserLoaded', initDashboard);
 
 // ============================================================
 // TERMINAL SIMULATION LOGIC
