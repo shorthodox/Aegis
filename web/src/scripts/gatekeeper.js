@@ -538,7 +538,7 @@ function attachEventListeners() {
 
       // Re-render signals from memory
       if (typeof window.latestSignals !== 'undefined' && Object.keys(window.latestSignals).length > 0) {
-        filterAndRenderSignals();
+        debouncedFilterAndRenderSignals();
       }
     });
   });
@@ -548,7 +548,7 @@ function attachEventListeners() {
     strategySelect.addEventListener('change', (e) => {
       currentRiskProfile = e.target.value;
       if (typeof window.latestSignals !== 'undefined' && Object.keys(window.latestSignals).length > 0) {
-        filterAndRenderSignals();
+        debouncedFilterAndRenderSignals();
       }
     });
   }
@@ -571,6 +571,32 @@ function attachEventListeners() {
 
   // Setup mobile optimizations
   setupMobileOptimizations();
+}
+
+// ============================================================
+// DEBOUNCE RENDER TO PREVENT EXCESSIVE DOM UPDATES
+// ============================================================
+let renderTimeout = null;
+let lastRenderTime = 0;
+const MIN_RENDER_INTERVAL = 500; // Minimum 500ms between renders
+
+function debouncedFilterAndRenderSignals() {
+  if (renderTimeout) clearTimeout(renderTimeout);
+  
+  const now = Date.now();
+  const timeSinceLastRender = now - lastRenderTime;
+  
+  if (timeSinceLastRender < MIN_RENDER_INTERVAL) {
+    // Schedule render after debounce period
+    renderTimeout = setTimeout(() => {
+      lastRenderTime = Date.now();
+      filterAndRenderSignals();
+    }, MIN_RENDER_INTERVAL - timeSinceLastRender);
+  } else {
+    // Render immediately
+    lastRenderTime = now;
+    filterAndRenderSignals();
+  }
 }
 
 function filterAndRenderSignals() {
@@ -986,7 +1012,7 @@ function updateDashboardData(data) {
         window.latestSignals[key] = signalObj;
       }
     });
-    filterAndRenderSignals();
+    debouncedFilterAndRenderSignals();
   }
 
   // Update open trades
@@ -1338,7 +1364,7 @@ function setupFirestoreListeners() {
     });
     
     if (Object.keys(window.latestSignals).length > 0) {
-      filterAndRenderSignals();
+      debouncedFilterAndRenderSignals();
     }
   }, (error) => {
     console.error('Signals listener error:', error);
