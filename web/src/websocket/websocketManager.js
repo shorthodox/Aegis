@@ -131,6 +131,12 @@ export class WebSocketManager {
         this.ws.onmessage = (event) => {
             try {
                 const msg = JSON.parse(event.data);
+                
+                // Step 4: Error Logging
+                console.log(`[WS Manager] Message Received. Type: ${msg.type || 'NO_TYPE'}`);
+                if (msg.data) console.log(`[WS Manager] Data keys: ${Object.keys(msg.data)}`);
+                if (msg.tickers) console.log(`[WS Manager] Tickers count: Object.keys(msg.tickers).length`);
+                
                 if (msg.type === "signal_update") {
                     if (this.isSignalExpired(msg.data)) {
                         this.handleExpirations({ [msg.data.pair]: msg.data });
