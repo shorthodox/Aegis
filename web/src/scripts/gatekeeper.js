@@ -1254,7 +1254,15 @@ window.selectSignal = function(symbol, timeframe) {
   const sig = window.latestSignals && window.latestSignals[key];
   if (!sig) return;
 
-  // Delegate to dashboard.js to properly populate selectedTrade state
+  // Set the global selectedTrade so terminal execution knows which trade is active
+  window.selectedTrade = {
+    symbol: sig.symbol,
+    direction: sig.direction || (sig.signal && sig.signal.includes('BUY') ? 'LONG' : (sig.signal && sig.signal.includes('SELL') ? 'SHORT' : 'NEUTRAL')),
+    signalId: sig.signal_id || sig.signalId,
+    ...sig
+  };
+
+  // Delegate to dashboard.js to properly populate selectedTrade state if function exists
   if (typeof window.prefillTradeSim === 'function') {
     window.prefillTradeSim(symbol, sig.entry_price || 0, sig);
   }
