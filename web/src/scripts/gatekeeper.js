@@ -1060,7 +1060,8 @@ function renderSignals(signals) {
   console.log('renderSignals - Allowed tokens:', allowedTokens);
   
   // Filter signals based on user's allowed tokens
-  const filteredEntries = signalEntries.filter(([symbol]) => {
+  const filteredEntries = signalEntries.filter(([key, signal]) => {
+    const symbol = signal.symbol;
     if (userPlan === 'pro' || effectiveTrialActive) {
       console.log(`renderSignals - Allowing ${symbol} for ${userPlan || 'trial-active'} user`);
       return allowedTokens.includes(symbol);
@@ -1102,8 +1103,8 @@ function renderSignals(signals) {
   if (simSelect) {
     const currentSelection = simSelect.value;
     simSelect.innerHTML = '<option value="">Select a signal...</option>' + 
-      filteredEntries.map(([sym]) => `<option value="${sym}">${sym}</option>`).join('');
-    if (filteredEntries.some(([sym]) => sym === currentSelection)) {
+      filteredEntries.map(([key, signal]) => `<option value="${signal.symbol}">${signal.symbol}</option>`).join('');
+    if (filteredEntries.some(([key, signal]) => signal.symbol === currentSelection)) {
       simSelect.value = currentSelection;
     }
   }
@@ -1111,7 +1112,8 @@ function renderSignals(signals) {
   const strategySelect = document.getElementById('strategy-matchmaker');
   const isStrategyActive = strategySelect && strategySelect.value !== '';
 
-  signalsContainer.innerHTML = filteredEntries.map(([symbol, signal]) => {
+  signalsContainer.innerHTML = filteredEntries.map(([key, signal]) => {
+    const symbol = signal.symbol;
     const signalType = signal.signal || 'WAITING';
     const timeframe = signal.timeframe || '1h'; // Default to 1h if not provided
     const signalStatus = signal.status || getSignalStatus(signal);
@@ -1747,3 +1749,4 @@ export {
   currentUser, currentUserData, userPlan, trialActive, allowedTokens,
   getUpgradeModal, showUpgradeModal, handleLogout as logout
 };
+
