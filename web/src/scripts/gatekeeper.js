@@ -810,15 +810,16 @@ async function loadUserLimits() {
 function updateUI() {
   // Update plan badge
   if (planBadge) {
+    planBadge.className = 'text-sm font-bold mt-1';
     if (userPlan === 'pro') {
-      planBadge.innerHTML = '<i class="fas fa-crown"></i> PRO PLAN';
-      planBadge.className = 'plan-badge pro';
+      planBadge.innerHTML = '<i class="fas fa-crown"></i> PRO ACTIVE';
+      planBadge.classList.add('text-yellow-500');
     } else if (trialActive) {
       planBadge.innerHTML = '<i class="fas fa-flask"></i> TRIAL ACTIVE';
-      planBadge.className = 'plan-badge trial';
+      planBadge.classList.add('text-cyan');
     } else {
       planBadge.innerHTML = '<i class="fas fa-clock"></i> TRIAL EXPIRED';
-      planBadge.className = 'plan-badge expired';
+      planBadge.classList.add('text-red-500');
     }
   }
 
@@ -826,7 +827,7 @@ function updateUI() {
   const aegisLogoBtn = document.getElementById('aegis-logo-btn');
   if (aegisLogoBtn) {
     aegisLogoBtn.addEventListener('click', () => {
-      window.location.href = '/web/src/index.html';
+      window.location.href = '/web/src/pages/index.html';
     });
   }
 
@@ -834,7 +835,7 @@ function updateUI() {
   const returnHomeBtn = document.getElementById('returnHomeBtn');
   if (returnHomeBtn) {
     returnHomeBtn.addEventListener('click', () => {
-      window.location.href = '/web/src/index.html';
+      window.location.href = '/web/src/pages/index.html';
     });
   }
 
