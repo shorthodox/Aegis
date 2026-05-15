@@ -228,26 +228,6 @@ function initializeLogoClickHandler() {
 // ============================================================
 // FETCH AND UPDATE TOKEN MOVEMENT DATA
 // ============================================================
-async function updateTokenMovement() {
-  try {
-    const response = await fetch('/web/src/data/live_signals.json');
-    if (!response.ok) throw new Error('Network response was not ok');
-    
-    const data = await response.json();
-    
-    // Update the UI elements (example selectors)
-    const movementElement = document.getElementById('token-movement-info');
-    if (movementElement && data.movement) {
-      movementElement.textContent = `${data.movement}%`;
-      movementElement.className = data.movement >= 0 ? 'text-green' : 'text-red';
-    }
-    
-    // Update other parts of the "token card" here
-  } catch (err) {
-    console.error('Failed to update token data:', err);
-  }
-}
-
 async function setupTrialNonBlocking(userId) {
   if (!userId) return;
   
@@ -291,8 +271,7 @@ async function initializeDashboard(event) {
   initializeTerminalListeners();
 
   // Always start fetching token movement data instantly, regardless of trial status
-  updateTokenMovement();
-  setInterval(updateTokenMovement, 30000);
+
 
   document.addEventListener('trialExpired', () => {
     console.log('🔒 Trial expired event triggered');
