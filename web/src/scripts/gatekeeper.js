@@ -136,6 +136,12 @@ function getSignalStatus(signal) {
 // Subscription & Trial Locking
 // -------------------------------------------------------------------
 function showSubscriptionExpiredOverlay() {
+  // Delegate to dashboard.js if available
+  if (typeof window.setExpiredView === 'function') {
+    window.setExpiredView();
+    return;
+  }
+
   const overlay = document.getElementById('subscriptionExpiredOverlay');
   const mainContent = document.getElementById('dashboard-main-content');
   
@@ -144,7 +150,7 @@ function showSubscriptionExpiredOverlay() {
   
   // Disable all interactive elements
   document.querySelectorAll('button, input, select, .signal-card').forEach(el => {
-    if (!el.closest('#subscriptionExpiredOverlay')) {
+    if (!el.closest('#subscriptionExpiredOverlay') && !el.closest('#access-expired-card')) {
       el.disabled = true;
       el.style.pointerEvents = 'none';
       el.style.opacity = '0.5';
@@ -417,6 +423,30 @@ document.addEventListener('DOMContentLoaded', () => {
   initializeElements();
   attachEventListeners();
   loadSignalHistoryFromStorage();
+  
+  // Global Event Listener for Real-Time Price Sync to drive Signal History Updates
+  window.addEventListener('priceUpdate', (e) => {
+    const { symbol, price } = e.detail;
+    let historyChanged = false;
+
+    // Check active signals in history and update status if target/stop hit
+    signalHistory.forEach(entry => {
+      if (entry.symbol === symbol && (!entry.status || entry.status === 'ACTIVE')) {
+        const newStatus = getSignalStatus(entry);
+        if (newStatus !== entry.status) {
+          entry.status = newStatus;
+          historyChanged = true;
+          console.log(`[Status Change] ${symbol} signal is now ${newStatus}`);
+        }
+      }
+    });
+
+    if (historyChanged) {
+      updateSignalHistoryUI();
+      saveSignalHistoryToStorage();
+    }
+  });
+
   onAuthStateChanged(auth, async (user) => {
     if (user) {
       console.log("Firebase user detected:", user.uid);
@@ -1015,8 +1045,14 @@ function updateDashboardData(data) {
       Object.entries(window.currentTickers).forEach(([sym, price]) => {
         const idStr = sym.replace('/', '-');
         const priceDisplays = document.querySelectorAll(`.live-price[data-symbol="${idStr}"]`);
+        
+        // Dispatch global custom event for dynamic UI synchronization (e.g., signal history updates)
+        const currentPrice = parseFloat(price);
+        if (!isNaN(currentPrice)) {
+          window.dispatchEvent(new CustomEvent('priceUpdate', { detail: { symbol: sym, price: currentPrice } }));
+        }
+
         priceDisplays.forEach(priceDisplay => {
-            const currentPrice = parseFloat(price);
             const previousPrice = parseFloat(window.previousTickers[sym] || currentPrice);
             
             if (isNaN(currentPrice)) return;
