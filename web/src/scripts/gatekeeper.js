@@ -993,18 +993,33 @@ function updateDashboardData(data) {
     debouncedFilterAndRenderSignals();
   }
 
+  // Fallback: Extract prices from signals if tickers are missing
+  if (data.signals) {
+    window.currentTickers = window.currentTickers || {};
+    Object.entries(data.signals).forEach(([sym, sig]) => {
+      if (sig && (sig.entry_price || sig.price) && !window.currentTickers[sym]) {
+        window.currentTickers[sym] = sig.price || sig.entry_price;
+      }
+    });
+  }
+
   // Handle live prices AFTER signals are rendered so DOM changes apply correctly
-  if (data.tickers) {
+  if (data.tickers || window.currentTickers) {
     window.previousTickers = window.currentTickers || {};
-    window.currentTickers = data.tickers;
+    if (data.tickers && Object.keys(data.tickers).length > 0) {
+        window.currentTickers = { ...window.currentTickers, ...data.tickers };
+    }
     
     // Defer ticker updates slightly to ensure Reactivity cycle finishes if debouncedFilterAndRenderSignals just fired
     setTimeout(() => {
-      Object.entries(data.tickers).forEach(([sym, price]) => {
-        const priceDisplays = document.querySelectorAll(`.live-price[data-symbol="${sym}"]`);
+      Object.entries(window.currentTickers).forEach(([sym, price]) => {
+        const idStr = sym.replace('/', '-');
+        const priceDisplays = document.querySelectorAll(`.live-price[data-symbol="${idStr}"]`);
         priceDisplays.forEach(priceDisplay => {
             const currentPrice = parseFloat(price);
             const previousPrice = parseFloat(window.previousTickers[sym] || currentPrice);
+            
+            if (isNaN(currentPrice)) return;
             
             // Format based on price size
             const priceStr = currentPrice < 0.01 ? currentPrice.toFixed(6) : currentPrice.toFixed(4);
@@ -1165,7 +1180,7 @@ function renderSignals(signals) {
             ${matchBadge}
           </div>
           <div class="flex items-center gap-3">
-            <div class="price-container text-sm flex font-mono"><span class="live-price" data-symbol="${symbol}">${window.currentTickers && window.currentTickers[symbol] ? '$' + parseFloat(window.currentTickers[symbol]).toFixed(4) : '-'}</span></div>
+            <div class="price-container text-sm flex font-mono"><span class="live-price" data-symbol="${symbol.replace('/', '-')}">${window.currentTickers && window.currentTickers[symbol] ? '$' + parseFloat(window.currentTickers[symbol]).toFixed(4) : '-'}</span></div>
             <span class="signal-badge ${signalClass}">${signalType}</span>
           </div>
         </div>
