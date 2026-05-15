@@ -859,6 +859,9 @@ function startWebSocket(token) {
         return;
       }
       
+      // Step 4: Detailed Error Logging
+      console.log(`[WS Receive] Type: ${data.type || 'NO_TYPE'} | Tickers: ${data.tickers ? Object.keys(data.tickers).length : 0} | Signals: ${data.signals ? Object.keys(data.signals).length : 0}`);
+      
       if (data.type === 'signals' || data.type === 'update') {
         updateDashboardData(data);
       } else {
@@ -1749,4 +1752,3 @@ export {
   currentUser, currentUserData, userPlan, trialActive, allowedTokens,
   getUpgradeModal, showUpgradeModal, handleLogout as logout
 };
-
