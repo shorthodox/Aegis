@@ -166,8 +166,6 @@ document.addEventListener('DOMContentLoaded', () => {
             positionUnits,
             notionalValue: notional,
             status: 'open',
-            openTime: new Date().toISOString(),
-            userId: currentUser.uid,
             signalId: window.selectedTrade.signalId || null
         };
         
@@ -175,9 +173,30 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('analyticsActiveTrade', JSON.stringify(tradeData));
         
         try {
-            const tradesRef = collection(db, 'users', currentUser.uid, 'trades');
-            await addDoc(tradesRef, tradeData);
-            console.log('Trade executed and stored to Firestore');
+            let token = localStorage.getItem('access_token') || localStorage.getItem('authToken');
+            if (!token && typeof AuthManager !== 'undefined') {
+                token = AuthManager.getToken();
+            }
+            if (!token) {
+                alert('You must be logged in to execute trades.');
+                return;
+            }
+
+            const response = await fetch('/api/trades/execute', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(tradeData)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || 'Failed to execute trade on backend');
+            }
+
+            console.log('✅ Trade executed and stored via backend API');
             
             // Redirect to Analytics Room
             if (typeof window.switchRoom === 'function') {

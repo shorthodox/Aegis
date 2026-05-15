@@ -497,16 +497,6 @@ async function executeTrade() {
   const positionUnits = parseFloat(document.getElementById('pos-units').innerText);
   const notional = parseFloat(document.getElementById('notional').innerText.replace('$', ''));
 
-  // Attempt to get user from auth module if initialized
-  let userId = 'anonymous';
-  try {
-    if (auth && auth.currentUser) {
-      userId = auth.currentUser.uid;
-    } else {
-      userId = localStorage.getItem('cached_uid') || 'anonymous';
-    }
-  } catch (e) { }
-
   const tradeData = {
     symbol: window.selectedTrade.symbol,
     side: window.selectedTrade.direction,
@@ -518,27 +508,45 @@ async function executeTrade() {
     positionUnits,
     notionalValue: notional,
     status: 'open',
-    openTime: new Date().toISOString(),
-    userId: userId,
     signalId: window.selectedTrade.signalId || null
   };
 
   localStorage.setItem('analyticsActiveTrade', JSON.stringify(tradeData));
 
   try {
-    const { getFirestore, collection, addDoc } = await import('https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js');
-    const db = getFirestore();
-    if (userId !== 'anonymous') {
-      const tradesRef = collection(db, 'users', userId, 'trades');
-      await addDoc(tradesRef, tradeData);
-      console.log('Trade executed and stored to Firestore');
+    let token = localStorage.getItem('access_token') || localStorage.getItem('authToken');
+    if (!token && typeof AuthManager !== 'undefined') {
+      token = AuthManager.getToken();
     }
+    
+    if (!token) {
+      console.warn('No auth token found, cannot execute trade on backend');
+      alert('You must be logged in to execute trades.');
+      return;
+    }
+
+    const response = await fetch('/api/trades/execute', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(tradeData)
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || 'Failed to execute trade on backend');
+    }
+
+    console.log('✅ Trade executed and stored via backend API');
 
     if (typeof window.switchRoom === 'function') {
       window.switchRoom('analytics');
     }
   } catch (err) {
     console.error('Failed to save trade:', err);
+    alert('Failed to execute trade: ' + err.message);
     if (typeof window.switchRoom === 'function') {
       window.switchRoom('analytics');
     }

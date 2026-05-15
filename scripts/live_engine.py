@@ -865,9 +865,19 @@ class SignalGenerator:
                 else:
                     ai_prob = raw_prob
             else:
-                ai_prob = float(probs[1]) if len(probs) > 1 else 0.0
-                prob_short, prob_hold, prob_long = (1-ai_prob, 0.0, ai_prob) if ai_prob > 0.5 else (1-ai_prob, 0.0, ai_prob)
-                predicted_class = 2 if ai_prob >= 0.5 else 0
+                raw_prob = float(probs[1]) if len(probs) > 1 else 0.0
+                predicted_class = 2 if raw_prob >= 0.5 else 0
+                
+                # Calibrate probabilities to enhance signal generation
+                base_prob = raw_prob if predicted_class == 2 else (1 - raw_prob)
+                if base_prob > 0.8:
+                    ai_prob = 0.75 + (base_prob - 0.8) * 0.4
+                elif base_prob > 0.5:
+                    ai_prob = 0.55 + (base_prob - 0.5) * 0.6
+                else:
+                    ai_prob = base_prob
+                    
+                prob_short, prob_hold, prob_long = (1-ai_prob, 0.0, ai_prob) if predicted_class == 2 else (ai_prob, 0.0, 1-ai_prob)
         except Exception as e:
             ai_prob = 0.0
             prob_short, prob_hold, prob_long = 0.0, 1.0, 0.0
@@ -887,8 +897,8 @@ class SignalGenerator:
             market_regime = "HIGH_VOLATILITY"
             alpha_risk_level = "HIGH"
 
-        # Volatility Tax Thresholds
-        req_confidence = 0.75 if market_regime in ["CRITICAL_VOLATILITY", "HIGH_VOLATILITY"] else 0.65
+        # Volatility Tax Thresholds (Optimized for more BUY signals)
+        req_confidence = 0.60 if market_regime in ["CRITICAL_VOLATILITY", "HIGH_VOLATILITY"] else 0.52
 
         # Conviction Spread
         conviction_spread = ai_prob - prob_hold
@@ -897,9 +907,9 @@ class SignalGenerator:
         base_signal = "NEUTRAL"
         if market_regime == "CRITICAL_VOLATILITY":
             base_signal = "NEUTRAL"
-        elif predicted_class == 2 and ai_prob >= req_confidence and conviction_spread > 0.15:
+        elif predicted_class == 2 and ai_prob >= req_confidence and conviction_spread > 0.05:
             base_signal = "LONG"
-        elif predicted_class == 0 and ai_prob >= req_confidence and conviction_spread > 0.15:
+        elif predicted_class == 0 and ai_prob >= req_confidence and conviction_spread > 0.05:
             base_signal = "SHORT"
 
         # BTC safety downgrade for LONG signals (only when Alpha OFF)

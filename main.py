@@ -1550,6 +1550,40 @@ async def submit_review(review: Review):
             raise HTTPException(status_code=500, detail="Failed to save review or send fallback email")
 
 # -------------------------------------------------------------------
+# Trade Execution endpoint
+# -------------------------------------------------------------------
+class TradeExecuteRequest(BaseModel):
+    symbol: str
+    side: str
+    entryPrice: float
+    stopLoss: float
+    takeProfit: float
+    riskPercent: float
+    leverage: float
+    positionUnits: float
+    notionalValue: float
+    status: str = "open"
+    signalId: Optional[str] = None
+    userId: Optional[str] = None
+
+@app.post("/api/trades/execute")
+async def execute_trade(request: TradeExecuteRequest, user_id: str = Depends(get_current_user)):
+    trade_data = request.dict()
+    trade_data["openTime"] = datetime.now(timezone.utc).isoformat()
+    # Ensure it's saved under the user who made the request
+    trade_data["userId"] = user_id
+    
+    try:
+        trade_ref = db.collection("users").document(user_id).collection("trades").document()
+        trade_data["id"] = trade_ref.id
+        trade_ref.set(trade_data)
+        print(f"✅ Trade executed via API for {user_id}")
+        return {"status": "success", "trade_id": trade_ref.id, "trade": trade_data}
+    except Exception as e:
+        print(f"❌ Failed to execute trade for {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to execute trade")
+
+# -------------------------------------------------------------------
 # Legacy OTP endpoints (kept for compatibility)
 # -------------------------------------------------------------------
 @app.post("/send-otp")
