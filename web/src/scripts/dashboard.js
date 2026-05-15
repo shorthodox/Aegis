@@ -183,8 +183,8 @@ function unblockFeatures() {
   // Enable all interactive elements
   const interactiveElements = document.querySelectorAll('button, a, input[type="checkbox"], [onclick]');
   interactiveElements.forEach(el => {
-    el.style.pointerEvents = 'auto';
-    el.style.opacity = '1';
+    el.style.removeProperty('pointer-events');
+    el.style.removeProperty('opacity');
   });
 
   console.log('✅ All features unlocked - subscription active');
@@ -377,12 +377,12 @@ document.addEventListener('dashboardUserLoaded', initDashboard);
 // TERMINAL SIMULATION LOGIC
 // ============================================================
 
-let selectedTrade = null;
+window.selectedTrade = null;
 
 function getATR(price) { return price * 0.015; }
 
 function updateSimulation() {
-  if (!selectedTrade) return;
+  if (!window.selectedTrade) return;
   const simEntry = document.getElementById('sim-entry');
   const simBalance = document.getElementById('sim-balance') || document.getElementById('user-capital');
   const simRiskSlider = document.getElementById('sim-risk-slider');
@@ -396,10 +396,10 @@ function updateSimulation() {
   const leverage = parseFloat(simLeverageSlider?.value || 1);
   let sl = parseFloat(simSl?.value);
   let tp = parseFloat(simTp?.value);
-  const direction = selectedTrade.direction;
+  const direction = window.selectedTrade.direction;
 
   if (isNaN(entry) || entry <= 0) return;
-  const atr = selectedTrade.atr || getATR(entry);
+  const atr = window.selectedTrade.atr || getATR(entry);
 
   if (isNaN(sl) || sl <= 0) {
     sl = direction === 'LONG' ? entry - atr * 1.5 : entry + atr * 1.5;
@@ -441,7 +441,7 @@ function updateSimulation() {
 window.prefillTradeSim = function (symbol, price, signalObj) {
   const direction = signalObj.direction || (signalObj.signal === 'SELL' ? 'SHORT' : 'LONG');
   const atr = signalObj.atr || getATR(price);
-  selectedTrade = {
+  window.selectedTrade = {
     symbol,
     entryPrice: price,
     direction,
@@ -484,7 +484,7 @@ window.prefillTradeSim = function (symbol, price, signalObj) {
 };
 
 async function executeTrade() {
-  if (!selectedTrade) {
+  if (!window.selectedTrade) {
     alert('Please select a trade first.');
     return;
   }
@@ -508,8 +508,8 @@ async function executeTrade() {
   } catch (e) { }
 
   const tradeData = {
-    symbol: selectedTrade.symbol,
-    side: selectedTrade.direction,
+    symbol: window.selectedTrade.symbol,
+    side: window.selectedTrade.direction,
     entryPrice: entry,
     stopLoss: sl,
     takeProfit: tp,
@@ -520,7 +520,7 @@ async function executeTrade() {
     status: 'open',
     openTime: new Date().toISOString(),
     userId: userId,
-    signalId: selectedTrade.signalId || null
+    signalId: window.selectedTrade.signalId || null
   };
 
   localStorage.setItem('analyticsActiveTrade', JSON.stringify(tradeData));

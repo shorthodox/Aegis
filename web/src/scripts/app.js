@@ -44,7 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ========== Simulator Global State ==========
     let currentUser = null;
-    let selectedTrade = null;
+    window.selectedTrade = null;
     let activeTrades = new Map();
     let unsubscribeTrades = null;
     let unsubscribeSettings = null;
@@ -63,7 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ========== Simulator Update ==========
     function updateSimulation() {
-        if (!selectedTrade) return;
+        if (!window.selectedTrade) return;
         const simEntry = document.getElementById('sim-entry');
         const simBalance = document.getElementById('sim-balance');
         const simRiskSlider = document.getElementById('sim-risk-slider');
@@ -77,10 +77,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const leverage = parseFloat(simLeverageSlider?.value);
         let sl = parseFloat(simSl?.value);
         let tp = parseFloat(simTp?.value);
-        const direction = selectedTrade.direction;
+        const direction = window.selectedTrade.direction;
         
         if (isNaN(entry) || entry <= 0) return;
-        const atr = selectedTrade.atr || getATR(entry);
+        const atr = window.selectedTrade.atr || getATR(entry);
         
         if (isNaN(sl) || sl <= 0) {
             sl = direction === 'LONG' ? entry - atr * 1.5 : entry + atr * 1.5;
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function prefillTradeSim(symbol, price, signalObj) {
         const direction = signalObj.direction || (signalObj.signal === 'SELL' ? 'SHORT' : 'LONG');
         const atr = signalObj.atr || getATR(price);
-        selectedTrade = { 
+        window.selectedTrade = { 
             symbol, 
             entryPrice: price, 
             direction, 
@@ -146,7 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ========== Execute Trade (Firestore) ==========
     async function executeTrade() {
-        if (!selectedTrade || !currentUser) return;
+        if (!window.selectedTrade || !currentUser) return;
         const entry = parseFloat(document.getElementById('sim-entry').value);
         const sl = parseFloat(document.getElementById('sim-sl').value);
         const tp = parseFloat(document.getElementById('sim-tp').value);
@@ -156,8 +156,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const notional = parseFloat(document.getElementById('notional').innerText.replace('$', ''));
         
         const tradeData = {
-            symbol: selectedTrade.symbol,
-            side: selectedTrade.direction,
+            symbol: window.selectedTrade.symbol,
+            side: window.selectedTrade.direction,
             entryPrice: entry,
             stopLoss: sl,
             takeProfit: tp,
@@ -168,7 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
             status: 'open',
             openTime: new Date().toISOString(),
             userId: currentUser.uid,
-            signalId: selectedTrade.signalId || null
+            signalId: window.selectedTrade.signalId || null
         };
         
         // Save to localStorage for immediate simulation in Analytics
