@@ -253,7 +253,7 @@ function fetchLiveMarketData() {
         html += `
           <div class="glass-panel p-4 rounded-xl flex flex-col justify-center border-l-2 border-cyan/50 hover:bg-white/5 transition-colors cursor-pointer shadow-lg">
             <span class="text-[10px] text-gray-500 font-bold uppercase tracking-widest">${sym}</span>
-            <span id="market-card-price-${idStr}" class="live-price text-xl font-mono text-white mt-1 transition-colors duration-300" data-symbol="${sym}">Loading...</span>
+            <span id="market-card-price-${idStr}" class="live-price text-xl font-mono mt-1 transition-colors duration-300" data-symbol="${idStr}">Loading...</span>
           </div>
         `;
       });
