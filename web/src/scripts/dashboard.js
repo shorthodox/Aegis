@@ -288,6 +288,7 @@ async function initializeDashboard(event) {
   
   initialized = true;
   initializeLogoClickHandler();
+  initializeTerminalListeners();
 
   // Always start fetching token movement data instantly, regardless of trial status
   updateTokenMovement();
@@ -353,3 +354,253 @@ async function initializeDashboard(event) {
 
 window.addEventListener('DOMContentLoaded', initializeDashboard);
 document.addEventListener('dashboardUserLoaded', initializeDashboard);
+
+// ============================================================
+// TERMINAL SIMULATION LOGIC
+// ============================================================
+
+let selectedTrade = null;
+
+function getATR(price) { return price * 0.015; }
+
+function updateSimulation() {
+    if (!selectedTrade) return;
+    const simEntry = document.getElementById('sim-entry');
+    const simBalance = document.getElementById('sim-balance') || document.getElementById('user-capital');
+    const simRiskSlider = document.getElementById('sim-risk-slider');
+    const simLeverageSlider = document.getElementById('sim-leverage');
+    const simSl = document.getElementById('sim-sl');
+    const simTp = document.getElementById('sim-tp');
+    
+    const entry = parseFloat(simEntry?.value);
+    const balance = parseFloat(simBalance?.value || 10000);
+    const riskPercent = parseFloat(simRiskSlider?.value || 2);
+    const leverage = parseFloat(simLeverageSlider?.value || 1);
+    let sl = parseFloat(simSl?.value);
+    let tp = parseFloat(simTp?.value);
+    const direction = selectedTrade.direction;
+    
+    if (isNaN(entry) || entry <= 0) return;
+    const atr = selectedTrade.atr || getATR(entry);
+    
+    if (isNaN(sl) || sl <= 0) {
+        sl = direction === 'LONG' ? entry - atr * 1.5 : entry + atr * 1.5;
+        if (simSl) simSl.value = sl.toFixed(4);
+    }
+    if (isNaN(tp) || tp <= 0) {
+        const riskDistance = Math.abs(entry - sl);
+        tp = direction === 'LONG' ? entry + riskDistance * 3 : entry - riskDistance * 3;
+        if (simTp) simTp.value = tp.toFixed(4);
+    }
+    
+    const slDistance = Math.abs(entry - sl);
+    if (slDistance === 0) return;
+    
+    const riskAmount = balance * (riskPercent / 100);
+    const positionUnits = riskAmount / slDistance;
+    const notionalValue = positionUnits * entry;
+    const marginRequired = notionalValue / leverage;
+    const liquidationPrice = direction === 'LONG'
+        ? entry - (entry / leverage) + (sl / leverage)
+        : entry + (entry / leverage) - (sl / leverage);
+        
+    const riskPercentOfBalance = (riskAmount / balance) * 100;
+    const gaugePercent = Math.min(100, (riskPercentOfBalance / 10) * 100);
+    
+    if (document.getElementById('risk-gauge-fill')) document.getElementById('risk-gauge-fill').style.width = `${gaugePercent}%`;
+    if (document.getElementById('pos-units')) document.getElementById('pos-units').innerText = Number(positionUnits || 0).toFixed(4);
+    if (document.getElementById('notional')) document.getElementById('notional').innerText = `$${Number(notionalValue || 0).toFixed(2)}`;
+    if (document.getElementById('margin')) document.getElementById('margin').innerText = `$${Number(marginRequired || 0).toFixed(2)}`;
+    if (document.getElementById('liquidation')) document.getElementById('liquidation').innerText = `$${Number(liquidationPrice || 0).toFixed(4)}`;
+    
+    // RR Ratio calculation
+    const tpDistance = Math.abs(tp - entry);
+    const rrRatio = slDistance > 0 ? (tpDistance / slDistance).toFixed(2) : "0.00";
+    if (document.getElementById('rr-ratio')) document.getElementById('rr-ratio').innerText = rrRatio;
+    if (document.getElementById('suggested-amount')) document.getElementById('suggested-amount').innerText = `$${Number(notionalValue || 0).toFixed(2)}`;
+}
+
+window.prefillTradeSim = function(symbol, price, signalObj) {
+    const direction = signalObj.direction || (signalObj.signal === 'SELL' ? 'SHORT' : 'LONG');
+    const atr = signalObj.atr || getATR(price);
+    selectedTrade = { 
+        symbol, 
+        entryPrice: price, 
+        direction, 
+        atr, 
+        aiProb: signalObj.confidence || signalObj.ai_prob, 
+        signal: signalObj.signal,
+        signalId: signalObj.signal_id
+    };
+    
+    const symbolSelect = document.getElementById('sim-symbol');
+    if (symbolSelect) {
+        let found = false;
+        for (let i=0; i<symbolSelect.options.length; i++) {
+            if (symbolSelect.options[i].value === symbol) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            const opt = document.createElement('option');
+            opt.value = symbol;
+            opt.innerText = symbol;
+            symbolSelect.appendChild(opt);
+        }
+        symbolSelect.value = symbol;
+    }
+    
+    if (document.getElementById('sim-entry')) document.getElementById('sim-entry').value = price;
+    
+    const badge = document.getElementById('direction-badge');
+    if (badge) {
+        badge.className = `text-xs px-2 py-0.5 rounded font-bold ${direction === 'LONG' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`;
+        badge.innerText = direction;
+    }
+    
+    if (document.getElementById('sim-sl')) document.getElementById('sim-sl').value = '';
+    if (document.getElementById('sim-tp')) document.getElementById('sim-tp').value = '';
+    
+    updateSimulation();
+};
+
+async function executeTrade() {
+    if (!selectedTrade) {
+        alert('Please select a trade first.');
+        return;
+    }
+    
+    const entry = parseFloat(document.getElementById('sim-entry').value);
+    const sl = parseFloat(document.getElementById('sim-sl').value);
+    const tp = parseFloat(document.getElementById('sim-tp').value);
+    const riskPercent = parseFloat(document.getElementById('sim-risk-slider').value);
+    const leverage = parseFloat(document.getElementById('sim-leverage').value);
+    const positionUnits = parseFloat(document.getElementById('pos-units').innerText);
+    const notional = parseFloat(document.getElementById('notional').innerText.replace('$', ''));
+    
+    // Attempt to get user from auth module if initialized
+    let userId = 'anonymous';
+    try {
+        if (auth && auth.currentUser) {
+            userId = auth.currentUser.uid;
+        } else {
+            userId = localStorage.getItem('cached_uid') || 'anonymous';
+        }
+    } catch(e) {}
+    
+    const tradeData = {
+        symbol: selectedTrade.symbol,
+        side: selectedTrade.direction,
+        entryPrice: entry,
+        stopLoss: sl,
+        takeProfit: tp,
+        riskPercent,
+        leverage,
+        positionUnits,
+        notionalValue: notional,
+        status: 'open',
+        openTime: new Date().toISOString(),
+        userId: userId,
+        signalId: selectedTrade.signalId || null
+    };
+    
+    localStorage.setItem('analyticsActiveTrade', JSON.stringify(tradeData));
+    
+    try {
+        const { getFirestore, collection, addDoc } = await import('https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js');
+        const db = getFirestore();
+        if (userId !== 'anonymous') {
+            const tradesRef = collection(db, 'users', userId, 'trades');
+            await addDoc(tradesRef, tradeData);
+            console.log('Trade executed and stored to Firestore');
+        }
+        
+        if (typeof window.switchRoom === 'function') {
+            window.switchRoom('analytics');
+        }
+    } catch (err) {
+        console.error('Failed to save trade:', err);
+        if (typeof window.switchRoom === 'function') {
+            window.switchRoom('analytics');
+        }
+    }
+}
+
+function initializeTerminalListeners() {
+    document.getElementById('user-capital')?.addEventListener('input', (e) => {
+        const simBal = document.getElementById('sim-balance');
+        if (simBal) simBal.value = e.target.value;
+        const capDisplay = document.getElementById('capitalDisplay');
+        if (capDisplay) capDisplay.innerText = `$${parseFloat(e.target.value).toLocaleString()}`;
+        updateSimulation();
+    });
+
+    document.getElementById('risk-level')?.addEventListener('change', (e) => {
+        const simRisk = document.getElementById('sim-risk-slider');
+        if (simRisk) simRisk.value = e.target.value;
+        if (document.getElementById('risk-percent-display')) document.getElementById('risk-percent-display').innerText = e.target.value + '%';
+        const riskDisplay = document.getElementById('riskDisplay');
+        if (riskDisplay) riskDisplay.innerText = `${e.target.value}%`;
+        updateSimulation();
+    });
+    
+    document.getElementById('sim-risk-slider')?.addEventListener('input', (e) => { 
+        if (document.getElementById('risk-percent-display')) document.getElementById('risk-percent-display').innerText = e.target.value + '%'; 
+        updateSimulation(); 
+    });
+    
+    document.getElementById('sim-leverage')?.addEventListener('input', (e) => { 
+        if (document.getElementById('leverage-display')) document.getElementById('leverage-display').innerText = e.target.value + 'x'; 
+        document.querySelectorAll('.leverage-btn').forEach(btn => {
+            if (btn.dataset.val === e.target.value) {
+                btn.classList.add('bg-cyan/20', 'border-cyan', 'text-white');
+                btn.classList.remove('bg-black/40', 'border-white/10', 'text-gray-400');
+            } else {
+                btn.classList.remove('bg-cyan/20', 'border-cyan', 'text-white');
+                btn.classList.add('bg-black/40', 'border-white/10', 'text-gray-400');
+            }
+        });
+        updateSimulation(); 
+    });
+    
+    document.querySelectorAll('.leverage-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const val = e.currentTarget.dataset.val;
+            const slider = document.getElementById('sim-leverage');
+            if (slider) {
+                slider.value = val;
+                slider.dispatchEvent(new Event('input'));
+            }
+        });
+    });
+    
+    ['sim-entry', 'sim-sl', 'sim-tp', 'sim-balance'].forEach(id => {
+        document.getElementById(id)?.addEventListener('input', updateSimulation);
+    });
+    
+    document.getElementById('execute-trade-btn')?.addEventListener('click', executeTrade);
+    
+    document.getElementById('paperTradeConfirm')?.addEventListener('click', () => {
+        const modal = document.getElementById('paperTradeModal');
+        if (modal) modal.classList.add('hidden');
+        if (typeof window.switchRoom === 'function') window.switchRoom('terminal');
+    });
+
+    document.getElementById('paperTradeCancel')?.addEventListener('click', () => {
+        const modal = document.getElementById('paperTradeModal');
+        if (modal) modal.classList.add('hidden');
+    });
+
+    document.getElementById('confirm-trade-yes')?.addEventListener('click', () => {
+        const modal = document.getElementById('trade-confirmation-modal');
+        if (modal) modal.classList.add('hidden');
+        if (typeof window.switchRoom === 'function') window.switchRoom('terminal');
+    });
+
+    document.getElementById('confirm-trade-no')?.addEventListener('click', () => {
+        const modal = document.getElementById('trade-confirmation-modal');
+        if (modal) modal.classList.add('hidden');
+    });
+}
+
