@@ -927,32 +927,7 @@ function updateDashboardData(data) {
     balanceDisplay.textContent = `$${data.balance.toFixed(2)}`;
   }
 
-  // Handle live prices if provided
-  if (data.tickers) {
-    window.previousTickers = window.currentTickers || {};
-    window.currentTickers = data.tickers;
-    
-    Object.entries(data.tickers).forEach(([sym, price]) => {
-      const priceDisplays = document.querySelectorAll(`.live-price[data-symbol="${sym}"]`);
-      priceDisplays.forEach(priceDisplay => {
-          const currentPrice = parseFloat(price);
-          const previousPrice = parseFloat(window.previousTickers[sym] || currentPrice);
-          
-          // Format based on price size
-          const priceStr = currentPrice < 0.01 ? currentPrice.toFixed(6) : currentPrice.toFixed(4);
-          priceDisplay.textContent = `$${priceStr}`;
-          
-          priceDisplay.classList.remove('price-up', 'price-down');
-          if (currentPrice > previousPrice) {
-            priceDisplay.classList.add('price-up');
-          } else if (currentPrice < previousPrice) {
-            priceDisplay.classList.add('price-down');
-          }
-      });
-    });
-  }
-
-  // Update signals with plan filtering
+  // Update signals with plan filtering FIRST
   if (signalsContainer && data.signals) {
     // Populate window.latestSignals from WebSocket
     Object.entries(data.signals).forEach(([sym, sig]) => {
@@ -1015,6 +990,34 @@ function updateDashboardData(data) {
     debouncedFilterAndRenderSignals();
   }
 
+  // Handle live prices AFTER signals are rendered so DOM changes apply correctly
+  if (data.tickers) {
+    window.previousTickers = window.currentTickers || {};
+    window.currentTickers = data.tickers;
+    
+    // Defer ticker updates slightly to ensure Reactivity cycle finishes if debouncedFilterAndRenderSignals just fired
+    setTimeout(() => {
+      Object.entries(data.tickers).forEach(([sym, price]) => {
+        const priceDisplays = document.querySelectorAll(`.live-price[data-symbol="${sym}"]`);
+        priceDisplays.forEach(priceDisplay => {
+            const currentPrice = parseFloat(price);
+            const previousPrice = parseFloat(window.previousTickers[sym] || currentPrice);
+            
+            // Format based on price size
+            const priceStr = currentPrice < 0.01 ? currentPrice.toFixed(6) : currentPrice.toFixed(4);
+            priceDisplay.textContent = `$${priceStr}`;
+            
+            priceDisplay.classList.remove('price-up', 'price-down');
+            if (currentPrice > previousPrice) {
+              priceDisplay.classList.add('price-up');
+            } else if (currentPrice < previousPrice) {
+              priceDisplay.classList.add('price-down');
+            }
+        });
+      });
+    }, 50);
+  }
+
   // Update open trades
   if (positionsContainer && data.open_trades) {
     renderTrades(data.open_trades);
@@ -1038,6 +1041,7 @@ function updateDashboardData(data) {
     if (warmupEl) warmupEl.textContent = `Warmup: ${data.warmup}`;
   }
 }
+
 
 // -------------------------------------------------------------------
 // Signal Rendering with Plan Filtering
