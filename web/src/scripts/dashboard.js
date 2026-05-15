@@ -228,6 +228,61 @@ function initializeLogoClickHandler() {
 // ============================================================
 // FETCH AND UPDATE TOKEN MOVEMENT DATA (LIVE MARKET CARDS)
 // ============================================================
+let previousCardPrices = {};
+let marketCardsInitialized = false;
+
+function fetchLiveMarketData() {
+  try {
+    if (!window.currentTickers) return;
+    
+    const container = document.getElementById('market-token-cards');
+    if (!container) return;
+
+    const priorityTokens = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT'];
+    
+    // Initial HTML setup
+    if (!marketCardsInitialized) {
+      let html = '';
+      priorityTokens.forEach(sym => {
+        const idStr = sym.replace('/', '-');
+        html += `
+          <div class="glass-panel p-4 rounded-xl flex flex-col justify-center border-l-2 border-cyan/50 hover:bg-white/5 transition-colors cursor-pointer shadow-lg">
+            <span class="text-[10px] text-gray-500 font-bold uppercase tracking-widest">${sym}</span>
+            <span id="market-card-price-${idStr}" class="text-xl font-mono text-white mt-1 transition-colors duration-300">Loading...</span>
+          </div>
+        `;
+      });
+      container.innerHTML = html;
+      marketCardsInitialized = true;
+    }
+
+    // Continuous Live Updates
+    priorityTokens.forEach(sym => {
+      const currentPrice = window.currentTickers[sym] ? parseFloat(window.currentTickers[sym]) : null;
+      if (!currentPrice) return;
+      
+      const prevPrice = previousCardPrices[sym] || currentPrice;
+      const idStr = sym.replace('/', '-');
+      const priceSpan = document.getElementById(`market-card-price-${idStr}`);
+      
+      if (priceSpan) {
+        priceSpan.textContent = `$${currentPrice > 1 ? currentPrice.toFixed(2) : currentPrice.toFixed(4)}`;
+        
+        // Color shifts based on live movement
+        if (currentPrice > prevPrice) {
+          priceSpan.className = "text-xl font-mono text-green-400 mt-1 transition-colors duration-300";
+        } else if (currentPrice < prevPrice) {
+          priceSpan.className = "text-xl font-mono text-red-400 mt-1 transition-colors duration-300";
+        }
+      }
+      
+      previousCardPrices[sym] = currentPrice;
+    });
+  } catch (err) {
+    console.error('Failed to update token market cards:', err);
+  }
+}
+
 async function setupTrialNonBlocking(userId) {
   if (!userId) return;
 
@@ -270,8 +325,8 @@ async function initializeDashboard(event) {
   initializeLogoClickHandler();
   initializeTerminalListeners();
 
-  // Always start fetching token movement data instantly, regardless of trial status
-
+  // Always start polling token movement data instantly to keep cards continuously moving
+  setInterval(fetchLiveMarketData, 1000);
 
   document.addEventListener('trialExpired', () => {
     console.log('🔒 Trial expired event triggered');
