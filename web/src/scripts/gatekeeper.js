@@ -1024,11 +1024,14 @@ function updateDashboardData(data) {
   }
 
   // Fallback: Extract prices from signals if tickers are missing
-  if (data.signals) {
+  if (window.latestSignals) {
     window.currentTickers = window.currentTickers || {};
-    Object.entries(data.signals).forEach(([sym, sig]) => {
-      if (sig && (sig.entry_price || sig.price) && !window.currentTickers[sym]) {
-        window.currentTickers[sym] = sig.price || sig.entry_price;
+    Object.entries(window.latestSignals).forEach(([key, sig]) => {
+      if (sig && sig.symbol && (sig.entry_price || sig.price)) {
+        // Only set fallback if currentTicker is completely missing or 0
+        if (!window.currentTickers[sig.symbol]) {
+          window.currentTickers[sig.symbol] = sig.price || sig.entry_price;
+        }
       }
     });
   }
