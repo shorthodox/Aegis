@@ -2870,28 +2870,6 @@ body.modal-open {
         overflow-y: auto;
     }
 
-    .dashboard-layout {
-        grid-template-columns: 1fr;
-    }
-
-    .sidebar {
-        position: fixed;
-        left: -100%;
-        top: 0;
-        width: 280px;
-        height: 100vh;
-        transition: left 0.3s ease;
-        z-index: 999;
-    }
-
-    .sidebar.active {
-        left: 0;
-    }
-
-    .signal-grid {
-        grid-template-columns: 1fr;
-    }
-
     .mobile-menu-btn {
         display: block;
     }
