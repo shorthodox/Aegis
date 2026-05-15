@@ -1254,6 +1254,11 @@ window.selectSignal = function(symbol, timeframe) {
   const sig = window.latestSignals && window.latestSignals[key];
   if (!sig) return;
 
+  // Delegate to dashboard.js to properly populate selectedTrade state
+  if (typeof window.prefillTradeSim === 'function') {
+    window.prefillTradeSim(symbol, sig.entry_price || 0, sig);
+  }
+
   // Add to signal history
   addSignalToHistory(sig);
 
