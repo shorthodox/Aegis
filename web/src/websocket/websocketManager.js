@@ -9,6 +9,100 @@ export class WebSocketManager {
         this.signalStore = signalStore;
         this.onDashboardUpdate = onDashboardUpdate;
         this.pingInterval = null;
+        
+        // 3. Cleanup Routine
+        this.cleanupInterval = setInterval(() => this.cleanupExpiredSignals(), 30000); // Check every 30 seconds
+    }
+
+    isSignalExpired(signal) {
+        if (!signal || !signal.time) return false;
+        const sigTime = new Date(signal.time).getTime();
+        const now = Date.now();
+        let durationMs = 3600000; // default 1 hour
+        if (signal.timeframe) {
+            const tf = signal.timeframe;
+            if (tf.endsWith('m')) durationMs = parseInt(tf) * 60000;
+            else if (tf.endsWith('h')) durationMs = parseInt(tf) * 3600000;
+            else if (tf.endsWith('d')) durationMs = parseInt(tf) * 86400000;
+        }
+        return now > (sigTime + durationMs);
+    }
+
+    handleExpirations(signalsObj) {
+        if (!signalsObj) return signalsObj;
+        
+        const validSignals = {};
+        let historyChanged = false;
+        let history = [];
+        try {
+            const hStr = localStorage.getItem('aegis_signal_history');
+            if (hStr) history = JSON.parse(hStr);
+        } catch(e) {}
+
+        for (const [pair, sig] of Object.entries(signalsObj)) {
+            // 1. Expiration Logic
+            if (this.isSignalExpired(sig)) {
+                // 2. JSON State Management: if expired, mark history
+                history.forEach(h => {
+                    if ((h.symbol === pair || h.symbol === sig.pair) && h.status !== 'signal expired') {
+                        h.status = 'signal expired';
+                        historyChanged = true;
+                    }
+                });
+            } else {
+                validSignals[pair] = sig;
+            }
+        }
+        
+        if (historyChanged) {
+            localStorage.setItem('aegis_signal_history', JSON.stringify(history));
+            if (typeof window.updateSignalHistoryUI === 'function') {
+                window.updateSignalHistoryUI();
+            }
+        }
+        
+        return validSignals;
+    }
+
+    cleanupExpiredSignals() {
+        if (!this.signalStore || !this.signalStore.signals) return;
+        
+        let changed = false;
+        let historyChanged = false;
+        let history = [];
+        try {
+            const hStr = localStorage.getItem('aegis_signal_history');
+            if (hStr) history = JSON.parse(hStr);
+        } catch(e) {}
+
+        for (const [pair, sig] of Object.entries(this.signalStore.signals)) {
+            if (this.isSignalExpired(sig)) {
+                delete this.signalStore.signals[pair];
+                changed = true;
+                
+                history.forEach(h => {
+                    if ((h.symbol === pair || h.symbol === sig.pair) && h.status !== 'signal expired') {
+                        h.status = 'signal expired';
+                        historyChanged = true;
+                    }
+                });
+            }
+        }
+        
+        if (historyChanged) {
+            localStorage.setItem('aegis_signal_history', JSON.stringify(history));
+            if (typeof window.updateSignalHistoryUI === 'function') {
+                window.updateSignalHistoryUI();
+            }
+        }
+        
+        if (changed) {
+            this.signalStore.notify();
+            // 4. UI Feedback
+            if (this.onDashboardUpdate) {
+                this.onDashboardUpdate({ type: 'dashboard_update', signals: this.signalStore.signals });
+            }
+        }
     }
 
     connect() {
@@ -38,13 +132,23 @@ export class WebSocketManager {
             try {
                 const msg = JSON.parse(event.data);
                 if (msg.type === "signal_update") {
-                    this.signalStore.updateSignal(msg.data);
+                    if (this.isSignalExpired(msg.data)) {
+                        this.handleExpirations({ [msg.data.pair]: msg.data });
+                        // Ensure cleanup is synced
+                        this.cleanupExpiredSignals();
+                    } else {
+                        this.signalStore.updateSignal(msg.data);
+                    }
                 } else if (msg.type === "dashboard_update" || (!msg.type && msg.signals)) {
                     // Unified backend fallback
                     if (msg.signals) {
+                        msg.signals = this.handleExpirations(msg.signals);
                         this.signalStore.updateMultiple(msg.signals);
+                        // Also sweep any old signals currently in the store
+                        this.cleanupExpiredSignals();
                     }
                     if (this.onDashboardUpdate) {
+                        // Pass through the message to the dashboard callback
                         this.onDashboardUpdate(msg);
                     }
                 }
@@ -56,6 +160,7 @@ export class WebSocketManager {
         this.ws.onclose = () => {
             console.log("WebSocket disconnected");
             clearInterval(this.pingInterval);
+            if (this.cleanupInterval) clearInterval(this.cleanupInterval);
             const statusText = document.getElementById('ws-status-text');
             const statusDot = document.getElementById('ws-status-dot');
             if (statusText) statusText.textContent = 'Disconnected';
