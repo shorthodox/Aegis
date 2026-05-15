@@ -398,18 +398,21 @@ function setupMobileOptimizations() {
       // Prevent double firing if app.js also catches it
       e.stopImmediatePropagation();
       sidebar.classList.toggle('-translate-x-full');
+      sidebar.classList.toggle('translate-x-0');
       overlay.classList.toggle('hidden');
     });
     
     closeMenuBtn?.addEventListener('click', (e) => {
       e.stopImmediatePropagation();
       sidebar.classList.add('-translate-x-full');
+      sidebar.classList.remove('translate-x-0');
       overlay.classList.add('hidden');
     });
     
     overlay.addEventListener('click', (e) => {
       e.stopImmediatePropagation();
       sidebar.classList.add('-translate-x-full');
+      sidebar.classList.remove('translate-x-0');
       overlay.classList.add('hidden');
     });
   }

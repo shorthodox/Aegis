@@ -464,7 +464,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const sidebarOverlay = document.getElementById('sidebarOverlay');
 
     function toggleSidebar() {
-        if (sidebar) sidebar.classList.toggle('-translate-x-full');
+        if (sidebar) {
+            sidebar.classList.toggle('-translate-x-full');
+            sidebar.classList.toggle('translate-x-0');
+        }
         if (sidebarOverlay) sidebarOverlay.classList.toggle('hidden');
     }
 

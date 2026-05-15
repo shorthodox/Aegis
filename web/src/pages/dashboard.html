@@ -138,7 +138,7 @@
 
         <!-- Sidebar Navigation -->
         <aside id="sidebar"
-            class="sidebar fixed top-[73px] lg:inset-y-0 left-0 z-40 w-full lg:w-[280px] transform -translate-x-full lg:translate-x-0 lg:static transition-transform duration-300 ease-in-out glass-panel border-r border-white/10 flex flex-col bg-deep/95 lg:bg-transparent h-[calc(100dvh-73px)] lg:h-full shrink-0">
+            class="sidebar fixed top-[73px] bottom-0 left-0 z-40 w-[280px] min-h-[calc(100vh-73px)] transform -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out glass-panel border-r border-white/10 flex flex-col bg-deep/95 shadow-2xl">
             <!-- Mobile Header -->
             <div class="flex items-center justify-between lg:hidden p-4 border-b border-white/10">
                 <span class="font-bold text-cyan tracking-wider">MENU</span>
@@ -639,6 +639,7 @@
             const overlay = document.getElementById('sidebarOverlay');
             if (window.innerWidth < 1024 && sidebar && overlay) {
                 sidebar.classList.add('-translate-x-full');
+                sidebar.classList.remove('translate-x-0');
                 overlay.classList.add('hidden');
             }
         }
