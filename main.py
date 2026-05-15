@@ -68,7 +68,7 @@ try:
     CASHFREE_SDK_AVAILABLE = True
 except ImportError:
     CASHFREE_SDK_AVAILABLE = False
-    print("⚠️ Cashfree PG SDK not installed. Install with: pip install cashfree-pg")
+    print("[WARNING] Cashfree PG SDK not installed. Install with: pip install cashfree-pg")
 
 # -------------------------------------------------------------------
 # Security: JWT & Algorithm must be from environment
@@ -96,9 +96,9 @@ if CASHFREE_SDK_AVAILABLE and CASHFREE_ENABLED:
     Cashfree.XEnvironment = Cashfree.SANDBOX if CASHFREE_ENV == "TEST" else Cashfree.PRODUCTION
     print(f"🔒 Cashfree payment gateway configured for {CASHFREE_ENV}")
 elif CASHFREE_ENABLED:
-    print(f"⚠️ Cashfree SDK not available, using REST API fallback for {CASHFREE_ENV}")
+    print(f"[WARNING] Cashfree SDK not available, using REST API fallback for {CASHFREE_ENV}")
 else:
-    print("⚠️ Cashfree payment gateway not configured. Set CASHFREE_APP_ID/CASHFREE_SECRET_KEY to enable.")
+    print("[WARNING] Cashfree payment gateway not configured. Set CASHFREE_APP_ID/CASHFREE_SECRET_KEY to enable.")
 
 # -------------------------------------------------------------------
 # SOVEREIGN FIREBASE INITIALIZATION
@@ -111,20 +111,31 @@ FIREBASE_PROJECT_ID = os.getenv("FIREBASE_PROJECT_ID", "aegis-d78e1")
 cred_json = os.getenv("FIREBASE_CREDENTIALS")
 
 if cred_json:
-    try:
-        # Load credentials directly from the Railway environment variable (JSON string)
-        cred_dict = json.loads(cred_json)
-        cred = credentials.Certificate(cred_dict)
-        print("🔥 Firebase initialized via Environment Variable")
-    except Exception as e:
-        print(f"❌ Failed to parse FIREBASE_CREDENTIALS JSON: {e}")
-        raise
+    # Check if cred_json is a file path first
+    if os.path.exists(cred_json):
+        cred = credentials.Certificate(cred_json)
+        print(f"[FIREBASE] Initialized via file path: {cred_json}")
+    else:
+        try:
+            # Try to parse as JSON string
+            cred_dict = json.loads(cred_json)
+            cred = credentials.Certificate(cred_dict)
+            print("[FIREBASE] Initialized via JSON environment variable")
+        except Exception as e:
+            print(f"[ERROR] Failed to parse FIREBASE_CREDENTIALS JSON: {e}")
+            # Fallback to default file path
+            cred_path = 'config/serviceAccountKey.json'
+            if os.path.exists(cred_path):
+                cred = credentials.Certificate(cred_path)
+                print(f"[FIREBASE] Initialized via fallback file: {cred_path}")
+            else:
+                raise RuntimeError("Firebase credentials not found. Provide either FIREBASE_CREDENTIALS as JSON or ensure config/serviceAccountKey.json exists")
 else:
     # Fallback for local development
     cred_path = 'config/serviceAccountKey.json'
     if os.path.exists(cred_path):
         cred = credentials.Certificate(cred_path)
-        print(f"🔥 Firebase initialized via local file: {cred_path}")
+        print(f"[FIREBASE] Initialized via local file: {cred_path}")
     else:
         raise RuntimeError("Firebase credentials not found in ENV or at config/serviceAccountKey.json")
 
@@ -1363,11 +1374,13 @@ async def check_and_send_subscription_reminders():
 async def websocket_dashboard(websocket: WebSocket):
     await websocket.accept()
     current_user_email = None
+    last_signals_hash = None  # Track changes to avoid redundant sends
     
     try:
-        data = await websocket.receive_text()
+        # Authenticate: receive token from client
+        auth_message = await asyncio.wait_for(websocket.receive_text(), timeout=10)
         try:
-            auth_data = json.loads(data)
+            auth_data = json.loads(auth_message)
             token = auth_data.get("token")
             if token:
                 current_user_email = decode_token(token)
@@ -1375,51 +1388,94 @@ async def websocket_dashboard(websocket: WebSocket):
                     await websocket.send_json({"error": "Invalid token"})
                     await websocket.close()
                     return
-        except:
+                print(f"✅ WebSocket authenticated: {current_user_email}")
+        except Exception as auth_err:
+            print(f"⚠️ Auth error: {auth_err}")
             pass
         
+        # Main loop: send data + listen for client messages (ping/pong)
         while True:
-            allowed_tokens = get_allowed_tokens(current_user_email) if current_user_email else BASIC_TOKENS
-            trial_expired = is_trial_expired(current_user_email) if current_user_email else False
-            
-            filtered_signals = {}
-            for sym, sig in LIVE_STATE.data["signals"].items():
-                if sym in allowed_tokens:
-                    filtered_signals[sym] = {
-                        "ai_prob": sig.get("ai_prob", 0),
-                        "signal": sig.get("signal", "WAITING"),
-                        "threshold": sig.get("threshold", 0),
-                        "signal_strength": sig.get("signal_strength", "NONE"),
-                        "atr": sig.get("atr", 0),
-                        "risk_pct": sig.get("risk_pct", 2),
-                        "direction": sig.get("direction", "NEUTRAL"),
-                        "entry_price": sig.get("entry_price", 0.0),
-                        "sl": sig.get("sl"),
-                        "tp": sig.get("tp"),
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
-                        "confidence_score": sig.get("ai_prob", 0) * 100,
-                        "signal_id": sig.get("signal_id", ""),
-                        "trading_accuracy": sig.get("trading_accuracy", 0.65),
-                        "profitability_index": sig.get("profitability_index", 1.5),
-                    }
-            
-            response_data = {
-                "tickers": {k: v for k, v in LIVE_STATE.data["tickers"].items() if k in allowed_tokens},
-                "signals": filtered_signals,
-                "open_trades": LIVE_STATE.data["open_trades"],
-                "balance": LIVE_STATE.data["balance"],
-                "alpha_mode": LIVE_STATE.data["alpha_mode"] and (get_user_plan(current_user_email) == "pro" if current_user_email else False),
-                "warmup": LIVE_STATE.data["warmup_progress"],
-                "trial_expired": trial_expired if current_user_email else True,
-                "plan": get_user_plan(current_user_email) if current_user_email else "trial"
-            }
-            clean_data = jsonable_encoder(response_data)
-            await websocket.send_json(clean_data)
-            await asyncio.sleep(1)
+            try:
+                # Use wait_for to allow timeout so we can also check for incoming messages
+                try:
+                    # Try to receive any incoming message from client (with 0.5s timeout)
+                    client_msg = await asyncio.wait_for(websocket.receive_text(), timeout=0.5)
+                    msg_data = json.loads(client_msg)
+                    msg_type = msg_data.get("type", "")
+                    
+                    if msg_type == "ping":
+                        # Respond with pong
+                        await websocket.send_json({"type": "pong"})
+                        print(f"🏓 Ping/Pong received from {current_user_email}")
+                    elif msg_type == "auth":
+                        # Re-authenticate if needed
+                        new_token = msg_data.get("token")
+                        if new_token:
+                            new_user = decode_token(new_token)
+                            if new_user:
+                                current_user_email = new_user
+                                print(f"🔄 WebSocket re-authenticated: {current_user_email}")
+                except asyncio.TimeoutError:
+                    # No message received, continue to send data
+                    pass
+                
+                # Build response data
+                allowed_tokens = get_allowed_tokens(current_user_email) if current_user_email else BASIC_TOKENS
+                trial_expired = is_trial_expired(current_user_email) if current_user_email else False
+                
+                filtered_signals = {}
+                for sym, sig in LIVE_STATE.data["signals"].items():
+                    if sym in allowed_tokens:
+                        filtered_signals[sym] = {
+                            "ai_prob": sig.get("ai_prob", 0),
+                            "signal": sig.get("signal", "WAITING"),
+                            "threshold": sig.get("threshold", 0),
+                            "signal_strength": sig.get("signal_strength", "NONE"),
+                            "atr": sig.get("atr", 0),
+                            "risk_pct": sig.get("risk_pct", 2),
+                            "direction": sig.get("direction", "NEUTRAL"),
+                            "entry_price": sig.get("entry_price", 0.0),
+                            "sl": sig.get("sl"),
+                            "tp": sig.get("tp"),
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                            "confidence_score": sig.get("ai_prob", 0) * 100,
+                            "signal_id": sig.get("signal_id", ""),
+                            "trading_accuracy": sig.get("trading_accuracy", 0.65),
+                            "profitability_index": sig.get("profitability_index", 1.5),
+                        }
+                
+                response_data = {
+                    "tickers": {k: v for k, v in LIVE_STATE.data["tickers"].items() if k in allowed_tokens},
+                    "signals": filtered_signals,
+                    "open_trades": LIVE_STATE.data["open_trades"],
+                    "balance": LIVE_STATE.data["balance"],
+                    "alpha_mode": LIVE_STATE.data["alpha_mode"] and (get_user_plan(current_user_email) == "pro" if current_user_email else False),
+                    "warmup": LIVE_STATE.data["warmup_progress"],
+                    "trial_expired": trial_expired if current_user_email else True,
+                    "plan": get_user_plan(current_user_email) if current_user_email else "trial"
+                }
+                clean_data = jsonable_encoder(response_data)
+                await websocket.send_json(clean_data)
+                
+                # Send less frequently if no changes to reduce bandwidth
+                await asyncio.sleep(1)
+            except asyncio.CancelledError:
+                print(f"⚠️ WebSocket task cancelled for {current_user_email}")
+                raise
+            except Exception as loop_err:
+                print(f"❌ Error in WebSocket loop: {loop_err}")
+                raise
     except WebSocketDisconnect:
-        pass
+        print(f"🔌 WebSocket disconnected: {current_user_email}")
+    except asyncio.TimeoutError:
+        print(f"⏱️ WebSocket timeout during authentication")
+        await websocket.close(code=1000)
     except Exception as e:
-        print(f"WebSocket error: {e}")
+        print(f"❌ WebSocket error: {e}")
+        try:
+            await websocket.close(code=1011)
+        except:
+            pass
 
 # -------------------------------------------------------------------
 # Alpha Mode toggle (only for Pro users)
