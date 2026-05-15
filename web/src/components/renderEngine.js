@@ -134,7 +134,7 @@ export class RenderEngine {
             const sigJsonStr = JSON.stringify(sig).replace(/'/g, "\\'");
             
             html += `
-                <div class="bg-black/60 border border-white/10 rounded-xl p-4 cursor-pointer hover:border-cyan/50 hover:bg-white/5 transition-all flex flex-col gap-3 ${rowAnim}" onclick='document.dispatchEvent(new CustomEvent("signalRowClicked", {detail: ${sigJsonStr}}))'>
+                <div class="bg-black/60 border border-white/10 rounded-xl p-4 cursor-pointer hover:border-cyan/50 hover:bg-white/5 transition-all transform hover:-translate-y-1 overflow-hidden flex flex-col gap-3 ${rowAnim}" onclick='document.dispatchEvent(new CustomEvent("signalRowClicked", {detail: ${sigJsonStr}}))'>
                     <div class="flex justify-between items-center">
                         <span class="font-bold text-lg font-mono text-white">${sig.pair}</span>
                         <span class="px-2 py-0.5 rounded text-xs font-bold border ${sigClass}">${sig.signal}</span>
