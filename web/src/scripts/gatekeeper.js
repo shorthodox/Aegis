@@ -1165,7 +1165,7 @@ function renderSignals(signals) {
             ${matchBadge}
           </div>
           <div class="flex items-center gap-3">
-            <div class="price-container text-sm hidden md:flex"><span class="live-price" data-symbol="${symbol}">${window.currentTickers && window.currentTickers[symbol] ? '$' + parseFloat(window.currentTickers[symbol]).toFixed(4) : '-'}</span></div>
+            <div class="price-container text-sm flex font-mono"><span class="live-price" data-symbol="${symbol}">${window.currentTickers && window.currentTickers[symbol] ? '$' + parseFloat(window.currentTickers[symbol]).toFixed(4) : '-'}</span></div>
             <span class="signal-badge ${signalClass}">${signalType}</span>
           </div>
         </div>
