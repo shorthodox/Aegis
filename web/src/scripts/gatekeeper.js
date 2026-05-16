@@ -66,12 +66,10 @@ let trialActive = true;
 // Listen for trial expiration from dashboard countdown
 document.addEventListener('trialExpired', () => {
     trialActive = false;
-    if (userPlan === 'trial') {
-        allowedTokens = [];
-        localStorage.setItem('cachedAllowedTokens', JSON.stringify([]));
-        if (typeof showSubscriptionExpiredOverlay === 'function') {
-            showSubscriptionExpiredOverlay();
-        }
+    allowedTokens = [];
+    localStorage.setItem('cachedAllowedTokens', JSON.stringify([]));
+    if (typeof showSubscriptionExpiredOverlay === 'function') {
+        showSubscriptionExpiredOverlay();
     }
     // Refresh UI to update plan badge immediately when trial expires
     updateUI();
@@ -81,6 +79,9 @@ document.addEventListener('trialExpired', () => {
 window.addEventListener('trial-status-updated', () => {
     if (typeof AuthManager !== 'undefined') {
         trialActive = AuthManager.isTrialValid();
+        if (!trialActive && typeof showSubscriptionExpiredOverlay === 'function') {
+            showSubscriptionExpiredOverlay();
+        }
         updateUI();
     }
 });
@@ -157,7 +158,10 @@ function showSubscriptionExpiredOverlay() {
   const mainContent = document.getElementById('dashboard-main-content');
   
   if (overlay) overlay.classList.remove('hidden');
-  if (mainContent) mainContent.classList.add('hidden');
+  if (mainContent) {
+    mainContent.classList.add('hidden');
+    mainContent.style.display = 'none';
+  }
   
   // Disable all interactive elements
   document.querySelectorAll('button, input, select, .signal-card').forEach(el => {
@@ -826,6 +830,10 @@ async function loadUserLimits() {
 }
 
 function updateUI() {
+  if (!trialActive && typeof signalsContainer !== 'undefined' && signalsContainer) {
+    signalsContainer.innerHTML = '';
+  }
+
   // Update plan badge
   if (planBadge) {
     planBadge.className = 'text-sm font-bold mt-1';
