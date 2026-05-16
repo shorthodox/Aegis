@@ -65,25 +65,25 @@ let trialActive = true;
 
 // Listen for trial expiration from dashboard countdown
 document.addEventListener('trialExpired', () => {
-    trialActive = false;
-    allowedTokens = [];
-    localStorage.setItem('cachedAllowedTokens', JSON.stringify([]));
-    if (typeof showSubscriptionExpiredOverlay === 'function') {
-        showSubscriptionExpiredOverlay();
-    }
-    // Refresh UI to update plan badge immediately when trial expires
-    updateUI();
+  trialActive = false;
+  allowedTokens = [];
+  localStorage.setItem('cachedAllowedTokens', JSON.stringify([]));
+  if (typeof showSubscriptionExpiredOverlay === 'function') {
+    showSubscriptionExpiredOverlay();
+  }
+  // Refresh UI to update plan badge immediately when trial expires
+  updateUI();
 });
 
 // Update UI if the trial status asynchronously finishes loading/refreshing
 window.addEventListener('trial-status-updated', () => {
-    if (typeof AuthManager !== 'undefined') {
-        trialActive = AuthManager.isTrialValid();
-        if (!trialActive && typeof showSubscriptionExpiredOverlay === 'function') {
-            showSubscriptionExpiredOverlay();
-        }
-        updateUI();
+  if (typeof AuthManager !== 'undefined') {
+    trialActive = AuthManager.isTrialValid();
+    if (!trialActive && typeof showSubscriptionExpiredOverlay === 'function') {
+      showSubscriptionExpiredOverlay();
     }
+    updateUI();
+  }
 });
 
 let allowedTokens = [];
@@ -121,15 +121,15 @@ function getSignalStatus(signal) {
    * - STOPPED_OUT: Stop loss has been hit (failure)
    */
   if (!signal || !window.currentTickers) return 'ACTIVE';
-  
+
   const currentPrice = window.currentTickers[signal.symbol];
   if (currentPrice === undefined) return 'ACTIVE';
-  
+
   const tp = parseFloat(signal.tp) || 0;
   const sl = parseFloat(signal.sl) || 0;
-  
+
   if (tp <= 0 || sl <= 0) return 'ACTIVE';
-  
+
   // For LONG positions: expired if current price >= tp
   if (signal.direction === 'LONG') {
     if (currentPrice >= tp) return 'EXPIRED';
@@ -140,7 +140,7 @@ function getSignalStatus(signal) {
     if (currentPrice <= tp) return 'EXPIRED';
     if (currentPrice >= sl) return 'STOPPED_OUT';
   }
-  
+
   return 'ACTIVE';
 }
 
@@ -156,13 +156,13 @@ function showSubscriptionExpiredOverlay() {
 
   const overlay = document.getElementById('subscriptionExpiredOverlay');
   const mainContent = document.getElementById('dashboard-main-content');
-  
+
   if (overlay) overlay.classList.remove('hidden');
   if (mainContent) {
     mainContent.classList.add('hidden');
     mainContent.style.display = 'none';
   }
-  
+
   // Disable all interactive elements
   document.querySelectorAll('button, input, select, .signal-card').forEach(el => {
     if (!el.closest('#subscriptionExpiredOverlay') && !el.closest('#access-expired-card')) {
@@ -191,14 +191,14 @@ function addSignalToHistory(signal) {
     status: status,
     direction: signal.direction || 'NEUTRAL'
   };
-  
+
   signalHistory.unshift(historyEntry);
-  
+
   // Keep only last 100 entries
   if (signalHistory.length > 100) {
     signalHistory = signalHistory.slice(0, 100);
   }
-  
+
   updateSignalHistoryUI();
   saveSignalHistoryToStorage();
 }
@@ -206,28 +206,28 @@ function addSignalToHistory(signal) {
 function updateSignalHistoryUI() {
   const tbody = document.getElementById('signalHistoryTbody');
   if (!tbody) return;
-  
+
   if (signalHistory.length === 0) {
     tbody.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-gray-500">No signal history available</td></tr>';
     return;
   }
-  
+
   // Update signal statuses based on current prices
   signalHistory.forEach(entry => {
     if (!entry.status || entry.status === 'ACTIVE') {
       entry.status = getSignalStatus(entry);
     }
   });
-  
+
   tbody.innerHTML = signalHistory.map(entry => {
     const signalClass = getSignalClass(entry.signal, entry.status);
     const timestamp = new Date(entry.timestamp).toLocaleString();
     const status = entry.status || 'ACTIVE';
-    
+
     // Determine status badge styling
     let statusBadgeClass = 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/50';
     let statusText = 'ACTIVE';
-    
+
     if (status === 'EXPIRED') {
       statusBadgeClass = 'bg-green-500/20 text-green-400 border border-green-500/50';
       statusText = '✓ TARGET HIT';
@@ -235,10 +235,20 @@ function updateSignalHistoryUI() {
       statusBadgeClass = 'bg-red-500/20 text-red-400 border border-red-500/50';
       statusText = '✗ STOPPED OUT';
     }
-    
+
+    // Win Rate Badge
+    const perf = (window.tokenPerformance && window.tokenPerformance[entry.symbol]) || null;
+    let winRateHtml = '';
+    if (perf) {
+      let wrClass = '';
+      if (perf.winRate >= 70) wrClass = 'win-rate-high';
+      else if (perf.winRate >= 50) wrClass = 'win-rate-medium';
+      winRateHtml = `<span class="win-rate-badge ${wrClass} text-[9px] ml-2 font-normal">WR: ${perf.winRate}%</span>`;
+    }
+
     return `
       <tr class="hover:bg-white/5">
-        <td class="p-3 font-bold">${entry.symbol}</td>
+        <td class="p-3 font-bold flex items-center h-full">${entry.symbol} ${winRateHtml}</td>
         <td class="p-3">
           <span class="signal-badge ${signalClass} text-xs">${entry.signal}</span>
         </td>
@@ -291,11 +301,11 @@ function clearSignalHistory() {
 function initiatePaperTrade(symbol, entryPrice, sl, tp) {
   const modal = document.getElementById('paperTradeModal');
   const symbolSpan = document.getElementById('paperTradeSymbol');
-  
+
   if (modal && symbolSpan) {
     symbolSpan.textContent = symbol;
     modal.classList.remove('hidden');
-    
+
     // Store trade data for confirmation
     modal._tradeData = { symbol, entryPrice, sl, tp };
   }
@@ -313,13 +323,13 @@ function startPaperTrade(symbol, entryPrice, sl, tp) {
     pnl: 0,
     status: 'active'
   };
-  
+
   paperTrades.push(trade);
   updatePaperTradesUI();
-  
+
   // Auto-fill terminal
   autoFillTerminal(trade);
-  
+
   // Switch to terminal room
   if (typeof switchRoom === 'function') {
     switchRoom('terminal');
@@ -336,7 +346,7 @@ function autoFillTerminal(trade) {
   const entryInput = document.getElementById('sim-entry');
   const slInput = document.getElementById('sim-sl');
   const tpInput = document.getElementById('sim-tp');
-  
+
   if (symbolSelect) {
     // Add option if not exists
     let option = Array.from(symbolSelect.options).find(opt => opt.value === trade.symbol);
@@ -348,11 +358,11 @@ function autoFillTerminal(trade) {
     }
     symbolSelect.value = trade.symbol;
   }
-  
+
   if (entryInput) entryInput.value = trade.entryPrice.toFixed(4);
   if (slInput) slInput.value = trade.sl.toFixed(4);
   if (tpInput) tpInput.value = trade.tp.toFixed(4);
-  
+
   // Trigger calculations
   if (typeof window.calculatePosition === 'function') {
     window.calculatePosition();
@@ -366,28 +376,28 @@ function shouldShowSignal(symbol, signalData) {
   const now = Date.now();
   const lastSignalTime = signalDebounceMap.get(symbol) || 0;
   const debouncePeriod = 300000; // 5 minutes
-  
+
   if (now - lastSignalTime < debouncePeriod) {
     console.log(`Signal for ${symbol} debounced (last signal ${Math.round((now - lastSignalTime) / 1000)}s ago)`);
     return false;
   }
-  
+
   signalDebounceMap.set(symbol, now);
   return true;
 }
 
 function sortSignalsByRisk(signals) {
   if (!Array.isArray(signals)) return signals;
-  
+
   const riskWeights = {
     conservative: { ai_prob: 0.75, risk_pct: 0.015 },
     balanced: { ai_prob: 0.65, risk_pct: 0.025 },
     aggressive: { ai_prob: 0.55, risk_pct: 0.035 },
     sniper: { ai_prob: 0.45, risk_pct: 0.045 }
   };
-  
+
   const weights = riskWeights[currentRiskProfile] || riskWeights.balanced;
-  
+
   return signals.sort((a, b) => {
     const scoreA = (a.ai_prob || 0) * weights.ai_prob + (1 / (a.risk_pct || 0.02)) * weights.risk_pct;
     const scoreB = (b.ai_prob || 0) * weights.ai_prob + (1 / (b.risk_pct || 0.02)) * weights.risk_pct;
@@ -403,7 +413,7 @@ function setupMobileOptimizations() {
   const closeMenuBtn = document.getElementById('closeMenuBtn');
   const sidebar = document.getElementById('sidebar');
   const overlay = document.getElementById('sidebarOverlay');
-  
+
   // Note: app.js also has a toggle logic for this. To avoid conflicts,
   // we just use a unified toggle if this runs, or let app.js handle it.
   // We'll safely use toggle here as well if app.js isn't loaded.
@@ -418,14 +428,14 @@ function setupMobileOptimizations() {
       sidebar.classList.toggle('translate-x-0');
       overlay.classList.toggle('hidden');
     });
-    
+
     closeMenuBtn?.addEventListener('click', (e) => {
       e.stopImmediatePropagation();
       sidebar.classList.add('-translate-x-full');
       sidebar.classList.remove('translate-x-0');
       overlay.classList.add('hidden');
     });
-    
+
     overlay.addEventListener('click', (e) => {
       e.stopImmediatePropagation();
       sidebar.classList.add('-translate-x-full');
@@ -443,7 +453,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initializeElements();
   attachEventListeners();
   loadSignalHistoryFromStorage();
-  
+
   // Global Event Listener for Real-Time Price Sync to drive Signal History Updates
   window.addEventListener('priceUpdate', (e) => {
     const { symbol, price } = e.detail;
@@ -475,7 +485,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await loadUserFromBackend(token);
     } else {
       // No Firebase user, fallback to manual token check
-      checkAuthAndLoad(); 
+      checkAuthAndLoad();
     }
   });
   setupFooter();
@@ -573,16 +583,16 @@ function attachEventListeners() {
       }
 
       currentTimeframe = tf;
-      
+
       // Update UI active state
       tfBtns.forEach(b => {
         b.classList.remove('bg-cyan/20', 'text-cyan', 'font-bold');
         if (!b.classList.contains('cursor-not-allowed')) {
-            b.classList.add('text-gray-400');
-            b.classList.remove('text-white');
+          b.classList.add('text-gray-400');
+          b.classList.remove('text-white');
         }
       });
-      
+
       btn.classList.add('bg-cyan/20', 'text-cyan', 'font-bold');
       btn.classList.remove('text-gray-400', 'text-gray-500');
 
@@ -632,10 +642,10 @@ const MIN_RENDER_INTERVAL = 500; // Minimum 500ms between renders
 
 function debouncedFilterAndRenderSignals() {
   if (renderTimeout) clearTimeout(renderTimeout);
-  
+
   const now = Date.now();
   const timeSinceLastRender = now - lastRenderTime;
-  
+
   if (timeSinceLastRender < MIN_RENDER_INTERVAL) {
     // Schedule render after debounce period
     renderTimeout = setTimeout(() => {
@@ -678,14 +688,14 @@ function filterAndRenderSignals() {
       }
     }
   });
-  
+
   // Sort signals by risk profile
   const sortedSignals = sortSignalsByRisk(Object.values(currentSignals));
   const sortedSignalsObj = {};
   sortedSignals.forEach(sig => {
     sortedSignalsObj[sig.symbol] = sig;
   });
-  
+
   renderSignals(sortedSignalsObj);
 }
 
@@ -726,7 +736,7 @@ async function checkAuthAndLoad() {
   }
 
   await loadUserFromBackend(token);
-  
+
   // Check for trial expiration after loading user data
   if (userPlan === 'trial' && !trialActive) {
     showSubscriptionExpiredOverlay();
@@ -758,11 +768,11 @@ async function loadUserFromBackend(token) {
       currentUserData = userData;
       userPlan = userData.plan || 'trial';
       trialEnd = userData.trial_end ? new Date(userData.trial_end) : null;
-      
+
       if (typeof AuthManager !== 'undefined') {
-          AuthManager.setUser(userData);
+        AuthManager.setUser(userData);
       }
-      
+
       const isActive = userData.trial_active ?? true; // Default to true if null
       trialActive = typeof AuthManager !== 'undefined' ? AuthManager.isTrialValid() : isActive;
 
@@ -776,11 +786,11 @@ async function loadUserFromBackend(token) {
       updateUI();
       startWebSocket(token);
       setupFirestoreListeners();
-      
+
       // Debug Logging: Print final allowedTokens list
       console.log('loadUserFromBackend - Final allowedTokens:', allowedTokens);
       console.log('loadUserFromBackend - User plan:', userPlan, 'Trial active:', trialActive);
-      
+
       document.dispatchEvent(new CustomEvent('dashboardUserLoaded', { detail: { userData: currentUserData } }));
     } else if (response.status === 401) {
       localStorage.removeItem('access_token');
@@ -841,7 +851,7 @@ function updateUI() {
     planBadge.className = 'text-sm font-bold mt-1';
     // Use AuthManager for accurate trial status check
     const isTrialValid = typeof AuthManager !== 'undefined' ? AuthManager.isTrialValid() : trialActive;
-    
+
     if (userPlan === 'pro') {
       planBadge.innerHTML = '<i class="fas fa-crown"></i> PRO ACTIVE';
       planBadge.classList.add('text-yellow-500');
@@ -901,7 +911,7 @@ function startWebSocket(token) {
     reconnectAttempts = 0; // Reset on successful connection
     updateConnectionStatus('CONNECTED', 'green');
     ws.send(JSON.stringify({ token, type: 'auth' }));
-    
+
     // Start heartbeat
     startHeartbeat();
   };
@@ -909,21 +919,21 @@ function startWebSocket(token) {
   ws.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
-      
+
       if (data.type === 'pong') {
         // Handle pong response
         console.log('🏓 WebSocket pong received');
         return;
       }
-      
+
       if (data.type === 'error') {
         console.error('WebSocket error message:', data.message);
         return;
       }
-      
+
       // Step 4: Detailed Error Logging
       console.log(`[WS Receive] Type: ${data.type || 'NO_TYPE'} | Tickers: ${data.tickers ? Object.keys(data.tickers).length : 0} | Signals: ${data.signals ? Object.keys(data.signals).length : 0}`);
-      
+
       if (data.type === 'signals' || data.type === 'update') {
         updateDashboardData(data);
       } else {
@@ -943,14 +953,14 @@ function startWebSocket(token) {
   ws.onclose = (event) => {
     console.log(`WebSocket disconnected (code: ${event.code}, reason: ${event.reason}), reconnecting...`);
     updateConnectionStatus('RECONNECTING', 'yellow');
-    
+
     // Stop heartbeat
     stopHeartbeat();
-    
+
     // Exponential backoff for reconnection
     const delay = Math.min(baseReconnectDelay * Math.pow(2, reconnectAttempts), 30000); // Max 30 seconds
     reconnectAttempts++;
-    
+
     setTimeout(() => startWebSocket(token), delay);
   };
 }
@@ -976,11 +986,11 @@ function stopHeartbeat() {
 function updateConnectionStatus(status, color) {
   const statusDots = document.querySelectorAll('#ws-status-dot, #ws-status-dot-mobile, #ws-status-dot-inner');
   const statusTexts = document.querySelectorAll('#ws-status-text, #ws-status-text-inner');
-  
+
   statusDots.forEach(dot => {
     dot.className = `status-dot text-${color}-500 bg-current`;
   });
-  
+
   statusTexts.forEach(text => {
     text.textContent = status;
   });
@@ -998,7 +1008,7 @@ function updateDashboardData(data) {
     Object.entries(data.signals).forEach(([sym, sig]) => {
       // For trial users, create signals for multiple timeframes (15m, 30m, 1h)
       const trialTimeframes = ['15m', '30m', '1h'];
-      
+
       if (userPlan === 'trial' || trialActive) {
         // For trial users, create the same signal for all trial timeframes
         trialTimeframes.forEach(tf => {
@@ -1072,15 +1082,15 @@ function updateDashboardData(data) {
   if (data.tickers || window.currentTickers) {
     window.previousTickers = window.currentTickers || {};
     if (data.tickers && Object.keys(data.tickers).length > 0) {
-        window.currentTickers = { ...window.currentTickers, ...data.tickers };
+      window.currentTickers = { ...window.currentTickers, ...data.tickers };
     }
-    
+
     // Defer ticker updates slightly to ensure Reactivity cycle finishes if debouncedFilterAndRenderSignals just fired
     setTimeout(() => {
       Object.entries(window.currentTickers).forEach(([sym, price]) => {
         const idStr = sym.replace('/', '-');
         const priceDisplays = document.querySelectorAll(`.live-price[data-symbol="${idStr}"]`);
-        
+
         // Dispatch global custom event for dynamic UI synchronization (e.g., signal history updates)
         const currentPrice = parseFloat(price);
         if (!isNaN(currentPrice)) {
@@ -1088,20 +1098,20 @@ function updateDashboardData(data) {
         }
 
         priceDisplays.forEach(priceDisplay => {
-            const previousPrice = parseFloat(window.previousTickers[sym] || currentPrice);
-            
-            if (isNaN(currentPrice)) return;
-            
-            // Format based on price size
-            const priceStr = currentPrice < 0.01 ? currentPrice.toFixed(6) : currentPrice.toFixed(4);
-            priceDisplay.textContent = `$${priceStr}`;
-            
-            priceDisplay.classList.remove('price-up', 'price-down');
-            if (currentPrice > previousPrice) {
-              priceDisplay.classList.add('price-up');
-            } else if (currentPrice < previousPrice) {
-              priceDisplay.classList.add('price-down');
-            }
+          const previousPrice = parseFloat(window.previousTickers[sym] || currentPrice);
+
+          if (isNaN(currentPrice)) return;
+
+          // Format based on price size
+          const priceStr = currentPrice < 0.01 ? currentPrice.toFixed(6) : currentPrice.toFixed(4);
+          priceDisplay.textContent = `$${priceStr}`;
+
+          priceDisplay.classList.remove('price-up', 'price-down');
+          if (currentPrice > previousPrice) {
+            priceDisplay.classList.add('price-up');
+          } else if (currentPrice < previousPrice) {
+            priceDisplay.classList.add('price-down');
+          }
         });
       });
     }, 50);
@@ -1139,7 +1149,7 @@ function renderSignals(signals) {
   if (!signalsContainer) return;
 
   const signalEntries = Object.entries(signals);
-  
+
   // Strict check using AuthManager
   const effectiveTrialActive = typeof AuthManager !== 'undefined' ? AuthManager.isTrialValid() : ((trialActive === null && userPlan === 'trial') ? true : trialActive);
 
@@ -1154,7 +1164,7 @@ function renderSignals(signals) {
   console.log('renderSignals - Total signals:', signalEntries.length);
   console.log('renderSignals - User plan:', userPlan, 'Effective trial active:', effectiveTrialActive);
   console.log('renderSignals - Allowed tokens:', allowedTokens);
-  
+
   // Filter signals based on user's allowed tokens
   const filteredEntries = signalEntries.filter(([key, signal]) => {
     const symbol = signal.symbol;
@@ -1198,7 +1208,7 @@ function renderSignals(signals) {
   const simSelect = document.getElementById('sim-symbol');
   if (simSelect) {
     const currentSelection = simSelect.value;
-    simSelect.innerHTML = '<option value="">Select a signal...</option>' + 
+    simSelect.innerHTML = '<option value="">Select a signal...</option>' +
       filteredEntries.map(([key, signal]) => `<option value="${signal.symbol}">${signal.symbol}</option>`).join('');
     if (filteredEntries.some(([key, signal]) => signal.symbol === currentSelection)) {
       simSelect.value = currentSelection;
@@ -1216,7 +1226,7 @@ function renderSignals(signals) {
     const signalClass = getSignalClass(signalType, signalStatus);
     const cardTypeClass = getSignalCardType(signal.direction);
     const confidence = (signal.ai_prob || 0) * 100;
-    
+
     // Determine status badge
     let statusBadge = '';
     let statusIndicator = '';
@@ -1227,7 +1237,7 @@ function renderSignals(signals) {
       statusBadge = '<span class="bg-red-500/20 text-red-400 border border-red-500/50 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider">✗ STOPPED OUT</span>';
       statusIndicator = ' opacity-50';
     }
-    
+
     let directionBadge = '';
     if (signal.direction === 'LONG') {
       directionBadge = '<span class="bg-green-500/20 text-green-400 border border-green-500/50 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider">LONG</span>';
@@ -1239,7 +1249,7 @@ function renderSignals(signals) {
     const tpStr = signal.tp ? signal.tp.toFixed(4) : '-';
     const entryStr = signal.entry_price ? signal.entry_price.toFixed(4) : '-';
     const profIndex = (signal.profitability_index || 0).toFixed(2);
-    
+
     // Confluence Mock / Data injection
     const confluence = signal.confluence || {
       trend: Math.floor(Math.random() * 20 + 70), // Mock 70-90 if absent
@@ -1316,15 +1326,15 @@ function renderSignals(signals) {
   }).join('');
 }
 
-window.toggleScorecard = function(event, symbol) {
+window.toggleScorecard = function (event, symbol) {
   event.stopPropagation(); // prevent card click
   const containerId = `scorecard-${symbol.replace('/', '-')}`;
   const content = document.getElementById(containerId);
   if (!content) return;
-  
+
   const wrapper = content.parentElement;
   const isOpen = wrapper.classList.contains('open');
-  
+
   // Calculate tier
   let userTier = 0;
   if (userPlan === 'pro') userTier = 3;
@@ -1333,15 +1343,15 @@ window.toggleScorecard = function(event, symbol) {
 
   if (userTier < 2) {
     content.classList.add('premium-lock-blur', 'locked');
-    
+
     // Toggle opening with lock
     wrapper.classList.toggle('open');
-    
+
     // If they click on the lock overlay (which is placed via pseudo element pointer-events:auto),
     // trigger upgrade modal.
     content.onclick = (e) => {
       e.stopPropagation();
-      if(typeof showUpgradeModal === 'function') showUpgradeModal();
+      if (typeof showUpgradeModal === 'function') showUpgradeModal();
     };
   } else {
     content.classList.remove('premium-lock-blur', 'locked');
@@ -1349,7 +1359,7 @@ window.toggleScorecard = function(event, symbol) {
   }
 }
 
-window.selectSignal = function(symbol, timeframe) {
+window.selectSignal = function (symbol, timeframe) {
   const key = `${symbol}_${timeframe}`;
   const sig = window.latestSignals && window.latestSignals[key];
   if (!sig) return;
@@ -1378,17 +1388,17 @@ window.selectSignal = function(symbol, timeframe) {
 
   if (simSelect) {
     if (!Array.from(simSelect.options).some(opt => opt.value === symbol)) {
-       const newOpt = document.createElement('option');
-       newOpt.value = symbol;
-       newOpt.textContent = symbol;
-       simSelect.appendChild(newOpt);
+      const newOpt = document.createElement('option');
+      newOpt.value = symbol;
+      newOpt.textContent = symbol;
+      simSelect.appendChild(newOpt);
     }
     simSelect.value = symbol;
   }
   if (simEntry) simEntry.value = sig.entry_price || 0;
   if (simSl) simSl.value = sig.sl || 0;
   if (simTp) simTp.value = sig.tp || 0;
-  
+
   if (directionBadge) {
     directionBadge.textContent = sig.direction || 'NEUTRAL';
     if (sig.direction === 'LONG') {
@@ -1423,12 +1433,12 @@ window.selectSignal = function(symbol, timeframe) {
 
 function getSignalClass(signal, status) {
   const s = String(signal).toUpperCase();
-  
+
   // If signal is expired or stopped out, use neutral/expired styling
   if (status === 'EXPIRED' || status === 'STOPPED_OUT') {
     return 'expired';
   }
-  
+
   if (s.includes('BUY') || s.includes('LONG')) return 'buy';
   if (s.includes('SELL') || s.includes('SHORT')) return 'sell';
   return 'neutral';
@@ -1479,7 +1489,7 @@ function setupFirestoreListeners() {
 
   // Listen to signals collection
   const signalsQuery = query(collection(db, 'signals'), orderBy('timestamp', 'desc'), limit(150));
-  
+
   window.latestSignals = {}; // Accumulate signals to prevent flickering
   signalsUnsubscribe = onSnapshot(signalsQuery, (snapshot) => {
     snapshot.docChanges().forEach(change => {
@@ -1488,12 +1498,12 @@ function setupFirestoreListeners() {
         const symbol = data.symbol || change.doc.id;
         const tf = data.timeframe || '1h';
         const key = `${symbol}_${tf}`;
-        
+
         // Apply plan filtering
         if (userPlan !== 'pro' && !allowedTokens.includes(symbol)) {
           return;
         }
-        
+
         const signalObj = {
           symbol: symbol,
           signal: data.signal || 'WAITING',
@@ -1524,7 +1534,7 @@ function setupFirestoreListeners() {
       } else if (change.type === 'removed') {
         const data = change.doc.data();
         const symbol = data.symbol || change.doc.id;
-        
+
         if (userPlan === 'trial' || trialActive) {
           const trialTimeframes = ['15m', '30m', '1h'];
           trialTimeframes.forEach(trialTf => {
@@ -1538,7 +1548,7 @@ function setupFirestoreListeners() {
         }
       }
     });
-    
+
     if (Object.keys(window.latestSignals).length > 0) {
       debouncedFilterAndRenderSignals();
     }
@@ -1562,7 +1572,7 @@ function setupFirestoreListeners() {
       where('status', '==', 'open'),
       orderBy('entry_time', 'desc')
     );
-    
+
     tradesUnsubscribe = onSnapshot(tradesQuery, (snapshot) => {
       const trades = [];
       snapshot.forEach(doc => {
@@ -1588,7 +1598,7 @@ function setupFirestoreListeners() {
 // -------------------------------------------------------------------
 async function toggleAlphaMode() {
   const isSubActive = AuthManager.getSubscriptionStatus() === 'active';
-  
+
   if (userPlan !== 'pro' && !isSubActive) {
     showUpgradeModal();
     return;
@@ -1609,10 +1619,10 @@ async function toggleAlphaMode() {
     if (response.ok) {
       const data = await response.json();
       currentAlphaMode = data.alpha_mode;
-      
+
       // Update UI theme/state for Alpha Mode
       updateAlphaTheme(currentAlphaMode);
-      
+
       if (alphaStatus) {
         alphaStatus.textContent = currentAlphaMode ? 'ACTIVE' : 'STANDBY';
         alphaStatus.className = currentAlphaMode ? 'alpha-active' : 'alpha-standby';
@@ -1693,7 +1703,7 @@ async function saveUserSettings() {
 // -------------------------------------------------------------------
 function showUpgradePrompt() {
   if (userPlan === 'pro') return;
-  
+
   const modal = getUpgradeModal();
   if (modal) modal.style.display = 'flex';
 }
@@ -1724,13 +1734,13 @@ function getUpgradeModal() {
       </div>
     `;
     document.body.appendChild(modal);
-    
+
     const closeBtn = modal.querySelector('.close-modal');
     const closeModalBtn = document.getElementById('closeUpgradeModalBtn');
-    
+
     if (closeBtn) closeBtn.onclick = () => modal.style.display = 'none';
     if (closeModalBtn) closeModalBtn.onclick = () => modal.style.display = 'none';
-    
+
     modal.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
   }
   return modal;
@@ -1742,54 +1752,54 @@ window.AegisDashboard = {
     const allowedPlans = ['basic', 'intermediate', 'pro'];
     const planName = allowedPlans.includes(planType) ? planType : 'basic';
     const token = AuthManager.getToken();
-    
+
     if (!token) {
       alert('Please log in first');
       window.location.href = '/web/src/pages/index.html';
       return;
     }
-    
+
     try {
       // 1. Fetch payment session from backend
       const response = await fetch(`${API_BASE_URL}/api/create_subscription`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ plan: planName })
       });
-      
+
       if (!response.ok) {
         console.warn('Subscription backend not ready, using sandbox fallback mock.');
         await mockSuccessfulPayment(planName);
         return;
       }
-      
+
       const data = await response.json();
       const paymentSessionId = data.payment_session_id;
-      
+
       // 2. Initialize Cashfree SDK
       if (typeof Cashfree !== 'undefined') {
         const cashfree = Cashfree({
-            mode: "sandbox" // Change to "production" in live
+          mode: "sandbox" // Change to "production" in live
         });
 
         // 3. Open Cashfree modal
         let checkoutOptions = {
-            paymentSessionId: paymentSessionId,
-            redirectTarget: "_modal",
+          paymentSessionId: paymentSessionId,
+          redirectTarget: "_modal",
         };
-        
+
         cashfree.checkout(checkoutOptions).then(async (result) => {
-            if(result.error){
-                console.error("Cashfree error:", result.error);
-                alert("Payment was cancelled or failed. Please try again.");
-            }
-            if(result.paymentDetails){
-                console.log("Payment successful");
-                await mockSuccessfulPayment(planName);
-            }
+          if (result.error) {
+            console.error("Cashfree error:", result.error);
+            alert("Payment was cancelled or failed. Please try again.");
+          }
+          if (result.paymentDetails) {
+            console.log("Payment successful");
+            await mockSuccessfulPayment(planName);
+          }
         });
       } else {
         alert('Payment gateway failed to load. Please refresh the page.');
@@ -1807,13 +1817,13 @@ async function mockSuccessfulPayment(planName) {
     // Update Firestore user status directly for demo purposes
     if (currentUser && currentUser.uid) {
       const userDocRef = doc(db, 'users', currentUser.uid);
-      await updateDoc(userDocRef, { 
+      await updateDoc(userDocRef, {
         plan: planName,
         subscriptionStatus: 'active',
         trialActive: false
       });
     }
-    
+
     // Clear expired view if it exists
     if (typeof window.clearExpiredView === 'function') {
       window.clearExpiredView();
@@ -1839,18 +1849,18 @@ async function handleLogout() {
   try {
     // Close WebSocket
     if (ws) ws.close();
-    
+
     // Unsubscribe from Firestore listeners
     if (signalsUnsubscribe) signalsUnsubscribe();
     if (tradesUnsubscribe) tradesUnsubscribe();
-    
+
     // Clear local storage
     localStorage.removeItem('access_token');
     localStorage.removeItem('authToken');
-    
+
     // Sign out from Firebase
     await signOut(auth);
-    
+
     // Redirect to home
     window.location.href = '/web/src/pages/index.html';
   } catch (error) {
@@ -1869,7 +1879,7 @@ function redirectToLogin() {
 function setupFooter() {
   const footer = document.querySelector('.footer');
   if (!footer) return;
-  
+
   // Check if footer already has proprietor info
   if (!footer.innerHTML.includes('Proprietor')) {
     const legalHtml = `
@@ -1893,50 +1903,50 @@ function setupFooter() {
 // Missing User/Settings Utilities for app.js
 // -------------------------------------------------------------------
 export async function ensureUserDocument(user) {
-    if (!user) return null;
-    const userDocRef = doc(db, 'users', user.uid);
-    const docSnap = await getDoc(userDocRef);
-    if (!docSnap.exists()) {
-        await setDoc(userDocRef, {
-            uid: user.uid,
-            email: user.email || '',
-            joinDate: serverTimestamp(),
-            lastLogin: serverTimestamp()
-        });
-    } else {
-        await updateDoc(userDocRef, { lastLogin: serverTimestamp() });
-    }
+  if (!user) return null;
+  const userDocRef = doc(db, 'users', user.uid);
+  const docSnap = await getDoc(userDocRef);
+  if (!docSnap.exists()) {
+    await setDoc(userDocRef, {
+      uid: user.uid,
+      email: user.email || '',
+      joinDate: serverTimestamp(),
+      lastLogin: serverTimestamp()
+    });
+  } else {
+    await updateDoc(userDocRef, { lastLogin: serverTimestamp() });
+  }
 }
 
 export function subscribeUserSettings(user, callback) {
-    if (!user) return () => {};
-    const ref = doc(db, 'users', user.uid, 'preferences', 'settings');
-    return onSnapshot(ref, (docSnap) => {
-        if (docSnap.exists()) {
-            callback(docSnap.data());
-        } else {
-            callback({ capital: 10000, risk_pct: 1 });
-        }
-    });
+  if (!user) return () => { };
+  const ref = doc(db, 'users', user.uid, 'preferences', 'settings');
+  return onSnapshot(ref, (docSnap) => {
+    if (docSnap.exists()) {
+      callback(docSnap.data());
+    } else {
+      callback({ capital: 10000, risk_pct: 1 });
+    }
+  });
 }
 
 export async function updateUserSetting(user, key, value) {
-    if (!user) return;
-    const ref = doc(db, 'users', user.uid, 'preferences', 'settings');
-    await setDoc(ref, { [key]: value }, { merge: true });
+  if (!user) return;
+  const ref = doc(db, 'users', user.uid, 'preferences', 'settings');
+  await setDoc(ref, { [key]: value }, { merge: true });
 }
 
 // Expose functions globally for HTML access
 window.initiatePaperTrade = initiatePaperTrade;
 
 export function getCurrentUserToken() {
-    return AuthManager.getToken();
+  return AuthManager.getToken();
 }
 
 // -------------------------------------------------------------------
 // Export for module usage
 // -------------------------------------------------------------------
-export { 
+export {
   currentUser, currentUserData, userPlan, trialActive, allowedTokens,
   getUpgradeModal, showUpgradeModal, handleLogout as logout
 };
