@@ -438,6 +438,18 @@ const TrialManager = (() => {
     }
 
     currentUserId = userId;
+    
+    // Fallback if trialStart is not provided (e.g. from app.js)
+    if (!trialStart) {
+      const cachedStart = localStorage.getItem('trial_start_timestamp');
+      if (cachedStart) {
+        trialStart = new Date(cachedStart);
+      } else {
+        const freshStart = await fetchTrialStartFromFirestore(userId);
+        trialStart = freshStart ? freshStart : new Date();
+      }
+    }
+
     if (trialStart) {
       explicitTrialStart = trialStart instanceof Date ? trialStart : new Date(trialStart);
       if (!Number.isNaN(explicitTrialStart.getTime())) {
