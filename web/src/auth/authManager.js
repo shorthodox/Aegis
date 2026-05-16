@@ -86,6 +86,7 @@ export class AuthManager {
             if (Date.now() > trialEnd) {
                 return false;
             }
+            return true;
         }
 
         // Exclusively use server response data
