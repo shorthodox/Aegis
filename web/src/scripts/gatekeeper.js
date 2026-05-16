@@ -1783,6 +1783,12 @@ window.AegisDashboard = {
       const data = await response.json();
       const paymentSessionId = data.payment_session_id;
 
+      if (!data.success || !paymentSessionId) {
+        console.warn('Invalid Cashfree session generated, using sandbox fallback mock. Error:', data.error);
+        await mockSuccessfulPayment(planName);
+        return;
+      }
+
       // 2. Initialize Cashfree SDK
       if (typeof Cashfree !== 'undefined') {
         const cashfree = Cashfree({

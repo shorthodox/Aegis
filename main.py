@@ -1933,22 +1933,10 @@ def create_cashfree_order(user_id: str, user_email: str, plan_amount: float, pla
             }
         else:
             print(f"❌ Cashfree Order Creation Failed: {response.text}")
-            # Mock successful response for development/testing when keys are missing
-            return {
-                "success": True, 
-                "payment_session_id": f"session_{uuid.uuid4().hex}",
-                "order_id": order_id,
-                "mocked": True
-            }
+            return {"success": False, "error": response.text}
     except Exception as e:
         print(f"❌ Request Error: {str(e)}")
-        # Mock successful response for development
-        return {
-            "success": True, 
-            "payment_session_id": f"session_{uuid.uuid4().hex}",
-            "order_id": order_id,
-            "mocked": True
-        }
+        return {"success": False, "error": str(e)}
 
 @app.post("/api/v1/create-payment-session")
 async def create_payment_session(request: PaymentSessionRequest):
