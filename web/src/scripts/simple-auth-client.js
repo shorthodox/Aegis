@@ -111,8 +111,8 @@ async function subscribeToPlan(planType) {
     }
     const me = await meResp.json();
     let amount = 3.60;
-    if (planType === 'pro') amount = 24.00;
-    else if (planType === 'intermediate') amount = 12.00;
+    if (planType === 'pro') amount = 40.00;
+    else if (planType === 'intermediate') amount = 24.00;
     
     const body = { plan_name: planType, amount: amount, email: me.email };
     const resp = await fetch('/create-subscription', {
