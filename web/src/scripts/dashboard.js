@@ -7,12 +7,75 @@ let initialized = false;
 // WAIT FOR AUTH STATE CHANGE (replaces polling waitForUserId)
 // ============================================================
 function waitForAuthStateChange() {
-  return new Promise((resolve) => {
+  const authPromise = new Promise((resolve) => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
       unsubscribe(); // Unsubscribe after first state change
       resolve(user?.uid || null);
     });
   });
+
+  const timeoutPromise = new Promise((resolve) => {
+    setTimeout(() => {
+      console.warn('waitForAuthStateChange timeout reached');
+      resolve(null);
+    }, 10000);
+  });
+
+  return Promise.race([authPromise, timeoutPromise]);
+}
+
+function handleAuthFailure() {
+  window.isSubscriptionActive = false;
+  blockAllFeatures();
+
+  const dashboardContent = document.getElementById('dashboard-main-content');
+  if (dashboardContent) dashboardContent.classList.add('hidden');
+
+  let errorCard = document.getElementById('auth-error-card');
+  if (!errorCard) {
+    errorCard = document.createElement('div');
+    errorCard.id = 'auth-error-card';
+    errorCard.className = 'expired-card'; // Reuse some styling
+    errorCard.innerHTML = `
+      <div class="expired-card-content">
+        <i class="fas fa-wifi-off" style="font-size: 3rem; color: #ff8c00; margin-bottom: 1rem;"></i>
+        <h2 style="color: #ff8c00; margin: 1rem 0;">Connection Error</h2>
+        <p style="color: #ccc; margin: 1rem 0; font-size: 1.1rem;">
+          Unable to verify your account status. Please check your connection and try again.
+        </p>
+        <div style="display: flex; gap: 1rem; justify-content: center; margin-top: 2rem;">
+          <button onclick="location.reload()" style="
+            padding: 12px 32px;
+            background: linear-gradient(135deg, #ff8c00, #ff0055);
+            border: 2px solid #ff8c00;
+            color: white;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+          ">
+            Retry
+          </button>
+        </div>
+      </div>
+    `;
+    errorCard.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.95);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    `;
+    document.body.appendChild(errorCard);
+  } else {
+    errorCard.classList.remove('hidden');
+  }
 }
 
 function setExpiredView() {
@@ -266,8 +329,18 @@ function fetchLiveMarketData() {
 }
 
 
+let trialSetupRunning = false;
+let lastTrialSetupTime = 0;
+
 async function setupTrialNonBlocking(userId) {
   if (!userId) return;
+
+  const now = Date.now();
+  if (trialSetupRunning || (now - lastTrialSetupTime < 5000)) {
+     console.log('⏳ Skipping duplicate setupTrialNonBlocking call to prevent request bloat');
+     return;
+  }
+  trialSetupRunning = true;
 
   const cacheKey = `trialStart_${userId}`;
   let trialStart = localStorage.getItem(cacheKey);
@@ -285,6 +358,11 @@ async function setupTrialNonBlocking(userId) {
     if (freshTrialStart && freshTrialStart !== trialStart) {
       localStorage.setItem(cacheKey, freshTrialStart);
       initializeTrialCountdown(userId, freshTrialStart);
+    } else if (!freshTrialStart && !trialStart) {
+      console.log('🛡️ No trial start found in DB, initiating 3-day grace period');
+      const fallbackStart = new Date().toISOString();
+      localStorage.setItem(cacheKey, fallbackStart);
+      initializeTrialCountdown(userId, fallbackStart);
     }
   } catch (trialErr) {
     console.error('Failed to fetch trial data, using fallback:', trialErr);
@@ -295,6 +373,9 @@ async function setupTrialNonBlocking(userId) {
       localStorage.setItem(cacheKey, fallbackStart);
       initializeTrialCountdown(userId, fallbackStart);
     }
+  } finally {
+    trialSetupRunning = false;
+    lastTrialSetupTime = Date.now();
   }
 }
 
@@ -332,17 +413,7 @@ async function initDashboard(event) {
 
     if (!realUserId) {
       console.warn('Dashboard countdown: could not resolve current user UID');
-      const countdownDisplay = document.getElementById('countdown-display');
-      if (countdownDisplay) {
-        countdownDisplay.innerHTML = `
-            <i class="fas fa-exclamation-triangle"></i>
-            Session Expired - Please log in again
-          `;
-        countdownDisplay.style.display = 'block';
-        countdownDisplay.style.background = 'rgba(255, 0, 85, 0.15)';
-        countdownDisplay.style.borderColor = 'rgba(255, 0, 85, 0.4)';
-        countdownDisplay.style.color = '#ff0055';
-      }
+      handleAuthFailure();
       return;
     }
 
