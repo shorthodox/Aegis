@@ -121,21 +121,32 @@ async function subscribeToPlan(planType) {
       body: JSON.stringify(body)
     });
     const data = await resp.json().catch(() => ({}));
-    if (resp.ok && data.success) {
-      if (typeof Cashfree !== 'undefined') {
-        // Use "sandbox" for TEST or "production" for LIVE. Hardcoded to sandbox for demo/safety.
-        const cashfree = Cashfree({ mode: "sandbox" }); 
-        let checkoutOptions = {
-            paymentSessionId: data.payment_session_id,
-            redirectTarget: "_self"
-        };
-        cashfree.checkout(checkoutOptions);
-      } else {
-        alert("Payment gateway failed to load. Please disable ad-blockers and refresh.");
-      }
+    if (!data.success || !data.payment_session_id) {
+      alert('Subscription API failed. Falling back to mock (development mode). Error: ' + (data.error || data.detail || 'Invalid session'));
+      // Simulate mock success here if desired or simply return
       return;
     }
-    alert('Subscription failed: ' + (data.error || data.detail || data.message || resp.status));
+    
+    if (typeof Cashfree !== 'undefined') {
+      // Use "sandbox" for TEST or "production" for LIVE. Hardcoded to sandbox for demo/safety.
+      const cashfree = Cashfree({ mode: "sandbox" }); 
+      let checkoutOptions = {
+          paymentSessionId: data.payment_session_id,
+          redirectTarget: "_modal"
+      };
+      cashfree.checkout(checkoutOptions).then((result) => {
+          if (result.error) {
+              console.error("Cashfree error:", result.error);
+              alert("Payment was cancelled or failed. Please try again.");
+          }
+          if (result.paymentDetails) {
+              console.log("Payment successful");
+              // Update UI/redirect as needed
+          }
+      });
+    } else {
+      alert("Payment gateway failed to load. Please disable ad-blockers and refresh.");
+    }
   } catch (err) {
     console.error('subscribeToPlan error', err);
     alert('Network error while creating subscription');
