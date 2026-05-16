@@ -243,7 +243,7 @@
         </aside>
 
         <!-- Main Content Area -->
-        <main class="flex-1 overflow-visible lg:overflow-y-auto p-4 lg:p-6 space-y-6 relative h-auto lg:h-full w-full">
+        <main class="flex-1 overflow-visible lg:overflow-y-auto p-4 lg:p-6 space-y-6 relative h-auto lg:h-full w-full lg:ml-[280px] lg:w-[calc(100%-280px)]">
             <div id="countdown-display" class="countdown-display w-full max-w-none mx-0 mb-4 lg:mb-6">Loading
                 countdown...</div>
 
@@ -605,6 +605,11 @@
             if (target) {
                 target.classList.remove('hidden');
                 target.classList.add('active');
+            }
+
+            // Force data refresh for analytics
+            if (roomName === 'analytics' && typeof window.forceTradesRefresh === 'function') {
+                window.forceTradesRefresh();
             }
 
             // Update nav styles
