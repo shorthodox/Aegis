@@ -76,6 +76,15 @@ document.addEventListener('trialExpired', () => {
     // Refresh UI to update plan badge immediately when trial expires
     updateUI();
 });
+
+// Update UI if the trial status asynchronously finishes loading/refreshing
+window.addEventListener('trial-status-updated', () => {
+    if (typeof AuthManager !== 'undefined') {
+        trialActive = AuthManager.isTrialValid();
+        updateUI();
+    }
+});
+
 let allowedTokens = [];
 let ws = null;
 let signalsUnsubscribe = null;
@@ -743,6 +752,10 @@ async function loadUserFromBackend(token) {
       currentUserData = userData;
       userPlan = userData.plan || 'trial';
       trialEnd = userData.trial_end ? new Date(userData.trial_end) : null;
+      
+      if (typeof AuthManager !== 'undefined') {
+          AuthManager.setUser(userData);
+      }
       
       const isActive = userData.trial_active ?? true; // Default to true if null
       trialActive = typeof AuthManager !== 'undefined' ? AuthManager.isTrialValid() : isActive;
