@@ -114,6 +114,85 @@ body.dashboard-body .glass-nav {
     color: #f8fafc;
 }
 
+/* ============================================================
+   TIER-SPECIFIC GLOWS & STYLING
+   ============================================================ */
+.glow-basic {
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.glow-intermediate {
+    box-shadow: 0 0 20px rgba(0, 242, 255, 0.3);
+    border-color: var(--primary-cyan);
+}
+
+.glow-pro {
+    box-shadow: 0 0 30px rgba(255, 215, 0, 0.3);
+    border-color: #ffd700;
+}
+
+.price-card.tier-pro.featured {
+    transform: scale(1.05);
+    z-index: 10;
+    position: relative;
+    border: 2px solid #ffd700;
+    background: linear-gradient(180deg, rgba(20,20,20,0.9) 0%, rgba(10,10,10,0.95) 100%);
+}
+
+.price-card.tier-pro.featured:hover {
+    transform: scale(1.08);
+}
+
+/* ============================================================
+   PROGRESS BARS & ZONE TRACKING
+   ============================================================ */
+.confluence-progress-bar {
+    width: 100%;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    margin-top: 8px;
+    overflow: hidden;
+}
+
+.confluence-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary-cyan), var(--success-green));
+    border-radius: 3px;
+}
+
+.zone-progression {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.zone-node {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    transition: 0.3s ease;
+}
+
+.zone-node.active {
+    background: var(--primary-cyan);
+    box-shadow: 0 0 8px var(--primary-cyan);
+}
+
+.zone-line {
+    flex-grow: 1;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.2);
+    transition: 0.3s ease;
+}
+
+.zone-line.active {
+    background: var(--primary-cyan);
+}
+
 .access-expired-card h2 {
     margin-bottom: 0.75rem;
     font-size: 1.75rem;
