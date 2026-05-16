@@ -1896,7 +1896,7 @@ def create_cashfree_order(user_id: str, user_email: str, plan_amount: float, pla
     BASE_URL = "https://api.cashfree.com/pg" if IS_PROD else "https://sandbox.cashfree.com/pg"
     
     headers = {
-        "x-client-id": os.getenv("CASHFREE_CLIENT_ID", "test_client_id"),
+        "x-client-id": os.getenv("CASHFREE_APP_ID", os.getenv("CASHFREE_CLIENT_ID", "test_client_id")),
         "x-client-secret": os.getenv("CASHFREE_SECRET_KEY", "test_client_secret"),
         "x-api-version": "2023-08-01",
         "Content-Type": "application/json"
@@ -2035,4 +2035,6 @@ async def handle_cashfree_webhook(request: Request):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     uvicorn.run("main:app", host="0.0.0.0", port=port)
+
+
 
