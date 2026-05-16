@@ -2977,3 +2977,68 @@ body.modal-open {
         justify-content: center;
     }
 }
+
+/* ============================================================
+   CONFLUENCE SCORECARD
+   ============================================================ */
+.confluence-bar {
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 4px;
+}
+
+.confluence-bar .fill {
+    height: 100%;
+    background: linear-gradient(90deg, #00f2ff, #0055ff);
+    border-radius: 2px;
+    transition: width 0.5s ease-out;
+}
+
+.slide-down-container {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.3s ease-out;
+}
+
+.slide-down-container.open {
+    grid-template-rows: 1fr;
+}
+
+.slide-down-content {
+    overflow: hidden;
+}
+
+.premium-lock-blur {
+    position: relative;
+}
+
+.premium-lock-blur::after {
+    content: "PRO FEATURE LOCKED";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    color: #ffd700;
+    font-size: 1.2rem;
+    z-index: 10;
+    border-radius: inherit;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+}
+
+.premium-lock-blur.locked::after {
+    opacity: 1;
+    pointer-events: auto;
+}
