@@ -42,7 +42,8 @@ body {
 
 /* DASHBOARD BODY OVERRIDES */
 body.dashboard-body {
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
     height: 100vh;
     padding-top: 0;
     /* Remove top padding since we hide the top nav */
