@@ -251,7 +251,7 @@ function fetchLiveMarketData() {
       priorityTokens.forEach(sym => {
         const idStr = sym.replace('/', '-');
         html += `
-          <div class="glass-panel p-4 rounded-xl flex flex-col justify-center border-l-2 border-cyan/50 hover:bg-white/5 transition-colors cursor-pointer shadow-lg">
+          <div class="glass-panel p-4 rounded-xl flex flex-col justify-center border-l-2 border-cyan/50 hover:bg-white/5 transition-colors cursor-pointer shadow-lg" onclick="selectToken('${sym}')">
             <span class="text-[10px] text-gray-500 font-bold uppercase tracking-widest">${sym}</span>
             <span id="market-card-price-${idStr}" class="live-price text-xl font-mono mt-1 transition-colors duration-300" data-symbol="${idStr}">Loading...</span>
           </div>
@@ -378,6 +378,11 @@ document.addEventListener('dashboardUserLoaded', initDashboard);
 // ============================================================
 
 window.selectedTrade = null;
+window.selectedTradeToken = null;
+
+window.selectToken = function(sym) {
+  window.selectedTradeToken = sym;
+};
 
 function getATR(price) { return price * 0.015; }
 
@@ -484,8 +489,8 @@ window.prefillTradeSim = function (symbol, price, signalObj) {
 };
 
 async function executeTrade() {
-  if (!window.selectedTrade) {
-    alert('Please select a trade first.');
+  if (!window.selectedTradeToken && !window.selectedTrade) {
+    alert('Please select a token first.');
     return;
   }
 
@@ -498,8 +503,8 @@ async function executeTrade() {
   const notional = parseFloat(document.getElementById('notional').innerText.replace('$', ''));
 
   const tradeData = {
-    symbol: window.selectedTrade.symbol,
-    side: window.selectedTrade.direction,
+    symbol: window.selectedTradeToken || (window.selectedTrade ? window.selectedTrade.symbol : null),
+    side: window.selectedTrade ? window.selectedTrade.direction : (document.getElementById('direction-badge')?.innerText || 'LONG'),
     entryPrice: entry,
     stopLoss: sl,
     takeProfit: tp,
@@ -508,7 +513,7 @@ async function executeTrade() {
     positionUnits,
     notionalValue: notional,
     status: 'open',
-    signalId: window.selectedTrade.signalId || null
+    signalId: window.selectedTrade ? (window.selectedTrade.signalId || null) : null
   };
 
   localStorage.setItem('analyticsActiveTrade', JSON.stringify(tradeData));
