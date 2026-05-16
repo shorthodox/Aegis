@@ -1647,9 +1647,10 @@ function getUpgradeModal() {
           <li>Real-time WebSocket feed</li>
           <li>Priority execution alerts</li>
         </ul>
-        <div class="pricing-options">
-          <button onclick="window.AegisDashboard?.subscribeToPlan('basic')" class="btn-outline">Basic ($3.60/mo)</button>
-          <button onclick="window.AegisDashboard?.subscribeToPlan('pro')" class="btn-pro">Pro ($24/mo)</button>
+        <div class="pricing-options" style="display:flex; flex-direction:column; gap:0.5rem; margin-bottom:1rem;">
+          <button onclick="window.AegisDashboard?.subscribeToPlan('basic')" class="btn-outline" style="padding: 0.6rem; font-size: 0.85rem;">Basic ($3.60/mo)</button>
+          <button onclick="window.AegisDashboard?.subscribeToPlan('intermediate')" class="btn-outline" style="padding: 0.6rem; font-size: 0.85rem; border-color: var(--primary-cyan);">Intermediate ($12/mo)</button>
+          <button onclick="window.AegisDashboard?.subscribeToPlan('pro')" class="btn-pro" style="padding: 0.6rem; font-size: 0.85rem;">Pro ($24/mo)</button>
         </div>
         <button id="closeUpgradeModalBtn" class="btn-secondary">Maybe Later</button>
       </div>
@@ -1670,7 +1671,8 @@ function getUpgradeModal() {
 // Cashfree Subscription Integration
 window.AegisDashboard = {
   subscribeToPlan: async (planType) => {
-    const planName = planType === 'pro' ? 'pro' : 'basic';
+    const allowedPlans = ['basic', 'intermediate', 'pro'];
+    const planName = allowedPlans.includes(planType) ? planType : 'basic';
     const token = AuthManager.getToken();
     
     if (!token) {
