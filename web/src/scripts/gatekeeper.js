@@ -1760,14 +1760,18 @@ window.AegisDashboard = {
     }
 
     try {
+      let amount = 3.60;
+      if (planName === 'pro') amount = 40.00;
+      else if (planName === 'intermediate') amount = 24.00;
+
       // 1. Fetch payment session from backend
-      const response = await fetch(`${API_BASE_URL}/api/create_subscription`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/create-payment-session`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ plan: planName })
+        body: JSON.stringify({ tier: planName, amount: amount })
       });
 
       if (!response.ok) {

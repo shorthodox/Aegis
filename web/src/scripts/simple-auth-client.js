@@ -114,18 +114,28 @@ async function subscribeToPlan(planType) {
     if (planType === 'pro') amount = 40.00;
     else if (planType === 'intermediate') amount = 24.00;
     
-    const body = { plan_name: planType, amount: amount, email: me.email };
-    const resp = await fetch('/create-subscription', {
+    const body = { tier: planType, amount: amount, email: me.email, user_id: me.uid || me.id || 'user_unknown' };
+    const resp = await fetch('/api/v1/create-payment-session', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
     const data = await resp.json().catch(() => ({}));
-    if (resp.ok && data.success && data.sub_auth_url) {
-      window.location.href = data.sub_auth_url;
+    if (resp.ok && data.success) {
+      if (typeof Cashfree !== 'undefined') {
+        // Use "sandbox" for TEST or "production" for LIVE. Hardcoded to sandbox for demo/safety.
+        const cashfree = Cashfree({ mode: "sandbox" }); 
+        let checkoutOptions = {
+            paymentSessionId: data.payment_session_id,
+            redirectTarget: "_self"
+        };
+        cashfree.checkout(checkoutOptions);
+      } else {
+        alert("Payment gateway failed to load. Please disable ad-blockers and refresh.");
+      }
       return;
     }
-    alert('Subscription failed: ' + (data.detail || data.message || resp.status));
+    alert('Subscription failed: ' + (data.error || data.detail || data.message || resp.status));
   } catch (err) {
     console.error('subscribeToPlan error', err);
     alert('Network error while creating subscription');
