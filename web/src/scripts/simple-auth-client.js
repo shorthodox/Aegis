@@ -110,7 +110,10 @@ async function subscribeToPlan(planType) {
       return;
     }
     const me = await meResp.json();
-    const amount = planType === 'pro' ? 24.00 : 3.60;
+    let amount = 3.60;
+    if (planType === 'pro') amount = 24.00;
+    else if (planType === 'intermediate') amount = 12.00;
+    
     const body = { plan_name: planType, amount: amount, email: me.email };
     const resp = await fetch('/create-subscription', {
       method: 'POST',
@@ -185,3 +188,4 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 export { openModal, closeModal, subscribeToPlan };
+
