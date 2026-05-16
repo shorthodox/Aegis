@@ -158,14 +158,29 @@ const TrialManager = (() => {
     }
 
     if (!cachedState) {
-      cachedState = {
-        active: false,
-        isLoading: true,
-        display: 'Verifying Trial Status...',
-        allowedTokens: [],
-        allowedTimeframes: [],
-        plan: 'trial'
-      };
+      if (!loadingStartTime) loadingStartTime = now;
+      if (now > loadingStartTime + loadingTimeoutMs) {
+        cachedState = {
+          active: false,
+          expired: false,
+          networkError: true,
+          display: 'Connection Timeout - Access Restricted',
+          allowedTokens: [],
+          allowedTimeframes: [],
+          plan: 'trial'
+        };
+      } else {
+        cachedState = {
+          active: false,
+          isLoading: true,
+          display: 'Verifying Trial Status...',
+          allowedTokens: [],
+          allowedTimeframes: [],
+          plan: 'trial'
+        };
+      }
+    } else {
+      loadingStartTime = null;
     }
 
     // Trigger background fetch if cache is old or missing
@@ -177,18 +192,27 @@ const TrialManager = (() => {
           
           if (token && isJWTExpired(token)) {
              console.warn('JWT expired, attempting silent refresh via Firebase...');
-             const { getAuth } = await import("https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js");
-             const auth = getAuth();
-             if (auth.currentUser) {
-                token = await auth.currentUser.getIdToken(true);
-                authHeader = `Bearer ${token}`;
-                localStorage.setItem('access_token', token);
-             } else {
-                throw new Error("Cannot refresh token");
+             try {
+               const { getAuth } = await import("https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js");
+               const auth = getAuth();
+               if (auth.currentUser) {
+                  token = await auth.currentUser.getIdToken(true);
+                  authHeader = `Bearer ${token}`;
+                  localStorage.setItem('access_token', token);
+               } else {
+                  networkErrorState = false;
+                  throw new Error("Cannot refresh token - no current user");
+               }
+             } catch (refreshErr) {
+               networkErrorState = false;
+               throw new Error("Token refresh failed: " + refreshErr.message);
              }
           }
 
-          if (!authHeader) throw new Error("Missing auth header");
+          if (!authHeader) {
+            networkErrorState = false;
+            throw new Error("Missing auth header");
+          }
 
           const userResponse = await fetch('/auth/me', {
             headers: { 'Authorization': authHeader },
@@ -206,6 +230,8 @@ const TrialManager = (() => {
           } else {
              if (userResponse.status >= 400 && userResponse.status < 600) {
                  networkErrorState = true;
+             } else {
+                 networkErrorState = false;
              }
              throw new Error(`HTTP Error ${userResponse.status}`);
           }
@@ -216,6 +242,8 @@ const TrialManager = (() => {
           } else {
               cachedTrialInfo = { _error: 'auth' };
           }
+        } finally {
+          window.dispatchEvent(new CustomEvent('trial-status-updated'));
         }
       })();
     }
