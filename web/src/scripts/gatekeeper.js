@@ -814,10 +814,13 @@ function updateUI() {
   // Update plan badge
   if (planBadge) {
     planBadge.className = 'text-sm font-bold mt-1';
+    // Use AuthManager for accurate trial status check
+    const isTrialValid = typeof AuthManager !== 'undefined' ? AuthManager.isTrialValid() : trialActive;
+    
     if (userPlan === 'pro') {
       planBadge.innerHTML = '<i class="fas fa-crown"></i> PRO ACTIVE';
       planBadge.classList.add('text-yellow-500');
-    } else if (trialActive) {
+    } else if (isTrialValid && userPlan === 'trial') {
       planBadge.innerHTML = '<i class="fas fa-flask"></i> TRIAL ACTIVE';
       planBadge.classList.add('text-cyan');
     } else {
