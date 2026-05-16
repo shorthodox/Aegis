@@ -1963,9 +1963,88 @@ async def create_payment_session(request: PaymentSessionRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+import hmac
+import hashlib
+import base64
+
+@app.post("/api/v1/cashfree-webhook")
+async def handle_cashfree_webhook(request: Request):
+    # 1. Capture the raw body payload and signature verification headers
+    raw_payload = await request.body()
+    payload_str = raw_payload.decode("utf-8")
+    
+    headers = request.headers
+    signature = headers.get("x-webhook-signature")
+    timestamp = headers.get("x-webhook-timestamp")
+    secret_key = os.getenv("CASHFREE_SECRET_KEY")
+    
+    # 2. Cryptographic Signature Verification (Protects against fake upgrades)
+    if not signature or not timestamp or not secret_key:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing security headers")
+        
+    # Cashfree v3 Signature math: Base64(HMAC-SHA256(timestamp + payload, secret_key))
+    data_to_sign = timestamp + payload_str
+    computed_sig = base64.b64encode(
+        hmac.new(secret_key.encode('utf-8'), data_to_sign.encode('utf-8'), hashlib.sha256).digest()
+    ).decode('utf-8')
+    
+    if not hmac.compare_digest(computed_sig, signature):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Signature mismatch")
+
+    # 3. Parse the data array
+    data = await request.json()
+    event_type = data.get("event_type", data.get("type"))
+    
+    # Only execute logic if the event explicitly confirms an order was paid successfully
+    if event_type == "ORDER_PAID" or event_type == "PAYMENT_SUCCESS_WEBHOOK":
+        webhook_data = data.get("data", {})
+        order_details = webhook_data.get("order", {})
+        customer_details = webhook_data.get("customer_details", {})
+        
+        order_id = order_details.get("order_id")
+        user_id = customer_details.get("customer_id")
+        email = customer_details.get("customer_email")
+        amount = order_details.get("order_amount", 0)
+        
+        target_doc = user_id if user_id and user_id != 'user_unknown' else email
+        
+        # 4. Perform the live database elevation inside Firestore
+        try:
+            if not target_doc:
+                raise ValueError("No valid user_id or email found in webhook")
+                
+            user_ref = db.collection("users").document(target_doc)
+            
+            # Determine the structural tier target based on the transaction amount
+            # E.g., ~1999 INR maps to PRO tier privileges
+            assigned_tier = "pro" if float(amount) >= 1000 else ("intermediate" if float(amount) >= 500 else "basic")
+            
+            # Use current datetime for Firestore as fallback to SERVER_TIMESTAMP depending on admin library
+            current_time = datetime.now(timezone.utc).isoformat()
+            
+            user_ref.update({
+                "plan": assigned_tier,
+                "subscription": {
+                    "status": "active",
+                    "plan_type": assigned_tier,
+                    "activated_at": current_time,
+                    "last_order_id": order_id
+                }
+            })
+            
+            print(f"✅ Webhook Success: Elevated User {target_doc} to {assigned_tier} Tier for Order {order_id}")
+            return {"status": "SUCCESS", "message": "User access parameters updated"}
+            
+        except Exception as e:
+            print(f"❌ Firestore Update Error inside Webhook: {str(e)}")
+            raise HTTPException(status_code=500, detail="Database write error")
+            
+    return {"status": "IGNORED", "message": "Non-payment event type processed"}
+
 # -------------------------------------------------------------------
 # Main entry point
 # -------------------------------------------------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     uvicorn.run("main:app", host="0.0.0.0", port=port)
+
