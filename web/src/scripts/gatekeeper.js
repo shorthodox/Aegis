@@ -73,6 +73,8 @@ document.addEventListener('trialExpired', () => {
             showSubscriptionExpiredOverlay();
         }
     }
+    // Refresh UI to update plan badge immediately when trial expires
+    updateUI();
 });
 let allowedTokens = [];
 let ws = null;
