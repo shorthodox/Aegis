@@ -113,6 +113,10 @@ const TrialManager = (() => {
         };
     }
 
+    if (cachedTrialInfo?.expired) {
+      return cachedTrialInfo;
+    }
+
     if (cachedTrialInfo?.subscription_active || cachedTrialInfo?.plan === 'pro' || cachedTrialInfo?.plan === 'active' || 
         jwtData.plan_type === 'pro' || jwtData.plan_type === 'active') {
       cachedState = {
@@ -139,6 +143,7 @@ const TrialManager = (() => {
             allowedTimeframes: [],
             plan: 'trial'
           };
+          cachedTrialInfo = cachedState;
         } else {
           cachedState = {
             active: true,
@@ -746,3 +751,4 @@ style.textContent = `
   }
 `;
 document.head.appendChild(style);
+
