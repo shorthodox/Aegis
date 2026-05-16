@@ -177,6 +177,8 @@ function showSubscriptionExpiredOverlay() {
 // Signal History Management
 // -------------------------------------------------------------------
 function addSignalToHistory(signal) {
+  if (!signal || signal.signal === 'HOLD') return;
+
   const status = getSignalStatus(signal);
   const historyEntry = {
     symbol: signal.symbol,
