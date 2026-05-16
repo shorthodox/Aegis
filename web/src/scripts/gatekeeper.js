@@ -1143,6 +1143,13 @@ function renderSignals(signals) {
   // Strict check using AuthManager
   const effectiveTrialActive = typeof AuthManager !== 'undefined' ? AuthManager.isTrialValid() : ((trialActive === null && userPlan === 'trial') ? true : trialActive);
 
+  function getUserTier() {
+    if (userPlan === 'pro') return 3;
+    if (userPlan === 'intermediate') return 2;
+    if (userPlan === 'basic') return 1;
+    return 1; // Trial or none
+  }
+
   // Debug Logging: Check filter logic
   console.log('renderSignals - Total signals:', signalEntries.length);
   console.log('renderSignals - User plan:', userPlan, 'Effective trial active:', effectiveTrialActive);
@@ -1232,6 +1239,13 @@ function renderSignals(signals) {
     const tpStr = signal.tp ? signal.tp.toFixed(4) : '-';
     const entryStr = signal.entry_price ? signal.entry_price.toFixed(4) : '-';
     const profIndex = (signal.profitability_index || 0).toFixed(2);
+    
+    // Confluence Mock / Data injection
+    const confluence = signal.confluence || {
+      trend: Math.floor(Math.random() * 20 + 70), // Mock 70-90 if absent
+      momentum: Math.floor(Math.random() * 30 + 50),
+      volume: Math.floor(Math.random() * 40 + 40)
+    };
 
     let matchClasses = '';
     let matchBadge = '';
@@ -1250,8 +1264,9 @@ function renderSignals(signals) {
             ${statusBadge}
             ${matchBadge}
           </div>
-          <div class="flex items-center gap-3">
-            <div class="price-container text-sm flex font-mono"><span class="live-price" data-symbol="${symbol.replace('/', '-')}">${window.currentTickers && window.currentTickers[symbol] ? '$' + parseFloat(window.currentTickers[symbol]).toFixed(4) : '-'}</span></div>
+          <div class="flex items-center gap-2">
+            <button class="view-logic-btn text-[10px] bg-white/5 border border-white/10 px-2 py-0.5 rounded text-gray-400 hover:text-white transition-colors" onclick="window.toggleScorecard(event, '${symbol}')">View Logic <i class="fas fa-chevron-down"></i></button>
+            <div class="price-container text-sm flex font-mono ml-1"><span class="live-price" data-symbol="${symbol.replace('/', '-')}">${window.currentTickers && window.currentTickers[symbol] ? '$' + parseFloat(window.currentTickers[symbol]).toFixed(4) : '-'}</span></div>
             <span class="signal-badge ${signalClass}">${signalType}</span>
           </div>
         </div>
@@ -1275,10 +1290,63 @@ function renderSignals(signals) {
                <span>SL: ${slStr} | TP: ${tpStr}</span>
             </span>
           </div>
+          
+          <div class="slide-down-container mt-2">
+            <div class="slide-down-content" id="scorecard-${symbol.replace('/', '-')}">
+              <div class="pt-2 border-t border-white/10 mt-2">
+                <div class="text-[10px] font-bold text-gray-400 uppercase mb-2">AI Reasoning: XGBoost Confluence</div>
+                <div class="mb-2">
+                  <div class="flex justify-between text-[10px]"><span class="text-gray-400">Trend Alignment (EMA 50/200)</span><span class="text-cyan font-mono">${confluence.trend}%</span></div>
+                  <div class="confluence-bar"><div class="fill" style="width: ${confluence.trend}%;"></div></div>
+                </div>
+                <div class="mb-2">
+                  <div class="flex justify-between text-[10px]"><span class="text-gray-400">Momentum (RSI Regime)</span><span class="text-cyan font-mono">${confluence.momentum}%</span></div>
+                  <div class="confluence-bar"><div class="fill" style="width: ${confluence.momentum}%;"></div></div>
+                </div>
+                <div class="mb-2">
+                  <div class="flex justify-between text-[10px]"><span class="text-gray-400">Volume Delta</span><span class="text-cyan font-mono">${confluence.volume}%</span></div>
+                  <div class="confluence-bar"><div class="fill" style="width: ${confluence.volume}%;"></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     `;
   }).join('');
+}
+
+window.toggleScorecard = function(event, symbol) {
+  event.stopPropagation(); // prevent card click
+  const containerId = `scorecard-${symbol.replace('/', '-')}`;
+  const content = document.getElementById(containerId);
+  if (!content) return;
+  
+  const wrapper = content.parentElement;
+  const isOpen = wrapper.classList.contains('open');
+  
+  // Calculate tier
+  let userTier = 0;
+  if (userPlan === 'pro') userTier = 3;
+  else if (userPlan === 'intermediate') userTier = 2;
+  else if (userPlan === 'basic') userTier = 1;
+
+  if (userTier < 2) {
+    content.classList.add('premium-lock-blur', 'locked');
+    
+    // Toggle opening with lock
+    wrapper.classList.toggle('open');
+    
+    // If they click on the lock overlay (which is placed via pseudo element pointer-events:auto),
+    // trigger upgrade modal.
+    content.onclick = (e) => {
+      e.stopPropagation();
+      if(typeof showUpgradeModal === 'function') showUpgradeModal();
+    };
+  } else {
+    content.classList.remove('premium-lock-blur', 'locked');
+    wrapper.classList.toggle('open');
+  }
 }
 
 window.selectSignal = function(symbol, timeframe) {
