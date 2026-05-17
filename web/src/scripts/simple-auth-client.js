@@ -146,7 +146,8 @@ async function subscribeToPlan(planType) {
           }
           if (result.paymentDetails) {
               console.log("Payment successful");
-              // Update UI/redirect as needed
+              alert("Payment successful! Redirecting to your dashboard...");
+              window.location.href = "/web/src/pages/dashboard.html";
           }
       });
     } else {
@@ -214,5 +215,3 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 export { openModal, closeModal, subscribeToPlan };
-
-
