@@ -1301,7 +1301,7 @@ function renderSignals(signals) {
             </span>
           </div>
           
-          <div class="slide-down-container mt-2">
+          <div class="slide-down-container mt-2 ${window.openScorecards && window.openScorecards.has(symbol) ? 'open' : ''}">
             <div class="slide-down-content" id="scorecard-${symbol.replace('/', '-')}">
               <div class="pt-2 border-t border-white/10 mt-2">
                 <div class="text-[10px] font-bold text-gray-400 uppercase mb-2">AI Reasoning: XGBoost Confluence</div>
@@ -1333,6 +1333,8 @@ window.toggleScorecard = function (event, symbol) {
   if (!content) return;
 
   const wrapper = content.parentElement;
+  
+  if (!window.openScorecards) window.openScorecards = new Set();
   const isOpen = wrapper.classList.contains('open');
 
   // Calculate tier
@@ -1346,6 +1348,11 @@ window.toggleScorecard = function (event, symbol) {
 
     // Toggle opening with lock
     wrapper.classList.toggle('open');
+    if (!isOpen) {
+      window.openScorecards.add(symbol);
+    } else {
+      window.openScorecards.delete(symbol);
+    }
 
     // If they click on the lock overlay (which is placed via pseudo element pointer-events:auto),
     // trigger upgrade modal.
@@ -1356,6 +1363,11 @@ window.toggleScorecard = function (event, symbol) {
   } else {
     content.classList.remove('premium-lock-blur', 'locked');
     wrapper.classList.toggle('open');
+    if (!isOpen) {
+      window.openScorecards.add(symbol);
+    } else {
+      window.openScorecards.delete(symbol);
+    }
   }
 }
 
