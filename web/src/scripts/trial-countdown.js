@@ -121,6 +121,7 @@ const TrialManager = (() => {
         jwtData.plan_type === 'pro' || jwtData.plan_type === 'active') {
       cachedState = {
         active: true,
+        isPremium: true,
         plan: cachedTrialInfo?.plan || jwtData.plan_type || 'pro',
         display: 'Premium Active',
         expired: false,
@@ -133,17 +134,29 @@ const TrialManager = (() => {
       if (!isNaN(trialEnd.getTime())) {
         const timeInfo = formatTimeRemaining(trialEnd);
         if (timeInfo.expired) {
-          // Clean up localStorage for expired trials (fail-closed)
-          localStorage.removeItem('trial_end_timestamp');
-          cachedState = {
-            active: false,
-            expired: true,
-            display: 'Trial Expired',
-            allowedTokens: [],
-            allowedTimeframes: [],
-            plan: 'trial'
-          };
-          cachedTrialInfo = cachedState;
+          // If we haven't fetched from the backend yet, don't immediately declare expired
+          if (!cachedTrialInfo || cachedTrialInfo.isLoading) {
+            cachedState = {
+              active: false,
+              isLoading: true,
+              display: 'Verifying Subscription...',
+              allowedTokens: [],
+              allowedTimeframes: [],
+              plan: 'trial'
+            };
+          } else {
+            // Clean up localStorage for expired trials (fail-closed)
+            localStorage.removeItem('trial_end_timestamp');
+            cachedState = {
+              active: false,
+              expired: true,
+              display: 'Trial Expired',
+              allowedTokens: [],
+              allowedTimeframes: [],
+              plan: 'trial'
+            };
+            cachedTrialInfo = cachedState;
+          }
         } else {
           cachedState = {
             active: true,
@@ -361,6 +374,8 @@ const TrialManager = (() => {
         element.style.background = 'rgba(255, 140, 0, 0.15)';
         element.style.borderColor = 'rgba(255, 140, 0, 0.4)';
         element.style.color = '#ff8c00';
+      } else if (trialInfo?.isPremium) {
+        element.style.display = 'none';
       } else if (trialInfo?.active) {
         element.innerHTML = `
           <span class="sovereign-badge">SOVEREIGN</span>
