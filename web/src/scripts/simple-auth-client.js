@@ -110,11 +110,16 @@ async function subscribeToPlan(planType) {
       return;
     }
     const me = await meResp.json();
-    let amount = 3.60;
-    if (planType === 'pro') amount = 40.00;
-    else if (planType === 'intermediate') amount = 24.00;
     
-    const body = { tier: planType, amount: amount, email: me.email, user_id: me.uid || me.id || 'user_unknown' };
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const isIndia = timeZone === 'Asia/Calcutta' || timeZone === 'Asia/Kolkata';
+    const currency = isIndia ? 'INR' : 'USD';
+    
+    let amount = isIndia ? 299.00 : 3.60;
+    if (planType === 'pro') amount = isIndia ? 3499.00 : 40.00;
+    else if (planType === 'intermediate') amount = isIndia ? 1999.00 : 24.00;
+    
+    const body = { tier: planType, amount: amount, currency: currency, email: me.email, user_id: me.uid || me.id || 'user_unknown' };
     const resp = await fetch('/api/v1/create-payment-session', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -209,4 +214,5 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 export { openModal, closeModal, subscribeToPlan };
+
 
