@@ -736,6 +736,7 @@ class CashfreePaymentRequest(BaseModel):
 class CreateSubscriptionRequest(BaseModel):
     plan_name: str
     amount: float
+    currency: str = "INR"
     email: EmailStr
     customer_phone: Optional[str] = None
 
@@ -950,7 +951,7 @@ def generate_unique_subscription_id(email: str) -> str:
     email_prefix = email.split('@')[0][:8]
     return f"SUB_{email_prefix}_{timestamp}_{random_str}"
 
-async def create_cashfree_mandate(subscription_id: str, amount: float, plan_name: str, email: str, phone: Optional[str] = None) -> Dict:
+async def create_cashfree_mandate(subscription_id: str, amount: float, plan_name: str, email: str, phone: Optional[str] = None, currency: str = "INR") -> Dict:
     """
     Create a Cashfree subscription mandate using REST API.
     This properly implements the Cashfree Subscriptions API v2023-08-01.
@@ -965,7 +966,7 @@ async def create_cashfree_mandate(subscription_id: str, amount: float, plan_name
     payload = {
         "subscription_id": subscription_id,
         "subscription_amount": amount,
-        "subscription_currency": "INR",
+        "subscription_currency": currency,
         "subscription_name": f"Aegis-1 {plan_name.upper()} Plan",
         "subscription_description": f"Monthly subscription for {plan_name} plan",
         "customer_details": {
@@ -1064,7 +1065,8 @@ async def create_subscription(request: CreateSubscriptionRequest, email: str = D
         amount=plan_amount,
         plan_name=plan_name,
         email=email,
-        phone=customer_phone
+        phone=customer_phone,
+        currency=request.currency
     )
     
     # Update pending subscription with mandate info
@@ -1888,10 +1890,11 @@ import requests
 class PaymentSessionRequest(BaseModel):
     amount: float
     tier: str
+    currency: str = "INR"
     email: Optional[str] = "user@example.com"
     user_id: Optional[str] = "user_123"
 
-def create_cashfree_order(user_id: str, user_email: str, plan_amount: float, plan_name: str):
+def create_cashfree_order(user_id: str, user_email: str, plan_amount: float, plan_name: str, currency: str = "INR"):
     IS_PROD = os.getenv("CASHFREE_MODE") == "PRODUCTION"
     BASE_URL = "https://api.cashfree.com/pg" if IS_PROD else "https://sandbox.cashfree.com/pg"
     
@@ -1907,7 +1910,7 @@ def create_cashfree_order(user_id: str, user_email: str, plan_amount: float, pla
     payload = {
         "order_id": order_id,
         "order_amount": float(plan_amount),
-        "order_currency": "INR",
+        "order_currency": currency,
         "customer_details": {
             "customer_id": user_id,
             "customer_email": user_email,
@@ -1945,7 +1948,8 @@ async def create_payment_session(request: PaymentSessionRequest):
             user_id=request.user_id,
             user_email=request.email,
             plan_amount=request.amount,
-            plan_name=request.tier
+            plan_name=request.tier,
+            currency=request.currency
         )
         return result
     except Exception as e:
@@ -2035,6 +2039,4 @@ async def handle_cashfree_webhook(request: Request):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     uvicorn.run("main:app", host="0.0.0.0", port=port)
-
-
 
