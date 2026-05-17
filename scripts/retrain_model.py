@@ -20,7 +20,11 @@ import warnings
 import subprocess
 import time
 import optuna
-import shap
+try:
+    import shap
+except Exception:
+    shap = None
+    print("⚠️ Optional dependency 'shap' not available — SHAP pruning will be skipped.")
 from sklearn.model_selection import TimeSeriesSplit
 from typing import Dict, List, Optional, Tuple
 
@@ -197,6 +201,11 @@ def prune_features_by_shap(model: xgb.Booster, X: pd.DataFrame, threshold: float
                 return np.mean(np.abs(arr), axis=(1, 2))
             raise ValueError(f"Cannot infer feature axis from SHAP array shape {arr.shape}")
         raise ValueError(f"Unsupported SHAP array ndim {arr.ndim}")
+
+    # If shap is not installed or failed to import, skip pruning and keep all features
+    if shap is None:
+        print("   ⚠️ SHAP unavailable — skipping pruning and keeping full feature set")
+        return list(X.columns)
 
     sample_size = min(500, len(X))
     X_sample = X.sample(n=sample_size, random_state=42)

@@ -1,44 +1,397 @@
 {
-  "timestamp": "2026-05-12T14:30:30.680403",
-  "hours_of_data": 5000,
-  "total_tokens": 58,
-  "successful": 48,
-  "results": [
+  "generated_at": "2026-05-18T00:28:22.893513",
+  "generated_from": {
+    "model_store": "D:\\Content\\Animesh\\bots\\ai_signal_bot\\src\\ml\\model_store",
+    "feature_logs": "D:\\Content\\Animesh\\bots\\ai_signal_bot\\logs\\features"
+  },
+  "total_models_found": 48,
+  "total_tokens_expected": 48,
+  "hours_of_data": null,
+  "missing_models": [],
+  "models": [
+    {
+      "symbol": "AAVE/USDT",
+      "model_file": "src\\ml\\model_store\\AAVE_USDT_model.json",
+      "model_size_bytes": 915187,
+      "modified_at": "2026-05-18T00:07:52.093789",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\AAVE_USDT_importance.txt"
+    },
+    {
+      "symbol": "ADA/USDT",
+      "model_file": "src\\ml\\model_store\\ADA_USDT_model.json",
+      "model_size_bytes": 1376154,
+      "modified_at": "2026-05-17T23:52:05.687783",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\ADA_USDT_importance.txt"
+    },
+    {
+      "symbol": "APT/USDT",
+      "model_file": "src\\ml\\model_store\\APT_USDT_model.json",
+      "model_size_bytes": 1518939,
+      "modified_at": "2026-05-18T00:03:22.684330",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\APT_USDT_importance.txt"
+    },
+    {
+      "symbol": "ARB/USDT",
+      "model_file": "src\\ml\\model_store\\ARB_USDT_model.json",
+      "model_size_bytes": 1638915,
+      "modified_at": "2026-05-18T00:04:20.145072",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\ARB_USDT_importance.txt"
+    },
+    {
+      "symbol": "ASTER/USDT",
+      "model_file": "src\\ml\\model_store\\ASTER_USDT_model.json",
+      "model_size_bytes": 1716652,
+      "modified_at": "2026-05-17T23:48:20.293397",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\ASTER_USDT_importance.txt"
+    },
+    {
+      "symbol": "AVAX/USDT",
+      "model_file": "src\\ml\\model_store\\AVAX_USDT_model.json",
+      "model_size_bytes": 832232,
+      "modified_at": "2026-05-17T23:52:52.905540",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\AVAX_USDT_importance.txt"
+    },
+    {
+      "symbol": "BCH/USDT",
+      "model_file": "src\\ml\\model_store\\BCH_USDT_model.json",
+      "model_size_bytes": 1164269,
+      "modified_at": "2026-05-17T23:58:24.877333",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\BCH_USDT_importance.txt"
+    },
+    {
+      "symbol": "BNB/USDT",
+      "model_file": "src\\ml\\model_store\\BNB_USDT_model.json",
+      "model_size_bytes": 1495437,
+      "modified_at": "2026-05-17T23:46:19.180808",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\BNB_USDT_importance.txt"
+    },
+    {
+      "symbol": "BONK/USDT",
+      "model_file": "src\\ml\\model_store\\BONK_USDT_model.json",
+      "model_size_bytes": 2188469,
+      "modified_at": "2026-05-18T00:22:01.134214",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\BONK_USDT_importance.txt"
+    },
     {
       "symbol": "BTC/USDT",
-      "cv_accuracy": 0.795416164053076,
-      "test_accuracy": 0.8824120603015075,
-      "feature_count": 13,
-      "best_params": {
-        "max_depth": 5,
-        "learning_rate": 0.019529105392935966,
-        "subsample": 0.8727089043907681,
-        "colsample_bytree": 0.7243775269784812,
-        "gamma": 4.786689607083602,
-        "reg_lambda": 1.7390548137148718,
-        "reg_alpha": 1.116605148113206,
-        "min_child_weight": 13,
-        "objective": "multi:softprob",
-        "eval_metric": "mlogloss",
-        "num_class": 3,
-        "seed": 42,
-        "tree_method": "hist",
-        "missing": NaN
-      },
-      "model_path": "d:\\Content\\Animesh\\bots\\ai_signal_bot\\src\\ml\\model_store\\BTC_USDT_model.json",
-      "atr_multiplier": 1.2,
-      "class_distribution": {
-        "sell": 1044,
-        "hold": 2869,
-        "buy": 1061
-      },
-      "risk_thresholds": {
-        "very_high_risk": "confidence < 50% - NOT SUITABLE FOR TRADING",
-        "high_risk": "50% \u2264 confidence < 60% - NOT SUITABLE FOR TRADING",
-        "medium_risk": "60% \u2264 confidence < 70% - TRADE WITH CAUTION",
-        "low_risk": "confidence \u2265 70% - SUITABLE FOR TRADING"
-      },
-      "sample_predictions": [
-        {
-          "signal": "BUY",
-          "class": 
+      "model_file": "src\\ml\\model_store\\BTC_USDT_model.json",
+      "model_size_bytes": 862079,
+      "modified_at": "2026-05-17T23:43:20.834078",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\BTC_USDT_importance.txt"
+    },
+    {
+      "symbol": "DOGE/USDT",
+      "model_file": "src\\ml\\model_store\\DOGE_USDT_model.json",
+      "model_size_bytes": 1169788,
+      "modified_at": "2026-05-18T00:19:18.982820",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\DOGE_USDT_importance.txt"
+    },
+    {
+      "symbol": "DOT/USDT",
+      "model_file": "src\\ml\\model_store\\DOT_USDT_model.json",
+      "model_size_bytes": 1285287,
+      "modified_at": "2026-05-17T23:55:35.891218",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\DOT_USDT_importance.txt"
+    },
+    {
+      "symbol": "ENA/USDT",
+      "model_file": "src\\ml\\model_store\\ENA_USDT_model.json",
+      "model_size_bytes": 1327051,
+      "modified_at": "2026-05-18T00:23:48.029988",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\ENA_USDT_importance.txt"
+    },
+    {
+      "symbol": "ETH/USDT",
+      "model_file": "src\\ml\\model_store\\ETH_USDT_model.json",
+      "model_size_bytes": 856965,
+      "modified_at": "2026-05-17T23:44:10.420212",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\ETH_USDT_importance.txt"
+    },
+    {
+      "symbol": "FET/USDT",
+      "model_file": "src\\ml\\model_store\\FET_USDT_model.json",
+      "model_size_bytes": 1214416,
+      "modified_at": "2026-05-18T00:12:24.098005",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\FET_USDT_importance.txt"
+    },
+    {
+      "symbol": "FIL/USDT",
+      "model_file": "src\\ml\\model_store\\FIL_USDT_model.json",
+      "model_size_bytes": 2086764,
+      "modified_at": "2026-05-18T00:07:02.151757",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\FIL_USDT_importance.txt"
+    },
+    {
+      "symbol": "FLOKI/USDT",
+      "model_file": "src\\ml\\model_store\\FLOKI_USDT_model.json",
+      "model_size_bytes": 871716,
+      "modified_at": "2026-05-18T00:21:03.224179",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\FLOKI_USDT_importance.txt"
+    },
+    {
+      "symbol": "GRT/USDT",
+      "model_file": "src\\ml\\model_store\\GRT_USDT_model.json",
+      "model_size_bytes": 1122466,
+      "modified_at": "2026-05-18T00:14:06.319911",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\GRT_USDT_importance.txt"
+    },
+    {
+      "symbol": "HBAR/USDT",
+      "model_file": "src\\ml\\model_store\\HBAR_USDT_model.json",
+      "model_size_bytes": 1183311,
+      "modified_at": "2026-05-18T00:02:27.088794",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\HBAR_USDT_importance.txt"
+    },
+    {
+      "symbol": "ICP/USDT",
+      "model_file": "src\\ml\\model_store\\ICP_USDT_model.json",
+      "model_size_bytes": 3260879,
+      "modified_at": "2026-05-18T00:01:32.613976",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\ICP_USDT_importance.txt"
+    },
+    {
+      "symbol": "INJ/USDT",
+      "model_file": "src\\ml\\model_store\\INJ_USDT_model.json",
+      "model_size_bytes": 1360891,
+      "modified_at": "2026-05-18T00:09:36.228498",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\INJ_USDT_importance.txt"
+    },
+    {
+      "symbol": "JUP/USDT",
+      "model_file": "src\\ml\\model_store\\JUP_USDT_model.json",
+      "model_size_bytes": 1257998,
+      "modified_at": "2026-05-18T00:16:47.698632",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\JUP_USDT_importance.txt"
+    },
+    {
+      "symbol": "LDO/USDT",
+      "model_file": "src\\ml\\model_store\\LDO_USDT_model.json",
+      "model_size_bytes": 1061545,
+      "modified_at": "2026-05-18T00:15:00.041203",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\LDO_USDT_importance.txt"
+    },
+    {
+      "symbol": "LINK/USDT",
+      "model_file": "src\\ml\\model_store\\LINK_USDT_model.json",
+      "model_size_bytes": 1583395,
+      "modified_at": "2026-05-17T23:53:52.724362",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\LINK_USDT_importance.txt"
+    },
+    {
+      "symbol": "LTC/USDT",
+      "model_file": "src\\ml\\model_store\\LTC_USDT_model.json",
+      "model_size_bytes": 937116,
+      "modified_at": "2026-05-17T23:57:29.064790",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\LTC_USDT_importance.txt"
+    },
+    {
+      "symbol": "NEAR/USDT",
+      "model_file": "src\\ml\\model_store\\NEAR_USDT_model.json",
+      "model_size_bytes": 1251447,
+      "modified_at": "2026-05-17T23:56:31.071218",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\NEAR_USDT_importance.txt"
+    },
+    {
+      "symbol": "NIGHT/USDT",
+      "model_file": "src\\ml\\model_store\\NIGHT_USDT_model.json",
+      "model_size_bytes": 1323346,
+      "modified_at": "2026-05-18T00:26:05.650246",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\NIGHT_USDT_importance.txt"
+    },
+    {
+      "symbol": "ONDO/USDT",
+      "model_file": "src\\ml\\model_store\\ONDO_USDT_model.json",
+      "model_size_bytes": 1125678,
+      "modified_at": "2026-05-18T00:17:40.104341",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\ONDO_USDT_importance.txt"
+    },
+    {
+      "symbol": "OP/USDT",
+      "model_file": "src\\ml\\model_store\\OP_USDT_model.json",
+      "model_size_bytes": 1280022,
+      "modified_at": "2026-05-18T00:05:16.554453",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\OP_USDT_importance.txt"
+    },
+    {
+      "symbol": "PEPE/USDT",
+      "model_file": "src\\ml\\model_store\\PEPE_USDT_model.json",
+      "model_size_bytes": 895016,
+      "modified_at": "2026-05-18T00:18:29.019048",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\PEPE_USDT_importance.txt"
+    },
+    {
+      "symbol": "PYTH/USDT",
+      "model_file": "src\\ml\\model_store\\PYTH_USDT_model.json",
+      "model_size_bytes": 1832224,
+      "modified_at": "2026-05-18T00:15:55.542231",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\PYTH_USDT_importance.txt"
+    },
+    {
+      "symbol": "RENDER/USDT",
+      "model_file": "src\\ml\\model_store\\RENDER_USDT_model.json",
+      "model_size_bytes": 1297145,
+      "modified_at": "2026-05-17T23:51:09.704523",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\RENDER_USDT_importance.txt"
+    },
+    {
+      "symbol": "SEI/USDT",
+      "model_file": "src\\ml\\model_store\\SEI_USDT_model.json",
+      "model_size_bytes": 1372442,
+      "modified_at": "2026-05-18T00:11:29.110501",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\SEI_USDT_importance.txt"
+    },
+    {
+      "symbol": "SHIB/USDT",
+      "model_file": "src\\ml\\model_store\\SHIB_USDT_model.json",
+      "model_size_bytes": 1145627,
+      "modified_at": "2026-05-17T23:59:19.639320",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\SHIB_USDT_importance.txt"
+    },
+    {
+      "symbol": "SKY/USDT",
+      "model_file": "src\\ml\\model_store\\SKY_USDT_model.json",
+      "model_size_bytes": 906432,
+      "modified_at": "2026-05-18T00:24:40.533963",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\SKY_USDT_importance.txt"
+    },
+    {
+      "symbol": "SOL/USDT",
+      "model_file": "src\\ml\\model_store\\SOL_USDT_model.json",
+      "model_size_bytes": 3076295,
+      "modified_at": "2026-05-17T23:45:20.846773",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\SOL_USDT_importance.txt"
+    },
+    {
+      "symbol": "STX/USDT",
+      "model_file": "src\\ml\\model_store\\STX_USDT_model.json",
+      "model_size_bytes": 979024,
+      "modified_at": "2026-05-18T00:06:04.639931",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\STX_USDT_importance.txt"
+    },
+    {
+      "symbol": "SUI/USDT",
+      "model_file": "src\\ml\\model_store\\SUI_USDT_model.json",
+      "model_size_bytes": 1338266,
+      "modified_at": "2026-05-17T23:49:16.400930",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\SUI_USDT_importance.txt"
+    },
+    {
+      "symbol": "TAO/USDT",
+      "model_file": "src\\ml\\model_store\\TAO_USDT_model.json",
+      "model_size_bytes": 1469315,
+      "modified_at": "2026-05-17T23:50:13.865315",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\TAO_USDT_importance.txt"
+    },
+    {
+      "symbol": "THETA/USDT",
+      "model_file": "src\\ml\\model_store\\THETA_USDT_model.json",
+      "model_size_bytes": 977630,
+      "modified_at": "2026-05-18T00:13:16.760581",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\THETA_USDT_importance.txt"
+    },
+    {
+      "symbol": "TIA/USDT",
+      "model_file": "src\\ml\\model_store\\TIA_USDT_model.json",
+      "model_size_bytes": 1410876,
+      "modified_at": "2026-05-18T00:10:31.935526",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\TIA_USDT_importance.txt"
+    },
+    {
+      "symbol": "TON/USDT",
+      "model_file": "src\\ml\\model_store\\TON_USDT_model.json",
+      "model_size_bytes": 1263787,
+      "modified_at": "2026-05-18T00:00:13.480589",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\TON_USDT_importance.txt"
+    },
+    {
+      "symbol": "TRUMP/USDT",
+      "model_file": "src\\ml\\model_store\\TRUMP_USDT_model.json",
+      "model_size_bytes": 839303,
+      "modified_at": "2026-05-18T00:25:28.812955",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\TRUMP_USDT_importance.txt"
+    },
+    {
+      "symbol": "TRX/USDT",
+      "model_file": "src\\ml\\model_store\\TRX_USDT_model.json",
+      "model_size_bytes": 888522,
+      "modified_at": "2026-05-17T23:54:41.306750",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\TRX_USDT_importance.txt"
+    },
+    {
+      "symbol": "VET/USDT",
+      "model_file": "src\\ml\\model_store\\VET_USDT_model.json",
+      "model_size_bytes": 1519574,
+      "modified_at": "2026-05-18T00:08:39.411833",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\VET_USDT_importance.txt"
+    },
+    {
+      "symbol": "WIF/USDT",
+      "model_file": "src\\ml\\model_store\\WIF_USDT_model.json",
+      "model_size_bytes": 1504939,
+      "modified_at": "2026-05-18T00:20:13.487521",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\WIF_USDT_importance.txt"
+    },
+    {
+      "symbol": "WLFI/USDT",
+      "model_file": "src\\ml\\model_store\\WLFI_USDT_model.json",
+      "model_size_bytes": 1032613,
+      "modified_at": "2026-05-18T00:22:54.465488",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\WLFI_USDT_importance.txt"
+    },
+    {
+      "symbol": "XRP/USDT",
+      "model_file": "src\\ml\\model_store\\XRP_USDT_model.json",
+      "model_size_bytes": 1468890,
+      "modified_at": "2026-05-17T23:47:15.700867",
+      "importance_log_exists": true,
+      "importance_log": "logs\\features\\XRP_USDT_importance.txt"
+    }
+  ]
+}

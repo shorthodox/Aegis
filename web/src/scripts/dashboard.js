@@ -10,13 +10,20 @@ async function checkUserSubscriptionStatus(uid) {
     const userSnap = await getDoc(userDocRef);
     if (userSnap.exists()) {
       const data = userSnap.data();
-      const plan = data.plan || data.tier || '';
-      return plan.toLowerCase() === 'premium';
+      const plan = data.plan || data.tier;
+      if (!plan) return true; // Fallback to prevent immediate locking for new users
+      
+      const p = plan.toLowerCase();
+      if (p === 'premium' || p === 'pro' || p === 'intermediate' || p === 'basic' || p === 'trial' || p === 'free_tier') {
+        return true;
+      }
+      return false; // Specifically locked/expired plans
     }
+    return true; // Document doesn't exist fallback
   } catch (error) {
     console.error('Error fetching user subscription status:', error);
+    return true; // Fallback on error
   }
-  return false;
 }
 
 // ============================================================
@@ -43,9 +50,31 @@ function waitForAuthStateChange() {
 
   const timeoutPromise = new Promise((resolve) => {
     setTimeout(() => {
-      console.warn('waitForAuthStateChange timeout reached');
-      resolve(null);
-    }, 10000);
+      console.warn('waitForAuthStateChange timeout reached, triggering retry...');
+      // Trigger retry mechanism
+      const retryUnsubscribe = auth.onAuthStateChanged(async (user) => {
+        retryUnsubscribe();
+        if (user?.uid) {
+          const isPremium = await checkUserSubscriptionStatus(user.uid);
+          if (isPremium) {
+            window.isSubscriptionActive = true;
+            window.isPremiumUser = true;
+            clearExpiredView();
+            unblockFeatures();
+            const countdownElements = document.querySelectorAll('.trial-countdown, [data-trial-countdown], #countdown-display');
+            countdownElements.forEach(el => el.style.display = 'none');
+          }
+          resolve(user?.uid || null);
+        } else {
+          resolve(null);
+        }
+      });
+      // Safety release for the retry
+      setTimeout(() => {
+        retryUnsubscribe();
+        resolve(null);
+      }, 5000);
+    }, 20000); // Increased timeout to 20 seconds
   });
 
   return Promise.race([authPromise, timeoutPromise]);
@@ -241,7 +270,12 @@ function blockAllFeatures() {
   const interactiveElements = document.querySelectorAll('button, a, input[type="checkbox"], [onclick]');
   interactiveElements.forEach(el => {
     const isExpiredElement = el.closest('#access-expired-card') !== null || (el.id && el.id.includes('expired'));
-    if (!isExpiredElement) {
+    
+    // Safety check so we don't lock the user in completely
+    const isLogout = el.id === 'logout-btn' || el.id === 'btn-logout' || el.classList.contains('logout-button');
+    const isNav = el.closest('nav') !== null || el.closest('header') !== null;
+    
+    if (!isExpiredElement && !isLogout && !isNav) {
       el.style.pointerEvents = 'none';
       el.style.opacity = '0.3';
     }

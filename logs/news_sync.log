@@ -27,3 +27,7 @@
 2026-05-12 13:44:37 | INFO | Pruned 78 old news items (>48h)
 2026-05-12 13:44:37 | INFO | Saved 49 news items to d:\Content\Animesh\bots\ai_signal_bot\data\news_data.json
 2026-05-12 13:44:37 | INFO | Scraping complete. Total stored: 49 items. Avg sentiment (last 50): 0.0330
+Traceback (most recent call last):
+  File "D:\Content\Animesh\bots\ai_signal_bot\scripts\news_scraper.py", line 12, in <module>
+    import feedparser
+ModuleNotFoundError: No module named 'feedparser'
