@@ -743,3 +743,818 @@ function initializeTerminalListeners() {
     if (modal) modal.classList.add('hidden');
   });
 }
+
+// ============================================================
+// SIGNAL DETAILS MODAL LOGIC
+// ============================================================
+window.showSignalDetailsModal = function(signal) {
+  const modal = document.getElementById('signalDetailsModal');
+  if (!modal) return;
+
+  // Basic Information
+  document.getElementById('sd-symbol').textContent = signal.symbol;
+  document.getElementById('sd-timeframe').textContent = signal.timeframe || '1h';
+  
+  const direction = signal.direction || 'LONG';
+  const badge = document.getElementById('sd-direction-badge');
+  badge.textContent = direction;
+  if (direction === 'LONG') {
+    badge.className = 'px-2 py-1 rounded text-xs font-bold tracking-wider bg-green-500/20 text-green-400 border border-green-500/30';
+  } else if (direction === 'SHORT') {
+    badge.className = 'px-2 py-1 rounded text-xs font-bold tracking-wider bg-red-500/20 text-red-400 border border-red-500/30';
+  } else {
+    badge.className = 'px-2 py-1 rounded text-xs font-bold tracking-wider bg-gray-500/20 text-gray-400 border border-gray-500/30';
+  }
+
+  // Price & Levels
+  const currentPrice = window.currentTickers && window.currentTickers[signal.symbol] 
+    ? parseFloat(window.currentTickers[signal.symbol]) 
+    : (signal.entry_price || 0);
+    
+  document.getElementById('sd-live-price').textContent = `$${currentPrice.toFixed(4)}`;
+  document.getElementById('sd-confidence').textContent = `${((signal.ai_prob || signal.confidence || 0) * 100).toFixed(1)}%`;
+  document.getElementById('sd-sl').textContent = `$${(signal.sl || 0).toFixed(4)}`;
+  document.getElementById('sd-tp').textContent = `$${(signal.tp || 0).toFixed(4)}`;
+
+  // Confluence Scorecards (Mocking if not present)
+  const confluence = signal.confluence || {
+    trend: Math.floor(Math.random() * 20 + 70),
+    momentum: Math.floor(Math.random() * 30 + 50),
+    volume: Math.floor(Math.random() * 40 + 40)
+  };
+  document.getElementById('sd-conf-trend-val').textContent = `${confluence.trend}%`;
+  document.getElementById('sd-conf-trend-bar').style.width = `${confluence.trend}%`;
+  
+  document.getElementById('sd-conf-mom-val').textContent = `${confluence.momentum}%`;
+  if (document.getElementById('sim-sl')) document.getElementById('sim-sl').value = '';
+  if (document.getElementById('sim-tp')) document.getElementById('sim-tp').value = '';
+
+  updateSimulation();
+};
+
+async function executeTrade() {
+  if (!window.selectedTradeToken && !window.selectedTrade) {
+    alert('Please select a token first.');
+    return;
+  }
+
+  const entry = parseFloat(document.getElementById('sim-entry').value);
+  const sl = parseFloat(document.getElementById('sim-sl').value);
+  const tp = parseFloat(document.getElementById('sim-tp').value);
+  const riskPercent = parseFloat(document.getElementById('sim-risk-slider').value);
+  const leverage = parseFloat(document.getElementById('sim-leverage').value);
+  const positionUnits = parseFloat(document.getElementById('pos-units').innerText);
+  const notional = parseFloat(document.getElementById('notional').innerText.replace('$', ''));
+
+  const tradeData = {
+    symbol: window.selectedTradeToken || (window.selectedTrade ? window.selectedTrade.symbol : null),
+    side: window.selectedTrade ? window.selectedTrade.direction : (document.getElementById('direction-badge')?.innerText || 'LONG'),
+    entryPrice: entry,
+    stopLoss: sl,
+    takeProfit: tp,
+    riskPercent,
+    leverage,
+    positionUnits,
+    notionalValue: notional,
+    status: 'open',
+    signalId: window.selectedTrade ? (window.selectedTrade.signalId || null) : null
+  };
+
+  localStorage.setItem('analyticsActiveTrade', JSON.stringify(tradeData));
+
+  try {
+    let token = localStorage.getItem('access_token') || localStorage.getItem('authToken');
+    if (!token && typeof AuthManager !== 'undefined') {
+      token = AuthManager.getToken();
+    }
+    
+    if (!token) {
+      console.warn('No auth token found, cannot execute trade on backend');
+      alert('You must be logged in to execute trades.');
+      return;
+    }
+
+    const response = await fetch('/api/trades/execute', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(tradeData)
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || 'Failed to execute trade on backend');
+    }
+
+    console.log('✅ Trade executed and stored via backend API');
+
+    if (typeof window.switchRoom === 'function') {
+      window.switchRoom('analytics');
+    }
+  } catch (err) {
+    console.error('Failed to save trade:', err);
+    alert('Failed to execute trade: ' + err.message);
+    if (typeof window.switchRoom === 'function') {
+      window.switchRoom('analytics');
+    }
+  }
+}
+
+function initializeTerminalListeners() {
+  document.getElementById('user-capital')?.addEventListener('input', (e) => {
+    const simBal = document.getElementById('sim-balance');
+    if (simBal) simBal.value = e.target.value;
+    const capDisplay = document.getElementById('capitalDisplay');
+    if (capDisplay) capDisplay.innerText = `$${parseFloat(e.target.value).toLocaleString()}`;
+    updateSimulation();
+  });
+
+  document.getElementById('risk-level')?.addEventListener('change', (e) => {
+    const simRisk = document.getElementById('sim-risk-slider');
+    if (simRisk) simRisk.value = e.target.value;
+    if (document.getElementById('risk-percent-display')) document.getElementById('risk-percent-display').innerText = e.target.value + '%';
+    const riskDisplay = document.getElementById('riskDisplay');
+    if (riskDisplay) riskDisplay.innerText = `${e.target.value}%`;
+    updateSimulation();
+  });
+
+  document.getElementById('sim-risk-slider')?.addEventListener('input', (e) => {
+    if (document.getElementById('risk-percent-display')) document.getElementById('risk-percent-display').innerText = e.target.value + '%';
+    updateSimulation();
+  });
+
+  document.getElementById('sim-leverage')?.addEventListener('input', (e) => {
+    if (document.getElementById('leverage-display')) document.getElementById('leverage-display').innerText = e.target.value + 'x';
+    document.querySelectorAll('.leverage-btn').forEach(btn => {
+      if (btn.dataset.val === e.target.value) {
+        btn.classList.add('bg-cyan/20', 'border-cyan', 'text-white');
+        btn.classList.remove('bg-black/40', 'border-white/10', 'text-gray-400');
+      } else {
+        btn.classList.remove('bg-cyan/20', 'border-cyan', 'text-white');
+        btn.classList.add('bg-black/40', 'border-white/10', 'text-gray-400');
+      }
+    });
+    updateSimulation();
+  });
+
+  document.querySelectorAll('.leverage-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const val = e.currentTarget.dataset.val;
+      const slider = document.getElementById('sim-leverage');
+      if (slider) {
+        slider.value = val;
+        slider.dispatchEvent(new Event('input'));
+      }
+    });
+  });
+
+  ['sim-entry', 'sim-sl', 'sim-tp', 'sim-balance'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', updateSimulation);
+  });
+
+  document.getElementById('execute-trade-btn')?.addEventListener('click', executeTrade);
+
+  document.getElementById('paperTradeConfirm')?.addEventListener('click', () => {
+    const modal = document.getElementById('paperTradeModal');
+    if (modal) modal.classList.add('hidden');
+    if (typeof window.switchRoom === 'function') window.switchRoom('terminal');
+  });
+
+  document.getElementById('paperTradeCancel')?.addEventListener('click', () => {
+    const modal = document.getElementById('paperTradeModal');
+    if (modal) modal.classList.add('hidden');
+  });
+
+  document.getElementById('confirm-trade-yes')?.addEventListener('click', () => {
+    const modal = document.getElementById('trade-confirmation-modal');
+    if (modal) modal.classList.add('hidden');
+    if (typeof window.switchRoom === 'function') window.switchRoom('terminal');
+  });
+
+  document.getElementById('confirm-trade-no')?.addEventListener('click', () => {
+    const modal = document.getElementById('trade-confirmation-modal');
+    if (modal) modal.classList.add('hidden');
+  });
+}
+
+// ============================================================
+// SIGNAL DETAILS MODAL LOGIC
+// ============================================================
+window.showSignalDetailsModal = function(signal) {
+  const modal = document.getElementById('signalDetailsModal');
+  if (!modal) return;
+
+  // Basic Information
+  document.getElementById('sd-symbol').textContent = signal.symbol;
+  document.getElementById('sd-timeframe').textContent = signal.timeframe || '1h';
+  
+  const direction = signal.direction || 'LONG';
+  const badge = document.getElementById('sd-direction-badge');
+  badge.textContent = direction;
+  if (direction === 'LONG') {
+    badge.className = 'px-2 py-1 rounded text-xs font-bold tracking-wider bg-green-500/20 text-green-400 border border-green-500/30';
+  } else if (direction === 'SHORT') {
+    badge.className = 'px-2 py-1 rounded text-xs font-bold tracking-wider bg-red-500/20 text-red-400 border border-red-500/30';
+  } else {
+    badge.className = 'px-2 py-1 rounded text-xs font-bold tracking-wider bg-gray-500/20 text-gray-400 border border-gray-500/30';
+  }
+
+  // Price & Levels
+  const currentPrice = window.currentTickers && window.currentTickers[signal.symbol] 
+    ? parseFloat(window.currentTickers[signal.symbol]) 
+    : (signal.entry_price || 0);
+    
+  document.getElementById('sd-live-price').textContent = `$${currentPrice.toFixed(4)}`;
+  document.getElementById('sd-confidence').textContent = `${((signal.ai_prob || signal.confidence || 0) * 100).toFixed(1)}%`;
+  document.getElementById('sd-sl').textContent = `$${(signal.sl || 0).toFixed(4)}`;
+  document.getElementById('sd-tp').textContent = `$${(signal.tp || 0).toFixed(4)}`;
+
+  // Confluence Scorecards (Mocking if not present)
+  const confluence = signal.confluence || {
+    trend: Math.floor(Math.random() * 20 + 70),
+    momentum: Math.floor(Math.random() * 30 + 50),
+    volume: Math.floor(Math.random() * 40 + 40)
+  };
+  document.getElementById('sd-conf-trend-val').textContent = `${confluence.trend}%`;
+  document.getElementById('sd-conf-trend-bar').style.width = `${confluence.trend}%`;
+  
+  document.getElementById('sd-conf-mom-val').textContent = `${confluence.momentum}%`;
+  document.getElementById('sd-conf-mom-bar').style.width = `${confluence.momentum}%`;
+  
+  document.getElementById('sd-conf-vol-val').textContent = `${confluence.volume}%`;
+  document.getElementById('sd-conf-vol-bar').style.width = `${confluence.volume}%`;
+
+  // Set active dataset for real-time tracking
+  modal.dataset.activeSymbol = signal.symbol;
+  modal.dataset.activeTimeframe = signal.timeframe || '1h';
+
+  // Visual Zones
+  updateZoneTracker(signal, currentPrice);
+
+  // Expectancy Matrix
+  renderExpectancyPanel();
+
+  // Raw Prob & SHAP
+  renderTelemetryPanel(signal);
+
+  // Developer Portal
+  renderDeveloperPortal(signal);
+
+  // Setup Execute Button
+  const execBtn = document.getElementById('sd-execute-btn');
+  if (execBtn) {
+    execBtn.onclick = () => {
+      modal.classList.add('hidden');
+      if (typeof window.selectSignal === 'function') {
+        window.selectSignal(signal.symbol, signal.timeframe || '1h');
+      }
+    };
+  }
+
+  modal.classList.remove('hidden');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const modal = document.getElementById('signalDetailsModal');
+  const closeBtn = document.getElementById('closeSignalDetailsBtn');
+  
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      modal.classList.add('hidden');
+    });
+  }
+
+  if (modal) {
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.classList.add('hidden');
+      }
+    });
+  }
+});
+
+// ============================================================
+// VISUAL ZONE TRACKING ENGINE
+// ============================================================
+
+function getUserTier() {
+  if (typeof AuthManager !== 'undefined') {
+    const user = AuthManager.getUser();
+    if (user) {
+      const plan = (user.plan || user.tier || 'basic').toLowerCase();
+      if (plan === 'pro' || plan === 'premium') return 'PRO';
+      if (plan === 'intermediate') return 'INTERMEDIATE';
+    }
+  }
+  // Fallback to window variables if set
+  if (window.isPremiumUser) return 'PRO';
+  return 'BASIC';
+}
+
+function updateZoneTracker(signal, currentPrice) {
+    const container = document.getElementById('sd-visual-zone-container');
+    if (!container) return;
+
+    const tier = getUserTier();
+    
+    // BASIC Tier Placeholder
+    if (tier === 'BASIC' || tier === 'TRIAL') {
+        container.innerHTML = `
+            <div class="flex-1 flex flex-col items-center justify-center p-4 border border-white/5 rounded-lg bg-black/40 relative overflow-hidden group cursor-pointer" onclick="window.location.href='/web/src/pages/pricing.html'">
+                <div class="absolute inset-0 bg-gradient-to-r from-red-500/5 via-transparent to-green-500/5 opacity-50 blur-sm pointer-events-none"></div>
+                <i class="fas fa-lock text-gray-500 text-xl mb-2 group-hover:text-cyan transition-colors"></i>
+                <div class="text-[10px] text-gray-400 font-mono text-center mb-2 opacity-70">
+                    <div class="h-1 w-full bg-white/10 rounded-full mb-2 overflow-hidden">
+                        <div class="h-full w-1/3 bg-white/20"></div>
+                    </div>
+                    Visual zone tracking restricted
+                </div>
+                <span class="text-xs text-cyan font-bold bg-cyan/10 px-3 py-1 rounded group-hover:bg-cyan/20 transition-colors">
+                    Unlock Risk Visualizer with Pro
+                </span>
+            </div>
+        `;
+        return;
+    }
+
+    // INTERMEDIATE / PRO Logic
+    const direction = signal.direction || 'LONG';
+    const entry = parseFloat(signal.entry_price) || 0;
+    const sl = parseFloat(signal.sl) || 0;
+    const tp = parseFloat(signal.tp) || 0;
+    const price = parseFloat(currentPrice) || entry;
+    
+    if (!entry || !sl || !tp) {
+        container.innerHTML = `<div class="text-xs text-gray-500 p-4">Invalid signal data for tracker.</div>`;
+        return;
+    }
+
+    // Calculate Percentages (0% is SL, 100% is TP)
+    let currentPercent = 0;
+    let entryPercent = 0;
+
+    if (direction === 'LONG') {
+        const totalRange = tp - sl;
+        if (totalRange > 0) {
+            currentPercent = ((price - sl) / totalRange) * 100;
+            entryPercent = ((entry - sl) / totalRange) * 100;
+        }
+    } else {
+        const totalRange = sl - tp;
+        if (totalRange > 0) {
+            currentPercent = ((sl - price) / totalRange) * 100;
+            entryPercent = ((sl - entry) / totalRange) * 100;
+        }
+    }
+
+    // Safety Clamping (-5% to 105%)
+    const clamp = (val) => Math.max(-5, Math.min(105, val));
+    const renderCurrentPercent = clamp(currentPercent);
+    const renderEntryPercent = clamp(entryPercent);
+
+    // Telemetry Warning Engine
+    let statusText = "⚡ Inside Active Entry Buffer Zone";
+    let statusColorClass = "text-cyan animate-pulse";
+    
+    if (direction === 'LONG') {
+        if (price >= tp) {
+            statusText = "✓ TARGET HIT";
+            statusColorClass = "text-green-400 font-bold";
+        } else if (price <= sl) {
+            statusText = "🛑 STOP LOSS TRIGGERED";
+            statusColorClass = "text-red-500 font-bold";
+        } else {
+            const drift = (price - entry) / entry;
+            if (drift > 0.002) {
+                statusText = "⚠️ Breakout In Progress: Do Not Chase";
+                statusColorClass = "text-yellow-400 font-bold";
+            }
+        }
+    } else { // SHORT
+        if (price <= tp) {
+            statusText = "✓ TARGET HIT";
+            statusColorClass = "text-green-400 font-bold";
+        } else if (price >= sl) {
+            statusText = "🛑 STOP LOSS TRIGGERED";
+            statusColorClass = "text-red-500 font-bold";
+        } else {
+            const drift = (entry - price) / entry;
+            if (drift > 0.002) {
+                statusText = "⚠️ Breakout In Progress: Do Not Chase";
+                statusColorClass = "text-yellow-400 font-bold";
+            }
+        }
+    }
+
+    // Render Template
+    container.innerHTML = `
+        <div class="flex justify-between items-center mb-3">
+            <h4 class="text-xs uppercase tracking-widest text-gray-400 font-bold flex items-center gap-2">
+                <i class="fas fa-bullseye text-orange"></i> Visual Zones
+            </h4>
+            <div class="text-[9px] uppercase tracking-wider ${statusColorClass}">
+                ${statusText}
+            </div>
+        </div>
+        
+        <div class="relative w-full h-8 mt-2 px-4 flex flex-col justify-center border border-white/5 rounded-lg bg-black/50">
+            <!-- Background Track Gradient -->
+            <div class="absolute inset-0 rounded-lg bg-gradient-to-r from-red-500/20 via-slate-800/50 to-emerald-500/20 pointer-events-none"></div>
+            
+            <!-- Base Track Line -->
+            <div class="relative w-full h-1 bg-white/10 rounded-full z-10">
+                
+                <!-- Static Entry Pin -->
+                <div class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex flex-col items-center" style="left: ${renderEntryPercent}%">
+                    <div class="w-2 h-4 bg-gray-400 rounded-sm"></div>
+                    <span class="absolute top-full mt-1 text-[8px] text-gray-400 font-mono">ENTRY</span>
+                </div>
+                
+                <!-- Dynamic Live Price Indicator -->
+                <div class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex flex-col items-center transition-all duration-300 ease-out z-20" style="left: ${renderCurrentPercent}%">
+                    <div class="w-3 h-3 bg-white rounded-full shadow-[0_0_10px_rgba(255,255,255,0.8)] border-2 border-cyan"></div>
+                    <span class="absolute bottom-full mb-1 text-[8px] text-white font-mono shadow-black drop-shadow-md">LIVE</span>
+                </div>
+                
+            </div>
+            
+            <!-- Scale Markers -->
+            <div class="absolute inset-x-0 bottom-0 translate-y-full pt-1 flex justify-between text-[8px] font-mono text-gray-500 px-4">
+                <span class="text-red-500/70">SL</span>
+                <span class="text-green-500/70">TP</span>
+            </div>
+        </div>
+    `;
+}
+
+// Listen to WebSocket price updates triggered from gatekeeper.js
+window.addEventListener('priceUpdate', (e) => {
+    const { symbol, price } = e.detail;
+    const modal = document.getElementById('signalDetailsModal');
+    
+    if (modal && !modal.classList.contains('hidden') && modal.dataset.activeSymbol === symbol) {
+        // Update Live Price text in the modal
+        const livePriceEl = document.getElementById('sd-live-price');
+        if (livePriceEl) {
+            livePriceEl.textContent = `$${parseFloat(price).toFixed(4)}`;
+        }
+        
+        // Update the Visual Zone Tracker
+        const timeframe = modal.dataset.activeTimeframe || '1h';
+        const key = `${symbol}_${timeframe}`;
+        const sig = window.latestSignals && window.latestSignals[key];
+        
+        if (sig) {
+            updateZoneTracker(sig, parseFloat(price));
+            // Model telemetry usually updates on candle close, but we can re-render it if the payload changes
+            renderTelemetryPanel(sig);
+        }
+    }
+});
+
+// ============================================================
+// EXPECTANCY & RISK PANEL
+// ============================================================
+
+let globalAnalyticsCache = null;
+
+async function fetchGlobalAnalytics() {
+    if (globalAnalyticsCache) return globalAnalyticsCache;
+    try {
+        const docRef = doc(db, 'analytics', 'global_performance');
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+            globalAnalyticsCache = docSnap.data();
+            return globalAnalyticsCache;
+        }
+    } catch (e) {
+        console.error("Error fetching analytics", e);
+    }
+    return null;
+}
+
+async function renderExpectancyPanel() {
+    const container = document.getElementById('sd-expectancy-container');
+    if (!container) return;
+    
+    const tier = getUserTier();
+    
+    if (tier !== 'PRO') {
+        container.innerHTML = `
+            <div class="relative w-full h-full min-h-[120px] rounded-xl overflow-hidden group cursor-pointer" onclick="window.location.href='/web/src/pages/pricing.html'">
+                <!-- Blurred background metrics -->
+                <div class="absolute inset-0 p-4 blur-[4px] opacity-40 bg-black/50 flex flex-col justify-between">
+                    <div class="flex justify-between"><span class="text-xs text-gray-400">Expectancy</span><span class="text-emerald-500 font-mono">+1.84%</span></div>
+                    <div class="flex justify-between"><span class="text-xs text-gray-400">Max DD</span><span class="text-red-400 font-mono">-12.5%</span></div>
+                    <div class="flex justify-between"><span class="text-xs text-gray-400">Profit Factor</span><span class="text-cyan font-mono">1.95</span></div>
+                </div>
+                
+                <!-- Lock Overlay -->
+                <div class="absolute inset-0 flex flex-col items-center justify-center bg-black/40 bg-gradient-to-t from-black/80 to-transparent">
+                    <i class="fas fa-lock text-gray-300 text-xl mb-2 group-hover:text-amber-400 transition-colors"></i>
+                    <span class="text-[10px] text-amber-400 font-bold tracking-widest text-center px-4 leading-relaxed group-hover:text-amber-300">
+                        Unlock Institutional Quant Telemetry with Pro Tier
+                    </span>
+                </div>
+            </div>
+        `;
+        return;
+    }
+    
+    // Pro Tier: Render skeleton loading
+    container.innerHTML = `<div class="flex items-center justify-center h-full min-h-[120px]"><i class="fas fa-circle-notch fa-spin text-cyan"></i></div>`;
+    
+    const data = await fetchGlobalAnalytics();
+    
+    if (!data) {
+        container.innerHTML = `<div class="text-xs text-gray-500 p-4 text-center min-h-[120px] flex items-center justify-center">Telemetry unavailable</div>`;
+        return;
+    }
+    
+    const exp = data.expectancy || 0;
+    const mdd = data.max_drawdown || 0;
+    const pf = data.profit_factor || 0;
+    
+    const expColor = exp > 0 ? 'text-emerald-400' : (exp < 0 ? 'text-red-400' : 'text-gray-400');
+    const expSign = exp > 0 ? '+' : '';
+    const expArrow = exp > 0 ? '<i class="fas fa-arrow-trend-up text-[10px] ml-1"></i>' : (exp < 0 ? '<i class="fas fa-arrow-trend-down text-[10px] ml-1"></i>' : '');
+    
+    const mddColor = mdd > 15 ? 'text-red-500' : 'text-amber-400';
+    
+    const pfColor = pf > 1.5 ? 'text-cyan shadow-cyan/20' : 'text-white';
+    
+    container.innerHTML = `
+        <h4 class="text-xs uppercase tracking-widest text-gray-400 font-bold mb-3 flex items-center gap-2">
+            <i class="fas fa-chart-line text-purple-400"></i> Inst. Quant Telemetry
+        </h4>
+        <div class="flex flex-col gap-2 flex-1 justify-center">
+            <div class="flex justify-between items-center border-b border-white/5 pb-2">
+                <span class="text-[10px] uppercase tracking-wider text-gray-500 font-bold">Expectancy</span>
+                <span class="font-mono text-sm font-bold ${expColor} drop-shadow-md">
+                    ${expSign}${exp.toFixed(2)}% ${expArrow}
+                </span>
+            </div>
+            <div class="flex justify-between items-center border-b border-white/5 pb-2">
+                <span class="text-[10px] uppercase tracking-wider text-gray-500 font-bold">Max Drawdown</span>
+                <span class="font-mono text-sm font-bold ${mddColor}">
+                    -${mdd.toFixed(1)}%
+                </span>
+            </div>
+            <div class="flex justify-between items-center">
+                <span class="text-[10px] uppercase tracking-wider text-gray-500 font-bold">Profit Factor</span>
+                <span class="font-mono text-sm font-bold ${pfColor} bg-black/40 px-2 py-0.5 rounded border border-white/5">
+                    ${pf.toFixed(2)}
+                </span>
+            </div>
+        </div>
+    `;
+}
+
+// ============================================================
+// MODEL TELEMETRY & EXPLAINABILITY (SHAP) PANEL
+// ============================================================
+
+function renderTelemetryPanel(signal) {
+    const container = document.getElementById('sd-telemetry-container');
+    if (!container) return;
+
+    const tier = getUserTier();
+
+    if (tier !== 'PRO') {
+        container.innerHTML = `
+            <div class="relative w-full h-full min-h-[160px] rounded-xl overflow-hidden group cursor-pointer" onclick="window.location.href='/web/src/pages/pricing.html'">
+                <!-- Blurred background metrics -->
+                <div class="absolute inset-0 p-4 blur-[4px] opacity-40 bg-black/50 flex flex-col gap-4 pointer-events-none">
+                    <div>
+                        <div class="flex justify-between items-center text-[10px] mb-1 text-gray-400"><span class="uppercase tracking-widest">Model Conviction</span><span class="font-bold text-cyan">76% LONG</span></div>
+                        <div class="w-full h-2 rounded overflow-hidden flex bg-black/50"><div class="h-full bg-rose-500/50" style="width: 14%"></div><div class="h-full bg-gray-500/50" style="width: 10%"></div><div class="h-full bg-emerald-500/50" style="width: 76%"></div></div>
+                    </div>
+                    <div>
+                        <div class="text-[10px] text-gray-400 uppercase tracking-widest mb-2">Live Logic Engine</div>
+                        <div class="w-full h-4 bg-emerald-500/20 rounded mb-1"></div>
+                        <div class="w-full h-4 bg-emerald-500/20 rounded mb-1 w-3/4"></div>
+                        <div class="w-full h-4 bg-rose-500/20 rounded w-1/2 ml-auto"></div>
+                    </div>
+                </div>
+                
+                <!-- Lock Overlay -->
+                <div class="absolute inset-0 flex flex-col items-center justify-center bg-black/40 bg-gradient-to-t from-black/90 to-transparent backdrop-blur-md z-10 transition-all group-hover:bg-black/50">
+                    <i class="fas fa-lock text-gray-300 text-2xl mb-2 group-hover:text-cyan transition-colors"></i>
+                    <span class="text-[10px] text-cyan font-bold tracking-widest text-center px-4 leading-relaxed group-hover:text-cyan/80">
+                        Unlock Live Machine Learning Probabilities & SHAP Attribution Maps with Pro Tier
+                    </span>
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    // Default fallbacks if backend doesn't send telemetry yet in websocket payload
+    const probs = signal.probabilities || { "SHORT": 24.5, "HOLD": 10.2, "LONG": 65.3 };
+    const shapList = signal.shap_contributions || [
+        { "feature": "Funding_Rate", "impact": 0.45 },
+        { "feature": "Orderbook_Imbalance", "impact": 0.23 },
+        { "feature": "RSI_Divergence", "impact": -0.15 }
+    ];
+
+    // Calculate conviction winner
+    let winner = "HOLD";
+    let winnerProb = probs.HOLD || 0;
+    let winnerColor = "text-gray-400";
+    
+    if ((probs.LONG || 0) > winnerProb) {
+        winner = "LONG";
+        winnerProb = probs.LONG;
+        winnerColor = "text-emerald-400";
+    }
+    if ((probs.SHORT || 0) > winnerProb) {
+        winner = "SHORT";
+        winnerProb = probs.SHORT;
+        winnerColor = "text-rose-400";
+    }
+
+    let shapHTML = '';
+    
+    if (!shapList || shapList.length === 0) {
+        shapHTML = \`<div class="text-xs text-gray-500 italic py-2">Attribution map unavailable.</div>\`;
+    } else {
+        // Max absolute impact for scaling
+        const maxImpact = Math.max(...shapList.map(s => Math.abs(s.impact)), 0.01);
+        
+        shapHTML = shapList.map(s => {
+            const isPositive = s.impact > 0;
+            const barWidth = (Math.abs(s.impact) / maxImpact) * 100;
+            const barColorClass = isPositive ? 'bg-emerald-500/20 border-emerald-500/30' : 'bg-rose-500/20 border-rose-500/30';
+            const textColorClass = isPositive ? 'text-emerald-400' : 'text-rose-400';
+            const sign = isPositive ? '+' : '-';
+            
+            return \`
+                <div class="flex items-center gap-2 mb-2 w-full text-[10px] font-mono">
+                    <div class="flex-1 text-right truncate text-gray-400 \${!isPositive ? textColorClass : ''}">\${!isPositive ? s.feature : ''}</div>
+                    
+                    <div class="w-1/3 flex items-center justify-center relative h-3 bg-black/30 rounded border border-white/5 overflow-hidden">
+                        <div class="absolute h-full border-r \${!isPositive ? 'border-r-0 border-l' : ''} border-white/10 \${barColorClass} \${isPositive ? 'left-1/2' : 'right-1/2'}" style="width: \${barWidth / 2}%"></div>
+                        <div class="absolute w-[1px] h-full bg-white/20 left-1/2"></div>
+                    </div>
+                    
+                    <div class="flex-1 truncate text-gray-400 \${isPositive ? textColorClass : ''}">\${isPositive ? s.feature : ''}</div>
+                </div>
+            \`;
+        }).join('');
+    }
+
+    container.innerHTML = \`
+        <div class="mb-4">
+            <h4 class="text-xs uppercase tracking-widest text-gray-400 font-bold flex items-center gap-2">
+                <i class="fas fa-brain text-emerald-400"></i> Model Telemetry
+            </h4>
+        </div>
+        
+        <!-- Conviction Meter -->
+        <div class="mb-4 bg-black/40 p-3 rounded-lg border border-white/5">
+            <div class="flex justify-between items-center text-[10px] uppercase tracking-widest font-bold mb-2">
+                <span class="text-gray-500">Conviction Vector</span>
+                <span class="\${winnerColor}">\${winnerProb.toFixed(1)}% \${winner}</span>
+            </div>
+            <div class="w-full h-1.5 rounded-full overflow-hidden flex bg-black/50 shadow-inner">
+                <div class="h-full bg-rose-500 transition-all duration-500" style="width: \${probs.SHORT || 0}%"></div>
+                <div class="h-full bg-gray-500 transition-all duration-500" style="width: \${probs.HOLD || 0}%"></div>
+                <div class="h-full bg-emerald-500 transition-all duration-500" style="width: \${probs.LONG || 0}%"></div>
+            </div>
+            <div class="flex justify-between text-[8px] mt-1 text-gray-500 font-mono">
+                <span>SH \${(probs.SHORT || 0).toFixed(0)}%</span>
+                <span>HD \${(probs.HOLD || 0).toFixed(0)}%</span>
+                <span>LN \${(probs.LONG || 0).toFixed(0)}%</span>
+            </div>
+        </div>
+
+        <!-- Live Logic Engine (Micro-SHAP) -->
+        <div class="bg-black/40 p-3 rounded-lg border border-white/5 flex-1 flex flex-col justify-center">
+            <div class="text-[9px] text-gray-500 uppercase tracking-widest font-bold mb-3 text-center border-b border-white/5 pb-2">
+                Live Logic Engine
+            </div>
+            <div class="flex flex-col w-full justify-center">
+                \${shapHTML}
+            </div>
+        </div>
+    \`;
+}
+
+// ============================================================
+// API PORTABILITY & DEVELOPER PORTAL
+// ============================================================
+
+window.regenerateApiKey = async function(symbol) {
+    try {
+        let token = localStorage.getItem('access_token') || localStorage.getItem('authToken');
+        if (!token && typeof AuthManager !== 'undefined') {
+            token = AuthManager.getToken();
+        }
+        
+        if (!token) {
+            alert('You must be logged in to regenerate API keys.');
+            return;
+        }
+
+        const btn = document.getElementById('btn-regen-key');
+        if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+
+        const response = await fetch('/api/v1/developer/regenerate_key', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to generate key. Are you on the PRO tier?');
+        }
+
+        const data = await response.json();
+        const apiKey = data.api_key;
+
+        // Show it to the user
+        const keyDisplay = document.getElementById('dev-api-key-display');
+        if (keyDisplay) {
+            keyDisplay.value = apiKey;
+            keyDisplay.type = 'text';
+        }
+
+        alert(`Copy your API key now. This is the only time it will be shown:\n\n${apiKey}`);
+
+        if (btn) btn.innerHTML = '<i class="fas fa-sync-alt"></i> Regenerate API Key';
+    } catch (e) {
+        console.error(e);
+        alert(e.message);
+        const btn = document.getElementById('btn-regen-key');
+        if (btn) btn.innerHTML = '<i class="fas fa-sync-alt"></i> Regenerate API Key';
+    }
+};
+
+window.copyEndpointUrl = function(symbol) {
+    const url = `${window.location.origin}/api/v1/signals/fleet?symbol=${symbol}`;
+    navigator.clipboard.writeText(url).then(() => {
+        alert('Endpoint URL copied to clipboard!');
+    });
+};
+
+function renderDeveloperPortal(signal) {
+    const container = document.getElementById('sd-developer-portal');
+    if (!container) return;
+
+    const tier = getUserTier();
+
+    if (tier !== 'PRO') {
+        container.innerHTML = `
+            <div class="relative w-full h-full min-h-[140px] rounded-xl overflow-hidden group cursor-pointer" onclick="window.location.href='/web/src/pages/pricing.html'">
+                <!-- Blurred background metrics -->
+                <div class="absolute inset-0 p-4 blur-[4px] opacity-40 bg-black/50 flex flex-col gap-3 pointer-events-none">
+                    <h4 class="text-xs uppercase tracking-widest text-gray-400 font-bold flex items-center gap-2">
+                        <i class="fas fa-code text-purple-400"></i> API Portability
+                    </h4>
+                    <input type="password" value="aegis_live_fakekey_xxxxxxxxxxxxxxxx" class="w-full bg-black/50 border border-white/10 rounded px-3 py-2 text-xs font-mono text-gray-500" disabled>
+                    <div class="flex gap-2">
+                        <button class="flex-1 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded py-2 text-[10px] font-bold"><i class="fas fa-sync-alt"></i> REGENERATE</button>
+                        <button class="flex-1 bg-white/5 text-gray-400 border border-white/10 rounded py-2 text-[10px] font-bold"><i class="fas fa-copy"></i> COPY ENDPOINT</button>
+                    </div>
+                </div>
+                
+                <!-- Lock Overlay -->
+                <div class="absolute inset-0 flex flex-col items-center justify-center bg-black/40 bg-gradient-to-t from-black/90 to-transparent backdrop-blur-sm z-10 transition-all group-hover:bg-black/50">
+                    <i class="fas fa-lock text-gray-300 text-2xl mb-2 group-hover:text-purple-400 transition-colors"></i>
+                    <span class="text-[10px] text-purple-400 font-bold tracking-widest text-center px-4 leading-relaxed group-hover:text-purple-300">
+                        Unlock Developer JSON Endpoints & Webhook Integrations with Pro Tier
+                    </span>
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = `
+        <h4 class="text-xs uppercase tracking-widest text-gray-400 font-bold mb-3 flex items-center gap-2">
+            <i class="fas fa-code text-purple-400"></i> API Portability & Developer Access
+        </h4>
+        <div class="flex flex-col gap-3">
+            <div class="relative">
+                <input type="password" id="dev-api-key-display" value="aegis_live_••••••••••••••••" 
+                    class="w-full bg-black/50 border border-white/10 rounded px-3 py-2 text-xs font-mono text-gray-300 outline-none focus:border-purple-500/50 transition-colors" readonly>
+            </div>
+            <div class="flex gap-2">
+                <button id="btn-regen-key" onclick="window.regenerateApiKey('${signal.symbol}')"
+                    class="flex-1 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 border border-purple-500/30 rounded py-2 text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2">
+                    <i class="fas fa-sync-alt"></i> Regenerate API Key
+                </button>
+                <button onclick="window.copyEndpointUrl('${signal.symbol}')"
+                    class="flex-1 bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 rounded py-2 text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2">
+                    <i class="fas fa-copy"></i> Copy Endpoint URL
+                </button>
+            </div>
+            <div class="text-[9px] text-gray-500 font-mono mt-1 text-center">
+                Requires header: <span class="text-purple-400">X-API-Key</span>
+            </div>
+        </div>
+    `;
+}

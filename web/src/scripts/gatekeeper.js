@@ -883,7 +883,13 @@ function updateUI() {
   // We leave trial banner manipulation to trial-countdown.js
   // Update alpha mode visibility (Pro only - or available for all if requested)
   if (alphaToggleBtn) {
-    alphaToggleBtn.style.display = 'flex';
+    if (userPlan === 'trial' || userPlan === 'basic') {
+      alphaToggleBtn.style.display = 'none';
+      alphaToggleBtn.classList.add('feature-locked');
+    } else {
+      alphaToggleBtn.style.display = 'flex';
+      alphaToggleBtn.classList.remove('feature-locked');
+    }
   }
 }
 
@@ -1265,7 +1271,7 @@ function renderSignals(signals) {
     }
 
     return `
-      <div class="signal-card ${cardTypeClass}${statusIndicator} cursor-pointer hover:shadow-[0_0_15px_rgba(0,242,255,0.2)] transition-all transform hover:-translate-y-1 overflow-hidden ${matchClasses}" onclick="window.selectSignal('${symbol}', '${timeframe}')" data-symbol="${symbol}" data-status="${signalStatus}">
+      <div class="signal-card ${cardTypeClass}${statusIndicator} cursor-pointer hover:shadow-[0_0_15px_rgba(0,242,255,0.2)] transition-all transform hover:-translate-y-1 overflow-hidden ${matchClasses}" onclick="window.openSignalDetails('${symbol}', '${timeframe}')" data-symbol="${symbol}" data-status="${signalStatus}">
         <div class="signal-header flex justify-between items-center">
           <div class="flex items-center">
             <span class="signal-symbol font-bold">${symbol}</span>
@@ -1302,8 +1308,15 @@ function renderSignals(signals) {
           </div>
           
           <div class="slide-down-container mt-2 ${window.openScorecards && window.openScorecards.has(symbol) ? 'open' : ''}">
-            <div class="slide-down-content" id="scorecard-${symbol.replace('/', '-')}">
-              <div class="pt-2 border-t border-white/10 mt-2">
+            <div class="slide-down-content ${ (userPlan === 'trial' || userPlan === 'basic') ? 'feature-locked relative' : '' }" id="scorecard-${symbol.replace('/', '-')}">
+              ${ (userPlan === 'trial' || userPlan === 'basic') ? `
+              <div class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/60 backdrop-blur-md rounded border border-white/10">
+                <i class="fas fa-lock text-white/50 text-xl mb-2"></i>
+                <div class="text-[10px] text-gray-400 mb-2">Logic Locked</div>
+                <button class="upgrade-btn text-[10px] bg-cyan/20 text-cyan px-2 py-1 rounded border border-cyan/30 hover:bg-cyan/30 transition-colors" onclick="window.location.href='/web/src/pages/pricing.html'; event.stopPropagation();">Upgrade to Pro</button>
+              </div>
+              ` : '' }
+              <div class="pt-2 border-t border-white/10 mt-2 ${ (userPlan === 'trial' || userPlan === 'basic') ? 'opacity-30 blur-sm pointer-events-none' : '' }">
                 <div class="text-[10px] font-bold text-gray-400 uppercase mb-2">AI Reasoning: XGBoost Confluence</div>
                 <div class="mb-2">
                   <div class="flex justify-between text-[10px]"><span class="text-gray-400">Trend Alignment (EMA 50/200)</span><span class="text-cyan font-mono">${confluence.trend}%</span></div>
@@ -1344,7 +1357,7 @@ window.toggleScorecard = function (event, symbol) {
   else if (userPlan === 'basic') userTier = 1;
 
   if (userTier < 2) {
-    content.classList.add('premium-lock-blur', 'locked');
+    content.classList.add('feature-locked', 'locked');
 
     // Toggle opening with lock
     wrapper.classList.toggle('open');
@@ -1368,6 +1381,16 @@ window.toggleScorecard = function (event, symbol) {
     } else {
       window.openScorecards.delete(symbol);
     }
+  }
+}
+
+window.openSignalDetails = function (symbol, timeframe) {
+  const key = `${symbol}_${timeframe}`;
+  const sig = window.latestSignals && window.latestSignals[key];
+  if (!sig) return;
+  
+  if (typeof window.showSignalDetailsModal === 'function') {
+    window.showSignalDetailsModal(sig);
   }
 }
 

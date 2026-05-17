@@ -18,6 +18,7 @@ if root_dir not in sys.path:
 
 from src.ml.predictor import Predictor
 from src.ml.feature_engine import prepare_features, compute_atr
+from src.ml.delltandecay import adjust_threshold_by_technical_and_fundamental
 
 # -------------------------------------------------------------------
 # ATR Multiplier for Triple Barriers
@@ -209,8 +210,15 @@ class SignalAnalyzer:
 
             sell_prob, hold_prob, buy_prob = proba[0], proba[1], proba[2]
 
-            # Dynamic threshold based on volatility
-            threshold = 0.75 if row['alpha_risk_flag'] == 'HIGH_RISK_VOLATILITY' else 0.65
+            # Dynamic threshold based on volatility -> further adjusted by fundamentals and anchor
+            base_thresh = 0.75 if row['alpha_risk_flag'] == 'HIGH_RISK_VOLATILITY' else 0.65
+            threshold = adjust_threshold_by_technical_and_fundamental(
+                base_thresh,
+                vol_regime=row.get('volatility_regime', None),
+                news_score=row.get('news_score', 0.0),
+                efficiency_ratio=row.get('efficiency_ratio', row.get('efficiency_ratio_10', 0.0)),
+                btc_anchor=(row.get('btc_dist_ema200', 0.0))
+            )
 
             # BTC correlation guard
             btc_prob = row.get('btc_prob', [0.0, 1.0, 0.0])

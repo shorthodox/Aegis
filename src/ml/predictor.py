@@ -212,6 +212,7 @@ class Predictor:
         news_df = self.load_news_data()
 
         from src.ml.feature_engine import prepare_features
+        from src.ml.delltandecay import smooth_probability_matrix
         df_features = prepare_features(df, btc_df=btc_df, news_df=news_df)
         return df_features
 
@@ -231,6 +232,12 @@ class Predictor:
             X = X.reindex(columns=list(expected), fill_value=0)
 
         y_proba = self.model.predict_proba(X)
+        # Smooth probabilities across time to reduce model jitter (helps live and backtests)
+        try:
+            if isinstance(y_proba, np.ndarray) and y_proba.ndim == 2 and y_proba.shape[0] > 1:
+                y_proba = smooth_probability_matrix(y_proba, span=6.0)
+        except Exception:
+            pass
         if y_proba.ndim == 1:
             return y_proba
         if y_proba.shape[1] == 2:

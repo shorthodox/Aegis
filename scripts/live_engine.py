@@ -50,6 +50,7 @@ root_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(root_dir))
 
 from src.ml.feature_engine import prepare_features, compute_atr, compute_efficiency_ratio
+from src.ml.delltandecay import adjust_threshold_by_technical_and_fundamental
 
 # -------------------------------------------------------------------
 # Logging
@@ -947,6 +948,17 @@ class SignalGenerator:
             base=base, prob=ai_prob, vol_regime=vol_regime, volume_condition=volume_cond,
             trend_aligned=trend_aligned, atr=atr_val, price=current_price,
         )
+        # Further adjust threshold with fundamentals & anchor signals
+        try:
+            adj_thresh = adjust_threshold_by_technical_and_fundamental(
+                adj_thresh,
+                vol_regime=vol_regime,
+                news_score=news_score,
+                efficiency_ratio=er,
+                btc_anchor=(btc_df['btc_dist_ema200'].iloc[-1] if (btc_df is not None and not btc_df.empty and 'btc_dist_ema200' in btc_df.columns) else 0.0)
+            )
+        except Exception:
+            pass
         if alpha_mode:
             adj_thresh = adj_thresh * 0.85
 

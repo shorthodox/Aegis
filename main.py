@@ -256,6 +256,111 @@ def is_cooldown_active(email: str) -> bool:
     return bool(cooldown and datetime.now(timezone.utc) < cooldown)
 
 # -------------------------------------------------------------------
+# Institutional Analytics Engine
+# -------------------------------------------------------------------
+async def compute_system_analytics():
+    """
+    Background task to compute win rate, mathematical expectancy, 
+    profit factor, and max drawdown from historical signals.
+    """
+    try:
+        if not db:
+            return
+            
+        print("📊 Running Institutional Analytics Computation...")
+        signals_ref = db.collection("signals")
+        
+        # Query only closed trades
+        # In Firestore, 'in' queries are supported up to 10 values
+        docs = signals_ref.where("status", "in", ["TARGET HIT", "STOP LOSS HIT"]).stream()
+        
+        trades = []
+        for doc in docs:
+            trades.append(doc.to_dict())
+            
+        if not trades:
+            print("📊 No closed trades found for analytics.")
+            db.collection("analytics").document("global_performance").set({
+                "win_rate": 0.0,
+                "expectancy": 0.0,
+                "profit_factor": 0.0,
+                "max_drawdown": 0.0,
+                "total_trades": 0,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            })
+            return
+            
+        wins = 0
+        losses = 0
+        gross_profit = 0.0
+        gross_loss = 0.0
+        
+        equity = 10000.0
+        peak_equity = equity
+        max_dd_pct = 0.0
+        
+        for trade in trades:
+            profit_pct = trade.get("profit_pct", None)
+            
+            if profit_pct is None:
+                status = trade.get("status")
+                entry = float(trade.get("entry_price", 0))
+                sl = float(trade.get("sl", 0))
+                tp = float(trade.get("tp", 0))
+                
+                if status == "TARGET HIT" and entry > 0:
+                    profit_pct = abs(tp - entry) / entry * 100
+                elif status == "STOP LOSS HIT" and entry > 0:
+                    profit_pct = -abs(entry - sl) / entry * 100
+                else:
+                    profit_pct = 0.0
+                    
+            if profit_pct > 0:
+                wins += 1
+                gross_profit += profit_pct
+            elif profit_pct < 0:
+                losses += 1
+                gross_loss += abs(profit_pct)
+                
+            trade_pl = equity * (profit_pct / 100)
+            equity += trade_pl
+            
+            if equity > peak_equity:
+                peak_equity = equity
+                
+            dd = (peak_equity - equity) / peak_equity * 100
+            if dd > max_dd_pct:
+                max_dd_pct = dd
+                
+        total_closed = wins + losses
+        win_rate = (wins / total_closed) if total_closed > 0 else 0.0
+        avg_win = (gross_profit / wins) if wins > 0 else 0.0
+        avg_loss = (gross_loss / losses) if losses > 0 else 0.0
+        
+        expectancy = (win_rate * avg_win) - ((1 - win_rate) * avg_loss)
+        profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else (gross_profit if gross_profit > 0 else 0.0)
+        
+        analytics_data = {
+            "win_rate": win_rate,
+            "expectancy": expectancy,
+            "profit_factor": profit_factor,
+            "max_drawdown": max_dd_pct,
+            "total_trades": total_closed,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        db.collection("analytics").document("global_performance").set(analytics_data)
+        print(f"📊 Analytics updated: Exp {expectancy:.2f}%, PF {profit_factor:.2f}, MDD {max_dd_pct:.2f}%")
+        
+    except Exception as e:
+        print(f"❌ Error computing analytics: {e}")
+
+async def analytics_loop():
+    while True:
+        await compute_system_analytics()
+        await asyncio.sleep(3600)  # Run every hour
+
+# -------------------------------------------------------------------
 # Engine runner as a background task (non‑blocking) with error handling
 # -------------------------------------------------------------------
 async def run_engine_background():
@@ -389,10 +494,12 @@ async def lifespan(app: FastAPI):
     engine_task = asyncio.create_task(run_engine_background())
     reminder_task = asyncio.create_task(check_and_send_trial_reminders())
     subscription_task = asyncio.create_task(check_and_send_subscription_reminders())
+    analytics_task = asyncio.create_task(analytics_loop())
     yield
     engine_task.cancel()
     reminder_task.cancel()
     subscription_task.cancel()
+    analytics_task.cancel()
 
 app = FastAPI(title="Aegis-1 by Gatekeeper", lifespan=lifespan)
 
@@ -2041,6 +2148,95 @@ async def handle_cashfree_webhook(request: Request):
             raise HTTPException(status_code=500, detail="Database write error")
             
     return {"status": "IGNORED", "message": "Non-payment event type processed"}
+
+# -------------------------------------------------------------------
+# API Portability & Developer Access
+# -------------------------------------------------------------------
+import hashlib
+import secrets
+
+async def verify_api_key(request: Request):
+    api_key = request.headers.get("X-API-Key")
+    if not api_key:
+        raise HTTPException(status_code=401, detail="Missing X-API-Key header")
+        
+    api_key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+    
+    users_ref = db.collection("users")
+    query = users_ref.where("api_key_hash", "==", api_key_hash).limit(1).stream()
+    
+    user_doc = None
+    for doc in query:
+        user_doc = doc.to_dict()
+        break
+        
+    if not user_doc:
+        raise HTTPException(status_code=401, detail="Invalid API Key")
+        
+    plan = user_doc.get("plan", "basic").lower()
+    if plan not in ["pro", "premium"]:
+        raise HTTPException(status_code=403, detail="Pro Tier required for API access")
+        
+    return user_doc
+
+@app.get("/api/v1/signals/fleet")
+async def get_signals_fleet(symbol: Optional[str] = None, user: dict = Depends(verify_api_key)):
+    """
+    Programmatic data portability endpoint for Pro users.
+    Returns structured JSON array of live signals.
+    """
+    signals_ref = db.collection("signals")
+    query = signals_ref.where("status", "==", "ACTIVE")
+    if symbol:
+        query = query.where("symbol", "==", symbol)
+        
+    docs = query.stream()
+    
+    fleet = []
+    for doc in docs:
+        sig = doc.to_dict()
+        fleet.append({
+            "ticker": sig.get("symbol"),
+            "direction": sig.get("direction"),
+            "start_anchor": sig.get("entry_price"),
+            "target_destination": sig.get("tp"),
+            "stop_loss": sig.get("sl"),
+            "model_conviction": sig.get("probabilities", {}),
+            "timestamp": sig.get("timestamp")
+        })
+        
+    return {"status": "SUCCESS", "data": fleet}
+
+@app.post("/api/v1/developer/regenerate_key")
+async def regenerate_api_key(user_id: str = Depends(get_current_user)):
+    """
+    Generates a new API key for the authenticated user, hashes it,
+    stores the hash in Firestore, and returns the raw key once.
+    """
+    user_ref = db.collection("users").document(user_id)
+    user_doc = user_ref.get()
+    
+    if not user_doc.exists:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    data = user_doc.to_dict()
+    plan = data.get("plan", "basic").lower()
+    
+    if plan not in ["pro", "premium", "intermediate"]:
+        # Allow intermediate if required, but user said Pro
+        if plan not in ["pro", "premium"]:
+            raise HTTPException(status_code=403, detail="Pro Tier required for API access")
+        
+    # Generate new key
+    raw_key = "aegis_live_" + secrets.token_urlsafe(32)
+    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+    
+    user_ref.update({
+        "api_key_hash": key_hash,
+        "api_key_last_generated": datetime.now(timezone.utc).isoformat()
+    })
+    
+    return {"status": "SUCCESS", "api_key": raw_key}
 
 # -------------------------------------------------------------------
 # Main entry point

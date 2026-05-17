@@ -17,6 +17,7 @@ if root_dir not in sys.path:
 
 from src.ml.predictor import Predictor
 from src.ml.feature_engine import prepare_features, compute_atr, compute_volatility_regime
+from src.ml.delltandecay import adjust_threshold_by_technical_and_fundamental
 
 BACKTEST_DIR = Path(r"D:\Content\Animesh\bots\ai_signal_bot\logs\backtests")
 BACKTEST_DIR.mkdir(parents=True, exist_ok=True)
@@ -113,7 +114,15 @@ def simulate_trades_for_threshold(df, min_net_profit_pct):
                 continue
 
         if position_units == 0:
-            if prob > buy_thresh:
+            # compute dynamic threshold per-row based on volatility, news, efficiency and BTC anchor
+            adj_buy_thresh = adjust_threshold_by_technical_and_fundamental(
+                buy_thresh,
+                vol_regime=row.get('volatility_regime', None),
+                news_score=row.get('news_score', 0.0),
+                efficiency_ratio=row.get('efficiency_ratio_10', row.get('efficiency_ratio', 0.0)),
+                btc_anchor=row.get('btc_dist_ema200', 0.0)
+            )
+            if prob > adj_buy_thresh:
                 direction = 'long'
             else:
                 continue

@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from typing import Optional, Tuple, List
+from src.ml.delltandecay import add_delta_and_decay_features
 
 # ------------------------------------------------------------------
 # Data Cleaning (fix inf/NaN issues for XGBoost)
@@ -505,6 +506,12 @@ def prepare_features(df: pd.DataFrame,
     # ----- Target (optional) -----
     if add_target_flag:
         df = add_target(df, forward_hours=forward_hours)
+
+    # ----- Delta & Decay features: short-term deltas and exponentially-weighted aggregates -----
+    try:
+        df = add_delta_and_decay_features(df, cols=['close', 'volume', 'vwap', 'returns_1h'], half_life=24.0)
+    except Exception:
+        pass
 
     # ----- Cleanup: drop rows with essential NaNs -----
     required_cols = ['atr_14', 'rsi_14', 'adx_14', 'volume_atr_efficiency', 'volatility_regime']
