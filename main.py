@@ -651,6 +651,7 @@ async def get_me(user_id: str = Depends(get_current_user)):
     if not user_doc:
         raise HTTPException(status_code=404)
     return {
+        "uid": user_id,
         "email": user_doc.get("email", user_id), 
         "plan": user_doc.get("plan", "trial"), 
         "trial_end": user_doc.get("trial_end"),
@@ -1896,7 +1897,8 @@ class PaymentSessionRequest(BaseModel):
 
 def create_cashfree_order(user_id: str, user_email: str, plan_amount: float, plan_name: str, currency: str = "INR"):
     IS_PROD = os.getenv("CASHFREE_MODE") == "PRODUCTION"
-    BASE_URL = "https://api.cashfree.com/pg" if IS_PROD else "https://sandbox.cashfree.com/pg"
+    CASHFREE_BASE_URL = "https://api.cashfree.com/pg" if IS_PROD else "https://sandbox.cashfree.com/pg"
+    APP_URL = os.getenv("BASE_URL", "http://localhost:8000").rstrip('/')
     
     headers = {
         "x-client-id": os.getenv("CASHFREE_APP_ID", os.getenv("CASHFREE_CLIENT_ID", "test_client_id")),
@@ -1917,8 +1919,8 @@ def create_cashfree_order(user_id: str, user_email: str, plan_amount: float, pla
             "customer_phone": "9999999999"
         },
         "order_meta": {
-            "return_url": f"https://gatekeeper.sbs/payment-status?order_id={order_id}",
-            "notify_url": "https://gatekeeper.sbs/api/v1/cashfree-webhook"
+            "return_url": f"{APP_URL}/web/src/pages/dashboard.html?order_id={order_id}",
+            "notify_url": f"{APP_URL}/api/v1/cashfree-webhook"
         },
         "order_tags": {
             "plan_tier": plan_name
@@ -1926,7 +1928,7 @@ def create_cashfree_order(user_id: str, user_email: str, plan_amount: float, pla
     }
     
     try:
-        response = requests.post(f"{BASE_URL}/orders", json=payload, headers=headers)
+        response = requests.post(f"{CASHFREE_BASE_URL}/orders", json=payload, headers=headers)
         if response.status_code == 200:
             order_data = response.json()
             return {
@@ -2007,6 +2009,13 @@ async def handle_cashfree_webhook(request: Request):
                 
             user_ref = db.collection("users").document(target_doc)
             
+            # Check if user doc exists, fallback to email if target_doc was user_id
+            doc_snap = user_ref.get()
+            if not getattr(doc_snap, "exists", False) and target_doc != email and email:
+                print(f"⚠️ User {target_doc} not found. Trying fallback to email {email}...")
+                target_doc = email
+                user_ref = db.collection("users").document(target_doc)
+
             # Determine the structural tier target based on the transaction amount
             # E.g., ~1999 INR maps to PRO tier privileges
             assigned_tier = "pro" if float(amount) >= 1000 else ("intermediate" if float(amount) >= 500 else "basic")
@@ -2039,4 +2048,5 @@ async def handle_cashfree_webhook(request: Request):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     uvicorn.run("main:app", host="0.0.0.0", port=port)
+
 
