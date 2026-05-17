@@ -221,7 +221,7 @@
     <script type="module">
         import { initSignInUI, openSignInModal } from '../scripts/signin-ui.js';
         import { initSignUpUI, openSignUpModal } from '../scripts/signup-ui.js';
-        import { isUserAuthenticated, handleLogout } from '../scripts/auth.js';
+        import { isUserAuthenticated, handleLogout, subscribeToAuthState } from '../scripts/auth.js';
         import { subscribeToPlan } from '../scripts/simple-auth-client.js';
 
         document.addEventListener('DOMContentLoaded', () => {
