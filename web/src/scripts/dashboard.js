@@ -1,15 +1,42 @@
 import { initializeTrialCountdown, fetchTrialStartFromFirestore } from './trial-countdown.js';
-import { auth } from './gatekeeper.js';
+import { auth, db } from './gatekeeper.js';
+import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js';
 
 let initialized = false;
+
+async function checkUserSubscriptionStatus(uid) {
+  try {
+    const userDocRef = doc(db, 'users', uid);
+    const userSnap = await getDoc(userDocRef);
+    if (userSnap.exists()) {
+      const data = userSnap.data();
+      const plan = data.plan || data.tier || '';
+      return plan.toLowerCase() === 'premium';
+    }
+  } catch (error) {
+    console.error('Error fetching user subscription status:', error);
+  }
+  return false;
+}
 
 // ============================================================
 // WAIT FOR AUTH STATE CHANGE (replaces polling waitForUserId)
 // ============================================================
 function waitForAuthStateChange() {
   const authPromise = new Promise((resolve) => {
-    const unsubscribe = auth.onAuthStateChanged((user) => {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
       unsubscribe(); // Unsubscribe after first state change
+      if (user?.uid) {
+        const isPremium = await checkUserSubscriptionStatus(user.uid);
+        if (isPremium) {
+          window.isSubscriptionActive = true;
+          window.isPremiumUser = true;
+          clearExpiredView();
+          unblockFeatures();
+          const countdownElements = document.querySelectorAll('.trial-countdown, [data-trial-countdown], #countdown-display');
+          countdownElements.forEach(el => el.style.display = 'none');
+        }
+      }
       resolve(user?.uid || null);
     });
   });
@@ -229,8 +256,8 @@ function blockAllFeatures() {
 function unblockFeatures() {
   window.isSubscriptionActive = true;
 
-  // Restore token cards
-  const tokenCards = document.querySelectorAll('[data-token-card], .token-card');
+  // Restore token cards and time-span selectors
+  const tokenCards = document.querySelectorAll('[data-token-card], .token-card, .tf-btn, [data-tf]');
   tokenCards.forEach(card => {
     card.style.pointerEvents = 'auto';
     card.style.opacity = '1';
@@ -333,7 +360,18 @@ let trialSetupRunning = false;
 let lastTrialSetupTime = 0;
 
 async function setupTrialNonBlocking(userId) {
-  if (!userId) return;
+  if (!userId || window.isPremiumUser) return;
+
+  const isPremium = await checkUserSubscriptionStatus(userId);
+  if (isPremium) {
+    window.isSubscriptionActive = true;
+    window.isPremiumUser = true;
+    clearExpiredView();
+    unblockFeatures();
+    const countdownElements = document.querySelectorAll('.trial-countdown, [data-trial-countdown], #countdown-display');
+    countdownElements.forEach(el => el.style.display = 'none');
+    return;
+  }
 
   const now = Date.now();
   if (trialSetupRunning || (now - lastTrialSetupTime < 5000)) {
