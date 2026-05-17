@@ -229,30 +229,49 @@
             initSignInUI();
             initSignUpUI();
 
-            function hasAuthToken() {
-                return !!localStorage.getItem('authToken') || !!localStorage.getItem('access_token') || localStorage.getItem('authenticated') === 'true';
+            // Localize Pricing
+            const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            const isIndia = timeZone === 'Asia/Calcutta' || timeZone === 'Asia/Kolkata';
+            if (isIndia) {
+                const priceElements = document.querySelectorAll('.price');
+                if (priceElements.length >= 3) {
+                    priceElements[0].innerHTML = '₹299 <span>/mo</span>';
+                    priceElements[1].innerHTML = '₹1,999 <span>/mo</span>';
+                    priceElements[2].innerHTML = '₹3,499 <span>/mo</span>';
+                }
+                const thElements = document.querySelectorAll('th');
+                thElements.forEach(th => {
+                    if (th.innerHTML.includes('Basic ($3.60)')) th.innerHTML = 'Basic (₹299)';
+                    else if (th.innerHTML.includes('Intermediate ($24.00)')) th.innerHTML = 'Intermediate (₹1,999)';
+                    else if (th.innerHTML.includes('Professional ($40.00)')) th.innerHTML = 'Professional (₹3,499)';
+                });
             }
 
             const portalBtn = document.getElementById('portalBtn');
             const dashboardBtn = document.getElementById('dashboardBtn');
             const signOutBtn = document.getElementById('signOutBtn');
             const createAccountBtn = document.getElementById('createAccountBtn');
-            const loggedIn = hasAuthToken() || isUserAuthenticated();
 
             const showElement = (el) => { if (el) el.style.display = 'inline-flex'; };
             const hideElement = (el) => { if (el) el.style.display = 'none'; };
 
-            if (loggedIn) {
-                hideElement(portalBtn);
-                hideElement(createAccountBtn);
-                showElement(dashboardBtn);
-                showElement(signOutBtn);
-            } else {
-                showElement(portalBtn);
-                showElement(createAccountBtn);
-                hideElement(dashboardBtn);
-                hideElement(signOutBtn);
-            }
+            let globalAuthState = false;
+
+            // 1. Verify Auth State and 3. Header Sync
+            subscribeToAuthState((state) => {
+                globalAuthState = state.authenticated;
+                if (globalAuthState) {
+                    hideElement(portalBtn);
+                    hideElement(createAccountBtn);
+                    showElement(dashboardBtn);
+                    showElement(signOutBtn);
+                } else {
+                    showElement(portalBtn);
+                    showElement(createAccountBtn);
+                    hideElement(dashboardBtn);
+                    hideElement(signOutBtn);
+                }
+            });
 
             if (portalBtn) {
                 portalBtn.addEventListener('click', (e) => {
@@ -297,7 +316,7 @@
             if (trialBtn) {
                 trialBtn.addEventListener('click', (e) => {
                     e.preventDefault();
-                    if (isUserAuthenticated()) {
+                    if (globalAuthState) {
                         window.location.href = '/web/src/pages/dashboard.html';
                     } else {
                         openSignUpModal();
@@ -310,7 +329,8 @@
                 btn.addEventListener('click', (e) => {
                     e.preventDefault();
                     const plan = e.currentTarget.dataset.plan;
-                    if (!isUserAuthenticated()) {
+                    // 2. Conditional Logic
+                    if (!globalAuthState) {
                         window.pendingPlan = plan;
                         openSignInModal();
                     } else {
