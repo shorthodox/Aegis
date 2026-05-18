@@ -668,7 +668,8 @@ def decode_token(token: str) -> Optional[str]:
     # Try decoding as Firebase token first
     try:
         decoded_token = firebase_auth.verify_id_token(token)
-        return decoded_token.get("uid")
+        # Firebase token contains email, fallback to uid if not present
+        return decoded_token.get("email") or decoded_token.get("uid")
     except Exception:
         # Fallback to custom JWT
         try:
@@ -1534,24 +1535,36 @@ async def websocket_dashboard(websocket: WebSocket):
                 trial_expired = is_trial_expired(current_user_email) if current_user_email else False
                 
                 filtered_signals = {}
-                for sym, sig in LIVE_STATE.data["signals"].items():
+                for sym, sig in LIVE_STATE.data.get("signals", {}).items():
                     if sym in allowed_tokens:
+                        # Handle both dictionary and object (dataclass) representations
+                        if isinstance(sig, dict):
+                            sig_data = sig
+                        elif hasattr(sig, "dict") and callable(sig.dict):
+                            sig_data = sig.dict()
+                        elif hasattr(sig, "__dataclass_fields__"):
+                            sig_data = asdict(sig)
+                        elif hasattr(sig, "__dict__"):
+                            sig_data = vars(sig)
+                        else:
+                            sig_data = {}
+                            
                         filtered_signals[sym] = {
-                            "ai_prob": sig.get("ai_prob", 0),
-                            "signal": sig.get("signal", "WAITING"),
-                            "threshold": sig.get("threshold", 0),
-                            "signal_strength": sig.get("signal_strength", "NONE"),
-                            "atr": sig.get("atr", 0),
-                            "risk_pct": sig.get("risk_pct", 2),
-                            "direction": sig.get("direction", "NEUTRAL"),
-                            "entry_price": sig.get("entry_price", 0.0),
-                            "sl": sig.get("sl"),
-                            "tp": sig.get("tp"),
+                            "ai_prob": sig_data.get("ai_prob", 0),
+                            "signal": sig_data.get("signal", "WAITING"),
+                            "threshold": sig_data.get("threshold", 0),
+                            "signal_strength": sig_data.get("signal_strength", "NONE"),
+                            "atr": sig_data.get("atr", 0),
+                            "risk_pct": sig_data.get("risk_pct", 2),
+                            "direction": sig_data.get("direction", "NEUTRAL"),
+                            "entry_price": sig_data.get("entry_price", 0.0),
+                            "sl": sig_data.get("sl"),
+                            "tp": sig_data.get("tp"),
                             "timestamp": datetime.now(timezone.utc).isoformat(),
-                            "confidence_score": sig.get("ai_prob", 0) * 100,
-                            "signal_id": sig.get("signal_id", ""),
-                            "trading_accuracy": sig.get("trading_accuracy", 0.65),
-                            "profitability_index": sig.get("profitability_index", 1.5),
+                            "confidence_score": sig_data.get("ai_prob", 0) * 100,
+                            "signal_id": sig_data.get("signal_id", ""),
+                            "trading_accuracy": sig_data.get("trading_accuracy", 0.65),
+                            "profitability_index": sig_data.get("profitability_index", 1.5),
                         }
                 
                 response_data = {
