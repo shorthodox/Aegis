@@ -50,9 +50,18 @@ export const db = getFirestore(firebaseApp, "default");
 export let currentTimeframe = '1h';
 
 // -------------------------------------------------------------------
-// API Base URL
+// API Base URL & Hash Token Extraction
 // -------------------------------------------------------------------
 const API_BASE_URL = window.location.origin;
+
+// Extract token from OAuth redirect hash
+if (window.location.hash.includes('token=')) {
+  const tokenFragment = window.location.hash.split('token=')[1].split('&')[0];
+  if (tokenFragment && typeof AuthManager !== 'undefined') {
+    AuthManager.setToken(tokenFragment);
+    window.location.hash = ''; // Clear hash for security
+  }
+}
 
 // -------------------------------------------------------------------
 // Global State
