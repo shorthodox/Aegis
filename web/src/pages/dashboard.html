@@ -913,6 +913,96 @@
 
     <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
     <script type="module" src="../scripts/dashboard.js"></script>
+    <script>
+async function updateTokenCards() {
+    try {
+        // 1. Fetch the latest token data
+        const response = await fetch('/api/tokens');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        // Handle both Array and Object responses
+        const tokens = Array.isArray(data) ? data : Object.values(data);
+        
+        // 2. Target the appropriate room container
+        const container = document.getElementById('room-signals') || document.getElementById('room-terminal');
+        if (!container) return;
+
+        // 3. Generate Cyberpunk HTML cards
+        let cardsHTML = '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4">';
+        
+        tokens.forEach(token => {
+            const symbol = token.symbol || 'UNKNOWN';
+            const price = token.price ? `$${parseFloat(token.price).toFixed(4)}` : 'N/A';
+            const change = parseFloat(token.change || 0).toFixed(2);
+            
+            // Dynamic styling based on positive/negative change
+            const isPositive = change >= 0;
+            const changeColor = isPositive ? 'text-cyan' : 'text-rose-500';
+            const changeSign = isPositive ? '+' : '';
+            const glowColor = isPositive ? 'rgba(0,255,255,0.2)' : 'rgba(244,63,94,0.2)';
+
+            cardsHTML += `
+                <div class="bg-void border border-white/10 p-5 rounded-xl shadow-[0_0_15px_${glowColor}] hover:border-cyan/50 hover:shadow-[0_0_30px_${glowColor}] transition-all duration-300 flex flex-col gap-3 relative overflow-hidden group cursor-pointer">
+                    <!-- Subtle background glow effect -->
+                    <div class="absolute -inset-1 bg-gradient-to-r from-cyan to-transparent opacity-0 group-hover:opacity-10 transition-opacity blur-xl z-0"></div>
+                    
+                    <div class="flex justify-between items-center z-10">
+                        <h3 class="text-white font-black tracking-widest text-lg uppercase">${symbol}</h3>
+                        <span class="text-xs font-mono px-2 py-1 bg-deep rounded border border-white/10 ${changeColor}">
+                            ${changeSign}${change}%
+                        </span>
+                    </div>
+                    
+                    <div class="text-3xl font-mono text-cyan font-bold z-10 drop-shadow-[0_0_8px_rgba(0,255,255,0.5)]">
+                        ${price}
+                    </div>
+                    
+                    <div class="flex justify-between items-center mt-2 z-10 border-t border-white/5 pt-3">
+                        <div class="text-[10px] text-gray-500 uppercase tracking-widest">
+                            Vol: <span class="text-gray-300">${token.volume || 'N/A'}</span>
+                        </div>
+                        <div class="text-[10px] text-gray-500 uppercase tracking-widest">
+                            <i class="fas fa-satellite-dish text-cyan animate-pulse mr-1"></i> LIVE
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        cardsHTML += '</div>';
+        
+        // Overwrite the container content
+        container.innerHTML = cardsHTML;
+
+        // Reset connection status if it was previously offline
+        const wsStatusText = document.getElementById('ws-status-text');
+        if (wsStatusText && wsStatusText.textContent === 'OFFLINE') {
+            wsStatusText.textContent = 'CONNECTED';
+            wsStatusText.classList.replace('text-rose-500', 'text-cyan');
+        }
+
+    } catch (error) {
+        console.error('Failed to update token cards:', error);
+        
+        // 4. Handle connection errors
+        const wsStatusText = document.getElementById('ws-status-text');
+        if (wsStatusText) {
+            wsStatusText.textContent = 'OFFLINE';
+            wsStatusText.classList.replace('text-cyan', 'text-rose-500');
+        }
+    }
+}
+
+// 5. Polling Mechanism: Execute immediately, then loop every 5 seconds
+document.addEventListener('DOMContentLoaded', () => {
+    updateTokenCards();
+    setInterval(updateTokenCards, 5000);
+});
+</script>
+
 </body>
 
 </html>
