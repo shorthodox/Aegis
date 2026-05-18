@@ -244,16 +244,19 @@
         </aside>
 
         <!-- Main Content Area -->
-        <main class="flex-1 overflow-visible lg:overflow-y-auto p-4 lg:p-6 space-y-6 relative h-auto lg:h-full w-full lg:ml-[280px] lg:w-[calc(100%-280px)]">
+        <main
+            class="flex-1 overflow-visible lg:overflow-y-auto p-4 lg:p-6 space-y-6 relative h-auto lg:h-full w-full lg:ml-[280px] lg:w-[calc(100%-280px)]">
             <div id="countdown-display" class="countdown-display w-full max-w-none mx-0 mb-4 lg:mb-6">Loading
                 countdown...</div>
 
             <!-- MARKET TOKEN CARDS -->
             <div class="mb-6">
-                <h3 class="text-xs uppercase tracking-widest text-gray-500 mb-3 font-bold px-1"><i class="fas fa-chart-bar mr-2"></i> Live Market Overview</h3>
+                <h3 class="text-xs uppercase tracking-widest text-gray-500 mb-3 font-bold px-1"><i
+                        class="fas fa-chart-bar mr-2"></i> Live Market Overview</h3>
                 <div id="market-token-cards" class="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <!-- Token cards dynamically populated by dashboard.js -->
-                    <div class="glass-panel p-4 rounded-xl flex flex-col justify-center border-l-2 border-cyan/30 animate-pulse">
+                    <div
+                        class="glass-panel p-4 rounded-xl flex flex-col justify-center border-l-2 border-cyan/30 animate-pulse">
                         <span class="text-xs text-gray-500 font-bold uppercase tracking-wider">Loading...</span>
                         <span class="text-xl font-mono text-gray-400 mt-1">---</span>
                     </div>
@@ -322,14 +325,16 @@
             <div id="room-terminal" class="room-section hidden">
                 <h2
                     class="text-xl lg:text-2xl font-black uppercase tracking-widest text-white mb-6 border-b border-white/10 pb-3 flex items-center gap-3">
-                    <i class="fas fa-terminal text-orange"></i> Execution Terminal</h2>
+                    <i class="fas fa-terminal text-orange"></i> Execution Terminal
+                </h2>
 
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <!-- Capital Management -->
                     <div class="glass-panel p-5 rounded-xl border-t-2 border-t-cyan h-fit">
                         <h3
                             class="text-xs uppercase tracking-widest text-gray-500 mb-4 font-bold flex items-center gap-2">
-                            <i class="fas fa-wallet"></i> Capital Management</h3>
+                            <i class="fas fa-wallet"></i> Capital Management
+                        </h3>
                         <div class="space-y-4">
                             <div>
                                 <label class="text-xs text-gray-400 mb-1 block">Account Capital (USDT)</label>
@@ -361,7 +366,8 @@
                     <div class="glass-panel p-5 rounded-xl border-t-2 border-t-orange">
                         <h3
                             class="text-xs uppercase tracking-widest text-gray-500 mb-4 font-bold flex items-center gap-2">
-                            <i class="fas fa-crosshairs"></i> Trade Setup</h3>
+                            <i class="fas fa-crosshairs"></i> Trade Setup
+                        </h3>
                         <div class="space-y-3 font-mono text-sm">
                             <div class="flex flex-col">
                                 <label class="text-xs text-gray-500">Symbol</label>
@@ -462,7 +468,8 @@
             <div id="room-analytics" class="room-section hidden space-y-6">
                 <h2
                     class="text-xl lg:text-2xl font-black uppercase tracking-widest text-white mb-6 border-b border-white/10 pb-3 flex items-center gap-3">
-                    <i class="fas fa-chart-pie text-blue-400"></i> Analytics</h2>
+                    <i class="fas fa-chart-pie text-blue-400"></i> Analytics
+                </h2>
 
                 <!-- Balance Displays -->
                 <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -487,7 +494,8 @@
                 <!-- Open Positions -->
                 <div class="glass-panel p-5 rounded-xl">
                     <h3 class="text-xs uppercase tracking-widest text-gray-500 mb-4 font-bold flex items-center gap-2">
-                        <i class="fas fa-list"></i> Open Positions</h3>
+                        <i class="fas fa-list"></i> Open Positions
+                    </h3>
                     <div id="positionsContainer" class="space-y-3">
                         <!-- Positions will be rendered here -->
                     </div>
@@ -524,7 +532,8 @@
             <div id="room-history" class="room-section hidden">
                 <h2
                     class="text-xl lg:text-2xl font-black uppercase tracking-widest text-white mb-6 border-b border-white/10 pb-3 flex items-center gap-3">
-                    <i class="fas fa-history text-purple-400"></i> Signal History</h2>
+                    <i class="fas fa-history text-purple-400"></i> Signal History
+                </h2>
 
                 <div class="glass-panel p-5 rounded-xl overflow-hidden">
                     <div class="flex items-center justify-between mb-4">
@@ -562,7 +571,8 @@
             <div id="room-settings" class="room-section hidden">
                 <h2
                     class="text-xl lg:text-2xl font-black uppercase tracking-widest text-white mb-6 border-b border-white/10 pb-3 flex items-center gap-3">
-                    <i class="fas fa-cog text-gray-400"></i> Settings</h2>
+                    <i class="fas fa-cog text-gray-400"></i> Settings
+                </h2>
                 <div class="glass-panel p-5 rounded-xl max-w-2xl">
                     <p class="text-gray-400 text-sm mb-6">System configuration and preferences.</p>
                     <div class="space-y-4">
@@ -601,23 +611,23 @@
             const closeMenuBtn = document.getElementById('closeMenuBtn');
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('sidebarOverlay');
-            
+
             function toggleMenu() {
-                if(sidebar && overlay) {
+                if (sidebar && overlay) {
                     sidebar.classList.toggle('-translate-x-full');
                     sidebar.classList.toggle('translate-x-0');
                     overlay.classList.toggle('hidden');
                 }
             }
-            
-            if(mobileMenuBtn) mobileMenuBtn.addEventListener('click', toggleMenu);
-            if(closeMenuBtn) closeMenuBtn.addEventListener('click', toggleMenu);
-            if(overlay) overlay.addEventListener('click', toggleMenu);
+
+            if (mobileMenuBtn) mobileMenuBtn.addEventListener('click', toggleMenu);
+            if (closeMenuBtn) closeMenuBtn.addEventListener('click', toggleMenu);
+            if (overlay) overlay.addEventListener('click', toggleMenu);
 
             // Mobile Status Dropdown
             const mobileStatusBtn = document.getElementById('mobileStatusBtn');
             const statusDropdown = document.getElementById('statusDropdown');
-            if(mobileStatusBtn && statusDropdown) {
+            if (mobileStatusBtn && statusDropdown) {
                 mobileStatusBtn.addEventListener('click', () => {
                     statusDropdown.classList.toggle('hidden');
                     statusDropdown.classList.toggle('absolute');
@@ -638,18 +648,18 @@
             const wsStatusTextInner = document.getElementById('ws-status-text-inner');
             const wsStatusDotInner = document.getElementById('ws-status-dot-inner');
             const wsStatusDotMobile = document.getElementById('ws-status-dot-mobile');
-            
+
             setTimeout(() => {
                 const updateStatus = (textEl, dotEl) => {
-                    if(textEl) textEl.innerText = 'CONNECTED';
-                    if(dotEl) {
+                    if (textEl) textEl.innerText = 'CONNECTED';
+                    if (dotEl) {
                         dotEl.classList.remove('text-yellow-500');
                         dotEl.classList.add('text-green-500');
                     }
                 };
                 updateStatus(wsStatusText, wsStatusDot);
                 updateStatus(wsStatusTextInner, wsStatusDotInner);
-                if(wsStatusDotMobile) {
+                if (wsStatusDotMobile) {
                     wsStatusDotMobile.classList.remove('text-yellow-500');
                     wsStatusDotMobile.classList.add('text-green-500');
                 }
@@ -725,20 +735,24 @@
     </div>
 
     <!-- Signal Details Modal (Popping Card) -->
-    <div id="signalDetailsModal" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md hidden p-4">
-        <div class="bg-void border border-cyan/30 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-[0_0_40px_rgba(0,242,255,0.15)] relative">
+    <div id="signalDetailsModal"
+        class="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md hidden p-4">
+        <div
+            class="bg-void border border-cyan/30 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-[0_0_40px_rgba(0,242,255,0.15)] relative">
             <!-- Header -->
-            <div class="sticky top-0 bg-void/90 backdrop-blur border-b border-white/10 p-4 flex items-center justify-between z-10">
+            <div
+                class="sticky top-0 bg-void/90 backdrop-blur border-b border-white/10 p-4 flex items-center justify-between z-10">
                 <div class="flex items-center gap-3">
                     <div id="sd-direction-badge" class="px-2 py-1 rounded text-xs font-bold tracking-wider">LONG</div>
                     <h3 class="text-xl font-black tracking-tight text-white m-0" id="sd-symbol">BTC/USDT</h3>
                     <span class="text-xs text-gray-500" id="sd-timeframe">1h</span>
                 </div>
-                <button id="closeSignalDetailsBtn" class="text-gray-400 hover:text-white transition-colors w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10">
+                <button id="closeSignalDetailsBtn"
+                    class="text-gray-400 hover:text-white transition-colors w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            
+
             <!-- Body -->
             <div class="p-5 space-y-6">
                 <!-- Price & Levels -->
@@ -763,48 +777,67 @@
 
                 <!-- 1. Confluence Scorecards -->
                 <div>
-                    <h4 class="text-xs uppercase tracking-widest text-gray-400 font-bold mb-3 flex items-center gap-2"><i class="fas fa-layer-group text-cyan"></i> Confluence Scorecards</h4>
+                    <h4 class="text-xs uppercase tracking-widest text-gray-400 font-bold mb-3 flex items-center gap-2">
+                        <i class="fas fa-layer-group text-cyan"></i> Confluence Scorecards
+                    </h4>
                     <div class="space-y-3 bg-black/30 p-4 rounded-xl border border-white/5">
                         <div>
-                            <div class="flex justify-between text-[10px] mb-1"><span class="text-gray-400">Trend Alignment</span><span class="text-cyan font-mono" id="sd-conf-trend-val">0%</span></div>
-                            <div class="h-1.5 bg-black/50 rounded overflow-hidden"><div class="h-full bg-cyan" id="sd-conf-trend-bar" style="width: 0%"></div></div>
+                            <div class="flex justify-between text-[10px] mb-1"><span class="text-gray-400">Trend
+                                    Alignment</span><span class="text-cyan font-mono" id="sd-conf-trend-val">0%</span>
+                            </div>
+                            <div class="h-1.5 bg-black/50 rounded overflow-hidden">
+                                <div class="h-full bg-cyan" id="sd-conf-trend-bar" style="width: 0%"></div>
+                            </div>
                         </div>
                         <div>
-                            <div class="flex justify-between text-[10px] mb-1"><span class="text-gray-400">Momentum</span><span class="text-cyan font-mono" id="sd-conf-mom-val">0%</span></div>
-                            <div class="h-1.5 bg-black/50 rounded overflow-hidden"><div class="h-full bg-cyan" id="sd-conf-mom-bar" style="width: 0%"></div></div>
+                            <div class="flex justify-between text-[10px] mb-1"><span
+                                    class="text-gray-400">Momentum</span><span class="text-cyan font-mono"
+                                    id="sd-conf-mom-val">0%</span></div>
+                            <div class="h-1.5 bg-black/50 rounded overflow-hidden">
+                                <div class="h-full bg-cyan" id="sd-conf-mom-bar" style="width: 0%"></div>
+                            </div>
                         </div>
                         <div>
-                            <div class="flex justify-between text-[10px] mb-1"><span class="text-gray-400">Volume Delta</span><span class="text-cyan font-mono" id="sd-conf-vol-val">0%</span></div>
-                            <div class="h-1.5 bg-black/50 rounded overflow-hidden"><div class="h-full bg-cyan" id="sd-conf-vol-bar" style="width: 0%"></div></div>
+                            <div class="flex justify-between text-[10px] mb-1"><span class="text-gray-400">Volume
+                                    Delta</span><span class="text-cyan font-mono" id="sd-conf-vol-val">0%</span></div>
+                            <div class="h-1.5 bg-black/50 rounded overflow-hidden">
+                                <div class="h-full bg-cyan" id="sd-conf-vol-bar" style="width: 0%"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- 2. Visual Zone Tracking & 3. Expectancy Matrix -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div class="bg-black/30 p-4 rounded-xl border border-white/5 flex flex-col justify-center" id="sd-visual-zone-container">
+                    <div class="bg-black/30 p-4 rounded-xl border border-white/5 flex flex-col justify-center"
+                        id="sd-visual-zone-container">
                         <!-- Dynamic Visual Zone Tracking Bar will be injected here -->
                     </div>
-                    <div class="bg-black/30 p-4 rounded-xl border border-white/5 flex flex-col" id="sd-expectancy-container">
+                    <div class="bg-black/30 p-4 rounded-xl border border-white/5 flex flex-col"
+                        id="sd-expectancy-container">
                         <!-- Dynamic Expectancy Panel will be injected here -->
                     </div>
                 </div>
 
                 <!-- 4. Raw Probabilities & SHAP -->
-                <div class="bg-black/30 p-4 rounded-xl border border-white/5 flex flex-col relative" id="sd-telemetry-container">
+                <div class="bg-black/30 p-4 rounded-xl border border-white/5 flex flex-col relative"
+                    id="sd-telemetry-container">
                     <!-- Dynamic Telemetry Panel will be injected here -->
                 </div>
 
                 <!-- 5. API Portability & Developer Access -->
-                <div id="sd-developer-portal" class="bg-black/30 p-4 rounded-xl border border-white/5 relative flex flex-col">
+                <div id="sd-developer-portal"
+                    class="bg-black/30 p-4 rounded-xl border border-white/5 relative flex flex-col">
                     <!-- Dynamic Developer Portal injected here -->
                 </div>
 
             </div>
-            
+
             <!-- Footer Actions -->
             <div class="p-4 border-t border-white/10 bg-black/20 flex gap-3">
-                <button id="sd-execute-btn" class="flex-1 bg-gradient-to-r from-cyan to-blue-600 text-white font-bold py-3 rounded-xl uppercase tracking-wider text-sm shadow-[0_0_15px_rgba(0,242,255,0.3)] transition-transform transform hover:-translate-y-0.5">Execute in Terminal</button>
+                <button id="sd-execute-btn"
+                    class="flex-1 bg-gradient-to-r from-cyan to-blue-600 text-white font-bold py-3 rounded-xl uppercase tracking-wider text-sm shadow-[0_0_15px_rgba(0,242,255,0.3)] transition-transform transform hover:-translate-y-0.5">Execute
+                    in Terminal</button>
             </div>
         </div>
     </div>
@@ -913,97 +946,6 @@
 
     <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
     <script type="module" src="../scripts/dashboard.js"></script>
-    <script>
-async function updateTokenCards() {
-    try {
-        // 1. Fetch the latest token data
-        const response = await fetch('/api/tokens');
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        // Handle both Array and Object responses
-        const tokens = Array.isArray(data) ? data : Object.values(data);
-        
-        // 2. Target the appropriate room container
-        const container = document.getElementById('room-signals') || document.getElementById('room-terminal');
-        if (!container) return;
-
-        // 3. Generate Cyberpunk HTML cards
-        let cardsHTML = '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4">';
-        
-        tokens.forEach(token => {
-            const symbol = token.symbol || 'UNKNOWN';
-            const price = token.price ? `$${parseFloat(token.price).toFixed(4)}` : 'N/A';
-            const change = parseFloat(token.change || 0).toFixed(2);
-            
-            // Dynamic styling based on positive/negative change
-            const isPositive = change >= 0;
-            const changeColor = isPositive ? 'text-cyan' : 'text-rose-500';
-            const changeSign = isPositive ? '+' : '';
-            const glowColor = isPositive ? 'rgba(0,255,255,0.2)' : 'rgba(244,63,94,0.2)';
-
-            cardsHTML += `
-                <div class="bg-void border border-white/10 p-5 rounded-xl shadow-[0_0_15px_${glowColor}] hover:border-cyan/50 hover:shadow-[0_0_30px_${glowColor}] transition-all duration-300 flex flex-col gap-3 relative overflow-hidden group cursor-pointer">
-                    <!-- Subtle background glow effect -->
-                    <div class="absolute -inset-1 bg-gradient-to-r from-cyan to-transparent opacity-0 group-hover:opacity-10 transition-opacity blur-xl z-0"></div>
-                    
-                    <div class="flex justify-between items-center z-10">
-                        <h3 class="text-white font-black tracking-widest text-lg uppercase">${symbol}</h3>
-                        <span class="text-xs font-mono px-2 py-1 bg-deep rounded border border-white/10 ${changeColor}">
-                            ${changeSign}${change}%
-                        </span>
-                    </div>
-                    
-                    <div class="text-3xl font-mono text-cyan font-bold z-10 drop-shadow-[0_0_8px_rgba(0,255,255,0.5)]">
-                        ${price}
-                    </div>
-                    
-                    <div class="flex justify-between items-center mt-2 z-10 border-t border-white/5 pt-3">
-                        <div class="text-[10px] text-gray-500 uppercase tracking-widest">
-                            Vol: <span class="text-gray-300">${token.volume || 'N/A'}</span>
-                        </div>
-                        <div class="text-[10px] text-gray-500 uppercase tracking-widest">
-                            <i class="fas fa-satellite-dish text-cyan animate-pulse mr-1"></i> LIVE
-                        </div>
-                    </div>
-                </div>
-            `;
-        });
-        
-        cardsHTML += '</div>';
-        
-        // Overwrite the container content
-        container.innerHTML = cardsHTML;
-
-        // Reset connection status if it was previously offline
-        const wsStatusText = document.getElementById('ws-status-text');
-        if (wsStatusText && wsStatusText.textContent === 'OFFLINE') {
-            wsStatusText.textContent = 'CONNECTED';
-            wsStatusText.classList.replace('text-rose-500', 'text-cyan');
-        }
-
-    } catch (error) {
-        console.error('Failed to update token cards:', error);
-        
-        // 4. Handle connection errors
-        const wsStatusText = document.getElementById('ws-status-text');
-        if (wsStatusText) {
-            wsStatusText.textContent = 'OFFLINE';
-            wsStatusText.classList.replace('text-cyan', 'text-rose-500');
-        }
-    }
-}
-
-// 5. Polling Mechanism: Execute immediately, then loop every 5 seconds
-document.addEventListener('DOMContentLoaded', () => {
-    updateTokenCards();
-    setInterval(updateTokenCards, 5000);
-});
-</script>
-
 </body>
 
 </html>
-
