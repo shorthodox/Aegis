@@ -595,6 +595,67 @@
     </div>
 
     <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Mobile Menu Logic
+            const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+            const closeMenuBtn = document.getElementById('closeMenuBtn');
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            
+            function toggleMenu() {
+                if(sidebar && overlay) {
+                    sidebar.classList.toggle('-translate-x-full');
+                    sidebar.classList.toggle('translate-x-0');
+                    overlay.classList.toggle('hidden');
+                }
+            }
+            
+            if(mobileMenuBtn) mobileMenuBtn.addEventListener('click', toggleMenu);
+            if(closeMenuBtn) closeMenuBtn.addEventListener('click', toggleMenu);
+            if(overlay) overlay.addEventListener('click', toggleMenu);
+
+            // Mobile Status Dropdown
+            const mobileStatusBtn = document.getElementById('mobileStatusBtn');
+            const statusDropdown = document.getElementById('statusDropdown');
+            if(mobileStatusBtn && statusDropdown) {
+                mobileStatusBtn.addEventListener('click', () => {
+                    statusDropdown.classList.toggle('hidden');
+                    statusDropdown.classList.toggle('absolute');
+                    statusDropdown.classList.toggle('top-[73px]');
+                    statusDropdown.classList.toggle('left-0');
+                    statusDropdown.classList.toggle('right-0');
+                    statusDropdown.classList.toggle('bg-deep');
+                    statusDropdown.classList.toggle('p-4');
+                    statusDropdown.classList.toggle('border-b');
+                    statusDropdown.classList.toggle('border-white/10');
+                    statusDropdown.classList.toggle('shadow-2xl');
+                });
+            }
+
+            // WebSocket Initialization Stub
+            const wsStatusText = document.getElementById('ws-status-text');
+            const wsStatusDot = document.getElementById('ws-status-dot');
+            const wsStatusTextInner = document.getElementById('ws-status-text-inner');
+            const wsStatusDotInner = document.getElementById('ws-status-dot-inner');
+            const wsStatusDotMobile = document.getElementById('ws-status-dot-mobile');
+            
+            setTimeout(() => {
+                const updateStatus = (textEl, dotEl) => {
+                    if(textEl) textEl.innerText = 'CONNECTED';
+                    if(dotEl) {
+                        dotEl.classList.remove('text-yellow-500');
+                        dotEl.classList.add('text-green-500');
+                    }
+                };
+                updateStatus(wsStatusText, wsStatusDot);
+                updateStatus(wsStatusTextInner, wsStatusDotInner);
+                if(wsStatusDotMobile) {
+                    wsStatusDotMobile.classList.remove('text-yellow-500');
+                    wsStatusDotMobile.classList.add('text-green-500');
+                }
+            }, 1500);
+        });
+
         function switchRoom(roomName) {
             // Hide all rooms
             document.querySelectorAll('.room-section').forEach(el => {
@@ -653,7 +714,6 @@
         // Add listener to switch to terminal when a signal card is clicked is REMOVED
         // We now use the openSignalDetails popping card modal instead.
     </script>
-    </div>
 
     <div id="access-expired-card" class="access-expired-card hidden">
         <h2>Access Expired</h2>
@@ -812,7 +872,7 @@
             <span class="close-modal"
                 style="position: absolute; top: 1rem; right: 1.5rem; font-size: 1.8rem; cursor: pointer; color: var(--dim, #94a3b8); z-index: 1001; pointer-events: auto;">&times;</span>
             <div id="step1" class="step active">
-                <div class="modal-logo">âš¡ AEGIS</div>
+                <div class="modal-logo">⚡ AEGIS</div>
                 <button id="googleStepBtn" class="provider-btn"><i class="fab fa-google"></i> Continue with
                     Google</button>
                 <div class="divider">or</div>
@@ -832,7 +892,7 @@
                     <input type="text" maxlength="1" class="otp-digit" data-idx="4">
                     <input type="text" maxlength="1" class="otp-digit" data-idx="5">
                 </div>
-                <button id="backToEmailBtn" class="auth-secondary-btn" style="margin-top:0.5rem;">â† Back</button>
+                <button id="backToEmailBtn" class="auth-secondary-btn" style="margin-top:0.5rem;">← Back</button>
             </div>
             <div id="step3" class="step">
                 <h3 id="onboardingTitle" style="text-align:center; margin-bottom:1rem;">Complete your account</h3>
