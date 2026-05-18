@@ -51,6 +51,7 @@ sys.path.insert(0, str(root_dir))
 
 from src.ml.feature_engine import prepare_features, compute_atr, compute_efficiency_ratio
 from src.ml.delltandecay import adjust_threshold_by_technical_and_fundamental
+from scripts.telemetry import extract_prediction_telemetry
 
 # -------------------------------------------------------------------
 # Logging
@@ -184,6 +185,8 @@ class TokenConfig:
     atr_sl: float
     atr_tp: float
     risk_pct: float
+    max_dd: float = 0.0
+    expectancy: float = 0.0
     optimizer_thresholds: Dict[Tuple[str, str], float] = field(default_factory=dict)
 
 @dataclass
@@ -851,6 +854,13 @@ class SignalGenerator:
 
         try:
             probs = model.predict_proba(aligned_features)[0]
+            
+            # --- NEW TELEMETRY ---
+            telemetry_data = extract_prediction_telemetry(model, aligned_features, expected_features)
+            shap_contribs = telemetry_data.get("shap_contributions", [])
+            raw_probs_dict = telemetry_data.get("probabilities", {})
+            # --- END TELEMETRY ---
+
             if len(probs) >= 3:
                 prob_short = float(probs[0])
                 prob_hold = float(probs[1])
@@ -883,6 +893,8 @@ class SignalGenerator:
             ai_prob = 0.0
             prob_short, prob_hold, prob_long = 0.0, 1.0, 0.0
             predicted_class = 1
+            shap_contribs = []
+            raw_probs_dict = {}
 
         atr_val = df_1h['atr'].iloc[-1] if not pd.isna(df_1h['atr'].iloc[-1]) else current_price * 0.01
 
@@ -989,10 +1001,38 @@ class SignalGenerator:
 
         self.score_history[norm_sym].appendleft(ai_prob)
 
+        confluence_scorecards = {
+            "volatility": vol_regime,
+            "volume": volume_cond,
+            "trend": "Aligned" if trend_aligned else "Misaligned",
+            "btc_anchor": "Healthy" if btc_healthy else "Shaky",
+            "efficiency": round(float(er), 2),
+            "news_sentiment": round(float(news_score), 2)
+        }
+
+        visual_zone_tracking = {
+            "support_sl": suggested_sl,
+            "resistance_tp": suggested_tp,
+            "market_regime": market_regime,
+            "alpha_risk_level": alpha_risk_level
+        }
+
+        expectancy_matrix = {
+            "expected_net_pct": round(expected_net_pct, 2) if expected_net_pct else 0.0,
+            "profitability_index": round(expected_net_pct / 100, 4) if expected_net_pct else 0.0,
+            "max_dd_pct": round(cfg.max_dd, 2) if hasattr(cfg, 'max_dd') else 0.0,
+            "historical_expectancy": round(cfg.expectancy, 2) if hasattr(cfg, 'expectancy') else 0.0
+        }
+
         return {
             "symbol": norm_sym,
             "price": current_price,
             "ai_prob": ai_prob,
+            "raw_probabilities": raw_probs_dict,
+            "shap_contributions": shap_contribs,
+            "confluence_scorecards": confluence_scorecards,
+            "visual_zone_tracking": visual_zone_tracking,
+            "expectancy_matrix": expectancy_matrix,
             "threshold": adj_thresh,
             "expected_net_pct": expected_net_pct,
             "signal": final_signal,
@@ -1362,7 +1402,12 @@ class LiveEngine:
                         "suggested_tp": sig.get("suggested_tp"),
                         "alpha_risk_level": sig.get("alpha_risk_level", "NORMAL"),
                         "trading_accuracy": acc,
-                        "profitability_index": profitability_index
+                        "profitability_index": profitability_index,
+                        "raw_probabilities": sig.get("raw_probabilities", {}),
+                        "shap_contributions": sig.get("shap_contributions", []),
+                        "confluence_scorecards": sig.get("confluence_scorecards", {}),
+                        "visual_zone_tracking": sig.get("visual_zone_tracking", {}),
+                        "expectancy_matrix": sig.get("expectancy_matrix", {})
                     })
             
             # Push signals to dashboard
@@ -1678,6 +1723,8 @@ def automated_setup(backtest_dir: Path, args: argparse.Namespace) -> Tuple[List[
                 atr_sl=balanced_params["atr_sl"],
                 atr_tp=balanced_params["atr_tp"],
                 risk_pct=float(balanced_params["risk_pct"] * 100),
+                max_dd=0.0,
+                expectancy=0.0,
                 optimizer_thresholds={},
             ))
         capital = args.capital if args.capital else DEFAULT_CAPITAL
@@ -1704,6 +1751,8 @@ def automated_setup(backtest_dir: Path, args: argparse.Namespace) -> Tuple[List[
             atr_sl=info["atr_sl"],
             atr_tp=info["atr_tp"],
             risk_pct=info["risk_pct"],
+            max_dd=info.get("max_drawdown_pct", 0.0),
+            expectancy=info.get("net_return_pct", 0.0),
             optimizer_thresholds={},
         ))
 
