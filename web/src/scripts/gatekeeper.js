@@ -937,16 +937,22 @@ function updateUI() {
     signalsContainer.innerHTML = '';
   }
 
-  // Update plan badge
+  // Update plan badge — reflects server-authoritative plan
   if (planBadge) {
     planBadge.className = 'text-sm font-bold mt-1';
-    // Use AuthManager for accurate trial status check
     const isTrialValid = typeof AuthManager !== 'undefined' ? AuthManager.isTrialValid() : trialActive;
+    const p = (userPlan || 'trial').toLowerCase();
 
-    if (userPlan === 'pro') {
-      planBadge.innerHTML = '<i class="fas fa-crown"></i> PRO ACTIVE';
+    if (p === 'pro' || p === 'premium') {
+      planBadge.innerHTML = '<i class="fas fa-crown"></i> PRO';
       planBadge.classList.add('text-yellow-500');
-    } else if (isTrialValid && userPlan === 'trial') {
+    } else if (p === 'intermediate') {
+      planBadge.innerHTML = '<i class="fas fa-bolt"></i> INTERMEDIATE';
+      planBadge.classList.add('text-purple-400');
+    } else if (p === 'basic') {
+      planBadge.innerHTML = '<i class="fas fa-shield-alt"></i> BASIC';
+      planBadge.classList.add('text-blue-400');
+    } else if (isTrialValid && p === 'trial') {
       planBadge.innerHTML = '<i class="fas fa-flask"></i> TRIAL ACTIVE';
       planBadge.classList.add('text-cyan');
     } else {
@@ -1235,6 +1241,21 @@ function updateDashboardData(data) {
   if (data.warmup) {
     const warmupEl = document.getElementById('warmupProgress');
     if (warmupEl) warmupEl.textContent = `Warmup: ${data.warmup}`;
+  }
+
+  // ── Server-authority enforcement ──────────────────────────────────
+  // The server sends trial_expired on every WS tick (~1 s). If the
+  // overlay was dismissed from the console, this re-applies it within
+  // the next tick. Conversely, a valid subscription removes the overlay.
+  if (typeof data.trial_expired === 'boolean') {
+    const expiredCard = document.getElementById('access-expired-card');
+    const isOverlayVisible = expiredCard && !expiredCard.classList.contains('hidden');
+
+    if (data.trial_expired && !isOverlayVisible) {
+      if (typeof window.setExpiredView === 'function') window.setExpiredView();
+    } else if (!data.trial_expired && isOverlayVisible) {
+      if (typeof window.clearExpiredView === 'function') window.clearExpiredView();
+    }
   }
 }
 
