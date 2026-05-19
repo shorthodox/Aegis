@@ -1363,20 +1363,39 @@ function getUserTier() {
 
 window._fpSignal = null;
 
+// Explicit list — never accidentally matches *-body divs
+const _FP_PANELS = ['fp-confluence', 'fp-zones', 'fp-expectancy', 'fp-shap', 'fp-api'];
+
 window.openFeaturePanel = function(panelId) {
-  document.querySelectorAll('[id^="fp-"]').forEach(p => {
-    p.classList.add('hidden');
-    p.classList.remove('flex');
+  // Hide all top-level panels only (NOT their -body children)
+  _FP_PANELS.forEach(id => {
+    const p = document.getElementById(id);
+    if (p) { p.classList.add('hidden'); p.classList.remove('flex'); }
   });
+
   const panel = document.getElementById(panelId);
   if (!panel) return;
   panel.classList.remove('hidden');
   panel.classList.add('flex');
 
+  // Also ensure the body div is visible (remove any stale hidden class)
+  const body = document.getElementById(`${panelId}-body`);
+  if (body) body.classList.remove('hidden');
+
   const signal = window._fpSignal;
   const tier = getUserTier();
-  const body = document.getElementById(`${panelId}-body`);
-  if (!body || !signal) return;
+
+  // If no signal context yet, show a waiting state instead of a blank panel
+  if (!signal) {
+    if (body) body.innerHTML = `
+      <div class="flex flex-col items-center justify-center h-full text-center py-20">
+        <i class="fas fa-satellite-dish text-4xl text-gray-600 mb-4 animate-pulse"></i>
+        <p class="text-gray-500 text-sm">Open a signal card first to load this panel.</p>
+      </div>`;
+    return;
+  }
+
+  if (!body) return;
 
   switch(panelId) {
     case 'fp-confluence': _renderFpConfluence(body, signal, tier); break;
@@ -1388,9 +1407,16 @@ window.openFeaturePanel = function(panelId) {
 };
 
 window.closeFP = function() {
-  document.querySelectorAll('[id^="fp-"]').forEach(p => {
-    p.classList.add('hidden');
-    p.classList.remove('flex');
+  // Remove live price listener from zones panel
+  const zonesBody = document.getElementById('fp-zones-body');
+  if (zonesBody && zonesBody._zonePriceHandler) {
+    window.removeEventListener('priceUpdate', zonesBody._zonePriceHandler);
+    delete zonesBody._zonePriceHandler;
+  }
+  // Hide top-level panels only
+  _FP_PANELS.forEach(id => {
+    const p = document.getElementById(id);
+    if (p) { p.classList.add('hidden'); p.classList.remove('flex'); }
   });
 };
 
@@ -1504,11 +1530,16 @@ function _renderFpZones(body, signal, tier) {
         </div>
         <div class="bg-black/40 p-5 rounded-xl border border-white/5">
           <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-4 font-bold">Risk-to-Reward Coordinate Map</div>
-          <div class="relative h-8 rounded-xl overflow-hidden" style="background: linear-gradient(to right, rgba(239,68,68,0.25) 0%, rgba(15,23,42,0.8) 30%, rgba(15,23,42,0.8) 70%, rgba(16,185,129,0.25) 100%); border: 1px solid rgba(255,255,255,0.08);">
-            <div class="absolute top-0 bottom-0 w-0.5 bg-cyan shadow-[0_0_8px_rgba(0,242,255,0.8)]" style="left:${entryPct.toFixed(1)}%"></div>
-            <div class="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-white shadow-[0_0_12px_rgba(255,255,255,0.9)] transition-all duration-300"
+          <div class="relative h-10 rounded-xl overflow-hidden" style="background: linear-gradient(to right, rgba(239,68,68,0.20) 0%, rgba(10,10,15,0.85) 25%, rgba(10,10,15,0.85) 75%, rgba(16,185,129,0.20) 100%); border: 1px solid rgba(255,255,255,0.08);">
+            <div class="fp-entry-line absolute top-0 bottom-0 w-px bg-cyan" style="left:${entryPct.toFixed(1)}%">
+              <div class="absolute -top-px -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-cyan"></div>
+              <div class="absolute bottom-1 -translate-x-1/2 text-[8px] font-bold text-cyan/80 whitespace-nowrap">ENTRY</div>
+            </div>
+            <div class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-emerald-400"
                  id="fp-zone-dot"
-                 style="left:calc(${curPct.toFixed(1)}% - 8px)"></div>
+                 style="left:${curPct.toFixed(1)}%"></div>
+            <div class="absolute bottom-1 left-2 text-[8px] font-bold text-red-400/70">SL</div>
+            <div class="absolute bottom-1 right-2 text-[8px] font-bold text-emerald-400/70">TP</div>
           </div>
           <div class="flex justify-between mt-2 text-[10px] font-mono">
             <div class="text-red-400"><div class="font-bold">SL</div><div>$${sl.toFixed(4)}</div></div>
@@ -1553,13 +1584,14 @@ function _renderFpZones(body, signal, tier) {
   }
   body._zonePriceHandler = (e) => {
     if (e.detail.symbol !== signal.symbol) return;
-    const p = e.detail.price;
+    const p = parseFloat(e.detail.price);
+    if (isNaN(p)) return;
     const el = body.querySelector('#fp-zone-price');
     if (el) el.textContent = `$${p.toFixed(4)}`;
     const dot = body.querySelector('#fp-zone-dot');
     if (dot && sl && tp) {
-      const newPct = Math.max(0, Math.min(98, (p - sl) / (tp - sl) * 100));
-      dot.style.left = `calc(${newPct.toFixed(1)}% - 8px)`;
+      const newPct = Math.max(2, Math.min(98, (p - sl) / (tp - sl) * 100));
+      dot.style.left = `${newPct.toFixed(1)}%`;
     }
   };
   window.addEventListener('priceUpdate', body._zonePriceHandler);
