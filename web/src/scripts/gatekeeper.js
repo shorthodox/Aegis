@@ -1207,9 +1207,9 @@ function updateDashboardData(data) {
           window.dispatchEvent(new CustomEvent('priceUpdate', { detail: { symbol: sym, price: currentPrice } }));
         }
 
-        priceDisplays.forEach(priceDisplay => {
-          const previousPrice = parseFloat(window.previousTickers[sym] || currentPrice);
+        const previousPrice = parseFloat(window.previousTickers[sym] || currentPrice);
 
+        priceDisplays.forEach(priceDisplay => {
           if (isNaN(currentPrice)) return;
 
           // Format based on price size
@@ -1223,6 +1223,17 @@ function updateDashboardData(data) {
             priceDisplay.classList.add('price-down');
           }
         });
+
+        // Update market card change indicator with % change
+        const changeSpan = document.getElementById(`market-card-change-${idStr}`);
+        if (changeSpan && !isNaN(currentPrice) && previousPrice && previousPrice !== currentPrice) {
+          const pct = ((currentPrice - previousPrice) / previousPrice) * 100;
+          const sign = pct >= 0 ? '+' : '';
+          changeSpan.textContent = `${sign}${pct.toFixed(2)}%`;
+          changeSpan.className = `text-[10px] font-mono font-semibold ${
+            pct >= 0 ? 'text-green-400' : 'text-red-400'
+          }`;
+        }
       });
     }, 50);
   }
