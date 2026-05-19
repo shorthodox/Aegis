@@ -28,22 +28,60 @@ let initialized = false;
 
 // Returns 'paid' | 'trial' | 'expired'
 async function checkUserSubscriptionStatus(uid) {
+  const now = new Date();
+
   try {
     const userDocRef = doc(db, 'users', uid);
     const userSnap = await getDoc(userDocRef);
+
     if (userSnap.exists()) {
       const data = userSnap.data();
       const plan = data.plan || data.tier;
-      if (!plan) return 'trial'; // new users get grace trial
 
+      // Paid plan — no expiry check needed
+      if (plan) {
+        const p = plan.toLowerCase();
+        if (p === 'premium' || p === 'pro' || p === 'intermediate' || p === 'basic') return 'paid';
+      }
+
+      // Check trial end from Firestore (multiple possible field locations)
+      const rawEnd = data.trial_end || data.trialEnd || data.trial?.endDate || data.trial?.end_date;
+      if (rawEnd) {
+        const endDate = rawEnd.toDate ? rawEnd.toDate() : new Date(rawEnd);
+        if (!isNaN(endDate.getTime())) {
+          if (endDate < now) return 'expired';
+          return 'trial';  // Firestore confirms active trial
+        }
+      }
+
+      // No Firestore end date — fall back to localStorage
+      const localEnd = localStorage.getItem('trial_end_timestamp');
+      if (localEnd) {
+        const localEndDate = new Date(localEnd);
+        if (!isNaN(localEndDate.getTime()) && localEndDate < now) return 'expired';
+      }
+
+      if (!plan) return 'trial';
       const p = plan.toLowerCase();
-      if (p === 'premium' || p === 'pro' || p === 'intermediate' || p === 'basic') return 'paid';
       if (p === 'trial' || p === 'free_tier') return 'trial';
       return 'expired';
+    }
+
+    // No Firestore doc — check localStorage trial end as last resort
+    const localEnd = localStorage.getItem('trial_end_timestamp');
+    if (localEnd) {
+      const localEndDate = new Date(localEnd);
+      if (!isNaN(localEndDate.getTime()) && localEndDate < now) return 'expired';
     }
     return 'trial';
   } catch (error) {
     console.error('Error fetching user subscription status:', error);
+    // On error, fall back to localStorage so expired users stay blocked
+    const localEnd = localStorage.getItem('trial_end_timestamp');
+    if (localEnd) {
+      const localEndDate = new Date(localEnd);
+      if (!isNaN(localEndDate.getTime()) && localEndDate < now) return 'expired';
+    }
     return 'trial';
   }
 }
@@ -94,18 +132,22 @@ function updatePlanBadge(status) {
 function waitForAuthStateChange() {
   const authPromise = new Promise((resolve) => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
-      unsubscribe(); // Unsubscribe after first state change
+      unsubscribe();
       if (user?.uid) {
         const status = await checkUserSubscriptionStatus(user.uid);
-        _subState.active = true;
+        _subState.active = (status !== 'expired');
         _subState.isPremium = (status === 'paid');
-        clearExpiredView();
-        unblockFeatures();
-        if (status === 'paid') {
-          document.querySelectorAll('.trial-countdown, [data-trial-countdown], #countdown-display')
-            .forEach(el => el.style.display = 'none');
-        }
         updatePlanBadge(status);
+        if (status === 'expired') {
+          setExpiredView();
+        } else {
+          clearExpiredView();
+          unblockFeatures();
+          if (status === 'paid') {
+            document.querySelectorAll('.trial-countdown, [data-trial-countdown], #countdown-display')
+              .forEach(el => el.style.display = 'none');
+          }
+        }
       }
       resolve(user?.uid || null);
     });
@@ -119,15 +161,19 @@ function waitForAuthStateChange() {
         retryUnsubscribe();
         if (user?.uid) {
           const status = await checkUserSubscriptionStatus(user.uid);
-          _subState.active = true;
+          _subState.active = (status !== 'expired');
           _subState.isPremium = (status === 'paid');
-          clearExpiredView();
-          unblockFeatures();
-          if (status === 'paid') {
-            document.querySelectorAll('.trial-countdown, [data-trial-countdown], #countdown-display')
-              .forEach(el => el.style.display = 'none');
-          }
           updatePlanBadge(status);
+          if (status === 'expired') {
+            setExpiredView();
+          } else {
+            clearExpiredView();
+            unblockFeatures();
+            if (status === 'paid') {
+              document.querySelectorAll('.trial-countdown, [data-trial-countdown], #countdown-display')
+                .forEach(el => el.style.display = 'none');
+            }
+          }
           resolve(user?.uid || null);
         } else {
           resolve(null);
@@ -451,7 +497,7 @@ function fetchLiveMarketData() {
                     class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border hidden">—</span>
             </div>
             <span id="market-card-price-${idStr}"
-                  class="live-price text-lg font-mono text-white group-hover:text-cyan transition-colors duration-300"
+                  class="live-price text-lg font-mono transition-colors duration-300"
                   data-symbol="${idStr}">—</span>
             <div class="flex items-center justify-between mt-auto">
               <span id="market-card-change-${idStr}" class="text-[10px] font-mono text-gray-500">—</span>
@@ -486,26 +532,37 @@ window.updateMarketCardSignalBadges = function updateMarketCardSignalBadges() {
     if (!badge) return;
 
     const match = signalArr.find(s => (s.symbol || '').toUpperCase() === sym.toUpperCase());
-    if (match) {
-      const dir = (match.direction || match.side || 'LONG').toUpperCase();
-      const isLong = dir === 'LONG' || dir === 'BUY';
-      badge.textContent = dir;
-      badge.className = `text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border ${
-        isLong
-          ? 'bg-green-500/20 text-green-400 border-green-500/40'
-          : 'bg-red-500/20 text-red-400 border-red-500/40'
-      }`;
-      badge.classList.remove('hidden');
+    const card = document.getElementById(`market-card-${idStr}`);
 
-      // Color the left border of the card to match direction
-      const card = document.getElementById(`market-card-${idStr}`);
-      if (card) {
-        card.classList.remove('border-cyan/40', 'border-green-500/50', 'border-red-500/50');
-        card.classList.add(isLong ? 'border-green-500/50' : 'border-red-500/50');
+    if (match) {
+      const dir = (match.direction || match.side || '').toUpperCase();
+      const isLong  = dir === 'LONG'  || dir === 'BUY';
+      const isShort = dir === 'SHORT' || dir === 'SELL';
+      const isDirectional = isLong || isShort;
+
+      if (isDirectional) {
+        badge.textContent = isLong ? 'LONG' : 'SHORT';
+        badge.className = `text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border ${
+          isLong
+            ? 'bg-green-500/20 text-green-400 border-green-500/40'
+            : 'bg-red-500/20 text-red-400 border-red-500/40'
+        }`;
+        badge.classList.remove('hidden');
+
+        if (card) {
+          card.classList.remove('border-cyan/40', 'border-green-500/50', 'border-red-500/50');
+          card.classList.add(isLong ? 'border-green-500/50' : 'border-red-500/50');
+        }
+      } else {
+        // NEUTRAL or unknown direction — hide badge, neutral border
+        badge.classList.add('hidden');
+        if (card) {
+          card.classList.remove('border-green-500/50', 'border-red-500/50');
+          card.classList.add('border-cyan/40');
+        }
       }
     } else {
       badge.classList.add('hidden');
-      const card = document.getElementById(`market-card-${idStr}`);
       if (card) {
         card.classList.remove('border-green-500/50', 'border-red-500/50');
         card.classList.add('border-cyan/40');
@@ -533,21 +590,36 @@ let lastTrialSetupTime = 0;
 async function setupTrialNonBlocking(userId) {
   if (!userId) return;
 
+  // Fast path: if localStorage already has a past trial_end, don't wait for Firestore
+  const cachedEnd = localStorage.getItem('trial_end_timestamp');
+  if (cachedEnd) {
+    const endDate = new Date(cachedEnd);
+    if (!isNaN(endDate.getTime()) && endDate < new Date()) {
+      _subState.active = false;
+      _subState.isPremium = false;
+      setExpiredView();
+      updatePlanBadge('expired');
+      return;
+    }
+  }
+
   const status = await checkUserSubscriptionStatus(userId);
-  _subState.active = true;
+  _subState.active = (status !== 'expired');
   _subState.isPremium = (status === 'paid');
+  updatePlanBadge(status);
+
+  if (status === 'expired') {
+    setExpiredView();
+    return;
+  }
+
+  // Only clear expired view if user has a valid subscription or active trial
   clearExpiredView();
   unblockFeatures();
-  updatePlanBadge(status);
 
   if (status === 'paid') {
     document.querySelectorAll('.trial-countdown, [data-trial-countdown], #countdown-display')
       .forEach(el => el.style.display = 'none');
-    return;
-  }
-
-  if (status === 'expired') {
-    setExpiredView();
     return;
   }
 
@@ -562,9 +634,20 @@ async function setupTrialNonBlocking(userId) {
   let trialStart = localStorage.getItem(cacheKey);
 
   try {
-    // 1. Check local caching
+    // 1. Check local caching — but verify trial hasn't expired before starting countdown
     if (trialStart) {
-      console.log('⚡ Using cached trial start time');
+      const startDate = new Date(trialStart);
+      if (!isNaN(startDate.getTime())) {
+        const derivedEnd = new Date(startDate.getTime() + 3 * 24 * 60 * 60 * 1000);
+        if (derivedEnd < new Date()) {
+          // Trial expired based on cached start — block immediately
+          setExpiredView();
+          updatePlanBadge('expired');
+          trialSetupRunning = false;
+          lastTrialSetupTime = Date.now();
+          return;
+        }
+      }
       initializeTrialCountdown(userId, trialStart);
     }
 
@@ -572,19 +655,44 @@ async function setupTrialNonBlocking(userId) {
     const freshTrialStart = await fetchTrialStartFromFirestore(userId);
 
     if (freshTrialStart && freshTrialStart !== trialStart) {
+      const freshDate = new Date(freshTrialStart);
+      if (!isNaN(freshDate.getTime())) {
+        const freshEnd = new Date(freshDate.getTime() + 3 * 24 * 60 * 60 * 1000);
+        if (freshEnd < new Date()) {
+          setExpiredView();
+          updatePlanBadge('expired');
+          trialSetupRunning = false;
+          lastTrialSetupTime = Date.now();
+          return;
+        }
+      }
       localStorage.setItem(cacheKey, freshTrialStart);
       initializeTrialCountdown(userId, freshTrialStart);
     } else if (!freshTrialStart && !trialStart) {
-      console.log('🛡️ No trial start found in DB, initiating 3-day grace period');
+      // Only start a grace period if there is NO prior trial_end in localStorage.
+      // If there is one, the user has already consumed their trial — don't reset it.
+      const existingEnd = localStorage.getItem('trial_end_timestamp');
+      if (existingEnd) {
+        const endDate = new Date(existingEnd);
+        if (!isNaN(endDate.getTime()) && endDate < new Date()) {
+          setExpiredView();
+          updatePlanBadge('expired');
+          return;
+        }
+      }
       const fallbackStart = new Date().toISOString();
       localStorage.setItem(cacheKey, fallbackStart);
       initializeTrialCountdown(userId, fallbackStart);
     }
   } catch (trialErr) {
     console.error('Failed to fetch trial data, using fallback:', trialErr);
-    // 4. Error Handling: fallback to grace period or last known
     if (!trialStart) {
-      console.log('🛡️ Initiating 24h grace period due to network error');
+      const existingEnd = localStorage.getItem('trial_end_timestamp');
+      if (existingEnd && new Date(existingEnd) < new Date()) {
+        setExpiredView();
+        updatePlanBadge('expired');
+        return;
+      }
       const fallbackStart = new Date().toISOString();
       localStorage.setItem(cacheKey, fallbackStart);
       initializeTrialCountdown(userId, fallbackStart);
