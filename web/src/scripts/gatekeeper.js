@@ -489,9 +489,8 @@ document.addEventListener('DOMContentLoaded', () => {
   onAuthStateChanged(auth, async (user) => {
     if (user) {
       console.log("Firebase user detected:", user.uid);
-      // If user exists, proceed to load data
       const token = await user.getIdToken();
-      await loadUserFromBackend(token);
+      await loadUserFromBackend(token, user);
     } else {
       // No Firebase user, fallback to manual token check
       checkAuthAndLoad();
@@ -764,43 +763,18 @@ function isJWTExpired(token) {
   }
 }
 
-async function loadUserFromBackend(token) {
+async function loadUserFromBackend(token, firebaseUser = null) {
   try {
-    // First, get user data from backend
     const response = await fetch(`${API_BASE_URL}/auth/me`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
 
     if (response.ok) {
       const userData = await response.json();
-      currentUser = { email: userData.email, token };
-      currentUserData = userData;
-      userPlan = userData.plan || 'trial';
-      trialEnd = userData.trial_end ? new Date(userData.trial_end) : null;
-
-      if (typeof AuthManager !== 'undefined') {
-        AuthManager.setUser(userData);
-      }
-
-      const isActive = userData.trial_active ?? true; // Default to true if null
-      trialActive = typeof AuthManager !== 'undefined' ? AuthManager.isTrialValid() : isActive;
-
-      // Grant Trial Access: Explicitly set allowedTokens for trial users
-      if (userPlan === 'trial' || trialActive) {
-        allowedTokens = BIG5_TOKENS;
-        localStorage.setItem('cachedAllowedTokens', JSON.stringify(allowedTokens));
-      }
-
-      await loadUserLimits();
-      updateUI();
-      startWebSocket(token);
-      setupFirestoreListeners();
-
-      // Debug Logging: Print final allowedTokens list
-      console.log('loadUserFromBackend - Final allowedTokens:', allowedTokens);
-      console.log('loadUserFromBackend - User plan:', userPlan, 'Trial active:', trialActive);
-
-      document.dispatchEvent(new CustomEvent('dashboardUserLoaded', { detail: { userData: currentUserData } }));
+      applyUserData(userData, token);
+    } else if (response.status === 404 && firebaseUser) {
+      // New Firebase user — auto-provision a backend profile then continue
+      await provisionUserFromFirebase(firebaseUser, token);
     } else if (response.status === 401) {
       localStorage.removeItem('access_token');
       localStorage.removeItem('authToken');
@@ -813,6 +787,114 @@ async function loadUserFromBackend(token) {
     console.error('Load user error:', error);
     redirectToLogin();
   }
+}
+
+function applyUserData(userData, token) {
+  currentUser = { email: userData.email, token };
+  currentUserData = userData;
+  userPlan = userData.plan || 'trial';
+  trialEnd = userData.trial_end ? new Date(userData.trial_end) : null;
+
+  if (typeof AuthManager !== 'undefined') {
+    AuthManager.setUser(userData);
+  }
+
+  const isActive = userData.trial_active ?? true;
+  trialActive = typeof AuthManager !== 'undefined' ? AuthManager.isTrialValid() : isActive;
+
+  if (userPlan === 'trial' || trialActive) {
+    allowedTokens = BIG5_TOKENS;
+    localStorage.setItem('cachedAllowedTokens', JSON.stringify(allowedTokens));
+  }
+
+  loadUserLimits().then(() => {
+    updateUI();
+    startWebSocket(token);
+    setupFirestoreListeners();
+    console.log('loadUserFromBackend - Final allowedTokens:', allowedTokens);
+    console.log('loadUserFromBackend - User plan:', userPlan, 'Trial active:', trialActive);
+    document.dispatchEvent(new CustomEvent('dashboardUserLoaded', { detail: { userData: currentUserData } }));
+  });
+}
+
+async function provisionUserFromFirebase(firebaseUser, token, attempt = 1) {
+  const MAX_ATTEMPTS = 3;
+
+  if (attempt === 1) showProvisioningState();
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/users/provision`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        uid: firebaseUser.uid,
+        email: firebaseUser.email || null,
+        display_name: firebaseUser.displayName || null
+      })
+    });
+
+    if (response.ok) {
+      hideProvisioningState();
+      const userData = await response.json();
+      applyUserData(userData, token);
+    } else if (attempt < MAX_ATTEMPTS) {
+      await new Promise(r => setTimeout(r, 1000 * attempt));
+      return provisionUserFromFirebase(firebaseUser, token, attempt + 1);
+    } else {
+      hideProvisioningState();
+      showProvisionErrorState();
+    }
+  } catch (error) {
+    console.error('provisionUserFromFirebase error:', error);
+    if (attempt < MAX_ATTEMPTS) {
+      await new Promise(r => setTimeout(r, 1000 * attempt));
+      return provisionUserFromFirebase(firebaseUser, token, attempt + 1);
+    }
+    hideProvisioningState();
+    showProvisionErrorState();
+  }
+}
+
+function showProvisioningState() {
+  if (document.getElementById('provision-overlay')) return;
+  const overlay = document.createElement('div');
+  overlay.id = 'provision-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.93);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;';
+  overlay.innerHTML = `
+    <i class="fas fa-circle-notch fa-spin" style="font-size:2.5rem;color:#22d3ee;"></i>
+    <p style="color:#e2e8f0;font-size:1.1rem;font-weight:600;">Setting up your account&hellip;</p>
+    <p style="color:#94a3b8;font-size:0.85rem;">This only happens once.</p>
+  `;
+  document.body.appendChild(overlay);
+}
+
+function hideProvisioningState() {
+  document.getElementById('provision-overlay')?.remove();
+}
+
+function showProvisionErrorState() {
+  const overlay = document.createElement('div');
+  overlay.id = 'provision-error-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;';
+  overlay.innerHTML = `
+    <i class="fas fa-exclamation-triangle" style="font-size:2.5rem;color:#f97316;"></i>
+    <h2 style="color:#f97316;font-size:1.3rem;font-weight:700;margin:0;">Account Setup Failed</h2>
+    <p style="color:#94a3b8;font-size:0.9rem;text-align:center;max-width:320px;margin:0;">
+      We couldn&apos;t create your account profile after 3 attempts. Please retry or contact support.
+    </p>
+    <div style="display:flex;gap:1rem;margin-top:0.5rem;">
+      <button onclick="location.reload()" style="padding:10px 28px;background:linear-gradient(135deg,#f97316,#ef4444);border:none;color:white;border-radius:8px;font-size:1rem;font-weight:bold;cursor:pointer;">
+        Retry
+      </button>
+      <button onclick="window.location.href='/web/src/pages/index.html'" style="padding:10px 28px;background:transparent;border:2px solid rgba(255,255,255,0.2);color:white;border-radius:8px;font-size:1rem;font-weight:bold;cursor:pointer;">
+        Go Home
+      </button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
 }
 
 async function loadUserLimits() {
