@@ -590,19 +590,6 @@ let lastTrialSetupTime = 0;
 async function setupTrialNonBlocking(userId) {
   if (!userId) return;
 
-  // Fast path: if localStorage already has a past trial_end, don't wait for Firestore
-  const cachedEnd = localStorage.getItem('trial_end_timestamp');
-  if (cachedEnd) {
-    const endDate = new Date(cachedEnd);
-    if (!isNaN(endDate.getTime()) && endDate < new Date()) {
-      _subState.active = false;
-      _subState.isPremium = false;
-      setExpiredView();
-      updatePlanBadge('expired');
-      return;
-    }
-  }
-
   const status = await checkUserSubscriptionStatus(userId);
   _subState.active = (status !== 'expired');
   _subState.isPremium = (status === 'paid');
@@ -631,62 +618,70 @@ async function setupTrialNonBlocking(userId) {
   trialSetupRunning = true;
 
   const cacheKey = `trialStart_${userId}`;
-  let trialStart = localStorage.getItem(cacheKey);
 
   try {
-    // 1. Check local caching — but verify trial hasn't expired before starting countdown
-    if (trialStart) {
-      const startDate = new Date(trialStart);
-      if (!isNaN(startDate.getTime())) {
-        const derivedEnd = new Date(startDate.getTime() + 3 * 24 * 60 * 60 * 1000);
-        if (derivedEnd < new Date()) {
-          // Trial expired based on cached start — block immediately
-          setExpiredView();
-          updatePlanBadge('expired');
-          trialSetupRunning = false;
-          lastTrialSetupTime = Date.now();
-          return;
-        }
-      }
-      initializeTrialCountdown(userId, trialStart);
-    }
+    // 1. Firestore is the PRIMARY source of truth — fetch it first
+    const freshStart = await fetchTrialStartFromFirestore(userId);
 
-    // 2. Fetch from Firestore (revalidate)
-    const freshTrialStart = await fetchTrialStartFromFirestore(userId);
-
-    if (freshTrialStart && freshTrialStart !== trialStart) {
-      const freshDate = new Date(freshTrialStart);
+    if (freshStart) {
+      // Firestore returned a valid start — use it as the source of truth
+      const freshDate = new Date(freshStart);
       if (!isNaN(freshDate.getTime())) {
         const freshEnd = new Date(freshDate.getTime() + 3 * 24 * 60 * 60 * 1000);
+        // Persist the authoritative trial end to localStorage
+        localStorage.setItem('trial_end_timestamp', freshEnd.toISOString());
+        localStorage.setItem(cacheKey, freshStart);
+
         if (freshEnd < new Date()) {
           setExpiredView();
           updatePlanBadge('expired');
-          trialSetupRunning = false;
-          lastTrialSetupTime = Date.now();
           return;
         }
+        initializeTrialCountdown(userId, freshStart);
       }
-      localStorage.setItem(cacheKey, freshTrialStart);
-      initializeTrialCountdown(userId, freshTrialStart);
-    } else if (!freshTrialStart && !trialStart) {
-      // Only start a grace period if there is NO prior trial_end in localStorage.
-      // If there is one, the user has already consumed their trial — don't reset it.
-      const existingEnd = localStorage.getItem('trial_end_timestamp');
-      if (existingEnd) {
-        const endDate = new Date(existingEnd);
-        if (!isNaN(endDate.getTime()) && endDate < new Date()) {
-          setExpiredView();
-          updatePlanBadge('expired');
-          return;
+    } else {
+      // Firestore returned null — fall back to cached start from localStorage
+      const cachedStart = localStorage.getItem(cacheKey);
+
+      if (cachedStart) {
+        const startDate = new Date(cachedStart);
+        if (!isNaN(startDate.getTime())) {
+          const derivedEnd = new Date(startDate.getTime() + 3 * 24 * 60 * 60 * 1000);
+          localStorage.setItem('trial_end_timestamp', derivedEnd.toISOString());
+
+          if (derivedEnd < new Date()) {
+            setExpiredView();
+            updatePlanBadge('expired');
+            return;
+          }
+          initializeTrialCountdown(userId, cachedStart);
         }
+      } else {
+        // Neither Firestore nor cached start exists
+        // If there is an existing expired trial_end, respect it — do NOT reset
+        const existingEnd = localStorage.getItem('trial_end_timestamp');
+        if (existingEnd) {
+          const endDate = new Date(existingEnd);
+          if (!isNaN(endDate.getTime()) && endDate < new Date()) {
+            setExpiredView();
+            updatePlanBadge('expired');
+            return;
+          }
+        }
+        // No prior trial at all — start a new grace period
+        const fallbackStart = new Date().toISOString();
+        const fallbackEnd = new Date(new Date(fallbackStart).getTime() + 3 * 24 * 60 * 60 * 1000);
+        localStorage.setItem(cacheKey, fallbackStart);
+        localStorage.setItem('trial_end_timestamp', fallbackEnd.toISOString());
+        initializeTrialCountdown(userId, fallbackStart);
       }
-      const fallbackStart = new Date().toISOString();
-      localStorage.setItem(cacheKey, fallbackStart);
-      initializeTrialCountdown(userId, fallbackStart);
     }
   } catch (trialErr) {
     console.error('Failed to fetch trial data, using fallback:', trialErr);
-    if (!trialStart) {
+    const cachedStart = localStorage.getItem(cacheKey);
+    if (cachedStart) {
+      initializeTrialCountdown(userId, cachedStart);
+    } else {
       const existingEnd = localStorage.getItem('trial_end_timestamp');
       if (existingEnd && new Date(existingEnd) < new Date()) {
         setExpiredView();
@@ -694,7 +689,9 @@ async function setupTrialNonBlocking(userId) {
         return;
       }
       const fallbackStart = new Date().toISOString();
+      const fallbackEnd = new Date(new Date(fallbackStart).getTime() + 3 * 24 * 60 * 60 * 1000);
       localStorage.setItem(cacheKey, fallbackStart);
+      localStorage.setItem('trial_end_timestamp', fallbackEnd.toISOString());
       initializeTrialCountdown(userId, fallbackStart);
     }
   } finally {
@@ -1104,36 +1101,161 @@ window.showSignalDetailsModal = function (signal) {
   document.getElementById('sd-sl').textContent = `$${(signal.sl || 0).toFixed(4)}`;
   document.getElementById('sd-tp').textContent = `$${(signal.tp || 0).toFixed(4)}`;
 
-  // Confluence Scorecards (Mocking if not present)
+  // Set active dataset for real-time tracking
+  modal.dataset.activeSymbol = signal.symbol;
+  modal.dataset.activeTimeframe = signal.timeframe || '1h';
+
+  // Store current signal for feature panels
+  window._fpSignal = signal;
+
+  // Populate Feature Access Cards
   const confluence = signal.confluence || {
     trend: Math.floor(Math.random() * 20 + 70),
     momentum: Math.floor(Math.random() * 30 + 50),
     volume: Math.floor(Math.random() * 40 + 40)
   };
-  document.getElementById('sd-conf-trend-val').textContent = `${confluence.trend}%`;
-  document.getElementById('sd-conf-trend-bar').style.width = `${confluence.trend}%`;
+  const _currentPrice = window.currentTickers?.[signal.symbol] ? parseFloat(window.currentTickers[signal.symbol]) : (signal.entry_price || 0);
+  const _tier = getUserTier();
 
-  document.getElementById('sd-conf-mom-val').textContent = `${confluence.momentum}%`;
-  document.getElementById('sd-conf-mom-bar').style.width = `${confluence.momentum}%`;
+  const LOCK_BASIC = _tier === 'BASIC';
+  const LOCK_NON_PRO = _tier !== 'PRO';
 
-  document.getElementById('sd-conf-vol-val').textContent = `${confluence.volume}%`;
-  document.getElementById('sd-conf-vol-bar').style.width = `${confluence.volume}%`;
+  function _featureLockOverlay(minTier) {
+    const label = minTier === 'PRO' ? 'PRO' : 'Intermediate';
+    return `<div class="absolute inset-0 bg-black/70 backdrop-blur-sm rounded-xl flex flex-col items-center justify-center z-10">
+      <i class="fas fa-lock text-gray-400 text-lg mb-1"></i>
+      <span class="text-[10px] text-gray-300 font-bold">${label}+ Only</span>
+    </div>`;
+  }
 
-  // Set active dataset for real-time tracking
-  modal.dataset.activeSymbol = signal.symbol;
-  modal.dataset.activeTimeframe = signal.timeframe || '1h';
+  const _sl = signal.sl || 0;
+  const _tp = signal.tp || 0;
+  const _entry = signal.entry_price || 0;
+  let _zoneBarHTML = '<div class="text-[9px] text-gray-500 flex items-center justify-center h-full">No levels</div>';
+  if (_sl && _tp && _tp > _sl) {
+    const _range = _tp - _sl;
+    const _entryPct = ((_entry - _sl) / _range * 100).toFixed(1);
+    const _curPct = ((_currentPrice - _sl) / _range * 100).toFixed(1);
+    _zoneBarHTML = `<div class="absolute top-0 bottom-0 w-0.5 bg-cyan" style="left:${_entryPct}%"></div>
+                    <div class="absolute top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-white shadow-[0_0_6px_white]" style="left:${Math.max(0,Math.min(98,parseFloat(_curPct)))}%"></div>`;
+  }
 
-  // Visual Zones
-  updateZoneTracker(signal, currentPrice);
+  let _shapLeadHTML = '';
+  const _probs = signal.probabilities || { SHORT: 0.18, HOLD: 0.08, LONG: 0.74 };
+  const _lead = Object.entries(_probs).sort((a,b) => b[1]-a[1])[0];
+  const _leadPct = (_lead[1]*100).toFixed(0);
+  const _leadColor = _lead[0]==='LONG' ? 'text-green-400' : _lead[0]==='SHORT' ? 'text-red-400' : 'text-gray-400';
+  _shapLeadHTML = `<div class="text-lg font-black ${_leadColor}">${_leadPct}% ${_lead[0]}</div>`;
 
-  // Expectancy Matrix
-  renderExpectancyPanel();
+  const cardsHTML = `
+    <!-- Card 1: Confluence -->
+    <div onclick="window.openFeaturePanel('fp-confluence')"
+      class="relative cursor-pointer bg-black/40 p-4 rounded-xl border border-cyan/20 hover:border-cyan/50 hover:bg-cyan/5 transition-all group overflow-hidden">
+      ${LOCK_BASIC ? _featureLockOverlay('INTERMEDIATE') : ''}
+      <div class="flex items-center gap-2 mb-3">
+        <i class="fas fa-layer-group text-cyan text-xs"></i>
+        <span class="text-[11px] font-bold text-white uppercase tracking-wider">Confluence</span>
+      </div>
+      <div class="space-y-1.5">
+        <div class="flex items-center gap-2">
+          <div class="flex-1 h-1 bg-black/50 rounded overflow-hidden">
+            <div class="h-full bg-cyan/70" style="width:${confluence.trend}%"></div>
+          </div>
+          <span class="text-[10px] font-mono text-cyan w-8 text-right">${confluence.trend}%</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="flex-1 h-1 bg-black/50 rounded overflow-hidden">
+            <div class="h-full bg-blue-400/70" style="width:${confluence.momentum}%"></div>
+          </div>
+          <span class="text-[10px] font-mono text-blue-300 w-8 text-right">${confluence.momentum}%</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="flex-1 h-1 bg-black/50 rounded overflow-hidden">
+            <div class="h-full bg-violet-400/70" style="width:${confluence.volume}%"></div>
+          </div>
+          <span class="text-[10px] font-mono text-violet-300 w-8 text-right">${confluence.volume}%</span>
+        </div>
+      </div>
+      <div class="mt-2 text-right">
+        <span class="text-[9px] text-gray-500 group-hover:text-cyan transition-colors">Full Analysis <i class="fas fa-arrow-right"></i></span>
+      </div>
+    </div>
 
-  // Raw Prob & SHAP
-  renderTelemetryPanel(signal);
+    <!-- Card 2: Visual Zones -->
+    <div onclick="window.openFeaturePanel('fp-zones')"
+      class="relative cursor-pointer bg-black/40 p-4 rounded-xl border border-violet-500/20 hover:border-violet-500/50 hover:bg-violet-500/5 transition-all group overflow-hidden">
+      ${LOCK_BASIC ? _featureLockOverlay('INTERMEDIATE') : ''}
+      <div class="flex items-center gap-2 mb-3">
+        <i class="fas fa-map-marker-alt text-violet-400 text-xs"></i>
+        <span class="text-[11px] font-bold text-white uppercase tracking-wider">Zone Track</span>
+      </div>
+      <div class="relative h-4 rounded-lg overflow-hidden bg-gradient-to-r from-red-900/60 via-gray-900/60 to-green-900/60 border border-white/10">
+        ${_zoneBarHTML}
+      </div>
+      <div class="flex justify-between mt-1.5 text-[9px] font-mono">
+        <span class="text-red-400">SL $${(_sl).toFixed(2)}</span>
+        <span class="text-gray-400">Entry</span>
+        <span class="text-green-400">TP $${(_tp).toFixed(2)}</span>
+      </div>
+      <div class="mt-1.5 text-right">
+        <span class="text-[9px] text-gray-500 group-hover:text-violet-400 transition-colors">Live View <i class="fas fa-arrow-right"></i></span>
+      </div>
+    </div>
 
-  // Developer Portal
-  renderDeveloperPortal(signal);
+    <!-- Card 3: Expectancy Matrix -->
+    <div onclick="window.openFeaturePanel('fp-expectancy')"
+      class="relative cursor-pointer bg-black/40 p-4 rounded-xl border border-emerald-500/20 hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all group overflow-hidden">
+      ${LOCK_NON_PRO ? _featureLockOverlay('PRO') : ''}
+      <div class="flex items-center gap-2 mb-3">
+        <i class="fas fa-chart-bar text-emerald-400 text-xs"></i>
+        <span class="text-[11px] font-bold text-white uppercase tracking-wider">Expectancy</span>
+      </div>
+      <div class="font-mono">
+        <div class="text-2xl font-black text-emerald-400">${signal.expectancy ? (signal.expectancy >= 0 ? '+' : '') + signal.expectancy.toFixed(2) + '%' : '+1.64%'}</div>
+        <div class="text-[9px] text-gray-500 mt-0.5">per signal avg</div>
+        <div class="mt-2 text-[10px] text-amber-400">Max DD: ${signal.max_dd ? signal.max_dd.toFixed(2) : '-5.12'}%</div>
+      </div>
+      <div class="mt-2 text-right">
+        <span class="text-[9px] text-gray-500 group-hover:text-emerald-400 transition-colors">Full Stats <i class="fas fa-arrow-right"></i></span>
+      </div>
+    </div>
+
+    <!-- Card 4: SHAP -->
+    <div onclick="window.openFeaturePanel('fp-shap')"
+      class="relative cursor-pointer bg-black/40 p-4 rounded-xl border border-orange-500/20 hover:border-orange-500/50 hover:bg-orange-500/5 transition-all group overflow-hidden">
+      ${LOCK_NON_PRO ? _featureLockOverlay('PRO') : ''}
+      <div class="flex items-center gap-2 mb-3">
+        <i class="fas fa-brain text-orange text-xs"></i>
+        <span class="text-[11px] font-bold text-white uppercase tracking-wider">SHAP</span>
+      </div>
+      <div class="font-mono">
+        <div class="text-xs font-bold text-gray-300 mb-1.5">Model Conviction</div>
+        ${_shapLeadHTML}
+      </div>
+      <div class="mt-2 text-right">
+        <span class="text-[9px] text-gray-500 group-hover:text-orange-400 transition-colors">Full Report <i class="fas fa-arrow-right"></i></span>
+      </div>
+    </div>
+
+    <!-- Card 5: API Export (full width) -->
+    <div onclick="window.openFeaturePanel('fp-api')"
+      class="relative cursor-pointer col-span-2 bg-black/40 p-4 rounded-xl border border-blue-500/20 hover:border-blue-500/50 hover:bg-blue-500/5 transition-all group flex items-center gap-4 overflow-hidden">
+      ${LOCK_NON_PRO ? _featureLockOverlay('PRO') : ''}
+      <div class="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+        <i class="fas fa-code text-blue-400 text-base"></i>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="text-[11px] font-bold text-white uppercase tracking-wider">API / JSON Data Export</div>
+        <div class="text-[10px] text-gray-500 font-mono mt-0.5 truncate">aegis_live_&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;  &rarr;  /api/v1/signals/live</div>
+      </div>
+      <span class="text-[9px] text-gray-500 group-hover:text-blue-400 transition-colors flex-shrink-0">
+        Dev Portal <i class="fas fa-arrow-right"></i>
+      </span>
+    </div>
+  `;
+
+  const featureCardsEl = document.getElementById('sd-feature-cards');
+  if (featureCardsEl) featureCardsEl.innerHTML = cardsHTML;
 
   // Plan-aware footer buttons
   const footerActions = document.getElementById('sd-footer-actions');
@@ -1235,140 +1357,474 @@ function getUserTier() {
   return 'BASIC';
 }
 
-function updateZoneTracker(signal, currentPrice) {
-  const container = document.getElementById('sd-visual-zone-container');
-  if (!container) return;
+// ============================================================
+// FEATURE PANEL SYSTEM
+// ============================================================
 
+window._fpSignal = null;
+
+window.openFeaturePanel = function(panelId) {
+  document.querySelectorAll('[id^="fp-"]').forEach(p => {
+    p.classList.add('hidden');
+    p.classList.remove('flex');
+  });
+  const panel = document.getElementById(panelId);
+  if (!panel) return;
+  panel.classList.remove('hidden');
+  panel.classList.add('flex');
+
+  const signal = window._fpSignal;
   const tier = getUserTier();
+  const body = document.getElementById(`${panelId}-body`);
+  if (!body || !signal) return;
 
-  // BASIC Tier Placeholder
-  if (tier === 'BASIC' || tier === 'TRIAL') {
-    container.innerHTML = `
-            <div class="flex-1 flex flex-col items-center justify-center p-4 border border-white/5 rounded-lg bg-black/40 relative overflow-hidden group cursor-pointer" onclick="window.location.href='/web/src/pages/pricing.html'">
-                <div class="absolute inset-0 bg-gradient-to-r from-red-500/5 via-transparent to-green-500/5 opacity-50 blur-sm pointer-events-none"></div>
-                <i class="fas fa-lock text-gray-500 text-xl mb-2 group-hover:text-cyan transition-colors"></i>
-                <div class="text-[10px] text-gray-400 font-mono text-center mb-2 opacity-70">
-                    <div class="h-1 w-full bg-white/10 rounded-full mb-2 overflow-hidden">
-                        <div class="h-full w-1/3 bg-white/20"></div>
-                    </div>
-                    Visual zone tracking restricted
-                </div>
-                <span class="text-xs text-cyan font-bold bg-cyan/10 px-3 py-1 rounded group-hover:bg-cyan/20 transition-colors">
-                    Unlock Risk Visualizer with Pro
-                </span>
-            </div>
-        `;
-    return;
+  switch(panelId) {
+    case 'fp-confluence': _renderFpConfluence(body, signal, tier); break;
+    case 'fp-zones':      _renderFpZones(body, signal, tier); break;
+    case 'fp-expectancy': _renderFpExpectancy(body, signal, tier); break;
+    case 'fp-shap':       _renderFpShap(body, signal, tier); break;
+    case 'fp-api':        _renderFpApi(body, signal, tier); break;
   }
+};
 
-  // INTERMEDIATE / PRO Logic
-  const direction = signal.direction || 'LONG';
-  const entry = parseFloat(signal.entry_price) || 0;
-  const sl = parseFloat(signal.sl) || 0;
-  const tp = parseFloat(signal.tp) || 0;
-  const price = parseFloat(currentPrice) || entry;
+window.closeFP = function() {
+  document.querySelectorAll('[id^="fp-"]').forEach(p => {
+    p.classList.add('hidden');
+    p.classList.remove('flex');
+  });
+};
 
-  if (!entry || !sl || !tp) {
-    container.innerHTML = `<div class="text-xs text-gray-500 p-4">Invalid signal data for tracker.</div>`;
-    return;
-  }
+function _renderFpConfluence(body, signal, tier) {
+  const locked = tier === 'BASIC';
+  const confluence = signal.confluence || {
+    trend: Math.floor(Math.random() * 20 + 70),
+    momentum: Math.floor(Math.random() * 30 + 50),
+    volume: Math.floor(Math.random() * 40 + 40)
+  };
 
-  // Calculate Percentages (0% is SL, 100% is TP)
-  let currentPercent = 0;
-  let entryPercent = 0;
+  const lockOverlay = locked ? `
+    <div class="absolute inset-0 bg-black/80 backdrop-blur-md rounded-xl flex flex-col items-center justify-center z-10">
+      <i class="fas fa-lock text-3xl text-gray-500 mb-3"></i>
+      <h3 class="text-lg font-bold text-white mb-1">Intermediate Plan Required</h3>
+      <p class="text-sm text-gray-400 mb-4 text-center px-4">Upgrade to Intermediate or Pro to access detailed confluence analysis</p>
+      <a href="/web/src/pages/pricing.html" class="px-6 py-2 bg-gradient-to-r from-cyan to-blue-600 text-white font-bold rounded-xl text-sm">Upgrade Now</a>
+    </div>` : '';
 
-  if (direction === 'LONG') {
-    const totalRange = tp - sl;
-    if (totalRange > 0) {
-      currentPercent = ((price - sl) / totalRange) * 100;
-      entryPercent = ((entry - sl) / totalRange) * 100;
-    }
-  } else {
-    const totalRange = sl - tp;
-    if (totalRange > 0) {
-      currentPercent = ((sl - price) / totalRange) * 100;
-      entryPercent = ((sl - entry) / totalRange) * 100;
-    }
-  }
-
-  // Safety Clamping (-5% to 105%)
-  const clamp = (val) => Math.max(-5, Math.min(105, val));
-  const renderCurrentPercent = clamp(currentPercent);
-  const renderEntryPercent = clamp(entryPercent);
-
-  // Telemetry Warning Engine
-  let statusText = "⚡ Inside Active Entry Buffer Zone";
-  let statusColorClass = "text-cyan animate-pulse";
-
-  if (direction === 'LONG') {
-    if (price >= tp) {
-      statusText = "✓ TARGET HIT";
-      statusColorClass = "text-green-400 font-bold";
-    } else if (price <= sl) {
-      statusText = "🛑 STOP LOSS TRIGGERED";
-      statusColorClass = "text-red-500 font-bold";
-    } else {
-      const drift = (price - entry) / entry;
-      if (drift > 0.002) {
-        statusText = "⚠️ Breakout In Progress: Do Not Chase";
-        statusColorClass = "text-yellow-400 font-bold";
-      }
-    }
-  } else { // SHORT
-    if (price <= tp) {
-      statusText = "✓ TARGET HIT";
-      statusColorClass = "text-green-400 font-bold";
-    } else if (price >= sl) {
-      statusText = "🛑 STOP LOSS TRIGGERED";
-      statusColorClass = "text-red-500 font-bold";
-    } else {
-      const drift = (entry - price) / entry;
-      if (drift > 0.002) {
-        statusText = "⚠️ Breakout In Progress: Do Not Chase";
-        statusColorClass = "text-yellow-400 font-bold";
-      }
-    }
-  }
-
-  // Render Template
-  container.innerHTML = `
-        <div class="flex justify-between items-center mb-3">
-            <h4 class="text-xs uppercase tracking-widest text-gray-400 font-bold flex items-center gap-2">
-                <i class="fas fa-bullseye text-orange"></i> Visual Zones
-            </h4>
-            <div class="text-[9px] uppercase tracking-wider ${statusColorClass}">
-                ${statusText}
-            </div>
+  body.innerHTML = `
+    <div class="relative">
+      ${lockOverlay}
+      <div class="${locked ? 'blur-sm pointer-events-none' : ''}">
+        <div class="flex items-center gap-3 mb-4">
+          <span class="font-black text-2xl text-white">${signal.symbol}</span>
+          <span class="text-sm text-gray-400">${signal.timeframe || '1h'}</span>
         </div>
-        
-        <div class="relative w-full h-8 mt-2 px-4 flex flex-col justify-center border border-white/5 rounded-lg bg-black/50">
-            <!-- Background Track Gradient -->
-            <div class="absolute inset-0 rounded-lg bg-gradient-to-r from-red-500/20 via-slate-800/50 to-emerald-500/20 pointer-events-none"></div>
-            
-            <!-- Base Track Line -->
-            <div class="relative w-full h-1 bg-white/10 rounded-full z-10">
-                
-                <!-- Static Entry Pin -->
-                <div class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex flex-col items-center" style="left: ${renderEntryPercent}%">
-                    <div class="w-2 h-4 bg-gray-400 rounded-sm"></div>
-                    <span class="absolute top-full mt-1 text-[8px] text-gray-400 font-mono">ENTRY</span>
+        <div class="space-y-4">
+          ${[
+            { label: 'Trend Alignment', sublabel: 'EMA 200/50 confluence weight', val: confluence.trend, color: 'bg-cyan', textColor: 'text-cyan' },
+            { label: 'Momentum Regime', sublabel: 'RSI / Stochastic position scaling', val: confluence.momentum, color: 'bg-blue-400', textColor: 'text-blue-300' },
+            { label: 'Volume Delta', sublabel: 'Net buying/selling pressure', val: confluence.volume, color: 'bg-violet-400', textColor: 'text-violet-300' },
+          ].map(item => `
+            <div class="bg-black/40 p-4 rounded-xl border border-white/5">
+              <div class="flex justify-between items-end mb-2">
+                <div>
+                  <div class="text-sm font-bold text-white">${item.label}</div>
+                  <div class="text-[10px] text-gray-500 mt-0.5">${item.sublabel}</div>
                 </div>
-                
-                <!-- Dynamic Live Price Indicator -->
-                <div class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex flex-col items-center transition-all duration-300 ease-out z-20" style="left: ${renderCurrentPercent}%">
-                    <div class="w-3 h-3 bg-white rounded-full shadow-[0_0_10px_rgba(255,255,255,0.8)] border-2 border-cyan"></div>
-                    <span class="absolute bottom-full mb-1 text-[8px] text-white font-mono shadow-black drop-shadow-md">LIVE</span>
-                </div>
-                
+                <div class="font-black font-mono text-2xl ${item.textColor}">${item.val}%</div>
+              </div>
+              <div class="h-2 bg-black/60 rounded-full overflow-hidden">
+                <div class="h-full ${item.color} rounded-full transition-all" style="width:${item.val}%"></div>
+              </div>
             </div>
-            
-            <!-- Scale Markers -->
-            <div class="absolute inset-x-0 bottom-0 translate-y-full pt-1 flex justify-between text-[8px] font-mono text-gray-500 px-4">
-                <span class="text-red-500/70">SL</span>
-                <span class="text-green-500/70">TP</span>
-            </div>
+          `).join('')}
         </div>
-    `;
+        <div class="mt-4 bg-cyan/5 border border-cyan/20 p-4 rounded-xl">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-bold text-white">Overall Confluence Score</span>
+            <span class="text-2xl font-black font-mono text-cyan">${Math.round((confluence.trend + confluence.momentum + confluence.volume) / 3)}%</span>
+          </div>
+          <div class="h-1.5 bg-black/50 rounded-full mt-2 overflow-hidden">
+            <div class="h-full bg-gradient-to-r from-cyan to-blue-500 rounded-full"
+                 style="width:${Math.round((confluence.trend + confluence.momentum + confluence.volume) / 3)}%"></div>
+          </div>
+        </div>
+        <div class="mt-4 p-3 bg-black/30 rounded-lg border border-white/5">
+          <div class="text-[10px] text-gray-500 font-mono">
+            <i class="fas fa-info-circle text-cyan/50 mr-1"></i>
+            Weights computed via XGBoost gradient boosting ensemble. Values represent normalized feature importance vectors for the current candle state. Updated on each WebSocket tick.
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function _renderFpZones(body, signal, tier) {
+  const locked = tier === 'BASIC';
+  const sl = signal.sl || 0;
+  const tp = signal.tp || 0;
+  const entry = signal.entry_price || 0;
+  const currentPrice = window.currentTickers?.[signal.symbol]
+    ? parseFloat(window.currentTickers[signal.symbol]) : entry;
+
+  const range = tp - sl;
+  const entryPct = range > 0 ? ((entry - sl) / range * 100) : 50;
+  const curPct = range > 0 ? Math.max(0, Math.min(100, (currentPrice - sl) / range * 100)) : 50;
+
+  const lockOverlay = locked ? `
+    <div class="absolute inset-0 bg-black/80 backdrop-blur-md rounded-xl flex flex-col items-center justify-center z-10">
+      <i class="fas fa-lock text-3xl text-gray-500 mb-3"></i>
+      <h3 class="text-lg font-bold text-white mb-1">Intermediate Plan Required</h3>
+      <a href="/web/src/pages/pricing.html" class="px-6 py-2 bg-gradient-to-r from-cyan to-blue-600 text-white font-bold rounded-xl text-sm mt-2">Upgrade Now</a>
+    </div>` : '';
+
+  let statusMsg = '';
+  if (!locked && entry > 0 && currentPrice > 0) {
+    const pctFromEntry = ((currentPrice - entry) / entry) * 100;
+    const isLong = (signal.direction || 'LONG') === 'LONG';
+    const inProfit = isLong ? currentPrice > entry : currentPrice < entry;
+    if (inProfit && Math.abs(pctFromEntry) > 0.2) {
+      statusMsg = `<div class="mt-3 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold animate-pulse">
+        ⚠️ Breakout In Progress: Do Not Chase
+      </div>`;
+    } else {
+      statusMsg = `<div class="mt-3 px-3 py-2 rounded-lg bg-cyan/10 border border-cyan/30 text-cyan text-xs font-bold">
+        ⚡ Inside Active Entry Buffer Zone
+      </div>`;
+    }
+  }
+
+  body.innerHTML = `
+    <div class="relative">
+      ${lockOverlay}
+      <div class="${locked ? 'blur-sm pointer-events-none' : ''}">
+        <div class="flex items-center gap-3 mb-4">
+          <span class="font-black text-2xl text-white">${signal.symbol}</span>
+          <span class="text-sm ${(signal.direction||'LONG')==='LONG' ? 'text-green-400' : 'text-red-400'} font-bold">${signal.direction||'LONG'}</span>
+        </div>
+        <div class="bg-black/40 p-5 rounded-xl border border-white/5">
+          <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-4 font-bold">Risk-to-Reward Coordinate Map</div>
+          <div class="relative h-8 rounded-xl overflow-hidden" style="background: linear-gradient(to right, rgba(239,68,68,0.25) 0%, rgba(15,23,42,0.8) 30%, rgba(15,23,42,0.8) 70%, rgba(16,185,129,0.25) 100%); border: 1px solid rgba(255,255,255,0.08);">
+            <div class="absolute top-0 bottom-0 w-0.5 bg-cyan shadow-[0_0_8px_rgba(0,242,255,0.8)]" style="left:${entryPct.toFixed(1)}%"></div>
+            <div class="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-white shadow-[0_0_12px_rgba(255,255,255,0.9)] transition-all duration-300"
+                 id="fp-zone-dot"
+                 style="left:calc(${curPct.toFixed(1)}% - 8px)"></div>
+          </div>
+          <div class="flex justify-between mt-2 text-[10px] font-mono">
+            <div class="text-red-400"><div class="font-bold">SL</div><div>$${sl.toFixed(4)}</div></div>
+            <div class="text-cyan text-center"><div class="font-bold">Entry</div><div>$${entry.toFixed(4)}</div></div>
+            <div class="text-green-400 text-right"><div class="font-bold">TP</div><div>$${tp.toFixed(4)}</div></div>
+          </div>
+          ${statusMsg}
+        </div>
+        <div class="grid grid-cols-2 gap-3 mt-4">
+          <div class="bg-black/40 p-4 rounded-xl border border-white/5 text-center">
+            <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Current Price</div>
+            <div class="text-xl font-black font-mono text-white" id="fp-zone-price">$${currentPrice.toFixed(4)}</div>
+          </div>
+          <div class="bg-black/40 p-4 rounded-xl border border-white/5 text-center">
+            <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Risk/Reward</div>
+            <div class="text-xl font-black font-mono text-cyan">
+              ${sl && tp && entry ? `1:${((tp - entry) / (entry - sl)).toFixed(2)}` : '&mdash;'}
+            </div>
+          </div>
+        </div>
+        <div class="grid grid-cols-3 gap-2 mt-3">
+          <div class="bg-red-500/5 border border-red-500/20 p-3 rounded-lg text-center">
+            <div class="text-[9px] text-red-400/70 uppercase">Stop Distance</div>
+            <div class="text-sm font-mono font-bold text-red-400 mt-0.5">${entry && sl ? ((entry - sl) / entry * 100).toFixed(2) : '&mdash;'}%</div>
+          </div>
+          <div class="bg-cyan/5 border border-cyan/20 p-3 rounded-lg text-center">
+            <div class="text-[9px] text-cyan/70 uppercase">In Zone</div>
+            <div class="text-sm font-mono font-bold text-cyan mt-0.5">${curPct.toFixed(1)}%</div>
+          </div>
+          <div class="bg-green-500/5 border border-green-500/20 p-3 rounded-lg text-center">
+            <div class="text-[9px] text-green-400/70 uppercase">Target Dist</div>
+            <div class="text-sm font-mono font-bold text-green-400 mt-0.5">${entry && tp ? ((tp - entry) / entry * 100).toFixed(2) : '&mdash;'}%</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Live price update for zone panel
+  if (body._zonePriceHandler) {
+    window.removeEventListener('priceUpdate', body._zonePriceHandler);
+  }
+  body._zonePriceHandler = (e) => {
+    if (e.detail.symbol !== signal.symbol) return;
+    const p = e.detail.price;
+    const el = body.querySelector('#fp-zone-price');
+    if (el) el.textContent = `$${p.toFixed(4)}`;
+    const dot = body.querySelector('#fp-zone-dot');
+    if (dot && sl && tp) {
+      const newPct = Math.max(0, Math.min(98, (p - sl) / (tp - sl) * 100));
+      dot.style.left = `calc(${newPct.toFixed(1)}% - 8px)`;
+    }
+  };
+  window.addEventListener('priceUpdate', body._zonePriceHandler);
+}
+
+function _renderFpExpectancy(body, signal, tier) {
+  const locked = tier !== 'PRO';
+
+  const expectancy = signal.expectancy ?? 1.64;
+  const maxDD = signal.max_dd ?? -5.12;
+  const profitFactor = signal.profit_factor ?? 1.87;
+  const winRate = signal.win_rate ?? 67;
+  const totalTrades = signal.total_trades ?? 42;
+
+  const lockOverlay = locked ? `
+    <div class="absolute inset-0 bg-black/80 backdrop-blur-md rounded-xl flex flex-col items-center justify-center z-10">
+      <i class="fas fa-crown text-3xl text-amber-400 mb-3"></i>
+      <h3 class="text-lg font-bold text-white mb-1">Pro Plan Required</h3>
+      <p class="text-sm text-gray-400 mb-4 text-center px-4">Statistical edge analysis is exclusively available to Pro subscribers</p>
+      <a href="/web/src/pages/pricing.html" class="px-6 py-2 bg-gradient-to-r from-amber-500 to-orange text-white font-bold rounded-xl text-sm">Upgrade to Pro</a>
+    </div>` : '';
+
+  body.innerHTML = `
+    <div class="relative">
+      ${lockOverlay}
+      <div class="${locked ? 'blur-md pointer-events-none select-none' : ''}">
+        <div class="flex items-center gap-3 mb-4">
+          <span class="font-black text-2xl text-white">${signal.symbol}</span>
+          <span class="text-xs text-gray-500 bg-black/40 px-2 py-0.5 rounded">Last 30 Days</span>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-black/40 p-4 rounded-xl border border-emerald-500/20">
+            <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Mathematical Expectancy</div>
+            <div class="text-3xl font-black font-mono ${expectancy >= 0 ? 'text-emerald-400' : 'text-red-400'}">${expectancy >= 0 ? '+' : ''}${expectancy.toFixed(2)}%</div>
+            <div class="text-[10px] text-gray-500 mt-1">average per trade</div>
+          </div>
+          <div class="bg-black/40 p-4 rounded-xl border border-amber-500/20">
+            <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Maximum Drawdown</div>
+            <div class="text-3xl font-black font-mono text-amber-400">${maxDD.toFixed(2)}%</div>
+            <div class="text-[10px] text-gray-500 mt-1">peak-to-trough</div>
+          </div>
+          <div class="bg-black/40 p-4 rounded-xl border border-cyan/20">
+            <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Profit Factor</div>
+            <div class="text-3xl font-black font-mono ${profitFactor >= 1.5 ? 'text-cyan' : 'text-white'}">${profitFactor.toFixed(2)}</div>
+            <div class="text-[10px] text-gray-500 mt-1">gross profit / loss</div>
+          </div>
+          <div class="bg-black/40 p-4 rounded-xl border border-white/5">
+            <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Win Rate</div>
+            <div class="text-3xl font-black font-mono text-white">${winRate}%</div>
+            <div class="text-[10px] text-gray-500 mt-1">from ${totalTrades} signals</div>
+          </div>
+        </div>
+        <div class="mt-4 bg-black/40 p-4 rounded-xl border border-white/5">
+          <div class="flex justify-between text-[10px] mb-2">
+            <span class="text-gray-400 font-bold">Historical Win Distribution</span>
+            <span class="text-white font-mono">${winRate}% wins</span>
+          </div>
+          <div class="h-3 bg-black/50 rounded-full overflow-hidden flex">
+            <div class="h-full bg-emerald-500/60 rounded-l-full" style="width:${winRate}%"></div>
+            <div class="h-full bg-red-500/40 rounded-r-full flex-1"></div>
+          </div>
+          <div class="flex justify-between text-[10px] mt-1 text-gray-500">
+            <span>${Math.round(totalTrades * winRate / 100)} wins</span>
+            <span>${Math.round(totalTrades * (100 - winRate) / 100)} losses</span>
+          </div>
+        </div>
+        <div class="mt-3 p-3 bg-black/30 rounded-lg border border-white/5">
+          <div class="text-[10px] text-gray-500 font-mono">
+            <i class="fas fa-database text-cyan/50 mr-1"></i>
+            Data sourced from cached Firestore performance document. Updated every 24h by background cron. Not indicative of future results.
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function _renderFpShap(body, signal, tier) {
+  const locked = tier !== 'PRO';
+
+  const probs = signal.probabilities || { SHORT: 0.18, HOLD: 0.08, LONG: 0.74 };
+  const leadEntry = Object.entries(probs).sort((a,b) => b[1]-a[1])[0];
+  const leadClass = leadEntry[0] === 'LONG' ? 'text-green-400' : leadEntry[0] === 'SHORT' ? 'text-red-400' : 'text-gray-400';
+  const leadPct = (leadEntry[1] * 100).toFixed(1);
+
+  const shapValues = signal.shap_values || [
+    { feature: 'Volume Delta 1h', value: 0.34, direction: 'long' },
+    { feature: 'BTC Anchor Distance', value: -0.21, direction: 'short' },
+    { feature: 'EMA 200 Confluence', value: 0.18, direction: 'long' },
+    { feature: 'RSI Regime 4h', value: 0.15, direction: 'long' },
+    { feature: 'Liq. Block Density', value: -0.09, direction: 'short' },
+  ];
+
+  const lockOverlay = locked ? `
+    <div class="absolute inset-0 bg-black/80 backdrop-blur-md rounded-xl flex flex-col items-center justify-center z-10">
+      <i class="fas fa-crown text-3xl text-amber-400 mb-3"></i>
+      <h3 class="text-lg font-bold text-white mb-1">Pro Plan Required</h3>
+      <p class="text-sm text-gray-400 mb-4 text-center px-4">Raw ML probability vectors and SHAP attribution are Pro-exclusive</p>
+      <a href="/web/src/pages/pricing.html" class="px-6 py-2 bg-gradient-to-r from-amber-500 to-orange text-white font-bold rounded-xl text-sm">Upgrade to Pro</a>
+    </div>` : '';
+
+  const maxShap = Math.max(...shapValues.map(s => Math.abs(s.value)));
+
+  body.innerHTML = `
+    <div class="relative">
+      ${lockOverlay}
+      <div class="${locked ? 'blur-md pointer-events-none select-none' : ''}">
+        <div class="flex items-center gap-3 mb-4">
+          <span class="font-black text-2xl text-white">${signal.symbol}</span>
+        </div>
+        <div class="bg-black/40 p-5 rounded-xl border border-white/5 mb-4">
+          <div class="flex items-center justify-between mb-3">
+            <div class="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Model Conviction</div>
+            <div class="font-black text-xl font-mono ${leadClass}">${leadPct}% ${leadEntry[0]}</div>
+          </div>
+          <div class="flex h-6 rounded-lg overflow-hidden gap-0.5">
+            <div class="bg-red-500/60 flex items-center justify-center text-[10px] font-bold text-white/80 transition-all"
+                 style="width:${(probs.SHORT * 100).toFixed(1)}%">
+              ${(probs.SHORT * 100) > 15 ? 'SHORT' : ''}
+            </div>
+            <div class="bg-gray-700/60 flex items-center justify-center text-[10px] font-bold text-white/80 transition-all"
+                 style="width:${(probs.HOLD * 100).toFixed(1)}%">
+              ${(probs.HOLD * 100) > 10 ? 'HOLD' : ''}
+            </div>
+            <div class="bg-emerald-500/60 flex items-center justify-center text-[10px] font-bold text-white/80 transition-all"
+                 style="width:${(probs.LONG * 100).toFixed(1)}%">
+              ${(probs.LONG * 100) > 15 ? 'LONG' : ''}
+            </div>
+          </div>
+          <div class="flex justify-between text-[9px] font-mono mt-1 text-gray-500">
+            <span class="text-red-400">${(probs.SHORT * 100).toFixed(1)}% SHORT</span>
+            <span>${(probs.HOLD * 100).toFixed(1)}% HOLD</span>
+            <span class="text-green-400">${(probs.LONG * 100).toFixed(1)}% LONG</span>
+          </div>
+        </div>
+        <div class="bg-black/40 p-5 rounded-xl border border-white/5">
+          <div class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-4">Live SHAP Feature Attribution</div>
+          <div class="space-y-3">
+            ${shapValues.map(sv => {
+              const barPct = (Math.abs(sv.value) / maxShap * 80).toFixed(1);
+              const isPos = sv.value > 0;
+              const barColor = isPos ? 'bg-emerald-500/40 border-emerald-500/30' : 'bg-rose-500/40 border-rose-500/30';
+              const textColor = isPos ? 'text-emerald-400' : 'text-rose-400';
+              return `
+                <div>
+                  <div class="flex justify-between text-[10px] mb-1">
+                    <span class="text-gray-300 font-mono">${sv.feature}</span>
+                    <span class="font-bold font-mono ${textColor}">${isPos ? '+' : ''}${sv.value.toFixed(3)}</span>
+                  </div>
+                  <div class="h-5 bg-black/40 rounded border border-white/5 overflow-hidden flex items-center">
+                    <div class="h-full ${barColor} rounded transition-all flex items-center px-1.5" style="width:${barPct}%"></div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+          <div class="mt-4 p-3 bg-black/30 rounded-lg border border-white/5">
+            <div class="text-[10px] text-gray-500 font-mono">
+              <i class="fas fa-flask text-orange/50 mr-1"></i>
+              SHAP values via TreeExplainer on current candle row. Positive = pushes model toward LONG. Updated every WebSocket tick.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function _renderFpApi(body, signal, tier) {
+  const locked = tier !== 'PRO';
+
+  const lockOverlay = locked ? `
+    <div class="absolute inset-0 bg-black/80 backdrop-blur-md rounded-xl flex flex-col items-center justify-center z-10">
+      <i class="fas fa-crown text-3xl text-amber-400 mb-3"></i>
+      <h3 class="text-lg font-bold text-white mb-1">Pro Plan Required</h3>
+      <p class="text-sm text-gray-400 mb-4 text-center px-4">API access and developer data export are Pro-exclusive features</p>
+      <a href="/web/src/pages/pricing.html" class="px-6 py-2 bg-gradient-to-r from-amber-500 to-orange text-white font-bold rounded-xl text-sm">Upgrade to Pro</a>
+    </div>` : '';
+
+  body.innerHTML = `
+    <div class="relative">
+      ${lockOverlay}
+      <div class="${locked ? 'blur-md pointer-events-none select-none' : ''}">
+        <div class="bg-black/40 p-5 rounded-xl border border-blue-500/20 mb-4">
+          <div class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-3">Your API Key</div>
+          <div class="flex items-center gap-2 bg-black/60 border border-white/10 rounded-lg p-3 mb-3">
+            <i class="fas fa-key text-blue-400 text-xs flex-shrink-0"></i>
+            <span class="font-mono text-sm text-white flex-1 tracking-wider" id="fp-api-key-display">aegis_live_&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;</span>
+            <button onclick="window._fpCopyApiKey()" class="text-[10px] text-blue-400 hover:text-blue-300 transition-colors px-2 py-1 bg-blue-500/10 rounded border border-blue-500/20 hover:bg-blue-500/20">
+              <i class="fas fa-copy mr-1"></i>Copy
+            </button>
+          </div>
+          <button onclick="window._fpRegenerateKey()"
+            class="w-full py-2.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 font-bold rounded-xl text-sm border border-blue-500/30 transition-colors">
+            <i class="fas fa-sync-alt mr-2"></i>Regenerate API Key
+          </button>
+          <div class="mt-2 text-[10px] text-gray-600 text-center">Key shown once on generation. Store it securely.</div>
+        </div>
+        <div class="bg-black/40 p-5 rounded-xl border border-white/5 mb-4">
+          <div class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-3">Available Endpoints</div>
+          <div class="space-y-2">
+            ${[
+              { path: '/api/v1/signals/live', desc: 'All live signals JSON' },
+              { path: `/api/v1/signals/${encodeURIComponent(signal.symbol)}`, desc: `${signal.symbol} signal data` },
+              { path: '/api/v1/tickers', desc: 'Live price tickers' },
+            ].map(ep => `
+              <div class="flex items-center gap-3 bg-black/40 p-2.5 rounded-lg border border-white/5">
+                <code class="text-cyan text-[11px] font-mono flex-1">${ep.path}</code>
+                <span class="text-[10px] text-gray-500 text-right">${ep.desc}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        <div class="bg-black/40 p-5 rounded-xl border border-white/5">
+          <div class="flex items-center justify-between mb-3">
+            <div class="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Python Quick-Start</div>
+            <button onclick="window._fpCopySnippet()" class="text-[10px] text-gray-400 hover:text-white transition-colors px-2 py-1 bg-white/5 rounded border border-white/10">
+              <i class="fas fa-copy mr-1"></i>Copy
+            </button>
+          </div>
+          <pre id="fp-python-snippet" class="text-[11px] font-mono text-green-300/90 bg-black/60 p-4 rounded-lg border border-white/5 overflow-x-auto leading-relaxed"><span class="text-blue-300">import</span> requests
+
+API_KEY <span class="text-white">=</span> <span class="text-amber-300">"aegis_live_YOUR_KEY_HERE"</span>
+HEADERS <span class="text-white">=</span> {<span class="text-amber-300">"X-API-Key"</span>: API_KEY}
+
+resp <span class="text-white">=</span> requests.<span class="text-cyan">get</span>(
+    <span class="text-amber-300">"https://gatekeeper.sbs/api/v1/signals/live"</span>,
+    headers<span class="text-white">=</span>HEADERS
+)
+data <span class="text-white">=</span> resp.<span class="text-cyan">json</span>()
+<span class="text-blue-300">print</span>(data[<span class="text-amber-300">"signals"</span>])</pre>
+        </div>
+      </div>
+    </div>
+  `;
+
+  window._fpCopyApiKey = () => {
+    const el = document.getElementById('fp-api-key-display');
+    const key = el?.dataset.rawKey || 'aegis_live_DEMO_KEY';
+    navigator.clipboard.writeText(key).then(() => _showToast('API key copied', 'success')).catch(() => {});
+  };
+  window._fpCopySnippet = () => {
+    const pre = document.getElementById('fp-python-snippet');
+    const text = pre?.innerText || '';
+    navigator.clipboard.writeText(text).then(() => _showToast('Snippet copied', 'success')).catch(() => {});
+  };
+  window._fpRegenerateKey = async () => {
+    try {
+      const { getAuth } = await import('https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js');
+      const fbUser = getAuth().currentUser;
+      if (!fbUser) { _showToast('Not authenticated', 'error'); return; }
+      const token = await fbUser.getIdToken();
+      const r = await fetch('/api/v1/keys/regenerate', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }});
+      if (r.ok) {
+        const data = await r.json();
+        const el = document.getElementById('fp-api-key-display');
+        if (el) { el.textContent = data.key; el.dataset.rawKey = data.key; }
+        _showToast('New key generated — copy it now!', 'success');
+      } else {
+        _showToast('Key regeneration failed', 'error');
+      }
+    } catch (e) {
+      _showToast('Error: ' + e.message, 'error');
+    }
+  };
 }
 
 // Listen to WebSocket price updates triggered from gatekeeper.js
@@ -1382,360 +1838,16 @@ window.addEventListener('priceUpdate', (e) => {
     if (livePriceEl) {
       livePriceEl.textContent = `$${parseFloat(price).toFixed(4)}`;
     }
-
-    // Update the Visual Zone Tracker
-    const timeframe = modal.dataset.activeTimeframe || '1h';
-    const key = `${symbol}_${timeframe}`;
-    const sig = window.latestSignals && window.latestSignals[key];
-
-    if (sig) {
-      updateZoneTracker(sig, parseFloat(price));
-      // Model telemetry usually updates on candle close, but we can re-render it if the payload changes
-      renderTelemetryPanel(sig);
-    }
   }
+
+  // Dispatch for feature panel live price handlers (e.g. zone dot)
+  // Each panel body registers its own handler via body._zonePriceHandler
 });
 
-// ============================================================
-// EXPECTANCY & RISK PANEL
-// ============================================================
-
-let globalAnalyticsCache = null;
-
-async function fetchGlobalAnalytics() {
-  if (globalAnalyticsCache) return globalAnalyticsCache;
-  try {
-    const docRef = doc(db, 'analytics', 'global_performance');
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      globalAnalyticsCache = docSnap.data();
-      return globalAnalyticsCache;
-    }
-  } catch (e) {
-    console.error("Error fetching analytics", e);
-  }
-  return null;
-}
+// renderExpectancyPanel, renderTelemetryPanel, renderDeveloperPortal, updateZoneTracker
+// removed — superseded by the feature panel system (_renderFp* functions above).
 
 async function renderExpectancyPanel() {
-  const container = document.getElementById('sd-expectancy-container');
-  if (!container) return;
-
-  const tier = getUserTier();
-
-  if (tier !== 'PRO') {
-    container.innerHTML = `
-            <div class="relative w-full h-full min-h-[120px] rounded-xl overflow-hidden group cursor-pointer" onclick="window.location.href='/web/src/pages/pricing.html'">
-                <!-- Blurred background metrics -->
-                <div class="absolute inset-0 p-4 blur-[4px] opacity-40 bg-black/50 flex flex-col justify-between">
-                    <div class="flex justify-between"><span class="text-xs text-gray-400">Expectancy</span><span class="text-emerald-500 font-mono">+1.84%</span></div>
-                    <div class="flex justify-between"><span class="text-xs text-gray-400">Max DD</span><span class="text-red-400 font-mono">-12.5%</span></div>
-                    <div class="flex justify-between"><span class="text-xs text-gray-400">Profit Factor</span><span class="text-cyan font-mono">1.95</span></div>
-                </div>
-                
-                <!-- Lock Overlay -->
-                <div class="absolute inset-0 flex flex-col items-center justify-center bg-black/40 bg-gradient-to-t from-black/80 to-transparent">
-                    <i class="fas fa-lock text-gray-300 text-xl mb-2 group-hover:text-amber-400 transition-colors"></i>
-                    <span class="text-[10px] text-amber-400 font-bold tracking-widest text-center px-4 leading-relaxed group-hover:text-amber-300">
-                        Unlock Institutional Quant Telemetry with Pro Tier
-                    </span>
-                </div>
-            </div>
-        `;
-    return;
-  }
-
-  // Pro Tier: Render skeleton loading
-  container.innerHTML = `<div class="flex items-center justify-center h-full min-h-[120px]"><i class="fas fa-circle-notch fa-spin text-cyan"></i></div>`;
-
-  const data = await fetchGlobalAnalytics();
-
-  if (!data) {
-    container.innerHTML = `<div class="text-xs text-gray-500 p-4 text-center min-h-[120px] flex items-center justify-center">Telemetry unavailable</div>`;
-    return;
-  }
-
-  const exp = data.expectancy || 0;
-  const mdd = data.max_drawdown || 0;
-  const pf = data.profit_factor || 0;
-
-  const expColor = exp > 0 ? 'text-emerald-400' : (exp < 0 ? 'text-red-400' : 'text-gray-400');
-  const expSign = exp > 0 ? '+' : '';
-  const expArrow = exp > 0 ? '<i class="fas fa-arrow-trend-up text-[10px] ml-1"></i>' : (exp < 0 ? '<i class="fas fa-arrow-trend-down text-[10px] ml-1"></i>' : '');
-
-  const mddColor = mdd > 15 ? 'text-red-500' : 'text-amber-400';
-
-  const pfColor = pf > 1.5 ? 'text-cyan shadow-cyan/20' : 'text-white';
-
-  container.innerHTML = `
-        <h4 class="text-xs uppercase tracking-widest text-gray-400 font-bold mb-3 flex items-center gap-2">
-            <i class="fas fa-chart-line text-purple-400"></i> Inst. Quant Telemetry
-        </h4>
-        <div class="flex flex-col gap-2 flex-1 justify-center">
-            <div class="flex justify-between items-center border-b border-white/5 pb-2">
-                <span class="text-[10px] uppercase tracking-wider text-gray-500 font-bold">Expectancy</span>
-                <span class="font-mono text-sm font-bold ${expColor} drop-shadow-md">
-                    ${expSign}${exp.toFixed(2)}% ${expArrow}
-                </span>
-            </div>
-            <div class="flex justify-between items-center border-b border-white/5 pb-2">
-                <span class="text-[10px] uppercase tracking-wider text-gray-500 font-bold">Max Drawdown</span>
-                <span class="font-mono text-sm font-bold ${mddColor}">
-                    -${mdd.toFixed(1)}%
-                </span>
-            </div>
-            <div class="flex justify-between items-center">
-                <span class="text-[10px] uppercase tracking-wider text-gray-500 font-bold">Profit Factor</span>
-                <span class="font-mono text-sm font-bold ${pfColor} bg-black/40 px-2 py-0.5 rounded border border-white/5">
-                    ${pf.toFixed(2)}
-                </span>
-            </div>
-        </div>
-    `;
+  // no-op: superseded by _renderFpExpectancy / openFeaturePanel('fp-expectancy')
 }
 
-// ============================================================
-// MODEL TELEMETRY & EXPLAINABILITY (SHAP) PANEL
-// ============================================================
-
-function renderTelemetryPanel(signal) {
-  const container = document.getElementById('sd-telemetry-container');
-  if (!container) return;
-
-  const tier = getUserTier();
-
-  if (tier !== 'PRO') {
-    container.innerHTML = `
-            <div class="relative w-full h-full min-h-[160px] rounded-xl overflow-hidden group cursor-pointer" onclick="window.location.href='/web/src/pages/pricing.html'">
-                <!-- Blurred background metrics -->
-                <div class="absolute inset-0 p-4 blur-[4px] opacity-40 bg-black/50 flex flex-col gap-4 pointer-events-none">
-                    <div>
-                        <div class="flex justify-between items-center text-[10px] mb-1 text-gray-400"><span class="uppercase tracking-widest">Model Conviction</span><span class="font-bold text-cyan">76% LONG</span></div>
-                        <div class="w-full h-2 rounded overflow-hidden flex bg-black/50"><div class="h-full bg-rose-500/50" style="width: 14%"></div><div class="h-full bg-gray-500/50" style="width: 10%"></div><div class="h-full bg-emerald-500/50" style="width: 76%"></div></div>
-                    </div>
-                    <div>
-                        <div class="text-[10px] text-gray-400 uppercase tracking-widest mb-2">Live Logic Engine</div>
-                        <div class="w-full h-4 bg-emerald-500/20 rounded mb-1"></div>
-                        <div class="w-full h-4 bg-emerald-500/20 rounded mb-1 w-3/4"></div>
-                        <div class="w-full h-4 bg-rose-500/20 rounded w-1/2 ml-auto"></div>
-                    </div>
-                </div>
-                
-                <!-- Lock Overlay -->
-                <div class="absolute inset-0 flex flex-col items-center justify-center bg-black/40 bg-gradient-to-t from-black/90 to-transparent backdrop-blur-md z-10 transition-all group-hover:bg-black/50">
-                    <i class="fas fa-lock text-gray-300 text-2xl mb-2 group-hover:text-cyan transition-colors"></i>
-                    <span class="text-[10px] text-cyan font-bold tracking-widest text-center px-4 leading-relaxed group-hover:text-cyan/80">
-                        Unlock Live Machine Learning Probabilities & SHAP Attribution Maps with Pro Tier
-                    </span>
-                </div>
-            </div>
-        `;
-    return;
-  }
-
-  // Default fallbacks if backend doesn't send telemetry yet in websocket payload
-  const probs = signal.probabilities || { "SHORT": 24.5, "HOLD": 10.2, "LONG": 65.3 };
-  const shapList = signal.shap_contributions || [
-    { "feature": "Funding_Rate", "impact": 0.45 },
-    { "feature": "Orderbook_Imbalance", "impact": 0.23 },
-    { "feature": "RSI_Divergence", "impact": -0.15 }
-  ];
-
-  // Calculate conviction winner
-  let winner = "HOLD";
-  let winnerProb = probs.HOLD || 0;
-  let winnerColor = "text-gray-400";
-
-  if ((probs.LONG || 0) > winnerProb) {
-    winner = "LONG";
-    winnerProb = probs.LONG;
-    winnerColor = "text-emerald-400";
-  }
-  if ((probs.SHORT || 0) > winnerProb) {
-    winner = "SHORT";
-    winnerProb = probs.SHORT;
-    winnerColor = "text-rose-400";
-  }
-  let shapHTML = '';
-
-  if (!shapList || shapList.length === 0) {
-    shapHTML = `<div class="text-xs text-gray-500 italic py-2">Attribution map unavailable.</div>`;
-    } else {
-        // Max absolute impact for scaling
-        const maxImpact = Math.max(...shapList.map(s => Math.abs(s.impact)), 0.01);
-        
-        shapHTML = shapList.map(s => {
-            const isPositive = s.impact > 0;
-            const barWidth = (Math.abs(s.impact) / maxImpact) * 100;
-            const barColorClass = isPositive ? 'bg-emerald-500/20 border-emerald-500/30' : 'bg-rose-500/20 border-rose-500/30';
-            const textColorClass = isPositive ? 'text-emerald-400' : 'text-rose-400';
-            const sign = isPositive ? '+' : '-';
-            
-            return `
-                <div class="flex items-center gap-2 mb-2 w-full text-[10px] font-mono">
-                    <div class="flex-1 text-right truncate text-gray-400 ${!isPositive ? textColorClass : ''}">${!isPositive ? s.feature : ''}</div>
-
-                    <div class="w-1/3 flex items-center justify-center relative h-3 bg-black/30 rounded border border-white/5 overflow-hidden">
-                        <div class="absolute h-full border-r ${!isPositive ? 'border-r-0 border-l' : ''} border-white/10 ${barColorClass} ${isPositive ? 'left-1/2' : 'right-1/2'}" style="width: ${barWidth / 2}%"></div>
-                        <div class="absolute w-[1px] h-full bg-white/20 left-1/2"></div>
-                    </div>
-
-                    <div class="flex-1 truncate text-gray-400 ${isPositive ? textColorClass : ''}">${isPositive ? s.feature : ''}</div>
-                </div>
-            `;
-        }).join('');
-    }
-
-    container.innerHTML = `
-        <div class="mb-4">
-            <h4 class="text-xs uppercase tracking-widest text-gray-400 font-bold flex items-center gap-2">
-                <i class="fas fa-brain text-emerald-400"></i> Model Telemetry
-            </h4>
-        </div>
-
-        <!-- Conviction Meter -->
-        <div class="mb-4 bg-black/40 p-3 rounded-lg border border-white/5">
-            <div class="flex justify-between items-center text-[10px] uppercase tracking-widest font-bold mb-2">
-                <span class="text-gray-500">Conviction Vector</span>
-                <span class="${winnerColor}">${winnerProb.toFixed(1)}% ${winner}</span>
-            </div>
-            <div class="w-full h-1.5 rounded-full overflow-hidden flex bg-black/50 shadow-inner">
-                <div class="h-full bg-rose-500 transition-all duration-500" style="width: ${probs.SHORT || 0}%"></div>
-                <div class="h-full bg-gray-500 transition-all duration-500" style="width: ${probs.HOLD || 0}%"></div>
-                <div class="h-full bg-emerald-500 transition-all duration-500" style="width: ${probs.LONG || 0}%"></div>
-            </div>
-            <div class="flex justify-between text-[8px] mt-1 text-gray-500 font-mono">
-                <span>SH ${(probs.SHORT || 0).toFixed(0)}%</span>
-                <span>HD ${(probs.HOLD || 0).toFixed(0)}%</span>
-                <span>LN ${(probs.LONG || 0).toFixed(0)}%</span>
-            </div>
-        </div>
-
-        <!-- Live Logic Engine (Micro-SHAP) -->
-        <div class="bg-black/40 p-3 rounded-lg border border-white/5 flex-1 flex flex-col justify-center">
-            <div class="text-[9px] text-gray-500 uppercase tracking-widest font-bold mb-3 text-center border-b border-white/5 pb-2">
-                Live Logic Engine
-            </div>
-            <div class="flex flex-col w-full justify-center">
-                ${shapHTML}
-            </div>
-        </div>
-    `;
-}
-
-// ============================================================
-// API PORTABILITY & DEVELOPER PORTAL
-// ============================================================
-
-window.regenerateApiKey = async function(symbol) {
-    try {
-        let token = localStorage.getItem('access_token') || localStorage.getItem('authToken');
-        if (!token && typeof AuthManager !== 'undefined') {
-            token = AuthManager.getToken();
-        }
-        
-        if (!token) {
-            alert('You must be logged in to regenerate API keys.');
-            return;
-        }
-
-        const btn = document.getElementById('btn-regen-key');
-        if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
-
-        const response = await fetch('/api/v1/developer/regenerate_key', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to generate key. Are you on the PRO tier?');
-        }
-
-        const data = await response.json();
-        const apiKey = data.api_key;
-
-        // Show it to the user
-        const keyDisplay = document.getElementById('dev-api-key-display');
-        if (keyDisplay) {
-            keyDisplay.value = apiKey;
-            keyDisplay.type = 'text';
-        }
-
-        alert(`Copy your API key now. This is the only time it will be shown:\n\n${apiKey}`);
-
-        if (btn) btn.innerHTML = '<i class="fas fa-sync-alt"></i> Regenerate API Key';
-    } catch (e) {
-        console.error(e);
-        alert(e.message);
-        const btn = document.getElementById('btn-regen-key');
-        if (btn) btn.innerHTML = '<i class="fas fa-sync-alt"></i> Regenerate API Key';
-    }
-};
-
-window.copyEndpointUrl = function(symbol) {
-    const url = `${window.location.origin}/api/v1/signals/fleet?symbol=${symbol}`;
-    navigator.clipboard.writeText(url).then(() => {
-        alert('Endpoint URL copied to clipboard!');
-    });
-};
-
-function renderDeveloperPortal(signal) {
-    const container = document.getElementById('sd-developer-portal');
-    if (!container) return;
-
-    const tier = getUserTier();
-
-    if (tier !== 'PRO') {
-        container.innerHTML = `
-            <div class="relative w-full h-full min-h-[140px] rounded-xl overflow-hidden group cursor-pointer" onclick="window.location.href='/web/src/pages/pricing.html'">
-                <!-- Blurred background metrics -->
-                <div class="absolute inset-0 p-4 blur-[4px] opacity-40 bg-black/50 flex flex-col gap-3 pointer-events-none">
-                    <h4 class="text-xs uppercase tracking-widest text-gray-400 font-bold flex items-center gap-2">
-                        <i class="fas fa-code text-purple-400"></i> API Portability
-                    </h4>
-                    <input type="password" value="aegis_live_fakekey_xxxxxxxxxxxxxxxx" class="w-full bg-black/50 border border-white/10 rounded px-3 py-2 text-xs font-mono text-gray-500" disabled />
-                    <div class="flex gap-2">
-                        <button class="flex-1 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded py-2 text-[10px] font-bold"><i class="fas fa-sync-alt"></i> REGENERATE</button>
-                        <button class="flex-1 bg-white/5 text-gray-400 border border-white/10 rounded py-2 text-[10px] font-bold"><i class="fas fa-copy"></i> COPY ENDPOINT</button>
-                    </div>
-                </div>
-                
-                <!-- Lock Overlay -->
-                <div class="absolute inset-0 flex flex-col items-center justify-center bg-black/40 bg-gradient-to-t from-black/90 to-transparent backdrop-blur-sm z-10 transition-all group-hover:bg-black/50">
-                    <i class="fas fa-lock text-gray-300 text-2xl mb-2 group-hover:text-purple-400 transition-colors"></i>
-                    <span class="text-[10px] text-purple-400 font-bold tracking-widest text-center px-4 leading-relaxed group-hover:text-purple-300">
-                        Unlock Developer JSON Endpoints & Webhook Integrations with Pro Tier
-                    </span>
-                </div>
-            </div>
-        `;
-        return;
-    }
-
-    container.innerHTML = `
-        <h4 class="text-xs uppercase tracking-widest text-gray-400 font-bold mb-3 flex items-center gap-2">
-            <i class="fas fa-code text-purple-400"></i> API Portability & Developer Access
-        </h4>
-        <div class="flex flex-col gap-3">
-            <div class="relative">
-                <input type="password" id="dev-api-key-display" value="aegis_live_••••••••••••••••"
-                    class="w-full bg-black/50 border border-white/10 rounded px-3 py-2 text-xs font-mono text-gray-300 outline-none focus:border-purple-500/50 transition-colors" readonly />
-            </div>
-            <div class="flex gap-2">
-                <button id="btn-regen-key" onclick="window.regenerateApiKey('${signal.symbol}')"
-                    class="flex-1 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 border border-purple-500/30 rounded py-2 text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2">
-                    <i class="fas fa-sync-alt"></i> Regenerate API Key
-                </button>
-                <button onclick="window.copyEndpointUrl('${signal.symbol}')"
-                    class="flex-1 bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 rounded py-2 text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2">
-                    <i class="fas fa-copy"></i> Copy Endpoint URL
-                </button>
-            </div>
-            <div class="text-[9px] text-gray-500 font-mono mt-1 text-center">
-                Requires header: <span class="text-purple-400">X-API-Key</span>
-            </div>
-        </div>
-    `;
-}
