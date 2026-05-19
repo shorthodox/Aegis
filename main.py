@@ -1761,6 +1761,25 @@ async def execute_trade(request: TradeExecuteRequest, user_id: str = Depends(get
         print(f"❌ Failed to execute trade for {user_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to execute trade")
 
+@app.post("/api/trades/{trade_id}/close")
+async def close_trade(trade_id: str, user_id: str = Depends(get_current_user)):
+    try:
+        trade_ref = db.collection("users").document(user_id).collection("trades").document(trade_id)
+        trade_doc = trade_ref.get()
+        if not trade_doc.exists:
+            raise HTTPException(status_code=404, detail="Trade not found")
+        trade_ref.update({
+            "status": "closed",
+            "closeTime": datetime.now(timezone.utc).isoformat()
+        })
+        print(f"✅ Trade {trade_id} closed for {user_id}")
+        return {"status": "success", "trade_id": trade_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Failed to close trade {trade_id} for {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to close trade")
+
 # -------------------------------------------------------------------
 # Legacy OTP endpoints (kept for compatibility)
 # -------------------------------------------------------------------
@@ -2321,5 +2340,6 @@ async def regenerate_api_key(user_id: str = Depends(get_current_user)):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     uvicorn.run("main:app", host="0.0.0.0", port=port)
+
 
 
