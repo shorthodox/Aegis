@@ -760,11 +760,52 @@ async def get_me(user_id: str = Depends(get_current_user)):
         raise HTTPException(status_code=404)
     return {
         "uid": user_id,
-        "email": user_doc.get("email", user_id), 
-        "plan": user_doc.get("plan", "trial"), 
+        "email": user_doc.get("email", user_id),
+        "plan": user_doc.get("plan", "trial"),
         "trial_end": user_doc.get("trial_end"),
         "full_name": user_doc.get("full_name"),
         "location": user_doc.get("location")
+    }
+
+@app.post("/api/users/provision")
+async def provision_user(request: Request, user_id: str = Depends(get_current_user)):
+    """
+    Create a default backend profile for a Firebase-authenticated user who has no record yet.
+    Idempotent: returns the existing doc if one already exists.
+    """
+    data = await request.json()
+    firebase_uid = data.get("uid") or user_id
+    email = data.get("email") or (user_id if "@" in user_id else None)
+    display_name = data.get("display_name") or (email.split("@")[0] if email else firebase_uid)
+
+    # Prefer email as doc key (consistent with rest of backend), fall back to uid
+    doc_key = email or firebase_uid
+
+    existing = get_user_doc(doc_key)
+    if existing:
+        update_last_login(doc_key)
+        return {
+            "uid": firebase_uid,
+            "email": existing.get("email", doc_key),
+            "plan": existing.get("plan", "trial"),
+            "trial_end": existing.get("trial_end"),
+            "full_name": existing.get("full_name"),
+            "location": existing.get("location"),
+        }
+
+    user_doc = create_user_doc(
+        doc_key,
+        provider="firebase",
+        social_id=firebase_uid,
+        full_name=display_name,
+    )
+    return {
+        "uid": firebase_uid,
+        "email": email or doc_key,
+        "plan": user_doc.get("plan", "trial"),
+        "trial_end": user_doc.get("trial_end"),
+        "full_name": user_doc.get("full_name"),
+        "location": user_doc.get("location"),
     }
 
 @app.get("/auth/{provider}")
@@ -1534,21 +1575,35 @@ async def websocket_dashboard(websocket: WebSocket):
                 allowed_tokens = get_allowed_tokens(current_user_email) if current_user_email else BASIC_TOKENS
                 trial_expired = is_trial_expired(current_user_email) if current_user_email else False
                 
+                def normalize_signal_data(signal_obj) -> dict:
+                    if isinstance(signal_obj, dict):
+                        return signal_obj
+                    if hasattr(signal_obj, "dict") and callable(signal_obj.dict):
+                        try:
+                            result = signal_obj.dict()
+                            if isinstance(result, dict):
+                                return result
+                        except Exception:
+                            pass
+                    if hasattr(signal_obj, "__dataclass_fields__"):
+                        return asdict(signal_obj)
+                    if hasattr(signal_obj, "__dict__"):
+                        return vars(signal_obj)
+                    try:
+                        result = dict(signal_obj)
+                        if isinstance(result, dict):
+                            return result
+                    except Exception:
+                        pass
+                    return {}
+
                 filtered_signals = {}
                 for sym, sig in LIVE_STATE.data.get("signals", {}).items():
                     if sym in allowed_tokens:
-                        # Handle both dictionary and object (dataclass) representations
-                        if isinstance(sig, dict):
-                            sig_data = sig
-                        elif hasattr(sig, "dict") and callable(sig.dict):
-                            sig_data = sig.dict()
-                        elif hasattr(sig, "__dataclass_fields__"):
-                            sig_data = asdict(sig)
-                        elif hasattr(sig, "__dict__"):
-                            sig_data = vars(sig)
-                        else:
+                        sig_data = normalize_signal_data(sig)
+                        if not isinstance(sig_data, dict):
                             sig_data = {}
-                            
+
                         filtered_signals[sym] = {
                             "ai_prob": sig_data.get("ai_prob", 0),
                             "signal": sig_data.get("signal", "WAITING"),
@@ -2065,6 +2120,11 @@ def create_cashfree_order(user_id: str, user_email: str, plan_amount: float, pla
 
 @app.post("/api/v1/create-payment-session")
 async def create_payment_session(request: PaymentSessionRequest):
+    if not request.user_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
+    if not request.email:
+        raise HTTPException(status_code=400, detail="email is required")
+    
     try:
         result = create_cashfree_order(
             user_id=request.user_id,
@@ -2193,11 +2253,14 @@ async def verify_api_key(request: Request):
     return user_doc
 
 @app.get("/api/v1/signals/fleet")
-async def get_signals_fleet(symbol: Optional[str] = None, user: dict = Depends(verify_api_key)):
+async def get_signals_fleet(symbol: Optional[str] = None, _user: dict = Depends(verify_api_key)):
     """
     Programmatic data portability endpoint for Pro users.
     Returns structured JSON array of live signals.
     """
+    # Verify user is authenticated
+    _ = _user
+    
     signals_ref = db.collection("signals")
     query = signals_ref.where("status", "==", "ACTIVE")
     if symbol:
@@ -2208,15 +2271,16 @@ async def get_signals_fleet(symbol: Optional[str] = None, user: dict = Depends(v
     fleet = []
     for doc in docs:
         sig = doc.to_dict()
-        fleet.append({
-            "ticker": sig.get("symbol"),
-            "direction": sig.get("direction"),
-            "start_anchor": sig.get("entry_price"),
-            "target_destination": sig.get("tp"),
-            "stop_loss": sig.get("sl"),
-            "model_conviction": sig.get("probabilities", {}),
-            "timestamp": sig.get("timestamp")
-        })
+        if sig:
+            fleet.append({
+                "ticker": sig.get("symbol"),
+                "direction": sig.get("direction"),
+                "start_anchor": sig.get("entry_price"),
+                "target_destination": sig.get("tp"),
+                "stop_loss": sig.get("sl"),
+                "model_conviction": sig.get("probabilities", {}),
+                "timestamp": sig.get("timestamp")
+            })
         
     return {"status": "SUCCESS", "data": fleet}
 
@@ -2227,13 +2291,13 @@ async def regenerate_api_key(user_id: str = Depends(get_current_user)):
     stores the hash in Firestore, and returns the raw key once.
     """
     user_ref = db.collection("users").document(user_id)
-    user_doc = user_ref.get()
+    user_doc = await user_ref.get() # type: ignore
     
     if not user_doc.exists:
         raise HTTPException(status_code=404, detail="User not found")
         
     data = user_doc.to_dict()
-    plan = data.get("plan", "basic").lower()
+    plan = data.get("plan", "basic").lower() if data else "basic"
     
     if plan not in ["pro", "premium", "intermediate"]:
         # Allow intermediate if required, but user said Pro
