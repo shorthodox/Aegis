@@ -2,6 +2,28 @@ import { initializeTrialCountdown, fetchTrialStartFromFirestore } from './trial-
 import { auth, db } from './gatekeeper.js';
 import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js';
 
+// ============================================================
+// SEALED SUBSCRIPTION STATE — console-proof
+// window.isSubscriptionActive and window.isPremiumUser are
+// read-only getters; writes from the console silently no-op.
+// The WebSocket tick is the server-authority enforcement loop.
+// ============================================================
+const _subState = { active: false, isPremium: false };
+try {
+  Object.defineProperty(window, 'isSubscriptionActive', {
+    get: () => _subState.active,
+    set: () => {},           // silently reject console writes
+    configurable: false,
+    enumerable: true,
+  });
+  Object.defineProperty(window, 'isPremiumUser', {
+    get: () => _subState.isPremium,
+    set: () => {},
+    configurable: false,
+    enumerable: true,
+  });
+} catch (_) { /* already sealed in this session */ }
+
 let initialized = false;
 
 async function checkUserSubscriptionStatus(uid) {
@@ -36,8 +58,8 @@ function waitForAuthStateChange() {
       if (user?.uid) {
         const isPremium = await checkUserSubscriptionStatus(user.uid);
         if (isPremium) {
-          window.isSubscriptionActive = true;
-          window.isPremiumUser = true;
+          _subState.active = true;
+          _subState.isPremium = true;
           clearExpiredView();
           unblockFeatures();
           const countdownElements = document.querySelectorAll('.trial-countdown, [data-trial-countdown], #countdown-display');
@@ -57,8 +79,8 @@ function waitForAuthStateChange() {
         if (user?.uid) {
           const isPremium = await checkUserSubscriptionStatus(user.uid);
           if (isPremium) {
-            window.isSubscriptionActive = true;
-            window.isPremiumUser = true;
+            _subState.active = true;
+            _subState.isPremium = true;
             clearExpiredView();
             unblockFeatures();
             const countdownElements = document.querySelectorAll('.trial-countdown, [data-trial-countdown], #countdown-display');
@@ -81,7 +103,7 @@ function waitForAuthStateChange() {
 }
 
 function handleAuthFailure() {
-  window.isSubscriptionActive = false;
+  _subState.active = false;
   blockAllFeatures();
 
   const dashboardContent = document.getElementById('dashboard-main-content');
@@ -250,7 +272,7 @@ function createExpiredCard() {
 // BLOCK ALL FEATURES WHEN SUBSCRIPTION EXPIRED
 // ============================================================
 function blockAllFeatures() {
-  window.isSubscriptionActive = false;
+  _subState.active = false;
 
   // Block token cards
   const tokenCards = document.querySelectorAll('[data-token-card], .token-card');
@@ -288,7 +310,7 @@ function blockAllFeatures() {
 // UNBLOCK FEATURES WHEN SUBSCRIPTION ACTIVE
 // ============================================================
 function unblockFeatures() {
-  window.isSubscriptionActive = true;
+  _subState.active = true;
 
   // Restore token cards and time-span selectors
   const tokenCards = document.querySelectorAll('[data-token-card], .token-card, .tf-btn, [data-tf]');
@@ -327,11 +349,14 @@ function canAccessFeatures() {
 }
 
 // ============================================================
-// EXPORT FUNCTIONS FOR EXTERNAL USE
+// EXPORT FUNCTIONS FOR EXTERNAL USE — sealed so they cannot be
+// overwritten or deleted from the browser console.
 // ============================================================
-window.canAccessFeatures = canAccessFeatures;
-window.setExpiredView = setExpiredView;
-window.clearExpiredView = clearExpiredView;
+try {
+  Object.defineProperty(window, 'canAccessFeatures', { value: canAccessFeatures, writable: false, configurable: false, enumerable: true });
+  Object.defineProperty(window, 'setExpiredView',    { value: setExpiredView,    writable: false, configurable: false, enumerable: true });
+  Object.defineProperty(window, 'clearExpiredView',  { value: clearExpiredView,  writable: false, configurable: false, enumerable: true });
+} catch (_) { /* already sealed */ }
 
 // ============================================================
 // INITIALIZE LOGO CLICK HANDLER
@@ -394,12 +419,12 @@ let trialSetupRunning = false;
 let lastTrialSetupTime = 0;
 
 async function setupTrialNonBlocking(userId) {
-  if (!userId || window.isPremiumUser) return;
+  if (!userId || _subState.isPremium) return;
 
   const isPremium = await checkUserSubscriptionStatus(userId);
   if (isPremium) {
-    window.isSubscriptionActive = true;
-    window.isPremiumUser = true;
+    _subState.active = true;
+    _subState.isPremium = true;
     clearExpiredView();
     unblockFeatures();
     const countdownElements = document.querySelectorAll('.trial-countdown, [data-trial-countdown], #countdown-display');
@@ -895,8 +920,8 @@ function getUserTier() {
       if (plan === 'intermediate') return 'INTERMEDIATE';
     }
   }
-  // Fallback to window variables if set
-  if (window.isPremiumUser) return 'PRO';
+  // Fallback to private sealed state (not window.isPremiumUser which is a getter anyway)
+  if (_subState.isPremium) return 'PRO';
   return 'BASIC';
 }
 
