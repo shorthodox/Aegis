@@ -26,6 +26,7 @@ try {
 
 let initialized = false;
 
+// Returns 'paid' | 'trial' | 'expired'
 async function checkUserSubscriptionStatus(uid) {
   try {
     const userDocRef = doc(db, 'users', uid);
@@ -33,19 +34,58 @@ async function checkUserSubscriptionStatus(uid) {
     if (userSnap.exists()) {
       const data = userSnap.data();
       const plan = data.plan || data.tier;
-      if (!plan) return true; // Fallback to prevent immediate locking for new users
+      if (!plan) return 'trial'; // new users get grace trial
 
       const p = plan.toLowerCase();
-      if (p === 'premium' || p === 'pro' || p === 'intermediate' || p === 'basic' || p === 'trial' || p === 'free_tier') {
-        return true;
-      }
-      return false; // Specifically locked/expired plans
+      if (p === 'premium' || p === 'pro' || p === 'intermediate' || p === 'basic') return 'paid';
+      if (p === 'trial' || p === 'free_tier') return 'trial';
+      return 'expired';
     }
-    return true; // Document doesn't exist fallback
+    return 'trial';
   } catch (error) {
     console.error('Error fetching user subscription status:', error);
-    return true; // Fallback on error
+    return 'trial';
   }
+}
+
+// ============================================================
+// PLAN BADGE UPDATER
+// ============================================================
+function updatePlanBadge(status) {
+  // Determine tier label
+  let label = 'Free Trial';
+  let colorClass = 'bg-amber-500/20 text-amber-400 border-amber-500/40';
+
+  if (status === 'paid') {
+    // Try to read actual plan from AuthManager for granularity
+    let planName = 'Basic';
+    if (typeof AuthManager !== 'undefined') {
+      const u = AuthManager.getUser();
+      if (u) {
+        const p = (u.plan || u.tier || '').toLowerCase();
+        if (p === 'pro' || p === 'premium') planName = 'Pro';
+        else if (p === 'intermediate') planName = 'Intermediate';
+        else if (p === 'basic') planName = 'Basic';
+      }
+    }
+    label = planName;
+    colorClass = planName === 'Pro'
+      ? 'bg-violet-500/20 text-violet-300 border-violet-500/40'
+      : planName === 'Intermediate'
+        ? 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+        : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
+  } else if (status === 'expired') {
+    label = 'Expired';
+    colorClass = 'bg-red-500/20 text-red-400 border-red-500/40';
+  }
+
+  const badgeHTML = `<span class="px-2 py-0.5 text-xs font-semibold rounded-full border ${colorClass}">${label}</span>`;
+
+  // Update all plan badge slots
+  ['planBadge', 'sidebar-plan-badge', 'header-plan-badge'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = badgeHTML;
+  });
 }
 
 // ============================================================
@@ -56,15 +96,16 @@ function waitForAuthStateChange() {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
       unsubscribe(); // Unsubscribe after first state change
       if (user?.uid) {
-        const isPremium = await checkUserSubscriptionStatus(user.uid);
-        if (isPremium) {
-          _subState.active = true;
-          _subState.isPremium = true;
-          clearExpiredView();
-          unblockFeatures();
-          const countdownElements = document.querySelectorAll('.trial-countdown, [data-trial-countdown], #countdown-display');
-          countdownElements.forEach(el => el.style.display = 'none');
+        const status = await checkUserSubscriptionStatus(user.uid);
+        _subState.active = true;
+        _subState.isPremium = (status === 'paid');
+        clearExpiredView();
+        unblockFeatures();
+        if (status === 'paid') {
+          document.querySelectorAll('.trial-countdown, [data-trial-countdown], #countdown-display')
+            .forEach(el => el.style.display = 'none');
         }
+        updatePlanBadge(status);
       }
       resolve(user?.uid || null);
     });
@@ -77,15 +118,16 @@ function waitForAuthStateChange() {
       const retryUnsubscribe = auth.onAuthStateChanged(async (user) => {
         retryUnsubscribe();
         if (user?.uid) {
-          const isPremium = await checkUserSubscriptionStatus(user.uid);
-          if (isPremium) {
-            _subState.active = true;
-            _subState.isPremium = true;
-            clearExpiredView();
-            unblockFeatures();
-            const countdownElements = document.querySelectorAll('.trial-countdown, [data-trial-countdown], #countdown-display');
-            countdownElements.forEach(el => el.style.display = 'none');
+          const status = await checkUserSubscriptionStatus(user.uid);
+          _subState.active = true;
+          _subState.isPremium = (status === 'paid');
+          clearExpiredView();
+          unblockFeatures();
+          if (status === 'paid') {
+            document.querySelectorAll('.trial-countdown, [data-trial-countdown], #countdown-display')
+              .forEach(el => el.style.display = 'none');
           }
+          updatePlanBadge(status);
           resolve(user?.uid || null);
         } else {
           resolve(null);
@@ -394,41 +436,118 @@ function fetchLiveMarketData() {
 
     const priorityTokens = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT'];
 
-    // Initial HTML setup - gatekeeper.js will take over price updates natively via .live-price class
     if (!marketCardsInitialized) {
       let html = '';
       priorityTokens.forEach(sym => {
         const idStr = sym.replace('/', '-');
+        const base = sym.split('/')[0];
         html += `
-          <div class="glass-panel p-4 rounded-xl flex flex-col justify-center border-l-2 border-cyan/50 hover:bg-white/5 transition-colors cursor-pointer shadow-lg" onclick="selectToken('${sym}')">
-            <span class="text-[10px] text-gray-500 font-bold uppercase tracking-widest">${sym}</span>
-            <span id="market-card-price-${idStr}" class="live-price text-xl font-mono mt-1 transition-colors duration-300" data-symbol="${idStr}">Loading...</span>
+          <div id="market-card-${idStr}"
+               class="glass-panel p-4 rounded-xl flex flex-col gap-2 border-l-2 border-cyan/40 hover:border-cyan/80 hover:bg-white/5 transition-all cursor-pointer shadow-lg group relative overflow-hidden"
+               onclick="window._openSignalCardForSymbol && window._openSignalCardForSymbol('${sym}')">
+            <div class="flex items-center justify-between">
+              <span class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">${base}</span>
+              <span id="market-card-signal-${idStr}"
+                    class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border hidden">—</span>
+            </div>
+            <span id="market-card-price-${idStr}"
+                  class="live-price text-lg font-mono text-white group-hover:text-cyan transition-colors duration-300"
+                  data-symbol="${idStr}">—</span>
+            <div class="flex items-center justify-between mt-auto">
+              <span id="market-card-change-${idStr}" class="text-[10px] font-mono text-gray-500">—</span>
+              <span class="text-[9px] text-gray-600 group-hover:text-cyan/60 transition-colors">
+                <i class="fas fa-arrow-right"></i>
+              </span>
+            </div>
           </div>
         `;
       });
       container.innerHTML = html;
       marketCardsInitialized = true;
     }
+
+    if (typeof window.updateMarketCardSignalBadges === 'function') {
+      window.updateMarketCardSignalBadges();
+    }
   } catch (err) {
     console.error('Failed to init token market cards:', err);
   }
 }
+
+window.updateMarketCardSignalBadges = function updateMarketCardSignalBadges() {
+  // latestSignals is an object keyed by "SYMBOL/TIMEFRAME"; convert to array for lookup
+  const raw = window.latestSignals || {};
+  const signalArr = Array.isArray(raw) ? raw : Object.values(raw);
+  const priorityTokens = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT'];
+
+  priorityTokens.forEach(sym => {
+    const idStr = sym.replace('/', '-');
+    const badge = document.getElementById(`market-card-signal-${idStr}`);
+    if (!badge) return;
+
+    const match = signalArr.find(s => (s.symbol || '').toUpperCase() === sym.toUpperCase());
+    if (match) {
+      const dir = (match.direction || match.side || 'LONG').toUpperCase();
+      const isLong = dir === 'LONG' || dir === 'BUY';
+      badge.textContent = dir;
+      badge.className = `text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border ${
+        isLong
+          ? 'bg-green-500/20 text-green-400 border-green-500/40'
+          : 'bg-red-500/20 text-red-400 border-red-500/40'
+      }`;
+      badge.classList.remove('hidden');
+
+      // Color the left border of the card to match direction
+      const card = document.getElementById(`market-card-${idStr}`);
+      if (card) {
+        card.classList.remove('border-cyan/40', 'border-green-500/50', 'border-red-500/50');
+        card.classList.add(isLong ? 'border-green-500/50' : 'border-red-500/50');
+      }
+    } else {
+      badge.classList.add('hidden');
+      const card = document.getElementById(`market-card-${idStr}`);
+      if (card) {
+        card.classList.remove('border-green-500/50', 'border-red-500/50');
+        card.classList.add('border-cyan/40');
+      }
+    }
+  });
+};
+
+// Opens signal details modal for the given symbol from window.latestSignals
+window._openSignalCardForSymbol = function(sym) {
+  const raw = window.latestSignals || {};
+  const signals = Array.isArray(raw) ? raw : Object.values(raw);
+  const match = signals.find(s => (s.symbol || '').toUpperCase() === sym.toUpperCase());
+  if (match && typeof showSignalDetailsModal === 'function') {
+    showSignalDetailsModal(match);
+  } else {
+    selectToken(sym);
+  }
+};
 
 
 let trialSetupRunning = false;
 let lastTrialSetupTime = 0;
 
 async function setupTrialNonBlocking(userId) {
-  if (!userId || _subState.isPremium) return;
+  if (!userId) return;
 
-  const isPremium = await checkUserSubscriptionStatus(userId);
-  if (isPremium) {
-    _subState.active = true;
-    _subState.isPremium = true;
-    clearExpiredView();
-    unblockFeatures();
-    const countdownElements = document.querySelectorAll('.trial-countdown, [data-trial-countdown], #countdown-display');
-    countdownElements.forEach(el => el.style.display = 'none');
+  const status = await checkUserSubscriptionStatus(userId);
+  _subState.active = true;
+  _subState.isPremium = (status === 'paid');
+  clearExpiredView();
+  unblockFeatures();
+  updatePlanBadge(status);
+
+  if (status === 'paid') {
+    document.querySelectorAll('.trial-countdown, [data-trial-countdown], #countdown-display')
+      .forEach(el => el.style.display = 'none');
+    return;
+  }
+
+  if (status === 'expired') {
+    setExpiredView();
     return;
   }
 
