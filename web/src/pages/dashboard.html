@@ -761,23 +761,23 @@
             <!-- Feature Quick-Nav -->
             <div class="sticky top-[57px] z-10 bg-void/95 backdrop-blur border-b border-white/5 px-4 py-2">
                 <div class="flex gap-2 overflow-x-auto scrollbar-none" id="sd-feature-nav">
-                    <button onclick="document.getElementById('sd-section-confluence')?.scrollIntoView({behavior:'smooth',block:'nearest'})"
+                    <button onclick="window.openFeaturePanel && window.openFeaturePanel('fp-confluence')"
                         class="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-cyan/10 text-cyan border border-cyan/30 hover:bg-cyan/20 transition-all whitespace-nowrap">
                         <i class="fas fa-layer-group text-[9px]"></i> Confluence
                     </button>
-                    <button onclick="document.getElementById('sd-section-zones')?.scrollIntoView({behavior:'smooth',block:'nearest'})"
+                    <button onclick="window.openFeaturePanel && window.openFeaturePanel('fp-zones')"
                         class="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-violet-500/10 text-violet-300 border border-violet-500/30 hover:bg-violet-500/20 transition-all whitespace-nowrap">
                         <i class="fas fa-map-marker-alt text-[9px]"></i> Zones
                     </button>
-                    <button onclick="document.getElementById('sd-section-zones')?.scrollIntoView({behavior:'smooth',block:'nearest'})"
+                    <button onclick="window.openFeaturePanel && window.openFeaturePanel('fp-expectancy')"
                         class="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/20 transition-all whitespace-nowrap">
                         <i class="fas fa-chart-bar text-[9px]"></i> Expectancy
                     </button>
-                    <button onclick="document.getElementById('sd-section-shap')?.scrollIntoView({behavior:'smooth',block:'nearest'})"
+                    <button onclick="window.openFeaturePanel && window.openFeaturePanel('fp-shap')"
                         class="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-orange-500/10 text-orange-300 border border-orange-500/30 hover:bg-orange-500/20 transition-all whitespace-nowrap">
                         <i class="fas fa-brain text-[9px]"></i> SHAP
                     </button>
-                    <button onclick="document.getElementById('sd-developer-portal')?.scrollIntoView({behavior:'smooth',block:'nearest'})"
+                    <button onclick="window.openFeaturePanel && window.openFeaturePanel('fp-api')"
                         class="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-blue-500/10 text-blue-300 border border-blue-500/30 hover:bg-blue-500/20 transition-all whitespace-nowrap">
                         <i class="fas fa-code text-[9px]"></i> API Export
                     </button>
@@ -806,62 +806,9 @@
                     </div>
                 </div>
 
-                <!-- 1. Confluence Scorecards -->
-                <div id="sd-section-confluence">
-                    <h4 class="text-xs uppercase tracking-widest text-gray-400 font-bold mb-3 flex items-center gap-2">
-                        <i class="fas fa-layer-group text-cyan"></i> Confluence Scorecards
-                    </h4>
-                    <div class="space-y-3 bg-black/30 p-4 rounded-xl border border-white/5">
-                        <div>
-                            <div class="flex justify-between text-[10px] mb-1"><span class="text-gray-400">Trend
-                                    Alignment</span><span class="text-cyan font-mono" id="sd-conf-trend-val">0%</span>
-                            </div>
-                            <div class="h-1.5 bg-black/50 rounded overflow-hidden">
-                                <div class="h-full bg-cyan" id="sd-conf-trend-bar" style="width: 0%"></div>
-                            </div>
-                        </div>
-                        <div>
-                            <div class="flex justify-between text-[10px] mb-1"><span
-                                    class="text-gray-400">Momentum</span><span class="text-cyan font-mono"
-                                    id="sd-conf-mom-val">0%</span></div>
-                            <div class="h-1.5 bg-black/50 rounded overflow-hidden">
-                                <div class="h-full bg-cyan" id="sd-conf-mom-bar" style="width: 0%"></div>
-                            </div>
-                        </div>
-                        <div>
-                            <div class="flex justify-between text-[10px] mb-1"><span class="text-gray-400">Volume
-                                    Delta</span><span class="text-cyan font-mono" id="sd-conf-vol-val">0%</span></div>
-                            <div class="h-1.5 bg-black/50 rounded overflow-hidden">
-                                <div class="h-full bg-cyan" id="sd-conf-vol-bar" style="width: 0%"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 2. Visual Zone Tracking & 3. Expectancy Matrix -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4" id="sd-section-zones">
-                    <div class="bg-black/30 p-4 rounded-xl border border-white/5 flex flex-col justify-center"
-                        id="sd-visual-zone-container">
-                        <!-- Dynamic Visual Zone Tracking Bar will be injected here -->
-                    </div>
-                    <div class="bg-black/30 p-4 rounded-xl border border-white/5 flex flex-col"
-                        id="sd-expectancy-container">
-                        <!-- Dynamic Expectancy Panel will be injected here -->
-                    </div>
-                </div>
-
-                <!-- 4. Raw Probabilities & SHAP -->
-                <div id="sd-section-shap">
-                    <div class="bg-black/30 p-4 rounded-xl border border-white/5 flex flex-col relative"
-                        id="sd-telemetry-container">
-                        <!-- Dynamic Telemetry Panel will be injected here -->
-                    </div>
-                </div>
-
-                <!-- 5. API Portability & Developer Access -->
-                <div id="sd-developer-portal"
-                    class="bg-black/30 p-4 rounded-xl border border-white/5 relative flex flex-col">
-                    <!-- Dynamic Developer Portal injected here -->
+                <!-- Feature Access Cards -->
+                <div class="grid grid-cols-2 gap-3 pt-1" id="sd-feature-cards">
+                    <!-- Cards populated by JS -->
                 </div>
 
             </div>
@@ -869,6 +816,93 @@
             <!-- Footer Actions — plan-aware buttons injected by showSignalDetailsModal -->
             <div id="sd-footer-actions" class="p-4 border-t border-white/10 bg-black/20"></div>
         </div>
+    </div>
+
+    <!-- ═══════════════ FEATURE PANELS ═══════════════ -->
+
+    <!-- FP-1: Confluence Scorecard -->
+    <div id="fp-confluence" class="fixed inset-0 z-[400] bg-[#050505] hidden flex-col overflow-hidden">
+        <div class="flex-shrink-0 flex items-center gap-3 p-4 border-b border-white/10 bg-void/95 backdrop-blur sticky top-0">
+            <button onclick="window.closeFP()" class="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
+                <i class="fas fa-arrow-left text-sm"></i>
+            </button>
+            <div>
+                <h2 class="text-base font-black tracking-tight text-white uppercase flex items-center gap-2">
+                    <i class="fas fa-layer-group text-cyan text-sm"></i> Confluence Scorecard
+                </h2>
+                <p class="text-[10px] text-gray-500">XGBoost multi-factor alignment analysis</p>
+            </div>
+            <span class="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">INTERMEDIATE+</span>
+        </div>
+        <div id="fp-confluence-body" class="flex-1 overflow-y-auto p-5 space-y-5"></div>
+    </div>
+
+    <!-- FP-2: Visual Zone Tracking -->
+    <div id="fp-zones" class="fixed inset-0 z-[400] bg-[#050505] hidden flex-col overflow-hidden">
+        <div class="flex-shrink-0 flex items-center gap-3 p-4 border-b border-white/10 bg-void/95 backdrop-blur sticky top-0">
+            <button onclick="window.closeFP()" class="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
+                <i class="fas fa-arrow-left text-sm"></i>
+            </button>
+            <div>
+                <h2 class="text-base font-black tracking-tight text-white uppercase flex items-center gap-2">
+                    <i class="fas fa-map-marker-alt text-violet-400 text-sm"></i> Visual Zone Tracking
+                </h2>
+                <p class="text-[10px] text-gray-500">Real-time SL/TP coordinate mapping</p>
+            </div>
+            <span class="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">INTERMEDIATE+</span>
+        </div>
+        <div id="fp-zones-body" class="flex-1 overflow-y-auto p-5 space-y-5"></div>
+    </div>
+
+    <!-- FP-3: Expectancy Matrix & Max DD -->
+    <div id="fp-expectancy" class="fixed inset-0 z-[400] bg-[#050505] hidden flex-col overflow-hidden">
+        <div class="flex-shrink-0 flex items-center gap-3 p-4 border-b border-white/10 bg-void/95 backdrop-blur sticky top-0">
+            <button onclick="window.closeFP()" class="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
+                <i class="fas fa-arrow-left text-sm"></i>
+            </button>
+            <div>
+                <h2 class="text-base font-black tracking-tight text-white uppercase flex items-center gap-2">
+                    <i class="fas fa-chart-bar text-emerald-400 text-sm"></i> Expectancy Matrix
+                </h2>
+                <p class="text-[10px] text-gray-500">30-day historical edge &amp; drawdown analysis</p>
+            </div>
+            <span class="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">PRO ONLY</span>
+        </div>
+        <div id="fp-expectancy-body" class="flex-1 overflow-y-auto p-5 space-y-5"></div>
+    </div>
+
+    <!-- FP-4: Raw Probabilities & SHAP -->
+    <div id="fp-shap" class="fixed inset-0 z-[400] bg-[#050505] hidden flex-col overflow-hidden">
+        <div class="flex-shrink-0 flex items-center gap-3 p-4 border-b border-white/10 bg-void/95 backdrop-blur sticky top-0">
+            <button onclick="window.closeFP()" class="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
+                <i class="fas fa-arrow-left text-sm"></i>
+            </button>
+            <div>
+                <h2 class="text-base font-black tracking-tight text-white uppercase flex items-center gap-2">
+                    <i class="fas fa-brain text-orange text-sm"></i> Raw Probabilities &amp; SHAP
+                </h2>
+                <p class="text-[10px] text-gray-500">Model conviction vectors &amp; feature attribution</p>
+            </div>
+            <span class="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30">PRO ONLY</span>
+        </div>
+        <div id="fp-shap-body" class="flex-1 overflow-y-auto p-5 space-y-5"></div>
+    </div>
+
+    <!-- FP-5: API / JSON Data Export -->
+    <div id="fp-api" class="fixed inset-0 z-[400] bg-[#050505] hidden flex-col overflow-hidden">
+        <div class="flex-shrink-0 flex items-center gap-3 p-4 border-b border-white/10 bg-void/95 backdrop-blur sticky top-0">
+            <button onclick="window.closeFP()" class="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
+                <i class="fas fa-arrow-left text-sm"></i>
+            </button>
+            <div>
+                <h2 class="text-base font-black tracking-tight text-white uppercase flex items-center gap-2">
+                    <i class="fas fa-code text-blue-400 text-sm"></i> API / JSON Data Export
+                </h2>
+                <p class="text-[10px] text-gray-500">Developer access &amp; programmatic data pipeline</p>
+            </div>
+            <span class="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">PRO ONLY</span>
+        </div>
+        <div id="fp-api-body" class="flex-1 overflow-y-auto p-5 space-y-5"></div>
     </div>
 
     <!-- Trade Confirmation Modal -->
