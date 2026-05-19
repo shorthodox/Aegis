@@ -490,6 +490,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (user) {
       console.log("Firebase user detected:", user.uid);
       const token = await user.getIdToken();
+      // Persist Firebase token so executeTrade and other API calls can find it
+      if (typeof AuthManager !== 'undefined') AuthManager.setToken(token);
       await loadUserFromBackend(token, user);
     } else {
       // No Firebase user, fallback to manual token check
@@ -790,7 +792,7 @@ async function loadUserFromBackend(token, firebaseUser = null) {
 }
 
 function applyUserData(userData, token) {
-  currentUser = { email: userData.email, token };
+  currentUser = { email: userData.email, uid: userData.uid || userData.email, token };
   currentUserData = userData;
   userPlan = userData.plan || 'trial';
   trialEnd = userData.trial_end ? new Date(userData.trial_end) : null;
@@ -1598,34 +1600,117 @@ function getSignalCardType(direction) {
 }
 
 function renderTrades(trades) {
-  if (!positionsContainer) return;
+  const normalized = (trades || []).map(t => ({
+    id:           t.id || t.tradeId || '',
+    symbol:       t.symbol || '—',
+    side:         t.side || t.direction || 'LONG',
+    entryPrice:   parseFloat(t.entryPrice   || t.entry_price  || 0),
+    stopLoss:     parseFloat(t.stopLoss     || t.stop_loss    || t.sl || 0),
+    takeProfit:   parseFloat(t.takeProfit   || t.take_profit  || t.tp || 0),
+    positionUnits:parseFloat(t.positionUnits|| t.position_size|| 0),
+    openTime:     t.openTime || t.entry_time || '',
+  }));
 
-  if (!trades || trades.length === 0) {
-    positionsContainer.innerHTML = '<div class="no-trades"><i class="fas fa-ban"></i> No active positions</div>';
-    return;
+  // ── Position Cards (#positionsContainer) ─────────────────────────
+  if (positionsContainer) {
+    if (normalized.length === 0) {
+      positionsContainer.innerHTML = `
+        <div class="text-center py-8 text-gray-500">
+          <i class="fas fa-chart-line text-2xl mb-3 opacity-30"></i>
+          <p class="text-sm">No active positions. Execute a trade from the Terminal to track it here.</p>
+        </div>`;
+    } else {
+      positionsContainer.innerHTML = normalized.map(trade => {
+        const cur      = window.currentTickers?.[trade.symbol]
+          ? parseFloat(window.currentTickers[trade.symbol]) : trade.entryPrice;
+        const pnl      = trade.side === 'LONG'
+          ? (cur - trade.entryPrice) * trade.positionUnits
+          : (trade.entryPrice - cur) * trade.positionUnits;
+        const pnlPct   = trade.entryPrice > 0
+          ? (pnl / (trade.entryPrice * (trade.positionUnits || 1)) * 100) : 0;
+        const pnlSign  = pnl >= 0 ? '+' : '';
+        const pnlColor = pnl >= 0 ? 'text-green-400' : 'text-red-400';
+        const sideCls  = trade.side === 'LONG'
+          ? 'bg-green-500/20 text-green-400 border-green-500/30'
+          : 'bg-red-500/20 text-red-400 border-red-500/30';
+        const opened   = trade.openTime ? new Date(trade.openTime).toLocaleString() : '—';
+
+        return `
+          <div class="bg-black/40 p-4 rounded-xl border border-white/10 flex flex-wrap items-center gap-4">
+            <span class="text-xs px-2 py-1 rounded border font-bold ${sideCls}">${trade.side}</span>
+            <div class="flex-1 min-w-0">
+              <div class="font-bold text-white">${trade.symbol}</div>
+              <div class="text-xs text-gray-500 font-mono truncate">Entry: $${trade.entryPrice.toFixed(4)} &nbsp;·&nbsp; ${opened}</div>
+            </div>
+            <div class="text-right">
+              <div class="font-mono font-bold ${pnlColor}">${pnlSign}$${pnl.toFixed(2)}</div>
+              <div class="text-xs ${pnlColor} opacity-70">${pnlSign}${pnlPct.toFixed(2)}%</div>
+            </div>
+            <div class="text-right font-mono text-xs text-gray-500 hidden sm:block">
+              <div>SL <span class="text-red-400">$${trade.stopLoss.toFixed(4)}</span></div>
+              <div>TP <span class="text-green-400">$${trade.takeProfit.toFixed(4)}</span></div>
+            </div>
+            <button onclick="window.closeTrade('${trade.id}')"
+              class="text-xs px-3 py-2 rounded-lg bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/40 transition-colors font-bold whitespace-nowrap">
+              <i class="fas fa-times-circle mr-1"></i>Close
+            </button>
+          </div>`;
+      }).join('');
+    }
   }
 
-  positionsContainer.innerHTML = trades.map(trade => {
-    const pnlClass = (trade.unrealized_pnl || 0) >= 0 ? 'positive' : 'negative';
-    return `
-      <div class="trade-card">
-        <div class="trade-header">
-          <span class="trade-symbol">${trade.symbol}</span>
-          <span class="trade-side ${trade.side}">${trade.side}</span>
-        </div>
-        <div class="trade-details">
-          <div>Entry: $${trade.entry_price?.toFixed(2)}</div>
-          <div>Size: ${trade.position_size?.toFixed(4)}</div>
-          <div>SL: $${trade.stop_loss?.toFixed(2)}</div>
-          <div>TP: $${trade.take_profit?.toFixed(2)}</div>
-        </div>
-        <div class="trade-pnl ${pnlClass}">
-          PnL: $${(trade.unrealized_pnl || 0).toFixed(2)}
-        </div>
-      </div>
-    `;
-  }).join('');
+  // ── Active Executions Table (#trades-tbody) ───────────────────────
+  const tbody = document.getElementById('trades-tbody');
+  if (tbody) {
+    if (normalized.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-gray-500">No active trades</td></tr>';
+    } else {
+      tbody.innerHTML = normalized.map(trade => {
+        const cur      = window.currentTickers?.[trade.symbol]
+          ? parseFloat(window.currentTickers[trade.symbol]) : trade.entryPrice;
+        const pnl      = trade.side === 'LONG'
+          ? (cur - trade.entryPrice) * trade.positionUnits
+          : (trade.entryPrice - cur) * trade.positionUnits;
+        const pnlSign  = pnl >= 0 ? '+' : '';
+        const pnlColor = pnl >= 0 ? 'text-green-400' : 'text-red-400';
+        const sideCls  = trade.side === 'LONG' ? 'text-green-400' : 'text-red-400';
+
+        return `
+          <tr class="hover:bg-white/5">
+            <td class="p-3 font-bold text-white">${trade.symbol}</td>
+            <td class="p-3 font-bold ${sideCls}">${trade.side}</td>
+            <td class="p-3 font-mono">$${trade.entryPrice.toFixed(4)}</td>
+            <td class="p-3 font-mono text-red-400">$${trade.stopLoss.toFixed(4)}</td>
+            <td class="p-3 font-mono text-green-400">$${trade.takeProfit.toFixed(4)}</td>
+            <td class="p-3 font-mono font-bold ${pnlColor}">${pnlSign}$${pnl.toFixed(2)}</td>
+            <td class="p-3">
+              <button onclick="window.closeTrade('${trade.id}')"
+                class="text-xs px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/40 transition-colors font-bold">
+                Close
+              </button>
+            </td>
+          </tr>`;
+      }).join('');
+    }
+  }
 }
+
+window.closeTrade = async function (tradeId) {
+  if (!tradeId) return;
+  try {
+    const token = typeof AuthManager !== 'undefined' ? AuthManager.getToken() : null;
+    if (!token) { alert('Session expired. Please refresh and log in again.'); return; }
+    const r = await fetch(`/api/trades/${tradeId}/close`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    // Firestore listener auto-refreshes the UI
+  } catch (e) {
+    console.error('closeTrade error:', e);
+    alert(`Could not close trade: ${e.message}`);
+  }
+};
 
 // -------------------------------------------------------------------
 // Firestore Real-time Listeners
@@ -1711,13 +1796,13 @@ function setupFirestoreListeners() {
     }
   });
 
-  // Listen to user's trades if exists
-  if (currentUser?.email) {
+  // Listen to user's trades — subcollection: users/{userId}/trades
+  const userId = currentUser?.uid || currentUser?.email;
+  if (userId) {
     const tradesQuery = query(
-      collection(db, 'trades'),
-      where('email', '==', currentUser.email),
+      collection(db, 'users', userId, 'trades'),
       where('status', '==', 'open'),
-      orderBy('entry_time', 'desc')
+      orderBy('openTime', 'desc')
     );
 
     tradesUnsubscribe = onSnapshot(tradesQuery, (snapshot) => {
@@ -1728,16 +1813,18 @@ function setupFirestoreListeners() {
       renderTrades(trades);
     }, (error) => {
       console.error('Trades listener error:', error);
-      if (error.code === 'permission-denied') {
-        if (!trialActive && userPlan !== 'pro') {
-          if (positionsContainer) {
-            positionsContainer.innerHTML = '<div class="no-trades"><i class="fas fa-lock text-red-500 mb-2 text-2xl"></i><p>Please upgrade to view trades.</p></div>';
-          }
-          showUpgradePrompt();
-        }
-      }
     });
   }
+
+  // Allow the analytics room to render from localStorage while the snapshot loads
+  window.forceTradesRefresh = function () {
+    const cached = localStorage.getItem('analyticsActiveTrade');
+    if (!cached) return;
+    try {
+      const trade = JSON.parse(cached);
+      if (trade && trade.status === 'open') renderTrades([trade]);
+    } catch (_) {}
+  };
 }
 
 // -------------------------------------------------------------------
