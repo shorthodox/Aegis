@@ -1240,6 +1240,7 @@ function updateDashboardData(data) {
 
   // Update open trades
   if (positionsContainer && data.open_trades) {
+    if (data.open_trades?.length > 0) localStorage.setItem('lastKnownTrades', JSON.stringify(data.open_trades));
     renderTrades(data.open_trades);
   }
 
@@ -1826,6 +1827,9 @@ function setupFirestoreListeners() {
       snapshot.forEach(doc => {
         trades.push({ id: doc.id, ...doc.data() });
       });
+      if (trades.length > 0) {
+        localStorage.setItem('lastKnownTrades', JSON.stringify(trades));
+      }
       renderTrades(trades);
     }, (error) => {
       console.error('Trades listener error:', error);
@@ -1834,6 +1838,13 @@ function setupFirestoreListeners() {
 
   // Allow the analytics room to render from localStorage while the snapshot loads
   window.forceTradesRefresh = function () {
+    const known = localStorage.getItem('lastKnownTrades');
+    if (known) {
+      try {
+        const trades = JSON.parse(known);
+        if (Array.isArray(trades) && trades.length > 0) { renderTrades(trades); return; }
+      } catch (_) {}
+    }
     const cached = localStorage.getItem('analyticsActiveTrade');
     if (!cached) return;
     try {
