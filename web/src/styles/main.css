@@ -3109,3 +3109,100 @@ body.modal-open {
     border-radius: inherit;
     pointer-events: auto;
 }
+
+/* ============================================================
+   FEATURE PANELS (fp-confluence, fp-zones, fp-expectancy, etc.)
+   ============================================================ */
+
+/* Top-level panel wrappers — always full-screen overlays */
+#fp-confluence,
+#fp-zones,
+#fp-expectancy,
+#fp-shap,
+#fp-api {
+    display: none;            /* default; Tailwind .flex overrides when shown  */
+    flex-direction: column;
+    position: fixed;
+    inset: 0;
+    z-index: 400;
+    background: #050505;
+    overflow: hidden;
+}
+
+/* Body scroll containers — must never receive 'hidden' */
+#fp-confluence-body,
+#fp-zones-body,
+#fp-expectancy-body,
+#fp-shap-body,
+#fp-api-body {
+    flex: 1 1 0%;
+    overflow-y: auto;
+    display: block !important;   /* override any stale Tailwind hidden */
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 242, 255, 0.2) transparent;
+}
+
+#fp-confluence-body::-webkit-scrollbar,
+#fp-zones-body::-webkit-scrollbar,
+#fp-expectancy-body::-webkit-scrollbar,
+#fp-shap-body::-webkit-scrollbar,
+#fp-api-body::-webkit-scrollbar {
+    width: 4px;
+}
+
+#fp-confluence-body::-webkit-scrollbar-track,
+#fp-zones-body::-webkit-scrollbar-track,
+#fp-expectancy-body::-webkit-scrollbar-track,
+#fp-shap-body::-webkit-scrollbar-track,
+#fp-api-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#fp-confluence-body::-webkit-scrollbar-thumb,
+#fp-zones-body::-webkit-scrollbar-thumb,
+#fp-expectancy-body::-webkit-scrollbar-thumb,
+#fp-shap-body::-webkit-scrollbar-thumb,
+#fp-api-body::-webkit-scrollbar-thumb {
+    background: rgba(0, 242, 255, 0.2);
+    border-radius: 2px;
+}
+
+/* Zone tracking — animated glowing price dot */
+@keyframes fp-zone-pulse {
+    0%, 100% { box-shadow: 0 0 8px 2px rgba(52, 211, 153, 0.8); }
+    50%       { box-shadow: 0 0 18px 6px rgba(52, 211, 153, 0.5); }
+}
+
+#fp-zone-dot {
+    animation: fp-zone-pulse 2s ease-in-out infinite;
+    transition: left 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* Confluence progress bars — smooth fill transition */
+.fp-progress-bar {
+    transition: width 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* SHAP bars */
+.fp-shap-bar {
+    transition: width 0.6s ease-out;
+}
+
+/* Probability conviction meter segments */
+.fp-prob-segment {
+    transition: width 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* Entry anchor glow line */
+.fp-entry-line {
+    box-shadow: 0 0 8px rgba(0, 242, 255, 0.8), 0 0 2px rgba(0, 242, 255, 1);
+}
+
+/* Scrollbar for sd-feature-nav quick-nav */
+#sd-feature-nav {
+    scrollbar-width: none;
+}
+#sd-feature-nav::-webkit-scrollbar {
+    display: none;
+}
