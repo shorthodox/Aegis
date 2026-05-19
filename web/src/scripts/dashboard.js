@@ -663,74 +663,108 @@ window.prefillTradeSim = function (symbol, price, signalObj) {
   updateSimulation();
 };
 
+// Shared auth-token helper — always returns a fresh Firebase ID token when possible,
+// falling back to whatever is in localStorage / AuthManager.
+async function _getAuthToken() {
+  try {
+    // Prefer a fresh Firebase token (handles expiry silently)
+    const { getAuth } = await import('https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js');
+    const fbUser = getAuth().currentUser;
+    if (fbUser) {
+      const fresh = await fbUser.getIdToken();
+      if (typeof AuthManager !== 'undefined') AuthManager.setToken(fresh);
+      return fresh;
+    }
+  } catch (_) { /* not a Firebase session — fall through */ }
+  // Custom JWT fallback
+  if (typeof AuthManager !== 'undefined') return AuthManager.getToken();
+  return localStorage.getItem('access_token') || localStorage.getItem('authToken') || null;
+}
+
 async function executeTrade() {
   if (!window.selectedTradeToken && !window.selectedTrade) {
     alert('Please select a token first.');
     return;
   }
 
-  const entry = parseFloat(document.getElementById('sim-entry').value);
-  const sl = parseFloat(document.getElementById('sim-sl').value);
-  const tp = parseFloat(document.getElementById('sim-tp').value);
-  const riskPercent = parseFloat(document.getElementById('sim-risk-slider').value);
-  const leverage = parseFloat(document.getElementById('sim-leverage').value);
-  const positionUnits = parseFloat(document.getElementById('pos-units').innerText);
-  const notional = parseFloat(document.getElementById('notional').innerText.replace('$', ''));
+  const entry    = parseFloat(document.getElementById('sim-entry').value);
+  const sl       = parseFloat(document.getElementById('sim-sl').value);
+  const tp       = parseFloat(document.getElementById('sim-tp').value);
+  const riskPct  = parseFloat(document.getElementById('sim-risk-slider')?.value || 2);
+  const leverage = parseFloat(document.getElementById('sim-leverage')?.value || 1);
+  const posUnits = parseFloat(document.getElementById('pos-units')?.innerText || 0);
+  const notional = parseFloat((document.getElementById('notional')?.innerText || '0').replace('$', ''));
+
+  if (isNaN(entry) || entry <= 0) { alert('Please enter a valid entry price.'); return; }
+  if (isNaN(sl)    || sl <= 0)    { alert('Please enter a valid stop-loss.'); return; }
+  if (isNaN(tp)    || tp <= 0)    { alert('Please enter a valid take-profit.'); return; }
 
   const tradeData = {
-    symbol: window.selectedTradeToken || (window.selectedTrade ? window.selectedTrade.symbol : null),
-    side: window.selectedTrade ? window.selectedTrade.direction : (document.getElementById('direction-badge')?.innerText || 'LONG'),
-    entryPrice: entry,
-    stopLoss: sl,
-    takeProfit: tp,
-    riskPercent,
+    symbol:        window.selectedTradeToken || window.selectedTrade?.symbol || null,
+    side:          window.selectedTrade?.direction || document.getElementById('direction-badge')?.innerText || 'LONG',
+    entryPrice:    entry,
+    stopLoss:      sl,
+    takeProfit:    tp,
+    riskPercent:   riskPct,
     leverage,
-    positionUnits,
+    positionUnits: posUnits,
     notionalValue: notional,
-    status: 'open',
-    signalId: window.selectedTrade ? (window.selectedTrade.signalId || null) : null
+    status:        'open',
+    signalId:      window.selectedTrade?.signalId || null,
   };
 
   localStorage.setItem('analyticsActiveTrade', JSON.stringify(tradeData));
 
-  try {
-    let token = localStorage.getItem('access_token') || localStorage.getItem('authToken');
-    if (!token && typeof AuthManager !== 'undefined') {
-      token = AuthManager.getToken();
-    }
+  // UI feedback
+  const btn = document.getElementById('execute-trade-btn');
+  const originalLabel = btn?.innerHTML;
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Executing…'; }
 
+  try {
+    const token = await _getAuthToken();
     if (!token) {
-      console.warn('No auth token found, cannot execute trade on backend');
-      alert('You must be logged in to execute trades.');
+      alert('You must be logged in to execute trades.\nPlease refresh the page and sign in again.');
       return;
     }
 
     const response = await fetch('/api/trades/execute', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(tradeData)
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify(tradeData),
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.detail || 'Failed to execute trade on backend');
+      const err = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }));
+      throw new Error(err.detail || 'Backend rejected the trade');
     }
 
-    console.log('✅ Trade executed and stored via backend API');
+    const result = await response.json();
+    console.log('✅ Trade executed:', result.trade_id);
 
-    if (typeof window.switchRoom === 'function') {
-      window.switchRoom('analytics');
-    }
+    // Navigate to analytics to show the live trade
+    if (typeof window.switchRoom === 'function') window.switchRoom('analytics');
+
+    // Show success toast
+    _showToast('Trade executed successfully! Tracking in Analytics.', 'success');
   } catch (err) {
-    console.error('Failed to save trade:', err);
-    alert('Failed to execute trade: ' + err.message);
-    if (typeof window.switchRoom === 'function') {
-      window.switchRoom('analytics');
-    }
+    console.error('executeTrade error:', err);
+    _showToast(`Trade failed: ${err.message}`, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = originalLabel; }
   }
+}
+
+function _showToast(message, type = 'info') {
+  const existing = document.getElementById('_aegis-toast');
+  if (existing) existing.remove();
+  const colors = { success: '#10b981', error: '#ef4444', info: '#06b6d4' };
+  const icons  = { success: 'fa-check-circle', error: 'fa-exclamation-circle', info: 'fa-info-circle' };
+  const toast = document.createElement('div');
+  toast.id = '_aegis-toast';
+  toast.style.cssText = `position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;display:flex;align-items:center;gap:10px;padding:14px 20px;border-radius:12px;background:#111827;border:1px solid ${colors[type]};color:${colors[type]};font-size:0.9rem;font-weight:600;box-shadow:0 0 20px ${colors[type]}40;animation:slideIn .25s ease;max-width:360px;`;
+  toast.innerHTML = `<i class="fas ${icons[type]}"></i><span>${message}</span>`;
+  document.body.appendChild(toast);
+  setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity .3s'; setTimeout(() => toast.remove(), 300); }, 4000);
 }
 
 function initializeTerminalListeners() {
@@ -874,15 +908,64 @@ window.showSignalDetailsModal = function (signal) {
   // Developer Portal
   renderDeveloperPortal(signal);
 
-  // Setup Execute Button
-  const execBtn = document.getElementById('sd-execute-btn');
-  if (execBtn) {
-    execBtn.onclick = () => {
+  // Plan-aware footer buttons
+  const footerActions = document.getElementById('sd-footer-actions');
+  if (footerActions) {
+    const tier = getUserTier();
+    const isPro = tier === 'PRO';
+
+    footerActions.innerHTML = `
+      <div class="flex flex-col gap-2">
+        <div class="flex gap-2">
+          <button id="sd-execute-btn"
+            class="flex-1 bg-gradient-to-r from-cyan to-blue-600 text-white font-bold py-3 rounded-xl uppercase tracking-wider text-sm shadow-[0_0_15px_rgba(0,242,255,0.3)] hover:-translate-y-0.5 transform transition-all">
+            <i class="fas fa-terminal mr-2"></i>Execute in Terminal
+          </button>
+          <button id="sd-paper-trade-btn"
+            class="px-5 bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl uppercase tracking-wider text-sm border border-white/20 transition-colors whitespace-nowrap">
+            <i class="fas fa-play-circle mr-1"></i>Paper
+          </button>
+        </div>
+        ${isPro ? `
+        <div class="flex gap-2">
+          <button id="sd-copy-signal-btn"
+            class="flex-1 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 font-bold py-2 rounded-xl text-xs border border-purple-500/30 transition-colors">
+            <i class="fas fa-copy mr-1"></i>Copy Signal JSON
+          </button>
+          <button id="sd-view-analytics-btn"
+            class="flex-1 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 font-bold py-2 rounded-xl text-xs border border-blue-500/30 transition-colors">
+            <i class="fas fa-chart-pie mr-1"></i>View in Analytics
+          </button>
+        </div>` : `
+        <a href="/web/src/pages/pricing.html"
+          class="flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500/10 to-orange/10 hover:from-amber-500/20 hover:to-orange/20 text-amber-400 font-bold py-2 rounded-xl text-xs border border-amber-500/30 transition-colors">
+          <i class="fas fa-crown"></i>Unlock Pro &mdash; Copy JSON, Advanced Analytics &amp; more
+        </a>`}
+      </div>
+    `;
+
+    document.getElementById('sd-execute-btn')?.addEventListener('click', () => {
       modal.classList.add('hidden');
-      if (typeof window.selectSignal === 'function') {
-        window.selectSignal(signal.symbol, signal.timeframe || '1h');
+      if (typeof window.selectSignal === 'function') window.selectSignal(signal.symbol, signal.timeframe || '1h');
+    });
+
+    document.getElementById('sd-paper-trade-btn')?.addEventListener('click', () => {
+      modal.classList.add('hidden');
+      if (typeof window.initiatePaperTrade === 'function') {
+        window.initiatePaperTrade(signal.symbol, signal.entry_price || 0, signal.sl || 0, signal.tp || 0);
       }
-    };
+    });
+
+    document.getElementById('sd-copy-signal-btn')?.addEventListener('click', () => {
+      navigator.clipboard.writeText(JSON.stringify(signal, null, 2))
+        .then(() => _showToast('Signal JSON copied to clipboard!', 'success'))
+        .catch(() => _showToast('Copy failed — check browser permissions', 'error'));
+    });
+
+    document.getElementById('sd-view-analytics-btn')?.addEventListener('click', () => {
+      modal.classList.add('hidden');
+      if (typeof window.switchRoom === 'function') window.switchRoom('analytics');
+    });
   }
 
   modal.classList.remove('hidden');
