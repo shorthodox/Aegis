@@ -707,6 +707,11 @@ function filterAndRenderSignals() {
   });
 
   renderSignals(sortedSignalsObj);
+
+  // Sync signal direction badges on market token cards
+  if (typeof window.updateMarketCardSignalBadges === 'function') {
+    window.updateMarketCardSignalBadges();
+  }
 }
 
 // -------------------------------------------------------------------
