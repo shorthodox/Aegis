@@ -1078,8 +1078,164 @@ async def get_user_limits(email: str = Depends(get_current_user)):
 
 @app.post("/upgrade")
 async def upgrade_plan(email: str = Depends(get_current_user)):
-    db.collection("users").document(email).update({"plan": "pro"})
+    db.collection("users").document(email).update({
+        "plan": "pro",
+        "trial_active": False,
+        "trial_end": datetime.now(timezone.utc).isoformat()
+    })
     return {"status": "upgraded to pro"}
+
+
+# -------------------------------------------------------------------
+# Backend-Authoritative Trial Management
+# -------------------------------------------------------------------
+
+@app.post("/api/v1/trial/start")
+async def start_free_trial(user_id: str = Depends(get_current_user)):
+    """
+    Register the start of a 3-day free trial for the authenticated user.
+    Idempotent: if an active trial or paid plan already exists, returns current state.
+    When user pays for any plan, the webhook auto-terminates the trial.
+    """
+    user_doc = get_user_doc(user_id)
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="Account not found. Please sign up first.")
+
+    plan = (user_doc.get("plan") or "trial").lower()
+    paid_plans = {"pro", "premium", "intermediate", "basic"}
+
+    if plan in paid_plans:
+        return {
+            "status": "paid",
+            "plan": plan,
+            "trial_active": False,
+            "message": "You already have an active paid subscription."
+        }
+
+    # Check for an existing unexpired trial
+    trial_end = user_doc.get("trial_end")
+    if trial_end:
+        try:
+            end_dt = datetime.fromisoformat(trial_end)
+            if end_dt.tzinfo is None:
+                end_dt = end_dt.replace(tzinfo=timezone.utc)
+            now = datetime.now(timezone.utc)
+            if now < end_dt:
+                remaining_seconds = int((end_dt - now).total_seconds())
+                return {
+                    "status": "trial",
+                    "plan": "trial",
+                    "trial_active": True,
+                    "trial_start": user_doc.get("trial_start"),
+                    "trial_end": trial_end,
+                    "seconds_remaining": remaining_seconds,
+                    "message": "Your free trial is already active."
+                }
+        except (ValueError, TypeError):
+            pass  # Corrupted date — fall through to fresh start
+
+    # Start a new (or restart an expired) trial
+    now = datetime.now(timezone.utc)
+    trial_start_iso = now.isoformat()
+    trial_end_dt = now + timedelta(days=3)
+    trial_end_iso = trial_end_dt.isoformat()
+
+    db.collection("users").document(user_id).update({
+        "plan": "trial",
+        "trial_start": trial_start_iso,
+        "trial_end": trial_end_iso,
+        "trial_active": True
+    })
+
+    remaining_seconds = int((trial_end_dt - now).total_seconds())
+    print(f"✅ Free trial started for {user_id}: ends {trial_end_iso}")
+
+    return {
+        "status": "trial",
+        "plan": "trial",
+        "trial_active": True,
+        "trial_start": trial_start_iso,
+        "trial_end": trial_end_iso,
+        "seconds_remaining": remaining_seconds,
+        "message": "Free trial started! You have 3 days of full access."
+    }
+
+
+@app.get("/api/v1/trial/status")
+async def get_trial_status(user_id: str = Depends(get_current_user)):
+    """
+    Returns backend-authoritative trial/subscription status.
+    Frontend countdown calls this instead of reading localStorage to prevent drift.
+    """
+    user_doc = get_user_doc(user_id)
+    if not user_doc:
+        return {
+            "status": "no_account",
+            "plan": "trial",
+            "trial_active": False,
+            "seconds_remaining": 0,
+            "message": "Account not found."
+        }
+
+    plan = (user_doc.get("plan") or "trial").lower()
+    paid_plans = {"pro", "premium", "intermediate", "basic"}
+
+    if plan in paid_plans:
+        return {
+            "status": "paid",
+            "plan": plan,
+            "trial_active": False,
+            "subscription_active": True,
+            "seconds_remaining": 0,
+            "message": f"{plan.title()} plan active."
+        }
+
+    trial_end = user_doc.get("trial_end")
+    trial_start = user_doc.get("trial_start")
+
+    if trial_end:
+        try:
+            end_dt = datetime.fromisoformat(trial_end)
+            if end_dt.tzinfo is None:
+                end_dt = end_dt.replace(tzinfo=timezone.utc)
+            now = datetime.now(timezone.utc)
+            if now < end_dt:
+                remaining_seconds = int((end_dt - now).total_seconds())
+                return {
+                    "status": "trial",
+                    "plan": "trial",
+                    "trial_active": True,
+                    "trial_start": trial_start,
+                    "trial_end": trial_end,
+                    "seconds_remaining": remaining_seconds,
+                    "message": "Trial active."
+                }
+            else:
+                # Lazily flip the flag on expiry
+                if user_doc.get("trial_active", False):
+                    db.collection("users").document(user_id).update({"trial_active": False})
+                return {
+                    "status": "expired",
+                    "plan": "trial",
+                    "trial_active": False,
+                    "trial_start": trial_start,
+                    "trial_end": trial_end,
+                    "seconds_remaining": 0,
+                    "message": "Trial has expired. Upgrade to continue."
+                }
+        except (ValueError, TypeError):
+            pass
+
+    return {
+        "status": "no_trial",
+        "plan": "trial",
+        "trial_active": False,
+        "trial_start": None,
+        "trial_end": None,
+        "seconds_remaining": 0,
+        "message": "No active trial. Click 'Start Free Trial' to begin."
+    }
+
 
 @app.get("/payment/config")
 async def payment_config():
@@ -2229,6 +2385,8 @@ async def handle_cashfree_webhook(request: Request):
             
             user_ref.update({
                 "plan": assigned_tier,
+                "trial_active": False,
+                "trial_end": current_time,   # seal trial at payment time
                 "subscription": {
                     "status": "active",
                     "plan_type": assigned_tier,

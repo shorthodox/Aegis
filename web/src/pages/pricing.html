@@ -68,6 +68,45 @@
                 integration.</p>
         </div>
 
+        <!-- Free Trial CTA -->
+        <div id="trialHero" style="
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 2.5rem;
+            padding: 2rem 1.5rem;
+            background: rgba(0,242,255,0.04);
+            border: 1px solid rgba(0,242,255,0.18);
+            border-radius: 16px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        ">
+            <div style="display:flex;align-items:center;gap:0.75rem;">
+                <i class="fas fa-flask" style="font-size:1.5rem;color:#00f2ff;"></i>
+                <h2 style="margin:0;font-size:1.3rem;color:#fff;font-weight:700;">Try AEGIS Free for 3 Days</h2>
+            </div>
+            <p style="margin:0;color:rgba(255,255,255,0.65);font-size:0.9rem;text-align:center;">
+                No credit card required. Get instant access to live signals, Confluence Scorecards, and Zone Tracking. Cancel anytime.
+            </p>
+            <button id="trialBtn" style="
+                padding: 0.75rem 2.5rem;
+                background: linear-gradient(135deg, rgba(0,242,255,0.25), rgba(0,180,255,0.15));
+                border: 1.5px solid rgba(0,242,255,0.5);
+                border-radius: 50px;
+                color: #00f2ff;
+                font-size: 1rem;
+                font-weight: 700;
+                cursor: pointer;
+                letter-spacing: 0.05em;
+                transition: all 0.2s;
+            " onmouseover="this.style.background='rgba(0,242,255,0.2)'" onmouseout="this.style.background='linear-gradient(135deg,rgba(0,242,255,0.25),rgba(0,180,255,0.15))'">
+                <i class="fas fa-bolt" style="margin-right:0.5rem;"></i>Start Free Trial
+            </button>
+            <div id="trialStatusMsg" style="font-size:0.82rem;color:rgba(255,255,255,0.5);min-height:1.2em;text-align:center;"></div>
+        </div>
+
         <div class="pricing-grid floating-cards">
             <!-- Tier 1: Basic -->
             <div class="price-card glow-basic hover-interactive">
@@ -311,18 +350,63 @@
                 });
             }
 
-            // Trial button
+            // Trial button — calls backend to register trial start
             const trialBtn = document.getElementById('trialBtn');
+            const trialStatusMsg = document.getElementById('trialStatusMsg');
+
+            async function startTrialWithBackend() {
+                const token = localStorage.getItem('access_token') || localStorage.getItem('authToken');
+                if (!token) { openSignUpModal(); return; }
+
+                if (trialBtn) { trialBtn.disabled = true; trialBtn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:0.5rem;"></i>Starting…'; }
+                if (trialStatusMsg) trialStatusMsg.textContent = '';
+
+                try {
+                    const res = await fetch('/api/v1/trial/start', {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+                    });
+                    const data = await res.json();
+
+                    if (res.ok) {
+                        if (data.status === 'paid') {
+                            if (trialStatusMsg) trialStatusMsg.style.color = '#00ff88';
+                            if (trialStatusMsg) trialStatusMsg.textContent = '✅ ' + data.message;
+                        } else if (data.status === 'trial') {
+                            if (trialStatusMsg) trialStatusMsg.style.color = '#00f2ff';
+                            if (trialStatusMsg) trialStatusMsg.textContent = '✅ ' + data.message;
+                        }
+                        setTimeout(() => { window.location.href = '/web/src/pages/dashboard.html'; }, 1200);
+                    } else {
+                        if (trialStatusMsg) { trialStatusMsg.style.color = '#ff6464'; trialStatusMsg.textContent = data.detail || 'Could not start trial. Please try again.'; }
+                        if (trialBtn) { trialBtn.disabled = false; trialBtn.innerHTML = '<i class="fas fa-bolt" style="margin-right:0.5rem;"></i>Start Free Trial'; }
+                    }
+                } catch (err) {
+                    if (trialStatusMsg) { trialStatusMsg.style.color = '#ff6464'; trialStatusMsg.textContent = 'Network error. Please try again.'; }
+                    if (trialBtn) { trialBtn.disabled = false; trialBtn.innerHTML = '<i class="fas fa-bolt" style="margin-right:0.5rem;"></i>Start Free Trial'; }
+                }
+            }
+
             if (trialBtn) {
                 trialBtn.addEventListener('click', (e) => {
                     e.preventDefault();
                     if (globalAuthState) {
-                        window.location.href = '/web/src/pages/dashboard.html';
+                        startTrialWithBackend();
                     } else {
+                        // After sign-up, auto-trigger trial start
+                        window.pendingAction = 'startTrial';
                         openSignUpModal();
                     }
                 });
             }
+
+            // Auto-start trial after sign-up if pending
+            window.addEventListener('authStateChange', (ev) => {
+                if (ev.detail?.authenticated && window.pendingAction === 'startTrial') {
+                    window.pendingAction = null;
+                    startTrialWithBackend();
+                }
+            });
 
             // Plan buttons
             document.querySelectorAll('[data-plan]').forEach(btn => {
