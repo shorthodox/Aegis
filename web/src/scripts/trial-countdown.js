@@ -117,13 +117,15 @@ const TrialManager = (() => {
       return cachedTrialInfo;
     }
 
-    if (cachedTrialInfo?.subscription_active || cachedTrialInfo?.plan === 'pro' || cachedTrialInfo?.plan === 'active' || 
-        jwtData.plan_type === 'pro' || jwtData.plan_type === 'active') {
+    const PAID_PLANS = ['pro', 'premium', 'active', 'basic', 'intermediate'];
+    const serverPlan = (cachedTrialInfo?.plan || '').toLowerCase();
+    const jwtPlan   = (jwtData.plan_type || '').toLowerCase();
+    if (cachedTrialInfo?.subscription_active || PAID_PLANS.includes(serverPlan) || PAID_PLANS.includes(jwtPlan)) {
       cachedState = {
         active: true,
         isPremium: true,
-        plan: cachedTrialInfo?.plan || jwtData.plan_type || 'pro',
-        display: 'Premium Active',
+        plan: serverPlan || jwtPlan || 'pro',
+        display: 'Subscription Active',
         expired: false,
         days: 999, hours: 23, minutes: 59, seconds: 59,
         allowedTokens: cachedTokens,
@@ -281,11 +283,24 @@ const TrialManager = (() => {
           try {
             const userDocRef = doc(db, 'users', userId);
             const userDoc = await getDoc(userDocRef);
-            if (!userDoc.exists()) resolve(null);
+            if (!userDoc.exists()) { resolve(null); return; }
             const data = userDoc.data();
+            // Try explicit start-date fields first
             const trialStart = data?.trial?.startDate || data?.trial_start || data?.trialStart || data?.joinDate;
-            if (!trialStart) resolve(null);
-            resolve(trialStart.toDate ? trialStart.toDate() : new Date(trialStart));
+            if (trialStart) {
+              resolve(trialStart.toDate ? trialStart.toDate() : new Date(trialStart));
+              return;
+            }
+            // Backend stores trial_end as a top-level ISO string — derive start from it
+            const trialEnd = data?.trial_end;
+            if (trialEnd) {
+              const endDate = new Date(trialEnd);
+              if (!isNaN(endDate.getTime())) {
+                resolve(new Date(endDate.getTime() - 3 * 24 * 60 * 60 * 1000));
+                return;
+              }
+            }
+            resolve(null);
           } catch (error) {
             console.error('Error fetching trial start from Firestore:', error);
             resolve(null);
@@ -375,7 +390,24 @@ const TrialManager = (() => {
         element.style.borderColor = 'rgba(255, 140, 0, 0.4)';
         element.style.color = '#ff8c00';
       } else if (trialInfo?.isPremium) {
-        element.style.display = 'none';
+        // Show tier badge instead of hiding the element
+        const plan = (trialInfo.plan || 'pro').toLowerCase();
+        const TIER_CONFIG = {
+          pro:          { label: 'Pro',          icon: 'fa-crown',      color: '#f59e0b', bg: 'rgba(245,158,11,0.10)',  border: 'rgba(245,158,11,0.35)' },
+          premium:      { label: 'Pro',          icon: 'fa-crown',      color: '#f59e0b', bg: 'rgba(245,158,11,0.10)',  border: 'rgba(245,158,11,0.35)' },
+          intermediate: { label: 'Intermediate', icon: 'fa-bolt',       color: '#a78bfa', bg: 'rgba(167,139,250,0.10)', border: 'rgba(167,139,250,0.35)' },
+          basic:        { label: 'Basic',        icon: 'fa-shield-alt', color: '#60a5fa', bg: 'rgba(96,165,250,0.10)',  border: 'rgba(96,165,250,0.35)'  },
+        };
+        const cfg = TIER_CONFIG[plan] || TIER_CONFIG.pro;
+        element.innerHTML = `
+          <i class="fas ${cfg.icon}" style="color:${cfg.color};margin-right:8px;"></i>
+          <strong style="color:${cfg.color};">${cfg.label} Plan Active</strong>
+          <span style="margin-left:10px;font-size:0.75em;opacity:0.65;">Full access enabled</span>
+        `;
+        element.style.display = 'block';
+        element.style.background = cfg.bg;
+        element.style.borderColor = cfg.border;
+        element.style.color = cfg.color;
       } else if (trialInfo?.active) {
         element.innerHTML = `
           <span class="sovereign-badge">SOVEREIGN</span>
