@@ -10,6 +10,7 @@ load_dotenv()
 # Now safe to import libraries that might use environment variables
 import asyncio
 import json
+import re
 import random
 import string
 from datetime import datetime, timedelta, timezone
@@ -2102,13 +2103,16 @@ def create_cashfree_order(user_id: str, user_email: str, plan_amount: float, pla
     }
     
     order_id = f"order_{uuid.uuid4().hex[:12]}"
-    
+
+    # Cashfree customer_id: alphanumeric + underscore/hyphen only, max 50 chars
+    safe_customer_id = re.sub(r'[^a-zA-Z0-9_-]', '_', user_id)[:50]
+
     payload = {
         "order_id": order_id,
         "order_amount": float(plan_amount),
         "order_currency": currency,
         "customer_details": {
-            "customer_id": user_id,
+            "customer_id": safe_customer_id,
             "customer_email": user_email,
             "customer_phone": "9999999999"
         },
@@ -2198,8 +2202,9 @@ async def handle_cashfree_webhook(request: Request):
         user_id = customer_details.get("customer_id")
         email = customer_details.get("customer_email")
         amount = order_details.get("order_amount", 0)
-        
-        target_doc = user_id if user_id and user_id != 'user_unknown' else email
+
+        # Prefer email as Firestore doc key; fall back to customer_id only if no email
+        target_doc = email if email else (user_id if user_id and user_id != 'user_unknown' else None)
         
         # 4. Perform the live database elevation inside Firestore
         try:
