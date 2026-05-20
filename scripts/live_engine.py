@@ -961,13 +961,14 @@ class SignalGenerator:
             trend_aligned=trend_aligned, atr=atr_val, price=current_price,
         )
         # Further adjust threshold with fundamentals & anchor signals
+        _btc_dist = float(btc_df['btc_dist_ema200'].iloc[-1]) if (btc_df is not None and not btc_df.empty and 'btc_dist_ema200' in btc_df.columns) else 0.0
         try:
             adj_thresh = adjust_threshold_by_technical_and_fundamental(
                 adj_thresh,
                 vol_regime=vol_regime,
                 news_score=news_score,
                 efficiency_ratio=er,
-                btc_anchor=(btc_df['btc_dist_ema200'].iloc[-1] if (btc_df is not None and not btc_df.empty and 'btc_dist_ema200' in btc_df.columns) else 0.0)
+                btc_anchor=_btc_dist
             )
         except Exception:
             pass
@@ -1058,7 +1059,67 @@ class SignalGenerator:
             "signal_id": str(uuid.uuid4()),
             "trading_accuracy": ai_prob,  # Using ai_prob as trading accuracy
             "profitability_index": expected_net_pct / 100 if expected_net_pct else 0.0,
+            "btc_dist_ema200": _btc_dist,
+            "data_timestamp": datetime.now().isoformat(),
         }
+
+# -------------------------------------------------------------------
+# Confirmation Engine – four-gate signal validation guardrail
+# -------------------------------------------------------------------
+_CRITICAL_NUMERIC_FIELDS = ("price", "atr", "ai_prob")
+
+async def confirm_live_signal(
+    symbol: str,
+    raw_prediction: dict,
+    df_row: pd.Series,
+) -> Tuple[bool, str]:
+    """
+    Async guardrail executed before every signal transmission.
+    Returns (True, 'OK') when all gates pass, (False, REJECTION_CODE) on first failure.
+    """
+    # Gate 1a — Time sync: reject if signal data is older than 10 seconds
+    try:
+        data_ts_str = raw_prediction.get("data_timestamp", "")
+        if data_ts_str:
+            data_ts = datetime.fromisoformat(data_ts_str)
+            if (datetime.now() - data_ts).total_seconds() > 10:
+                return False, "STALE_DATA_TIMEOUT"
+    except Exception:
+        pass
+
+    # Gate 1b — Feature stream integrity: critical numeric fields must be finite and non-zero
+    for field in _CRITICAL_NUMERIC_FIELDS:
+        val = raw_prediction.get(field)
+        if val is None:
+            return False, "CORRUPTED_FEATURE_STREAM"
+        try:
+            fval = float(val)
+            if np.isnan(fval) or (fval == 0.0 and field in ("price", "atr")):
+                return False, "CORRUPTED_FEATURE_STREAM"
+        except (TypeError, ValueError):
+            return False, "CORRUPTED_FEATURE_STREAM"
+
+    # Gate 2 — BTC macro confluence: suppress LONG when BTC is deeply below EMA-200
+    direction = raw_prediction.get("direction", "NEUTRAL")
+    logger.debug(f"[ConfirmationEngine] {symbol} direction={direction}")
+    if direction == "LONG":
+        btc_dist = raw_prediction.get("btc_dist_ema200")
+        if btc_dist is None and "btc_dist_ema200" in df_row.index:
+            btc_dist = df_row["btc_dist_ema200"]
+        btc_dist = btc_dist if btc_dist is not None else 0.0
+        try:
+            if float(btc_dist) < -0.02:
+                return False, "MACRO_TREND_DIVERGENT"
+        except (TypeError, ValueError):
+            pass
+
+    # Gate 3 — Liquidity / slippage risk: high volatility paired with thin volume
+    vol_regime = raw_prediction.get("vol_regime", "normal")
+    volume_cond = raw_prediction.get("volume_cond", "normal")
+    if vol_regime == "high" and volume_cond == "low":
+        return False, "EXCESSIVE_SLIPPAGE_RISK"
+
+    return True, "OK"
 
 # -------------------------------------------------------------------
 # LiveEngine – with RESET (C key) and colour‑coded dashboard
@@ -1377,6 +1438,29 @@ class LiveEngine:
             self.signal_gen.alpha_risk_pct = self.alpha_risk_pct
             tasks = [self.signal_gen.compute_signal(cfg.symbol, self.fetcher, self.alpha_mode, btc_safe) for cfg in self.token_configs]
             signals = await asyncio.gather(*tasks)
+
+            # ── Confirmation Engine gate ──────────────────────────────────
+            _confirmed: List[Optional[Dict]] = []
+            for _sig in signals:
+                if not _sig or _sig.get("direction", "NEUTRAL") == "NEUTRAL":
+                    _confirmed.append(_sig)
+                    continue
+                _is_valid, _reason = await confirm_live_signal(
+                    _sig["symbol"], _sig, pd.Series(_sig)
+                )
+                if not _is_valid:
+                    logger.warning(
+                        f"⚠️ Signal for {_sig['symbol']} suppressed by Confirmation Engine. Reason: {_reason}"
+                    )
+                    self.activity_log.appendleft(
+                        f"[{datetime.now().strftime('%H:%M:%S')}] 🚫 {_sig['symbol']} suppressed: {_reason}"
+                    )
+                    _confirmed.append(None)
+                else:
+                    _confirmed.append(_sig)
+            signals = _confirmed
+            # ─────────────────────────────────────────────────────────────
+
             frontend_signals = []
             for sig in signals:
                 if sig:
