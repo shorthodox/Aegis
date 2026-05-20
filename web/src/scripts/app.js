@@ -210,15 +210,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ========== Live P/L Simulation (Analytics Room) ==========
+    // Uses #simPositionContainer (not #positionsContainer) so the Firestore-backed
+    // positions list rendered by gatekeeper.js is never overwritten.
     function updateAnalyticsSimulation() {
-        const positionsContainer = document.getElementById('positionsContainer');
+        const positionsContainer = document.getElementById('simPositionContainer');
         if (!positionsContainer) return;
-        
+
         const storedTradeStr = localStorage.getItem('analyticsActiveTrade');
         if (!storedTradeStr) {
-            // Keep existing UI if we already have trades fetched from Firestore, or show empty
-            if (positionsContainer.innerHTML.trim() === '' || positionsContainer.innerHTML.includes('simulated-trade')) {
-                positionsContainer.innerHTML = '<div class="text-gray-500 text-sm text-center py-4">No simulated trades active.</div>';
+            if (positionsContainer.innerHTML.includes('simulated-trade')) {
+                positionsContainer.innerHTML = '';
             }
             return;
         }
@@ -457,23 +458,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target === loginModal) { loginModal.style.display = 'none'; unlockBodyScroll(); }
     });
 
-    // ========== Mobile Menu Logic ==========
-    const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-    const closeMenuBtn = document.getElementById('closeMenuBtn');
-    const sidebar = document.getElementById('sidebar');
-    const sidebarOverlay = document.getElementById('sidebarOverlay');
-
-    function toggleSidebar() {
-        if (sidebar) {
-            sidebar.classList.toggle('-translate-x-full');
-            sidebar.classList.toggle('translate-x-0');
-        }
-        if (sidebarOverlay) sidebarOverlay.classList.toggle('hidden');
-    }
-
-    if (mobileMenuBtn) mobileMenuBtn.addEventListener('click', toggleSidebar);
-    if (closeMenuBtn) closeMenuBtn.addEventListener('click', toggleSidebar);
-    if (sidebarOverlay) sidebarOverlay.addEventListener('click', toggleSidebar);
+    // Mobile menu toggle is owned by the inline <script> in dashboard.html.
+    // Removed from app.js to avoid double-firing on every click.
 
     const mobileStatusBtn = document.getElementById('mobileStatusBtn');
     const statusDropdown = document.getElementById('statusDropdown');
