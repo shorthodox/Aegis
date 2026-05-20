@@ -203,7 +203,8 @@ async function performEmailSignup(e) {
       showSuccess('Account created! Welcome to AEGIS! Redirecting...');
       setTimeout(() => {
         closeSignUpModal();
-        window.location.href = '/web/src/pages/dashboard.html';
+        // Route through pricing first so new users see the tier architecture before the dashboard.
+        window.location.href = '/web/src/pages/pricing.html?newUser=1';
       }, 1500);
     } else {
       console.error('❌ Signup failed:', result.message);
@@ -225,7 +226,7 @@ async function performGoogleSignup() {
       showSuccess('Account created with Google!');
       setTimeout(() => {
         closeSignUpModal();
-        window.location.href = '/web/src/pages/dashboard.html';
+        window.location.href = '/web/src/pages/pricing.html?newUser=1';
       }, 1000);
     } else {
       showError('signupFormError', result.message);

@@ -496,6 +496,43 @@
                     </div>
                 </div>
 
+                <!-- Global Performance Metrics (loaded from analytics/global_performance) -->
+                <div class="glass-panel p-5 rounded-xl">
+                    <h3 class="text-xs uppercase tracking-widest text-gray-500 mb-4 font-bold flex items-center gap-2">
+                        <i class="fas fa-chart-bar text-emerald-400"></i> Engine Performance
+                    </h3>
+                    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                        <div class="bg-black/40 p-3 rounded-xl border border-emerald-500/20 text-center">
+                            <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-1 font-mono">Expectancy</div>
+                            <div id="analytics-expectancy" class="text-lg font-black font-mono text-emerald-400">—</div>
+                            <div class="text-[9px] text-gray-600 mt-0.5">avg / trade</div>
+                        </div>
+                        <div class="bg-black/40 p-3 rounded-xl border border-amber-500/20 text-center">
+                            <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-1 font-mono">Max DD</div>
+                            <div id="analytics-maxdd" class="text-lg font-black font-mono text-amber-400">—</div>
+                            <div class="text-[9px] text-gray-600 mt-0.5">peak-to-trough</div>
+                        </div>
+                        <div class="bg-black/40 p-3 rounded-xl border border-cyan/20 text-center">
+                            <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-1 font-mono">Profit Factor</div>
+                            <div id="analytics-profit-factor" class="text-lg font-black font-mono text-cyan">—</div>
+                            <div class="text-[9px] text-gray-600 mt-0.5">gross P / L</div>
+                        </div>
+                        <div class="bg-black/40 p-3 rounded-xl border border-white/10 text-center">
+                            <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-1 font-mono">Win Rate</div>
+                            <div id="analytics-win-rate" class="text-lg font-black font-mono text-white">—</div>
+                            <div class="text-[9px] text-gray-600 mt-0.5">signals</div>
+                        </div>
+                        <div class="bg-black/40 p-3 rounded-xl border border-white/10 text-center">
+                            <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-1 font-mono">Total Signals</div>
+                            <div id="analytics-total-trades" class="text-lg font-black font-mono text-white">—</div>
+                            <div class="text-[9px] text-gray-600 mt-0.5">30-day window</div>
+                        </div>
+                    </div>
+                    <div class="mt-3 text-[10px] text-gray-600 font-mono flex items-center gap-1.5">
+                        <i class="fas fa-database"></i> Sourced from Firestore · analytics/global_performance · Updated every 24h
+                    </div>
+                </div>
+
                 <!-- Open Positions -->
                 <div class="glass-panel p-5 rounded-xl">
                     <h3 class="text-xs uppercase tracking-widest text-gray-500 mb-4 font-bold flex items-center gap-2">

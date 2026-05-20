@@ -1200,7 +1200,7 @@ window.showSignalDetailsModal = function (signal) {
 
   const cardsHTML = `
     <!-- Card 1: Confluence -->
-    <div onclick="window.openFeaturePanel('fp-confluence')"
+    <div data-open-panel="fp-confluence"
       class="relative cursor-pointer bg-black/40 p-4 rounded-xl border border-cyan/20 hover:border-cyan/50 hover:bg-cyan/5 transition-all group overflow-hidden">
       ${LOCK_BASIC ? _featureLockOverlay('INTERMEDIATE') : ''}
       <div class="flex items-center gap-2 mb-3">
@@ -1233,7 +1233,7 @@ window.showSignalDetailsModal = function (signal) {
     </div>
 
     <!-- Card 2: Visual Zones -->
-    <div onclick="window.openFeaturePanel('fp-zones')"
+    <div data-open-panel="fp-zones"
       class="relative cursor-pointer bg-black/40 p-4 rounded-xl border border-violet-500/20 hover:border-violet-500/50 hover:bg-violet-500/5 transition-all group overflow-hidden">
       ${LOCK_BASIC ? _featureLockOverlay('INTERMEDIATE') : ''}
       <div class="flex items-center gap-2 mb-3">
@@ -1254,7 +1254,7 @@ window.showSignalDetailsModal = function (signal) {
     </div>
 
     <!-- Card 3: Expectancy Matrix -->
-    <div onclick="window.openFeaturePanel('fp-expectancy')"
+    <div data-open-panel="fp-expectancy"
       class="relative cursor-pointer bg-black/40 p-4 rounded-xl border border-emerald-500/20 hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all group overflow-hidden">
       ${LOCK_NON_PRO ? _featureLockOverlay('PRO') : ''}
       <div class="flex items-center gap-2 mb-3">
@@ -1272,7 +1272,7 @@ window.showSignalDetailsModal = function (signal) {
     </div>
 
     <!-- Card 4: SHAP -->
-    <div onclick="window.openFeaturePanel('fp-shap')"
+    <div data-open-panel="fp-shap"
       class="relative cursor-pointer bg-black/40 p-4 rounded-xl border border-orange-500/20 hover:border-orange-500/50 hover:bg-orange-500/5 transition-all group overflow-hidden">
       ${LOCK_NON_PRO ? _featureLockOverlay('PRO') : ''}
       <div class="flex items-center gap-2 mb-3">
@@ -1289,7 +1289,7 @@ window.showSignalDetailsModal = function (signal) {
     </div>
 
     <!-- Card 5: API Export (full width) -->
-    <div onclick="window.openFeaturePanel('fp-api')"
+    <div data-open-panel="fp-api"
       class="relative cursor-pointer col-span-2 bg-black/40 p-4 rounded-xl border border-blue-500/20 hover:border-blue-500/50 hover:bg-blue-500/5 transition-all group flex items-center gap-4 overflow-hidden">
       ${LOCK_NON_PRO ? _featureLockOverlay('PRO') : ''}
       <div class="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
@@ -1382,9 +1382,22 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   if (modal) {
+    // Backdrop click closes modal
     modal.addEventListener('click', (e) => {
       if (e.target === modal) {
         modal.classList.add('hidden');
+      }
+    });
+
+    // Event delegation for feature panel cards — works on dynamically injected innerHTML.
+    // Cards set data-open-panel="fp-*" instead of inline onclick so this single listener
+    // handles all clicks regardless of when the card was rendered.
+    modal.addEventListener('click', (e) => {
+      const card = e.target.closest('[data-open-panel]');
+      if (!card) return;
+      const panelId = card.dataset.openPanel;
+      if (panelId && typeof window.openFeaturePanel === 'function') {
+        window.openFeaturePanel(panelId);
       }
     });
   }

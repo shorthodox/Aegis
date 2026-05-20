@@ -331,7 +331,7 @@ function startPaperTrade(symbol, entryPrice, sl, tp) {
     startTime: new Date(),
     currentPrice: entryPrice,
     pnl: 0,
-    status: 'active'
+    status: 'open'   // must match Firestore listener query: where('status', '==', 'open')
   };
 
   paperTrades.push(trade);
@@ -828,6 +828,7 @@ function applyUserData(userData, token) {
     updateUI();
     startWebSocket(token);
     setupFirestoreListeners();
+    loadGlobalPerformanceData();
     console.log('loadUserFromBackend - Final allowedTokens:', allowedTokens);
     console.log('loadUserFromBackend - User plan:', userPlan, 'Trial active:', trialActive);
     document.dispatchEvent(new CustomEvent('dashboardUserLoaded', { detail: { userData: currentUserData } }));
@@ -1248,10 +1249,11 @@ function updateDashboardData(data) {
     }, 50);
   }
 
-  // Update open trades
-  if (positionsContainer && data.open_trades) {
-    if (data.open_trades?.length > 0) localStorage.setItem('lastKnownTrades', JSON.stringify(data.open_trades));
-    renderTrades(data.open_trades);
+  // Update open trades — accept any of the keys the backend might use
+  const incomingTrades = data.open_trades ?? data.positions ?? data.fleet ?? null;
+  if (incomingTrades !== null) {
+    if (incomingTrades.length > 0) localStorage.setItem('lastKnownTrades', JSON.stringify(incomingTrades));
+    renderTrades(incomingTrades);
   }
 
   // Update alpha mode status
@@ -1739,6 +1741,46 @@ window.closeTrade = async function (tradeId) {
     alert(`Could not close trade: ${e.message}`);
   }
 };
+
+// -------------------------------------------------------------------
+// Global Performance Data (analytics/global_performance)
+// -------------------------------------------------------------------
+async function loadGlobalPerformanceData() {
+  try {
+    const perfRef = doc(db, 'analytics', 'global_performance');
+    const perfSnap = await getDoc(perfRef);
+
+    const FALLBACKS = { expectancy: '0.00%', maxdd: '-0.00%', profitFactor: '1.00', winRate: '0%', totalTrades: '0' };
+
+    const d = perfSnap.exists() ? perfSnap.data() : {};
+
+    const expectancy   = d.mathematical_expectancy ?? d.expectancy   ?? FALLBACKS.expectancy;
+    const maxdd        = d.max_drawdown            ?? d.maxDrawdown   ?? FALLBACKS.maxdd;
+    const profitFactor = d.profit_factor           ?? d.profitFactor  ?? FALLBACKS.profitFactor;
+    const winRate      = d.win_rate != null
+      ? `${(parseFloat(d.win_rate) * (d.win_rate <= 1 ? 100 : 1)).toFixed(1)}%`
+      : FALLBACKS.winRate;
+    const totalTrades  = d.total_trades            ?? d.totalTrades   ?? FALLBACKS.totalTrades;
+
+    const safe = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = val;
+    };
+
+    safe('analytics-expectancy',    String(expectancy));
+    safe('analytics-maxdd',         String(maxdd));
+    safe('analytics-profit-factor', String(profitFactor));
+    safe('analytics-win-rate',      String(winRate));
+    safe('analytics-total-trades',  String(totalTrades));
+  } catch (err) {
+    console.warn('[loadGlobalPerformanceData] Firestore error — showing fallbacks:', err);
+    ['analytics-expectancy', 'analytics-maxdd', 'analytics-profit-factor',
+     'analytics-win-rate', 'analytics-total-trades'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = '—';
+    });
+  }
+}
 
 // -------------------------------------------------------------------
 // Firestore Real-time Listeners
