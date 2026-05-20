@@ -28,11 +28,7 @@ try {
 let initialized = false;
 
 // Returns 'paid' | 'trial' | 'expired'
-// DEBUG: force 'paid' for all logged-in users while diagnosing feature-access issues.
-// Remove the next two lines to restore real subscription gating.
 async function checkUserSubscriptionStatus(uid) {
-  if (uid) return 'paid';
-
   const now = new Date();
 
   // Fast path: AuthManager already resolved the plan on a previous auth cycle.
