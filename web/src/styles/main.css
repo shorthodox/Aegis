@@ -3426,3 +3426,131 @@ body.modal-open {
     user-select: none;
     transition: opacity 0.3s ease, filter 0.3s ease;
 }
+
+/* ============================================================
+   SCREEN MODE THEMES
+   ============================================================ */
+
+/* Dark (OLED black) — inherits :root defaults */
+[data-theme="dark"] {
+    color-scheme: dark;
+}
+
+/* Grey (elevated slate dark) */
+[data-theme="grey"] {
+    color-scheme: dark;
+    --bg-deep: #12131b;
+    --bg-void: #1c1d28;
+    --glass-bg: rgba(26, 30, 50, 0.88);
+    --glass-border: rgba(0, 242, 255, 0.14);
+    --text-dim: #7e8fa8;
+}
+
+[data-theme="grey"] body,
+[data-theme="grey"] body.dashboard-body {
+    background: var(--bg-deep);
+    background-image: radial-gradient(circle at 15% 30%, rgba(0, 242, 255, 0.04) 0%, var(--bg-void) 100%);
+    background-attachment: fixed;
+}
+
+/* Light */
+[data-theme="light"] {
+    color-scheme: light;
+    --bg-deep: #eef2f7;
+    --bg-void: #dde4ee;
+    --glass-bg: rgba(255, 255, 255, 0.74);
+    --glass-border: rgba(0, 160, 190, 0.28);
+    --text-white: #0f172a;
+    --text-dim: #4a5568;
+    --primary-cyan: #0099bb;
+    --neon-blue: #0099bb;
+    --glow-cyan: 0 0 12px rgba(0, 153, 187, 0.22);
+    --success-green: #007a44;
+    --danger-red: #cc0033;
+    --hold-grey: #64748b;
+}
+
+[data-theme="light"] body,
+[data-theme="light"] body.dashboard-body {
+    background: var(--bg-deep);
+    background-image: radial-gradient(circle at 15% 30%, rgba(0, 153, 187, 0.07) 0%, var(--bg-void) 100%);
+    background-attachment: fixed;
+    color: var(--text-white);
+}
+
+/* Header */
+[data-theme="light"] header.glass-panel {
+    background: rgba(238, 242, 247, 0.92) !important;
+    border-bottom-color: rgba(0, 153, 187, 0.2) !important;
+}
+
+/* Sidebar Tailwind bg-deep/95 override */
+[data-theme="light"] aside.sidebar,
+[data-theme="light"] .bg-deep\/95 {
+    background-color: rgba(238, 242, 247, 0.95) !important;
+}
+
+/* Panel overlays */
+[data-theme="light"] .bg-black\/40,
+[data-theme="light"] .bg-black\/30,
+[data-theme="light"] .bg-black\/20,
+[data-theme="light"] .bg-black\/60,
+[data-theme="light"] .bg-black\/80,
+[data-theme="light"] .bg-black\/95 {
+    background-color: rgba(0, 0, 0, 0.055) !important;
+}
+
+/* White transparency backgrounds → subtle dark */
+[data-theme="light"] .bg-white\/5  { background-color: rgba(0, 0, 0, 0.04) !important; }
+[data-theme="light"] .bg-white\/10 { background-color: rgba(0, 0, 0, 0.07) !important; }
+[data-theme="light"] .bg-white\/20 { background-color: rgba(0, 0, 0, 0.12) !important; }
+
+/* Borders */
+[data-theme="light"] .border-white\/5  { border-color: rgba(0, 0, 0, 0.07) !important; }
+[data-theme="light"] .border-white\/10 { border-color: rgba(0, 0, 0, 0.10) !important; }
+[data-theme="light"] .border-white\/20 { border-color: rgba(0, 0, 0, 0.16) !important; }
+
+/* Tailwind text overrides */
+[data-theme="light"] .text-white       { color: #0f172a !important; }
+[data-theme="light"] .text-gray-300    { color: #334155 !important; }
+[data-theme="light"] .text-gray-400    { color: #4a5568 !important; }
+[data-theme="light"] .text-gray-500    { color: #64748b !important; }
+
+/* Logo gradient stays legible */
+[data-theme="light"] .logo {
+    background: linear-gradient(135deg, #0f172a, var(--primary-cyan));
+    -webkit-background-clip: text;
+    background-clip: text;
+}
+
+/* Sidebar inputs */
+[data-theme="light"] .sidebar-input {
+    background: rgba(255, 255, 255, 0.7);
+    border-color: rgba(0, 0, 0, 0.14);
+    color: #0f172a;
+}
+
+/* Screen mode button token */
+[data-theme="light"] .user-stats {
+    background: rgba(255, 255, 255, 0.45);
+}
+
+/* Connection status pill */
+[data-theme="light"] .connection-status {
+    background: rgba(238, 242, 247, 0.8);
+}
+
+/* ── Screen Mode Button Widget ────────────────────────────── */
+.screen-mode-btn {
+    cursor: pointer;
+    border: none;
+    background: transparent;
+}
+
+.screen-mode-btn--active {
+    background: rgba(0, 242, 255, 0.14);
+    color: var(--primary-cyan) !important;
+    box-shadow: 0 0 8px rgba(0, 242, 255, 0.18);
+    border-radius: 6px;
+}
+
