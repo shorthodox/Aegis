@@ -9,6 +9,7 @@ import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/12.12.1/firebase
 // The WebSocket tick is the server-authority enforcement loop.
 // ============================================================
 const _subState = { active: false, isPremium: false };
+let _lastVerifiedAt = 0; // timestamp of last successful Firestore subscription check
 try {
   Object.defineProperty(window, 'isSubscriptionActive', {
     get: () => _subState.active,
@@ -34,6 +35,21 @@ async function checkUserSubscriptionStatus(uid) {
 
   const now = new Date();
 
+  // Fast path: AuthManager already resolved the plan on a previous auth cycle.
+  // Trust it immediately so the UI never flashes 'expired' while Firestore loads.
+  if (typeof AuthManager !== 'undefined') {
+    const u = AuthManager.getUser();
+    if (u) {
+      const p = (u.plan || u.tier || '').toLowerCase();
+      if (p === 'pro' || p === 'premium' || p === 'intermediate' || p === 'basic') {
+        console.log('[SubCheck] AuthManager fast-path → paid (' + p + ')');
+        return 'paid';
+      }
+    }
+    // Any active JWT session → at minimum a trial; won't default to 'expired'
+    // before Firestore has a chance to respond.
+  }
+
   try {
     const userDocRef = doc(db, 'users', uid);
     const userSnap = await getDoc(userDocRef);
@@ -54,7 +70,7 @@ async function checkUserSubscriptionStatus(uid) {
         const endDate = rawEnd.toDate ? rawEnd.toDate() : new Date(rawEnd);
         if (!isNaN(endDate.getTime())) {
           if (endDate < now) return 'expired';
-          return 'trial';  // Firestore confirms active trial
+          return 'trial';
         }
       }
 
@@ -79,8 +95,20 @@ async function checkUserSubscriptionStatus(uid) {
     }
     return 'trial';
   } catch (error) {
-    console.error('Error fetching user subscription status:', error);
-    // On error, fall back to localStorage so expired users stay blocked
+    console.error('[SubCheck] Firestore error — falling back to AuthManager/localStorage:', error);
+
+    // On error: prefer AuthManager knowledge over defaulting to 'expired'
+    if (typeof AuthManager !== 'undefined') {
+      const u = AuthManager.getUser();
+      if (u) {
+        const p = (u.plan || u.tier || '').toLowerCase();
+        if (p === 'pro' || p === 'premium' || p === 'intermediate' || p === 'basic') return 'paid';
+        if (p === 'trial' || p === 'free_tier') return 'trial';
+      }
+      // Active token → safe to assume trial rather than blocking the user
+      if (AuthManager.getToken()) return 'trial';
+    }
+
     const localEnd = localStorage.getItem('trial_end_timestamp');
     if (localEnd) {
       const localEndDate = new Date(localEnd);
@@ -141,6 +169,8 @@ function waitForAuthStateChange() {
         const status = await checkUserSubscriptionStatus(user.uid);
         _subState.active = (status !== 'expired');
         _subState.isPremium = (status === 'paid');
+        if (status !== 'expired') _lastVerifiedAt = Date.now();
+        console.log('[waitForAuth] uid:', user.uid, 'status:', status, '_subState:', JSON.stringify(_subState));
         updatePlanBadge(status);
         if (status === 'expired') {
           setExpiredView();
@@ -167,6 +197,8 @@ function waitForAuthStateChange() {
           const status = await checkUserSubscriptionStatus(user.uid);
           _subState.active = (status !== 'expired');
           _subState.isPremium = (status === 'paid');
+          if (status !== 'expired') _lastVerifiedAt = Date.now();
+          console.log('[waitForAuth retry] uid:', user.uid, 'status:', status, '_subState:', JSON.stringify(_subState));
           updatePlanBadge(status);
           if (status === 'expired') {
             setExpiredView();
@@ -252,11 +284,17 @@ function setExpiredView() {
   // If Firestore already confirmed this session as paid, don't let a WS tick override it.
   if (_subState.isPremium) return;
 
+  // Debounce: if Firestore verified within the last 2 minutes and sub is active, ignore WS ticks.
+  if (_subState.active && (Date.now() - _lastVerifiedAt < 120000)) return;
+
   const dashboardContent = document.getElementById('dashboard-main-content');
   const expiredCard = document.getElementById('access-expired-card');
 
-  // Hide all dashboard content
-  if (dashboardContent) dashboardContent.classList.add('hidden');
+  // Dim/disable dashboard without removing it from DOM — preserves analytics state.
+  if (dashboardContent) {
+    dashboardContent.classList.remove('hidden');
+    dashboardContent.classList.add('sub-expired');
+  }
 
   // Show or create expired card
   if (expiredCard) {
@@ -273,7 +311,10 @@ function setExpiredView() {
 function clearExpiredView() {
   const dashboardContent = document.getElementById('dashboard-main-content');
   const expiredCard = document.getElementById('access-expired-card');
-  if (dashboardContent) dashboardContent.classList.remove('hidden');
+  if (dashboardContent) {
+    dashboardContent.classList.remove('hidden');
+    dashboardContent.classList.remove('sub-expired');
+  }
   if (expiredCard) expiredCard.classList.add('hidden');
 
   // Re-enable features
@@ -397,6 +438,7 @@ function blockAllFeatures() {
     const isModalOrPanel = el.closest('#signalDetailsModal, #fp-confluence, #fp-zones, #fp-expectancy, #fp-shap, #fp-api') !== null;
 
     if (!isExpiredElement && !isLogout && !isNav && !isModalOrPanel) {
+      el.dataset.aegisBlocked = '1';
       el.style.pointerEvents = 'none';
       el.style.opacity = '0.3';
     }
@@ -425,11 +467,12 @@ function unblockFeatures() {
     signalsContainer.style.opacity = '1';
   }
 
-  // Enable all interactive elements
-  const interactiveElements = document.querySelectorAll('button, a, input[type="checkbox"], [onclick]');
-  interactiveElements.forEach(el => {
+  // Only restore elements that were explicitly blocked by aegis — avoids clobbering intentional disables.
+  const blockedElements = document.querySelectorAll('[data-aegis-blocked]');
+  blockedElements.forEach(el => {
     el.style.removeProperty('pointer-events');
     el.style.removeProperty('opacity');
+    delete el.dataset.aegisBlocked;
   });
 
   console.log('✅ All features unlocked - subscription active');
@@ -604,6 +647,7 @@ async function setupTrialNonBlocking(userId) {
   const status = await checkUserSubscriptionStatus(userId);
   _subState.active = (status !== 'expired');
   _subState.isPremium = (status === 'paid');
+  if (status !== 'expired') _lastVerifiedAt = Date.now();
   updatePlanBadge(status);
 
   if (status === 'expired') {

@@ -39,25 +39,50 @@
 <body>
 
     <!-- Fixed Glass Header (same as index.html) -->
-    <header class="fixed-header">
-        <div class="logo">⚡ AEGIS <span>v1.0</span></div>
-        <div class="nav-links-centered">
+    <header class="fixed-header" id="main-nav">
+        <a href="/web/src/pages/index.html" class="logo" style="text-decoration:none;">⚡ AEGIS <span>v1.0</span></a>
+
+        <nav class="nav-links-centered" aria-label="Main navigation">
             <a href="/web/src/pages/index.html" class="nav-link">Home</a>
             <a href="/web/src/pages/index.html#sentinel" class="nav-link">Sentinel</a>
             <a href="/web/src/pages/index.html#cockpit" class="nav-link">Cockpit</a>
             <a href="/web/src/pages/index.html#security" class="nav-link">Security</a>
             <a href="/web/src/pages/pricing.html" class="nav-link active">Pricing</a>
+        </nav>
+
+        <div id="authButtonContainer" class="nav-auth-desktop" style="display:flex;align-items:center;gap:0.5rem;">
+            <button id="portalBtn" class="nav-btn-login">
+                <i class="fas fa-user-shield"></i> Sign In
+            </button>
+            <button id="dashboardBtn" class="nav-btn-dashboard" style="display:none;">
+                <i class="fas fa-chart-line"></i> Dashboard
+            </button>
+            <button id="signOutBtn" class="nav-btn-signout" style="display:none;">
+                <i class="fas fa-sign-out-alt"></i> Sign Out
+            </button>
+            <button id="createAccountBtn" class="nav-btn-cta">
+                Get Started
+            </button>
         </div>
-        <div id="authButtonContainer" style="display:flex; align-items:center; gap:0.5rem;">
-            <button id="portalBtn" class="portal-btn">Portal</button>
-            <button id="dashboardBtn" class="portal-btn" style="display:none;">Dashboard</button>
-            <button id="signOutBtn" class="portal-btn"
-                style="display:none; background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.15); color: #fff;">Sign
-                Out</button>
-            <button id="createAccountBtn" class="portal-btn"
-                style="margin-left: 0.5rem; background: rgba(0, 242, 255, 0.2);">Create Account</button>
-        </div>
+
+        <button class="nav-hamburger-btn" id="navHamburger" aria-label="Toggle navigation" aria-expanded="false">
+            <i class="fas fa-bars"></i>
+        </button>
     </header>
+
+    <div class="nav-mobile-drawer" id="navMobileDrawer">
+        <a href="/web/src/pages/index.html" class="nav-mobile-link"><i class="fas fa-home"></i> Home</a>
+        <a href="/web/src/pages/index.html#sentinel" class="nav-mobile-link"><i class="fas fa-satellite-dish"></i> Sentinel</a>
+        <a href="/web/src/pages/index.html#cockpit" class="nav-mobile-link"><i class="fas fa-desktop"></i> Cockpit</a>
+        <a href="/web/src/pages/index.html#security" class="nav-mobile-link"><i class="fas fa-shield-alt"></i> Security</a>
+        <a href="/web/src/pages/pricing.html" class="nav-mobile-link mobile-active"><i class="fas fa-tag"></i> Pricing</a>
+        <div class="nav-mobile-auth">
+            <button class="nav-btn-login" id="mPortalProxy"><i class="fas fa-user-shield"></i> Sign In</button>
+            <button class="nav-btn-dashboard" id="mDashProxy" style="display:none;"><i class="fas fa-chart-line"></i> Dashboard</button>
+            <button class="nav-btn-signout" id="mSignoutProxy" style="display:none;"><i class="fas fa-sign-out-alt"></i> Sign Out</button>
+            <button class="nav-btn-cta" id="mCtaProxy">Get Started</button>
+        </div>
+    </div>
 
     <!-- Pricing Section -->
     <section class="pricing-hero">
@@ -431,6 +456,54 @@
     <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
 
     <!-- Lightweight server-backed login modal is injected by simple-auth-client.js -->
+    <script>
+    (function(){
+        var btn = document.getElementById('navHamburger');
+        var drawer = document.getElementById('navMobileDrawer');
+        if (!btn || !drawer) return;
+
+        function closeDrawer() {
+            drawer.classList.remove('open');
+            drawer.setAttribute('aria-hidden','true');
+            btn.setAttribute('aria-expanded','false');
+            var ico = btn.querySelector('i');
+            if (ico) ico.className = 'fas fa-bars';
+        }
+
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var open = drawer.classList.toggle('open');
+            drawer.setAttribute('aria-hidden', !open);
+            btn.setAttribute('aria-expanded', open);
+            var ico = btn.querySelector('i');
+            if (ico) ico.className = open ? 'fas fa-times' : 'fas fa-bars';
+        });
+
+        document.addEventListener('click', function(e) {
+            if (!btn.contains(e.target) && !drawer.contains(e.target)) closeDrawer();
+        });
+
+        drawer.querySelectorAll('.nav-mobile-link').forEach(function(a) {
+            a.addEventListener('click', closeDrawer);
+        });
+
+        function proxyAuth(proxyId, targetId) {
+            var proxy = document.getElementById(proxyId);
+            var target = document.getElementById(targetId);
+            if (!proxy || !target) return;
+            proxy.style.display = target.style.display || '';
+            proxy.addEventListener('click', function() { closeDrawer(); target.click(); });
+            new MutationObserver(function() {
+                proxy.style.display = target.style.display;
+            }).observe(target, { attributes: true, attributeFilter: ['style'] });
+        }
+
+        proxyAuth('mPortalProxy',  'portalBtn');
+        proxyAuth('mDashProxy',    'dashboardBtn');
+        proxyAuth('mSignoutProxy', 'signOutBtn');
+        proxyAuth('mCtaProxy',     'createAccountBtn');
+    })();
+    </script>
 </body>
 
 </html>

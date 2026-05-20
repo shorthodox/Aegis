@@ -10,15 +10,42 @@
 </head>
 
 <body>
-    <header class="fixed-header">
-        <div class="logo">⚡ AEGIS <span>v1.0</span></div>
-        <div class="nav-links-centered">
+    <header class="fixed-header" id="main-nav">
+        <a href="/web/src/pages/index.html" class="logo" style="text-decoration:none;">⚡ AEGIS <span>v1.0</span></a>
+
+        <nav class="nav-links-centered" aria-label="Main navigation">
             <a href="/web/src/pages/index.html" class="nav-link">Home</a>
+            <a href="/web/src/pages/index.html#sentinel" class="nav-link">Sentinel</a>
+            <a href="/web/src/pages/index.html#cockpit" class="nav-link">Cockpit</a>
+            <a href="/web/src/pages/index.html#security" class="nav-link">Security</a>
             <a href="/web/src/pages/pricing.html" class="nav-link">Pricing</a>
-            <a href="/web/src/pages/reviews.html" class="nav-link active">Reviews</a>
+        </nav>
+
+        <div class="nav-auth-desktop" style="display:flex;align-items:center;gap:0.5rem;">
+            <a href="/web/src/pages/index.html" class="nav-btn-login">
+                <i class="fas fa-user-shield"></i> Sign In
+            </a>
+            <a href="/web/src/pages/pricing.html" class="nav-btn-cta">
+                Get Started
+            </a>
         </div>
-        <button id="portalBtn" class="portal-btn">Client Login</button>
+
+        <button class="nav-hamburger-btn" id="navHamburger" aria-label="Toggle navigation" aria-expanded="false">
+            <i class="fas fa-bars"></i>
+        </button>
     </header>
+
+    <div class="nav-mobile-drawer" id="navMobileDrawer">
+        <a href="/web/src/pages/index.html" class="nav-mobile-link"><i class="fas fa-home"></i> Home</a>
+        <a href="/web/src/pages/index.html#sentinel" class="nav-mobile-link"><i class="fas fa-satellite-dish"></i> Sentinel</a>
+        <a href="/web/src/pages/index.html#cockpit" class="nav-mobile-link"><i class="fas fa-desktop"></i> Cockpit</a>
+        <a href="/web/src/pages/index.html#security" class="nav-mobile-link"><i class="fas fa-shield-alt"></i> Security</a>
+        <a href="/web/src/pages/pricing.html" class="nav-mobile-link"><i class="fas fa-tag"></i> Pricing</a>
+        <div class="nav-mobile-auth">
+            <a href="/web/src/pages/index.html" class="nav-btn-login"><i class="fas fa-user-shield"></i> Sign In</a>
+            <a href="/web/src/pages/pricing.html" class="nav-btn-cta">Get Started</a>
+        </div>
+    </div>
 
     <section class="feature-section" style="padding-top:120px;">
         <div class="feature-container">
@@ -132,6 +159,36 @@
                 </div>
             </div>
 
+    <script>
+    (function(){
+        var btn = document.getElementById('navHamburger');
+        var drawer = document.getElementById('navMobileDrawer');
+        if (!btn || !drawer) return;
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var open = drawer.classList.toggle('open');
+            btn.setAttribute('aria-expanded', open);
+            var ico = btn.querySelector('i');
+            if (ico) ico.className = open ? 'fas fa-times' : 'fas fa-bars';
+        });
+        document.addEventListener('click', function(e) {
+            if (!btn.contains(e.target) && !drawer.contains(e.target)) {
+                drawer.classList.remove('open');
+                btn.setAttribute('aria-expanded','false');
+                var ico = btn.querySelector('i');
+                if (ico) ico.className = 'fas fa-bars';
+            }
+        });
+        drawer.querySelectorAll('.nav-mobile-link, .nav-btn-login, .nav-btn-cta').forEach(function(a) {
+            a.addEventListener('click', function() {
+                drawer.classList.remove('open');
+                btn.setAttribute('aria-expanded','false');
+                var ico = btn.querySelector('i');
+                if (ico) ico.className = 'fas fa-bars';
+            });
+        });
+    })();
+    </script>
 </body>
 
 </html>

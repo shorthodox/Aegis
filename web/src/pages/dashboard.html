@@ -40,8 +40,8 @@
         <div class="flex items-center gap-4 lg:gap-6">
             <!-- Mobile Menu Toggle -->
             <button id="mobileMenuBtn"
-                class="lg:hidden text-gray-300 hover:text-cyan min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors">
-                <i class="fas fa-bars text-xl"></i>
+                class="lg:hidden text-gray-300 hover:text-cyan min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors rounded-xl border border-white/10 hover:border-cyan/40 hover:bg-cyan/5 active:scale-95 w-11 h-11">
+                <i class="fas fa-bars text-xl" id="mobileMenuIcon"></i>
             </button>
 
             <div class="flex items-center gap-2">
@@ -619,9 +619,11 @@
 
             function toggleMenu() {
                 if (sidebar && overlay) {
+                    const isOpen = sidebar.classList.toggle('translate-x-0');
                     sidebar.classList.toggle('-translate-x-full');
-                    sidebar.classList.toggle('translate-x-0');
                     overlay.classList.toggle('hidden');
+                    const icon = document.getElementById('mobileMenuIcon');
+                    if (icon) icon.className = isOpen ? 'fas fa-times text-xl' : 'fas fa-bars text-xl';
                 }
             }
 
