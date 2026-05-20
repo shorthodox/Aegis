@@ -118,6 +118,7 @@ let signalHistory = [];
 let paperTrades = [];
 let signalDebounceMap = new Map(); // Track last signal time per symbol
 let currentRiskProfile = 'balanced';
+let _lastRenderedTrades = [];
 
 // -------------------------------------------------------------------
 // Signal Status Determination
@@ -346,8 +347,9 @@ function startPaperTrade(symbol, entryPrice, sl, tp) {
 }
 
 function updatePaperTradesUI() {
-  // Update any UI elements showing paper trades
-  console.log('Paper trades updated:', paperTrades.length);
+  if (paperTrades.length > 0) {
+    renderTrades(paperTrades);
+  }
 }
 
 function autoFillTerminal(trade) {
@@ -483,6 +485,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (historyChanged) {
       updateSignalHistoryUI();
       saveSignalHistoryToStorage();
+    }
+  });
+
+  // Refresh trades PnL whenever a tracked symbol's price updates
+  window.addEventListener('priceUpdate', (e) => {
+    const { symbol } = e.detail;
+    if (_lastRenderedTrades.length > 0 && _lastRenderedTrades.some(t => t.symbol === symbol)) {
+      renderTrades(_lastRenderedTrades);
     }
   });
 
@@ -1617,6 +1627,7 @@ function getSignalCardType(direction) {
 }
 
 function renderTrades(trades) {
+  _lastRenderedTrades = trades || [];
   const normalized = (trades || []).map(t => ({
     id:           t.id || t.tradeId || '',
     symbol:       t.symbol || '—',
@@ -1846,11 +1857,15 @@ function setupFirestoreListeners() {
       } catch (_) {}
     }
     const cached = localStorage.getItem('analyticsActiveTrade');
-    if (!cached) return;
-    try {
-      const trade = JSON.parse(cached);
-      if (trade && trade.status === 'open') renderTrades([trade]);
-    } catch (_) {}
+    if (cached) {
+      try {
+        const trade = JSON.parse(cached);
+        if (trade && trade.status === 'open') { renderTrades([trade]); return; }
+      } catch (_) {}
+    }
+    if (paperTrades.length > 0) {
+      renderTrades(paperTrades);
+    }
   };
 }
 
