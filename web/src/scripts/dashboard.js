@@ -1122,7 +1122,7 @@ window.showSignalDetailsModal = function (signal) {
 
   function _featureLockOverlay(minTier) {
     const label = minTier === 'PRO' ? 'PRO' : 'Intermediate';
-    return `<div class="absolute inset-0 bg-black/70 backdrop-blur-sm rounded-xl flex flex-col items-center justify-center z-10">
+    return `<div class="absolute inset-0 bg-black/70 backdrop-blur-sm rounded-xl flex flex-col items-center justify-center z-10 pointer-events-none">
       <i class="fas fa-lock text-gray-400 text-lg mb-1"></i>
       <span class="text-[10px] text-gray-300 font-bold">${label}+ Only</span>
     </div>`;
