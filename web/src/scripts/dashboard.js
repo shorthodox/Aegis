@@ -27,7 +27,11 @@ try {
 let initialized = false;
 
 // Returns 'paid' | 'trial' | 'expired'
+// DEBUG: force 'paid' for all logged-in users while diagnosing feature-access issues.
+// Remove the next two lines to restore real subscription gating.
 async function checkUserSubscriptionStatus(uid) {
+  if (uid) return 'paid';
+
   const now = new Date();
 
   try {
@@ -245,6 +249,9 @@ function handleAuthFailure() {
 }
 
 function setExpiredView() {
+  // If Firestore already confirmed this session as paid, don't let a WS tick override it.
+  if (_subState.isPremium) return;
+
   const dashboardContent = document.getElementById('dashboard-main-content');
   const expiredCard = document.getElementById('access-expired-card');
 
@@ -385,7 +392,11 @@ function blockAllFeatures() {
     const isLogout = el.id === 'logout-btn' || el.id === 'btn-logout' || el.classList.contains('logout-button');
     const isNav = el.closest('nav') !== null || el.closest('header') !== null;
 
-    if (!isExpiredElement && !isLogout && !isNav) {
+    // Never block elements inside the signal modal or feature panels —
+    // those overlays manage their own access gating via lock overlays.
+    const isModalOrPanel = el.closest('#signalDetailsModal, #fp-confluence, #fp-zones, #fp-expectancy, #fp-shap, #fp-api') !== null;
+
+    if (!isExpiredElement && !isLogout && !isNav && !isModalOrPanel) {
       el.style.pointerEvents = 'none';
       el.style.opacity = '0.3';
     }
