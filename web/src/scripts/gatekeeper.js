@@ -1643,8 +1643,20 @@ function getSignalCardType(direction) {
 }
 
 function renderTrades(trades) {
-  _lastRenderedTrades = trades || [];
-  let normalized = (trades || []).map(t => ({
+  // Ensure we only render trades that belong to the currently authenticated
+  // user. Some backend systems (live_engine) may write global executions
+  // which should not appear in a user's Analytics view.
+  let tradesToProcess = trades || [];
+  const uid = (auth && auth.currentUser && auth.currentUser.uid) || (currentUser && currentUser.uid);
+  if (uid && tradesToProcess.length > 0) {
+    const containsOtherUsers = tradesToProcess.some(tt => tt.userId && tt.userId !== uid);
+    if (containsOtherUsers) {
+      tradesToProcess = tradesToProcess.filter(tt => (tt.userId && tt.userId === uid) || String(tt.id || '').startsWith('sim-'));
+    }
+  }
+
+  _lastRenderedTrades = tradesToProcess || [];
+  let normalized = (tradesToProcess || []).map(t => ({
     id:           t.id || t.tradeId || '',
     symbol:       t.symbol || '—',
     side:         t.side || t.direction || 'LONG',
@@ -1972,6 +1984,15 @@ function setupFirestoreListeners() {
           if (!alreadyIn) trades.unshift(trade);
         }
       } catch (_) {}
+    }
+
+    // Filter fallback trades to the current user as well
+    const uid = (auth && auth.currentUser && auth.currentUser.uid) || (currentUser && currentUser.uid);
+    if (uid && trades.length > 0) {
+      const containsOtherUsers = trades.some(t => t.userId && t.userId !== uid);
+      if (containsOtherUsers) {
+        trades = trades.filter(t => (t.userId && t.userId === uid) || String(t.id || '').startsWith('sim-'));
+      }
     }
 
     if (trades.length > 0) { renderTrades(trades); return; }
