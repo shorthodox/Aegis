@@ -2236,3 +2236,67 @@ function setupFooter() {
       <div class="footer-links">
         <a href="/web/src/pages/terms.html">Terms of Service</a>
         <span class="separator">•</span>
+        <a href="/web/src/pages/refund-policy.html">Refund Policy</a>
+        <span class="separator">•</span>
+        <a href="/web/src/pages/risk-disclosure.html">Risk Disclosure</a>
+      </div>
+      <div class="footer-proprietor">
+        Proprietor: Animesh Kukreti | Dehradun, Uttarakhand, India
+      </div>
+      <p>© 2025 AEGIS v1.0 — Sovereign Intelligence Terminal</p>
+    `;
+    footer.innerHTML = legalHtml;
+  }
+}
+
+// -------------------------------------------------------------------
+// Missing User/Settings Utilities for app.js
+// -------------------------------------------------------------------
+export async function ensureUserDocument(user) {
+  if (!user) return null;
+  const userDocRef = doc(db, 'users', user.uid);
+  const docSnap = await getDoc(userDocRef);
+  if (!docSnap.exists()) {
+    await setDoc(userDocRef, {
+      uid: user.uid,
+      email: user.email || '',
+      joinDate: serverTimestamp(),
+      lastLogin: serverTimestamp()
+    });
+  } else {
+    await updateDoc(userDocRef, { lastLogin: serverTimestamp() });
+  }
+}
+
+export function subscribeUserSettings(user, callback) {
+  if (!user) return () => { };
+  const ref = doc(db, 'users', user.uid, 'preferences', 'settings');
+  return onSnapshot(ref, (docSnap) => {
+    if (docSnap.exists()) {
+      callback(docSnap.data());
+    } else {
+      callback({ capital: 10000, risk_pct: 1 });
+    }
+  });
+}
+
+export async function updateUserSetting(user, key, value) {
+  if (!user) return;
+  const ref = doc(db, 'users', user.uid, 'preferences', 'settings');
+  await setDoc(ref, { [key]: value }, { merge: true });
+}
+
+// Expose functions globally for HTML access
+window.initiatePaperTrade = initiatePaperTrade;
+
+export function getCurrentUserToken() {
+  return AuthManager.getToken();
+}
+
+// -------------------------------------------------------------------
+// Export for module usage
+// -------------------------------------------------------------------
+export {
+  currentUser, currentUserData, userPlan, trialActive, allowedTokens,
+  getUpgradeModal, showUpgradeModal, handleLogout as logout
+};
