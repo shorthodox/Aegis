@@ -90,6 +90,12 @@ FLEET_SYMBOLS = [
     'SKY/USDT', 'TRUMP/USDT', 'NIGHT/USDT'
 ]
 
+# Explicitly ensure these new multi-timeframe structural features are included
+FEATURE_ADDONS = [
+    'pct_dist_to_resistance', 'pct_dist_to_support', 'range_position_score',
+    'macro_trend_1d', 'macro_trend_1w', 'macro_confluence_score'
+]
+
 # News configuration
 NEWS_FILE = Path(root_dir) / "data" / "news_data.json"
 NEWS_MAX_AGE_SECONDS = 30 * 60  # 30 minutes
@@ -119,13 +125,14 @@ def create_triple_barrier_labels(df: pd.DataFrame, atr_multiplier: float,
                                  max_lookahead: int = 48,
                                  volatility_regime: Optional[pd.Series] = None,
                                  efficiency_ratio: Optional[pd.Series] = None,
-                                 trend_regime: Optional[pd.Series] = None) -> pd.Series:
+                                 trend_regime: Optional[pd.Series] = None,
+                                 macro_confluence_score: Optional[pd.Series] = None) -> pd.Series:
     """
     Labels for 3-class classification:
     - 0 = SELL (lower barrier hit first)
     - 1 = HOLD (no barrier hit within lookahead)
     - 2 = BUY (upper barrier hit first)
-    Uses adaptive volatility threshold and efficiency filter.
+    Uses adaptive volatility threshold, efficiency filter, and macro regime suppression.
     """
     if df is None or df.empty:
         return pd.Series(dtype=int)
@@ -165,6 +172,11 @@ def create_triple_barrier_labels(df: pd.DataFrame, atr_multiplier: float,
             if low <= lower:
                 hit = 0  # SELL signal
                 break
+
+        if hit == 2 and macro_confluence_score is not None and macro_confluence_score.iloc[i] == 2.0:
+            hit = None
+        if hit == 0 and macro_confluence_score is not None and macro_confluence_score.iloc[i] == -2.0:
+            hit = None
 
         labels.iloc[i] = hit if hit is not None else 1  # 1 = HOLD (default)
     return labels
@@ -478,7 +490,17 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
 
         # Feature engineering (all 60+ indicators, no target yet)
         print("🛠 Applying feature engineering (enhanced indicators)...")
-        df = prepare_features(df, btc_df=btc_df, news_df=news_df, add_target_flag=False)
+        # Fetch macro timeframes to provide regime anchors. The predictor does not support
+        # native weekly '1w' slices, so we gather daily history and derive weekly context.
+        df_1d = None
+        df_1w = None
+        try:
+            df_1d = p.fetch_live_data(timeframe='1d', limit=max(1000, int(hours / 24) + 10))
+        except Exception:
+            df_1d = None
+        # We intentionally avoid a native 1w query and derive weekly anchors from daily data.
+
+        df = prepare_features(df, btc_df=btc_df, news_df=news_df, add_target_flag=False, df_1d=df_1d, df_1w=df_1w)
         if df is None or df.empty:
             print(f"❌ Feature engineering failed for {symbol}")
             return None
@@ -498,8 +520,10 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             max_lookahead=48,
             volatility_regime=df['volatility_regime'],
             efficiency_ratio=df['efficiency_ratio_10'],
-            trend_regime=df['trend_regime']
+            trend_regime=df['trend_regime'],
+            macro_confluence_score=df.get('macro_confluence_score')
         )
+        df = df.copy()
         df['target'] = labels
         df['target'] = df['target'].fillna(1).astype(int)
         if not df['target'].isin([0, 1, 2]).all():
@@ -510,7 +534,12 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             print(f"⚠️ Too few samples ({len(df)}), skipping")
             return None
 
+        # Start with all computed numeric features excluding timestamp & target
         feature_cols = [c for c in df.columns if c not in ['timestamp', 'target']]
+        # Ensure feature addons are present in the active training set (if available)
+        for addon in FEATURE_ADDONS:
+            if addon in df.columns and addon not in feature_cols:
+                feature_cols.append(addon)
         y = df['target'].to_numpy().astype(int)
 
         # Class distribution reporting (3-class: 0=SELL, 1=HOLD, 2=BUY)

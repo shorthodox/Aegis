@@ -538,13 +538,45 @@ class AdaptiveBacktester:
         news_df = predictor.load_news_data()
         if btc_df is None or btc_df.empty:
             btc_df = pd.DataFrame({"timestamp": df["timestamp"], "close": 0.0})
+            btc_df["open"] = btc_df["high"] = btc_df["low"] = btc_df["close"]
+            btc_df["volume"] = 0
         if news_df is None or news_df.empty:
             news_df = pd.DataFrame({"timestamp": df["timestamp"], "sentiment": 0.0})
-        df = prepare_features(df, btc_df=btc_df, news_df=news_df)
+
+        df_1d = None
+        try:
+            df_1d = predictor.fetch_live_data(timeframe='1d', limit=max(1000, int(hours / 24) + 50))
+        except Exception:
+            df_1d = None
+
+        df = prepare_features(
+            df,
+            btc_df=btc_df,
+            news_df=news_df,
+            add_target_flag=False,
+            forward_hours=MAX_HOLD_CANDLES,
+            df_1d=df_1d,
+            df_1w=None,
+            macro_state=None
+        )
         if df is None or df.empty:
             return None
-        df["prob"] = predictor.predict(df)
-        df["atr_14"] = compute_atr(df, 14)
+        df = df.sort_values('timestamp').reset_index(drop=True)
+
+        probabilities = predictor.predict(df)
+        if isinstance(probabilities, np.ndarray) and probabilities.ndim == 2:
+            df['prob_sell'] = [row[0] for row in probabilities]
+            df['prob_hold'] = [row[1] for row in probabilities]
+            df['prob_buy'] = [row[2] for row in probabilities]
+            df['prob'] = df['prob_buy']
+        else:
+            prob_values = [float(x) for x in list(probabilities)] if hasattr(probabilities, '__iter__') else [float(probabilities)]
+            df['prob'] = prob_values
+            df['prob_buy'] = df['prob']
+            df['prob_hold'] = 0.0
+            df['prob_sell'] = 0.0
+
+        df['atr_14'] = compute_atr(df, 14)
         return df
 
 

@@ -127,6 +127,8 @@ VOLUME_LOW_FACTOR = 1.10
 THRESHOLD_FLOOR = 0.05
 THRESHOLD_CEIL = 3.00
 
+PROXIMITY_THRESHOLD = 0.005  # 0.5% proximity to S&R boundary triggers alert
+
 MODE_PARAMS = {
     "conservative": {"entry_prob": 0.75, "risk_pct": 0.015, "atr_sl": 1.2, "atr_tp": 1.8},
     "balanced":     {"entry_prob": 0.70, "risk_pct": 0.020, "atr_sl": 1.5, "atr_tp": 2.0},
@@ -766,6 +768,7 @@ class SignalGenerator:
         self.regime_detector = RegimeDetector()
         self.threshold_engine = ThresholdEngine()
         self.score_history: Dict[str, Deque[float]] = {norm_sym: deque(maxlen=5) for norm_sym in self.configs.keys()}
+        self.macro_cache: Dict[str, Dict[str, float]] = {}
 
     def _align_features(self, df: pd.DataFrame, expected_features: List[str]) -> Optional[pd.DataFrame]:
         missing = [f for f in expected_features if f not in df.columns]
@@ -775,7 +778,44 @@ class SignalGenerator:
         aligned = df[expected_features].copy()
         return aligned
 
-    async def compute_signal(self, symbol: str, fetcher: MarketDataFetcher, alpha_mode: bool, btc_healthy: bool = True) -> Optional[Dict]:
+    async def compute_macro_trend(self, symbol: str, fetcher: MarketDataFetcher) -> Tuple[str, Dict]:
+        """
+        Compute macro trend for `symbol` using 1d and 1w EMA50 comparison.
+        Returns (trend, telemetry)
+        trend: 'BULL', 'BEAR', or 'DIVERGENT'
+        telemetry: dict with ema50_1d, ema50_1w, close_1d, close_1w
+        """
+        norm_sym = normalize_symbol(symbol)
+        try:
+            df_1d = await fetcher.get_data(norm_sym, '1d', lookback_hours=800)
+            df_1w = await fetcher.get_data(norm_sym, '1w', lookback_hours=4000)
+            if df_1d.empty or df_1w.empty:
+                return 'DIVERGENT', {}
+
+            ema50_1d = df_1d['close'].ewm(span=50, adjust=False).mean().iloc[-1]
+            ema50_1w = df_1w['close'].ewm(span=50, adjust=False).mean().iloc[-1]
+            close_1d = float(df_1d['close'].iloc[-1])
+            close_1w = float(df_1w['close'].iloc[-1])
+
+            bull_1d = close_1d > ema50_1d
+            bull_1w = close_1w > ema50_1w
+
+            macro_state = {
+                'trend_1d': 1.0 if bull_1d else -1.0,
+                'trend_1w': 1.0 if bull_1w else -1.0,
+                'confluence_score': float((1.0 if bull_1d else -1.0) + (1.0 if bull_1w else -1.0))
+            }
+            self.macro_cache[norm_sym] = macro_state
+            if bull_1d and bull_1w:
+                return 'BULL', { 'ema50_1d': float(ema50_1d), 'ema50_1w': float(ema50_1w), 'close_1d': close_1d, 'close_1w': close_1w }
+            if not bull_1d and not bull_1w:
+                return 'BEAR', { 'ema50_1d': float(ema50_1d), 'ema50_1w': float(ema50_1w), 'close_1d': close_1d, 'close_1w': close_1w }
+            return 'DIVERGENT', { 'ema50_1d': float(ema50_1d), 'ema50_1w': float(ema50_1w), 'close_1d': close_1d, 'close_1w': close_1w }
+        except Exception as e:
+            logger.debug(f"Macro trend compute failed for {symbol}: {e}")
+            return 'DIVERGENT', {}
+
+    async def compute_signal(self, symbol: str, fetcher: MarketDataFetcher, alpha_mode: bool, timeframe: str = '1h', btc_healthy: bool = True, macro_trend: Optional[str] = None) -> Optional[Dict]:
         # Normalize incoming symbol (e.g., BTC_USDT -> BTC/USDT)
         norm_sym = normalize_symbol(symbol)
         cfg = self.configs.get(norm_sym)
@@ -785,15 +825,22 @@ class SignalGenerator:
 
         current_risk_pct = self.alpha_risk_pct if alpha_mode else cfg.risk_pct
 
-        df_1m = await fetcher.get_data(norm_sym, '1m', lookback_hours=2)
-        if df_1m.empty or len(df_1m) < 50:
-            logger.warning(f"{norm_sym}: insufficient 1m data")
+        # Primary timeframe data (allows generating signals per timeframe)
+        tf_lookbacks = {
+            '1m': 2, '5m': 6, '15m': 24, '30m': 48,
+            '1h': 200, '4h': 400, '1d': 800, '1w': 4000
+        }
+        lookback = tf_lookbacks.get(timeframe, 200)
+        df_tf = await fetcher.get_data(norm_sym, timeframe, lookback_hours=lookback)
+        if df_tf.empty or len(df_tf) < 20:
+            logger.debug(f"{norm_sym} {timeframe}: insufficient data (len={len(df_tf)})")
             return None
-        current_price = float(df_1m['close'].iloc[-1])
+        current_price = float(df_tf['close'].iloc[-1])
 
+        # Context: keep 1h features for the core model preprocessing (backward compatible)
         df_1h = await fetcher.get_data(norm_sym, '1h', lookback_hours=200)
-        if df_1h.empty or len(df_1h) < 100:
-            return None
+        if df_1h.empty or len(df_1h) < 20:
+            df_1h = df_tf.copy()
 
         df_1h['atr'] = compute_atr(df_1h, 14)
         df_1h['volume_ma'] = df_1h['volume'].rolling(VOLUME_LOOKBACK).mean()
@@ -820,15 +867,50 @@ class SignalGenerator:
                 pass
 
         full_1h = df_1h.reset_index()
+        macro_state = self.macro_cache.get(norm_sym)
         features_df = prepare_features(
             full_1h,
             btc_df.reset_index() if not btc_df.empty else None,
-            pd.DataFrame([{'timestamp': datetime.now(), 'sentiment': news_score}])
+            pd.DataFrame([{'timestamp': datetime.now(), 'sentiment': news_score}]),
+            add_target_flag=False,
+            forward_hours=1,
+            df_1d=None,
+            df_1w=None,
+            macro_state=macro_state
         )
         if features_df is None or features_df.empty:
             return None
 
+        _current_row = features_df.iloc[-1]
         latest_features = features_df.iloc[-1:].drop(columns=['timestamp', 'target'], errors='ignore')
+
+        try:
+            dist_to_support = float(_current_row["pct_dist_to_support"])
+            dist_to_resistance = float(_current_row["pct_dist_to_resistance"])
+            if dist_to_support <= PROXIMITY_THRESHOLD:
+                sr_alert_state = "NEAR_SUPPORT"
+            elif dist_to_resistance <= PROXIMITY_THRESHOLD:
+                sr_alert_state = "NEAR_RESISTANCE"
+            else:
+                sr_alert_state = "NONE"
+            sr_telemetry = {
+                "support_line": float(_current_row["rolling_support"]),
+                "resistance_line": float(_current_row["rolling_resistance"]),
+                "dist_to_support_pct": round(dist_to_support * 100, 4),
+                "dist_to_resistance_pct": round(dist_to_resistance * 100, 4),
+                "alert_state": sr_alert_state,
+            }
+        except (KeyError, TypeError, ValueError):
+            sr_telemetry = {
+                "support_line": None, "resistance_line": None,
+                "dist_to_support_pct": None, "dist_to_resistance_pct": None,
+                "alert_state": "NONE",
+            }
+
+        macro_regime = {
+            "confluence_score": float(_current_row.get("macro_confluence_score", 0.0)),
+            "trend_1d": float(_current_row.get("macro_trend_1d", 0.0)),
+        }
 
         model_path = MODEL_STORE / f"{norm_sym.replace('/', '_')}_model.json"
         if not model_path.exists():
@@ -1061,6 +1143,8 @@ class SignalGenerator:
             "profitability_index": expected_net_pct / 100 if expected_net_pct else 0.0,
             "btc_dist_ema200": _btc_dist,
             "data_timestamp": datetime.now().isoformat(),
+            "sr_telemetry": sr_telemetry,
+            "macro_regime": macro_regime,
         }
 
 # -------------------------------------------------------------------
@@ -1436,8 +1520,91 @@ class LiveEngine:
                 continue
 
             self.signal_gen.alpha_risk_pct = self.alpha_risk_pct
-            tasks = [self.signal_gen.compute_signal(cfg.symbol, self.fetcher, self.alpha_mode, btc_safe) for cfg in self.token_configs]
-            signals = await asyncio.gather(*tasks)
+
+            # Macro-first multi-timeframe signal computation
+            tf_blocks = ['1m','5m','15m','30m','1h','4h','1d','1w']
+
+            # 1) Macro trend computation (parallel)
+            macro_tasks = {cfg.symbol: asyncio.create_task(self.signal_gen.compute_macro_trend(cfg.symbol, self.fetcher)) for cfg in self.token_configs}
+            macro_results: Dict[str, str] = {}
+            for sym, task in macro_tasks.items():
+                try:
+                    trend, _tele = await task
+                    macro_results[sym] = trend
+                except Exception:
+                    macro_results[sym] = 'DIVERGENT'
+
+            # 2) Per-timeframe compute tasks
+            compute_tasks = []
+            for cfg in self.token_configs:
+                sym = cfg.symbol
+                for tf in tf_blocks:
+                    compute_tasks.append((sym, tf, asyncio.create_task(self.signal_gen.compute_signal(sym, self.fetcher, self.alpha_mode, timeframe=tf, btc_healthy=btc_safe, macro_trend=macro_results.get(sym)))))
+
+            # 3) Await per-timeframe tasks and apply macro filtering rules
+            nested_signals: Dict[str, Dict[str, Optional[Dict]]] = {cfg.symbol: {} for cfg in self.token_configs}
+            for sym, tf, task in compute_tasks:
+                sig = None
+                try:
+                    sig = await task
+                except Exception:
+                    sig = None
+
+                macro = macro_results.get(sym, 'DIVERGENT')
+                lower_tfs = ['1m','5m','15m','30m','1h','4h']
+                if sig and tf in lower_tfs:
+                    direction = sig.get('direction', 'NEUTRAL')
+                    if macro == 'BULL' and direction == 'SHORT':
+                        sig['signal'] = 'HOLD'
+                        sig['signal_strength'] = 'HOLD'
+                        sig['direction'] = 'NEUTRAL'
+                    elif macro == 'BEAR' and direction == 'LONG':
+                        sig['signal'] = 'HOLD'
+                        sig['signal_strength'] = 'HOLD'
+                        sig['direction'] = 'NEUTRAL'
+                    elif macro == 'DIVERGENT':
+                        sig['signal'] = 'HOLD'
+                        sig['signal_strength'] = 'HOLD'
+                        sig['direction'] = 'NEUTRAL'
+
+                if isinstance(sig, dict):
+                    sig['timeframe'] = tf
+
+                nested_signals[sym][tf] = sig
+
+            # 4) Confirmation engine per-timeframe (suppress signals if confirmation rejects)
+            for sym, tf_map in nested_signals.items():
+                for tf, s in tf_map.items():
+                    if not s or s.get('direction', 'NEUTRAL') == 'NEUTRAL':
+                        continue
+                    try:
+                        ok, reason = await confirm_live_signal(s['symbol'], s, pd.Series(s))
+                        if not ok:
+                            logger.warning(f"⚠️ Signal for {s['symbol']} {tf} suppressed by Confirmation Engine. Reason: {reason}")
+                            nested_signals[sym][tf] = None
+                    except Exception as e:
+                        logger.debug(f"Confirmation check failed for {sym} {tf}: {e}")
+
+            # 5) Persist nested results into last_signals (symbol -> timeframe -> signal)
+            for sym, tf_map in nested_signals.items():
+                self.last_signals[sym] = tf_map
+
+            # 6) Build a flattened frontend_signals list used by older UI paths: pick 1h as summary if present
+            signals = []
+            for sym, tf_map in nested_signals.items():
+                chosen = None
+                if tf_map.get('1h'):
+                    chosen = tf_map.get('1h')
+                else:
+                    # pick first non-null timeframe in order
+                    for tf in tf_blocks:
+                        if tf_map.get(tf):
+                            chosen = tf_map.get(tf)
+                            break
+                if chosen:
+                    if 'signal_id' not in chosen:
+                        chosen['signal_id'] = str(uuid.uuid4())
+                    signals.append(chosen)
 
             # ── Confirmation Engine gate ──────────────────────────────────
             _confirmed: List[Optional[Dict]] = []
@@ -1491,7 +1658,8 @@ class LiveEngine:
                         "shap_contributions": sig.get("shap_contributions", []),
                         "confluence_scorecards": sig.get("confluence_scorecards", {}),
                         "visual_zone_tracking": sig.get("visual_zone_tracking", {}),
-                        "expectancy_matrix": sig.get("expectancy_matrix", {})
+                        "expectancy_matrix": sig.get("expectancy_matrix", {}),
+                        "sr_telemetry": sig.get("sr_telemetry", {}),
                     })
             
             # Push signals to dashboard

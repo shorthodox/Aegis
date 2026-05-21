@@ -1224,8 +1224,11 @@ function initializeTerminalListeners() {
 // SIGNAL DETAILS MODAL LOGIC
 // ============================================================
 window.showSignalDetailsModal = function (signal) {
+  const wrapper = document.getElementById('token-details-modal');
   const modal = document.getElementById('signalDetailsModal');
   if (!modal) return;
+  if (wrapper) wrapper.classList.remove('hidden');
+  modal.classList.remove('hidden');
 
   // Basic Information
   document.getElementById('sd-symbol').textContent = signal.symbol;
@@ -1472,7 +1475,7 @@ window.showSignalDetailsModal = function (signal) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  const modal = document.getElementById('signalDetailsModal');
+  const modal = document.getElementById('token-details-modal') || document.getElementById('signalDetailsModal');
   const closeBtn = document.getElementById('closeSignalDetailsBtn');
 
   if (closeBtn) {
@@ -1485,9 +1488,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Single delegating listener: feature-card clicks are caught first so inner
     // elements never accidentally trigger the backdrop-close branch.
     modal.addEventListener('click', (e) => {
-      const card = e.target.closest('[data-open-panel]');
+      const card = e.target.closest('[data-open-panel], .feature-card-trigger');
       if (card) {
-        const panelId = card.dataset.openPanel;
+        const panelId = card.dataset.openPanel || card.dataset.target;
         if (panelId && typeof window.openFeaturePanel === 'function') {
           window.openFeaturePanel(panelId);
         }

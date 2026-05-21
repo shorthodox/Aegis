@@ -87,6 +87,32 @@ export class SignalStore {
     updateMultiple(signalsObj) {
         let changed = false;
         for (const [pair, data] of Object.entries(signalsObj)) {
+            // Support nested timeframe map: { symbol: { '1m': {...}, '1h': {...} } }
+            if (data && typeof data === 'object' && Object.keys(data).every(k => /^(1m|5m|15m|30m|1h|4h|1d|1w)$/.test(k))) {
+                for (const [tf, tfdata] of Object.entries(data)) {
+                    const key = `${pair}_${tf}`;
+                    const payload = tfdata || {};
+                    const entry = {
+                        pair: key,
+                        signal: payload.signal || "WAITING",
+                        entry: payload.price || payload.entry_price || payload.entry || 0,
+                        sl: payload.sl || 0,
+                        tp: payload.tp || 0,
+                        status: payload.status || "OPEN",
+                        time: payload.time || new Date().toISOString(),
+                        timeframe: tf,
+                        confidence: payload.ai_prob !== undefined ? payload.ai_prob : (payload.confidence || 0),
+                        rr: payload.rr || 0,
+                        atr: payload.atr || 0
+                    };
+                    if (!this.signals[key] || JSON.stringify(this.signals[key]) !== JSON.stringify(entry)) {
+                        this.signals[key] = entry;
+                        changed = true;
+                    }
+                }
+                continue;
+            }
+
             if (!this.signals[pair] || JSON.stringify(this.signals[pair]) !== JSON.stringify(data)) {
                 this.signals[pair] = {
                     pair: pair,

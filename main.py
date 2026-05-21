@@ -453,38 +453,71 @@ async def run_engine_background():
                     count = 0
                     now_str = datetime.now(timezone.utc).isoformat()
                     for sym, sig in signals_data.items():
-                        doc_id = sym.replace('/', '_')
-                        sig_ref = db.collection("signals").document(doc_id)
-                        
-                        # Convert signals to a plain dictionary safely
-                        if isinstance(sig, dict):
-                            sig_data = sig.copy()
-                        elif hasattr(sig, 'dict') and callable(sig.dict):
-                            sig_data = sig.dict()
-                        elif hasattr(sig, '__dataclass_fields__'):
-                            sig_data = asdict(sig)
-                        elif hasattr(sig, '__dict__'):
-                            sig_data = vars(sig).copy()
-                        else:
-                            try:
-                                sig_data = dict(sig)
-                            except Exception:
-                                sig_data = {'value': sig}
+                        # signals_data may be nested: { symbol: { timeframe: sigobj, ... } }
+                        if isinstance(sig, dict) and any(isinstance(v, dict) or v is None for v in sig.values()):
+                            # Flatten: write one doc per timeframe
+                            for tf, tf_sig in sig.items():
+                                doc_id = f"{sym.replace('/', '_')}_{tf}"
+                                sig_ref = db.collection("signals").document(doc_id)
+                                if tf_sig is None:
+                                    sig_data = {'symbol': sym, 'timeframe': tf, 'timestamp': now_str}
+                                else:
+                                    # Normalize into a plain dict safely
+                                    try:
+                                        sig_data = numpy_to_native(tf_sig)
+                                    except Exception:
+                                        sig_data = tf_sig
+                                    if not isinstance(sig_data, dict):
+                                        try:
+                                            # attempt conversion
+                                            sig_data = dict(sig_data)
+                                        except Exception:
+                                            sig_data = {'value': sig_data}
+                                    # Ensure metadata keys exist
+                                    sig_data['symbol'] = sym
+                                    sig_data['timeframe'] = tf
+                                    sig_data['timestamp'] = now_str
 
-                        # Ensure sig_data is a dict before setting keys
-                        if not isinstance(sig_data, dict):
-                            sig_data = {'value': sig_data}
-                        
-                        sig_data['symbol'] = sym
-                        sig_data['timestamp'] = now_str
-                        
-                        # Fix numpy serialization here
-                        sig_data = numpy_to_native(sig_data)
-                        if not isinstance(sig_data, dict):
-                            sig_data = {'value': sig_data, 'symbol': sym, 'timestamp': now_str}
-                        
-                        batch.set(sig_ref, sig_data, merge=True)
-                        count += 1
+                                sig_data = numpy_to_native(sig_data)
+                                if not isinstance(sig_data, dict):
+                                    sig_data = {'value': sig_data, 'symbol': sym, 'timeframe': tf, 'timestamp': now_str}
+                                batch.set(sig_ref, dict(sig_data), merge=True)
+                                count += 1
+                                if count >= 450:
+                                    results = batch.commit()
+                                    print(f"[PRODUCER SUCCESS] Batch committed {count} signals. Last commit timestamp: {results[-1].update_time if results else 'N/A'}")
+                                    batch = db.batch()
+                                    count = 0
+                        else:
+                            doc_id = sym.replace('/', '_')
+                            sig_ref = db.collection("signals").document(doc_id)
+                            # Convert single signal object
+                            if isinstance(sig, dict):
+                                sig_data = sig.copy()
+                            elif hasattr(sig, 'dict') and callable(sig.dict):
+                                sig_data = sig.dict()
+                            elif hasattr(sig, '__dataclass_fields__'):
+                                sig_data = asdict(sig)
+                            elif hasattr(sig, '__dict__'):
+                                sig_data = vars(sig).copy()
+                            else:
+                                try:
+                                    sig_data = dict(sig)
+                                except Exception:
+                                    sig_data = {'value': sig}
+
+                            if not isinstance(sig_data, dict):
+                                sig_data = {'value': sig_data}
+
+                            sig_data['symbol'] = sym
+                            sig_data['timestamp'] = now_str
+                            sig_data = numpy_to_native(sig_data)
+                            if not isinstance(sig_data, dict):
+                                sig_data = {'value': sig_data, 'symbol': sym, 'timestamp': now_str}
+                            batch.set(sig_ref, dict(sig_data), merge=True)
+                            count += 1
+
+                        # commit in chunks handled above for nested case
                         
                         if count >= 450:
                             results = batch.commit()
@@ -1797,9 +1830,79 @@ async def websocket_dashboard(websocket: WebSocket):
                         pass
                     return {}
 
+                # Build both a flattened summary map (for legacy clients) and a timeframe-aware map
                 filtered_signals = {}
+                timeframes_map: Dict[str, Dict[str, Dict]] = {}
+                response_timeframe = None
                 for sym, sig in LIVE_STATE.data.get("signals", {}).items():
-                    if sym in allowed_tokens:
+                    if sym not in allowed_tokens:
+                        continue
+
+                    # If sig is nested per timeframe
+                    if isinstance(sig, dict) and any(isinstance(v, dict) or v is None for v in sig.values()):
+                        timeframes_map[sym] = {}
+                        # choose summary as 1h if present
+                        summary = None
+                        for tf, tf_sig in sig.items():
+                            if tf_sig is None:
+                                continue
+                            tf_data = normalize_signal_data(tf_sig)
+                            tf_data['timeframe'] = tf
+                            timeframes_map[sym][tf] = tf_data
+                            if tf == '1h' and summary is None:
+                                summary = tf_data
+
+                        # fallback pick first non-null tf as summary
+                        if summary is None:
+                            for tf in ['1h','4h','15m','30m','1m']:
+                                if timeframes_map[sym].get(tf):
+                                    summary = timeframes_map[sym][tf]
+                                    break
+
+                        if summary is None:
+                            filtered_signals[sym] = {
+                                "ai_prob": 0,
+                                "signal": "WAITING",
+                                "threshold": 0,
+                                "signal_strength": "NONE",
+                                "atr": 0,
+                                "risk_pct": 2,
+                                "direction": "NEUTRAL",
+                                "entry_price": 0.0,
+                                "sl": None,
+                                "tp": None,
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
+                                "confidence_score": 0,
+                                "signal_id": "",
+                                "trading_accuracy": 0.65,
+                                "profitability_index": 1.0,
+                                "sr_telemetry": None,
+                                "timeframe": "1h",
+                            }
+                        else:
+                            filtered_signals[sym] = {
+                                "ai_prob": summary.get("ai_prob", 0),
+                                "signal": summary.get("signal", "WAITING"),
+                                "threshold": summary.get("threshold", 0),
+                                "signal_strength": summary.get("signal_strength", "NONE"),
+                                "atr": summary.get("atr", 0),
+                                "risk_pct": summary.get("risk_pct", 2),
+                                "direction": summary.get("direction", "NEUTRAL"),
+                                "entry_price": summary.get("entry_price", 0.0),
+                                "sl": summary.get("sl"),
+                                "tp": summary.get("tp"),
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
+                                "confidence_score": summary.get("ai_prob", 0) * 100,
+                                "signal_id": summary.get("signal_id", ""),
+                                "trading_accuracy": summary.get("trading_accuracy", 0.65),
+                                "profitability_index": summary.get("profitability_index", 1.5),
+                                "sr_telemetry": summary.get("sr_telemetry"),
+                                "macro_regime": summary.get("macro_regime"),
+                                "timeframe": summary.get("timeframe", "1h"),
+                            }
+                            if response_timeframe is None:
+                                response_timeframe = summary.get("timeframe", "1h")
+                    else:
                         sig_data = normalize_signal_data(sig)
                         if not isinstance(sig_data, dict):
                             sig_data = {}
@@ -1821,7 +1924,10 @@ async def websocket_dashboard(websocket: WebSocket):
                             "trading_accuracy": sig_data.get("trading_accuracy", 0.65),
                             "profitability_index": sig_data.get("profitability_index", 1.5),
                             "sr_telemetry": sig_data.get("sr_telemetry"),
+                            "macro_regime": sig_data.get("macro_regime"),
+                            "timeframe": sig_data.get("timeframe", "1h"),
                         }
+                # Attach under a distinct key in response_data below
 
                 # Collect active S&R proximity alerts for frontend toast
                 sr_alerts = []
@@ -1840,6 +1946,8 @@ async def websocket_dashboard(websocket: WebSocket):
                 response_data = {
                     "tickers": {k: v for k, v in LIVE_STATE.data["tickers"].items() if k in allowed_tokens},
                     "signals": filtered_signals,
+                    "timeframes": timeframes_map,
+                    "timeframe": response_timeframe or "1h",
                     "open_trades": LIVE_STATE.data["open_trades"],
                     "balance": LIVE_STATE.data["balance"],
                     "alpha_mode": LIVE_STATE.data["alpha_mode"] and (get_user_plan(current_user_email) == "pro" if current_user_email else False),

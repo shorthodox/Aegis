@@ -145,12 +145,17 @@ export class WebSocketManager {
                     } else {
                         this.signalStore.updateSignal(msg.data);
                     }
-                } else if (msg.type === "dashboard_update" || (!msg.type && msg.signals)) {
+                } else if (msg.type === "dashboard_update" || (!msg.type && (msg.signals || msg.timeframes))) {
                     // Unified backend fallback
                     if (msg.signals) {
                         msg.signals = this.handleExpirations(msg.signals);
                         this.signalStore.updateMultiple(msg.signals);
                         // Also sweep any old signals currently in the store
+                        this.cleanupExpiredSignals();
+                    }
+                    if (msg.timeframes) {
+                        // timeframes is nested: { symbol: { tf: sig, ... } }
+                        this.signalStore.updateMultiple(msg.timeframes);
                         this.cleanupExpiredSignals();
                     }
                     if (this.onDashboardUpdate) {

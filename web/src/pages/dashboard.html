@@ -137,7 +137,7 @@
 
         <!-- Sidebar Navigation -->
         <aside id="sidebar"
-            class="sidebar fixed top-0 lg:top-[73px] left-0 bottom-0 z-40 w-[280px] transform -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out glass-panel border-r border-white/10 flex flex-col overflow-hidden bg-deep/95 shadow-2xl"
+            class="sidebar fixed top-0 lg:top-[73px] left-0 bottom-0 z-40 w-[280px] transform -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out glass-panel border-r border-white/10 flex flex-col justify-between overflow-hidden bg-deep/95 shadow-2xl"
             style="padding-bottom: env(safe-area-inset-bottom); padding-bottom: constant(safe-area-inset-bottom);">
             <!-- Mobile Header -->
             <div class="flex items-center justify-between lg:hidden p-4 border-b border-white/10">
@@ -807,9 +807,8 @@
     </div>
 
     <!-- Signal Details Modal (Popping Card) -->
-    <div id="signalDetailsModal"
-        class="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md hidden p-4">
-        <div
+    <div id="token-details-modal" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md hidden p-4">
+        <div id="signalDetailsModal"
             class="bg-void border border-cyan/30 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-[0_0_40px_rgba(0,242,255,0.15)] relative">
             <!-- Header -->
             <div
@@ -828,24 +827,24 @@
             <!-- Feature Quick-Nav -->
             <div class="sticky top-[57px] z-10 bg-void/95 backdrop-blur border-b border-white/5 px-4 py-2">
                 <div class="flex gap-2 overflow-x-auto scrollbar-none" id="sd-feature-nav">
-                    <button onclick="window.openFeaturePanel && window.openFeaturePanel('fp-confluence')"
-                        class="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-cyan/10 text-cyan border border-cyan/30 hover:bg-cyan/20 transition-all whitespace-nowrap">
+                    <button class="feature-card-trigger flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-cyan/10 text-cyan border border-cyan/30 hover:bg-cyan/20 transition-all whitespace-nowrap"
+                        data-target="fp-confluence">
                         <i class="fas fa-layer-group text-[9px]"></i> Confluence
                     </button>
-                    <button onclick="window.openFeaturePanel && window.openFeaturePanel('fp-zones')"
-                        class="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-violet-500/10 text-violet-300 border border-violet-500/30 hover:bg-violet-500/20 transition-all whitespace-nowrap">
+                    <button class="feature-card-trigger flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-violet-500/10 text-violet-300 border border-violet-500/30 hover:bg-violet-500/20 transition-all whitespace-nowrap"
+                        data-target="fp-zones">
                         <i class="fas fa-map-marker-alt text-[9px]"></i> Zones
                     </button>
-                    <button onclick="window.openFeaturePanel && window.openFeaturePanel('fp-expectancy')"
-                        class="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/20 transition-all whitespace-nowrap">
+                    <button class="feature-card-trigger flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/20 transition-all whitespace-nowrap"
+                        data-target="fp-expectancy">
                         <i class="fas fa-chart-bar text-[9px]"></i> Expectancy
                     </button>
-                    <button onclick="window.openFeaturePanel && window.openFeaturePanel('fp-shap')"
-                        class="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-orange-500/10 text-orange-300 border border-orange-500/30 hover:bg-orange-500/20 transition-all whitespace-nowrap">
+                    <button class="feature-card-trigger flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-orange-500/10 text-orange-300 border border-orange-500/30 hover:bg-orange-500/20 transition-all whitespace-nowrap"
+                        data-target="fp-shap">
                         <i class="fas fa-brain text-[9px]"></i> SHAP
                     </button>
-                    <button onclick="window.openFeaturePanel && window.openFeaturePanel('fp-api')"
-                        class="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-blue-500/10 text-blue-300 border border-blue-500/30 hover:bg-blue-500/20 transition-all whitespace-nowrap">
+                    <button class="feature-card-trigger flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-blue-500/10 text-blue-300 border border-blue-500/30 hover:bg-blue-500/20 transition-all whitespace-nowrap"
+                        data-target="fp-api">
                         <i class="fas fa-code text-[9px]"></i> API Export
                     </button>
                 </div>

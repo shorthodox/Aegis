@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from typing import Optional, Tuple, List
+from typing import Any, Optional, Tuple, List, Dict
 from src.ml.delltandecay import add_delta_and_decay_features
 
 # ------------------------------------------------------------------
@@ -293,6 +293,143 @@ def compute_accumulation_distribution(df: pd.DataFrame) -> pd.Series:
     clv = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'] + 1e-9)
     return (clv * df['volume']).cumsum()
 
+
+# ------------------------------------------------------------------
+# Support & Resistance (lookahead-bias free) and Macro Regime
+# ------------------------------------------------------------------
+def add_support_resistance_features(df: pd.DataFrame, window: int = 24) -> pd.DataFrame:
+    """
+    Add lookahead-bias-free support & resistance features computed from
+    historical highs/lows shifted by one bar and rolled over `window`.
+
+    - rolling_resistance: historical rolling max of high.shift(1)
+    - rolling_support: historical rolling min of low.shift(1)
+    - pct_dist_to_resistance: (rolling_resistance - close) / close
+    - pct_dist_to_support: (close - rolling_support) / close
+    - range_position_score: (close - support) / (resistance - support)
+    """
+    df = df.copy()
+    highs_shift = df['high'].shift(1)
+    lows_shift = df['low'].shift(1)
+
+    rolling_resistance = highs_shift.rolling(window=window, min_periods=1).max()
+    rolling_support = lows_shift.rolling(window=window, min_periods=1).min()
+
+    pct_dist_to_resistance = (rolling_resistance - df['close']) / (df['close'] + 1e-9)
+    pct_dist_to_support = (df['close'] - rolling_support) / (df['close'] + 1e-9)
+    denom = (rolling_resistance - rolling_support).replace(0, np.nan)
+    range_position_score = ((df['close'] - rolling_support) / (denom + 1e-9)).clip(0.0, 1.0).fillna(0.5)
+
+    output = pd.DataFrame({
+        'rolling_resistance': rolling_resistance,
+        'rolling_support': rolling_support,
+        'pct_dist_to_resistance': pct_dist_to_resistance.fillna(0.0),
+        'pct_dist_to_support': pct_dist_to_support.fillna(0.0),
+        'range_position_score': range_position_score,
+    }, index=df.index)
+    return output
+
+
+def add_macro_regime_features(df: pd.DataFrame, df_1d: Optional[pd.DataFrame], df_1w: Optional[pd.DataFrame], macro_state: Optional[Dict[str, Any]] = None) -> pd.DataFrame:
+    """
+    Map 1d and 1w macro directional anchors down to the base dataframe `df`.
+
+    Produces:
+    - macro_trend_1d: 1.0 if close_1d > ema50_1d else -1.0
+    - macro_trend_1w: 1.0 if close_1w > ema50_1w else -1.0
+    - macro_confluence_score: sum of the two (2, 0, or -2)
+
+    Uses merge_asof to map the lower-frequency macro signals to high-frequency timestamps.
+    Falls back to `macro_state` when `df_1d`/`df_1w` are unavailable.
+    """
+    df = df.copy()
+    # Default neutral values
+    df['macro_trend_1d'] = 0.0
+    df['macro_trend_1w'] = 0.0
+    df['macro_confluence_score'] = 0.0
+
+    try:
+        # Derive weekly macro anchors from available daily macro history when 1w is unavailable.
+        if (df_1w is None or df_1w.empty) and df_1d is not None and not df_1d.empty:
+            weekly = df_1d.copy()
+            weekly['timestamp'] = pd.to_datetime(weekly['timestamp'])
+            weekly = weekly.sort_values('timestamp').set_index('timestamp')
+            weekly = weekly['close'].rolling(window=7, min_periods=1).last().reset_index()
+            weekly = weekly.dropna(subset=['close'])
+            if not weekly.empty:
+                df_1w = weekly[['timestamp', 'close']].copy()
+
+        if (df_1d is None or df_1d.empty) and (df_1w is None or df_1w.empty):
+            if macro_state:
+                df['macro_trend_1d'] = float(macro_state.get('trend_1d', 0.0))
+                df['macro_trend_1w'] = float(macro_state.get('trend_1w', 0.0))
+                df['macro_confluence_score'] = float(macro_state.get('confluence_score', 0.0))
+            return df
+
+        macro_rows = []
+        if df_1d is not None and not df_1d.empty:
+            t1 = df_1d.copy()
+            t1['timestamp'] = pd.to_datetime(t1['timestamp'])
+            t1 = t1.sort_values('timestamp')
+            t1['ema50_1d'] = t1['close'].ewm(span=50, adjust=False).mean()
+            t1['macro_trend_1d'] = (t1['close'] > t1['ema50_1d']).astype(float).replace({0.0: -1.0, 1.0: 1.0})
+            macro_rows.append(t1[['timestamp', 'macro_trend_1d']])
+
+        if df_1w is not None and not df_1w.empty:
+            t2 = df_1w.copy()
+            t2['timestamp'] = pd.to_datetime(t2['timestamp'])
+            t2 = t2.sort_values('timestamp')
+            t2['ema50_1w'] = t2['close'].ewm(span=50, adjust=False).mean()
+            t2['macro_trend_1w'] = (t2['close'] > t2['ema50_1w']).astype(float).replace({0.0: -1.0, 1.0: 1.0})
+            macro_rows.append(t2[['timestamp', 'macro_trend_1w']])
+
+        if not macro_rows:
+            if macro_state:
+                df['macro_trend_1d'] = float(macro_state.get('trend_1d', 0.0))
+                df['macro_trend_1w'] = float(macro_state.get('trend_1w', 0.0))
+                df['macro_confluence_score'] = float(macro_state.get('confluence_score', 0.0))
+            return df
+
+        # Build macro_df by merging available macro rows on timestamp
+        from functools import reduce
+        macro_df = reduce(
+            lambda left, right: pd.merge_asof(
+                left.sort_values('timestamp'),
+                right.sort_values('timestamp'),
+                on='timestamp',
+                direction='backward'
+            ),
+            macro_rows
+        )
+
+        if 'macro_trend_1d' not in macro_df.columns:
+            macro_df['macro_trend_1d'] = 0.0
+        if 'macro_trend_1w' not in macro_df.columns:
+            macro_df['macro_trend_1w'] = 0.0
+
+        macro_df['macro_confluence_score'] = macro_df['macro_trend_1d'].fillna(0.0) + macro_df['macro_trend_1w'].fillna(0.0)
+
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        macro_df = macro_df.sort_values('timestamp')
+        df = df.sort_values('timestamp')
+        merged = pd.merge_asof(
+            df,
+            macro_df[['timestamp', 'macro_trend_1d', 'macro_trend_1w', 'macro_confluence_score']],
+            on='timestamp',
+            direction='backward'
+        )
+
+        merged['macro_trend_1d'] = merged['macro_trend_1d'].fillna(0.0)
+        merged['macro_trend_1w'] = merged['macro_trend_1w'].fillna(0.0)
+        merged['macro_confluence_score'] = merged['macro_confluence_score'].fillna(0.0)
+
+        return merged
+    except Exception:
+        df['macro_trend_1d'] = df.get('macro_trend_1d', 0.0)
+        df['macro_trend_1w'] = df.get('macro_trend_1w', 0.0)
+        df['macro_confluence_score'] = df.get('macro_confluence_score', 0.0)
+        return df
+
 # ------------------------------------------------------------------
 # Regime Classification (Adaptive Strategy)
 # ------------------------------------------------------------------
@@ -410,85 +547,93 @@ def prepare_features(df: pd.DataFrame,
                      btc_df: Optional[pd.DataFrame] = None,
                      news_df: Optional[pd.DataFrame] = None,
                      add_target_flag: bool = False,
-                     forward_hours: int = 1) -> pd.DataFrame:
+                     forward_hours: int = 1,
+                     df_1d: Optional[pd.DataFrame] = None,
+                     df_1w: Optional[pd.DataFrame] = None,
+                     macro_state: Optional[Dict[str, Any]] = None) -> pd.DataFrame:
     if df is None or df.empty:
         return df
 
     df = df.copy()
     df['timestamp'] = pd.to_datetime(df['timestamp'])
 
+    compiled_features: Dict[str, pd.Series] = {}
+
     # ----- Basic price & volume -----
-    df['returns_1h'] = df['close'].pct_change()
-    df['returns_4h'] = df['close'].pct_change(4)
-    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+    compiled_features['returns_1h'] = df['close'].pct_change()
+    compiled_features['returns_4h'] = df['close'].pct_change(4)
+    compiled_features['log_returns'] = pd.Series(np.log(df['close'] / df['close'].shift(1)), index=df.index)
 
     # ----- Price Momentum & EMA Cluster -----
     for p in [9, 21, 50, 100, 200]:
-        df[f'ema_{p}'] = df['close'].ewm(span=p, adjust=False).mean()
-        df[f'dist_ema_{p}'] = (df['close'] / df[f'ema_{p}']) - 1
+        ema = df['close'].ewm(span=p, adjust=False).mean()
+        compiled_features[f'ema_{p}'] = ema
+        compiled_features[f'dist_ema_{p}'] = (df['close'] / ema) - 1
 
-    df['ema_9_21_cross'] = (df['ema_9'] > df['ema_21']).astype(int)
-    df['ema_50_200_cross'] = (df['ema_50'] > df['ema_200']).astype(int)
+    compiled_features['ema_9_21_cross'] = (compiled_features['ema_9'] > compiled_features['ema_21']).astype(int)
+    compiled_features['ema_50_200_cross'] = (compiled_features['ema_50'] > compiled_features['ema_200']).astype(int)
 
     # ----- Oscillators (Momentum) -----
-    df['rsi_14'] = compute_rsi(df['close'], 14)
-    df['mfi_14'] = compute_mfi(df, 14)
-    df['stoch_k'], df['stoch_d'] = compute_stoch_rsi(df['close'], 14)
-    df['macd'], df['macd_signal'], df['macd_hist'] = compute_macd(df['close'])
+    compiled_features['rsi_14'] = compute_rsi(df['close'], 14)
+    compiled_features['mfi_14'] = compute_mfi(df, 14)
+    compiled_features['stoch_k'], compiled_features['stoch_d'] = compute_stoch_rsi(df['close'], 14)
+    compiled_features['macd'], compiled_features['macd_signal'], compiled_features['macd_hist'] = compute_macd(df['close'])
 
     # ----- Volume & Liquidity -----
-    df['vwap'] = compute_vwap(df)
-    df['dist_vwap'] = (df['close'] / df['vwap']) - 1
-    df['cmf_20'] = compute_cmf(df, 20)
-    df['vol_velocity'] = df['volume'].pct_change(3)
-    df['volume_zscore'] = (df['volume'] - df['volume'].rolling(20).mean()) / df['volume'].rolling(20).std()
-    df['relative_volume'] = df['volume'] / (df['volume'].rolling(20, min_periods=1).mean() + 1e-9)
-    df['rolling_volatility'] = df['log_returns'].rolling(24, min_periods=1).std()
-    df['obv'] = df['close'].diff().apply(np.sign).mul(df['volume']).fillna(0).cumsum()
-    df['acc_dist'] = compute_accumulation_distribution(df)
+    compiled_features['vwap'] = compute_vwap(df)
+    compiled_features['dist_vwap'] = (df['close'] / compiled_features['vwap']) - 1
+    compiled_features['cmf_20'] = compute_cmf(df, 20)
+    compiled_features['vol_velocity'] = df['volume'].pct_change(3)
+    compiled_features['volume_zscore'] = (df['volume'] - df['volume'].rolling(20).mean()) / df['volume'].rolling(20).std()
+    compiled_features['relative_volume'] = df['volume'] / (df['volume'].rolling(20, min_periods=1).mean() + 1e-9)
+    compiled_features['rolling_volatility'] = compiled_features['log_returns'].rolling(24, min_periods=1).std()
+    compiled_features['obv'] = df['close'].diff().apply(np.sign).mul(df['volume']).fillna(0).cumsum()
+    compiled_features['acc_dist'] = compute_accumulation_distribution(df)
 
     # ----- Volatility & Statistics -----
-    df['atr_14'] = compute_atr(df, 14)
-    df['volatility_skew'] = df['close'].rolling(24).skew()
-    df['volatility_kurt'] = df['close'].rolling(24).kurt()
-    df['historical_volatility'] = compute_historical_volatility(df, period=24)
+    compiled_features['atr_14'] = compute_atr(df, 14)
+    compiled_features['volatility_skew'] = df['close'].rolling(24).skew()
+    compiled_features['volatility_kurt'] = df['close'].rolling(24).kurt()
+    compiled_features['historical_volatility'] = compute_historical_volatility(df, period=24)
 
     # ----- Advanced 2026 Features -----
-    df['adx_14'] = compute_adx(df, 14)
-    df['efficiency_ratio_10'] = compute_efficiency_ratio(df['close'], period=10)
-    df['bb_width_percentile'] = compute_bollinger_width_percentile(df, lookback=252)
-    df['is_squeeze'] = (df['bb_width_percentile'] < 0.1).astype(int)
-    df['fvg_distance'] = compute_fvg_distance(df)
-    df['volume_atr_efficiency'] = compute_volume_volatility_efficiency(df)
-    df['price_zscore_200'] = compute_price_zscore(df, 200)
-    df['volatility_regime'] = compute_volatility_regime(df, atr_period=14, lookback=100)
+    compiled_features['adx_14'] = compute_adx(df, 14)
+    compiled_features['efficiency_ratio_10'] = compute_efficiency_ratio(df['close'], period=10)
+    compiled_features['bb_width_percentile'] = compute_bollinger_width_percentile(df, lookback=252)
+    compiled_features['is_squeeze'] = (compiled_features['bb_width_percentile'] < 0.1).astype(int)
+    compiled_features['fvg_distance'] = compute_fvg_distance(df)
+    compiled_features['volume_atr_efficiency'] = compute_volume_volatility_efficiency(df)
+    compiled_features['price_zscore_200'] = compute_price_zscore(df, 200)
+    compiled_features['volatility_regime'] = compute_volatility_regime(df, atr_period=14, lookback=100)
 
     # ----- Return Lags -----
     for h in [1, 4, 12, 24]:
-        df[f'ret_{h}h'] = df['close'].pct_change(h)
+        compiled_features[f'ret_{h}h'] = df['close'].pct_change(h)
 
     # ==================== NEW FEATURES ====================
-    # Aroon
-    df['aroon_up'], df['aroon_down'], df['aroon_osc'] = compute_aroon(df, period=25)
-    # Keltner Channels
-    df['keltner_upper'], df['keltner_lower'], df['keltner_width'] = compute_keltner_channels(df)
-    # Choppiness Index
-    df['choppiness'] = compute_choppiness_index(df, period=14)
-    # Ichimoku
+    compiled_features['aroon_up'], compiled_features['aroon_down'], compiled_features['aroon_osc'] = compute_aroon(df, period=25)
+    compiled_features['keltner_upper'], compiled_features['keltner_lower'], compiled_features['keltner_width'] = compute_keltner_channels(df)
+    compiled_features['choppiness'] = compute_choppiness_index(df, period=14)
     ichimoku = compute_ichimoku(df)
     for col in ichimoku.columns:
-        df[col] = ichimoku[col]
-    # Linear regression slope & R²
-    df['linreg_slope_14'] = compute_linear_regression_slope(df['close'], 14)
-    df['linreg_r2_14'] = compute_r_squared(df['close'], 14)
-    # Williams %R
-    df['williams_r'] = compute_williams_r(df, 14)
-    # Ultimate Oscillator
-    df['ultimate_osc'] = compute_ultimate_oscillator(df)
-    # Vortex
-    df['vi_plus'], df['vi_minus'] = compute_vortex_indicator(df, period=14)
-    # Force Index
-    df['force_index'] = compute_force_index(df, period=13)
+        compiled_features[col] = ichimoku[col]
+    compiled_features['linreg_slope_14'] = compute_linear_regression_slope(df['close'], 14)
+    compiled_features['linreg_r2_14'] = compute_r_squared(df['close'], 14)
+    compiled_features['williams_r'] = compute_williams_r(df, 14)
+    compiled_features['ultimate_osc'] = compute_ultimate_oscillator(df)
+    compiled_features['vi_plus'], compiled_features['vi_minus'] = compute_vortex_indicator(df, period=14)
+    compiled_features['force_index'] = compute_force_index(df, period=13)
+
+    # ----- Support & Resistance structural features -----
+    try:
+        sr_features = add_support_resistance_features(df[['high', 'low', 'close']].copy(), window=24)
+        for col in sr_features.columns:
+            compiled_features[col] = sr_features[col]
+    except Exception:
+        pass
+
+    # Bulk-attach all generated feature columns in one allocation pass.
+    df = pd.concat([df, pd.DataFrame(compiled_features, index=df.index)], axis=1)
 
     # ----- Market Anchor (BTC) -----
     df = add_btc_anchor_features(df, btc_df)
@@ -497,6 +642,12 @@ def prepare_features(df: pd.DataFrame,
 
     # ----- News Sentiment -----
     df = add_news_features(df, news_df)
+
+    # ----- Macro Regime Features (map 1d/1w onto base timeframe) -----
+    try:
+        df = add_macro_regime_features(df, df_1d, df_1w, macro_state=macro_state)
+    except Exception:
+        pass
 
     # ----- Regime Classification -----
     df['trend_regime'] = classify_trend_regime(df['adx_14'], threshold_trend=25, threshold_weak=20)
@@ -512,6 +663,13 @@ def prepare_features(df: pd.DataFrame,
         df = add_delta_and_decay_features(df, cols=['close', 'volume', 'vwap', 'returns_1h'], half_life=24.0)
     except Exception:
         pass
+
+    # ----- Robust fill to remove NaN boundaries introduced by multi-timeframe joins -----
+    try:
+        df = df.sort_values('timestamp').ffill().bfill()
+    except Exception:
+        # fall back to forward/backward fill without using fillna(method=...)
+        df = df.ffill().bfill()
 
     # ----- Cleanup: drop rows with essential NaNs -----
     required_cols = ['atr_14', 'rsi_14', 'adx_14', 'volume_atr_efficiency', 'volatility_regime']

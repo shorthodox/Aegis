@@ -98,7 +98,7 @@ def normalize_probability(prob: Any) -> List[float]:
     return [float(x) for x in proba]
 
 
-def get_dynamic_barrier_multiplier(vol_regime: Optional[object], alpha_flag: str) -> float:
+def get_dynamic_barrier_multiplier(vol_regime: Any, alpha_flag: str) -> float:
     adjustment = 1.0
     if vol_regime is not None:
         try:
@@ -181,43 +181,67 @@ class SignalAnalyzer:
             print(f"   ⚠️ News data missing for {self.symbol}, using neutral sentiment.")
             news_df = pd.DataFrame({'timestamp': df['timestamp'], 'sentiment': 0.0})
 
+        print(f"   Fetching higher-timeframe macro context...")
+        df_1d = None
+        try:
+            df_1d = self.predictor.fetch_live_data(timeframe='1d', limit=max(1000, int(hours / 24) + 50))
+        except Exception:
+            df_1d = None
+
         print(f"   Applying feature engineering...")
         df = prepare_features(
             df,
             btc_df=btc_df,
             news_df=news_df,
-            add_target_flag=True,
-            forward_hours=self.lookahead
+            add_target_flag=False,
+            forward_hours=self.lookahead,
+            df_1d=df_1d,
+            df_1w=None,
+            macro_state=None
         )
         if df is None or df.empty:
             return None
+        df = df.sort_values('timestamp').reset_index(drop=True)
 
         # Generate predictions
         print(f"   Generating predictions...")
         predictions = self.predictor.predict(df)
-        if isinstance(predictions, np.ndarray) and predictions.ndim > 1:
+        if isinstance(predictions, np.ndarray) and predictions.ndim == 2:
+            df['prob_sell'] = [row[0] for row in predictions]
+            df['prob_hold'] = [row[1] for row in predictions]
+            df['prob_buy'] = [row[2] for row in predictions]
             df['prob'] = [row.tolist() for row in predictions]
         else:
             df['prob'] = predictions
+            df['prob_sell'] = 0.0
+            df['prob_hold'] = 0.0
+            df['prob_buy'] = 0.0
 
         # Generate BTC predictions for correlation guard
         print(f"   Generating BTC predictions...")
-        # Filter btc_df to match df's timestamps to ensure same length
         btc_df_filtered = btc_df[btc_df['timestamp'].isin(df['timestamp'])].copy()
+        btc_df_filtered = btc_df_filtered.sort_values('timestamp').reset_index(drop=True)
         btc_features = prepare_features(
             btc_df_filtered,
             btc_df=btc_df_filtered,
             news_df=news_df,
             add_target_flag=False,
-            forward_hours=self.lookahead
+            forward_hours=self.lookahead,
+            df_1d=None,
+            df_1w=None,
+            macro_state=None
         )
         if btc_features is not None and not btc_features.empty:
-            # Ensure btc_features matches df's timestamps exactly
-            btc_features = btc_features[btc_features['timestamp'].isin(df['timestamp'])]
+            btc_features = btc_features[btc_features['timestamp'].isin(df['timestamp'])].sort_values('timestamp').reset_index(drop=True)
             btc_predictions = self.btc_predictor.predict(btc_features)
-            # Map btc_predictions to df by timestamp to handle any order differences
-            btc_prob_series = pd.Series(index=btc_features['timestamp'], data=[row.tolist() for row in btc_predictions])
+            if isinstance(btc_predictions, np.ndarray) and btc_predictions.ndim == 2:
+                btc_prob_series = pd.Series(index=btc_features['timestamp'], data=[row.tolist() for row in btc_predictions])
+            else:
+                btc_prob_series = pd.Series(index=btc_features['timestamp'], data=list(btc_predictions))
             df['btc_prob'] = df['timestamp'].map(btc_prob_series)
+            missing_mask = df['btc_prob'].isna()
+            if missing_mask.any():
+                df.loc[missing_mask, 'btc_prob'] = [[0.0, 1.0, 0.0]] * missing_mask.sum()
         else:
             df['btc_prob'] = [[0.0, 1.0, 0.0]] * len(df)  # neutral
 
