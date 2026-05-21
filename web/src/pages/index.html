@@ -1017,24 +1017,11 @@
       import { initSignInUI, openSignInModal } from '/web/src/scripts/signin-ui.js';
       import { initSignUpUI, openSignUpModal } from '/web/src/scripts/signup-ui.js';
       import { isUserAuthenticated, handleLogout } from '/web/src/scripts/auth.js';
-      import { SignalStore } from '/web/src/stores/signalStore.js';
-      import { WebSocketManager } from '/web/src/websocket/websocketManager.js';
 
       document.addEventListener('DOMContentLoaded', () => {
         // Initialize both auth UIs
         initSignInUI();
         initSignUpUI();
-
-        // Connect WebSocketManager
-        try {
-          const wsStore = new SignalStore();
-          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-          const wsUrl = `${protocol}//${window.location.host}/ws/dashboard`;
-          const wsManager = new WebSocketManager(wsUrl, wsStore);
-          wsManager.connect();
-        } catch(e) {
-          console.log("WebSocket connection init failed on landing page: ", e);
-        }
 
         function hasAuthToken() {
           return !!localStorage.getItem('authToken') || !!localStorage.getItem('access_token') || localStorage.getItem('authenticated') === 'true';
