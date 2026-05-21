@@ -1644,7 +1644,7 @@ function getSignalCardType(direction) {
 
 function renderTrades(trades) {
   _lastRenderedTrades = trades || [];
-  const normalized = (trades || []).map(t => ({
+  let normalized = (trades || []).map(t => ({
     id:           t.id || t.tradeId || '',
     symbol:       t.symbol || '—',
     side:         t.side || t.direction || 'LONG',
@@ -1654,6 +1654,46 @@ function renderTrades(trades) {
     positionUnits:parseFloat(t.positionUnits|| t.position_size|| 0),
     openTime:     t.openTime || t.entry_time || '',
   }));
+
+  // If the live snapshot returned no trades, try to fall back to any
+  // recently executed trade saved to localStorage (analyticsActiveTrade)
+  // or the last known trades cache so the UI doesn't flash empty briefly.
+  if (normalized.length === 0) {
+    try {
+      const stored = localStorage.getItem('analyticsActiveTrade');
+      const lastKnown = localStorage.getItem('lastKnownTrades');
+      let fallback = [];
+
+      if (lastKnown) {
+        const parsed = JSON.parse(lastKnown);
+        if (Array.isArray(parsed) && parsed.length > 0) fallback = parsed.slice();
+      }
+
+      if (stored) {
+        const t = JSON.parse(stored);
+        if (t && (t.status === 'open' || !t.status)) {
+          // Ensure simulated trade appears at the front
+          fallback.unshift(Object.assign({ id: t.id || `sim-${Date.now()}` }, t));
+        }
+      }
+
+      if (fallback.length > 0) {
+        normalized = fallback.map(t => ({
+          id:           t.id || t.tradeId || '',
+          symbol:       t.symbol || '—',
+          side:         t.side || t.direction || 'LONG',
+          entryPrice:   parseFloat(t.entryPrice   || t.entry_price  || t.entry || 0),
+          stopLoss:     parseFloat(t.stopLoss     || t.stop_loss    || t.sl || 0),
+          takeProfit:   parseFloat(t.takeProfit   || t.take_profit  || t.tp || 0),
+          positionUnits:parseFloat(t.positionUnits|| t.position_size|| t.position_units || 0),
+          openTime:     t.openTime || t.entry_time || t.openTime || ''
+        }));
+      }
+    } catch (err) {
+      // ignore parsing errors and fall through to empty state
+      console.warn('Fallback trades parse error:', err);
+    }
+  }
 
   // ── Position Cards (#positionsContainer) ─────────────────────────
   if (positionsContainer) {

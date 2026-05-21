@@ -1,4 +1,8 @@
 export class AuthManager {
+    // ── Token Storage ────────────────────────────────────────────────
+    // Canonical key: 'access_token'. 'authToken' is kept as a read-only
+    // legacy fallback so old sessions survive across deploys.
+
     static getToken() {
         return localStorage.getItem('access_token') ||
                localStorage.getItem('authToken') ||
@@ -9,101 +13,166 @@ export class AuthManager {
     static setToken(token, remember = true) {
         if (remember) {
             localStorage.setItem('access_token', token);
-            localStorage.setItem('authToken', token);
+            localStorage.removeItem('authToken'); // retire legacy duplicate
         } else {
             sessionStorage.setItem('access_token', token);
-            sessionStorage.setItem('authToken', token);
+            sessionStorage.removeItem('authToken');
         }
     }
-    
+
     static clearToken() {
         localStorage.removeItem('access_token');
         localStorage.removeItem('authToken');
         sessionStorage.removeItem('access_token');
         sessionStorage.removeItem('authToken');
     }
-    
+
+    // ── User Profile Storage ─────────────────────────────────────────
+
+    static clearUser() {
+        localStorage.removeItem('user_profile');
+        localStorage.removeItem('trial_end_timestamp');
+        localStorage.removeItem('trial_end_sig');
+        localStorage.removeItem('cachedAllowedTokens');
+    }
+
+    // Full logout: wipe tokens + user data in one call.
+    static logout() {
+        this.clearToken();
+        this.clearUser();
+    }
+
     static isAuthenticated() {
         return !!this.getToken();
     }
-    
+
     static getAuthHeader() {
         const token = this.getToken();
         return token ? `Bearer ${token}` : null;
     }
 
+    // ── Trial End Integrity ──────────────────────────────────────────
+    // SHA-256 hash of `uid||trialEnd||salt` stored alongside the
+    // trial_end_timestamp. Prevents casual DevTools manipulation.
+    // Note: the WebSocket server-authority tick (~1 s) remains the
+    // primary enforcement mechanism; this is a defense-in-depth layer.
+
+    static _signTrialEnd(trialEndIso, uid) {
+        if (typeof crypto === 'undefined' || !crypto.subtle) return;
+        const payload = `${uid}||${trialEndIso}||aegis-integrity-v1`;
+        crypto.subtle
+            .digest('SHA-256', new TextEncoder().encode(payload))
+            .then(buf => {
+                const hex = Array.from(new Uint8Array(buf))
+                    .map(b => b.toString(16).padStart(2, '0'))
+                    .join('');
+                localStorage.setItem('trial_end_sig', hex);
+            })
+            .catch(() => {});
+    }
+
+    // Returns true (valid), false (tampered), or null (cannot verify).
+    static async verifyTrialEndIntegrity() {
+        const trialEndIso = localStorage.getItem('trial_end_timestamp');
+        const storedSig   = localStorage.getItem('trial_end_sig');
+        if (!trialEndIso || !storedSig) return null;
+
+        const user = this.getUser();
+        if (!user) return null;
+
+        const uid = user.uid || user.email || '';
+        if (typeof crypto === 'undefined' || !crypto.subtle) return null;
+
+        try {
+            const payload = `${uid}||${trialEndIso}||aegis-integrity-v1`;
+            const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(payload));
+            const expected = Array.from(new Uint8Array(buf))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+            return storedSig === expected;
+        } catch {
+            return null;
+        }
+    }
+
+    // ── User Profile ─────────────────────────────────────────────────
+
     static setUser(userData) {
         localStorage.setItem('user_profile', JSON.stringify(userData));
-        if (userData) {
-            let endDate = null;
-            if (userData.trial && userData.trial.endDate !== undefined && userData.trial.endDate !== null) {
-                endDate = userData.trial.endDate;
-            } else if (userData.trial_end !== undefined && userData.trial_end !== null) {
-                endDate = userData.trial_end;
-            } else if (userData.trialEnd !== undefined && userData.trialEnd !== null) {
-                endDate = userData.trialEnd;
+        if (!userData) return;
+
+        let endDate = null;
+        if (userData.trial?.endDate != null) {
+            endDate = userData.trial.endDate;
+        } else if (userData.trial_end != null) {
+            endDate = userData.trial_end;
+        } else if (userData.trialEnd != null) {
+            endDate = userData.trialEnd;
+        }
+
+        if (endDate && String(endDate) !== 'null') {
+            if (typeof endDate === 'object' && endDate.seconds) {
+                endDate = new Date(endDate.seconds * 1000).toISOString();
+            } else if (typeof endDate === 'number') {
+                endDate = new Date(endDate).toISOString();
             }
-            
-            if (endDate && String(endDate) !== 'null') {
-                // Support both Firestore Timestamp and ISO String
-                if (typeof endDate === 'object' && endDate.seconds) {
-                    endDate = new Date(endDate.seconds * 1000).toISOString();
-                } else if (typeof endDate === 'number') { // Support ms timestamp
-                    endDate = new Date(endDate).toISOString();
-                }
-                localStorage.setItem('trial_end_timestamp', endDate);
-                console.log('[AuthManager] trial_end_timestamp updated:', endDate);
-            } else {
-                console.warn('[AuthManager] No valid trial end date found in userData:', userData);
-            }
+            localStorage.setItem('trial_end_timestamp', endDate);
+            // Sign for tamper detection
+            const uid = userData.uid || userData.email || '';
+            this._signTrialEnd(endDate, uid);
         }
     }
 
     static getUser() {
         const data = localStorage.getItem('user_profile');
-        return data ? JSON.parse(data) : null;
+        if (!data) return null;
+        try {
+            return JSON.parse(data);
+        } catch {
+            // Corrupted entry — remove it so the app does not get stuck.
+            localStorage.removeItem('user_profile');
+            return null;
+        }
     }
+
+    // ── Plan & Trial ─────────────────────────────────────────────────
 
     static getPlanType() {
         const tokenData = this.getUserData();
-        if (tokenData && tokenData.plan_type) {
-            return tokenData.plan_type;
-        }
-        
+        if (tokenData?.plan_type) return tokenData.plan_type;
+
         const user = this.getUser();
-        if (user && user.plan) {
-            return user.plan;
-        }
-        
+        if (user?.plan) return user.plan;
+
         return 'free_trial';
     }
 
     static isTrialValid() {
-        // Retrieve the trial_end_timestamp from localStorage.
         const trialEndStr = localStorage.getItem('trial_end_timestamp');
         if (trialEndStr && trialEndStr !== 'null') {
             const trialEnd = new Date(trialEndStr).getTime();
-            if (Date.now() > trialEnd) {
+            if (isNaN(trialEnd)) {
+                // Unparseable value — clear it to prevent perpetual loop.
+                localStorage.removeItem('trial_end_timestamp');
                 return false;
             }
-            return true;
+            return Date.now() <= trialEnd;
         }
 
-        // Exclusively use server response data
         const user = this.getUser();
         if (user) {
             if (user.plan === 'pro' || user.plan === 'active' || user.subscription_active) return true;
             if (user.trial_expired === false) return true;
             if (user.trial_expired === true) return false;
         }
-        
+
         const tokenData = this.getUserData();
         if (tokenData) {
             if (tokenData.plan_type === 'pro' || tokenData.plan_type === 'active' || tokenData.status === 'active') return true;
             if (tokenData.status === 'expired') return false;
         }
-        
-        // Strict security posture: Default to inactive/expired state instead of active
+
+        // Fail-secure: assume expired when no authoritative data is present.
         return false;
     }
 
@@ -114,10 +183,8 @@ export class AuthManager {
             const base64Url = token.split('.')[1];
             const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
             const payload = JSON.parse(atob(base64));
-            // Add a small 10 second buffer for token expiration instead of 5 minutes
-            return payload.exp * 1000 > Date.now() + 10000;
-        } catch (e) {
-            console.error('Token validation failed:', e);
+            return payload.exp * 1000 > Date.now() + 10000; // 10-second buffer
+        } catch {
             return false;
         }
     }
@@ -126,9 +193,7 @@ export class AuthManager {
         try {
             const response = await fetch('/api/auth/refresh', {
                 method: 'POST',
-                headers: {
-                    'Authorization': this.getAuthHeader()
-                }
+                headers: { 'Authorization': this.getAuthHeader() }
             });
             if (response.ok) {
                 const data = await response.json();
@@ -138,8 +203,7 @@ export class AuthManager {
                 }
             }
             return false;
-        } catch (error) {
-            console.error('Token refresh failed', error);
+        } catch {
             return false;
         }
     }
@@ -153,74 +217,45 @@ export class AuthManager {
             const payload = JSON.parse(atob(base64));
             return {
                 trial_start: payload.trial_start,
-                plan_type: payload.plan_type,
-                status: payload.status
+                plan_type:   payload.plan_type,
+                status:      payload.status
             };
-        } catch (e) {
-            console.error('Failed to decode token payload', e);
+        } catch {
             return null;
         }
     }
 
-    static hasAccess(feature) {
+    static hasAccess(_feature) {
         const data = this.getUserData();
         const user = this.getUser();
-        
-        // Check both Token and Local User Profile
-        const plan = data?.plan_type || user?.plan || user?.plan_type;
-        const status = data?.status || user?.status;
 
-        if (plan === 'active' || plan === 'pro' || status === 'active') {
-            return true;
-        }
-        
-        // Fallback for trials
-        if (plan === 'free_trial' || plan === 'trial') {
-            return this.isTrialValid();
-        }
-        
+        const plan   = data?.plan_type || user?.plan || user?.plan_type;
+        const status = data?.status    || user?.status;
+
+        if (plan === 'active' || plan === 'pro' || status === 'active') return true;
+        if (plan === 'free_trial' || plan === 'trial') return this.isTrialValid();
+
         return false;
     }
 
     static getSubscriptionStatus() {
         const user = this.getUser();
-        
-        // Immediately return active if the user has a pro/active plan
-        if (user && (user.plan === 'pro' || user.plan === 'active')) {
-            return 'active';
-        }
+        if (user && (user.plan === 'pro' || user.plan === 'active')) return 'active';
+        if (this.isTrialValid()) return 'active';
+        if (user && (user.plan === 'trial' || user.plan === 'free_trial') && user.trial_expired === false) return 'active';
 
-        // Prioritize actual trial end date stored in the user profile/localStorage
-        if (this.isTrialValid()) {
-            return 'active';
-        }
-
-        if (user && (user.plan === 'trial' || user.plan === 'free_trial') && user.trial_expired === false) {
-            return 'active';
-        }
-        
-        // Fallback to decoded JWT logic
         const tokenData = this.getUserData();
-        if (tokenData) {
-            return this.hasAccess('signals') ? 'active' : 'expired';
-        }
-        
+        if (tokenData) return this.hasAccess('signals') ? 'active' : 'expired';
+
         return 'expired';
     }
 
-    /**
-     * Helper method to check if user is fully authenticated and has valid token
-     * Returns a Promise for backward compatibility with async code
-     * @returns {Promise<boolean>}
-     */
     static async checkAuth() {
-        const isAuth = this.isAuthenticated();
-        const isTokenOk = this.isTokenValid();
-        return isAuth && isTokenOk;
+        return this.isAuthenticated() && this.isTokenValid();
     }
 }
 
-// Make AuthManager globally available for non-module scripts
+// Make AuthManager globally available for non-module scripts.
 if (typeof window !== 'undefined') {
-    window.AuthManager = AuthManager;
+    window['AuthManager'] = AuthManager;
 }

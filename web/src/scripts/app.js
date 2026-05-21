@@ -441,7 +441,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             if (unsubscribeTrades) unsubscribeTrades();
             if (unsubscribeSettings) unsubscribeSettings();
-            AuthManager.clearToken();
+            AuthManager.logout();
             await logout();
             window.location.replace('/web/src/pages/index.html');
         } catch (err) {

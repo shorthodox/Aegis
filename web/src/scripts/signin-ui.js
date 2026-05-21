@@ -173,9 +173,12 @@ async function performEmailSignin(e) {
     const result = await handleEmailLogin(email, password);
     if (result.success) {
       showSuccess('Sign in successful!');
+      window.dispatchEvent(new CustomEvent('authStateChange', { detail: { authenticated: true } }));
       setTimeout(() => {
         closeSignInModal();
-        window.location.href = '/web/src/pages/dashboard.html';
+        if (!window.pendingPlan && !window.pendingAction) {
+          window.location.href = '/web/src/pages/dashboard.html';
+        }
       }, 1000);
     } else {
       showError('signinFormError', result.message);
@@ -193,9 +196,12 @@ async function performGoogleSignin() {
     const result = await handleGoogleAuth();
     if (result.success) {
       showSuccess('Google sign in successful!');
+      window.dispatchEvent(new CustomEvent('authStateChange', { detail: { authenticated: true } }));
       setTimeout(() => {
         closeSignInModal();
-        window.location.href = '/web/src/pages/dashboard.html';
+        if (!window.pendingPlan && !window.pendingAction) {
+          window.location.href = '/web/src/pages/dashboard.html';
+        }
       }, 1000);
     } else {
       showError('signinFormError', result.message);

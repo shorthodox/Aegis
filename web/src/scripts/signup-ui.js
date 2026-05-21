@@ -199,15 +199,13 @@ async function performEmailSignup(e) {
     const result = await handleEmailSignup(email, password, name);
 
     if (result.success) {
-      console.log('✅ Signup successful:', email);
       showSuccess('Account created! Welcome to AEGIS! Redirecting...');
+      window.dispatchEvent(new CustomEvent('authStateChange', { detail: { authenticated: true } }));
       setTimeout(() => {
         closeSignUpModal();
-        // Route through pricing first so new users see the tier architecture before the dashboard.
         window.location.href = '/web/src/pages/pricing.html?newUser=1';
       }, 1500);
     } else {
-      console.error('❌ Signup failed:', result.message);
       showError('signupFormError', result.message);
     }
   } catch (error) {
@@ -224,6 +222,7 @@ async function performGoogleSignup() {
     const result = await handleGoogleAuth();
     if (result.success) {
       showSuccess('Account created with Google!');
+      window.dispatchEvent(new CustomEvent('authStateChange', { detail: { authenticated: true } }));
       setTimeout(() => {
         closeSignUpModal();
         window.location.href = '/web/src/pages/pricing.html?newUser=1';
