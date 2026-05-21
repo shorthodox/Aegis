@@ -35,14 +35,10 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Subscriptions collection — owner access only
-    match /subscriptions/{subscriptionId} {
-      allow read: if request.auth != null &&
-                     resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null &&
-                       request.resource.data.userId == request.auth.uid;
-      allow update, delete: if request.auth != null &&
-                               resource.data.userId == request.auth.uid;
+    // Subscriptions collection — document ID must equal caller's UID
+    match /subscriptions/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false;
     }
 
     // Transactions / audit logs — owner read, server write
