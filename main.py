@@ -701,11 +701,33 @@ def decode_token(token: str) -> Optional[str]:
         except:
             return None
 
+def decode_uid_from_token(token: str) -> Optional[str]:
+    """Return Firebase UID (not email) — used for Firestore paths shared with the frontend."""
+    try:
+        decoded = firebase_auth.verify_id_token(token)
+        return decoded.get("uid")
+    except Exception:
+        pass
+    # Fallback for custom JWT: sub is email, use it as path key
+    try:
+        assert SECRET_KEY is not None
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload.get("sub")
+    except:
+        return None
+
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
     email = decode_token(credentials.credentials)
     if not email:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
     return email
+
+def get_firebase_uid(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
+    """Dependency that returns Firebase UID — keeps Firestore paths consistent with the frontend."""
+    uid = decode_uid_from_token(credentials.credentials)
+    if not uid:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    return uid
 
 # -------------------------------------------------------------------
 # Firestore user helpers
@@ -1798,8 +1820,23 @@ async def websocket_dashboard(websocket: WebSocket):
                             "signal_id": sig_data.get("signal_id", ""),
                             "trading_accuracy": sig_data.get("trading_accuracy", 0.65),
                             "profitability_index": sig_data.get("profitability_index", 1.5),
+                            "sr_telemetry": sig_data.get("sr_telemetry"),
                         }
-                
+
+                # Collect active S&R proximity alerts for frontend toast
+                sr_alerts = []
+                for _sym, _sig in filtered_signals.items():
+                    _telem = _sig.get("sr_telemetry") or {}
+                    if isinstance(_telem, dict) and _telem.get("alert_state", "NONE") != "NONE":
+                        sr_alerts.append({
+                            "symbol": _sym,
+                            "alert_state": _telem["alert_state"],
+                            "support_line": _telem.get("support_line"),
+                            "resistance_line": _telem.get("resistance_line"),
+                            "dist_to_support_pct": _telem.get("dist_to_support_pct"),
+                            "dist_to_resistance_pct": _telem.get("dist_to_resistance_pct"),
+                        })
+
                 response_data = {
                     "tickers": {k: v for k, v in LIVE_STATE.data["tickers"].items() if k in allowed_tokens},
                     "signals": filtered_signals,
@@ -1808,7 +1845,8 @@ async def websocket_dashboard(websocket: WebSocket):
                     "alpha_mode": LIVE_STATE.data["alpha_mode"] and (get_user_plan(current_user_email) == "pro" if current_user_email else False),
                     "warmup": LIVE_STATE.data["warmup_progress"],
                     "trial_expired": trial_expired if current_user_email else True,
-                    "plan": get_user_plan(current_user_email) if current_user_email else "trial"
+                    "plan": get_user_plan(current_user_email) if current_user_email else "trial",
+                    "sr_alerts": sr_alerts,
                 }
                 clean_data = jsonable_encoder(response_data)
                 await websocket.send_json(clean_data)
@@ -1923,7 +1961,7 @@ class TradeExecuteRequest(BaseModel):
     userId: Optional[str] = None
 
 @app.post("/api/trades/execute")
-async def execute_trade(request: TradeExecuteRequest, user_id: str = Depends(get_current_user)):
+async def execute_trade(request: TradeExecuteRequest, user_id: str = Depends(get_firebase_uid)):
     trade_data = request.dict()
     trade_data["openTime"] = datetime.now(timezone.utc).isoformat()
     # Ensure it's saved under the user who made the request
@@ -1940,7 +1978,7 @@ async def execute_trade(request: TradeExecuteRequest, user_id: str = Depends(get
         raise HTTPException(status_code=500, detail="Failed to execute trade")
 
 @app.post("/api/trades/{trade_id}/close")
-async def close_trade(trade_id: str, user_id: str = Depends(get_current_user)):
+async def close_trade(trade_id: str, user_id: str = Depends(get_firebase_uid)):
     try:
         trade_ref = db.collection("users").document(user_id).collection("trades").document(trade_id)
         trade_doc = trade_ref.get()
