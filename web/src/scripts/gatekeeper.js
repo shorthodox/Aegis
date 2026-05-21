@@ -1909,23 +1909,34 @@ function setupFirestoreListeners() {
 
   // Allow the analytics room to render from localStorage while the snapshot loads
   window.forceTradesRefresh = function () {
+    let trades = [];
+
+    // Firestore-synced trades from the onSnapshot listener
     const known = localStorage.getItem('lastKnownTrades');
     if (known) {
       try {
-        const trades = JSON.parse(known);
-        if (Array.isArray(trades) && trades.length > 0) { renderTrades(trades); return; }
+        const parsed = JSON.parse(known);
+        if (Array.isArray(parsed)) trades = parsed;
       } catch (_) {}
     }
+
+    // Always include a freshly-executed trade that isn't already in the Firestore list
     const cached = localStorage.getItem('analyticsActiveTrade');
     if (cached) {
       try {
         const trade = JSON.parse(cached);
-        if (trade && trade.status === 'open') { renderTrades([trade]); return; }
+        if (trade && trade.status === 'open') {
+          const alreadyIn = trades.some(t =>
+            (trade.signalId && t.signalId === trade.signalId) ||
+            (t.symbol === trade.symbol && String(t.entryPrice) === String(trade.entryPrice))
+          );
+          if (!alreadyIn) trades.unshift(trade);
+        }
       } catch (_) {}
     }
-    if (paperTrades.length > 0) {
-      renderTrades(paperTrades);
-    }
+
+    if (trades.length > 0) { renderTrades(trades); return; }
+    if (paperTrades.length > 0) { renderTrades(paperTrades); }
   };
 }
 
