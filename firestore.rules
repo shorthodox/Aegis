@@ -29,9 +29,9 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Root-level trades collection — readable by any authenticated user, written by admin SDK only
+    // Root-level trades collection — owner read only, written by admin SDK only
     match /trades/{tradeId} {
-      allow read: if request.auth != null;
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
       allow write: if false;
     }
 
