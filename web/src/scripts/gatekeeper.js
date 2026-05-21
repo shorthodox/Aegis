@@ -611,7 +611,7 @@ function attachEventListeners() {
       const tf = btn.getAttribute('data-tf');
       const requiresPro = btn.getAttribute('data-pro') === 'true';
 
-      if (requiresPro && userPlan !== 'pro') {
+      if (requiresPro && !['pro', 'intermediate'].includes(userPlan)) {
         showUpgradeModal();
         return;
       }
@@ -1134,6 +1134,46 @@ function updateConnectionStatus(status, color) {
   });
 }
 
+// -------------------------------------------------------------------
+// S&R Proximity Alert Toast
+// -------------------------------------------------------------------
+const _srAlertCooldowns = {};
+
+function showSRAlertToast(alert) {
+  const key = `${alert.symbol}_${alert.alert_state}`;
+  const now = Date.now();
+  // Suppress if same symbol+state fired within the last 60 s
+  if (_srAlertCooldowns[key] && now - _srAlertCooldowns[key] < 60000) return;
+  _srAlertCooldowns[key] = now;
+
+  const container = document.getElementById('sr-alert-toast');
+  if (!container) return;
+
+  const isSupport = alert.alert_state === 'NEAR_SUPPORT';
+  const color    = isSupport ? '#00ff88' : '#ff5252';
+  const icon     = isSupport ? 'fa-level-down-alt' : 'fa-level-up-alt';
+  const label    = isSupport ? 'NEAR SUPPORT' : 'NEAR RESISTANCE';
+  const dist     = isSupport ? alert.dist_to_support_pct : alert.dist_to_resistance_pct;
+  const line     = isSupport ? alert.support_line : alert.resistance_line;
+  const lineStr  = line != null ? parseFloat(line).toFixed(4) : '—';
+  const distStr  = dist != null ? `${parseFloat(dist).toFixed(2)}% away` : '';
+
+  const toast = document.createElement('div');
+  toast.className = 'sr-toast-item';
+  toast.style.cssText = `border-left:3px solid ${color}`;
+  toast.innerHTML = `
+    <div class="sr-toast-row">
+      <i class="fas ${icon}" style="color:${color}"></i>
+      <strong>${alert.symbol}</strong>
+      <span style="color:${color};font-weight:700;font-size:0.65rem;letter-spacing:1px">${label}</span>
+    </div>
+    <div class="sr-toast-detail">@ ${lineStr} &bull; ${distStr}</div>
+  `;
+  container.appendChild(toast);
+  // Auto-dismiss after 8 s with fade-out
+  setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 400); }, 7600);
+}
+
 function updateDashboardData(data) {
   // Update balance
   if (balanceDisplay && data.balance !== undefined) {
@@ -1167,7 +1207,8 @@ function updateDashboardData(data) {
             confidence_score: sig.confidence_score || 0,
             signal_id: sig.signal_id || "",
             trading_accuracy: sig.trading_accuracy || 0.5,
-            profitability_index: sig.profitability_index || 0
+            profitability_index: sig.profitability_index || 0,
+            sr_telemetry: sig.sr_telemetry || null,
           };
           // Determine and set signal status
           signalObj.status = getSignalStatus(signalObj);
@@ -1193,7 +1234,8 @@ function updateDashboardData(data) {
           confidence_score: sig.confidence_score || 0,
           signal_id: sig.signal_id || "",
           trading_accuracy: sig.trading_accuracy || 0.5,
-          profitability_index: sig.profitability_index || 0
+          profitability_index: sig.profitability_index || 0,
+          sr_telemetry: sig.sr_telemetry || null,
         };
         // Determine and set signal status
         signalObj.status = getSignalStatus(signalObj);
@@ -1201,6 +1243,11 @@ function updateDashboardData(data) {
       }
     });
     debouncedFilterAndRenderSignals();
+
+    // S&R proximity alert toasts
+    if (data.sr_alerts && Array.isArray(data.sr_alerts)) {
+      data.sr_alerts.forEach(alert => showSRAlertToast(alert));
+    }
   }
 
   // Fallback: Extract prices from signals if tickers are missing
@@ -1427,6 +1474,23 @@ function renderSignals(signals) {
       matchBadge = '<span class="bg-cyan/20 text-cyan border border-cyan/50 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider animate-pulse">ALPHA MATCH</span>';
     }
 
+    // S&R proximity inline badge
+    const _srT = signal.sr_telemetry;
+    const srBadge = _srT && _srT.alert_state && _srT.alert_state !== 'NONE' ? (() => {
+      const _sup = _srT.alert_state === 'NEAR_SUPPORT';
+      const _col = _sup ? '#00ff88' : '#ff5252';
+      const _ico = _sup ? 'fa-level-down-alt' : 'fa-level-up-alt';
+      const _lbl = _sup ? 'NEAR SUPPORT' : 'NEAR RESISTANCE';
+      const _dist = _sup ? _srT.dist_to_support_pct : _srT.dist_to_resistance_pct;
+      const _line = _sup ? _srT.support_line : _srT.resistance_line;
+      const _dStr = _dist != null ? `${parseFloat(_dist).toFixed(2)}% away` : '';
+      const _lStr = _line != null ? parseFloat(_line).toFixed(4) : '';
+      return `<div class="col-span-2 flex items-center justify-between mt-1 px-1.5 py-1 rounded text-[10px] font-mono" style="background:${_sup ? 'rgba(0,255,136,0.07)' : 'rgba(255,82,82,0.07)'};border:1px solid ${_sup ? 'rgba(0,255,136,0.3)' : 'rgba(255,82,82,0.3)'}">
+        <span style="color:${_col};font-weight:700"><i class="fas ${_ico} mr-1"></i>${_lbl}</span>
+        <span style="color:#94a3b8">${_lStr} &bull; ${_dStr}</span>
+      </div>`;
+    })() : '';
+
     return `
       <div class="signal-card ${cardTypeClass}${statusIndicator} cursor-pointer hover:shadow-[0_0_15px_rgba(0,242,255,0.2)] transition-all transform hover:-translate-y-1 overflow-hidden ${matchClasses}" onclick="window.openSignalDetails('${symbol}', '${timeframe}')" data-symbol="${symbol}" data-status="${signalStatus}">
         <div class="signal-header flex justify-between items-center">
@@ -1462,6 +1526,7 @@ function renderSignals(signals) {
                <span>Entry: ${entryStr}</span>
                <span>SL: ${slStr} | TP: ${tpStr}</span>
             </span>
+            ${srBadge}
           </div>
           
           <div class="slide-down-container mt-2 ${window.openScorecards && window.openScorecards.has(symbol) ? 'open' : ''}">
