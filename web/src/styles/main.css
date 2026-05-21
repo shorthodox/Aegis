@@ -248,9 +248,7 @@ body.dashboard-body .glass-nav {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    /* pushes logout to bottom */
-    height: 100%;
-    padding: 1.8rem 1.2rem;
+    /* height + padding handled by Tailwind utilities on the element */
     overflow-y: auto;
     z-index: 100;
 }
@@ -2146,13 +2144,13 @@ body:not(.dashboard-body) {
     }
 
     .sidebar {
+        /* Slide-in panel — grid layout removed; Tailwind handles mobile responsiveness */
+        display: flex;
+        flex-direction: column;
+        height: 100dvh;
+        max-height: none;
+        padding: 0;
         border-right: none;
-        border-bottom: 1px solid var(--glass-border);
-        padding: 1rem;
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        height: auto;
-        max-height: 80px;
     }
 
     .sidebar-header {
@@ -2251,10 +2249,10 @@ body:not(.dashboard-body) {
     }
 
     .sidebar {
-        grid-template-columns: repeat(3, 1fr);
-        gap: 0.3rem;
-        padding: 0.75rem;
-        max-height: 100px;
+        /* Slide-in panel — grid overrides removed */
+        grid-template-columns: none;
+        padding: 0;
+        max-height: none;
     }
 
     .nav-item {
@@ -3550,5 +3548,54 @@ body.modal-open {
     color: var(--primary-cyan) !important;
     box-shadow: 0 0 8px rgba(0, 242, 255, 0.18);
     border-radius: 6px;
+}
+
+/* ============================================================
+   S&R PROXIMITY ALERT TOASTS
+   ============================================================ */
+#sr-alert-toast {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    z-index: 9000;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    pointer-events: none;
+    max-width: 320px;
+}
+
+.sr-toast-item {
+    background: rgba(5, 5, 5, 0.92);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 0.7rem 1rem;
+    opacity: 1;
+    transition: opacity 0.4s ease;
+    font-family: 'JetBrains Mono', monospace;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    animation: srToastIn 0.3s ease;
+}
+
+@keyframes srToastIn {
+    from { opacity: 0; transform: translateX(20px); }
+    to   { opacity: 1; transform: translateX(0);    }
+}
+
+.sr-toast-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-bottom: 0.2rem;
+}
+
+.sr-toast-detail {
+    font-size: 0.7rem;
+    color: #64748b;
+    padding-left: 1.4rem;
 }
 
