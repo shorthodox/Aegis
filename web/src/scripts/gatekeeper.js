@@ -1928,13 +1928,12 @@ function setupFirestoreListeners() {
     }
   });
 
-  // Listen to user's trades — root collection filtered by userId field
+  // Listen to user's trades in the user's subcollection so updates from
+  // the backend API (which writes to users/{uid}/trades) reconcile properly.
   const firebaseUid = auth.currentUser?.uid;
   if (firebaseUid) {
-    const tradesQuery = query(
-      collection(db, 'trades'),
-      where('userId', '==', firebaseUid)
-    );
+    const userTradesCol = collection(db, 'users', firebaseUid, 'trades');
+    const tradesQuery = query(userTradesCol);
 
     tradesUnsubscribe = onSnapshot(tradesQuery, (snapshot) => {
       const trades = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
