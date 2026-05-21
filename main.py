@@ -122,19 +122,27 @@ def resolve_credential_path(path_value: str) -> Path:
 fallback_cred_path = resolve_credential_path('config/serviceAccountKey.json')
 
 if cred_json:
-    # First try to resolve FIREBASE_CREDENTIALS as a path relative to this file
-    resolved_path = resolve_credential_path(cred_json)
-    if resolved_path.exists():
-        cred = credentials.Certificate(str(resolved_path))
-        print(f"[FIREBASE] Initialized via file path: {resolved_path}")
-    else:
-        try:
-            # Try to parse as JSON string
-            cred_dict = json.loads(cred_json)
-            cred = credentials.Certificate(cred_dict)
-            print("[FIREBASE] Initialized via JSON environment variable")
-        except Exception as e:
-            print(f"[ERROR] Failed to parse FIREBASE_CREDENTIALS JSON: {e}")
+    # Prefer parsing FIREBASE_CREDENTIALS as JSON, but allow a file path fallback.
+    cred = None
+    parsed_json = False
+    try:
+        cred_dict = json.loads(cred_json)
+        cred = credentials.Certificate(cred_dict)
+        parsed_json = True
+        print("[FIREBASE] Initialized via JSON environment variable")
+    except json.JSONDecodeError:
+        # Not JSON, continue to path fallback.
+        pass
+    except Exception as e:
+        print(f"[ERROR] Failed to parse FIREBASE_CREDENTIALS JSON: {e}")
+
+    if not parsed_json:
+        resolved_path = resolve_credential_path(cred_json)
+        if resolved_path.exists():
+            cred = credentials.Certificate(str(resolved_path))
+            print(f"[FIREBASE] Initialized via file path: {resolved_path}")
+        else:
+            print(f"[FIREBASE] FIREBASE_CREDENTIALS is not valid JSON and file not found at: {resolved_path}")
             if fallback_cred_path.exists():
                 cred = credentials.Certificate(str(fallback_cred_path))
                 print(f"[FIREBASE] Initialized via fallback file: {fallback_cred_path}")
@@ -2511,12 +2519,4 @@ async def regenerate_api_key(user_id: str = Depends(get_current_user)):
     return {"status": "SUCCESS", "api_key": raw_key}
 
 # -------------------------------------------------------------------
-# Main entry point
-# -------------------------------------------------------------------
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))
-    uvicorn.run("main:app", host="0.0.0.0", port=port)
-
-
-
 
