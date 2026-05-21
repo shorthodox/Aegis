@@ -55,16 +55,3 @@ service cloud.firestore {
     }
   }
 }
-
-service cloud.firestore {
-  match /databases/{database}/documents {
-    // Match any document in the 'users' collection
-    match /users/{userId} {
-      // Allow read if the request is authenticated AND the UID matches the document ID
-      allow read: if request.auth != null && request.auth.uid == userId;
-      
-      // Keep other rules as needed, e.g., allow users to write to their own profile
-      allow write: if request.auth != null && request.auth.uid == userId;
-    }
-  }
-}
