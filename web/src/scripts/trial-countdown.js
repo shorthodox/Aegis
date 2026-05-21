@@ -281,7 +281,7 @@ const TrialManager = (() => {
              return;
           }
           try {
-            const userDocRef = doc(db, 'users', userId);
+            const userDocRef = doc(db, 'users', user.uid);
             const userDoc = await getDoc(userDocRef);
             if (!userDoc.exists()) { resolve(null); return; }
             const data = userDoc.data();
@@ -838,4 +838,5 @@ style.textContent = `
   }
 `;
 document.head.appendChild(style);
+
 
