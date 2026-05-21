@@ -6,7 +6,9 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Include project custom styles last so they can override Tailwind defaults when needed */
-@import "./main.css";
-
-/* Add any lightweight project-specific component utilities here if needed */
+/*
+ * NOTE: main.css is NOT imported here.
+ * Tailwind CLI does not process local @import statements (needs postcss-import).
+ * main.css is linked directly in each HTML page AFTER this compiled stylesheet
+ * so that the custom design-system rules load on top of the Tailwind utilities.
+ */
