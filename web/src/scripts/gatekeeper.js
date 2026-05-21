@@ -1900,11 +1900,18 @@ window.closeTrade = async function (tradeId) {
   }
 
   try {
+    // Defensive: ensure simulated trades never reach the backend (double-check)
+    if (String(tradeId).startsWith('sim-')) {
+      pruneFromStorage(tradeId);
+      return;
+    }
+
     const token = typeof AuthManager !== 'undefined' ? AuthManager.getToken() : null;
     if (!token) { alert('Session expired. Please refresh and log in again.'); return; }
 
     console.log('Closing trade via API', { tradeId, uid });
-    const r = await fetch(`/api/trades/${tradeId}/close`, {
+    const url = `/api/trades/${encodeURIComponent(tradeId)}/close`;
+    const r = await fetch(url, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}` }
     });
