@@ -111,11 +111,22 @@ from firebase_admin import credentials, firestore, auth as firebase_auth
 FIREBASE_PROJECT_ID = os.getenv("FIREBASE_PROJECT_ID", "aegis-d78e1")
 cred_json = os.getenv("FIREBASE_CREDENTIALS")
 
+base_dir = Path(__file__).resolve().parent
+
+def resolve_credential_path(path_value: str) -> Path:
+    candidate = Path(path_value).expanduser()
+    if candidate.is_absolute():
+        return candidate
+    return base_dir / candidate
+
+fallback_cred_path = resolve_credential_path('config/serviceAccountKey.json')
+
 if cred_json:
-    # Check if cred_json is a file path first
-    if os.path.exists(cred_json):
-        cred = credentials.Certificate(cred_json)
-        print(f"[FIREBASE] Initialized via file path: {cred_json}")
+    # First try to resolve FIREBASE_CREDENTIALS as a path relative to this file
+    resolved_path = resolve_credential_path(cred_json)
+    if resolved_path.exists():
+        cred = credentials.Certificate(str(resolved_path))
+        print(f"[FIREBASE] Initialized via file path: {resolved_path}")
     else:
         try:
             # Try to parse as JSON string
@@ -124,21 +135,23 @@ if cred_json:
             print("[FIREBASE] Initialized via JSON environment variable")
         except Exception as e:
             print(f"[ERROR] Failed to parse FIREBASE_CREDENTIALS JSON: {e}")
-            # Fallback to default file path
-            cred_path = 'config/serviceAccountKey.json'
-            if os.path.exists(cred_path):
-                cred = credentials.Certificate(cred_path)
-                print(f"[FIREBASE] Initialized via fallback file: {cred_path}")
+            if fallback_cred_path.exists():
+                cred = credentials.Certificate(str(fallback_cred_path))
+                print(f"[FIREBASE] Initialized via fallback file: {fallback_cred_path}")
             else:
-                raise RuntimeError("Firebase credentials not found. Provide either FIREBASE_CREDENTIALS as JSON or ensure config/serviceAccountKey.json exists")
+                raise RuntimeError(
+                    "Firebase credentials not found. "
+                    "Provide either FIREBASE_CREDENTIALS as JSON or ensure config/serviceAccountKey.json exists"
+                )
 else:
     # Fallback for local development
-    cred_path = 'config/serviceAccountKey.json'
-    if os.path.exists(cred_path):
-        cred = credentials.Certificate(cred_path)
-        print(f"[FIREBASE] Initialized via local file: {cred_path}")
+    if fallback_cred_path.exists():
+        cred = credentials.Certificate(str(fallback_cred_path))
+        print(f"[FIREBASE] Initialized via local file: {fallback_cred_path}")
     else:
-        raise RuntimeError("Firebase credentials not found in ENV or at config/serviceAccountKey.json")
+        raise RuntimeError(
+            "Firebase credentials not found in ENV or at config/serviceAccountKey.json"
+        )
 
 if not firebase_admin._apps:
     firebase_admin.initialize_app(cred)
@@ -2503,6 +2516,7 @@ async def regenerate_api_key(user_id: str = Depends(get_current_user)):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     uvicorn.run("main:app", host="0.0.0.0", port=port)
+
 
 
 
