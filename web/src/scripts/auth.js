@@ -1,93 +1,10 @@
-function createModalIfMissing() {
-  // ... (unchanged code) ...
-}
-
-function openModal() {
-  // ... (unchanged code) ...
-}
-
-function closeModal() {
-  // ... (unchanged code) ...
-}
-
-async function doLogin() {
-  console.log('DEBUG: doLogin function started.'); // ADD THIS LINE
-  const email = document.getElementById('simpleEmail')?.value?.trim();
-  const password = document.getElementById('simplePassword')?.value;
-  const errEl = document.getElementById('simpleAuthError');
-  if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
-
-  console.log('DEBUG: Email and password retrieved:', email ? 'present' : 'missing', password ? 'present' : 'missing'); // ADD THIS LINE
-
-  if (!email || !password) {
-    if (errEl) { errEl.style.display = 'block'; errEl.textContent = 'Email and password are required'; }
-    console.log('DEBUG: Email or password missing. Returning.'); // ADD THIS LINE
-    return;
-  }
-
-  const btn = document.getElementById('simpleLoginSubmit');
-  try {
-    btn.disabled = true;
-    btn.innerText = 'Signing in...';
-    console.log('DEBUG: Attempting fetch to /auth/login'); // ADD THIS LINE
-    const resp = await fetch('/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
-    console.log('DEBUG: Fetch response received:', resp.status); // ADD THIS LINE
-
-    const data = await resp.json().catch(() => ({}));
-    if (resp.ok && data.access_token) {
-      localStorage.setItem('access_token', data.access_token);
-      localStorage.setItem('authenticated', 'true');
-      AuthManager.setToken(data.access_token);  // Add this to match Firebase handlers
-      if (data.user) {
-        AuthManager.setUser(data.user); // CRITICAL: This enables isTrialValid()
-      }
-      closeModal();
-      window.location.href = '/web/src/pages/dashboard.html';
-      return;
-    }
-    const message = data.detail || data.message || 'Invalid credentials';
-    if (errEl) { errEl.style.display = 'block'; errEl.textContent = message; }
-  } catch (err) {
-    console.error('DEBUG: Fetch caught an error:', err); // MODIFY THIS LINE
-    if (errEl) { errEl.style.display = 'block'; errEl.textContent = 'Network error'; }
-  } finally {
-    btn.disabled = false;
-    btn.innerText = 'Sign In';
-    console.log('DEBUG: doLogin function finished.'); // ADD THIS LINE
-  }
-}
-
-async function subscribeToPlan(planType) {
-  // ... (unchanged code) ...
-}
-
-function attachHandlers() {
-  // ... (unchanged code) ...
-}
-
-function portalClickHandler(e) {
-  // ... (unchanged code) ...
-}
-
-function trialClickHandler(e) {
-  // ... (unchanged code) ...
-}
-
-function planClickHandler(e) {
-  // ... (unchanged code) ...
-}
-
 // ============================================================
 // AEGIS Authentication Module – Mobile-First Design
 // Separate Login/Signup flows with multiple auth methods
 // ============================================================
 
-import { 
-  auth, 
+import {
+  auth,
   db
 } from './gatekeeper.js';
 
@@ -107,8 +24,6 @@ import {
   GoogleAuthProvider
 } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
 
-const googleProvider = new GoogleAuthProvider();
-
 import {
   doc,
   setDoc,
@@ -116,6 +31,8 @@ import {
   updateDoc,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js";
+
+const googleProvider = new GoogleAuthProvider();
 
 // ============================================================
 // STATE & DOM ELEMENTS
@@ -445,12 +362,10 @@ export async function verifyPhoneOTP(otpCode) {
 // ============================================================
 export async function handleLogout() {
   try {
-    console.log('👋 Logging out...');
     await signOut(auth);
-    AuthManager.clearToken();
+    AuthManager.logout();
     localStorage.removeItem('authenticated');
     localStorage.removeItem('userSession');
-    console.log('✅ Logout successful');
     window.location.href = '/web/src/pages/index.html';
     return { success: true };
   } catch (error) {
@@ -488,20 +403,20 @@ export async function handlePasswordReset(email) {
 export function subscribeToAuthState(callback) {
   return onAuthStateChanged(auth, async (user) => {
     if (user) {
-      console.log('✅ User authenticated:', user.email);
       const userData = await getDoc(doc(db, 'users', user.uid));
       callback({
         authenticated: true,
         user,
         userData: userData.data()
       });
+      window.dispatchEvent(new CustomEvent('authStateChange', { detail: { authenticated: true } }));
     } else {
-      console.log('❌ User not authenticated');
       callback({
         authenticated: false,
         user: null,
         userData: null
       });
+      window.dispatchEvent(new CustomEvent('authStateChange', { detail: { authenticated: false } }));
     }
   });
 }
