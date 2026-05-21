@@ -826,7 +826,7 @@ async function loadUserFromBackend(token, firebaseUser = null) {
 }
 
 function applyUserData(userData, token) {
-  currentUser = { email: userData.email, uid: userData.uid || userData.email, token };
+  currentUser = { email: userData.email, uid: userData.uid || auth.currentUser?.uid || userData.email, token };
   currentUserData = userData;
   userPlan = userData.plan || 'trial';
   trialEnd = userData.trial_end ? new Date(userData.trial_end) : null;
@@ -1888,20 +1888,16 @@ function setupFirestoreListeners() {
     }
   });
 
-  // Listen to user's trades — subcollection: users/{userId}/trades
-  const userId = currentUser?.uid || currentUser?.email;
-  if (userId) {
+  // Listen to user's trades — root collection filtered by userId field
+  const firebaseUid = auth.currentUser?.uid;
+  if (firebaseUid) {
     const tradesQuery = query(
-      collection(db, 'users', userId, 'trades'),
-      where('status', '==', 'open'),
-      orderBy('openTime', 'desc')
+      collection(db, 'trades'),
+      where('userId', '==', firebaseUid)
     );
 
     tradesUnsubscribe = onSnapshot(tradesQuery, (snapshot) => {
-      const trades = [];
-      snapshot.forEach(doc => {
-        trades.push({ id: doc.id, ...doc.data() });
-      });
+      const trades = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       if (trades.length > 0) {
         localStorage.setItem('lastKnownTrades', JSON.stringify(trades));
       }
