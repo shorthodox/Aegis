@@ -20,23 +20,8 @@
         })();
     </script>
     <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
-    <!-- Tailwind CSS via CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        deep: '#050505',
-                        void: '#0a0a0c',
-                        cyan: { DEFAULT: '#00f2ff' },
-                        orange: { DEFAULT: '#ff8c00' }
-                    }
-                }
-            }
-        }
-    </script>
+    <!-- Tailwind CSS: use compiled stylesheet in production (built via Tailwind CLI / PostCSS) -->
+    <link rel="stylesheet" href="/web/dist/styles.css">
     <style>
         .visible {
             display: block !important;

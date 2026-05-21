@@ -1,0 +1,11 @@
+{
+  "name": "aegis-web",
+  "private": true,
+  "devDependencies": {
+    "tailwindcss": "^3.4.0"
+  },
+  "scripts": {
+    "build:css": "npx tailwindcss -i ./src/styles/input.css -o ./dist/styles.css --minify",
+    "watch:css": "npx tailwindcss -i ./src/styles/input.css -o ./dist/styles.css --watch"
+  }
+}

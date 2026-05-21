@@ -1,0 +1,6 @@
+/* Tailwind input: include Tailwind layers only. Custom styles live in main.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Add any lightweight project-specific component utilities here if needed */
