@@ -1878,6 +1878,27 @@ window.closeTrade = async function (tradeId) {
   _lastRenderedTrades = _lastRenderedTrades.filter(t => (t.id || t.tradeId) !== tradeId);
   renderTrades(_lastRenderedTrades);
 
+  // Prune from localStorage so the fallback renderer can't re-add the trade
+  function pruneFromStorage(id) {
+    try {
+      const lk = localStorage.getItem('lastKnownTrades');
+      if (lk) localStorage.setItem('lastKnownTrades', JSON.stringify(JSON.parse(lk).filter(t => (t.id || t.tradeId) !== id)));
+    } catch (_) {}
+    try {
+      const at = localStorage.getItem('analyticsActiveTrade');
+      if (at) {
+        const t = JSON.parse(at);
+        if (t && (t.id === id || t.tradeId === id)) localStorage.removeItem('analyticsActiveTrade');
+      }
+    } catch (_) {}
+  }
+
+  // Simulated trades (sim-*) only live in localStorage — no backend record exists
+  if (String(tradeId).startsWith('sim-')) {
+    pruneFromStorage(tradeId);
+    return;
+  }
+
   try {
     const token = typeof AuthManager !== 'undefined' ? AuthManager.getToken() : null;
     if (!token) { alert('Session expired. Please refresh and log in again.'); return; }
@@ -1889,10 +1910,9 @@ window.closeTrade = async function (tradeId) {
     });
 
     if (r.status === 404) {
-      // If backend reports not found, refresh trades and inform user
+      // Trade not on server (already closed or never persisted) — just clean up locally
       console.warn('Backend returned 404 when closing trade', tradeId);
-      alert('Could not close trade: trade not found on server. Refreshing trades.');
-      if (typeof window.forceTradesRefresh === 'function') window.forceTradesRefresh();
+      pruneFromStorage(tradeId);
       return;
     }
 
@@ -1900,6 +1920,8 @@ window.closeTrade = async function (tradeId) {
       const text = await r.text();
       throw new Error(`HTTP ${r.status} ${text}`);
     }
+
+    pruneFromStorage(tradeId);
     // Firestore listener will reconcile the authoritative list on the next snapshot.
   } catch (e) {
     console.error('closeTrade error:', e);
@@ -2038,13 +2060,12 @@ function setupFirestoreListeners() {
   const firebaseUid = auth.currentUser?.uid;
   if (firebaseUid) {
     const userTradesCol = collection(db, 'users', firebaseUid, 'trades');
-    const tradesQuery = query(userTradesCol);
+    const tradesQuery = query(userTradesCol, where('status', '==', 'open'));
 
     tradesUnsubscribe = onSnapshot(tradesQuery, (snapshot) => {
       const trades = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      if (trades.length > 0) {
-        localStorage.setItem('lastKnownTrades', JSON.stringify(trades));
-      }
+      // Always sync so closed-trade pruning clears the cache even when 0 open trades remain
+      localStorage.setItem('lastKnownTrades', JSON.stringify(trades));
       renderTrades(trades);
     }, (error) => {
       console.error('Trades listener error:', error);
