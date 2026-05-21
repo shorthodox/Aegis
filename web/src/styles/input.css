@@ -1,6 +1,12 @@
-/* Tailwind input: include Tailwind layers only. Custom styles live in main.css */
+/* Import fonts first (must precede other rules) */
+@import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+/* Tailwind layers */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Include project custom styles last so they can override Tailwind defaults when needed */
+@import "./main.css";
 
 /* Add any lightweight project-specific component utilities here if needed */
