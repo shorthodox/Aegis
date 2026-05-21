@@ -1115,6 +1115,9 @@ async function executeTrade() {
 
     // Navigate to analytics to show the live trade
     if (typeof window.switchRoom === 'function') window.switchRoom('analytics');
+    setTimeout(() => {
+      if (typeof window.forceTradesRefresh === 'function') window.forceTradesRefresh();
+    }, 150);
 
     // Show success toast
     _showToast('Trade executed successfully! Tracking in Analytics.', 'success');
