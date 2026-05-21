@@ -163,7 +163,7 @@
             <div class="p-4 flex-1 overflow-y-auto space-y-4">
                 <h3 class="text-xs uppercase tracking-widest text-gray-500 mb-2 font-bold px-2">Navigation</h3>
 
-                <a href="#room-signals" onclick="switchRoom('signals')"
+                <a href="javascript:void(0)" onclick="switchRoom('signals')"
                     class="nav-room block glass-panel p-4 rounded-xl text-white border-cyan/50 shadow-[0_0_15px_rgba(0,242,255,0.2)] hover:border-cyan/50 hover:shadow-[0_0_15px_rgba(0,242,255,0.2)] transition-all group min-h-[44px]"
                     data-room="signals">
                     <div class="flex items-center gap-3">
@@ -178,7 +178,7 @@
                     </div>
                 </a>
 
-                <a href="#room-terminal" onclick="switchRoom('terminal')"
+                <a href="javascript:void(0)" onclick="switchRoom('terminal')"
                     class="nav-room block glass-panel p-4 rounded-xl text-gray-400 hover:text-white hover:border-orange/50 hover:shadow-[0_0_15px_rgba(255,140,0,0.2)] transition-all group min-h-[44px]"
                     data-room="terminal">
                     <div class="flex items-center gap-3">
@@ -193,7 +193,7 @@
                     </div>
                 </a>
 
-                <a href="#room-analytics" onclick="switchRoom('analytics')"
+                <a href="javascript:void(0)" onclick="switchRoom('analytics')"
                     class="nav-room block glass-panel p-4 rounded-xl text-gray-400 hover:text-white hover:border-white/30 transition-all group min-h-[44px]"
                     data-room="analytics">
                     <div class="flex items-center gap-3">
@@ -208,7 +208,7 @@
                     </div>
                 </a>
 
-                <a href="#room-history" onclick="switchRoom('history')"
+                <a href="javascript:void(0)" onclick="switchRoom('history')"
                     class="nav-room block glass-panel p-4 rounded-xl text-gray-400 hover:text-white hover:border-purple-500/50 hover:shadow-[0_0_15px_rgba(147,51,234,0.2)] transition-all group min-h-[44px]"
                     data-room="history">
                     <div class="flex items-center gap-3">
@@ -223,7 +223,7 @@
                     </div>
                 </a>
 
-                <a href="#room-settings" onclick="switchRoom('settings')"
+                <a href="javascript:void(0)" onclick="switchRoom('settings')"
                     class="nav-room block glass-panel p-4 rounded-xl text-gray-400 hover:text-white hover:border-white/30 transition-all group min-h-[44px]"
                     data-room="settings">
                     <div class="flex items-center gap-3">
@@ -757,6 +757,10 @@
                 target.classList.remove('hidden');
                 target.classList.add('active');
             }
+
+            // Scroll main content to top so the room is always visible
+            const mainEl = document.querySelector('main');
+            if (mainEl) mainEl.scrollTop = 0;
 
             // Force data refresh for analytics
             if (roomName === 'analytics' && typeof window.forceTradesRefresh === 'function') {
