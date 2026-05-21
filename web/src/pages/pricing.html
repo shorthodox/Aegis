@@ -9,29 +9,49 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
     <style>
+        .footer {
+            text-align: center;
+            padding: 2rem;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            margin-top: 3rem;
+        }
         .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            flex-wrap: wrap;
             margin-bottom: 1rem;
         }
-
         .footer-links a {
-            color: #00f2ff;
+            color: #6b7280;
             text-decoration: none;
-            margin: 0 0.5rem;
+            font-size: 0.8rem;
         }
-
         .footer-links a:hover {
-            text-decoration: underline;
+            color: #00f2ff;
         }
-
         .separator {
-            color: #475569;
-            margin: 0 0.5rem;
+            color: #374151;
         }
-
         .footer-proprietor {
-            margin: 1rem 0;
-            font-size: 0.85rem;
-            color: #64748b;
+            font-size: 0.75rem;
+            color: #4b5563;
+            margin-bottom: 0.5rem;
+        }
+        .footer p {
+            font-size: 0.7rem;
+            color: #374151;
+        }
+        @media (max-width: 768px) {
+            .footer-links {
+                gap: 0.5rem;
+            }
+            .footer-links a {
+                font-size: 0.7rem;
+            }
+            .footer {
+                padding: 1.5rem 1rem;
+            }
         }
     </style>
 </head>
@@ -268,9 +288,13 @@
         <div class="footer-links">
             <a href="/web/src/pages/terms.html">Terms of Service</a>
             <span class="separator">•</span>
-            <a href="/web/src/pages/refund-policy.html">Refund Policy</a>
+            <a href="/web/src/pages/conditions.html">Conditions</a>
             <span class="separator">•</span>
-            <a href="/web/src/pages/risk-disclosure.html">Risk Disclosure</a>
+            <a href="/web/src/pages/privacy_policy.html">Privacy Policy</a>
+            <span class="separator">•</span>
+            <a href="/web/src/pages/refund_policy.html">Refund Policy</a>
+            <span class="separator">•</span>
+            <a href="/web/src/pages/risk_disclosure.html">Risk Disclosure</a>
         </div>
         <div class="footer-proprietor">
             Proprietor: Animesh Kukreti | Dehradun, Uttarakhand, India
@@ -415,21 +439,25 @@
             if (trialBtn) {
                 trialBtn.addEventListener('click', (e) => {
                     e.preventDefault();
-                    if (globalAuthState) {
+                    if (globalAuthState || isUserAuthenticated()) {
                         startTrialWithBackend();
                     } else {
-                        // After sign-up, auto-trigger trial start
                         window.pendingAction = 'startTrial';
                         openSignUpModal();
                     }
                 });
             }
 
-            // Auto-start trial after sign-up if pending
+            // After sign-in/sign-up, resume pending action or plan purchase
             window.addEventListener('authStateChange', (ev) => {
-                if (ev.detail?.authenticated && window.pendingAction === 'startTrial') {
+                if (!ev.detail?.authenticated) return;
+                if (window.pendingAction === 'startTrial') {
                     window.pendingAction = null;
                     startTrialWithBackend();
+                } else if (window.pendingPlan) {
+                    const plan = window.pendingPlan;
+                    window.pendingPlan = null;
+                    subscribeToPlan(plan);
                 }
             });
 
@@ -438,8 +466,7 @@
                 btn.addEventListener('click', (e) => {
                     e.preventDefault();
                     const plan = e.currentTarget.dataset.plan;
-                    // 2. Conditional Logic
-                    if (!globalAuthState) {
+                    if (!globalAuthState && !isUserAuthenticated()) {
                         window.pendingPlan = plan;
                         openSignInModal();
                     } else {
