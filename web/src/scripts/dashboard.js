@@ -9,7 +9,7 @@ import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/12.12.1/firebase
 // The WebSocket tick is the server-authority enforcement loop.
 // ============================================================
 const _subState = { active: false, isPremium: false };
-let _lastVerifiedAt = 0; // timestamp of last successful Firestore subscription check
+let _lastVerifiedAt = Date.now(); // grace period: blocks WS ticks until Firestore check completes
 try {
   Object.defineProperty(window, 'isSubscriptionActive', {
     get: () => _subState.active,
