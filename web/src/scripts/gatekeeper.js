@@ -1794,6 +1794,20 @@ function renderTrades(trades) {
 window.closeTrade = async function (tradeId) {
   if (!tradeId) return;
 
+  // Find the trade in the last rendered list to validate ownership
+  const trade = _lastRenderedTrades.find(t => (t.id || t.tradeId) === tradeId);
+  const uid = (auth && auth.currentUser && auth.currentUser.uid) || (currentUser && currentUser.uid);
+
+  if (trade) {
+    // If trade has a userId and it doesn't match current user, don't call backend
+    if (trade.userId && uid && trade.userId !== uid) {
+      console.warn('Attempted to close a trade that does not belong to the current user', { tradeId, owner: trade.userId, me: uid });
+      alert('Cannot close this trade: it does not belong to your account. Refreshing trades.');
+      if (typeof window.forceTradesRefresh === 'function') window.forceTradesRefresh();
+      return;
+    }
+  }
+
   // Optimistic removal — drop the row from both tables immediately so the
   // user sees instant feedback rather than waiting for the Firestore round-trip.
   _lastRenderedTrades = _lastRenderedTrades.filter(t => (t.id || t.tradeId) !== tradeId);
@@ -1802,11 +1816,25 @@ window.closeTrade = async function (tradeId) {
   try {
     const token = typeof AuthManager !== 'undefined' ? AuthManager.getToken() : null;
     if (!token) { alert('Session expired. Please refresh and log in again.'); return; }
+
+    console.log('Closing trade via API', { tradeId, uid });
     const r = await fetch(`/api/trades/${tradeId}/close`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}` }
     });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+
+    if (r.status === 404) {
+      // If backend reports not found, refresh trades and inform user
+      console.warn('Backend returned 404 when closing trade', tradeId);
+      alert('Could not close trade: trade not found on server. Refreshing trades.');
+      if (typeof window.forceTradesRefresh === 'function') window.forceTradesRefresh();
+      return;
+    }
+
+    if (!r.ok) {
+      const text = await r.text();
+      throw new Error(`HTTP ${r.status} ${text}`);
+    }
     // Firestore listener will reconcile the authoritative list on the next snapshot.
   } catch (e) {
     console.error('closeTrade error:', e);
