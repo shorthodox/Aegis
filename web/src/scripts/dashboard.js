@@ -46,6 +46,13 @@ async function checkUserSubscriptionStatus(uid) {
     // before Firestore has a chance to respond.
   }
 
+  // Placeholder UID — skip Firestore, fall back to localStorage only
+  if (!uid || uid === 'jwt-user') {
+    const localEnd = localStorage.getItem('trial_end_timestamp');
+    if (localEnd && new Date(localEnd) < now) return 'expired';
+    return 'trial';
+  }
+
   try {
     const userDocRef = doc(db, 'users', uid);
     const userSnap = await getDoc(userDocRef);
@@ -780,13 +787,10 @@ async function initDashboard(event) {
       setupTrialNonBlocking(initialUid);
     }
 
-    // Await true auth state
+    // Await true auth state — always resolve to a real Firebase UID
     const realUserId = eventUid || await (async () => {
-      // Check if we have a custom JWT token in localStorage
       const localToken = localStorage.getItem('access_token') || localStorage.getItem('authToken');
-      if (localToken) {
-        return 'jwt-user';
-      }
+      if (localToken && cachedUid) return cachedUid; // fast path: token + cached UID
       return await waitForAuthStateChange();
     })();
 
@@ -822,6 +826,99 @@ async function initDashboard(event) {
 
 window.addEventListener('DOMContentLoaded', initDashboard);
 document.addEventListener('dashboardUserLoaded', initDashboard);
+
+// ── Periodic subscription re-verification ────────────────────────────────────
+// Re-checks Firestore every 5 minutes so a paid-to-expired transition is caught
+// even if the WebSocket is briefly disconnected. Also runs on tab focus so
+// returning users always see an up-to-date state without waiting for the interval.
+
+let _periodicVerifyTimer = null;
+let _lastPeriodicVerify   = 0;
+
+async function _periodicSubscriptionCheck() {
+  const now = Date.now();
+  // Guard: skip if checked less than 4 minutes ago (WS may have already updated)
+  if (now - _lastPeriodicVerify < 4 * 60_000) return;
+  _lastPeriodicVerify = now;
+
+  try {
+    const uid = localStorage.getItem('cached_uid');
+    if (!uid) return;
+    const status = await checkUserSubscriptionStatus(uid);
+    _subState.active    = (status !== 'expired');
+    _subState.isPremium = (status === 'paid');
+    if (status !== 'expired') _lastVerifiedAt = now;
+    updatePlanBadge(status);
+    if (status === 'expired') {
+      setExpiredView();
+    } else {
+      clearExpiredView();
+    }
+  } catch (_) {
+    // Silently ignore — the WS tick is the primary enforcement mechanism.
+  }
+}
+
+document.addEventListener('dashboardUserLoaded', () => {
+  // Start the 5-minute interval once the dashboard is initialised.
+  if (!_periodicVerifyTimer) {
+    _periodicVerifyTimer = setInterval(_periodicSubscriptionCheck, 5 * 60_000);
+  }
+
+  // Re-verify immediately when the user returns to the tab (debounced to 60 s).
+  let _tabFocusLast = 0;
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    const now = Date.now();
+    if (now - _tabFocusLast < 60_000) return;
+    _tabFocusLast = now;
+    _periodicSubscriptionCheck();
+  });
+});
+
+// ============================================================
+// SCREEN MODE ENGINE
+// ============================================================
+const _SCREEN_MODE_KEY = 'aegis-screen-mode';
+
+function _applyTheme(mode) {
+    const effectiveTheme = mode === 'auto'
+        ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+        : mode;
+    document.documentElement.setAttribute('data-theme', effectiveTheme);
+    if (effectiveTheme === 'light') document.documentElement.classList.remove('dark');
+    else document.documentElement.classList.add('dark');
+}
+
+function _updateScreenModeUI(mode) {
+    document.querySelectorAll('[data-screen-mode-btn]').forEach(btn => {
+        btn.classList.toggle('screen-mode-btn--active', btn.dataset.screenModeBtn === mode);
+    });
+}
+
+window.setScreenMode = function (mode) {
+    if (!['auto', 'dark', 'grey', 'light'].includes(mode)) return;
+    localStorage.setItem(_SCREEN_MODE_KEY, mode);
+    _applyTheme(mode);
+    _updateScreenModeUI(mode);
+};
+
+function initScreenMode() {
+    const saved = localStorage.getItem(_SCREEN_MODE_KEY) || 'auto';
+    _applyTheme(saved);
+    _updateScreenModeUI(saved);
+
+    // Respond to OS-level preference changes when in auto mode
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+        if ((localStorage.getItem(_SCREEN_MODE_KEY) || 'auto') === 'auto') _applyTheme('auto');
+    });
+
+    document.querySelectorAll('[data-screen-mode-btn]').forEach(btn => {
+        btn.addEventListener('click', () => window.setScreenMode(btn.dataset.screenModeBtn));
+    });
+}
+
+document.addEventListener('DOMContentLoaded', initScreenMode);
 
 // ============================================================
 // TERMINAL SIMULATION LOGIC
@@ -1382,22 +1479,19 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   if (modal) {
-    // Backdrop click closes modal
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) {
-        modal.classList.add('hidden');
-      }
-    });
-
-    // Event delegation for feature panel cards — works on dynamically injected innerHTML.
-    // Cards set data-open-panel="fp-*" instead of inline onclick so this single listener
-    // handles all clicks regardless of when the card was rendered.
+    // Single delegating listener: feature-card clicks are caught first so inner
+    // elements never accidentally trigger the backdrop-close branch.
     modal.addEventListener('click', (e) => {
       const card = e.target.closest('[data-open-panel]');
-      if (!card) return;
-      const panelId = card.dataset.openPanel;
-      if (panelId && typeof window.openFeaturePanel === 'function') {
-        window.openFeaturePanel(panelId);
+      if (card) {
+        const panelId = card.dataset.openPanel;
+        if (panelId && typeof window.openFeaturePanel === 'function') {
+          window.openFeaturePanel(panelId);
+        }
+        return;
+      }
+      if (e.target === modal) {
+        modal.classList.add('hidden');
       }
     });
   }
