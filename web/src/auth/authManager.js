@@ -232,7 +232,8 @@ export class AuthManager {
         const plan   = data?.plan_type || user?.plan || user?.plan_type;
         const status = data?.status    || user?.status;
 
-        if (plan === 'active' || plan === 'pro' || status === 'active') return true;
+        // Grant access for pro, intermediate and active plans
+        if (plan === 'active' || plan === 'pro' || plan === 'intermediate' || status === 'active') return true;
         if (plan === 'free_trial' || plan === 'trial') return this.isTrialValid();
 
         return false;
