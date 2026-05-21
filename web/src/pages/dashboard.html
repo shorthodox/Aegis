@@ -19,8 +19,9 @@
         })();
     </script>
     <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
-    <!-- Tailwind CSS: use compiled stylesheet in production (built via Tailwind CLI / PostCSS) -->
+    <!-- Tailwind CSS: compiled utilities first, then custom design-system on top -->
     <link rel="stylesheet" href="/web/dist/styles.css">
+    <link rel="stylesheet" href="/web/src/styles/main.css">
     <style>
         .visible {
             display: block !important;
@@ -1071,6 +1072,9 @@
             </div>
         </div>
     </div>
+
+    <!-- S&R proximity alert toasts -->
+    <div id="sr-alert-toast" aria-live="polite"></div>
 
     <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
     <script type="module" src="../scripts/dashboard.js"></script>
