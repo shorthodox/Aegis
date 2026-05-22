@@ -997,6 +997,15 @@ function updateUI() {
       planBadge.innerHTML = '<i class="fas fa-clock"></i> TRIAL EXPIRED';
       planBadge.classList.add('text-red-500');
     }
+    
+    // Unlock timeframes visually for Pro and Intermediate
+    if (['pro', 'premium', 'intermediate'].includes(p)) {
+      document.querySelectorAll('.tf-btn[data-pro="true"]').forEach(btn => {
+        const lockIcon = btn.querySelector('.fa-lock');
+        if (lockIcon) lockIcon.remove();
+        btn.removeAttribute('data-pro');
+      });
+    }
   }
 
   // Update Aegis logo click handler
