@@ -762,7 +762,7 @@ async function initDashboard(event) {
   clearExpiredView();
 
   if (initialized) return;
-  if (!window.location.pathname.includes('dashboard.html')) return;
+  if (!window.location.pathname.includes('dashboard')) return;
 
   initialized = true;
   initializeLogoClickHandler();
