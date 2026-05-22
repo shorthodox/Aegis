@@ -679,8 +679,7 @@
 
             function toggleMenu() {
                 if (sidebar && overlay) {
-                    const isOpen = sidebar.classList.toggle('translate-x-0');
-                    sidebar.classList.toggle('-translate-x-full');
+                    const isOpen = sidebar.classList.toggle('open');
                     overlay.classList.toggle('hidden');
                     const icon = document.getElementById('mobileMenuIcon');
                     if (icon) icon.className = isOpen ? 'fas fa-times text-xl' : 'fas fa-bars text-xl';
@@ -786,8 +785,7 @@
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('sidebarOverlay');
             if (window.innerWidth < 1024 && sidebar && overlay) {
-                sidebar.classList.add('-translate-x-full');
-                sidebar.classList.remove('translate-x-0');
+                sidebar.classList.remove('open');
                 overlay.classList.add('hidden');
             }
         }
