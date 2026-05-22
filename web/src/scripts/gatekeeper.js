@@ -997,15 +997,6 @@ function updateUI() {
       planBadge.innerHTML = '<i class="fas fa-clock"></i> TRIAL EXPIRED';
       planBadge.classList.add('text-red-500');
     }
-    
-    // Unlock timeframes visually for Pro and Intermediate
-    if (['pro', 'premium', 'intermediate'].includes(p)) {
-      document.querySelectorAll('.tf-btn[data-pro="true"]').forEach(btn => {
-        const lockIcon = btn.querySelector('.fa-lock');
-        if (lockIcon) lockIcon.remove();
-        btn.removeAttribute('data-pro');
-      });
-    }
   }
 
   // Update Aegis logo click handler
@@ -1198,16 +1189,39 @@ function updateDashboardData(data) {
   if (signalsContainer && data.signals) {
     // Populate window.latestSignals from WebSocket
     Object.entries(data.signals).forEach(([sym, sig]) => {
-      const lowerPlan = (userPlan || '').toLowerCase();
-      const isPaidTier = ['pro', 'premium', 'intermediate'].includes(lowerPlan);
+      // For trial users, create signals for multiple timeframes (15m, 30m, 1h)
+      const trialTimeframes = ['15m', '30m', '1h'];
 
-      // Determine the list of timeframes to generate fallbacks for
-      const targetTimeframes = isPaidTier ? 
-        ['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w'] : 
-        ['15m', '30m', '1h'];
-
-      // Generate the fallback signals so the UI doesn't break during backend warmup
-      targetTimeframes.forEach(tf => {
+      if (userPlan === 'trial' || trialActive) {
+        // For trial users, create the same signal for all trial timeframes
+        trialTimeframes.forEach(tf => {
+          const key = `${sym}_${tf}`;
+          window.latestSignals = window.latestSignals || {};
+          const signalObj = {
+            symbol: sym,
+            signal: sig.signal || 'WAITING',
+            ai_prob: sig.ai_prob || sig.confidence || 0,
+            signal_strength: sig.signal_strength || 'NORMAL',
+            risk_pct: sig.risk_pct || 2,
+            atr: sig.atr || 0,
+            timeframe: tf,
+            direction: sig.direction || "NEUTRAL",
+            entry_price: sig.entry_price || 0,
+            sl: sig.sl || 0,
+            tp: sig.tp || 0,
+            confidence_score: sig.confidence_score || 0,
+            signal_id: sig.signal_id || "",
+            trading_accuracy: sig.trading_accuracy || 0.5,
+            profitability_index: sig.profitability_index || 0,
+            sr_telemetry: sig.sr_telemetry || null,
+          };
+          // Determine and set signal status
+          signalObj.status = getSignalStatus(signalObj);
+          window.latestSignals[key] = signalObj;
+        });
+      } else {
+        // For pro users, use the actual timeframe from data or default to 1h
+        const tf = sig.timeframe || '1h';
         const key = `${sym}_${tf}`;
         window.latestSignals = window.latestSignals || {};
         const signalObj = {
@@ -1232,15 +1246,13 @@ function updateDashboardData(data) {
         // Determine and set signal status
         signalObj.status = getSignalStatus(signalObj);
         window.latestSignals[key] = signalObj;
-      });
+      }
     });
 
     // Populate ALL timeframes from the full map the backend sends.
     // This is what makes tab-switching work: without it, pro signals are only
     // stored under the engine's native timeframe key and never match the user's tab.
-    const lowerPlan = (userPlan || '').toLowerCase();
-    const isPaidTierTimeframes = ['pro', 'premium', 'intermediate'].includes(lowerPlan);
-    if (data.timeframes && (isPaidTierTimeframes || (lowerPlan !== 'trial' && !trialActive))) {
+    if (data.timeframes && userPlan !== 'trial' && !trialActive) {
       window.latestSignals = window.latestSignals || {};
       Object.entries(data.timeframes).forEach(([sym, tfMap]) => {
         Object.entries(tfMap).forEach(([tf, sig]) => {
@@ -1402,10 +1414,9 @@ function renderSignals(signals) {
   const effectiveTrialActive = typeof AuthManager !== 'undefined' ? AuthManager.isTrialValid() : ((trialActive === null && userPlan === 'trial') ? true : trialActive);
 
   function getUserTier() {
-    const lowerPlan = (userPlan || '').toLowerCase();
-    if (lowerPlan === 'pro') return 3;
-    if (lowerPlan === 'intermediate') return 2;
-    if (lowerPlan === 'basic') return 1;
+    if (userPlan === 'pro') return 3;
+    if (userPlan === 'intermediate') return 2;
+    if (userPlan === 'basic') return 1;
     return 1; // Trial or none
   }
 
@@ -1414,17 +1425,14 @@ function renderSignals(signals) {
   const filteredEntries = signalEntries.filter(([key, signal]) => {
     const symbol = signal.symbol;
     // PRO and INTERMEDIATE subscribers see all incoming tokens — no filter
-    const lowerPlan = (userPlan || '').toLowerCase();
-    if (lowerPlan === 'pro' || lowerPlan === 'premium' || lowerPlan === 'intermediate') return true;
+    if (userPlan === 'pro' || userPlan === 'premium' || userPlan === 'intermediate') return true;
     // Trial/basic: restrict to allowedTokens (BIG5 by default)
     return allowedTokens.includes(symbol);
   });
 
   if (filteredEntries.length === 0) {
-    const lowerPlan = (userPlan || '').toLowerCase();
-    const isExplicitlyExpired = lowerPlan === 'expired' || lowerPlan === 'none' || window.trialExpiredTriggered === true;
-    const isPaidTierEmpty = ['pro', 'premium', 'intermediate'].includes(lowerPlan);
-    const isTrialPlan = !isPaidTierEmpty && (lowerPlan === 'trial' || lowerPlan === 'trial-active' || effectiveTrialActive);
+    const isExplicitlyExpired = userPlan === 'expired' || userPlan === 'none' || window.trialExpiredTriggered === true;
+    const isTrialPlan = userPlan === 'trial' || userPlan === 'trial-active' || effectiveTrialActive;
 
     if (!isExplicitlyExpired && isTrialPlan) {
       signalsContainer.innerHTML = `
@@ -1556,6 +1564,7 @@ function renderSignals(signals) {
             ${directionBadge}
             ${statusBadge}
             ${matchBadge}
+            ${macroBadge}
           </div>
           <div class="flex items-center gap-2">
             <button class="view-logic-btn text-[10px] bg-white/5 border border-white/10 px-2 py-0.5 rounded text-gray-400 hover:text-white transition-colors" onclick="window.toggleScorecard(event, '${symbol}')">View Logic <i class="fas fa-chevron-down"></i></button>
@@ -1570,7 +1579,7 @@ function renderSignals(signals) {
             </div>
             <span class="text-xs font-mono">AI: ${confidence.toFixed(1)}%</span>
           </div>
-          <div class="signal-meta grid grid-cols-2 gap-2 mt-3 text-xs text-gray-400 pb-2">
+          <div class="signal-meta grid grid-cols-2 gap-2 mt-3 text-xs text-gray-400">
             <span class="signal-strength ${signal.signal_strength?.toLowerCase()}">
               <i class="fas fa-bolt"></i> ${signal.signal_strength || 'NORMAL'}
             </span>
@@ -1582,7 +1591,7 @@ function renderSignals(signals) {
                <span>Entry: ${entryStr}</span>
                <span>SL: ${slStr} | TP: ${tpStr}</span>
             </span>
-            ${macroBadge}
+            ${srBadge}
           </div>
           
           <div class="slide-down-container mt-2 ${window.openScorecards && window.openScorecards.has(symbol) ? 'open' : ''}">
@@ -1608,11 +1617,6 @@ function renderSignals(signals) {
                   <div class="flex justify-between text-[10px]"><span class="text-gray-400">Volume Delta</span><span class="text-cyan font-mono">${confluence.volume}%</span></div>
                   <div class="confluence-bar"><div class="fill" style="width: ${confluence.volume}%;"></div></div>
                 </div>
-                <!-- Support and Resistance inside advanced features -->
-                <div class="mt-4 pt-2 border-t border-white/10">
-                  <div class="text-[10px] font-bold text-gray-400 uppercase mb-2">Support & Resistance Zones</div>
-                  ${srBadge}
-                </div>
               </div>
             </div>
           </div>
@@ -1635,10 +1639,9 @@ window.toggleScorecard = function (event, symbol) {
 
   // Calculate tier
   let userTier = 0;
-  const lowerPlan = (userPlan || '').toLowerCase();
-  if (lowerPlan === 'pro') userTier = 3;
-  else if (lowerPlan === 'intermediate') userTier = 2;
-  else if (lowerPlan === 'basic') userTier = 1;
+  if (userPlan === 'pro') userTier = 3;
+  else if (userPlan === 'intermediate') userTier = 2;
+  else if (userPlan === 'basic') userTier = 1;
 
   if (userTier < 2) {
     content.classList.add('feature-locked', 'locked');
@@ -2060,9 +2063,7 @@ function setupFirestoreListeners() {
         const key = `${symbol}_${tf}`;
 
         // Apply plan filtering
-        const lowerPlan = (userPlan || '').toLowerCase();
-        const isPaidTier = ['pro', 'premium', 'intermediate'].includes(lowerPlan);
-        if (!isPaidTier && !allowedTokens.includes(symbol)) {
+        if (userPlan !== 'pro' && !allowedTokens.includes(symbol)) {
           return;
         }
 
