@@ -1201,7 +1201,9 @@ function updateDashboardData(data) {
       // For trial users, create signals for multiple timeframes (15m, 30m, 1h)
       const trialTimeframes = ['15m', '30m', '1h'];
 
-      if (userPlan === 'trial' || trialActive) {
+      const isPaidTier = ['pro', 'premium', 'intermediate'].includes(userPlan);
+
+      if (!isPaidTier && (userPlan === 'trial' || trialActive)) {
         // For trial users, create the same signal for all trial timeframes
         trialTimeframes.forEach(tf => {
           const key = `${sym}_${tf}`;
@@ -1261,7 +1263,8 @@ function updateDashboardData(data) {
     // Populate ALL timeframes from the full map the backend sends.
     // This is what makes tab-switching work: without it, pro signals are only
     // stored under the engine's native timeframe key and never match the user's tab.
-    if (data.timeframes && userPlan !== 'trial' && !trialActive) {
+    const isPaidTierTimeframes = ['pro', 'premium', 'intermediate'].includes(userPlan);
+    if (data.timeframes && (isPaidTierTimeframes || (userPlan !== 'trial' && !trialActive))) {
       window.latestSignals = window.latestSignals || {};
       Object.entries(data.timeframes).forEach(([sym, tfMap]) => {
         Object.entries(tfMap).forEach(([tf, sig]) => {
@@ -1441,7 +1444,8 @@ function renderSignals(signals) {
 
   if (filteredEntries.length === 0) {
     const isExplicitlyExpired = userPlan === 'expired' || userPlan === 'none' || window.trialExpiredTriggered === true;
-    const isTrialPlan = userPlan === 'trial' || userPlan === 'trial-active' || effectiveTrialActive;
+    const isPaidTierEmpty = ['pro', 'premium', 'intermediate'].includes(userPlan);
+    const isTrialPlan = !isPaidTierEmpty && (userPlan === 'trial' || userPlan === 'trial-active' || effectiveTrialActive);
 
     if (!isExplicitlyExpired && isTrialPlan) {
       signalsContainer.innerHTML = `
