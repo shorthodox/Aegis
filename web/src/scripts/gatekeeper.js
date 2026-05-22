@@ -613,7 +613,7 @@ function attachEventListeners() {
       const tf = btn.getAttribute('data-tf');
       const requiresPro = btn.getAttribute('data-pro') === 'true';
 
-      if (requiresPro && !['pro', 'intermediate', 'premium'].includes(userPlan)) {
+      if (requiresPro && !['pro', 'intermediate'].includes(userPlan)) {
         showUpgradeModal();
         return;
       }
@@ -1449,7 +1449,7 @@ function renderSignals(signals) {
       <div class="no-signals">
         <i class="fas fa-chart-line"></i>
         <p>No signals available for your plan</p>
-        ${!['pro', 'premium', 'intermediate'].includes(userPlan) ? '<a href="/web/src/pages/pricing.html" class="upgrade-link">Upgrade to Pro for 58 tokens →</a>' : ''}
+        ${userPlan !== 'pro' ? '<a href="/web/src/pages/pricing.html" class="upgrade-link">Upgrade to Pro for 58 tokens →</a>' : ''}
       </div>
     `;
     return;
@@ -1564,7 +1564,6 @@ function renderSignals(signals) {
             ${directionBadge}
             ${statusBadge}
             ${matchBadge}
-            ${macroBadge}
           </div>
           <div class="flex items-center gap-2">
             <button class="view-logic-btn text-[10px] bg-white/5 border border-white/10 px-2 py-0.5 rounded text-gray-400 hover:text-white transition-colors" onclick="window.toggleScorecard(event, '${symbol}')">View Logic <i class="fas fa-chevron-down"></i></button>
@@ -1579,7 +1578,7 @@ function renderSignals(signals) {
             </div>
             <span class="text-xs font-mono">AI: ${confidence.toFixed(1)}%</span>
           </div>
-          <div class="signal-meta grid grid-cols-2 gap-2 mt-3 text-xs text-gray-400">
+          <div class="signal-meta grid grid-cols-2 gap-2 mt-3 text-xs text-gray-400 pb-2">
             <span class="signal-strength ${signal.signal_strength?.toLowerCase()}">
               <i class="fas fa-bolt"></i> ${signal.signal_strength || 'NORMAL'}
             </span>
@@ -1591,7 +1590,7 @@ function renderSignals(signals) {
                <span>Entry: ${entryStr}</span>
                <span>SL: ${slStr} | TP: ${tpStr}</span>
             </span>
-            ${srBadge}
+            ${macroBadge}
           </div>
           
           <div class="slide-down-container mt-2 ${window.openScorecards && window.openScorecards.has(symbol) ? 'open' : ''}">
@@ -1616,6 +1615,11 @@ function renderSignals(signals) {
                 <div class="mb-2">
                   <div class="flex justify-between text-[10px]"><span class="text-gray-400">Volume Delta</span><span class="text-cyan font-mono">${confluence.volume}%</span></div>
                   <div class="confluence-bar"><div class="fill" style="width: ${confluence.volume}%;"></div></div>
+                </div>
+                <!-- Support and Resistance inside advanced features -->
+                <div class="mt-4 pt-2 border-t border-white/10">
+                  <div class="text-[10px] font-bold text-gray-400 uppercase mb-2">Support & Resistance Zones</div>
+                  ${srBadge}
                 </div>
               </div>
             </div>
@@ -2063,7 +2067,7 @@ function setupFirestoreListeners() {
         const key = `${symbol}_${tf}`;
 
         // Apply plan filtering
-        if (!['pro', 'premium', 'intermediate'].includes(userPlan) && !allowedTokens.includes(symbol)) {
+        if (userPlan !== 'pro' && !allowedTokens.includes(symbol)) {
           return;
         }
 
@@ -2120,7 +2124,7 @@ function setupFirestoreListeners() {
   }, (error) => {
     console.error('Signals listener error:', error);
     if (error.code === 'permission-denied') {
-      if (!trialActive && !['pro', 'premium', 'intermediate'].includes(userPlan)) {
+      if (!trialActive && userPlan !== 'pro') {
         if (signalsContainer) {
           signalsContainer.innerHTML = '<div class="no-signals"><i class="fas fa-lock text-red-500 mb-2 text-2xl"></i><p>Please upgrade to view signals.</p></div>';
         }
