@@ -454,7 +454,12 @@ async def run_engine_background():
                     now_str = datetime.now(timezone.utc).isoformat()
                     for sym, sig in signals_data.items():
                         # signals_data may be nested: { symbol: { timeframe: sigobj, ... } }
-                        if isinstance(sig, dict) and any(isinstance(v, dict) or v is None for v in sig.values()):
+                        is_nested_tf = (
+                            isinstance(sig, dict) and 
+                            any(isinstance(v, dict) or v is None for v in sig.values()) and 
+                            all(k in {'1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w'} for k in sig.keys())
+                        )
+                        if is_nested_tf:
                             # Flatten: write one doc per timeframe
                             for tf, tf_sig in sig.items():
                                 doc_id = f"{sym.replace('/', '_')}_{tf}"
@@ -1147,15 +1152,15 @@ def get_user_plan(email: str) -> str:
 
 def get_allowed_tokens(email: str) -> List[str]:
     plan = get_user_plan(email)
-    if plan in ["pro", "premium", "intermediate"]:
+    if plan == "pro":
         return PRO_TOKENS if PRO_TOKENS else BASIC_TOKENS + ["ADA/USDT", "DOT/USDT", "DOGE/USDT", "MATIC/USDT", "AVAX/USDT", "LINK/USDT"]
     else:
         return BASIC_TOKENS
 
 def get_allowed_timeframes(email: str) -> List[str]:
     plan = get_user_plan(email)
-    if plan in ["pro", "premium", "intermediate"]:
-        return ["1m","5m","15m","30m","1h","4h","1d","1w"]
+    if plan == "pro":
+        return ["1m","5m","15m","30m","1h","1d","1w","1M"]
     else:
         return BASIC_TIMEFRAMES
 
@@ -1862,7 +1867,12 @@ async def websocket_dashboard(websocket: WebSocket):
                         continue
 
                     # If sig is nested per timeframe
-                    if isinstance(sig, dict) and any(isinstance(v, dict) or v is None for v in sig.values()):
+                    is_nested_tf = (
+                        isinstance(sig, dict) and 
+                        any(isinstance(v, dict) or v is None for v in sig.values()) and 
+                        all(k in {'1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w'} for k in sig.keys())
+                    )
+                    if is_nested_tf:
                         timeframes_map[sym] = {}
                         # choose summary as 1h if present
                         summary = None
