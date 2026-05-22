@@ -1075,10 +1075,8 @@ function startWebSocket(token) {
       // Step 4: Detailed Error Logging
       console.log(`[WS Receive] Type: ${data.type || 'NO_TYPE'} | Tickers: ${data.tickers ? Object.keys(data.tickers).length : 0} | Signals: ${data.signals ? Object.keys(data.signals).length : 0}`);
 
-      if (data.timeframe && data.timeframe !== currentTimeframe) {
-        console.debug(`Skipping stale WS payload for timeframe ${data.timeframe}, active is ${currentTimeframe}`);
-        return;
-      }
+      // NOTE: do NOT gate on data.timeframe here — the backend sends a full
+      // timeframes map and the summary timeframe rarely matches the user's tab.
       if (data.type === 'signals' || data.type === 'update') {
         updateDashboardData(data);
       } else {
@@ -1250,6 +1248,41 @@ function updateDashboardData(data) {
         window.latestSignals[key] = signalObj;
       }
     });
+
+    // Populate ALL timeframes from the full map the backend sends.
+    // This is what makes tab-switching work: without it, pro signals are only
+    // stored under the engine's native timeframe key and never match the user's tab.
+    if (data.timeframes && userPlan !== 'trial' && !trialActive) {
+      window.latestSignals = window.latestSignals || {};
+      Object.entries(data.timeframes).forEach(([sym, tfMap]) => {
+        Object.entries(tfMap).forEach(([tf, sig]) => {
+          if (!sig) return;
+          const key = `${sym}_${tf}`;
+          const tfSignalObj = {
+            symbol: sym,
+            signal: sig.signal || 'WAITING',
+            ai_prob: sig.ai_prob || sig.confidence || 0,
+            signal_strength: sig.signal_strength || 'NORMAL',
+            risk_pct: sig.risk_pct || 2,
+            atr: sig.atr || 0,
+            timeframe: tf,
+            direction: sig.direction || 'NEUTRAL',
+            entry_price: sig.entry_price || 0,
+            sl: sig.sl || 0,
+            tp: sig.tp || 0,
+            confidence_score: sig.confidence_score || 0,
+            signal_id: sig.signal_id || '',
+            trading_accuracy: sig.trading_accuracy || 0.5,
+            profitability_index: sig.profitability_index || 0,
+            sr_telemetry: sig.sr_telemetry || null,
+            macro_regime: sig.macro_regime || null,
+          };
+          tfSignalObj.status = getSignalStatus(tfSignalObj);
+          window.latestSignals[key] = tfSignalObj;
+        });
+      });
+    }
+
     debouncedFilterAndRenderSignals();
 
     // S&R proximity alert toasts
