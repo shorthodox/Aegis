@@ -173,22 +173,32 @@ const TrialManager = (() => {
     }
 
     if (!cachedState) {
-      if (!loadingStartTime) loadingStartTime = now;
-      if (now > loadingStartTime + loadingTimeoutMs) {
+      if (!loadingStartTime) {
+        loadingStartTime = now;
+      }
+      // Check if timeout has been exceeded
+      const elapsedTime = now - loadingStartTime;
+      if (elapsedTime > loadingTimeoutMs) {
+        console.warn(`[Trial] Loading timeout exceeded after ${elapsedTime}ms, showing fallback state`);
+        // Timeout exceeded - use fallback state (assume active trial with default end date)
+        const defaultTrialEnd = new Date(now + 3 * 24 * 60 * 60 * 1000); // 3 days from now
+        localStorage.setItem('trial_end_timestamp', defaultTrialEnd.toISOString());
+        const timeInfo = formatTimeRemaining(defaultTrialEnd);
         cachedState = {
-          active: false,
-          expired: false,
-          networkError: true,
-          display: 'Connection Timeout - Access Restricted',
-          allowedTokens: [],
-          allowedTimeframes: [],
-          plan: 'trial'
+          active: true,
+          ...timeInfo,
+          allowedTokens: cachedTokens,
+          allowedTimeframes: ['15m', '30m'],
+          plan: 'trial',
+          trialEndDate: defaultTrialEnd,
+          isLoadingFallback: true // Mark this as a fallback state
         };
+        loadingStartTime = null; // Reset for next cycle
       } else {
         cachedState = {
           active: false,
           isLoading: true,
-          display: 'Verifying Trial Status...',
+          display: `Verifying Trial Status... (${Math.round((loadingTimeoutMs - elapsedTime) / 1000)}s)`,
           allowedTokens: [],
           allowedTimeframes: [],
           plan: 'trial'
@@ -229,19 +239,27 @@ const TrialManager = (() => {
             throw new Error("Missing auth header");
           }
 
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 5000);
+
           const userResponse = await fetch('/auth/me', {
             headers: { 'Authorization': authHeader },
-            timeout: 5000
+            signal: controller.signal
           });
+
+          clearTimeout(timeoutId);
 
           if (userResponse.ok) {
             const userData = await userResponse.json();
             cachedTrialInfo = userData;
             lastFetchTime = Date.now();
             networkErrorState = false;
+            // Reset loading timeout when successful fetch completes
+            loadingStartTime = null;
             if (userData.trial_end && isValidISOString(userData.trial_end)) {
               localStorage.setItem('trial_end_timestamp', userData.trial_end);
             }
+            console.log('[Trial] Successfully fetched user trial info:', userData);
           } else {
              if (userResponse.status >= 400 && userResponse.status < 600) {
                  networkErrorState = true;
@@ -252,7 +270,10 @@ const TrialManager = (() => {
           }
         } catch (err) {
           console.warn("Background fetch failed:", err);
-          if (networkErrorState) {
+          if (err.name === 'AbortError') {
+            networkErrorState = true;
+            cachedTrialInfo = { _error: 'network' };
+          } else if (networkErrorState) {
               cachedTrialInfo = { _error: 'network' };
           } else {
               cachedTrialInfo = { _error: 'auth' };
@@ -357,12 +378,23 @@ const TrialManager = (() => {
     }
 
     countdownElements.forEach(element => {
-      if (trialInfo?.isLoading) {
-        // Loading state
+      if (trialInfo?.isLoading && !trialInfo?.isLoadingFallback) {
+        // Loading state - show with progress
         element.innerHTML = `
           <span class="sovereign-badge">SOVEREIGN</span>
           <i class="fas fa-spinner" style="animation: spin 1s linear infinite;"></i>
           ${trialInfo.display}
+        `;
+        element.style.display = 'block';
+        element.style.background = 'rgba(100, 150, 255, 0.1)';
+        element.style.borderColor = 'rgba(100, 150, 255, 0.3)';
+      } else if (trialInfo?.isLoadingFallback) {
+        // Loading fallback - show trial with caveat
+        element.innerHTML = `
+          <span class="sovereign-badge">SOVEREIGN</span>
+          <i class="fas fa-hourglass-end"></i>
+          Free Trial: <strong>${trialInfo.display}</strong>
+          <span style="font-size:0.85em;opacity:0.7;margin-left:10px;">(Offline mode)</span>
         `;
         element.style.display = 'block';
         element.style.background = 'rgba(100, 150, 255, 0.1)';
@@ -527,6 +559,12 @@ const TrialManager = (() => {
       if (e.detail.warmup) {
         updateWarmupDisplay(e.detail.warmup);
       }
+    });
+
+    // Listen for trial status updates from background fetch
+    window.addEventListener('trial-status-updated', () => {
+      console.log('[Trial] Status updated event received, refreshing display');
+      updateTrialDisplay();
     });
 
     console.log('✅ Trial countdown initialized');
