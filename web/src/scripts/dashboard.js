@@ -722,55 +722,22 @@ async function setupTrialNonBlocking(userId) {
         }
       } else {
         // Neither Firestore nor cached start exists
-        // If there is an existing expired trial_end, respect it — do NOT reset
-        const existingEnd = localStorage.getItem('trial_end_timestamp');
-        if (existingEnd) {
-          const endDate = new Date(existingEnd);
-          if (!isNaN(endDate.getTime()) && endDate < new Date()) {
-            setExpiredView();
-            updatePlanBadge('expired');
-            return;
-          }
+        // Delegate to initializeTrialCountdown which will safely fetch from Firestore or create properly
+        const badge = document.getElementById('planBadge');
+        if (badge) {
+          badge.textContent = 'Free Trial';
+          badge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20';
         }
-        // No prior trial at all — start a new grace period
-        const fallbackStart = new Date().toISOString();
-        const fallbackEnd = new Date(new Date(fallbackStart).getTime() + 3 * 24 * 60 * 60 * 1000);
-        localStorage.setItem(cacheKey, fallbackStart);
-        localStorage.setItem('trial_start_timestamp', fallbackStart);
-        localStorage.setItem('trial_end_timestamp', fallbackEnd.toISOString());
-        
-        try {
-          const docKey = auth.currentUser?.email || userId;
-          setDoc(doc(db, 'users', docKey), {
-            trial_start: fallbackStart,
-            trial_end: fallbackEnd.toISOString(),
-            trial: {
-              startDate: fallbackStart,
-              endDate: fallbackEnd.toISOString()
-            }
-          }, { merge: true }).catch(e => console.log('Non-blocking update of trial failed', e));
-        } catch(e) {}
-
-        initializeTrialCountdown(userId, fallbackStart);
+        initializeTrialCountdown(userId);
       }
     }
   } catch (trialErr) {
     console.error('Failed to fetch trial data, using fallback:', trialErr);
-    const cachedStart = localStorage.getItem(cacheKey);
+    const cachedStart = localStorage.getItem(`trialStart_${userId}`);
     if (cachedStart) {
       initializeTrialCountdown(userId, cachedStart);
     } else {
-      const existingEnd = localStorage.getItem('trial_end_timestamp');
-      if (existingEnd && new Date(existingEnd) < new Date()) {
-        setExpiredView();
-        updatePlanBadge('expired');
-        return;
-      }
-      const fallbackStart = new Date().toISOString();
-      const fallbackEnd = new Date(new Date(fallbackStart).getTime() + 3 * 24 * 60 * 60 * 1000);
-      localStorage.setItem(cacheKey, fallbackStart);
-      localStorage.setItem('trial_end_timestamp', fallbackEnd.toISOString());
-      initializeTrialCountdown(userId, fallbackStart);
+      initializeTrialCountdown(userId);
     }
   } finally {
     trialSetupRunning = false;
