@@ -1633,7 +1633,8 @@ class LiveEngine:
                 if sig:
                     if "signal_id" not in sig:
                         sig["signal_id"] = str(uuid.uuid4())
-                    self.last_signals[sig["symbol"]] = sig
+                    # Do not overwrite the nested timeframe mapping
+                    # self.last_signals[sig["symbol"]] = sig
                     
                     # Prepare frontend payload object
                     sym = sig["symbol"]
@@ -1837,6 +1838,16 @@ class LiveEngine:
                 prev = self.prev_prices.get(sym, price)
                 delta_symbol = "▲" if price > prev else ("▼" if price < prev else " ")
                 sig = self.last_signals.get(sym)
+                # Resolve nested timeframe dictionary to summary signal
+                if sig is not None and isinstance(sig, dict) and any(tf in sig for tf in ('1m','5m','15m','30m','1h','4h','1d','1w')):
+                    tf_sig = sig.get('1h')
+                    if tf_sig is None:
+                        for tf in ('4h','15m','30m','1m','5m','1d','1w'):
+                            if sig.get(tf) is not None:
+                                tf_sig = sig[tf]
+                                break
+                    sig = tf_sig
+
                 if sig is None:
                     ai_str, thresh_str, signal_str, risk_str = "0.000", "0.00", "WAITING", "-"
                 else:
@@ -2077,3 +2088,4 @@ async def main():
 if __name__ == "__main__":
     import socket
     asyncio.run(main())
+
