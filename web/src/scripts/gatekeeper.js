@@ -953,7 +953,8 @@ async function loadUserLimits() {
       }
       return limits;
     } else {
-      console.warn('Backend failed to provide limits, using fallback');
+      const errorText = await response.text().catch(() => 'No response body');
+      console.warn(`Backend failed to provide limits (Status: ${response.status} ${response.statusText}). Response: ${errorText}. Using fallback.`);
       allowedTokens = allowedTokens.length > 0 ? allowedTokens : BIG5_TOKENS;
     }
   } catch (error) {
