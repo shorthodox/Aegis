@@ -677,6 +677,23 @@ body.dashboard-body .glass-nav {
     font-size: 1.1em;
 }
 
+/* Fix for Market Token Cards overflowing on small screens */
+#market-token-cards > div {
+    min-width: 0;
+}
+#market-token-cards span.live-price, 
+#market-token-cards span[id^="market-card-signal-"],
+#market-token-cards .text-\[10px\] {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: inline-block;
+    max-width: 100%;
+}
+#market-token-cards .flex {
+    min-width: 0;
+}
+
 .price-up {
     color: #26a69a;
     /* Green */
