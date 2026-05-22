@@ -54,8 +54,14 @@ async function checkUserSubscriptionStatus(uid) {
   }
 
   try {
-    const userDocRef = doc(db, 'users', uid);
-    const userSnap = await getDoc(userDocRef);
+    const currentUser = typeof auth !== 'undefined' ? auth.currentUser : null;
+    const docKey = currentUser?.email || uid;
+    let userDocRef = doc(db, 'users', docKey);
+    let userSnap = await getDoc(userDocRef);
+    
+    if (!userSnap.exists() && currentUser?.email) {
+      userSnap = await getDoc(doc(db, 'users', uid));
+    }
 
     if (userSnap.exists()) {
       const data = userSnap.data();
@@ -734,7 +740,8 @@ async function setupTrialNonBlocking(userId) {
         localStorage.setItem('trial_end_timestamp', fallbackEnd.toISOString());
         
         try {
-          setDoc(doc(db, 'users', userId), {
+          const docKey = auth.currentUser?.email || userId;
+          setDoc(doc(db, 'users', docKey), {
             trial_start: fallbackStart,
             trial_end: fallbackEnd.toISOString(),
             trial: {

@@ -243,8 +243,28 @@ const TrialManager = (() => {
             networkErrorState = false;
             // Reset loading timeout when successful fetch completes
             loadingStartTime = null;
+            
             if (userData.trial_end && isValidISOString(userData.trial_end)) {
-              localStorage.setItem('trial_end_timestamp', userData.trial_end);
+              const backendEnd = new Date(userData.trial_end).getTime();
+              const localEndStr = localStorage.getItem('trial_end_timestamp');
+              
+              let shouldUpdate = true;
+              if (userData._generated) {
+                  shouldUpdate = false;
+              } else if (localEndStr && isValidISOString(localEndStr)) {
+                  const localEnd = new Date(localEndStr).getTime();
+                  const isPaid = ['pro', 'premium', 'active', 'basic', 'intermediate'].includes((userData.plan || '').toLowerCase());
+                  // Don't let the backend extend the trial unless it's a paid plan
+                  if (!isPaid && backendEnd > localEnd) {
+                      shouldUpdate = false;
+                  }
+              }
+
+              if (shouldUpdate) {
+                localStorage.setItem('trial_end_timestamp', userData.trial_end);
+              } else if (localEndStr) {
+                cachedTrialInfo.trial_end = localEndStr;
+              }
             }
             console.log('[Trial] Successfully fetched user trial info:', userData);
           } else {
@@ -289,8 +309,12 @@ const TrialManager = (() => {
              return;
           }
           try {
-            const userDocRef = doc(db, 'users', user.uid);
-            const userDoc = await getDoc(userDocRef);
+            const docKey = user.email || user.uid;
+            let userDocRef = doc(db, 'users', docKey);
+            let userDoc = await getDoc(userDocRef);
+            if (!userDoc.exists() && user.email) {
+                userDoc = await getDoc(doc(db, 'users', user.uid));
+            }
             if (!userDoc.exists()) { resolve(null); return; }
             const data = userDoc.data();
             // Try explicit start-date fields first
@@ -526,7 +550,10 @@ const TrialManager = (() => {
         
         try {
           const { setDoc } = await import("https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js");
-          setDoc(doc(db, 'users', userId), {
+          const { getAuth } = await import("https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js");
+          const auth = getAuth();
+          const docKey = auth.currentUser?.email || userId;
+          setDoc(doc(db, 'users', docKey), {
             trial_start: explicitTrialStart.toISOString(),
             trial_end: trialEnd.toISOString(),
             trial: {
