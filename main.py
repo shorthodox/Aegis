@@ -1167,7 +1167,7 @@ def get_allowed_timeframes(email: str) -> List[str]:
 @app.get("/user/limits")
 async def get_user_limits(email: str = Depends(get_current_user)):
     user_doc = get_user_doc(email)
-    plan = user_doc["plan"] if user_doc else "trial"
+    plan = user_doc.get("plan", "trial") if user_doc else "trial"
     trial_end = user_doc.get("trial_end") if user_doc else None
     trial_expired = is_trial_expired(email) if trial_end else False
     
@@ -2303,7 +2303,7 @@ async def get_dashboard(
         current_user_email = current_user_email or ""
         user_doc = get_user_doc(current_user_email) if current_user_email else None
         
-        plan = user_doc["plan"] if user_doc else "trial"
+        plan = user_doc.get("plan", "trial") if user_doc else "trial"
         trial_end = user_doc.get("trial_end") if user_doc else None
         trial_expired = is_trial_expired(current_user_email) if trial_end else False
         
