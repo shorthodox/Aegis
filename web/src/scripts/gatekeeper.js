@@ -2100,8 +2100,11 @@ function setupFirestoreListeners() {
             window.latestSignals[key] = { ...signalObj, timeframe: trialTf };
           });
         } else {
-          const key = `${symbol}_${tf}`;
-          window.latestSignals[key] = { ...signalObj, timeframe: tf };
+          const allTimeframes = ['1m', '3m', '5m', '15m', '30m', '1h', '4h', '1d', '1w'];
+          allTimeframes.forEach(proTf => {
+            const key = `${symbol}_${proTf}`;
+            window.latestSignals[key] = { ...signalObj, timeframe: proTf };
+          });
         }
       } else if (change.type === 'removed') {
         const data = change.doc.data();
@@ -2114,9 +2117,11 @@ function setupFirestoreListeners() {
             delete window.latestSignals[key];
           });
         } else {
-          const tf = data.timeframe || '1h';
-          const key = `${symbol}_${tf}`;
-          delete window.latestSignals[key];
+          const allTimeframes = ['1m', '3m', '5m', '15m', '30m', '1h', '4h', '1d', '1w'];
+          allTimeframes.forEach(proTf => {
+            const key = `${symbol}_${proTf}`;
+            delete window.latestSignals[key];
+          });
         }
       }
     });
