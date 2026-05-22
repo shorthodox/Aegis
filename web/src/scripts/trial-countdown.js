@@ -93,7 +93,9 @@ const TrialManager = (() => {
         }
     } catch (e) {}
 
-    if (cachedTrialInfo && cachedTrialInfo._error === 'network') {
+    const hasValidLocalEnd = isValidISOString(localEndStr);
+
+    if (cachedTrialInfo && cachedTrialInfo._error === 'network' && !hasValidLocalEnd) {
         return {
           active: false,
           expired: false,
@@ -102,7 +104,7 @@ const TrialManager = (() => {
           allowedTokens: []
         };
     }
-    if (cachedTrialInfo && cachedTrialInfo._error === 'auth') {
+    if (cachedTrialInfo && cachedTrialInfo._error === 'auth' && !hasValidLocalEnd) {
         return {
           active: false,
           expired: false,
@@ -876,6 +878,7 @@ style.textContent = `
   }
 `;
 document.head.appendChild(style);
+
 
 
 
