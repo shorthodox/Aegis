@@ -613,7 +613,7 @@ function attachEventListeners() {
       const tf = btn.getAttribute('data-tf');
       const requiresPro = btn.getAttribute('data-pro') === 'true';
 
-      if (requiresPro && !['pro', 'intermediate'].includes(userPlan)) {
+      if (requiresPro && !['pro', 'intermediate', 'premium'].includes(userPlan)) {
         showUpgradeModal();
         return;
       }
@@ -1449,7 +1449,7 @@ function renderSignals(signals) {
       <div class="no-signals">
         <i class="fas fa-chart-line"></i>
         <p>No signals available for your plan</p>
-        ${userPlan !== 'pro' ? '<a href="/web/src/pages/pricing.html" class="upgrade-link">Upgrade to Pro for 58 tokens →</a>' : ''}
+        ${!['pro', 'premium', 'intermediate'].includes(userPlan) ? '<a href="/web/src/pages/pricing.html" class="upgrade-link">Upgrade to Pro for 58 tokens →</a>' : ''}
       </div>
     `;
     return;
@@ -2063,7 +2063,7 @@ function setupFirestoreListeners() {
         const key = `${symbol}_${tf}`;
 
         // Apply plan filtering
-        if (userPlan !== 'pro' && !allowedTokens.includes(symbol)) {
+        if (!['pro', 'premium', 'intermediate'].includes(userPlan) && !allowedTokens.includes(symbol)) {
           return;
         }
 
@@ -2120,7 +2120,7 @@ function setupFirestoreListeners() {
   }, (error) => {
     console.error('Signals listener error:', error);
     if (error.code === 'permission-denied') {
-      if (!trialActive && userPlan !== 'pro') {
+      if (!trialActive && !['pro', 'premium', 'intermediate'].includes(userPlan)) {
         if (signalsContainer) {
           signalsContainer.innerHTML = '<div class="no-signals"><i class="fas fa-lock text-red-500 mb-2 text-2xl"></i><p>Please upgrade to view signals.</p></div>';
         }
