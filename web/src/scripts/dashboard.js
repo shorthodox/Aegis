@@ -1,6 +1,6 @@
 import { initializeTrialCountdown, fetchTrialStartFromFirestore } from './trial-countdown.js';
 import { auth, db } from './gatekeeper.js';
-import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js';
+import { doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js';
 
 // ============================================================
 // SEALED SUBSCRIPTION STATE — console-proof
@@ -730,7 +730,20 @@ async function setupTrialNonBlocking(userId) {
         const fallbackStart = new Date().toISOString();
         const fallbackEnd = new Date(new Date(fallbackStart).getTime() + 3 * 24 * 60 * 60 * 1000);
         localStorage.setItem(cacheKey, fallbackStart);
+        localStorage.setItem('trial_start_timestamp', fallbackStart);
         localStorage.setItem('trial_end_timestamp', fallbackEnd.toISOString());
+        
+        try {
+          setDoc(doc(db, 'users', userId), {
+            trial_start: fallbackStart,
+            trial_end: fallbackEnd.toISOString(),
+            trial: {
+              startDate: fallbackStart,
+              endDate: fallbackEnd.toISOString()
+            }
+          }, { merge: true }).catch(e => console.log('Non-blocking update of trial failed', e));
+        } catch(e) {}
+
         initializeTrialCountdown(userId, fallbackStart);
       }
     }
