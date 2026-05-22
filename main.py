@@ -829,9 +829,23 @@ def is_trial_expired(email: str) -> bool:
         return True
     if user_doc.get("plan") in ("pro", "premium", "intermediate"):
         return False
-    trial_end = user_doc.get("trial_end")
-    if trial_end:
-        return datetime.now(timezone.utc) > datetime.fromisoformat(trial_end)
+    trial_end_raw = user_doc.get("trial_end")
+    if trial_end_raw:
+        if isinstance(trial_end_raw, datetime):
+            trial_end = trial_end_raw
+        else:
+            try:
+                # Replace Z with +00:00 for compatibility with Python < 3.11
+                clean_str = str(trial_end_raw).replace("Z", "+00:00")
+                trial_end = datetime.fromisoformat(clean_str)
+            except (ValueError, TypeError):
+                return True
+                
+        # Ensure timezone awareness before comparison
+        if trial_end.tzinfo is None:
+            trial_end = trial_end.replace(tzinfo=timezone.utc)
+            
+        return datetime.now(timezone.utc) > trial_end
     return True
 
 # -------------------------------------------------------------------
