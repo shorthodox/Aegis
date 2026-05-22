@@ -161,7 +161,8 @@ export class AuthManager {
 
         const user = this.getUser();
         if (user) {
-            if (user.plan === 'pro' || user.plan === 'active' || user.subscription_active) return true;
+            const plan = (user.plan || '').toLowerCase();
+            if (plan === 'pro' || plan === 'active' || user.subscription_active) return true;
             if (user.trial_expired === false) return true;
             if (user.trial_expired === true) return false;
         }
@@ -233,17 +234,22 @@ export class AuthManager {
         const status = data?.status    || user?.status;
 
         // Grant access for pro, intermediate and active plans
-        if (plan === 'active' || plan === 'pro' || plan === 'intermediate' || status === 'active') return true;
-        if (plan === 'free_trial' || plan === 'trial') return this.isTrialValid();
+        const lowerPlan = (plan || '').toLowerCase();
+        if (lowerPlan === 'active' || lowerPlan === 'pro' || lowerPlan === 'intermediate' || status === 'active') return true;
+        if (lowerPlan === 'free_trial' || lowerPlan === 'trial') return this.isTrialValid();
 
         return false;
     }
 
     static getSubscriptionStatus() {
         const user = this.getUser();
-        if (user && (user.plan === 'pro' || user.plan === 'active')) return 'active';
+        if (user) {
+            const lowerPlan = (user.plan || '').toLowerCase();
+            if (lowerPlan === 'pro' || lowerPlan === 'active') return 'active';
+            if (this.isTrialValid()) return 'active';
+            if ((lowerPlan === 'trial' || lowerPlan === 'free_trial') && user.trial_expired === false) return 'active';
+        }
         if (this.isTrialValid()) return 'active';
-        if (user && (user.plan === 'trial' || user.plan === 'free_trial') && user.trial_expired === false) return 'active';
 
         const tokenData = this.getUserData();
         if (tokenData) return this.hasAccess('signals') ? 'active' : 'expired';
