@@ -1201,9 +1201,10 @@ function updateDashboardData(data) {
       // For trial users, create signals for multiple timeframes (15m, 30m, 1h)
       const trialTimeframes = ['15m', '30m', '1h'];
 
-      const isPaidTier = ['pro', 'premium', 'intermediate'].includes(userPlan);
+      const lowerPlan = (userPlan || '').toLowerCase();
+      const isPaidTier = ['pro', 'premium', 'intermediate'].includes(lowerPlan);
 
-      if (!isPaidTier && (userPlan === 'trial' || trialActive)) {
+      if (!isPaidTier && (lowerPlan === 'trial' || trialActive)) {
         // For trial users, create the same signal for all trial timeframes
         trialTimeframes.forEach(tf => {
           const key = `${sym}_${tf}`;
@@ -1263,8 +1264,9 @@ function updateDashboardData(data) {
     // Populate ALL timeframes from the full map the backend sends.
     // This is what makes tab-switching work: without it, pro signals are only
     // stored under the engine's native timeframe key and never match the user's tab.
-    const isPaidTierTimeframes = ['pro', 'premium', 'intermediate'].includes(userPlan);
-    if (data.timeframes && (isPaidTierTimeframes || (userPlan !== 'trial' && !trialActive))) {
+    const lowerPlan = (userPlan || '').toLowerCase();
+    const isPaidTierTimeframes = ['pro', 'premium', 'intermediate'].includes(lowerPlan);
+    if (data.timeframes && (isPaidTierTimeframes || (lowerPlan !== 'trial' && !trialActive))) {
       window.latestSignals = window.latestSignals || {};
       Object.entries(data.timeframes).forEach(([sym, tfMap]) => {
         Object.entries(tfMap).forEach(([tf, sig]) => {
@@ -1426,9 +1428,10 @@ function renderSignals(signals) {
   const effectiveTrialActive = typeof AuthManager !== 'undefined' ? AuthManager.isTrialValid() : ((trialActive === null && userPlan === 'trial') ? true : trialActive);
 
   function getUserTier() {
-    if (userPlan === 'pro') return 3;
-    if (userPlan === 'intermediate') return 2;
-    if (userPlan === 'basic') return 1;
+    const lowerPlan = (userPlan || '').toLowerCase();
+    if (lowerPlan === 'pro') return 3;
+    if (lowerPlan === 'intermediate') return 2;
+    if (lowerPlan === 'basic') return 1;
     return 1; // Trial or none
   }
 
@@ -1437,15 +1440,17 @@ function renderSignals(signals) {
   const filteredEntries = signalEntries.filter(([key, signal]) => {
     const symbol = signal.symbol;
     // PRO and INTERMEDIATE subscribers see all incoming tokens — no filter
-    if (userPlan === 'pro' || userPlan === 'premium' || userPlan === 'intermediate') return true;
+    const lowerPlan = (userPlan || '').toLowerCase();
+    if (lowerPlan === 'pro' || lowerPlan === 'premium' || lowerPlan === 'intermediate') return true;
     // Trial/basic: restrict to allowedTokens (BIG5 by default)
     return allowedTokens.includes(symbol);
   });
 
   if (filteredEntries.length === 0) {
-    const isExplicitlyExpired = userPlan === 'expired' || userPlan === 'none' || window.trialExpiredTriggered === true;
-    const isPaidTierEmpty = ['pro', 'premium', 'intermediate'].includes(userPlan);
-    const isTrialPlan = !isPaidTierEmpty && (userPlan === 'trial' || userPlan === 'trial-active' || effectiveTrialActive);
+    const lowerPlan = (userPlan || '').toLowerCase();
+    const isExplicitlyExpired = lowerPlan === 'expired' || lowerPlan === 'none' || window.trialExpiredTriggered === true;
+    const isPaidTierEmpty = ['pro', 'premium', 'intermediate'].includes(lowerPlan);
+    const isTrialPlan = !isPaidTierEmpty && (lowerPlan === 'trial' || lowerPlan === 'trial-active' || effectiveTrialActive);
 
     if (!isExplicitlyExpired && isTrialPlan) {
       signalsContainer.innerHTML = `
@@ -1656,9 +1661,10 @@ window.toggleScorecard = function (event, symbol) {
 
   // Calculate tier
   let userTier = 0;
-  if (userPlan === 'pro') userTier = 3;
-  else if (userPlan === 'intermediate') userTier = 2;
-  else if (userPlan === 'basic') userTier = 1;
+  const lowerPlan = (userPlan || '').toLowerCase();
+  if (lowerPlan === 'pro') userTier = 3;
+  else if (lowerPlan === 'intermediate') userTier = 2;
+  else if (lowerPlan === 'basic') userTier = 1;
 
   if (userTier < 2) {
     content.classList.add('feature-locked', 'locked');
