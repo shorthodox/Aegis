@@ -2060,7 +2060,9 @@ function setupFirestoreListeners() {
         const key = `${symbol}_${tf}`;
 
         // Apply plan filtering
-        if (userPlan !== 'pro' && !allowedTokens.includes(symbol)) {
+        const lowerPlan = (userPlan || '').toLowerCase();
+        const isPaidTier = ['pro', 'premium', 'intermediate'].includes(lowerPlan);
+        if (!isPaidTier && !allowedTokens.includes(symbol)) {
           return;
         }
 
