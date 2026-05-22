@@ -1644,6 +1644,15 @@ function _renderFpConfluence(body, signal, tier) {
             Weights computed via XGBoost gradient boosting ensemble. Values represent normalized feature importance vectors for the current candle state. Updated on each WebSocket tick.
           </div>
         </div>
+        <div class="mt-4 p-4 bg-black/40 rounded-xl border border-cyan/20">
+          <h4 class="text-xs font-bold text-cyan uppercase tracking-wider mb-2">Confluence Intelligence</h4>
+          <ul class="text-[11px] text-gray-300 space-y-2">
+            <li><strong class="text-white">How it works:</strong> Aggregates Trend, Momentum, and Volume metrics into a single score.</li>
+            <li><strong class="text-white">Why use it:</strong> High confluence reduces false breakouts and validates signal strength.</li>
+            <li><strong class="text-white">When to act:</strong> Look for scores above 75% for strong entries. Avoid trading below 50%.</li>
+            <li><strong class="text-white">What to do:</strong> If confluence aligns with the signal direction, consider scaling up your position size.</li>
+          </ul>
+        </div>
       </div>
     </div>
   `;
@@ -1738,6 +1747,15 @@ function _renderFpZones(body, signal, tier) {
             <div class="text-sm font-mono font-bold text-green-400 mt-0.5">${entry && tp ? ((tp - entry) / entry * 100).toFixed(2) : '&mdash;'}%</div>
           </div>
         </div>
+        <div class="mt-4 p-4 bg-black/40 rounded-xl border border-emerald-500/20">
+          <h4 class="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-2">Zone Dynamics</h4>
+          <ul class="text-[11px] text-gray-300 space-y-2">
+            <li><strong class="text-white">How it works:</strong> Tracks live price relative to the Entry, Stop Loss (SL), and Take Profit (TP).</li>
+            <li><strong class="text-white">Why use it:</strong> Visualizes real-time Risk/Reward and structural invalidation points.</li>
+            <li><strong class="text-white">When to act:</strong> Enter trades when price is near the Entry zone. Avoid chasing if price is already halfway to TP.</li>
+            <li><strong class="text-emerald-400">Where to focus:</strong> Prioritize tokens that are actively moving towards their TP with strong momentum. If a token stalls near SL, prepare to exit.</li>
+          </ul>
+        </div>
       </div>
     </div>
   `;
@@ -1828,6 +1846,15 @@ function _renderFpExpectancy(body, signal, tier) {
             Data sourced from cached Firestore performance document. Updated every 24h by background cron. Not indicative of future results.
           </div>
         </div>
+        <div class="mt-4 p-4 bg-black/40 rounded-xl border border-amber-500/20">
+          <h4 class="text-xs font-bold text-amber-400 uppercase tracking-wider mb-2">Expectancy Insights</h4>
+          <ul class="text-[11px] text-gray-300 space-y-2">
+            <li><strong class="text-white">How it works:</strong> Calculates average profitability per trade over the last 30 days based on win rate and Profit Factor.</li>
+            <li><strong class="text-white">Why use it:</strong> Determines long-term viability of the trading strategy for this token.</li>
+            <li><strong class="text-white">When to act:</strong> Trade heavily on tokens with Positive Mathematical Expectancy and Profit Factor > 1.5.</li>
+            <li><strong class="text-white">What to do:</strong> Avoid assets with a high Maximum Drawdown relative to their Profit Factor, as they represent excessive risk.</li>
+          </ul>
+        </div>
       </div>
     </div>
   `;
@@ -1917,6 +1944,15 @@ function _renderFpShap(body, signal, tier) {
               <i class="fas fa-flask text-orange/50 mr-1"></i>
               SHAP values via TreeExplainer on current candle row. Positive = pushes model toward LONG. Updated every WebSocket tick.
             </div>
+          </div>
+          <div class="mt-4 p-4 bg-black/40 rounded-xl border border-orange/20">
+            <h4 class="text-xs font-bold text-orange uppercase tracking-wider mb-2">Probability & SHAP Analytics</h4>
+            <ul class="text-[11px] text-gray-300 space-y-2">
+              <li><strong class="text-white">How it works:</strong> ML models output directional probabilities and SHAP scores isolate which features influenced that decision the most.</li>
+              <li><strong class="text-white">Why use it:</strong> Uncovers the "why" behind the AI's signal, preventing blind trading.</li>
+              <li><strong class="text-white">When to act:</strong> When Model Conviction aligns with a strong positive SHAP feature (e.g., Volume Delta strongly pushing LONG).</li>
+              <li><strong class="text-white">What to do:</strong> Double-check the top SHAP features against your own chart analysis before executing the trade.</li>
+            </ul>
           </div>
         </div>
       </div>
