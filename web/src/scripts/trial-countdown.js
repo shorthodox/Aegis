@@ -138,29 +138,19 @@ const TrialManager = (() => {
       if (!isNaN(trialEnd.getTime())) {
         const timeInfo = formatTimeRemaining(trialEnd);
         if (timeInfo.expired) {
-          // If we haven't fetched from the backend yet, don't immediately declare expired
-          if (!cachedTrialInfo || cachedTrialInfo.isLoading) {
-            cachedState = {
-              active: false,
-              isLoading: true,
-              display: 'Verifying Subscription...',
-              allowedTokens: [],
-              allowedTimeframes: [],
-              plan: 'trial'
-            };
-          } else {
-            // Clean up localStorage for expired trials (fail-closed)
-            localStorage.removeItem('trial_end_timestamp');
-            cachedState = {
-              active: false,
-              expired: true,
-              display: 'Trial Expired',
-              allowedTokens: [],
-              allowedTimeframes: [],
-              plan: 'trial'
-            };
-            cachedTrialInfo = cachedState;
-          }
+          // Trust the local timestamp — show expired immediately.
+          // The background fetch still runs; if the user has since upgraded,
+          // trial-status-updated will flip the display to "Subscription Active".
+          localStorage.removeItem('trial_end_timestamp');
+          cachedState = {
+            active: false,
+            expired: true,
+            display: 'Trial Expired',
+            allowedTokens: [],
+            allowedTimeframes: [],
+            plan: 'trial'
+          };
+          cachedTrialInfo = cachedState;
         } else {
           cachedState = {
             active: true,
@@ -178,24 +168,19 @@ const TrialManager = (() => {
       if (!loadingStartTime) {
         loadingStartTime = now;
       }
-      // Check if timeout has been exceeded
       const elapsedTime = now - loadingStartTime;
       if (elapsedTime > loadingTimeoutMs) {
-        console.warn(`[Trial] Loading timeout exceeded after ${elapsedTime}ms, showing fallback state`);
-        // Timeout exceeded - use fallback state (assume active trial with default end date)
-        const defaultTrialEnd = new Date(now + 3 * 24 * 60 * 60 * 1000); // 3 days from now
-        localStorage.setItem('trial_end_timestamp', defaultTrialEnd.toISOString());
-        const timeInfo = formatTimeRemaining(defaultTrialEnd);
+        // Timeout: no trial data found and backend unreachable — restrict access
+        console.warn(`[Trial] Loading timeout after ${elapsedTime}ms — restricting access`);
+        loadingStartTime = null;
         cachedState = {
-          active: true,
-          ...timeInfo,
-          allowedTokens: cachedTokens,
-          allowedTimeframes: ['15m', '30m'],
-          plan: 'trial',
-          trialEndDate: defaultTrialEnd,
-          isLoadingFallback: true // Mark this as a fallback state
+          active: false,
+          expired: true,
+          display: 'Trial Expired',
+          allowedTokens: [],
+          allowedTimeframes: [],
+          plan: 'trial'
         };
-        loadingStartTime = null; // Reset for next cycle
       } else {
         cachedState = {
           active: false,

@@ -946,23 +946,19 @@ async function loadUserLimits() {
 
     if (response.ok) {
       const limits = await response.json();
-      // Override allowedTokens from backend for paid plans
-      if (limits.allowed_tokens && ['pro', 'premium', 'intermediate'].includes(userPlan)) {
-        allowedTokens = limits.allowed_tokens.length > 0 ? limits.allowed_tokens : allowedTokens;
+      // Backend is authoritative for allowed tokens for all plans (including trial)
+      if (limits.allowed_tokens && limits.allowed_tokens.length > 0) {
+        allowedTokens = limits.allowed_tokens;
         localStorage.setItem('cachedAllowedTokens', JSON.stringify(allowedTokens));
       }
       return limits;
     } else {
-      console.warn('Backend failed to provide limits, using fallback for authenticated user');
-      if (['pro', 'premium', 'intermediate'].includes(userPlan)) {
-        allowedTokens = allowedTokens.length > 0 ? allowedTokens : BIG5_TOKENS;
-      }
+      console.warn('Backend failed to provide limits, using fallback');
+      allowedTokens = allowedTokens.length > 0 ? allowedTokens : BIG5_TOKENS;
     }
   } catch (error) {
     console.error('Load limits error:', error);
-    if (['pro', 'premium', 'intermediate'].includes(userPlan)) {
-      allowedTokens = allowedTokens.length > 0 ? allowedTokens : BIG5_TOKENS;
-    }
+    allowedTokens = allowedTokens.length > 0 ? allowedTokens : BIG5_TOKENS;
   }
   return null;
 }
