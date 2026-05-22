@@ -1241,6 +1241,7 @@ class LiveEngine:
         self.bootstrap_total = len(token_configs) * 2
         self.bootstrap_done = 0
         self.bootstrap_complete = False
+        self.summary_signals: Dict[str, Dict] = {}
         self.last_context_refresh = 0
 
         self.live_prices: Dict[str, float] = {}
@@ -1468,7 +1469,8 @@ class LiveEngine:
                 try:
                     sig = await self.signal_gen.compute_signal(cfg.symbol, self.fetcher, self.alpha_mode, btc_healthy=True)  # initial bootstrap, assume BTC safe
                     if sig:
-                        self.last_signals[cfg.symbol] = sig
+                        self.last_signals[cfg.symbol] = {'1h': sig}
+                        self.summary_signals[cfg.symbol] = sig
                 except Exception as e:
                     logger.warning(f"Initial signal compute error for {cfg.symbol}: {e}")
         self.bootstrap_complete = True
@@ -1633,7 +1635,7 @@ class LiveEngine:
                 if sig:
                     if "signal_id" not in sig:
                         sig["signal_id"] = str(uuid.uuid4())
-                    self.last_signals[sig["symbol"]] = sig
+                    self.summary_signals[sig["symbol"]] = sig
                     
                     # Prepare frontend payload object
                     sym = sig["symbol"]
@@ -1836,7 +1838,7 @@ class LiveEngine:
                     continue
                 prev = self.prev_prices.get(sym, price)
                 delta_symbol = "▲" if price > prev else ("▼" if price < prev else " ")
-                sig = self.last_signals.get(sym)
+                sig = self.summary_signals.get(sym)
                 if sig is None:
                     ai_str, thresh_str, signal_str, risk_str = "0.000", "0.00", "WAITING", "-"
                 else:
