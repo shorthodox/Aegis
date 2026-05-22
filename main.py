@@ -138,7 +138,13 @@ if cred_json:
 
     if not parsed_json:
         resolved_path = resolve_credential_path(cred_json)
-        if resolved_path.exists():
+        path_exists = False
+        try:
+            path_exists = resolved_path.exists()
+        except OSError:
+            pass # Name too long or invalid path characters
+
+        if path_exists:
             cred = credentials.Certificate(str(resolved_path))
             print(f"[FIREBASE] Initialized via file path: {resolved_path}")
         else:
