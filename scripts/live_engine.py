@@ -1468,7 +1468,10 @@ class LiveEngine:
                 try:
                     sig = await self.signal_gen.compute_signal(cfg.symbol, self.fetcher, self.alpha_mode, btc_healthy=True)  # initial bootstrap, assume BTC safe
                     if sig:
-                        self.last_signals[cfg.symbol] = sig
+                        sig['timeframe'] = '1h'
+                        self.last_signals[cfg.symbol] = {
+                            tf: dict(sig, timeframe=tf) for tf in ['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w']
+                        }
                 except Exception as e:
                     logger.warning(f"Initial signal compute error for {cfg.symbol}: {e}")
         self.bootstrap_complete = True
@@ -2088,4 +2091,3 @@ async def main():
 if __name__ == "__main__":
     import socket
     asyncio.run(main())
-
