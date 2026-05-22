@@ -11,6 +11,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
 
 import { AuthManager } from '../auth/authManager.js';
+import { loadThirdPartyScript } from './iframeGuard.js';
 
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
@@ -2350,30 +2351,31 @@ window.AegisDashboard = {
         return;
       }
 
-      // 2. Initialize Cashfree SDK
-      if (typeof Cashfree !== 'undefined') {
-        const cashfree = Cashfree({
-          mode: "sandbox" // Change to "production" in live
-        });
+      // 2. Load Cashfree SDK on-demand (guarded — errors if blocked or timed out)
+      try {
+        await loadThirdPartyScript('https://sdk.cashfree.com/js/v3/cashfree.js');
+      } catch (sdkErr) {
+        console.error('[Cashfree] SDK failed to load:', sdkErr);
+        alert('Payment gateway failed to load. Please check your connection and try again.');
+        return;
+      }
 
-        // 3. Open Cashfree modal
-        let checkoutOptions = {
-          paymentSessionId: paymentSessionId,
-          redirectTarget: "_modal",
-        };
+      // 3. Open Cashfree modal
+      const cashfree = window.Cashfree({ mode: 'sandbox' }); // Change to 'production' in live
+      const checkoutOptions = { paymentSessionId, redirectTarget: '_modal' };
 
-        cashfree.checkout(checkoutOptions).then(async (result) => {
-          if (result.error) {
-            console.error("Cashfree error:", result.error);
-            alert("Payment was cancelled or failed. Please try again.");
-          }
-          if (result.paymentDetails) {
-            console.log("Payment successful");
-            await mockSuccessfulPayment(planName);
-          }
-        });
-      } else {
-        alert('Payment gateway failed to load. Please refresh the page.');
+      try {
+        const result = await cashfree.checkout(checkoutOptions);
+        if (result.error) {
+          console.error('[Cashfree] Checkout error:', result.error);
+          alert('Payment was cancelled or failed. Please try again.');
+        } else if (result.paymentDetails) {
+          console.log('[Cashfree] Payment successful');
+          await mockSuccessfulPayment(planName);
+        }
+      } catch (checkoutErr) {
+        console.error('[Cashfree] Checkout exception:', checkoutErr);
+        alert('Payment gateway error. Please try again.');
       }
     } catch (error) {
       console.error('Subscription error:', error);

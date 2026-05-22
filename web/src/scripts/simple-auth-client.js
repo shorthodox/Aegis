@@ -1,5 +1,6 @@
 // Lightweight auth client for pages (server-backed login + subscription helper)
 // Works with server endpoints: POST /auth/login and POST /create-subscription
+import { loadThirdPartyScript } from './iframeGuard.js';
 
 function createModalIfMissing() {
   if (document.getElementById('simpleAuthModal')) return;
@@ -132,26 +133,32 @@ async function subscribeToPlan(planType) {
       return;
     }
     
-    if (typeof Cashfree !== 'undefined') {
-      // Use "sandbox" for TEST or "production" for LIVE. Hardcoded to sandbox for demo/safety.
-      const cashfree = Cashfree({ mode: "sandbox" }); 
-      let checkoutOptions = {
-          paymentSessionId: data.payment_session_id,
-          redirectTarget: "_modal"
-      };
-      cashfree.checkout(checkoutOptions).then((result) => {
-          if (result.error) {
-              console.error("Cashfree error:", result.error);
-              alert("Payment was cancelled or failed. Please try again.");
-          }
-          if (result.paymentDetails) {
-              console.log("Payment successful");
-              alert("Payment successful! Redirecting to your dashboard...");
-              window.location.href = "/web/src/pages/dashboard.html";
-          }
-      });
-    } else {
-      alert("Payment gateway failed to load. Please disable ad-blockers and refresh.");
+    // Load Cashfree SDK on-demand (guarded — errors if blocked or timed out)
+    try {
+      await loadThirdPartyScript('https://sdk.cashfree.com/js/v3/cashfree.js');
+    } catch (sdkErr) {
+      console.error('[Cashfree] SDK failed to load:', sdkErr);
+      alert('Payment gateway failed to load. Please disable ad-blockers and refresh.');
+      return;
+    }
+
+    // Use "sandbox" for TEST or "production" for LIVE. Hardcoded to sandbox for demo/safety.
+    const cashfree = window.Cashfree({ mode: 'sandbox' });
+    const checkoutOptions = { paymentSessionId: data.payment_session_id, redirectTarget: '_modal' };
+
+    try {
+      const result = await cashfree.checkout(checkoutOptions);
+      if (result.error) {
+        console.error('[Cashfree] Checkout error:', result.error);
+        alert('Payment was cancelled or failed. Please try again.');
+      } else if (result.paymentDetails) {
+        console.log('[Cashfree] Payment successful');
+        alert('Payment successful! Redirecting to your dashboard...');
+        window.location.href = '/web/src/pages/dashboard.html';
+      }
+    } catch (checkoutErr) {
+      console.error('[Cashfree] Checkout exception:', checkoutErr);
+      alert('Payment gateway error. Please try again.');
     }
   } catch (err) {
     console.error('subscribeToPlan error', err);
