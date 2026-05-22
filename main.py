@@ -40,7 +40,7 @@ import numpy as np
 # -------------------------------------------------------------------
 # Helper: Recursively convert numpy types to native Python types
 # -------------------------------------------------------------------
-def numpy_to_native(obj):
+def numpy_to_native(obj) -> Any:
     if isinstance(obj, np.integer):
         return int(obj)
     elif isinstance(obj, np.floating):
@@ -469,19 +469,17 @@ async def run_engine_background():
                                         sig_data = tf_sig
                                     if not isinstance(sig_data, dict):
                                         try:
-                                            # attempt conversion
                                             sig_data = dict(sig_data)
                                         except Exception:
                                             sig_data = {'value': sig_data}
-                                    # Ensure metadata keys exist
                                     sig_data['symbol'] = sym
                                     sig_data['timeframe'] = tf
                                     sig_data['timestamp'] = now_str
 
-                                sig_data = numpy_to_native(sig_data)
-                                if not isinstance(sig_data, dict):
-                                    sig_data = {'value': sig_data, 'symbol': sym, 'timeframe': tf, 'timestamp': now_str}
-                                batch.set(sig_ref, dict(sig_data), merge=True)
+                                if isinstance(sig_data, dict):
+                                    batch.set(sig_ref, sig_data, merge=True)
+                                else:
+                                    batch.set(sig_ref, {'value': sig_data, 'symbol': sym, 'timeframe': tf, 'timestamp': now_str}, merge=True)
                                 count += 1
                                 if count >= 450:
                                     results = batch.commit()
@@ -832,17 +830,42 @@ BASE_URL = os.getenv("BASE_URL", "http://localhost:8000").rstrip('/')
 
 @app.get("/auth/me")
 async def get_me(user_id: str = Depends(get_current_user)):
-    user_doc = get_user_doc(user_id)
-    if not user_doc:
-        raise HTTPException(status_code=404)
-    return {
-        "uid": user_id,
-        "email": user_doc.get("email", user_id),
-        "plan": user_doc.get("plan", "trial"),
-        "trial_end": user_doc.get("trial_end"),
-        "full_name": user_doc.get("full_name"),
-        "location": user_doc.get("location")
-    }
+    """
+    Get current user's information including trial/subscription status.
+    Returns user details with trial_end timestamp for frontend countdown.
+    """
+    try:
+        # Attempt to get user document by email/id
+        user_doc = get_user_doc(user_id)
+        
+        # If no document found and user_id looks like an email, try creating a default entry
+        if not user_doc:
+            # This shouldn't happen in normal flow, but provide a sensible fallback
+            from datetime import datetime, timezone, timedelta
+            default_trial_end = (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()
+            return {
+                "uid": user_id,
+                "email": user_id,
+                "plan": "trial",
+                "trial_end": default_trial_end,
+                "full_name": user_id.split("@")[0] if "@" in user_id else "User",
+                "location": None,
+                "_generated": True  # Indicates this is a generated response
+            }
+        
+        # Return user data with all necessary fields
+        return {
+            "uid": user_id,
+            "email": user_doc.get("email", user_id),
+            "plan": user_doc.get("plan", "trial"),
+            "trial_end": user_doc.get("trial_end"),
+            "subscription_active": user_doc.get("subscription", {}).get("status") == "active",
+            "full_name": user_doc.get("full_name"),
+            "location": user_doc.get("location")
+        }
+    except Exception as e:
+        print(f"Error fetching user /auth/me for {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Error fetching user information")
 
 @app.post("/api/users/provision")
 async def provision_user(request: Request, user_id: str = Depends(get_current_user)):
