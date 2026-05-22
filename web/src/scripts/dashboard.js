@@ -1644,15 +1644,40 @@ function _renderFpConfluence(body, signal, tier) {
             Weights computed via XGBoost gradient boosting ensemble. Values represent normalized feature importance vectors for the current candle state. Updated on each WebSocket tick.
           </div>
         </div>
-        <div class="mt-4 p-4 bg-black/40 rounded-xl border border-cyan/20">
-          <h4 class="text-xs font-bold text-cyan uppercase tracking-wider mb-2">Confluence Intelligence</h4>
-          <ul class="text-[11px] text-gray-300 space-y-2">
-            <li><strong class="text-white">How it works:</strong> Aggregates Trend, Momentum, and Volume metrics into a single score.</li>
-            <li><strong class="text-white">Why use it:</strong> High confluence reduces false breakouts and validates signal strength.</li>
-            <li><strong class="text-white">When to act:</strong> Look for scores above 75% for strong entries. Avoid trading below 50%.</li>
-            <li><strong class="text-white">What to do:</strong> If confluence aligns with the signal direction, consider scaling up your position size.</li>
-          </ul>
-        </div>
+        ${(() => {
+          const _sc = Math.round((confluence.trend + confluence.momentum + confluence.volume) / 3);
+          const _dir = signal.direction || 'LONG';
+          const _vc = _sc >= 75 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+            : _sc >= 55 ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+            : 'bg-red-500/20 text-red-400 border-red-500/30';
+          const _vl = _sc >= 75 ? 'STRONG' : _sc >= 55 ? 'MODERATE' : 'WEAK';
+          const _dom = confluence.trend >= confluence.momentum && confluence.trend >= confluence.volume
+            ? 'Trend' : confluence.momentum >= confluence.volume ? 'Momentum' : 'Volume';
+          const _domVal = Math.max(confluence.trend, confluence.momentum, confluence.volume);
+          const _bias = _dir === 'LONG' ? 'bullish' : _dir === 'SHORT' ? 'bearish' : 'neutral';
+          const _why = `Score of ${_sc}% reflects ${_bias} alignment across all three vectors — Trend ${confluence.trend}%, Momentum ${confluence.momentum}%, Volume ${confluence.volume}%.`;
+          const _what = `${_dom} is the dominant driver at ${_domVal}%. ${_sc >= 75 ? 'All vectors are aligned — signal has strong structural backing.' : _sc >= 55 ? 'Minor divergence between vectors — signal is valid but not optimal.' : 'Significant divergence detected — signal reliability is reduced.'}`;
+          const _when = _sc >= 75
+            ? 'Optimal entry window. High confluence supports immediate position initiation at current levels.'
+            : _sc >= 55
+            ? 'Entry is viable — reduce position size by 30–50% to account for moderate alignment.'
+            : 'Stand aside. Wait for confluence to exceed 55% before considering a position.';
+          const _ep = (signal.entry_price || 0).toFixed(4);
+          const _sl = (signal.sl || 0).toFixed(4);
+          const _where = `Execute near $${_ep} with SL at $${_sl}. ${_sc >= 75 ? 'Full position size is justified.' : _sc >= 55 ? 'Reduced size recommended — scale in on confirmation.' : 'No trade — observe for vector realignment before acting.'}`;
+          return `<div class="mt-4 p-4 bg-black/40 rounded-xl border border-cyan/20">
+            <div class="flex items-center justify-between mb-3">
+              <h4 class="text-xs font-bold text-cyan uppercase tracking-wider">Signal Intelligence</h4>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded border ${_vc}">${_vl}</span>
+            </div>
+            <div class="space-y-2 text-[11px]">
+              <div class="flex gap-2 items-start"><span class="w-[46px] shrink-0 text-cyan/60 font-bold uppercase text-[9px] pt-0.5">WHY</span><span class="text-gray-300">${_why}</span></div>
+              <div class="flex gap-2 items-start"><span class="w-[46px] shrink-0 text-cyan/60 font-bold uppercase text-[9px] pt-0.5">WHAT</span><span class="text-gray-300">${_what}</span></div>
+              <div class="flex gap-2 items-start"><span class="w-[46px] shrink-0 text-cyan/60 font-bold uppercase text-[9px] pt-0.5">WHEN</span><span class="text-gray-300">${_when}</span></div>
+              <div class="flex gap-2 items-start"><span class="w-[46px] shrink-0 text-cyan/60 font-bold uppercase text-[9px] pt-0.5">WHERE</span><span class="text-gray-300">${_where}</span></div>
+            </div>
+          </div>`;
+        })()}
       </div>
     </div>
   `;
@@ -1747,15 +1772,39 @@ function _renderFpZones(body, signal, tier) {
             <div class="text-sm font-mono font-bold text-green-400 mt-0.5">${entry && tp ? ((tp - entry) / entry * 100).toFixed(2) : '&mdash;'}%</div>
           </div>
         </div>
-        <div class="mt-4 p-4 bg-black/40 rounded-xl border border-emerald-500/20">
-          <h4 class="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-2">Zone Dynamics</h4>
-          <ul class="text-[11px] text-gray-300 space-y-2">
-            <li><strong class="text-white">How it works:</strong> Tracks live price relative to the Entry, Stop Loss (SL), and Take Profit (TP).</li>
-            <li><strong class="text-white">Why use it:</strong> Visualizes real-time Risk/Reward and structural invalidation points.</li>
-            <li><strong class="text-white">When to act:</strong> Enter trades when price is near the Entry zone. Avoid chasing if price is already halfway to TP.</li>
-            <li><strong class="text-emerald-400">Where to focus:</strong> Prioritize tokens that are actively moving towards their TP with strong momentum. If a token stalls near SL, prepare to exit.</li>
-          </ul>
-        </div>
+        ${(() => {
+          const _isLong = (signal.direction || 'LONG') === 'LONG';
+          const _rrRaw = (sl && tp && entry) ? ((tp - entry) / (entry - sl)) : 0;
+          const _rr = _rrRaw.toFixed(2);
+          const _vc = _rrRaw >= 2 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+            : _rrRaw >= 1.5 ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+            : 'bg-red-500/20 text-red-400 border-red-500/30';
+          const _vl = _rrRaw >= 2 ? 'HIGH R:R' : _rrRaw >= 1.5 ? 'FAIR R:R' : 'LOW R:R';
+          const _pctFromEntry = entry > 0 ? ((currentPrice - entry) / entry * 100) : 0;
+          const _inProfit = _isLong ? currentPrice > entry : currentPrice < entry;
+          const _stopDist = entry && sl ? Math.abs(((entry - sl) / entry * 100)).toFixed(2) : '0.00';
+          const _tgtDist = entry && tp ? Math.abs(((tp - entry) / entry * 100)).toFixed(2) : '0.00';
+          const _why = `Price is ${Math.abs(_pctFromEntry).toFixed(2)}% ${_inProfit ? 'ahead of' : 'behind'} the entry at $${entry.toFixed(4)} — currently ${curPct.toFixed(1)}% across the SL-to-TP corridor.`;
+          const _what = `Risk/Reward is 1:${_rr}. Stop distance is ${_stopDist}% ($${sl.toFixed(4)}); target distance is ${_tgtDist}% ($${tp.toFixed(4)}). ${_rrRaw >= 2 ? 'Excellent asymmetry — reward far outweighs risk.' : _rrRaw >= 1.5 ? 'Acceptable ratio — proceed with standard sizing.' : 'Tight reward relative to risk — consider skipping or waiting for a better entry.'}`;
+          const _when = curPct < 30
+            ? 'Price is near the entry zone — valid window to initiate the position.'
+            : curPct < 60
+            ? 'Price has moved into the middle of the range. Entry is still viable but chase risk is elevated.'
+            : 'Price is deep into the TP corridor. Do not chase — wait for a pullback to the entry zone.';
+          const _where = `Watch $${entry.toFixed(4)} (entry), $${sl.toFixed(4)} (invalidation). ${_isLong ? 'A close below SL signals the trade has failed.' : 'A close above SL signals the trade has failed.'} TP target at $${tp.toFixed(4)}.`;
+          return `<div class="mt-4 p-4 bg-black/40 rounded-xl border border-emerald-500/20">
+            <div class="flex items-center justify-between mb-3">
+              <h4 class="text-xs font-bold text-emerald-400 uppercase tracking-wider">Zone Intelligence</h4>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded border ${_vc}">${_vl}</span>
+            </div>
+            <div class="space-y-2 text-[11px]">
+              <div class="flex gap-2 items-start"><span class="w-[46px] shrink-0 text-emerald-400/60 font-bold uppercase text-[9px] pt-0.5">WHY</span><span class="text-gray-300">${_why}</span></div>
+              <div class="flex gap-2 items-start"><span class="w-[46px] shrink-0 text-emerald-400/60 font-bold uppercase text-[9px] pt-0.5">WHAT</span><span class="text-gray-300">${_what}</span></div>
+              <div class="flex gap-2 items-start"><span class="w-[46px] shrink-0 text-emerald-400/60 font-bold uppercase text-[9px] pt-0.5">WHEN</span><span class="text-gray-300">${_when}</span></div>
+              <div class="flex gap-2 items-start"><span class="w-[46px] shrink-0 text-emerald-400/60 font-bold uppercase text-[9px] pt-0.5">WHERE</span><span class="text-gray-300">${_where}</span></div>
+            </div>
+          </div>`;
+        })()}
       </div>
     </div>
   `;
@@ -1846,15 +1895,37 @@ function _renderFpExpectancy(body, signal, tier) {
             Data sourced from cached Firestore performance document. Updated every 24h by background cron. Not indicative of future results.
           </div>
         </div>
-        <div class="mt-4 p-4 bg-black/40 rounded-xl border border-amber-500/20">
-          <h4 class="text-xs font-bold text-amber-400 uppercase tracking-wider mb-2">Expectancy Insights</h4>
-          <ul class="text-[11px] text-gray-300 space-y-2">
-            <li><strong class="text-white">How it works:</strong> Calculates average profitability per trade over the last 30 days based on win rate and Profit Factor.</li>
-            <li><strong class="text-white">Why use it:</strong> Determines long-term viability of the trading strategy for this token.</li>
-            <li><strong class="text-white">When to act:</strong> Trade heavily on tokens with Positive Mathematical Expectancy and Profit Factor > 1.5.</li>
-            <li><strong class="text-white">What to do:</strong> Avoid assets with a high Maximum Drawdown relative to their Profit Factor, as they represent excessive risk.</li>
-          </ul>
-        </div>
+        ${(() => {
+          const _vc = expectancy >= 1.5 && profitFactor >= 1.5
+            ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+            : expectancy >= 0 && profitFactor >= 1.0
+            ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+            : 'bg-red-500/20 text-red-400 border-red-500/30';
+          const _vl = expectancy >= 1.5 && profitFactor >= 1.5 ? 'EDGE+' : expectancy >= 0 ? 'MARGINAL' : 'NEGATIVE EDGE';
+          const _wins = Math.round(totalTrades * winRate / 100);
+          const _losses = totalTrades - _wins;
+          const _ddRatio = profitFactor > 0 ? (Math.abs(maxDD) / profitFactor).toFixed(2) : 'N/A';
+          const _why = `Over ${totalTrades} historical signals, this asset produced a mathematical expectancy of ${expectancy >= 0 ? '+' : ''}${expectancy.toFixed(2)}% per trade — meaning every position statistically ${expectancy >= 0 ? 'returns a positive edge' : 'loses value on average'}.`;
+          const _what = `Profit Factor of ${profitFactor.toFixed(2)} means every $1 lost returns $${profitFactor.toFixed(2)} in gross wins. Win rate is ${winRate}% (${_wins}W / ${_losses}L). Max drawdown reached ${maxDD.toFixed(2)}% peak-to-trough. DD/PF ratio: ${_ddRatio} ${parseFloat(_ddRatio) < 4 ? '(healthy)' : '(elevated — oversized risk).'}.`;
+          const _when = expectancy >= 1.5 && profitFactor >= 1.5
+            ? 'Strong edge confirmed. This is the right time to allocate full or above-average position size.'
+            : expectancy >= 0 && profitFactor >= 1.0
+            ? 'Marginal edge — trade with standard or reduced sizing. Monitor for edge degradation.'
+            : 'Negative expectancy detected. Avoid new positions on this asset until performance improves.';
+          const _where = `Focus on setups where ${winRate >= 60 ? 'win rate consistency' : 'profit factor'} is the primary driver. ${Math.abs(maxDD) > 10 ? 'High max drawdown warrants tighter stop placement.' : 'Max drawdown is within acceptable range for standard stops.'} Compare against your portfolio average to assess relative merit.`;
+          return `<div class="mt-4 p-4 bg-black/40 rounded-xl border border-amber-500/20">
+            <div class="flex items-center justify-between mb-3">
+              <h4 class="text-xs font-bold text-amber-400 uppercase tracking-wider">Edge Intelligence</h4>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded border ${_vc}">${_vl}</span>
+            </div>
+            <div class="space-y-2 text-[11px]">
+              <div class="flex gap-2 items-start"><span class="w-[46px] shrink-0 text-amber-400/60 font-bold uppercase text-[9px] pt-0.5">WHY</span><span class="text-gray-300">${_why}</span></div>
+              <div class="flex gap-2 items-start"><span class="w-[46px] shrink-0 text-amber-400/60 font-bold uppercase text-[9px] pt-0.5">WHAT</span><span class="text-gray-300">${_what}</span></div>
+              <div class="flex gap-2 items-start"><span class="w-[46px] shrink-0 text-amber-400/60 font-bold uppercase text-[9px] pt-0.5">WHEN</span><span class="text-gray-300">${_when}</span></div>
+              <div class="flex gap-2 items-start"><span class="w-[46px] shrink-0 text-amber-400/60 font-bold uppercase text-[9px] pt-0.5">WHERE</span><span class="text-gray-300">${_where}</span></div>
+            </div>
+          </div>`;
+        })()}
       </div>
     </div>
   `;
@@ -1945,15 +2016,43 @@ function _renderFpShap(body, signal, tier) {
               SHAP values via TreeExplainer on current candle row. Positive = pushes model toward LONG. Updated every WebSocket tick.
             </div>
           </div>
-          <div class="mt-4 p-4 bg-black/40 rounded-xl border border-orange/20">
-            <h4 class="text-xs font-bold text-orange uppercase tracking-wider mb-2">Probability & SHAP Analytics</h4>
-            <ul class="text-[11px] text-gray-300 space-y-2">
-              <li><strong class="text-white">How it works:</strong> ML models output directional probabilities and SHAP scores isolate which features influenced that decision the most.</li>
-              <li><strong class="text-white">Why use it:</strong> Uncovers the "why" behind the AI's signal, preventing blind trading.</li>
-              <li><strong class="text-white">When to act:</strong> When Model Conviction aligns with a strong positive SHAP feature (e.g., Volume Delta strongly pushing LONG).</li>
-              <li><strong class="text-white">What to do:</strong> Double-check the top SHAP features against your own chart analysis before executing the trade.</li>
-            </ul>
-          </div>
+          ${(() => {
+            const _topShap = shapValues.reduce((a, b) => Math.abs(a.value) > Math.abs(b.value) ? a : b, shapValues[0]);
+            const _topDir = _topShap ? (_topShap.value > 0 ? 'LONG' : 'SHORT') : leadEntry[0];
+            const _aligned = _topShap && _topDir === leadEntry[0];
+            const _convPct = parseFloat(leadPct);
+            const _vc = _convPct >= 70 && _aligned
+              ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+              : _convPct >= 55
+              ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+              : 'bg-red-500/20 text-red-400 border-red-500/30';
+            const _vl = _convPct >= 70 && _aligned ? 'ALIGNED' : _convPct >= 55 ? 'PARTIAL' : 'DIVERGENT';
+            const _topFeat = _topShap ? _topShap.feature : 'N/A';
+            const _topVal = _topShap ? (_topShap.value > 0 ? '+' : '') + _topShap.value.toFixed(3) : '0.000';
+            const _shortPct = (probs.SHORT * 100).toFixed(1);
+            const _holdPct = (probs.HOLD * 100).toFixed(1);
+            const _longPct = (probs.LONG * 100).toFixed(1);
+            const _why = `The model assigns ${leadPct}% conviction to ${leadEntry[0]}. Top SHAP driver is "${_topFeat}" (${_topVal}), pushing the model ${_topDir === 'LONG' ? 'toward LONG' : _topDir === 'SHORT' ? 'toward SHORT' : 'toward HOLD'}. ${_aligned ? 'Top feature aligns with model direction — high-confidence signal.' : 'Top feature conflicts with model direction — treat with caution.'}`;
+            const _what = `Full probability vector: SHORT ${_shortPct}% | HOLD ${_holdPct}% | LONG ${_longPct}%. ${_aligned ? 'SHAP and probability agree — XGBoost ensemble has clear directional bias.' : 'SHAP and probability diverge — the model may be uncertain. Weigh other confluences.'}`;
+            const _when = _convPct >= 70 && _aligned
+              ? 'High conviction with aligned SHAP. Act when price reaches the entry zone and Confluence Score exceeds 65%.'
+              : _convPct >= 55
+              ? 'Moderate conviction. Wait for at least two confirming indicators before executing.'
+              : 'Low conviction or divergent signals. Skip this trade or reduce size significantly until the model realigns.';
+            const _where = `Cross-reference "${_topFeat}" on your chart. ${_topShap && _topShap.value > 0.2 ? 'This feature has dominant positive influence — verify it visually before entering.' : _topShap && _topShap.value < -0.2 ? 'Strong bearish SHAP driver — confirm bearish structure on chart.' : 'No single feature dominates — signal is driven by collective weak signals.'} Compare model conviction against Confluence Score for final entry decision.`;
+            return `<div class="mt-4 p-4 bg-black/40 rounded-xl border border-orange/20">
+              <div class="flex items-center justify-between mb-3">
+                <h4 class="text-xs font-bold text-orange uppercase tracking-wider">Model Intelligence</h4>
+                <span class="text-[10px] font-bold px-2 py-0.5 rounded border ${_vc}">${_vl}</span>
+              </div>
+              <div class="space-y-2 text-[11px]">
+                <div class="flex gap-2 items-start"><span class="w-[46px] shrink-0 text-orange/60 font-bold uppercase text-[9px] pt-0.5">WHY</span><span class="text-gray-300">${_why}</span></div>
+                <div class="flex gap-2 items-start"><span class="w-[46px] shrink-0 text-orange/60 font-bold uppercase text-[9px] pt-0.5">WHAT</span><span class="text-gray-300">${_what}</span></div>
+                <div class="flex gap-2 items-start"><span class="w-[46px] shrink-0 text-orange/60 font-bold uppercase text-[9px] pt-0.5">WHEN</span><span class="text-gray-300">${_when}</span></div>
+                <div class="flex gap-2 items-start"><span class="w-[46px] shrink-0 text-orange/60 font-bold uppercase text-[9px] pt-0.5">WHERE</span><span class="text-gray-300">${_where}</span></div>
+              </div>
+            </div>`;
+          })()}
         </div>
       </div>
     </div>
