@@ -129,7 +129,7 @@ const TrialManager = (() => {
         expired: false,
         days: 999, hours: 23, minutes: 59, seconds: 59,
         allowedTokens: cachedTokens,
-        allowedTimeframes: ['1m', '3m', '5m', '15m', '30m', '1h', '4h', '1d']
+        allowedTimeframes: ['1m', '3m', '5m', '15m', '30m', '1h', '4h', '1d', '1w']
       };
     } else if (isValidISOString(localEndStr)) {
       const trialEnd = new Date(localEndStr);
@@ -876,5 +876,6 @@ style.textContent = `
   }
 `;
 document.head.appendChild(style);
+
 
 
