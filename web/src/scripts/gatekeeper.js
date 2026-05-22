@@ -1536,7 +1536,7 @@ function renderSignals(signals) {
       const _line = _sup ? _srT.support_line : _srT.resistance_line;
       const _distanceText = _dist != null ? `${parseFloat(_dist).toFixed(2)}% away` : 'distance unknown';
       const _lineText = _line != null ? parseFloat(_line).toFixed(4) : '---';
-      return `<div class="col-span-2 mt-2 flex items-center justify-between rounded-full border px-3 py-2 text-[10px] font-mono ${_badgeStyle}">
+      return `<div class="flex items-center justify-between rounded-full border px-3 py-1.5 text-[10px] font-mono ${_badgeStyle}">
         <span class="flex items-center gap-2 font-semibold uppercase tracking-[0.08em] text-[10px]"><i class="fas ${_icon}"></i>${_label}</span>
         <span class="text-slate-300">${_lineText} · ${_distanceText}</span>
       </div>`;
@@ -1545,18 +1545,18 @@ function renderSignals(signals) {
       const resistanceLine = _srT.resistance_line != null ? parseFloat(_srT.resistance_line).toFixed(4) : '---';
       const supportDist = _srT.dist_to_support_pct != null ? `${parseFloat(_srT.dist_to_support_pct).toFixed(2)}%` : 'N/A';
       const resistanceDist = _srT.dist_to_resistance_pct != null ? `${parseFloat(_srT.dist_to_resistance_pct).toFixed(2)}%` : 'N/A';
-      return `<div class="col-span-2 mt-2 rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-[10px] font-mono text-slate-400">
+      return `<div class="rounded-xl border border-white/10 bg-slate-950/70 px-3 py-1.5 text-[10px] font-mono text-slate-400">
         <div class="flex items-center justify-between gap-3">
           <span class="font-semibold">S: ${supportDist}</span>
           <span class="font-semibold">R: ${resistanceDist}</span>
         </div>
-        <div class="mt-1 text-[9px] text-slate-500">S ${supportLine} · R ${resistanceLine}</div>
+        <div class="mt-0.5 text-[9px] text-slate-500">S ${supportLine} · R ${resistanceLine}</div>
       </div>`;
     })() : '');
     const macroBadge = (_macro && (_macro.confluence_score !== undefined || _macro.trend_1d !== undefined)) ? (() => {
       const trendLabel = _macro.trend_1d === 1 ? 'BULLISH 1D' : _macro.trend_1d === -1 ? 'BEARISH 1D' : 'NEUTRAL 1D';
       const score = typeof _macro.confluence_score === 'number' ? _macro.confluence_score.toFixed(0) : '0';
-      return `<div class="col-span-2 flex items-center justify-between mt-1 px-1.5 py-1 rounded text-[10px] font-mono bg-slate-900/80 border border-slate-700 text-slate-200">
+      return `<div class="flex items-center justify-between px-1.5 py-1 rounded text-[10px] font-mono bg-slate-900/80 border border-slate-700 text-slate-200">
         <span style="font-weight:700">${trendLabel}</span>
         <span style="color:#7dd3fc">Confluence ${score}</span>
       </div>`;
@@ -1571,7 +1571,6 @@ function renderSignals(signals) {
             ${directionBadge}
             ${statusBadge}
             ${matchBadge}
-            ${macroBadge}
           </div>
           <div class="flex items-center gap-2">
             <button class="view-logic-btn text-[10px] bg-white/5 border border-white/10 px-2 py-0.5 rounded text-gray-400 hover:text-white transition-colors" onclick="window.toggleScorecard(event, '${symbol}')">View Logic <i class="fas fa-chevron-down"></i></button>
@@ -1598,9 +1597,8 @@ function renderSignals(signals) {
                <span>Entry: ${entryStr}</span>
                <span>SL: ${slStr} | TP: ${tpStr}</span>
             </span>
-            ${srBadge}
           </div>
-          
+          ${(srBadge || macroBadge) ? `<div class="mt-2 pt-1.5 border-t border-white/5 space-y-1">${macroBadge}${srBadge}</div>` : ''}
           <div class="slide-down-container mt-2 ${window.openScorecards && window.openScorecards.has(symbol) ? 'open' : ''}">
             <div class="slide-down-content ${ (userPlan === 'trial' || userPlan === 'basic') ? 'feature-locked relative' : '' }" id="scorecard-${symbol.replace('/', '-')}">
               ${ (userPlan === 'trial' || userPlan === 'basic') ? `
