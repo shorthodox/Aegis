@@ -1038,21 +1038,41 @@ function updateUI() {
 let reconnectAttempts = 0;
 const maxReconnectAttempts = 10;
 const baseReconnectDelay = 1000; // 1 second
+let heartbeatInterval = null;
+let heartbeatTimeout = null;
+
+function cleanupWebSocket() {
+  if (ws) {
+    ws.onopen = null;
+    ws.onmessage = null;
+    ws.onerror = null;
+    ws.onclose = null;
+    if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+      ws.close();
+    }
+    ws = null;
+  }
+  stopHeartbeat();
+}
 
 function startWebSocket(token) {
   if (reconnectAttempts >= maxReconnectAttempts) {
-    console.error('Max WebSocket reconnection attempts reached');
+    console.error('[WS] Max WebSocket reconnection attempts reached');
     updateConnectionStatus('DISCONNECTED', 'red');
     return;
   }
 
+  // State Management: Clean up existing instance before creating a new one
+  cleanupWebSocket();
+
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const wsUrl = `${wsProtocol}//${window.location.host}/ws/dashboard`;
 
+  console.log(`[WS] Connecting to ${wsUrl}...`);
   ws = new WebSocket(wsUrl);
 
   ws.onopen = () => {
-    console.log('✅ WebSocket connected');
+    console.log('[WS] ✅ WebSocket connected');
     reconnectAttempts = 0; // Reset on successful connection
     updateConnectionStatus('CONNECTED', 'green');
     ws.send(JSON.stringify({ token, type: 'auth' }));
@@ -1067,16 +1087,20 @@ function startWebSocket(token) {
 
       if (data.type === 'pong') {
         // Handle pong response
-        console.log('🏓 WebSocket pong received');
+        console.log('[WS] 🏓 WebSocket pong received');
+        resetHeartbeatTimeout();
         return;
       }
+
+      // Any message resets the timeout because the connection is alive
+      resetHeartbeatTimeout();
 
       if (data.type === 'error') {
-        console.error('WebSocket error message:', data.message);
+        console.error('[WS] WebSocket error message:', data.message);
         return;
       }
 
-      // Step 4: Detailed Error Logging
+      // Detailed Error Logging
       console.log(`[WS Receive] Type: ${data.type || 'NO_TYPE'} | Tickers: ${data.tickers ? Object.keys(data.tickers).length : 0} | Signals: ${data.signals ? Object.keys(data.signals).length : 0}`);
 
       // NOTE: do NOT gate on data.timeframe here — the backend sends a full
@@ -1088,21 +1112,20 @@ function startWebSocket(token) {
         updateDashboardData(data);
       }
     } catch (e) {
-      console.error('WebSocket parse error:', e);
+      console.error('[WS] WebSocket parse error:', e);
     }
   };
 
   ws.onerror = (error) => {
-    console.error('WebSocket error:', error);
+    console.error('[WS] WebSocket error:', error);
     updateConnectionStatus('ERROR', 'red');
   };
 
   ws.onclose = (event) => {
-    console.log(`WebSocket disconnected (code: ${event.code}, reason: ${event.reason}), reconnecting...`);
+    console.log(`[WS] WebSocket disconnected (code: ${event.code}, reason: ${event.reason || 'None'}), reconnecting...`);
     updateConnectionStatus('RECONNECTING', 'yellow');
 
-    // Stop heartbeat
-    stopHeartbeat();
+    cleanupWebSocket();
 
     // Exponential backoff for reconnection
     const delay = Math.min(baseReconnectDelay * Math.pow(2, reconnectAttempts), 30000); // Max 30 seconds
@@ -1112,21 +1135,43 @@ function startWebSocket(token) {
   };
 }
 
-let heartbeatInterval = null;
-
 function startHeartbeat() {
-  if (heartbeatInterval) clearInterval(heartbeatInterval);
+  stopHeartbeat();
+  // Send ping every 30 seconds
   heartbeatInterval = setInterval(() => {
     if (ws && ws.readyState === WebSocket.OPEN) {
+      console.log('[WS] Sending ping...');
       ws.send(JSON.stringify({ type: 'ping' }));
     }
-  }, 30000); // Send ping every 30 seconds
+  }, 30000);
+  resetHeartbeatTimeout();
+}
+
+function resetHeartbeatTimeout() {
+  if (heartbeatTimeout) clearTimeout(heartbeatTimeout);
+  // If we don't receive ANY message for 35 seconds, assume connection is dead
+  heartbeatTimeout = setTimeout(() => {
+    console.warn('[WS] Heartbeat timeout. Connection appears dead. Closing and reconnecting...');
+    cleanupWebSocket();
+    
+    // Trigger reconnection if token is available
+    if (typeof AuthManager !== 'undefined') {
+      const token = AuthManager.getToken();
+      if (token) {
+        startWebSocket(token);
+      }
+    }
+  }, 35000);
 }
 
 function stopHeartbeat() {
   if (heartbeatInterval) {
     clearInterval(heartbeatInterval);
     heartbeatInterval = null;
+  }
+  if (heartbeatTimeout) {
+    clearTimeout(heartbeatTimeout);
+    heartbeatTimeout = null;
   }
 }
 
