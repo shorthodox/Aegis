@@ -1198,42 +1198,16 @@ function updateDashboardData(data) {
   if (signalsContainer && data.signals) {
     // Populate window.latestSignals from WebSocket
     Object.entries(data.signals).forEach(([sym, sig]) => {
-      // For trial users, create signals for multiple timeframes (15m, 30m, 1h)
-      const trialTimeframes = ['15m', '30m', '1h'];
-
       const lowerPlan = (userPlan || '').toLowerCase();
       const isPaidTier = ['pro', 'premium', 'intermediate'].includes(lowerPlan);
 
-      if (!isPaidTier && (lowerPlan === 'trial' || trialActive)) {
-        // For trial users, create the same signal for all trial timeframes
-        trialTimeframes.forEach(tf => {
-          const key = `${sym}_${tf}`;
-          window.latestSignals = window.latestSignals || {};
-          const signalObj = {
-            symbol: sym,
-            signal: sig.signal || 'WAITING',
-            ai_prob: sig.ai_prob || sig.confidence || 0,
-            signal_strength: sig.signal_strength || 'NORMAL',
-            risk_pct: sig.risk_pct || 2,
-            atr: sig.atr || 0,
-            timeframe: tf,
-            direction: sig.direction || "NEUTRAL",
-            entry_price: sig.entry_price || 0,
-            sl: sig.sl || 0,
-            tp: sig.tp || 0,
-            confidence_score: sig.confidence_score || 0,
-            signal_id: sig.signal_id || "",
-            trading_accuracy: sig.trading_accuracy || 0.5,
-            profitability_index: sig.profitability_index || 0,
-            sr_telemetry: sig.sr_telemetry || null,
-          };
-          // Determine and set signal status
-          signalObj.status = getSignalStatus(signalObj);
-          window.latestSignals[key] = signalObj;
-        });
-      } else {
-        // For pro users, use the actual timeframe from data or default to 1h
-        const tf = sig.timeframe || '1h';
+      // Determine the list of timeframes to generate fallbacks for
+      const targetTimeframes = isPaidTier ? 
+        ['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w'] : 
+        ['15m', '30m', '1h'];
+
+      // Generate the fallback signals so the UI doesn't break during backend warmup
+      targetTimeframes.forEach(tf => {
         const key = `${sym}_${tf}`;
         window.latestSignals = window.latestSignals || {};
         const signalObj = {
@@ -1258,7 +1232,7 @@ function updateDashboardData(data) {
         // Determine and set signal status
         signalObj.status = getSignalStatus(signalObj);
         window.latestSignals[key] = signalObj;
-      }
+      });
     });
 
     // Populate ALL timeframes from the full map the backend sends.
