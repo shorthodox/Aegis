@@ -821,7 +821,7 @@ def is_trial_expired(email: str) -> bool:
     user_doc = get_user_doc(email)
     if not user_doc:
         return True
-    if user_doc.get("plan") == "pro":
+    if user_doc.get("plan") in ("pro", "premium", "intermediate"):
         return False
     trial_end = user_doc.get("trial_end")
     if trial_end:
@@ -1152,15 +1152,15 @@ def get_user_plan(email: str) -> str:
 
 def get_allowed_tokens(email: str) -> List[str]:
     plan = get_user_plan(email)
-    if plan == "pro":
+    if plan in ("pro", "premium", "intermediate"):
         return PRO_TOKENS if PRO_TOKENS else BASIC_TOKENS + ["ADA/USDT", "DOT/USDT", "DOGE/USDT", "MATIC/USDT", "AVAX/USDT", "LINK/USDT"]
     else:
         return BASIC_TOKENS
 
 def get_allowed_timeframes(email: str) -> List[str]:
     plan = get_user_plan(email)
-    if plan == "pro":
-        return ["1m","5m","15m","30m","1h","1d","1w","1M"]
+    if plan in ("pro", "premium", "intermediate"):
+        return ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w"]
     else:
         return BASIC_TIMEFRAMES
 

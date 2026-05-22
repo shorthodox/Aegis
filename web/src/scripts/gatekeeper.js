@@ -841,7 +841,7 @@ function applyUserData(userData, token) {
   const isActive = userData.trial_active ?? true;
   trialActive = typeof AuthManager !== 'undefined' ? AuthManager.isTrialValid() : isActive;
 
-  if (userPlan === 'trial' || trialActive) {
+  if (!['pro', 'premium', 'intermediate'].includes(userPlan)) {
     allowedTokens = BIG5_TOKENS;
     localStorage.setItem('cachedAllowedTokens', JSON.stringify(allowedTokens));
   }
@@ -946,25 +946,22 @@ async function loadUserLimits() {
 
     if (response.ok) {
       const limits = await response.json();
-      // Handle Missing Data: Only override allowedTokens if backend provides them AND user is not in trial
-      if (limits.allowed_tokens && (userPlan !== 'trial' && !trialActive)) {
-        allowedTokens = limits.allowed_tokens.length > 0 ? limits.allowed_tokens : BIG5_TOKENS;
+      // Override allowedTokens from backend for paid plans
+      if (limits.allowed_tokens && ['pro', 'premium', 'intermediate'].includes(userPlan)) {
+        allowedTokens = limits.allowed_tokens.length > 0 ? limits.allowed_tokens : allowedTokens;
         localStorage.setItem('cachedAllowedTokens', JSON.stringify(allowedTokens));
       }
-      // For trial users or if no tokens provided, keep the BIG5_TOKENS set in loadUserFromBackend
       return limits;
     } else {
-      // Handle Missing Data: Fallback for authenticated users if backend fails
       console.warn('Backend failed to provide limits, using fallback for authenticated user');
-      if (userPlan !== 'trial' && !trialActive) {
-        allowedTokens = BIG5_TOKENS;
+      if (['pro', 'premium', 'intermediate'].includes(userPlan)) {
+        allowedTokens = allowedTokens.length > 0 ? allowedTokens : BIG5_TOKENS;
       }
     }
   } catch (error) {
     console.error('Load limits error:', error);
-    // Handle Missing Data: Fallback for authenticated users if request fails
-    if (userPlan !== 'trial' && !trialActive) {
-      allowedTokens = BIG5_TOKENS;
+    if (['pro', 'premium', 'intermediate'].includes(userPlan)) {
+      allowedTokens = allowedTokens.length > 0 ? allowedTokens : BIG5_TOKENS;
     }
   }
   return null;
@@ -1025,6 +1022,16 @@ function updateUI() {
       alphaToggleBtn.style.display = 'flex';
       alphaToggleBtn.classList.remove('feature-locked');
     }
+  }
+
+  // Unlock timeframe buttons for paid plans
+  if (['pro', 'premium', 'intermediate'].includes(userPlan)) {
+    document.querySelectorAll('.tf-btn[data-pro="true"]').forEach(btn => {
+      const lockIcon = btn.querySelector('.fa-lock');
+      if (lockIcon) lockIcon.remove();
+      btn.disabled = false;
+      btn.classList.remove('opacity-50', 'cursor-not-allowed', 'text-gray-500');
+    });
   }
 }
 
@@ -1192,8 +1199,8 @@ function updateDashboardData(data) {
       // For trial users, create signals for multiple timeframes (15m, 30m, 1h)
       const trialTimeframes = ['15m', '30m', '1h'];
 
-      if (userPlan === 'trial' || trialActive) {
-        // For trial users, create the same signal for all trial timeframes
+      if (!['pro', 'premium', 'intermediate'].includes(userPlan)) {
+        // For trial/basic users, create the same signal for all trial timeframes
         trialTimeframes.forEach(tf => {
           const key = `${sym}_${tf}`;
           window.latestSignals = window.latestSignals || {};
@@ -1252,7 +1259,7 @@ function updateDashboardData(data) {
     // Populate ALL timeframes from the full map the backend sends.
     // This is what makes tab-switching work: without it, pro signals are only
     // stored under the engine's native timeframe key and never match the user's tab.
-    if (data.timeframes && userPlan !== 'trial' && !trialActive) {
+    if (data.timeframes && ['pro', 'premium', 'intermediate'].includes(userPlan)) {
       window.latestSignals = window.latestSignals || {};
       Object.entries(data.timeframes).forEach(([sym, tfMap]) => {
         Object.entries(tfMap).forEach(([tf, sig]) => {
@@ -2063,7 +2070,7 @@ function setupFirestoreListeners() {
         const key = `${symbol}_${tf}`;
 
         // Apply plan filtering
-        if (userPlan !== 'pro' && !allowedTokens.includes(symbol)) {
+        if (!['pro', 'premium', 'intermediate'].includes(userPlan) && !allowedTokens.includes(symbol)) {
           return;
         }
 
@@ -2086,7 +2093,7 @@ function setupFirestoreListeners() {
           macro_regime: data.macro_regime || null
         };
 
-        if (userPlan === 'trial' || trialActive) {
+        if (!['pro', 'premium', 'intermediate'].includes(userPlan)) {
           const trialTimeframes = ['15m', '30m', '1h'];
           trialTimeframes.forEach(trialTf => {
             const key = `${symbol}_${trialTf}`;
@@ -2100,7 +2107,7 @@ function setupFirestoreListeners() {
         const data = change.doc.data();
         const symbol = data.symbol || change.doc.id;
 
-        if (userPlan === 'trial' || trialActive) {
+        if (!['pro', 'premium', 'intermediate'].includes(userPlan)) {
           const trialTimeframes = ['15m', '30m', '1h'];
           trialTimeframes.forEach(trialTf => {
             const key = `${symbol}_${trialTf}`;
@@ -2120,7 +2127,7 @@ function setupFirestoreListeners() {
   }, (error) => {
     console.error('Signals listener error:', error);
     if (error.code === 'permission-denied') {
-      if (!trialActive && userPlan !== 'pro') {
+      if (!['pro', 'premium', 'intermediate'].includes(userPlan)) {
         if (signalsContainer) {
           signalsContainer.innerHTML = '<div class="no-signals"><i class="fas fa-lock text-red-500 mb-2 text-2xl"></i><p>Please upgrade to view signals.</p></div>';
         }
