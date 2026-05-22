@@ -507,7 +507,7 @@ const TrialManager = (() => {
     
     // Fallback if trialStart is not provided (e.g. from app.js)
     if (!trialStart) {
-      const cachedStart = localStorage.getItem('trial_start_timestamp');
+      const cachedStart = localStorage.getItem(`trialStart_${userId}`) || localStorage.getItem('trial_start_timestamp');
       if (cachedStart) {
         trialStart = new Date(cachedStart);
       } else {
@@ -519,9 +519,22 @@ const TrialManager = (() => {
     if (trialStart) {
       explicitTrialStart = trialStart instanceof Date ? trialStart : new Date(trialStart);
       if (!Number.isNaN(explicitTrialStart.getTime())) {
+        localStorage.setItem(`trialStart_${userId}`, explicitTrialStart.toISOString());
         localStorage.setItem('trial_start_timestamp', explicitTrialStart.toISOString());
         const trialEnd = new Date(explicitTrialStart.getTime() + 3 * 24 * 60 * 60 * 1000);
         localStorage.setItem('trial_end_timestamp', trialEnd.toISOString());
+        
+        try {
+          const { setDoc } = await import("https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js");
+          setDoc(doc(db, 'users', userId), {
+            trial_start: explicitTrialStart.toISOString(),
+            trial_end: trialEnd.toISOString(),
+            trial: {
+              startDate: explicitTrialStart.toISOString(),
+              endDate: trialEnd.toISOString()
+            }
+          }, { merge: true }).catch(e => console.log('Silent update of trial data failed', e));
+        } catch(e) {}
       }
     }
 
@@ -580,12 +593,21 @@ const TrialManager = (() => {
       };
     }
 
+    let defaultTokens = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ARB/USDT', 'AAVE/USDT'];
+    try {
+        const storedTokens = localStorage.getItem('cachedAllowedTokens');
+        if (storedTokens) {
+            const parsed = JSON.parse(storedTokens);
+            if (Array.isArray(parsed) && parsed.length > 0) defaultTokens = parsed;
+        }
+    } catch (e) {}
+
     return {
       maxTokens: 5,
-      allowedTokens: trialInfo.allowedTokens || ['BTC', 'ETH', 'SOL', 'ARB', 'AAVE'],
-      allowedTimeframes: trialInfo.allowedTimeframes || ['30m', '1h'],
+      allowedTokens: trialInfo.allowedTokens || defaultTokens,
+      allowedTimeframes: trialInfo.allowedTimeframes || ['15m', '30m', '1h'],
       maxSignalsPerDay: 10,
-      message: 'Trial user - Limited to 5 tokens, 30m/1h timeframes only'
+      message: 'Trial user - Limited to 5 tokens, 15m/30m/1h timeframes only'
     };
   }
 
