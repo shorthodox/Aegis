@@ -475,7 +475,16 @@ function setupMobileOptimizations() {
 // -------------------------------------------------------------------
 // Initialize Dashboard
 // -------------------------------------------------------------------
+
 document.addEventListener('DOMContentLoaded', () => {
+  // Try to load saved timeframe preference
+  const savedTf = localStorage.getItem('activeTimeframe');
+  if (savedTf) {
+    // Note: userPlan may not be fully loaded here yet, but we will validate later in applyUserData or updateDashboardData
+    currentTimeframe = savedTf;
+  }
+  window.activeTimeframe = currentTimeframe;
+
   if (!window.location.pathname.includes('dashboard.html')) return;
   initializeElements();
   attachEventListeners();
@@ -698,8 +707,17 @@ function debouncedFilterAndRenderSignals() {
 
 function filterAndRenderSignals() {
   const currentSignals = {};
+  
   const strategySelect = document.getElementById('strategy-matchmaker');
   const currentStrategy = strategySelect ? strategySelect.value : '';
+
+  // Validate timeframe for trial users
+  if (!['pro', 'premium', 'intermediate'].includes(userPlan)) {
+      if (!['15m', '30m', '1h'].includes(currentTimeframe)) {
+          currentTimeframe = '1h';
+          if (typeof window !== 'undefined') window.activeTimeframe = '1h';
+      }
+  }
 
   Object.values(window.latestSignals || {}).forEach(sig => {
     if (sig.timeframe === currentTimeframe) {
@@ -1263,6 +1281,14 @@ function updateDashboardData(data) {
             trading_accuracy: sig.trading_accuracy || 0.5,
             profitability_index: sig.profitability_index || 0,
             sr_telemetry: sig.sr_telemetry || null,
+            confluence: sig.confluence || null,
+            probabilities: sig.probabilities || {},
+            shap_values: sig.shap_values || [],
+            expectancy: sig.expectancy ?? null,
+            max_dd: sig.max_dd ?? null,
+            profit_factor: sig.profit_factor ?? null,
+            win_rate: sig.win_rate ?? null,
+            total_trades: sig.total_trades ?? 0,
           };
           // Determine and set signal status
           signalObj.status = getSignalStatus(signalObj);
@@ -1291,6 +1317,14 @@ function updateDashboardData(data) {
           profitability_index: sig.profitability_index || 0,
           sr_telemetry: sig.sr_telemetry || null,
           macro_regime: sig.macro_regime || null,
+          confluence: sig.confluence || null,
+          probabilities: sig.probabilities || {},
+          shap_values: sig.shap_values || [],
+          expectancy: sig.expectancy ?? null,
+          max_dd: sig.max_dd ?? null,
+          profit_factor: sig.profit_factor ?? null,
+          win_rate: sig.win_rate ?? null,
+          total_trades: sig.total_trades ?? 0,
         };
         // Determine and set signal status
         signalObj.status = getSignalStatus(signalObj);
@@ -1325,6 +1359,14 @@ function updateDashboardData(data) {
             profitability_index: sig.profitability_index || 0,
             sr_telemetry: sig.sr_telemetry || null,
             macro_regime: sig.macro_regime || null,
+            confluence: sig.confluence || null,
+            probabilities: sig.probabilities || {},
+            shap_values: sig.shap_values || [],
+            expectancy: sig.expectancy ?? null,
+            max_dd: sig.max_dd ?? null,
+            profit_factor: sig.profit_factor ?? null,
+            win_rate: sig.win_rate ?? null,
+            total_trades: sig.total_trades ?? 0,
           };
           tfSignalObj.status = getSignalStatus(tfSignalObj);
           window.latestSignals[key] = tfSignalObj;
@@ -1486,9 +1528,16 @@ function renderSignals(signals) {
     if (!isExplicitlyExpired && isTrialPlan) {
       signalsContainer.innerHTML = `
         <div class="no-signals">
-          <i class="fas fa-chart-line"></i>
+          <i class="fas fa-spinner fa-spin"></i>
           <p>Preparing your trial token cards...</p>
-          <p class="text-sm text-gray-400 mt-2">Loading data or verifying access...</p>
+          <div style="font-size:10px; margin-top:20px; text-align:left; color:#888; max-height:150px; overflow-y:auto; word-break:break-all;">
+            <p>DEBUG INFO:</p>
+            <p>userPlan: ${userPlan}</p>
+            <p>allowedTokens: ${JSON.stringify(allowedTokens)}</p>
+            <p>currentTimeframe: ${currentTimeframe}</p>
+            <p>latestSignals count: ${Object.keys(window.latestSignals || {}).length}</p>
+            <p>First 5 keys: ${Object.keys(window.latestSignals || {}).slice(0,5).join(', ')}</p>
+          </div>
         </div>
       `;
       return;
@@ -1550,12 +1599,7 @@ function renderSignals(signals) {
     const entryStr = signal.entry_price ? signal.entry_price.toFixed(4) : '-';
     const profIndex = (signal.profitability_index || 0).toFixed(2);
 
-    // Confluence Mock / Data injection
-    const confluence = signal.confluence || {
-      trend: Math.floor(Math.random() * 20 + 70), // Mock 70-90 if absent
-      momentum: Math.floor(Math.random() * 30 + 50),
-      volume: Math.floor(Math.random() * 40 + 40)
-    };
+    const confluence = signal.confluence || { trend: 50, momentum: 50, volume: 50 };
 
     let matchClasses = '';
     let matchBadge = '';
@@ -2105,7 +2149,10 @@ function setupFirestoreListeners() {
     snapshot.docChanges().forEach(change => {
       if (change.type === 'added' || change.type === 'modified') {
         const data = change.doc.data();
-        const symbol = data.symbol || change.doc.id;
+        let symbol = data.symbol || change.doc.id;
+        if (symbol && symbol.includes('_') && !symbol.includes('/')) {
+            symbol = symbol.replace('_', '/');
+        }
         const tf = data.timeframe || '1h';
         const key = `${symbol}_${tf}`;
 
@@ -2114,6 +2161,8 @@ function setupFirestoreListeners() {
           return;
         }
 
+        const _fsConf = data.confluence_scorecards || {};
+        const _fsEm = data.expectancy_matrix || {};
         const signalObj = {
           symbol: symbol,
           signal: data.signal || 'WAITING',
@@ -2130,7 +2179,21 @@ function setupFirestoreListeners() {
           trading_accuracy: data.trading_accuracy || 0.5,
           profitability_index: data.profitability_index || 0,
           sr_telemetry: data.sr_telemetry || null,
-          macro_regime: data.macro_regime || null
+          macro_regime: data.macro_regime || null,
+          confluence: data.confluence || (_fsConf.trend ? {
+            trend: _fsConf.trend === 'Aligned' ? 80 : 35,
+            momentum: Math.min(100, Math.max(0, Math.round((_fsConf.efficiency || 0.5) * 100))),
+            volume: _fsConf.volume === 'high' ? 78 : (_fsConf.volume === 'normal' ? 58 : 38),
+          } : null),
+          probabilities: data.probabilities || data.raw_probabilities || {},
+          shap_values: data.shap_values || data.shap_contributions || [],
+          expectancy: data.expectancy || (_fsEm.historical_expectancy !== undefined ? {
+            expectancy: _fsEm.historical_expectancy || 0,
+            profitFactor: Math.max(0.01, _fsEm.profitability_index || 1.0),
+            winRate: data.trading_accuracy || 0.5,
+            maxDD: _fsEm.max_dd_pct || 0,
+            totalTrades: 0,
+          } : null),
         };
 
         if (!['pro', 'premium', 'intermediate'].includes(userPlan)) {
@@ -2148,7 +2211,10 @@ function setupFirestoreListeners() {
         }
       } else if (change.type === 'removed') {
         const data = change.doc.data();
-        const symbol = data.symbol || change.doc.id;
+        let symbol = data.symbol || change.doc.id;
+        if (symbol && symbol.includes('_') && !symbol.includes('/')) {
+            symbol = symbol.replace('_', '/');
+        }
 
         if (!['pro', 'premium', 'intermediate'].includes(userPlan)) {
           const trialTimeframes = ['15m', '30m', '1h'];

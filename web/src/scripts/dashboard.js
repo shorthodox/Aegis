@@ -1250,11 +1250,7 @@ window.showSignalDetailsModal = function (signal) {
   window._fpSignal = signal;
 
   // Populate Feature Access Cards
-  const confluence = signal.confluence || {
-    trend: Math.floor(Math.random() * 20 + 70),
-    momentum: Math.floor(Math.random() * 30 + 50),
-    volume: Math.floor(Math.random() * 40 + 40)
-  };
+  const confluence = signal.confluence || { trend: 50, momentum: 50, volume: 50 };
   const _currentPrice = window.currentTickers?.[signal.symbol] ? parseFloat(window.currentTickers[signal.symbol]) : (signal.entry_price || 0);
   const _tier = getUserTier();
 
@@ -1573,11 +1569,7 @@ window.closeFP = function() {
 
 function _renderFpConfluence(body, signal, tier) {
   const locked = tier === 'BASIC';
-  const confluence = signal.confluence || {
-    trend: Math.floor(Math.random() * 20 + 70),
-    momentum: Math.floor(Math.random() * 30 + 50),
-    volume: Math.floor(Math.random() * 40 + 40)
-  };
+  const confluence = signal.confluence || { trend: 50, momentum: 50, volume: 50 };
 
   const lockOverlay = locked ? `
     <div class="absolute inset-0 bg-black/80 backdrop-blur-md rounded-xl flex flex-col items-center justify-center z-10">

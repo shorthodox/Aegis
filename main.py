@@ -1179,6 +1179,7 @@ def get_user_plan(email: str) -> str:
     # Use .get() to safely fallback to "trial" if "plan" is missing
     return user_doc.get("plan", "trial") if user_doc else "trial"
 
+
 def get_allowed_tokens(email: str) -> List[str]:
     plan = get_user_plan(email)
     if plan in ("pro", "premium", "intermediate"):
@@ -1913,6 +1914,21 @@ async def websocket_dashboard(websocket: WebSocket):
                                 continue
                             tf_data = normalize_signal_data(tf_sig)
                             tf_data['timeframe'] = tf
+                            # Enrich with frontend-friendly derived fields
+                            _tfc = tf_data.get("confluence_scorecards", {})
+                            _tfe = tf_data.get("expectancy_matrix", {})
+                            tf_data['confluence'] = {
+                                "trend": 80 if _tfc.get("trend") == "Aligned" else 35,
+                                "momentum": min(100, max(0, int(_tfc.get("efficiency", 0.5) * 100))),
+                                "volume": 78 if _tfc.get("volume") == "high" else (58 if _tfc.get("volume") == "normal" else 38),
+                            }
+                            tf_data['probabilities'] = tf_data.get("raw_probabilities", {})
+                            tf_data['shap_values'] = tf_data.get("shap_contributions", [])
+                            tf_data['expectancy'] = round(_tfe.get("historical_expectancy", 0.0), 2)
+                            tf_data['max_dd'] = -abs(_tfe.get("max_dd_pct", 0.0))
+                            tf_data['profit_factor'] = round(max(0.01, _tfe.get("profitability_index", 1.0)), 2)
+                            tf_data['win_rate'] = round(tf_data.get("trading_accuracy", 0.5) * 100, 1)
+                            tf_data['total_trades'] = 0
                             timeframes_map[sym][tf] = tf_data
                             if tf == '1h' and summary is None:
                                 summary = tf_data
@@ -1945,6 +1961,8 @@ async def websocket_dashboard(websocket: WebSocket):
                                 "timeframe": "1h",
                             }
                         else:
+                            _conf = summary.get("confluence_scorecards", {})
+                            _em = summary.get("expectancy_matrix", {})
                             filtered_signals[sym] = {
                                 "ai_prob": summary.get("ai_prob", 0),
                                 "signal": summary.get("signal", "WAITING"),
@@ -1964,6 +1982,18 @@ async def websocket_dashboard(websocket: WebSocket):
                                 "sr_telemetry": summary.get("sr_telemetry"),
                                 "macro_regime": summary.get("macro_regime"),
                                 "timeframe": summary.get("timeframe", "1h"),
+                                "confluence": {
+                                    "trend": 80 if _conf.get("trend") == "Aligned" else 35,
+                                    "momentum": min(100, max(0, int(_conf.get("efficiency", 0.5) * 100))),
+                                    "volume": 78 if _conf.get("volume") == "high" else (58 if _conf.get("volume") == "normal" else 38),
+                                },
+                                "probabilities": summary.get("raw_probabilities", {}),
+                                "shap_values": summary.get("shap_contributions", []),
+                                "expectancy": round(_em.get("historical_expectancy", 0.0), 2),
+                                "max_dd": -abs(_em.get("max_dd_pct", 0.0)),
+                                "profit_factor": round(max(0.01, _em.get("profitability_index", 1.0)), 2),
+                                "win_rate": round(summary.get("trading_accuracy", 0.5) * 100, 1),
+                                "total_trades": 0,
                             }
                             if response_timeframe is None:
                                 response_timeframe = summary.get("timeframe", "1h")
@@ -1972,6 +2002,8 @@ async def websocket_dashboard(websocket: WebSocket):
                         if not isinstance(sig_data, dict):
                             sig_data = {}
 
+                        _conf2 = sig_data.get("confluence_scorecards", {})
+                        _em2 = sig_data.get("expectancy_matrix", {})
                         filtered_signals[sym] = {
                             "ai_prob": sig_data.get("ai_prob", 0),
                             "signal": sig_data.get("signal", "WAITING"),
@@ -1991,6 +2023,18 @@ async def websocket_dashboard(websocket: WebSocket):
                             "sr_telemetry": sig_data.get("sr_telemetry"),
                             "macro_regime": sig_data.get("macro_regime"),
                             "timeframe": sig_data.get("timeframe", "1h"),
+                            "confluence": {
+                                "trend": 80 if _conf2.get("trend") == "Aligned" else 35,
+                                "momentum": min(100, max(0, int(_conf2.get("efficiency", 0.5) * 100))),
+                                "volume": 78 if _conf2.get("volume") == "high" else (58 if _conf2.get("volume") == "normal" else 38),
+                            },
+                            "probabilities": sig_data.get("raw_probabilities", {}),
+                            "shap_values": sig_data.get("shap_contributions", []),
+                            "expectancy": round(_em2.get("historical_expectancy", 0.0), 2),
+                            "max_dd": -abs(_em2.get("max_dd_pct", 0.0)),
+                            "profit_factor": round(max(0.01, _em2.get("profitability_index", 1.0)), 2),
+                            "win_rate": round(sig_data.get("trading_accuracy", 0.5) * 100, 1),
+                            "total_trades": 0,
                         }
                 # Attach under a distinct key in response_data below
 
@@ -2008,7 +2052,6 @@ async def websocket_dashboard(websocket: WebSocket):
                             "dist_to_resistance_pct": _telem.get("dist_to_resistance_pct"),
                         })
 
-                print(f"DEBUG WS -> email: {current_user_email}, plan: {get_user_plan(current_user_email) if current_user_email else 'guest'}, allowed: {allowed_tokens}, signals: {list(filtered_signals.keys())}")
                 response_data = {
                     "tickers": {k: v for k, v in LIVE_STATE.data.get("tickers", {}).items() if k in allowed_tokens},
                     "signals": filtered_signals,
