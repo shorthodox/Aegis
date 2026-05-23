@@ -1492,7 +1492,13 @@ function initModals() {
       }
     });
   }
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initModals);
+} else {
+  initModals();
+}
 
 // ============================================================
 // VISUAL ZONE TRACKING ENGINE
