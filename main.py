@@ -2738,3 +2738,15 @@ async def regenerate_api_key(user_id: str = Depends(get_current_user)):
 
 
 
+
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=port,
+        ws="websockets",
+        log_level="info",
+    )
