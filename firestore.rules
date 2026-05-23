@@ -17,9 +17,26 @@ service cloud.firestore {
       }
     }
 
-    // Signals collection — readable by all authenticated users, written by admin SDK only
+    function isSubscriptionActive() {
+      let userData = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      
+      let plan = userData.get('plan', userData.get('tier', ''));
+      let isPaid = plan == 'premium' || plan == 'pro' || plan == 'intermediate' || plan == 'basic';
+      
+      let hasActiveFlag = userData.get('subscription_active', false) == true || request.auth.token.subscription_active == true;
+      
+      let trialEnd = userData.get('trial_end', userData.get('trialEnd', null));
+      let isTrialNotExpired = trialEnd != null && trialEnd > request.time;
+      
+      let trialStart = userData.get('trial_start', userData.get('trialStart', userData.get('createdAt', null)));
+      let isDerivedTrialNotExpired = trialStart != null && trialStart > (request.time - duration.value(3, 'd'));
+      
+      return isPaid || hasActiveFlag || isTrialNotExpired || isDerivedTrialNotExpired;
+    }
+
+    // Signals collection — readable by users with active subscriptions or trials, written by admin SDK only
     match /signals/{signalId} {
-      allow read: if request.auth != null;
+      allow read: if request.auth != null && isSubscriptionActive();
       allow write: if false;
     }
 

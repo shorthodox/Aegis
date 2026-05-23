@@ -2293,6 +2293,15 @@ function setupFirestoreListeners() {
           signalsContainer.innerHTML = '<div class="no-signals"><i class="fas fa-lock text-red-500 mb-2 text-2xl"></i><p>Please upgrade to view signals.</p></div>';
         }
         showUpgradePrompt();
+        if (auth && auth.currentUser) {
+          auth.currentUser.getIdToken(true).catch(e => console.warn('Failed to force token refresh on permission denied:', e));
+        }
+        if (typeof setExpiredView === 'function') {
+          setExpiredView();
+        }
+        if (typeof blockAllFeatures === 'function') {
+          blockAllFeatures();
+        }
       }
     } else {
       console.warn('Signals stream aborted/errored. Reconnecting in 5s...');
