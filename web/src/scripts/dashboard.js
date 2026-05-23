@@ -119,7 +119,17 @@ async function checkUserSubscriptionStatus(uid) {
         console.error(`[SubCheck] Firestore error code: ${error.code}. This is a database problem.`);
     }
 
-    // On error: prefer AuthManager knowledge over defaulting to 'expired'
+    // ALWAYS enforce local expiry first, even if there's a database error
+    const localEnd = localStorage.getItem('trial_end_timestamp');
+    if (localEnd) {
+      const localEndDate = new Date(localEnd);
+      if (!isNaN(localEndDate.getTime()) && localEndDate < Date.now()) {
+        console.warn('[SubCheck] Local storage confirms expired. Enforcing expiry despite DB error.');
+        return 'expired';
+      }
+    }
+
+    // On error: prefer AuthManager knowledge over defaulting to 'expired' ONLY if not locally expired
     if (typeof AuthManager !== 'undefined') {
       const u = AuthManager.getUser();
       if (u) {
@@ -127,15 +137,10 @@ async function checkUserSubscriptionStatus(uid) {
         if (p === 'pro' || p === 'premium' || p === 'intermediate' || p === 'basic') return 'paid';
         if (p === 'trial' || p === 'free_tier') return 'trial';
       }
-      // Active token → safe to assume trial rather than blocking the user
+      // Active token — safe to assume trial rather than blocking the user
       if (AuthManager.getToken()) return 'trial';
     }
 
-    const localEnd = localStorage.getItem('trial_end_timestamp');
-    if (localEnd) {
-      const localEndDate = new Date(localEnd);
-      if (!isNaN(localEndDate.getTime()) && localEndDate < now) return 'expired';
-    }
     return 'trial';
   }
 }
