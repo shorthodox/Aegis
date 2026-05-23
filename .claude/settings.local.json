@@ -6,7 +6,15 @@
       "Bash(git push *)",
       "PowerShell(Get-ChildItem -Path \"d:\\\\Content\\\\Animesh\\\\bots\\\\ai_signal_bot\" -Recurse -Force | Where-Object { $_.PSIsContainer -eq $false } | Select-Object -First 50 FullName)",
       "WebFetch(domain:www.gstatic.com)",
-      "Bash(node --input-type=module)"
+      "Bash(node --input-type=module)",
+      "Bash(git commit -m ' *)",
+      "Bash(git stash *)",
+      "Bash(git pull *)",
+      "Bash(tail -100 logs/news_scraper.log)",
+      "Bash(tail -100 logs/news_sync.log)",
+      "Bash(git add *)",
+      "Bash(python patch_ws.py)",
+      "Bash(rm \"d:/Content/Animesh/bots/ai_signal_bot/patch_ws.py\")"
     ]
   }
 }

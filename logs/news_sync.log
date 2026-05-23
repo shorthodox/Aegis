@@ -31,3 +31,13 @@ Traceback (most recent call last):
   File "D:\Content\Animesh\bots\ai_signal_bot\scripts\news_scraper.py", line 12, in <module>
     import feedparser
 ModuleNotFoundError: No module named 'feedparser'
+2026-05-21 23:24:31 | INFO | Starting news scraping cycle...
+2026-05-21 23:24:31 | INFO | Fetching RSS: https://cointelegraph.com/rss
+2026-05-21 23:24:32 | INFO | Fetching RSS: https://www.coindesk.com/feed/
+2026-05-21 23:24:32 | WARNING | Feedparser error for https://www.coindesk.com/feed/: text/html; charset=utf-8 is not an XML media type
+2026-05-21 23:24:33 | INFO | Fetching RSS: https://cryptoslate.com/feed/
+2026-05-21 23:24:35 | INFO | Fetching RSS: https://decrypt.co/feed
+2026-05-21 23:24:37 | INFO | Fetched 50 raw articles, 50 new unique items.
+2026-05-21 23:24:37 | INFO | Pruned 49 old news items (>48h)
+2026-05-21 23:24:37 | INFO | Saved 50 news items to d:\Content\Animesh\bots\ai_signal_bot\data\news_data.json
+2026-05-21 23:24:37 | INFO | Scraping complete. Total stored: 50 items. Avg sentiment (last 50): 0.0038

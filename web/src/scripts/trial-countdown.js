@@ -95,6 +95,15 @@ const TrialManager = (() => {
 
     const hasValidLocalEnd = isValidISOString(localEndStr);
 
+    if (cachedTrialInfo && cachedTrialInfo._error === 'timeout' && !hasValidLocalEnd) {
+        return {
+          active: false,
+          expired: false,
+          networkError: true,
+          display: 'Request Timeout - Server is taking too long',
+          allowedTokens: []
+        };
+    }
     if (cachedTrialInfo && cachedTrialInfo._error === 'network' && !hasValidLocalEnd) {
         return {
           active: false,
@@ -227,7 +236,7 @@ const TrialManager = (() => {
           }
 
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort('timeout'), 5000);
+          const timeoutId = setTimeout(() => controller.abort('timeout'), 15000);
 
           let userResponse;
           try {
@@ -274,10 +283,10 @@ const TrialManager = (() => {
           }
         } catch (err) {
           if (err.name === 'AbortError') {
-            console.warn('[Trial] Fetch timed out after 5s — marking network error');
+            console.warn('[Trial] Fetch timed out after 15s — marking timeout error');
             networkErrorState = true;
-            cachedTrialInfo = { _error: 'network' };
-          } else if (networkErrorState) {
+            cachedTrialInfo = { _error: 'timeout' };
+          } else if (networkErrorState || (err.message && err.message.toLowerCase().includes('fetch'))) {
             console.warn('[Trial] Background fetch failed (network):', err.message);
             cachedTrialInfo = { _error: 'network' };
           } else {
