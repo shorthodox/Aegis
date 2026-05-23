@@ -749,7 +749,7 @@ async function initDashboard(event) {
   clearExpiredView();
 
   if (initialized) return;
-  if (!window.location.pathname.includes('dashboard')) return;
+  if (!document.getElementById('dashboard-main-content') && !document.getElementById('market-token-cards')) return;
 
   initialized = true;
   initializeLogoClickHandler();
