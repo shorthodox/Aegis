@@ -1845,23 +1845,22 @@ async def websocket_dashboard(websocket: WebSocket):
                 try:
                     # Try to receive any incoming message from client (with 0.5s timeout)
                     client_msg = await asyncio.wait_for(websocket.receive_text(), timeout=0.5)
-                    msg_data = json.loads(client_msg)
+                    try:
+                        msg_data = json.loads(client_msg)
+                    except json.JSONDecodeError:
+                        msg_data = {}
                     msg_type = msg_data.get("type", "")
-                    
+
                     if msg_type == "ping":
-                        # Respond with pong
                         await websocket.send_json({"type": "pong"})
-                        print(f"🏓 Ping/Pong received from {current_user_email}")
                     elif msg_type == "auth":
-                        # Re-authenticate if needed
                         new_token = msg_data.get("token")
                         if new_token:
                             new_user = decode_token(new_token)
                             if new_user:
                                 current_user_email = new_user
-                                print(f"🔄 WebSocket re-authenticated: {current_user_email}")
+                                print(f"[WS] Re-authenticated: {current_user_email}")
                 except asyncio.TimeoutError:
-                    # No message received, continue to send data
                     pass
                 
                 # Build response data
@@ -2010,14 +2009,14 @@ async def websocket_dashboard(websocket: WebSocket):
 
                 print(f"DEBUG WS -> email: {current_user_email}, plan: {get_user_plan(current_user_email) if current_user_email else 'guest'}, allowed: {allowed_tokens}, signals: {list(filtered_signals.keys())}")
                 response_data = {
-                    "tickers": {k: v for k, v in LIVE_STATE.data["tickers"].items() if k in allowed_tokens},
+                    "tickers": {k: v for k, v in LIVE_STATE.data.get("tickers", {}).items() if k in allowed_tokens},
                     "signals": filtered_signals,
                     "timeframes": timeframes_map,
                     "timeframe": response_timeframe or "1h",
-                    "open_trades": LIVE_STATE.data["open_trades"],
-                    "balance": LIVE_STATE.data["balance"],
-                    "alpha_mode": LIVE_STATE.data["alpha_mode"] and (get_user_plan(current_user_email) == "pro" if current_user_email else False),
-                    "warmup": LIVE_STATE.data["warmup_progress"],
+                    "open_trades": LIVE_STATE.data.get("open_trades", []),
+                    "balance": LIVE_STATE.data.get("balance", 0),
+                    "alpha_mode": LIVE_STATE.data.get("alpha_mode", False) and (get_user_plan(current_user_email) == "pro" if current_user_email else False),
+                    "warmup": LIVE_STATE.data.get("warmup_progress", "0/0"),
                     "trial_expired": trial_expired if current_user_email else True,
                     "plan": get_user_plan(current_user_email) if current_user_email else "trial",
                     "sr_alerts": sr_alerts,
@@ -2028,11 +2027,16 @@ async def websocket_dashboard(websocket: WebSocket):
                 # Send less frequently if no changes to reduce bandwidth
                 await asyncio.sleep(1)
             except asyncio.CancelledError:
-                print(f"⚠️ WebSocket task cancelled for {current_user_email}")
+                print(f"[WS] Task cancelled for {current_user_email}")
+                raise
+            except WebSocketDisconnect:
                 raise
             except Exception as loop_err:
-                print(f"❌ Error in WebSocket loop: {loop_err}")
-                raise
+                import traceback
+                print(f"[WS] Non-fatal loop error for {current_user_email}: {type(loop_err).__name__}: {loop_err}")
+                print(traceback.format_exc())
+                await asyncio.sleep(1)
+                continue
     except WebSocketDisconnect:
         print(f"🔌 WebSocket disconnected: {current_user_email}")
     except asyncio.TimeoutError:
