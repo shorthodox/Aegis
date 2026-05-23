@@ -2052,8 +2052,16 @@ async def websocket_dashboard(websocket: WebSocket):
                             "dist_to_resistance_pct": _telem.get("dist_to_resistance_pct"),
                         })
 
+                # Build tickers: prefer live prices; fall back to signal entry_price
+                live_tickers = {k: v for k, v in LIVE_STATE.data.get("tickers", {}).items() if k in allowed_tokens}
+                for _sym, _sd in filtered_signals.items():
+                    if _sym not in live_tickers:
+                        _ep = _sd.get("entry_price") or _sd.get("price")
+                        if _ep:
+                            live_tickers[_sym] = float(_ep)
+
                 response_data = {
-                    "tickers": {k: v for k, v in LIVE_STATE.data.get("tickers", {}).items() if k in allowed_tokens},
+                    "tickers": live_tickers,
                     "signals": filtered_signals,
                     "timeframes": timeframes_map,
                     "timeframe": response_timeframe or "1h",
