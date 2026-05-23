@@ -1176,7 +1176,8 @@ BASIC_TIMEFRAMES = ["30m", "1h"]
 
 def get_user_plan(email: str) -> str:
     user_doc = get_user_doc(email)
-    return user_doc["plan"] if user_doc else "trial"
+    # Use .get() to safely fallback to "trial" if "plan" is missing
+    return user_doc.get("plan", "trial") if user_doc else "trial"
 
 def get_allowed_tokens(email: str) -> List[str]:
     plan = get_user_plan(email)
