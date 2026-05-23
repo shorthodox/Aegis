@@ -83,6 +83,16 @@ async function checkUserSubscriptionStatus(uid) {
         }
       }
 
+      // If trial_end is missing, derive it from trial_start
+      const rawStart = data.trial_start || data.trialStart || data.createdAt || data.trial?.startDate;
+      if (rawStart) {
+        const startDate = rawStart.toDate ? rawStart.toDate() : new Date(rawStart);
+        if (!isNaN(startDate.getTime())) {
+          const derivedEnd = new Date(startDate.getTime() + 3 * 24 * 60 * 60 * 1000);
+          if (derivedEnd < now) return 'expired';
+        }
+      }
+
       // No Firestore end date — fall back to localStorage
       const localEnd = localStorage.getItem('trial_end_timestamp');
       if (localEnd) {
