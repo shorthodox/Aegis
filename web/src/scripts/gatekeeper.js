@@ -1119,6 +1119,17 @@ function startWebSocket(token) {
 
       if (data.type === 'error') {
         console.error('[WS] WebSocket error message:', data.message);
+        if (data.message === 'Invalid token') {
+          // Token was rejected by the server — attempt a silent Firebase refresh
+          // before the connection closes so the next reconnect has a valid token.
+          if (auth.currentUser) {
+            auth.currentUser.getIdToken(true)
+              .then(refreshed => {
+                if (typeof AuthManager !== 'undefined') AuthManager.setToken(refreshed);
+              })
+              .catch(() => {});
+          }
+        }
         return;
       }
 
@@ -1152,11 +1163,27 @@ function startWebSocket(token) {
     reconnectAttempts++;
 
     setTimeout(async () => {
-      let freshToken = token;
-      if (typeof AuthManager !== 'undefined') {
-        const t = await AuthManager.getToken();
-        if (t) freshToken = t;
+      let freshToken = AuthManager.getToken() || token;
+
+      // Firebase ID tokens expire after 1 hour. If the stored token is expired
+      // and the user still has an active Firebase session, refresh it silently
+      // so the backend doesn't reject the reconnection with "Invalid token".
+      if (isJWTExpired(freshToken) && auth.currentUser) {
+        try {
+          freshToken = await auth.currentUser.getIdToken(true);
+          AuthManager.setToken(freshToken);
+        } catch (refreshErr) {
+          console.warn('[WS] Token refresh failed on reconnect:', refreshErr.message || refreshErr);
+          redirectToLogin();
+          return;
+        }
+      } else if (isJWTExpired(freshToken)) {
+        // Token expired and no Firebase session — send back to login
+        console.warn('[WS] Token expired and no active Firebase session — redirecting to login');
+        redirectToLogin();
+        return;
       }
+
       startWebSocket(freshToken);
     }, delay);
   };
