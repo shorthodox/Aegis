@@ -690,7 +690,7 @@ function attachEventListeners() {
 // ============================================================
 let renderTimeout = null;
 let lastRenderTime = 0;
-const MIN_RENDER_INTERVAL = 500; // Minimum 500ms between renders
+const MIN_RENDER_INTERVAL = 100; // Minimum 100ms between renders
 
 function debouncedFilterAndRenderSignals() {
   if (renderTimeout) clearTimeout(renderTimeout);
