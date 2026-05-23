@@ -366,6 +366,14 @@ export async function handleLogout() {
     AuthManager.logout();
     localStorage.removeItem('authenticated');
     localStorage.removeItem('userSession');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('trial_end_timestamp');
+    localStorage.removeItem('trial_end_sig');
+    localStorage.removeItem('cached_uid');
+    Object.keys(localStorage).forEach(k => {
+      if (k.startsWith('trialStart_')) localStorage.removeItem(k);
+    });
     window.location.href = '/web/src/pages/index.html';
     return { success: true };
   } catch (error) {

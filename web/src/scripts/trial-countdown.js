@@ -265,7 +265,11 @@ const TrialManager = (() => {
               } else if (localEndStr && isValidISOString(localEndStr)) {
                 const localEnd = new Date(localEndStr).getTime();
                 const isPaid = ['pro', 'premium', 'active', 'basic', 'intermediate'].includes((userData.plan || '').toLowerCase());
-                if (!isPaid && backendEnd > localEnd) {
+                // Only trust local over backend when local is in the future — an expired
+                // local timestamp must always yield to a valid backend value (new account,
+                // or trial reset), otherwise a stale value from a previous session locks
+                // every new account into an "expired" state permanently.
+                if (!isPaid && backendEnd > localEnd && localEnd > Date.now()) {
                   shouldUpdate = false;
                 }
               }

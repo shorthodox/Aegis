@@ -793,7 +793,9 @@ def create_user_doc(email: str, password_hash: Optional[str] = None,
     user_data = {
         "email": email,
         "plan": "trial",
+        "trial_start": now,
         "trial_end": trial_end,
+        "trial_active": True,
         "created_at": now,
         "last_login": now,
         "subscription": {

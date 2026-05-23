@@ -2566,9 +2566,15 @@ async function handleLogout() {
     if (signalsUnsubscribe) signalsUnsubscribe();
     if (tradesUnsubscribe) tradesUnsubscribe();
 
-    // Clear local storage
+    // Clear local storage — including trial/session state so a new login starts clean
     localStorage.removeItem('access_token');
     localStorage.removeItem('authToken');
+    localStorage.removeItem('trial_end_timestamp');
+    localStorage.removeItem('trial_end_sig');
+    localStorage.removeItem('cached_uid');
+    Object.keys(localStorage).forEach(k => {
+      if (k.startsWith('trialStart_')) localStorage.removeItem(k);
+    });
 
     // Sign out from Firebase
     await signOut(auth);
