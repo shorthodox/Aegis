@@ -2142,6 +2142,9 @@ async function loadGlobalPerformanceData() {
 // Firestore Real-time Listeners
 // -------------------------------------------------------------------
 function setupFirestoreListeners() {
+  if (signalsUnsubscribe) { signalsUnsubscribe(); signalsUnsubscribe = null; }
+  if (tradesUnsubscribe) { tradesUnsubscribe(); tradesUnsubscribe = null; }
+
   const token = AuthManager.getToken();
   if (!token) return;
 
@@ -2246,6 +2249,9 @@ function setupFirestoreListeners() {
         }
         showUpgradePrompt();
       }
+    } else {
+      console.warn('Signals stream aborted/errored. Reconnecting in 5s...');
+      setTimeout(setupFirestoreListeners, 5000);
     }
   });
 
@@ -2263,6 +2269,10 @@ function setupFirestoreListeners() {
       renderTrades(trades);
     }, (error) => {
       console.error('Trades listener error:', error);
+      if (error.code !== 'permission-denied') {
+        console.warn('Trades stream aborted/errored. Reconnecting in 5s...');
+        setTimeout(setupFirestoreListeners, 5000);
+      }
     });
   }
 
@@ -2653,13 +2663,26 @@ export async function ensureUserDocument(user) {
 export function subscribeUserSettings(user, callback) {
   if (!user) return () => { };
   const ref = doc(db, 'users', user.uid, 'preferences', 'settings');
-  return onSnapshot(ref, (docSnap) => {
-    if (docSnap.exists()) {
-      callback(docSnap.data());
-    } else {
-      callback({ capital: 10000, risk_pct: 1 });
-    }
-  });
+  
+  let unsub = null;
+  function connect() {
+    if (unsub) unsub();
+    unsub = onSnapshot(ref, (docSnap) => {
+      if (docSnap.exists()) {
+        callback(docSnap.data());
+      } else {
+        callback({ capital: 10000, risk_pct: 1 });
+      }
+    }, (error) => {
+      console.error('User settings listener error:', error);
+      if (error.code !== 'permission-denied') {
+        setTimeout(connect, 5000);
+      }
+    });
+  }
+  
+  connect();
+  return () => { if (unsub) unsub(); };
 }
 
 export async function updateUserSetting(user, key, value) {

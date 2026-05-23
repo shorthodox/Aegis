@@ -340,7 +340,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 activeTrades.set(doc.id, { id: doc.id, ...doc.data() });
             });
             renderTradesTable();
-        }, (error) => console.error('Trade subscription error:', error));
+        }, (error) => {
+            console.error('Trade subscription error:', error);
+            if (error.code !== 'permission-denied') {
+                console.warn('Trade stream aborted/errored. Reconnecting in 5s...');
+                setTimeout(() => subscribeToTrades(userId), 5000);
+            }
+        });
     }
 
     // ========== Auth Init ==========
