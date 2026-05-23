@@ -104,7 +104,10 @@ async function checkUserSubscriptionStatus(uid) {
     }
     return 'trial';
   } catch (error) {
-    console.error('[SubCheck] Firestore error — falling back to AuthManager/localStorage:', error);
+    console.error('[SubCheck] Invalid database error — falling back to AuthManager/localStorage:', error);
+    if (error.code) {
+        console.error(`[SubCheck] Firestore error code: ${error.code}. This is a database problem.`);
+    }
 
     // On error: prefer AuthManager knowledge over defaulting to 'expired'
     if (typeof AuthManager !== 'undefined') {
