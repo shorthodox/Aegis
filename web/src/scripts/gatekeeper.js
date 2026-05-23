@@ -359,6 +359,10 @@ function initiatePaperTrade(symbol, entryPrice, sl, tp) {
   const modal = document.getElementById('paperTradeModal');
   const symbolSpan = document.getElementById('paperTradeSymbol');
 
+  // Pre-set selection globals so executeTrade() passes its guard check even
+  // if the user edits values before clicking confirm in the modal.
+  window.selectedTradeToken = symbol;
+
   if (modal && symbolSpan) {
     symbolSpan.textContent = symbol;
     modal.classList.remove('hidden');
@@ -379,6 +383,18 @@ function startPaperTrade(symbol, entryPrice, sl, tp) {
     currentPrice: entryPrice,
     pnl: 0,
     status: 'open'   // must match Firestore listener query: where('status', '==', 'open')
+  };
+
+  // Set global selection state so dashboard.js executeTrade() can find the token.
+  // Derive direction from SL position: SL < entry → LONG, SL > entry → SHORT.
+  window.selectedTradeToken = symbol;
+  window.selectedTrade = {
+    symbol,
+    direction: sl < entryPrice ? 'LONG' : 'SHORT',
+    entry_price: entryPrice,
+    sl,
+    tp,
+    signalId: null,
   };
 
   paperTrades.push(trade);
