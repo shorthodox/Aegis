@@ -3431,13 +3431,12 @@ body.modal-open {
     .nav-hamburger-btn { min-height: 44px; min-width: 44px; }
 }
 
-/* Subscription expired overlay — dims dashboard without removing analytics from DOM */
+/* Subscription expired — fully hides background content so signals never bleed
+   through the full-screen overlay. pointer-events:none prevents interaction. */
 #dashboard-main-content.sub-expired {
     pointer-events: none;
-    opacity: 0.25;
-    filter: blur(1px);
+    opacity: 0;
     user-select: none;
-    transition: opacity 0.3s ease, filter 0.3s ease;
 }
 
 /* ============================================================

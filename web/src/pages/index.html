@@ -1170,7 +1170,7 @@
          Fires once per browser session (guarded by localStorage).
          ============================================================ -->
     <div id="onboarding-overlay" class="fixed inset-0 z-[100] items-center justify-center hidden opacity-0 transition-opacity duration-300" style="background:rgba(0,0,0,0.85);backdrop-filter:blur(12px);">
-      <div id="onboarding-modal" class="relative w-[90%] max-w-3xl transform scale-95 opacity-0 transition-all duration-300 ease-out overflow-hidden" style="background:#060809;border-radius:28px;border:1px solid rgba(0,242,255,0.22);box-shadow:0 25px 60px -12px rgba(0,0,0,0.8),inset 0 1px 0 rgba(255,255,255,0.04),0 0 40px rgba(0,242,255,0.05);">
+      <div id="onboarding-modal" class="modal-card relative w-[90%] transform scale-95 opacity-0 transition-all duration-300 ease-out overflow-hidden" style="max-width: 768px; padding: 0;">
 
         <!-- Header -->
         <div class="flex items-center justify-between px-7 py-4" style="border-bottom:1px solid rgba(0,242,255,0.12);background:rgba(0,242,255,0.025);">
@@ -1184,10 +1184,10 @@
         </div>
 
         <!-- Step Content Container -->
-        <div class="relative min-h-[410px] p-7 overflow-y-auto">
+        <div class="relative p-7 overflow-y-auto" style="min-height: 410px;">
 
           <!-- Step 1: Beginner Warnings -->
-          <div id="wizard-step-1" class="wizard-step transition-all duration-300 translate-x-0 opacity-100 space-y-4">
+          <div id="wizard-step-1" class="wizard-step animate-fade-in space-y-4">
             <h2 class="text-xl font-bold text-gray-100 tracking-tight flex items-center gap-2">
               ⚠️ Beginner Warnings &amp; Trading Reality Check
             </h2>
@@ -1208,7 +1208,7 @@
           </div>
 
           <!-- Step 2: Premium Gating & Trial -->
-          <div id="wizard-step-2" class="wizard-step absolute inset-x-7 top-7 transition-all duration-300 translate-x-full opacity-0 hidden space-y-4">
+          <div id="wizard-step-2" class="wizard-step animate-fade-in hidden space-y-4">
             <h2 class="text-xl font-bold text-gray-100 tracking-tight">🎁 Premium Gating &amp; Trial Allocation</h2>
             <p class="text-sm text-gray-400 leading-relaxed">Welcome to the terminal network layout. New accounts are instantly provisioned with localized feature tracking:</p>
             <div class="grid grid-cols-2 gap-4 pt-1">
@@ -1225,7 +1225,7 @@
           </div>
 
           <!-- Step 3: Workflow Automation vs. Predictive AI -->
-          <div id="wizard-step-3" class="wizard-step absolute inset-x-7 top-7 transition-all duration-300 translate-x-full opacity-0 hidden space-y-4">
+          <div id="wizard-step-3" class="wizard-step animate-fade-in hidden space-y-4">
             <h2 class="text-xl font-bold text-gray-100 tracking-tight">🧠 Workflow Automation vs. Predictive AI</h2>
             <div class="space-y-3 overflow-y-auto pr-1 custom-scrollbar text-sm" style="max-height:310px;">
               <div class="pl-3" style="border-left:2px solid rgba(251,191,36,0.7);">
@@ -1323,26 +1323,12 @@
         var toEl   = document.getElementById('wizard-step-' + target);
         if (!fromEl || !toEl) return;
 
-        var forward = target > currentStep;
-
-        // 1. Animate current step off-screen
-        fromEl.classList.add(forward ? 'ob-exit-left' : 'ob-exit-right');
-
-        // 2. Prepare incoming step: reveal off-screen, then slide to centre
+        // Simple toggle without absolute positioning that causes layout collapse
+        fromEl.classList.add('hidden');
         toEl.classList.remove('hidden');
-        toEl.classList.add(forward ? 'ob-enter-right' : 'ob-enter-left');
-        toEl.offsetHeight; // force reflow so initial off-screen position renders
 
-        toEl.classList.remove('ob-enter-right', 'ob-enter-left', 'translate-x-full', 'opacity-0');
-        toEl.classList.add('translate-x-0', 'opacity-100');
-
-        // 3. After exit animation completes, park the old step
-        setTimeout(function () {
-          fromEl.classList.add('hidden');
-          fromEl.classList.remove('ob-exit-left', 'ob-exit-right', 'translate-x-0', 'opacity-100');
-          currentStep = target;
-          updateNavUI();
-        }, 300);
+        currentStep = target;
+        updateNavUI();
       }
 
       // ── Navigation UI Sync ───────────────────────────────────────

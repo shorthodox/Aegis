@@ -300,19 +300,27 @@ function setExpiredView() {
   if (_subState.active && (Date.now() - _lastVerifiedAt < 120000)) return;
 
   const dashboardContent = document.getElementById('dashboard-main-content');
-  const expiredCard = document.getElementById('access-expired-card');
 
-  // Dim/disable dashboard without removing it from DOM — preserves analytics state.
+  // Fully hide background content — opacity:0 so signals are invisible behind the overlay.
   if (dashboardContent) {
     dashboardContent.classList.remove('hidden');
     dashboardContent.classList.add('sub-expired');
   }
 
-  // Show or create expired card
-  if (expiredCard) {
-    expiredCard.classList.remove('hidden');
+  // Hide the trial countdown banner so "Loading..." never floats above the expired screen.
+  const trialBanner = document.getElementById('trialBanner');
+  if (trialBanner) trialBanner.classList.add('hidden');
+
+  // Clear signals immediately so nothing bleeds through during the transition.
+  const signalsContainer = document.getElementById('signalsContainer');
+  if (signalsContainer) signalsContainer.innerHTML = '';
+
+  // Show the full-screen opaque overlay (z-[9999] covers header and all panels).
+  const overlay = document.getElementById('subscriptionExpiredOverlay');
+  if (overlay) {
+    overlay.classList.remove('hidden');
   } else {
-    // Create expired card if it doesn't exist
+    // Fallback: create the overlay programmatically if the HTML element is missing.
     createExpiredCard();
   }
 
@@ -322,11 +330,17 @@ function setExpiredView() {
 
 function clearExpiredView() {
   const dashboardContent = document.getElementById('dashboard-main-content');
-  const expiredCard = document.getElementById('access-expired-card');
   if (dashboardContent) {
     dashboardContent.classList.remove('hidden');
     dashboardContent.classList.remove('sub-expired');
   }
+
+  // Hide the full-screen overlay.
+  const overlay = document.getElementById('subscriptionExpiredOverlay');
+  if (overlay) overlay.classList.add('hidden');
+
+  // Also hide the legacy card in case it was created by an older code path.
+  const expiredCard = document.getElementById('access-expired-card');
   if (expiredCard) expiredCard.classList.add('hidden');
 
   // Re-enable features
