@@ -889,8 +889,8 @@ async def get_me(user_id: str = Depends(get_current_user)):
             "location": user_doc.get("location")
         }
     except Exception as e:
-        print(f"Error fetching user /auth/me for {user_id}: {e}")
-        raise HTTPException(status_code=500, detail="Error fetching user information")
+        print(f"[/auth/me] Error for {user_id}: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching user information: {type(e).__name__}")
 
 @app.post("/api/users/provision")
 async def provision_user(request: Request, user_id: str = Depends(get_current_user)):
@@ -898,40 +898,48 @@ async def provision_user(request: Request, user_id: str = Depends(get_current_us
     Create a default backend profile for a Firebase-authenticated user who has no record yet.
     Idempotent: returns the existing doc if one already exists.
     """
-    data = await request.json()
-    firebase_uid = data.get("uid") or user_id
-    email = data.get("email") or (user_id if "@" in user_id else None)
-    display_name = data.get("display_name") or (email.split("@")[0] if email else firebase_uid)
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
 
-    # Prefer email as doc key (consistent with rest of backend), fall back to uid
-    doc_key = email or firebase_uid
+    try:
+        firebase_uid = data.get("uid") or user_id
+        email = data.get("email") or (user_id if "@" in user_id else None)
+        display_name = data.get("display_name") or (email.split("@")[0] if email else firebase_uid)
 
-    existing = get_user_doc(doc_key)
-    if existing:
-        update_last_login(doc_key)
+        # Prefer email as doc key (consistent with rest of backend), fall back to uid
+        doc_key = email or firebase_uid
+
+        existing = get_user_doc(doc_key)
+        if existing:
+            update_last_login(doc_key)
+            return {
+                "uid": firebase_uid,
+                "email": existing.get("email", doc_key),
+                "plan": existing.get("plan", "trial"),
+                "trial_end": existing.get("trial_end"),
+                "full_name": existing.get("full_name"),
+                "location": existing.get("location"),
+            }
+
+        user_doc = create_user_doc(
+            doc_key,
+            provider="firebase",
+            social_id=firebase_uid,
+            full_name=display_name,
+        )
         return {
             "uid": firebase_uid,
-            "email": existing.get("email", doc_key),
-            "plan": existing.get("plan", "trial"),
-            "trial_end": existing.get("trial_end"),
-            "full_name": existing.get("full_name"),
-            "location": existing.get("location"),
+            "email": email or doc_key,
+            "plan": user_doc.get("plan", "trial"),
+            "trial_end": user_doc.get("trial_end"),
+            "full_name": user_doc.get("full_name"),
+            "location": user_doc.get("location"),
         }
-
-    user_doc = create_user_doc(
-        doc_key,
-        provider="firebase",
-        social_id=firebase_uid,
-        full_name=display_name,
-    )
-    return {
-        "uid": firebase_uid,
-        "email": email or doc_key,
-        "plan": user_doc.get("plan", "trial"),
-        "trial_end": user_doc.get("trial_end"),
-        "full_name": user_doc.get("full_name"),
-        "location": user_doc.get("location"),
-    }
+    except Exception as e:
+        print(f"[/api/users/provision] Error for {user_id}: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=500, detail=f"User provisioning failed: {type(e).__name__}")
 
 @app.get("/auth/{provider}")
 async def oauth_login(request: Request, provider: str):
@@ -1186,19 +1194,23 @@ def get_allowed_timeframes(email: str) -> List[str]:
 
 @app.get("/user/limits")
 async def get_user_limits(email: str = Depends(get_current_user)):
-    user_doc = get_user_doc(email)
-    plan = user_doc.get("plan", "trial") if user_doc else "trial"
-    trial_end = user_doc.get("trial_end") if user_doc else None
-    trial_expired = is_trial_expired(email) if trial_end else False
-    
-    return {
-        "plan": plan,
-        "allowed_tokens": get_allowed_tokens(email),
-        "is_trial": plan == "trial",
-        "trial_end": trial_end,
-        "trial_expired": trial_expired,
-        "alpha_mode_enabled": plan == "pro"
-    }
+    try:
+        user_doc = get_user_doc(email)
+        plan = user_doc.get("plan", "trial") if user_doc else "trial"
+        trial_end = user_doc.get("trial_end") if user_doc else None
+        trial_expired = is_trial_expired(email) if trial_end else False
+        allowed_tokens = get_allowed_tokens(email)
+        return {
+            "plan": plan,
+            "allowed_tokens": allowed_tokens,
+            "is_trial": plan == "trial",
+            "trial_end": trial_end,
+            "trial_expired": trial_expired,
+            "alpha_mode_enabled": plan in ("pro", "premium")
+        }
+    except Exception as e:
+        print(f"[/user/limits] Error for {email}: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to load user limits: {type(e).__name__}")
 
 @app.post("/upgrade")
 async def upgrade_plan(email: str = Depends(get_current_user)):
@@ -1996,6 +2008,7 @@ async def websocket_dashboard(websocket: WebSocket):
                             "dist_to_resistance_pct": _telem.get("dist_to_resistance_pct"),
                         })
 
+                print(f"DEBUG WS -> email: {current_user_email}, plan: {get_user_plan(current_user_email) if current_user_email else 'guest'}, allowed: {allowed_tokens}, signals: {list(filtered_signals.keys())}")
                 response_data = {
                     "tickers": {k: v for k, v in LIVE_STATE.data["tickers"].items() if k in allowed_tokens},
                     "signals": filtered_signals,
