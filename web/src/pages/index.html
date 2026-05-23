@@ -1169,73 +1169,75 @@
          AEGIS ONBOARDING WIZARD MODAL
          Fires once per browser session (guarded by localStorage).
          ============================================================ -->
-    <div id="onboarding-overlay" class="fixed inset-0 z-[100] items-center justify-center bg-black/80 backdrop-blur-md hidden opacity-0 transition-opacity duration-300">
-      <div id="onboarding-modal" class="relative w-full max-w-2xl bg-[#0B0E11] border border-gray-800 rounded-xl shadow-2xl overflow-hidden transform scale-95 opacity-0 transition-all duration-300 ease-out mx-4">
+    <div id="onboarding-overlay" class="fixed inset-0 z-[100] items-center justify-center hidden opacity-0 transition-opacity duration-300" style="background:rgba(0,0,0,0.85);backdrop-filter:blur(12px);">
+      <div id="onboarding-modal" class="relative w-[90%] max-w-3xl transform scale-95 opacity-0 transition-all duration-300 ease-out overflow-hidden" style="background:#060809;border-radius:28px;border:1px solid rgba(0,242,255,0.22);box-shadow:0 25px 60px -12px rgba(0,0,0,0.8),inset 0 1px 0 rgba(255,255,255,0.04),0 0 40px rgba(0,242,255,0.05);">
 
         <!-- Header -->
-        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-800/60 bg-[#161A20]/40">
-          <div class="flex items-center space-x-2">
-            <span class="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <h3 class="text-sm font-semibold tracking-wider text-gray-400 uppercase font-mono">Aegis-1 Core Guidance</h3>
+        <div class="flex items-center justify-between px-7 py-4" style="border-bottom:1px solid rgba(0,242,255,0.12);background:rgba(0,242,255,0.025);">
+          <div class="flex items-center space-x-2.5">
+            <span class="h-2 w-2 rounded-full animate-pulse" style="background:#00f2ff;box-shadow:0 0 6px rgba(0,242,255,0.9);"></span>
+            <h3 class="text-xs font-semibold tracking-widest uppercase font-mono" style="color:rgba(0,242,255,0.65);">Aegis-1 &middot; Core Guidance</h3>
           </div>
-          <button id="close-onboarding-btn" class="text-gray-500 hover:text-rose-400 transition-colors duration-200 focus:outline-none" aria-label="Close onboarding">
+          <button id="close-onboarding-btn" class="transition-colors duration-200 focus:outline-none ob-close-x" aria-label="Close onboarding" style="color:#64748b;">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
           </button>
         </div>
 
         <!-- Step Content Container -->
-        <div class="relative min-h-[380px] p-6 overflow-y-auto">
+        <div class="relative min-h-[410px] p-7 overflow-y-auto">
 
           <!-- Step 1: Beginner Warnings -->
           <div id="wizard-step-1" class="wizard-step transition-all duration-300 translate-x-0 opacity-100 space-y-4">
             <h2 class="text-xl font-bold text-gray-100 tracking-tight flex items-center gap-2">
               ⚠️ Beginner Warnings &amp; Trading Reality Check
             </h2>
-            <div class="space-y-4 pt-2">
-              <div class="bg-[#161A20]/60 p-4 rounded-lg border border-gray-800/60">
-                <h4 class="text-emerald-400 font-bold text-sm uppercase font-mono tracking-wider mb-1">Strategy Over Prediction</h4>
+            <div class="space-y-3 pt-1">
+              <div class="p-4 rounded-xl" style="background:rgba(0,242,255,0.03);border:1px solid rgba(0,242,255,0.14);">
+                <h4 class="font-bold text-xs uppercase font-mono tracking-wider mb-1.5" style="color:#00f2ff;">Strategy Over Prediction</h4>
                 <p class="text-gray-400 text-sm leading-relaxed">Trading is not a game of prediction, it is a game of strategies. Treat every signal as a systematic execution of risk-to-reward parameters rather than a one-time guess.</p>
               </div>
-              <div class="bg-[#161A20]/60 p-4 rounded-lg border border-gray-800/60">
-                <h4 class="text-rose-400 font-bold text-sm uppercase font-mono tracking-wider mb-1">The Bleed of Fees</h4>
+              <div class="p-4 rounded-xl" style="background:rgba(244,63,94,0.04);border:1px solid rgba(244,63,94,0.18);">
+                <h4 class="font-bold text-xs uppercase font-mono tracking-wider mb-1.5 text-rose-400">The Bleed of Fees</h4>
                 <p class="text-gray-400 text-sm leading-relaxed">Exchange trading fees and slippage can quietly bleed your profits and your underlying capital. Be fully prepared and calculate your transactional friction before execution.</p>
               </div>
-              <div class="bg-[#161A20]/60 p-4 rounded-lg border border-gray-800/60">
-                <h4 class="text-amber-400 font-bold text-sm uppercase font-mono tracking-wider mb-1">Model Variance</h4>
+              <div class="p-4 rounded-xl" style="background:rgba(251,191,36,0.04);border:1px solid rgba(251,191,36,0.18);">
+                <h4 class="font-bold text-xs uppercase font-mono tracking-wider mb-1.5 text-amber-400">Model Variance</h4>
                 <p class="text-gray-400 text-sm leading-relaxed">Mind that our AI can still make wrong decisions although it is 70–80% accurate. Operating on statistical expectancy means that some trades will naturally result in losses due to market variance. Always protect your capital.</p>
               </div>
             </div>
           </div>
 
           <!-- Step 2: Premium Gating & Trial -->
-          <div id="wizard-step-2" class="wizard-step absolute inset-x-6 top-6 transition-all duration-300 translate-x-full opacity-0 hidden space-y-4">
+          <div id="wizard-step-2" class="wizard-step absolute inset-x-7 top-7 transition-all duration-300 translate-x-full opacity-0 hidden space-y-4">
             <h2 class="text-xl font-bold text-gray-100 tracking-tight">🎁 Premium Gating &amp; Trial Allocation</h2>
             <p class="text-sm text-gray-400 leading-relaxed">Welcome to the terminal network layout. New accounts are instantly provisioned with localized feature tracking:</p>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-              <div class="bg-emerald-500/5 border border-emerald-500/20 p-4 rounded-lg">
-                <div class="text-emerald-400 font-bold text-sm uppercase font-mono tracking-wider mb-1">Free Tier Allocation</div>
+            <div class="grid grid-cols-2 gap-4 pt-1">
+              <div class="p-4 rounded-xl" style="background:rgba(0,242,255,0.04);border:1px solid rgba(0,242,255,0.18);">
+                <div class="font-bold text-xs uppercase font-mono tracking-wider mb-2" style="color:#00f2ff;">Free Tier Allocation</div>
                 <p class="text-xs text-gray-400 leading-relaxed">Full access to systemic developer logs and real-world asset configuration run diagnostics completely free of charge.</p>
               </div>
-              <div class="bg-[#161A20] border border-gray-800 p-4 rounded-lg">
-                <div class="text-gray-300 font-bold text-sm uppercase font-mono tracking-wider mb-1">Basic Plan Trial Enabled</div>
+              <div class="p-4 rounded-xl" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);">
+                <div class="font-bold text-xs uppercase font-mono tracking-wider mb-2 text-gray-300">Basic Plan Trial Enabled</div>
                 <p class="text-xs text-gray-400 leading-relaxed">Includes real-time, high-fidelity Vectorized Support &amp; Resistance Anchors mapped automatically to token detail metrics.</p>
               </div>
             </div>
-            <p class="text-xs text-gray-500 italic pt-2">To unlock advanced multi-class XGBoost strategy vectors or hyperparameter sweeps, upgrade your seat token inside the terminal settings pane.</p>
+            <p class="text-xs italic pt-1" style="color:rgba(148,163,184,0.55);">To unlock advanced multi-class XGBoost strategy vectors or hyperparameter sweeps, upgrade your seat token inside the terminal settings pane.</p>
           </div>
 
           <!-- Step 3: Workflow Automation vs. Predictive AI -->
-          <div id="wizard-step-3" class="wizard-step absolute inset-x-6 top-6 transition-all duration-300 translate-x-full opacity-0 hidden space-y-4">
+          <div id="wizard-step-3" class="wizard-step absolute inset-x-7 top-7 transition-all duration-300 translate-x-full opacity-0 hidden space-y-4">
             <h2 class="text-xl font-bold text-gray-100 tracking-tight">🧠 Workflow Automation vs. Predictive AI</h2>
-            <div class="space-y-3 max-h-[260px] overflow-y-auto pr-2 custom-scrollbar text-sm">
-              <div class="border-l-2 border-amber-500 pl-3">
-                <span class="text-gray-400 font-bold">Retail Bots (The Old Way):</span> Built as Static Rule Automators. They execute basic linear "If-This-Then-That" commands. They cannot adapt to shifting conditions, frequently over-trade in choppy consolidation layers, or blindly buy into a macro market crash via rigid DCA grids.
+            <div class="space-y-3 overflow-y-auto pr-1 custom-scrollbar text-sm" style="max-height:310px;">
+              <div class="pl-3" style="border-left:2px solid rgba(251,191,36,0.7);">
+                <span class="text-gray-300 font-bold">Retail Bots (The Old Way):</span>
+                <span class="text-gray-400"> Built as Static Rule Automators. They execute basic linear "If-This-Then-That" commands. They cannot adapt to shifting conditions, frequently over-trade in choppy consolidation layers, or blindly buy into a macro market crash via rigid DCA grids.</span>
               </div>
-              <div class="border-l-2 border-emerald-500 pl-3">
-                <span class="text-emerald-400 font-bold">Aegis-1 (The Quantitative Leap):</span> Engineered as a Context-Aware Machine Learning Risk Engine. Powered by a non-linear XGBoost ensemble, it concurrently analyzes over 60 structural market features to compute real-world statistical probabilities. If a trade setup carries weak conviction, it self-suppresses to protect capital.
+              <div class="pl-3" style="border-left:2px solid #00f2ff;">
+                <span class="font-bold" style="color:#00f2ff;">Aegis-1 (The Quantitative Leap):</span>
+                <span class="text-gray-400"> Engineered as a Context-Aware Machine Learning Risk Engine. Powered by a non-linear XGBoost ensemble, it concurrently analyzes over 60 structural market features to compute real-world statistical probabilities. If a trade setup carries weak conviction, it self-suppresses to protect capital.</span>
               </div>
-              <div class="border-t border-gray-800/80 my-2 pt-2"></div>
-              <h4 class="font-mono text-xs text-gray-400 uppercase tracking-wider font-bold mb-1">Architectural Dominance:</h4>
+              <div class="pt-2" style="border-top:1px solid rgba(255,255,255,0.06);"></div>
+              <h4 class="font-mono text-xs uppercase tracking-wider font-bold" style="color:rgba(0,242,255,0.6);">Architectural Dominance:</h4>
               <p class="text-xs text-gray-400 leading-relaxed">
                 <strong class="text-gray-300">1. Triple-Barrier Labels:</strong> Uses adaptive ATR boundaries instead of fixed percentage guesses.<br>
                 <strong class="text-gray-300">2. Hierarchical Trends:</strong> Lower frames are anchored straight to daily (1D) and weekly (1W) structures to prevent trading against institutional volume.<br>
@@ -1247,15 +1249,15 @@
         </div>
 
         <!-- Footer: Dots + Navigation -->
-        <div class="flex items-center justify-between px-6 py-4 border-t border-gray-800/60 bg-[#161A20]/20">
+        <div class="flex items-center justify-between px-7 py-4" style="border-top:1px solid rgba(0,242,255,0.1);background:rgba(0,0,0,0.25);">
           <div class="flex space-x-2" aria-label="Step progress">
-            <span id="dot-1" class="h-1.5 w-6 rounded-full bg-emerald-500 transition-all duration-300"></span>
-            <span id="dot-2" class="h-1.5 w-2 rounded-full bg-gray-800 transition-all duration-300"></span>
-            <span id="dot-3" class="h-1.5 w-2 rounded-full bg-gray-800 transition-all duration-300"></span>
+            <span id="dot-1" class="h-1.5 w-6 rounded-full transition-all duration-300" style="background:#00f2ff;"></span>
+            <span id="dot-2" class="h-1.5 w-2 rounded-full transition-all duration-300" style="background:rgba(255,255,255,0.12);"></span>
+            <span id="dot-3" class="h-1.5 w-2 rounded-full transition-all duration-300" style="background:rgba(255,255,255,0.12);"></span>
           </div>
           <div class="flex items-center space-x-3">
-            <button id="wizard-prev-btn" class="px-4 py-2 text-xs font-semibold tracking-wider uppercase font-mono text-gray-500 hover:text-gray-300 transition-colors duration-200 hidden">Back</button>
-            <button id="wizard-next-btn" class="px-5 py-2 text-xs font-semibold tracking-wider uppercase font-mono text-[#0B0E11] bg-emerald-400 hover:bg-emerald-300 rounded transition-all duration-200 shadow-[0_0_15px_rgba(52,211,153,0.15)]">Next</button>
+            <button id="wizard-prev-btn" class="px-4 py-2 text-xs font-semibold tracking-wider uppercase font-mono transition-colors duration-200 hidden ob-prev-btn" style="color:rgba(148,163,184,0.6);">Back</button>
+            <button id="wizard-next-btn" class="px-5 py-2 text-xs font-semibold tracking-wider uppercase font-mono rounded-lg transition-all duration-200" style="background:#00f2ff;color:#050505;box-shadow:0 0 16px rgba(0,242,255,0.3);">Next</button>
           </div>
         </div>
 
@@ -1282,6 +1284,14 @@
 
       // Abort if any element is missing (page variant without the wizard)
       if (!overlay || !modal || !closeBtn || !nextBtn || !prevBtn) return;
+
+      // Hover colours wired via JS to avoid extra CSS classes
+      closeBtn.addEventListener('mouseenter', function () { this.style.color = '#00f2ff'; });
+      closeBtn.addEventListener('mouseleave', function () { this.style.color = '#64748b'; });
+      prevBtn.addEventListener('mouseenter',  function () { this.style.color = 'rgba(0,242,255,0.75)'; });
+      prevBtn.addEventListener('mouseleave',  function () { this.style.color = 'rgba(148,163,184,0.6)'; });
+      nextBtn.addEventListener('mouseenter',  function () { this.style.boxShadow = '0 0 24px rgba(0,242,255,0.55)'; });
+      nextBtn.addEventListener('mouseleave',  function () { this.style.boxShadow = '0 0 16px rgba(0,242,255,0.3)'; });
 
       // ── Open ────────────────────────────────────────────────────
       if (!localStorage.getItem(STORAGE_KEY)) {
@@ -1344,27 +1354,21 @@
           prevBtn.classList.remove('hidden');
         }
 
-        // Next / Launch button
-        if (currentStep === TOTAL_STEPS) {
-          nextBtn.textContent = 'Launch Terminal';
-          nextBtn.classList.remove('bg-emerald-400', 'hover:bg-emerald-300', 'text-[#0B0E11]');
-          nextBtn.classList.add('bg-emerald-500', 'hover:bg-emerald-400', 'text-white');
-        } else {
-          nextBtn.textContent = 'Next';
-          nextBtn.classList.remove('bg-emerald-500', 'hover:bg-emerald-400', 'text-white');
-          nextBtn.classList.add('bg-emerald-400', 'hover:bg-emerald-300', 'text-[#0B0E11]');
-        }
+        // Next / Launch button label only — colour stays cyan throughout
+        nextBtn.textContent = (currentStep === TOTAL_STEPS) ? 'Launch Terminal' : 'Next';
 
         // Dot indicators
         for (var i = 1; i <= TOTAL_STEPS; i++) {
           var dot = document.getElementById('dot-' + i);
           if (!dot) continue;
           if (i === currentStep) {
-            dot.classList.add('bg-emerald-500', 'w-6');
-            dot.classList.remove('bg-gray-800', 'w-2');
+            dot.style.background = '#00f2ff';
+            dot.classList.add('w-6');
+            dot.classList.remove('w-2');
           } else {
-            dot.classList.remove('bg-emerald-500', 'w-6');
-            dot.classList.add('bg-gray-800', 'w-2');
+            dot.style.background = 'rgba(255,255,255,0.12)';
+            dot.classList.remove('w-6');
+            dot.classList.add('w-2');
           }
         }
       }
