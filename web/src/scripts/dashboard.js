@@ -352,9 +352,6 @@ function clearExpiredView() {
   // Also hide the legacy card in case it was created by an older code path.
   const expiredCard = document.getElementById('access-expired-card');
   if (expiredCard) expiredCard.classList.add('hidden');
-
-  // Re-enable features
-  unblockFeatures();
 }
 
 // ============================================================
@@ -871,6 +868,7 @@ async function _periodicSubscriptionCheck() {
       setExpiredView();
     } else {
       clearExpiredView();
+      unblockFeatures();
     }
   } catch (_) {
     // Silently ignore — the WS tick is the primary enforcement mechanism.
