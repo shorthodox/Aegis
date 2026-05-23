@@ -1843,25 +1843,27 @@ async def websocket_dashboard(websocket: WebSocket):
             print(f"⚠️ Auth error: {auth_err}")
             pass
         
-        # normalize_signal_data defined once outside the loop
+        # normalize_signal_data defined once outside the loop.
+        # Always returns a plain Python dict with all numpy types converted
+        # so that jsonable_encoder never encounters numpy scalars.
         def normalize_signal_data(signal_obj) -> dict:
             if isinstance(signal_obj, dict):
-                return signal_obj
+                return numpy_to_native(signal_obj)
             if hasattr(signal_obj, "dict") and callable(signal_obj.dict):
                 try:
                     result = signal_obj.dict()
                     if isinstance(result, dict):
-                        return result
+                        return numpy_to_native(result)
                 except Exception:
                     pass
             if hasattr(signal_obj, "__dataclass_fields__"):
-                return asdict(signal_obj)
+                return numpy_to_native(asdict(signal_obj))
             if hasattr(signal_obj, "__dict__"):
-                return vars(signal_obj)
+                return numpy_to_native(vars(signal_obj))
             try:
                 result = dict(signal_obj)
                 if isinstance(result, dict):
-                    return result
+                    return numpy_to_native(result)
             except Exception:
                 pass
             return {}
@@ -1926,9 +1928,10 @@ async def websocket_dashboard(websocket: WebSocket):
 
                 allowed_tokens = _allowed_tokens_cache
 
-                # Build tickers: prefer live prices; fall back to signal entry_price
+                # Build tickers: prefer live prices; fall back to signal entry_price.
+                # Cast values to float explicitly — engine.live_prices contains numpy.float32.
                 live_tickers = {
-                    k: v
+                    k: float(v)
                     for k, v in LIVE_STATE.data.get("tickers", {}).items()
                     if k in allowed_tokens
                 }
@@ -2102,11 +2105,11 @@ async def websocket_dashboard(websocket: WebSocket):
                         "plan": _user_plan_cache,
                         "sr_alerts": sr_alerts,
                     }
-                    await websocket.send_json(jsonable_encoder(response_data))
+                    await websocket.send_json(jsonable_encoder(numpy_to_native(response_data)))
 
                 else:
                     # ── Ticker-only update (every 250 ms) ───────────────────────
-                    await websocket.send_json({"type": "ticker", "tickers": live_tickers})
+                    await websocket.send_json({"type": "ticker", "tickers": numpy_to_native(live_tickers)})
 
                 tick_count += 1
                 await asyncio.sleep(TICKER_INTERVAL)
@@ -2117,9 +2120,13 @@ async def websocket_dashboard(websocket: WebSocket):
             except WebSocketDisconnect:
                 raise
             except Exception as loop_err:
-                import traceback
-                print(f"[WS] Non-fatal loop error for {current_user_email}: {type(loop_err).__name__}: {loop_err}")
-                print(traceback.format_exc())
+                # Rate-limit error logging: print once, not every 100ms tick.
+                _err_key = type(loop_err).__name__
+                if not getattr(websocket_dashboard, '_last_loop_err', None) == _err_key:
+                    import traceback
+                    print(f"[WS] Loop error ({current_user_email}): {_err_key}: {loop_err}")
+                    print(traceback.format_exc())
+                    websocket_dashboard._last_loop_err = _err_key
                 await asyncio.sleep(TICKER_INTERVAL)
                 continue
     except WebSocketDisconnect:
