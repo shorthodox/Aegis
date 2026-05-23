@@ -443,6 +443,11 @@ function createExpiredCard() {
 function blockAllFeatures() {
   _subState.active = false;
 
+  // Disconnect the live server WebSocket if it's running
+  if (typeof window.disconnectGatekeeperWebSocket === 'function') {
+    window.disconnectGatekeeperWebSocket();
+  }
+
   // Block token cards
   const tokenCards = document.querySelectorAll('[data-token-card], .token-card');
   tokenCards.forEach(card => {

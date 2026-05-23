@@ -1104,6 +1104,9 @@ function startWebSocket(token) {
 
   // State Management: Clean up existing instance before creating a new one
   cleanupWebSocket();
+  
+  // Expose disconnect function so dashboard.js can terminate connection on expiry
+  window.disconnectGatekeeperWebSocket = cleanupWebSocket;
 
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const wsUrl = `${wsProtocol}//${window.location.host}/ws/dashboard`;
