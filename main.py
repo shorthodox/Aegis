@@ -1168,12 +1168,32 @@ async def google_login(request: Request):
 # Subscription & plan limits
 # -------------------------------------------------------------------
 BASIC_TOKENS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT"]
-PRO_TOKENS = []
+
+# Full token universe for intermediate / pro / premium plans.
+# Mirrors FLEET in scripts/live_engine.py — kept in sync here so the
+# correct list is available even if the engine module fails to import.
+ALL_TOKENS = [
+    "BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT",
+    "HYPE/USDT", "ASTER/USDT", "SUI/USDT", "TAO/USDT", "RENDER/USDT",
+    "ADA/USDT", "AVAX/USDT", "LINK/USDT", "TRX/USDT", "DOT/USDT",
+    "NEAR/USDT", "MATIC/USDT", "LTC/USDT", "BCH/USDT", "SHIB/USDT",
+    "TON/USDT", "ICP/USDT", "HBAR/USDT", "APT/USDT", "ARB/USDT",
+    "OP/USDT", "STX/USDT", "FIL/USDT", "AAVE/USDT", "VET/USDT",
+    "RNDR/USDT", "INJ/USDT", "TIA/USDT", "SEI/USDT", "KAS/USDT",
+    "FET/USDT", "AGIX/USDT", "OCEAN/USDT", "AKT/USDT", "THETA/USDT",
+    "GRT/USDT", "LDO/USDT", "PYTH/USDT", "JUP/USDT", "ONDO/USDT",
+    "PEPE/USDT", "DOGE/USDT", "WIF/USDT", "FLOKI/USDT", "BONK/USDT",
+    "WLFI/USDT", "MNT/USDT", "ENA/USDT", "BGB/USDT", "PI/USDT",
+    "SKY/USDT", "TRUMP/USDT", "NIGHT/USDT",
+]
+
+PRO_TOKENS = ALL_TOKENS  # default; overridden below if live_engine is available
 try:
     from scripts.live_engine import FLEET
-    PRO_TOKENS = FLEET if isinstance(FLEET, list) else []
+    if isinstance(FLEET, list) and FLEET:
+        PRO_TOKENS = FLEET
 except ImportError:
-    PRO_TOKENS = BASIC_TOKENS + ["ADA/USDT", "DOT/USDT", "DOGE/USDT", "MATIC/USDT", "AVAX/USDT", "LINK/USDT"]
+    pass
 
 BASIC_TIMEFRAMES = ["30m", "1h"]
 
@@ -1186,9 +1206,8 @@ def get_user_plan(email: str) -> str:
 def get_allowed_tokens(email: str) -> List[str]:
     plan = get_user_plan(email)
     if plan in ("pro", "premium", "intermediate"):
-        return PRO_TOKENS if PRO_TOKENS else BASIC_TOKENS + ["ADA/USDT", "DOT/USDT", "DOGE/USDT", "MATIC/USDT", "AVAX/USDT", "LINK/USDT"]
-    else:
-        return BASIC_TOKENS
+        return PRO_TOKENS
+    return BASIC_TOKENS
 
 def get_allowed_timeframes(email: str) -> List[str]:
     plan = get_user_plan(email)
