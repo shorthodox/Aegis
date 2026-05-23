@@ -1835,8 +1835,8 @@ async def websocket_dashboard(websocket: WebSocket):
             if token:
                 current_user_email = decode_token(token)
                 if not current_user_email:
-                    await websocket.send_json({"error": "Invalid token"})
-                    await websocket.close()
+                    await websocket.send_json({"type": "error", "message": "Invalid token"})
+                    await websocket.close(code=1008)
                     return
                 print(f"✅ WebSocket authenticated: {current_user_email}")
         except Exception as auth_err:

@@ -1141,16 +1141,24 @@ function startWebSocket(token) {
   };
 
   ws.onclose = (event) => {
-    console.log(`[WS] WebSocket disconnected (code: ${event.code}, reason: ${event.reason || 'None'}), reconnecting...`);
-    updateConnectionStatus('RECONNECTING', 'yellow');
-
-    cleanupWebSocket();
-
-    // Exponential backoff for reconnection
-    const delay = Math.min(baseReconnectDelay * Math.pow(2, reconnectAttempts), 30000); // Max 30 seconds
+    console.warn(`[WS] WebSocket disconnected (code: ${event.code}, reason: ${event.reason || 'None'}), reconnecting...`);
+    ws = null;
+    updateConnectionStatus('DISCONNECTED', 'red');
+    
+    // Stop heartbeat to avoid ghost pings
+    stopHeartbeat();
+    
+    const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
     reconnectAttempts++;
 
-    setTimeout(() => startWebSocket(token), delay);
+    setTimeout(async () => {
+      let freshToken = token;
+      if (typeof AuthManager !== 'undefined') {
+        const t = await AuthManager.getToken();
+        if (t) freshToken = t;
+      }
+      startWebSocket(freshToken);
+    }, delay);
   };
 }
 
