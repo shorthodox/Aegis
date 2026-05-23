@@ -286,15 +286,15 @@ const TrialManager = (() => {
             throw new Error(`HTTP Error ${userResponse.status}`);
           }
         } catch (err) {
-          if (err.name === 'AbortError') {
+          if (err === 'timeout' || (err && err.name === 'AbortError')) {
             console.warn('[Trial] Fetch timed out after 15s — marking timeout error');
             networkErrorState = true;
             cachedTrialInfo = { _error: 'timeout' };
           } else if (networkErrorState || (err.message && err.message.toLowerCase().includes('fetch'))) {
-            console.warn('[Trial] Background fetch failed (network):', err.message);
+            console.warn('[Trial] Background fetch failed (network):', err.message || err);
             cachedTrialInfo = { _error: 'network' };
           } else {
-            console.warn('[Trial] Background fetch failed (auth):', err.message);
+            console.warn('[Trial] Background fetch failed (auth):', err.message || err);
             cachedTrialInfo = { _error: 'auth' };
           }
         } finally {
