@@ -120,7 +120,7 @@ export class WebSocketManager {
                 if (this.ws.readyState === WebSocket.OPEN) {
                     this.ws.send(JSON.stringify({ type: "ping" }));
                 }
-            }, 15000);
+            }, 2000);
             
             const statusText = document.getElementById('ws-status-text');
             const statusDot = document.getElementById('ws-status-dot');

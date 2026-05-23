@@ -1168,13 +1168,13 @@ function startHeartbeat() {
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'ping' }));
     }
-  }, 1000);
+  }, 2000);
   resetHeartbeatTimeout();
 }
 
 function resetHeartbeatTimeout() {
   if (heartbeatTimeout) clearTimeout(heartbeatTimeout);
-  // If no message received for 3s, connection is dead — reconnect
+  // If no message received for 10s, connection is dead — reconnect
   heartbeatTimeout = setTimeout(() => {
     console.warn('[WS] Heartbeat timeout. Reconnecting...');
     cleanupWebSocket();
@@ -1182,7 +1182,7 @@ function resetHeartbeatTimeout() {
       const token = AuthManager.getToken();
       if (token) startWebSocket(token);
     }
-  }, 3000);
+  }, 10000);
 }
 
 function stopHeartbeat() {
