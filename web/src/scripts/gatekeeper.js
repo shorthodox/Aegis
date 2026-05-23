@@ -476,7 +476,7 @@ function setupMobileOptimizations() {
 // Initialize Dashboard
 // -------------------------------------------------------------------
 
-document.addEventListener('DOMContentLoaded', () => {
+function initGatekeeper() {
   // Try to load saved timeframe preference
   const savedTf = localStorage.getItem('activeTimeframe');
   if (savedTf) {
@@ -485,7 +485,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   window.activeTimeframe = currentTimeframe;
 
-  if (!window.location.pathname.includes('dashboard.html')) return;
+  if (!document.getElementById('dashboard-main-content')) return;
   initializeElements();
   attachEventListeners();
   loadSignalHistoryFromStorage();
@@ -534,7 +534,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
   setupFooter();
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initGatekeeper);
+} else {
+  initGatekeeper();
+}
 
 function initializeElements() {
   signalsContainer = document.getElementById('signalsContainer');

@@ -811,7 +811,11 @@ async function initDashboard(event) {
   }
 }
 
-window.addEventListener('DOMContentLoaded', initDashboard);
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', initDashboard);
+} else {
+  initDashboard();
+}
 document.addEventListener('dashboardUserLoaded', initDashboard);
 
 // ── Periodic subscription re-verification ────────────────────────────────────
@@ -905,7 +909,11 @@ function initScreenMode() {
     });
 }
 
-document.addEventListener('DOMContentLoaded', initScreenMode);
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initScreenMode);
+} else {
+  initScreenMode();
+}
 
 // ============================================================
 // TERMINAL SIMULATION LOGIC
@@ -1457,7 +1465,7 @@ window.showSignalDetailsModal = function (signal) {
   modal.classList.remove('hidden');
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+function initModals() {
   const modal = document.getElementById('token-details-modal') || document.getElementById('signalDetailsModal');
   const closeBtn = document.getElementById('closeSignalDetailsBtn');
 
