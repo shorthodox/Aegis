@@ -207,36 +207,49 @@ const TrialManager = (() => {
     // Trigger background fetch if cache is old or missing
     if (!cachedTrialInfo || now - lastFetchTime > 60000) {
       const fetchPromise = (async () => {
+        // Safely turn any throwable into a readable string.
+        const errStr = (e) => {
+          if (e == null) return String(e);
+          if (typeof e === 'string') return e;
+          if (typeof e.message === 'string' && e.message) return e.message;
+          if (typeof e.code === 'string') return e.code;
+          try { return String(e); } catch { return '[unknown error]'; }
+        };
+
         try {
           let authHeader = AuthManager.getAuthHeader();
           let token = AuthManager.getToken();
-          
-          if (token && isJWTExpired(token)) {
-             console.warn('JWT expired, attempting silent refresh via Firebase...');
-             try {
-               const { getAuth } = await import("https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js");
-               const auth = getAuth();
-               if (auth.currentUser) {
-                  token = await auth.currentUser.getIdToken(true);
-                  authHeader = `Bearer ${token}`;
-                  localStorage.setItem('access_token', token);
-               } else {
-                  networkErrorState = false;
-                  throw new Error("Cannot refresh token - no current user");
-               }
-             } catch (refreshErr) {
-               networkErrorState = false;
-               throw new Error("Token refresh failed: " + refreshErr.message);
-             }
+
+          // No token at all — user not yet authenticated; skip silently so we
+          // don't lock the UI before auth completes.
+          if (!token) return;
+
+          if (isJWTExpired(token)) {
+            console.warn('[Trial] JWT expired, attempting silent Firebase refresh...');
+            let refreshed = false;
+            try {
+              const { getAuth } = await import("https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js");
+              const firebaseAuth = getAuth();
+              if (firebaseAuth.currentUser) {
+                token = await firebaseAuth.currentUser.getIdToken(true);
+                authHeader = `Bearer ${token}`;
+                localStorage.setItem('access_token', token);
+                refreshed = true;
+              }
+            } catch (refreshErr) {
+              console.warn('[Trial] Firebase token refresh failed:', errStr(refreshErr));
+            }
+            if (!refreshed) {
+              // Token expired and Firebase can't refresh — skip fetch, keep existing state.
+              console.warn('[Trial] Could not refresh token; skipping /auth/me fetch.');
+              return;
+            }
           }
 
-          if (!authHeader) {
-            networkErrorState = false;
-            throw new Error("Missing auth header");
-          }
+          if (!authHeader) return; // guard — should not be reachable after checks above
 
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort('timeout'), 15000);
+          const timeoutId = setTimeout(() => controller.abort(), 15000);
 
           let userResponse;
           try {
@@ -280,21 +293,21 @@ const TrialManager = (() => {
                 cachedTrialInfo.trial_end = localEndStr;
               }
             }
-            console.log('[Trial] Successfully fetched user trial info:', userData);
           } else {
             networkErrorState = userResponse.status >= 400 && userResponse.status < 600;
-            throw new Error(`HTTP Error ${userResponse.status}`);
+            throw new Error(`HTTP ${userResponse.status}`);
           }
         } catch (err) {
-          if (err === 'timeout' || (err && err.name === 'AbortError')) {
-            console.warn('[Trial] Fetch timed out after 15s — marking timeout error');
+          const msg = errStr(err);
+          if (err && err.name === 'AbortError') {
+            console.warn('[Trial] Fetch timed out after 15s');
             networkErrorState = true;
             cachedTrialInfo = { _error: 'timeout' };
-          } else if (networkErrorState || (err.message && err.message.toLowerCase().includes('fetch'))) {
-            console.warn('[Trial] Background fetch failed (network):', err.message || err);
+          } else if (networkErrorState || /fetch|network|failed to fetch/i.test(msg)) {
+            console.warn('[Trial] Background fetch failed (network):', msg);
             cachedTrialInfo = { _error: 'network' };
           } else {
-            console.warn('[Trial] Background fetch failed (auth):', err.message || err);
+            console.warn('[Trial] Background fetch failed (auth):', msg);
             cachedTrialInfo = { _error: 'auth' };
           }
         } finally {
