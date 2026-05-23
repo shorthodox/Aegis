@@ -227,37 +227,38 @@ const TrialManager = (() => {
           }
 
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 5000);
+          const timeoutId = setTimeout(() => controller.abort('timeout'), 5000);
 
-          const userResponse = await fetch('/auth/me', {
-            headers: { 'Authorization': authHeader },
-            signal: controller.signal
-          });
-
-          clearTimeout(timeoutId);
+          let userResponse;
+          try {
+            userResponse = await fetch('/auth/me', {
+              headers: { 'Authorization': authHeader },
+              signal: controller.signal
+            });
+          } finally {
+            clearTimeout(timeoutId);
+          }
 
           if (userResponse.ok) {
             const userData = await userResponse.json();
             cachedTrialInfo = userData;
             lastFetchTime = Date.now();
             networkErrorState = false;
-            // Reset loading timeout when successful fetch completes
             loadingStartTime = null;
-            
+
             if (userData.trial_end && isValidISOString(userData.trial_end)) {
               const backendEnd = new Date(userData.trial_end).getTime();
               const localEndStr = localStorage.getItem('trial_end_timestamp');
-              
+
               let shouldUpdate = true;
               if (userData._generated) {
-                  shouldUpdate = false;
+                shouldUpdate = false;
               } else if (localEndStr && isValidISOString(localEndStr)) {
-                  const localEnd = new Date(localEndStr).getTime();
-                  const isPaid = ['pro', 'premium', 'active', 'basic', 'intermediate'].includes((userData.plan || '').toLowerCase());
-                  // Don't let the backend extend the trial unless it's a paid plan
-                  if (!isPaid && backendEnd > localEnd) {
-                      shouldUpdate = false;
-                  }
+                const localEnd = new Date(localEndStr).getTime();
+                const isPaid = ['pro', 'premium', 'active', 'basic', 'intermediate'].includes((userData.plan || '').toLowerCase());
+                if (!isPaid && backendEnd > localEnd) {
+                  shouldUpdate = false;
+                }
               }
 
               if (shouldUpdate) {
@@ -268,22 +269,20 @@ const TrialManager = (() => {
             }
             console.log('[Trial] Successfully fetched user trial info:', userData);
           } else {
-             if (userResponse.status >= 400 && userResponse.status < 600) {
-                 networkErrorState = true;
-             } else {
-                 networkErrorState = false;
-             }
-             throw new Error(`HTTP Error ${userResponse.status}`);
+            networkErrorState = userResponse.status >= 400 && userResponse.status < 600;
+            throw new Error(`HTTP Error ${userResponse.status}`);
           }
         } catch (err) {
-          console.warn("Background fetch failed:", err);
           if (err.name === 'AbortError') {
+            console.warn('[Trial] Fetch timed out after 5s — marking network error');
             networkErrorState = true;
             cachedTrialInfo = { _error: 'network' };
           } else if (networkErrorState) {
-              cachedTrialInfo = { _error: 'network' };
+            console.warn('[Trial] Background fetch failed (network):', err.message);
+            cachedTrialInfo = { _error: 'network' };
           } else {
-              cachedTrialInfo = { _error: 'auth' };
+            console.warn('[Trial] Background fetch failed (auth):', err.message);
+            cachedTrialInfo = { _error: 'auth' };
           }
         } finally {
           window.dispatchEvent(new CustomEvent('trial-status-updated'));
