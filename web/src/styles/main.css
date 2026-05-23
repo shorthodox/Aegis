@@ -3616,3 +3616,47 @@ body.modal-open {
     padding-left: 1.4rem;
 }
 
+/* ============================================================
+   AEGIS ONBOARDING WIZARD
+   Custom scrollbar + slide-transition animation classes.
+   ob-exit-left / ob-exit-right / ob-enter-left / ob-enter-right
+   are applied transiently by the wizard JS controller.
+   ============================================================ */
+
+/* Scrollbar inside the step-3 content area */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: rgba(22, 26, 32, 0.4);
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(156, 163, 175, 0.2);
+    border-radius: 2px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(52, 211, 153, 0.4);
+}
+
+/* Slide animation helpers — use !important to beat Tailwind
+   translate-x-* utilities that may still be in the class list
+   during the brief transition window. */
+.ob-exit-left {
+    transform: translateX(-100%) !important;
+    opacity: 0 !important;
+    pointer-events: none;
+}
+.ob-exit-right {
+    transform: translateX(100%) !important;
+    opacity: 0 !important;
+    pointer-events: none;
+}
+.ob-enter-left {
+    transform: translateX(-100%) !important;
+    opacity: 0 !important;
+}
+.ob-enter-right {
+    transform: translateX(100%) !important;
+    opacity: 0 !important;
+}
+

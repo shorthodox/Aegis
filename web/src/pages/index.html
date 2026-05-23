@@ -1164,5 +1164,240 @@
         proxyAuth('mCtaProxy',     'createAccountBtn');
     })();
     </script>
+
+    <!-- ============================================================
+         AEGIS ONBOARDING WIZARD MODAL
+         Fires once per browser session (guarded by localStorage).
+         ============================================================ -->
+    <div id="onboarding-overlay" class="fixed inset-0 z-[100] items-center justify-center bg-black/80 backdrop-blur-md hidden opacity-0 transition-opacity duration-300">
+      <div id="onboarding-modal" class="relative w-full max-w-2xl bg-[#0B0E11] border border-gray-800 rounded-xl shadow-2xl overflow-hidden transform scale-95 opacity-0 transition-all duration-300 ease-out mx-4">
+
+        <!-- Header -->
+        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-800/60 bg-[#161A20]/40">
+          <div class="flex items-center space-x-2">
+            <span class="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <h3 class="text-sm font-semibold tracking-wider text-gray-400 uppercase font-mono">Aegis-1 Core Guidance</h3>
+          </div>
+          <button id="close-onboarding-btn" class="text-gray-500 hover:text-rose-400 transition-colors duration-200 focus:outline-none" aria-label="Close onboarding">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        <!-- Step Content Container -->
+        <div class="relative min-h-[380px] p-6 overflow-y-auto">
+
+          <!-- Step 1: Beginner Warnings -->
+          <div id="wizard-step-1" class="wizard-step transition-all duration-300 translate-x-0 opacity-100 space-y-4">
+            <h2 class="text-xl font-bold text-gray-100 tracking-tight flex items-center gap-2">
+              ⚠️ Beginner Warnings &amp; Trading Reality Check
+            </h2>
+            <div class="space-y-4 pt-2">
+              <div class="bg-[#161A20]/60 p-4 rounded-lg border border-gray-800/60">
+                <h4 class="text-emerald-400 font-bold text-sm uppercase font-mono tracking-wider mb-1">Strategy Over Prediction</h4>
+                <p class="text-gray-400 text-sm leading-relaxed">Trading is not a game of prediction, it is a game of strategies. Treat every signal as a systematic execution of risk-to-reward parameters rather than a one-time guess.</p>
+              </div>
+              <div class="bg-[#161A20]/60 p-4 rounded-lg border border-gray-800/60">
+                <h4 class="text-rose-400 font-bold text-sm uppercase font-mono tracking-wider mb-1">The Bleed of Fees</h4>
+                <p class="text-gray-400 text-sm leading-relaxed">Exchange trading fees and slippage can quietly bleed your profits and your underlying capital. Be fully prepared and calculate your transactional friction before execution.</p>
+              </div>
+              <div class="bg-[#161A20]/60 p-4 rounded-lg border border-gray-800/60">
+                <h4 class="text-amber-400 font-bold text-sm uppercase font-mono tracking-wider mb-1">Model Variance</h4>
+                <p class="text-gray-400 text-sm leading-relaxed">Mind that our AI can still make wrong decisions although it is 70–80% accurate. Operating on statistical expectancy means that some trades will naturally result in losses due to market variance. Always protect your capital.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 2: Premium Gating & Trial -->
+          <div id="wizard-step-2" class="wizard-step absolute inset-x-6 top-6 transition-all duration-300 translate-x-full opacity-0 hidden space-y-4">
+            <h2 class="text-xl font-bold text-gray-100 tracking-tight">🎁 Premium Gating &amp; Trial Allocation</h2>
+            <p class="text-sm text-gray-400 leading-relaxed">Welcome to the terminal network layout. New accounts are instantly provisioned with localized feature tracking:</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+              <div class="bg-emerald-500/5 border border-emerald-500/20 p-4 rounded-lg">
+                <div class="text-emerald-400 font-bold text-sm uppercase font-mono tracking-wider mb-1">Free Tier Allocation</div>
+                <p class="text-xs text-gray-400 leading-relaxed">Full access to systemic developer logs and real-world asset configuration run diagnostics completely free of charge.</p>
+              </div>
+              <div class="bg-[#161A20] border border-gray-800 p-4 rounded-lg">
+                <div class="text-gray-300 font-bold text-sm uppercase font-mono tracking-wider mb-1">Basic Plan Trial Enabled</div>
+                <p class="text-xs text-gray-400 leading-relaxed">Includes real-time, high-fidelity Vectorized Support &amp; Resistance Anchors mapped automatically to token detail metrics.</p>
+              </div>
+            </div>
+            <p class="text-xs text-gray-500 italic pt-2">To unlock advanced multi-class XGBoost strategy vectors or hyperparameter sweeps, upgrade your seat token inside the terminal settings pane.</p>
+          </div>
+
+          <!-- Step 3: Workflow Automation vs. Predictive AI -->
+          <div id="wizard-step-3" class="wizard-step absolute inset-x-6 top-6 transition-all duration-300 translate-x-full opacity-0 hidden space-y-4">
+            <h2 class="text-xl font-bold text-gray-100 tracking-tight">🧠 Workflow Automation vs. Predictive AI</h2>
+            <div class="space-y-3 max-h-[260px] overflow-y-auto pr-2 custom-scrollbar text-sm">
+              <div class="border-l-2 border-amber-500 pl-3">
+                <span class="text-gray-400 font-bold">Retail Bots (The Old Way):</span> Built as Static Rule Automators. They execute basic linear "If-This-Then-That" commands. They cannot adapt to shifting conditions, frequently over-trade in choppy consolidation layers, or blindly buy into a macro market crash via rigid DCA grids.
+              </div>
+              <div class="border-l-2 border-emerald-500 pl-3">
+                <span class="text-emerald-400 font-bold">Aegis-1 (The Quantitative Leap):</span> Engineered as a Context-Aware Machine Learning Risk Engine. Powered by a non-linear XGBoost ensemble, it concurrently analyzes over 60 structural market features to compute real-world statistical probabilities. If a trade setup carries weak conviction, it self-suppresses to protect capital.
+              </div>
+              <div class="border-t border-gray-800/80 my-2 pt-2"></div>
+              <h4 class="font-mono text-xs text-gray-400 uppercase tracking-wider font-bold mb-1">Architectural Dominance:</h4>
+              <p class="text-xs text-gray-400 leading-relaxed">
+                <strong class="text-gray-300">1. Triple-Barrier Labels:</strong> Uses adaptive ATR boundaries instead of fixed percentage guesses.<br>
+                <strong class="text-gray-300">2. Hierarchical Trends:</strong> Lower frames are anchored straight to daily (1D) and weekly (1W) structures to prevent trading against institutional volume.<br>
+                <strong class="text-gray-300">3. Glass-Box SHAP Analytics:</strong> Instantly prunes pricing clutter to show the top 10 relative features directly in your dashboard cards.
+              </p>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Footer: Dots + Navigation -->
+        <div class="flex items-center justify-between px-6 py-4 border-t border-gray-800/60 bg-[#161A20]/20">
+          <div class="flex space-x-2" aria-label="Step progress">
+            <span id="dot-1" class="h-1.5 w-6 rounded-full bg-emerald-500 transition-all duration-300"></span>
+            <span id="dot-2" class="h-1.5 w-2 rounded-full bg-gray-800 transition-all duration-300"></span>
+            <span id="dot-3" class="h-1.5 w-2 rounded-full bg-gray-800 transition-all duration-300"></span>
+          </div>
+          <div class="flex items-center space-x-3">
+            <button id="wizard-prev-btn" class="px-4 py-2 text-xs font-semibold tracking-wider uppercase font-mono text-gray-500 hover:text-gray-300 transition-colors duration-200 hidden">Back</button>
+            <button id="wizard-next-btn" class="px-5 py-2 text-xs font-semibold tracking-wider uppercase font-mono text-[#0B0E11] bg-emerald-400 hover:bg-emerald-300 rounded transition-all duration-200 shadow-[0_0_15px_rgba(52,211,153,0.15)]">Next</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <script>
+    // ============================================================
+    // Aegis Onboarding Wizard Controller
+    // Guards on localStorage so it only fires on first visit.
+    // ============================================================
+    (function () {
+      'use strict';
+
+      var STORAGE_KEY = 'aegis_onboarding_completed';
+      var TOTAL_STEPS = 3;
+      var currentStep = 1;
+
+      var overlay  = document.getElementById('onboarding-overlay');
+      var modal    = document.getElementById('onboarding-modal');
+      var closeBtn = document.getElementById('close-onboarding-btn');
+      var nextBtn  = document.getElementById('wizard-next-btn');
+      var prevBtn  = document.getElementById('wizard-prev-btn');
+
+      // Abort if any element is missing (page variant without the wizard)
+      if (!overlay || !modal || !closeBtn || !nextBtn || !prevBtn) return;
+
+      // ── Open ────────────────────────────────────────────────────
+      if (!localStorage.getItem(STORAGE_KEY)) {
+        setTimeout(function () {
+          overlay.classList.remove('hidden');
+          overlay.classList.add('flex');    // add flex only after hidden is gone
+          overlay.offsetHeight;             // force reflow before class change
+          overlay.classList.remove('opacity-0');
+          modal.classList.remove('scale-95', 'opacity-0');
+        }, 800);
+      }
+
+      // ── Close / Dismiss ──────────────────────────────────────────
+      function shutdownModal() {
+        overlay.classList.add('opacity-0');
+        modal.classList.add('scale-95', 'opacity-0');
+        try { localStorage.setItem(STORAGE_KEY, 'true'); } catch (e) {}
+        setTimeout(function () {
+          overlay.classList.add('hidden');
+          overlay.classList.remove('flex'); // remove flex together with hidden
+        }, 300);
+      }
+
+      // ── Step Transition ──────────────────────────────────────────
+      function transitionToStep(target) {
+        if (target < 1 || target > TOTAL_STEPS || target === currentStep) return;
+
+        var fromEl = document.getElementById('wizard-step-' + currentStep);
+        var toEl   = document.getElementById('wizard-step-' + target);
+        if (!fromEl || !toEl) return;
+
+        var forward = target > currentStep;
+
+        // 1. Animate current step off-screen
+        fromEl.classList.add(forward ? 'ob-exit-left' : 'ob-exit-right');
+
+        // 2. Prepare incoming step: reveal off-screen, then slide to centre
+        toEl.classList.remove('hidden');
+        toEl.classList.add(forward ? 'ob-enter-right' : 'ob-enter-left');
+        toEl.offsetHeight; // force reflow so initial off-screen position renders
+
+        toEl.classList.remove('ob-enter-right', 'ob-enter-left', 'translate-x-full', 'opacity-0');
+        toEl.classList.add('translate-x-0', 'opacity-100');
+
+        // 3. After exit animation completes, park the old step
+        setTimeout(function () {
+          fromEl.classList.add('hidden');
+          fromEl.classList.remove('ob-exit-left', 'ob-exit-right', 'translate-x-0', 'opacity-100');
+          currentStep = target;
+          updateNavUI();
+        }, 300);
+      }
+
+      // ── Navigation UI Sync ───────────────────────────────────────
+      function updateNavUI() {
+        // Prev button
+        if (currentStep === 1) {
+          prevBtn.classList.add('hidden');
+        } else {
+          prevBtn.classList.remove('hidden');
+        }
+
+        // Next / Launch button
+        if (currentStep === TOTAL_STEPS) {
+          nextBtn.textContent = 'Launch Terminal';
+          nextBtn.classList.remove('bg-emerald-400', 'hover:bg-emerald-300', 'text-[#0B0E11]');
+          nextBtn.classList.add('bg-emerald-500', 'hover:bg-emerald-400', 'text-white');
+        } else {
+          nextBtn.textContent = 'Next';
+          nextBtn.classList.remove('bg-emerald-500', 'hover:bg-emerald-400', 'text-white');
+          nextBtn.classList.add('bg-emerald-400', 'hover:bg-emerald-300', 'text-[#0B0E11]');
+        }
+
+        // Dot indicators
+        for (var i = 1; i <= TOTAL_STEPS; i++) {
+          var dot = document.getElementById('dot-' + i);
+          if (!dot) continue;
+          if (i === currentStep) {
+            dot.classList.add('bg-emerald-500', 'w-6');
+            dot.classList.remove('bg-gray-800', 'w-2');
+          } else {
+            dot.classList.remove('bg-emerald-500', 'w-6');
+            dot.classList.add('bg-gray-800', 'w-2');
+          }
+        }
+      }
+
+      // ── Event Bindings ───────────────────────────────────────────
+      closeBtn.addEventListener('click', shutdownModal);
+
+      nextBtn.addEventListener('click', function () {
+        if (currentStep < TOTAL_STEPS) {
+          transitionToStep(currentStep + 1);
+        } else {
+          shutdownModal();
+        }
+      });
+
+      prevBtn.addEventListener('click', function () {
+        if (currentStep > 1) {
+          transitionToStep(currentStep - 1);
+        }
+      });
+
+      // Close on backdrop click (outside modal)
+      overlay.addEventListener('click', function (e) {
+        if (e.target === overlay) shutdownModal();
+      });
+
+      // Close on Escape key
+      document.addEventListener('keydown', function (e) {
+        if ((e.key === 'Escape' || e.key === 'Esc') && !overlay.classList.contains('hidden')) {
+          shutdownModal();
+        }
+      });
+    }());
+    </script>
 </body>
 </html>

@@ -1688,7 +1688,7 @@ function renderSignals(signals) {
     })() : '');
     const macroBadge = (_macro && (_macro.confluence_score !== undefined || _macro.trend_1d !== undefined)) ? (() => {
       const trendLabel = _macro.trend_1d === 1 ? 'BULLISH 1D' : _macro.trend_1d === -1 ? 'BEARISH 1D' : 'NEUTRAL 1D';
-      const score = typeof _macro.confluence_score === 'number' ? _macro.confluence_score.toFixed(0) : '0';
+      const score = typeof _macro.confluence_score === 'number' && _macro.confluence_score > 0 ? _macro.confluence_score.toFixed(0) : '—';
       return `<div class="flex items-center justify-between px-1.5 py-1 rounded text-[10px] font-mono bg-slate-900/80 border border-slate-700 text-slate-200">
         <span style="font-weight:700">${trendLabel}</span>
         <span style="color:#7dd3fc">Confluence ${score}</span>
@@ -2213,6 +2213,12 @@ function setupFirestoreListeners() {
 
         const _fsConf = data.confluence_scorecards || {};
         const _fsEm = data.expectancy_matrix || {};
+        const _existingSignal = window.latestSignals && window.latestSignals[key];
+        const _computedConfluence = data.confluence || (_fsConf.trend ? {
+          trend: _fsConf.trend === 'Aligned' ? 80 : 35,
+          momentum: Math.min(100, Math.max(0, Math.round((_fsConf.efficiency || 0.5) * 100))),
+          volume: _fsConf.volume === 'high' ? 78 : (_fsConf.volume === 'normal' ? 58 : 38),
+        } : null);
         const signalObj = {
           symbol: symbol,
           signal: data.signal || 'WAITING',
@@ -2230,11 +2236,7 @@ function setupFirestoreListeners() {
           profitability_index: data.profitability_index || 0,
           sr_telemetry: data.sr_telemetry || null,
           macro_regime: data.macro_regime || null,
-          confluence: data.confluence || (_fsConf.trend ? {
-            trend: _fsConf.trend === 'Aligned' ? 80 : 35,
-            momentum: Math.min(100, Math.max(0, Math.round((_fsConf.efficiency || 0.5) * 100))),
-            volume: _fsConf.volume === 'high' ? 78 : (_fsConf.volume === 'normal' ? 58 : 38),
-          } : null),
+          confluence: _computedConfluence || (_existingSignal ? _existingSignal.confluence : null),
           probabilities: data.probabilities || data.raw_probabilities || {},
           shap_values: data.shap_values || data.shap_contributions || [],
           expectancy: data.expectancy ?? (_fsEm.historical_expectancy ?? null),

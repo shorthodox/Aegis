@@ -1981,7 +1981,7 @@ async def websocket_dashboard(websocket: WebSocket):
                                 _tfe = tf_data.get("expectancy_matrix", {})
                                 tf_data['confluence'] = {
                                     "trend": 80 if _tfc.get("trend") == "Aligned" else 35,
-                                    "momentum": min(100, max(0, int(_tfc.get("efficiency", 0.5) * 100))),
+                                    "momentum": min(100, max(0, int((_tfc.get("efficiency") or 0.5) * 100))),
                                     "volume": 78 if _tfc.get("volume") == "high" else (58 if _tfc.get("volume") == "normal" else 38),
                                 }
                                 tf_data['probabilities'] = tf_data.get("raw_probabilities", {})
@@ -2035,7 +2035,7 @@ async def websocket_dashboard(websocket: WebSocket):
                                     "timeframe": summary.get("timeframe", "1h"),
                                     "confluence": {
                                         "trend": 80 if _conf.get("trend") == "Aligned" else 35,
-                                        "momentum": min(100, max(0, int(_conf.get("efficiency", 0.5) * 100))),
+                                        "momentum": min(100, max(0, int((_conf.get("efficiency") or 0.5) * 100))),
                                         "volume": 78 if _conf.get("volume") == "high" else (58 if _conf.get("volume") == "normal" else 38),
                                     },
                                     "probabilities": summary.get("raw_probabilities", {}),
@@ -2075,7 +2075,7 @@ async def websocket_dashboard(websocket: WebSocket):
                                 "timeframe": sig_data.get("timeframe", "1h"),
                                 "confluence": {
                                     "trend": 80 if _conf2.get("trend") == "Aligned" else 35,
-                                    "momentum": min(100, max(0, int(_conf2.get("efficiency", 0.5) * 100))),
+                                    "momentum": min(100, max(0, int((_conf2.get("efficiency") or 0.5) * 100))),
                                     "volume": 78 if _conf2.get("volume") == "high" else (58 if _conf2.get("volume") == "normal" else 38),
                                 },
                                 "probabilities": sig_data.get("raw_probabilities", {}),
