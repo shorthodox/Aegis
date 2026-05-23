@@ -2187,13 +2187,11 @@ function setupFirestoreListeners() {
           } : null),
           probabilities: data.probabilities || data.raw_probabilities || {},
           shap_values: data.shap_values || data.shap_contributions || [],
-          expectancy: data.expectancy || (_fsEm.historical_expectancy !== undefined ? {
-            expectancy: _fsEm.historical_expectancy || 0,
-            profitFactor: Math.max(0.01, _fsEm.profitability_index || 1.0),
-            winRate: data.trading_accuracy || 0.5,
-            maxDD: _fsEm.max_dd_pct || 0,
-            totalTrades: 0,
-          } : null),
+          expectancy: data.expectancy ?? (_fsEm.historical_expectancy ?? null),
+          max_dd: data.max_dd ?? (_fsEm.max_dd_pct != null ? -Math.abs(_fsEm.max_dd_pct) : null),
+          profit_factor: data.profit_factor ?? (_fsEm.profitability_index != null ? Math.max(0.01, _fsEm.profitability_index) : null),
+          win_rate: data.win_rate ?? (data.trading_accuracy != null ? Math.round(data.trading_accuracy * 1000) / 10 : null),
+          total_trades: data.total_trades ?? 0,
         };
 
         if (!['pro', 'premium', 'intermediate'].includes(userPlan)) {

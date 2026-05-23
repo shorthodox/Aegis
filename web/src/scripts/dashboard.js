@@ -1348,9 +1348,9 @@ window.showSignalDetailsModal = function (signal) {
         <span class="text-[11px] font-bold text-white uppercase tracking-wider">Expectancy</span>
       </div>
       <div class="font-mono">
-        <div class="text-2xl font-black text-emerald-400">${signal.expectancy ? (signal.expectancy >= 0 ? '+' : '') + signal.expectancy.toFixed(2) + '%' : '+1.64%'}</div>
+        <div class="text-2xl font-black text-emerald-400">${typeof signal.expectancy === 'number' ? (signal.expectancy >= 0 ? '+' : '') + signal.expectancy.toFixed(2) + '%' : '+1.64%'}</div>
         <div class="text-[9px] text-gray-500 mt-0.5">per signal avg</div>
-        <div class="mt-2 text-[10px] text-amber-400">Max DD: ${signal.max_dd ? signal.max_dd.toFixed(2) : '-5.12'}%</div>
+        <div class="mt-2 text-[10px] text-amber-400">Max DD: ${typeof signal.max_dd === 'number' ? signal.max_dd.toFixed(2) : '-5.12'}%</div>
       </div>
       <div class="mt-2 text-right">
         <span class="text-[9px] text-gray-500 group-hover:text-emerald-400 transition-colors">Full Stats <i class="fas fa-arrow-right"></i></span>
@@ -1810,11 +1810,11 @@ function _renderFpZones(body, signal, tier) {
 function _renderFpExpectancy(body, signal, tier) {
   const locked = tier !== 'PRO';
 
-  const expectancy = signal.expectancy ?? 1.64;
-  const maxDD = signal.max_dd ?? -5.12;
-  const profitFactor = signal.profit_factor ?? 1.87;
-  const winRate = signal.win_rate ?? 67;
-  const totalTrades = signal.total_trades ?? 42;
+  const expectancy = typeof signal.expectancy === 'number' ? signal.expectancy : 1.64;
+  const maxDD = typeof signal.max_dd === 'number' ? signal.max_dd : -5.12;
+  const profitFactor = typeof signal.profit_factor === 'number' ? signal.profit_factor : 1.87;
+  const winRate = typeof signal.win_rate === 'number' ? signal.win_rate : 67;
+  const totalTrades = typeof signal.total_trades === 'number' ? signal.total_trades : 42;
 
   const lockOverlay = locked ? `
     <div class="absolute inset-0 bg-black/80 backdrop-blur-md rounded-xl flex flex-col items-center justify-center z-10">
