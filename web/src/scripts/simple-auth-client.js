@@ -181,11 +181,9 @@ function attachHandlers() {
     trialBtn.addEventListener('click', trialClickHandler);
   }
 
-  // Subscription buttons
-  document.querySelectorAll('[data-plan]').forEach(btn => {
-    btn.removeEventListener('click', planClickHandler);
-    btn.addEventListener('click', planClickHandler);
-  });
+  // [data-plan] buttons are handled entirely by pricing.html's own module script
+  // which owns the pendingPlan + authStateChange resume flow. Adding listeners
+  // here would create a double-handler and open two modals simultaneously.
 }
 
 function portalClickHandler(e) {
@@ -208,12 +206,6 @@ function trialClickHandler(e) {
   }
 }
 
-function planClickHandler(e) {
-  e.preventDefault();
-  const plan = e.currentTarget.dataset.plan;
-  if (!plan) return;
-  subscribeToPlan(plan);
-}
 
 // Auto init
 document.addEventListener('DOMContentLoaded', () => {
