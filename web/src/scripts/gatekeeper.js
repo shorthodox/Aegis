@@ -1104,8 +1104,6 @@ function startWebSocket(token) {
       const data = JSON.parse(event.data);
 
       if (data.type === 'pong') {
-        // Handle pong response
-        console.log('[WS] 🏓 WebSocket pong received');
         resetHeartbeatTimeout();
         return;
       }
@@ -1117,9 +1115,6 @@ function startWebSocket(token) {
         console.error('[WS] WebSocket error message:', data.message);
         return;
       }
-
-      // Detailed Error Logging
-      console.log(`[WS Receive] Type: ${data.type || 'NO_TYPE'} | Tickers: ${data.tickers ? Object.keys(data.tickers).length : 0} | Signals: ${data.signals ? Object.keys(data.signals).length : 0}`);
 
       // NOTE: do NOT gate on data.timeframe here — the backend sends a full
       // timeframes map and the summary timeframe rarely matches the user's tab.
@@ -1155,31 +1150,25 @@ function startWebSocket(token) {
 
 function startHeartbeat() {
   stopHeartbeat();
-  // Send ping every 30 seconds
   heartbeatInterval = setInterval(() => {
     if (ws && ws.readyState === WebSocket.OPEN) {
-      console.log('[WS] Sending ping...');
       ws.send(JSON.stringify({ type: 'ping' }));
     }
-  }, 30000);
+  }, 15000);
   resetHeartbeatTimeout();
 }
 
 function resetHeartbeatTimeout() {
   if (heartbeatTimeout) clearTimeout(heartbeatTimeout);
-  // If we don't receive ANY message for 35 seconds, assume connection is dead
+  // If no message received for 20s, connection is dead — reconnect
   heartbeatTimeout = setTimeout(() => {
-    console.warn('[WS] Heartbeat timeout. Connection appears dead. Closing and reconnecting...');
+    console.warn('[WS] Heartbeat timeout. Reconnecting...');
     cleanupWebSocket();
-    
-    // Trigger reconnection if token is available
     if (typeof AuthManager !== 'undefined') {
       const token = AuthManager.getToken();
-      if (token) {
-        startWebSocket(token);
-      }
+      if (token) startWebSocket(token);
     }
-  }, 35000);
+  }, 20000);
 }
 
 function stopHeartbeat() {

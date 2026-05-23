@@ -13,6 +13,7 @@ import json
 import re
 import random
 import string
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Any, Optional, List, TYPE_CHECKING, Union
@@ -1840,19 +1841,55 @@ async def websocket_dashboard(websocket: WebSocket):
             print(f"⚠️ Auth error: {auth_err}")
             pass
         
-        # Main loop: send data + listen for client messages (ping/pong)
+        # normalize_signal_data defined once outside the loop
+        def normalize_signal_data(signal_obj) -> dict:
+            if isinstance(signal_obj, dict):
+                return signal_obj
+            if hasattr(signal_obj, "dict") and callable(signal_obj.dict):
+                try:
+                    result = signal_obj.dict()
+                    if isinstance(result, dict):
+                        return result
+                except Exception:
+                    pass
+            if hasattr(signal_obj, "__dataclass_fields__"):
+                return asdict(signal_obj)
+            if hasattr(signal_obj, "__dict__"):
+                return vars(signal_obj)
+            try:
+                result = dict(signal_obj)
+                if isinstance(result, dict):
+                    return result
+            except Exception:
+                pass
+            return {}
+
+        # Plan info cached for 10 s — avoids a Firestore round-trip on every 250 ms tick
+        _plan_cache_ts: float = 0.0
+        _allowed_tokens_cache: list = BASIC_TOKENS
+        _trial_expired_cache: bool = True
+        _user_plan_cache: str = "trial"
+
+        # Ticker-only sends happen every tick (250 ms).
+        # Full signal payloads are sent every SIGNAL_EVERY_N ticks (~2 s).
+        TICKER_INTERVAL = 0.25
+        SIGNAL_EVERY_N = 8
+        tick_count = 0
+
+        # Main loop
         while True:
             try:
-                # Use wait_for to allow timeout so we can also check for incoming messages
+                # Receive any client message (ping / re-auth) — short timeout so we
+                # don't block the ticker cadence.
                 try:
-                    # Try to receive any incoming message from client (with 0.5s timeout)
-                    client_msg = await asyncio.wait_for(websocket.receive_text(), timeout=0.5)
+                    client_msg = await asyncio.wait_for(
+                        websocket.receive_text(), timeout=0.1
+                    )
                     try:
                         msg_data = json.loads(client_msg)
                     except json.JSONDecodeError:
                         msg_data = {}
                     msg_type = msg_data.get("type", "")
-
                     if msg_type == "ping":
                         await websocket.send_json({"type": "pong"})
                     elif msg_type == "auth":
@@ -1861,223 +1898,215 @@ async def websocket_dashboard(websocket: WebSocket):
                             new_user = decode_token(new_token)
                             if new_user:
                                 current_user_email = new_user
+                                _plan_cache_ts = 0.0  # force cache refresh
                                 print(f"[WS] Re-authenticated: {current_user_email}")
                 except asyncio.TimeoutError:
                     pass
-                
-                # Build response data
-                allowed_tokens = get_allowed_tokens(current_user_email) if current_user_email else BASIC_TOKENS
-                trial_expired = is_trial_expired(current_user_email) if current_user_email else False
-                
-                def normalize_signal_data(signal_obj) -> dict:
-                    if isinstance(signal_obj, dict):
-                        return signal_obj
-                    if hasattr(signal_obj, "dict") and callable(signal_obj.dict):
-                        try:
-                            result = signal_obj.dict()
-                            if isinstance(result, dict):
-                                return result
-                        except Exception:
-                            pass
-                    if hasattr(signal_obj, "__dataclass_fields__"):
-                        return asdict(signal_obj)
-                    if hasattr(signal_obj, "__dict__"):
-                        return vars(signal_obj)
-                    try:
-                        result = dict(signal_obj)
-                        if isinstance(result, dict):
-                            return result
-                    except Exception:
-                        pass
-                    return {}
 
-                # Build both a flattened summary map (for legacy clients) and a timeframe-aware map
-                filtered_signals = {}
-                timeframes_map: Dict[str, Dict[str, Dict]] = {}
-                response_timeframe = None
-                for sym, sig in LIVE_STATE.data.get("signals", {}).items():
-                    if sym not in allowed_tokens:
-                        continue
-
-                    # If sig is nested per timeframe
-                    is_nested_tf = (
-                        isinstance(sig, dict) and 
-                        any(isinstance(v, dict) or v is None for v in sig.values()) and 
-                        all(k in {'1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w'} for k in sig.keys())
+                # Refresh plan/token cache at most once every 10 s
+                _now = time.time()
+                if _now - _plan_cache_ts > 10:
+                    _allowed_tokens_cache = (
+                        get_allowed_tokens(current_user_email)
+                        if current_user_email else BASIC_TOKENS
                     )
-                    if is_nested_tf:
-                        timeframes_map[sym] = {}
-                        # choose summary as 1h if present
-                        summary = None
-                        for tf, tf_sig in sig.items():
-                            if tf_sig is None:
-                                continue
-                            tf_data = normalize_signal_data(tf_sig)
-                            tf_data['timeframe'] = tf
-                            # Enrich with frontend-friendly derived fields
-                            _tfc = tf_data.get("confluence_scorecards", {})
-                            _tfe = tf_data.get("expectancy_matrix", {})
-                            tf_data['confluence'] = {
-                                "trend": 80 if _tfc.get("trend") == "Aligned" else 35,
-                                "momentum": min(100, max(0, int(_tfc.get("efficiency", 0.5) * 100))),
-                                "volume": 78 if _tfc.get("volume") == "high" else (58 if _tfc.get("volume") == "normal" else 38),
-                            }
-                            tf_data['probabilities'] = tf_data.get("raw_probabilities", {})
-                            tf_data['shap_values'] = tf_data.get("shap_contributions", [])
-                            tf_data['expectancy'] = round(_tfe.get("historical_expectancy", 0.0), 2)
-                            tf_data['max_dd'] = -abs(_tfe.get("max_dd_pct", 0.0))
-                            tf_data['profit_factor'] = round(max(0.01, _tfe.get("profitability_index", 1.0)), 2)
-                            tf_data['win_rate'] = round(tf_data.get("trading_accuracy", 0.5) * 100, 1)
-                            tf_data['total_trades'] = 0
-                            timeframes_map[sym][tf] = tf_data
-                            if tf == '1h' and summary is None:
-                                summary = tf_data
+                    _trial_expired_cache = (
+                        is_trial_expired(current_user_email)
+                        if current_user_email else True
+                    )
+                    _user_plan_cache = (
+                        get_user_plan(current_user_email)
+                        if current_user_email else "trial"
+                    )
+                    _plan_cache_ts = _now
 
-                        # fallback pick first non-null tf as summary
-                        if summary is None:
-                            for tf in ['1h','4h','15m','30m','1m']:
-                                if timeframes_map[sym].get(tf):
-                                    summary = timeframes_map[sym][tf]
-                                    break
-
-                        if summary is None:
-                            filtered_signals[sym] = {
-                                "ai_prob": 0,
-                                "signal": "WAITING",
-                                "threshold": 0,
-                                "signal_strength": "NONE",
-                                "atr": 0,
-                                "risk_pct": 2,
-                                "direction": "NEUTRAL",
-                                "entry_price": 0.0,
-                                "sl": None,
-                                "tp": None,
-                                "timestamp": datetime.now(timezone.utc).isoformat(),
-                                "confidence_score": 0,
-                                "signal_id": "",
-                                "trading_accuracy": 0.65,
-                                "profitability_index": 1.0,
-                                "sr_telemetry": None,
-                                "timeframe": "1h",
-                            }
-                        else:
-                            _conf = summary.get("confluence_scorecards", {})
-                            _em = summary.get("expectancy_matrix", {})
-                            filtered_signals[sym] = {
-                                "ai_prob": summary.get("ai_prob", 0),
-                                "signal": summary.get("signal", "WAITING"),
-                                "threshold": summary.get("threshold", 0),
-                                "signal_strength": summary.get("signal_strength", "NONE"),
-                                "atr": summary.get("atr", 0),
-                                "risk_pct": summary.get("risk_pct", 2),
-                                "direction": summary.get("direction", "NEUTRAL"),
-                                "entry_price": summary.get("entry_price", 0.0),
-                                "sl": summary.get("sl"),
-                                "tp": summary.get("tp"),
-                                "timestamp": datetime.now(timezone.utc).isoformat(),
-                                "confidence_score": summary.get("ai_prob", 0) * 100,
-                                "signal_id": summary.get("signal_id", ""),
-                                "trading_accuracy": summary.get("trading_accuracy", 0.65),
-                                "profitability_index": summary.get("profitability_index", 1.5),
-                                "sr_telemetry": summary.get("sr_telemetry"),
-                                "macro_regime": summary.get("macro_regime"),
-                                "timeframe": summary.get("timeframe", "1h"),
-                                "confluence": {
-                                    "trend": 80 if _conf.get("trend") == "Aligned" else 35,
-                                    "momentum": min(100, max(0, int(_conf.get("efficiency", 0.5) * 100))),
-                                    "volume": 78 if _conf.get("volume") == "high" else (58 if _conf.get("volume") == "normal" else 38),
-                                },
-                                "probabilities": summary.get("raw_probabilities", {}),
-                                "shap_values": summary.get("shap_contributions", []),
-                                "expectancy": round(_em.get("historical_expectancy", 0.0), 2),
-                                "max_dd": -abs(_em.get("max_dd_pct", 0.0)),
-                                "profit_factor": round(max(0.01, _em.get("profitability_index", 1.0)), 2),
-                                "win_rate": round(summary.get("trading_accuracy", 0.5) * 100, 1),
-                                "total_trades": 0,
-                            }
-                            if response_timeframe is None:
-                                response_timeframe = summary.get("timeframe", "1h")
-                    else:
-                        sig_data = normalize_signal_data(sig)
-                        if not isinstance(sig_data, dict):
-                            sig_data = {}
-
-                        _conf2 = sig_data.get("confluence_scorecards", {})
-                        _em2 = sig_data.get("expectancy_matrix", {})
-                        filtered_signals[sym] = {
-                            "ai_prob": sig_data.get("ai_prob", 0),
-                            "signal": sig_data.get("signal", "WAITING"),
-                            "threshold": sig_data.get("threshold", 0),
-                            "signal_strength": sig_data.get("signal_strength", "NONE"),
-                            "atr": sig_data.get("atr", 0),
-                            "risk_pct": sig_data.get("risk_pct", 2),
-                            "direction": sig_data.get("direction", "NEUTRAL"),
-                            "entry_price": sig_data.get("entry_price", 0.0),
-                            "sl": sig_data.get("sl"),
-                            "tp": sig_data.get("tp"),
-                            "timestamp": datetime.now(timezone.utc).isoformat(),
-                            "confidence_score": sig_data.get("ai_prob", 0) * 100,
-                            "signal_id": sig_data.get("signal_id", ""),
-                            "trading_accuracy": sig_data.get("trading_accuracy", 0.65),
-                            "profitability_index": sig_data.get("profitability_index", 1.5),
-                            "sr_telemetry": sig_data.get("sr_telemetry"),
-                            "macro_regime": sig_data.get("macro_regime"),
-                            "timeframe": sig_data.get("timeframe", "1h"),
-                            "confluence": {
-                                "trend": 80 if _conf2.get("trend") == "Aligned" else 35,
-                                "momentum": min(100, max(0, int(_conf2.get("efficiency", 0.5) * 100))),
-                                "volume": 78 if _conf2.get("volume") == "high" else (58 if _conf2.get("volume") == "normal" else 38),
-                            },
-                            "probabilities": sig_data.get("raw_probabilities", {}),
-                            "shap_values": sig_data.get("shap_contributions", []),
-                            "expectancy": round(_em2.get("historical_expectancy", 0.0), 2),
-                            "max_dd": -abs(_em2.get("max_dd_pct", 0.0)),
-                            "profit_factor": round(max(0.01, _em2.get("profitability_index", 1.0)), 2),
-                            "win_rate": round(sig_data.get("trading_accuracy", 0.5) * 100, 1),
-                            "total_trades": 0,
-                        }
-                # Attach under a distinct key in response_data below
-
-                # Collect active S&R proximity alerts for frontend toast
-                sr_alerts = []
-                for _sym, _sig in filtered_signals.items():
-                    _telem = _sig.get("sr_telemetry") or {}
-                    if isinstance(_telem, dict) and _telem.get("alert_state", "NONE") != "NONE":
-                        sr_alerts.append({
-                            "symbol": _sym,
-                            "alert_state": _telem["alert_state"],
-                            "support_line": _telem.get("support_line"),
-                            "resistance_line": _telem.get("resistance_line"),
-                            "dist_to_support_pct": _telem.get("dist_to_support_pct"),
-                            "dist_to_resistance_pct": _telem.get("dist_to_resistance_pct"),
-                        })
+                allowed_tokens = _allowed_tokens_cache
 
                 # Build tickers: prefer live prices; fall back to signal entry_price
-                live_tickers = {k: v for k, v in LIVE_STATE.data.get("tickers", {}).items() if k in allowed_tokens}
-                for _sym, _sd in filtered_signals.items():
-                    if _sym not in live_tickers:
-                        _ep = _sd.get("entry_price") or _sd.get("price")
-                        if _ep:
-                            live_tickers[_sym] = float(_ep)
-
-                response_data = {
-                    "tickers": live_tickers,
-                    "signals": filtered_signals,
-                    "timeframes": timeframes_map,
-                    "timeframe": response_timeframe or "1h",
-                    "open_trades": LIVE_STATE.data.get("open_trades", []),
-                    "balance": LIVE_STATE.data.get("balance", 0),
-                    "alpha_mode": LIVE_STATE.data.get("alpha_mode", False) and (get_user_plan(current_user_email) == "pro" if current_user_email else False),
-                    "warmup": LIVE_STATE.data.get("warmup_progress", "0/0"),
-                    "trial_expired": trial_expired if current_user_email else True,
-                    "plan": get_user_plan(current_user_email) if current_user_email else "trial",
-                    "sr_alerts": sr_alerts,
+                live_tickers = {
+                    k: v
+                    for k, v in LIVE_STATE.data.get("tickers", {}).items()
+                    if k in allowed_tokens
                 }
-                clean_data = jsonable_encoder(response_data)
-                await websocket.send_json(clean_data)
-                
-                # Send less frequently if no changes to reduce bandwidth
-                await asyncio.sleep(1)
+
+                if tick_count % SIGNAL_EVERY_N == 0:
+                    # ── Full signal update (every ~2 s) ──────────────────────────
+                    filtered_signals: Dict[str, dict] = {}
+                    timeframes_map: Dict[str, Dict[str, dict]] = {}
+                    response_timeframe = None
+
+                    for sym, sig in LIVE_STATE.data.get("signals", {}).items():
+                        if sym not in allowed_tokens:
+                            continue
+                        is_nested_tf = (
+                            isinstance(sig, dict)
+                            and any(isinstance(v, dict) or v is None for v in sig.values())
+                            and all(k in {'1m','5m','15m','30m','1h','4h','1d','1w'} for k in sig.keys())
+                        )
+                        if is_nested_tf:
+                            timeframes_map[sym] = {}
+                            summary = None
+                            for tf, tf_sig in sig.items():
+                                if tf_sig is None:
+                                    continue
+                                tf_data = normalize_signal_data(tf_sig)
+                                tf_data['timeframe'] = tf
+                                _tfc = tf_data.get("confluence_scorecards", {})
+                                _tfe = tf_data.get("expectancy_matrix", {})
+                                tf_data['confluence'] = {
+                                    "trend": 80 if _tfc.get("trend") == "Aligned" else 35,
+                                    "momentum": min(100, max(0, int(_tfc.get("efficiency", 0.5) * 100))),
+                                    "volume": 78 if _tfc.get("volume") == "high" else (58 if _tfc.get("volume") == "normal" else 38),
+                                }
+                                tf_data['probabilities'] = tf_data.get("raw_probabilities", {})
+                                tf_data['shap_values'] = tf_data.get("shap_contributions", [])
+                                tf_data['expectancy'] = round(_tfe.get("historical_expectancy", 0.0), 2)
+                                tf_data['max_dd'] = -abs(_tfe.get("max_dd_pct", 0.0))
+                                tf_data['profit_factor'] = round(max(0.01, _tfe.get("profitability_index", 1.0)), 2)
+                                tf_data['win_rate'] = round(tf_data.get("trading_accuracy", 0.5) * 100, 1)
+                                tf_data['total_trades'] = 0
+                                timeframes_map[sym][tf] = tf_data
+                                if tf == '1h' and summary is None:
+                                    summary = tf_data
+                            if summary is None:
+                                for tf in ['1h', '4h', '15m', '30m', '1m']:
+                                    if timeframes_map[sym].get(tf):
+                                        summary = timeframes_map[sym][tf]
+                                        break
+                            if summary is None:
+                                filtered_signals[sym] = {
+                                    "ai_prob": 0, "signal": "WAITING",
+                                    "threshold": 0, "signal_strength": "NONE",
+                                    "atr": 0, "risk_pct": 2,
+                                    "direction": "NEUTRAL", "entry_price": 0.0,
+                                    "sl": None, "tp": None,
+                                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                                    "confidence_score": 0, "signal_id": "",
+                                    "trading_accuracy": 0.65, "profitability_index": 1.0,
+                                    "sr_telemetry": None, "timeframe": "1h",
+                                }
+                            else:
+                                _conf = summary.get("confluence_scorecards", {})
+                                _em = summary.get("expectancy_matrix", {})
+                                filtered_signals[sym] = {
+                                    "ai_prob": summary.get("ai_prob", 0),
+                                    "signal": summary.get("signal", "WAITING"),
+                                    "threshold": summary.get("threshold", 0),
+                                    "signal_strength": summary.get("signal_strength", "NONE"),
+                                    "atr": summary.get("atr", 0),
+                                    "risk_pct": summary.get("risk_pct", 2),
+                                    "direction": summary.get("direction", "NEUTRAL"),
+                                    "entry_price": summary.get("entry_price", 0.0),
+                                    "sl": summary.get("sl"),
+                                    "tp": summary.get("tp"),
+                                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                                    "confidence_score": summary.get("ai_prob", 0) * 100,
+                                    "signal_id": summary.get("signal_id", ""),
+                                    "trading_accuracy": summary.get("trading_accuracy", 0.65),
+                                    "profitability_index": summary.get("profitability_index", 1.5),
+                                    "sr_telemetry": summary.get("sr_telemetry"),
+                                    "macro_regime": summary.get("macro_regime"),
+                                    "timeframe": summary.get("timeframe", "1h"),
+                                    "confluence": {
+                                        "trend": 80 if _conf.get("trend") == "Aligned" else 35,
+                                        "momentum": min(100, max(0, int(_conf.get("efficiency", 0.5) * 100))),
+                                        "volume": 78 if _conf.get("volume") == "high" else (58 if _conf.get("volume") == "normal" else 38),
+                                    },
+                                    "probabilities": summary.get("raw_probabilities", {}),
+                                    "shap_values": summary.get("shap_contributions", []),
+                                    "expectancy": round(_em.get("historical_expectancy", 0.0), 2),
+                                    "max_dd": -abs(_em.get("max_dd_pct", 0.0)),
+                                    "profit_factor": round(max(0.01, _em.get("profitability_index", 1.0)), 2),
+                                    "win_rate": round(summary.get("trading_accuracy", 0.5) * 100, 1),
+                                    "total_trades": 0,
+                                }
+                                if response_timeframe is None:
+                                    response_timeframe = summary.get("timeframe", "1h")
+                        else:
+                            sig_data = normalize_signal_data(sig)
+                            if not isinstance(sig_data, dict):
+                                sig_data = {}
+                            _conf2 = sig_data.get("confluence_scorecards", {})
+                            _em2 = sig_data.get("expectancy_matrix", {})
+                            filtered_signals[sym] = {
+                                "ai_prob": sig_data.get("ai_prob", 0),
+                                "signal": sig_data.get("signal", "WAITING"),
+                                "threshold": sig_data.get("threshold", 0),
+                                "signal_strength": sig_data.get("signal_strength", "NONE"),
+                                "atr": sig_data.get("atr", 0),
+                                "risk_pct": sig_data.get("risk_pct", 2),
+                                "direction": sig_data.get("direction", "NEUTRAL"),
+                                "entry_price": sig_data.get("entry_price", 0.0),
+                                "sl": sig_data.get("sl"),
+                                "tp": sig_data.get("tp"),
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
+                                "confidence_score": sig_data.get("ai_prob", 0) * 100,
+                                "signal_id": sig_data.get("signal_id", ""),
+                                "trading_accuracy": sig_data.get("trading_accuracy", 0.65),
+                                "profitability_index": sig_data.get("profitability_index", 1.5),
+                                "sr_telemetry": sig_data.get("sr_telemetry"),
+                                "macro_regime": sig_data.get("macro_regime"),
+                                "timeframe": sig_data.get("timeframe", "1h"),
+                                "confluence": {
+                                    "trend": 80 if _conf2.get("trend") == "Aligned" else 35,
+                                    "momentum": min(100, max(0, int(_conf2.get("efficiency", 0.5) * 100))),
+                                    "volume": 78 if _conf2.get("volume") == "high" else (58 if _conf2.get("volume") == "normal" else 38),
+                                },
+                                "probabilities": sig_data.get("raw_probabilities", {}),
+                                "shap_values": sig_data.get("shap_contributions", []),
+                                "expectancy": round(_em2.get("historical_expectancy", 0.0), 2),
+                                "max_dd": -abs(_em2.get("max_dd_pct", 0.0)),
+                                "profit_factor": round(max(0.01, _em2.get("profitability_index", 1.0)), 2),
+                                "win_rate": round(sig_data.get("trading_accuracy", 0.5) * 100, 1),
+                                "total_trades": 0,
+                            }
+
+                    # Fill any ticker gaps with signal entry_price
+                    for _sym, _sd in filtered_signals.items():
+                        if _sym not in live_tickers:
+                            _ep = _sd.get("entry_price") or _sd.get("price")
+                            if _ep:
+                                live_tickers[_sym] = float(_ep)
+
+                    # Collect S&R proximity alerts
+                    sr_alerts = []
+                    for _sym, _sig in filtered_signals.items():
+                        _telem = _sig.get("sr_telemetry") or {}
+                        if isinstance(_telem, dict) and _telem.get("alert_state", "NONE") != "NONE":
+                            sr_alerts.append({
+                                "symbol": _sym,
+                                "alert_state": _telem["alert_state"],
+                                "support_line": _telem.get("support_line"),
+                                "resistance_line": _telem.get("resistance_line"),
+                                "dist_to_support_pct": _telem.get("dist_to_support_pct"),
+                                "dist_to_resistance_pct": _telem.get("dist_to_resistance_pct"),
+                            })
+
+                    response_data = {
+                        "tickers": live_tickers,
+                        "signals": filtered_signals,
+                        "timeframes": timeframes_map,
+                        "timeframe": response_timeframe or "1h",
+                        "open_trades": LIVE_STATE.data.get("open_trades", []),
+                        "balance": LIVE_STATE.data.get("balance", 0),
+                        "alpha_mode": (
+                            LIVE_STATE.data.get("alpha_mode", False)
+                            and _user_plan_cache in ("pro", "premium")
+                        ),
+                        "warmup": LIVE_STATE.data.get("warmup_progress", "0/0"),
+                        "trial_expired": _trial_expired_cache if current_user_email else True,
+                        "plan": _user_plan_cache,
+                        "sr_alerts": sr_alerts,
+                    }
+                    await websocket.send_json(jsonable_encoder(response_data))
+
+                else:
+                    # ── Ticker-only update (every 250 ms) ───────────────────────
+                    await websocket.send_json({"type": "ticker", "tickers": live_tickers})
+
+                tick_count += 1
+                await asyncio.sleep(TICKER_INTERVAL)
+
             except asyncio.CancelledError:
                 print(f"[WS] Task cancelled for {current_user_email}")
                 raise
@@ -2087,7 +2116,7 @@ async def websocket_dashboard(websocket: WebSocket):
                 import traceback
                 print(f"[WS] Non-fatal loop error for {current_user_email}: {type(loop_err).__name__}: {loop_err}")
                 print(traceback.format_exc())
-                await asyncio.sleep(1)
+                await asyncio.sleep(TICKER_INTERVAL)
                 continue
     except WebSocketDisconnect:
         print(f"🔌 WebSocket disconnected: {current_user_email}")
