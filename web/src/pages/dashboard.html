@@ -1074,6 +1074,40 @@
     <div id="sr-alert-toast" aria-live="polite"></div>
 
     <script type="module" src="../scripts/dashboard.js"></script>
+
+    <!-- Payment return handler: Cashfree _self redirect lands here with ?order_id=... -->
+    <script>
+    (function () {
+      var params = new URLSearchParams(window.location.search);
+      var orderId = params.get('order_id');
+      if (!orderId) return;
+
+      // Clean the URL so a reload doesn't re-trigger the banner
+      try {
+        history.replaceState(null, '', window.location.pathname);
+      } catch (e) {}
+
+      // Show a non-blocking success banner at the top of the page
+      var banner = document.createElement('div');
+      banner.style.cssText = [
+        'position:fixed', 'top:0', 'left:0', 'right:0', 'z-index:9999',
+        'padding:14px 24px', 'display:flex', 'align-items:center', 'justify-content:center',
+        'gap:10px', 'font-size:0.875rem', 'font-weight:600', 'letter-spacing:0.03em',
+        'background:rgba(0,242,255,0.12)', 'border-bottom:1px solid rgba(0,242,255,0.3)',
+        'color:#00f2ff', 'backdrop-filter:blur(8px)',
+      ].join(';');
+      banner.innerHTML = '<span style="font-size:1.1em;">✅</span> Payment received — your subscription is being activated. This may take a moment.';
+
+      var closeBtn = document.createElement('button');
+      closeBtn.textContent = '✕';
+      closeBtn.style.cssText = 'margin-left:auto;background:none;border:none;color:rgba(0,242,255,0.6);cursor:pointer;font-size:1rem;padding:0 4px;';
+      closeBtn.addEventListener('click', function () { banner.remove(); });
+      banner.appendChild(closeBtn);
+
+      document.body.prepend(banner);
+      setTimeout(function () { if (banner.parentNode) banner.remove(); }, 12000);
+    }());
+    </script>
 </body>
 
 </html>

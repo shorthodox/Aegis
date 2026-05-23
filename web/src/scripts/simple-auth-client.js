@@ -144,10 +144,20 @@ async function subscribeToPlan(planType) {
 
     // Use "sandbox" for TEST or "production" for LIVE. Hardcoded to sandbox for demo/safety.
     const cashfree = window.Cashfree({ mode: 'sandbox' });
-    const checkoutOptions = { paymentSessionId: data.payment_session_id, redirectTarget: '_modal' };
+
+    // Mobile browsers (iOS Safari / Android Chrome) block cross-origin iframes opened
+    // after async operations because the user-gesture context is lost by then.
+    // Use _self (full-page redirect) on mobile — return_url in the order already
+    // points back to dashboard.html?order_id=... so the user lands there after payment.
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+    if (isMobile) {
+      cashfree.checkout({ paymentSessionId: data.payment_session_id, redirectTarget: '_self' });
+      return; // page navigates away — nothing below runs
+    }
 
     try {
-      const result = await cashfree.checkout(checkoutOptions);
+      const result = await cashfree.checkout({ paymentSessionId: data.payment_session_id, redirectTarget: '_modal' });
       if (result.error) {
         console.error('[Cashfree] Checkout error:', result.error);
         alert('Payment was cancelled or failed. Please try again.');
