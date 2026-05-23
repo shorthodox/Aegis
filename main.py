@@ -1872,10 +1872,10 @@ async def websocket_dashboard(websocket: WebSocket):
         _trial_expired_cache: bool = True
         _user_plan_cache: str = "trial"
 
-        # Ticker-only sends happen every tick (250 ms).
-        # Full signal payloads are sent every SIGNAL_EVERY_N ticks (~2 s).
-        TICKER_INTERVAL = 0.25
-        SIGNAL_EVERY_N = 8
+        # Ticker-only sends happen every tick (100 ms).
+        # Full signal payloads are sent every SIGNAL_EVERY_N ticks (~0.5 s).
+        TICKER_INTERVAL = 0.1
+        SIGNAL_EVERY_N = 5
         tick_count = 0
 
         # Define a background task for receiving messages
