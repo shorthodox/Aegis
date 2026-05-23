@@ -1878,15 +1878,12 @@ async def websocket_dashboard(websocket: WebSocket):
         SIGNAL_EVERY_N = 8
         tick_count = 0
 
-        # Main loop
-        while True:
+        # Define a background task for receiving messages
+        async def receiver():
+            nonlocal current_user_email, _plan_cache_ts
             try:
-                # Receive any client message (ping / re-auth) — short timeout so we
-                # don't block the ticker cadence.
-                try:
-                    client_msg = await asyncio.wait_for(
-                        websocket.receive_text(), timeout=0.1
-                    )
+                while True:
+                    client_msg = await websocket.receive_text()
                     try:
                         msg_data = json.loads(client_msg)
                     except json.JSONDecodeError:
@@ -1902,9 +1899,14 @@ async def websocket_dashboard(websocket: WebSocket):
                                 current_user_email = new_user
                                 _plan_cache_ts = 0.0  # force cache refresh
                                 print(f"[WS] Re-authenticated: {current_user_email}")
-                except asyncio.TimeoutError:
-                    pass
+            except Exception:
+                pass
 
+        receiver_task = asyncio.create_task(receiver())
+
+        # Main loop
+        while True:
+            try:
                 # Refresh plan/token cache at most once every 10 s
                 _now = time.time()
                 if _now - _plan_cache_ts > 10:
