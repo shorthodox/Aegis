@@ -378,6 +378,9 @@ function clearExpiredView() {
   // Also hide the legacy card in case it was created by an older code path.
   const expiredCard = document.getElementById('access-expired-card');
   if (expiredCard) expiredCard.classList.add('hidden');
+
+  // Restore any elements that were blocked by blockAllFeatures so UI is fully interactive again.
+  unblockFeatures();
 }
 
 // ============================================================
@@ -501,7 +504,10 @@ function blockAllFeatures() {
     // those overlays manage their own access gating via lock overlays.
     const isModalOrPanel = el.closest('#signalDetailsModal, #fp-confluence, #fp-zones, #fp-expectancy, #fp-shap, #fp-api') !== null;
 
-    if (!isExpiredElement && !isLogout && !isNav && !isModalOrPanel) {
+    // Never block the Guardian help panel — it must always be dismissible.
+    const isGuardian = el.closest('#guardian-drawer') !== null;
+
+    if (!isExpiredElement && !isLogout && !isNav && !isModalOrPanel && !isGuardian) {
       el.dataset.aegisBlocked = '1';
       el.style.pointerEvents = 'none';
       el.style.opacity = '0.3';

@@ -217,7 +217,7 @@ function showSubscriptionExpiredOverlay() {
 
   // Disable all interactive elements
   document.querySelectorAll('button, input, select, .signal-card').forEach(el => {
-    if (!el.closest('#subscriptionExpiredOverlay') && !el.closest('#access-expired-card')) {
+    if (!el.closest('#subscriptionExpiredOverlay') && !el.closest('#access-expired-card') && !el.closest('#guardian-drawer')) {
       el.disabled = true;
       el.style.pointerEvents = 'none';
       el.style.opacity = '0.5';
