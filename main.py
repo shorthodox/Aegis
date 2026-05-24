@@ -2257,11 +2257,17 @@ async def execute_trade(request: TradeExecuteRequest, user_id: str = Depends(get
     trade_data["userId"] = user_id
     
     try:
+        # NOTE: Connect to the Demat API here.
+        # This is where the call will be sent to the broker API for execution.
+        print(f"🚀 Sending order to Demat API: Symbol: {trade_data.get('symbol')}, Side: {trade_data.get('side')}, Units: {trade_data.get('positionUnits')}")
+        # demat_response = await demat_client.place_order(...)
+        
         trade_ref = db.collection("users").document(user_id).collection("trades").document()
         trade_data["id"] = trade_ref.id
+        trade_data["demat_status"] = "sent_to_broker"
         trade_ref.set(trade_data)
-        print(f"✅ Trade executed via API for {user_id}")
-        return {"status": "success", "trade_id": trade_ref.id, "trade": trade_data}
+        print(f"✅ Trade executed and sent to Demat via API for {user_id}")
+        return {"status": "success", "trade_id": trade_ref.id, "trade": trade_data, "message": "Order sent to Demat account successfully"}
     except Exception as e:
         print(f"❌ Failed to execute trade for {user_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to execute trade")

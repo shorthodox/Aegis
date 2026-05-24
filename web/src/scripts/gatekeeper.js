@@ -699,6 +699,7 @@ function attachEventListeners() {
   if (simSelect) {
     simSelect.addEventListener('change', (e) => {
       const sym = e.target.value;
+      window.selectedTradeToken = sym; // Ensure global is set
       if (sym && window.latestSignals) {
         // Find the corresponding signal (try 1h timeframe first, then fallback)
         const key1h = `${sym}_1h`;
@@ -706,6 +707,24 @@ function attachEventListeners() {
         if (window.latestSignals[key1h] || window.latestSignals[key15m]) {
           const timeframe = window.latestSignals[key1h] ? '1h' : '15m';
           window.selectSignal(sym, timeframe);
+        } else {
+          window.selectedTrade = {
+            symbol: sym,
+            direction: 'LONG',
+            entry_price: parseFloat(document.getElementById('sim-entry')?.value || window.currentTickers?.[sym] || 0)
+          };
+          if (typeof window.updateSimulation === 'function') {
+            window.updateSimulation();
+          }
+        }
+      } else {
+        window.selectedTrade = {
+          symbol: sym,
+          direction: 'LONG',
+          entry_price: parseFloat(document.getElementById('sim-entry')?.value || 0)
+        };
+        if (typeof window.updateSimulation === 'function') {
+          window.updateSimulation();
         }
       }
     });

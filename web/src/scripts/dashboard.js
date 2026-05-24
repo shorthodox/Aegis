@@ -1084,9 +1084,14 @@ async function _getAuthToken() {
 }
 
 async function executeTrade() {
-  if (!window.selectedTradeToken && !window.selectedTrade) {
+  const simSymbolVal = document.getElementById('sim-symbol')?.value;
+  if (!window.selectedTradeToken && !window.selectedTrade && !simSymbolVal) {
     alert('Please select a token first.');
     return;
+  }
+  
+  if (simSymbolVal && !window.selectedTradeToken) {
+    window.selectedTradeToken = simSymbolVal;
   }
 
   const entry    = parseFloat(document.getElementById('sim-entry').value);

@@ -144,70 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateSimulation();
     }
 
-    // ========== Execute Trade (Firestore) ==========
-    async function executeTrade() {
-        if (!window.selectedTrade || !currentUser) return;
-        const entry = parseFloat(document.getElementById('sim-entry').value);
-        const sl = parseFloat(document.getElementById('sim-sl').value);
-        const tp = parseFloat(document.getElementById('sim-tp').value);
-        const riskPercent = parseFloat(document.getElementById('sim-risk-slider').value);
-        const leverage = parseFloat(document.getElementById('sim-leverage').value);
-        const positionUnits = parseFloat(document.getElementById('pos-units').innerText);
-        const notional = parseFloat(document.getElementById('notional').innerText.replace('$', ''));
-        
-        const tradeData = {
-            symbol: window.selectedTrade.symbol,
-            side: window.selectedTrade.direction,
-            entryPrice: entry,
-            stopLoss: sl,
-            takeProfit: tp,
-            riskPercent,
-            leverage,
-            positionUnits,
-            notionalValue: notional,
-            status: 'open',
-            signalId: window.selectedTrade.signalId || null
-        };
-        
-        // Save to localStorage for immediate simulation in Analytics
-        localStorage.setItem('analyticsActiveTrade', JSON.stringify(tradeData));
-        
-        try {
-            let token = localStorage.getItem('access_token') || localStorage.getItem('authToken');
-            if (!token && typeof AuthManager !== 'undefined') {
-                token = AuthManager.getToken();
-            }
-            if (!token) {
-                alert('You must be logged in to execute trades.');
-                return;
-            }
-
-            const response = await fetch('/api/trades/execute', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(tradeData)
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.detail || 'Failed to execute trade on backend');
-            }
-
-            console.log('✅ Trade executed and stored via backend API');
-            
-            // Redirect to Analytics Room
-            if (typeof window.switchRoom === 'function') {
-                window.switchRoom('analytics');
-                updateAnalyticsSimulation(); // Immediately show it
-            }
-        } catch (err) {
-            console.error('Failed to save trade:', err);
-            alert('Trade execution failed: ' + err.message);
-        }
-    }
+    // ========== Execute Trade (Handled by dashboard.js) ==========
 
     // ========== Live P/L Simulation (Analytics Room) ==========
     // Uses #simPositionContainer (not #positionsContainer) so the Firestore-backed
@@ -440,7 +377,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById(id)?.addEventListener('input', updateSimulation);
     });
     
-    document.getElementById('execute-trade-btn')?.addEventListener('click', executeTrade);
+    // execute-trade-btn listener is in dashboard.js
     
     // Logout
     document.getElementById('logoutBtn')?.addEventListener('click', async () => {
