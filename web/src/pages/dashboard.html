@@ -1064,6 +1064,365 @@
       setTimeout(function () { if (banner.parentNode) banner.remove(); }, 12000);
     }());
     </script>
+
+    <!-- ============================================================
+         GUARDIAN — Execution Guidance Panel
+         First-visit: full overlay with scroll. Every visit: FAB in
+         bottom-right that reopens the panel as a side-drawer.
+         ============================================================ -->
+    <style>
+      /* ── Floating Action Button ───────────────────────────── */
+      #guardian-fab {
+        position: fixed;
+        bottom: 1.5rem;
+        right: 1.5rem;
+        z-index: 900;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0.55rem 1.1rem 0.55rem 0.85rem;
+        border-radius: 40px;
+        background: rgba(10,10,14,0.92);
+        border: 1px solid rgba(0,242,255,0.3);
+        color: #00f2ff;
+        font-size: 0.78rem;
+        font-weight: 700;
+        font-family: monospace;
+        letter-spacing: 0.06em;
+        cursor: pointer;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,242,255,0.08);
+        backdrop-filter: blur(12px);
+        transition: border-color 0.2s, box-shadow 0.2s;
+        text-transform: uppercase;
+      }
+      #guardian-fab:hover {
+        border-color: rgba(0,242,255,0.6);
+        box-shadow: 0 4px 28px rgba(0,0,0,0.5), 0 0 18px rgba(0,242,255,0.18);
+      }
+      #guardian-fab .gfab-dot {
+        width: 7px; height: 7px;
+        border-radius: 50%;
+        background: #00f2ff;
+        box-shadow: 0 0 6px rgba(0,242,255,0.9);
+        animation: pulse 2s infinite;
+        flex-shrink: 0;
+      }
+
+      /* ── Drawer panel (shared by first-visit + FAB reopen) ── */
+      #guardian-drawer {
+        position: fixed;
+        top: 0; right: 0;
+        width: min(420px, 100vw);
+        height: 100dvh;
+        z-index: 950;
+        display: flex;
+        flex-direction: column;
+        background: rgba(8,8,12,0.97);
+        border-left: 1px solid rgba(0,242,255,0.12);
+        box-shadow: -8px 0 40px rgba(0,0,0,0.6);
+        backdrop-filter: blur(20px);
+        transform: translateX(100%);
+        transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+        pointer-events: none;
+      }
+      #guardian-drawer.open {
+        transform: translateX(0);
+        pointer-events: auto;
+      }
+
+      /* Dim backdrop when drawer is open */
+      #guardian-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 940;
+        background: rgba(0,0,0,0.5);
+        backdrop-filter: blur(2px);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s;
+      }
+      #guardian-backdrop.open {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      /* Drawer header */
+      #guardian-drawer .gd-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid rgba(0,242,255,0.1);
+        background: rgba(0,242,255,0.02);
+        flex-shrink: 0;
+      }
+      #guardian-drawer .gd-title {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+      }
+      #guardian-drawer .gd-title-dot {
+        width: 8px; height: 8px;
+        border-radius: 50%;
+        background: #00f2ff;
+        box-shadow: 0 0 8px rgba(0,242,255,0.9);
+        animation: pulse 2s infinite;
+      }
+      #guardian-drawer .gd-title h3 {
+        font-size: 0.72rem;
+        font-weight: 700;
+        font-family: monospace;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: rgba(0,242,255,0.65);
+        margin: 0;
+      }
+      #guardian-drawer .gd-title span {
+        font-size: 0.65rem;
+        color: #475569;
+        font-family: monospace;
+        margin-left: 4px;
+      }
+      #guardian-close {
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: #475569;
+        padding: 4px;
+        transition: color 0.2s;
+        line-height: 1;
+      }
+      #guardian-close:hover { color: #00f2ff; }
+
+      /* Drawer scrollable body */
+      #guardian-drawer .gd-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1.25rem;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(0,242,255,0.15) transparent;
+      }
+      #guardian-drawer .gd-body::-webkit-scrollbar { width: 4px; }
+      #guardian-drawer .gd-body::-webkit-scrollbar-thumb { background: rgba(0,242,255,0.15); border-radius: 4px; }
+
+      /* Protocol cards */
+      .gd-protocol {
+        border-radius: 14px;
+        padding: 1rem 1.1rem;
+        margin-bottom: 0.75rem;
+        border: 1px solid transparent;
+        position: relative;
+      }
+      .gd-protocol:last-child { margin-bottom: 0; }
+      .gd-protocol .gd-rr {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 0.62rem;
+        font-weight: 700;
+        font-family: monospace;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 2px 8px;
+        border-radius: 20px;
+        margin-bottom: 0.55rem;
+      }
+      .gd-protocol .gd-name {
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #e2e8f0;
+        margin: 0 0 0.3rem;
+        line-height: 1.3;
+      }
+      .gd-protocol .gd-goal {
+        font-size: 0.72rem;
+        font-family: monospace;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        margin-bottom: 0.4rem;
+      }
+      .gd-protocol .gd-strategy {
+        font-size: 0.79rem;
+        color: #94a3b8;
+        line-height: 1.55;
+        margin: 0;
+      }
+      .gd-protocol .gd-strategy strong { color: #cbd5e1; }
+
+      /* Colour variants */
+      .gd-p1 { background: rgba(0,242,255,0.03);  border-color: rgba(0,242,255,0.14); }
+      .gd-p1 .gd-rr { background: rgba(0,242,255,0.1); color: #00f2ff; border: 1px solid rgba(0,242,255,0.25); }
+      .gd-p1 .gd-goal { color: rgba(0,242,255,0.6); }
+
+      .gd-p2 { background: rgba(34,197,94,0.03);  border-color: rgba(34,197,94,0.15); }
+      .gd-p2 .gd-rr { background: rgba(34,197,94,0.1); color: #4ade80; border: 1px solid rgba(34,197,94,0.25); }
+      .gd-p2 .gd-goal { color: rgba(74,222,128,0.65); }
+
+      .gd-p3 { background: rgba(139,92,246,0.04); border-color: rgba(139,92,246,0.16); }
+      .gd-p3 .gd-rr { background: rgba(139,92,246,0.1); color: #a78bfa; border: 1px solid rgba(139,92,246,0.25); }
+      .gd-p3 .gd-goal { color: rgba(167,139,250,0.65); }
+
+      .gd-p4 { background: rgba(251,191,36,0.03); border-color: rgba(251,191,36,0.16); }
+      .gd-p4 .gd-rr { background: rgba(251,191,36,0.1); color: #fbbf24; border: 1px solid rgba(251,191,36,0.25); }
+      .gd-p4 .gd-goal { color: rgba(251,191,36,0.6); }
+
+      .gd-p5 { background: rgba(244,63,94,0.03);  border-color: rgba(244,63,94,0.16); }
+      .gd-p5 .gd-rr { background: rgba(244,63,94,0.1); color: #fb7185; border: 1px solid rgba(244,63,94,0.25); }
+      .gd-p5 .gd-goal { color: rgba(251,113,133,0.65); }
+
+      /* Drawer footer */
+      #guardian-drawer .gd-footer {
+        padding: 0.9rem 1.25rem;
+        border-top: 1px solid rgba(0,242,255,0.08);
+        flex-shrink: 0;
+        font-size: 0.68rem;
+        color: #374151;
+        font-family: monospace;
+        letter-spacing: 0.05em;
+        text-align: center;
+        background: rgba(0,0,0,0.2);
+      }
+
+      /* First-visit hint banner inside drawer */
+      .gd-first-banner {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+        padding: 0.75rem 1rem;
+        border-radius: 10px;
+        background: rgba(0,242,255,0.04);
+        border: 1px solid rgba(0,242,255,0.12);
+        margin-bottom: 1rem;
+        font-size: 0.77rem;
+        color: #64748b;
+        line-height: 1.5;
+      }
+      .gd-first-banner i { color: rgba(0,242,255,0.5); margin-top: 2px; flex-shrink: 0; }
+    </style>
+
+    <!-- Backdrop -->
+    <div id="guardian-backdrop"></div>
+
+    <!-- Floating Action Button -->
+    <button id="guardian-fab" aria-label="Open Guardian guidance">
+      <span class="gfab-dot"></span>
+      Guardian
+    </button>
+
+    <!-- Slide-in Drawer -->
+    <div id="guardian-drawer" role="complementary" aria-label="Guardian execution guidance">
+
+      <div class="gd-header">
+        <div class="gd-title">
+          <span class="gd-title-dot"></span>
+          <h3>Guardian<span>· Execution Protocols</span></h3>
+        </div>
+        <button id="guardian-close" aria-label="Close Guardian">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="gd-body">
+
+        <!-- First-visit hint (hidden on repeat visits) -->
+        <div class="gd-first-banner" id="gd-first-banner">
+          <i class="fas fa-shield-alt"></i>
+          <span>These five protocols are your execution guardrails. Apply them <strong style="color:#94a3b8;">before</strong> sizing any position — they work with any S&amp;R signal from the dashboard.</span>
+        </div>
+
+        <!-- Protocol 1 -->
+        <div class="gd-protocol gd-p1">
+          <div class="gd-rr"><i class="fas fa-equals" style="font-size:0.55rem;"></i> 1 : 1 R:R</div>
+          <p class="gd-name">1 — Passive Maker Protocol</p>
+          <p class="gd-goal"><i class="fas fa-bullseye" style="margin-right:4px;"></i>Eliminate taker fees on high-frequency scalp moves</p>
+          <p class="gd-strategy">Avoid market orders entirely. Place a passive <strong>Limit Order at the Start Anchor</strong> price coordinate to act as a Maker and drop exchange fees to the floor.</p>
+        </div>
+
+        <!-- Protocol 2 -->
+        <div class="gd-protocol gd-p2">
+          <div class="gd-rr"><i class="fas fa-equals" style="font-size:0.55rem;"></i> 1 : 2 R:R</div>
+          <p class="gd-name">2 — Spread-Lock Filter</p>
+          <p class="gd-goal"><i class="fas fa-bullseye" style="margin-right:4px;"></i>Neutralize toxic slippage on mid-cap altcoins</p>
+          <p class="gd-strategy">Check the live <strong>Bid-Ask spread before deploying capital</strong>. If the gap between the highest buyer and lowest seller is wider than <strong>0.05%</strong>, skip the trade entirely.</p>
+        </div>
+
+        <!-- Protocol 3 -->
+        <div class="gd-protocol gd-p3">
+          <div class="gd-rr"><i class="fas fa-equals" style="font-size:0.55rem;"></i> 1 : 3 R:R</div>
+          <p class="gd-name">3 — Layered Bracket Accumulation</p>
+          <p class="gd-goal"><i class="fas fa-bullseye" style="margin-right:4px;"></i>Build an institutional average entry within the structural boundary</p>
+          <p class="gd-strategy">Split your position into a <strong>30 / 40 / 30</strong> laddered profile. Distribute three limit entries inside the <strong>Start Zone buffer</strong> to optimize the entry math.</p>
+        </div>
+
+        <!-- Protocol 4 -->
+        <div class="gd-protocol gd-p4">
+          <div class="gd-rr"><i class="fas fa-equals" style="font-size:0.55rem;"></i> 1 : 5+ R:R</div>
+          <p class="gd-name">4 — Maximum Boundary Drift Rule</p>
+          <p class="gd-goal"><i class="fas fa-bullseye" style="margin-right:4px;"></i>Eliminate the psychological flaw of chasing a runaway breakout</p>
+          <p class="gd-strategy">If the live price has already moved <strong>more than 0.2% away from the Start Anchor</strong>, the trade is dead. Do not pursue it — chasing shrinks your upside runway.</p>
+        </div>
+
+        <!-- Protocol 5 -->
+        <div class="gd-protocol gd-p5">
+          <div class="gd-rr"><i class="fas fa-infinity" style="font-size:0.6rem;"></i> Universal</div>
+          <p class="gd-name">5 — Institutional Funding Hour Handshake</p>
+          <p class="gd-goal"><i class="fas fa-bullseye" style="margin-right:4px;"></i>Avoid the hidden 3× daily funding fee bleed on high-leverage accounts</p>
+          <p class="gd-strategy">Pause execution if a high-conviction signal lands within <strong>15 minutes of a major funding interval</strong> where the required position direction forces you to pay a premium funding rate.</p>
+        </div>
+
+      </div>
+
+      <div class="gd-footer">
+        AEGIS-1 · Guardian v1 · Apply before every execution
+      </div>
+
+    </div>
+
+    <script>
+    (function () {
+      var STORAGE_KEY = 'aegis_guardian_seen';
+      var fab      = document.getElementById('guardian-fab');
+      var drawer   = document.getElementById('guardian-drawer');
+      var backdrop = document.getElementById('guardian-backdrop');
+      var closeBtn = document.getElementById('guardian-close');
+      var firstBanner = document.getElementById('gd-first-banner');
+
+      function openDrawer() {
+        drawer.classList.add('open');
+        backdrop.classList.add('open');
+        fab.style.opacity = '0';
+        fab.style.pointerEvents = 'none';
+      }
+
+      function closeDrawer() {
+        drawer.classList.remove('open');
+        backdrop.classList.remove('open');
+        fab.style.opacity = '1';
+        fab.style.pointerEvents = '';
+        try { localStorage.setItem(STORAGE_KEY, '1'); } catch (e) {}
+      }
+
+      // Hide first-visit banner if already seen
+      if (localStorage.getItem(STORAGE_KEY)) {
+        if (firstBanner) firstBanner.style.display = 'none';
+      }
+
+      // Auto-open on first visit (800ms delay, same cadence as onboarding wizard)
+      if (!localStorage.getItem(STORAGE_KEY)) {
+        setTimeout(openDrawer, 900);
+      }
+
+      fab.addEventListener('click', openDrawer);
+      closeBtn.addEventListener('click', closeDrawer);
+      backdrop.addEventListener('click', closeDrawer);
+
+      document.addEventListener('keydown', function (e) {
+        if ((e.key === 'Escape') && drawer.classList.contains('open')) closeDrawer();
+      });
+    }());
+    </script>
 </body>
 
 </html>
