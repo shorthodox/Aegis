@@ -992,8 +992,14 @@ class SignalGenerator:
             market_regime = "HIGH_VOLATILITY"
             alpha_risk_level = "HIGH"
 
-        # Volatility Tax Thresholds (Optimized for more BUY signals)
-        req_confidence = 0.60 if market_regime in ["CRITICAL_VOLATILITY", "HIGH_VOLATILITY"] else 0.52
+        # Minimum confidence gate — use the per-token threshold set by the mode
+        # config (balanced=0.70, aggressive=0.65, conservative=0.75). Raise it by
+        # 0.10 during elevated volatility so noisy markets don't flood signals.
+        req_confidence = (
+            min(0.90, cfg.entry_prob_threshold + 0.10)
+            if market_regime in ["CRITICAL_VOLATILITY", "HIGH_VOLATILITY"]
+            else cfg.entry_prob_threshold
+        )
 
         # Conviction Spread
         conviction_spread = ai_prob - prob_hold
