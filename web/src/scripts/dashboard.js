@@ -1453,7 +1453,7 @@ window.showSignalDetailsModal = function (signal) {
         <div class="flex gap-2">
           <button id="sd-execute-btn"
             class="flex-1 bg-gradient-to-r from-cyan to-blue-600 text-white font-bold py-3 rounded-xl uppercase tracking-wider text-sm shadow-[0_0_15px_rgba(0,242,255,0.3)] hover:-translate-y-0.5 transform transition-all">
-            <i class="fas fa-terminal mr-2"></i>Execute in Terminal
+            <i class="fas fa-satellite-dish mr-2"></i>Execute with API
           </button>
           <button id="sd-paper-trade-btn"
             class="px-5 bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl uppercase tracking-wider text-sm border border-white/20 transition-colors whitespace-nowrap">
@@ -1478,9 +1478,62 @@ window.showSignalDetailsModal = function (signal) {
       </div>
     `;
 
-    document.getElementById('sd-execute-btn')?.addEventListener('click', () => {
-      modal.classList.add('hidden');
-      if (typeof window.selectSignal === 'function') window.selectSignal(signal.symbol, signal.timeframe || '1h');
+    document.getElementById('sd-execute-btn')?.addEventListener('click', async () => {
+      try {
+        let token = localStorage.getItem('access_token') || localStorage.getItem('authToken');
+        if (!token && typeof AuthManager !== 'undefined') {
+          token = AuthManager.getToken();
+        }
+        if (!token) {
+          alert('You must be logged in to execute trades via API.');
+          return;
+        }
+
+        const direction = signal.direction || (signal.signal && signal.signal.includes('BUY') ? 'LONG' : (signal.signal && signal.signal.includes('SELL') ? 'SHORT' : 'NEUTRAL'));
+        const tradeData = {
+            symbol: signal.symbol,
+            side: direction,
+            entryPrice: signal.entry_price || 0,
+            stopLoss: signal.sl || 0,
+            takeProfit: signal.tp || 0,
+            riskPercent: 2, // Default 2%
+            leverage: 10,   // Default 10x
+            positionUnits: 1, 
+            notionalValue: (signal.entry_price || 0) * 10,
+            status: 'open',
+            signalId: signal.signal_id || signal.signalId || null
+        };
+
+        const btn = document.getElementById('sd-execute-btn');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Executing...';
+        btn.disabled = true;
+
+        const response = await fetch('/api/trades/execute', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(tradeData)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || 'Failed to execute trade on API');
+        }
+        
+        btn.innerHTML = '<i class="fas fa-check mr-2"></i>Sent to Demat';
+        setTimeout(() => {
+            modal.classList.add('hidden');
+        }, 1500);
+      } catch (err) {
+        console.error('Failed to execute trade:', err);
+        alert('Trade API execution failed: ' + err.message);
+        const btn = document.getElementById('sd-execute-btn');
+        btn.innerHTML = '<i class="fas fa-satellite-dish mr-2"></i>Execute with API';
+        btn.disabled = false;
+      }
     });
 
     document.getElementById('sd-paper-trade-btn')?.addEventListener('click', () => {
