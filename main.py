@@ -713,6 +713,13 @@ async def robots():
         return FileResponse(robots_path)
     return Response(status_code=204)
 
+@app.get("/sitemap.xml")
+async def sitemap():
+    sitemap_path = WEB_ROOT_PATH / "sitemap.xml"
+    if sitemap_path.exists():
+        return FileResponse(sitemap_path, media_type="application/xml")
+    return Response(status_code=204)
+
 # -------------------------------------------------------------------
 # Auth helpers (JWT)
 # -------------------------------------------------------------------
