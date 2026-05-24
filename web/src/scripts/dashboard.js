@@ -341,6 +341,27 @@ function setExpiredView() {
 
   // Block all feature access
   blockAllFeatures();
+
+  // Force click handlers and pointer-events on the overlay buttons to guarantee navigation
+  const subOverlay = document.getElementById('subscriptionExpiredOverlay');
+  if (subOverlay) {
+    const subBtn = subOverlay.querySelector('a[href*="pricing"]');
+    const homeBtn = document.getElementById('returnHomeBtn');
+
+    if (subBtn) {
+      subBtn.style.setProperty('pointer-events', 'auto', 'important');
+      subBtn.addEventListener('click', (e) => {
+        window.location.href = '/web/src/pages/pricing.html';
+      });
+    }
+
+    if (homeBtn) {
+      homeBtn.style.setProperty('pointer-events', 'auto', 'important');
+      homeBtn.addEventListener('click', (e) => {
+        window.location.href = '/web/src/pages/index.html';
+      });
+    }
+  }
 }
 
 function clearExpiredView() {
