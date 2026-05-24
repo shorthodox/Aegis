@@ -470,7 +470,7 @@ function blockAllFeatures() {
   // Disable all interactive elements in dashboard
   const interactiveElements = document.querySelectorAll('button, a, input[type="checkbox"], [onclick]');
   interactiveElements.forEach(el => {
-    const isExpiredElement = el.closest('#access-expired-card') !== null || (el.id && el.id.includes('expired'));
+    const isExpiredElement = el.closest('#access-expired-card, #subscriptionExpiredOverlay') !== null || (el.id && el.id.includes('expired'));
 
     // Safety check so we don't lock the user in completely
     const isLogout = el.id === 'logout-btn' || el.id === 'btn-logout' || el.classList.contains('logout-button');
