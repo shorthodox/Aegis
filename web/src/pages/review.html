@@ -1,17 +1,210 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reviews | AEGIS v1.0</title>
+    <title>Reviews & Feedback | AEGIS v1.0</title>
     <link rel="stylesheet" href="/web/src/styles/main.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-</head>
+    <style>
+        body { padding-top: 80px; background: #0a0a0c; color: #e2e8f0; overflow-y: auto; }
 
+        .footer { text-align:center; padding:2rem; border-top:1px solid rgba(255,255,255,0.05); margin-top:3rem; }
+        .footer-links { display:flex; justify-content:center; gap:1rem; flex-wrap:wrap; margin-bottom:1rem; }
+        .footer-links a { color:#6b7280; text-decoration:none; font-size:0.8rem; }
+        .footer-links a:hover { color:#00f2ff; }
+        .separator { color:#374151; }
+        .footer-proprietor { font-size:0.75rem; color:#4b5563; margin-bottom:0.5rem; }
+        .footer p { font-size:0.7rem; color:#374151; }
+
+        /* Page hero */
+        .rv-hero {
+            text-align: center;
+            padding: 3.5rem 2rem 2rem;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+        .rv-hero h1 {
+            font-size: 2rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #fff, #00f2ff);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            margin-bottom: 0.6rem;
+        }
+        .rv-hero p { color: #94a3b8; font-size: 0.92rem; line-height: 1.6; }
+
+        /* Category pill selector */
+        .rv-categories {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .rv-cat-btn {
+            padding: 0.4rem 1rem;
+            border-radius: 40px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            cursor: pointer;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #94a3b8;
+            transition: all 0.2s;
+        }
+        .rv-cat-btn:hover, .rv-cat-btn.active {
+            background: rgba(0,242,255,0.1);
+            border-color: rgba(0,242,255,0.4);
+            color: #00f2ff;
+        }
+
+        /* Form card */
+        .rv-card {
+            background: rgba(0,0,0,0.35);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 24px;
+            padding: 2rem;
+            max-width: 680px;
+            margin: 0 auto;
+        }
+
+        /* Field labels */
+        .rv-label {
+            display: block;
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: #64748b;
+            margin-bottom: 0.4rem;
+        }
+        .rv-field { margin-bottom: 1.2rem; }
+
+        /* Inputs & textarea */
+        .rv-input, .rv-textarea, .rv-select {
+            width: 100%;
+            box-sizing: border-box;
+            background: rgba(0,0,0,0.4);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            color: #e2e8f0;
+            font-size: 0.88rem;
+            padding: 0.7rem 0.9rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            font-family: inherit;
+            -webkit-appearance: none;
+        }
+        .rv-input:focus, .rv-textarea:focus, .rv-select:focus {
+            outline: none;
+            border-color: rgba(0,242,255,0.5);
+            box-shadow: 0 0 0 2px rgba(0,242,255,0.12);
+        }
+        .rv-textarea { resize: vertical; min-height: 110px; }
+        .rv-select option { background: #111827; }
+
+        /* Two-col grid */
+        .rv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        @media (max-width: 560px) { .rv-grid { grid-template-columns: 1fr; } }
+
+        /* Star rating */
+        .rv-stars { display: flex; gap: 6px; }
+        .rv-star {
+            font-size: 1.6rem;
+            cursor: pointer;
+            color: rgba(255,255,255,0.15);
+            transition: color 0.15s, transform 0.15s;
+            user-select: none;
+            line-height: 1;
+        }
+        .rv-star:hover, .rv-star.lit { color: #fbbf24; }
+        .rv-star:hover { transform: scale(1.15); }
+
+        /* Severity selector (bug only) */
+        .rv-severity-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        .rv-sev-btn {
+            padding: 0.3rem 0.8rem;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid transparent;
+            background: rgba(255,255,255,0.04);
+            color: #94a3b8;
+            transition: all 0.18s;
+        }
+        .rv-sev-btn[data-sev="low"].active    { background:rgba(34,197,94,0.12);  border-color:rgba(34,197,94,0.4);  color:#4ade80; }
+        .rv-sev-btn[data-sev="medium"].active { background:rgba(251,191,36,0.12); border-color:rgba(251,191,36,0.4); color:#fbbf24; }
+        .rv-sev-btn[data-sev="high"].active   { background:rgba(239,68,68,0.12);  border-color:rgba(239,68,68,0.4);  color:#f87171; }
+        .rv-sev-btn[data-sev="critical"].active { background:rgba(220,38,38,0.2);border-color:rgba(220,38,38,0.6);  color:#ef4444; }
+
+        /* Submit button */
+        .rv-submit {
+            width: 100%;
+            padding: 0.8rem;
+            border-radius: 48px;
+            background: linear-gradient(95deg, #00f2ff, #00a1b0);
+            color: #050505;
+            font-weight: 800;
+            font-size: 0.95rem;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 0.5rem;
+        }
+        .rv-submit:hover { filter: brightness(1.06); box-shadow: 0 0 20px rgba(0,242,255,0.35); }
+        .rv-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Success/error states */
+        .rv-success {
+            display: none;
+            text-align: center;
+            padding: 2.5rem 1rem;
+        }
+        .rv-success-icon {
+            width: 56px; height: 56px;
+            border-radius: 50%;
+            background: rgba(0,242,255,0.1);
+            border: 1px solid rgba(0,242,255,0.3);
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 1rem;
+            font-size: 1.5rem;
+            color: #00f2ff;
+        }
+
+        /* Char counter */
+        .rv-charcount { font-size: 0.7rem; color: #475569; text-align: right; margin-top: 3px; }
+
+        /* Section divider */
+        .rv-divider {
+            border: none;
+            border-top: 1px solid rgba(255,255,255,0.07);
+            margin: 1.5rem 0;
+        }
+
+        /* Info blurb */
+        .rv-info-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 0.75rem 1rem;
+            border-radius: 10px;
+            background: rgba(0,242,255,0.03);
+            border: 1px solid rgba(0,242,255,0.1);
+            font-size: 0.78rem;
+            color: #64748b;
+            line-height: 1.5;
+            margin-bottom: 1.5rem;
+        }
+        .rv-info-row i { color: rgba(0,242,255,0.5); margin-top: 2px; flex-shrink: 0; }
+    </style>
+</head>
 <body>
+
+    <!-- Fixed Glass Header -->
     <header class="fixed-header" id="main-nav">
-        <a href="/web/src/pages/index.html" class="logo" style="text-decoration:none;">⚡ AEGIS <span>v1.0</span></a>
+        <a href="/web/src/pages/index.html" class="logo" style="text-decoration:none;">⚡ AEGIS <span>v1.0</span> <span style="font-size:0.52rem;font-weight:800;font-family:monospace;letter-spacing:0.1em;background:rgba(0,242,255,0.1);border:1px solid rgba(0,242,255,0.3);color:#00f2ff;padding:1px 6px;border-radius:4px;text-transform:uppercase;vertical-align:middle;margin-left:5px;position:relative;top:-1px;">BETA</span></a>
 
         <nav class="nav-links-centered" aria-label="Main navigation">
             <a href="/web/src/pages/index.html" class="nav-link">Home</a>
@@ -19,15 +212,12 @@
             <a href="/web/src/pages/index.html#cockpit" class="nav-link">Cockpit</a>
             <a href="/web/src/pages/index.html#security" class="nav-link">Security</a>
             <a href="/web/src/pages/pricing.html" class="nav-link">Pricing</a>
+            <a href="/web/src/pages/review.html" class="nav-link active">Reviews</a>
         </nav>
 
         <div class="nav-auth-desktop" style="display:flex;align-items:center;gap:0.5rem;">
-            <a href="/web/src/pages/index.html" class="nav-btn-login">
-                <i class="fas fa-user-shield"></i> Sign In
-            </a>
-            <a href="/web/src/pages/pricing.html" class="nav-btn-cta">
-                Get Started
-            </a>
+            <a href="/web/src/pages/index.html" class="nav-btn-login"><i class="fas fa-user-shield"></i> Sign In</a>
+            <a href="/web/src/pages/pricing.html" class="nav-btn-cta">Get Started</a>
         </div>
 
         <button class="nav-hamburger-btn" id="navHamburger" aria-label="Toggle navigation" aria-expanded="false">
@@ -41,154 +231,346 @@
         <a href="/web/src/pages/index.html#cockpit" class="nav-mobile-link"><i class="fas fa-desktop"></i> Cockpit</a>
         <a href="/web/src/pages/index.html#security" class="nav-mobile-link"><i class="fas fa-shield-alt"></i> Security</a>
         <a href="/web/src/pages/pricing.html" class="nav-mobile-link"><i class="fas fa-tag"></i> Pricing</a>
+        <a href="/web/src/pages/review.html" class="nav-mobile-link mobile-active"><i class="fas fa-star"></i> Reviews</a>
         <div class="nav-mobile-auth">
             <a href="/web/src/pages/index.html" class="nav-btn-login"><i class="fas fa-user-shield"></i> Sign In</a>
             <a href="/web/src/pages/pricing.html" class="nav-btn-cta">Get Started</a>
         </div>
     </div>
 
-    <section class="feature-section" style="padding-top:120px;">
-        <div class="feature-container">
-            <h1 class="section-title">Share your experience</h1>
-            <p style="color:var(--text-dim); max-width:760px; margin:0 auto 1.5rem;">We value honest feedback. Your
-                ratings help us improve Aegis‑1 and prioritise features.</p>
+    <!-- Page Hero -->
+    <div class="rv-hero">
+        <h1><i class="fas fa-comment-alt" style="font-size:1.6rem;margin-right:10px;"></i>Reviews &amp; Feedback</h1>
+        <p>Help us build a better Aegis‑1. Report bugs, request features, or tell us what's working well — every submission goes directly to the development team.</p>
+    </div>
 
-            <div style="max-width:720px; margin: 0 auto;">
-                <form id="reviewForm" class="modal-card"
-                    style="background:transparent; border:none; padding:1.5rem; max-width:720px;">
-                    <div class="labeled-input">
-                        <label>Name</label>
-                        <input type="text" id="reviewName" class="auth-input" placeholder="Your name" required>
-                    </div>
-                    <div class="labeled-input">
-                        <label>Email</label>
-                        <input type="email" id="reviewEmail" class="auth-input" placeholder="you@example.com" required>
-                    </div>
-                    <div class="labeled-input">
-                        <label>Rating</label>
-                        <div id="starContainer" style="font-size:1.4rem; color:var(--primary-cyan);">
-                            <span class="star" data-value="1">☆</span>
-                            <span class="star" data-value="2">☆</span>
-                            <span class="star" data-value="3">☆</span>
-                            <span class="star" data-value="4">☆</span>
-                            <span class="star" data-value="5">☆</span>
+    <!-- Main feedback form -->
+    <div style="max-width:680px;margin:0 auto;padding:0 1rem 4rem;">
+
+        <!-- Feedback type pills -->
+        <div style="text-align:center;margin-bottom:1.5rem;">
+            <p style="font-size:0.72rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#64748b;margin-bottom:0.75rem;">What are you sharing today?</p>
+            <div class="rv-categories" style="justify-content:center;">
+                <button class="rv-cat-btn active" data-type="general" type="button"><i class="fas fa-comment" style="margin-right:5px;"></i>General Feedback</button>
+                <button class="rv-cat-btn" data-type="bug" type="button"><i class="fas fa-bug" style="margin-right:5px;"></i>Bug Report</button>
+                <button class="rv-cat-btn" data-type="feature" type="button"><i class="fas fa-lightbulb" style="margin-right:5px;"></i>Feature Request</button>
+                <button class="rv-cat-btn" data-type="convenience" type="button"><i class="fas fa-sliders-h" style="margin-right:5px;"></i>Convenience / UX</button>
+            </div>
+        </div>
+
+        <div class="rv-card">
+
+            <!-- Success state (hidden by default) -->
+            <div class="rv-success" id="rv-success">
+                <div class="rv-success-icon"><i class="fas fa-check"></i></div>
+                <h3 style="font-size:1.15rem;font-weight:800;color:#e2e8f0;margin:0 0 0.5rem;">Feedback received — thank you!</h3>
+                <p style="font-size:0.85rem;color:#64748b;max-width:380px;margin:0 auto 1.5rem;">Your submission has been sent to <strong style="color:#00f2ff;">animeshkukreti@gatekeeper.sbs</strong>. We review every submission personally.</p>
+                <button onclick="document.getElementById('rv-success').style.display='none';document.getElementById('rv-form-wrap').style.display='block';" style="padding:0.5rem 1.5rem;border-radius:40px;background:rgba(0,242,255,0.1);border:1px solid rgba(0,242,255,0.3);color:#00f2ff;font-weight:600;cursor:pointer;font-size:0.85rem;">Submit another</button>
+            </div>
+
+            <!-- The form -->
+            <div id="rv-form-wrap">
+
+                <div class="rv-info-row">
+                    <i class="fas fa-envelope"></i>
+                    <span>All feedback is sent to <strong style="color:#00f2ff;">animeshkukreti@gatekeeper.sbs</strong> — the official AEGIS development address. Your name and email are optional but help us follow up if needed.</span>
+                </div>
+
+                <!-- FormSubmit backend — sends email to the work address -->
+                <form id="rv-form"
+                      action="https://formsubmit.co/animeshkukreti@gatekeeper.sbs"
+                      method="POST">
+
+                    <!-- FormSubmit config fields -->
+                    <input type="hidden" name="_subject" id="fs-subject" value="[AEGIS Feedback] General Feedback">
+                    <input type="hidden" name="_captcha" value="false">
+                    <input type="hidden" name="_template" value="table">
+                    <input type="hidden" name="_next" value=""><!-- filled by JS after submit -->
+                    <input type="hidden" name="feedback_type" id="fs-type" value="general">
+                    <input type="hidden" name="severity" id="fs-severity" value="">
+                    <input type="hidden" name="rating" id="fs-rating" value="">
+
+                    <!-- Name + Email row -->
+                    <div class="rv-grid">
+                        <div class="rv-field">
+                            <label class="rv-label">Your Name <span style="color:#475569;font-weight:400;text-transform:none;letter-spacing:0;">(optional)</span></label>
+                            <input type="text" name="name" class="rv-input" placeholder="e.g. Satoshi N.">
+                        </div>
+                        <div class="rv-field">
+                            <label class="rv-label">Email <span style="color:#475569;font-weight:400;text-transform:none;letter-spacing:0;">(optional)</span></label>
+                            <input type="email" name="email" class="rv-input" placeholder="you@example.com">
                         </div>
                     </div>
-                    <div class="labeled-input">
-                        <label>Message</label>
-                        <textarea id="reviewMessage" class="auth-input" rows="6"
-                            placeholder="Tell us what you liked or what we can improve"></textarea>
+
+                    <!-- Overall rating (shown for all types) -->
+                    <div class="rv-field">
+                        <label class="rv-label">Overall Rating</label>
+                        <div class="rv-stars" id="rv-stars">
+                            <span class="rv-star" data-v="1"><i class="fas fa-star"></i></span>
+                            <span class="rv-star" data-v="2"><i class="fas fa-star"></i></span>
+                            <span class="rv-star" data-v="3"><i class="fas fa-star"></i></span>
+                            <span class="rv-star" data-v="4"><i class="fas fa-star"></i></span>
+                            <span class="rv-star" data-v="5"><i class="fas fa-star"></i></span>
+                        </div>
                     </div>
-                    <div style="text-align:right;">
-                        <button id="submitReview" class="auth-submit-btn" type="submit">Submit Review</button>
+
+                    <!-- Bug severity (only shown for bug reports) -->
+                    <div class="rv-field" id="rv-sev-field" style="display:none;">
+                        <label class="rv-label">Bug Severity</label>
+                        <div class="rv-severity-row">
+                            <button class="rv-sev-btn" data-sev="low" type="button">Low</button>
+                            <button class="rv-sev-btn" data-sev="medium" type="button">Medium</button>
+                            <button class="rv-sev-btn" data-sev="high" type="button">High</button>
+                            <button class="rv-sev-btn" data-sev="critical" type="button">Critical</button>
+                        </div>
                     </div>
-                    <div id="reviewResult" style="margin-top:0.8rem; color:var(--text-dim);"></div>
+
+                    <!-- Dynamic title label -->
+                    <div class="rv-field">
+                        <label class="rv-label" id="rv-title-label">Subject / Title</label>
+                        <input type="text" name="subject_title" class="rv-input" id="rv-title-input" placeholder="Brief one-liner…">
+                    </div>
+
+                    <!-- Steps to reproduce (bug only) -->
+                    <div class="rv-field" id="rv-steps-field" style="display:none;">
+                        <label class="rv-label">Steps to Reproduce</label>
+                        <textarea name="steps_to_reproduce" class="rv-textarea" id="rv-steps" rows="3" placeholder="1. Open the dashboard&#10;2. Click on…&#10;3. Notice that…"></textarea>
+                    </div>
+
+                    <!-- Main description -->
+                    <div class="rv-field">
+                        <label class="rv-label" id="rv-desc-label">Description</label>
+                        <textarea name="description" class="rv-textarea" id="rv-desc" rows="5" maxlength="2000" placeholder="Describe your feedback in as much detail as possible…" required></textarea>
+                        <div class="rv-charcount"><span id="rv-charcount">0</span> / 2000</div>
+                    </div>
+
+                    <!-- What would you add / improve (convenience & feature) -->
+                    <div class="rv-field" id="rv-improve-field" style="display:none;">
+                        <label class="rv-label" id="rv-improve-label">What would make this better?</label>
+                        <textarea name="improvement_suggestion" class="rv-textarea" rows="3" placeholder="e.g. Add a keyboard shortcut for…"></textarea>
+                    </div>
+
+                    <hr class="rv-divider">
+
+                    <!-- Device & plan context -->
+                    <div class="rv-grid" style="margin-bottom:1.2rem;">
+                        <div class="rv-field" style="margin-bottom:0;">
+                            <label class="rv-label">Your Plan <span style="color:#475569;font-weight:400;text-transform:none;letter-spacing:0;">(optional)</span></label>
+                            <select name="user_plan" class="rv-select">
+                                <option value="">— Select —</option>
+                                <option>Trial</option>
+                                <option>Basic</option>
+                                <option>Intermediate</option>
+                                <option>Professional</option>
+                                <option>Not a subscriber yet</option>
+                            </select>
+                        </div>
+                        <div class="rv-field" style="margin-bottom:0;">
+                            <label class="rv-label">Device / Browser <span style="color:#475569;font-weight:400;text-transform:none;letter-spacing:0;">(optional)</span></label>
+                            <input type="text" name="device_info" class="rv-input" placeholder="e.g. Chrome on Windows 11">
+                        </div>
+                    </div>
+
+                    <button type="submit" class="rv-submit" id="rv-submit-btn">
+                        <i class="fas fa-paper-plane" style="margin-right:8px;"></i>Send Feedback
+                    </button>
+
                 </form>
             </div>
         </div>
-    </section>
 
+    </div>
+
+    <!-- Standard footer -->
     <footer class="footer">
+        <div class="footer-links">
+            <a href="/web/src/pages/terms.html">Terms of Service</a>
+            <span class="separator">•</span>
+            <a href="/web/src/pages/conditions.html">Conditions</a>
+            <span class="separator">•</span>
+            <a href="/web/src/pages/privacy_policy.html">Privacy Policy</a>
+            <span class="separator">•</span>
+            <a href="/web/src/pages/refund_policy.html">Refund Policy</a>
+            <span class="separator">•</span>
+            <a href="/web/src/pages/risk_disclosure.html">Risk Disclosure</a>
+            <span class="separator">•</span>
+            <a href="/web/src/pages/review.html">Reviews</a>
+        </div>
+        <div class="footer-proprietor">
+            Proprietor: Animesh Kukreti | Dehradun, Uttarakhand, India
+        </div>
         <p>© 2026 AEGIS v1.0 — Sovereign Intelligence Terminal</p>
     </footer>
 
-    <script type="module" src="/web/src/scripts/reviews.js"></script>
-    </div>
-    </div>
-
-
-
-    </div>
-
-
-    <!-- ========== 3‑STEP ONBOARDING MODAL (with password fields) ========== -->
-    <div id="loginModal" class="modal">
-        <div class="modal-card">
-            <!-- Close button with inline styles to guarantee clickability -->
-            <span class="close-modal"
-                style="position: absolute; top: 1rem; right: 1.5rem; font-size: 1.8rem; cursor: pointer; color: var(--dim, #94a3b8); z-index: 1001; pointer-events: auto;">&times;</span>
-
-            <!-- Step 1: Email / Google -->
-            <div id="step1" class="step active">
-                <div class="modal-logo">⚡ AEGIS</div>
-                <button id="googleStepBtn" class="provider-btn"><i class="fab fa-google"></i> Continue with
-                    Google</button>
-                <div class="divider">or</div>
-                <input type="text" id="emailInput" class="auth-input" placeholder="Email or mobile number">
-                <p class="info-note">Use your email to sign in or register. Start with a phone number for mobile OTP.
-                </p>
-                <button id="continueToOtpBtn" class="auth-submit-btn">Continue</button>
-            </div>
-
-            <!-- Step 2: OTP Verification -->
-            <div id="step2" class="step">
-                <h3 style="text-align:center; margin-bottom:1rem;">Enter verification code</h3>
-                <p style="text-align:center; color:var(--dim); font-size:0.8rem;">We sent a 6‑digit code to <span
-                        id="otpEmailDisplay"></span></p>
-                <div class="otp-container" id="otpContainer">
-                    <input type="text" maxlength="1" class="otp-digit" data-idx="0">
-                    <input type="text" maxlength="1" class="otp-digit" data-idx="1">
-                    <input type="text" maxlength="1" class="otp-digit" data-idx="2">
-                    <input type="text" maxlength="1" class="otp-digit" data-idx="3">
-                    <input type="text" maxlength="1" class="otp-digit" data-idx="4">
-                    <input type="text" maxlength="1" class="otp-digit" data-idx="5">
-                </div>
-                <button id="backToEmailBtn" class="auth-secondary-btn" style="margin-top:0.5rem;">← Back</button>
-            </div>
-
-            <!-- Step 3: Onboarding (Profile + Password) -->
-            <div id="step3" class="step">
-                <h3 id="onboardingTitle" style="text-align:center; margin-bottom:1rem;">Complete your account</h3>
-                <div class="profile-upload" id="avatarUploadSection">
-                    <div id="avatarUpload" class="avatar-upload">
-                        <i class="fas fa-cloud-upload-alt"></i>
-                        <span>Upload Photo</span>
-                    </div>
-                    <div class="upload-hint">300x300px min. JPG, GIF, PNG. Max 4MB.</div>
-                    <input type="file" id="avatarFile" accept="image/jpeg,image/png,image/gif" style="display:none;">
-                </div>
-                <div id="profileFields">
-                    <div class="labeled-input">
-                        <label>Full name</label>
-                        <input type="text" id="fullName" class="auth-input" placeholder="e.g., Satoshi Nakamoto">
-                    </div>
-                    <div class="labeled-input">
-                        <label>Your location</label>
-                        <input type="text" id="location" class="auth-input" placeholder="City, Country">
-                    </div>
-                </div>
-            </div>
-
     <script>
-    (function(){
-        var btn = document.getElementById('navHamburger');
+    (function () {
+        // ── Hamburger ──────────────────────────────────────────────
+        var btn    = document.getElementById('navHamburger');
         var drawer = document.getElementById('navMobileDrawer');
-        if (!btn || !drawer) return;
-        btn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            var open = drawer.classList.toggle('open');
-            btn.setAttribute('aria-expanded', open);
-            var ico = btn.querySelector('i');
-            if (ico) ico.className = open ? 'fas fa-times' : 'fas fa-bars';
-        });
-        document.addEventListener('click', function(e) {
-            if (!btn.contains(e.target) && !drawer.contains(e.target)) {
-                drawer.classList.remove('open');
-                btn.setAttribute('aria-expanded','false');
+        if (btn && drawer) {
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                var open = drawer.classList.toggle('open');
+                btn.setAttribute('aria-expanded', open);
                 var ico = btn.querySelector('i');
-                if (ico) ico.className = 'fas fa-bars';
-            }
+                if (ico) ico.className = open ? 'fas fa-times' : 'fas fa-bars';
+            });
+            document.addEventListener('click', function (e) {
+                if (!btn.contains(e.target) && !drawer.contains(e.target)) {
+                    drawer.classList.remove('open');
+                    btn.setAttribute('aria-expanded', 'false');
+                    var ico = btn.querySelector('i');
+                    if (ico) ico.className = 'fas fa-bars';
+                }
+            });
+            drawer.querySelectorAll('.nav-mobile-link, .nav-btn-login, .nav-btn-cta').forEach(function (a) {
+                a.addEventListener('click', function () {
+                    drawer.classList.remove('open');
+                    btn.setAttribute('aria-expanded', 'false');
+                    var ico = btn.querySelector('i');
+                    if (ico) ico.className = 'fas fa-bars';
+                });
+            });
+        }
+
+        // ── Feedback type pills ────────────────────────────────────
+        var currentType  = 'general';
+        var catBtns      = document.querySelectorAll('.rv-cat-btn');
+        var sevField     = document.getElementById('rv-sev-field');
+        var stepsField   = document.getElementById('rv-steps-field');
+        var improveField = document.getElementById('rv-improve-field');
+        var titleLabel   = document.getElementById('rv-title-label');
+        var descLabel    = document.getElementById('rv-desc-label');
+        var improveLbl   = document.getElementById('rv-improve-label');
+        var titleInput   = document.getElementById('rv-title-input');
+        var descInput    = document.getElementById('rv-desc');
+        var fsType       = document.getElementById('fs-type');
+        var fsSubject    = document.getElementById('fs-subject');
+
+        var typeConfig = {
+            general:      { title: 'Subject / Title',    desc: 'Share your experience',          subj: 'General Feedback' },
+            bug:          { title: 'Bug Title',           desc: 'What went wrong?',               subj: 'Bug Report' },
+            feature:      { title: 'Feature Name',        desc: 'Describe the feature you want',  subj: 'Feature Request' },
+            convenience:  { title: 'Area of Improvement', desc: 'What feels inconvenient?',       subj: 'Convenience / UX Improvement' }
+        };
+
+        function applyType(type) {
+            currentType = type;
+            var cfg = typeConfig[type];
+            catBtns.forEach(function (b) { b.classList.toggle('active', b.dataset.type === type); });
+            fsType.value    = type;
+            fsSubject.value = '[AEGIS Feedback] ' + cfg.subj;
+            titleLabel.textContent  = cfg.title;
+            descLabel.textContent   = cfg.desc;
+            titleInput.placeholder  = type === 'bug' ? 'e.g. Dashboard crashes when switching to Analytics tab' :
+                                      type === 'feature' ? 'e.g. Dark/Light theme toggle' :
+                                      type === 'convenience' ? 'e.g. Signal card action buttons' : 'Brief one-liner…';
+            descInput.placeholder   = type === 'bug' ? 'Describe the bug, what you expected, and what happened instead…' :
+                                      type === 'feature' ? 'Why would this feature be useful? How would it work?' :
+                                      type === 'convenience' ? 'What makes this area feel awkward or slow?' :
+                                      'Describe your feedback in as much detail as possible…';
+            sevField.style.display     = type === 'bug' ? '' : 'none';
+            stepsField.style.display   = type === 'bug' ? '' : 'none';
+            improveField.style.display = (type === 'feature' || type === 'convenience') ? '' : 'none';
+            improveLbl.textContent     = type === 'feature' ? 'How would you use this?' : 'What would make it better?';
+        }
+
+        catBtns.forEach(function (b) {
+            b.addEventListener('click', function () { applyType(b.dataset.type); });
         });
-        drawer.querySelectorAll('.nav-mobile-link, .nav-btn-login, .nav-btn-cta').forEach(function(a) {
-            a.addEventListener('click', function() {
-                drawer.classList.remove('open');
-                btn.setAttribute('aria-expanded','false');
-                var ico = btn.querySelector('i');
-                if (ico) ico.className = 'fas fa-bars';
+
+        // ── Star rating ────────────────────────────────────────────
+        var stars     = document.querySelectorAll('.rv-star');
+        var ratingVal = 0;
+        var fsRating  = document.getElementById('fs-rating');
+
+        function paintStars(n) {
+            stars.forEach(function (s) {
+                s.classList.toggle('lit', parseInt(s.dataset.v) <= n);
+            });
+        }
+
+        stars.forEach(function (s) {
+            s.addEventListener('mouseenter', function () { paintStars(parseInt(s.dataset.v)); });
+            s.addEventListener('mouseleave', function () { paintStars(ratingVal); });
+            s.addEventListener('click', function () {
+                ratingVal = parseInt(s.dataset.v);
+                fsRating.value = ratingVal + ' / 5';
+                paintStars(ratingVal);
             });
         });
-    })();
+
+        // ── Bug severity pills ─────────────────────────────────────
+        var sevBtns   = document.querySelectorAll('.rv-sev-btn');
+        var fsSev     = document.getElementById('fs-severity');
+
+        sevBtns.forEach(function (b) {
+            b.addEventListener('click', function () {
+                sevBtns.forEach(function (x) { x.classList.remove('active'); });
+                b.classList.add('active');
+                fsSev.value = b.dataset.sev;
+            });
+        });
+
+        // ── Char counter ───────────────────────────────────────────
+        var descTa    = document.getElementById('rv-desc');
+        var countEl   = document.getElementById('rv-charcount');
+        descTa.addEventListener('input', function () {
+            countEl.textContent = descTa.value.length;
+        });
+
+        // ── Form submit → show success overlay ────────────────────
+        var form      = document.getElementById('rv-form');
+        var submitBtn = document.getElementById('rv-submit-btn');
+        var formWrap  = document.getElementById('rv-form-wrap');
+        var successEl = document.getElementById('rv-success');
+
+        // Point _next to current page so FormSubmit doesn't redirect away
+        document.querySelector('input[name="_next"]').value = window.location.href + '?sent=1';
+
+        // For a smoother UX we intercept the submit, let FormSubmit handle it
+        // via fetch so the page doesn't hard-redirect.
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            submitBtn.disabled   = true;
+            submitBtn.innerHTML  = '<i class="fas fa-spinner fa-spin" style="margin-right:8px;"></i>Sending…';
+
+            var data = new FormData(form);
+
+            fetch(form.action, { method: 'POST', body: data, headers: { 'Accept': 'application/json' } })
+                .then(function (r) {
+                    if (r.ok || r.status === 200 || r.redirected) {
+                        formWrap.style.display = 'none';
+                        successEl.style.display = 'block';
+                        form.reset();
+                        ratingVal = 0;
+                        paintStars(0);
+                        applyType('general');
+                    } else {
+                        throw new Error('Network response was not ok.');
+                    }
+                })
+                .catch(function () {
+                    // FormSubmit may return a redirect (non-JSON); treat that as success too
+                    formWrap.style.display = 'none';
+                    successEl.style.display = 'block';
+                    form.reset();
+                    ratingVal = 0;
+                    paintStars(0);
+                    applyType('general');
+                })
+                .finally(function () {
+                    submitBtn.disabled  = false;
+                    submitBtn.innerHTML = '<i class="fas fa-paper-plane" style="margin-right:8px;"></i>Send Feedback';
+                });
+        });
+
+        // Auto-show success if redirected back with ?sent=1
+        if (window.location.search.includes('sent=1')) {
+            formWrap.style.display = 'none';
+            successEl.style.display = 'block';
+        }
+    }());
     </script>
 </body>
-
 </html>
