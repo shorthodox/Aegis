@@ -537,16 +537,30 @@ function initGatekeeper() {
     }
   });
 
+  // Fast path: if a valid cached JWT exists, start loading immediately without
+  // waiting for Firebase's cold-start (~500 ms–2 s). onAuthStateChanged still
+  // fires in the background to silently refresh the token.
+  let _fastPathFired = false;
+  const _cachedToken = typeof AuthManager !== 'undefined' ? AuthManager.getToken() : null;
+  if (_cachedToken && !isJWTExpired(_cachedToken)) {
+    _fastPathFired = true;
+    loadUserFromBackend(_cachedToken).catch(() => {});
+  }
+
   onAuthStateChanged(auth, async (user) => {
     if (user) {
       console.log("Firebase user detected:", user.uid);
       const token = await user.getIdToken();
-      // Persist Firebase token so executeTrade and other API calls can find it
       if (typeof AuthManager !== 'undefined') AuthManager.setToken(token);
-      await loadUserFromBackend(token, user);
+      if (!_fastPathFired) {
+        await loadUserFromBackend(token, user);
+      }
+      // Fast path already running — just keep the stored token current so
+      // WebSocket reconnects and API calls use the fresh Firebase token.
     } else {
-      // No Firebase user, fallback to manual token check
-      checkAuthAndLoad();
+      if (!_fastPathFired) {
+        checkAuthAndLoad();
+      }
     }
   });
   setupFooter();
@@ -886,9 +900,14 @@ function applyUserData(userData, token) {
     localStorage.setItem('cachedAllowedTokens', JSON.stringify(allowedTokens));
   }
 
+  // Start WebSocket immediately — don't block on the /user/limits round-trip.
+  // BIG5_TOKENS is already set above as a safe fallback for trial users.
+  updateUI();
+  startWebSocket(token);
+
+  // Fetch limits and secondary data in the background; refresh UI when done.
   loadUserLimits().then(() => {
     updateUI();
-    startWebSocket(token);
     setupFirestoreListeners();
     loadGlobalPerformanceData();
     document.dispatchEvent(new CustomEvent('dashboardUserLoaded', { detail: { userData: currentUserData } }));
