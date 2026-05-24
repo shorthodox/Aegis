@@ -1120,7 +1120,7 @@ async function executeTrade() {
     signalId:      window.selectedTrade?.signalId || null,
   };
 
-  localStorage.setItem('analyticsActiveTrade', JSON.stringify(tradeData));
+  // Removed analyticsActiveTrade injection to prevent duplicate trade rendering.
 
   // UI feedback
   const btn = document.getElementById('execute-trade-btn');

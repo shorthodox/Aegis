@@ -1976,26 +1976,16 @@ function renderTrades(trades) {
     openTime:     t.openTime || t.entry_time || '',
   }));
 
-  // If the live snapshot returned no trades, try to fall back to any
-  // recently executed trade saved to localStorage (analyticsActiveTrade)
-  // or the last known trades cache so the UI doesn't flash empty briefly.
+  // If the live snapshot returned no trades, try to fall back to the
+  // last known trades cache so the UI doesn't flash empty briefly.
   if (normalized.length === 0) {
     try {
-      const stored = localStorage.getItem('analyticsActiveTrade');
       const lastKnown = localStorage.getItem('lastKnownTrades');
       let fallback = [];
 
       if (lastKnown) {
         const parsed = JSON.parse(lastKnown);
         if (Array.isArray(parsed) && parsed.length > 0) fallback = parsed.slice();
-      }
-
-      if (stored) {
-        const t = JSON.parse(stored);
-        if (t && (t.status === 'open' || !t.status)) {
-          // Ensure simulated trade appears at the front
-          fallback.unshift(Object.assign({ id: t.id || `sim-${Date.now()}` }, t));
-        }
       }
 
       if (fallback.length > 0) {
@@ -2127,13 +2117,6 @@ window.closeTrade = async function (tradeId) {
     try {
       const lk = localStorage.getItem('lastKnownTrades');
       if (lk) localStorage.setItem('lastKnownTrades', JSON.stringify(JSON.parse(lk).filter(t => (t.id || t.tradeId) !== id)));
-    } catch (_) {}
-    try {
-      const at = localStorage.getItem('analyticsActiveTrade');
-      if (at) {
-        const t = JSON.parse(at);
-        if (t && (t.id === id || t.tradeId === id)) localStorage.removeItem('analyticsActiveTrade');
-      }
     } catch (_) {}
   }
 
@@ -2373,18 +2356,6 @@ function setupFirestoreListeners() {
 
   // Allow the analytics room to render from localStorage while the snapshot loads
   window.forceTradesRefresh = function () {
-    let trades = [];
-
-    // Firestore-synced trades from the onSnapshot listener
-    const known = localStorage.getItem('lastKnownTrades');
-    if (known) {
-      try {
-        const parsed = JSON.parse(known);
-        if (Array.isArray(parsed)) trades = parsed;
-      } catch (_) {}
-    }
-
-    // Always include a freshly-executed trade that isn't already in the Firestore list
     const cached = localStorage.getItem('analyticsActiveTrade');
     if (cached) {
       try {

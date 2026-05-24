@@ -44,9 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ========== Simulator Global State ==========
     let currentUser = null;
-    window.selectedTrade = null;
-    let activeTrades = new Map();
-    let unsubscribeTrades = null;
+    let analyticsData = null;
     let unsubscribeSettings = null;
 
     // Listen to row clicks for simulation
@@ -145,121 +143,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ========== Execute Trade (Handled by dashboard.js) ==========
-
-    // ========== Live P/L Simulation (Analytics Room) ==========
-    // Uses #simPositionContainer (not #positionsContainer) so the Firestore-backed
-    // positions list rendered by gatekeeper.js is never overwritten.
-    function updateAnalyticsSimulation() {
-        const positionsContainer = document.getElementById('simPositionContainer');
-        if (!positionsContainer) return;
-
-        const storedTradeStr = localStorage.getItem('analyticsActiveTrade');
-        if (!storedTradeStr) {
-            if (positionsContainer.innerHTML.includes('simulated-trade')) {
-                positionsContainer.innerHTML = '';
-            }
-            return;
-        }
-        
-        const trade = JSON.parse(storedTradeStr);
-        
-        // Use real price from SignalStore instead of mock fluctuation
-        const sideMultiplier = trade.side === 'LONG' ? 1 : -1;
-        const currentSignal = signalStore.signals[trade.symbol];
-        const currentSimPrice = currentSignal && currentSignal.entry ? currentSignal.entry : trade.entryPrice;
-        
-        const priceDiff = currentSimPrice - trade.entryPrice;
-        const pnl = priceDiff * trade.positionUnits * sideMultiplier;
-        const pnlPercent = trade.notionalValue > 0 ? (pnl / (trade.notionalValue / trade.leverage)) * 100 : 0;
-        
-        const pnlColor = pnl >= 0 ? 'text-green-400' : 'text-red-400';
-        
-        positionsContainer.innerHTML = `
-            <div class="simulated-trade glass-panel p-4 rounded-xl border border-white/10 hover:border-cyan/30 transition-colors">
-                <div class="flex justify-between items-center mb-3">
-                    <div class="flex items-center gap-3">
-                        <div class="font-bold text-lg text-white">${trade.symbol}</div>
-                        <span class="text-xs px-2 py-0.5 rounded ${trade.side === 'LONG' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}">${trade.side} ${trade.leverage}x</span>
-                    </div>
-                    <div class="text-right">
-                        <div class="font-mono ${pnlColor} font-bold text-lg transition-colors duration-500">
-                            ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)} (${pnl >= 0 ? '+' : ''}${pnlPercent.toFixed(2)}%)
-                        </div>
-                    </div>
-                </div>
-                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm mt-4">
-                    <div>
-                        <div class="text-gray-500 text-xs uppercase">Entry Price</div>
-                        <div class="font-mono text-white mt-1">$${trade.entryPrice.toFixed(4)}</div>
-                    </div>
-                    <div>
-                        <div class="text-gray-500 text-xs uppercase">Current Price</div>
-                        <div class="font-mono text-cyan mt-1 transition-colors duration-500">$${currentSimPrice.toFixed(4)}</div>
-                    </div>
-                    <div>
-                        <div class="text-gray-500 text-xs uppercase">Position Size</div>
-                        <div class="font-mono text-white mt-1">$${trade.notionalValue.toFixed(2)}</div>
-                    </div>
-                    <div>
-                        <div class="text-gray-500 text-xs uppercase">Margin</div>
-                        <div class="font-mono text-white mt-1">$${(trade.notionalValue / trade.leverage).toFixed(2)}</div>
-                    </div>
-                </div>
-                <div class="mt-4 border-t border-white/10 pt-4 text-right">
-                   <button id="closeSimTradeBtn" class="bg-red-500/20 text-red-400 hover:bg-red-500/40 border border-red-500/30 px-4 py-1.5 rounded text-xs uppercase tracking-wider font-bold transition-all">Close Position</button>
-                </div>
-            </div>
-        `;
-        
-        document.getElementById('closeSimTradeBtn')?.addEventListener('click', () => {
-            localStorage.removeItem('analyticsActiveTrade');
-            updateAnalyticsSimulation();
-        });
-    }
-    
-    // Start interval for simulation
-    setInterval(updateAnalyticsSimulation, 2000);
-    updateAnalyticsSimulation();
-
-    // ========== Trades Table (Firestore) ==========
-    function renderTradesTable() {
-        const tbody = document.getElementById('trades-tbody');
-        if (!tbody) return;
-        
-        if (activeTrades.size === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No active trades</td></tr>';
-            return;
-        }
-        let html = '';
-        for (let [id, trade] of activeTrades.entries()) {
-            const currentSignal = signalStore.signals[trade.symbol];
-            const currentPrice = currentSignal ? currentSignal.entry : (trade.entryPrice || 0);
-            let pnl = 0;
-            const entryPrice = Number(trade.entryPrice || 0);
-            const positionUnits = Number(trade.positionUnits || 0);
-            if (trade.side === 'LONG') pnl = (currentPrice - entryPrice) * positionUnits;
-            else pnl = (entryPrice - currentPrice) * positionUnits;
-            
-            const pnlClass = pnl >= 0 ? 'color: #00ff88;' : 'color: #ff3333;';
-            html += `
-                <tr data-trade-id="${id}">
-                    <td>${trade.symbol}</td>
-                    <td>${trade.side}</td>
-                    <td>${entryPrice.toFixed(4)}</td>
-                    <td>${Number(trade.stopLoss || 0).toFixed(4)}</td>
-                    <td>${Number(trade.takeProfit || 0).toFixed(4)}</td>
-                    <td style="${pnlClass}">$${Number(pnl).toFixed(2)}</td>
-                    <td><button class="close-trade-btn btn-primary-glow" data-id="${id}" style="padding: 0.2rem 0.5rem; font-size: 0.8rem;">Close</button></td>
-                </tr>
-            `;
-        }
-        tbody.innerHTML = html;
-        document.querySelectorAll('.close-trade-btn').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                await closeTrade(btn.dataset.id);
-            });
-        });
-    }
+    // ========== Live P/L Simulation & Trades Table ==========
+    // Note: Rendering of #positionsContainer and #trades-tbody is handled 
+    // by renderTrades() in gatekeeper.js to avoid duplicate execution cards.
 
     async function closeTrade(tradeId) {
         if (!currentUser) return;
