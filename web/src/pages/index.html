@@ -1174,30 +1174,55 @@
          Fires once per browser session (guarded by localStorage).
          ============================================================ -->
     <style>
+      /* Outer card must not scroll — inner step area owns scrolling */
+      #onboarding-modal {
+        overflow: hidden !important;
+        display: flex !important;
+        flex-direction: column;
+      }
+      /* Step content area fills remaining space */
+      #wizard-content-area {
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding: 1.4rem 1.5rem;
+        min-height: 0; /* critical for flex-shrink to work in Firefox */
+        max-height: none !important;
+      }
       #onboarding-modal .ob-card {
-        padding: 1rem 1.1rem;
+        padding: 0.9rem 1rem;
         border-radius: 14px;
         display: flex;
-        gap: 1rem;
+        gap: 0.9rem;
         align-items: flex-start;
       }
       #onboarding-modal .ob-icon-wrap {
-        width: 36px;
-        height: 36px;
+        width: 34px;
+        height: 34px;
         border-radius: 10px;
         display: flex;
         align-items: center;
         justify-content: center;
         flex-shrink: 0;
-        font-size: 0.9rem;
+        font-size: 0.85rem;
       }
       #onboarding-modal .ob-compare-row {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 0.75rem;
+        gap: 0.7rem;
+      }
+      /* Step 3 old-vs-new comparison grid */
+      #s3-compare-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.6rem;
+        margin-bottom: 1rem;
       }
       @media (max-width: 500px) {
         #onboarding-modal .ob-compare-row { grid-template-columns: 1fr; }
+        #s3-compare-grid { grid-template-columns: 1fr; }
+        #wizard-content-area { padding: 1.1rem 1rem; }
+        #onboarding-modal .ob-card { gap: 0.75rem; padding: 0.75rem 0.85rem; }
       }
     </style>
 
@@ -1216,7 +1241,7 @@
         </div>
 
         <!-- Step content -->
-        <div style="padding:1.6rem 1.5rem;overflow-y:auto;max-height:calc(90vh - 130px);">
+        <div id="wizard-content-area">
 
           <!-- ── Step 1: Risk Warnings ── -->
           <div id="wizard-step-1" class="wizard-step">
@@ -1320,7 +1345,7 @@
             </div>
 
             <!-- Old vs New comparison -->
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;margin-bottom:1rem;">
+            <div id="s3-compare-grid">
               <div style="padding:0.9rem 1rem;border-radius:12px;background:rgba(251,191,36,0.03);border:1px solid rgba(251,191,36,0.14);">
                 <p style="font-size:0.65rem;font-family:monospace;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgba(251,191,36,0.6);margin:0 0 7px;"><i class="fas fa-robot" style="margin-right:5px;"></i>Old Retail Bots</p>
                 <p style="font-size:0.78rem;color:#64748b;line-height:1.5;margin:0;">Static If-This-Then-That rules. Can't adapt to shifting markets, over-trade in consolidation, or blindly DCA into crashes.</p>

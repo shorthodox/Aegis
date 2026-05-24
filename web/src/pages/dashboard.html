@@ -648,6 +648,24 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            // loginModal close button (× span)
+            const loginModal = document.getElementById('loginModal');
+            if (loginModal) {
+                const closeSpan = loginModal.querySelector('.close-modal');
+                if (closeSpan) {
+                    closeSpan.addEventListener('click', () => {
+                        loginModal.classList.remove('active');
+                        loginModal.style.display = 'none';
+                    });
+                }
+                loginModal.addEventListener('click', (e) => {
+                    if (e.target === loginModal) {
+                        loginModal.classList.remove('active');
+                        loginModal.style.display = 'none';
+                    }
+                });
+            }
+
             // Mobile Menu Logic
             const mobileMenuBtn = document.getElementById('mobileMenuBtn');
             const closeMenuBtn = document.getElementById('closeMenuBtn');
