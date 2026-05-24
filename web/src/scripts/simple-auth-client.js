@@ -105,25 +105,60 @@ async function subscribeToPlan(planType) {
   }
 
   try {
-    const meResp = await fetch('/auth/me', { headers: { 'Authorization': `Bearer ${token}` } });
-    if (!meResp.ok) {
+    // Prefer locally-stored profile (Firebase auth flow populates this via AuthManager.setUser).
+    // Avoids hitting /auth/me with a Firebase ID token that the custom server endpoint rejects.
+    let userEmail = null, userId = null;
+    try {
+      const profileRaw = localStorage.getItem('user_profile');
+      if (profileRaw) {
+        const profile = JSON.parse(profileRaw);
+        userEmail = profile.email || null;
+        userId = profile.uid || null;
+      }
+    } catch (_) {}
+
+    // Get a fresh Firebase token (handles 1-hour expiry; Firebase SDK auto-refreshes).
+    // Also fills userEmail/userId if the stored profile was missing.
+    let freshToken = token;
+    try {
+      const { auth } = await import('./gatekeeper.js');
+      if (auth?.currentUser) {
+        freshToken = await auth.currentUser.getIdToken();
+        localStorage.setItem('access_token', freshToken);
+        if (!userEmail) userEmail = auth.currentUser.email;
+        if (!userId)   userId   = auth.currentUser.uid;
+      }
+    } catch (_) {}
+
+    // Hard fallback: server-issued JWT users who never went through Firebase login
+    if (!userEmail) {
+      const meResp = await fetch('/auth/me', { headers: { 'Authorization': `Bearer ${freshToken}` } });
+      if (!meResp.ok) {
+        openModal();
+        return;
+      }
+      const me = await meResp.json();
+      userEmail = me.email;
+      userId = me.uid || me.id || 'user_unknown';
+    }
+
+    if (!userEmail) {
       openModal();
       return;
     }
-    const me = await meResp.json();
-    
+
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const isIndia = timeZone === 'Asia/Calcutta' || timeZone === 'Asia/Kolkata';
     const currency = isIndia ? 'INR' : 'USD';
-    
+
     let amount = isIndia ? 299.00 : 3.60;
     if (planType === 'pro') amount = isIndia ? 3499.00 : 40.00;
     else if (planType === 'intermediate') amount = isIndia ? 1999.00 : 24.00;
-    
-    const body = { tier: planType, amount: amount, currency: currency, email: me.email, user_id: me.uid || me.id || 'user_unknown' };
+
+    const body = { tier: planType, amount: amount, currency: currency, email: userEmail, user_id: userId || 'user_unknown' };
     const resp = await fetch('/api/v1/create-payment-session', {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: { 'Authorization': `Bearer ${freshToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
     const data = await resp.json().catch(() => ({}));
