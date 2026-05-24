@@ -150,7 +150,7 @@ let countdownInterval = null;
 let currentAlphaMode = false;
 
 // DOM Elements
-let signalsContainer, positionsContainer, balanceDisplay, capitalDisplay, riskDisplay;
+let signalsContainer, balanceDisplay, capitalDisplay, riskDisplay;
 let alphaToggleBtn, alphaStatus, upgradeBtn, logoutBtn, trialBanner, planBadge;
 let capitalInput, riskInput, saveSettingsBtn;
 
@@ -160,12 +160,7 @@ let capitalInput, riskInput, saveSettingsBtn;
 const BIG5_TOKENS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "ARB/USDT", "AAVE/USDT"];
 const PRO_TOKENS = []; // Will be populated from backend
 
-// Global state for new features
-let signalHistory = [];
-let paperTrades = [];
-let signalDebounceMap = new Map(); // Track last signal time per symbol
 let currentRiskProfile = 'balanced';
-let _lastRenderedTrades = [];
 
 // -------------------------------------------------------------------
 // Signal Status Determination
@@ -231,234 +226,8 @@ function showSubscriptionExpiredOverlay() {
 }
 
 // -------------------------------------------------------------------
-// Signal History Management
-// -------------------------------------------------------------------
-function addSignalToHistory(signal) {
-  if (!signal || signal.signal === 'HOLD') return;
-
-  const status = getSignalStatus(signal);
-  const historyEntry = {
-    symbol: signal.symbol,
-    signal: signal.signal,
-    entry_price: signal.entry_price,
-    sl: signal.sl,
-    tp: signal.tp,
-    timestamp: new Date().toISOString(),
-    signal_id: signal.signal_id,
-    status: status,
-    direction: signal.direction || 'NEUTRAL'
-  };
-
-  signalHistory.unshift(historyEntry);
-
-  // Keep only last 100 entries
-  if (signalHistory.length > 100) {
-    signalHistory = signalHistory.slice(0, 100);
-  }
-
-  updateSignalHistoryUI();
-  saveSignalHistoryToStorage();
-}
-
-function updateSignalHistoryUI() {
-  const tbody = document.getElementById('signalHistoryTbody');
-  if (!tbody) return;
-
-  if (signalHistory.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-gray-500">No signal history available</td></tr>';
-    return;
-  }
-
-  // Update signal statuses based on current prices
-  signalHistory.forEach(entry => {
-    if (!entry.status || entry.status === 'ACTIVE') {
-      entry.status = getSignalStatus(entry);
-    }
-  });
-
-  tbody.innerHTML = signalHistory.map(entry => {
-    const signalClass = getSignalClass(entry.signal, entry.status);
-    const timestamp = new Date(entry.timestamp).toLocaleString();
-    const status = entry.status || 'ACTIVE';
-
-    // Determine status badge styling
-    let statusBadgeClass = 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/50';
-    let statusText = 'ACTIVE';
-
-    if (status === 'EXPIRED') {
-      statusBadgeClass = 'bg-green-500/20 text-green-400 border border-green-500/50';
-      statusText = '✓ TARGET HIT';
-    } else if (status === 'STOPPED_OUT') {
-      statusBadgeClass = 'bg-red-500/20 text-red-400 border border-red-500/50';
-      statusText = '✗ STOPPED OUT';
-    }
-
-    // Win Rate Badge
-    const perf = (window.tokenPerformance && window.tokenPerformance[entry.symbol]) || null;
-    let winRateHtml = '';
-    if (perf) {
-      let wrClass = '';
-      if (perf.winRate >= 70) wrClass = 'win-rate-high';
-      else if (perf.winRate >= 50) wrClass = 'win-rate-medium';
-      winRateHtml = `<span class="win-rate-badge ${wrClass} text-[9px] ml-2 font-normal">WR: ${perf.winRate}%</span>`;
-    }
-
-    return `
-      <tr class="hover:bg-white/5">
-        <td class="p-3 font-bold flex items-center h-full">${entry.symbol} ${winRateHtml}</td>
-        <td class="p-3">
-          <span class="signal-badge ${signalClass} text-xs">${entry.signal}</span>
-        </td>
-        <td class="p-3 font-mono">${entry.entry_price ? '$' + entry.entry_price.toFixed(4) : '-'}</td>
-        <td class="p-3 font-mono">${entry.tp ? '$' + entry.tp.toFixed(4) : '-'}</td>
-        <td class="p-3 text-xs text-gray-400">${timestamp}</td>
-        <td class="p-3">
-          <span class="text-xs font-bold px-2 py-1 rounded ${statusBadgeClass}">${statusText}</span>
-        </td>
-        <td class="p-3">
-          <button onclick="initiatePaperTrade('${entry.symbol}', ${entry.entry_price || 0}, ${entry.sl || 0}, ${entry.tp || 0})" 
-                  class="text-xs bg-cyan/20 hover:bg-cyan/40 text-cyan border border-cyan/50 px-2 py-1 rounded transition-colors">
-            Paper Trade
-          </button>
-        </td>
-      </tr>
-    `;
-  }).join('');
-}
-
-function saveSignalHistoryToStorage() {
-  try {
-    localStorage.setItem('signalHistory', JSON.stringify(signalHistory));
-  } catch (e) {
-    console.warn('Failed to save signal history to localStorage:', e);
-  }
-}
-
-function loadSignalHistoryFromStorage() {
-  try {
-    const stored = localStorage.getItem('signalHistory');
-    if (stored) {
-      signalHistory = JSON.parse(stored);
-      updateSignalHistoryUI();
-    }
-  } catch (e) {
-    console.warn('Failed to load signal history from localStorage:', e);
-  }
-}
-
-function clearSignalHistory() {
-  signalHistory = [];
-  updateSignalHistoryUI();
-  localStorage.removeItem('signalHistory');
-}
-
-// -------------------------------------------------------------------
-// Paper Trading System
-// -------------------------------------------------------------------
-function initiatePaperTrade(symbol, entryPrice, sl, tp) {
-  const modal = document.getElementById('paperTradeModal');
-  const symbolSpan = document.getElementById('paperTradeSymbol');
-
-  // Pre-set selection globals so executeTrade() passes its guard check even
-  // if the user edits values before clicking confirm in the modal.
-  window.selectedTradeToken = symbol;
-
-  if (modal && symbolSpan) {
-    symbolSpan.textContent = symbol;
-    modal.classList.remove('hidden');
-
-    // Store trade data for confirmation
-    modal._tradeData = { symbol, entryPrice, sl, tp };
-  }
-}
-
-function startPaperTrade(symbol, entryPrice, sl, tp) {
-  const trade = {
-    id: Date.now().toString(),
-    symbol,
-    entryPrice,
-    sl,
-    tp,
-    startTime: new Date(),
-    currentPrice: entryPrice,
-    pnl: 0,
-    status: 'open'   // must match Firestore listener query: where('status', '==', 'open')
-  };
-
-  // Set global selection state so dashboard.js executeTrade() can find the token.
-  // Derive direction from SL position: SL < entry → LONG, SL > entry → SHORT.
-  window.selectedTradeToken = symbol;
-  window.selectedTrade = {
-    symbol,
-    direction: sl < entryPrice ? 'LONG' : 'SHORT',
-    entry_price: entryPrice,
-    sl,
-    tp,
-    signalId: null,
-  };
-
-  paperTrades.push(trade);
-  updatePaperTradesUI();
-
-  // Auto-fill terminal
-  autoFillTerminal(trade);
-
-  // Switch to terminal room
-  if (typeof switchRoom === 'function') {
-    switchRoom('terminal');
-  }
-}
-
-function updatePaperTradesUI() {
-  if (paperTrades.length > 0) {
-    renderTrades(paperTrades);
-  }
-}
-
-function autoFillTerminal(trade) {
-  const symbolSelect = document.getElementById('sim-symbol');
-  const entryInput = document.getElementById('sim-entry');
-  const slInput = document.getElementById('sim-sl');
-  const tpInput = document.getElementById('sim-tp');
-
-  if (symbolSelect) {
-    // Add option if not exists
-    let option = Array.from(symbolSelect.options).find(opt => opt.value === trade.symbol);
-    if (!option) {
-      option = document.createElement('option');
-      option.value = trade.symbol;
-      option.textContent = trade.symbol;
-      symbolSelect.appendChild(option);
-    }
-    symbolSelect.value = trade.symbol;
-  }
-
-  if (entryInput) entryInput.value = trade.entryPrice.toFixed(4);
-  if (slInput) slInput.value = trade.sl.toFixed(4);
-  if (tpInput) tpInput.value = trade.tp.toFixed(4);
-
-  // Trigger calculations
-  if (typeof window.calculatePosition === 'function') {
-    window.calculatePosition();
-  }
-}
-
-// -------------------------------------------------------------------
 // Signal Debouncing & Risk-Based Sorting
 // -------------------------------------------------------------------
-function shouldShowSignal(symbol, signalData) {
-  const now = Date.now();
-  const lastSignalTime = signalDebounceMap.get(symbol) || 0;
-  const debouncePeriod = 300000; // 5 minutes
-
-  if (now - lastSignalTime < debouncePeriod) {
-    console.log(`Signal for ${symbol} debounced (last signal ${Math.round((now - lastSignalTime) / 1000)}s ago)`);
-    return false;
-  }
-
-  signalDebounceMap.set(symbol, now);
-  return true;
-}
 
 function sortSignalsByRisk(signals) {
   if (!Array.isArray(signals)) return signals;
@@ -504,38 +273,6 @@ function initGatekeeper() {
   if (!document.getElementById('dashboard-main-content')) return;
   initializeElements();
   attachEventListeners();
-  loadSignalHistoryFromStorage();
-
-  // Global Event Listener for Real-Time Price Sync to drive Signal History Updates
-  window.addEventListener('priceUpdate', (e) => {
-    const { symbol, price } = e.detail;
-    let historyChanged = false;
-
-    // Check active signals in history and update status if target/stop hit
-    signalHistory.forEach(entry => {
-      if (entry.symbol === symbol && (!entry.status || entry.status === 'ACTIVE')) {
-        const newStatus = getSignalStatus(entry);
-        if (newStatus !== entry.status) {
-          entry.status = newStatus;
-          historyChanged = true;
-          console.log(`[Status Change] ${symbol} signal is now ${newStatus}`);
-        }
-      }
-    });
-
-    if (historyChanged) {
-      updateSignalHistoryUI();
-      saveSignalHistoryToStorage();
-    }
-  });
-
-  // Refresh trades PnL whenever a tracked symbol's price updates
-  window.addEventListener('priceUpdate', (e) => {
-    const { symbol } = e.detail;
-    if (_lastRenderedTrades.length > 0 && _lastRenderedTrades.some(t => t.symbol === symbol)) {
-      renderTrades(_lastRenderedTrades);
-    }
-  });
 
   // Fast path: if a valid cached JWT exists, start loading immediately without
   // waiting for Firebase's cold-start (~500 ms–2 s). onAuthStateChanged still
@@ -574,7 +311,6 @@ if (document.readyState === 'loading') {
 
 function initializeElements() {
   signalsContainer = document.getElementById('signalsContainer');
-  positionsContainer = document.getElementById('positionsContainer');
   balanceDisplay = document.getElementById('balanceDisplay');
   capitalDisplay = document.getElementById('capitalDisplay');
   riskDisplay = document.getElementById('riskDisplay');
@@ -621,36 +357,6 @@ function attachEventListeners() {
     });
   }
 
-  // Paper Trade Modal bindings
-  const paperTradeConfirm = document.getElementById('paperTradeConfirm');
-  const paperTradeCancel = document.getElementById('paperTradeCancel');
-  const paperTradeModal = document.getElementById('paperTradeModal');
-
-  if (paperTradeConfirm && paperTradeModal) {
-    paperTradeConfirm.addEventListener('click', () => {
-      if (paperTradeModal._tradeData) {
-        const { symbol, entryPrice, sl, tp } = paperTradeModal._tradeData;
-        startPaperTrade(symbol, entryPrice, sl, tp);
-        paperTradeModal.classList.add('hidden');
-      }
-    });
-  }
-  if (paperTradeCancel && paperTradeModal) {
-    paperTradeCancel.addEventListener('click', () => {
-      paperTradeModal.classList.add('hidden');
-    });
-  }
-
-  // Clear History Button
-  const clearHistoryBtn = document.getElementById('clearHistoryBtn');
-  if (clearHistoryBtn) {
-    clearHistoryBtn.addEventListener('click', () => {
-      if (confirm('Are you sure you want to clear all signal history?')) {
-        clearSignalHistory();
-      }
-    });
-  }
-
   // Timeframe listeners
   const tfBtns = document.querySelectorAll('.tf-btn');
   tfBtns.forEach(btn => {
@@ -691,41 +397,6 @@ function attachEventListeners() {
       currentRiskProfile = e.target.value;
       if (typeof window.latestSignals !== 'undefined' && Object.keys(window.latestSignals).length > 0) {
         debouncedFilterAndRenderSignals();
-      }
-    });
-  }
-
-  const simSelect = document.getElementById('sim-symbol');
-  if (simSelect) {
-    simSelect.addEventListener('change', (e) => {
-      const sym = e.target.value;
-      window.selectedTradeToken = sym; // Ensure global is set
-      if (sym && window.latestSignals) {
-        // Find the corresponding signal (try 1h timeframe first, then fallback)
-        const key1h = `${sym}_1h`;
-        const key15m = `${sym}_15m`;
-        if (window.latestSignals[key1h] || window.latestSignals[key15m]) {
-          const timeframe = window.latestSignals[key1h] ? '1h' : '15m';
-          window.selectSignal(sym, timeframe);
-        } else {
-          window.selectedTrade = {
-            symbol: sym,
-            direction: 'LONG',
-            entry_price: parseFloat(document.getElementById('sim-entry')?.value || window.currentTickers?.[sym] || 0)
-          };
-          if (typeof window.updateSimulation === 'function') {
-            window.updateSimulation();
-          }
-        }
-      } else {
-        window.selectedTrade = {
-          symbol: sym,
-          direction: 'LONG',
-          entry_price: parseFloat(document.getElementById('sim-entry')?.value || 0)
-        };
-        if (typeof window.updateSimulation === 'function') {
-          window.updateSimulation();
-        }
       }
     });
   }
@@ -1543,7 +1214,7 @@ function updateDashboardData(data) {
       ? rawTrades.filter(t => !t.user_id || t.user_id === uid)
       : rawTrades;
     if (incomingTrades.length > 0) localStorage.setItem('lastKnownTrades', JSON.stringify(incomingTrades));
-    renderTrades(incomingTrades);
+    if (typeof window.renderTrades === 'function') window.renderTrades(incomingTrades);
   }
 
   // Update alpha mode status
@@ -1865,55 +1536,9 @@ window.selectSignal = function (symbol, timeframe) {
   const sig = window.latestSignals && window.latestSignals[key];
   if (!sig) return;
 
-  // Set the global selectedTrade so terminal execution knows which trade is active
-  window.selectedTrade = {
-    symbol: sig.symbol,
-    direction: sig.direction || (sig.signal && sig.signal.includes('BUY') ? 'LONG' : (sig.signal && sig.signal.includes('SELL') ? 'SHORT' : 'NEUTRAL')),
-    signalId: sig.signal_id || sig.signalId,
-    ...sig
-  };
-
-  // Delegate to dashboard.js to properly populate selectedTrade state if function exists
-  if (typeof window.prefillTradeSim === 'function') {
-    window.prefillTradeSim(symbol, sig.entry_price || 0, sig);
-  }
-
-  // Add to signal history
-  addSignalToHistory(sig);
-
-  const simSelect = document.getElementById('sim-symbol');
-  const simEntry = document.getElementById('sim-entry');
-  const simSl = document.getElementById('sim-sl');
-  const simTp = document.getElementById('sim-tp');
-  const directionBadge = document.getElementById('direction-badge');
-
-  if (simSelect) {
-    if (!Array.from(simSelect.options).some(opt => opt.value === symbol)) {
-      const newOpt = document.createElement('option');
-      newOpt.value = symbol;
-      newOpt.textContent = symbol;
-      simSelect.appendChild(newOpt);
-    }
-    simSelect.value = symbol;
-  }
-  if (simEntry) simEntry.value = sig.entry_price || 0;
-  if (simSl) simSl.value = sig.sl || 0;
-  if (simTp) simTp.value = sig.tp || 0;
-
-  if (directionBadge) {
-    directionBadge.textContent = sig.direction || 'NEUTRAL';
-    if (sig.direction === 'LONG') {
-      directionBadge.className = 'text-xs px-2 py-0.5 rounded bg-green-500/20 text-green-400 font-bold border border-green-500/30';
-    } else if (sig.direction === 'SHORT') {
-      directionBadge.className = 'text-xs px-2 py-0.5 rounded bg-red-500/20 text-red-400 font-bold border border-red-500/30';
-    } else {
-      directionBadge.className = 'text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-400';
-    }
-  }
-
-  if (typeof window.calculatePosition === 'function') {
-    window.calculatePosition();
-  }
+  // Delegate signal history and terminal prefill to trading-rooms.js
+  if (typeof window.addToSignalHistory === 'function') window.addToSignalHistory(sig);
+  if (typeof window.prefillFromSignal === 'function') window.prefillFromSignal(sig);
 
   // Switch to the terminal tab
   if (typeof window.switchRoom === 'function') {
@@ -1951,219 +1576,6 @@ function getSignalCardType(direction) {
   return 'hold';
 }
 
-function renderTrades(trades) {
-  // Ensure we only render trades that belong to the currently authenticated
-  // user. Some backend systems (live_engine) may write global executions
-  // which should not appear in a user's Analytics view.
-  let tradesToProcess = trades || [];
-  const uid = (auth && auth.currentUser && auth.currentUser.uid) || (currentUser && currentUser.uid);
-  if (uid && tradesToProcess.length > 0) {
-    const containsOtherUsers = tradesToProcess.some(tt => tt.userId && tt.userId !== uid);
-    if (containsOtherUsers) {
-      tradesToProcess = tradesToProcess.filter(tt => (tt.userId && tt.userId === uid) || String(tt.id || '').startsWith('sim-'));
-    }
-  }
-
-  _lastRenderedTrades = tradesToProcess || [];
-  let normalized = (tradesToProcess || []).map(t => ({
-    id:           t.id || t.tradeId || '',
-    symbol:       t.symbol || '—',
-    side:         t.side || t.direction || 'LONG',
-    entryPrice:   parseFloat(t.entryPrice   || t.entry_price  || 0),
-    stopLoss:     parseFloat(t.stopLoss     || t.stop_loss    || t.sl || 0),
-    takeProfit:   parseFloat(t.takeProfit   || t.take_profit  || t.tp || 0),
-    positionUnits:parseFloat(t.positionUnits|| t.position_size|| 0),
-    openTime:     t.openTime || t.entry_time || '',
-  }));
-
-  // If the live snapshot returned no trades, try to fall back to the
-  // last known trades cache so the UI doesn't flash empty briefly.
-  if (normalized.length === 0) {
-    try {
-      const lastKnown = localStorage.getItem('lastKnownTrades');
-      let fallback = [];
-
-      if (lastKnown) {
-        const parsed = JSON.parse(lastKnown);
-        if (Array.isArray(parsed) && parsed.length > 0) fallback = parsed.slice();
-      }
-
-      if (fallback.length > 0) {
-        normalized = fallback.map(t => ({
-          id:           t.id || t.tradeId || '',
-          symbol:       t.symbol || '—',
-          side:         t.side || t.direction || 'LONG',
-          entryPrice:   parseFloat(t.entryPrice   || t.entry_price  || t.entry || 0),
-          stopLoss:     parseFloat(t.stopLoss     || t.stop_loss    || t.sl || 0),
-          takeProfit:   parseFloat(t.takeProfit   || t.take_profit  || t.tp || 0),
-          positionUnits:parseFloat(t.positionUnits|| t.position_size|| t.position_units || 0),
-          openTime:     t.openTime || t.entry_time || t.openTime || ''
-        }));
-      }
-    } catch (err) {
-      // ignore parsing errors and fall through to empty state
-      console.warn('Fallback trades parse error:', err);
-    }
-  }
-
-  // ── Position Cards (#positionsContainer) ─────────────────────────
-  if (positionsContainer) {
-    if (normalized.length === 0) {
-      positionsContainer.innerHTML = `
-        <div class="text-center py-8 text-gray-500">
-          <i class="fas fa-chart-line text-2xl mb-3 opacity-30"></i>
-          <p class="text-sm">No active positions. Execute a trade from the Terminal to track it here.</p>
-        </div>`;
-    } else {
-      positionsContainer.innerHTML = normalized.map(trade => {
-        const cur      = window.currentTickers?.[trade.symbol]
-          ? parseFloat(window.currentTickers[trade.symbol]) : trade.entryPrice;
-        const pnl      = trade.side === 'LONG'
-          ? (cur - trade.entryPrice) * trade.positionUnits
-          : (trade.entryPrice - cur) * trade.positionUnits;
-        const pnlPct   = trade.entryPrice > 0
-          ? (pnl / (trade.entryPrice * (trade.positionUnits || 1)) * 100) : 0;
-        const pnlSign  = pnl >= 0 ? '+' : '';
-        const pnlColor = pnl >= 0 ? 'text-green-400' : 'text-red-400';
-        const sideCls  = trade.side === 'LONG'
-          ? 'bg-green-500/20 text-green-400 border-green-500/30'
-          : 'bg-red-500/20 text-red-400 border-red-500/30';
-        const opened   = trade.openTime ? new Date(trade.openTime).toLocaleString() : '—';
-
-        return `
-          <div class="bg-black/40 p-4 rounded-xl border border-white/10 flex flex-wrap items-center gap-4">
-            <span class="text-xs px-2 py-1 rounded border font-bold ${sideCls}">${trade.side}</span>
-            <div class="flex-1 min-w-0">
-              <div class="font-bold text-white">${trade.symbol}</div>
-              <div class="text-xs text-gray-500 font-mono truncate">Entry: $${trade.entryPrice.toFixed(4)} &nbsp;·&nbsp; ${opened}</div>
-            </div>
-            <div class="text-right">
-              <div class="font-mono font-bold ${pnlColor}">${pnlSign}$${pnl.toFixed(2)}</div>
-              <div class="text-xs ${pnlColor} opacity-70">${pnlSign}${pnlPct.toFixed(2)}%</div>
-            </div>
-            <div class="text-right font-mono text-xs text-gray-500 hidden sm:block">
-              <div>SL <span class="text-red-400">$${trade.stopLoss.toFixed(4)}</span></div>
-              <div>TP <span class="text-green-400">$${trade.takeProfit.toFixed(4)}</span></div>
-            </div>
-            <button onclick="window.closeTrade('${trade.id}')"
-              class="text-xs px-3 py-2 rounded-lg bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/40 transition-colors font-bold whitespace-nowrap">
-              <i class="fas fa-times-circle mr-1"></i>Close
-            </button>
-          </div>`;
-      }).join('');
-    }
-  }
-
-  // ── Active Executions Table (#trades-tbody) ───────────────────────
-  const tbody = document.getElementById('trades-tbody');
-  if (tbody) {
-    if (normalized.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-gray-500">No active trades</td></tr>';
-    } else {
-      tbody.innerHTML = normalized.map(trade => {
-        const cur      = window.currentTickers?.[trade.symbol]
-          ? parseFloat(window.currentTickers[trade.symbol]) : trade.entryPrice;
-        const pnl      = trade.side === 'LONG'
-          ? (cur - trade.entryPrice) * trade.positionUnits
-          : (trade.entryPrice - cur) * trade.positionUnits;
-        const pnlSign  = pnl >= 0 ? '+' : '';
-        const pnlColor = pnl >= 0 ? 'text-green-400' : 'text-red-400';
-        const sideCls  = trade.side === 'LONG' ? 'text-green-400' : 'text-red-400';
-
-        return `
-          <tr class="hover:bg-white/5">
-            <td class="p-3 font-bold text-white">${trade.symbol}</td>
-            <td class="p-3 font-bold ${sideCls}">${trade.side}</td>
-            <td class="p-3 font-mono">$${trade.entryPrice.toFixed(4)}</td>
-            <td class="p-3 font-mono text-red-400">$${trade.stopLoss.toFixed(4)}</td>
-            <td class="p-3 font-mono text-green-400">$${trade.takeProfit.toFixed(4)}</td>
-            <td class="p-3 font-mono font-bold ${pnlColor}">${pnlSign}$${pnl.toFixed(2)}</td>
-            <td class="p-3">
-              <button onclick="window.closeTrade('${trade.id}')"
-                class="text-xs px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/40 transition-colors font-bold">
-                Close
-              </button>
-            </td>
-          </tr>`;
-      }).join('');
-    }
-  }
-}
-
-window.closeTrade = async function (tradeId) {
-  if (!tradeId) return;
-
-  // Find the trade in the last rendered list to validate ownership
-  const trade = _lastRenderedTrades.find(t => (t.id || t.tradeId) === tradeId);
-  const uid = (auth && auth.currentUser && auth.currentUser.uid) || (currentUser && currentUser.uid);
-
-  if (trade) {
-    // If trade has a userId and it doesn't match current user, don't call backend
-    if (trade.userId && uid && trade.userId !== uid) {
-      console.warn('Attempted to close a trade that does not belong to the current user', { tradeId, owner: trade.userId, me: uid });
-      alert('Cannot close this trade: it does not belong to your account. Refreshing trades.');
-      if (typeof window.forceTradesRefresh === 'function') window.forceTradesRefresh();
-      return;
-    }
-  }
-
-  // Optimistic removal — drop the row from both tables immediately so the
-  // user sees instant feedback rather than waiting for the Firestore round-trip.
-  _lastRenderedTrades = _lastRenderedTrades.filter(t => (t.id || t.tradeId) !== tradeId);
-  renderTrades(_lastRenderedTrades);
-
-  // Prune from localStorage so the fallback renderer can't re-add the trade
-  function pruneFromStorage(id) {
-    try {
-      const lk = localStorage.getItem('lastKnownTrades');
-      if (lk) localStorage.setItem('lastKnownTrades', JSON.stringify(JSON.parse(lk).filter(t => (t.id || t.tradeId) !== id)));
-    } catch (_) {}
-  }
-
-  // Simulated trades (sim-*) only live in localStorage — no backend record exists
-  if (String(tradeId).startsWith('sim-')) {
-    pruneFromStorage(tradeId);
-    return;
-  }
-
-  try {
-    // Defensive: ensure simulated trades never reach the backend (double-check)
-    if (String(tradeId).startsWith('sim-')) {
-      pruneFromStorage(tradeId);
-      return;
-    }
-
-    const token = typeof AuthManager !== 'undefined' ? AuthManager.getToken() : null;
-    if (!token) { alert('Session expired. Please refresh and log in again.'); return; }
-
-    console.log('Closing trade via API', { tradeId, uid });
-    const url = `/api/trades/${encodeURIComponent(tradeId)}/close`;
-    const r = await fetch(url, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-
-    if (r.status === 404) {
-      // Trade not on server (already closed or never persisted) — just clean up locally
-      console.warn('Backend returned 404 when closing trade', tradeId);
-      pruneFromStorage(tradeId);
-      return;
-    }
-
-    if (!r.ok) {
-      const text = await r.text();
-      throw new Error(`HTTP ${r.status} ${text}`);
-    }
-
-    pruneFromStorage(tradeId);
-    // Firestore listener will reconcile the authoritative list on the next snapshot.
-  } catch (e) {
-    console.error('closeTrade error:', e);
-    alert(`Could not close trade: ${e.message}`);
-    // Re-fetch known trades to restore the list if the request failed
-    if (typeof window.forceTradesRefresh === 'function') window.forceTradesRefresh();
-  }
-};
 
 // -------------------------------------------------------------------
 // Global Performance Data (analytics/global_performance)
@@ -2344,7 +1756,7 @@ function setupFirestoreListeners() {
       const trades = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       // Always sync so closed-trade pruning clears the cache even when 0 open trades remain
       localStorage.setItem('lastKnownTrades', JSON.stringify(trades));
-      renderTrades(trades);
+      if (typeof window.renderTrades === 'function') window.renderTrades(trades);
     }, (error) => {
       console.error('Trades listener error:', error);
       if (error.code !== 'permission-denied') {
@@ -2379,8 +1791,7 @@ function setupFirestoreListeners() {
       }
     }
 
-    if (trades.length > 0) { renderTrades(trades); return; }
-    if (paperTrades.length > 0) { renderTrades(paperTrades); }
+    if (trades.length > 0 && typeof window.renderTrades === 'function') { window.renderTrades(trades); }
   };
 }
 
@@ -2756,9 +2167,6 @@ export async function updateUserSetting(user, key, value) {
   const ref = doc(db, 'users', user.uid, 'preferences', 'settings');
   await setDoc(ref, { [key]: value }, { merge: true });
 }
-
-// Expose functions globally for HTML access
-window.initiatePaperTrade = initiatePaperTrade;
 
 export function getCurrentUserToken() {
   return AuthManager.getToken();
