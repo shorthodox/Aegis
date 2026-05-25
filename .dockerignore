@@ -27,6 +27,10 @@ logs/*.log
 .continue/
 .firebase/
 
+# Railway config (not needed inside Docker image)
+railway.json
+Procfile
+
 # Firebase / Dataconnect
 dataconnect/
 .firebaserc
