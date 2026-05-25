@@ -1486,7 +1486,7 @@ class LiveEngine:
                     if sig:
                         sig['timeframe'] = '1h'
                         self.last_signals[cfg.symbol] = {
-                            tf: dict(sig, timeframe=tf) for tf in ['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w']
+                            tf: dict(sig, timeframe=tf) for tf in ['1m', '5m', '15m', '30m', '1h', '4h', '1d']
                         }
                 except Exception as e:
                     logger.warning(f"Initial signal compute error for {cfg.symbol}: {e}")
