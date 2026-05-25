@@ -16,6 +16,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application source
 COPY . .
 
+# Guard: fail loudly if compiled CSS was excluded by .dockerignore instead of silently
+# serving broken pages. Run: cd web && npm run build:css and commit the result.
+RUN test -f web/dist/styles.css || { echo "FATAL: web/dist/styles.css missing from image. Run 'cd web && npm run build:css' and commit the output."; exit 1; }
+
 EXPOSE 8080
 
 RUN chmod +x start.sh

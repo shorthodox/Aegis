@@ -40,5 +40,5 @@ firebase.json
 *.md
 skills-lock.json
 
-# Build artifacts
-
+# web/dist/ is intentionally NOT excluded — styles.css is committed and must be
+# present in the image. See Dockerfile guard that validates this at build time.
