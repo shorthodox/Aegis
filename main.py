@@ -837,8 +837,13 @@ def is_trial_expired(email: str) -> bool:
     user_doc = get_user_doc(email)
     if not user_doc:
         return True
-    if user_doc.get("plan") in ("pro", "premium", "intermediate"):
-        return False
+    plan = user_doc.get("plan", "trial")
+    if plan in ("pro", "premium", "intermediate", "basic"):
+        # Only bypass expiry if there is an active subscription record
+        subscription = user_doc.get("subscription", {})
+        if isinstance(subscription, dict) and subscription.get("status") == "active":
+            return False
+        # No active subscription — fall through to trial date check
     trial_end_raw = user_doc.get("trial_end")
     if trial_end_raw:
         if isinstance(trial_end_raw, datetime):
@@ -873,20 +878,9 @@ async def get_me(user_id: str = Depends(get_current_user)):
         # Attempt to get user document by email/id
         user_doc = get_user_doc(user_id)
         
-        # If no document found and user_id looks like an email, try creating a default entry
+        # No document found — return 404 so the frontend provisioning flow triggers correctly
         if not user_doc:
-            # This shouldn't happen in normal flow, but provide a sensible fallback
-            from datetime import datetime, timezone, timedelta
-            default_trial_end = (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()
-            return {
-                "uid": user_id,
-                "email": user_id,
-                "plan": "trial",
-                "trial_end": default_trial_end,
-                "full_name": user_id.split("@")[0] if "@" in user_id else "User",
-                "location": None,
-                "_generated": True  # Indicates this is a generated response
-            }
+            raise HTTPException(status_code=404, detail="User not found")
         
         # Return user data with all necessary fields
         return {

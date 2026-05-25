@@ -32,18 +32,16 @@ async function checkUserSubscriptionStatus(uid) {
   const now = new Date();
 
   // Fast path: AuthManager already resolved the plan on a previous auth cycle.
-  // Trust it immediately so the UI never flashes 'expired' while Firestore loads.
+  // Only trust it if subscription_active is explicitly true — never bypass on plan name alone.
   if (typeof AuthManager !== 'undefined') {
     const u = AuthManager.getUser();
-    if (u) {
+    if (u && u.subscription_active === true) {
       const p = (u.plan || u.tier || '').toLowerCase();
       if (p === 'pro' || p === 'premium' || p === 'intermediate' || p === 'basic') {
         console.log('[SubCheck] AuthManager fast-path → paid (' + p + ')');
         return 'paid';
       }
     }
-    // Any active JWT session → at minimum a trial; won't default to 'expired'
-    // before Firestore has a chance to respond.
   }
 
   // Placeholder UID — skip Firestore, fall back to localStorage only
