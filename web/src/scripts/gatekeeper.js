@@ -604,6 +604,18 @@ function applyUserData(userData, token) {
 async function provisionUserFromFirebase(firebaseUser, token, attempt = 1) {
   const MAX_ATTEMPTS = 3;
 
+  // Detect provider — email/password accounts must present the OTP signup_token
+  const provider = firebaseUser.providerData?.[0]?.providerId || 'firebase';
+  const isPasswordUser = provider === 'password';
+  const signupToken = sessionStorage.getItem('otp_signup_token');
+
+  if (isPasswordUser && !signupToken) {
+    // No OTP-verified token — block provisioning and send back to signup
+    console.warn('[provision] Password user missing OTP signup_token — redirecting to login');
+    redirectToLogin();
+    return;
+  }
+
   if (attempt === 1) showProvisioningState();
 
   try {
@@ -616,14 +628,21 @@ async function provisionUserFromFirebase(firebaseUser, token, attempt = 1) {
       body: JSON.stringify({
         uid: firebaseUser.uid,
         email: firebaseUser.email || null,
-        display_name: firebaseUser.displayName || null
+        display_name: firebaseUser.displayName || null,
+        provider,
+        signup_token: isPasswordUser ? signupToken : null
       })
     });
 
     if (response.ok) {
+      sessionStorage.removeItem('otp_signup_token'); // single-use — clear after provisioning
       hideProvisioningState();
       const userData = await response.json();
       applyUserData(userData, token);
+    } else if (response.status === 403) {
+      // OTP token rejected by backend — never retry, send to signup
+      hideProvisioningState();
+      redirectToLogin();
     } else if (attempt < MAX_ATTEMPTS) {
       await new Promise(r => setTimeout(r, 1000 * attempt));
       return provisionUserFromFirebase(firebaseUser, token, attempt + 1);

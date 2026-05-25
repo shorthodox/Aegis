@@ -300,7 +300,7 @@ async function handleStep2Verify() {
 
   // OTP passed — create Firebase account + Firestore doc
   setLoading(true, 'Creating your account…');
-  const signupResult = await handleEmailSignup(_pending.email, _pending.password, _pending.name);
+  const signupResult = await handleEmailSignup(_pending.email, _pending.password, _pending.name, verifyResult.signup_token);
   setLoading(false);
 
   if (!signupResult.success) {

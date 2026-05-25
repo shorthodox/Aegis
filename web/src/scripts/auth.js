@@ -199,7 +199,7 @@ export async function verifyOTPForSignup(email, otp) {
     });
     const data = await res.json();
     if (!res.ok) return { success: false, message: data.detail || 'Invalid OTP' };
-    return { success: true };
+    return { success: true, signup_token: data.signup_token };
   } catch {
     return { success: false, message: 'Network error. Please try again.' };
   }
@@ -208,7 +208,7 @@ export async function verifyOTPForSignup(email, otp) {
 // ============================================================
 // EMAIL/PASSWORD SIGNUP (called only after OTP is verified)
 // ============================================================
-export async function handleEmailSignup(email, password, displayName) {
+export async function handleEmailSignup(email, password, displayName, signupToken = null) {
   try {
     if (!email || !password || !displayName) {
       throw new Error('Please fill in all fields');
@@ -217,6 +217,13 @@ export async function handleEmailSignup(email, password, displayName) {
     if (password.length < 8) {
       throw new Error('Password must be at least 8 characters');
     }
+
+    if (!signupToken) {
+      throw new Error('Email verification required before creating an account.');
+    }
+
+    // Store token so provisionUserFromFirebase can present it to the backend
+    sessionStorage.setItem('otp_signup_token', signupToken);
 
     // Check if Firebase account already exists for this email
     const methods = await fetchSignInMethodsForEmail(auth, email);

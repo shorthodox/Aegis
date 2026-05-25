@@ -915,6 +915,24 @@ async def provision_user(request: Request, user_id: str = Depends(get_current_us
         firebase_uid = data.get("uid") or user_id
         email = data.get("email") or (user_id if "@" in user_id else None)
         display_name = data.get("display_name") or (email.split("@")[0] if email else firebase_uid)
+        provider = data.get("provider", "firebase")
+
+        # Email/password accounts must present a valid OTP signup_token to prevent bypass
+        if provider == "password":
+            signup_token = data.get("signup_token")
+            if not signup_token:
+                raise HTTPException(status_code=403, detail="OTP verification required before account creation.")
+            valid = any(
+                isinstance(entry, dict) and entry.get("signup_token") == signup_token
+                for entry in otp_store.values()
+            )
+            if not valid:
+                raise HTTPException(status_code=403, detail="Invalid or expired OTP verification token.")
+            # Invalidate the token — single use only
+            for k, entry in list(otp_store.items()):
+                if isinstance(entry, dict) and entry.get("signup_token") == signup_token:
+                    otp_store.pop(k, None)
+                    break
 
         # Prefer email as doc key (consistent with rest of backend), fall back to uid
         doc_key = email or firebase_uid
@@ -1164,8 +1182,10 @@ async def verify_otp_for_registration(request: OTPVerifyRequest):
         raise HTTPException(status_code=400, detail="OTP has expired. Please request a new one.")
     if record["otp"] != otp:
         raise HTTPException(status_code=400, detail="Invalid OTP. Please try again.")
+    signup_token = str(uuid.uuid4())
     otp_store[email]["verified"] = True
-    return {"success": True, "message": "OTP verified successfully. Please complete your profile."}
+    otp_store[email]["signup_token"] = signup_token
+    return {"success": True, "message": "OTP verified successfully. Please complete your profile.", "signup_token": signup_token}
 
 @app.post("/auth/complete-registration")
 async def complete_registration(profile: UserProfileComplete):
