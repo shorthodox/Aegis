@@ -1,0 +1,25 @@
+app = "aegis-signals"
+primary_region = "bom"
+
+[build]
+
+[env]
+  PORT = "8080"
+  ENV = "production"
+  BASE_URL = "https://aegis-signals.fly.dev"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 100
+    soft_limit = 80
+
+[[vm]]
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1

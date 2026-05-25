@@ -1,0 +1,40 @@
+# Python environments
+.venv/
+venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# Secrets
+.env
+config/serviceAccountKey.json
+
+# Version control
+.git/
+.gitignore
+
+# Node
+node_modules/
+web/node_modules/
+
+# Logs
+logs/*.log
+
+# IDE / tooling
+.vscode/
+.claude/
+.continue/
+.firebase/
+
+# Firebase / Dataconnect
+dataconnect/
+.firebaserc
+firebase.json
+
+# Unused docs
+*.md
+skills-lock.json
+
+# Build artifacts
+web/dist/
