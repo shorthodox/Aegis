@@ -1042,13 +1042,14 @@ class Review(BaseModel):
 # Email configuration
 # -------------------------------------------------------------------
 conf = ConnectionConfig(
-    MAIL_USERNAME=os.getenv("MAIL_USERNAME", "your_email@gmail.com"),
-    MAIL_PASSWORD=SecretStr(os.getenv("MAIL_PASSWORD", "your_app_password")),
-    MAIL_FROM=os.getenv("MAIL_FROM", "noreply@aegis.com"),
-    MAIL_PORT=587,
-    MAIL_SERVER="smtp.gmail.com",
-    MAIL_STARTTLS=True,
-    MAIL_SSL_TLS=False,
+    MAIL_USERNAME=os.getenv("MAIL_USERNAME", "animeshkukreti@gatekeeper.sbs"),
+    MAIL_PASSWORD=SecretStr(os.getenv("MAIL_PASSWORD", "")),
+    MAIL_FROM=os.getenv("MAIL_FROM", "animeshkukreti@gatekeeper.sbs"),
+    MAIL_FROM_NAME=os.getenv("MAIL_FROM_NAME", "AEGIS Terminal"),
+    MAIL_PORT=int(os.getenv("MAIL_PORT", "587")),
+    MAIL_SERVER=os.getenv("MAIL_SERVER", "smtp.gmail.com"),
+    MAIL_STARTTLS=os.getenv("MAIL_STARTTLS", "true").lower() == "true",
+    MAIL_SSL_TLS=os.getenv("MAIL_SSL_TLS", "false").lower() == "true",
 )
 
 fastmail = FastMail(conf)
@@ -1074,18 +1075,71 @@ async def send_otp_for_registration(request: OTPSendRequest):
     }
     try:
         message = MessageSchema(
-            subject="Your Aegis‑1 Verification Code",
+            subject="Your AEGIS Verification Code",
             recipients=[NameEmail(name=email, email=email)],
             body=f"""
+            <!DOCTYPE html>
             <html>
-            <body style="font-family: monospace; background: #0a0a0c; color: #00f2ff; padding: 20px;">
-                <h2>🔐 Aegis‑1 OTP</h2>
-                <p>Your verification code is:</p>
-                <h1 style="background: #1a1f2e; display: inline-block; padding: 12px 24px; border-radius: 12px;">{otp}</h1>
-                <p>This code expires in 5 minutes.</p>
-                <p>If you didn't request this, please ignore this email.</p>
-                <hr>
-                <small style="color: #6b7280;">Aegis‑1 Sovereign Terminal</small>
+            <head><meta charset="UTF-8"></head>
+            <body style="margin:0;padding:0;background:#0a0a0c;font-family:'Segoe UI',Arial,sans-serif;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0c;padding:40px 0;">
+                <tr><td align="center">
+                  <table width="480" cellpadding="0" cellspacing="0"
+                         style="background:#0f111a;border:1px solid rgba(0,242,255,0.15);border-radius:16px;overflow:hidden;max-width:480px;">
+
+                    <!-- Header -->
+                    <tr>
+                      <td style="background:linear-gradient(135deg,#00f2ff22,#7b2fff22);padding:32px 40px 24px;text-align:center;border-bottom:1px solid rgba(0,242,255,0.1);">
+                        <div style="font-size:28px;font-weight:800;letter-spacing:3px;
+                                    background:linear-gradient(90deg,#00f2ff,#7b2fff);
+                                    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+                                    display:inline-block;">
+                          ⚡ AEGIS
+                        </div>
+                        <p style="color:#6b7280;margin:8px 0 0;font-size:13px;letter-spacing:1px;">SOVEREIGN TERMINAL</p>
+                      </td>
+                    </tr>
+
+                    <!-- Body -->
+                    <tr>
+                      <td style="padding:36px 40px;">
+                        <p style="color:#9ca3af;font-size:15px;margin:0 0 8px;">Email Verification</p>
+                        <h2 style="color:#f9fafb;font-size:20px;font-weight:600;margin:0 0 24px;">Your one-time verification code</h2>
+
+                        <!-- OTP display -->
+                        <div style="background:#0a0a0c;border:1px solid rgba(0,242,255,0.25);border-radius:12px;
+                                    padding:24px;text-align:center;margin:0 0 24px;">
+                          <span style="font-family:'Courier New',Courier,monospace;font-size:38px;font-weight:700;
+                                       letter-spacing:12px;color:#00f2ff;">{otp}</span>
+                        </div>
+
+                        <p style="color:#9ca3af;font-size:14px;margin:0 0 8px;">
+                          This code expires in <strong style="color:#f9fafb;">5 minutes</strong>.
+                          Do not share it with anyone.
+                        </p>
+                        <p style="color:#6b7280;font-size:13px;margin:0;">
+                          If you didn't request this, you can safely ignore this email.
+                        </p>
+                      </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                      <td style="padding:20px 40px 28px;border-top:1px solid rgba(255,255,255,0.05);text-align:center;">
+                        <p style="color:#4b5563;font-size:12px;margin:0;">
+                          Sent by
+                          <a href="mailto:animeshkukreti@gatekeeper.sbs"
+                             style="color:#00f2ff;text-decoration:none;">animeshkukreti@gatekeeper.sbs</a>
+                          &nbsp;·&nbsp;
+                          <a href="https://gatekeeper.sbs"
+                             style="color:#00f2ff;text-decoration:none;">gatekeeper.sbs</a>
+                        </p>
+                      </td>
+                    </tr>
+
+                  </table>
+                </td></tr>
+              </table>
             </body>
             </html>
             """,
@@ -2317,18 +2371,71 @@ async def send_otp(request: OTPSendRequest):
     }
     try:
         message = MessageSchema(
-            subject="Your Aegis‑1 Verification Code",
+            subject="Your AEGIS Verification Code",
             recipients=[NameEmail(name=email, email=email)],
             body=f"""
+            <!DOCTYPE html>
             <html>
-            <body style="font-family: monospace; background: #0a0a0c; color: #00f2ff; padding: 20px;">
-                <h2>🔐 Aegis‑1 OTP</h2>
-                <p>Your verification code is:</p>
-                <h1 style="background: #1a1f2e; display: inline-block; padding: 12px 24px; border-radius: 12px;">{otp}</h1>
-                <p>This code expires in 5 minutes.</p>
-                <p>If you didn't request this, please ignore this email.</p>
-                <hr>
-                <small style="color: #6b7280;">Aegis‑1 Sovereign Terminal</small>
+            <head><meta charset="UTF-8"></head>
+            <body style="margin:0;padding:0;background:#0a0a0c;font-family:'Segoe UI',Arial,sans-serif;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0c;padding:40px 0;">
+                <tr><td align="center">
+                  <table width="480" cellpadding="0" cellspacing="0"
+                         style="background:#0f111a;border:1px solid rgba(0,242,255,0.15);border-radius:16px;overflow:hidden;max-width:480px;">
+
+                    <!-- Header -->
+                    <tr>
+                      <td style="background:linear-gradient(135deg,#00f2ff22,#7b2fff22);padding:32px 40px 24px;text-align:center;border-bottom:1px solid rgba(0,242,255,0.1);">
+                        <div style="font-size:28px;font-weight:800;letter-spacing:3px;
+                                    background:linear-gradient(90deg,#00f2ff,#7b2fff);
+                                    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+                                    display:inline-block;">
+                          ⚡ AEGIS
+                        </div>
+                        <p style="color:#6b7280;margin:8px 0 0;font-size:13px;letter-spacing:1px;">SOVEREIGN TERMINAL</p>
+                      </td>
+                    </tr>
+
+                    <!-- Body -->
+                    <tr>
+                      <td style="padding:36px 40px;">
+                        <p style="color:#9ca3af;font-size:15px;margin:0 0 8px;">Email Verification</p>
+                        <h2 style="color:#f9fafb;font-size:20px;font-weight:600;margin:0 0 24px;">Your one-time verification code</h2>
+
+                        <!-- OTP display -->
+                        <div style="background:#0a0a0c;border:1px solid rgba(0,242,255,0.25);border-radius:12px;
+                                    padding:24px;text-align:center;margin:0 0 24px;">
+                          <span style="font-family:'Courier New',Courier,monospace;font-size:38px;font-weight:700;
+                                       letter-spacing:12px;color:#00f2ff;">{otp}</span>
+                        </div>
+
+                        <p style="color:#9ca3af;font-size:14px;margin:0 0 8px;">
+                          This code expires in <strong style="color:#f9fafb;">5 minutes</strong>.
+                          Do not share it with anyone.
+                        </p>
+                        <p style="color:#6b7280;font-size:13px;margin:0;">
+                          If you didn't request this, you can safely ignore this email.
+                        </p>
+                      </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                      <td style="padding:20px 40px 28px;border-top:1px solid rgba(255,255,255,0.05);text-align:center;">
+                        <p style="color:#4b5563;font-size:12px;margin:0;">
+                          Sent by
+                          <a href="mailto:animeshkukreti@gatekeeper.sbs"
+                             style="color:#00f2ff;text-decoration:none;">animeshkukreti@gatekeeper.sbs</a>
+                          &nbsp;·&nbsp;
+                          <a href="https://gatekeeper.sbs"
+                             style="color:#00f2ff;text-decoration:none;">gatekeeper.sbs</a>
+                        </p>
+                      </td>
+                    </tr>
+
+                  </table>
+                </td></tr>
+              </table>
             </body>
             </html>
             """,
