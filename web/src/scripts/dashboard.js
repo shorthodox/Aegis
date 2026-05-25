@@ -2,6 +2,19 @@ import { initializeTrialCountdown, fetchTrialStartFromFirestore } from './trial-
 import { auth, db } from './gatekeeper.js';
 import { doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js';
 
+function _showToast(msg, type = 'info') {
+  const existing = document.getElementById('_dash-toast');
+  if (existing) existing.remove();
+  const c = { success: '#10b981', error: '#ef4444', info: '#06b6d4' };
+  const ic = { success: 'fa-check-circle', error: 'fa-exclamation-circle', info: 'fa-info-circle' };
+  const el = document.createElement('div');
+  el.id = '_dash-toast';
+  el.style.cssText = `position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;display:flex;align-items:center;gap:10px;padding:14px 20px;border-radius:12px;background:#111827;border:1px solid ${c[type]};color:${c[type]};font-size:.9rem;font-weight:600;box-shadow:0 0 20px ${c[type]}40;max-width:380px;`;
+  el.innerHTML = `<i class="fas ${ic[type]}"></i><span>${msg}</span>`;
+  document.body.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(() => el.remove(), 300); }, 4000);
+}
+
 // ============================================================
 // SEALED SUBSCRIPTION STATE — console-proof
 // window.isSubscriptionActive and window.isPremiumUser are
@@ -705,7 +718,7 @@ window._openSignalCardForSymbol = function(sym) {
   if (match && typeof showSignalDetailsModal === 'function') {
     showSignalDetailsModal(match);
   } else {
-    selectToken(sym);
+    window.openSignalDetails(sym, window.activeTimeframe || '1h');
   }
 };
 
@@ -726,10 +739,6 @@ async function setupTrialNonBlocking(userId) {
     setExpiredView();
     return;
   }
-
-  // Only clear expired view if user has a valid subscription or active trial
-  clearExpiredView();
-  unblockFeatures();
 
   if (status === 'paid') {
     document.querySelectorAll('.trial-countdown, [data-trial-countdown], #countdown-display')
@@ -1174,14 +1183,17 @@ window.showSignalDetailsModal = function (signal) {
     footerActions.innerHTML = `
       <div class="flex flex-col gap-2">
         <div class="flex gap-2">
-          <button id="sd-execute-btn"
-            class="flex-1 bg-gradient-to-r from-cyan to-blue-600 text-white font-bold py-3 rounded-xl uppercase tracking-wider text-sm shadow-[0_0_15px_rgba(0,242,255,0.3)] hover:-translate-y-0.5 transform transition-all">
-            <i class="fas fa-satellite-dish mr-2"></i>Execute with API
-          </button>
           <button id="sd-paper-trade-btn"
-            class="px-5 bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl uppercase tracking-wider text-sm border border-white/20 transition-colors whitespace-nowrap">
-            <i class="fas fa-play-circle mr-1"></i>Paper
+            class="flex-1 bg-gradient-to-r from-cyan to-blue-600 text-white font-bold py-3 rounded-xl uppercase tracking-wider text-sm shadow-[0_0_15px_rgba(0,242,255,0.3)] hover:-translate-y-0.5 transform transition-all">
+            <i class="fas fa-play-circle mr-2"></i>Paper Trade
           </button>
+          <button id="sd-execute-btn"
+            class="px-5 bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl uppercase tracking-wider text-sm border border-white/20 transition-colors whitespace-nowrap">
+            <i class="fas fa-satellite-dish mr-1"></i>Demat
+          </button>
+        </div>
+        <div class="text-center text-[10px] text-gray-500 py-0.5">
+          Prefer advanced charts? <a href="https://www.tradingview.com/paper-trading/" target="_blank" rel="noopener noreferrer" class="text-cyan/70 hover:text-cyan underline">Try TradingView Paper Trading</a>
         </div>
         ${isPro ? `
         <div class="flex gap-2">
@@ -1254,16 +1266,16 @@ window.showSignalDetailsModal = function (signal) {
         console.error('Failed to execute trade:', err);
         alert('Trade API execution failed: ' + err.message);
         const btn = document.getElementById('sd-execute-btn');
-        btn.innerHTML = '<i class="fas fa-satellite-dish mr-2"></i>Execute with API';
+        btn.innerHTML = '<i class="fas fa-satellite-dish mr-1"></i>Demat';
         btn.disabled = false;
       }
     });
 
     document.getElementById('sd-paper-trade-btn')?.addEventListener('click', () => {
       modal.classList.add('hidden');
-      if (typeof window.initiatePaperTrade === 'function') {
-        window.initiatePaperTrade(signal.symbol, signal.entry_price || 0, signal.sl || 0, signal.tp || 0);
-      }
+      if (typeof window.addToSignalHistory === 'function') window.addToSignalHistory(signal);
+      if (typeof window.prefillFromSignal === 'function') window.prefillFromSignal(signal);
+      if (typeof window.switchRoom === 'function') window.switchRoom('terminal');
     });
 
     document.getElementById('sd-copy-signal-btn')?.addEventListener('click', () => {

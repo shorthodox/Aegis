@@ -399,7 +399,7 @@ function _renderSignalHistory() {
         <div class="flex gap-1.5 flex-nowrap">
           <button onclick="window.trFromHistory(${i},'real')"
             class="text-[10px] px-2 py-1.5 rounded bg-cyan/20 text-cyan border border-cyan/30 hover:bg-cyan/40 transition-colors font-bold whitespace-nowrap">
-            <i class="fas fa-rocket mr-1"></i>Real
+            <i class="fas fa-satellite-dish mr-1"></i>Demat
           </button>
           <button onclick="window.trFromHistory(${i},'paper')"
             class="text-[10px] px-2 py-1.5 rounded bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 hover:bg-yellow-500/40 transition-colors font-bold whitespace-nowrap">
@@ -515,6 +515,10 @@ function initTradingRooms() {
   window.addToSignalHistory  = addToSignalHistory;
   window.prefillFromSignal   = prefillFromSignal;
   window.trFromHistory       = _fromHistory;
+  window.initiatePaperTrade  = (symbol, entry, sl, tp) => {
+    prefillFromSignal({ symbol, entry_price: entry, sl, tp });
+    if (typeof window.switchRoom === 'function') window.switchRoom('terminal');
+  };
 }
 
 // Auto-init when the module loads (same pattern as gatekeeper.js / dashboard.js)

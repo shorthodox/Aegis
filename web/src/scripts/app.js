@@ -46,6 +46,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentUser = null;
     let analyticsData = null;
     let unsubscribeSettings = null;
+    let unsubscribeTrades = null;
+    const activeTrades = new Map();
 
     // Listen to row clicks for simulation
     document.addEventListener('signalRowClicked', (e) => {
@@ -162,7 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
             snapshot.forEach(doc => {
                 activeTrades.set(doc.id, { id: doc.id, ...doc.data() });
             });
-            renderTradesTable();
+            if (typeof window.renderTrades === 'function') window.renderTrades([...activeTrades.values()]);
         }, (error) => {
             console.error('Trade subscription error:', error);
             if (error.code !== 'permission-denied') {

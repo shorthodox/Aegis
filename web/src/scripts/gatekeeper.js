@@ -79,9 +79,6 @@ document.addEventListener('trialExpired', () => {
   trialActive = false;
   allowedTokens = [];
   localStorage.setItem('cachedAllowedTokens', JSON.stringify([]));
-  if (typeof showSubscriptionExpiredOverlay === 'function') {
-    showSubscriptionExpiredOverlay();
-  }
   // Refresh UI to update plan badge immediately when trial expires
   updateUI();
 });
@@ -1240,7 +1237,7 @@ function updateDashboardData(data) {
   // overlay was dismissed from the console, this re-applies it within
   // the next tick. Conversely, a valid subscription removes the overlay.
   if (typeof data.trial_expired === 'boolean') {
-    const expiredCard = document.getElementById('access-expired-card');
+    const expiredCard = document.getElementById('subscriptionExpiredOverlay');
     const isOverlayVisible = expiredCard && !expiredCard.classList.contains('hidden');
 
     if (data.trial_expired && !isOverlayVisible) {
@@ -1768,10 +1765,16 @@ function setupFirestoreListeners() {
 
   // Allow the analytics room to render from localStorage while the snapshot loads
   window.forceTradesRefresh = function () {
-    const cached = localStorage.getItem('analyticsActiveTrade');
-    if (cached) {
+    let trades = [];
+    try {
+      const lk = localStorage.getItem('lastKnownTrades');
+      if (lk) trades = JSON.parse(lk);
+    } catch (_) {}
+
+    const analyticsEntry = localStorage.getItem('analyticsActiveTrade');
+    if (analyticsEntry) {
       try {
-        const trade = JSON.parse(cached);
+        const trade = JSON.parse(analyticsEntry);
         if (trade && trade.status === 'open') {
           const alreadyIn = trades.some(t =>
             (trade.signalId && t.signalId === trade.signalId) ||
@@ -1782,7 +1785,6 @@ function setupFirestoreListeners() {
       } catch (_) {}
     }
 
-    // Filter fallback trades to the current user as well
     const uid = (auth && auth.currentUser && auth.currentUser.uid) || (currentUser && currentUser.uid);
     if (uid && trades.length > 0) {
       const containsOtherUsers = trades.some(t => t.userId && t.userId !== uid);
