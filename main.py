@@ -745,7 +745,11 @@ def decode_token(token: str) -> Optional[str]:
     # Try decoding as Firebase token first
     try:
         decoded_token = firebase_auth.verify_id_token(token)
-        # Firebase token contains email, fallback to uid if not present
+        # Block accounts whose email was never verified (fake/bypassed signups).
+        # Google accounts always have email_verified=True; OTP-provisioned accounts
+        # are marked verified by /api/users/provision after token consumption.
+        if not decoded_token.get("email_verified", False):
+            return None
         return decoded_token.get("email") or decoded_token.get("uid")
     except Exception:
         # Fallback to custom JWT
@@ -760,6 +764,8 @@ def decode_uid_from_token(token: str) -> Optional[str]:
     """Return Firebase UID (not email) — used for Firestore paths shared with the frontend."""
     try:
         decoded = firebase_auth.verify_id_token(token)
+        if not decoded.get("email_verified", False):
+            return None
         return decoded.get("uid")
     except Exception:
         pass
@@ -934,6 +940,12 @@ async def provision_user(request: Request, user_id: str = Depends(get_current_us
                 if isinstance(entry, dict) and entry.get("signup_token") == signup_token:
                     otp_store.pop(k, None)
                     break
+            # Mark Firebase email as verified — this is the gate used in decode_token
+            # so accounts that bypassed OTP can never authenticate.
+            try:
+                firebase_auth.update_user(firebase_uid, email_verified=True)
+            except Exception as fe:
+                print(f"[provision] Warning: could not mark email_verified for {firebase_uid}: {fe}")
 
         # Prefer email as doc key (consistent with rest of backend), fall back to uid
         doc_key = email or firebase_uid
@@ -964,6 +976,8 @@ async def provision_user(request: Request, user_id: str = Depends(get_current_us
             "full_name": user_doc.get("full_name"),
             "location": user_doc.get("location"),
         }
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"[/api/users/provision] Error for {user_id}: {type(e).__name__}: {e}")
         raise HTTPException(status_code=500, detail=f"User provisioning failed: {type(e).__name__}")
