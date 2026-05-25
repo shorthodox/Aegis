@@ -779,21 +779,29 @@ class SignalGenerator:
         return aligned
 
     async def compute_macro_trend(self, symbol: str, fetcher: MarketDataFetcher) -> Tuple[str, Dict]:
-        """
-        Compute macro trend for `symbol` using 1d and 1w EMA50 comparison.
-        Returns (trend, telemetry)
-        trend: 'BULL', 'BEAR', or 'DIVERGENT'
-        telemetry: dict with ema50_1d, ema50_1w, close_1d, close_1w
-        """
         norm_sym = normalize_symbol(symbol)
         try:
-            df_1d = await fetcher.get_data(norm_sym, '1d', lookback_hours=800)
-            df_1w = await fetcher.get_data(norm_sym, '1w', lookback_hours=4000)
-            if df_1d.empty or df_1w.empty:
+            # Request an expanded daily history pool (4500 hours / ~180 days) to construct a valid weekly matrix
+            df_1d = await fetcher.get_data(norm_sym, '1d', lookback_hours=4500)
+            if df_1d.empty or len(df_1d) < 50:
                 return 'DIVERGENT', {}
 
+            # Synthetically resample the clean daily dataframe into chronological weekly blocks (ending Sundays)
+            df_1w = df_1d.resample('W').agg({
+                'open': 'first',
+                'high': 'max',
+                'low': 'min',
+                'close': 'last',
+                'volume': 'sum'
+            })
+
+            if df_1w.empty or len(df_1w) < 2:
+                return 'DIVERGENT', {}
+
+            # Calculate 50-period Exponential Moving Averages across both horizons safely
             ema50_1d = df_1d['close'].ewm(span=50, adjust=False).mean().iloc[-1]
             ema50_1w = df_1w['close'].ewm(span=50, adjust=False).mean().iloc[-1]
+
             close_1d = float(df_1d['close'].iloc[-1])
             close_1w = float(df_1w['close'].iloc[-1])
 
@@ -806,13 +814,15 @@ class SignalGenerator:
                 'confluence_score': float((1.0 if bull_1d else -1.0) + (1.0 if bull_1w else -1.0))
             }
             self.macro_cache[norm_sym] = macro_state
+
             if bull_1d and bull_1w:
                 return 'BULL', { 'ema50_1d': float(ema50_1d), 'ema50_1w': float(ema50_1w), 'close_1d': close_1d, 'close_1w': close_1w }
             if not bull_1d and not bull_1w:
                 return 'BEAR', { 'ema50_1d': float(ema50_1d), 'ema50_1w': float(ema50_1w), 'close_1d': close_1d, 'close_1w': close_1w }
+
             return 'DIVERGENT', { 'ema50_1d': float(ema50_1d), 'ema50_1w': float(ema50_1w), 'close_1d': close_1d, 'close_1w': close_1w }
         except Exception as e:
-            logger.debug(f"Macro trend compute failed for {symbol}: {e}")
+            logger.debug(f"Synthetic macro trend compute failed for {symbol}: {e}")
             return 'DIVERGENT', {}
 
     async def compute_signal(self, symbol: str, fetcher: MarketDataFetcher, alpha_mode: bool, timeframe: str = '1h', btc_healthy: bool = True, macro_trend: Optional[str] = None) -> Optional[Dict]:
