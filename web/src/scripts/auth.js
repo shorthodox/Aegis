@@ -245,7 +245,19 @@ export async function handleEmailLogin(email, password) {
       };
     }
 
-    // Email confirmed real — now safe to create/update Firestore document
+    // Gate: check Firestore — only users who went through signup exist here
+    const userDocRef = doc(db, 'users', user.uid);
+    const docSnap = await getDoc(userDocRef);
+    if (!docSnap.exists()) {
+      await signOut(auth);
+      return {
+        success: false,
+        needsSignup: true,
+        message: 'No account found for this email. Please create an account first.'
+      };
+    }
+
+    // Firestore doc confirmed — update last login
     const userData = await ensureUserDocumentV2(user, 'email');
 
     // Store token

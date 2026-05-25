@@ -182,6 +182,23 @@ async function performEmailSignin(e) {
       }, 1000);
     } else if (result.needsVerification) {
       showError('signinFormError', '📧 ' + result.message);
+    } else if (result.needsSignup) {
+      showError('signinFormError', result.message);
+      // Offer a direct link to signup
+      const errEl = document.getElementById('signinFormError');
+      if (errEl) {
+        const link = document.createElement('a');
+        link.href = '#';
+        link.textContent = ' Create an account →';
+        link.className = 'auth-link';
+        link.style.display = 'inline';
+        link.addEventListener('click', (e) => {
+          e.preventDefault();
+          closeSignInModal();
+          window.dispatchEvent(new CustomEvent('openSignup'));
+        });
+        errEl.appendChild(link);
+      }
     } else {
       showError('signinFormError', result.message);
     }
