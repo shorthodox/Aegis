@@ -1541,7 +1541,8 @@ class LiveEngine:
             self.signal_gen.alpha_risk_pct = self.alpha_risk_pct
 
             # Macro-first multi-timeframe signal computation
-            tf_blocks = ['1m','5m','15m','30m','1h','4h','1d','1w']
+            # Remove '1w' from live prediction blocks; weekly context is handled synthetically via compute_macro_trend
+            tf_blocks = ['1m', '5m', '15m', '30m', '1h', '4h', '1d']
 
             # 1) Macro trend computation (parallel)
             macro_tasks = {cfg.symbol: asyncio.create_task(self.signal_gen.compute_macro_trend(cfg.symbol, self.fetcher)) for cfg in self.token_configs}
@@ -1611,11 +1612,9 @@ class LiveEngine:
             # 6) Build a flattened frontend_signals list used by older UI paths: pick 1h as summary if present
             signals = []
             for sym, tf_map in nested_signals.items():
-                chosen = None
-                if tf_map.get('1h'):
-                    chosen = tf_map.get('1h')
-                else:
-                    # pick first non-null timeframe in order
+                chosen = tf_map.get('1h')
+                if not chosen:
+                    # Pick first available non-null timeframe in order
                     for tf in tf_blocks:
                         if tf_map.get(tf):
                             chosen = tf_map.get(tf)
@@ -1625,43 +1624,18 @@ class LiveEngine:
                         chosen['signal_id'] = str(uuid.uuid4())
                     signals.append(chosen)
 
-            # ── Confirmation Engine gate ──────────────────────────────────
-            _confirmed: List[Optional[Dict]] = []
-            for _sig in signals:
-                if not _sig or _sig.get("direction", "NEUTRAL") == "NEUTRAL":
-                    _confirmed.append(_sig)
-                    continue
-                _is_valid, _reason = await confirm_live_signal(
-                    _sig["symbol"], _sig, pd.Series(_sig)
-                )
-                if not _is_valid:
-                    logger.warning(
-                        f"⚠️ Signal for {_sig['symbol']} suppressed by Confirmation Engine. Reason: {_reason}"
-                    )
-                    self.activity_log.appendleft(
-                        f"[{datetime.now().strftime('%H:%M:%S')}] 🚫 {_sig['symbol']} suppressed: {_reason}"
-                    )
-                    _confirmed.append(None)
-                else:
-                    _confirmed.append(_sig)
-            signals = _confirmed
-            # ─────────────────────────────────────────────────────────────
-
             frontend_signals = []
             for sig in signals:
                 if sig:
                     if "signal_id" not in sig:
                         sig["signal_id"] = str(uuid.uuid4())
-                    # Do not overwrite the nested timeframe mapping
-                    # self.last_signals[sig["symbol"]] = sig
-                    
-                    # Prepare frontend payload object
+
                     sym = sig["symbol"]
                     acc = self.trading_accuracies.get(sym, 0.65)
                     tp_dist = sig.get("suggested_tp_distance", 0)
                     sl_dist = sig.get("suggested_sl_distance", 0)
                     profitability_index = (acc * tp_dist) - ((1 - acc) * sl_dist)
-                    
+
                     frontend_signals.append({
                         "signal_id": sig["signal_id"],
                         "symbol": sym,
@@ -1681,7 +1655,7 @@ class LiveEngine:
                         "expectancy_matrix": sig.get("expectancy_matrix", {}),
                         "sr_telemetry": sig.get("sr_telemetry", {}),
                     })
-            
+
             # Push signals to dashboard
             if frontend_signals:
                 self.sync_to_dashboard(frontend_signals)
