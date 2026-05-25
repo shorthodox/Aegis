@@ -1262,8 +1262,8 @@ window.showSignalDetailsModal = function (signal) {
         
         btn.innerHTML = '<i class="fas fa-check mr-2"></i>Sent to Demat';
         setTimeout(() => {
-            if (wrapper) wrapper.classList.add('hidden');
-            modal.classList.add('hidden');
+            document.getElementById('token-details-modal')?.classList.add('hidden');
+            document.getElementById('signalDetailsModal')?.classList.add('hidden');
         }, 1500);
       } catch (err) {
         console.error('Failed to execute trade:', err);
@@ -1274,12 +1274,17 @@ window.showSignalDetailsModal = function (signal) {
       }
     });
 
-    document.getElementById('sd-paper-trade-btn')?.addEventListener('click', () => {
-      if (wrapper) wrapper.classList.add('hidden');
-      modal.classList.add('hidden');
+    document.getElementById('sd-paper-trade-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // Close both modal layers explicitly — don't rely on closure variable
+      const _mw = document.getElementById('token-details-modal');
+      const _mi = document.getElementById('signalDetailsModal');
+      if (_mw) _mw.classList.add('hidden');
+      if (_mi) _mi.classList.add('hidden');
       if (typeof window.addToSignalHistory === 'function') window.addToSignalHistory(signal);
-      if (typeof window.prefillFromSignal === 'function') window.prefillFromSignal(signal);
       if (typeof window.switchRoom === 'function') window.switchRoom('terminal');
+      // Prefill AFTER room switch so inputs are in the active room
+      if (typeof window.prefillFromSignal === 'function') window.prefillFromSignal(signal);
     });
 
     document.getElementById('sd-copy-signal-btn')?.addEventListener('click', () => {
@@ -1288,9 +1293,10 @@ window.showSignalDetailsModal = function (signal) {
         .catch(() => _showToast('Copy failed — check browser permissions', 'error'));
     });
 
-    document.getElementById('sd-view-analytics-btn')?.addEventListener('click', () => {
-      if (wrapper) wrapper.classList.add('hidden');
-      modal.classList.add('hidden');
+    document.getElementById('sd-view-analytics-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.getElementById('token-details-modal')?.classList.add('hidden');
+      document.getElementById('signalDetailsModal')?.classList.add('hidden');
       if (typeof window.switchRoom === 'function') window.switchRoom('analytics');
     });
   }
@@ -1298,20 +1304,24 @@ window.showSignalDetailsModal = function (signal) {
   modal.classList.remove('hidden');
 }
 
+function _closeSignalModal() {
+  document.getElementById('token-details-modal')?.classList.add('hidden');
+  document.getElementById('signalDetailsModal')?.classList.add('hidden');
+}
+
 function initModals() {
-  const modal = document.getElementById('token-details-modal') || document.getElementById('signalDetailsModal');
+  const wrapper = document.getElementById('token-details-modal');
   const closeBtn = document.getElementById('closeSignalDetailsBtn');
 
   if (closeBtn) {
-    closeBtn.addEventListener('click', () => {
-      modal.classList.add('hidden');
+    closeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      _closeSignalModal();
     });
   }
 
-  if (modal) {
-    // Single delegating listener: feature-card clicks are caught first so inner
-    // elements never accidentally trigger the backdrop-close branch.
-    modal.addEventListener('click', (e) => {
+  if (wrapper) {
+    wrapper.addEventListener('click', (e) => {
       const card = e.target.closest('[data-open-panel], .feature-card-trigger');
       if (card) {
         const panelId = card.dataset.openPanel || card.dataset.target;
@@ -1320,8 +1330,9 @@ function initModals() {
         }
         return;
       }
-      if (e.target === modal) {
-        modal.classList.add('hidden');
+      // Close when clicking the backdrop (not the inner card)
+      if (e.target === wrapper) {
+        _closeSignalModal();
       }
     });
   }
