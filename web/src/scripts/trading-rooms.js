@@ -196,7 +196,10 @@ function _executePaperTrade() {
   const tp    = parseFloat(document.getElementById('tr-tp')?.value);
   if (!entry || !sl || !tp) { _toast('Fill in Entry, SL and TP', 'error'); return; }
 
-  const { direction } = _calcPos({ capital: 10000, riskPct: 2, entry, sl, tp, leverage: 1 });
+  const capital  = parseFloat(document.getElementById('tr-capital')?.value  || 10000);
+  const riskPct  = parseFloat(document.getElementById('tr-risk')?.value     || 2);
+  const leverage = parseFloat(document.getElementById('tr-leverage')?.value || 1);
+  const { direction, posUnits } = _calcPos({ capital, riskPct, entry, sl, tp, leverage });
 
   const trade = {
     id: `paper-${Date.now()}`,
@@ -206,7 +209,7 @@ function _executePaperTrade() {
     entryPrice: entry,
     stopLoss: sl,
     takeProfit: tp,
-    positionUnits: parseFloat(document.getElementById('tr-pos-units')?.textContent || '0') || 1,
+    positionUnits: posUnits || parseFloat(document.getElementById('tr-pos-units')?.textContent || '0') || 1,
     openTime: new Date().toISOString(),
   };
 
@@ -233,6 +236,28 @@ function _renderAllTrades() {
   const all = [..._paperTrades, ..._liveTradesCache];
   _renderPositionCards(all);
   _renderTradesTable(all);
+  _updateAnalytics(all);
+}
+
+function _updateAnalytics(all) {
+  const capital = parseFloat(document.getElementById('tr-capital')?.value || 10000);
+  const paperOpen = (all || []).filter(t => String(t.id || '').startsWith('paper-'));
+  const allocated = paperOpen.reduce((sum, t) => sum + (t.positionUnits || 1) * (t.entryPrice || 0), 0);
+  const remaining = Math.max(0, capital - allocated);
+
+  const balEl = document.getElementById('balanceDisplay');
+  if (balEl) balEl.textContent = `$${remaining.toFixed(2)}`;
+  const capEl = document.getElementById('capitalDisplay');
+  if (capEl) capEl.textContent = `$${capital.toLocaleString()}`;
+
+  // Engine performance: sum unrealised P&L across all open trades
+  const totalPnl = (all || []).reduce((sum, t) => sum + _pnl(t), 0);
+  const perfEl = document.getElementById('enginePnlDisplay');
+  if (perfEl) {
+    perfEl.textContent = `${totalPnl >= 0 ? '+' : ''}$${totalPnl.toFixed(2)}`;
+    perfEl.className = perfEl.className.replace(/text-(green|red)-\d+/, '');
+    perfEl.classList.add(totalPnl >= 0 ? 'text-green-400' : 'text-red-400');
+  }
 }
 
 function _pnl(trade) {

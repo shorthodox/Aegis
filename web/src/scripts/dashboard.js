@@ -1260,6 +1260,7 @@ window.showSignalDetailsModal = function (signal) {
         
         btn.innerHTML = '<i class="fas fa-check mr-2"></i>Sent to Demat';
         setTimeout(() => {
+            if (wrapper) wrapper.classList.add('hidden');
             modal.classList.add('hidden');
         }, 1500);
       } catch (err) {
@@ -1272,6 +1273,7 @@ window.showSignalDetailsModal = function (signal) {
     });
 
     document.getElementById('sd-paper-trade-btn')?.addEventListener('click', () => {
+      if (wrapper) wrapper.classList.add('hidden');
       modal.classList.add('hidden');
       if (typeof window.addToSignalHistory === 'function') window.addToSignalHistory(signal);
       if (typeof window.prefillFromSignal === 'function') window.prefillFromSignal(signal);
@@ -1285,6 +1287,7 @@ window.showSignalDetailsModal = function (signal) {
     });
 
     document.getElementById('sd-view-analytics-btn')?.addEventListener('click', () => {
+      if (wrapper) wrapper.classList.add('hidden');
       modal.classList.add('hidden');
       if (typeof window.switchRoom === 'function') window.switchRoom('analytics');
     });
