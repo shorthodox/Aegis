@@ -198,8 +198,36 @@ async function performEmailSignup(e) {
     console.log('📝 Creating account for:', email);
     const result = await handleEmailSignup(email, password, name);
 
-    if (result.success) {
-      showSuccess('Account created! Welcome to AEGIS! Redirecting...');
+    if (result.success && result.emailVerificationSent) {
+      // Show verification message inside modal — do NOT redirect or set auth state
+      hideLoading();
+      document.getElementById('signupEmailForm').style.display = 'none';
+      const container = document.querySelector('#signupModal .auth-modal-container');
+      const notice = document.createElement('div');
+      notice.className = 'auth-verification-notice';
+      notice.innerHTML = `
+        <div style="text-align:center;padding:2rem 1rem;">
+          <div style="font-size:3rem;margin-bottom:1rem;">📧</div>
+          <h3 style="color:#00f2ff;margin-bottom:0.75rem;">Check Your Inbox</h3>
+          <p style="color:#9ca3af;font-size:0.9rem;line-height:1.6;">
+            A verification link has been sent to<br>
+            <strong style="color:#e5e7eb;">${email}</strong>
+          </p>
+          <p style="color:#6b7280;font-size:0.8rem;margin-top:1rem;">
+            Click the link in the email to activate your account, then come back and sign in.
+          </p>
+          <button id="verificationDoneBtn" class="auth-btn-primary" style="margin-top:1.5rem;">
+            Go to Sign In
+          </button>
+        </div>
+      `;
+      container.appendChild(notice);
+      document.getElementById('verificationDoneBtn')?.addEventListener('click', () => {
+        closeSignUpModal();
+        window.dispatchEvent(new CustomEvent('openSignin'));
+      });
+      return;
+    } else if (result.success) {
       window.dispatchEvent(new CustomEvent('authStateChange', { detail: { authenticated: true } }));
       setTimeout(() => {
         closeSignUpModal();

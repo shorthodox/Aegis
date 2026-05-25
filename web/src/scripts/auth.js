@@ -20,6 +20,7 @@ import {
   updateProfile,
   fetchSignInMethodsForEmail,
   sendPasswordResetEmail,
+  sendEmailVerification,
   onAuthStateChanged,
   GoogleAuthProvider
 } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
@@ -177,44 +178,45 @@ export async function handleEmailSignup(email, password, displayName) {
     if (!email || !password || !displayName) {
       throw new Error('Please fill in all fields');
     }
-    
+
     if (password.length < 8) {
       throw new Error('Password must be at least 8 characters');
     }
-    
+
     console.log('📝 Creating email account...');
-    
+
     // Check if email already exists
     const methods = await fetchSignInMethodsForEmail(auth, email);
     if (methods.length > 0) {
       throw new Error('Email already in use. Please try logging in instead.');
     }
-    
-    // Create user
+
+    // Create Firebase Auth account
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
-    
-    // Update profile
+
+    // Update display name and avatar
     await updateProfile(user, {
       displayName: displayName,
       photoURL: `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=00f2ff&color=000`
     });
-    
-    // Create user document in Firestore
-    const userData = await ensureUserDocumentV2(user, 'email');
-    
-    // Store token
-    const idToken = await user.getIdToken();
-    AuthManager.setToken(idToken);
-    AuthManager.setUser(userData);
-    localStorage.setItem('authenticated', 'true');
-    
-    console.log('✅ Email signup successful:', email);
-    return { success: true, user, message: 'Account created successfully!', userData };
+
+    // Send verification email — user must click this before Firestore doc is created
+    await sendEmailVerification(user);
+
+    // Sign out immediately: Firestore doc is written only after verified login
+    await signOut(auth);
+
+    console.log('📧 Verification email sent to:', email);
+    return {
+      success: true,
+      emailVerificationSent: true,
+      message: 'Account created! Please check your inbox and click the verification link, then sign in.'
+    };
   } catch (error) {
     console.error('❌ Email signup error:', error.code, error.message);
-    return { 
-      success: false, 
+    return {
+      success: false,
       message: error.message || 'Signup failed'
     };
   }
@@ -228,36 +230,48 @@ export async function handleEmailLogin(email, password) {
     if (!email || !password) {
       throw new Error('Please enter email and password');
     }
-    
+
     console.log('🔐 Logging in with email...');
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
-    
-    // Update user document
+
+    // Gate: reject unverified emails — this is what blocks fake/non-existent addresses
+    if (!user.emailVerified) {
+      await signOut(auth);
+      return {
+        success: false,
+        needsVerification: true,
+        message: 'Please verify your email before signing in. Check your inbox for the verification link.'
+      };
+    }
+
+    // Email confirmed real — now safe to create/update Firestore document
     const userData = await ensureUserDocumentV2(user, 'email');
-    
+
     // Store token
     const idToken = await user.getIdToken();
     AuthManager.setToken(idToken);
     AuthManager.setUser(userData);
     localStorage.setItem('authenticated', 'true');
-    
+
     console.log('✅ Email login successful:', email);
     return { success: true, user, message: 'Logged in successfully!', userData };
   } catch (error) {
     console.error('❌ Email login error:', error.code, error.message);
-    
+
     let userMessage = 'Login failed';
     if (error.code === 'auth/user-not-found') {
-      userMessage = 'Email not found. Please sign up instead.';
-    } else if (error.code === 'auth/wrong-password') {
+      userMessage = 'No account found with this email. Please sign up first.';
+    } else if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
       userMessage = 'Incorrect password. Please try again.';
     } else if (error.code === 'auth/invalid-email') {
       userMessage = 'Invalid email address.';
+    } else if (error.code === 'auth/too-many-requests') {
+      userMessage = 'Too many failed attempts. Please try again later.';
     }
-    
-    return { 
-      success: false, 
+
+    return {
+      success: false,
       message: userMessage
     };
   }
