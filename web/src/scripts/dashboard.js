@@ -65,10 +65,14 @@ async function checkUserSubscriptionStatus(uid) {
       const data = userSnap.data();
       const plan = data.plan || data.tier;
 
-      // Paid plan — no expiry check needed
+      // Paid plan — only valid if subscription is actually active in Firestore
       if (plan) {
         const p = plan.toLowerCase();
-        if (p === 'premium' || p === 'pro' || p === 'intermediate' || p === 'basic') return 'paid';
+        if (p === 'premium' || p === 'pro' || p === 'intermediate' || p === 'basic') {
+          const sub = data.subscription || {};
+          if (sub.status === 'active') return 'paid';
+          // Plan name set but no active subscription — fall through to trial date check
+        }
       }
 
       // Check trial end from Firestore (multiple possible field locations)
@@ -805,8 +809,6 @@ async function setupTrialNonBlocking(userId) {
 }
 
 async function initDashboard(event) {
-  clearExpiredView();
-
   if (initialized) return;
   if (!document.getElementById('dashboard-main-content') && !document.getElementById('market-token-cards')) return;
 
