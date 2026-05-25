@@ -19,6 +19,13 @@ primary_region = "bom"
     hard_limit = 100
     soft_limit = 80
 
+  [[http_service.checks]]
+    grace_period = "60s"
+    interval = "15s"
+    method = "GET"
+    path = "/health"
+    timeout = "5s"
+
 [[vm]]
   memory = "1gb"
   cpu_kind = "shared"

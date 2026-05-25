@@ -613,6 +613,10 @@ app.mount("/web", StaticFiles(directory=str(WEB_ROOT_PATH), html=True), name="we
 # -------------------------------------------------------------------
 # Redirects
 # -------------------------------------------------------------------
+@app.get("/health")
+async def health():
+    return JSONResponse({"status": "ok"})
+
 @app.get("/")
 async def root_redirect():
     return RedirectResponse(url="/web/src/pages/index.html")
