@@ -559,6 +559,13 @@ async function loadUserFromBackend(token, firebaseUser = null) {
       localStorage.removeItem('access_token');
       localStorage.removeItem('authToken');
       redirectToLogin();
+    } else if (response.status === 403) {
+      // Account exists but was not OTP-verified (created before the verification gate).
+      // Sign the Firebase user out so they can't re-enter the dashboard loop.
+      try { await import("https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js").then(m => m.signOut(auth)); } catch (_) {}
+      localStorage.clear();
+      sessionStorage.clear();
+      redirectToLogin();
     } else {
       console.error('Failed to load user data:', response.status);
       redirectToLogin();
@@ -638,7 +645,17 @@ async function provisionUserFromFirebase(firebaseUser, token, attempt = 1) {
       sessionStorage.removeItem('otp_signup_token'); // single-use — clear after provisioning
       hideProvisioningState();
       const userData = await response.json();
-      applyUserData(userData, token);
+      // Force-refresh the Firebase ID token so it picks up email_verified=true,
+      // which the backend just set via Admin SDK. Without this the stale token
+      // still carries email_verified=false and every subsequent API call returns 401.
+      let freshToken = token;
+      try {
+        freshToken = await firebaseUser.getIdToken(true);
+        if (typeof AuthManager !== 'undefined') AuthManager.setToken(freshToken);
+      } catch (e) {
+        console.warn('[provision] Token refresh failed, using original token:', e.message);
+      }
+      applyUserData(userData, freshToken);
     } else if (response.status === 403) {
       // OTP token rejected by backend — never retry, send to signup
       hideProvisioningState();

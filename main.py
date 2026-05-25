@@ -657,6 +657,8 @@ async def api_signals(credentials: HTTPAuthorizationCredentials = Depends(securi
     user_doc = get_user_doc(email)
     if not user_doc:
         raise HTTPException(status_code=403, detail="User not found")
+    if not user_doc.get("otp_verified", False):
+        raise HTTPException(status_code=403, detail="Account not verified. Please sign up with a valid email.")
     plan = user_doc.get('plan', 'trial')
     if plan != 'pro':
         raise HTTPException(status_code=403, detail="Subscription required to access signals")
@@ -679,7 +681,7 @@ async def api_public_signals(authorization: Optional[str] = Header(None)):
             email = decode_token(token)
             if email:
                 user_doc = get_user_doc(email)
-                if user_doc:
+                if user_doc and user_doc.get("otp_verified", False):
                     plan = user_doc.get("plan", "trial")
                     trial_end = user_doc.get("trial_end")
                     if plan in ["pro", "active"]:
@@ -745,11 +747,6 @@ def decode_token(token: str) -> Optional[str]:
     # Try decoding as Firebase token first
     try:
         decoded_token = firebase_auth.verify_id_token(token)
-        # Block accounts whose email was never verified (fake/bypassed signups).
-        # Google accounts always have email_verified=True; OTP-provisioned accounts
-        # are marked verified by /api/users/provision after token consumption.
-        if not decoded_token.get("email_verified", False):
-            return None
         return decoded_token.get("email") or decoded_token.get("uid")
     except Exception:
         # Fallback to custom JWT
@@ -764,8 +761,6 @@ def decode_uid_from_token(token: str) -> Optional[str]:
     """Return Firebase UID (not email) — used for Firestore paths shared with the frontend."""
     try:
         decoded = firebase_auth.verify_id_token(token)
-        if not decoded.get("email_verified", False):
-            return None
         return decoded.get("uid")
     except Exception:
         pass
@@ -818,7 +813,9 @@ def create_user_doc(email: str, password_hash: Optional[str] = None,
         "last_login": now,
         "subscription": {
             "status": "inactive"
-        }
+        },
+        # Set only during OTP-verified provisioning; old/bypass accounts lack this field.
+        "otp_verified": True,
     }
     if password_hash:
         user_data["password_hash"] = password_hash
@@ -892,6 +889,10 @@ async def get_me(user_id: str = Depends(get_current_user)):
         # No document found — return 404 so the frontend provisioning flow triggers correctly
         if not user_doc:
             raise HTTPException(status_code=404, detail="User not found")
+
+        # Block accounts that were created without OTP verification
+        if not user_doc.get("otp_verified", False):
+            raise HTTPException(status_code=403, detail="Account not verified.")
         
         # Return user data with all necessary fields
         return {
@@ -953,6 +954,9 @@ async def provision_user(request: Request, user_id: str = Depends(get_current_us
         existing = get_user_doc(doc_key)
         if existing:
             update_last_login(doc_key)
+            # Stamp otp_verified on re-provision if it reached here through the OTP gate.
+            if provider == "password" and not existing.get("otp_verified"):
+                db.collection("users").document(doc_key).update({"otp_verified": True})
             return {
                 "uid": firebase_uid,
                 "email": existing.get("email", doc_key),
