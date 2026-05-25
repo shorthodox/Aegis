@@ -54,7 +54,7 @@ function _lock(requiredTier, msg) {
       <p class="text-xs text-slate-300 text-center px-5 font-medium leading-relaxed">${msg}</p>
       <span class="mt-3 text-[9px] font-black uppercase tracking-widest px-3 py-1
                    rounded-full border ${badgeColor}">${requiredTier} TIER REQUIRED</span>
-      <a href="/web/src/pages/pricing.html"
+      <a href="/src/pages/pricing.html"
          class="mt-3 text-[10px] font-bold text-white bg-gradient-to-r
                 from-cyan-500/80 to-blue-600/80 px-4 py-1.5 rounded-lg
                 hover:from-cyan-500 hover:to-blue-600 transition-all">

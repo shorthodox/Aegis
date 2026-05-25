@@ -199,7 +199,7 @@ async function subscribeToPlan(planType) {
       } else if (result.paymentDetails) {
         console.log('[Cashfree] Payment successful');
         alert('Payment successful! Redirecting to your dashboard...');
-        window.location.href = '/web/src/pages/dashboard.html';
+        window.location.href = '/src/pages/dashboard.html';
       }
     } catch (checkoutErr) {
       console.error('[Cashfree] Checkout exception:', checkoutErr);
@@ -235,7 +235,7 @@ function portalClickHandler(e) {
   e.preventDefault();
   const token = localStorage.getItem('access_token') || localStorage.getItem('authToken');
   if (token) {
-    window.location.href = '/web/src/pages/dashboard.html';
+    window.location.href = '/src/pages/dashboard.html';
   } else {
     openModal();
   }
@@ -245,7 +245,7 @@ function trialClickHandler(e) {
   e.preventDefault();
   const token = localStorage.getItem('access_token') || localStorage.getItem('authToken');
   if (token) {
-    window.location.href = '/web/src/pages/dashboard.html';
+    window.location.href = '/src/pages/dashboard.html';
   } else {
     openModal();
   }

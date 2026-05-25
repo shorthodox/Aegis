@@ -274,7 +274,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (unsubscribeSettings) unsubscribeSettings();
             AuthManager.logout();
             await logout();
-            window.location.replace('/web/src/pages/index.html');
+            window.location.replace('/src/pages/index.html');
         } catch (err) {
             console.error(err);
         }
