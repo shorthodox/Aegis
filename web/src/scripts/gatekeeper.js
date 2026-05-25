@@ -802,6 +802,17 @@ function cleanupWebSocket() {
 }
 
 function startWebSocket(token) {
+  // Check if features are blocked before connecting
+  const isTrialValid = typeof AuthManager !== 'undefined' ? AuthManager.isTrialValid() : trialActive;
+  const plan = (userPlan || 'trial').toLowerCase();
+  const hasPaidPlan = ['pro', 'premium', 'intermediate', 'basic'].includes(plan);
+
+  if (!hasPaidPlan && !isTrialValid) {
+    console.warn('[WS] Features are blocked (trial expired). WebSocket connection aborted.');
+    updateConnectionStatus('DISCONNECTED', 'red');
+    return;
+  }
+
   if (reconnectAttempts >= maxReconnectAttempts) {
     console.error('[WS] Max WebSocket reconnection attempts reached');
     updateConnectionStatus('DISCONNECTED', 'red');
@@ -1242,9 +1253,11 @@ function updateDashboardData(data) {
 
     if (data.trial_expired && !isOverlayVisible) {
       if (typeof window.setExpiredView === 'function') window.setExpiredView();
-    } else if (!data.trial_expired && isOverlayVisible) {
-      if (typeof window.clearExpiredView === 'function') window.clearExpiredView();
-    }
+    } 
+    // WebSocket should not have the power to unlock features
+    // else if (!data.trial_expired && isOverlayVisible) {
+    //   if (typeof window.clearExpiredView === 'function') window.clearExpiredView();
+    // }
   }
 }
 
