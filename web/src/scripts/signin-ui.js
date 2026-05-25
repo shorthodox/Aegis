@@ -180,8 +180,6 @@ async function performEmailSignin(e) {
           window.location.href = '/web/src/pages/dashboard.html';
         }
       }, 1000);
-    } else if (result.needsVerification) {
-      showError('signinFormError', '📧 ' + result.message);
     } else if (result.needsSignup) {
       showError('signinFormError', result.message);
       // Offer a direct link to signup

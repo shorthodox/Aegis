@@ -20,7 +20,6 @@ import {
   updateProfile,
   fetchSignInMethodsForEmail,
   sendPasswordResetEmail,
-  sendEmailVerification,
   onAuthStateChanged,
   GoogleAuthProvider
 } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
@@ -173,6 +172,42 @@ export async function handleGoogleAuth() {
 // ============================================================
 // EMAIL/PASSWORD SIGNUP
 // ============================================================
+// ============================================================
+// OTP helpers — call backend before creating Firebase account
+// ============================================================
+export async function sendOTPForSignup(email) {
+  try {
+    const res = await fetch('/auth/send-otp-for-registration', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    const data = await res.json();
+    if (!res.ok) return { success: false, message: data.detail || 'Failed to send OTP' };
+    return { success: true, message: data.message };
+  } catch {
+    return { success: false, message: 'Network error. Please try again.' };
+  }
+}
+
+export async function verifyOTPForSignup(email, otp) {
+  try {
+    const res = await fetch('/auth/verify-otp-for-registration', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, otp })
+    });
+    const data = await res.json();
+    if (!res.ok) return { success: false, message: data.detail || 'Invalid OTP' };
+    return { success: true };
+  } catch {
+    return { success: false, message: 'Network error. Please try again.' };
+  }
+}
+
+// ============================================================
+// EMAIL/PASSWORD SIGNUP (called only after OTP is verified)
+// ============================================================
 export async function handleEmailSignup(email, password, displayName) {
   try {
     if (!email || !password || !displayName) {
@@ -183,42 +218,34 @@ export async function handleEmailSignup(email, password, displayName) {
       throw new Error('Password must be at least 8 characters');
     }
 
-    console.log('📝 Creating email account...');
-
-    // Check if email already exists
+    // Check if Firebase account already exists for this email
     const methods = await fetchSignInMethodsForEmail(auth, email);
     if (methods.length > 0) {
-      throw new Error('Email already in use. Please try logging in instead.');
+      throw new Error('Email already in use. Please sign in instead.');
     }
 
-    // Create Firebase Auth account
+    // OTP already proved email is reachable — create account and sign in directly
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
 
-    // Update display name and avatar
     await updateProfile(user, {
       displayName: displayName,
       photoURL: `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=00f2ff&color=000`
     });
 
-    // Send verification email — user must click this before Firestore doc is created
-    await sendEmailVerification(user);
+    // Create Firestore document immediately (email was verified via OTP)
+    const userData = await ensureUserDocumentV2(user, 'email');
 
-    // Sign out immediately: Firestore doc is written only after verified login
-    await signOut(auth);
+    const idToken = await user.getIdToken();
+    AuthManager.setToken(idToken);
+    AuthManager.setUser(userData);
+    localStorage.setItem('authenticated', 'true');
 
-    console.log('📧 Verification email sent to:', email);
-    return {
-      success: true,
-      emailVerificationSent: true,
-      message: 'Account created! Please check your inbox and click the verification link, then sign in.'
-    };
+    console.log('✅ Email signup successful:', email);
+    return { success: true, user, message: 'Account created successfully!', userData };
   } catch (error) {
     console.error('❌ Email signup error:', error.code, error.message);
-    return {
-      success: false,
-      message: error.message || 'Signup failed'
-    };
+    return { success: false, message: error.message || 'Signup failed' };
   }
 }
 
@@ -235,17 +262,7 @@ export async function handleEmailLogin(email, password) {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
 
-    // Gate: reject unverified emails — this is what blocks fake/non-existent addresses
-    if (!user.emailVerified) {
-      await signOut(auth);
-      return {
-        success: false,
-        needsVerification: true,
-        message: 'Please verify your email before signing in. Check your inbox for the verification link.'
-      };
-    }
-
-    // Gate: check Firestore — only users who went through signup exist here
+    // Gate: check Firestore — only users who completed OTP-verified signup exist here
     const userDocRef = doc(db, 'users', user.uid);
     const docSnap = await getDoc(userDocRef);
     if (!docSnap.exists()) {
