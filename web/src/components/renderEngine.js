@@ -110,7 +110,7 @@ export class RenderEngine {
                     <i class="fas fa-lock text-4xl text-red-500 mb-4"></i>
                     <h3 class="text-xl font-bold text-white mb-2">Access Expired</h3>
                     <p class="text-gray-400 text-center max-w-md">Your trial or subscription has expired. Please upgrade your plan to restore real-time fleet monitoring.</p>
-                    <a href="/src/pages/pricing.html" class="mt-6 px-6 py-2 bg-gradient-to-r from-red-600 to-orange hover:from-red-500 hover:to-orange rounded font-bold text-white shadow-[0_0_15px_rgba(255,140,0,0.4)]">Upgrade Now</a>
+                    <a href="/web/src/pages/pricing.html" class="mt-6 px-6 py-2 bg-gradient-to-r from-red-600 to-orange hover:from-red-500 hover:to-orange rounded font-bold text-white shadow-[0_0_15px_rgba(255,140,0,0.4)]">Upgrade Now</a>
                 </div>
             `;
             return;

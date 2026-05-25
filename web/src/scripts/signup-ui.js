@@ -203,7 +203,7 @@ async function performEmailSignup(e) {
       window.dispatchEvent(new CustomEvent('authStateChange', { detail: { authenticated: true } }));
       setTimeout(() => {
         closeSignUpModal();
-        window.location.href = '/src/pages/pricing.html?newUser=1';
+        window.location.href = '/web/src/pages/pricing.html?newUser=1';
       }, 1500);
     } else {
       showError('signupFormError', result.message);
@@ -225,7 +225,7 @@ async function performGoogleSignup() {
       window.dispatchEvent(new CustomEvent('authStateChange', { detail: { authenticated: true } }));
       setTimeout(() => {
         closeSignUpModal();
-        window.location.href = '/src/pages/pricing.html?newUser=1';
+        window.location.href = '/web/src/pages/pricing.html?newUser=1';
       }, 1000);
     } else {
       showError('signupFormError', result.message);
