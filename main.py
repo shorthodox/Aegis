@@ -2856,6 +2856,36 @@ async def regenerate_api_key(user_id: str = Depends(get_current_user)):
     
     return {"status": "SUCCESS", "api_key": raw_key}
 
+# Frontend uses /api/v1/keys/regenerate — alias to the canonical route above
+@app.post("/api/v1/keys/regenerate")
+async def regenerate_api_key_alias(user_id: str = Depends(get_current_user)):
+    return await regenerate_api_key(user_id)
+
+# -------------------------------------------------------------------
+# User settings (capital + risk) — persisted to Firestore
+# Called by the Settings room in dashboard.js when user hits Save
+# -------------------------------------------------------------------
+class UserSettingsUpdate(BaseModel):
+    capital: float
+    risk_pct: float
+
+@app.post("/user/settings")
+async def save_user_settings(
+    payload: UserSettingsUpdate,
+    user_id: str = Depends(get_current_user)
+):
+    if payload.capital < 100:
+        raise HTTPException(status_code=400, detail="Capital must be at least $100")
+    if not (0.5 <= payload.risk_pct <= 10):
+        raise HTTPException(status_code=400, detail="Risk % must be between 0.5 and 10")
+
+    user_ref = db.collection("users").document(user_id)
+    user_ref.set(
+        {"capital": payload.capital, "risk_pct": payload.risk_pct},
+        merge=True
+    )
+    return {"status": "ok", "capital": payload.capital, "risk_pct": payload.risk_pct}
+
 # -------------------------------------------------------------------
 
 
