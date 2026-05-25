@@ -182,7 +182,6 @@ async function performEmailSignin(e) {
       }, 1000);
     } else if (result.needsSignup) {
       showError('signinFormError', result.message);
-      // Offer a direct link to signup
       const errEl = document.getElementById('signinFormError');
       if (errEl) {
         const link = document.createElement('a');
@@ -190,15 +189,17 @@ async function performEmailSignin(e) {
         link.textContent = ' Create an account →';
         link.className = 'auth-link';
         link.style.display = 'inline';
-        link.addEventListener('click', (e) => {
-          e.preventDefault();
+        link.addEventListener('click', (ev) => {
+          ev.preventDefault();
           closeSignInModal();
           window.dispatchEvent(new CustomEvent('openSignup'));
         });
         errEl.appendChild(link);
       }
+      showResetPasswordPrompt(email);
     } else {
       showError('signinFormError', result.message);
+      showResetPasswordPrompt(email);
     }
   } catch (error) {
     showError('signinFormError', error.message);
@@ -269,9 +270,9 @@ export function closeSignInModal() {
   if (modal) {
     modal.classList.remove('active');
     document.body.style.overflow = 'auto';
-    // Reset form
     document.getElementById('signinEmailForm')?.reset();
     document.getElementById('signinFormError').textContent = '';
+    document.getElementById('resetPasswordPrompt')?.remove();
   }
 }
 
@@ -283,6 +284,22 @@ function openForgotPasswordModal() {
 function closeForgotPasswordModal() {
   const modal = document.getElementById('forgotPasswordModal');
   if (modal) modal.style.display = 'none';
+}
+
+function showResetPasswordPrompt(email) {
+  document.getElementById('resetPasswordPrompt')?.remove();
+  const prompt = document.createElement('div');
+  prompt.id = 'resetPasswordPrompt';
+  prompt.style.cssText = 'text-align:center;margin-top:0.75rem;font-size:0.82rem;color:#9ca3af;';
+  prompt.innerHTML = `Forgot your password? <a href="#" id="inlineResetLink" class="auth-link">Send reset link</a>`;
+  document.getElementById('signinFormError')?.insertAdjacentElement('afterend', prompt);
+  document.getElementById('inlineResetLink')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    closeSignInModal();
+    const emailField = document.getElementById('forgotEmail');
+    if (emailField) emailField.value = email;
+    openForgotPasswordModal();
+  });
 }
 
 function showLoading() {

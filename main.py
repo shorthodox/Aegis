@@ -38,6 +38,7 @@ from dataclasses import asdict
 from starlette.middleware.sessions import SessionMiddleware
 import numpy as np
 from email_validator import validate_email, EmailNotValidError
+from functools import partial
 
 # -------------------------------------------------------------------
 # Helper: Recursively convert numpy types to native Python types
@@ -877,36 +878,43 @@ def is_trial_expired(email: str) -> bool:
 BASE_URL = os.getenv("BASE_URL", "http://localhost:8000").rstrip('/')
 
 @app.get("/auth/me")
-async def get_me(user_id: str = Depends(get_current_user)):
+async def get_me(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """
     Get current user's information including trial/subscription status.
     Returns user details with trial_end timestamp for frontend countdown.
     """
-    try:
-        # Attempt to get user document by email/id
-        user_doc = get_user_doc(user_id)
-        
-        # No document found — return 404 so the frontend provisioning flow triggers correctly
-        if not user_doc:
-            raise HTTPException(status_code=404, detail="User not found")
+    user_id = decode_token(credentials.credentials)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
 
-        # Block accounts that were created without OTP verification
-        if not user_doc.get("otp_verified", False):
-            raise HTTPException(status_code=403, detail="Account not verified.")
-        
-        # Return user data with all necessary fields
-        return {
-            "uid": user_id,
-            "email": user_doc.get("email", user_id),
-            "plan": user_doc.get("plan", "trial"),
-            "trial_end": user_doc.get("trial_end"),
-            "subscription_active": user_doc.get("subscription", {}).get("status") == "active",
-            "full_name": user_doc.get("full_name"),
-            "location": user_doc.get("location")
-        }
-    except Exception as e:
-        print(f"[/auth/me] Error for {user_id}: {type(e).__name__}: {e}")
-        raise HTTPException(status_code=500, detail=f"Error fetching user information: {type(e).__name__}")
+    user_doc = get_user_doc(user_id)
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    otp_verified = user_doc.get("otp_verified", False)
+    if not otp_verified:
+        # Auto-stamp accounts that Firebase has already verified (Google / OAuth providers).
+        # Their email_verified claim is True natively — no OTP needed for them.
+        try:
+            decoded = firebase_auth.verify_id_token(credentials.credentials)
+            if decoded.get("email_verified", False):
+                db.collection("users").document(user_id).update({"otp_verified": True})
+                otp_verified = True
+        except Exception:
+            pass
+
+    if not otp_verified:
+        raise HTTPException(status_code=403, detail="Account not verified.")
+
+    return {
+        "uid": user_id,
+        "email": user_doc.get("email", user_id),
+        "plan": user_doc.get("plan", "trial"),
+        "trial_end": user_doc.get("trial_end"),
+        "subscription_active": user_doc.get("subscription", {}).get("status") == "active",
+        "full_name": user_doc.get("full_name"),
+        "location": user_doc.get("location")
+    }
 
 @app.post("/api/users/provision")
 async def provision_user(request: Request, user_id: str = Depends(get_current_user)):
@@ -954,8 +962,10 @@ async def provision_user(request: Request, user_id: str = Depends(get_current_us
         existing = get_user_doc(doc_key)
         if existing:
             update_last_login(doc_key)
-            # Stamp otp_verified on re-provision if it reached here through the OTP gate.
-            if provider == "password" and not existing.get("otp_verified"):
+            # Stamp otp_verified for any provider that passes the provision gate:
+            # - password: already validated OTP signup_token above
+            # - google.com / other OAuth: email_verified is set by the provider
+            if not existing.get("otp_verified"):
                 db.collection("users").document(doc_key).update({"otp_verified": True})
             return {
                 "uid": firebase_uid,
@@ -1136,12 +1146,16 @@ async def send_otp_for_registration(request: OTPSendRequest):
     if domain in DISPOSABLE_EMAIL_DOMAINS:
         raise HTTPException(status_code=422, detail="Disposable or temporary email addresses are not allowed.")
 
-    # Validate format and check MX records (DNS lookup)
+    # Validate format and check MX records.
+    # Run in a thread executor — dns.resolver is synchronous and would block the event loop.
     try:
-        validated = validate_email(email, check_deliverability=True)
+        loop = asyncio.get_event_loop()
+        validated = await loop.run_in_executor(
+            None, partial(validate_email, email, check_deliverability=True)
+        )
         email = validated.normalized
-    except EmailNotValidError as exc:
-        raise HTTPException(status_code=422, detail=f"Invalid email address: {exc}")
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid email address: {str(exc)}")
 
     existing_user = get_user_doc(email)
     if existing_user:
