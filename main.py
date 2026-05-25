@@ -37,6 +37,7 @@ import uvicorn
 from dataclasses import asdict
 from starlette.middleware.sessions import SessionMiddleware
 import numpy as np
+from email_validator import validate_email, EmailNotValidError
 
 # -------------------------------------------------------------------
 # Helper: Recursively convert numpy types to native Python types
@@ -1057,6 +1058,39 @@ class Review(BaseModel):
     product: Optional[str] = None
 
 # -------------------------------------------------------------------
+# Disposable / temp-email domain blocklist
+# These domains have valid MX records so DNS lookup alone won't catch them.
+# -------------------------------------------------------------------
+DISPOSABLE_EMAIL_DOMAINS = {
+    "mailinator.com", "guerrillamail.com", "guerrillamail.net", "guerrillamail.org",
+    "guerrillamail.biz", "guerrillamail.de", "guerrillamail.info",
+    "temp-mail.org", "tempmail.com", "tempmail.net", "temp-mail.io",
+    "10minutemail.com", "10minutemail.net", "10minutemail.org",
+    "throwam.com", "throwaway.email", "trashmail.com", "trashmail.net",
+    "trashmail.me", "trashmail.at", "trashmail.io",
+    "dispostable.com", "disposablemail.com", "fakeinbox.com",
+    "maildrop.cc", "mailnull.com", "spamgourmet.com", "spamgourmet.net",
+    "yopmail.com", "yopmail.fr", "yopmail.net",
+    "sharklasers.com", "guerillaMail.com", "grr.la", "spam4.me",
+    "getairmail.com", "filzmail.com", "sofimail.com", "spamavert.com",
+    "spamevader.com", "dodgeit.com", "mailexpire.com", "spamhole.com",
+    "spamcorpse.com", "deadaddress.com", "mailfreeonline.com",
+    "spaml.com", "spamspot.com", "binkmail.com", "mailbolt.com",
+    "mailfree.net", "spamfree24.org", "spamfree.eu", "mailzilla.com",
+    "anonymail.com", "anonymbox.com", "anonbox.net", "mailnew.com",
+    "tempr.email", "discard.email", "mt2015.com", "mt2016.com",
+    "spam.la", "spaml.de", "temporaryemail.net", "throwam.com",
+    "mailscrap.com", "dispostable.com", "e4ward.com",
+    "jetable.fr.nf", "jetable.net", "jetable.org",
+    "nomail.xl.cx", "plokeit.com", "putthisinyourspamdatabase.com",
+    "rmqkr.net", "s0ny.net", "safetymail.info", "safetypost.de",
+    "sneakemail.com", "spamfree.eu", "spamgob.com", "spaml.com",
+    "spammotel.com", "spamspot.com", "spamthisplease.com", "tradermail.info",
+    "turnermail.com", "uroid.com", "venompen.com", "wh4f.org",
+    "yam.com", "zoemail.org", "zymuying.com",
+}
+
+# -------------------------------------------------------------------
 # Email configuration
 # -------------------------------------------------------------------
 conf = ConnectionConfig(
@@ -1078,6 +1112,19 @@ fastmail = FastMail(conf)
 @app.post("/auth/send-otp-for-registration")
 async def send_otp_for_registration(request: OTPSendRequest):
     email = request.email
+
+    # Block disposable / temp-mail domains
+    domain = email.split('@')[-1].lower()
+    if domain in DISPOSABLE_EMAIL_DOMAINS:
+        raise HTTPException(status_code=422, detail="Disposable or temporary email addresses are not allowed.")
+
+    # Validate format and check MX records (DNS lookup)
+    try:
+        validated = validate_email(email, check_deliverability=True)
+        email = validated.normalized
+    except EmailNotValidError as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid email address: {exc}")
+
     existing_user = get_user_doc(email)
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered. Please sign in.")
