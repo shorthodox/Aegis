@@ -204,9 +204,11 @@ function updatePlanBadge(status) {
 // WAIT FOR AUTH STATE CHANGE (replaces polling waitForUserId)
 // ============================================================
 function waitForAuthStateChange() {
+  let timeoutId;
   const authPromise = new Promise((resolve) => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
       unsubscribe();
+      if (timeoutId) clearTimeout(timeoutId);
       if (user?.uid) {
         const status = await checkUserSubscriptionStatus(user.uid);
         _subState.active = (status !== 'expired');
@@ -230,7 +232,7 @@ function waitForAuthStateChange() {
   });
 
   const timeoutPromise = new Promise((resolve) => {
-    setTimeout(() => {
+    timeoutId = setTimeout(() => {
       console.warn('waitForAuthStateChange timeout reached, triggering retry...');
       // Trigger retry mechanism
       const retryUnsubscribe = auth.onAuthStateChanged(async (user) => {
