@@ -196,17 +196,27 @@ function _executePaperTrade() {
   const tp    = parseFloat(document.getElementById('tr-tp')?.value);
   if (!entry || !sl || !tp) { _toast('Fill in Entry, SL and TP', 'error'); return; }
 
+  // Use live price as the actual execution price so P&L starts at $0.
+  // The signal's entry_price may be stale; we fill at the current market price.
+  const livePrice = window.currentTickers?.[symbol]
+    ? parseFloat(window.currentTickers[symbol])
+    : entry;
+  const execEntry = (livePrice > 0 && isFinite(livePrice)) ? livePrice : entry;
+
+  // Update the entry field to show what we actually executed at
+  _setVal('tr-entry', execEntry.toFixed(4));
+
   const capital  = parseFloat(document.getElementById('tr-capital')?.value  || 10000);
   const riskPct  = parseFloat(document.getElementById('tr-risk')?.value     || 2);
   const leverage = parseFloat(document.getElementById('tr-leverage')?.value || 1);
-  const { direction, posUnits } = _calcPos({ capital, riskPct, entry, sl, tp, leverage });
+  const { direction, posUnits } = _calcPos({ capital, riskPct, entry: execEntry, sl, tp, leverage });
 
   const trade = {
     id: `paper-${Date.now()}`,
     type: 'paper',
     symbol,
-    side: direction || (sl < entry ? 'LONG' : 'SHORT'),
-    entryPrice: entry,
+    side: direction || (sl < execEntry ? 'LONG' : 'SHORT'),
+    entryPrice: execEntry,
     stopLoss: sl,
     takeProfit: tp,
     positionUnits: posUnits || parseFloat(document.getElementById('tr-pos-units')?.textContent || '0') || 1,
@@ -215,7 +225,7 @@ function _executePaperTrade() {
 
   _paperTrades.unshift(trade);
   _renderAllTrades();
-  _toast(`Paper trade opened for ${symbol}`, 'success');
+  _toast(`Paper trade opened for ${symbol} @ $${execEntry.toFixed(4)}`, 'success');
 }
 
 // ── Trade rendering ──────────────────────────────────────────────────────────
