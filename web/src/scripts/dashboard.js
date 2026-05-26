@@ -1060,7 +1060,10 @@ window.showSignalDetailsModal = function (signal) {
   }
 
   let _shapLeadHTML = '';
-  const _probs = signal.probabilities || { SHORT: 0.18, HOLD: 0.08, LONG: 0.74 };
+  const _rawP = signal.raw_probabilities;
+  const _probs = _rawP
+    ? { SHORT: (_rawP.SHORT||0)/100, HOLD: (_rawP.HOLD||0)/100, LONG: (_rawP.LONG||0)/100 }
+    : { SHORT: 0.18, HOLD: 0.08, LONG: 0.74 };
   const _lead = Object.entries(_probs).sort((a,b) => b[1]-a[1])[0];
   const _leadPct = (_lead[1]*100).toFixed(0);
   const _leadColor = _lead[0]==='LONG' ? 'text-green-400' : _lead[0]==='SHORT' ? 'text-red-400' : 'text-gray-400';
@@ -1771,18 +1774,24 @@ function _renderFpExpectancy(body, signal, tier) {
 function _renderFpShap(body, signal, tier) {
   const locked = tier !== 'PRO';
 
-  const probs = signal.probabilities || { SHORT: 0.18, HOLD: 0.08, LONG: 0.74 };
+  const _rp = signal.raw_probabilities;
+  const probs = _rp
+    ? { SHORT: (_rp.SHORT||0)/100, HOLD: (_rp.HOLD||0)/100, LONG: (_rp.LONG||0)/100 }
+    : { SHORT: 0.18, HOLD: 0.08, LONG: 0.74 };
   const leadEntry = Object.entries(probs).sort((a,b) => b[1]-a[1])[0];
   const leadClass = leadEntry[0] === 'LONG' ? 'text-green-400' : leadEntry[0] === 'SHORT' ? 'text-red-400' : 'text-gray-400';
   const leadPct = (leadEntry[1] * 100).toFixed(1);
 
-  const shapValues = signal.shap_values || [
-    { feature: 'Volume Delta 1h', value: 0.34, direction: 'long' },
-    { feature: 'BTC Anchor Distance', value: -0.21, direction: 'short' },
-    { feature: 'EMA 200 Confluence', value: 0.18, direction: 'long' },
-    { feature: 'RSI Regime 4h', value: 0.15, direction: 'long' },
-    { feature: 'Liq. Block Density', value: -0.09, direction: 'short' },
-  ];
+  const _shapContribs = signal.shap_contributions;
+  const shapValues = (_shapContribs && _shapContribs.length > 0)
+    ? _shapContribs.map(s => ({ feature: s.feature, value: s.impact }))
+    : [
+      { feature: 'Volume Delta 1h', value: 0.34 },
+      { feature: 'BTC Anchor Distance', value: -0.21 },
+      { feature: 'EMA 200 Confluence', value: 0.18 },
+      { feature: 'RSI Regime 4h', value: 0.15 },
+      { feature: 'Liq. Block Density', value: -0.09 },
+    ];
 
   const lockOverlay = locked ? `
     <div class="absolute inset-0 bg-black/80 backdrop-blur-md rounded-xl flex flex-col items-center justify-center z-10">
