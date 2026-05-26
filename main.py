@@ -583,6 +583,10 @@ async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
     response.headers["Cross-Origin-Opener-Policy"] = "same-origin-allow-popups"
     response.headers["Cross-Origin-Embedder-Policy"] = "unsafe-none"
+    # Prevent browsers from serving stale JS/HTML from disk cache after deploys
+    path = request.url.path
+    if path.endswith((".js", ".html")) and "/web/" in path:
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
     return response
 
 # -------------------------------------------------------------------

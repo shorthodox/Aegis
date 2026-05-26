@@ -1,5 +1,5 @@
 import { initializeTrialCountdown, fetchTrialStartFromFirestore } from './trial-countdown.js';
-import { auth, db } from './gatekeeper.js';
+import { auth, db } from './gatekeeper.js?v=2.0';
 import { doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js';
 
 function _showToast(msg, type = 'info') {
