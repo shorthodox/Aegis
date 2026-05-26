@@ -14,6 +14,7 @@ import re
 import random
 import string
 import time
+import urllib.parse
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Any, Optional, List, TYPE_CHECKING, Union
@@ -1125,7 +1126,7 @@ conf = ConnectionConfig(
     MAIL_USERNAME=os.getenv("MAIL_USERNAME", "animeshkukreti@gatekeeper.sbs"),
     MAIL_PASSWORD=SecretStr(os.getenv("MAIL_PASSWORD", "")),
     MAIL_FROM=os.getenv("MAIL_FROM", "animeshkukreti@gatekeeper.sbs"),
-    MAIL_FROM_NAME=os.getenv("MAIL_FROM_NAME", "AEGIS Terminal"),
+    MAIL_FROM_NAME=os.getenv("MAIL_FROM_NAME", "Gatekeeper (Aegis-1)"),
     MAIL_PORT=int(os.getenv("MAIL_PORT", "587")),
     MAIL_SERVER=os.getenv("MAIL_SERVER", "smtp.neo.space"),
     MAIL_STARTTLS=os.getenv("MAIL_STARTTLS", "true").lower() == "true",
@@ -1277,88 +1278,148 @@ class PasswordResetRequest(BaseModel):
 async def send_password_reset(request: PasswordResetRequest):
     email = request.email
     try:
-        reset_link = firebase_auth.generate_password_reset_link(email)
+        firebase_link = firebase_auth.generate_password_reset_link(email)
     except firebase_auth.UserNotFoundError:
-        # Don't reveal whether the account exists (timing-safe response)
         return {"success": True, "message": "If an account with this email exists, a reset link has been sent."}
     except Exception as e:
         print(f"[password-reset] generate_password_reset_link failed: {e}")
         raise HTTPException(status_code=500, detail="Could not generate reset link. Please try again.")
 
+    # Extract oobCode and apiKey from Firebase's link so our custom reset page
+    # can call confirmPasswordReset() directly without going through Firebase's UI.
+    parsed = urllib.parse.urlparse(firebase_link)
+    params = urllib.parse.parse_qs(parsed.query)
+    oob_code = params.get("oobCode", [""])[0]
+    api_key  = params.get("apiKey",  [""])[0]
+    base_url = os.getenv("BASE_URL", "https://gatekeeper.sbs").rstrip("/")
+    custom_reset_url = (
+        f"{base_url}/web/src/pages/reset-password.html"
+        f"?oobCode={urllib.parse.quote(oob_code)}&apiKey={urllib.parse.quote(api_key)}"
+    )
+
     try:
         message = MessageSchema(
-            subject="Reset Your AEGIS Password",
+            subject="Reset Your Gatekeeper Password",
             recipients=[NameEmail(name=email, email=email)],
-            body=f"""
-            <!DOCTYPE html>
-            <html>
-            <head><meta charset="UTF-8"></head>
-            <body style="margin:0;padding:0;background:#0a0a0c;font-family:'Segoe UI',Arial,sans-serif;">
-              <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0c;padding:40px 0;">
-                <tr><td align="center">
-                  <table width="480" cellpadding="0" cellspacing="0"
-                         style="background:#0f111a;border:1px solid rgba(0,242,255,0.15);border-radius:16px;overflow:hidden;max-width:480px;">
+            body=f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+</head>
+<body style="margin:0;padding:0;background:#050505;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0"
+         style="background:#050505;padding:48px 16px;">
+    <tr><td align="center">
 
-                    <tr>
-                      <td style="background:linear-gradient(135deg,#00f2ff22,#7b2fff22);padding:32px 40px 24px;text-align:center;border-bottom:1px solid rgba(0,242,255,0.1);">
-                        <div style="font-size:28px;font-weight:800;letter-spacing:3px;
-                                    background:linear-gradient(90deg,#00f2ff,#7b2fff);
-                                    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-                                    display:inline-block;">
-                          ⚡ AEGIS
-                        </div>
-                        <p style="color:#6b7280;margin:8px 0 0;font-size:13px;letter-spacing:1px;">SOVEREIGN TERMINAL</p>
-                      </td>
-                    </tr>
+      <!-- Card -->
+      <table width="520" cellpadding="0" cellspacing="0"
+             style="max-width:520px;width:100%;background:#0a0c14;
+                    border:1px solid rgba(0,242,255,0.14);
+                    border-radius:18px;overflow:hidden;">
 
-                    <tr>
-                      <td style="padding:36px 40px;">
-                        <p style="color:#9ca3af;font-size:15px;margin:0 0 8px;">Password Reset</p>
-                        <h2 style="color:#f9fafb;font-size:20px;font-weight:600;margin:0 0 16px;">Reset your password</h2>
-                        <p style="color:#9ca3af;font-size:14px;margin:0 0 24px;">
-                          We received a request to reset the password for your AEGIS account.
-                          Click the button below to set a new password.
-                        </p>
+        <!-- Top accent bar -->
+        <tr>
+          <td style="height:3px;background:linear-gradient(90deg,#00f2ff,#7b2fff);"></td>
+        </tr>
 
-                        <div style="text-align:center;margin:0 0 24px;">
-                          <a href="{reset_link}"
-                             style="display:inline-block;padding:14px 32px;
-                                    background:linear-gradient(90deg,#00f2ff,#7b2fff);
-                                    color:#000;font-weight:700;font-size:15px;
-                                    border-radius:10px;text-decoration:none;letter-spacing:0.5px;">
-                            Reset Password
-                          </a>
-                        </div>
+        <!-- Header -->
+        <tr>
+          <td style="padding:36px 44px 28px;text-align:center;
+                     border-bottom:1px solid rgba(255,255,255,0.05);">
+            <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:6px;">
+              <span style="font-size:22px;">⚡</span>
+              <span style="font-size:22px;font-weight:800;letter-spacing:2.5px;
+                           background:linear-gradient(90deg,#00f2ff,#7b2fff);
+                           -webkit-background-clip:text;-webkit-text-fill-color:transparent;">
+                GATEKEEPER
+              </span>
+            </div>
+            <p style="margin:2px 0 0;font-size:11px;letter-spacing:2px;
+                      color:#4b5563;text-transform:uppercase;">Aegis-1 · Sovereign Terminal</p>
+          </td>
+        </tr>
 
-                        <p style="color:#6b7280;font-size:13px;margin:0 0 8px;">
-                          This link expires in <strong style="color:#f9fafb;">1 hour</strong>.
-                          If you didn't request a password reset, you can safely ignore this email.
-                        </p>
-                        <p style="color:#4b5563;font-size:12px;margin:0;word-break:break-all;">
-                          Or copy this link: <a href="{reset_link}" style="color:#00f2ff;">{reset_link}</a>
-                        </p>
-                      </td>
-                    </tr>
+        <!-- Body -->
+        <tr>
+          <td style="padding:40px 44px 32px;">
 
-                    <tr>
-                      <td style="padding:20px 40px 28px;border-top:1px solid rgba(255,255,255,0.05);text-align:center;">
-                        <p style="color:#4b5563;font-size:12px;margin:0;">
-                          Sent by
-                          <a href="mailto:animeshkukreti@gatekeeper.sbs"
-                             style="color:#00f2ff;text-decoration:none;">animeshkukreti@gatekeeper.sbs</a>
-                          &nbsp;·&nbsp;
-                          <a href="https://gatekeeper.sbs"
-                             style="color:#00f2ff;text-decoration:none;">gatekeeper.sbs</a>
-                        </p>
-                      </td>
-                    </tr>
+            <!-- Icon circle -->
+            <div style="text-align:center;margin-bottom:28px;">
+              <div style="display:inline-block;width:64px;height:64px;border-radius:50%;
+                          background:rgba(0,242,255,0.08);border:1px solid rgba(0,242,255,0.2);
+                          line-height:64px;font-size:26px;">🔐</div>
+            </div>
 
-                  </table>
-                </td></tr>
-              </table>
-            </body>
-            </html>
-            """,
+            <h1 style="margin:0 0 10px;font-size:22px;font-weight:700;
+                       color:#f1f5f9;text-align:center;letter-spacing:-0.3px;">
+              Password Reset Request
+            </h1>
+            <p style="margin:0 0 28px;font-size:14px;color:#94a3b8;
+                      text-align:center;line-height:1.65;">
+              We received a request to reset the password for<br>
+              <strong style="color:#e2e8f0;">{email}</strong>
+            </p>
+
+            <!-- CTA button -->
+            <div style="text-align:center;margin-bottom:28px;">
+              <a href="{custom_reset_url}"
+                 style="display:inline-block;padding:15px 40px;
+                        background:linear-gradient(95deg,#00f2ff,#00a8c6);
+                        color:#000;font-weight:700;font-size:15px;
+                        border-radius:10px;text-decoration:none;
+                        letter-spacing:0.4px;
+                        box-shadow:0 4px 20px rgba(0,242,255,0.25);">
+                Reset My Password
+              </a>
+            </div>
+
+            <!-- Expiry notice -->
+            <div style="background:rgba(0,242,255,0.04);border:1px solid rgba(0,242,255,0.1);
+                        border-radius:10px;padding:16px 20px;margin-bottom:24px;">
+              <p style="margin:0;font-size:13px;color:#64748b;line-height:1.6;">
+                ⏱ &nbsp;This link expires in <strong style="color:#94a3b8;">1 hour</strong>.<br>
+                🔒 &nbsp;If you didn't request this, your account is safe — ignore this email.
+              </p>
+            </div>
+
+            <!-- Fallback link -->
+            <p style="margin:0;font-size:11.5px;color:#374151;
+                      word-break:break-all;line-height:1.7;">
+              Button not working? Copy and paste this link into your browser:<br>
+              <a href="{custom_reset_url}"
+                 style="color:#00f2ff;text-decoration:none;">{custom_reset_url}</a>
+            </p>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="padding:20px 44px 28px;
+                     border-top:1px solid rgba(255,255,255,0.04);
+                     text-align:center;">
+            <p style="margin:0 0 6px;font-size:12px;color:#374151;">
+              Sent by Gatekeeper (Aegis-1) &nbsp;·&nbsp;
+              <a href="https://gatekeeper.sbs"
+                 style="color:#00f2ff;text-decoration:none;">gatekeeper.sbs</a>
+            </p>
+            <p style="margin:0;font-size:11px;color:#1f2937;">
+              © 2025 Gatekeeper. All rights reserved.
+            </p>
+          </td>
+        </tr>
+
+        <!-- Bottom accent bar -->
+        <tr>
+          <td style="height:3px;background:linear-gradient(90deg,#7b2fff,#00f2ff);"></td>
+        </tr>
+
+      </table>
+
+    </td></tr>
+  </table>
+</body>
+</html>""",
             subtype=MessageType.html,
         )
         await fastmail.send_message(message)
