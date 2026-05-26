@@ -552,19 +552,22 @@ class ReversalDetector:
 
     @staticmethod
     def count_confirming_candles(df: pd.DataFrame, direction: str, max_look: int = 5) -> int:
-        """Count consecutive completed candles moving in the reversal direction (newest first)."""
-        if len(df) < 3:
+        if len(df) < 5:
             return 0
-        # Exclude the last (potentially still-forming) candle
-        completed = df.iloc[-(max_look + 1):-1]
+        # Access contiguous underlying numpy matrix locations directly to prevent IndexErrors
+        closes = df['close'].to_numpy()
+        opens = df['open'].to_numpy()
+
         count = 0
-        for _, c in completed.iloc[::-1].iterrows():
-            if direction == "LONG" and float(c['close']) > float(c['open']):
+        # Loop backwards starting from the last completed candle (-2) down to lookback limits
+        for i in range(2, min(max_look + 2, len(df))):
+            idx = -i
+            if direction == "LONG" and closes[idx] > opens[idx]:
                 count += 1
-            elif direction == "SHORT" and float(c['close']) < float(c['open']):
+            elif direction == "SHORT" and closes[idx] < opens[idx]:
                 count += 1
             else:
-                break  # non-consecutive run ends
+                break
         return count
 
     @staticmethod
@@ -1251,11 +1254,10 @@ class SignalGenerator:
                     signal_status = "CONFIRMED"
                     self.reversal_candidates.pop(cand_key, None)
                 else:
-                    # Not enough candle confirmation yet — hold back
-                    base_signal = "NEUTRAL"
+                    # Preserve signal payload for dashboard tracking; entries blocked via signal_status
                     signal_status = "AWAITING_CONFIRMATION"
             else:
-                # Reversal setup not strong enough — clear candidate and hold
+                # Reversal setup not strong enough — clear candidate and neutralise
                 self.reversal_candidates.pop(cand_key, None)
                 base_signal = "NEUTRAL"
                 signal_status = "ACTIVE"
@@ -1265,8 +1267,7 @@ class SignalGenerator:
             if sr_alert_state == "NEAR_SUPPORT" and support_lvl > 0:
                 support_broken = ReversalDetector.is_support_broken(current_price, support_lvl)
                 if not support_broken:
-                    # Block SHORT — support is holding; user must wait for break
-                    base_signal = "NEUTRAL"
+                    # Preserve SHORT payload for dashboard tracking; entries blocked via signal_status
                     signal_status = "AWAITING_SR_BREAK"
                     self.reversal_candidates[f"{rev_key}_SR_BREAK"] = {
                         "support_level": support_lvl,
@@ -1301,7 +1302,7 @@ class SignalGenerator:
                         signal_status = "CONFIRMED"
                         self.reversal_candidates.pop(cand_key, None)
                     else:
-                        base_signal = "NEUTRAL"
+                        # Preserve signal payload for dashboard tracking; entries blocked via signal_status
                         signal_status = "AWAITING_CONFIRMATION"
                 else:
                     self.reversal_candidates.pop(cand_key, None)
@@ -1415,7 +1416,7 @@ class SignalGenerator:
             "expectancy_matrix": expectancy_matrix,
             "threshold": adj_thresh,
             "expected_net_pct": expected_net_pct,
-            "signal": final_signal,
+            "signal": "HOLD" if signal_status in ("AWAITING_CONFIRMATION", "AWAITING_SR_BREAK") else final_signal,
             "signal_strength": signal_strength,
             # Reversal anticipation fields
             "signal_status": signal_status,
@@ -1433,7 +1434,7 @@ class SignalGenerator:
             "atr_sl": cfg.atr_sl,
             "atr_tp": RR_RATIO * cfg.atr_sl,
             "efficiency_ratio": er,               # added for UI / debugging
-            "direction": base_signal,             # LONG/SHORT/NEUTRAL
+            "direction": "NEUTRAL" if signal_status in ("AWAITING_CONFIRMATION", "AWAITING_SR_BREAK") else base_signal,
             "entry_price": current_price,
             "sl": suggested_sl,
             "tp": suggested_tp,
