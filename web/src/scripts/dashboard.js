@@ -1014,6 +1014,39 @@ window.showSignalDetailsModal = function (signal) {
     badge.className = 'px-2 py-1 rounded text-xs font-bold tracking-wider bg-gray-500/20 text-gray-400 border border-gray-500/30';
   }
 
+  // ── Signal Status Banner (reversal anticipation states) ──
+  const sigStatus = signal.signal_status || 'ACTIVE';
+  let sdStatusEl = document.getElementById('sd-signal-status');
+  if (!sdStatusEl) {
+    sdStatusEl = document.createElement('div');
+    sdStatusEl.id = 'sd-signal-status';
+    const priceRow = document.getElementById('sd-live-price');
+    if (priceRow && priceRow.parentElement && priceRow.parentElement.parentElement) {
+      priceRow.parentElement.parentElement.insertBefore(sdStatusEl, priceRow.parentElement);
+    }
+  }
+  sdStatusEl.innerHTML = '';
+  sdStatusEl.className = 'hidden';
+  if (sigStatus === 'EXPIRED') {
+    sdStatusEl.innerHTML = '<i class="fas fa-clock-rotate-left mr-1"></i>SIGNAL EXPIRED — Move exceeded 60% of target before entry';
+    sdStatusEl.className = 'w-full px-3 py-2 mb-3 rounded-lg text-xs font-bold tracking-wider bg-gray-700/40 text-gray-400 border border-gray-600/40 text-center';
+  } else if (sigStatus === 'AWAITING_CONFIRMATION') {
+    const cc = signal.candles_confirmed || 0;
+    sdStatusEl.innerHTML = '<i class="fas fa-hourglass-half mr-1"></i>CONFIRMING REVERSAL — ' + cc + '/3 candles confirmed';
+    sdStatusEl.className = 'w-full px-3 py-2 mb-3 rounded-lg text-xs font-bold tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/30 text-center';
+  } else if (sigStatus === 'AWAITING_SR_BREAK') {
+    sdStatusEl.innerHTML = '<i class="fas fa-lock mr-1"></i>WAITING FOR SUPPORT BREAK — SELL held until support breaks';
+    sdStatusEl.className = 'w-full px-3 py-2 mb-3 rounded-lg text-xs font-bold tracking-wider bg-orange-500/10 text-orange-400 border border-orange-500/30 text-center';
+  } else if (sigStatus === 'SR_BREAK_CONFIRMED') {
+    sdStatusEl.innerHTML = '<i class="fas fa-unlock mr-1"></i>SUPPORT BROKEN — SELL confirmed after S/R breach';
+    sdStatusEl.className = 'w-full px-3 py-2 mb-3 rounded-lg text-xs font-bold tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-center';
+  } else if (sigStatus === 'CONFIRMED' && (signal.reversal_score || 0) > 0) {
+    const rs = ((signal.reversal_score || 0) * 100).toFixed(0);
+    const tags = (signal.reversal_signals || []).slice(0, 3).join(' · ');
+    sdStatusEl.innerHTML = '<i class="fas fa-rotate-left mr-1"></i>EARLY REVERSAL — Score ' + rs + '% · ' + (tags || 'Technical Setup');
+    sdStatusEl.className = 'w-full px-3 py-2 mb-3 rounded-lg text-xs font-bold tracking-wider bg-cyan/10 text-cyan border border-cyan/30 text-center';
+  }
+
   // Price & Levels
   const currentPrice = window.currentTickers && window.currentTickers[signal.symbol]
     ? parseFloat(window.currentTickers[signal.symbol])

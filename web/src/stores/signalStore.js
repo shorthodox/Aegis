@@ -103,7 +103,12 @@ export class SignalStore {
                         timeframe: tf,
                         confidence: payload.ai_prob !== undefined ? payload.ai_prob : (payload.confidence || 0),
                         rr: payload.rr || 0,
-                        atr: payload.atr || 0
+                        atr: payload.atr || 0,
+                        signal_status: payload.signal_status || 'ACTIVE',
+                        candles_confirmed: payload.candles_confirmed || 0,
+                        reversal_score: payload.reversal_score || 0,
+                        reversal_signals: payload.reversal_signals || [],
+                        direction: payload.direction || 'NEUTRAL',
                     };
                     if (!this.signals[key] || JSON.stringify(this.signals[key]) !== JSON.stringify(entry)) {
                         this.signals[key] = entry;
@@ -125,7 +130,12 @@ export class SignalStore {
                     timeframe: data.timeframe || this.timeframe,
                     confidence: data.ai_prob !== undefined ? data.ai_prob : (data.confidence || 0),
                     rr: data.rr || 0,
-                    atr: data.atr || 0
+                    atr: data.atr || 0,
+                    signal_status: data.signal_status || 'ACTIVE',
+                    candles_confirmed: data.candles_confirmed || 0,
+                    reversal_score: data.reversal_score || 0,
+                    reversal_signals: data.reversal_signals || [],
+                    direction: data.direction || 'NEUTRAL',
                 };
                 changed = true;
             }
