@@ -62,18 +62,7 @@ def numpy_to_native(obj) -> Any:
             pass
     return obj
 
-# -------------------------------------------------------------------
-# Cashfree PG SDK imports
-# -------------------------------------------------------------------
-try:
-    from cashfree_pg.api_client import Cashfree
-    from cashfree_pg.models.create_order_request import CreateOrderRequest
-    from cashfree_pg.models.customer_details import CustomerDetails
-    from cashfree_pg.models.create_subscription_payment_request import CreateSubscriptionPaymentRequest
-    CASHFREE_SDK_AVAILABLE = True
-except ImportError:
-    CASHFREE_SDK_AVAILABLE = False
-    print("[WARNING] Cashfree PG SDK not installed. Install with: pip install cashfree-pg")
+import razorpay
 
 # -------------------------------------------------------------------
 # Security: JWT & Algorithm must be from environment
@@ -86,24 +75,19 @@ if not ALGORITHM:
     raise RuntimeError("ALGORITHM is missing. Add it to your local .env file or Railway variables.")
 
 # -------------------------------------------------------------------
-# Cashfree payment gateway environment fields
+# Razorpay payment gateway
 # -------------------------------------------------------------------
-CASHFREE_APP_ID = os.getenv("CASHFREE_APP_ID")
-CASHFREE_SECRET_KEY = os.getenv("CASHFREE_SECRET_KEY")
-CASHFREE_ENV = os.getenv("CASHFREE_ENV", "TEST").upper()
-CASHFREE_BASE_URL = "https://sandbox.cashfree.com" if CASHFREE_ENV == "TEST" else "https://api.cashfree.com"
-CASHFREE_ENABLED = bool(CASHFREE_APP_ID and CASHFREE_SECRET_KEY)
+RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
+RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET")
+RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET")
+RAZORPAY_PLAN_ID = os.getenv("RAZORPAY_PLAN_ID")
+RAZORPAY_ENABLED = bool(RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET)
 
-# Initialize Cashfree SDK if available and credentials present
-if CASHFREE_SDK_AVAILABLE and CASHFREE_ENABLED:
-    Cashfree.XClientId = CASHFREE_APP_ID
-    Cashfree.XClientSecret = CASHFREE_SECRET_KEY
-    Cashfree.XEnvironment = Cashfree.SANDBOX if CASHFREE_ENV == "TEST" else Cashfree.PRODUCTION
-    print(f"🔒 Cashfree payment gateway configured for {CASHFREE_ENV}")
-elif CASHFREE_ENABLED:
-    print(f"[WARNING] Cashfree SDK not available, using REST API fallback for {CASHFREE_ENV}")
+razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET)) if RAZORPAY_ENABLED else None
+if RAZORPAY_ENABLED:
+    print("Razorpay payment gateway configured")
 else:
-    print("[WARNING] Cashfree payment gateway not configured. Set CASHFREE_APP_ID/CASHFREE_SECRET_KEY to enable.")
+    print("[WARNING] Razorpay not configured. Set RAZORPAY_KEY_ID/RAZORPAY_KEY_SECRET to enable.")
 
 # -------------------------------------------------------------------
 # SOVEREIGN FIREBASE INITIALIZATION
@@ -1090,19 +1074,22 @@ class OTPVerifyRequest(BaseModel):
     email: EmailStr
     otp: str
 
-class CashfreePaymentRequest(BaseModel):
-    amount: float
-    currency: str = "INR"
-    email: EmailStr
-    order_id: Optional[str] = None
-    customer_phone: Optional[str] = None
-
 class CreateSubscriptionRequest(BaseModel):
     plan_name: str
     amount: float
     currency: str = "INR"
     email: EmailStr
     customer_phone: Optional[str] = None
+
+class CreateOrderRequest(BaseModel):
+    plan: str
+    currency: str = "INR"
+
+class VerifyPaymentRequest(BaseModel):
+    razorpay_payment_id: str
+    razorpay_order_id: str
+    razorpay_signature: str
+    plan: str
 
 class Review(BaseModel):
     name: str
@@ -1746,282 +1733,215 @@ async def get_trial_status(user_id: str = Depends(get_current_user)):
 @app.get("/payment/config")
 async def payment_config():
     return {
-        "cashfree": {
-            "enabled": CASHFREE_ENABLED,
-            "environment": CASHFREE_ENV,
-            "base_url": CASHFREE_BASE_URL
+        "razorpay": {
+            "enabled": RAZORPAY_ENABLED,
+            "key_id": RAZORPAY_KEY_ID,
         }
     }
 
 # -------------------------------------------------------------------
-# Cashfree Payment Integration - Create Subscription Endpoint (FIXED)
+# Razorpay Subscription Integration
 # -------------------------------------------------------------------
 
-def generate_unique_subscription_id(email: str) -> str:
-    """Generate a unique subscription ID for Cashfree mandate"""
-    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-    random_str = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-    email_prefix = email.split('@')[0][:8]
-    return f"SUB_{email_prefix}_{timestamp}_{random_str}"
-
-async def create_cashfree_mandate(subscription_id: str, amount: float, plan_name: str, email: str, phone: Optional[str] = None, currency: str = "INR") -> Dict:
+@app.post("/api/v1/payments/subscription/initialize")
+async def initialize_subscription(user_id: str = Depends(get_current_user)):
     """
-    Create a Cashfree subscription mandate using REST API.
-    This properly implements the Cashfree Subscriptions API v2023-08-01.
+    Create a Razorpay recurring subscription and return its ID for the frontend
+    checkout flow (UPI AutoPay / card e-mandate).
     """
-    if not CASHFREE_ENABLED:
+    if not RAZORPAY_ENABLED or razorpay_client is None:
         raise HTTPException(status_code=503, detail="Payment system is not configured")
-    
-    # Build customer ID from email (safe for all characters)
-    customer_id = "".join(c if c.isalnum() else "_" for c in email.replace("@", "_").replace(".", "_"))
-    
-    # Cashfree Subscriptions API payload structure
-    payload = {
-        "subscription_id": subscription_id,
-        "subscription_amount": amount,
-        "subscription_currency": currency,
-        "subscription_name": f"Aegis-1 {plan_name.upper()} Plan",
-        "subscription_description": f"Monthly subscription for {plan_name} plan",
-        "customer_details": {
-            "customer_id": customer_id,
-            "customer_email": email,
-            "customer_phone": phone or "9999999999"
-        },
-        "return_url": f"{BASE_URL}/web/src/pages/dashboard.html?subscription={subscription_id}",
-        "callback_url": f"{BASE_URL}/payments/webhook",
-        "auth_mode": "AUTH",  # Use AUTH for mandate creation
-        "first_payment_amount": amount,
-        "expiry_time": (datetime.now(timezone.utc) + timedelta(days=365)).isoformat()
-    }
-    
-    headers = {
-        "Content-Type": "application/json",
-        "x-api-version": "2023-08-01"
-    }
-    
-    # Add authentication headers if credentials are available
-    if CASHFREE_APP_ID and CASHFREE_SECRET_KEY:
-        # Generate signature for secure API calls
-        import hashlib
-        import hmac
-        
-        message = json.dumps(payload, sort_keys=True)
-        secret = CASHFREE_SECRET_KEY.encode() if isinstance(CASHFREE_SECRET_KEY, str) else CASHFREE_SECRET_KEY
-        signature = hmac.new(secret, message.encode(), hashlib.sha256).hexdigest()
-        
-        headers["x-signature"] = signature
-    
-    # Make the actual API request to create subscription mandate
-    async with httpx.AsyncClient() as client:
-        url = f"{CASHFREE_BASE_URL}/pg/subscriptions"
-        response = await client.post(url, json=payload, headers=headers)
-        result = response.json()
-    
-    # Safely handle result - it might be a string (error HTML) or dict
-    sub_auth_url = None
-    if response.status_code in (200, 201):
-        if isinstance(result, dict):
-            sub_auth_url = result.get("subscription_auth_url") or \
-                          result.get("auth_url") or \
-                          result.get("redirect_url") or \
-                          result.get("data", {}).get("subscription_auth_url")
-        else:
-            # If result is not a dict (e.g., error HTML), use fallback URL
-            sub_auth_url = f"{CASHFREE_BASE_URL}/pg/subscriptions/{subscription_id}/auth"
-        
-        if not sub_auth_url:
-            # If no URL in response, construct one from the callback
-            sub_auth_url = f"{CASHFREE_BASE_URL}/pg/subscriptions/{subscription_id}/auth"
-    else:
-        print(f"Cashfree API error (status {response.status_code}): {result}")
-    
-    return {
-        "success": True,
-        "subscription_id": subscription_id,
-        "sub_auth_url": sub_auth_url or f"{CASHFREE_BASE_URL}/pg/subscriptions/{subscription_id}/auth",
-        "cashfree_response": result,
-        "status_code": response.status_code
-    }
 
-@app.post("/create-subscription")
-async def create_subscription(request: CreateSubscriptionRequest, email: str = Depends(get_current_user)):
-    """
-    Create a Cashfree subscription mandate and return the authorization URL.
-    This endpoint implements the Cashfree Subscriptions API to create a mandate.
-    """
-    if not CASHFREE_ENABLED:
-        raise HTTPException(status_code=503, detail="Payment system is not configured")
-    
-    if request.email != email:
-        raise HTTPException(status_code=403, detail="Email mismatch")
-    
-    # Generate unique subscription ID
-    subscription_id = generate_unique_subscription_id(email)
-    plan_amount = request.amount
-    plan_name = request.plan_name
-    customer_phone = request.customer_phone
-    
-    # Store pending subscription in Firestore
-    pending_ref = db.collection("pending_subscriptions").document(subscription_id)
-    pending_ref.set({
-        "email": email,
-        "plan_name": plan_name,
-        "amount": plan_amount,
-        "status": "pending",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "subscription_id": subscription_id
+    subscription = razorpay_client.subscription.create({
+        "plan_id": RAZORPAY_PLAN_ID,
+        "total_count": 12,
+        "customer_notify": 1,
+        "notes": {"internal_user_id": user_id},
     })
-    
-    # Create Cashfree mandate using the fixed helper function
-    result = await create_cashfree_mandate(
-        subscription_id=subscription_id,
-        amount=plan_amount,
-        plan_name=plan_name,
-        email=email,
-        phone=customer_phone,
-        currency=request.currency
-    )
-    
-    # Update pending subscription with mandate info
-    if result.get("success"):
-        sub_auth_url = result.get("sub_auth_url")
-        pending_ref.update({
-            "sub_auth_url": sub_auth_url,
-            "subscription_status": "mandate_pending",
-            "cashfree_response": result.get("cashfree_response")
+    return {"subscription_id": subscription["id"]}
+
+
+# Base prices in USD — source of truth for all plans
+USD_PLAN_PRICES: Dict[str, float] = {
+    "basic": 3.60,
+    "intermediate": 24.00,
+    "pro": 40.00,
+}
+
+# Currencies whose smallest unit is the unit itself (no multiply by 100)
+_ZERO_DECIMAL = {"BIF","CLP","DJF","GNF","JPY","KMF","KRW","MGA","PYG","RWF","UGX","VND","VUV","XAF","XOF","XPF"}
+# Currencies with 3 decimal places (multiply by 1000)
+_THREE_DECIMAL = {"BHD","JOD","KWD","OMR","TND"}
+
+# Exchange rate cache: USD as base, refreshed every hour
+_fx: Dict[str, Any] = {"rates": {"USD": 1.0, "INR": 84.0}, "ts": 0.0}
+_FX_TTL = 3600.0
+
+async def _get_fx_rates() -> Dict[str, float]:
+    """Return cached USD-based exchange rates, refreshing hourly."""
+    if time.time() - _fx["ts"] < _FX_TTL:
+        return _fx["rates"]
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get("https://open.er-api.com/v6/latest/USD")
+            data = resp.json()
+            if data.get("result") == "success" and isinstance(data.get("rates"), dict):
+                _fx["rates"] = data["rates"]
+                _fx["ts"] = time.time()
+                print(f"[FX] Rates refreshed. USD/INR={_fx['rates'].get('INR', '?')}")
+    except Exception as exc:
+        print(f"[FX] Rate fetch failed, using cached: {exc}")
+    return _fx["rates"]
+
+
+@app.get("/api/exchange-rates")
+async def exchange_rates_endpoint():
+    """Return live USD-based exchange rates plus USD plan prices for the frontend."""
+    rates = await _get_fx_rates()
+    return {"base": "USD", "rates": rates, "plan_prices_usd": USD_PLAN_PRICES}
+
+
+def _to_subunits(amount_float: float, currency: str) -> int:
+    """Convert a float amount to the currency's smallest unit."""
+    if currency in _ZERO_DECIMAL:
+        return int(round(amount_float))
+    if currency in _THREE_DECIMAL:
+        return int(round(amount_float * 1000))
+    return int(round(amount_float * 100))
+
+
+@app.post("/api/create-order")
+async def create_order(req: CreateOrderRequest, user_id: str = Depends(get_current_user)):
+    """Convert the USD plan price to the requested currency at live rate, create Razorpay order."""
+    if not RAZORPAY_ENABLED or razorpay_client is None:
+        raise HTTPException(status_code=503, detail="Payment system not configured")
+
+    usd_price = USD_PLAN_PRICES.get(req.plan)
+    if usd_price is None:
+        raise HTTPException(status_code=400, detail=f"Unknown plan: {req.plan}")
+
+    currency = req.currency.upper()
+    rates = await _get_fx_rates()
+    rate = rates.get(currency)
+    if rate is None:
+        raise HTTPException(status_code=400, detail=f"Unsupported currency: {currency}")
+
+    amount_subunits = _to_subunits(usd_price * rate, currency)
+    if amount_subunits < 100:
+        raise HTTPException(status_code=400, detail="Calculated amount too low (min 100 subunits)")
+
+    receipt = f"{user_id[:16]}_{req.plan}_{int(time.time())}"
+    order = razorpay_client.order.create({  # type: ignore[union-attr]
+        "amount": amount_subunits,
+        "currency": currency,
+        "receipt": receipt,
+        "notes": {"user_id": user_id, "plan": req.plan, "usd_price": str(usd_price)},
+    })
+    return {"order_id": order["id"], "amount": order["amount"], "currency": order["currency"]}
+
+
+@app.post("/api/verify-payment")
+async def verify_payment(req: VerifyPaymentRequest, user_id: str = Depends(get_current_user)):
+    """Verify Razorpay payment signature and upgrade the user's plan."""
+    import hmac as _hmac
+    import hashlib
+
+    if not RAZORPAY_KEY_SECRET:
+        raise HTTPException(status_code=503, detail="Payment system not configured")
+    if not req.razorpay_payment_id or not req.razorpay_order_id or not req.razorpay_signature:
+        raise HTTPException(status_code=400, detail="Missing payment fields")
+
+    msg = f"{req.razorpay_order_id}|{req.razorpay_payment_id}"
+    expected = _hmac.new(
+        RAZORPAY_KEY_SECRET.encode(),
+        msg.encode(),
+        hashlib.sha256,
+    ).hexdigest()
+
+    if not _hmac.compare_digest(expected, req.razorpay_signature):
+        raise HTTPException(status_code=400, detail="Payment verification failed")
+
+    plan = req.plan if req.plan in ("basic", "intermediate", "pro") else "basic"
+    user_ref = db.collection("users").document(user_id)
+    try:
+        update_result = user_ref.update({
+            "plan": plan,
+            "subscription": {
+                "status": "active",
+                "payment_id": req.razorpay_payment_id,
+                "order_id": req.razorpay_order_id,
+                "activated_at": datetime.now(timezone.utc).isoformat(),
+                "plan_type": plan,
+            },
+            "trial_active": False,
         })
-    
-    return {
-        "success": result.get("success", False),
-        "subscription_id": subscription_id,
-        "sub_auth_url": result.get("sub_auth_url"),
-        "message": result.get("message", "Subscription mandate created successfully" if result.get("success") else "Check logs for details")
-    }
+        if inspect.isawaitable(update_result):
+            await update_result
+        await send_subscription_confirmation(user_id, plan)
+    except Exception as e:
+        print(f"Failed to update user after payment: {e}")
+        raise HTTPException(status_code=500, detail="Payment verified but account update failed")
+
+    return {"status": "success", "plan": plan}
+
 
 # -------------------------------------------------------------------
-# Cashfree Webhook for SUBSCRIPTION_ACTIVATED events
+# Razorpay Webhook for subscription.activated events
 # -------------------------------------------------------------------
-@app.post("/payments/webhook")
-async def cashfree_webhook(request: Request):
+@app.post("/api/v1/payments/webhook")
+async def razorpay_webhook(request: Request):
     """
-    Webhook endpoint to catch SUBSCRIPTION_ACTIVATED events from Cashfree.
-    Upon success, find the user in Firestore by email and update their plan to 'pro' 
-    and subscription.status to 'active'.
+    Verify Razorpay webhook signature, handle subscription.activated,
+    and promote the matching user to the pro plan.
     """
+    import hmac
+    import hashlib
+
+    body = await request.body()
+    received_sig = request.headers.get("X-Razorpay-Signature", "")
+
+    if RAZORPAY_WEBHOOK_SECRET:
+        expected = hmac.new(
+            RAZORPAY_WEBHOOK_SECRET.encode(),
+            body,
+            hashlib.sha256,
+        ).hexdigest()
+        if not hmac.compare_digest(expected, received_sig):
+            raise HTTPException(status_code=400, detail="Invalid webhook signature")
+
     try:
-        # Get raw body for signature verification (optional but recommended)
-        body = await request.body()
         data = json.loads(body)
-        
-        # Log incoming webhook for debugging
-        print(f"📨 Webhook received: {json.dumps(data, indent=2)}")
-        
-        webhook_type = data.get("type") or data.get("event")
-        
-        # Handle SUBSCRIPTION_ACTIVATED event
-        if webhook_type == "SUBSCRIPTION_ACTIVATED" or webhook_type == "SUBSCRIPTION_CREATED":
-            subscription_data = data.get("data", {}) if isinstance(data, dict) else {}
-            subscription_id = subscription_data.get("subscription_id") if isinstance(subscription_data, dict) else None
-            
-            # Extract customer email (depends on webhook structure)
-            customer_details = subscription_data.get("customer_details", {}) if isinstance(subscription_data, dict) else {}
-            email = customer_details.get("customer_email") if isinstance(customer_details, dict) else None
-            
-            if not email and isinstance(data, dict):
-                # Try alternative paths at root level
-                customer_details_root = data.get("customer_details", {})
-                email = customer_details_root.get("customer_email") if isinstance(customer_details_root, dict) else None
-            
-            if not email and subscription_id:
-                # Look up from pending_subscriptions
-                sub_ref = db.collection("pending_subscriptions").document(subscription_id)
-                try:
-                    sub_get_result = sub_ref.get()
-                    # Handle both sync and async Firestore clients
-                    if inspect.isawaitable(sub_get_result):
-                        sub_doc = await sub_get_result
-                    else:
-                        sub_doc = sub_get_result
-                    
-                    if hasattr(sub_doc, "exists") and sub_doc.exists and hasattr(sub_doc, "to_dict"):
-                        to_dict_fn = getattr(sub_doc, "to_dict", None)
-                        if callable(to_dict_fn):
-                            sub_data = to_dict_fn()
-                            # Ensure sub_data is a dict before accessing .get()
-                            if isinstance(sub_data, dict):
-                                email = sub_data.get("email")
-                except Exception as e:
-                    print(f"Error looking up subscription: {e}")
-            
-            if email:
-                print(f"✅ Processing subscription activation for {email}")
-                
-                # Update user in Firestore
-                user_ref = db.collection("users").document(email)
-                try:
-                    update_result = user_ref.update({
-                        "plan": "pro",
-                        "subscription": {
-                            "status": "active",
-                            "subscription_id": subscription_id,
-                            "activated_at": datetime.now(timezone.utc).isoformat(),
-                            "plan_type": subscription_data.get("subscription_plan_name", "pro")
-                        }
-                    })
-                    # Handle async update result if needed
-                    if inspect.isawaitable(update_result):
-                        await update_result
-                    print(f"✅ User {email} updated to pro plan")
-                except Exception as e:
-                    print(f"Failed to update user: {e}")
-                
-                # Update pending subscription record
-                if subscription_id:
-                    try:
-                        sub_ref = db.collection("pending_subscriptions").document(subscription_id)
-                        sub_ref.update({
-                            "status": "completed",
-                            "activated_at": datetime.now(timezone.utc).isoformat(),
-                            "webhook_data": data
-                        })
-                    except Exception as e:
-                        print(f"Failed to update subscription record: {e}")
-                
-                # Send confirmation email
-                await send_subscription_confirmation(email, "pro")
-                
-                return JSONResponse({"status": "success", "message": "Subscription activated"})
-            else:
-                print(f"⚠️ Could not find email for subscription {subscription_id}")
-                return JSONResponse({"status": "ignored", "message": "Email not found"}, status_code=200)
-        
-        # Handle PAYMENT_SUCCESS for one-time payments (legacy support)
-        elif webhook_type == "PAYMENT_SUCCESS":
-            order_data = data.get("data", {}).get("order", {})
-            order_id = order_data.get("order_id")
-            email = order_data.get("customer_details", {}).get("customer_email")
-            
-            if email and order_id:
-                user_ref = db.collection("users").document(email)
-                user_ref.update({
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+
+    event = data.get("event")
+    print(f"Razorpay webhook: {event}")
+
+    if event == "subscription.activated":
+        entity = data.get("payload", {}).get("subscription", {}).get("entity", {})
+        subscription_id = entity.get("id")
+        user_id = entity.get("notes", {}).get("internal_user_id")
+
+        if user_id:
+            user_ref = db.collection("users").document(user_id)
+            try:
+                result = user_ref.update({
                     "plan": "pro",
                     "subscription": {
                         "status": "active",
-                        "activated_at": datetime.now(timezone.utc).isoformat()
-                    }
+                        "subscription_id": subscription_id,
+                        "activated_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                    "trial_active": False,
                 })
-                print(f"✅ User {email} upgraded via one-time payment")
-                await send_subscription_confirmation(email, "pro")
-            
-            return JSONResponse({"status": "success"})
-        
-        # Acknowledge other webhook types
-        print(f"📨 Webhook type {webhook_type} received, no action taken")
-        return JSONResponse({"status": "received"})
-        
-    except Exception as e:
-        print(f"Webhook processing error: {e}")
-        return JSONResponse({"status": "error"}, status_code=500)
+                if inspect.isawaitable(result):
+                    await result
+                print(f"User {user_id} upgraded to pro via Razorpay")
+                await send_subscription_confirmation(user_id, "pro")
+            except Exception as e:
+                print(f"Failed to update user {user_id}: {e}")
+
+    return JSONResponse({"status": "ACKNOWLEDGED"})
 
 async def send_subscription_confirmation(email: str, plan: str):
     """Send email confirmation for successful subscription activation"""

@@ -135,8 +135,7 @@
         <div class="pricing-header">
             <h1 class="gradient-text">Choose Your Edge</h1>
             <p class="hero-sub">Every plan includes <strong>Aegis‑1 Executive Guidance</strong>: step‑by‑step execution
-                playbooks and real‑time risk filters. Cashfree payment gateway support is prepared for checkout
-                integration.</p>
+                playbooks and real‑time risk filters. Razorpay Standard Checkout — UPI, cards, and netbanking.</p>
         </div>
 
         <!-- Free Trial CTA -->
@@ -300,7 +299,7 @@
         </div>
 
         <div class="pricing-note" style="margin-top:2.5rem; text-align:center; color:rgba(255,255,255,0.75);">
-            <p>✅ Cashfree payment gateway support is enabled for smooth global checkout flows.</p>
+            <p>✅ Razorpay Standard Checkout is enabled — UPI AutoPay, cards, netbanking, and wallets.</p>
         </div>
 
         <div class="guidance-teaser" style="margin-top: 1.5rem;">
@@ -345,23 +344,48 @@
             initSignInUI();
             initSignUpUI();
 
-            // Localize Pricing
-            const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-            const isIndia = timeZone === 'Asia/Calcutta' || timeZone === 'Asia/Kolkata';
-            if (isIndia) {
-                const priceElements = document.querySelectorAll('.price');
-                if (priceElements.length >= 3) {
-                    priceElements[0].innerHTML = '₹299 <span>/mo</span>';
-                    priceElements[1].innerHTML = '₹1,999 <span>/mo</span>';
-                    priceElements[2].innerHTML = '₹3,499 <span>/mo</span>';
+            // Localize Pricing — fetches live USD exchange rate from the backend
+            (async () => {
+                const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                const isIndia = timeZone === 'Asia/Calcutta' || timeZone === 'Asia/Kolkata';
+
+                // Determine display currency and symbol from timezone
+                const locale = navigator.language || 'en-US';
+                let displayCurrency = 'USD';
+                if (isIndia) displayCurrency = 'INR';
+
+                if (displayCurrency === 'USD') return; // USD prices already shown in HTML
+
+                try {
+                    const resp = await fetch('/api/exchange-rates');
+                    if (!resp.ok) return;
+                    const data = await resp.json();
+                    const rate = data.rates?.[displayCurrency];
+                    const usd = data.plan_prices_usd;
+                    if (!rate || !usd) return;
+
+                    const fmt = (usdPrice) => new Intl.NumberFormat(locale, {
+                        style: 'currency',
+                        currency: displayCurrency,
+                        maximumFractionDigits: 0,
+                    }).format(Math.round(usdPrice * rate));
+
+                    const planKeys = ['basic', 'intermediate', 'pro'];
+                    const priceEls = document.querySelectorAll('.price');
+                    planKeys.forEach((key, i) => {
+                        if (priceEls[i]) priceEls[i].innerHTML = fmt(usd[key]) + ' <span>/mo</span>';
+                    });
+
+                    document.querySelectorAll('th').forEach(th => {
+                        const text = th.textContent;
+                        if (text.includes('Basic')) th.textContent = `Basic (${fmt(usd.basic)})`;
+                        else if (text.includes('Intermediate')) th.textContent = `Intermediate (${fmt(usd.intermediate)})`;
+                        else if (text.includes('Professional')) th.textContent = `Professional (${fmt(usd.pro)})`;
+                    });
+                } catch (_) {
+                    // silently keep USD prices if rate fetch fails
                 }
-                const thElements = document.querySelectorAll('th');
-                thElements.forEach(th => {
-                    if (th.innerHTML.includes('Basic ($3.60)')) th.innerHTML = 'Basic (₹299)';
-                    else if (th.innerHTML.includes('Intermediate ($24.00)')) th.innerHTML = 'Intermediate (₹1,999)';
-                    else if (th.innerHTML.includes('Professional ($40.00)')) th.innerHTML = 'Professional (₹3,499)';
-                });
-            }
+            })();
 
             const portalBtn = document.getElementById('portalBtn');
             const dashboardBtn = document.getElementById('dashboardBtn');
