@@ -622,7 +622,8 @@ async def health():
 
 @app.get("/")
 async def root_redirect():
-    return RedirectResponse(url="/web/src/pages/index.html")
+    # Permanent redirect — compliance checkers and search engines follow 301s reliably
+    return RedirectResponse(url="/web/src/pages/index.html", status_code=301)
 
 @app.get("/dashboard")
 async def dashboard_redirect():
