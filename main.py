@@ -730,6 +730,30 @@ async def sitemap():
         return FileResponse(sitemap_path, media_type="application/xml")
     return Response(status_code=204)
 
+@app.get("/terms")
+async def terms_page():
+    return FileResponse(WEB_ROOT_PATH / "src/pages/terms.html")
+
+@app.get("/privacy-policy")
+async def privacy_page():
+    return FileResponse(WEB_ROOT_PATH / "src/pages/privacy_policy.html")
+
+@app.get("/refund-policy")
+async def refund_page():
+    return FileResponse(WEB_ROOT_PATH / "src/pages/refund-policy.html")
+
+@app.get("/contact")
+async def contact_page():
+    return FileResponse(WEB_ROOT_PATH / "src/pages/contact.html")
+
+@app.get("/risk-disclosure")
+async def risk_disclosure_page():
+    return FileResponse(WEB_ROOT_PATH / "src/pages/risk_disclosure.html")
+
+@app.get("/pricing")
+async def pricing_page():
+    return FileResponse(WEB_ROOT_PATH / "src/pages/pricing.html")
+
 # -------------------------------------------------------------------
 # Auth helpers (JWT)
 # -------------------------------------------------------------------
