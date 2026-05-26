@@ -78,7 +78,11 @@ if not ALGORITHM:
 RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
 RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET")
 RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET")
-RAZORPAY_PLAN_ID = os.getenv("RAZORPAY_PLAN_ID")
+RAZORPAY_PLAN_IDS = {
+    "basic":        os.getenv("RAZORPAY_PLAN_ID_BASIC"),
+    "intermediate": os.getenv("RAZORPAY_PLAN_ID_INTERMEDIATE"),
+    "pro":          os.getenv("RAZORPAY_PLAN_ID_PRO"),
+}
 RAZORPAY_ENABLED = bool(RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET)
 _RZP_BASE = "https://api.razorpay.com/v1"
 
@@ -1754,19 +1758,26 @@ async def payment_config():
 # -------------------------------------------------------------------
 
 @app.post("/api/v1/payments/subscription/initialize")
-async def initialize_subscription(user_id: str = Depends(get_current_user)):
+async def initialize_subscription(
+    plan: str = "basic",
+    user_id: str = Depends(get_current_user),
+):
     """
-    Create a Razorpay recurring subscription and return its ID for the frontend
-    checkout flow (UPI AutoPay / card e-mandate).
+    Create a Razorpay recurring subscription for the given plan tier.
+    plan: basic | intermediate | pro
     """
     if not RAZORPAY_ENABLED:
         raise HTTPException(status_code=503, detail="Payment system is not configured")
 
+    plan_id = RAZORPAY_PLAN_IDS.get(plan)
+    if not plan_id:
+        raise HTTPException(status_code=400, detail=f"No Razorpay plan configured for tier: {plan}")
+
     subscription = await _rzp_post("/subscriptions", {
-        "plan_id": RAZORPAY_PLAN_ID,
+        "plan_id": plan_id,
         "total_count": 12,
         "customer_notify": 1,
-        "notes": {"internal_user_id": user_id},
+        "notes": {"internal_user_id": user_id, "plan": plan},
     })
     return {"subscription_id": subscription["id"]}
 
