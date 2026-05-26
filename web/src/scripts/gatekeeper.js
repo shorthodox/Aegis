@@ -1999,7 +1999,7 @@ function getUpgradeModal() {
   return modal;
 }
 
-// Cashfree Subscription Integration
+// Razorpay Standard Checkout Integration
 window.AegisDashboard = {
   subscribeToPlan: async (planType) => {
     const allowedPlans = ['basic', 'intermediate', 'pro'];
@@ -2013,92 +2013,97 @@ window.AegisDashboard = {
     }
 
     try {
-      let amount = 3.60;
-      if (planName === 'pro') amount = 40.00;
-      else if (planName === 'intermediate') amount = 24.00;
+      // 1. Get Razorpay key_id from backend (keeps secret off the frontend)
+      const configResp = await fetch(`${API_BASE_URL}/payment/config`);
+      const config = await configResp.json().catch(() => ({}));
+      const keyId = config?.razorpay?.key_id;
+      if (!keyId) {
+        alert('Payment gateway is not configured. Please contact support.');
+        return;
+      }
 
-      // 1. Fetch payment session from backend
-      const response = await fetch(`${API_BASE_URL}/api/v1/create-payment-session`, {
+      // 2. Detect currency from timezone
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const currency = (tz === 'Asia/Calcutta' || tz === 'Asia/Kolkata') ? 'INR' : 'USD';
+
+      // 3. Create Razorpay order on backend (amount converted from USD at live rate)
+      const orderResp = await fetch(`${API_BASE_URL}/api/create-order`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ tier: planName, amount: amount })
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan: planName, currency })
+      });
+      if (!orderResp.ok) {
+        const err = await orderResp.json().catch(() => ({}));
+        alert('Could not create payment order. ' + (err.detail || 'Please try again.'));
+        return;
+      }
+      const orderData = await orderResp.json();
+
+      // 4. Load Razorpay checkout.js on-demand
+      try {
+        await loadThirdPartyScript('https://checkout.razorpay.com/v1/checkout.js');
+      } catch (sdkErr) {
+        console.error('[Razorpay] Checkout script failed to load:', sdkErr);
+        alert('Payment gateway failed to load. Please disable ad-blockers and refresh.');
+        return;
+      }
+
+      // 5. Open Razorpay modal; verify signature on success
+      await new Promise((resolve) => {
+        const userEmail = currentUser?.email || '';
+        const rzp = new window.Razorpay({
+          key: keyId,
+          amount: orderData.amount,
+          currency: orderData.currency,
+          order_id: orderData.order_id,
+          name: 'AEGIS v1.0',
+          description: planName.charAt(0).toUpperCase() + planName.slice(1) + ' Plan',
+          prefill: { email: userEmail },
+          theme: { color: '#00f2ff' },
+          handler: async (response) => {
+            try {
+              const verifyResp = await fetch(`${API_BASE_URL}/api/verify-payment`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_order_id:   response.razorpay_order_id,
+                  razorpay_signature:  response.razorpay_signature,
+                  plan: planName,
+                })
+              });
+              const verifyData = await verifyResp.json().catch(() => ({}));
+              if (verifyResp.ok && verifyData.status === 'success') {
+                alert('Payment successful! Your subscription is now active.');
+                window.location.reload();
+              } else {
+                alert('Payment verification failed. Contact support with payment ID: ' + response.razorpay_payment_id);
+              }
+            } catch (verifyErr) {
+              console.error('[Razorpay] Verify error:', verifyErr);
+              alert('Network error during verification. Contact support with payment ID: ' + response.razorpay_payment_id);
+            }
+            resolve();
+          },
+          modal: {
+            ondismiss: () => { resolve(); }
+          }
+        });
+        rzp.on('payment.failed', (response) => {
+          console.error('[Razorpay] Payment failed:', response.error);
+          alert('Payment failed: ' + (response.error?.description || 'Please try again.'));
+          resolve();
+        });
+        rzp.open();
       });
 
-      if (!response.ok) {
-        console.warn('Subscription backend not ready, using sandbox fallback mock.');
-        await mockSuccessfulPayment(planName);
-        return;
-      }
-
-      const data = await response.json();
-      const paymentSessionId = data.payment_session_id;
-
-      if (!data.success || !paymentSessionId) {
-        console.warn('Invalid Cashfree session generated, using sandbox fallback mock. Error:', data.error);
-        await mockSuccessfulPayment(planName);
-        return;
-      }
-
-      // 2. Load Cashfree SDK on-demand (guarded — errors if blocked or timed out)
-      try {
-        await loadThirdPartyScript('https://sdk.cashfree.com/js/v3/cashfree.js');
-      } catch (sdkErr) {
-        console.error('[Cashfree] SDK failed to load:', sdkErr);
-        alert('Payment gateway failed to load. Please check your connection and try again.');
-        return;
-      }
-
-      // 3. Open Cashfree modal
-      const cashfree = window.Cashfree({ mode: 'sandbox' }); // Change to 'production' in live
-      const checkoutOptions = { paymentSessionId, redirectTarget: '_modal' };
-
-      try {
-        const result = await cashfree.checkout(checkoutOptions);
-        if (result.error) {
-          console.error('[Cashfree] Checkout error:', result.error);
-          alert('Payment was cancelled or failed. Please try again.');
-        } else if (result.paymentDetails) {
-          console.log('[Cashfree] Payment successful');
-          await mockSuccessfulPayment(planName);
-        }
-      } catch (checkoutErr) {
-        console.error('[Cashfree] Checkout exception:', checkoutErr);
-        alert('Payment gateway error. Please try again.');
-      }
     } catch (error) {
       console.error('Subscription error:', error);
-      // Fallback mock payment for current sandbox environment
-      await mockSuccessfulPayment(planName);
+      alert('An error occurred while processing payment. Please try again.');
     }
   }
 };
 
-async function mockSuccessfulPayment(planName) {
-  try {
-    // Update Firestore user status directly for demo purposes
-    if (currentUser && currentUser.uid) {
-      const userDocRef = doc(db, 'users', currentUser.uid);
-      await updateDoc(userDocRef, {
-        plan: planName,
-        subscriptionStatus: 'active',
-        trialActive: false
-      });
-    }
-
-    // Clear expired view if it exists
-    if (typeof window.clearExpiredView === 'function') {
-      window.clearExpiredView();
-    }
-
-    alert('Payment successful! Your subscription is now active.');
-    window.location.reload();
-  } catch (err) {
-    console.error("Error updating subscription status:", err);
-  }
-}
 
 // Show upgrade modal on dashboard if trial expired
 function showUpgradeModal() {
