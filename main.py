@@ -2306,12 +2306,15 @@ async def websocket_dashboard(websocket: WebSocket):
                                     "momentum": min(100, max(0, int((_tfc.get("efficiency") or 0.5) * 100))),
                                     "volume": 78 if _tfc.get("volume") == "high" else (58 if _tfc.get("volume") == "normal" else 38),
                                 }
-                                tf_data['probabilities'] = tf_data.get("raw_probabilities", {})
-                                tf_data['shap_values'] = tf_data.get("shap_contributions", [])
-                                tf_data['expectancy'] = round(_tfe.get("historical_expectancy", 0.0), 2)
-                                tf_data['max_dd'] = -abs(_tfe.get("max_dd_pct", 0.0))
-                                tf_data['profit_factor'] = round(max(0.01, _tfe.get("profitability_index", 1.0)), 2)
-                                tf_data['win_rate'] = round(tf_data.get("trading_accuracy", 0.5) * 100, 1)
+                                _acc1 = tf_data.get("trading_accuracy", 0.65)
+                                _tp_d1 = abs(tf_data.get("suggested_tp_distance") or 0.025)
+                                _sl_d1 = abs(tf_data.get("suggested_sl_distance") or 0.015)
+                                _rr1 = _tp_d1 / _sl_d1 if _sl_d1 > 0 else 1.5
+                                _exp_hist1 = _tfe.get("historical_expectancy") or 0
+                                tf_data['expectancy'] = round(_exp_hist1 if abs(_exp_hist1) > 0 else (_acc1 * _tp_d1 * 100) - ((1 - _acc1) * _sl_d1 * 100), 2)
+                                tf_data['max_dd'] = round(-abs(_tfe.get("max_dd_pct") or _sl_d1 * 100 * 3), 2)
+                                tf_data['profit_factor'] = round((_acc1 * _rr1) / max(0.001, 1 - _acc1), 2)
+                                tf_data['win_rate'] = round(_acc1 * 100, 1)
                                 tf_data['total_trades'] = 0
                                 timeframes_map[sym][tf] = tf_data
                                 if tf == '1h' and summary is None:
@@ -2336,6 +2339,11 @@ async def websocket_dashboard(websocket: WebSocket):
                             else:
                                 _conf = summary.get("confluence_scorecards", {})
                                 _em = summary.get("expectancy_matrix", {})
+                                _acc_s = summary.get("trading_accuracy", 0.65)
+                                _tp_s = abs(summary.get("suggested_tp_distance") or 0.025)
+                                _sl_s = abs(summary.get("suggested_sl_distance") or 0.015)
+                                _rr_s = _tp_s / _sl_s if _sl_s > 0 else 1.5
+                                _eh_s = _em.get("historical_expectancy") or 0
                                 filtered_signals[sym] = {
                                     "ai_prob": summary.get("ai_prob", 0),
                                     "signal": summary.get("signal", "WAITING"),
@@ -2350,7 +2358,7 @@ async def websocket_dashboard(websocket: WebSocket):
                                     "timestamp": datetime.now(timezone.utc).isoformat(),
                                     "confidence_score": summary.get("ai_prob", 0) * 100,
                                     "signal_id": summary.get("signal_id", ""),
-                                    "trading_accuracy": summary.get("trading_accuracy", 0.65),
+                                    "trading_accuracy": _acc_s,
                                     "profitability_index": summary.get("profitability_index", 1.5),
                                     "sr_telemetry": summary.get("sr_telemetry"),
                                     "macro_regime": summary.get("macro_regime"),
@@ -2360,12 +2368,12 @@ async def websocket_dashboard(websocket: WebSocket):
                                         "momentum": min(100, max(0, int((_conf.get("efficiency") or 0.5) * 100))),
                                         "volume": 78 if _conf.get("volume") == "high" else (58 if _conf.get("volume") == "normal" else 38),
                                     },
-                                    "probabilities": summary.get("raw_probabilities", {}),
-                                    "shap_values": summary.get("shap_contributions", []),
-                                    "expectancy": round(_em.get("historical_expectancy", 0.0), 2),
-                                    "max_dd": -abs(_em.get("max_dd_pct", 0.0)),
-                                    "profit_factor": round(max(0.01, _em.get("profitability_index", 1.0)), 2),
-                                    "win_rate": round(summary.get("trading_accuracy", 0.5) * 100, 1),
+                                    "raw_probabilities": summary.get("raw_probabilities", {}),
+                                    "shap_contributions": summary.get("shap_contributions", []),
+                                    "expectancy": round(_eh_s if abs(_eh_s) > 0 else (_acc_s * _tp_s * 100) - ((1 - _acc_s) * _sl_s * 100), 2),
+                                    "max_dd": round(-abs(_em.get("max_dd_pct") or _sl_s * 100 * 3), 2),
+                                    "profit_factor": round((_acc_s * _rr_s) / max(0.001, 1 - _acc_s), 2),
+                                    "win_rate": round(_acc_s * 100, 1),
                                     "total_trades": 0,
                                 }
                                 if response_timeframe is None:
@@ -2376,6 +2384,11 @@ async def websocket_dashboard(websocket: WebSocket):
                                 sig_data = {}
                             _conf2 = sig_data.get("confluence_scorecards", {})
                             _em2 = sig_data.get("expectancy_matrix", {})
+                            _acc3 = sig_data.get("trading_accuracy", 0.65)
+                            _tp_d3 = abs(sig_data.get("suggested_tp_distance") or 0.025)
+                            _sl_d3 = abs(sig_data.get("suggested_sl_distance") or 0.015)
+                            _rr3 = _tp_d3 / _sl_d3 if _sl_d3 > 0 else 1.5
+                            _eh3 = _em2.get("historical_expectancy") or 0
                             filtered_signals[sym] = {
                                 "ai_prob": sig_data.get("ai_prob", 0),
                                 "signal": sig_data.get("signal", "WAITING"),
@@ -2390,7 +2403,7 @@ async def websocket_dashboard(websocket: WebSocket):
                                 "timestamp": datetime.now(timezone.utc).isoformat(),
                                 "confidence_score": sig_data.get("ai_prob", 0) * 100,
                                 "signal_id": sig_data.get("signal_id", ""),
-                                "trading_accuracy": sig_data.get("trading_accuracy", 0.65),
+                                "trading_accuracy": _acc3,
                                 "profitability_index": sig_data.get("profitability_index", 1.5),
                                 "sr_telemetry": sig_data.get("sr_telemetry"),
                                 "macro_regime": sig_data.get("macro_regime"),
@@ -2400,12 +2413,12 @@ async def websocket_dashboard(websocket: WebSocket):
                                     "momentum": min(100, max(0, int((_conf2.get("efficiency") or 0.5) * 100))),
                                     "volume": 78 if _conf2.get("volume") == "high" else (58 if _conf2.get("volume") == "normal" else 38),
                                 },
-                                "probabilities": sig_data.get("raw_probabilities", {}),
-                                "shap_values": sig_data.get("shap_contributions", []),
-                                "expectancy": round(_em2.get("historical_expectancy", 0.0), 2),
-                                "max_dd": -abs(_em2.get("max_dd_pct", 0.0)),
-                                "profit_factor": round(max(0.01, _em2.get("profitability_index", 1.0)), 2),
-                                "win_rate": round(sig_data.get("trading_accuracy", 0.5) * 100, 1),
+                                "raw_probabilities": sig_data.get("raw_probabilities", {}),
+                                "shap_contributions": sig_data.get("shap_contributions", []),
+                                "expectancy": round(_eh3 if abs(_eh3) > 0 else (_acc3 * _tp_d3 * 100) - ((1 - _acc3) * _sl_d3 * 100), 2),
+                                "max_dd": round(-abs(_em2.get("max_dd_pct") or _sl_d3 * 100 * 3), 2),
+                                "profit_factor": round((_acc3 * _rr3) / max(0.001, 1 - _acc3), 2),
+                                "win_rate": round(_acc3 * 100, 1),
                                 "total_trades": 0,
                             }
 

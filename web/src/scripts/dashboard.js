@@ -1531,9 +1531,14 @@ function _renderFpZones(body, signal, tier) {
   const currentPrice = window.currentTickers?.[signal.symbol]
     ? parseFloat(window.currentTickers[signal.symbol]) : entry;
 
-  const range = tp - sl;
-  const entryPct = range > 0 ? ((entry - sl) / range * 100) : 50;
-  const curPct = range > 0 ? Math.max(0, Math.min(100, (currentPrice - sl) / range * 100)) : 50;
+  const isLongDir = (signal.direction || 'LONG') === 'LONG';
+  const absRange = Math.abs(tp - sl) || 1;
+  const entryPct = isLongDir
+    ? Math.max(2, Math.min(98, ((entry - sl) / absRange * 100)))
+    : Math.max(2, Math.min(98, ((sl - entry) / absRange * 100)));
+  const curPct = isLongDir
+    ? Math.max(0, Math.min(100, ((currentPrice - sl) / absRange * 100)))
+    : Math.max(0, Math.min(100, ((sl - currentPrice) / absRange * 100)));
 
   const lockOverlay = locked ? `
     <div class="absolute inset-0 bg-black/80 backdrop-blur-md rounded-xl flex flex-col items-center justify-center z-10">
@@ -1661,7 +1666,11 @@ function _renderFpZones(body, signal, tier) {
     if (el) el.textContent = `$${p.toFixed(4)}`;
     const dot = body.querySelector('#fp-zone-dot');
     if (dot && sl && tp) {
-      const newPct = Math.max(2, Math.min(98, (p - sl) / (tp - sl) * 100));
+      const isLDiv = (signal.direction || 'LONG') === 'LONG';
+      const absR = Math.abs(tp - sl) || 1;
+      const newPct = isLDiv
+        ? Math.max(2, Math.min(98, (p - sl) / absR * 100))
+        : Math.max(2, Math.min(98, (sl - p) / absR * 100));
       dot.style.left = `${newPct.toFixed(1)}%`;
     }
   };

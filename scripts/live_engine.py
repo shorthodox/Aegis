@@ -1219,6 +1219,15 @@ async def confirm_live_signal(
     if vol_regime == "high" and volume_cond == "low":
         return False, "EXCESSIVE_SLIPPAGE_RISK"
 
+    # Gate 4 — S/R context: suppress counter-directional signals at key levels
+    # SHORT at support and LONG at resistance are high-failure setups
+    sr_data = raw_prediction.get("sr_telemetry", {})
+    sr_state = sr_data.get("alert_state", "NONE") if isinstance(sr_data, dict) else "NONE"
+    if direction == "SHORT" and sr_state == "NEAR_SUPPORT":
+        return False, "SR_CONTEXT_MISMATCH"
+    if direction == "LONG" and sr_state == "NEAR_RESISTANCE":
+        return False, "SR_CONTEXT_MISMATCH"
+
     return True, "OK"
 
 # -------------------------------------------------------------------
