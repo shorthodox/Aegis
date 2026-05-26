@@ -1549,11 +1549,8 @@ def get_user_plan(email: str) -> str:
     return user_doc.get("plan", "trial") if user_doc else "trial"
 
 
-def get_allowed_tokens(email: str) -> List[str]:
-    plan = get_user_plan(email)
-    if plan in ("pro", "premium", "intermediate"):
-        return PRO_TOKENS
-    return BASIC_TOKENS
+def get_allowed_tokens() -> List[str]:
+    return PRO_TOKENS  # All plans get the full token fleet
 
 def get_allowed_timeframes(email: str) -> List[str]:
     plan = get_user_plan(email)
@@ -1569,7 +1566,7 @@ async def get_user_limits(email: str = Depends(get_current_user)):
         plan = user_doc.get("plan", "trial") if user_doc else "trial"
         trial_end = user_doc.get("trial_end") if user_doc else None
         trial_expired = is_trial_expired(email) if trial_end else False
-        allowed_tokens = get_allowed_tokens(email)
+        allowed_tokens = get_allowed_tokens()
         return {
             "plan": plan,
             "allowed_tokens": allowed_tokens,
@@ -2168,7 +2165,7 @@ async def websocket_dashboard(websocket: WebSocket):
 
         # Plan info cached for 10 s — avoids a Firestore round-trip on every 250 ms tick
         _plan_cache_ts: float = 0.0
-        _allowed_tokens_cache: list = BASIC_TOKENS
+        _allowed_tokens_cache: list = PRO_TOKENS
         _trial_expired_cache: bool = True
         _user_plan_cache: str = "trial"
 
@@ -2211,8 +2208,8 @@ async def websocket_dashboard(websocket: WebSocket):
                 _now = time.time()
                 if _now - _plan_cache_ts > 10:
                     _allowed_tokens_cache = (
-                        get_allowed_tokens(current_user_email)
-                        if current_user_email else BASIC_TOKENS
+                        get_allowed_tokens()
+                        if current_user_email else PRO_TOKENS
                     )
                     _trial_expired_cache = (
                         is_trial_expired(current_user_email)
@@ -2812,7 +2809,7 @@ async def get_dashboard(
                 "plan": plan,
                 "trial_active": not (isinstance(trial_end, str) and trial_expired),
                 "trial_days_remaining": max(0, (datetime.fromisoformat(trial_end.replace("Z", "+00:00")) - datetime.now(timezone.utc)).days) if isinstance(trial_end, str) and not trial_expired else 0,
-                "allowed_tokens": get_allowed_tokens(current_user_email),
+                "allowed_tokens": get_allowed_tokens(),
                 "allowed_timeframes": get_allowed_timeframes(current_user_email)
             },
             "signals": [],
@@ -2845,7 +2842,7 @@ async def get_dashboard(
                 "plan": "trial",
                 "trial_active": True,
                 "trial_days_remaining": 2,
-                "allowed_tokens": ["BTC", "ETH", "SOL", "ARB", "AAVE"],
+                "allowed_tokens": PRO_TOKENS,
                 "allowed_timeframes": ["30m", "1h"]
             },
             "signals": [],
