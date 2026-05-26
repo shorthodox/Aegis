@@ -62,8 +62,6 @@ def numpy_to_native(obj) -> Any:
             pass
     return obj
 
-import razorpay
-
 # -------------------------------------------------------------------
 # Security: JWT & Algorithm must be from environment
 # -------------------------------------------------------------------
@@ -82,12 +80,23 @@ RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET")
 RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET")
 RAZORPAY_PLAN_ID = os.getenv("RAZORPAY_PLAN_ID")
 RAZORPAY_ENABLED = bool(RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET)
+_RZP_BASE = "https://api.razorpay.com/v1"
 
-razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET)) if RAZORPAY_ENABLED else None
 if RAZORPAY_ENABLED:
     print("Razorpay payment gateway configured")
 else:
     print("[WARNING] Razorpay not configured. Set RAZORPAY_KEY_ID/RAZORPAY_KEY_SECRET to enable.")
+
+async def _rzp_post(path: str, payload: dict) -> dict:
+    """POST to the Razorpay REST API using HTTP Basic Auth. No SDK required."""
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.post(
+            f"{_RZP_BASE}{path}",
+            json=payload,
+            auth=(RAZORPAY_KEY_ID or "", RAZORPAY_KEY_SECRET or ""),
+        )
+        resp.raise_for_status()
+        return resp.json()
 
 # -------------------------------------------------------------------
 # SOVEREIGN FIREBASE INITIALIZATION
@@ -1749,10 +1758,10 @@ async def initialize_subscription(user_id: str = Depends(get_current_user)):
     Create a Razorpay recurring subscription and return its ID for the frontend
     checkout flow (UPI AutoPay / card e-mandate).
     """
-    if not RAZORPAY_ENABLED or razorpay_client is None:
+    if not RAZORPAY_ENABLED:
         raise HTTPException(status_code=503, detail="Payment system is not configured")
 
-    subscription = razorpay_client.subscription.create({
+    subscription = await _rzp_post("/subscriptions", {
         "plan_id": RAZORPAY_PLAN_ID,
         "total_count": 12,
         "customer_notify": 1,
@@ -1813,7 +1822,7 @@ def _to_subunits(amount_float: float, currency: str) -> int:
 @app.post("/api/create-order")
 async def create_order(req: CreateOrderRequest, user_id: str = Depends(get_current_user)):
     """Convert the USD plan price to the requested currency at live rate, create Razorpay order."""
-    if not RAZORPAY_ENABLED or razorpay_client is None:
+    if not RAZORPAY_ENABLED:
         raise HTTPException(status_code=503, detail="Payment system not configured")
 
     usd_price = USD_PLAN_PRICES.get(req.plan)
@@ -1831,7 +1840,7 @@ async def create_order(req: CreateOrderRequest, user_id: str = Depends(get_curre
         raise HTTPException(status_code=400, detail="Calculated amount too low (min 100 subunits)")
 
     receipt = f"{user_id[:16]}_{req.plan}_{int(time.time())}"
-    order = razorpay_client.order.create({  # type: ignore[union-attr]
+    order = await _rzp_post("/orders", {
         "amount": amount_subunits,
         "currency": currency,
         "receipt": receipt,
