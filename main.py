@@ -1266,6 +1266,108 @@ async def verify_otp_for_registration(request: OTPVerifyRequest):
     otp_store[email]["signup_token"] = signup_token
     return {"success": True, "message": "OTP verified successfully. Please complete your profile.", "signup_token": signup_token}
 
+# -------------------------------------------------------------------
+# Password reset — generate Firebase link, deliver via Neo SMTP
+# Firebase's default noreply sender goes to spam; our domain is trusted.
+# -------------------------------------------------------------------
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+@app.post("/auth/send-password-reset")
+async def send_password_reset(request: PasswordResetRequest):
+    email = request.email
+    try:
+        reset_link = firebase_auth.generate_password_reset_link(email)
+    except firebase_auth.UserNotFoundError:
+        # Don't reveal whether the account exists (timing-safe response)
+        return {"success": True, "message": "If an account with this email exists, a reset link has been sent."}
+    except Exception as e:
+        print(f"[password-reset] generate_password_reset_link failed: {e}")
+        raise HTTPException(status_code=500, detail="Could not generate reset link. Please try again.")
+
+    try:
+        message = MessageSchema(
+            subject="Reset Your AEGIS Password",
+            recipients=[NameEmail(name=email, email=email)],
+            body=f"""
+            <!DOCTYPE html>
+            <html>
+            <head><meta charset="UTF-8"></head>
+            <body style="margin:0;padding:0;background:#0a0a0c;font-family:'Segoe UI',Arial,sans-serif;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0c;padding:40px 0;">
+                <tr><td align="center">
+                  <table width="480" cellpadding="0" cellspacing="0"
+                         style="background:#0f111a;border:1px solid rgba(0,242,255,0.15);border-radius:16px;overflow:hidden;max-width:480px;">
+
+                    <tr>
+                      <td style="background:linear-gradient(135deg,#00f2ff22,#7b2fff22);padding:32px 40px 24px;text-align:center;border-bottom:1px solid rgba(0,242,255,0.1);">
+                        <div style="font-size:28px;font-weight:800;letter-spacing:3px;
+                                    background:linear-gradient(90deg,#00f2ff,#7b2fff);
+                                    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+                                    display:inline-block;">
+                          ⚡ AEGIS
+                        </div>
+                        <p style="color:#6b7280;margin:8px 0 0;font-size:13px;letter-spacing:1px;">SOVEREIGN TERMINAL</p>
+                      </td>
+                    </tr>
+
+                    <tr>
+                      <td style="padding:36px 40px;">
+                        <p style="color:#9ca3af;font-size:15px;margin:0 0 8px;">Password Reset</p>
+                        <h2 style="color:#f9fafb;font-size:20px;font-weight:600;margin:0 0 16px;">Reset your password</h2>
+                        <p style="color:#9ca3af;font-size:14px;margin:0 0 24px;">
+                          We received a request to reset the password for your AEGIS account.
+                          Click the button below to set a new password.
+                        </p>
+
+                        <div style="text-align:center;margin:0 0 24px;">
+                          <a href="{reset_link}"
+                             style="display:inline-block;padding:14px 32px;
+                                    background:linear-gradient(90deg,#00f2ff,#7b2fff);
+                                    color:#000;font-weight:700;font-size:15px;
+                                    border-radius:10px;text-decoration:none;letter-spacing:0.5px;">
+                            Reset Password
+                          </a>
+                        </div>
+
+                        <p style="color:#6b7280;font-size:13px;margin:0 0 8px;">
+                          This link expires in <strong style="color:#f9fafb;">1 hour</strong>.
+                          If you didn't request a password reset, you can safely ignore this email.
+                        </p>
+                        <p style="color:#4b5563;font-size:12px;margin:0;word-break:break-all;">
+                          Or copy this link: <a href="{reset_link}" style="color:#00f2ff;">{reset_link}</a>
+                        </p>
+                      </td>
+                    </tr>
+
+                    <tr>
+                      <td style="padding:20px 40px 28px;border-top:1px solid rgba(255,255,255,0.05);text-align:center;">
+                        <p style="color:#4b5563;font-size:12px;margin:0;">
+                          Sent by
+                          <a href="mailto:animeshkukreti@gatekeeper.sbs"
+                             style="color:#00f2ff;text-decoration:none;">animeshkukreti@gatekeeper.sbs</a>
+                          &nbsp;·&nbsp;
+                          <a href="https://gatekeeper.sbs"
+                             style="color:#00f2ff;text-decoration:none;">gatekeeper.sbs</a>
+                        </p>
+                      </td>
+                    </tr>
+
+                  </table>
+                </td></tr>
+              </table>
+            </body>
+            </html>
+            """,
+            subtype=MessageType.html,
+        )
+        await fastmail.send_message(message)
+    except Exception as e:
+        print(f"[password-reset] SMTP send failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send reset email. Please check your email address and try again.")
+
+    return {"success": True, "message": "Password reset link sent. Check your inbox (and spam folder)."}
+
 @app.post("/auth/complete-registration")
 async def complete_registration(profile: UserProfileComplete):
     email = profile.email

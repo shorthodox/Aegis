@@ -19,7 +19,6 @@ import {
   RecaptchaVerifier,
   updateProfile,
   fetchSignInMethodsForEmail,
-  sendPasswordResetEmail,
   onAuthStateChanged,
   GoogleAuthProvider
 } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
@@ -435,23 +434,22 @@ export async function handleLogout() {
 // ============================================================
 // PASSWORD RESET
 // ============================================================
+// Routed through backend so the email arrives from our trusted Neo domain
+// (animeshkukreti@gatekeeper.sbs) instead of Firebase's noreply address.
 export async function handlePasswordReset(email) {
   try {
     if (!email) throw new Error('Email required');
-    
-    console.log('📧 Sending password reset email...');
-    await sendPasswordResetEmail(auth, email);
-    console.log('✅ Password reset email sent');
-    return { 
-      success: true, 
-      message: 'Check your email for password reset link'
-    };
+    const res = await fetch('/auth/send-password-reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    const data = await res.json();
+    if (!res.ok) return { success: false, message: data.detail || 'Failed to send reset email' };
+    return { success: true, message: data.message };
   } catch (error) {
     console.error('❌ Password reset error:', error);
-    return { 
-      success: false, 
-      message: error.message || 'Failed to send reset email'
-    };
+    return { success: false, message: 'Network error. Please try again.' };
   }
 }
 
