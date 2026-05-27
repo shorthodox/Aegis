@@ -129,7 +129,7 @@ THRESHOLD_CEIL = 3.00
 
 PROXIMITY_THRESHOLD = 0.005  # 0.5% proximity to S&R boundary triggers alert
 
-CANDLE_CONFIRM_REQUIRED = 3    # consecutive candles needed before emitting signal
+CANDLE_CONFIRM_REQUIRED = 1    # consecutive candles needed before emitting signal
 SIGNAL_EXPIRY_MOVE_PCT = 0.60  # if price moves 60% of expected TP before action → expired
 REVERSAL_SCORE_THRESHOLD = 0.35  # minimum technical score to begin candle counting
 SR_SIGNAL_ZONE = 0.010         # 1% proximity band — price within 1% of S/R triggers S/R signal path
@@ -1045,7 +1045,9 @@ class SignalGenerator:
         volume_cond = RegimeDetector.volume(df_1h['volume'].iloc[-1], df_1h['volume_ma'].iloc[-1])
         er = df_1h['efficiency_ratio'].iloc[-1]
         trend_str = RegimeDetector.trend(er)
-        trend_aligned = RegimeDetector.is_trend_aligned("long", trend_str)
+        # Use actual signal direction once known; pre-compute for confluence adjustments.
+        # We re-evaluate after base_signal is set, so use a neutral default here.
+        trend_aligned = trend_str == "strong"
 
         btc_df = await fetcher.get_data('BTC/USDT', '1h', lookback_hours=200)
         news_score = 0.0
@@ -1314,8 +1316,8 @@ class SignalGenerator:
                     base_signal = "NEUTRAL"
 
             elif near_resistance:
-                # ── LONG near resistance: only valid if resistance is already broken ──
-                if trend_str == "strong" and ReversalDetector.is_resistance_broken(current_price, resistance_lvl):
+                # ── LONG near resistance: valid if resistance is broken (breakout) ──
+                if ReversalDetector.is_resistance_broken(current_price, resistance_lvl):
                     signal_status = "MOMENTUM_BREAKOUT"
                 else:
                     # Buying into unbroken resistance = low-quality setup → suppress
@@ -1323,8 +1325,8 @@ class SignalGenerator:
                     base_signal = "NEUTRAL"
 
             else:
-                # ── Mid-range: only pass on strong momentum ────────────────────
-                if trend_str == "strong":
+                # ── Mid-range: pass on normal or strong momentum; suppress only weak ──
+                if trend_str in ("strong", "normal"):
                     signal_status = "MOMENTUM_BREAKOUT"
                 else:
                     self.reversal_candidates.pop(f"{rev_key}_LONG", None)
@@ -1372,8 +1374,8 @@ class SignalGenerator:
                     }
 
             else:
-                # ── Mid-range: only pass on strong momentum ────────────────────
-                if trend_str == "strong":
+                # ── Mid-range: pass on normal or strong momentum; suppress only weak ──
+                if trend_str in ("strong", "normal"):
                     signal_status = "MOMENTUM_BREAKOUT"
                 else:
                     self.reversal_candidates.pop(f"{rev_key}_SHORT", None)
@@ -1546,12 +1548,14 @@ async def confirm_live_signal(
     Async guardrail executed before every signal transmission.
     Returns (True, 'OK') when all gates pass, (False, REJECTION_CODE) on first failure.
     """
-    # Gate 1a — Time sync: reject if signal data is older than 10 seconds
+    # Gate 1a — Time sync: reject if signal data is older than 90 seconds
+    # (58 tokens × 7 timeframes run in parallel; last signals may be stamped
+    #  60-70 seconds before confirm_live_signal is reached in the loop)
     try:
         data_ts_str = raw_prediction.get("data_timestamp", "")
         if data_ts_str:
             data_ts = datetime.fromisoformat(data_ts_str)
-            if (datetime.now() - data_ts).total_seconds() > 10:
+            if (datetime.now() - data_ts).total_seconds() > 90:
                 return False, "STALE_DATA_TIMEOUT"
     except Exception:
         pass
