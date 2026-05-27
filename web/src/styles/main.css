@@ -696,7 +696,6 @@ body.dashboard-body .glass-nav {
 
 .price-up {
     color: #26a69a;
-    /* Green */
 }
 
 .price-up::after {
@@ -706,12 +705,40 @@ body.dashboard-body .glass-nav {
 
 .price-down {
     color: #ef5350;
-    /* Red */
 }
 
 .price-down::after {
     content: ' ▼';
     font-size: 0.8em;
+}
+
+/* Brief background flash when a price ticks — fades out in 400 ms */
+@keyframes price-flash-up {
+    0%   { background: rgba(38, 166, 154, 0.30); border-radius: 3px; }
+    100% { background: transparent; }
+}
+@keyframes price-flash-down {
+    0%   { background: rgba(239, 83, 80, 0.30); border-radius: 3px; }
+    100% { background: transparent; }
+}
+.price-flash-up {
+    animation: price-flash-up 0.4s ease-out forwards;
+    padding: 0 3px;
+    border-radius: 3px;
+}
+.price-flash-down {
+    animation: price-flash-down 0.4s ease-out forwards;
+    padding: 0 3px;
+    border-radius: 3px;
+}
+
+/* WS status dot brightens for 200 ms when a data packet arrives */
+@keyframes data-received-pulse {
+    0%   { opacity: 1; transform: scale(1.5); }
+    100% { opacity: 1; transform: scale(1); }
+}
+.data-received {
+    animation: data-received-pulse 0.2s ease-out forwards;
 }
 
 .sl-tp {

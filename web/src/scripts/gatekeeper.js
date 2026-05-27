@@ -448,6 +448,73 @@ function attachEventListeners() {
 }
 
 // ============================================================
+// ── Live price DOM refresh ─────────────────────────────────────────────
+// Reads window.currentTickers vs window.previousTickers and updates every
+// .live-price element immediately — no setTimeout, no debounce.
+// Flash classes (price-flash-up / price-flash-down) fire a 400ms CSS animation
+// then are removed so each price change produces a visible blip.
+function _refreshPriceElements() {
+  const prev = window.previousTickers || {};
+  const curr = window.currentTickers;
+  if (!curr || typeof curr !== 'object') return;
+
+  Object.entries(curr).forEach(([sym, price]) => {
+    const currentPrice = parseFloat(price);
+    if (isNaN(currentPrice)) return;
+
+    const idStr = sym.replace('/', '-');
+    const previousPrice = parseFloat(prev[sym] ?? currentPrice);
+    const priceStr = currentPrice < 0.01 ? currentPrice.toFixed(6) : currentPrice.toFixed(4);
+
+    window.dispatchEvent(new CustomEvent('priceUpdate', { detail: { symbol: sym, price: currentPrice } }));
+
+    document.querySelectorAll(`.live-price[data-symbol="${idStr}"]`).forEach(el => {
+      el.textContent = `$${priceStr}`;
+      el.classList.remove('price-up', 'price-down', 'price-flash-up', 'price-flash-down');
+      if (currentPrice > previousPrice) {
+        el.classList.add('price-up', 'price-flash-up');
+        setTimeout(() => el.classList.remove('price-flash-up'), 400);
+      } else if (currentPrice < previousPrice) {
+        el.classList.add('price-down', 'price-flash-down');
+        setTimeout(() => el.classList.remove('price-flash-down'), 400);
+      }
+    });
+
+    // Market overview card % change badge
+    const changeSpan = document.getElementById(`market-card-change-${idStr}`);
+    if (changeSpan && previousPrice !== currentPrice) {
+      const pct = ((currentPrice - previousPrice) / previousPrice) * 100;
+      changeSpan.textContent = `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
+      changeSpan.className = `text-[10px] font-mono font-semibold ${pct >= 0 ? 'text-green-400' : 'text-red-400'}`;
+    }
+  });
+}
+
+// Pulses the WS status dot so users can see data is flowing even when prices
+// aren't changing. Clears itself after 200 ms.
+let _pulseTimer = null;
+function _pulseLiveIndicator() {
+  document.querySelectorAll('#ws-status-dot, #ws-status-dot-mobile, #ws-status-dot-inner').forEach(d => {
+    d.classList.add('data-received');
+  });
+  if (_pulseTimer) clearTimeout(_pulseTimer);
+  _pulseTimer = setTimeout(() => {
+    document.querySelectorAll('#ws-status-dot, #ws-status-dot-mobile, #ws-status-dot-inner').forEach(d => {
+      d.classList.remove('data-received');
+    });
+  }, 200);
+}
+
+// Fast-path ticker update — called directly for type:"ticker" messages so they
+// never enter the full updateDashboardData pipeline.
+function applyTickerUpdates(tickers) {
+  if (!tickers || typeof tickers !== 'object') return;
+  window.previousTickers = { ...(window.currentTickers || {}) };
+  window.currentTickers = { ...(window.currentTickers || {}), ...tickers };
+  _refreshPriceElements();
+  _pulseLiveIndicator();
+}
+
 // DEBOUNCE RENDER TO PREVENT EXCESSIVE DOM UPDATES
 // ============================================================
 let renderTimeout = null;
@@ -965,14 +1032,16 @@ function startWebSocket(token) {
         return;
       }
 
-      // NOTE: do NOT gate on data.timeframe here — the backend sends a full
-      // timeframes map and the summary timeframe rarely matches the user's tab.
-      if (data.type === 'signals' || data.type === 'update') {
-        updateDashboardData(data);
-      } else {
-        // Handle other message types
-        updateDashboardData(data);
+      // Fast path: ticker-only messages bypass the full updateDashboardData
+      // pipeline — they go straight to DOM via applyTickerUpdates (no signal
+      // card re-render, no debounce, no defer) for immediate price flashes.
+      if (data.type === 'ticker' && data.tickers) {
+        applyTickerUpdates(data.tickers);
+        return;
       }
+
+      // Full signal update (every ~500 ms) — runs the complete pipeline.
+      updateDashboardData(data);
     } catch (e) {
       console.error('[WS] WebSocket parse error:', e);
     }
@@ -1109,6 +1178,14 @@ function showSRAlertToast(alert) {
 }
 
 function updateDashboardData(data) {
+  // Save previous prices and pre-merge before any rendering so:
+  //   1. Signal cards render with the latest prices from this message.
+  //   2. _refreshPriceElements() can compare old vs new for direction arrows.
+  window.previousTickers = { ...(window.currentTickers || {}) };
+  if (data.tickers && Object.keys(data.tickers).length > 0) {
+    window.currentTickers = { ...(window.currentTickers || {}), ...data.tickers };
+  }
+
   // Update balance
   if (balanceDisplay && data.balance !== undefined) {
     balanceDisplay.textContent = `$${data.balance.toFixed(2)}`;
@@ -1236,11 +1313,6 @@ function updateDashboardData(data) {
       });
     }
 
-    // Merge latest tickers BEFORE rendering signal cards so new cards display current prices
-    if (data.tickers && Object.keys(data.tickers).length > 0) {
-      window.currentTickers = { ...(window.currentTickers || {}), ...data.tickers };
-    }
-
     debouncedFilterAndRenderSignals();
 
     // S&R proximity alert toasts
@@ -1263,56 +1335,11 @@ function updateDashboardData(data) {
     });
   }
 
-  // Handle live prices AFTER signals are rendered so DOM changes apply correctly
-  if (data.tickers || window.currentTickers) {
-    window.previousTickers = window.currentTickers || {};
-    if (data.tickers && Object.keys(data.tickers).length > 0) {
-      window.currentTickers = { ...(window.currentTickers || {}), ...data.tickers };
-    }
-    if (!window.currentTickers || typeof window.currentTickers !== 'object') return;
-
-    // Defer ticker updates slightly to ensure Reactivity cycle finishes if debouncedFilterAndRenderSignals just fired
-    setTimeout(() => {
-      if (!window.currentTickers) return;
-      Object.entries(window.currentTickers).forEach(([sym, price]) => {
-        const idStr = sym.replace('/', '-');
-        const priceDisplays = document.querySelectorAll(`.live-price[data-symbol="${idStr}"]`);
-
-        // Dispatch global custom event for dynamic UI synchronization (e.g., signal history updates)
-        const currentPrice = parseFloat(price);
-        if (!isNaN(currentPrice)) {
-          window.dispatchEvent(new CustomEvent('priceUpdate', { detail: { symbol: sym, price: currentPrice } }));
-        }
-
-        const previousPrice = parseFloat(window.previousTickers[sym] || currentPrice);
-
-        priceDisplays.forEach(priceDisplay => {
-          if (isNaN(currentPrice)) return;
-
-          // Format based on price size
-          const priceStr = currentPrice < 0.01 ? currentPrice.toFixed(6) : currentPrice.toFixed(4);
-          priceDisplay.textContent = `$${priceStr}`;
-
-          priceDisplay.classList.remove('price-up', 'price-down');
-          if (currentPrice > previousPrice) {
-            priceDisplay.classList.add('price-up');
-          } else if (currentPrice < previousPrice) {
-            priceDisplay.classList.add('price-down');
-          }
-        });
-
-        // Update market card change indicator with % change
-        const changeSpan = document.getElementById(`market-card-change-${idStr}`);
-        if (changeSpan && !isNaN(currentPrice) && previousPrice && previousPrice !== currentPrice) {
-          const pct = ((currentPrice - previousPrice) / previousPrice) * 100;
-          const sign = pct >= 0 ? '+' : '';
-          changeSpan.textContent = `${sign}${pct.toFixed(2)}%`;
-          changeSpan.className = `text-[10px] font-mono font-semibold ${
-            pct >= 0 ? 'text-green-400' : 'text-red-400'
-          }`;
-        }
-      });
-    }, 50);
+  // Apply live price DOM updates immediately — previousTickers was saved at
+  // the top of this function so direction arrows and flash animations are correct.
+  if (window.currentTickers && typeof window.currentTickers === 'object') {
+    _refreshPriceElements();
+    _pulseLiveIndicator();
   }
 
   // Update open trades — accept any of the keys the backend might use.
