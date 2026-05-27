@@ -562,11 +562,13 @@ async def lifespan(app: FastAPI):
     reminder_task = asyncio.create_task(check_and_send_trial_reminders())
     subscription_task = asyncio.create_task(check_and_send_subscription_reminders())
     analytics_task = asyncio.create_task(analytics_loop())
+    dev_token_task = asyncio.create_task(dev_token_display_loop())
     yield
     engine_task.cancel()
     reminder_task.cancel()
     subscription_task.cancel()
     analytics_task.cancel()
+    dev_token_task.cancel()
 
 app = FastAPI(title="Aegis-1 by Gatekeeper", lifespan=lifespan)
 
@@ -2577,6 +2579,96 @@ async def toggle_alpha_mode(email: str = Depends(get_current_user)):
 
 ADMIN_SECRET = os.getenv("ADMIN_SECRET", "")
 
+# Sentinel document key inside dev_codes collection that tracks the single
+# "always-active" developer token the backend continuously displays.
+_CURRENT_TOKEN_SENTINEL = "__current__"
+_DEV_TOKEN_VALIDITY_DAYS = 5
+
+
+def _provision_dev_token() -> Dict[str, str]:
+    """Generate a fresh 5-day dev token, persist to Firestore, and update the sentinel."""
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(days=_DEV_TOKEN_VALIDITY_DAYS)
+    code = _make_dev_code()
+
+    db.collection("dev_codes").document(code).set({
+        "source": "backend",
+        "plan": "pro",
+        "label": "dev",
+        "created_at": now.isoformat(),
+        "expires_at": expires_at.isoformat(),
+        "used_by": None,
+        "used_at": None,
+    })
+
+    db.collection("dev_codes").document(_CURRENT_TOKEN_SENTINEL).set({
+        "active_code": code,
+        "expires_at": expires_at.isoformat(),
+        "created_at": now.isoformat(),
+    })
+
+    logger.info(f"🔑 New dev token provisioned: {code} (valid until {expires_at.strftime('%Y-%m-%d %H:%M UTC')})")
+    return {"code": code, "expires_at": expires_at.isoformat()}
+
+
+def _get_or_refresh_dev_token() -> Dict[str, str]:
+    """Return the current active dev token, generating a fresh one if expired or used."""
+    try:
+        sentinel_doc = db.collection("dev_codes").document(_CURRENT_TOKEN_SENTINEL).get()
+        if getattr(sentinel_doc, "exists", False):
+            data = sentinel_doc.to_dict() or {}
+            code = data.get("active_code", "")
+            expires_str = data.get("expires_at", "")
+            try:
+                still_valid = datetime.now(timezone.utc) < datetime.fromisoformat(expires_str)
+            except Exception:
+                still_valid = False
+
+            if still_valid and code:
+                code_doc = _get_dev_code_doc(code)
+                if code_doc and not code_doc.get("used_by"):
+                    return {"code": code, "expires_at": expires_str}
+    except Exception as e:
+        logger.warning(f"Dev token sentinel read error: {e}")
+
+    return _provision_dev_token()
+
+
+async def dev_token_display_loop():
+    """Background task: continuously print the active developer token to the console."""
+    await asyncio.sleep(4)  # let other startup messages print first
+    while True:
+        try:
+            token_info = await asyncio.to_thread(_get_or_refresh_dev_token)
+            code = token_info["code"]
+            expires_str = token_info["expires_at"]
+            try:
+                exp_dt = datetime.fromisoformat(expires_str)
+                exp_display = exp_dt.strftime("%Y-%m-%d %H:%M UTC")
+                remaining = exp_dt - datetime.now(timezone.utc)
+                days_left = max(remaining.days, 0)
+                hours_left = remaining.seconds // 3600
+                time_left = f"{days_left}d {hours_left}h remaining"
+            except Exception:
+                exp_display = expires_str
+                time_left = "unknown"
+
+            W = 56
+            lines = [
+                "\033[36m╔" + "═" * W + "╗",
+                "║" + " AEGIS  —  ACTIVE DEVELOPER TOKEN ".center(W) + "║",
+                "╠" + "═" * W + "╣",
+                "║" + f"  Token   :  {code}".ljust(W) + "║",
+                "║" + f"  Expires :  {exp_display}".ljust(W) + "║",
+                "║" + f"  Valid   :  {time_left}  ·  one-time use".ljust(W) + "║",
+                "╚" + "═" * W + "╝\033[0m",
+            ]
+            print("\n" + "\n".join(lines) + "\n", flush=True)
+        except Exception as e:
+            logger.warning(f"Dev token display loop error: {e}")
+
+        await asyncio.sleep(60)
+
 _DEV_CODE_RE = re.compile(r'^AEGIS-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$')
 _DEV_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no 0/O, 1/I/L
 
@@ -2695,6 +2787,13 @@ async def redeem_dev_code(req: DevCodeRequest, email: str = Depends(get_current_
         })
         if inspect.isawaitable(mark_result):
             await mark_result
+
+        # Token consumed — provision a replacement immediately so the backend
+        # always has an active token available for the next developer.
+        try:
+            await asyncio.to_thread(_provision_dev_token)
+        except Exception as _e:
+            logger.warning(f"Auto-provision replacement dev token failed: {_e}")
 
     return {"status": "success", "plan": plan, "expires_at": expires_iso}
 
