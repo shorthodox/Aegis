@@ -1214,6 +1214,42 @@ class SignalGenerator:
             base_signal = "NEUTRAL"
 
         # ──────────────────────────────────────────────────────────────
+        # CONFLUENCE + SHAP ALIGNMENT CHECK
+        # Compute an effective reversal threshold that tightens or relaxes
+        # based on market quality and whether the model's own top features
+        # corroborate the S/R context.
+        #
+        # Confluence adjustment (volume + trend):
+        #   high volume & aligned trend → threshold −0.10 (market quality confirms)
+        #   low volume  | misaligned   → threshold +0.05 (noisy conditions, raise bar)
+        #
+        # SHAP S/R alignment bonus:
+        #   if any top-3 SHAP feature is an S/R-related column, model and
+        #   technical analysis agree → threshold −0.05 additional
+        # ──────────────────────────────────────────────────────────────
+        _sr_adj = 0.0
+        if volume_cond == "high":
+            _sr_adj -= 0.05
+        elif volume_cond == "low":
+            _sr_adj += 0.05
+        if trend_aligned:
+            _sr_adj -= 0.05
+
+        _SR_SHAP_FEATURES = {
+            "pct_dist_to_support", "pct_dist_to_resistance",
+            "rolling_support", "rolling_resistance", "range_position_score",
+        }
+        _shap_sr_present = any(
+            c.get("feature") in _SR_SHAP_FEATURES
+            for c in shap_contribs
+            if isinstance(c, dict)
+        )
+        if _shap_sr_present:
+            _sr_adj -= 0.05
+
+        effective_sr_threshold = max(0.20, min(0.55, REVERSAL_SCORE_THRESHOLD + _sr_adj))
+
+        # ──────────────────────────────────────────────────────────────
         # S/R-FIRST SIGNAL CLASSIFICATION ENGINE
         #
         # Priority 1 — S/R Zone (price within SR_SIGNAL_ZONE of support/resistance):
@@ -1258,7 +1294,7 @@ class SignalGenerator:
                 candles_confirmed = ReversalDetector.count_confirming_candles(df_1h, "LONG")
 
                 cand_key = f"{rev_key}_LONG"
-                if bull_score >= REVERSAL_SCORE_THRESHOLD:
+                if bull_score >= effective_sr_threshold:
                     if cand_key not in self.reversal_candidates:
                         self.reversal_candidates[cand_key] = {
                             "direction": "LONG", "first_price": current_price,
@@ -1305,7 +1341,7 @@ class SignalGenerator:
                 candles_confirmed = ReversalDetector.count_confirming_candles(df_1h, "SHORT")
 
                 cand_key = f"{rev_key}_SHORT"
-                if bear_score >= REVERSAL_SCORE_THRESHOLD:
+                if bear_score >= effective_sr_threshold:
                     if cand_key not in self.reversal_candidates:
                         self.reversal_candidates[cand_key] = {
                             "direction": "SHORT", "first_price": current_price,
@@ -1366,6 +1402,19 @@ class SignalGenerator:
             final_signal = "HOLD"
             signal_strength = "HOLD"
 
+        # Expectancy gate — suppress any signal where the math says we lose money.
+        # Uses the actual SL/TP distances already computed above so EV is consistent
+        # with what would be traded. Alpha mode bypasses this gate intentionally.
+        if base_signal != "NEUTRAL" and current_price > 0 and not alpha_mode:
+            _tp_pct = suggested_tp_distance / current_price
+            _sl_pct = suggested_sl_distance / current_price
+            _ev = ai_prob * _tp_pct - (1 - ai_prob) * _sl_pct - TOTAL_COST_PCT
+            if _ev < 0:
+                base_signal = "NEUTRAL"
+                signal_status = "NEGATIVE_EV"
+                final_signal = "HOLD"
+                signal_strength = "HOLD"
+
         # ------------------------------------------------------------------
         # Legacy calculations (for completeness and compatibility)
         # ------------------------------------------------------------------
@@ -1389,14 +1438,13 @@ class SignalGenerator:
         if alpha_mode:
             adj_thresh = adj_thresh * 0.85
 
+        # Use actual traded SL/TP distances (same as expectancy gate) so the
+        # dashboard matrix is consistent with what was used to approve the signal.
         expected_net_pct = 0.0
-        if not alpha_mode:
-            atr_sl_dist = cfg.atr_sl * atr_val
-            atr_tp_dist = RR_RATIO * atr_sl_dist
-            tp_move_pct = atr_tp_dist / current_price
-            sl_move_pct = atr_sl_dist / current_price
-            expected_net = ai_prob * tp_move_pct - (1 - ai_prob) * sl_move_pct - TOTAL_COST_PCT
-            expected_net_pct = expected_net * 100
+        if current_price > 0:
+            tp_move_pct = suggested_tp_distance / current_price
+            sl_move_pct = suggested_sl_distance / current_price
+            expected_net_pct = (ai_prob * tp_move_pct - (1 - ai_prob) * sl_move_pct - TOTAL_COST_PCT) * 100
 
         btc_ai = 0.5
         if self.btc_model:
