@@ -1428,9 +1428,18 @@ class SignalGenerator:
         # Expectancy gate — suppress any signal where the math says we lose money.
         # Uses the actual SL/TP distances already computed above so EV is consistent
         # with what would be traded. Alpha mode bypasses this gate intentionally.
+        # MOMENTUM_BREAKOUT signals get a volatility scaling factor (0.75) applied to
+        # the SL/TP distances before EV is computed — wide ATR bands during breakouts
+        # inflate the risk side of the equation and would wrongly kill valid momentum
+        # setups; tightening by 25% reflects that breakout entries trail a tighter stop.
         if base_signal != "NEUTRAL" and current_price > 0 and not alpha_mode:
-            _tp_pct = suggested_tp_distance / current_price
-            _sl_pct = suggested_sl_distance / current_price
+            if signal_status == "MOMENTUM_BREAKOUT":
+                _vol_scale = 0.75
+                _tp_pct = (suggested_tp_distance * _vol_scale) / current_price
+                _sl_pct = (suggested_sl_distance * _vol_scale) / current_price
+            else:
+                _tp_pct = suggested_tp_distance / current_price
+                _sl_pct = suggested_sl_distance / current_price
             _ev = ai_prob * _tp_pct - (1 - ai_prob) * _sl_pct - TOTAL_COST_PCT
             if _ev < 0:
                 base_signal = "NEUTRAL"
