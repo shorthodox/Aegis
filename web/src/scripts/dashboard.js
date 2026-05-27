@@ -1565,13 +1565,18 @@ function _renderFpZones(body, signal, tier) {
     ? parseFloat(window.currentTickers[signal.symbol]) : entry;
 
   const isLongDir = (signal.direction || 'LONG') === 'LONG';
-  const absRange = Math.abs(tp - sl) || 1;
-  const entryPct = isLongDir
-    ? Math.max(2, Math.min(98, ((entry - sl) / absRange * 100)))
-    : Math.max(2, Math.min(98, ((sl - entry) / absRange * 100)));
-  const curPct = isLongDir
-    ? Math.max(0, Math.min(100, ((currentPrice - sl) / absRange * 100)))
-    : Math.max(0, Math.min(100, ((sl - currentPrice) / absRange * 100)));
+  const hasZone = sl > 0 && tp > 0 && Math.abs(tp - sl) > 1e-10;
+  const absRange = hasZone ? Math.abs(tp - sl) : 1;
+  const entryPct = hasZone
+    ? (isLongDir
+        ? Math.max(2, Math.min(98, ((entry - sl) / absRange * 100)))
+        : Math.max(2, Math.min(98, ((sl - entry) / absRange * 100))))
+    : 50;
+  const curPct = hasZone
+    ? (isLongDir
+        ? Math.max(2, Math.min(98, ((currentPrice - sl) / absRange * 100)))
+        : Math.max(2, Math.min(98, ((sl - currentPrice) / absRange * 100))))
+    : 50;
 
   const lockOverlay = locked ? `
     <div class="absolute inset-0 bg-black/80 backdrop-blur-md rounded-xl flex flex-col items-center justify-center z-10">
@@ -1632,7 +1637,7 @@ function _renderFpZones(body, signal, tier) {
           <div class="bg-black/40 p-4 rounded-xl border border-white/5 text-center">
             <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Risk/Reward</div>
             <div class="text-xl font-black font-mono text-cyan">
-              ${sl && tp && entry ? `1:${((tp - entry) / (entry - sl)).toFixed(2)}` : '&mdash;'}
+              ${hasZone && entry > sl ? `1:${((tp - entry) / (entry - sl)).toFixed(2)}` : '&mdash;'}
             </div>
           </div>
         </div>
@@ -1652,7 +1657,7 @@ function _renderFpZones(body, signal, tier) {
         </div>
         ${(() => {
           const _isLong = (signal.direction || 'LONG') === 'LONG';
-          const _rrRaw = (sl && tp && entry) ? ((tp - entry) / (entry - sl)) : 0;
+          const _rrRaw = hasZone && entry > sl ? ((tp - entry) / (entry - sl)) : 0;
           const _rr = _rrRaw.toFixed(2);
           const _vc = _rrRaw >= 2 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
             : _rrRaw >= 1.5 ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
@@ -1698,13 +1703,17 @@ function _renderFpZones(body, signal, tier) {
     const el = body.querySelector('#fp-zone-price');
     if (el) el.textContent = `$${p.toFixed(4)}`;
     const dot = body.querySelector('#fp-zone-dot');
-    if (dot && sl && tp) {
-      const isLDiv = (signal.direction || 'LONG') === 'LONG';
-      const absR = Math.abs(tp - sl) || 1;
-      const newPct = isLDiv
-        ? Math.max(2, Math.min(98, (p - sl) / absR * 100))
-        : Math.max(2, Math.min(98, (sl - p) / absR * 100));
-      dot.style.left = `${newPct.toFixed(1)}%`;
+    if (dot) {
+      if (hasZone) {
+        const isLDiv = (signal.direction || 'LONG') === 'LONG';
+        const absR = Math.abs(tp - sl);
+        const newPct = isLDiv
+          ? Math.max(2, Math.min(98, (p - sl) / absR * 100))
+          : Math.max(2, Math.min(98, (sl - p) / absR * 100));
+        dot.style.left = `${newPct.toFixed(1)}%`;
+      } else {
+        dot.style.left = '50%';
+      }
     }
   };
   window.addEventListener('priceUpdate', body._zonePriceHandler);
