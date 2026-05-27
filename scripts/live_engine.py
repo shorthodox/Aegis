@@ -1348,6 +1348,7 @@ class SignalGenerator:
                 # ── Mid-range: pass on normal or strong momentum; suppress only weak ──
                 if trend_str in ("strong", "normal"):
                     signal_status = "MOMENTUM_BREAKOUT"
+                    base_signal = "LONG"
                 else:
                     self.reversal_candidates.pop(f"{rev_key}_LONG", None)
                     base_signal = "NEUTRAL"
@@ -1397,6 +1398,7 @@ class SignalGenerator:
                 # ── Mid-range: pass on normal or strong momentum; suppress only weak ──
                 if trend_str in ("strong", "normal"):
                     signal_status = "MOMENTUM_BREAKOUT"
+                    base_signal = "SHORT"
                 else:
                     self.reversal_candidates.pop(f"{rev_key}_SHORT", None)
                     base_signal = "NEUTRAL"
@@ -1575,7 +1577,7 @@ async def confirm_live_signal(
         data_ts_str = raw_prediction.get("data_timestamp", "")
         if data_ts_str:
             data_ts = datetime.fromisoformat(data_ts_str)
-            if (datetime.now() - data_ts).total_seconds() > 90:
+            if (datetime.now() - data_ts).total_seconds() > 180:
                 return False, "STALE_DATA_TIMEOUT"
     except Exception:
         pass
