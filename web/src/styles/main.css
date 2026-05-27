@@ -3659,3 +3659,97 @@ body.modal-open {
     opacity: 0 !important;
 }
 
+/* ── TOKEN SEARCH BAR ───────────────────────────────────────── */
+.token-search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.token-search-inner {
+    position: relative;
+    flex: 1;
+    display: flex;
+    align-items: center;
+}
+
+.token-search-icon {
+    position: absolute;
+    left: 14px;
+    color: var(--text-dim);
+    font-size: 13px;
+    pointer-events: none;
+    z-index: 1;
+    transition: color 0.2s;
+}
+
+.token-search-inner:focus-within .token-search-icon {
+    color: var(--primary-cyan);
+}
+
+.token-search-inner input {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 10px 40px 10px 40px;
+    color: #fff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 0.03em;
+    outline: none;
+    min-height: 42px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.token-search-inner input:focus {
+    border-color: var(--primary-cyan);
+    box-shadow: 0 0 0 3px rgba(0, 242, 255, 0.07), 0 0 16px rgba(0, 242, 255, 0.08);
+}
+
+.token-search-inner input::placeholder {
+    color: rgba(148, 163, 184, 0.45);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+}
+
+#token-search-clear {
+    position: absolute;
+    right: 11px;
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    padding: 5px;
+    font-size: 11px;
+    line-height: 1;
+    border-radius: 50%;
+    transition: color 0.15s, background 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+}
+
+#token-search-clear:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.token-search-count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    min-width: 72px;
+    text-align: right;
+    transition: color 0.2s;
+}
+
+.token-search-count.has-query {
+    color: var(--primary-cyan);
+    text-shadow: 0 0 8px rgba(0, 242, 255, 0.4);
+}
+

@@ -331,6 +331,20 @@
                     </div>
                 </div>
 
+                <!-- Token Search Bar -->
+                <div class="token-search-wrap">
+                    <div class="token-search-inner">
+                        <i class="fas fa-search token-search-icon"></i>
+                        <input id="token-search-input" type="text"
+                               placeholder="Search token… BTC, ETH, SOL"
+                               autocomplete="off" spellcheck="false">
+                        <button id="token-search-clear" class="hidden" aria-label="Clear search">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <span id="token-search-count" class="token-search-count"></span>
+                </div>
+
                 <!-- Responsive Grid: 1 col on mobile, 2 or 3 on desktop -->
                 <div id="signalsContainer"
                     class="signals-grid grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">

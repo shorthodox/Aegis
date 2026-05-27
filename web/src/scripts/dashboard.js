@@ -2079,3 +2079,103 @@ async function renderExpectancyPanel() {
   // no-op: superseded by _renderFpExpectancy / openFeaturePanel('fp-expectancy')
 }
 
+// ── TOKEN SEARCH ─────────────────────────────────────────────────────────────
+
+let _tokenSearchQuery = '';
+
+function _applyTokenSearch(query) {
+  _tokenSearchQuery = (query || '').toLowerCase().trim();
+
+  const container  = document.getElementById('signalsContainer');
+  const countEl    = document.getElementById('token-search-count');
+  const clearBtn   = document.getElementById('token-search-clear');
+  if (!container) return;
+
+  if (clearBtn) clearBtn.classList.toggle('hidden', !_tokenSearchQuery);
+
+  const cards = container.querySelectorAll('[data-symbol]');
+  let visible = 0;
+
+  cards.forEach(card => {
+    const sym = (card.dataset.symbol || '').toLowerCase();
+    const match = !_tokenSearchQuery || sym.includes(_tokenSearchQuery);
+    card.style.display = match ? '' : 'none';
+    if (match) visible++;
+  });
+
+  // Count label
+  if (countEl) {
+    if (cards.length > 0) {
+      countEl.textContent = _tokenSearchQuery
+        ? `${visible} / ${cards.length}`
+        : `${cards.length} tokens`;
+      countEl.classList.toggle('has-query', !!_tokenSearchQuery && visible < cards.length);
+    } else {
+      countEl.textContent = '';
+      countEl.classList.remove('has-query');
+    }
+  }
+
+  // "No results" placeholder
+  let noResult = container.querySelector('.search-no-result');
+  if (cards.length > 0 && visible === 0 && _tokenSearchQuery) {
+    if (!noResult) {
+      noResult = document.createElement('div');
+      noResult.className = 'no-signals search-no-result';
+      noResult.style.gridColumn = '1 / -1';
+      container.appendChild(noResult);
+    }
+    noResult.innerHTML = `
+      <i class="fas fa-search" style="font-size:1.6rem;opacity:.35;margin-bottom:10px"></i>
+      <p>No token matches "<strong style="color:var(--primary-cyan)">${_tokenSearchQuery.toUpperCase()}</strong>"</p>`;
+  } else if (noResult) {
+    noResult.remove();
+  }
+}
+
+// Wire up once DOM is ready
+(function _initTokenSearch() {
+  function attach() {
+    const input   = document.getElementById('token-search-input');
+    const clear   = document.getElementById('token-search-clear');
+    const container = document.getElementById('signalsContainer');
+
+    if (input) {
+      input.addEventListener('input', e => _applyTokenSearch(e.target.value));
+
+      // Keyboard shortcut: Escape clears the search
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Escape') { input.value = ''; _applyTokenSearch(''); }
+      });
+    }
+
+    if (clear) {
+      clear.addEventListener('click', () => {
+        const inp = document.getElementById('token-search-input');
+        if (inp) { inp.value = ''; inp.focus(); }
+        _applyTokenSearch('');
+      });
+    }
+
+    // Re-apply filter after every signal render (renderSignals replaces innerHTML)
+    if (container) {
+      new MutationObserver(() => {
+        const countEl = document.getElementById('token-search-count');
+        if (_tokenSearchQuery) {
+          _applyTokenSearch(_tokenSearchQuery);
+        } else if (countEl) {
+          const cards = container.querySelectorAll('[data-symbol]');
+          countEl.textContent = cards.length > 0 ? `${cards.length} tokens` : '';
+          countEl.classList.remove('has-query');
+        }
+      }).observe(container, { childList: true });
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', attach);
+  } else {
+    attach();
+  }
+}());
+
