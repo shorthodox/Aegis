@@ -2586,10 +2586,25 @@ _DEV_TOKEN_VALIDITY_DAYS = 5
 
 
 def _provision_dev_token() -> Dict[str, str]:
-    """Generate a fresh 5-day dev token, persist to Firestore, and update the sentinel."""
+    """Generate a fresh dev token, persist to Firestore, update sentinel, delete previous unused token."""
     now = datetime.now(timezone.utc)
     expires_at = now + timedelta(days=_DEV_TOKEN_VALIDITY_DAYS)
     code = _make_dev_code()
+
+    # Delete previous unused sentinel code to keep Firestore clean
+    try:
+        prev_sentinel = db.collection("dev_codes").document(_CURRENT_TOKEN_SENTINEL).get()
+        if getattr(prev_sentinel, "exists", False):
+            prev_data = prev_sentinel.to_dict() or {}
+            prev_code = prev_data.get("active_code", "")
+            if prev_code:
+                prev_doc = db.collection("dev_codes").document(prev_code).get()
+                if getattr(prev_doc, "exists", False):
+                    prev_code_data = prev_doc.to_dict() or {}
+                    if not prev_code_data.get("used_by"):
+                        db.collection("dev_codes").document(prev_code).delete()
+    except Exception as _cleanup_err:
+        logger.warning(f"Dev token cleanup error: {_cleanup_err}")
 
     db.collection("dev_codes").document(code).set({
         "source": "backend",
@@ -2607,7 +2622,6 @@ def _provision_dev_token() -> Dict[str, str]:
         "created_at": now.isoformat(),
     })
 
-    logger.info(f"🔑 New dev token provisioned: {code} (valid until {expires_at.strftime('%Y-%m-%d %H:%M UTC')})")
     return {"code": code, "expires_at": expires_at.isoformat()}
 
 
@@ -2635,31 +2649,25 @@ def _get_or_refresh_dev_token() -> Dict[str, str]:
 
 
 async def dev_token_display_loop():
-    """Background task: emit the active developer token to backend logs every 60s."""
+    """Background task: generate a new developer token every 60s and emit it to logs."""
     await asyncio.sleep(5)  # let uvicorn startup messages land first
     while True:
         try:
-            token_info = await asyncio.to_thread(_get_or_refresh_dev_token)
+            token_info = await asyncio.to_thread(_provision_dev_token)
             code = token_info["code"]
             expires_str = token_info["expires_at"]
             try:
                 exp_dt = datetime.fromisoformat(expires_str)
                 exp_display = exp_dt.strftime("%Y-%m-%d %H:%M UTC")
-                remaining = exp_dt - datetime.now(timezone.utc)
-                days_left = max(remaining.days, 0)
-                hours_left = remaining.seconds // 3600
-                time_left = f"{days_left}d {hours_left}h remaining"
             except Exception:
                 exp_display = expires_str
-                time_left = "unknown"
 
             sep = "=" * 58
             logger.info(sep)
-            logger.info("         AEGIS  --  ACTIVE DEVELOPER TOKEN")
+            logger.info("  AEGIS -- DEV TOKEN (rotates every 60s, one-time use)")
             logger.info(sep)
             logger.info(f"  Token   : {code}")
-            logger.info(f"  Expires : {exp_display}")
-            logger.info(f"  Valid   : {time_left}  |  one-time use  |  5-day window")
+            logger.info(f"  Expires : {exp_display}  (5-day window)")
             logger.info(sep)
 
         except Exception as e:
