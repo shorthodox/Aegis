@@ -1834,22 +1834,58 @@ class LiveEngine:
             logger.critical(f"Data fetch test failed: {e}")
             raise
 
+        # Validate all token symbols against the exchange market list.
+        # Symbols not listed on Binance Spot are removed so they never cause
+        # ticker fallbacks or failed data fetches further down the pipeline.
+        if self.fetcher.exchange and self.fetcher.exchange.markets:
+            available = set(self.fetcher.exchange.markets.keys())
+            valid_configs, skipped = [], []
+            for cfg in self.token_configs:
+                sym = normalize_symbol(cfg.symbol)
+                if sym in available:
+                    valid_configs.append(cfg)
+                else:
+                    skipped.append(sym)
+            if skipped:
+                logger.warning(f"Removing {len(skipped)} symbols not on Binance Spot: {', '.join(skipped)}")
+                self.activity_log.appendleft(
+                    f"[{datetime.now().strftime('%H:%M:%S')}] ⚠️ Skipped {len(skipped)} invalid: {', '.join(skipped)}"
+                )
+                self.token_configs = valid_configs
+                self.bootstrap_total = len(valid_configs) * 2
+                if self.signal_gen:
+                    for sym in skipped:
+                        self.signal_gen.configs.pop(sym, None)
+
     async def _fetch_all_tickers(self):
         if not self.fetcher.exchange:
             return
         symbols = [cfg.symbol for cfg in self.token_configs]
         try:
-            # First try fetching only our symbols (more efficient but fails if one is invalid)
             tickers = await self.fetcher.exchange.fetch_tickers(symbols)
         except Exception as e:
-            logger.warning(f"Ticker fetch error with specific symbols ({e}), falling back to fetch all...")
+            # Identify and permanently remove the bad symbol so future cycles are clean
+            error_str = str(e)
+            bad_sym = next((s for s in symbols if s in error_str), None)
+            if bad_sym:
+                norm_bad = normalize_symbol(bad_sym)
+                logger.warning(f"Removing invalid symbol {bad_sym} from active fleet")
+                self.activity_log.appendleft(
+                    f"[{datetime.now().strftime('%H:%M:%S')}] ⚠️ Removed invalid symbol: {bad_sym}"
+                )
+                self.token_configs = [cfg for cfg in self.token_configs if cfg.symbol != bad_sym]
+                if self.signal_gen:
+                    self.signal_gen.configs.pop(norm_bad, None)
+                symbols = [cfg.symbol for cfg in self.token_configs]
             try:
-                # Fallback: fetch all tickers and filter
-                tickers = await self.fetcher.exchange.fetch_tickers()
-            except Exception as e_all:
-                self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] ⚠️ Ticker fetch fallback error: {e_all}")
-                logger.warning(f"Ticker fetch fallback error: {e_all}")
-                return
+                tickers = await self.fetcher.exchange.fetch_tickers(symbols)
+            except Exception:
+                try:
+                    tickers = await self.fetcher.exchange.fetch_tickers()
+                except Exception as e_all:
+                    self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] ⚠️ Ticker fetch error: {e_all}")
+                    logger.warning(f"Ticker fetch fallback error: {e_all}")
+                    return
 
         for sym in symbols:
             ticker = tickers.get(sym)
@@ -2238,6 +2274,16 @@ class LiveEngine:
     # ------------------------------------------------------------------
     # Colour‑coded dashboard display
     # ------------------------------------------------------------------
+    @staticmethod
+    def _fmt_price(price: float) -> str:
+        if price <= 0:
+            return f"{'0':>10}"
+        if price < 0.0001:
+            return f"{price:>10.8f}"
+        if price < 0.001:
+            return f"{price:>10.6f}"
+        return f"{price:>10.4f}"
+
     def _colorize_signal(self, signal: str) -> str:
         """Return ANSI coloured signal string."""
         if signal.startswith("STRONG_BUY") or signal.startswith("BUY"):
@@ -2315,7 +2361,7 @@ class LiveEngine:
                 else:
                     pnl_str = "   -   "
                 status = f"{trade.trade_type[:4]}" if trade else "SCANNING"
-                print(f"{sym:<12} | {mode_display:<10} | {price:10.4f} | {delta_symbol:2} | {ai_str:>6} | {thresh_str:>6} | {signal_str:<20} | {risk_str:<12} | {pnl_str:>8} | {status:<10}")
+                print(f"{sym:<12} | {mode_display:<10} | {self._fmt_price(price)} | {delta_symbol:2} | {ai_str:>6} | {thresh_str:>6} | {signal_str:<20} | {risk_str:<12} | {pnl_str:>8} | {status:<10}")
 
             if self.wallet.open_trades:
                 print("\n" + "*"*140)
