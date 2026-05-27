@@ -1895,10 +1895,6 @@ class LiveEngine:
                         sig['signal'] = 'HOLD'
                         sig['signal_strength'] = 'HOLD'
                         sig['direction'] = 'NEUTRAL'
-                    elif macro == 'DIVERGENT':
-                        sig['signal'] = 'HOLD'
-                        sig['signal_strength'] = 'HOLD'
-                        sig['direction'] = 'NEUTRAL'
 
                 if isinstance(sig, dict):
                     sig['timeframe'] = tf

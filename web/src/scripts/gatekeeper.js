@@ -1236,6 +1236,11 @@ function updateDashboardData(data) {
       });
     }
 
+    // Merge latest tickers BEFORE rendering signal cards so new cards display current prices
+    if (data.tickers && Object.keys(data.tickers).length > 0) {
+      window.currentTickers = { ...(window.currentTickers || {}), ...data.tickers };
+    }
+
     debouncedFilterAndRenderSignals();
 
     // S&R proximity alert toasts
