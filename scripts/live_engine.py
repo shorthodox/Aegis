@@ -1131,9 +1131,13 @@ class SignalGenerator:
             logger.critical(f"Feature mismatch for {norm_sym}: cannot predict")
             return None
 
+        # Convert to numpy array to avoid XGBoost internal dtype alignment errors
+        # when a sliced Pandas DataFrame is passed directly into predict_proba.
+        aligned_features_np = aligned_features.to_numpy().astype(np.float32)
+
         try:
-            probs = model.predict_proba(aligned_features)[0]
-            
+            probs = model.predict_proba(aligned_features_np)[0]
+
             # --- NEW TELEMETRY ---
             telemetry_data = extract_prediction_telemetry(model, aligned_features, expected_features)
             shap_contribs = telemetry_data.get("shap_contributions", [])
@@ -1490,7 +1494,7 @@ class SignalGenerator:
                         btc_expected = list(btc_expected) if btc_expected else []
                         btc_aligned = self._align_features(btc_latest, btc_expected)
                         if btc_aligned is not None:
-                            btc_ai = self.btc_model.predict_proba(btc_aligned)[0, 1]
+                            btc_ai = self.btc_model.predict_proba(btc_aligned.to_numpy().astype(np.float32))[0, 1]
                     except Exception as e:
                         logger.warning(f"BTC model prediction error: {e}")
 
