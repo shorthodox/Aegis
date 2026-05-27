@@ -2635,8 +2635,8 @@ def _get_or_refresh_dev_token() -> Dict[str, str]:
 
 
 async def dev_token_display_loop():
-    """Background task: continuously print the active developer token to the console."""
-    await asyncio.sleep(4)  # let other startup messages print first
+    """Background task: emit the active developer token to backend logs every 60s."""
+    await asyncio.sleep(5)  # let uvicorn startup messages land first
     while True:
         try:
             token_info = await asyncio.to_thread(_get_or_refresh_dev_token)
@@ -2653,19 +2653,17 @@ async def dev_token_display_loop():
                 exp_display = expires_str
                 time_left = "unknown"
 
-            W = 56
-            lines = [
-                "\033[36m╔" + "═" * W + "╗",
-                "║" + " AEGIS  —  ACTIVE DEVELOPER TOKEN ".center(W) + "║",
-                "╠" + "═" * W + "╣",
-                "║" + f"  Token   :  {code}".ljust(W) + "║",
-                "║" + f"  Expires :  {exp_display}".ljust(W) + "║",
-                "║" + f"  Valid   :  {time_left}  ·  one-time use".ljust(W) + "║",
-                "╚" + "═" * W + "╝\033[0m",
-            ]
-            print("\n" + "\n".join(lines) + "\n", flush=True)
+            sep = "=" * 58
+            logger.info(sep)
+            logger.info("         AEGIS  --  ACTIVE DEVELOPER TOKEN")
+            logger.info(sep)
+            logger.info(f"  Token   : {code}")
+            logger.info(f"  Expires : {exp_display}")
+            logger.info(f"  Valid   : {time_left}  |  one-time use  |  5-day window")
+            logger.info(sep)
+
         except Exception as e:
-            logger.warning(f"Dev token display loop error: {e}")
+            logger.error(f"[dev_token_display_loop] {e}", exc_info=True)
 
         await asyncio.sleep(60)
 
