@@ -688,7 +688,7 @@ async def api_public_signals(authorization: Optional[str] = Header(None)):
                 if user_doc and user_doc.get("otp_verified", False):
                     plan = user_doc.get("plan", "trial")
                     trial_end = user_doc.get("trial_end")
-                    if plan in ["pro", "active"]:
+                    if plan in ["pro", "active", "premium", "intermediate", "basic"]:
                         subscription_active = True
                     elif trial_end:
                         if datetime.now(timezone.utc) <= datetime.fromisoformat(trial_end):
@@ -1944,21 +1944,25 @@ async def razorpay_webhook(request: Request):
         user_id = entity.get("notes", {}).get("internal_user_id")
 
         if user_id:
+            plan_tier = entity.get("notes", {}).get("plan", "pro")
+            if plan_tier not in ("basic", "intermediate", "pro"):
+                plan_tier = "pro"
             user_ref = db.collection("users").document(user_id)
             try:
                 result = user_ref.update({
-                    "plan": "pro",
+                    "plan": plan_tier,
                     "subscription": {
                         "status": "active",
                         "subscription_id": subscription_id,
                         "activated_at": datetime.now(timezone.utc).isoformat(),
+                        "plan_type": plan_tier,
                     },
                     "trial_active": False,
                 })
                 if inspect.isawaitable(result):
                     await result
-                print(f"User {user_id} upgraded to pro via Razorpay")
-                await send_subscription_confirmation(user_id, "pro")
+                print(f"User {user_id} upgraded to {plan_tier} via Razorpay webhook")
+                await send_subscription_confirmation(user_id, plan_tier)
             except Exception as e:
                 print(f"Failed to update user {user_id}: {e}")
 
