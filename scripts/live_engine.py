@@ -1190,26 +1190,46 @@ class SignalGenerator:
             market_regime = "HIGH_VOLATILITY"
             alpha_risk_level = "HIGH"
 
-        # Minimum confidence gate — use the per-token threshold set by the mode
-        # config (balanced=0.70, aggressive=0.65, conservative=0.75). Raise it by
-        # 0.10 during elevated volatility so noisy markets don't flood signals.
+        # Minimum confidence gate — lower the bar by 0.10 from the backtest
+        # config so mid-range signals can fire at raw_prob ~0.55+.
+        # During elevated volatility, raise back up by 0.10 to stay conservative.
         req_confidence = (
             min(0.90, cfg.entry_prob_threshold + 0.10)
             if market_regime in ["CRITICAL_VOLATILITY", "HIGH_VOLATILITY"]
-            else cfg.entry_prob_threshold
+            else max(0.55, cfg.entry_prob_threshold - 0.10)
         )
 
-        # Conviction Spread
+        # Conviction Spread — lowered from 0.05 to 0.01 so a clear lean toward
+        # LONG/SHORT over HOLD is sufficient; 0.05 was blocking calibrated probs.
         conviction_spread = ai_prob - prob_hold
 
         # Direction logic: Class 2 = LONG, Class 0 = SHORT, Class 1 = NEUTRAL.
         base_signal = "NEUTRAL"
         if market_regime == "CRITICAL_VOLATILITY":
             base_signal = "NEUTRAL"
-        elif predicted_class == 2 and ai_prob >= req_confidence and conviction_spread > 0.05:
+        elif predicted_class == 2 and ai_prob >= req_confidence and conviction_spread > 0.01:
             base_signal = "LONG"
-        elif predicted_class == 0 and ai_prob >= req_confidence and conviction_spread > 0.05:
+        elif predicted_class == 0 and ai_prob >= req_confidence and conviction_spread > 0.01:
             base_signal = "SHORT"
+
+        # S/R zone override — when price is already within SR_SIGNAL_ZONE of a
+        # key level, accept a lower confidence bar (0.47) because the reversal
+        # pattern score provides independent technical confirmation.
+        # Only activates when the standard gate produced NEUTRAL.
+        if base_signal == "NEUTRAL" and market_regime != "CRITICAL_VOLATILITY":
+            _pre_sup = _pre_res = 999.0
+            try:
+                _pre_sup = float(_current_row["pct_dist_to_support"])
+                _pre_res = float(_current_row["pct_dist_to_resistance"])
+            except (KeyError, TypeError, ValueError):
+                pass
+            _sup_lvl = float(sr_telemetry.get("support_line") or 0.0)
+            _res_lvl = float(sr_telemetry.get("resistance_line") or 0.0)
+            _sr_conf = 0.47
+            if _sup_lvl > 0 and 0 <= _pre_sup <= SR_SIGNAL_ZONE and predicted_class == 2 and ai_prob >= _sr_conf:
+                base_signal = "LONG"
+            elif _res_lvl > 0 and 0 <= _pre_res <= SR_SIGNAL_ZONE and predicted_class == 0 and ai_prob >= _sr_conf:
+                base_signal = "SHORT"
 
         # BTC safety downgrade for LONG signals (only when Alpha OFF)
         if not alpha_mode and not btc_healthy and base_signal == "LONG":
