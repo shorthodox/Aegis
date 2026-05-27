@@ -41,6 +41,7 @@ from starlette.middleware.sessions import SessionMiddleware
 import numpy as np
 from email_validator import validate_email, EmailNotValidError
 from functools import partial
+from generate_dev_code import generate_dev_key
 
 # -------------------------------------------------------------------
 # Helper: Recursively convert numpy types to native Python types
@@ -2267,6 +2268,14 @@ async def websocket_dashboard(websocket: WebSocket):
                                 current_user_email = new_user
                                 _plan_cache_ts = 0.0  # force cache refresh
                                 print(f"[WS] Re-authenticated: {current_user_email}")
+                    elif client_msg.strip() == "@devkey":
+                        dev_key = generate_dev_key()
+                        print(f"[WS] @devkey requested by {current_user_email} — key generated")
+                        await websocket.send_json({
+                            "type": "devkey",
+                            "key": dev_key,
+                            "message": f"Your developer key: {dev_key}",
+                        })
             except Exception:
                 pass
 
