@@ -2093,7 +2093,7 @@ function _applyTokenSearch(query) {
 
   if (clearBtn) clearBtn.classList.toggle('hidden', !_tokenSearchQuery);
 
-  const cards = container.querySelectorAll('[data-symbol]');
+  const cards = container.querySelectorAll('.signal-card[data-symbol]');
   let visible = 0;
 
   cards.forEach(card => {
@@ -2164,7 +2164,7 @@ function _applyTokenSearch(query) {
         if (_tokenSearchQuery) {
           _applyTokenSearch(_tokenSearchQuery);
         } else if (countEl) {
-          const cards = container.querySelectorAll('[data-symbol]');
+          const cards = container.querySelectorAll('.signal-card[data-symbol]');
           countEl.textContent = cards.length > 0 ? `${cards.length} tokens` : '';
           countEl.classList.remove('has-query');
         }

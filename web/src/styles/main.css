@@ -3665,13 +3665,26 @@ body.modal-open {
     align-items: center;
     gap: 12px;
     margin-bottom: 20px;
+    padding: 0 2px;
 }
 
+/* Background/border live on the wrapper so Tailwind preflight can't reset them */
 .token-search-inner {
     position: relative;
     flex: 1;
     display: flex;
     align-items: center;
+    background: rgba(6, 14, 26, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 12px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.token-search-inner:focus-within {
+    border-color: var(--primary-cyan);
+    box-shadow: 0 0 0 3px rgba(0, 242, 255, 0.07), 0 0 18px rgba(0, 242, 255, 0.10);
 }
 
 .token-search-icon {
@@ -3688,28 +3701,24 @@ body.modal-open {
     color: var(--primary-cyan);
 }
 
+/* Input is transparent — wrapper provides the visual box */
 .token-search-inner input {
     width: 100%;
-    background: rgba(0, 0, 0, 0.45);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
     border-radius: 12px;
     padding: 10px 40px 10px 40px;
     color: #fff;
     font-family: 'JetBrains Mono', monospace;
     font-size: 13px;
     letter-spacing: 0.03em;
-    outline: none;
+    outline: none !important;
     min-height: 42px;
-    transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.token-search-inner input:focus {
-    border-color: var(--primary-cyan);
-    box-shadow: 0 0 0 3px rgba(0, 242, 255, 0.07), 0 0 16px rgba(0, 242, 255, 0.08);
 }
 
 .token-search-inner input::placeholder {
-    color: rgba(148, 163, 184, 0.45);
+    color: rgba(148, 163, 184, 0.40);
     font-size: 12px;
     letter-spacing: 0.04em;
 }
