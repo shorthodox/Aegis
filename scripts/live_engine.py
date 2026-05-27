@@ -1213,13 +1213,19 @@ class SignalGenerator:
             base_signal = "NEUTRAL"
 
         # ──────────────────────────────────────────────────────────────
-        # REVERSAL ANTICIPATION ENGINE
-        # Signals fire when the trend is *about to* reverse, not after it
-        # has already moved ≥50%.  Logic:
-        #   1. Detect technical reversal setup (RSI divergence, patterns, S/R)
-        #   2. Count 3 consecutive confirming candles in the new direction
-        #   3. For SHORT near support: wait for actual support break first
-        #   4. Mark signal_status: AWAITING_CONFIRMATION / AWAITING_SR_BREAK / CONFIRMED
+        # SIGNAL CLASSIFICATION ENGINE
+        # Two distinct regimes gated by efficiency ratio (trend_str):
+        #
+        #   MOMENTUM_BREAKOUT  (trend_str == "strong")
+        #     High-velocity expansion — ReversalDetector skipped entirely.
+        #     base_signal passes through unhindered for breakout entries.
+        #
+        #   MEAN_REVERSION     (trend_str == "normal" | "weak")
+        #     Choppy / range-bound — full reversal filter stack applied:
+        #       1. Detect setup (RSI divergence, patterns, S/R proximity)
+        #       2. Count 3 consecutive confirming candles in new direction
+        #       3. SHORT near support: gate on actual support break first
+        #       4. signal_status: AWAITING_CONFIRMATION / AWAITING_SR_BREAK / CONFIRMED
         # ──────────────────────────────────────────────────────────────
         rev_key = f"{norm_sym}_{timeframe}"
         signal_status = "ACTIVE"
@@ -1231,69 +1237,26 @@ class SignalGenerator:
         resistance_lvl = float(sr_telemetry.get("resistance_line") or 0.0)
 
         if base_signal == "LONG":
-            bull_score, bull_sigs = ReversalDetector.detect_bullish_reversal_setup(
-                df_1h, support=support_lvl
-            )
-            reversal_score_val = bull_score
-            reversal_signals_list = bull_sigs
-            candles_confirmed = ReversalDetector.count_confirming_candles(df_1h, "LONG")
-
-            cand_key = f"{rev_key}_LONG"
-            if bull_score >= REVERSAL_SCORE_THRESHOLD:
-                if cand_key not in self.reversal_candidates:
-                    self.reversal_candidates[cand_key] = {
-                        "direction": "LONG",
-                        "first_price": current_price,
-                        "candles_confirmed": candles_confirmed,
-                        "score": bull_score,
-                    }
-                else:
-                    self.reversal_candidates[cand_key]["candles_confirmed"] = candles_confirmed
-
-                if candles_confirmed >= CANDLE_CONFIRM_REQUIRED:
-                    signal_status = "CONFIRMED"
-                    self.reversal_candidates.pop(cand_key, None)
-                else:
-                    # Preserve signal payload for dashboard tracking; entries blocked via signal_status
-                    signal_status = "AWAITING_CONFIRMATION"
+            if trend_str == "strong":
+                # High-velocity momentum expansion — bypass reversal filters entirely
+                signal_status = "MOMENTUM_BREAKOUT"
             else:
-                # Reversal setup not strong enough — clear candidate and neutralise
-                self.reversal_candidates.pop(cand_key, None)
-                base_signal = "NEUTRAL"
-                signal_status = "ACTIVE"
-
-        elif base_signal == "SHORT":
-            # ── Support-break gate: SELL near support → wait for break ──
-            if sr_alert_state == "NEAR_SUPPORT" and support_lvl > 0:
-                support_broken = ReversalDetector.is_support_broken(current_price, support_lvl)
-                if not support_broken:
-                    # Preserve SHORT payload for dashboard tracking; entries blocked via signal_status
-                    signal_status = "AWAITING_SR_BREAK"
-                    self.reversal_candidates[f"{rev_key}_SR_BREAK"] = {
-                        "support_level": support_lvl,
-                        "direction": "SHORT",
-                    }
-                else:
-                    # Support actually broken — allow SHORT to proceed
-                    signal_status = "SR_BREAK_CONFIRMED"
-                    self.reversal_candidates.pop(f"{rev_key}_SR_BREAK", None)
-            else:
-                # Not near support; apply standard candle-confirmation
-                bear_score, bear_sigs = ReversalDetector.detect_bearish_reversal_setup(
-                    df_1h, resistance=resistance_lvl
+                # Market regime indicates mean-reversion conditions — engage filters
+                bull_score, bull_sigs = ReversalDetector.detect_bullish_reversal_setup(
+                    df_1h, support=support_lvl
                 )
-                reversal_score_val = bear_score
-                reversal_signals_list = bear_sigs
-                candles_confirmed = ReversalDetector.count_confirming_candles(df_1h, "SHORT")
+                reversal_score_val = bull_score
+                reversal_signals_list = bull_sigs
+                candles_confirmed = ReversalDetector.count_confirming_candles(df_1h, "LONG")
 
-                cand_key = f"{rev_key}_SHORT"
-                if bear_score >= REVERSAL_SCORE_THRESHOLD:
+                cand_key = f"{rev_key}_LONG"
+                if bull_score >= REVERSAL_SCORE_THRESHOLD:
                     if cand_key not in self.reversal_candidates:
                         self.reversal_candidates[cand_key] = {
-                            "direction": "SHORT",
+                            "direction": "LONG",
                             "first_price": current_price,
                             "candles_confirmed": candles_confirmed,
-                            "score": bear_score,
+                            "score": bull_score,
                         }
                     else:
                         self.reversal_candidates[cand_key]["candles_confirmed"] = candles_confirmed
@@ -1305,9 +1268,61 @@ class SignalGenerator:
                         # Preserve signal payload for dashboard tracking; entries blocked via signal_status
                         signal_status = "AWAITING_CONFIRMATION"
                 else:
+                    # Reversal setup not strong enough — clear candidate and neutralise
                     self.reversal_candidates.pop(cand_key, None)
                     base_signal = "NEUTRAL"
                     signal_status = "ACTIVE"
+
+        elif base_signal == "SHORT":
+            if trend_str == "strong":
+                # High-velocity momentum breakdown — bypass reversal filters entirely
+                signal_status = "MOMENTUM_BREAKOUT"
+            else:
+                # ── Support-break gate: SELL near support → wait for break ──
+                if sr_alert_state == "NEAR_SUPPORT" and support_lvl > 0:
+                    support_broken = ReversalDetector.is_support_broken(current_price, support_lvl)
+                    if not support_broken:
+                        # Preserve SHORT payload for dashboard tracking; entries blocked via signal_status
+                        signal_status = "AWAITING_SR_BREAK"
+                        self.reversal_candidates[f"{rev_key}_SR_BREAK"] = {
+                            "support_level": support_lvl,
+                            "direction": "SHORT",
+                        }
+                    else:
+                        # Support actually broken — allow SHORT to proceed
+                        signal_status = "SR_BREAK_CONFIRMED"
+                        self.reversal_candidates.pop(f"{rev_key}_SR_BREAK", None)
+                else:
+                    # Not near support; apply standard candle-confirmation
+                    bear_score, bear_sigs = ReversalDetector.detect_bearish_reversal_setup(
+                        df_1h, resistance=resistance_lvl
+                    )
+                    reversal_score_val = bear_score
+                    reversal_signals_list = bear_sigs
+                    candles_confirmed = ReversalDetector.count_confirming_candles(df_1h, "SHORT")
+
+                    cand_key = f"{rev_key}_SHORT"
+                    if bear_score >= REVERSAL_SCORE_THRESHOLD:
+                        if cand_key not in self.reversal_candidates:
+                            self.reversal_candidates[cand_key] = {
+                                "direction": "SHORT",
+                                "first_price": current_price,
+                                "candles_confirmed": candles_confirmed,
+                                "score": bear_score,
+                            }
+                        else:
+                            self.reversal_candidates[cand_key]["candles_confirmed"] = candles_confirmed
+
+                        if candles_confirmed >= CANDLE_CONFIRM_REQUIRED:
+                            signal_status = "CONFIRMED"
+                            self.reversal_candidates.pop(cand_key, None)
+                        else:
+                            # Preserve signal payload for dashboard tracking; entries blocked via signal_status
+                            signal_status = "AWAITING_CONFIRMATION"
+                    else:
+                        self.reversal_candidates.pop(cand_key, None)
+                        base_signal = "NEUTRAL"
+                        signal_status = "ACTIVE"
 
         # SL/TP Logic based on asset classification
         heavy_caps = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT"]
