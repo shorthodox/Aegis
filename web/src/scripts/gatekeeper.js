@@ -1269,6 +1269,11 @@ function updateDashboardData(data) {
         signalObj.status = getSignalStatus(signalObj);
         window.latestSignals[key] = signalObj;
       }
+      // Auto-save new BUY/SELL signals to history (deduped by signal_id inside addToSignalHistory)
+      if (sig.signal_id && !['HOLD', 'WAITING', 'NEUTRAL'].includes(sig.signal || 'WAITING') &&
+          typeof window.addToSignalHistory === 'function') {
+        window.addToSignalHistory({ ...sig, symbol: sym });
+      }
     });
 
     // Populate ALL timeframes from the full map the backend sends.
@@ -1821,6 +1826,12 @@ function setupFirestoreListeners() {
           win_rate: data.win_rate ?? (data.trading_accuracy != null ? Math.round(data.trading_accuracy * 1000) / 10 : null),
           total_trades: data.total_trades ?? 0,
         };
+
+        // Auto-save new BUY/SELL signals to history (deduped by signal_id inside addToSignalHistory)
+        if (signalObj.signal_id && !['HOLD', 'WAITING', 'NEUTRAL'].includes(signalObj.signal) &&
+            typeof window.addToSignalHistory === 'function') {
+          window.addToSignalHistory(signalObj);
+        }
 
         if (!['pro', 'premium', 'intermediate'].includes(userPlan)) {
           const trialTimeframes = ['15m', '30m', '1h'];

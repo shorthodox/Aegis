@@ -1,7 +1,7 @@
 // trading-rooms.js — owns Terminal, Analytics, and Signal History rooms
 // Provides window globals consumed by gatekeeper.js:
 //   window.renderTrades(trades)       — called on every WS tick with live trade data
-//   window.addToSignalHistory(signal) — called when a signal card is selected
+//   window.addToSignalHistory(signal) — called automatically on signal arrival and on signal card select
 //   window.prefillFromSignal(signal)  — fills the terminal cockpit from a signal
 //   window.closeTrade(tradeId)        — close a paper or live trade
 //   window.trFromHistory(idx, mode)   — trigger trade from signal history row
