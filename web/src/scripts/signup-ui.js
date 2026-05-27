@@ -12,8 +12,29 @@ import {
 } from './auth.js';
 
 // Pending form data stored between step 1 and step 2
-let _pending = { name: '', email: '', password: '' };
+let _pending = { name: '', email: '', password: '', mobile: '' };
 let _resendTimer = null;
+
+function normalizeMobile(raw) {
+  const stripped = raw.replace(/[\s\-\.\(\)]/g, '');
+  if (/^\d{10}$/.test(stripped)) return '+91' + stripped;
+  if (/^\+\d{7,15}$/.test(stripped)) return stripped;
+  return null;
+}
+
+async function checkPhoneUnique(phone) {
+  try {
+    const res = await fetch('/auth/check-phone', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone })
+    });
+    const data = await res.json();
+    return data.available !== false;
+  } catch {
+    return true; // fail open — backend will enforce on provision
+  }
+}
 
 // ============================================================
 // Modal HTML
@@ -45,6 +66,12 @@ export function createSignUpModal() {
               <label>Email Address</label>
               <input type="email" id="signupEmail" placeholder="your@email.com" required>
               <span class="error-msg" id="signupEmailError"></span>
+            </div>
+
+            <div class="form-group">
+              <label>Mobile Number</label>
+              <input type="tel" id="signupMobile" placeholder="9876543210 or +91 9876543210" required>
+              <span class="error-msg" id="signupMobileError"></span>
             </div>
 
             <div class="form-group">
@@ -82,6 +109,26 @@ export function createSignUpModal() {
           <div class="auth-security-badge">
             <i class="fas fa-lock"></i> Your data is encrypted and secure
           </div>
+        </div>
+
+        <!-- ── STEP 1b: Phone for Google users ── -->
+        <div id="signupStep1b" style="display:none;">
+          <div class="auth-header">
+            <div class="auth-logo">⚡ AEGIS</div>
+            <h2>One Last Step</h2>
+            <p>Add your mobile number to secure your account</p>
+          </div>
+          <form id="googlePhoneForm" class="auth-form">
+            <div class="form-group">
+              <label>Mobile Number</label>
+              <input type="tel" id="googleMobile" placeholder="9876543210 or +91 9876543210" required>
+              <span class="error-msg" id="googleMobileError"></span>
+            </div>
+            <button type="submit" class="auth-btn-primary" id="googlePhoneSubmitBtn">
+              Complete Sign Up
+            </button>
+            <span class="auth-error" id="googlePhoneFormError"></span>
+          </form>
         </div>
 
         <!-- ── STEP 2: OTP verification ── -->
@@ -180,6 +227,8 @@ function attachStep1Listeners() {
     const el = document.getElementById('signupPasswordConfirmError');
     if (el) el.textContent = (pwd && conf && pwd !== conf) ? 'Passwords do not match' : '';
   });
+
+  attachGooglePhoneListeners();
 }
 
 // ============================================================
@@ -190,13 +239,15 @@ async function handleStep1Submit(e) {
 
   const name     = document.getElementById('signupName')?.value?.trim();
   const email    = document.getElementById('signupEmail')?.value?.trim();
+  const mobileRaw = document.getElementById('signupMobile')?.value?.trim();
   const password = document.getElementById('signupPassword')?.value;
   const confirm  = document.getElementById('signupPasswordConfirm')?.value;
   const terms    = document.getElementById('termsAgree')?.checked;
 
   clearError('signupFormError');
+  clearError('signupMobileError');
 
-  if (!name || !email || !password || !confirm) {
+  if (!name || !email || !mobileRaw || !password || !confirm) {
     return showError('signupFormError', 'All fields are required');
   }
   if (password.length < 8) {
@@ -209,6 +260,18 @@ async function handleStep1Submit(e) {
     return showError('signupFormError', 'You must agree to the Terms of Service');
   }
 
+  const mobile = normalizeMobile(mobileRaw);
+  if (!mobile) {
+    return showError('signupMobileError', 'Enter a valid mobile number (e.g. 9876543210 or +91 9876543210)');
+  }
+
+  setLoading(true, 'Checking mobile number…');
+  const phoneAvailable = await checkPhoneUnique(mobile);
+  if (!phoneAvailable) {
+    setLoading(false);
+    return showError('signupMobileError', 'This mobile number is already registered to another account');
+  }
+
   setLoading(true, 'Sending verification code…');
   const result = await sendOTPForSignup(email);
   setLoading(false);
@@ -218,7 +281,7 @@ async function handleStep1Submit(e) {
   }
 
   // Store for step 2
-  _pending = { name, email, password };
+  _pending = { name, email, password, mobile };
 
   showStep2(email);
   startResendCountdown(60);
@@ -300,7 +363,7 @@ async function handleStep2Verify() {
 
   // OTP passed — create Firebase account + Firestore doc
   setLoading(true, 'Creating your account…');
-  const signupResult = await handleEmailSignup(_pending.email, _pending.password, _pending.name, verifyResult.signup_token);
+  const signupResult = await handleEmailSignup(_pending.email, _pending.password, _pending.name, verifyResult.signup_token, _pending.mobile);
   setLoading(false);
 
   if (!signupResult.success) {
@@ -308,31 +371,73 @@ async function handleStep2Verify() {
   }
 
   clearResendTimer();
-  _pending = { name: '', email: '', password: '' };
+  _pending = { name: '', email: '', password: '', mobile: '' };
   window.dispatchEvent(new CustomEvent('authStateChange', { detail: { authenticated: true } }));
   closeSignUpModal();
   window.location.href = '/web/src/pages/pricing.html?newUser=1';
 }
 
 // ============================================================
-// Google signup (unchanged path — Google verifies email itself)
+// Google signup — collect phone number if new user
 // ============================================================
 async function performGoogleSignup() {
   setLoading(true, 'Connecting to Google…');
   try {
     const result = await handleGoogleAuth();
+    setLoading(false);
     if (result.success) {
-      window.dispatchEvent(new CustomEvent('authStateChange', { detail: { authenticated: true } }));
-      closeSignUpModal();
-      window.location.href = '/web/src/pages/pricing.html?newUser=1';
+      const isNew = result.userData?.isNewUser !== false;
+      if (isNew) {
+        showGooglePhoneStep();
+      } else {
+        finishGoogleSignup();
+      }
     } else {
       showError('signupFormError', result.message);
     }
   } catch (error) {
-    showError('signupFormError', error.message);
-  } finally {
     setLoading(false);
+    showError('signupFormError', error.message);
   }
+}
+
+function showGooglePhoneStep() {
+  document.getElementById('signupStep1').style.display = 'none';
+  document.getElementById('signupStep1b').style.display = '';
+  document.getElementById('googleMobile')?.focus();
+}
+
+function finishGoogleSignup() {
+  window.dispatchEvent(new CustomEvent('authStateChange', { detail: { authenticated: true } }));
+  closeSignUpModal();
+  window.location.href = '/web/src/pages/pricing.html?newUser=1';
+}
+
+function attachGooglePhoneListeners() {
+  document.getElementById('googlePhoneForm')?.addEventListener('submit', handleGooglePhoneSubmit);
+}
+
+async function handleGooglePhoneSubmit(e) {
+  e.preventDefault();
+  clearError('googleMobileError');
+  clearError('googlePhoneFormError');
+
+  const raw = document.getElementById('googleMobile')?.value?.trim();
+  const mobile = normalizeMobile(raw || '');
+  if (!mobile) {
+    return showError('googleMobileError', 'Enter a valid mobile number (e.g. 9876543210 or +91 9876543210)');
+  }
+
+  setLoading(true, 'Checking mobile number…');
+  const available = await checkPhoneUnique(mobile);
+  setLoading(false);
+
+  if (!available) {
+    return showError('googleMobileError', 'This mobile number is already registered to another account');
+  }
+
+  sessionStorage.setItem('pending_phone', mobile);
+  finishGoogleSignup();
 }
 
 // ============================================================
@@ -340,6 +445,7 @@ async function performGoogleSignup() {
 // ============================================================
 function showStep1() {
   document.getElementById('signupStep1').style.display = '';
+  document.getElementById('signupStep1b').style.display = 'none';
   document.getElementById('signupStep2').style.display = 'none';
 }
 

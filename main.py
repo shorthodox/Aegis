@@ -827,9 +827,22 @@ def get_user_doc(email: str) -> Optional[Dict]:
         return result if isinstance(result, dict) else {}
     return None
 
+def phone_is_unique(phone: str, exclude_email: Optional[str] = None) -> bool:
+    """Return True if phone number is not already stored in any user document."""
+    try:
+        docs = db.collection("users").where("phone_number", "==", phone).limit(2).stream()
+        for d in docs:
+            if exclude_email and d.id == exclude_email:
+                continue
+            return False
+    except Exception:
+        pass  # if query fails, don't block registration
+    return True
+
 def create_user_doc(email: str, password_hash: Optional[str] = None,
                     provider: Optional[str] = None, social_id: Optional[str] = None,
-                    full_name: Optional[str] = None, location: Optional[str] = None) -> Dict:
+                    full_name: Optional[str] = None, location: Optional[str] = None,
+                    phone_number: Optional[str] = None) -> Dict:
     now = datetime.now(timezone.utc).isoformat()
     trial_end = (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()
     user_data = {
@@ -856,6 +869,8 @@ def create_user_doc(email: str, password_hash: Optional[str] = None,
         user_data["full_name"] = full_name
     if location:
         user_data["location"] = location
+    if phone_number:
+        user_data["phone_number"] = phone_number
     db.collection("users").document(email).set(user_data)
     return {"email": email, "plan": "trial", "trial_end": trial_end, "full_name": full_name, "location": location}
 
@@ -987,14 +1002,33 @@ async def provision_user(request: Request, user_id: str = Depends(get_current_us
         # Prefer email as doc key (consistent with rest of backend), fall back to uid
         doc_key = email or firebase_uid
 
+        # Normalize and validate phone number if provided
+        phone_raw = data.get("phone_number") or ""
+        phone_number: Optional[str] = None
+        if phone_raw:
+            cleaned = re.sub(r'[\s\-\.\(\)]', '', phone_raw.strip())
+            if re.match(r'^\d{10}$', cleaned):
+                cleaned = '+91' + cleaned
+            if re.match(r'^\+\d{7,15}$', cleaned):
+                phone_number = cleaned
+
         existing = get_user_doc(doc_key)
         if existing:
             update_last_login(doc_key)
-            # Stamp otp_verified for any provider that passes the provision gate:
-            # - password: already validated OTP signup_token above
-            # - google.com / other OAuth: email_verified is set by the provider
             if not existing.get("otp_verified"):
                 db.collection("users").document(doc_key).update({"otp_verified": True})
+            # Save phone number if not already stored
+            if phone_number and not existing.get("phone_number"):
+                if not phone_is_unique(phone_number, exclude_email=doc_key):
+                    try:
+                        firebase_auth.update_user(firebase_uid, disabled=True)
+                    except Exception:
+                        pass
+                    db.collection("users").document(doc_key).update({
+                        "suspended": True, "suspension_reason": "duplicate_phone"
+                    })
+                    raise HTTPException(status_code=409, detail="This phone number is already registered to another account. Your account has been suspended.")
+                db.collection("users").document(doc_key).update({"phone_number": phone_number})
             return {
                 "uid": firebase_uid,
                 "email": existing.get("email", doc_key),
@@ -1004,11 +1038,20 @@ async def provision_user(request: Request, user_id: str = Depends(get_current_us
                 "location": existing.get("location"),
             }
 
+        # Check phone uniqueness before creating new doc
+        if phone_number and not phone_is_unique(phone_number):
+            try:
+                firebase_auth.update_user(firebase_uid, disabled=True)
+            except Exception:
+                pass
+            raise HTTPException(status_code=409, detail="This phone number is already registered to another account.")
+
         user_doc = create_user_doc(
             doc_key,
             provider="firebase",
             social_id=firebase_uid,
             full_name=display_name,
+            phone_number=phone_number,
         )
         return {
             "uid": firebase_uid,
@@ -1091,6 +1134,9 @@ class OTPSendRequest(BaseModel):
 class OTPVerifyRequest(BaseModel):
     email: EmailStr
     otp: str
+
+class PhoneCheckRequest(BaseModel):
+    phone: str
 
 class CreateSubscriptionRequest(BaseModel):
     plan_name: str
@@ -1296,6 +1342,14 @@ async def verify_otp_for_registration(request: OTPVerifyRequest):
     otp_store[email]["verified"] = True
     otp_store[email]["signup_token"] = signup_token
     return {"success": True, "message": "OTP verified successfully. Please complete your profile.", "signup_token": signup_token}
+
+@app.post("/auth/check-phone")
+async def check_phone_unique(request: PhoneCheckRequest):
+    """Pre-signup phone uniqueness check. No auth required."""
+    phone = request.phone.strip()
+    if not phone or len(phone) < 7:
+        raise HTTPException(status_code=422, detail="Invalid phone number")
+    return {"available": phone_is_unique(phone)}
 
 # -------------------------------------------------------------------
 # Password reset — generate Firebase link, deliver via Neo SMTP
@@ -2190,6 +2244,7 @@ async def websocket_dashboard(websocket: WebSocket):
         TICKER_INTERVAL = 0.1
         SIGNAL_EVERY_N = 5
         tick_count = 0
+        _cached_tickers: Dict[str, float] = {}  # last non-empty tickers for this connection
 
         # Define a background task for receiving messages
         async def receiver():
@@ -2239,13 +2294,39 @@ async def websocket_dashboard(websocket: WebSocket):
 
                 allowed_tokens = _allowed_tokens_cache
 
-                # Build tickers: prefer live prices; fall back to signal entry_price.
+                # Build tickers: prefer live prices; fall back to cached or signal entry_price.
                 # Cast values to float explicitly — engine.live_prices contains numpy.float32.
                 live_tickers = {
                     k: float(v)
                     for k, v in LIVE_STATE.data.get("tickers", {}).items()
                     if k in allowed_tokens
                 }
+                # During engine warmup live_prices is empty; fill from signal entry_price
+                # so the dashboard always shows something meaningful.
+                if not live_tickers:
+                    for _sym, _sig in LIVE_STATE.data.get("signals", {}).items():
+                        if _sym not in allowed_tokens:
+                            continue
+                        _ep = None
+                        if isinstance(_sig, dict):
+                            # flat signal
+                            _ep = _sig.get("entry_price") or _sig.get("price")
+                            if _ep is None:
+                                # nested timeframe dict — pick best available tf
+                                for _tf in ("1h", "30m", "15m", "4h", "1d"):
+                                    _tf_sig = _sig.get(_tf)
+                                    if isinstance(_tf_sig, dict):
+                                        _ep = _tf_sig.get("entry_price") or _tf_sig.get("price")
+                                        if _ep:
+                                            break
+                        if _ep:
+                            live_tickers[_sym] = float(_ep)
+                # Update connection-level cache with any real prices we have
+                if live_tickers:
+                    _cached_tickers.update(live_tickers)
+                elif _cached_tickers:
+                    # No fresh prices — serve stale cache so the UI stays populated
+                    live_tickers = dict(_cached_tickers)
 
                 if tick_count % SIGNAL_EVERY_N == 0:
                     # ── Full signal update (every ~2 s) ──────────────────────────

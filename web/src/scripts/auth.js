@@ -207,7 +207,7 @@ export async function verifyOTPForSignup(email, otp) {
 // ============================================================
 // EMAIL/PASSWORD SIGNUP (called only after OTP is verified)
 // ============================================================
-export async function handleEmailSignup(email, password, displayName, signupToken = null) {
+export async function handleEmailSignup(email, password, displayName, signupToken = null, mobile = null) {
   try {
     if (!email || !password || !displayName) {
       throw new Error('Please fill in all fields');
@@ -223,6 +223,7 @@ export async function handleEmailSignup(email, password, displayName, signupToke
 
     // Store token so provisionUserFromFirebase can present it to the backend
     sessionStorage.setItem('otp_signup_token', signupToken);
+    if (mobile) sessionStorage.setItem('pending_phone', mobile);
 
     // Check if Firebase account already exists for this email
     const methods = await fetchSignInMethodsForEmail(auth, email);

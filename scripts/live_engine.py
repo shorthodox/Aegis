@@ -2222,6 +2222,9 @@ class LiveEngine:
             await asyncio.sleep(1)
 
     async def run(self):
+        # Start fetching live prices immediately so the dashboard shows real prices
+        # during the bootstrap phase rather than waiting for initialize() to complete.
+        self._ticker_task = asyncio.create_task(self._run_ticker_loop())
         await self.initialize()
         logger.info("Entering Main Loop Heartbeat...")
 
@@ -2245,7 +2248,6 @@ class LiveEngine:
 └───────────────────────────────────────────────────────────────────────────────────────────────────┘
 """
         print(guidelines)
-        self._ticker_task = asyncio.create_task(self._run_ticker_loop())
         self._signal_task = asyncio.create_task(self._run_signal_loop())
         self._keyboard_task = asyncio.create_task(self._keyboard_listener())
         await self._display_dashboard()

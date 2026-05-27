@@ -682,12 +682,14 @@ async function provisionUserFromFirebase(firebaseUser, token, attempt = 1) {
         email: firebaseUser.email || null,
         display_name: firebaseUser.displayName || null,
         provider,
-        signup_token: isPasswordUser ? signupToken : null
+        signup_token: isPasswordUser ? signupToken : null,
+        phone_number: sessionStorage.getItem('pending_phone') || null
       })
     });
 
     if (response.ok) {
       sessionStorage.removeItem('otp_signup_token'); // single-use — clear after provisioning
+      sessionStorage.removeItem('pending_phone');
       hideProvisioningState();
       const userData = await response.json();
       // Force-refresh the Firebase ID token so it picks up email_verified=true,
@@ -701,6 +703,19 @@ async function provisionUserFromFirebase(firebaseUser, token, attempt = 1) {
         console.warn('[provision] Token refresh failed, using original token:', e.message);
       }
       applyUserData(userData, freshToken);
+    } else if (response.status === 409) {
+      // Duplicate phone number — account suspended by backend
+      hideProvisioningState();
+      let detail = 'This phone number is already registered to another account.';
+      try { detail = (await response.json()).detail || detail; } catch (_) {}
+      try {
+        const { signOut: _signOut } = await import("https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js");
+        await _signOut(auth);
+      } catch (_) {}
+      localStorage.clear();
+      sessionStorage.clear();
+      alert(detail);
+      redirectToLogin();
     } else if (response.status === 403) {
       // OTP token rejected by backend — never retry, send to signup
       hideProvisioningState();
@@ -1247,11 +1262,13 @@ function updateDashboardData(data) {
   if (data.tickers || window.currentTickers) {
     window.previousTickers = window.currentTickers || {};
     if (data.tickers && Object.keys(data.tickers).length > 0) {
-      window.currentTickers = { ...window.currentTickers, ...data.tickers };
+      window.currentTickers = { ...(window.currentTickers || {}), ...data.tickers };
     }
+    if (!window.currentTickers || typeof window.currentTickers !== 'object') return;
 
     // Defer ticker updates slightly to ensure Reactivity cycle finishes if debouncedFilterAndRenderSignals just fired
     setTimeout(() => {
+      if (!window.currentTickers) return;
       Object.entries(window.currentTickers).forEach(([sym, price]) => {
         const idStr = sym.replace('/', '-');
         const priceDisplays = document.querySelectorAll(`.live-price[data-symbol="${idStr}"]`);
