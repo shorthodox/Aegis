@@ -106,6 +106,26 @@
         .nav-link:hover, .nav-link.active {
             color: var(--primary-cyan, #00f2ff);
         }
+        /* Home-page section links grouped visually together */
+        .nav-home-group {
+            display: flex;
+            align-items: center;
+            gap: 0.1rem;
+            background: rgba(0, 242, 255, 0.05);
+            border: 1px solid rgba(0, 242, 255, 0.14);
+            border-radius: 30px;
+            padding: 0.18rem 0.6rem;
+        }
+        .nav-home-group .nav-link {
+            padding: 0.15rem 0.45rem;
+            font-size: 0.875rem;
+        }
+        .nav-sep {
+            color: rgba(0, 242, 255, 0.25);
+            font-size: 0.75rem;
+            user-select: none;
+            pointer-events: none;
+        }
         .portal-btn {
             background: rgba(0, 242, 255, 0.1);
             border: 1px solid rgba(0, 242, 255, 0.3);
@@ -813,12 +833,17 @@
         <a href="/web/src/pages/index.html" class="logo" style="text-decoration:none;">⚡ AEGIS <span>v1.0</span> <span style="font-size:0.52rem;font-weight:800;font-family:monospace;letter-spacing:0.1em;background:rgba(0,242,255,0.1);border:1px solid rgba(0,242,255,0.3);color:#00f2ff;padding:1px 6px;border-radius:4px;text-transform:uppercase;vertical-align:middle;margin-left:5px;position:relative;top:-1px;">BETA</span></a>
 
         <nav class="nav-links-centered" aria-label="Main navigation">
-            <a href="/web/src/pages/index.html" class="nav-link active">Home</a>
+            <div class="nav-home-group">
+                <a href="/web/src/pages/index.html" class="nav-link active">Home</a>
+                <span class="nav-sep">·</span>
+                <a href="#sentinel" class="nav-link">Sentinel</a>
+                <span class="nav-sep">·</span>
+                <a href="#cockpit" class="nav-link">Cockpit</a>
+                <span class="nav-sep">·</span>
+                <a href="#security" class="nav-link">Security</a>
+            </div>
             <a href="/web/src/pages/review.html" class="nav-link">Reviews</a>
             <a href="/web/src/pages/pricing.html" class="nav-link">Pricing</a>
-            <a href="#sentinel" class="nav-link">Sentinel</a>
-            <a href="#cockpit" class="nav-link">Cockpit</a>
-            <a href="#security" class="nav-link">Security</a>
         </nav>
 
         <div id="authButtonContainer" class="nav-auth-desktop" style="display:flex;align-items:center;gap:0.5rem;">
@@ -843,11 +868,11 @@
 
     <div class="nav-mobile-drawer" id="navMobileDrawer" aria-hidden="true">
         <a href="/web/src/pages/index.html" class="nav-mobile-link mobile-active"><i class="fas fa-home"></i> Home</a>
+        <a href="#sentinel" class="nav-mobile-link" style="padding-left:2.2rem;font-size:0.82rem;opacity:0.85;"><i class="fas fa-satellite-dish"></i> Sentinel</a>
+        <a href="#cockpit" class="nav-mobile-link" style="padding-left:2.2rem;font-size:0.82rem;opacity:0.85;"><i class="fas fa-desktop"></i> Cockpit</a>
+        <a href="#security" class="nav-mobile-link" style="padding-left:2.2rem;font-size:0.82rem;opacity:0.85;"><i class="fas fa-shield-alt"></i> Security</a>
         <a href="/web/src/pages/review.html" class="nav-mobile-link"><i class="fas fa-star"></i> Reviews</a>
         <a href="/web/src/pages/pricing.html" class="nav-mobile-link"><i class="fas fa-tag"></i> Pricing</a>
-        <a href="#sentinel" class="nav-mobile-link"><i class="fas fa-satellite-dish"></i> Sentinel</a>
-        <a href="#cockpit" class="nav-mobile-link"><i class="fas fa-desktop"></i> Cockpit</a>
-        <a href="#security" class="nav-mobile-link"><i class="fas fa-shield-alt"></i> Security</a>
         <div class="nav-mobile-auth">
             <button class="nav-btn-login" id="mPortalProxy"><i class="fas fa-user-shield"></i> Sign In</button>
             <button class="nav-btn-dashboard" id="mDashProxy" style="display:none;"><i class="fas fa-chart-line"></i> Dashboard</button>
