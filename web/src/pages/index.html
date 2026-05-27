@@ -4,10 +4,59 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AEGIS v1.0 | Sovereign Intelligence</title>
-    <link rel="stylesheet" href="/web/dist/styles.css">
+    <!-- Preconnect to external origins so DNS+TLS happens in parallel with HTML parse -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+    <!-- Google Fonts: async (non-blocking) -->
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap"></noscript>
+    <!-- Local CSS: render-blocking but served from same origin (fast) -->
+    <link rel="stylesheet" href="/web/dist/styles.css?v=1.1">
     <link rel="stylesheet" href="/web/src/styles/main.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <link rel="canonical" href="https://gatekeeper.sbs/web/src/pages/index.html">
+    <!-- FontAwesome: async to avoid blocking first paint -->
+    <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"></noscript>
+    <link rel="canonical" href="https://gatekeeper.sbs/">
+    <meta name="author" content="Animesh Kukreti &amp; Aman Juiyal">
+    <meta name="owner" content="Animesh Kukreti &amp; Aman Juiyal">
+    <meta name="description" content="AEGIS v1.0 — Sovereign AI trading signal terminal. Operated by Animesh Kukreti &amp; Aman Juiyal, Dehradun, Uttarakhand, India.">
+    <!-- JSON-LD: machine-readable legal identity for payment gateway compliance -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "Gatekeeper — Aegis-1",
+      "url": "https://gatekeeper.sbs",
+      "description": "AI-powered trading signal terminal",
+      "publisher": {
+        "@type": "Organization",
+        "name": "Gatekeeper (Aegis-1)",
+        "founders": [
+          {
+            "@type": "Person",
+            "name": "Animesh Kukreti",
+            "givenName": "Animesh",
+            "familyName": "Kukreti"
+          },
+          {
+            "@type": "Person",
+            "name": "Aman Juiyal",
+            "givenName": "Aman",
+            "familyName": "Juiyal"
+          }
+        ],
+        "address": {
+          "@type": "PostalAddress",
+          "addressLocality": "Dehradun",
+          "addressRegion": "Uttarakhand",
+          "addressCountry": "IN"
+        },
+        "email": "animeshkukreti@gatekeeper.sbs",
+        "url": "https://gatekeeper.sbs"
+      }
+    }
+    </script>
     <style>
         /* ===== KEEP EXISTING OVERRIDES (header, hero, etc.) ===== */
         .fixed-header {
@@ -1024,13 +1073,11 @@
             <a href="/web/src/pages/refund_policy.html">Refund Policy</a>
             <span class="separator">•</span>
             <a href="/web/src/pages/risk_disclosure.html">Risk Disclosure</a>
-            <span class="separator">•</span>
-            <a href="/web/src/pages/review.html">Reviews</a>
         </div>
         <div class="footer-proprietor">
-            Proprietor: Animesh Kukreti | Dehradun, Uttarakhand, India
+            Operated by <strong>Animesh Kukreti &amp; Aman Juiyal</strong> &nbsp;|&nbsp; Dehradun, Uttarakhand, India
         </div>
-        <p>© 2026 AEGIS v1.0 — Sovereign Intelligence Terminal</p>
+        <p>© 2026 Animesh Kukreti &amp; Aman Juiyal &nbsp;·&nbsp; AEGIS v1.0 — Sovereign Intelligence Terminal</p>
     </footer>
 
     <!-- Main Script - auth clients and UI interactions -->

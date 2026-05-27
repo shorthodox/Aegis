@@ -5,7 +5,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
     <title>AEGIS v1.0 | Sovereign Terminal</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- Preconnect to external origins so DNS+TLS happens in parallel with HTML parse -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+    <!-- Google Fonts: async (non-blocking) -->
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap"></noscript>
     <!-- Screen-mode: apply before paint to prevent flash -->
     <script>
         (function () {
@@ -19,8 +25,11 @@
         })();
     </script>
     <!-- Tailwind CSS: compiled utilities first, then custom design-system on top -->
-    <link rel="stylesheet" href="/web/dist/styles.css">
+    <link rel="stylesheet" href="/web/dist/styles.css?v=1.1">
     <link rel="stylesheet" href="/web/src/styles/main.css">
+    <!-- FontAwesome: async to avoid blocking first paint -->
+    <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"></noscript>
     <style>
         .visible {
             display: block !important;
@@ -281,8 +290,9 @@
 
                     <div class="flex items-center gap-3">
                         <!-- Strategy Matchmaker -->
+                        <label for="strategy-matchmaker" class="sr-only">Risk Profile</label>
                         <select id="strategy-matchmaker"
-                            class="bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 min-h-[36px] text-xs font-bold text-gray-400 focus:outline-none focus:border-cyan appearance-none cursor-pointer hover:text-white transition-colors">
+                            class="bg-black/40 border border-white/10 rounded-lg px-3 py-2 min-h-[36px] text-xs font-bold text-gray-400 focus:outline-none focus:border-cyan appearance-none cursor-pointer hover:text-white transition-colors">
                             <option value="">Select Risk Profile</option>
                             <option value="conservative">Conservative (1:1)</option>
                             <option value="balanced">Balanced (1:1.5)</option>
@@ -321,6 +331,20 @@
                     </div>
                 </div>
 
+                <!-- Token Search Bar -->
+                <div class="token-search-wrap">
+                    <div class="token-search-inner">
+                        <i class="fas fa-search token-search-icon"></i>
+                        <input id="token-search-input" type="text"
+                               placeholder="Search token… BTC, ETH, SOL"
+                               autocomplete="off" spellcheck="false">
+                        <button id="token-search-clear" class="hidden" aria-label="Clear search">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <span id="token-search-count" class="token-search-count"></span>
+                </div>
+
                 <!-- Responsive Grid: 1 col on mobile, 2 or 3 on desktop -->
                 <div id="signalsContainer"
                     class="signals-grid grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
@@ -351,7 +375,7 @@
                         </h3>
                         <div class="space-y-4">
                             <div>
-                                <label class="text-xs text-gray-400 mb-1 block">Account Capital (USDT)</label>
+                                <label for="tr-capital" class="text-xs text-gray-400 mb-1 block">Account Capital (USDT)</label>
                                 <div class="relative">
                                     <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
                                     <input type="number" id="tr-capital" value="10000"
@@ -359,7 +383,7 @@
                                 </div>
                             </div>
                             <div>
-                                <label class="text-xs text-gray-400 mb-1 block">Risk Per Trade</label>
+                                <label for="tr-risk-slider" class="text-xs text-gray-400 mb-1 block">Risk Per Trade</label>
                                 <div class="flex items-center gap-3">
                                     <input type="range" id="tr-risk-slider" min="0.5" max="10" step="0.1" value="2" class="flex-1 accent-cyan">
                                     <span id="tr-risk-display" class="text-cyan font-mono text-sm w-12 text-right">2.0%</span>
@@ -367,17 +391,17 @@
                                 <input type="hidden" id="tr-risk" value="2">
                             </div>
                             <div>
-                                <label class="text-xs text-gray-400 mb-1 block">Leverage</label>
+                                <label for="tr-leverage" class="text-xs text-gray-400 mb-1 block">Leverage</label>
                                 <div class="flex items-center gap-3 mb-2">
                                     <input type="range" id="tr-leverage" min="1" max="50" step="1" value="1" class="flex-1 accent-cyan">
                                     <span id="tr-lev-display" class="text-cyan font-mono text-sm w-12 text-right">1x</span>
                                 </div>
                                 <div class="flex gap-1.5">
-                                    <button class="tr-lev-btn flex-1 py-1.5 text-xs font-bold rounded border bg-cyan/20 border-cyan text-white transition-colors" data-val="1">1x</button>
-                                    <button class="tr-lev-btn flex-1 py-1.5 text-xs font-bold rounded border bg-black/40 border-white/10 text-gray-400 hover:border-cyan/50 hover:text-white transition-colors" data-val="5">5x</button>
-                                    <button class="tr-lev-btn flex-1 py-1.5 text-xs font-bold rounded border bg-black/40 border-white/10 text-gray-400 hover:border-cyan/50 hover:text-white transition-colors" data-val="10">10x</button>
-                                    <button class="tr-lev-btn flex-1 py-1.5 text-xs font-bold rounded border bg-black/40 border-white/10 text-gray-400 hover:border-cyan/50 hover:text-white transition-colors" data-val="25">25x</button>
-                                    <button class="tr-lev-btn flex-1 py-1.5 text-xs font-bold rounded border bg-black/40 border-white/10 text-gray-400 hover:border-cyan/50 hover:text-white transition-colors" data-val="50">50x</button>
+                                    <button class="tr-lev-btn flex-1 py-2.5 min-h-[44px] text-xs font-bold rounded border bg-cyan/20 border-cyan text-white transition-colors" data-val="1">1x</button>
+                                    <button class="tr-lev-btn flex-1 py-2.5 min-h-[44px] text-xs font-bold rounded border bg-black/40 border-white/10 text-gray-400 hover:border-cyan/50 hover:text-white transition-colors" data-val="5">5x</button>
+                                    <button class="tr-lev-btn flex-1 py-2.5 min-h-[44px] text-xs font-bold rounded border bg-black/40 border-white/10 text-gray-400 hover:border-cyan/50 hover:text-white transition-colors" data-val="10">10x</button>
+                                    <button class="tr-lev-btn flex-1 py-2.5 min-h-[44px] text-xs font-bold rounded border bg-black/40 border-white/10 text-gray-400 hover:border-cyan/50 hover:text-white transition-colors" data-val="25">25x</button>
+                                    <button class="tr-lev-btn flex-1 py-2.5 min-h-[44px] text-xs font-bold rounded border bg-black/40 border-white/10 text-gray-400 hover:border-cyan/50 hover:text-white transition-colors" data-val="50">50x</button>
                                 </div>
                             </div>
                             <div class="pt-2 border-t border-white/5">
@@ -394,7 +418,7 @@
                         </h3>
                         <div class="space-y-3 font-mono text-sm">
                             <div>
-                                <label class="text-xs text-gray-500 block mb-1">Symbol</label>
+                                <label for="tr-symbol-select" class="text-xs text-gray-500 block mb-1">Symbol</label>
                                 <select id="tr-symbol-select"
                                     class="w-full bg-black/40 border border-white/5 rounded px-2 py-2 min-h-[44px] text-cyan outline-none appearance-none cursor-pointer focus:border-cyan">
                                     <option value="">Select a signal…</option>
@@ -406,17 +430,17 @@
                             </div>
                             <div class="grid grid-cols-3 gap-2">
                                 <div>
-                                    <label class="text-[10px] text-gray-500 block mb-1">Entry (USDT)</label>
+                                    <label for="tr-entry" class="text-[10px] text-gray-500 block mb-1">Entry (USDT)</label>
                                     <input type="number" id="tr-entry" step="0.0001" placeholder="0.0000"
                                         class="w-full bg-black/50 border border-white/10 rounded px-2 py-2 min-h-[44px] text-white outline-none focus:border-cyan">
                                 </div>
                                 <div>
-                                    <label class="text-[10px] text-gray-500 block mb-1">Stop Loss</label>
+                                    <label for="tr-sl" class="text-[10px] text-gray-500 block mb-1">Stop Loss</label>
                                     <input type="number" id="tr-sl" step="0.0001" placeholder="0.0000"
                                         class="w-full bg-red-900/20 border border-red-500/30 rounded px-2 py-2 min-h-[44px] text-red-400 outline-none">
                                 </div>
                                 <div>
-                                    <label class="text-[10px] text-gray-500 block mb-1">Take Profit</label>
+                                    <label for="tr-tp" class="text-[10px] text-gray-500 block mb-1">Take Profit</label>
                                     <input type="number" id="tr-tp" step="0.0001" placeholder="0.0000"
                                         class="w-full bg-green-900/20 border border-green-500/30 rounded px-2 py-2 min-h-[44px] text-green-400 outline-none">
                                 </div>
@@ -810,9 +834,9 @@
                     <h3 class="text-xl font-black tracking-tight text-white m-0" id="sd-symbol">BTC/USDT</h3>
                     <span class="text-xs text-gray-500" id="sd-timeframe">1h</span>
                 </div>
-                <button id="closeSignalDetailsBtn"
+                <button id="closeSignalDetailsBtn" aria-label="Close signal details"
                     class="text-gray-400 hover:text-white transition-colors w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10">
-                    <i class="fas fa-times"></i>
+                    <i class="fas fa-times" aria-hidden="true"></i>
                 </button>
             </div>
 
@@ -844,6 +868,9 @@
 
             <!-- Body -->
             <div class="p-5 space-y-6">
+                <!-- Signal Status Banner (reversal anticipation states) -->
+                <div id="sd-signal-status" class="hidden"></div>
+
                 <!-- Price & Levels -->
                 <div class="grid grid-cols-2 gap-4">
                     <div class="bg-black/40 p-3 rounded-xl border border-white/5">
@@ -1046,8 +1073,8 @@
     <!-- S&R proximity alert toasts -->
     <div id="sr-alert-toast" aria-live="polite"></div>
 
-    <script type="module" src="../scripts/dashboard.js?v=1.2"></script>
-    <script type="module" src="../scripts/trading-rooms.js?v=1.0"></script>
+    <script type="module" src="../scripts/dashboard.js?v=1.5"></script>
+    <script type="module" src="../scripts/trading-rooms.js?v=1.2"></script>
 
     <!-- Payment return handler: Cashfree _self redirect lands here with ?order_id=... -->
     <script>

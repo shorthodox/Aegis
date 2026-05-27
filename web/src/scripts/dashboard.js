@@ -1,6 +1,19 @@
 import { initializeTrialCountdown, fetchTrialStartFromFirestore } from './trial-countdown.js';
-import { auth, db } from './gatekeeper.js';
+import { auth, db } from './gatekeeper.js?v=2.0';
 import { doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js';
+
+function _showToast(msg, type = 'info') {
+  const existing = document.getElementById('_dash-toast');
+  if (existing) existing.remove();
+  const c = { success: '#10b981', error: '#ef4444', info: '#06b6d4' };
+  const ic = { success: 'fa-check-circle', error: 'fa-exclamation-circle', info: 'fa-info-circle' };
+  const el = document.createElement('div');
+  el.id = '_dash-toast';
+  el.style.cssText = `position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;display:flex;align-items:center;gap:10px;padding:14px 20px;border-radius:12px;background:#111827;border:1px solid ${c[type]};color:${c[type]};font-size:.9rem;font-weight:600;box-shadow:0 0 20px ${c[type]}40;max-width:380px;`;
+  el.innerHTML = `<i class="fas ${ic[type]}"></i><span>${msg}</span>`;
+  document.body.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(() => el.remove(), 300); }, 4000);
+}
 
 // ============================================================
 // SEALED SUBSCRIPTION STATE — console-proof
@@ -191,9 +204,11 @@ function updatePlanBadge(status) {
 // WAIT FOR AUTH STATE CHANGE (replaces polling waitForUserId)
 // ============================================================
 function waitForAuthStateChange() {
+  let timeoutId;
   const authPromise = new Promise((resolve) => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
       unsubscribe();
+      if (timeoutId) clearTimeout(timeoutId);
       if (user?.uid) {
         const status = await checkUserSubscriptionStatus(user.uid);
         _subState.active = (status !== 'expired');
@@ -217,7 +232,7 @@ function waitForAuthStateChange() {
   });
 
   const timeoutPromise = new Promise((resolve) => {
-    setTimeout(() => {
+    timeoutId = setTimeout(() => {
       console.warn('waitForAuthStateChange timeout reached, triggering retry...');
       // Trigger retry mechanism
       const retryUnsubscribe = auth.onAuthStateChanged(async (user) => {
@@ -705,7 +720,7 @@ window._openSignalCardForSymbol = function(sym) {
   if (match && typeof showSignalDetailsModal === 'function') {
     showSignalDetailsModal(match);
   } else {
-    selectToken(sym);
+    window.openSignalDetails(sym, window.activeTimeframe || '1h');
   }
 };
 
@@ -726,10 +741,6 @@ async function setupTrialNonBlocking(userId) {
     setExpiredView();
     return;
   }
-
-  // Only clear expired view if user has a valid subscription or active trial
-  clearExpiredView();
-  unblockFeatures();
 
   if (status === 'paid') {
     document.querySelectorAll('.trial-countdown, [data-trial-countdown], #countdown-display')
@@ -1003,6 +1014,39 @@ window.showSignalDetailsModal = function (signal) {
     badge.className = 'px-2 py-1 rounded text-xs font-bold tracking-wider bg-gray-500/20 text-gray-400 border border-gray-500/30';
   }
 
+  // ── Signal Status Banner (reversal anticipation states) ──
+  const sigStatus = signal.signal_status || 'ACTIVE';
+  let sdStatusEl = document.getElementById('sd-signal-status');
+  if (!sdStatusEl) {
+    sdStatusEl = document.createElement('div');
+    sdStatusEl.id = 'sd-signal-status';
+    const priceRow = document.getElementById('sd-live-price');
+    if (priceRow && priceRow.parentElement && priceRow.parentElement.parentElement) {
+      priceRow.parentElement.parentElement.insertBefore(sdStatusEl, priceRow.parentElement);
+    }
+  }
+  sdStatusEl.innerHTML = '';
+  sdStatusEl.className = 'hidden';
+  if (sigStatus === 'EXPIRED') {
+    sdStatusEl.innerHTML = '<i class="fas fa-clock-rotate-left mr-1"></i>SIGNAL EXPIRED — Move exceeded 60% of target before entry';
+    sdStatusEl.className = 'w-full px-3 py-2 mb-3 rounded-lg text-xs font-bold tracking-wider bg-gray-700/40 text-gray-400 border border-gray-600/40 text-center';
+  } else if (sigStatus === 'AWAITING_CONFIRMATION') {
+    const cc = signal.candles_confirmed || 0;
+    sdStatusEl.innerHTML = '<i class="fas fa-hourglass-half mr-1"></i>CONFIRMING REVERSAL — ' + cc + '/3 candles confirmed';
+    sdStatusEl.className = 'w-full px-3 py-2 mb-3 rounded-lg text-xs font-bold tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/30 text-center';
+  } else if (sigStatus === 'AWAITING_SR_BREAK') {
+    sdStatusEl.innerHTML = '<i class="fas fa-lock mr-1"></i>WAITING FOR SUPPORT BREAK — SELL held until support breaks';
+    sdStatusEl.className = 'w-full px-3 py-2 mb-3 rounded-lg text-xs font-bold tracking-wider bg-orange-500/10 text-orange-400 border border-orange-500/30 text-center';
+  } else if (sigStatus === 'SR_BREAK_CONFIRMED') {
+    sdStatusEl.innerHTML = '<i class="fas fa-unlock mr-1"></i>SUPPORT BROKEN — SELL confirmed after S/R breach';
+    sdStatusEl.className = 'w-full px-3 py-2 mb-3 rounded-lg text-xs font-bold tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-center';
+  } else if (sigStatus === 'CONFIRMED' && (signal.reversal_score || 0) > 0) {
+    const rs = ((signal.reversal_score || 0) * 100).toFixed(0);
+    const tags = (signal.reversal_signals || []).slice(0, 3).join(' · ');
+    sdStatusEl.innerHTML = '<i class="fas fa-rotate-left mr-1"></i>EARLY REVERSAL — Score ' + rs + '% · ' + (tags || 'Technical Setup');
+    sdStatusEl.className = 'w-full px-3 py-2 mb-3 rounded-lg text-xs font-bold tracking-wider bg-cyan/10 text-cyan border border-cyan/30 text-center';
+  }
+
   // Price & Levels
   const currentPrice = window.currentTickers && window.currentTickers[signal.symbol]
     ? parseFloat(window.currentTickers[signal.symbol])
@@ -1049,7 +1093,10 @@ window.showSignalDetailsModal = function (signal) {
   }
 
   let _shapLeadHTML = '';
-  const _probs = signal.probabilities || { SHORT: 0.18, HOLD: 0.08, LONG: 0.74 };
+  const _rawP = signal.raw_probabilities;
+  const _probs = _rawP
+    ? { SHORT: (_rawP.SHORT||0)/100, HOLD: (_rawP.HOLD||0)/100, LONG: (_rawP.LONG||0)/100 }
+    : { SHORT: 0.18, HOLD: 0.08, LONG: 0.74 };
   const _lead = Object.entries(_probs).sort((a,b) => b[1]-a[1])[0];
   const _leadPct = (_lead[1]*100).toFixed(0);
   const _leadColor = _lead[0]==='LONG' ? 'text-green-400' : _lead[0]==='SHORT' ? 'text-red-400' : 'text-gray-400';
@@ -1174,14 +1221,17 @@ window.showSignalDetailsModal = function (signal) {
     footerActions.innerHTML = `
       <div class="flex flex-col gap-2">
         <div class="flex gap-2">
-          <button id="sd-execute-btn"
-            class="flex-1 bg-gradient-to-r from-cyan to-blue-600 text-white font-bold py-3 rounded-xl uppercase tracking-wider text-sm shadow-[0_0_15px_rgba(0,242,255,0.3)] hover:-translate-y-0.5 transform transition-all">
-            <i class="fas fa-satellite-dish mr-2"></i>Execute with API
-          </button>
           <button id="sd-paper-trade-btn"
-            class="px-5 bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl uppercase tracking-wider text-sm border border-white/20 transition-colors whitespace-nowrap">
-            <i class="fas fa-play-circle mr-1"></i>Paper
+            class="flex-1 bg-gradient-to-r from-cyan to-blue-600 text-white font-bold py-3 rounded-xl uppercase tracking-wider text-sm shadow-[0_0_15px_rgba(0,242,255,0.3)] hover:-translate-y-0.5 transform transition-all">
+            <i class="fas fa-play-circle mr-2"></i>Paper Trade
           </button>
+          <button id="sd-execute-btn"
+            class="px-5 bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl uppercase tracking-wider text-sm border border-white/20 transition-colors whitespace-nowrap">
+            <i class="fas fa-satellite-dish mr-1"></i>Demat
+          </button>
+        </div>
+        <div class="text-center text-[10px] text-gray-500 py-0.5">
+          Prefer advanced charts? <a href="https://www.tradingview.com/paper-trading/" target="_blank" rel="noopener noreferrer" class="text-cyan/70 hover:text-cyan underline">Try TradingView Paper Trading</a>
         </div>
         ${isPro ? `
         <div class="flex gap-2">
@@ -1248,22 +1298,29 @@ window.showSignalDetailsModal = function (signal) {
         
         btn.innerHTML = '<i class="fas fa-check mr-2"></i>Sent to Demat';
         setTimeout(() => {
-            modal.classList.add('hidden');
+            document.getElementById('token-details-modal')?.classList.add('hidden');
+            document.getElementById('signalDetailsModal')?.classList.add('hidden');
         }, 1500);
       } catch (err) {
         console.error('Failed to execute trade:', err);
         alert('Trade API execution failed: ' + err.message);
         const btn = document.getElementById('sd-execute-btn');
-        btn.innerHTML = '<i class="fas fa-satellite-dish mr-2"></i>Execute with API';
+        btn.innerHTML = '<i class="fas fa-satellite-dish mr-1"></i>Demat';
         btn.disabled = false;
       }
     });
 
-    document.getElementById('sd-paper-trade-btn')?.addEventListener('click', () => {
-      modal.classList.add('hidden');
-      if (typeof window.initiatePaperTrade === 'function') {
-        window.initiatePaperTrade(signal.symbol, signal.entry_price || 0, signal.sl || 0, signal.tp || 0);
-      }
+    document.getElementById('sd-paper-trade-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // Close both modal layers explicitly — don't rely on closure variable
+      const _mw = document.getElementById('token-details-modal');
+      const _mi = document.getElementById('signalDetailsModal');
+      if (_mw) _mw.classList.add('hidden');
+      if (_mi) _mi.classList.add('hidden');
+      if (typeof window.addToSignalHistory === 'function') window.addToSignalHistory(signal);
+      if (typeof window.switchRoom === 'function') window.switchRoom('terminal');
+      // Prefill AFTER room switch so inputs are in the active room
+      if (typeof window.prefillFromSignal === 'function') window.prefillFromSignal(signal);
     });
 
     document.getElementById('sd-copy-signal-btn')?.addEventListener('click', () => {
@@ -1272,8 +1329,10 @@ window.showSignalDetailsModal = function (signal) {
         .catch(() => _showToast('Copy failed — check browser permissions', 'error'));
     });
 
-    document.getElementById('sd-view-analytics-btn')?.addEventListener('click', () => {
-      modal.classList.add('hidden');
+    document.getElementById('sd-view-analytics-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.getElementById('token-details-modal')?.classList.add('hidden');
+      document.getElementById('signalDetailsModal')?.classList.add('hidden');
       if (typeof window.switchRoom === 'function') window.switchRoom('analytics');
     });
   }
@@ -1281,20 +1340,24 @@ window.showSignalDetailsModal = function (signal) {
   modal.classList.remove('hidden');
 }
 
+function _closeSignalModal() {
+  document.getElementById('token-details-modal')?.classList.add('hidden');
+  document.getElementById('signalDetailsModal')?.classList.add('hidden');
+}
+
 function initModals() {
-  const modal = document.getElementById('token-details-modal') || document.getElementById('signalDetailsModal');
+  const wrapper = document.getElementById('token-details-modal');
   const closeBtn = document.getElementById('closeSignalDetailsBtn');
 
   if (closeBtn) {
-    closeBtn.addEventListener('click', () => {
-      modal.classList.add('hidden');
+    closeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      _closeSignalModal();
     });
   }
 
-  if (modal) {
-    // Single delegating listener: feature-card clicks are caught first so inner
-    // elements never accidentally trigger the backdrop-close branch.
-    modal.addEventListener('click', (e) => {
+  if (wrapper) {
+    wrapper.addEventListener('click', (e) => {
       const card = e.target.closest('[data-open-panel], .feature-card-trigger');
       if (card) {
         const panelId = card.dataset.openPanel || card.dataset.target;
@@ -1303,8 +1366,9 @@ function initModals() {
         }
         return;
       }
-      if (e.target === modal) {
-        modal.classList.add('hidden');
+      // Close when clicking the backdrop (not the inner card)
+      if (e.target === wrapper) {
+        _closeSignalModal();
       }
     });
   }
@@ -1500,9 +1564,19 @@ function _renderFpZones(body, signal, tier) {
   const currentPrice = window.currentTickers?.[signal.symbol]
     ? parseFloat(window.currentTickers[signal.symbol]) : entry;
 
-  const range = tp - sl;
-  const entryPct = range > 0 ? ((entry - sl) / range * 100) : 50;
-  const curPct = range > 0 ? Math.max(0, Math.min(100, (currentPrice - sl) / range * 100)) : 50;
+  const isLongDir = (signal.direction || 'LONG') === 'LONG';
+  const hasZone = sl > 0 && tp > 0 && Math.abs(tp - sl) > 1e-10;
+  const absRange = hasZone ? Math.abs(tp - sl) : 1;
+  const entryPct = hasZone
+    ? (isLongDir
+        ? Math.max(2, Math.min(98, ((entry - sl) / absRange * 100)))
+        : Math.max(2, Math.min(98, ((sl - entry) / absRange * 100))))
+    : 50;
+  const curPct = hasZone
+    ? (isLongDir
+        ? Math.max(2, Math.min(98, ((currentPrice - sl) / absRange * 100)))
+        : Math.max(2, Math.min(98, ((sl - currentPrice) / absRange * 100))))
+    : 50;
 
   const lockOverlay = locked ? `
     <div class="absolute inset-0 bg-black/80 backdrop-blur-md rounded-xl flex flex-col items-center justify-center z-10">
@@ -1563,7 +1637,7 @@ function _renderFpZones(body, signal, tier) {
           <div class="bg-black/40 p-4 rounded-xl border border-white/5 text-center">
             <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Risk/Reward</div>
             <div class="text-xl font-black font-mono text-cyan">
-              ${sl && tp && entry ? `1:${((tp - entry) / (entry - sl)).toFixed(2)}` : '&mdash;'}
+              ${hasZone && entry > sl ? `1:${((tp - entry) / (entry - sl)).toFixed(2)}` : '&mdash;'}
             </div>
           </div>
         </div>
@@ -1583,7 +1657,7 @@ function _renderFpZones(body, signal, tier) {
         </div>
         ${(() => {
           const _isLong = (signal.direction || 'LONG') === 'LONG';
-          const _rrRaw = (sl && tp && entry) ? ((tp - entry) / (entry - sl)) : 0;
+          const _rrRaw = hasZone && entry > sl ? ((tp - entry) / (entry - sl)) : 0;
           const _rr = _rrRaw.toFixed(2);
           const _vc = _rrRaw >= 2 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
             : _rrRaw >= 1.5 ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
@@ -1629,9 +1703,17 @@ function _renderFpZones(body, signal, tier) {
     const el = body.querySelector('#fp-zone-price');
     if (el) el.textContent = `$${p.toFixed(4)}`;
     const dot = body.querySelector('#fp-zone-dot');
-    if (dot && sl && tp) {
-      const newPct = Math.max(2, Math.min(98, (p - sl) / (tp - sl) * 100));
-      dot.style.left = `${newPct.toFixed(1)}%`;
+    if (dot) {
+      if (hasZone) {
+        const isLDiv = (signal.direction || 'LONG') === 'LONG';
+        const absR = Math.abs(tp - sl);
+        const newPct = isLDiv
+          ? Math.max(2, Math.min(98, (p - sl) / absR * 100))
+          : Math.max(2, Math.min(98, (sl - p) / absR * 100));
+        dot.style.left = `${newPct.toFixed(1)}%`;
+      } else {
+        dot.style.left = '50%';
+      }
     }
   };
   window.addEventListener('priceUpdate', body._zonePriceHandler);
@@ -1743,18 +1825,24 @@ function _renderFpExpectancy(body, signal, tier) {
 function _renderFpShap(body, signal, tier) {
   const locked = tier !== 'PRO';
 
-  const probs = signal.probabilities || { SHORT: 0.18, HOLD: 0.08, LONG: 0.74 };
+  const _rp = signal.raw_probabilities;
+  const probs = _rp
+    ? { SHORT: (_rp.SHORT||0)/100, HOLD: (_rp.HOLD||0)/100, LONG: (_rp.LONG||0)/100 }
+    : { SHORT: 0.18, HOLD: 0.08, LONG: 0.74 };
   const leadEntry = Object.entries(probs).sort((a,b) => b[1]-a[1])[0];
   const leadClass = leadEntry[0] === 'LONG' ? 'text-green-400' : leadEntry[0] === 'SHORT' ? 'text-red-400' : 'text-gray-400';
   const leadPct = (leadEntry[1] * 100).toFixed(1);
 
-  const shapValues = signal.shap_values || [
-    { feature: 'Volume Delta 1h', value: 0.34, direction: 'long' },
-    { feature: 'BTC Anchor Distance', value: -0.21, direction: 'short' },
-    { feature: 'EMA 200 Confluence', value: 0.18, direction: 'long' },
-    { feature: 'RSI Regime 4h', value: 0.15, direction: 'long' },
-    { feature: 'Liq. Block Density', value: -0.09, direction: 'short' },
-  ];
+  const _shapContribs = signal.shap_contributions;
+  const shapValues = (_shapContribs && _shapContribs.length > 0)
+    ? _shapContribs.map(s => ({ feature: s.feature, value: s.impact }))
+    : [
+      { feature: 'Volume Delta 1h', value: 0.34 },
+      { feature: 'BTC Anchor Distance', value: -0.21 },
+      { feature: 'EMA 200 Confluence', value: 0.18 },
+      { feature: 'RSI Regime 4h', value: 0.15 },
+      { feature: 'Liq. Block Density', value: -0.09 },
+    ];
 
   const lockOverlay = locked ? `
     <div class="absolute inset-0 bg-black/80 backdrop-blur-md rounded-xl flex flex-col items-center justify-center z-10">
@@ -1990,4 +2078,104 @@ window.addEventListener('priceUpdate', (e) => {
 async function renderExpectancyPanel() {
   // no-op: superseded by _renderFpExpectancy / openFeaturePanel('fp-expectancy')
 }
+
+// ── TOKEN SEARCH ─────────────────────────────────────────────────────────────
+
+let _tokenSearchQuery = '';
+
+function _applyTokenSearch(query) {
+  _tokenSearchQuery = (query || '').toLowerCase().trim();
+
+  const container  = document.getElementById('signalsContainer');
+  const countEl    = document.getElementById('token-search-count');
+  const clearBtn   = document.getElementById('token-search-clear');
+  if (!container) return;
+
+  if (clearBtn) clearBtn.classList.toggle('hidden', !_tokenSearchQuery);
+
+  const cards = container.querySelectorAll('[data-symbol]');
+  let visible = 0;
+
+  cards.forEach(card => {
+    const sym = (card.dataset.symbol || '').toLowerCase();
+    const match = !_tokenSearchQuery || sym.includes(_tokenSearchQuery);
+    card.style.display = match ? '' : 'none';
+    if (match) visible++;
+  });
+
+  // Count label
+  if (countEl) {
+    if (cards.length > 0) {
+      countEl.textContent = _tokenSearchQuery
+        ? `${visible} / ${cards.length}`
+        : `${cards.length} tokens`;
+      countEl.classList.toggle('has-query', !!_tokenSearchQuery && visible < cards.length);
+    } else {
+      countEl.textContent = '';
+      countEl.classList.remove('has-query');
+    }
+  }
+
+  // "No results" placeholder
+  let noResult = container.querySelector('.search-no-result');
+  if (cards.length > 0 && visible === 0 && _tokenSearchQuery) {
+    if (!noResult) {
+      noResult = document.createElement('div');
+      noResult.className = 'no-signals search-no-result';
+      noResult.style.gridColumn = '1 / -1';
+      container.appendChild(noResult);
+    }
+    noResult.innerHTML = `
+      <i class="fas fa-search" style="font-size:1.6rem;opacity:.35;margin-bottom:10px"></i>
+      <p>No token matches "<strong style="color:var(--primary-cyan)">${_tokenSearchQuery.toUpperCase()}</strong>"</p>`;
+  } else if (noResult) {
+    noResult.remove();
+  }
+}
+
+// Wire up once DOM is ready
+(function _initTokenSearch() {
+  function attach() {
+    const input   = document.getElementById('token-search-input');
+    const clear   = document.getElementById('token-search-clear');
+    const container = document.getElementById('signalsContainer');
+
+    if (input) {
+      input.addEventListener('input', e => _applyTokenSearch(e.target.value));
+
+      // Keyboard shortcut: Escape clears the search
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Escape') { input.value = ''; _applyTokenSearch(''); }
+      });
+    }
+
+    if (clear) {
+      clear.addEventListener('click', () => {
+        const inp = document.getElementById('token-search-input');
+        if (inp) { inp.value = ''; inp.focus(); }
+        _applyTokenSearch('');
+      });
+    }
+
+    // Re-apply filter after every signal render (renderSignals replaces innerHTML)
+    if (container) {
+      new MutationObserver(() => {
+        const countEl = document.getElementById('token-search-count');
+        if (_tokenSearchQuery) {
+          _applyTokenSearch(_tokenSearchQuery);
+        } else if (countEl) {
+          const cards = container.querySelectorAll('[data-symbol]');
+          countEl.textContent = cards.length > 0 ? `${cards.length} tokens` : '';
+          countEl.classList.remove('has-query');
+        }
+      }).observe(container, { childList: true });
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', attach);
+  } else {
+    attach();
+  }
+}());
 

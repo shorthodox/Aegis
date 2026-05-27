@@ -19,7 +19,6 @@ import {
   RecaptchaVerifier,
   updateProfile,
   fetchSignInMethodsForEmail,
-  sendPasswordResetEmail,
   onAuthStateChanged,
   GoogleAuthProvider
 } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
@@ -172,51 +171,88 @@ export async function handleGoogleAuth() {
 // ============================================================
 // EMAIL/PASSWORD SIGNUP
 // ============================================================
-export async function handleEmailSignup(email, password, displayName) {
+// ============================================================
+// OTP helpers — call backend before creating Firebase account
+// ============================================================
+export async function sendOTPForSignup(email) {
+  try {
+    const res = await fetch('/auth/send-otp-for-registration', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    const data = await res.json();
+    if (!res.ok) return { success: false, message: data.detail || 'Failed to send OTP' };
+    return { success: true, message: data.message };
+  } catch {
+    return { success: false, message: 'Network error. Please try again.' };
+  }
+}
+
+export async function verifyOTPForSignup(email, otp) {
+  try {
+    const res = await fetch('/auth/verify-otp-for-registration', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, otp })
+    });
+    const data = await res.json();
+    if (!res.ok) return { success: false, message: data.detail || 'Invalid OTP' };
+    return { success: true, signup_token: data.signup_token };
+  } catch {
+    return { success: false, message: 'Network error. Please try again.' };
+  }
+}
+
+// ============================================================
+// EMAIL/PASSWORD SIGNUP (called only after OTP is verified)
+// ============================================================
+export async function handleEmailSignup(email, password, displayName, signupToken = null, mobile = null) {
   try {
     if (!email || !password || !displayName) {
       throw new Error('Please fill in all fields');
     }
-    
+
     if (password.length < 8) {
       throw new Error('Password must be at least 8 characters');
     }
-    
-    console.log('📝 Creating email account...');
-    
-    // Check if email already exists
+
+    if (!signupToken) {
+      throw new Error('Email verification required before creating an account.');
+    }
+
+    // Store token so provisionUserFromFirebase can present it to the backend
+    sessionStorage.setItem('otp_signup_token', signupToken);
+    if (mobile) sessionStorage.setItem('pending_phone', mobile);
+
+    // Check if Firebase account already exists for this email
     const methods = await fetchSignInMethodsForEmail(auth, email);
     if (methods.length > 0) {
-      throw new Error('Email already in use. Please try logging in instead.');
+      throw new Error('Email already in use. Please sign in instead.');
     }
-    
-    // Create user
+
+    // OTP already proved email is reachable — create account and sign in directly
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
-    
-    // Update profile
+
     await updateProfile(user, {
       displayName: displayName,
       photoURL: `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=00f2ff&color=000`
     });
-    
-    // Create user document in Firestore
+
+    // Create Firestore document immediately (email was verified via OTP)
     const userData = await ensureUserDocumentV2(user, 'email');
-    
-    // Store token
+
     const idToken = await user.getIdToken();
     AuthManager.setToken(idToken);
     AuthManager.setUser(userData);
     localStorage.setItem('authenticated', 'true');
-    
+
     console.log('✅ Email signup successful:', email);
     return { success: true, user, message: 'Account created successfully!', userData };
   } catch (error) {
     console.error('❌ Email signup error:', error.code, error.message);
-    return { 
-      success: false, 
-      message: error.message || 'Signup failed'
-    };
+    return { success: false, message: error.message || 'Signup failed' };
   }
 }
 
@@ -228,36 +264,50 @@ export async function handleEmailLogin(email, password) {
     if (!email || !password) {
       throw new Error('Please enter email and password');
     }
-    
+
     console.log('🔐 Logging in with email...');
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
-    
-    // Update user document
+
+    // Gate: check Firestore — only users who completed OTP-verified signup exist here
+    const userDocRef = doc(db, 'users', user.uid);
+    const docSnap = await getDoc(userDocRef);
+    if (!docSnap.exists()) {
+      await signOut(auth);
+      return {
+        success: false,
+        needsSignup: true,
+        message: 'No account found for this email. Please create an account first.'
+      };
+    }
+
+    // Firestore doc confirmed — update last login
     const userData = await ensureUserDocumentV2(user, 'email');
-    
+
     // Store token
     const idToken = await user.getIdToken();
     AuthManager.setToken(idToken);
     AuthManager.setUser(userData);
     localStorage.setItem('authenticated', 'true');
-    
+
     console.log('✅ Email login successful:', email);
     return { success: true, user, message: 'Logged in successfully!', userData };
   } catch (error) {
     console.error('❌ Email login error:', error.code, error.message);
-    
+
     let userMessage = 'Login failed';
     if (error.code === 'auth/user-not-found') {
-      userMessage = 'Email not found. Please sign up instead.';
-    } else if (error.code === 'auth/wrong-password') {
+      userMessage = 'No account found with this email. Please sign up first.';
+    } else if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
       userMessage = 'Incorrect password. Please try again.';
     } else if (error.code === 'auth/invalid-email') {
       userMessage = 'Invalid email address.';
+    } else if (error.code === 'auth/too-many-requests') {
+      userMessage = 'Too many failed attempts. Please try again later.';
     }
-    
-    return { 
-      success: false, 
+
+    return {
+      success: false,
       message: userMessage
     };
   }
@@ -385,23 +435,22 @@ export async function handleLogout() {
 // ============================================================
 // PASSWORD RESET
 // ============================================================
+// Routed through backend so the email arrives from our trusted Neo domain
+// (animeshkukreti@gatekeeper.sbs) instead of Firebase's noreply address.
 export async function handlePasswordReset(email) {
   try {
     if (!email) throw new Error('Email required');
-    
-    console.log('📧 Sending password reset email...');
-    await sendPasswordResetEmail(auth, email);
-    console.log('✅ Password reset email sent');
-    return { 
-      success: true, 
-      message: 'Check your email for password reset link'
-    };
+    const res = await fetch('/auth/send-password-reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    const data = await res.json();
+    if (!res.ok) return { success: false, message: data.detail || 'Failed to send reset email' };
+    return { success: true, message: data.message };
   } catch (error) {
     console.error('❌ Password reset error:', error);
-    return { 
-      success: false, 
-      message: error.message || 'Failed to send reset email'
-    };
+    return { success: false, message: 'Network error. Please try again.' };
   }
 }
 

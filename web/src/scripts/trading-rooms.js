@@ -196,23 +196,36 @@ function _executePaperTrade() {
   const tp    = parseFloat(document.getElementById('tr-tp')?.value);
   if (!entry || !sl || !tp) { _toast('Fill in Entry, SL and TP', 'error'); return; }
 
-  const { direction } = _calcPos({ capital: 10000, riskPct: 2, entry, sl, tp, leverage: 1 });
+  // Use live price as the actual execution price so P&L starts at $0.
+  // The signal's entry_price may be stale; we fill at the current market price.
+  const livePrice = window.currentTickers?.[symbol]
+    ? parseFloat(window.currentTickers[symbol])
+    : entry;
+  const execEntry = (livePrice > 0 && isFinite(livePrice)) ? livePrice : entry;
+
+  // Update the entry field to show what we actually executed at
+  _setVal('tr-entry', execEntry.toFixed(4));
+
+  const capital  = parseFloat(document.getElementById('tr-capital')?.value  || 10000);
+  const riskPct  = parseFloat(document.getElementById('tr-risk')?.value     || 2);
+  const leverage = parseFloat(document.getElementById('tr-leverage')?.value || 1);
+  const { direction, posUnits } = _calcPos({ capital, riskPct, entry: execEntry, sl, tp, leverage });
 
   const trade = {
     id: `paper-${Date.now()}`,
     type: 'paper',
     symbol,
-    side: direction || (sl < entry ? 'LONG' : 'SHORT'),
-    entryPrice: entry,
+    side: direction || (sl < execEntry ? 'LONG' : 'SHORT'),
+    entryPrice: execEntry,
     stopLoss: sl,
     takeProfit: tp,
-    positionUnits: parseFloat(document.getElementById('tr-pos-units')?.textContent || '0') || 1,
+    positionUnits: posUnits || parseFloat(document.getElementById('tr-pos-units')?.textContent || '0') || 1,
     openTime: new Date().toISOString(),
   };
 
   _paperTrades.unshift(trade);
   _renderAllTrades();
-  _toast(`Paper trade opened for ${symbol}`, 'success');
+  _toast(`Paper trade opened for ${symbol} @ $${execEntry.toFixed(4)}`, 'success');
 }
 
 // ── Trade rendering ──────────────────────────────────────────────────────────
@@ -233,6 +246,28 @@ function _renderAllTrades() {
   const all = [..._paperTrades, ..._liveTradesCache];
   _renderPositionCards(all);
   _renderTradesTable(all);
+  _updateAnalytics(all);
+}
+
+function _updateAnalytics(all) {
+  const capital = parseFloat(document.getElementById('tr-capital')?.value || 10000);
+  const paperOpen = (all || []).filter(t => String(t.id || '').startsWith('paper-'));
+  const allocated = paperOpen.reduce((sum, t) => sum + (t.positionUnits || 1) * (t.entryPrice || 0), 0);
+  const remaining = Math.max(0, capital - allocated);
+
+  const balEl = document.getElementById('balanceDisplay');
+  if (balEl) balEl.textContent = `$${remaining.toFixed(2)}`;
+  const capEl = document.getElementById('capitalDisplay');
+  if (capEl) capEl.textContent = `$${capital.toLocaleString()}`;
+
+  // Engine performance: sum unrealised P&L across all open trades
+  const totalPnl = (all || []).reduce((sum, t) => sum + _pnl(t), 0);
+  const perfEl = document.getElementById('enginePnlDisplay');
+  if (perfEl) {
+    perfEl.textContent = `${totalPnl >= 0 ? '+' : ''}$${totalPnl.toFixed(2)}`;
+    perfEl.className = perfEl.className.replace(/text-(green|red)-\d+/, '');
+    perfEl.classList.add(totalPnl >= 0 ? 'text-green-400' : 'text-red-400');
+  }
 }
 
 function _pnl(trade) {
@@ -399,7 +434,7 @@ function _renderSignalHistory() {
         <div class="flex gap-1.5 flex-nowrap">
           <button onclick="window.trFromHistory(${i},'real')"
             class="text-[10px] px-2 py-1.5 rounded bg-cyan/20 text-cyan border border-cyan/30 hover:bg-cyan/40 transition-colors font-bold whitespace-nowrap">
-            <i class="fas fa-rocket mr-1"></i>Real
+            <i class="fas fa-satellite-dish mr-1"></i>Demat
           </button>
           <button onclick="window.trFromHistory(${i},'paper')"
             class="text-[10px] px-2 py-1.5 rounded bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 hover:bg-yellow-500/40 transition-colors font-bold whitespace-nowrap">
@@ -515,6 +550,10 @@ function initTradingRooms() {
   window.addToSignalHistory  = addToSignalHistory;
   window.prefillFromSignal   = prefillFromSignal;
   window.trFromHistory       = _fromHistory;
+  window.initiatePaperTrade  = (symbol, entry, sl, tp) => {
+    prefillFromSignal({ symbol, entry_price: entry, sl, tp });
+    if (typeof window.switchRoom === 'function') window.switchRoom('terminal');
+  };
 }
 
 // Auto-init when the module loads (same pattern as gatekeeper.js / dashboard.js)

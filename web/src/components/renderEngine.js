@@ -124,27 +124,67 @@ export class RenderEngine {
         
         let html = '';
         signals.forEach(sig => {
-            // Tailwind adapted styling for signal cards
-            const sigClass = sig.signal.includes('BUY') ? 'bg-cyan/20 text-cyan border-cyan/50' : (sig.signal.includes('SELL') ? 'bg-red-500/20 text-red-400 border-red-500/50' : 'bg-gray-500/20 text-gray-400 border-gray-500/50');
+            const status = sig.signal_status || 'ACTIVE';
+            const isExpired = status === 'EXPIRED';
+            const isAwaitingConfirm = status === 'AWAITING_CONFIRMATION';
+            const isAwaitingSR = status === 'AWAITING_SR_BREAK';
+            const isSRBreak = status === 'SR_BREAK_CONFIRMED';
+
+            // Card border and signal badge colour
+            let borderCls = 'border-white/10';
+            let sigClass = 'bg-gray-500/20 text-gray-400 border-gray-500/50';
+            if (isExpired) {
+                borderCls = 'border-gray-600/40';
+                sigClass = 'bg-gray-700/30 text-gray-500 border-gray-600/40';
+            } else if (isAwaitingConfirm || isAwaitingSR) {
+                borderCls = 'border-amber-500/30';
+                sigClass = 'bg-amber-500/10 text-amber-400 border-amber-500/30';
+            } else if (sig.signal && sig.signal.includes('BUY')) {
+                borderCls = 'border-cyan/30';
+                sigClass = 'bg-cyan/20 text-cyan border-cyan/50';
+            } else if (sig.signal && sig.signal.includes('SELL')) {
+                borderCls = 'border-red-500/30';
+                sigClass = 'bg-red-500/20 text-red-400 border-red-500/50';
+            }
+
             const confColor = sig.confidence > 0.8 ? 'text-green-400' : (sig.confidence > 0.5 ? 'text-orange' : 'text-red-400');
             const timeAgoStr = this.timeAgo(sig.time);
-            const isRecent = timeAgoStr.includes('s') || timeAgoStr.includes('m ago');
-            const rowAnim = isRecent ? 'animate-pulse shadow-[0_0_15px_rgba(255,255,255,0.1)]' : '';
-            
+            const isRecent = !isExpired && (timeAgoStr.includes('s') || timeAgoStr.includes('m ago'));
+            const rowAnim = isRecent ? 'animate-pulse shadow-[0_0_15px_rgba(255,255,255,0.05)]' : '';
+
+            // Status badge shown below the signal type badge
+            let statusBadge = '';
+            if (isExpired) {
+                statusBadge = `<span class="text-[10px] font-bold px-2 py-0.5 rounded border bg-gray-700/30 text-gray-500 border-gray-600/40 tracking-wider">SIGNAL EXPIRED</span>`;
+            } else if (isAwaitingConfirm) {
+                const confirmed = sig.candles_confirmed || 0;
+                statusBadge = '<span class="text-[10px] font-bold px-2 py-0.5 rounded border bg-amber-500/10 text-amber-400 border-amber-500/30 tracking-wider">⏳ ' + confirmed + '/3 CANDLES</span>';
+            } else if (isAwaitingSR) {
+                statusBadge = `<span class="text-[10px] font-bold px-2 py-0.5 rounded border bg-orange-500/10 text-orange-400 border-orange-500/30 tracking-wider">🔐 WAIT S/R BREAK</span>`;
+            } else if (isSRBreak) {
+                statusBadge = `<span class="text-[10px] font-bold px-2 py-0.5 rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/30 tracking-wider">✅ S/R BROKEN</span>`;
+            } else if (status === 'CONFIRMED' && sig.reversal_score > 0) {
+                statusBadge = `<span class="text-[10px] font-bold px-2 py-0.5 rounded border bg-cyan/10 text-cyan border-cyan/30 tracking-wider">↩ REVERSAL</span>`;
+            }
+
             const sigJsonStr = JSON.stringify(sig).replace(/'/g, "\\'");
-            
+            const opacity = isExpired ? 'opacity-50' : '';
+
             html += `
-                <div class="bg-black/60 border border-white/10 rounded-xl p-4 cursor-pointer hover:border-cyan/50 hover:bg-white/5 transition-all transform hover:-translate-y-1 overflow-hidden flex flex-col gap-3 ${rowAnim}" onclick='document.dispatchEvent(new CustomEvent("signalRowClicked", {detail: ${sigJsonStr}}))'>
-                    <div class="flex justify-between items-center">
+                <div class="bg-black/60 border ${borderCls} rounded-xl p-4 cursor-pointer hover:border-cyan/50 hover:bg-white/5 transition-all transform hover:-translate-y-1 overflow-hidden flex flex-col gap-3 ${rowAnim} ${opacity}" onclick='document.dispatchEvent(new CustomEvent("signalRowClicked", {detail: ${sigJsonStr}}))'>
+                    <div class="flex justify-between items-start gap-2">
                         <span class="font-bold text-lg font-mono text-white">${sig.pair}</span>
-                        <span class="px-2 py-0.5 rounded text-xs font-bold border ${sigClass}">${sig.signal}</span>
+                        <div class="flex flex-col items-end gap-1">
+                            <span class="px-2 py-0.5 rounded text-xs font-bold border ${sigClass}">${isExpired ? 'EXPIRED' : (sig.signal || 'HOLD')}</span>
+                            ${statusBadge}
+                        </div>
                     </div>
-                    
+
                     <div class="flex justify-between items-center text-sm">
                         <span class="text-gray-500">Entry</span>
-                        <span class="font-mono text-white">${sig.entry ? sig.entry.toFixed(4) : '-'}</span>
+                        <span class="font-mono ${isExpired ? 'text-gray-500 line-through' : 'text-white'}">${sig.entry ? sig.entry.toFixed(4) : '-'}</span>
                     </div>
-                    
+
                     <div class="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-white/5">
                         <div class="flex flex-col">
                             <span class="text-gray-500">Stop Loss</span>

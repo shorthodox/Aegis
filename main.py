@@ -11,9 +11,11 @@ load_dotenv()
 import asyncio
 import json
 import re
+import uuid
 import random
 import string
 import time
+import urllib.parse
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Any, Optional, List, TYPE_CHECKING, Union
@@ -37,6 +39,9 @@ import uvicorn
 from dataclasses import asdict
 from starlette.middleware.sessions import SessionMiddleware
 import numpy as np
+from email_validator import validate_email, EmailNotValidError
+from functools import partial
+from generate_dev_code import generate_dev_key
 
 # -------------------------------------------------------------------
 # Helper: Recursively convert numpy types to native Python types
@@ -60,19 +65,6 @@ def numpy_to_native(obj) -> Any:
     return obj
 
 # -------------------------------------------------------------------
-# Cashfree PG SDK imports
-# -------------------------------------------------------------------
-try:
-    from cashfree_pg.api_client import Cashfree
-    from cashfree_pg.models.create_order_request import CreateOrderRequest
-    from cashfree_pg.models.customer_details import CustomerDetails
-    from cashfree_pg.models.create_subscription_payment_request import CreateSubscriptionPaymentRequest
-    CASHFREE_SDK_AVAILABLE = True
-except ImportError:
-    CASHFREE_SDK_AVAILABLE = False
-    print("[WARNING] Cashfree PG SDK not installed. Install with: pip install cashfree-pg")
-
-# -------------------------------------------------------------------
 # Security: JWT & Algorithm must be from environment
 # -------------------------------------------------------------------
 SECRET_KEY = os.getenv("JWT_SECRET_KEY")
@@ -83,24 +75,34 @@ if not ALGORITHM:
     raise RuntimeError("ALGORITHM is missing. Add it to your local .env file or Railway variables.")
 
 # -------------------------------------------------------------------
-# Cashfree payment gateway environment fields
+# Razorpay payment gateway
 # -------------------------------------------------------------------
-CASHFREE_APP_ID = os.getenv("CASHFREE_APP_ID")
-CASHFREE_SECRET_KEY = os.getenv("CASHFREE_SECRET_KEY")
-CASHFREE_ENV = os.getenv("CASHFREE_ENV", "TEST").upper()
-CASHFREE_BASE_URL = "https://sandbox.cashfree.com" if CASHFREE_ENV == "TEST" else "https://api.cashfree.com"
-CASHFREE_ENABLED = bool(CASHFREE_APP_ID and CASHFREE_SECRET_KEY)
+RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
+RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET")
+RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET")
+RAZORPAY_PLAN_IDS = {
+    "basic":        os.getenv("RAZORPAY_PLAN_ID_BASIC"),
+    "intermediate": os.getenv("RAZORPAY_PLAN_ID_INTERMEDIATE"),
+    "pro":          os.getenv("RAZORPAY_PLAN_ID_PRO"),
+}
+RAZORPAY_ENABLED = bool(RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET)
+_RZP_BASE = "https://api.razorpay.com/v1"
 
-# Initialize Cashfree SDK if available and credentials present
-if CASHFREE_SDK_AVAILABLE and CASHFREE_ENABLED:
-    Cashfree.XClientId = CASHFREE_APP_ID
-    Cashfree.XClientSecret = CASHFREE_SECRET_KEY
-    Cashfree.XEnvironment = Cashfree.SANDBOX if CASHFREE_ENV == "TEST" else Cashfree.PRODUCTION
-    print(f"🔒 Cashfree payment gateway configured for {CASHFREE_ENV}")
-elif CASHFREE_ENABLED:
-    print(f"[WARNING] Cashfree SDK not available, using REST API fallback for {CASHFREE_ENV}")
+if RAZORPAY_ENABLED:
+    print("Razorpay payment gateway configured")
 else:
-    print("[WARNING] Cashfree payment gateway not configured. Set CASHFREE_APP_ID/CASHFREE_SECRET_KEY to enable.")
+    print("[WARNING] Razorpay not configured. Set RAZORPAY_KEY_ID/RAZORPAY_KEY_SECRET to enable.")
+
+async def _rzp_post(path: str, payload: dict) -> dict:
+    """POST to the Razorpay REST API using HTTP Basic Auth. No SDK required."""
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.post(
+            f"{_RZP_BASE}{path}",
+            json=payload,
+            auth=(RAZORPAY_KEY_ID or "", RAZORPAY_KEY_SECRET or ""),
+        )
+        resp.raise_for_status()
+        return resp.json()
 
 # -------------------------------------------------------------------
 # SOVEREIGN FIREBASE INITIALIZATION
@@ -587,6 +589,10 @@ async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
     response.headers["Cross-Origin-Opener-Policy"] = "same-origin-allow-popups"
     response.headers["Cross-Origin-Embedder-Policy"] = "unsafe-none"
+    # Prevent browsers from serving stale JS/HTML from disk cache after deploys
+    path = request.url.path
+    if path.endswith((".js", ".html")) and "/web/" in path:
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
     return response
 
 # -------------------------------------------------------------------
@@ -619,7 +625,8 @@ async def health():
 
 @app.get("/")
 async def root_redirect():
-    return RedirectResponse(url="/web/src/pages/index.html")
+    # Permanent redirect — compliance checkers and search engines follow 301s reliably
+    return RedirectResponse(url="/web/src/pages/index.html", status_code=301)
 
 @app.get("/dashboard")
 async def dashboard_redirect():
@@ -656,6 +663,8 @@ async def api_signals(credentials: HTTPAuthorizationCredentials = Depends(securi
     user_doc = get_user_doc(email)
     if not user_doc:
         raise HTTPException(status_code=403, detail="User not found")
+    if not user_doc.get("otp_verified", False):
+        raise HTTPException(status_code=403, detail="Account not verified. Please sign up with a valid email.")
     plan = user_doc.get('plan', 'trial')
     if plan != 'pro':
         raise HTTPException(status_code=403, detail="Subscription required to access signals")
@@ -678,10 +687,10 @@ async def api_public_signals(authorization: Optional[str] = Header(None)):
             email = decode_token(token)
             if email:
                 user_doc = get_user_doc(email)
-                if user_doc:
+                if user_doc and user_doc.get("otp_verified", False):
                     plan = user_doc.get("plan", "trial")
                     trial_end = user_doc.get("trial_end")
-                    if plan in ["pro", "active"]:
+                    if plan in ["pro", "active", "premium", "intermediate", "basic"]:
                         subscription_active = True
                     elif trial_end:
                         if datetime.now(timezone.utc) <= datetime.fromisoformat(trial_end):
@@ -724,6 +733,30 @@ async def sitemap():
         return FileResponse(sitemap_path, media_type="application/xml")
     return Response(status_code=204)
 
+@app.get("/terms")
+async def terms_page():
+    return FileResponse(WEB_ROOT_PATH / "src/pages/terms.html")
+
+@app.get("/privacy-policy")
+async def privacy_page():
+    return FileResponse(WEB_ROOT_PATH / "src/pages/privacy_policy.html")
+
+@app.get("/refund-policy")
+async def refund_page():
+    return FileResponse(WEB_ROOT_PATH / "src/pages/refund-policy.html")
+
+@app.get("/contact")
+async def contact_page():
+    return FileResponse(WEB_ROOT_PATH / "src/pages/contact.html")
+
+@app.get("/risk-disclosure")
+async def risk_disclosure_page():
+    return FileResponse(WEB_ROOT_PATH / "src/pages/risk_disclosure.html")
+
+@app.get("/pricing")
+async def pricing_page():
+    return FileResponse(WEB_ROOT_PATH / "src/pages/pricing.html")
+
 # -------------------------------------------------------------------
 # Auth helpers (JWT)
 # -------------------------------------------------------------------
@@ -744,7 +777,6 @@ def decode_token(token: str) -> Optional[str]:
     # Try decoding as Firebase token first
     try:
         decoded_token = firebase_auth.verify_id_token(token)
-        # Firebase token contains email, fallback to uid if not present
         return decoded_token.get("email") or decoded_token.get("uid")
     except Exception:
         # Fallback to custom JWT
@@ -796,9 +828,22 @@ def get_user_doc(email: str) -> Optional[Dict]:
         return result if isinstance(result, dict) else {}
     return None
 
+def phone_is_unique(phone: str, exclude_email: Optional[str] = None) -> bool:
+    """Return True if phone number is not already stored in any user document."""
+    try:
+        docs = db.collection("users").where("phone_number", "==", phone).limit(2).stream()
+        for d in docs:
+            if exclude_email and d.id == exclude_email:
+                continue
+            return False
+    except Exception:
+        pass  # if query fails, don't block registration
+    return True
+
 def create_user_doc(email: str, password_hash: Optional[str] = None,
                     provider: Optional[str] = None, social_id: Optional[str] = None,
-                    full_name: Optional[str] = None, location: Optional[str] = None) -> Dict:
+                    full_name: Optional[str] = None, location: Optional[str] = None,
+                    phone_number: Optional[str] = None) -> Dict:
     now = datetime.now(timezone.utc).isoformat()
     trial_end = (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()
     user_data = {
@@ -811,7 +856,9 @@ def create_user_doc(email: str, password_hash: Optional[str] = None,
         "last_login": now,
         "subscription": {
             "status": "inactive"
-        }
+        },
+        # Set only during OTP-verified provisioning; old/bypass accounts lack this field.
+        "otp_verified": True,
     }
     if password_hash:
         user_data["password_hash"] = password_hash
@@ -823,6 +870,8 @@ def create_user_doc(email: str, password_hash: Optional[str] = None,
         user_data["full_name"] = full_name
     if location:
         user_data["location"] = location
+    if phone_number:
+        user_data["phone_number"] = phone_number
     db.collection("users").document(email).set(user_data)
     return {"email": email, "plan": "trial", "trial_end": trial_end, "full_name": full_name, "location": location}
 
@@ -873,32 +922,43 @@ def is_trial_expired(email: str) -> bool:
 BASE_URL = os.getenv("BASE_URL", "http://localhost:8000").rstrip('/')
 
 @app.get("/auth/me")
-async def get_me(user_id: str = Depends(get_current_user)):
+async def get_me(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """
     Get current user's information including trial/subscription status.
     Returns user details with trial_end timestamp for frontend countdown.
     """
-    try:
-        # Attempt to get user document by email/id
-        user_doc = get_user_doc(user_id)
-        
-        # No document found — return 404 so the frontend provisioning flow triggers correctly
-        if not user_doc:
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        # Return user data with all necessary fields
-        return {
-            "uid": user_id,
-            "email": user_doc.get("email", user_id),
-            "plan": user_doc.get("plan", "trial"),
-            "trial_end": user_doc.get("trial_end"),
-            "subscription_active": user_doc.get("subscription", {}).get("status") == "active",
-            "full_name": user_doc.get("full_name"),
-            "location": user_doc.get("location")
-        }
-    except Exception as e:
-        print(f"[/auth/me] Error for {user_id}: {type(e).__name__}: {e}")
-        raise HTTPException(status_code=500, detail=f"Error fetching user information: {type(e).__name__}")
+    user_id = decode_token(credentials.credentials)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    user_doc = get_user_doc(user_id)
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    otp_verified = user_doc.get("otp_verified", False)
+    if not otp_verified:
+        # Auto-stamp accounts that Firebase has already verified (Google / OAuth providers).
+        # Their email_verified claim is True natively — no OTP needed for them.
+        try:
+            decoded = firebase_auth.verify_id_token(credentials.credentials)
+            if decoded.get("email_verified", False):
+                db.collection("users").document(user_id).update({"otp_verified": True})
+                otp_verified = True
+        except Exception:
+            pass
+
+    if not otp_verified:
+        raise HTTPException(status_code=403, detail="Account not verified.")
+
+    return {
+        "uid": user_id,
+        "email": user_doc.get("email", user_id),
+        "plan": user_doc.get("plan", "trial"),
+        "trial_end": user_doc.get("trial_end"),
+        "subscription_active": user_doc.get("subscription", {}).get("status") == "active",
+        "full_name": user_doc.get("full_name"),
+        "location": user_doc.get("location")
+    }
 
 @app.post("/api/users/provision")
 async def provision_user(request: Request, user_id: str = Depends(get_current_user)):
@@ -915,13 +975,61 @@ async def provision_user(request: Request, user_id: str = Depends(get_current_us
         firebase_uid = data.get("uid") or user_id
         email = data.get("email") or (user_id if "@" in user_id else None)
         display_name = data.get("display_name") or (email.split("@")[0] if email else firebase_uid)
+        provider = data.get("provider", "firebase")
+
+        # Email/password accounts must present a valid OTP signup_token to prevent bypass
+        if provider == "password":
+            signup_token = data.get("signup_token")
+            if not signup_token:
+                raise HTTPException(status_code=403, detail="OTP verification required before account creation.")
+            valid = any(
+                isinstance(entry, dict) and entry.get("signup_token") == signup_token
+                for entry in otp_store.values()
+            )
+            if not valid:
+                raise HTTPException(status_code=403, detail="Invalid or expired OTP verification token.")
+            # Invalidate the token — single use only
+            for k, entry in list(otp_store.items()):
+                if isinstance(entry, dict) and entry.get("signup_token") == signup_token:
+                    otp_store.pop(k, None)
+                    break
+            # Mark Firebase email as verified — this is the gate used in decode_token
+            # so accounts that bypassed OTP can never authenticate.
+            try:
+                firebase_auth.update_user(firebase_uid, email_verified=True)
+            except Exception as fe:
+                print(f"[provision] Warning: could not mark email_verified for {firebase_uid}: {fe}")
 
         # Prefer email as doc key (consistent with rest of backend), fall back to uid
         doc_key = email or firebase_uid
 
+        # Normalize and validate phone number if provided
+        phone_raw = data.get("phone_number") or ""
+        phone_number: Optional[str] = None
+        if phone_raw:
+            cleaned = re.sub(r'[\s\-\.\(\)]', '', phone_raw.strip())
+            if re.match(r'^\d{10}$', cleaned):
+                cleaned = '+91' + cleaned
+            if re.match(r'^\+\d{7,15}$', cleaned):
+                phone_number = cleaned
+
         existing = get_user_doc(doc_key)
         if existing:
             update_last_login(doc_key)
+            if not existing.get("otp_verified"):
+                db.collection("users").document(doc_key).update({"otp_verified": True})
+            # Save phone number if not already stored
+            if phone_number and not existing.get("phone_number"):
+                if not phone_is_unique(phone_number, exclude_email=doc_key):
+                    try:
+                        firebase_auth.update_user(firebase_uid, disabled=True)
+                    except Exception:
+                        pass
+                    db.collection("users").document(doc_key).update({
+                        "suspended": True, "suspension_reason": "duplicate_phone"
+                    })
+                    raise HTTPException(status_code=409, detail="This phone number is already registered to another account. Your account has been suspended.")
+                db.collection("users").document(doc_key).update({"phone_number": phone_number})
             return {
                 "uid": firebase_uid,
                 "email": existing.get("email", doc_key),
@@ -931,11 +1039,20 @@ async def provision_user(request: Request, user_id: str = Depends(get_current_us
                 "location": existing.get("location"),
             }
 
+        # Check phone uniqueness before creating new doc
+        if phone_number and not phone_is_unique(phone_number):
+            try:
+                firebase_auth.update_user(firebase_uid, disabled=True)
+            except Exception:
+                pass
+            raise HTTPException(status_code=409, detail="This phone number is already registered to another account.")
+
         user_doc = create_user_doc(
             doc_key,
             provider="firebase",
             social_id=firebase_uid,
             full_name=display_name,
+            phone_number=phone_number,
         )
         return {
             "uid": firebase_uid,
@@ -945,6 +1062,8 @@ async def provision_user(request: Request, user_id: str = Depends(get_current_us
             "full_name": user_doc.get("full_name"),
             "location": user_doc.get("location"),
         }
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"[/api/users/provision] Error for {user_id}: {type(e).__name__}: {e}")
         raise HTTPException(status_code=500, detail=f"User provisioning failed: {type(e).__name__}")
@@ -1017,12 +1136,8 @@ class OTPVerifyRequest(BaseModel):
     email: EmailStr
     otp: str
 
-class CashfreePaymentRequest(BaseModel):
-    amount: float
-    currency: str = "INR"
-    email: EmailStr
-    order_id: Optional[str] = None
-    customer_phone: Optional[str] = None
+class PhoneCheckRequest(BaseModel):
+    phone: str
 
 class CreateSubscriptionRequest(BaseModel):
     plan_name: str
@@ -1030,6 +1145,16 @@ class CreateSubscriptionRequest(BaseModel):
     currency: str = "INR"
     email: EmailStr
     customer_phone: Optional[str] = None
+
+class CreateOrderRequest(BaseModel):
+    plan: str
+    currency: str = "INR"
+
+class VerifyPaymentRequest(BaseModel):
+    razorpay_payment_id: str
+    razorpay_order_id: str
+    razorpay_signature: str
+    plan: str
 
 class Review(BaseModel):
     name: str
@@ -1039,16 +1164,50 @@ class Review(BaseModel):
     product: Optional[str] = None
 
 # -------------------------------------------------------------------
+# Disposable / temp-email domain blocklist
+# These domains have valid MX records so DNS lookup alone won't catch them.
+# -------------------------------------------------------------------
+DISPOSABLE_EMAIL_DOMAINS = {
+    "mailinator.com", "guerrillamail.com", "guerrillamail.net", "guerrillamail.org",
+    "guerrillamail.biz", "guerrillamail.de", "guerrillamail.info",
+    "temp-mail.org", "tempmail.com", "tempmail.net", "temp-mail.io",
+    "10minutemail.com", "10minutemail.net", "10minutemail.org",
+    "throwam.com", "throwaway.email", "trashmail.com", "trashmail.net",
+    "trashmail.me", "trashmail.at", "trashmail.io",
+    "dispostable.com", "disposablemail.com", "fakeinbox.com",
+    "maildrop.cc", "mailnull.com", "spamgourmet.com", "spamgourmet.net",
+    "yopmail.com", "yopmail.fr", "yopmail.net",
+    "sharklasers.com", "guerillaMail.com", "grr.la", "spam4.me",
+    "getairmail.com", "filzmail.com", "sofimail.com", "spamavert.com",
+    "spamevader.com", "dodgeit.com", "mailexpire.com", "spamhole.com",
+    "spamcorpse.com", "deadaddress.com", "mailfreeonline.com",
+    "spaml.com", "spamspot.com", "binkmail.com", "mailbolt.com",
+    "mailfree.net", "spamfree24.org", "spamfree.eu", "mailzilla.com",
+    "anonymail.com", "anonymbox.com", "anonbox.net", "mailnew.com",
+    "tempr.email", "discard.email", "mt2015.com", "mt2016.com",
+    "spam.la", "spaml.de", "temporaryemail.net", "throwam.com",
+    "mailscrap.com", "dispostable.com", "e4ward.com",
+    "jetable.fr.nf", "jetable.net", "jetable.org",
+    "nomail.xl.cx", "plokeit.com", "putthisinyourspamdatabase.com",
+    "rmqkr.net", "s0ny.net", "safetymail.info", "safetypost.de",
+    "sneakemail.com", "spamfree.eu", "spamgob.com", "spaml.com",
+    "spammotel.com", "spamspot.com", "spamthisplease.com", "tradermail.info",
+    "turnermail.com", "uroid.com", "venompen.com", "wh4f.org",
+    "yam.com", "zoemail.org", "zymuying.com",
+}
+
+# -------------------------------------------------------------------
 # Email configuration
 # -------------------------------------------------------------------
 conf = ConnectionConfig(
-    MAIL_USERNAME=os.getenv("MAIL_USERNAME", "your_email@gmail.com"),
-    MAIL_PASSWORD=SecretStr(os.getenv("MAIL_PASSWORD", "your_app_password")),
-    MAIL_FROM=os.getenv("MAIL_FROM", "noreply@aegis.com"),
-    MAIL_PORT=587,
-    MAIL_SERVER="smtp.gmail.com",
-    MAIL_STARTTLS=True,
-    MAIL_SSL_TLS=False,
+    MAIL_USERNAME=os.getenv("MAIL_USERNAME", "animeshkukreti@gatekeeper.sbs"),
+    MAIL_PASSWORD=SecretStr(os.getenv("MAIL_PASSWORD", "")),
+    MAIL_FROM=os.getenv("MAIL_FROM", "animeshkukreti@gatekeeper.sbs"),
+    MAIL_FROM_NAME=os.getenv("MAIL_FROM_NAME", "Gatekeeper (Aegis-1)"),
+    MAIL_PORT=int(os.getenv("MAIL_PORT", "587")),
+    MAIL_SERVER=os.getenv("MAIL_SERVER", "smtp.neo.space"),
+    MAIL_STARTTLS=os.getenv("MAIL_STARTTLS", "true").lower() == "true",
+    MAIL_SSL_TLS=os.getenv("MAIL_SSL_TLS", "false").lower() == "true",
 )
 
 fastmail = FastMail(conf)
@@ -1059,6 +1218,23 @@ fastmail = FastMail(conf)
 @app.post("/auth/send-otp-for-registration")
 async def send_otp_for_registration(request: OTPSendRequest):
     email = request.email
+
+    # Block disposable / temp-mail domains
+    domain = email.split('@')[-1].lower()
+    if domain in DISPOSABLE_EMAIL_DOMAINS:
+        raise HTTPException(status_code=422, detail="Disposable or temporary email addresses are not allowed.")
+
+    # Validate format and check MX records.
+    # Run in a thread executor — dns.resolver is synchronous and would block the event loop.
+    try:
+        loop = asyncio.get_event_loop()
+        validated = await loop.run_in_executor(
+            None, partial(validate_email, email, check_deliverability=True)
+        )
+        email = validated.normalized
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid email address: {str(exc)}")
+
     existing_user = get_user_doc(email)
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered. Please sign in.")
@@ -1074,18 +1250,71 @@ async def send_otp_for_registration(request: OTPSendRequest):
     }
     try:
         message = MessageSchema(
-            subject="Your Aegis‑1 Verification Code",
+            subject="Your AEGIS Verification Code",
             recipients=[NameEmail(name=email, email=email)],
             body=f"""
+            <!DOCTYPE html>
             <html>
-            <body style="font-family: monospace; background: #0a0a0c; color: #00f2ff; padding: 20px;">
-                <h2>🔐 Aegis‑1 OTP</h2>
-                <p>Your verification code is:</p>
-                <h1 style="background: #1a1f2e; display: inline-block; padding: 12px 24px; border-radius: 12px;">{otp}</h1>
-                <p>This code expires in 5 minutes.</p>
-                <p>If you didn't request this, please ignore this email.</p>
-                <hr>
-                <small style="color: #6b7280;">Aegis‑1 Sovereign Terminal</small>
+            <head><meta charset="UTF-8"></head>
+            <body style="margin:0;padding:0;background:#0a0a0c;font-family:'Segoe UI',Arial,sans-serif;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0c;padding:40px 0;">
+                <tr><td align="center">
+                  <table width="480" cellpadding="0" cellspacing="0"
+                         style="background:#0f111a;border:1px solid rgba(0,242,255,0.15);border-radius:16px;overflow:hidden;max-width:480px;">
+
+                    <!-- Header -->
+                    <tr>
+                      <td style="background:linear-gradient(135deg,#00f2ff22,#7b2fff22);padding:32px 40px 24px;text-align:center;border-bottom:1px solid rgba(0,242,255,0.1);">
+                        <div style="font-size:28px;font-weight:800;letter-spacing:3px;
+                                    background:linear-gradient(90deg,#00f2ff,#7b2fff);
+                                    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+                                    display:inline-block;">
+                          ⚡ AEGIS
+                        </div>
+                        <p style="color:#6b7280;margin:8px 0 0;font-size:13px;letter-spacing:1px;">SOVEREIGN TERMINAL</p>
+                      </td>
+                    </tr>
+
+                    <!-- Body -->
+                    <tr>
+                      <td style="padding:36px 40px;">
+                        <p style="color:#9ca3af;font-size:15px;margin:0 0 8px;">Email Verification</p>
+                        <h2 style="color:#f9fafb;font-size:20px;font-weight:600;margin:0 0 24px;">Your one-time verification code</h2>
+
+                        <!-- OTP display -->
+                        <div style="background:#0a0a0c;border:1px solid rgba(0,242,255,0.25);border-radius:12px;
+                                    padding:24px;text-align:center;margin:0 0 24px;">
+                          <span style="font-family:'Courier New',Courier,monospace;font-size:38px;font-weight:700;
+                                       letter-spacing:12px;color:#00f2ff;">{otp}</span>
+                        </div>
+
+                        <p style="color:#9ca3af;font-size:14px;margin:0 0 8px;">
+                          This code expires in <strong style="color:#f9fafb;">5 minutes</strong>.
+                          Do not share it with anyone.
+                        </p>
+                        <p style="color:#6b7280;font-size:13px;margin:0;">
+                          If you didn't request this, you can safely ignore this email.
+                        </p>
+                      </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                      <td style="padding:20px 40px 28px;border-top:1px solid rgba(255,255,255,0.05);text-align:center;">
+                        <p style="color:#4b5563;font-size:12px;margin:0;">
+                          Sent by
+                          <a href="mailto:animeshkukreti@gatekeeper.sbs"
+                             style="color:#00f2ff;text-decoration:none;">animeshkukreti@gatekeeper.sbs</a>
+                          &nbsp;·&nbsp;
+                          <a href="https://gatekeeper.sbs"
+                             style="color:#00f2ff;text-decoration:none;">gatekeeper.sbs</a>
+                        </p>
+                      </td>
+                    </tr>
+
+                  </table>
+                </td></tr>
+              </table>
             </body>
             </html>
             """,
@@ -1110,8 +1339,180 @@ async def verify_otp_for_registration(request: OTPVerifyRequest):
         raise HTTPException(status_code=400, detail="OTP has expired. Please request a new one.")
     if record["otp"] != otp:
         raise HTTPException(status_code=400, detail="Invalid OTP. Please try again.")
+    signup_token = str(uuid.uuid4())
     otp_store[email]["verified"] = True
-    return {"success": True, "message": "OTP verified successfully. Please complete your profile."}
+    otp_store[email]["signup_token"] = signup_token
+    return {"success": True, "message": "OTP verified successfully. Please complete your profile.", "signup_token": signup_token}
+
+@app.post("/auth/check-phone")
+async def check_phone_unique(request: PhoneCheckRequest):
+    """Pre-signup phone uniqueness check. No auth required."""
+    phone = request.phone.strip()
+    if not phone or len(phone) < 7:
+        raise HTTPException(status_code=422, detail="Invalid phone number")
+    return {"available": phone_is_unique(phone)}
+
+# -------------------------------------------------------------------
+# Password reset — generate Firebase link, deliver via Neo SMTP
+# Firebase's default noreply sender goes to spam; our domain is trusted.
+# -------------------------------------------------------------------
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+@app.post("/auth/send-password-reset")
+async def send_password_reset(request: PasswordResetRequest):
+    email = request.email
+    try:
+        firebase_link = firebase_auth.generate_password_reset_link(email)
+    except firebase_auth.UserNotFoundError:
+        return {"success": True, "message": "If an account with this email exists, a reset link has been sent."}
+    except Exception as e:
+        print(f"[password-reset] generate_password_reset_link failed: {e}")
+        raise HTTPException(status_code=500, detail="Could not generate reset link. Please try again.")
+
+    # Extract oobCode and apiKey from Firebase's link so our custom reset page
+    # can call confirmPasswordReset() directly without going through Firebase's UI.
+    parsed = urllib.parse.urlparse(firebase_link)
+    params = urllib.parse.parse_qs(parsed.query)
+    oob_code = params.get("oobCode", [""])[0]
+    api_key  = params.get("apiKey",  [""])[0]
+    base_url = os.getenv("BASE_URL", "https://gatekeeper.sbs").rstrip("/")
+    custom_reset_url = (
+        f"{base_url}/web/src/pages/reset-password.html"
+        f"?oobCode={urllib.parse.quote(oob_code)}&apiKey={urllib.parse.quote(api_key)}"
+    )
+
+    try:
+        message = MessageSchema(
+            subject="Reset Your Gatekeeper Password",
+            recipients=[NameEmail(name=email, email=email)],
+            body=f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+</head>
+<body style="margin:0;padding:0;background:#050505;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0"
+         style="background:#050505;padding:48px 16px;">
+    <tr><td align="center">
+
+      <!-- Card -->
+      <table width="520" cellpadding="0" cellspacing="0"
+             style="max-width:520px;width:100%;background:#0a0c14;
+                    border:1px solid rgba(0,242,255,0.14);
+                    border-radius:18px;overflow:hidden;">
+
+        <!-- Top accent bar -->
+        <tr>
+          <td style="height:3px;background:linear-gradient(90deg,#00f2ff,#7b2fff);"></td>
+        </tr>
+
+        <!-- Header -->
+        <tr>
+          <td style="padding:36px 44px 28px;text-align:center;
+                     border-bottom:1px solid rgba(255,255,255,0.05);">
+            <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:6px;">
+              <span style="font-size:22px;">⚡</span>
+              <span style="font-size:22px;font-weight:800;letter-spacing:2.5px;
+                           background:linear-gradient(90deg,#00f2ff,#7b2fff);
+                           -webkit-background-clip:text;-webkit-text-fill-color:transparent;">
+                GATEKEEPER
+              </span>
+            </div>
+            <p style="margin:2px 0 0;font-size:11px;letter-spacing:2px;
+                      color:#4b5563;text-transform:uppercase;">Aegis-1 · Sovereign Terminal</p>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="padding:40px 44px 32px;">
+
+            <!-- Icon circle -->
+            <div style="text-align:center;margin-bottom:28px;">
+              <div style="display:inline-block;width:64px;height:64px;border-radius:50%;
+                          background:rgba(0,242,255,0.08);border:1px solid rgba(0,242,255,0.2);
+                          line-height:64px;font-size:26px;">🔐</div>
+            </div>
+
+            <h1 style="margin:0 0 10px;font-size:22px;font-weight:700;
+                       color:#f1f5f9;text-align:center;letter-spacing:-0.3px;">
+              Password Reset Request
+            </h1>
+            <p style="margin:0 0 28px;font-size:14px;color:#94a3b8;
+                      text-align:center;line-height:1.65;">
+              We received a request to reset the password for<br>
+              <strong style="color:#e2e8f0;">{email}</strong>
+            </p>
+
+            <!-- CTA button -->
+            <div style="text-align:center;margin-bottom:28px;">
+              <a href="{custom_reset_url}"
+                 style="display:inline-block;padding:15px 40px;
+                        background:linear-gradient(95deg,#00f2ff,#00a8c6);
+                        color:#000;font-weight:700;font-size:15px;
+                        border-radius:10px;text-decoration:none;
+                        letter-spacing:0.4px;
+                        box-shadow:0 4px 20px rgba(0,242,255,0.25);">
+                Reset My Password
+              </a>
+            </div>
+
+            <!-- Expiry notice -->
+            <div style="background:rgba(0,242,255,0.04);border:1px solid rgba(0,242,255,0.1);
+                        border-radius:10px;padding:16px 20px;margin-bottom:24px;">
+              <p style="margin:0;font-size:13px;color:#64748b;line-height:1.6;">
+                ⏱ &nbsp;This link expires in <strong style="color:#94a3b8;">1 hour</strong>.<br>
+                🔒 &nbsp;If you didn't request this, your account is safe — ignore this email.
+              </p>
+            </div>
+
+            <!-- Fallback link -->
+            <p style="margin:0;font-size:11.5px;color:#374151;
+                      word-break:break-all;line-height:1.7;">
+              Button not working? Copy and paste this link into your browser:<br>
+              <a href="{custom_reset_url}"
+                 style="color:#00f2ff;text-decoration:none;">{custom_reset_url}</a>
+            </p>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="padding:20px 44px 28px;
+                     border-top:1px solid rgba(255,255,255,0.04);
+                     text-align:center;">
+            <p style="margin:0 0 6px;font-size:12px;color:#374151;">
+              Sent by Gatekeeper (Aegis-1) &nbsp;·&nbsp;
+              <a href="https://gatekeeper.sbs"
+                 style="color:#00f2ff;text-decoration:none;">gatekeeper.sbs</a>
+            </p>
+            <p style="margin:0;font-size:11px;color:#1f2937;">
+              © 2025 Gatekeeper. All rights reserved.
+            </p>
+          </td>
+        </tr>
+
+        <!-- Bottom accent bar -->
+        <tr>
+          <td style="height:3px;background:linear-gradient(90deg,#7b2fff,#00f2ff);"></td>
+        </tr>
+
+      </table>
+
+    </td></tr>
+  </table>
+</body>
+</html>""",
+            subtype=MessageType.html,
+        )
+        await fastmail.send_message(message)
+    except Exception as e:
+        print(f"[password-reset] SMTP send failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send reset email. Please check your email address and try again.")
+
+    return {"success": True, "message": "Password reset link sent. Check your inbox (and spam folder)."}
 
 @app.post("/auth/complete-registration")
 async def complete_registration(profile: UserProfileComplete):
@@ -1208,11 +1609,8 @@ def get_user_plan(email: str) -> str:
     return user_doc.get("plan", "trial") if user_doc else "trial"
 
 
-def get_allowed_tokens(email: str) -> List[str]:
-    plan = get_user_plan(email)
-    if plan in ("pro", "premium", "intermediate"):
-        return PRO_TOKENS
-    return BASIC_TOKENS
+def get_allowed_tokens() -> List[str]:
+    return PRO_TOKENS  # All plans get the full token fleet
 
 def get_allowed_timeframes(email: str) -> List[str]:
     plan = get_user_plan(email)
@@ -1228,7 +1626,7 @@ async def get_user_limits(email: str = Depends(get_current_user)):
         plan = user_doc.get("plan", "trial") if user_doc else "trial"
         trial_end = user_doc.get("trial_end") if user_doc else None
         trial_expired = is_trial_expired(email) if trial_end else False
-        allowed_tokens = get_allowed_tokens(email)
+        allowed_tokens = get_allowed_tokens()
         return {
             "plan": plan,
             "allowed_tokens": allowed_tokens,
@@ -1405,282 +1803,226 @@ async def get_trial_status(user_id: str = Depends(get_current_user)):
 @app.get("/payment/config")
 async def payment_config():
     return {
-        "cashfree": {
-            "enabled": CASHFREE_ENABLED,
-            "environment": CASHFREE_ENV,
-            "base_url": CASHFREE_BASE_URL
+        "razorpay": {
+            "enabled": RAZORPAY_ENABLED,
+            "key_id": RAZORPAY_KEY_ID,
         }
     }
 
 # -------------------------------------------------------------------
-# Cashfree Payment Integration - Create Subscription Endpoint (FIXED)
+# Razorpay Subscription Integration
 # -------------------------------------------------------------------
 
-def generate_unique_subscription_id(email: str) -> str:
-    """Generate a unique subscription ID for Cashfree mandate"""
-    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-    random_str = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-    email_prefix = email.split('@')[0][:8]
-    return f"SUB_{email_prefix}_{timestamp}_{random_str}"
-
-async def create_cashfree_mandate(subscription_id: str, amount: float, plan_name: str, email: str, phone: Optional[str] = None, currency: str = "INR") -> Dict:
+@app.post("/api/v1/payments/subscription/initialize")
+async def initialize_subscription(
+    plan: str = "basic",
+    user_id: str = Depends(get_current_user),
+):
     """
-    Create a Cashfree subscription mandate using REST API.
-    This properly implements the Cashfree Subscriptions API v2023-08-01.
+    Create a Razorpay recurring subscription for the given plan tier.
+    plan: basic | intermediate | pro
     """
-    if not CASHFREE_ENABLED:
+    if not RAZORPAY_ENABLED:
         raise HTTPException(status_code=503, detail="Payment system is not configured")
-    
-    # Build customer ID from email (safe for all characters)
-    customer_id = "".join(c if c.isalnum() else "_" for c in email.replace("@", "_").replace(".", "_"))
-    
-    # Cashfree Subscriptions API payload structure
-    payload = {
-        "subscription_id": subscription_id,
-        "subscription_amount": amount,
-        "subscription_currency": currency,
-        "subscription_name": f"Aegis-1 {plan_name.upper()} Plan",
-        "subscription_description": f"Monthly subscription for {plan_name} plan",
-        "customer_details": {
-            "customer_id": customer_id,
-            "customer_email": email,
-            "customer_phone": phone or "9999999999"
-        },
-        "return_url": f"{BASE_URL}/web/src/pages/dashboard.html?subscription={subscription_id}",
-        "callback_url": f"{BASE_URL}/payments/webhook",
-        "auth_mode": "AUTH",  # Use AUTH for mandate creation
-        "first_payment_amount": amount,
-        "expiry_time": (datetime.now(timezone.utc) + timedelta(days=365)).isoformat()
-    }
-    
-    headers = {
-        "Content-Type": "application/json",
-        "x-api-version": "2023-08-01"
-    }
-    
-    # Add authentication headers if credentials are available
-    if CASHFREE_APP_ID and CASHFREE_SECRET_KEY:
-        # Generate signature for secure API calls
-        import hashlib
-        import hmac
-        
-        message = json.dumps(payload, sort_keys=True)
-        secret = CASHFREE_SECRET_KEY.encode() if isinstance(CASHFREE_SECRET_KEY, str) else CASHFREE_SECRET_KEY
-        signature = hmac.new(secret, message.encode(), hashlib.sha256).hexdigest()
-        
-        headers["x-signature"] = signature
-    
-    # Make the actual API request to create subscription mandate
-    async with httpx.AsyncClient() as client:
-        url = f"{CASHFREE_BASE_URL}/pg/subscriptions"
-        response = await client.post(url, json=payload, headers=headers)
-        result = response.json()
-    
-    # Safely handle result - it might be a string (error HTML) or dict
-    sub_auth_url = None
-    if response.status_code in (200, 201):
-        if isinstance(result, dict):
-            sub_auth_url = result.get("subscription_auth_url") or \
-                          result.get("auth_url") or \
-                          result.get("redirect_url") or \
-                          result.get("data", {}).get("subscription_auth_url")
-        else:
-            # If result is not a dict (e.g., error HTML), use fallback URL
-            sub_auth_url = f"{CASHFREE_BASE_URL}/pg/subscriptions/{subscription_id}/auth"
-        
-        if not sub_auth_url:
-            # If no URL in response, construct one from the callback
-            sub_auth_url = f"{CASHFREE_BASE_URL}/pg/subscriptions/{subscription_id}/auth"
-    else:
-        print(f"Cashfree API error (status {response.status_code}): {result}")
-    
-    return {
-        "success": True,
-        "subscription_id": subscription_id,
-        "sub_auth_url": sub_auth_url or f"{CASHFREE_BASE_URL}/pg/subscriptions/{subscription_id}/auth",
-        "cashfree_response": result,
-        "status_code": response.status_code
-    }
 
-@app.post("/create-subscription")
-async def create_subscription(request: CreateSubscriptionRequest, email: str = Depends(get_current_user)):
-    """
-    Create a Cashfree subscription mandate and return the authorization URL.
-    This endpoint implements the Cashfree Subscriptions API to create a mandate.
-    """
-    if not CASHFREE_ENABLED:
-        raise HTTPException(status_code=503, detail="Payment system is not configured")
-    
-    if request.email != email:
-        raise HTTPException(status_code=403, detail="Email mismatch")
-    
-    # Generate unique subscription ID
-    subscription_id = generate_unique_subscription_id(email)
-    plan_amount = request.amount
-    plan_name = request.plan_name
-    customer_phone = request.customer_phone
-    
-    # Store pending subscription in Firestore
-    pending_ref = db.collection("pending_subscriptions").document(subscription_id)
-    pending_ref.set({
-        "email": email,
-        "plan_name": plan_name,
-        "amount": plan_amount,
-        "status": "pending",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "subscription_id": subscription_id
+    plan_id = RAZORPAY_PLAN_IDS.get(plan)
+    if not plan_id:
+        raise HTTPException(status_code=400, detail=f"No Razorpay plan configured for tier: {plan}")
+
+    subscription = await _rzp_post("/subscriptions", {
+        "plan_id": plan_id,
+        "total_count": 12,
+        "customer_notify": 1,
+        "notes": {"internal_user_id": user_id, "plan": plan},
     })
-    
-    # Create Cashfree mandate using the fixed helper function
-    result = await create_cashfree_mandate(
-        subscription_id=subscription_id,
-        amount=plan_amount,
-        plan_name=plan_name,
-        email=email,
-        phone=customer_phone,
-        currency=request.currency
-    )
-    
-    # Update pending subscription with mandate info
-    if result.get("success"):
-        sub_auth_url = result.get("sub_auth_url")
-        pending_ref.update({
-            "sub_auth_url": sub_auth_url,
-            "subscription_status": "mandate_pending",
-            "cashfree_response": result.get("cashfree_response")
+    return {"subscription_id": subscription["id"]}
+
+
+# Base prices in USD — source of truth for all plans
+USD_PLAN_PRICES: Dict[str, float] = {
+    "basic": 3.60,
+    "intermediate": 24.00,
+    "pro": 40.00,
+}
+
+# Currencies whose smallest unit is the unit itself (no multiply by 100)
+_ZERO_DECIMAL = {"BIF","CLP","DJF","GNF","JPY","KMF","KRW","MGA","PYG","RWF","UGX","VND","VUV","XAF","XOF","XPF"}
+# Currencies with 3 decimal places (multiply by 1000)
+_THREE_DECIMAL = {"BHD","JOD","KWD","OMR","TND"}
+
+# Exchange rate cache: USD as base, refreshed every hour
+_fx: Dict[str, Any] = {"rates": {"USD": 1.0, "INR": 84.0}, "ts": 0.0}
+_FX_TTL = 3600.0
+
+async def _get_fx_rates() -> Dict[str, float]:
+    """Return cached USD-based exchange rates, refreshing hourly."""
+    if time.time() - _fx["ts"] < _FX_TTL:
+        return _fx["rates"]
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get("https://open.er-api.com/v6/latest/USD")
+            data = resp.json()
+            if data.get("result") == "success" and isinstance(data.get("rates"), dict):
+                _fx["rates"] = data["rates"]
+                _fx["ts"] = time.time()
+                print(f"[FX] Rates refreshed. USD/INR={_fx['rates'].get('INR', '?')}")
+    except Exception as exc:
+        print(f"[FX] Rate fetch failed, using cached: {exc}")
+    return _fx["rates"]
+
+
+@app.get("/api/exchange-rates")
+async def exchange_rates_endpoint():
+    """Return live USD-based exchange rates plus USD plan prices for the frontend."""
+    rates = await _get_fx_rates()
+    return {"base": "USD", "rates": rates, "plan_prices_usd": USD_PLAN_PRICES}
+
+
+def _to_subunits(amount_float: float, currency: str) -> int:
+    """Convert a float amount to the currency's smallest unit."""
+    if currency in _ZERO_DECIMAL:
+        return int(round(amount_float))
+    if currency in _THREE_DECIMAL:
+        return int(round(amount_float * 1000))
+    return int(round(amount_float * 100))
+
+
+@app.post("/api/create-order")
+async def create_order(req: CreateOrderRequest, user_id: str = Depends(get_current_user)):
+    """Convert the USD plan price to the requested currency at live rate, create Razorpay order."""
+    if not RAZORPAY_ENABLED:
+        raise HTTPException(status_code=503, detail="Payment system not configured")
+
+    usd_price = USD_PLAN_PRICES.get(req.plan)
+    if usd_price is None:
+        raise HTTPException(status_code=400, detail=f"Unknown plan: {req.plan}")
+
+    currency = req.currency.upper()
+    rates = await _get_fx_rates()
+    rate = rates.get(currency)
+    if rate is None:
+        raise HTTPException(status_code=400, detail=f"Unsupported currency: {currency}")
+
+    amount_subunits = _to_subunits(usd_price * rate, currency)
+    if amount_subunits < 100:
+        raise HTTPException(status_code=400, detail="Calculated amount too low (min 100 subunits)")
+
+    receipt = f"{user_id[:16]}_{req.plan}_{int(time.time())}"
+    order = await _rzp_post("/orders", {
+        "amount": amount_subunits,
+        "currency": currency,
+        "receipt": receipt,
+        "notes": {"user_id": user_id, "plan": req.plan, "usd_price": str(usd_price)},
+    })
+    return {"order_id": order["id"], "amount": order["amount"], "currency": order["currency"]}
+
+
+@app.post("/api/verify-payment")
+async def verify_payment(req: VerifyPaymentRequest, user_id: str = Depends(get_current_user)):
+    """Verify Razorpay payment signature and upgrade the user's plan."""
+    import hmac as _hmac
+    import hashlib
+
+    if not RAZORPAY_KEY_SECRET:
+        raise HTTPException(status_code=503, detail="Payment system not configured")
+    if not req.razorpay_payment_id or not req.razorpay_order_id or not req.razorpay_signature:
+        raise HTTPException(status_code=400, detail="Missing payment fields")
+
+    msg = f"{req.razorpay_order_id}|{req.razorpay_payment_id}"
+    expected = _hmac.new(
+        RAZORPAY_KEY_SECRET.encode(),
+        msg.encode(),
+        hashlib.sha256,
+    ).hexdigest()
+
+    if not _hmac.compare_digest(expected, req.razorpay_signature):
+        raise HTTPException(status_code=400, detail="Payment verification failed")
+
+    plan = req.plan if req.plan in ("basic", "intermediate", "pro") else "basic"
+    user_ref = db.collection("users").document(user_id)
+    try:
+        update_result = user_ref.update({
+            "plan": plan,
+            "subscription": {
+                "status": "active",
+                "payment_id": req.razorpay_payment_id,
+                "order_id": req.razorpay_order_id,
+                "activated_at": datetime.now(timezone.utc).isoformat(),
+                "plan_type": plan,
+            },
+            "trial_active": False,
         })
-    
-    return {
-        "success": result.get("success", False),
-        "subscription_id": subscription_id,
-        "sub_auth_url": result.get("sub_auth_url"),
-        "message": result.get("message", "Subscription mandate created successfully" if result.get("success") else "Check logs for details")
-    }
+        if inspect.isawaitable(update_result):
+            await update_result
+        await send_subscription_confirmation(user_id, plan)
+    except Exception as e:
+        print(f"Failed to update user after payment: {e}")
+        raise HTTPException(status_code=500, detail="Payment verified but account update failed")
+
+    return {"status": "success", "plan": plan}
+
 
 # -------------------------------------------------------------------
-# Cashfree Webhook for SUBSCRIPTION_ACTIVATED events
+# Razorpay Webhook for subscription.activated events
 # -------------------------------------------------------------------
-@app.post("/payments/webhook")
-async def cashfree_webhook(request: Request):
+@app.post("/api/v1/payments/webhook")
+async def razorpay_webhook(request: Request):
     """
-    Webhook endpoint to catch SUBSCRIPTION_ACTIVATED events from Cashfree.
-    Upon success, find the user in Firestore by email and update their plan to 'pro' 
-    and subscription.status to 'active'.
+    Verify Razorpay webhook signature, handle subscription.activated,
+    and promote the matching user to the pro plan.
     """
+    import hmac
+    import hashlib
+
+    body = await request.body()
+    received_sig = request.headers.get("X-Razorpay-Signature", "")
+
+    if RAZORPAY_WEBHOOK_SECRET:
+        expected = hmac.new(
+            RAZORPAY_WEBHOOK_SECRET.encode(),
+            body,
+            hashlib.sha256,
+        ).hexdigest()
+        if not hmac.compare_digest(expected, received_sig):
+            raise HTTPException(status_code=400, detail="Invalid webhook signature")
+
     try:
-        # Get raw body for signature verification (optional but recommended)
-        body = await request.body()
         data = json.loads(body)
-        
-        # Log incoming webhook for debugging
-        print(f"📨 Webhook received: {json.dumps(data, indent=2)}")
-        
-        webhook_type = data.get("type") or data.get("event")
-        
-        # Handle SUBSCRIPTION_ACTIVATED event
-        if webhook_type == "SUBSCRIPTION_ACTIVATED" or webhook_type == "SUBSCRIPTION_CREATED":
-            subscription_data = data.get("data", {}) if isinstance(data, dict) else {}
-            subscription_id = subscription_data.get("subscription_id") if isinstance(subscription_data, dict) else None
-            
-            # Extract customer email (depends on webhook structure)
-            customer_details = subscription_data.get("customer_details", {}) if isinstance(subscription_data, dict) else {}
-            email = customer_details.get("customer_email") if isinstance(customer_details, dict) else None
-            
-            if not email and isinstance(data, dict):
-                # Try alternative paths at root level
-                customer_details_root = data.get("customer_details", {})
-                email = customer_details_root.get("customer_email") if isinstance(customer_details_root, dict) else None
-            
-            if not email and subscription_id:
-                # Look up from pending_subscriptions
-                sub_ref = db.collection("pending_subscriptions").document(subscription_id)
-                try:
-                    sub_get_result = sub_ref.get()
-                    # Handle both sync and async Firestore clients
-                    if inspect.isawaitable(sub_get_result):
-                        sub_doc = await sub_get_result
-                    else:
-                        sub_doc = sub_get_result
-                    
-                    if hasattr(sub_doc, "exists") and sub_doc.exists and hasattr(sub_doc, "to_dict"):
-                        to_dict_fn = getattr(sub_doc, "to_dict", None)
-                        if callable(to_dict_fn):
-                            sub_data = to_dict_fn()
-                            # Ensure sub_data is a dict before accessing .get()
-                            if isinstance(sub_data, dict):
-                                email = sub_data.get("email")
-                except Exception as e:
-                    print(f"Error looking up subscription: {e}")
-            
-            if email:
-                print(f"✅ Processing subscription activation for {email}")
-                
-                # Update user in Firestore
-                user_ref = db.collection("users").document(email)
-                try:
-                    update_result = user_ref.update({
-                        "plan": "pro",
-                        "subscription": {
-                            "status": "active",
-                            "subscription_id": subscription_id,
-                            "activated_at": datetime.now(timezone.utc).isoformat(),
-                            "plan_type": subscription_data.get("subscription_plan_name", "pro")
-                        }
-                    })
-                    # Handle async update result if needed
-                    if inspect.isawaitable(update_result):
-                        await update_result
-                    print(f"✅ User {email} updated to pro plan")
-                except Exception as e:
-                    print(f"Failed to update user: {e}")
-                
-                # Update pending subscription record
-                if subscription_id:
-                    try:
-                        sub_ref = db.collection("pending_subscriptions").document(subscription_id)
-                        sub_ref.update({
-                            "status": "completed",
-                            "activated_at": datetime.now(timezone.utc).isoformat(),
-                            "webhook_data": data
-                        })
-                    except Exception as e:
-                        print(f"Failed to update subscription record: {e}")
-                
-                # Send confirmation email
-                await send_subscription_confirmation(email, "pro")
-                
-                return JSONResponse({"status": "success", "message": "Subscription activated"})
-            else:
-                print(f"⚠️ Could not find email for subscription {subscription_id}")
-                return JSONResponse({"status": "ignored", "message": "Email not found"}, status_code=200)
-        
-        # Handle PAYMENT_SUCCESS for one-time payments (legacy support)
-        elif webhook_type == "PAYMENT_SUCCESS":
-            order_data = data.get("data", {}).get("order", {})
-            order_id = order_data.get("order_id")
-            email = order_data.get("customer_details", {}).get("customer_email")
-            
-            if email and order_id:
-                user_ref = db.collection("users").document(email)
-                user_ref.update({
-                    "plan": "pro",
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+
+    event = data.get("event")
+    print(f"Razorpay webhook: {event}")
+
+    if event == "subscription.activated":
+        entity = data.get("payload", {}).get("subscription", {}).get("entity", {})
+        subscription_id = entity.get("id")
+        user_id = entity.get("notes", {}).get("internal_user_id")
+
+        if user_id:
+            plan_tier = entity.get("notes", {}).get("plan", "pro")
+            if plan_tier not in ("basic", "intermediate", "pro"):
+                plan_tier = "pro"
+            user_ref = db.collection("users").document(user_id)
+            try:
+                result = user_ref.update({
+                    "plan": plan_tier,
                     "subscription": {
                         "status": "active",
-                        "activated_at": datetime.now(timezone.utc).isoformat()
-                    }
+                        "subscription_id": subscription_id,
+                        "activated_at": datetime.now(timezone.utc).isoformat(),
+                        "plan_type": plan_tier,
+                    },
+                    "trial_active": False,
                 })
-                print(f"✅ User {email} upgraded via one-time payment")
-                await send_subscription_confirmation(email, "pro")
-            
-            return JSONResponse({"status": "success"})
-        
-        # Acknowledge other webhook types
-        print(f"📨 Webhook type {webhook_type} received, no action taken")
-        return JSONResponse({"status": "received"})
-        
-    except Exception as e:
-        print(f"Webhook processing error: {e}")
-        return JSONResponse({"status": "error"}, status_code=500)
+                if inspect.isawaitable(result):
+                    await result
+                print(f"User {user_id} upgraded to {plan_tier} via Razorpay webhook")
+                await send_subscription_confirmation(user_id, plan_tier)
+            except Exception as e:
+                print(f"Failed to update user {user_id}: {e}")
+
+    return JSONResponse({"status": "ACKNOWLEDGED"})
 
 async def send_subscription_confirmation(email: str, plan: str):
     """Send email confirmation for successful subscription activation"""
@@ -1894,7 +2236,7 @@ async def websocket_dashboard(websocket: WebSocket):
 
         # Plan info cached for 10 s — avoids a Firestore round-trip on every 250 ms tick
         _plan_cache_ts: float = 0.0
-        _allowed_tokens_cache: list = BASIC_TOKENS
+        _allowed_tokens_cache: list = PRO_TOKENS
         _trial_expired_cache: bool = True
         _user_plan_cache: str = "trial"
 
@@ -1903,6 +2245,7 @@ async def websocket_dashboard(websocket: WebSocket):
         TICKER_INTERVAL = 0.1
         SIGNAL_EVERY_N = 5
         tick_count = 0
+        _cached_tickers: Dict[str, float] = {}  # last non-empty tickers for this connection
 
         # Define a background task for receiving messages
         async def receiver():
@@ -1925,6 +2268,14 @@ async def websocket_dashboard(websocket: WebSocket):
                                 current_user_email = new_user
                                 _plan_cache_ts = 0.0  # force cache refresh
                                 print(f"[WS] Re-authenticated: {current_user_email}")
+                    elif client_msg.strip() == "@devkey":
+                        dev_key = generate_dev_key()
+                        print(f"[WS] @devkey requested by {current_user_email} — key generated")
+                        await websocket.send_json({
+                            "type": "devkey",
+                            "key": dev_key,
+                            "message": f"Your developer key: {dev_key}",
+                        })
             except Exception:
                 pass
 
@@ -1937,8 +2288,8 @@ async def websocket_dashboard(websocket: WebSocket):
                 _now = time.time()
                 if _now - _plan_cache_ts > 10:
                     _allowed_tokens_cache = (
-                        get_allowed_tokens(current_user_email)
-                        if current_user_email else BASIC_TOKENS
+                        get_allowed_tokens()
+                        if current_user_email else PRO_TOKENS
                     )
                     _trial_expired_cache = (
                         is_trial_expired(current_user_email)
@@ -1952,13 +2303,39 @@ async def websocket_dashboard(websocket: WebSocket):
 
                 allowed_tokens = _allowed_tokens_cache
 
-                # Build tickers: prefer live prices; fall back to signal entry_price.
+                # Build tickers: prefer live prices; fall back to cached or signal entry_price.
                 # Cast values to float explicitly — engine.live_prices contains numpy.float32.
                 live_tickers = {
                     k: float(v)
                     for k, v in LIVE_STATE.data.get("tickers", {}).items()
                     if k in allowed_tokens
                 }
+                # During engine warmup live_prices is empty; fill from signal entry_price
+                # so the dashboard always shows something meaningful.
+                if not live_tickers:
+                    for _sym, _sig in LIVE_STATE.data.get("signals", {}).items():
+                        if _sym not in allowed_tokens:
+                            continue
+                        _ep = None
+                        if isinstance(_sig, dict):
+                            # flat signal
+                            _ep = _sig.get("entry_price") or _sig.get("price")
+                            if _ep is None:
+                                # nested timeframe dict — pick best available tf
+                                for _tf in ("1h", "30m", "15m", "4h", "1d"):
+                                    _tf_sig = _sig.get(_tf)
+                                    if isinstance(_tf_sig, dict):
+                                        _ep = _tf_sig.get("entry_price") or _tf_sig.get("price")
+                                        if _ep:
+                                            break
+                        if _ep:
+                            live_tickers[_sym] = float(_ep)
+                # Update connection-level cache with any real prices we have
+                if live_tickers:
+                    _cached_tickers.update(live_tickers)
+                elif _cached_tickers:
+                    # No fresh prices — serve stale cache so the UI stays populated
+                    live_tickers = dict(_cached_tickers)
 
                 if tick_count % SIGNAL_EVERY_N == 0:
                     # ── Full signal update (every ~2 s) ──────────────────────────
@@ -1989,12 +2366,15 @@ async def websocket_dashboard(websocket: WebSocket):
                                     "momentum": min(100, max(0, int((_tfc.get("efficiency") or 0.5) * 100))),
                                     "volume": 78 if _tfc.get("volume") == "high" else (58 if _tfc.get("volume") == "normal" else 38),
                                 }
-                                tf_data['probabilities'] = tf_data.get("raw_probabilities", {})
-                                tf_data['shap_values'] = tf_data.get("shap_contributions", [])
-                                tf_data['expectancy'] = round(_tfe.get("historical_expectancy", 0.0), 2)
-                                tf_data['max_dd'] = -abs(_tfe.get("max_dd_pct", 0.0))
-                                tf_data['profit_factor'] = round(max(0.01, _tfe.get("profitability_index", 1.0)), 2)
-                                tf_data['win_rate'] = round(tf_data.get("trading_accuracy", 0.5) * 100, 1)
+                                _acc1 = tf_data.get("trading_accuracy", 0.65)
+                                _tp_d1 = abs(tf_data.get("suggested_tp_distance") or 0.025)
+                                _sl_d1 = abs(tf_data.get("suggested_sl_distance") or 0.015)
+                                _rr1 = _tp_d1 / _sl_d1 if _sl_d1 > 0 else 1.5
+                                _exp_hist1 = _tfe.get("historical_expectancy") or 0
+                                tf_data['expectancy'] = round(_exp_hist1 if abs(_exp_hist1) > 0 else (_acc1 * _tp_d1 * 100) - ((1 - _acc1) * _sl_d1 * 100), 2)
+                                tf_data['max_dd'] = round(-abs(_tfe.get("max_dd_pct") or _sl_d1 * 100 * 3), 2)
+                                tf_data['profit_factor'] = round((_acc1 * _rr1) / max(0.001, 1 - _acc1), 2)
+                                tf_data['win_rate'] = round(_acc1 * 100, 1)
                                 tf_data['total_trades'] = 0
                                 timeframes_map[sym][tf] = tf_data
                                 if tf == '1h' and summary is None:
@@ -2019,6 +2399,11 @@ async def websocket_dashboard(websocket: WebSocket):
                             else:
                                 _conf = summary.get("confluence_scorecards", {})
                                 _em = summary.get("expectancy_matrix", {})
+                                _acc_s = summary.get("trading_accuracy", 0.65)
+                                _tp_s = abs(summary.get("suggested_tp_distance") or 0.025)
+                                _sl_s = abs(summary.get("suggested_sl_distance") or 0.015)
+                                _rr_s = _tp_s / _sl_s if _sl_s > 0 else 1.5
+                                _eh_s = _em.get("historical_expectancy") or 0
                                 filtered_signals[sym] = {
                                     "ai_prob": summary.get("ai_prob", 0),
                                     "signal": summary.get("signal", "WAITING"),
@@ -2033,7 +2418,7 @@ async def websocket_dashboard(websocket: WebSocket):
                                     "timestamp": datetime.now(timezone.utc).isoformat(),
                                     "confidence_score": summary.get("ai_prob", 0) * 100,
                                     "signal_id": summary.get("signal_id", ""),
-                                    "trading_accuracy": summary.get("trading_accuracy", 0.65),
+                                    "trading_accuracy": _acc_s,
                                     "profitability_index": summary.get("profitability_index", 1.5),
                                     "sr_telemetry": summary.get("sr_telemetry"),
                                     "macro_regime": summary.get("macro_regime"),
@@ -2043,12 +2428,12 @@ async def websocket_dashboard(websocket: WebSocket):
                                         "momentum": min(100, max(0, int((_conf.get("efficiency") or 0.5) * 100))),
                                         "volume": 78 if _conf.get("volume") == "high" else (58 if _conf.get("volume") == "normal" else 38),
                                     },
-                                    "probabilities": summary.get("raw_probabilities", {}),
-                                    "shap_values": summary.get("shap_contributions", []),
-                                    "expectancy": round(_em.get("historical_expectancy", 0.0), 2),
-                                    "max_dd": -abs(_em.get("max_dd_pct", 0.0)),
-                                    "profit_factor": round(max(0.01, _em.get("profitability_index", 1.0)), 2),
-                                    "win_rate": round(summary.get("trading_accuracy", 0.5) * 100, 1),
+                                    "raw_probabilities": summary.get("raw_probabilities", {}),
+                                    "shap_contributions": summary.get("shap_contributions", []),
+                                    "expectancy": round(_eh_s if abs(_eh_s) > 0 else (_acc_s * _tp_s * 100) - ((1 - _acc_s) * _sl_s * 100), 2),
+                                    "max_dd": round(-abs(_em.get("max_dd_pct") or _sl_s * 100 * 3), 2),
+                                    "profit_factor": round((_acc_s * _rr_s) / max(0.001, 1 - _acc_s), 2),
+                                    "win_rate": round(_acc_s * 100, 1),
                                     "total_trades": 0,
                                 }
                                 if response_timeframe is None:
@@ -2059,6 +2444,11 @@ async def websocket_dashboard(websocket: WebSocket):
                                 sig_data = {}
                             _conf2 = sig_data.get("confluence_scorecards", {})
                             _em2 = sig_data.get("expectancy_matrix", {})
+                            _acc3 = sig_data.get("trading_accuracy", 0.65)
+                            _tp_d3 = abs(sig_data.get("suggested_tp_distance") or 0.025)
+                            _sl_d3 = abs(sig_data.get("suggested_sl_distance") or 0.015)
+                            _rr3 = _tp_d3 / _sl_d3 if _sl_d3 > 0 else 1.5
+                            _eh3 = _em2.get("historical_expectancy") or 0
                             filtered_signals[sym] = {
                                 "ai_prob": sig_data.get("ai_prob", 0),
                                 "signal": sig_data.get("signal", "WAITING"),
@@ -2073,7 +2463,7 @@ async def websocket_dashboard(websocket: WebSocket):
                                 "timestamp": datetime.now(timezone.utc).isoformat(),
                                 "confidence_score": sig_data.get("ai_prob", 0) * 100,
                                 "signal_id": sig_data.get("signal_id", ""),
-                                "trading_accuracy": sig_data.get("trading_accuracy", 0.65),
+                                "trading_accuracy": _acc3,
                                 "profitability_index": sig_data.get("profitability_index", 1.5),
                                 "sr_telemetry": sig_data.get("sr_telemetry"),
                                 "macro_regime": sig_data.get("macro_regime"),
@@ -2083,12 +2473,12 @@ async def websocket_dashboard(websocket: WebSocket):
                                     "momentum": min(100, max(0, int((_conf2.get("efficiency") or 0.5) * 100))),
                                     "volume": 78 if _conf2.get("volume") == "high" else (58 if _conf2.get("volume") == "normal" else 38),
                                 },
-                                "probabilities": sig_data.get("raw_probabilities", {}),
-                                "shap_values": sig_data.get("shap_contributions", []),
-                                "expectancy": round(_em2.get("historical_expectancy", 0.0), 2),
-                                "max_dd": -abs(_em2.get("max_dd_pct", 0.0)),
-                                "profit_factor": round(max(0.01, _em2.get("profitability_index", 1.0)), 2),
-                                "win_rate": round(sig_data.get("trading_accuracy", 0.5) * 100, 1),
+                                "raw_probabilities": sig_data.get("raw_probabilities", {}),
+                                "shap_contributions": sig_data.get("shap_contributions", []),
+                                "expectancy": round(_eh3 if abs(_eh3) > 0 else (_acc3 * _tp_d3 * 100) - ((1 - _acc3) * _sl_d3 * 100), 2),
+                                "max_dd": round(-abs(_em2.get("max_dd_pct") or _sl_d3 * 100 * 3), 2),
+                                "profit_factor": round((_acc3 * _rr3) / max(0.001, 1 - _acc3), 2),
+                                "win_rate": round(_acc3 * 100, 1),
                                 "total_trades": 0,
                             }
 
@@ -2180,6 +2570,133 @@ async def toggle_alpha_mode(email: str = Depends(get_current_user)):
     LIVE_STATE.engine.alpha_mode = new_state
     LIVE_STATE.data["alpha_mode"] = new_state
     return {"alpha_mode": new_state}
+
+# -------------------------------------------------------------------
+# Dev code system — admin generation + user redemption
+# -------------------------------------------------------------------
+
+ADMIN_SECRET = os.getenv("ADMIN_SECRET", "")
+
+_DEV_CODE_RE = re.compile(r'^AEGIS-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$')
+_DEV_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no 0/O, 1/I/L
+
+def _make_dev_code() -> str:
+    seg = lambda: "".join(secrets.choice(_DEV_CODE_ALPHABET) for _ in range(4))
+    return f"AEGIS-{seg()}-{seg()}-{seg()}"
+
+async def _require_admin(x_admin_key: Optional[str] = Header(None)) -> None:
+    if not ADMIN_SECRET or x_admin_key != ADMIN_SECRET:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+def _get_dev_code_doc(code: str) -> Optional[Dict]:
+    doc_ref = db.collection("dev_codes").document(code)
+    doc = doc_ref.get()
+    to_dict = getattr(doc, "to_dict", None)
+    exists = getattr(doc, "exists", False)
+    if callable(to_dict) and exists:
+        result = to_dict()
+        return result if isinstance(result, dict) else {}
+    return None
+
+class GenerateDevCodeRequest(BaseModel):
+    count: int = 1
+    plan: str = "pro"
+    days: int = 30
+    label: str = "beta"
+
+@app.post("/admin/dev-codes/generate")
+async def admin_generate_dev_codes(
+    req: GenerateDevCodeRequest,
+    _admin: None = Depends(_require_admin),
+):
+    if req.plan not in ("basic", "intermediate", "pro"):
+        raise HTTPException(status_code=400, detail="Invalid plan")
+    if not (1 <= req.count <= 50):
+        raise HTTPException(status_code=400, detail="count must be 1–50")
+    if not (1 <= req.days <= 365):
+        raise HTTPException(status_code=400, detail="days must be 1–365")
+
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(days=req.days)
+    codes = []
+
+    for _i in range(req.count):
+        code = _make_dev_code()
+        db.collection("dev_codes").document(code).set({
+            "source": "backend",
+            "plan": req.plan,
+            "label": req.label,
+            "created_at": now.isoformat(),
+            "expires_at": expires_at.isoformat(),
+            "used_by": None,
+            "used_at": None,
+        })
+        codes.append({"code": code, "expires_at": expires_at.isoformat()})
+
+    return {"generated": len(codes), "plan": req.plan, "codes": codes}
+
+class DevCodeRequest(BaseModel):
+    code: str
+
+@app.post("/api/redeem-dev-code")
+async def redeem_dev_code(req: DevCodeRequest, email: str = Depends(get_current_user)):
+    code = req.code.strip().upper()
+
+    if not _DEV_CODE_RE.match(code):
+        raise HTTPException(status_code=400, detail="Invalid code format. Expected: AEGIS-XXXX-XXXX-XXXX")
+
+    code_data = _get_dev_code_doc(code)
+    if code_data is None:
+        raise HTTPException(status_code=404, detail="Dev code not found")
+
+    if code_data.get("source") != "backend":
+        raise HTTPException(status_code=403, detail="Dev code is not valid")
+
+    try:
+        expires_at_dt = datetime.fromisoformat(code_data["expires_at"])
+    except Exception:
+        raise HTTPException(status_code=500, detail="Malformed dev code record")
+
+    if datetime.now(timezone.utc) > expires_at_dt:
+        raise HTTPException(status_code=410, detail="This dev code has expired")
+
+    used_by = code_data.get("used_by")
+    if used_by and used_by != email:
+        raise HTTPException(status_code=409, detail="This dev code has already been used")
+
+    plan = code_data.get("plan", "pro")
+    expires_iso = code_data["expires_at"]
+
+    user_doc = get_user_doc(email)
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User account not found")
+
+    user_ref = db.collection("users").document(email)
+    update_result = user_ref.update({
+        "plan": plan,
+        "subscription": {
+            "status": "active",
+            "payment_id": f"devcode_{code}",
+            "order_id": f"devcode_{code}",
+            "activated_at": datetime.now(timezone.utc).isoformat(),
+            "plan_type": plan,
+            "expires_at": expires_iso,
+        },
+        "trial_active": False,
+        "dev_code_used": code,
+    })
+    if inspect.isawaitable(update_result):
+        await update_result
+
+    if not used_by:
+        mark_result = db.collection("dev_codes").document(code).update({
+            "used_by": email,
+            "used_at": datetime.now(timezone.utc).isoformat(),
+        })
+        if inspect.isawaitable(mark_result):
+            await mark_result
+
+    return {"status": "success", "plan": plan, "expires_at": expires_iso}
 
 # -------------------------------------------------------------------
 # Feedback endpoint
@@ -2317,18 +2834,71 @@ async def send_otp(request: OTPSendRequest):
     }
     try:
         message = MessageSchema(
-            subject="Your Aegis‑1 Verification Code",
+            subject="Your AEGIS Verification Code",
             recipients=[NameEmail(name=email, email=email)],
             body=f"""
+            <!DOCTYPE html>
             <html>
-            <body style="font-family: monospace; background: #0a0a0c; color: #00f2ff; padding: 20px;">
-                <h2>🔐 Aegis‑1 OTP</h2>
-                <p>Your verification code is:</p>
-                <h1 style="background: #1a1f2e; display: inline-block; padding: 12px 24px; border-radius: 12px;">{otp}</h1>
-                <p>This code expires in 5 minutes.</p>
-                <p>If you didn't request this, please ignore this email.</p>
-                <hr>
-                <small style="color: #6b7280;">Aegis‑1 Sovereign Terminal</small>
+            <head><meta charset="UTF-8"></head>
+            <body style="margin:0;padding:0;background:#0a0a0c;font-family:'Segoe UI',Arial,sans-serif;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0c;padding:40px 0;">
+                <tr><td align="center">
+                  <table width="480" cellpadding="0" cellspacing="0"
+                         style="background:#0f111a;border:1px solid rgba(0,242,255,0.15);border-radius:16px;overflow:hidden;max-width:480px;">
+
+                    <!-- Header -->
+                    <tr>
+                      <td style="background:linear-gradient(135deg,#00f2ff22,#7b2fff22);padding:32px 40px 24px;text-align:center;border-bottom:1px solid rgba(0,242,255,0.1);">
+                        <div style="font-size:28px;font-weight:800;letter-spacing:3px;
+                                    background:linear-gradient(90deg,#00f2ff,#7b2fff);
+                                    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+                                    display:inline-block;">
+                          ⚡ AEGIS
+                        </div>
+                        <p style="color:#6b7280;margin:8px 0 0;font-size:13px;letter-spacing:1px;">SOVEREIGN TERMINAL</p>
+                      </td>
+                    </tr>
+
+                    <!-- Body -->
+                    <tr>
+                      <td style="padding:36px 40px;">
+                        <p style="color:#9ca3af;font-size:15px;margin:0 0 8px;">Email Verification</p>
+                        <h2 style="color:#f9fafb;font-size:20px;font-weight:600;margin:0 0 24px;">Your one-time verification code</h2>
+
+                        <!-- OTP display -->
+                        <div style="background:#0a0a0c;border:1px solid rgba(0,242,255,0.25);border-radius:12px;
+                                    padding:24px;text-align:center;margin:0 0 24px;">
+                          <span style="font-family:'Courier New',Courier,monospace;font-size:38px;font-weight:700;
+                                       letter-spacing:12px;color:#00f2ff;">{otp}</span>
+                        </div>
+
+                        <p style="color:#9ca3af;font-size:14px;margin:0 0 8px;">
+                          This code expires in <strong style="color:#f9fafb;">5 minutes</strong>.
+                          Do not share it with anyone.
+                        </p>
+                        <p style="color:#6b7280;font-size:13px;margin:0;">
+                          If you didn't request this, you can safely ignore this email.
+                        </p>
+                      </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                      <td style="padding:20px 40px 28px;border-top:1px solid rgba(255,255,255,0.05);text-align:center;">
+                        <p style="color:#4b5563;font-size:12px;margin:0;">
+                          Sent by
+                          <a href="mailto:animeshkukreti@gatekeeper.sbs"
+                             style="color:#00f2ff;text-decoration:none;">animeshkukreti@gatekeeper.sbs</a>
+                          &nbsp;·&nbsp;
+                          <a href="https://gatekeeper.sbs"
+                             style="color:#00f2ff;text-decoration:none;">gatekeeper.sbs</a>
+                        </p>
+                      </td>
+                    </tr>
+
+                  </table>
+                </td></tr>
+              </table>
             </body>
             </html>
             """,
@@ -2472,7 +3042,7 @@ async def get_dashboard(
                 "plan": plan,
                 "trial_active": not (isinstance(trial_end, str) and trial_expired),
                 "trial_days_remaining": max(0, (datetime.fromisoformat(trial_end.replace("Z", "+00:00")) - datetime.now(timezone.utc)).days) if isinstance(trial_end, str) and not trial_expired else 0,
-                "allowed_tokens": get_allowed_tokens(current_user_email),
+                "allowed_tokens": get_allowed_tokens(),
                 "allowed_timeframes": get_allowed_timeframes(current_user_email)
             },
             "signals": [],
@@ -2505,7 +3075,7 @@ async def get_dashboard(
                 "plan": "trial",
                 "trial_active": True,
                 "trial_days_remaining": 2,
-                "allowed_tokens": ["BTC", "ETH", "SOL", "ARB", "AAVE"],
+                "allowed_tokens": PRO_TOKENS,
                 "allowed_timeframes": ["30m", "1h"]
             },
             "signals": [],
@@ -2591,177 +3161,6 @@ async def update_signal(
     except Exception as e:
         print(f"❌ Error updating signal: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to update signal")
-
-# -------------------------------------------------------------------
-# Phase 2: Cashfree Payment Integration
-# -------------------------------------------------------------------
-import uuid
-import requests
-
-class PaymentSessionRequest(BaseModel):
-    amount: float
-    tier: str
-    currency: str = "INR"
-    email: Optional[str] = "user@example.com"
-    user_id: Optional[str] = "user_123"
-
-def create_cashfree_order(user_id: str, user_email: str, plan_amount: float, plan_name: str, currency: str = "INR"):
-    IS_PROD = os.getenv("CASHFREE_MODE") == "PRODUCTION"
-    CASHFREE_BASE_URL = "https://api.cashfree.com/pg" if IS_PROD else "https://sandbox.cashfree.com/pg"
-    APP_URL = os.getenv("BASE_URL", "http://localhost:8000").rstrip('/')
-    
-    headers = {
-        "x-client-id": os.getenv("CASHFREE_APP_ID", os.getenv("CASHFREE_CLIENT_ID", "test_client_id")),
-        "x-client-secret": os.getenv("CASHFREE_SECRET_KEY", "test_client_secret"),
-        "x-api-version": "2023-08-01",
-        "Content-Type": "application/json"
-    }
-    
-    order_id = f"order_{uuid.uuid4().hex[:12]}"
-
-    # Cashfree customer_id: alphanumeric + underscore/hyphen only, max 50 chars
-    safe_customer_id = re.sub(r'[^a-zA-Z0-9_-]', '_', user_id)[:50]
-
-    payload = {
-        "order_id": order_id,
-        "order_amount": float(plan_amount),
-        "order_currency": currency,
-        "customer_details": {
-            "customer_id": safe_customer_id,
-            "customer_email": user_email,
-            "customer_phone": "9999999999"
-        },
-        "order_meta": {
-            "return_url": f"{APP_URL}/web/src/pages/dashboard.html?order_id={order_id}",
-            "notify_url": f"{APP_URL}/api/v1/cashfree-webhook"
-        },
-        "order_tags": {
-            "plan_tier": plan_name
-        }
-    }
-    
-    try:
-        response = requests.post(f"{CASHFREE_BASE_URL}/orders", json=payload, headers=headers)
-        if response.status_code == 200:
-            order_data = response.json()
-            return {
-                "success": True,
-                "payment_session_id": order_data.get("payment_session_id"),
-                "order_id": order_id
-            }
-        else:
-            print(f"❌ Cashfree Order Creation Failed: {response.text}")
-            return {"success": False, "error": response.text}
-    except Exception as e:
-        print(f"❌ Request Error: {str(e)}")
-        return {"success": False, "error": str(e)}
-
-@app.post("/api/v1/create-payment-session")
-async def create_payment_session(request: PaymentSessionRequest):
-    if not request.user_id:
-        raise HTTPException(status_code=400, detail="user_id is required")
-    if not request.email:
-        raise HTTPException(status_code=400, detail="email is required")
-    
-    try:
-        result = create_cashfree_order(
-            user_id=request.user_id,
-            user_email=request.email,
-            plan_amount=request.amount,
-            plan_name=request.tier,
-            currency=request.currency
-        )
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-import hmac
-import hashlib
-import base64
-
-@app.post("/api/v1/cashfree-webhook")
-async def handle_cashfree_webhook(request: Request):
-    # 1. Capture the raw body payload and signature verification headers
-    raw_payload = await request.body()
-    payload_str = raw_payload.decode("utf-8")
-    
-    headers = request.headers
-    signature = headers.get("x-webhook-signature")
-    timestamp = headers.get("x-webhook-timestamp")
-    secret_key = os.getenv("CASHFREE_SECRET_KEY")
-    
-    # 2. Cryptographic Signature Verification (Protects against fake upgrades)
-    if not signature or not timestamp or not secret_key:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing security headers")
-        
-    # Cashfree v3 Signature math: Base64(HMAC-SHA256(timestamp + payload, secret_key))
-    data_to_sign = timestamp + payload_str
-    computed_sig = base64.b64encode(
-        hmac.new(secret_key.encode('utf-8'), data_to_sign.encode('utf-8'), hashlib.sha256).digest()
-    ).decode('utf-8')
-    
-    if not hmac.compare_digest(computed_sig, signature):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Signature mismatch")
-
-    # 3. Parse the data array
-    data = await request.json()
-    event_type = data.get("event_type", data.get("type"))
-    
-    # Only execute logic if the event explicitly confirms an order was paid successfully
-    if event_type == "ORDER_PAID" or event_type == "PAYMENT_SUCCESS_WEBHOOK":
-        webhook_data = data.get("data", {})
-        order_details = webhook_data.get("order", {})
-        customer_details = webhook_data.get("customer_details", {})
-        
-        order_id = order_details.get("order_id")
-        user_id = customer_details.get("customer_id")
-        email = customer_details.get("customer_email")
-        amount = order_details.get("order_amount", 0)
-
-        # Prefer email as Firestore doc key; fall back to customer_id only if no email
-        target_doc = email if email else (user_id if user_id and user_id != 'user_unknown' else None)
-        
-        # 4. Perform the live database elevation inside Firestore
-        try:
-            if not target_doc:
-                raise ValueError("No valid user_id or email found in webhook")
-                
-            user_ref = db.collection("users").document(target_doc)
-            
-            # Check if user doc exists, fallback to email if target_doc was user_id
-            doc_snap = user_ref.get()
-            if not getattr(doc_snap, "exists", False) and target_doc != email and email:
-                print(f"⚠️ User {target_doc} not found. Trying fallback to email {email}...")
-                target_doc = email
-                user_ref = db.collection("users").document(target_doc)
-
-            # Determine the structural tier target based on the transaction amount
-            # E.g., ~1999 INR maps to PRO tier privileges
-            assigned_tier = "pro" if float(amount) >= 1000 else ("intermediate" if float(amount) >= 500 else "basic")
-            
-            # Use current datetime for Firestore as fallback to SERVER_TIMESTAMP depending on admin library
-            current_time = datetime.now(timezone.utc).isoformat()
-            
-            user_ref.update({
-                "plan": assigned_tier,
-                "trial_active": False,
-                "trial_end": current_time,   # seal trial at payment time
-                "subscription": {
-                    "status": "active",
-                    "plan_type": assigned_tier,
-                    "activated_at": current_time,
-                    "last_order_id": order_id
-                }
-            })
-            
-            print(f"✅ Webhook Success: Elevated User {target_doc} to {assigned_tier} Tier for Order {order_id}")
-            return {"status": "SUCCESS", "message": "User access parameters updated"}
-            
-        except Exception as e:
-            print(f"❌ Firestore Update Error inside Webhook: {str(e)}")
-            raise HTTPException(status_code=500, detail="Database write error")
-            
-    return {"status": "IGNORED", "message": "Non-payment event type processed"}
 
 # -------------------------------------------------------------------
 # API Portability & Developer Access
@@ -2855,6 +3254,36 @@ async def regenerate_api_key(user_id: str = Depends(get_current_user)):
     })
     
     return {"status": "SUCCESS", "api_key": raw_key}
+
+# Frontend uses /api/v1/keys/regenerate — alias to the canonical route above
+@app.post("/api/v1/keys/regenerate")
+async def regenerate_api_key_alias(user_id: str = Depends(get_current_user)):
+    return await regenerate_api_key(user_id)
+
+# -------------------------------------------------------------------
+# User settings (capital + risk) — persisted to Firestore
+# Called by the Settings room in dashboard.js when user hits Save
+# -------------------------------------------------------------------
+class UserSettingsUpdate(BaseModel):
+    capital: float
+    risk_pct: float
+
+@app.post("/user/settings")
+async def save_user_settings(
+    payload: UserSettingsUpdate,
+    user_id: str = Depends(get_current_user)
+):
+    if payload.capital < 100:
+        raise HTTPException(status_code=400, detail="Capital must be at least $100")
+    if not (0.5 <= payload.risk_pct <= 10):
+        raise HTTPException(status_code=400, detail="Risk % must be between 0.5 and 10")
+
+    user_ref = db.collection("users").document(user_id)
+    user_ref.set(
+        {"capital": payload.capital, "risk_pct": payload.risk_pct},
+        merge=True
+    )
+    return {"status": "ok", "capital": payload.capital, "risk_pct": payload.risk_pct}
 
 # -------------------------------------------------------------------
 

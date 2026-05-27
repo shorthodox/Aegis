@@ -106,6 +106,21 @@ export class WebSocketManager {
     }
 
     connect() {
+        // Check if features are blocked before connecting
+        const isTrialValid = typeof AuthManager !== 'undefined' ? AuthManager.isTrialValid() : false;
+        const user = typeof AuthManager !== 'undefined' ? AuthManager.getUser() : null;
+        const plan = (user?.plan || user?.tier || 'trial').toLowerCase();
+        const hasPaidPlan = ['pro', 'premium', 'intermediate', 'basic'].includes(plan);
+
+        if (!hasPaidPlan && !isTrialValid) {
+            console.warn('[WS Manager] Features are blocked (trial expired). WebSocket connection aborted.');
+            const statusText = document.getElementById('ws-status-text');
+            const statusDot = document.getElementById('ws-status-dot');
+            if (statusText) statusText.textContent = 'Disconnected (Blocked)';
+            if (statusDot) statusDot.className = 'ws-dot disconnected';
+            return;
+        }
+
         this.ws = new WebSocket(this.url);
         
         this.ws.onopen = () => {

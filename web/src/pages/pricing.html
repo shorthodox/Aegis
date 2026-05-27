@@ -8,6 +8,30 @@
     <link rel="stylesheet" href="/web/src/styles/main.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="canonical" href="https://gatekeeper.sbs/web/src/pages/pricing.html">
+    <meta name="author" content="Animesh Kukreti &amp; Aman Juiyal">
+    <meta name="owner" content="Animesh Kukreti &amp; Aman Juiyal">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      "name": "Pricing — Gatekeeper (Aegis-1)",
+      "url": "https://gatekeeper.sbs/web/src/pages/pricing.html",
+      "publisher": {
+        "@type": "Organization",
+        "name": "Gatekeeper (Aegis-1)",
+        "founders": [
+          {"@type": "Person", "name": "Animesh Kukreti"},
+          {"@type": "Person", "name": "Aman Juiyal"}
+        ],
+        "address": {
+          "@type": "PostalAddress",
+          "addressLocality": "Dehradun",
+          "addressRegion": "Uttarakhand",
+          "addressCountry": "IN"
+        }
+      }
+    }
+    </script>
     <style>
         .footer {
             text-align: center;
@@ -111,8 +135,7 @@
         <div class="pricing-header">
             <h1 class="gradient-text">Choose Your Edge</h1>
             <p class="hero-sub">Every plan includes <strong>Aegis‑1 Executive Guidance</strong>: step‑by‑step execution
-                playbooks and real‑time risk filters. Cashfree payment gateway support is prepared for checkout
-                integration.</p>
+                playbooks and real‑time risk filters. Razorpay Standard Checkout — UPI, cards, and netbanking.</p>
         </div>
 
         <!-- Free Trial CTA -->
@@ -161,7 +184,7 @@
                 <div class="price">$3.60 <span>/mo</span></div>
                 <p class="card-desc">Entry Level Intelligence.</p>
                 <ul class="features-list">
-                    <li><i class="fas fa-check-circle"></i> BTC/ETH only</li>
+                    <li><i class="fas fa-check-circle"></i> Full 42-Token Fleet</li>
                     <li><i class="fas fa-chart-line"></i> 1:1 R:R profiles</li>
                     <li><i class="fas fa-flask"></i> 3-Day Free Trial</li>
                     <li><i class="fas fa-archive"></i> Signal Archive</li>
@@ -237,7 +260,7 @@
                     </tr>
                     <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                         <td style="padding: 1rem 1.5rem;">Full 42-Token Fleet</td>
-                        <td style="padding: 1rem; text-align: center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
+                        <td style="padding: 1rem; text-align: center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
                         <td style="padding: 1rem; text-align: center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
                         <td style="padding: 1rem; text-align: center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
                     </tr>
@@ -276,12 +299,59 @@
         </div>
 
         <div class="pricing-note" style="margin-top:2.5rem; text-align:center; color:rgba(255,255,255,0.75);">
-            <p>✅ Cashfree payment gateway support is enabled for smooth global checkout flows.</p>
+            <p>✅ Razorpay Standard Checkout is enabled — UPI AutoPay, cards, netbanking, and wallets.</p>
         </div>
 
         <div class="guidance-teaser" style="margin-top: 1.5rem;">
             <p>🛡️ <strong>The Aegis‑1 Promise:</strong> We don't just give signals. We tell you <u>exactly</u> how to
                 enter, when to sit on your hands, and which common retail traps to avoid.</p>
+        </div>
+        <!-- Developer Access Code -->
+        <div id="devCodeSection" style="
+            margin: 2.5rem auto 0;
+            max-width: 480px;
+            padding: 1.5rem 1.75rem;
+            background: rgba(0,0,0,0.35);
+            border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 14px;
+        ">
+            <button id="devCodeToggle" style="
+                background: none; border: none; cursor: pointer;
+                display: flex; align-items: center; gap: 0.6rem;
+                color: rgba(255,255,255,0.4); font-size: 0.8rem;
+                letter-spacing: 0.08em; text-transform: uppercase; padding: 0;
+                width: 100%;
+            ">
+                <i class="fas fa-key" style="font-size:0.75rem;"></i>
+                <span>Have a developer access code?</span>
+                <i id="devCodeChevron" class="fas fa-chevron-down" style="margin-left:auto;font-size:0.65rem;transition:transform 0.2s;"></i>
+            </button>
+
+            <div id="devCodeBody" style="display:none; margin-top: 1.1rem;">
+                <div style="display:flex; gap:0.5rem;">
+                    <input id="devCodeInput" type="text" placeholder="AEGIS-XXXX-XXXX-XXXX"
+                        autocomplete="off" spellcheck="false" maxlength="22"
+                        style="
+                            flex:1; background:rgba(255,255,255,0.05);
+                            border:1px solid rgba(255,255,255,0.12);
+                            border-radius:8px; padding:0.55rem 0.85rem;
+                            color:#fff; font-size:0.9rem; font-family:monospace;
+                            letter-spacing:0.06em; outline:none;
+                        "
+                        oninput="this.value=this.value.toUpperCase()"
+                    >
+                    <button id="devCodeSubmit" style="
+                        padding: 0.55rem 1.1rem;
+                        background: rgba(0,242,255,0.12);
+                        border: 1px solid rgba(0,242,255,0.3);
+                        border-radius: 8px; color: #00f2ff;
+                        font-size: 0.85rem; font-weight: 700;
+                        cursor: pointer; white-space: nowrap;
+                        transition: background 0.2s;
+                    ">Redeem</button>
+                </div>
+                <div id="devCodeMsg" style="margin-top:0.6rem; font-size:0.8rem; min-height:1.1em;"></div>
+            </div>
         </div>
     </section>
 
@@ -297,11 +367,9 @@
             <a href="/web/src/pages/refund_policy.html">Refund Policy</a>
             <span class="separator">•</span>
             <a href="/web/src/pages/risk_disclosure.html">Risk Disclosure</a>
-            <span class="separator">•</span>
-            <a href="/web/src/pages/review.html">Reviews</a>
         </div>
         <div class="footer-proprietor">
-            Proprietor: Animesh Kukreti | Dehradun, Uttarakhand, India
+            Operated by <strong>Animesh Kukreti &amp; Aman Juiyal</strong> &nbsp;|&nbsp; Dehradun, Uttarakhand, India
         </div>
         <p>© 2026 AEGIS v1.0 — Sovereign Intelligence Terminal</p>
     </footer>
@@ -321,23 +389,48 @@
             initSignInUI();
             initSignUpUI();
 
-            // Localize Pricing
-            const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-            const isIndia = timeZone === 'Asia/Calcutta' || timeZone === 'Asia/Kolkata';
-            if (isIndia) {
-                const priceElements = document.querySelectorAll('.price');
-                if (priceElements.length >= 3) {
-                    priceElements[0].innerHTML = '₹299 <span>/mo</span>';
-                    priceElements[1].innerHTML = '₹1,999 <span>/mo</span>';
-                    priceElements[2].innerHTML = '₹3,499 <span>/mo</span>';
+            // Localize Pricing — fetches live USD exchange rate from the backend
+            (async () => {
+                const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                const isIndia = timeZone === 'Asia/Calcutta' || timeZone === 'Asia/Kolkata';
+
+                // Determine display currency and symbol from timezone
+                const locale = navigator.language || 'en-US';
+                let displayCurrency = 'USD';
+                if (isIndia) displayCurrency = 'INR';
+
+                if (displayCurrency === 'USD') return; // USD prices already shown in HTML
+
+                try {
+                    const resp = await fetch('/api/exchange-rates');
+                    if (!resp.ok) return;
+                    const data = await resp.json();
+                    const rate = data.rates?.[displayCurrency];
+                    const usd = data.plan_prices_usd;
+                    if (!rate || !usd) return;
+
+                    const fmt = (usdPrice) => new Intl.NumberFormat(locale, {
+                        style: 'currency',
+                        currency: displayCurrency,
+                        maximumFractionDigits: 0,
+                    }).format(Math.round(usdPrice * rate));
+
+                    const planKeys = ['basic', 'intermediate', 'pro'];
+                    const priceEls = document.querySelectorAll('.price');
+                    planKeys.forEach((key, i) => {
+                        if (priceEls[i]) priceEls[i].innerHTML = fmt(usd[key]) + ' <span>/mo</span>';
+                    });
+
+                    document.querySelectorAll('th').forEach(th => {
+                        const text = th.textContent;
+                        if (text.includes('Basic')) th.textContent = `Basic (${fmt(usd.basic)})`;
+                        else if (text.includes('Intermediate')) th.textContent = `Intermediate (${fmt(usd.intermediate)})`;
+                        else if (text.includes('Professional')) th.textContent = `Professional (${fmt(usd.pro)})`;
+                    });
+                } catch (_) {
+                    // silently keep USD prices if rate fetch fails
                 }
-                const thElements = document.querySelectorAll('th');
-                thElements.forEach(th => {
-                    if (th.innerHTML.includes('Basic ($3.60)')) th.innerHTML = 'Basic (₹299)';
-                    else if (th.innerHTML.includes('Intermediate ($24.00)')) th.innerHTML = 'Intermediate (₹1,999)';
-                    else if (th.innerHTML.includes('Professional ($40.00)')) th.innerHTML = 'Professional (₹3,499)';
-                });
-            }
+            })();
 
             const portalBtn = document.getElementById('portalBtn');
             const dashboardBtn = document.getElementById('dashboardBtn');
@@ -482,6 +575,72 @@
             // Listen for navigation events
             window.addEventListener('openSignin', openSignInModal);
             window.addEventListener('openSignup', openSignUpModal);
+
+            // Dev code widget
+            const devCodeToggle = document.getElementById('devCodeToggle');
+            const devCodeBody   = document.getElementById('devCodeBody');
+            const devCodeChevron = document.getElementById('devCodeChevron');
+            const devCodeInput  = document.getElementById('devCodeInput');
+            const devCodeSubmit = document.getElementById('devCodeSubmit');
+            const devCodeMsg    = document.getElementById('devCodeMsg');
+
+            if (devCodeToggle && devCodeBody) {
+                devCodeToggle.addEventListener('click', () => {
+                    const open = devCodeBody.style.display === 'none';
+                    devCodeBody.style.display = open ? 'block' : 'none';
+                    if (devCodeChevron) devCodeChevron.style.transform = open ? 'rotate(180deg)' : '';
+                    if (open && devCodeInput) devCodeInput.focus();
+                });
+            }
+
+            async function redeemDevCode() {
+                const code = (devCodeInput?.value || '').trim().toUpperCase();
+                if (!code) return;
+
+                const token = localStorage.getItem('access_token') || localStorage.getItem('authToken');
+                if (!token) {
+                    window.pendingAction = 'redeemDevCode';
+                    openSignInModal();
+                    return;
+                }
+
+                if (devCodeSubmit) { devCodeSubmit.disabled = true; devCodeSubmit.textContent = '…'; }
+                if (devCodeMsg) { devCodeMsg.style.color = 'rgba(255,255,255,0.5)'; devCodeMsg.textContent = 'Validating…'; }
+
+                try {
+                    const res = await fetch('/api/redeem-dev-code', {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ code })
+                    });
+                    const data = await res.json();
+
+                    if (res.ok) {
+                        const exp = data.expires_at ? new Date(data.expires_at).toLocaleDateString() : '';
+                        devCodeMsg.style.color = '#00ff88';
+                        devCodeMsg.textContent = `✅ ${data.plan.toUpperCase()} access activated${exp ? ' until ' + exp : ''}. Redirecting…`;
+                        setTimeout(() => { window.location.href = '/web/src/pages/dashboard.html'; }, 1500);
+                    } else {
+                        devCodeMsg.style.color = '#ff6464';
+                        devCodeMsg.textContent = '✗ ' + (data.detail || 'Could not redeem code. Please try again.');
+                        if (devCodeSubmit) { devCodeSubmit.disabled = false; devCodeSubmit.textContent = 'Redeem'; }
+                    }
+                } catch (err) {
+                    devCodeMsg.style.color = '#ff6464';
+                    devCodeMsg.textContent = 'Network error. Please try again.';
+                    if (devCodeSubmit) { devCodeSubmit.disabled = false; devCodeSubmit.textContent = 'Redeem'; }
+                }
+            }
+
+            if (devCodeSubmit) devCodeSubmit.addEventListener('click', redeemDevCode);
+            if (devCodeInput) devCodeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') redeemDevCode(); });
+
+            window.addEventListener('authStateChange', (ev) => {
+                if (ev.detail?.authenticated && window.pendingAction === 'redeemDevCode') {
+                    window.pendingAction = null;
+                    redeemDevCode();
+                }
+            });
         });
     </script>
     <!-- Lightweight server-backed login modal is injected by simple-auth-client.js -->

@@ -129,6 +129,10 @@ THRESHOLD_CEIL = 3.00
 
 PROXIMITY_THRESHOLD = 0.005  # 0.5% proximity to S&R boundary triggers alert
 
+CANDLE_CONFIRM_REQUIRED = 3    # consecutive candles needed before emitting signal
+SIGNAL_EXPIRY_MOVE_PCT = 0.60  # if price moves 60% of expected TP before action → expired
+REVERSAL_SCORE_THRESHOLD = 0.35  # minimum technical score to begin candle counting
+
 MODE_PARAMS = {
     "conservative": {"entry_prob": 0.75, "risk_pct": 0.015, "atr_sl": 1.2, "atr_tp": 1.8},
     "balanced":     {"entry_prob": 0.70, "risk_pct": 0.020, "atr_sl": 1.5, "atr_tp": 2.0},
@@ -404,6 +408,183 @@ class ThresholdEngine:
 # -------------------------------------------------------------------
 # LiveWallet (with reset feature)
 # -------------------------------------------------------------------
+# -------------------------------------------------------------------
+# Reversal Anticipation Engine
+# -------------------------------------------------------------------
+class ReversalDetector:
+    """Detects early signs of trend reversal using RSI, candlestick patterns, and S/R proximity."""
+
+    @staticmethod
+    def _rsi(series: pd.Series, period: int = 14) -> pd.Series:
+        delta = series.diff()
+        gain = delta.clip(lower=0)
+        loss = -delta.clip(upper=0)
+        avg_gain = gain.ewm(com=period - 1, adjust=False).mean()
+        avg_loss = loss.ewm(com=period - 1, adjust=False).mean()
+        rs = avg_gain / (avg_loss + 1e-9)
+        return 100 - (100 / (1 + rs))
+
+    @classmethod
+    def detect_bearish_reversal_setup(
+        cls, df: pd.DataFrame, resistance: float = 0.0
+    ) -> tuple:
+        """Return (score 0-1, [signal_tags]) indicating how ripe a bearish reversal is."""
+        if len(df) < 20:
+            return 0.0, []
+        close = df['close']
+        signals: list = []
+        score = 0.0
+
+        rsi_s = cls._rsi(close)
+        rsi_now = float(rsi_s.iloc[-1])
+        if rsi_now > 70:
+            signals.append(f"RSI_OB_{rsi_now:.0f}")
+            score += 0.25
+        elif rsi_now > 65:
+            score += 0.10
+
+        # Bearish divergence: price higher high, RSI lower high
+        if len(df) >= 10:
+            rsi_window = rsi_s.iloc[-6:-1]
+            close_window = close.iloc[-6:-1]
+            if not rsi_window.empty and close.iloc[-1] >= close_window.max() and rsi_now <= float(rsi_window.max()):
+                signals.append("BEARISH_RSI_DIV")
+                score += 0.30
+
+        # Exhaustion candle: small body + long upper wick
+        c = df.iloc[-1]
+        body = abs(float(c['close']) - float(c['open']))
+        up_wick = float(c['high']) - max(float(c['close']), float(c['open']))
+        total = float(c['high']) - float(c['low'])
+        if total > 0 and up_wick / total > 0.50 and body / total < 0.35:
+            signals.append("SHOOTING_STAR")
+            score += 0.20
+
+        # Bearish engulfing
+        if len(df) >= 2:
+            prev = df.iloc[-2]
+            if (float(c['close']) < float(c['open']) and float(prev['close']) > float(prev['open'])
+                    and float(c['open']) >= float(prev['close']) * 0.997
+                    and float(c['close']) < float(prev['open'])):
+                signals.append("BEARISH_ENGULF")
+                score += 0.25
+
+        # Near resistance
+        cp = float(close.iloc[-1])
+        if resistance > 0:
+            dist = (resistance - cp) / cp
+            if 0 <= dist <= 0.005:
+                signals.append("AT_RESISTANCE")
+                score += 0.20
+
+        # Price overextended above EMA-20
+        ema20 = close.ewm(span=20, adjust=False).mean()
+        if float(ema20.iloc[-1]) > 0:
+            ext = (cp - float(ema20.iloc[-1])) / float(ema20.iloc[-1])
+            if ext > 0.03:
+                signals.append(f"OVEREXT_{ext*100:.1f}%")
+                score += 0.15
+
+        return min(score, 1.0), signals
+
+    @classmethod
+    def detect_bullish_reversal_setup(
+        cls, df: pd.DataFrame, support: float = 0.0
+    ) -> tuple:
+        """Return (score 0-1, [signal_tags]) indicating how ripe a bullish reversal is."""
+        if len(df) < 20:
+            return 0.0, []
+        close = df['close']
+        signals: list = []
+        score = 0.0
+
+        rsi_s = cls._rsi(close)
+        rsi_now = float(rsi_s.iloc[-1])
+        if rsi_now < 30:
+            signals.append(f"RSI_OS_{rsi_now:.0f}")
+            score += 0.25
+        elif rsi_now < 35:
+            score += 0.10
+
+        # Bullish divergence: price lower low, RSI higher low
+        if len(df) >= 10:
+            rsi_window = rsi_s.iloc[-6:-1]
+            close_window = close.iloc[-6:-1]
+            if not rsi_window.empty and close.iloc[-1] <= close_window.min() and rsi_now >= float(rsi_window.min()):
+                signals.append("BULLISH_RSI_DIV")
+                score += 0.30
+
+        # Hammer candle: small body + long lower wick
+        c = df.iloc[-1]
+        body = abs(float(c['close']) - float(c['open']))
+        low_wick = min(float(c['close']), float(c['open'])) - float(c['low'])
+        total = float(c['high']) - float(c['low'])
+        if total > 0 and low_wick / total > 0.50 and body / total < 0.35:
+            signals.append("HAMMER")
+            score += 0.20
+
+        # Bullish engulfing
+        if len(df) >= 2:
+            prev = df.iloc[-2]
+            if (float(c['close']) > float(c['open']) and float(prev['close']) < float(prev['open'])
+                    and float(c['open']) <= float(prev['close']) * 1.003
+                    and float(c['close']) > float(prev['open'])):
+                signals.append("BULLISH_ENGULF")
+                score += 0.25
+
+        # Near support
+        cp = float(close.iloc[-1])
+        if support > 0:
+            dist = (cp - support) / cp
+            if 0 <= dist <= 0.005:
+                signals.append("AT_SUPPORT")
+                score += 0.20
+
+        # Price overextended below EMA-20
+        ema20 = close.ewm(span=20, adjust=False).mean()
+        if float(ema20.iloc[-1]) > 0:
+            ext = (cp - float(ema20.iloc[-1])) / float(ema20.iloc[-1])
+            if ext < -0.03:
+                signals.append(f"OVEREXT_{ext*100:.1f}%")
+                score += 0.15
+
+        return min(score, 1.0), signals
+
+    @staticmethod
+    def count_confirming_candles(df: pd.DataFrame, direction: str, max_look: int = 5) -> int:
+        if len(df) < 5:
+            return 0
+        # Access contiguous underlying numpy matrix locations directly to prevent IndexErrors
+        closes = df['close'].to_numpy()
+        opens = df['open'].to_numpy()
+
+        count = 0
+        # Loop backwards starting from the last completed candle (-2) down to lookback limits
+        for i in range(2, min(max_look + 2, len(df))):
+            idx = -i
+            if direction == "LONG" and closes[idx] > opens[idx]:
+                count += 1
+            elif direction == "SHORT" and closes[idx] < opens[idx]:
+                count += 1
+            else:
+                break
+        return count
+
+    @staticmethod
+    def is_support_broken(current_close: float, support: float, buffer_pct: float = 0.001) -> bool:
+        """True when close is below support by more than buffer."""
+        if support <= 0:
+            return False
+        return current_close < support * (1 - buffer_pct)
+
+    @staticmethod
+    def is_resistance_broken(current_close: float, resistance: float, buffer_pct: float = 0.001) -> bool:
+        """True when close is above resistance by more than buffer."""
+        if resistance <= 0:
+            return False
+        return current_close > resistance * (1 + buffer_pct)
+
+
 class LiveWallet:
     def __init__(self, initial_balance: float, max_position_usdt: float):
         self.initial_balance = initial_balance   # store for reset
@@ -769,6 +950,8 @@ class SignalGenerator:
         self.threshold_engine = ThresholdEngine()
         self.score_history: Dict[str, Deque[float]] = {norm_sym: deque(maxlen=5) for norm_sym in self.configs.keys()}
         self.macro_cache: Dict[str, Dict[str, float]] = {}
+        # Tracks reversal candidates per "sym_tf_DIR" key until candle confirmation
+        self.reversal_candidates: Dict[str, dict] = {}
 
     def _align_features(self, df: pd.DataFrame, expected_features: List[str]) -> Optional[pd.DataFrame]:
         missing = [f for f in expected_features if f not in df.columns]
@@ -779,21 +962,29 @@ class SignalGenerator:
         return aligned
 
     async def compute_macro_trend(self, symbol: str, fetcher: MarketDataFetcher) -> Tuple[str, Dict]:
-        """
-        Compute macro trend for `symbol` using 1d and 1w EMA50 comparison.
-        Returns (trend, telemetry)
-        trend: 'BULL', 'BEAR', or 'DIVERGENT'
-        telemetry: dict with ema50_1d, ema50_1w, close_1d, close_1w
-        """
         norm_sym = normalize_symbol(symbol)
         try:
-            df_1d = await fetcher.get_data(norm_sym, '1d', lookback_hours=800)
-            df_1w = await fetcher.get_data(norm_sym, '1w', lookback_hours=4000)
-            if df_1d.empty or df_1w.empty:
+            # Request an expanded daily history pool (4500 hours / ~180 days) to construct a valid weekly matrix
+            df_1d = await fetcher.get_data(norm_sym, '1d', lookback_hours=4500)
+            if df_1d.empty or len(df_1d) < 50:
                 return 'DIVERGENT', {}
 
+            # Synthetically resample the clean daily dataframe into chronological weekly blocks (ending Sundays)
+            df_1w = df_1d.resample('W').agg({
+                'open': 'first',
+                'high': 'max',
+                'low': 'min',
+                'close': 'last',
+                'volume': 'sum'
+            })
+
+            if df_1w.empty or len(df_1w) < 2:
+                return 'DIVERGENT', {}
+
+            # Calculate 50-period Exponential Moving Averages across both horizons safely
             ema50_1d = df_1d['close'].ewm(span=50, adjust=False).mean().iloc[-1]
             ema50_1w = df_1w['close'].ewm(span=50, adjust=False).mean().iloc[-1]
+
             close_1d = float(df_1d['close'].iloc[-1])
             close_1w = float(df_1w['close'].iloc[-1])
 
@@ -806,13 +997,15 @@ class SignalGenerator:
                 'confluence_score': float((1.0 if bull_1d else -1.0) + (1.0 if bull_1w else -1.0))
             }
             self.macro_cache[norm_sym] = macro_state
+
             if bull_1d and bull_1w:
                 return 'BULL', { 'ema50_1d': float(ema50_1d), 'ema50_1w': float(ema50_1w), 'close_1d': close_1d, 'close_1w': close_1w }
             if not bull_1d and not bull_1w:
                 return 'BEAR', { 'ema50_1d': float(ema50_1d), 'ema50_1w': float(ema50_1w), 'close_1d': close_1d, 'close_1w': close_1w }
+
             return 'DIVERGENT', { 'ema50_1d': float(ema50_1d), 'ema50_1w': float(ema50_1w), 'close_1d': close_1d, 'close_1w': close_1w }
         except Exception as e:
-            logger.debug(f"Macro trend compute failed for {symbol}: {e}")
+            logger.debug(f"Synthetic macro trend compute failed for {symbol}: {e}")
             return 'DIVERGENT', {}
 
     async def compute_signal(self, symbol: str, fetcher: MarketDataFetcher, alpha_mode: bool, timeframe: str = '1h', btc_healthy: bool = True, macro_trend: Optional[str] = None) -> Optional[Dict]:
@@ -887,9 +1080,11 @@ class SignalGenerator:
         try:
             dist_to_support = float(_current_row["pct_dist_to_support"])
             dist_to_resistance = float(_current_row["pct_dist_to_resistance"])
-            if dist_to_support <= PROXIMITY_THRESHOLD:
+            # Only flag NEAR_SUPPORT when price is *above* support (positive dist) within threshold.
+            # A negative dist_to_support means price is already below support (broken).
+            if 0 <= dist_to_support <= PROXIMITY_THRESHOLD:
                 sr_alert_state = "NEAR_SUPPORT"
-            elif dist_to_resistance <= PROXIMITY_THRESHOLD:
+            elif 0 <= dist_to_resistance <= PROXIMITY_THRESHOLD:
                 sr_alert_state = "NEAR_RESISTANCE"
             else:
                 sr_alert_state = "NONE"
@@ -1017,6 +1212,103 @@ class SignalGenerator:
         if not alpha_mode and not btc_healthy and base_signal == "LONG":
             base_signal = "NEUTRAL"
 
+        # ──────────────────────────────────────────────────────────────
+        # REVERSAL ANTICIPATION ENGINE
+        # Signals fire when the trend is *about to* reverse, not after it
+        # has already moved ≥50%.  Logic:
+        #   1. Detect technical reversal setup (RSI divergence, patterns, S/R)
+        #   2. Count 3 consecutive confirming candles in the new direction
+        #   3. For SHORT near support: wait for actual support break first
+        #   4. Mark signal_status: AWAITING_CONFIRMATION / AWAITING_SR_BREAK / CONFIRMED
+        # ──────────────────────────────────────────────────────────────
+        rev_key = f"{norm_sym}_{timeframe}"
+        signal_status = "ACTIVE"
+        candles_confirmed = 0
+        reversal_score_val = 0.0
+        reversal_signals_list: list = []
+
+        support_lvl = float(sr_telemetry.get("support_line") or 0.0)
+        resistance_lvl = float(sr_telemetry.get("resistance_line") or 0.0)
+
+        if base_signal == "LONG":
+            bull_score, bull_sigs = ReversalDetector.detect_bullish_reversal_setup(
+                df_1h, support=support_lvl
+            )
+            reversal_score_val = bull_score
+            reversal_signals_list = bull_sigs
+            candles_confirmed = ReversalDetector.count_confirming_candles(df_1h, "LONG")
+
+            cand_key = f"{rev_key}_LONG"
+            if bull_score >= REVERSAL_SCORE_THRESHOLD:
+                if cand_key not in self.reversal_candidates:
+                    self.reversal_candidates[cand_key] = {
+                        "direction": "LONG",
+                        "first_price": current_price,
+                        "candles_confirmed": candles_confirmed,
+                        "score": bull_score,
+                    }
+                else:
+                    self.reversal_candidates[cand_key]["candles_confirmed"] = candles_confirmed
+
+                if candles_confirmed >= CANDLE_CONFIRM_REQUIRED:
+                    signal_status = "CONFIRMED"
+                    self.reversal_candidates.pop(cand_key, None)
+                else:
+                    # Preserve signal payload for dashboard tracking; entries blocked via signal_status
+                    signal_status = "AWAITING_CONFIRMATION"
+            else:
+                # Reversal setup not strong enough — clear candidate and neutralise
+                self.reversal_candidates.pop(cand_key, None)
+                base_signal = "NEUTRAL"
+                signal_status = "ACTIVE"
+
+        elif base_signal == "SHORT":
+            # ── Support-break gate: SELL near support → wait for break ──
+            if sr_alert_state == "NEAR_SUPPORT" and support_lvl > 0:
+                support_broken = ReversalDetector.is_support_broken(current_price, support_lvl)
+                if not support_broken:
+                    # Preserve SHORT payload for dashboard tracking; entries blocked via signal_status
+                    signal_status = "AWAITING_SR_BREAK"
+                    self.reversal_candidates[f"{rev_key}_SR_BREAK"] = {
+                        "support_level": support_lvl,
+                        "direction": "SHORT",
+                    }
+                else:
+                    # Support actually broken — allow SHORT to proceed
+                    signal_status = "SR_BREAK_CONFIRMED"
+                    self.reversal_candidates.pop(f"{rev_key}_SR_BREAK", None)
+            else:
+                # Not near support; apply standard candle-confirmation
+                bear_score, bear_sigs = ReversalDetector.detect_bearish_reversal_setup(
+                    df_1h, resistance=resistance_lvl
+                )
+                reversal_score_val = bear_score
+                reversal_signals_list = bear_sigs
+                candles_confirmed = ReversalDetector.count_confirming_candles(df_1h, "SHORT")
+
+                cand_key = f"{rev_key}_SHORT"
+                if bear_score >= REVERSAL_SCORE_THRESHOLD:
+                    if cand_key not in self.reversal_candidates:
+                        self.reversal_candidates[cand_key] = {
+                            "direction": "SHORT",
+                            "first_price": current_price,
+                            "candles_confirmed": candles_confirmed,
+                            "score": bear_score,
+                        }
+                    else:
+                        self.reversal_candidates[cand_key]["candles_confirmed"] = candles_confirmed
+
+                    if candles_confirmed >= CANDLE_CONFIRM_REQUIRED:
+                        signal_status = "CONFIRMED"
+                        self.reversal_candidates.pop(cand_key, None)
+                    else:
+                        # Preserve signal payload for dashboard tracking; entries blocked via signal_status
+                        signal_status = "AWAITING_CONFIRMATION"
+                else:
+                    self.reversal_candidates.pop(cand_key, None)
+                    base_signal = "NEUTRAL"
+                    signal_status = "ACTIVE"
+
         # SL/TP Logic based on asset classification
         heavy_caps = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT"]
         atr_multiplier = 1.2 if norm_sym in heavy_caps else 1.8
@@ -1124,8 +1416,13 @@ class SignalGenerator:
             "expectancy_matrix": expectancy_matrix,
             "threshold": adj_thresh,
             "expected_net_pct": expected_net_pct,
-            "signal": final_signal,
+            "signal": "HOLD" if signal_status in ("AWAITING_CONFIRMATION", "AWAITING_SR_BREAK") else final_signal,
             "signal_strength": signal_strength,
+            # Reversal anticipation fields
+            "signal_status": signal_status,
+            "candles_confirmed": candles_confirmed,
+            "reversal_score": round(reversal_score_val, 3),
+            "reversal_signals": reversal_signals_list,
             "btc_ai": btc_ai,
             "btc_filter_ok": not (not alpha_mode and not btc_healthy and final_signal in ("STRONG_BUY", "BUY")),
             "vol_regime": vol_regime,
@@ -1137,7 +1434,7 @@ class SignalGenerator:
             "atr_sl": cfg.atr_sl,
             "atr_tp": RR_RATIO * cfg.atr_sl,
             "efficiency_ratio": er,               # added for UI / debugging
-            "direction": base_signal,             # LONG/SHORT/NEUTRAL
+            "direction": "NEUTRAL" if signal_status in ("AWAITING_CONFIRMATION", "AWAITING_SR_BREAK") else base_signal,
             "entry_price": current_price,
             "sl": suggested_sl,
             "tp": suggested_tp,
@@ -1209,6 +1506,15 @@ async def confirm_live_signal(
     if vol_regime == "high" and volume_cond == "low":
         return False, "EXCESSIVE_SLIPPAGE_RISK"
 
+    # Gate 4 — S/R context: suppress counter-directional signals at key levels
+    # SHORT at support and LONG at resistance are high-failure setups
+    sr_data = raw_prediction.get("sr_telemetry", {})
+    sr_state = sr_data.get("alert_state", "NONE") if isinstance(sr_data, dict) else "NONE"
+    if direction == "SHORT" and sr_state == "NEAR_SUPPORT":
+        return False, "SR_CONTEXT_MISMATCH"
+    if direction == "LONG" and sr_state == "NEAR_RESISTANCE":
+        return False, "SR_CONTEXT_MISMATCH"
+
     return True, "OK"
 
 # -------------------------------------------------------------------
@@ -1252,6 +1558,8 @@ class LiveEngine:
         self.live_prices: Dict[str, float] = {}
         self.prev_prices: Dict[str, float] = {}
         self.last_signals: Dict[str, Optional[Dict]] = {}
+        # Tracks issued signals per "sym_tf" to detect when they expire (>60% move before action)
+        self.signal_expiry_tracker: Dict[str, dict] = {}
         self._ticker_task: Optional[asyncio.Task] = None
         self._signal_task: Optional[asyncio.Task] = None
         self._keyboard_task: Optional[asyncio.Task] = None
@@ -1476,7 +1784,7 @@ class LiveEngine:
                     if sig:
                         sig['timeframe'] = '1h'
                         self.last_signals[cfg.symbol] = {
-                            tf: dict(sig, timeframe=tf) for tf in ['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w']
+                            tf: dict(sig, timeframe=tf) for tf in ['1m', '5m', '15m', '30m', '1h', '4h', '1d']
                         }
                 except Exception as e:
                     logger.warning(f"Initial signal compute error for {cfg.symbol}: {e}")
@@ -1531,7 +1839,8 @@ class LiveEngine:
             self.signal_gen.alpha_risk_pct = self.alpha_risk_pct
 
             # Macro-first multi-timeframe signal computation
-            tf_blocks = ['1m','5m','15m','30m','1h','4h','1d','1w']
+            # Remove '1w' from live prediction blocks; weekly context is handled synthetically via compute_macro_trend
+            tf_blocks = ['1m', '5m', '15m', '30m', '1h', '4h', '1d']
 
             # 1) Macro trend computation (parallel)
             macro_tasks = {cfg.symbol: asyncio.create_task(self.signal_gen.compute_macro_trend(cfg.symbol, self.fetcher)) for cfg in self.token_configs}
@@ -1594,6 +1903,45 @@ class LiveEngine:
                     except Exception as e:
                         logger.debug(f"Confirmation check failed for {sym} {tf}: {e}")
 
+            # 4b) Signal expiry: if price has moved ≥60% of expected TP from entry without
+            #     action, mark signal_status = "EXPIRED" so the dashboard can display it.
+            for sym, tf_map in nested_signals.items():
+                for tf, sig in tf_map.items():
+                    if sig is None:
+                        continue
+                    direction = sig.get('direction', 'NEUTRAL')
+                    current_price_now = sig.get('price', 0.0)
+                    sig_key = f"{sym}_{tf}"
+
+                    if direction in ('LONG', 'SHORT') and current_price_now > 0:
+                        entry_px = float(sig.get('entry_price', current_price_now))
+                        tp_px = float(sig.get('tp', 0.0))
+                        expected_move = abs(tp_px - entry_px) if tp_px else 0.0
+
+                        tracked = self.signal_expiry_tracker.get(sig_key)
+                        if tracked is None or tracked.get('direction') != direction:
+                            # New or direction-changed signal — start fresh tracker
+                            self.signal_expiry_tracker[sig_key] = {
+                                'entry_price': entry_px,
+                                'direction': direction,
+                                'expected_move': expected_move,
+                            }
+                        elif expected_move > 0:
+                            orig_entry = tracked['entry_price']
+                            if direction == 'LONG':
+                                completion = (current_price_now - orig_entry) / expected_move
+                            else:
+                                completion = (orig_entry - current_price_now) / expected_move
+
+                            if completion >= SIGNAL_EXPIRY_MOVE_PCT:
+                                sig['signal_status'] = 'EXPIRED'
+                                sig['signal'] = 'EXPIRED'
+                                self.signal_expiry_tracker.pop(sig_key, None)
+                                logger.info(f"⏰ Signal EXPIRED: {sym} {tf} moved {completion*100:.0f}% of expected range before action")
+                    else:
+                        # NEUTRAL — clear any stale expiry tracker for this pair/tf
+                        self.signal_expiry_tracker.pop(sig_key, None)
+
             # 5) Persist nested results into last_signals (symbol -> timeframe -> signal)
             for sym, tf_map in nested_signals.items():
                 self.last_signals[sym] = tf_map
@@ -1601,11 +1949,9 @@ class LiveEngine:
             # 6) Build a flattened frontend_signals list used by older UI paths: pick 1h as summary if present
             signals = []
             for sym, tf_map in nested_signals.items():
-                chosen = None
-                if tf_map.get('1h'):
-                    chosen = tf_map.get('1h')
-                else:
-                    # pick first non-null timeframe in order
+                chosen = tf_map.get('1h')
+                if not chosen:
+                    # Pick first available non-null timeframe in order
                     for tf in tf_blocks:
                         if tf_map.get(tf):
                             chosen = tf_map.get(tf)
@@ -1615,43 +1961,18 @@ class LiveEngine:
                         chosen['signal_id'] = str(uuid.uuid4())
                     signals.append(chosen)
 
-            # ── Confirmation Engine gate ──────────────────────────────────
-            _confirmed: List[Optional[Dict]] = []
-            for _sig in signals:
-                if not _sig or _sig.get("direction", "NEUTRAL") == "NEUTRAL":
-                    _confirmed.append(_sig)
-                    continue
-                _is_valid, _reason = await confirm_live_signal(
-                    _sig["symbol"], _sig, pd.Series(_sig)
-                )
-                if not _is_valid:
-                    logger.warning(
-                        f"⚠️ Signal for {_sig['symbol']} suppressed by Confirmation Engine. Reason: {_reason}"
-                    )
-                    self.activity_log.appendleft(
-                        f"[{datetime.now().strftime('%H:%M:%S')}] 🚫 {_sig['symbol']} suppressed: {_reason}"
-                    )
-                    _confirmed.append(None)
-                else:
-                    _confirmed.append(_sig)
-            signals = _confirmed
-            # ─────────────────────────────────────────────────────────────
-
             frontend_signals = []
             for sig in signals:
                 if sig:
                     if "signal_id" not in sig:
                         sig["signal_id"] = str(uuid.uuid4())
-                    # Do not overwrite the nested timeframe mapping
-                    # self.last_signals[sig["symbol"]] = sig
-                    
-                    # Prepare frontend payload object
+
                     sym = sig["symbol"]
                     acc = self.trading_accuracies.get(sym, 0.65)
                     tp_dist = sig.get("suggested_tp_distance", 0)
                     sl_dist = sig.get("suggested_sl_distance", 0)
                     profitability_index = (acc * tp_dist) - ((1 - acc) * sl_dist)
-                    
+
                     frontend_signals.append({
                         "signal_id": sig["signal_id"],
                         "symbol": sym,
@@ -1671,7 +1992,7 @@ class LiveEngine:
                         "expectancy_matrix": sig.get("expectancy_matrix", {}),
                         "sr_telemetry": sig.get("sr_telemetry", {}),
                     })
-            
+
             # Push signals to dashboard
             if frontend_signals:
                 self.sync_to_dashboard(frontend_signals)
@@ -1901,6 +2222,9 @@ class LiveEngine:
             await asyncio.sleep(1)
 
     async def run(self):
+        # Start fetching live prices immediately so the dashboard shows real prices
+        # during the bootstrap phase rather than waiting for initialize() to complete.
+        self._ticker_task = asyncio.create_task(self._run_ticker_loop())
         await self.initialize()
         logger.info("Entering Main Loop Heartbeat...")
 
@@ -1924,7 +2248,6 @@ class LiveEngine:
 └───────────────────────────────────────────────────────────────────────────────────────────────────┘
 """
         print(guidelines)
-        self._ticker_task = asyncio.create_task(self._run_ticker_loop())
         self._signal_task = asyncio.create_task(self._run_signal_loop())
         self._keyboard_task = asyncio.create_task(self._keyboard_listener())
         await self._display_dashboard()

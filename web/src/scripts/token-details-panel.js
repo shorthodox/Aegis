@@ -105,7 +105,10 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
   const winRate      = tokenData.win_rate      ?? 0.63;
 
   // XGBoost probabilities
-  const probs    = tokenData.probabilities || { SHORT: 0.18, HOLD: 0.08, LONG: 0.74 };
+  const _rpTdp  = tokenData.raw_probabilities;
+  const probs   = _rpTdp
+    ? { SHORT: (_rpTdp.SHORT||0)/100, HOLD: (_rpTdp.HOLD||0)/100, LONG: (_rpTdp.LONG||0)/100 }
+    : { SHORT: 0.18, HOLD: 0.08, LONG: 0.74 };
   const shortPct = Math.round((probs.SHORT || 0) * 100);
   const holdPct  = Math.round((probs.HOLD  || 0) * 100);
   const longPct  = Math.round((probs.LONG  || 0) * 100);
@@ -114,11 +117,14 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
   const leadClass   = leadIsLong ? 'text-emerald-400' : 'text-rose-400';
 
   // SHAP values (top 3)
-  const shapRaw  = tokenData.shap_values || [
-    { feature: 'Volume Delta 1h',     value:  0.34 },
-    { feature: 'BTC Anchor Distance', value: -0.21 },
-    { feature: 'EMA 200 Confluence',  value:  0.18 },
-  ];
+  const _scTdp  = tokenData.shap_contributions;
+  const shapRaw = (_scTdp && _scTdp.length > 0)
+    ? _scTdp.map(s => ({ feature: s.feature, value: s.impact }))
+    : [
+      { feature: 'Volume Delta 1h',     value:  0.34 },
+      { feature: 'BTC Anchor Distance', value: -0.21 },
+      { feature: 'EMA 200 Confluence',  value:  0.18 },
+    ];
   const shapValues = shapRaw.slice(0, 3);
   const maxShapAbs = Math.max(...shapValues.map(s => Math.abs(s.value)), 0.01);
 

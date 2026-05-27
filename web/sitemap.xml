@@ -2,71 +2,50 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 
   <url>
-    <loc>https://gatekeeper.sbs/web/src/pages/index.html</loc>
-    <lastmod>2026-05-24</lastmod>
+    <loc>https://gatekeeper.sbs/</loc>
+    <lastmod>2026-05-26</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
 
   <url>
-    <loc>https://gatekeeper.sbs/web/src/pages/pricing.html</loc>
-    <lastmod>2026-05-24</lastmod>
+    <loc>https://gatekeeper.sbs/pricing</loc>
+    <lastmod>2026-05-26</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
 
   <url>
-    <loc>https://gatekeeper.sbs/web/src/pages/review.html</loc>
-    <lastmod>2026-05-24</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-
-  <url>
-    <loc>https://gatekeeper.sbs/web/src/pages/contact.html</loc>
-    <lastmod>2026-05-24</lastmod>
+    <loc>https://gatekeeper.sbs/contact</loc>
+    <lastmod>2026-05-26</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
 
   <url>
-    <loc>https://gatekeeper.sbs/web/src/pages/logic.html</loc>
-    <lastmod>2026-05-24</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
-  </url>
-
-  <url>
-    <loc>https://gatekeeper.sbs/web/src/pages/terms.html</loc>
-    <lastmod>2026-05-24</lastmod>
+    <loc>https://gatekeeper.sbs/terms</loc>
+    <lastmod>2026-05-26</lastmod>
     <changefreq>yearly</changefreq>
-    <priority>0.4</priority>
+    <priority>0.5</priority>
   </url>
 
   <url>
-    <loc>https://gatekeeper.sbs/web/src/pages/conditions.html</loc>
-    <lastmod>2026-05-24</lastmod>
+    <loc>https://gatekeeper.sbs/privacy-policy</loc>
+    <lastmod>2026-05-26</lastmod>
     <changefreq>yearly</changefreq>
-    <priority>0.4</priority>
+    <priority>0.5</priority>
   </url>
 
   <url>
-    <loc>https://gatekeeper.sbs/web/src/pages/privacy_policy.html</loc>
-    <lastmod>2026-05-24</lastmod>
+    <loc>https://gatekeeper.sbs/refund-policy</loc>
+    <lastmod>2026-05-26</lastmod>
     <changefreq>yearly</changefreq>
-    <priority>0.4</priority>
+    <priority>0.5</priority>
   </url>
 
   <url>
-    <loc>https://gatekeeper.sbs/web/src/pages/refund_policy.html</loc>
-    <lastmod>2026-05-24</lastmod>
-    <changefreq>yearly</changefreq>
-    <priority>0.4</priority>
-  </url>
-
-  <url>
-    <loc>https://gatekeeper.sbs/web/src/pages/risk_disclosure.html</loc>
-    <lastmod>2026-05-24</lastmod>
+    <loc>https://gatekeeper.sbs/risk-disclosure</loc>
+    <lastmod>2026-05-26</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.4</priority>
   </url>

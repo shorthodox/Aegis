@@ -2,71 +2,149 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Users collection — each user reads/writes only their own document
-    match /users/{userId} {
-      allow read, write: if request.auth != null && (request.auth.uid == userId || request.auth.token.email == userId);
+    // ----------------------------------------------------------------
+    // Helpers
+    // ----------------------------------------------------------------
 
-      // User preferences subcollection
-      match /preferences/{document=**} {
-        allow read, write: if request.auth != null && (request.auth.uid == userId || request.auth.token.email == userId);
-      }
-
-      // User trades subcollection
-      match /trades/{document=**} {
-        allow read, write: if request.auth != null && (request.auth.uid == userId || request.auth.token.email == userId);
-      }
+    function isAuthed() {
+      return request.auth != null;
     }
 
+    // True if the doc ID matches the caller's uid OR their email.
+    // Needed because the backend keys user docs by email while the
+    // client SDK (ensureUserDocumentV2) keys them by uid.
+    function ownsDoc(userId) {
+      return request.auth.uid == userId
+          || request.auth.token.email == userId;
+    }
+
+    // Fetch user data — try uid-keyed doc first (client-created),
+    // fall back to email-keyed doc (backend-created via Admin SDK).
+    // Returns null when neither exists.
+    function getUserData() {
+      let uidPath   = /databases/$(database)/documents/users/$(request.auth.uid);
+      let emailPath = /databases/$(database)/documents/users/$(request.auth.token.email);
+      return exists(uidPath)
+        ? get(uidPath).data
+        : (request.auth.token.email != null && exists(emailPath)
+            ? get(emailPath).data
+            : null);
+    }
+
+    // True when the user has any active plan (trial or paid).
+    // Trial expiry is enforced server-side; rules check plan existence only
+    // because trial_end is stored as an ISO string and cannot be compared
+    // with the Timestamp type of request.time in Firestore rules.
     function isSubscriptionActive() {
-      let userData = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-      
-      let plan = userData.get('plan', userData.get('tier', ''));
-      let isPaid = plan == 'premium' || plan == 'pro' || plan == 'intermediate' || plan == 'basic';
-      
-      let hasActiveFlag = userData.get('subscription_active', false) == true || request.auth.token.subscription_active == true;
-      
-      let trialEnd = userData.get('trial_end', userData.get('trialEnd', null));
-      let isTrialNotExpired = trialEnd != null && trialEnd > request.time;
-      
-      let trialStart = userData.get('trial_start', userData.get('trialStart', userData.get('createdAt', null)));
-      let isDerivedTrialNotExpired = trialStart != null && trialStart > (request.time - duration.value(3, 'd'));
-      
-      return isPaid || hasActiveFlag || isTrialNotExpired || isDerivedTrialNotExpired;
+      let d = getUserData();
+      let plan = d != null ? d.get('plan', d.get('tier', '')) : '';
+      return plan == 'trial'
+          || plan == 'pro'
+          || plan == 'premium'
+          || plan == 'intermediate'
+          || plan == 'basic';
     }
 
-    // Signals collection — readable by users with active subscriptions or trials, written by admin SDK only
+    // Prevent users from escalating their own plan or touching
+    // subscription/trial fields — only the Admin SDK may write these.
+    function planFieldsUnchanged() {
+      let protected = ['plan', 'tier', 'trial_end', 'trialEnd',
+                       'subscription_active', 'subscription'];
+      return !request.resource.data.diff(resource.data)
+                .affectedKeys().hasAny(protected);
+    }
+
+    // ----------------------------------------------------------------
+    // Users collection
+    // ----------------------------------------------------------------
+    match /users/{userId} {
+
+      // Owner reads their own doc (uid-keyed or email-keyed)
+      allow read: if isAuthed() && ownsDoc(userId);
+
+      // Initial doc creation: only allow plan == 'trial' (or no plan field).
+      // Prevents a user from self-assigning a paid plan at signup.
+      allow create: if isAuthed()
+        && ownsDoc(userId)
+        && (!('plan' in request.resource.data)
+            || request.resource.data.plan == 'trial')
+        && !('subscription_active' in request.resource.data);
+
+      // Updates allowed only when plan/subscription fields are untouched.
+      allow update: if isAuthed()
+        && ownsDoc(userId)
+        && planFieldsUnchanged();
+
+      // Deletes via client are not permitted — backend Admin SDK handles cleanup.
+      allow delete: if false;
+
+      // User preferences — full owner read/write
+      match /preferences/{doc=**} {
+        allow read, write: if isAuthed() && ownsDoc(userId);
+      }
+
+      // Per-user trade subcollection — owner reads, backend writes
+      match /trades/{doc=**} {
+        allow read:  if isAuthed() && ownsDoc(userId);
+        allow write: if false;
+      }
+    }
+
+    // ----------------------------------------------------------------
+    // Signals — subscription/trial required; backend writes only
+    // ----------------------------------------------------------------
     match /signals/{signalId} {
-      allow read: if request.auth != null && isSubscriptionActive();
+      allow read:  if isAuthed() && isSubscriptionActive();
       allow write: if false;
     }
 
-    // Analytics collection — readable by all authenticated users, written by admin SDK only
+    // ----------------------------------------------------------------
+    // Analytics — any authenticated user may read; backend writes only
+    // ----------------------------------------------------------------
     match /analytics/{docId} {
-      allow read: if request.auth != null;
+      allow read:  if isAuthed();
       allow write: if false;
     }
 
-    // Root-level trades collection — owner read only, written by admin SDK only
+    // ----------------------------------------------------------------
+    // Reviews — public read (shown on landing page); backend writes only
+    // ----------------------------------------------------------------
+    match /reviews/{reviewId} {
+      allow read:  if true;
+      allow write: if false;
+    }
+
+    // ----------------------------------------------------------------
+    // Root-level trades — owner read; backend writes only
+    // ----------------------------------------------------------------
     match /trades/{tradeId} {
-      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow read:  if isAuthed()
+        && resource.data.get('userId', '') == request.auth.uid;
       allow write: if false;
     }
 
-    // Subscriptions collection — document ID must equal caller's UID
+    // ----------------------------------------------------------------
+    // Subscriptions — owner read; backend writes only
+    // ----------------------------------------------------------------
     match /subscriptions/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
+      allow read:  if isAuthed() && request.auth.uid == userId;
       allow write: if false;
     }
 
-    // Transactions / audit logs — owner read, server write
+    // ----------------------------------------------------------------
+    // Transactions / audit log — owner read; owner create (no uid spoof)
+    // ----------------------------------------------------------------
     match /transactions/{transactionId} {
-      allow read: if request.auth != null &&
-                     resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null &&
-                       request.resource.data.userId == request.auth.uid;
+      allow read: if isAuthed()
+        && resource.data.get('userId', '') == request.auth.uid;
+      allow create: if isAuthed()
+        && request.resource.data.get('userId', '') == request.auth.uid;
+      allow update, delete: if false;
     }
 
+    // ----------------------------------------------------------------
     // Deny everything else
+    // ----------------------------------------------------------------
     match /{document=**} {
       allow read, write: if false;
     }

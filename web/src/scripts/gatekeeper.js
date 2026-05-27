@@ -13,6 +13,48 @@ import {
 import { AuthManager } from '../auth/authManager.js';
 import { loadThirdPartyScript } from './iframeGuard.js';
 
+function _showPaymentLoader() {
+  if (document.getElementById('aegis-pay-loader')) return;
+  const el = document.createElement('div');
+  el.id = 'aegis-pay-loader';
+  el.innerHTML = `
+    <style>
+      #aegis-pay-loader {
+        position: fixed; inset: 0; z-index: 99999;
+        background: rgba(0,0,0,0.82); backdrop-filter: blur(6px);
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 20px;
+      }
+      #aegis-pay-loader .apl-ring {
+        width: 56px; height: 56px;
+        border: 3px solid rgba(0,242,255,0.15);
+        border-top-color: #00f2ff;
+        border-radius: 50%;
+        animation: apl-spin 0.75s linear infinite;
+      }
+      #aegis-pay-loader .apl-text {
+        font-family: monospace; font-size: 13px;
+        color: rgba(0,242,255,0.85); letter-spacing: 0.12em;
+        text-transform: uppercase; font-weight: 700;
+      }
+      #aegis-pay-loader .apl-sub {
+        font-family: monospace; font-size: 10px;
+        color: rgba(255,255,255,0.3); letter-spacing: 0.08em;
+      }
+      @keyframes apl-spin { to { transform: rotate(360deg); } }
+    </style>
+    <div class="apl-ring"></div>
+    <div class="apl-text">Connecting to Gateway</div>
+    <div class="apl-sub">Please wait&hellip;</div>
+  `;
+  document.body.appendChild(el);
+}
+
+function _hidePaymentLoader() {
+  const el = document.getElementById('aegis-pay-loader');
+  if (el) el.remove();
+}
+
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyDtudUL2sE1_fKbzIro5d2IP0-M2dYI6x4",
@@ -79,9 +121,6 @@ document.addEventListener('trialExpired', () => {
   trialActive = false;
   allowedTokens = [];
   localStorage.setItem('cachedAllowedTokens', JSON.stringify([]));
-  if (typeof showSubscriptionExpiredOverlay === 'function') {
-    showSubscriptionExpiredOverlay();
-  }
   // Refresh UI to update plan badge immediately when trial expires
   updateUI();
 });
@@ -326,8 +365,7 @@ function initializeElements() {
 }
 
 function attachEventListeners() {
-  if (alphaToggleBtn) alphaToggleBtn.addEventListener('click', toggleAlphaMode);
-  // Alpha toggle is handled via modal now
+  // Alpha toggle is handled via modal — no direct listener on alphaToggleBtn
   if (upgradeBtn) upgradeBtn.addEventListener('click', () => {
     window.location.href = '/web/src/pages/pricing.html';
   });
@@ -342,6 +380,10 @@ function attachEventListeners() {
 
   if (alphaToggleContainer && alphaModal) {
     alphaToggleContainer.addEventListener('click', () => {
+      if (userPlan !== 'pro') {
+        showUpgradeModal();
+        return;
+      }
       alphaModal.classList.remove('hidden');
     });
   }
@@ -562,6 +604,13 @@ async function loadUserFromBackend(token, firebaseUser = null) {
       localStorage.removeItem('access_token');
       localStorage.removeItem('authToken');
       redirectToLogin();
+    } else if (response.status === 403) {
+      // Account exists but was not OTP-verified (created before the verification gate).
+      // Sign the Firebase user out so they can't re-enter the dashboard loop.
+      try { await import("https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js").then(m => m.signOut(auth)); } catch (_) {}
+      localStorage.clear();
+      sessionStorage.clear();
+      redirectToLogin();
     } else {
       console.error('Failed to load user data:', response.status);
       redirectToLogin();
@@ -607,6 +656,18 @@ function applyUserData(userData, token) {
 async function provisionUserFromFirebase(firebaseUser, token, attempt = 1) {
   const MAX_ATTEMPTS = 3;
 
+  // Detect provider — email/password accounts must present the OTP signup_token
+  const provider = firebaseUser.providerData?.[0]?.providerId || 'firebase';
+  const isPasswordUser = provider === 'password';
+  const signupToken = sessionStorage.getItem('otp_signup_token');
+
+  if (isPasswordUser && !signupToken) {
+    // No OTP-verified token — block provisioning and send back to signup
+    console.warn('[provision] Password user missing OTP signup_token — redirecting to login');
+    redirectToLogin();
+    return;
+  }
+
   if (attempt === 1) showProvisioningState();
 
   try {
@@ -619,14 +680,46 @@ async function provisionUserFromFirebase(firebaseUser, token, attempt = 1) {
       body: JSON.stringify({
         uid: firebaseUser.uid,
         email: firebaseUser.email || null,
-        display_name: firebaseUser.displayName || null
+        display_name: firebaseUser.displayName || null,
+        provider,
+        signup_token: isPasswordUser ? signupToken : null,
+        phone_number: sessionStorage.getItem('pending_phone') || null
       })
     });
 
     if (response.ok) {
+      sessionStorage.removeItem('otp_signup_token'); // single-use — clear after provisioning
+      sessionStorage.removeItem('pending_phone');
       hideProvisioningState();
       const userData = await response.json();
-      applyUserData(userData, token);
+      // Force-refresh the Firebase ID token so it picks up email_verified=true,
+      // which the backend just set via Admin SDK. Without this the stale token
+      // still carries email_verified=false and every subsequent API call returns 401.
+      let freshToken = token;
+      try {
+        freshToken = await firebaseUser.getIdToken(true);
+        if (typeof AuthManager !== 'undefined') AuthManager.setToken(freshToken);
+      } catch (e) {
+        console.warn('[provision] Token refresh failed, using original token:', e.message);
+      }
+      applyUserData(userData, freshToken);
+    } else if (response.status === 409) {
+      // Duplicate phone number — account suspended by backend
+      hideProvisioningState();
+      let detail = 'This phone number is already registered to another account.';
+      try { detail = (await response.json()).detail || detail; } catch (_) {}
+      try {
+        const { signOut: _signOut } = await import("https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js");
+        await _signOut(auth);
+      } catch (_) {}
+      localStorage.clear();
+      sessionStorage.clear();
+      alert(detail);
+      redirectToLogin();
+    } else if (response.status === 403) {
+      // OTP token rejected by backend — never retry, send to signup
+      hideProvisioningState();
+      redirectToLogin();
     } else if (attempt < MAX_ATTEMPTS) {
       await new Promise(r => setTimeout(r, 1000 * attempt));
       return provisionUserFromFirebase(firebaseUser, token, attempt + 1);
@@ -805,6 +898,17 @@ function cleanupWebSocket() {
 }
 
 function startWebSocket(token) {
+  // Check if features are blocked before connecting
+  const isTrialValid = typeof AuthManager !== 'undefined' ? AuthManager.isTrialValid() : trialActive;
+  const plan = (userPlan || 'trial').toLowerCase();
+  const hasPaidPlan = ['pro', 'premium', 'intermediate', 'basic'].includes(plan);
+
+  if (!hasPaidPlan && !isTrialValid) {
+    console.warn('[WS] Features are blocked (trial expired). WebSocket connection aborted.');
+    updateConnectionStatus('DISCONNECTED', 'red');
+    return;
+  }
+
   if (reconnectAttempts >= maxReconnectAttempts) {
     console.error('[WS] Max WebSocket reconnection attempts reached');
     updateConnectionStatus('DISCONNECTED', 'red');
@@ -1158,11 +1262,13 @@ function updateDashboardData(data) {
   if (data.tickers || window.currentTickers) {
     window.previousTickers = window.currentTickers || {};
     if (data.tickers && Object.keys(data.tickers).length > 0) {
-      window.currentTickers = { ...window.currentTickers, ...data.tickers };
+      window.currentTickers = { ...(window.currentTickers || {}), ...data.tickers };
     }
+    if (!window.currentTickers || typeof window.currentTickers !== 'object') return;
 
     // Defer ticker updates slightly to ensure Reactivity cycle finishes if debouncedFilterAndRenderSignals just fired
     setTimeout(() => {
+      if (!window.currentTickers) return;
       Object.entries(window.currentTickers).forEach(([sym, price]) => {
         const idStr = sym.replace('/', '-');
         const priceDisplays = document.querySelectorAll(`.live-price[data-symbol="${idStr}"]`);
@@ -1240,14 +1346,16 @@ function updateDashboardData(data) {
   // overlay was dismissed from the console, this re-applies it within
   // the next tick. Conversely, a valid subscription removes the overlay.
   if (typeof data.trial_expired === 'boolean') {
-    const expiredCard = document.getElementById('access-expired-card');
+    const expiredCard = document.getElementById('subscriptionExpiredOverlay');
     const isOverlayVisible = expiredCard && !expiredCard.classList.contains('hidden');
 
     if (data.trial_expired && !isOverlayVisible) {
       if (typeof window.setExpiredView === 'function') window.setExpiredView();
-    } else if (!data.trial_expired && isOverlayVisible) {
-      if (typeof window.clearExpiredView === 'function') window.clearExpiredView();
-    }
+    } 
+    // WebSocket should not have the power to unlock features
+    // else if (!data.trial_expired && isOverlayVisible) {
+    //   if (typeof window.clearExpiredView === 'function') window.clearExpiredView();
+    // }
   }
 }
 
@@ -1768,10 +1876,16 @@ function setupFirestoreListeners() {
 
   // Allow the analytics room to render from localStorage while the snapshot loads
   window.forceTradesRefresh = function () {
-    const cached = localStorage.getItem('analyticsActiveTrade');
-    if (cached) {
+    let trades = [];
+    try {
+      const lk = localStorage.getItem('lastKnownTrades');
+      if (lk) trades = JSON.parse(lk);
+    } catch (_) {}
+
+    const analyticsEntry = localStorage.getItem('analyticsActiveTrade');
+    if (analyticsEntry) {
       try {
-        const trade = JSON.parse(cached);
+        const trade = JSON.parse(analyticsEntry);
         if (trade && trade.status === 'open') {
           const alreadyIn = trades.some(t =>
             (trade.signalId && t.signalId === trade.signalId) ||
@@ -1782,7 +1896,6 @@ function setupFirestoreListeners() {
       } catch (_) {}
     }
 
-    // Filter fallback trades to the current user as well
     const uid = (auth && auth.currentUser && auth.currentUser.uid) || (currentUser && currentUser.uid);
     if (uid && trades.length > 0) {
       const containsOtherUsers = trades.some(t => t.userId && t.userId !== uid);
@@ -1835,9 +1948,14 @@ async function toggleAlphaMode() {
       console.log(`Alpha mode ${currentAlphaMode ? 'enabled' : 'disabled'}`);
     } else if (response.status === 403) {
       showUpgradeModal();
+    } else if (response.status === 503) {
+      alert('Engine is warming up. Please try again in a few seconds.');
+    } else {
+      alert('Failed to toggle Alpha Mode. Please try again.');
     }
   } catch (error) {
     console.error('Toggle alpha error:', error);
+    alert('Network error. Please check your connection and try again.');
   }
 }
 
@@ -1948,7 +2066,7 @@ function getUpgradeModal() {
   return modal;
 }
 
-// Cashfree Subscription Integration
+// Razorpay Standard Checkout Integration
 window.AegisDashboard = {
   subscribeToPlan: async (planType) => {
     const allowedPlans = ['basic', 'intermediate', 'pro'];
@@ -1961,93 +2079,109 @@ window.AegisDashboard = {
       return;
     }
 
+    _showPaymentLoader();
     try {
-      let amount = 3.60;
-      if (planName === 'pro') amount = 40.00;
-      else if (planName === 'intermediate') amount = 24.00;
+      // 1. Get Razorpay key_id from backend (keeps secret off the frontend)
+      const configResp = await fetch(`${API_BASE_URL}/payment/config`);
+      const config = await configResp.json().catch(() => ({}));
+      const keyId = config?.razorpay?.key_id;
+      if (!keyId) {
+        _hidePaymentLoader();
+        alert('Payment gateway is not configured. Please contact support.');
+        return;
+      }
 
-      // 1. Fetch payment session from backend
-      const response = await fetch(`${API_BASE_URL}/api/v1/create-payment-session`, {
+      // 2. Detect currency from timezone
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const currency = (tz === 'Asia/Calcutta' || tz === 'Asia/Kolkata') ? 'INR' : 'USD';
+
+      // 3. Create Razorpay order on backend (amount converted from USD at live rate)
+      const orderResp = await fetch(`${API_BASE_URL}/api/create-order`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ tier: planName, amount: amount })
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan: planName, currency })
+      });
+      if (!orderResp.ok) {
+        _hidePaymentLoader();
+        if (orderResp.status === 401 || orderResp.status === 403) {
+          alert('Your session has expired. Please sign in again.');
+          window.location.href = '/web/src/pages/index.html';
+          return;
+        }
+        const err = await orderResp.json().catch(() => ({}));
+        alert('Could not create payment order. ' + (err.detail || 'Please try again.'));
+        return;
+      }
+      const orderData = await orderResp.json();
+
+      // 4. Load Razorpay checkout.js on-demand
+      try {
+        await loadThirdPartyScript('https://checkout.razorpay.com/v1/checkout.js');
+      } catch (sdkErr) {
+        _hidePaymentLoader();
+        console.error('[Razorpay] Checkout script failed to load:', sdkErr);
+        alert('Payment gateway failed to load. Please disable ad-blockers and refresh.');
+        return;
+      }
+
+      // 5. Open Razorpay modal; verify signature on success
+      _hidePaymentLoader();
+      await new Promise((resolve) => {
+        const userEmail = currentUser?.email || '';
+        const rzp = new window.Razorpay({
+          key: keyId,
+          amount: orderData.amount,
+          currency: orderData.currency,
+          order_id: orderData.order_id,
+          name: 'AEGIS v1.0',
+          description: planName.charAt(0).toUpperCase() + planName.slice(1) + ' Plan',
+          prefill: { email: userEmail },
+          theme: { color: '#00f2ff' },
+          handler: async (response) => {
+            try {
+              const verifyResp = await fetch(`${API_BASE_URL}/api/verify-payment`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_order_id:   response.razorpay_order_id,
+                  razorpay_signature:  response.razorpay_signature,
+                  plan: planName,
+                })
+              });
+              const verifyData = await verifyResp.json().catch(() => ({}));
+              if (verifyResp.ok && verifyData.status === 'success') {
+                alert('Payment successful! Your subscription is now active.');
+                window.location.reload();
+              } else {
+                alert('Payment verification failed. Contact support with payment ID: ' + response.razorpay_payment_id);
+              }
+            } catch (verifyErr) {
+              console.error('[Razorpay] Verify error:', verifyErr);
+              alert('Network error during verification. Contact support with payment ID: ' + response.razorpay_payment_id);
+            }
+            resolve();
+          },
+          modal: {
+            ondismiss: () => { resolve(); }
+          }
+        });
+        rzp.on('payment.failed', (response) => {
+          console.error('[Razorpay] Payment failed:', response.error);
+          alert('Payment failed: ' + (response.error?.description || 'Please try again.'));
+          resolve();
+        });
+        rzp.open();
       });
 
-      if (!response.ok) {
-        console.warn('Subscription backend not ready, using sandbox fallback mock.');
-        await mockSuccessfulPayment(planName);
-        return;
-      }
-
-      const data = await response.json();
-      const paymentSessionId = data.payment_session_id;
-
-      if (!data.success || !paymentSessionId) {
-        console.warn('Invalid Cashfree session generated, using sandbox fallback mock. Error:', data.error);
-        await mockSuccessfulPayment(planName);
-        return;
-      }
-
-      // 2. Load Cashfree SDK on-demand (guarded — errors if blocked or timed out)
-      try {
-        await loadThirdPartyScript('https://sdk.cashfree.com/js/v3/cashfree.js');
-      } catch (sdkErr) {
-        console.error('[Cashfree] SDK failed to load:', sdkErr);
-        alert('Payment gateway failed to load. Please check your connection and try again.');
-        return;
-      }
-
-      // 3. Open Cashfree modal
-      const cashfree = window.Cashfree({ mode: 'sandbox' }); // Change to 'production' in live
-      const checkoutOptions = { paymentSessionId, redirectTarget: '_modal' };
-
-      try {
-        const result = await cashfree.checkout(checkoutOptions);
-        if (result.error) {
-          console.error('[Cashfree] Checkout error:', result.error);
-          alert('Payment was cancelled or failed. Please try again.');
-        } else if (result.paymentDetails) {
-          console.log('[Cashfree] Payment successful');
-          await mockSuccessfulPayment(planName);
-        }
-      } catch (checkoutErr) {
-        console.error('[Cashfree] Checkout exception:', checkoutErr);
-        alert('Payment gateway error. Please try again.');
-      }
     } catch (error) {
+      _hidePaymentLoader();
       console.error('Subscription error:', error);
-      // Fallback mock payment for current sandbox environment
-      await mockSuccessfulPayment(planName);
+      alert('An error occurred while processing payment. Please try again.');
     }
   }
 };
 
-async function mockSuccessfulPayment(planName) {
-  try {
-    // Update Firestore user status directly for demo purposes
-    if (currentUser && currentUser.uid) {
-      const userDocRef = doc(db, 'users', currentUser.uid);
-      await updateDoc(userDocRef, {
-        plan: planName,
-        subscriptionStatus: 'active',
-        trialActive: false
-      });
-    }
-
-    // Clear expired view if it exists
-    if (typeof window.clearExpiredView === 'function') {
-      window.clearExpiredView();
-    }
-
-    alert('Payment successful! Your subscription is now active.');
-    window.location.reload();
-  } catch (err) {
-    console.error("Error updating subscription status:", err);
-  }
-}
 
 // Show upgrade modal on dashboard if trial expired
 function showUpgradeModal() {

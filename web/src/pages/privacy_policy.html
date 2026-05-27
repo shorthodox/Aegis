@@ -7,6 +7,20 @@
     <link rel="stylesheet" href="/web/src/styles/main.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="canonical" href="https://gatekeeper.sbs/web/src/pages/privacy_policy.html">
+    <style>
+        .footer { text-align: center; padding: 2rem; border-top: 1px solid rgba(255,255,255,0.05); margin-top: 3rem; }
+        .footer-links { display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+        .footer-links a { color: #6b7280; text-decoration: none; font-size: 0.8rem; }
+        .footer-links a:hover { color: #00f2ff; }
+        .separator { color: #374151; }
+        .footer-proprietor { font-size: 0.75rem; color: #4b5563; margin-bottom: 0.5rem; }
+        .footer p { font-size: 0.7rem; color: #374151; }
+        @media (max-width: 768px) {
+            .footer-links { gap: 0.5rem; }
+            .footer-links a { font-size: 0.7rem; }
+            .footer { padding: 1.5rem 1rem; }
+        }
+    </style>
 </head>
 <body>
 
@@ -169,98 +183,38 @@
             <a href="/web/src/pages/refund_policy.html">Refund Policy</a>
             <span class="separator">•</span>
             <a href="/web/src/pages/risk_disclosure.html">Risk Disclosure</a>
-            <span class="separator">•</span>
-            <a href="/web/src/pages/review.html">Reviews</a>
         </div>
         <div class="footer-proprietor">
-            Proprietor: Animesh Kukreti | Dehradun, Uttarakhand, India
+            Operated by <strong>Animesh Kukreti &amp; Aman Juiyal</strong> &nbsp;|&nbsp; Dehradun, Uttarakhand, India
         </div>
         <p>© 2026 AEGIS v1.0 — Sovereign Intelligence Terminal</p>
     </footer>
 
-    <!-- Shared auth script (landing.js) handles portal button & modal -->
-    <!-- ========== 3‑STEP ONBOARDING MODAL (with password fields) ========== -->
-    <div id="loginModal" class="modal">
-        <div class="modal-card">
-            <!-- Close button with inline styles to guarantee clickability -->
-            <span class="close-modal" style="position: absolute; top: 1rem; right: 1.5rem; font-size: 1.8rem; cursor: pointer; color: var(--dim, #94a3b8); z-index: 1001; pointer-events: auto;">&times;</span>
-
-            <!-- Step 1: Email / Google -->
-            <div id="step1" class="step active">
-                <div class="modal-logo">⚡ AEGIS</div>
-                <button id="googleStepBtn" class="provider-btn"><i class="fab fa-google"></i> Continue with Google</button>
-                <div class="divider">or</div>
-                <input type="text" id="emailInput" class="auth-input" placeholder="Email or mobile number">
-                <p class="info-note">Use your email to sign in or register. Start with a phone number for mobile OTP.</p>
-                <button id="continueToOtpBtn" class="auth-submit-btn">Continue</button>
-            </div>
-
-            <!-- Step 2: OTP Verification -->
-            <div id="step2" class="step">
-                <h3 style="text-align:center; margin-bottom:1rem;">Enter verification code</h3>
-                <p style="text-align:center; color:var(--dim); font-size:0.8rem;">We sent a 6‑digit code to <span id="otpEmailDisplay"></span></p>
-                <div class="otp-container" id="otpContainer">
-                    <input type="text" maxlength="1" class="otp-digit" data-idx="0">
-                    <input type="text" maxlength="1" class="otp-digit" data-idx="1">
-                    <input type="text" maxlength="1" class="otp-digit" data-idx="2">
-                    <input type="text" maxlength="1" class="otp-digit" data-idx="3">
-                    <input type="text" maxlength="1" class="otp-digit" data-idx="4">
-                    <input type="text" maxlength="1" class="otp-digit" data-idx="5">
-                </div>
-                <button id="backToEmailBtn" class="auth-secondary-btn" style="margin-top:0.5rem;">← Back</button>
-            </div>
-
-            <!-- Step 3: Onboarding (Profile + Password) -->
-            <div id="step3" class="step">
-                <h3 id="onboardingTitle" style="text-align:center; margin-bottom:1rem;">Complete your account</h3>
-                <div class="profile-upload" id="avatarUploadSection">
-                    <div id="avatarUpload" class="avatar-upload">
-                        <i class="fas fa-cloud-upload-alt"></i>
-                        <span>Upload Photo</span>
-                    </div>
-                    <div class="upload-hint">300x300px min. JPG, GIF, PNG. Max 4MB.</div>
-                    <input type="file" id="avatarFile" accept="image/jpeg,image/png,image/gif" style="display:none;">
-                </div>
-                <div id="profileFields">
-                    <div class="labeled-input">
-                        <label>Full name</label>
-                        <input type="text" id="fullName" class="auth-input" placeholder="e.g., Satoshi Nakamoto">
-                    </div>
-                    <div class="labeled-input">
-                        <label>Your location</label>
-                        <input type="text" id="location" class="auth-input" placeholder="City, Country">
-                    </div>
-                </div>
-    </div>
-
-    <script type="module" src="/web/src/scripts/landing.js"></script>
     <script>
-    (function(){
+    (function () {
         var btn = document.getElementById('navHamburger');
         var drawer = document.getElementById('navMobileDrawer');
         if (!btn || !drawer) return;
-        btn.addEventListener('click', function(e) {
+        function closeDrawer() {
+            drawer.classList.remove('open');
+            drawer.setAttribute('aria-hidden', 'true');
+            btn.setAttribute('aria-expanded', 'false');
+            var ico = btn.querySelector('i');
+            if (ico) ico.className = 'fas fa-bars';
+        }
+        btn.addEventListener('click', function (e) {
             e.stopPropagation();
             var open = drawer.classList.toggle('open');
+            drawer.setAttribute('aria-hidden', !open);
             btn.setAttribute('aria-expanded', open);
             var ico = btn.querySelector('i');
             if (ico) ico.className = open ? 'fas fa-times' : 'fas fa-bars';
         });
-        document.addEventListener('click', function(e) {
-            if (!btn.contains(e.target) && !drawer.contains(e.target)) {
-                drawer.classList.remove('open');
-                btn.setAttribute('aria-expanded','false');
-                var ico = btn.querySelector('i');
-                if (ico) ico.className = 'fas fa-bars';
-            }
+        document.addEventListener('click', function (e) {
+            if (!btn.contains(e.target) && !drawer.contains(e.target)) closeDrawer();
         });
-        drawer.querySelectorAll('.nav-mobile-link, .nav-btn-login, .nav-btn-cta').forEach(function(a) {
-            a.addEventListener('click', function() {
-                drawer.classList.remove('open');
-                btn.setAttribute('aria-expanded','false');
-                var ico = btn.querySelector('i');
-                if (ico) ico.className = 'fas fa-bars';
-            });
+        drawer.querySelectorAll('.nav-mobile-link, .nav-btn-login, .nav-btn-cta').forEach(function (a) {
+            a.addEventListener('click', closeDrawer);
         });
     })();
     </script>
