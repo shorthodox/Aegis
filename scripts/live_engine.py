@@ -953,6 +953,7 @@ class SignalGenerator:
         self.macro_cache: Dict[str, Dict[str, float]] = {}
         # Tracks reversal candidates per "sym_tf_DIR" key until candle confirmation
         self.reversal_candidates: Dict[str, dict] = {}
+        self.models: Dict[str, xgb.XGBClassifier] = {}
 
     def _align_features(self, df: pd.DataFrame, expected_features: List[str]) -> Optional[pd.DataFrame]:
         missing = [f for f in expected_features if f not in df.columns]
@@ -1110,12 +1111,10 @@ class SignalGenerator:
             "trend_1d": float(_current_row.get("macro_trend_1d", 0.0)),
         }
 
-        model_path = MODEL_STORE / f"{norm_sym.replace('/', '_')}_model.json"
-        if not model_path.exists():
-            logger.warning(f"No model for {norm_sym}")
+        model = self.models.get(norm_sym)
+        if model is None:
+            logger.warning(f"No cached model for {norm_sym}")
             return None
-        model = xgb.XGBClassifier()
-        model.load_model(str(model_path))
 
         try:
             expected_feature_names = model.get_booster().feature_names
@@ -1628,6 +1627,7 @@ class LiveEngine:
         self.fetcher = MarketDataFetcher(proxy_url, self.activity_log)
         self.btc_model = None
         self.signal_gen = None
+        self.models: Dict[str, xgb.XGBClassifier] = {}
         self.scan_interval = scan_interval_seconds
         self.alpha_mode = alpha_mode
         self.alpha_risk_pct = alpha_risk_pct
@@ -1793,8 +1793,23 @@ class LiveEngine:
             logger.warning("BTC model not found – BTC filter disabled")
             self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] ℹ️ BTC model not found – filter disabled")
 
+        logger.info("Pre-loading all token models into RAM memory cache...")
+        for cfg in self.token_configs:
+            norm_sym = normalize_symbol(cfg.symbol)
+            model_path = MODEL_STORE / f"{norm_sym.replace('/', '_')}_model.json"
+            if model_path.exists():
+                try:
+                    cached_model = xgb.XGBClassifier()
+                    cached_model.load_model(str(model_path))
+                    self.models[norm_sym] = cached_model
+                except Exception as e:
+                    logger.error(f"Failed to pre-load model for {norm_sym} into RAM: {e}")
+        logger.info(f"Successfully cached {len(self.models)} token models in RAM.")
+        self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] {len(self.models)} token models cached in RAM")
+
         logger.info("Starting Signal Generator...")
         self.signal_gen = SignalGenerator(self.token_configs, self.btc_model, self.alpha_risk_pct)
+        self.signal_gen.models = self.models
         self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] Signal Generator ready")
         logger.info("Live engine initialized – starting lazy data load")
 
