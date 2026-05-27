@@ -229,7 +229,8 @@ function _executePaperTrade() {
 }
 
 // ── Trade rendering ──────────────────────────────────────────────────────────
-// Called via window.renderTrades by gatekeeper.js on every WS tick
+// Called by gatekeeper.js's Firestore users/{uid}/trades listener only.
+// Engine autonomous trades (LiveWallet) are intentionally excluded upstream.
 function renderTrades(liveTrades) {
   _liveTradesCache = (liveTrades || []).map(t => ({
     ...t,
@@ -243,6 +244,8 @@ function renderTrades(liveTrades) {
 }
 
 function _renderAllTrades() {
+  // Only include paper trades (UI-executed) and real trades from the
+  // Firestore user subcollection — never engine-wallet autonomous trades.
   const all = [..._paperTrades, ..._liveTradesCache];
   _renderPositionCards(all);
   _renderTradesTable(all);

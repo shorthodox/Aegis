@@ -1347,18 +1347,11 @@ function updateDashboardData(data) {
     _pulseLiveIndicator();
   }
 
-  // Update open trades — accept any of the keys the backend might use.
-  // Filter to current user's positions only to prevent ghost trades from other
-  // sessions or global backtest data leaking into the active UI.
-  const rawTrades = data.open_trades ?? data.positions ?? data.fleet ?? null;
-  if (rawTrades !== null) {
-    const uid = currentUser?.uid || currentUser?.email || null;
-    const incomingTrades = uid
-      ? rawTrades.filter(t => !t.user_id || t.user_id === uid)
-      : rawTrades;
-    if (incomingTrades.length > 0) localStorage.setItem('lastKnownTrades', JSON.stringify(incomingTrades));
-    if (typeof window.renderTrades === 'function') window.renderTrades(incomingTrades);
-  }
+  // Engine's autonomous wallet trades (data.open_trades) are intentionally NOT
+  // forwarded to renderTrades here. The analytics UI only shows positions that
+  // the user manually executed from the token card panel or signal history.
+  // User-initiated real trades are synced via the Firestore users/{uid}/trades
+  // listener in setupFirestoreListeners(), which is the authoritative source.
 
   // Update alpha mode status
   if (data.alpha_mode !== undefined) {
