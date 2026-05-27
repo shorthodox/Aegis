@@ -2033,6 +2033,11 @@ window.AegisDashboard = {
         body: JSON.stringify({ plan: planName, currency })
       });
       if (!orderResp.ok) {
+        if (orderResp.status === 401 || orderResp.status === 403) {
+          alert('Your session has expired. Please sign in again.');
+          window.location.href = '/web/src/pages/index.html';
+          return;
+        }
         const err = await orderResp.json().catch(() => ({}));
         alert('Could not create payment order. ' + (err.detail || 'Please try again.'));
         return;
