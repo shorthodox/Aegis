@@ -10,6 +10,7 @@ load_dotenv()
 # Now safe to import libraries that might use environment variables
 import asyncio
 import json
+import re
 import uuid
 import random
 import string
@@ -2479,6 +2480,133 @@ async def toggle_alpha_mode(email: str = Depends(get_current_user)):
     LIVE_STATE.engine.alpha_mode = new_state
     LIVE_STATE.data["alpha_mode"] = new_state
     return {"alpha_mode": new_state}
+
+# -------------------------------------------------------------------
+# Dev code system — admin generation + user redemption
+# -------------------------------------------------------------------
+
+ADMIN_SECRET = os.getenv("ADMIN_SECRET", "")
+
+_DEV_CODE_RE = re.compile(r'^AEGIS-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$')
+_DEV_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no 0/O, 1/I/L
+
+def _make_dev_code() -> str:
+    seg = lambda: "".join(secrets.choice(_DEV_CODE_ALPHABET) for _ in range(4))
+    return f"AEGIS-{seg()}-{seg()}-{seg()}"
+
+async def _require_admin(x_admin_key: Optional[str] = Header(None)) -> None:
+    if not ADMIN_SECRET or x_admin_key != ADMIN_SECRET:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+def _get_dev_code_doc(code: str) -> Optional[Dict]:
+    doc_ref = db.collection("dev_codes").document(code)
+    doc = doc_ref.get()
+    to_dict = getattr(doc, "to_dict", None)
+    exists = getattr(doc, "exists", False)
+    if callable(to_dict) and exists:
+        result = to_dict()
+        return result if isinstance(result, dict) else {}
+    return None
+
+class GenerateDevCodeRequest(BaseModel):
+    count: int = 1
+    plan: str = "pro"
+    days: int = 30
+    label: str = "beta"
+
+@app.post("/admin/dev-codes/generate")
+async def admin_generate_dev_codes(
+    req: GenerateDevCodeRequest,
+    _admin: None = Depends(_require_admin),
+):
+    if req.plan not in ("basic", "intermediate", "pro"):
+        raise HTTPException(status_code=400, detail="Invalid plan")
+    if not (1 <= req.count <= 50):
+        raise HTTPException(status_code=400, detail="count must be 1–50")
+    if not (1 <= req.days <= 365):
+        raise HTTPException(status_code=400, detail="days must be 1–365")
+
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(days=req.days)
+    codes = []
+
+    for _i in range(req.count):
+        code = _make_dev_code()
+        db.collection("dev_codes").document(code).set({
+            "source": "backend",
+            "plan": req.plan,
+            "label": req.label,
+            "created_at": now.isoformat(),
+            "expires_at": expires_at.isoformat(),
+            "used_by": None,
+            "used_at": None,
+        })
+        codes.append({"code": code, "expires_at": expires_at.isoformat()})
+
+    return {"generated": len(codes), "plan": req.plan, "codes": codes}
+
+class DevCodeRequest(BaseModel):
+    code: str
+
+@app.post("/api/redeem-dev-code")
+async def redeem_dev_code(req: DevCodeRequest, email: str = Depends(get_current_user)):
+    code = req.code.strip().upper()
+
+    if not _DEV_CODE_RE.match(code):
+        raise HTTPException(status_code=400, detail="Invalid code format. Expected: AEGIS-XXXX-XXXX-XXXX")
+
+    code_data = _get_dev_code_doc(code)
+    if code_data is None:
+        raise HTTPException(status_code=404, detail="Dev code not found")
+
+    if code_data.get("source") != "backend":
+        raise HTTPException(status_code=403, detail="Dev code is not valid")
+
+    try:
+        expires_at_dt = datetime.fromisoformat(code_data["expires_at"])
+    except Exception:
+        raise HTTPException(status_code=500, detail="Malformed dev code record")
+
+    if datetime.now(timezone.utc) > expires_at_dt:
+        raise HTTPException(status_code=410, detail="This dev code has expired")
+
+    used_by = code_data.get("used_by")
+    if used_by and used_by != email:
+        raise HTTPException(status_code=409, detail="This dev code has already been used")
+
+    plan = code_data.get("plan", "pro")
+    expires_iso = code_data["expires_at"]
+
+    user_doc = get_user_doc(email)
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User account not found")
+
+    user_ref = db.collection("users").document(email)
+    update_result = user_ref.update({
+        "plan": plan,
+        "subscription": {
+            "status": "active",
+            "payment_id": f"devcode_{code}",
+            "order_id": f"devcode_{code}",
+            "activated_at": datetime.now(timezone.utc).isoformat(),
+            "plan_type": plan,
+            "expires_at": expires_iso,
+        },
+        "trial_active": False,
+        "dev_code_used": code,
+    })
+    if inspect.isawaitable(update_result):
+        await update_result
+
+    if not used_by:
+        mark_result = db.collection("dev_codes").document(code).update({
+            "used_by": email,
+            "used_at": datetime.now(timezone.utc).isoformat(),
+        })
+        if inspect.isawaitable(mark_result):
+            await mark_result
+
+    return {"status": "success", "plan": plan, "expires_at": expires_iso}
 
 # -------------------------------------------------------------------
 # Feedback endpoint

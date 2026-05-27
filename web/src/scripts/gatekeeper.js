@@ -365,8 +365,7 @@ function initializeElements() {
 }
 
 function attachEventListeners() {
-  if (alphaToggleBtn) alphaToggleBtn.addEventListener('click', toggleAlphaMode);
-  // Alpha toggle is handled via modal now
+  // Alpha toggle is handled via modal — no direct listener on alphaToggleBtn
   if (upgradeBtn) upgradeBtn.addEventListener('click', () => {
     window.location.href = '/web/src/pages/pricing.html';
   });
@@ -381,6 +380,10 @@ function attachEventListeners() {
 
   if (alphaToggleContainer && alphaModal) {
     alphaToggleContainer.addEventListener('click', () => {
+      if (userPlan !== 'pro') {
+        showUpgradeModal();
+        return;
+      }
       alphaModal.classList.remove('hidden');
     });
   }
@@ -1928,9 +1931,14 @@ async function toggleAlphaMode() {
       console.log(`Alpha mode ${currentAlphaMode ? 'enabled' : 'disabled'}`);
     } else if (response.status === 403) {
       showUpgradeModal();
+    } else if (response.status === 503) {
+      alert('Engine is warming up. Please try again in a few seconds.');
+    } else {
+      alert('Failed to toggle Alpha Mode. Please try again.');
     }
   } catch (error) {
     console.error('Toggle alpha error:', error);
+    alert('Network error. Please check your connection and try again.');
   }
 }
 
