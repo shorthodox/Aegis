@@ -13,6 +13,48 @@ import {
 import { AuthManager } from '../auth/authManager.js';
 import { loadThirdPartyScript } from './iframeGuard.js';
 
+function _showPaymentLoader() {
+  if (document.getElementById('aegis-pay-loader')) return;
+  const el = document.createElement('div');
+  el.id = 'aegis-pay-loader';
+  el.innerHTML = `
+    <style>
+      #aegis-pay-loader {
+        position: fixed; inset: 0; z-index: 99999;
+        background: rgba(0,0,0,0.82); backdrop-filter: blur(6px);
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 20px;
+      }
+      #aegis-pay-loader .apl-ring {
+        width: 56px; height: 56px;
+        border: 3px solid rgba(0,242,255,0.15);
+        border-top-color: #00f2ff;
+        border-radius: 50%;
+        animation: apl-spin 0.75s linear infinite;
+      }
+      #aegis-pay-loader .apl-text {
+        font-family: monospace; font-size: 13px;
+        color: rgba(0,242,255,0.85); letter-spacing: 0.12em;
+        text-transform: uppercase; font-weight: 700;
+      }
+      #aegis-pay-loader .apl-sub {
+        font-family: monospace; font-size: 10px;
+        color: rgba(255,255,255,0.3); letter-spacing: 0.08em;
+      }
+      @keyframes apl-spin { to { transform: rotate(360deg); } }
+    </style>
+    <div class="apl-ring"></div>
+    <div class="apl-text">Connecting to Gateway</div>
+    <div class="apl-sub">Please wait&hellip;</div>
+  `;
+  document.body.appendChild(el);
+}
+
+function _hidePaymentLoader() {
+  const el = document.getElementById('aegis-pay-loader');
+  if (el) el.remove();
+}
+
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyDtudUL2sE1_fKbzIro5d2IP0-M2dYI6x4",
@@ -2012,12 +2054,14 @@ window.AegisDashboard = {
       return;
     }
 
+    _showPaymentLoader();
     try {
       // 1. Get Razorpay key_id from backend (keeps secret off the frontend)
       const configResp = await fetch(`${API_BASE_URL}/payment/config`);
       const config = await configResp.json().catch(() => ({}));
       const keyId = config?.razorpay?.key_id;
       if (!keyId) {
+        _hidePaymentLoader();
         alert('Payment gateway is not configured. Please contact support.');
         return;
       }
@@ -2033,6 +2077,7 @@ window.AegisDashboard = {
         body: JSON.stringify({ plan: planName, currency })
       });
       if (!orderResp.ok) {
+        _hidePaymentLoader();
         if (orderResp.status === 401 || orderResp.status === 403) {
           alert('Your session has expired. Please sign in again.');
           window.location.href = '/web/src/pages/index.html';
@@ -2048,12 +2093,14 @@ window.AegisDashboard = {
       try {
         await loadThirdPartyScript('https://checkout.razorpay.com/v1/checkout.js');
       } catch (sdkErr) {
+        _hidePaymentLoader();
         console.error('[Razorpay] Checkout script failed to load:', sdkErr);
         alert('Payment gateway failed to load. Please disable ad-blockers and refresh.');
         return;
       }
 
       // 5. Open Razorpay modal; verify signature on success
+      _hidePaymentLoader();
       await new Promise((resolve) => {
         const userEmail = currentUser?.email || '';
         const rzp = new window.Razorpay({
@@ -2103,6 +2150,7 @@ window.AegisDashboard = {
       });
 
     } catch (error) {
+      _hidePaymentLoader();
       console.error('Subscription error:', error);
       alert('An error occurred while processing payment. Please try again.');
     }

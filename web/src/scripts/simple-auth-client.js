@@ -2,6 +2,48 @@
 // Works with server endpoints: POST /auth/login and POST /create-subscription
 import { loadThirdPartyScript } from './iframeGuard.js';
 
+function showPaymentLoader() {
+  if (document.getElementById('aegis-pay-loader')) return;
+  const el = document.createElement('div');
+  el.id = 'aegis-pay-loader';
+  el.innerHTML = `
+    <style>
+      #aegis-pay-loader {
+        position: fixed; inset: 0; z-index: 99999;
+        background: rgba(0,0,0,0.82); backdrop-filter: blur(6px);
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 20px;
+      }
+      #aegis-pay-loader .apl-ring {
+        width: 56px; height: 56px;
+        border: 3px solid rgba(0,242,255,0.15);
+        border-top-color: #00f2ff;
+        border-radius: 50%;
+        animation: apl-spin 0.75s linear infinite;
+      }
+      #aegis-pay-loader .apl-text {
+        font-family: monospace; font-size: 13px;
+        color: rgba(0,242,255,0.85); letter-spacing: 0.12em;
+        text-transform: uppercase; font-weight: 700;
+      }
+      #aegis-pay-loader .apl-sub {
+        font-family: monospace; font-size: 10px;
+        color: rgba(255,255,255,0.3); letter-spacing: 0.08em;
+      }
+      @keyframes apl-spin { to { transform: rotate(360deg); } }
+    </style>
+    <div class="apl-ring"></div>
+    <div class="apl-text">Connecting to Gateway</div>
+    <div class="apl-sub">Please wait&hellip;</div>
+  `;
+  document.body.appendChild(el);
+}
+
+function hidePaymentLoader() {
+  const el = document.getElementById('aegis-pay-loader');
+  if (el) el.remove();
+}
+
 function createModalIfMissing() {
   if (document.getElementById('simpleAuthModal')) return;
   const wrap = document.createElement('div');
@@ -104,6 +146,8 @@ async function subscribeToPlan(planType) {
     return;
   }
 
+  showPaymentLoader();
+
   try {
     // Prefer locally-stored profile (Firebase auth flow populates this via AuthManager.setUser).
     // Avoids hitting /auth/me with a Firebase ID token that the custom server endpoint rejects.
@@ -134,6 +178,7 @@ async function subscribeToPlan(planType) {
     if (!userEmail) {
       const meResp = await fetch('/auth/me', { headers: { 'Authorization': `Bearer ${freshToken}` } });
       if (!meResp.ok) {
+        hidePaymentLoader();
         openModal();
         return;
       }
@@ -143,6 +188,7 @@ async function subscribeToPlan(planType) {
     }
 
     if (!userEmail) {
+      hidePaymentLoader();
       openModal();
       return;
     }
@@ -156,6 +202,7 @@ async function subscribeToPlan(planType) {
     const config = await configResp.json().catch(() => ({}));
     const keyId = config?.razorpay?.key_id;
     if (!keyId) {
+      hidePaymentLoader();
       alert('Payment gateway is not configured. Please contact support.');
       return;
     }
@@ -167,6 +214,7 @@ async function subscribeToPlan(planType) {
       body: JSON.stringify({ plan: planType, currency })
     });
     if (!orderResp.ok) {
+      hidePaymentLoader();
       if (orderResp.status === 401 || orderResp.status === 403) {
         alert('Your session has expired. Please sign in again.');
         window.location.href = '/web/src/pages/index.html';
@@ -182,12 +230,14 @@ async function subscribeToPlan(planType) {
     try {
       await loadThirdPartyScript('https://checkout.razorpay.com/v1/checkout.js');
     } catch (sdkErr) {
+      hidePaymentLoader();
       console.error('[Razorpay] Checkout script failed to load:', sdkErr);
       alert('Payment gateway failed to load. Please disable ad-blockers and refresh.');
       return;
     }
 
     // 4. Open Razorpay modal
+    hidePaymentLoader();
     await new Promise((resolve) => {
       const rzp = new window.Razorpay({
         key: keyId,
@@ -239,6 +289,7 @@ async function subscribeToPlan(planType) {
       rzp.open();
     });
   } catch (err) {
+    hidePaymentLoader();
     console.error('subscribeToPlan error', err);
     alert('Network error while creating subscription');
   }
