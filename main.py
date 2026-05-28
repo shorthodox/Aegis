@@ -1386,16 +1386,14 @@ async def send_otp_for_registration(request: OTPSendRequest):
     if domain in DISPOSABLE_EMAIL_DOMAINS:
         raise HTTPException(status_code=422, detail="Disposable or temporary email addresses are not allowed.")
 
-    # Validate format and check MX records.
-    # Run in a thread executor — dns.resolver is synchronous and would block the event loop.
+    # Validate email syntax only — no DNS/MX lookup.
+    # Deliverability is proven naturally: if the email is fake or unreachable,
+    # the OTP never arrives and signup cannot complete.
     try:
-        loop = asyncio.get_event_loop()
-        validated = await loop.run_in_executor(
-            None, partial(validate_email, email, check_deliverability=True)
-        )
+        validated = validate_email(email, check_deliverability=False)
         email = validated.normalized
     except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"Invalid email address: {str(exc)}")
+        raise HTTPException(status_code=422, detail=f"Invalid email format: {str(exc)}")
 
     existing_user = get_user_doc(email)
     if existing_user:
