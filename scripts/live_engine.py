@@ -147,15 +147,11 @@ RR_RATIO = 1.5
 
 DEFAULT_CAPITAL = 10000.0
 DEFAULT_RISK_PCT = 2.0
-DEFAULT_ALPHA_RISK_PCT = 3.0
 DEFAULT_MAX_POSITION = 2000.0
 DEFAULT_SCAN_TIMEFRAME = '1m'
-DEFAULT_ALPHA_MODE = False
 
 CONVICTION_LONG_BAILOUT = 0.40   # close LONG if ai_prob < 0.40
 CONVICTION_SHORT_BAILOUT = 0.60  # close SHORT if ai_prob > 0.60
-
-WARMUP_DURATION = 3600
 
 FLEET = [
     'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT',
@@ -940,14 +936,12 @@ class MarketDataFetcher:
 # SignalGenerator – ASYMMETRIC THRESHOLDS + SELLABILITY BRAKE
 # -------------------------------------------------------------------
 class SignalGenerator:
-    def __init__(self, token_configs: List[TokenConfig], btc_model: Optional[xgb.XGBClassifier], alpha_risk_pct: float):
-        # Normalize symbols in configs (replace underscore with slash)
+    def __init__(self, token_configs: List[TokenConfig], btc_model: Optional[xgb.XGBClassifier]):
         self.configs = {}
         for cfg in token_configs:
             norm_sym = normalize_symbol(cfg.symbol)
             self.configs[norm_sym] = cfg
         self.btc_model = btc_model
-        self.alpha_risk_pct = alpha_risk_pct
         self.regime_detector = RegimeDetector()
         self.threshold_engine = ThresholdEngine()
         self.score_history: Dict[str, Deque[float]] = {norm_sym: deque(maxlen=5) for norm_sym in self.configs.keys()}
@@ -1011,7 +1005,7 @@ class SignalGenerator:
             logger.debug(f"Synthetic macro trend compute failed for {symbol}: {e}")
             return 'DIVERGENT', {}
 
-    async def compute_signal(self, symbol: str, fetcher: MarketDataFetcher, alpha_mode: bool, timeframe: str = '1h', btc_healthy: bool = True, macro_trend: Optional[str] = None) -> Optional[Dict]:
+    async def compute_signal(self, symbol: str, fetcher: MarketDataFetcher, timeframe: str = '1h', btc_healthy: bool = True, macro_trend: Optional[str] = None) -> Optional[Dict]:
         # Normalize incoming symbol (e.g., BTC_USDT -> BTC/USDT)
         norm_sym = normalize_symbol(symbol)
         cfg = self.configs.get(norm_sym)
@@ -1019,7 +1013,7 @@ class SignalGenerator:
             logger.debug(f"No config for symbol {norm_sym} (original {symbol})")
             return None
 
-        current_risk_pct = self.alpha_risk_pct if alpha_mode else cfg.risk_pct
+        current_risk_pct = cfg.risk_pct
 
         # Primary timeframe data (allows generating signals per timeframe)
         tf_lookbacks = {
@@ -1255,8 +1249,8 @@ class SignalGenerator:
             elif _res_lvl > 0 and 0 <= _pre_res <= SR_SIGNAL_ZONE and predicted_class == 0 and ai_prob >= _sr_conf:
                 base_signal = "SHORT"
 
-        # BTC safety downgrade for LONG signals (only when Alpha OFF)
-        if not alpha_mode and not btc_healthy and base_signal == "LONG":
+        # BTC safety downgrade for LONG signals
+        if not btc_healthy and base_signal == "LONG":
             base_signal = "NEUTRAL"
 
         # ──────────────────────────────────────────────────────────────
@@ -1510,7 +1504,7 @@ class SignalGenerator:
         # the SL/TP distances before EV is computed — wide ATR bands during breakouts
         # inflate the risk side of the equation and would wrongly kill valid momentum
         # setups; tightening by 25% reflects that breakout entries trail a tighter stop.
-        if base_signal != "NEUTRAL" and current_price > 0 and not alpha_mode:
+        if base_signal != "NEUTRAL" and current_price > 0:
             if signal_status == "MOMENTUM_BREAKOUT":
                 _vol_scale = 0.75
                 _tp_pct = (suggested_tp_distance * _vol_scale) / current_price
@@ -1545,8 +1539,6 @@ class SignalGenerator:
             )
         except Exception:
             pass
-        if alpha_mode:
-            adj_thresh = adj_thresh * 0.85
 
         # Use actual traded SL/TP distances (same as expectancy gate) so the
         # dashboard matrix is consistent with what was used to approve the signal.
@@ -1616,7 +1608,7 @@ class SignalGenerator:
             "reversal_score": round(reversal_score_val, 3),
             "reversal_signals": reversal_signals_list,
             "btc_ai": btc_ai,
-            "btc_filter_ok": not (not alpha_mode and not btc_healthy and final_signal in ("STRONG_BUY", "BUY")),
+            "btc_filter_ok": btc_healthy or final_signal not in ("STRONG_BUY", "BUY"),
             "vol_regime": vol_regime,
             "volume_cond": volume_cond,
             "trend_aligned": trend_aligned,
@@ -1707,7 +1699,7 @@ async def confirm_live_signal(
 # -------------------------------------------------------------------
 class LiveEngine:
     def __init__(self, token_configs: List[TokenConfig], capital: float, max_position_usdt: float,
-                 scan_interval_seconds: int, alpha_mode: bool, alpha_risk_pct: float, proxy_url: Optional[str] = None):
+                 scan_interval_seconds: int, proxy_url: Optional[str] = None):
         self.token_configs = token_configs
         self.wallet = LiveWallet(capital, max_position_usdt)
         self.activity_log = deque(maxlen=12)
@@ -1716,8 +1708,6 @@ class LiveEngine:
         self.signal_gen = None
         self.models: Dict[str, xgb.XGBClassifier] = {}
         self.scan_interval = scan_interval_seconds
-        self.alpha_mode = alpha_mode
-        self.alpha_risk_pct = alpha_risk_pct
         self.trading_accuracies = {}
 
         # Load backtest summary for trading accuracy
@@ -1731,10 +1721,6 @@ class LiveEngine:
                         self.trading_accuracies[item[0]] = float(item[2])
             except Exception as e:
                 logger.error(f"Error loading accuracy data: {e}")
-
-        # Warm‑up timer (only for Alpha OFF)
-        self.engine_start_time = time.time()
-        self.warmup_complete = False
 
         self.bootstrap_total = len(token_configs) * 2
         self.bootstrap_done = 0
@@ -1811,13 +1797,7 @@ class LiveEngine:
                 if not inp:
                     continue
                 inp = inp.strip().lower()
-                if inp == 'a':
-                    self.alpha_mode = not self.alpha_mode
-                    status = "ON" if self.alpha_mode else "OFF"
-                    await self.announce(f"Alpha mode {status}")
-                    self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] Alpha Mode toggled: {status}")
-                    logger.info(f"Alpha Mode toggled: {status}")
-                elif inp == 'c':
+                if inp == 'c':
                     print("\n⚠️  DATA PURGE CONFIRMATION ⚠️")
                     confirm = await loop.run_in_executor(None, lambda: input("Confirm Data Purge? [Y/N]: ").strip().upper())
                     if confirm == 'Y':
@@ -1829,22 +1809,6 @@ class LiveEngine:
                     else:
                         print("Reset cancelled.")
                         self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] Reset cancelled by user.")
-                elif inp.startswith('risk'):
-                    parts = inp.split()
-                    if len(parts) == 2:
-                        try:
-                            new_risk = float(parts[1])
-                            if 0.5 <= new_risk <= 10:
-                                self.alpha_risk_pct = new_risk
-                                await self.announce(f"Alpha risk set to {new_risk} percent")
-                                self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] Alpha risk updated to {new_risk}%")
-                                logger.info(f"Alpha risk updated to {new_risk}%")
-                            else:
-                                logger.warning("Risk must be between 0.5 and 10")
-                        except ValueError:
-                            logger.warning("Invalid risk value")
-                    else:
-                        logger.info(f"Current alpha risk: {self.alpha_risk_pct}% (use 'risk X' to change)")
                 elif inp == 'q':
                     logger.info("Quit command received, shutting down...")
                     self._shutdown_event.set()
@@ -1895,7 +1859,7 @@ class LiveEngine:
         self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] {len(self.models)} token models cached in RAM")
 
         logger.info("Starting Signal Generator...")
-        self.signal_gen = SignalGenerator(self.token_configs, self.btc_model, self.alpha_risk_pct)
+        self.signal_gen = SignalGenerator(self.token_configs, self.btc_model)
         self.signal_gen.models = self.models
         self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] Signal Generator ready")
         logger.info("Live engine initialized – starting lazy data load")
@@ -2017,7 +1981,7 @@ class LiveEngine:
                 await asyncio.sleep(5)
             if self.signal_gen:
                 try:
-                    sig = await self.signal_gen.compute_signal(cfg.symbol, self.fetcher, self.alpha_mode, btc_healthy=True)  # initial bootstrap, assume BTC safe
+                    sig = await self.signal_gen.compute_signal(cfg.symbol, self.fetcher, btc_healthy=True)
                     if sig:
                         sig['timeframe'] = '1h'
                         self.last_signals[cfg.symbol] = {
@@ -2034,38 +1998,15 @@ class LiveEngine:
         while not self._shutdown_event.is_set():
             loop_start = time.time()
 
-            # 1. Warm‑up check (only when Alpha Mode OFF)
-            if not self.alpha_mode:
-                elapsed = time.time() - self.engine_start_time
-                remaining = max(0, WARMUP_DURATION - elapsed)
-                if elapsed < WARMUP_DURATION:
-                    if int(remaining) % 60 == 0 or remaining < 60:
-                        mins = int(remaining // 60)
-                        secs = int(remaining % 60)
-                        logger.info(f"[SENTINEL] Engine warming up... {mins}m {secs}s remaining")
-                        self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] 🔵 WARMUP: {mins}m {secs}s left")
-                    await asyncio.sleep(self.scan_interval)
-                    continue
-                else:
-                    if not self.warmup_complete:
-                        self.warmup_complete = True
-                        logger.info("[SENTINEL] Warm‑up complete – signal generation enabled.")
-                        self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] ✅ Warm‑up complete.")
-            else:
-                # Alpha Mode ON – skip warm‑up entirely
-                pass
-
-            # 2. Refresh context every hour
+            # 1. Refresh context every hour
             if time.time() - self.last_context_refresh > 3600:
                 await self._refresh_context()
 
-            # 3. Check BTC safety (BRAKE) – ONLY if Alpha OFF
-            btc_safe = True
-            if not self.alpha_mode:
-                btc_safe = await self._is_btc_safe()
-                if not btc_safe:
-                    logger.warning("BTC is shaky – all BUY/STRONG_BUY signals will be downgraded to HOLD (BTC_SHAKY).")
-                    self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] 🛑 BTC BRAKE ACTIVE – Buy signals suppressed.")
+            # 2. BTC safety check — suppress LONG signals when BTC is shaky
+            btc_safe = await self._is_btc_safe()
+            if not btc_safe:
+                logger.warning("BTC is shaky – BUY signals will be downgraded to HOLD.")
+                self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] 🛑 BTC BRAKE – Buy signals suppressed.")
 
             # 4. Compute signals for all tokens (pass btc_safe flag)
             if self.signal_gen is None:
@@ -2073,7 +2014,6 @@ class LiveEngine:
                 await asyncio.sleep(self.scan_interval)
                 continue
 
-            self.signal_gen.alpha_risk_pct = self.alpha_risk_pct
 
             # Macro-first multi-timeframe signal computation
             # Remove '1w' from live prediction blocks; weekly context is handled synthetically via compute_macro_trend
@@ -2094,7 +2034,7 @@ class LiveEngine:
             for cfg in self.token_configs:
                 sym = cfg.symbol
                 for tf in tf_blocks:
-                    compute_tasks.append((sym, tf, asyncio.create_task(self.signal_gen.compute_signal(sym, self.fetcher, self.alpha_mode, timeframe=tf, btc_healthy=btc_safe, macro_trend=macro_results.get(sym)))))
+                    compute_tasks.append((sym, tf, asyncio.create_task(self.signal_gen.compute_signal(sym, self.fetcher, timeframe=tf, btc_healthy=btc_safe, macro_trend=macro_results.get(sym)))))
 
             # 3) Await per-timeframe tasks and apply macro filtering rules
             nested_signals: Dict[str, Dict[str, Optional[Dict]]] = {cfg.symbol: {} for cfg in self.token_configs}
@@ -2354,12 +2294,12 @@ class LiveEngine:
                 ai_status = "ACTIVE"
 
             print("\n" + "="*140)
-            print(f"AEGIS‑1 DASHBOARD – {now.strftime('%Y-%m-%d %H:%M:%S')}  |  ALPHA: {'ON' if self.alpha_mode else 'OFF'}  |  Alpha Risk: {self.alpha_risk_pct}%")
+            print(f"AEGIS‑1 DASHBOARD – {now.strftime('%Y-%m-%d %H:%M:%S')}")
             print(f"Balance: ${self.wallet.balance:.2f} | Unrealized PnL: ${total_unrealized_usd:+.2f} | Equity: ${total_equity:.2f}")
             print(f"Max Position: ${self.wallet.max_position_usdt:.0f} | Scan Interval: {self.scan_interval}s")
             print(f"Open Trades: {len(self.wallet.open_trades)} | Total History: {len(self.wallet.trade_history)}")
             print(f"AI STATUS: [{ai_status}]")
-            print("Keys: [A] Toggle Alpha Mode  |  [C] RESET Wallet (purge trades)  |  [risk X] Set Alpha Risk  |  [Q] Quit")
+            print("Keys: [C] RESET Wallet (purge trades)  |  [Q] Quit")
             print("="*140)
             print(f"{'Symbol':<12} | {'Mode':<10} | {'Live Price':>10} | {'Δ':<2} | {'AI Prob':>6} | {'Thresh':>6} | {'Signal':<20} | {'Risk':<12} | {'PnL %':>8} | {'Status':<10}")
             print("-"*140)
@@ -2442,8 +2382,8 @@ class LiveEngine:
 │ 4. INTERNET STABILITY – Ensure VPN is stable; a disconnection could prevent closing trades.         │
 │ 5. MONITOR DASHBOARD – Watch for abnormal PnL or connectivity warnings.                             │
 │ 6. LOGS ARE YOUR FRIEND – Check logs/ live_engine.log after any unexpected behavior.               │
-│ 7. ALPHA MODE – When active, BTC filter and warm‑up are bypassed.                                  │
-│ 8. ALPHA RISK – Use 'risk X' to change risk percentage for Alpha Mode (e.g., risk 4.5).            │
+│ 7. SIGNALS START AFTER BOOTSTRAP – engine scans once data loads for all tokens (~15 min).          │
+│ 8. BTC BRAKE – LONG signals are suppressed when BTC is trending below its 20-period EMA.           │
 │ 9. BI-DIRECTIONAL TRADING – BUY and SELL signals are asymmetric (sell thresholds stricter).        │
 │10. CONVICTION EXITS – Longs exit if AI < 40%, Shorts exit if AI > 60%.                             │
 │11. SIGNAL GRID – Asymmetric thresholds: SELL<0.20, STRONG_SELL<0.15, expanded HOLD 0.20-0.60.      │
@@ -2470,7 +2410,7 @@ class LiveEngine:
 # -------------------------------------------------------------------
 # Automated setup (with fallback to default configs)
 # -------------------------------------------------------------------
-def automated_setup(backtest_dir: Path, args: argparse.Namespace) -> Tuple[List[TokenConfig], float, float, int, bool, float, Optional[str]]:
+def automated_setup(backtest_dir: Path, args: argparse.Namespace) -> Tuple[List[TokenConfig], float, float, int, Optional[str]]:
     # Ensure backtest directory exists (create if missing)
     backtest_dir.mkdir(parents=True, exist_ok=True)
 
@@ -2500,11 +2440,9 @@ def automated_setup(backtest_dir: Path, args: argparse.Namespace) -> Tuple[List[
         tf_choice = args.timeframe if args.timeframe else DEFAULT_SCAN_TIMEFRAME
         tf_map = {'1m': 60, '5m': 300, '15m': 900, '30m': 1800, '1h': 3600, '1d': 86400, '1w': 604800, '1M': 2592000}
         scan_seconds = tf_map.get(tf_choice, 60)
-        alpha_mode = args.alpha_mode if args.alpha_mode else DEFAULT_ALPHA_MODE
-        alpha_risk = args.alpha_risk if args.alpha_risk else DEFAULT_ALPHA_RISK_PCT
         proxy_url = args.proxy if hasattr(args, 'proxy') else None
         logger.info(f"Using default configs for {len(configs)} tokens (no backtest file)")
-        return configs, capital, max_pos, scan_seconds, alpha_mode, alpha_risk, proxy_url
+        return configs, capital, max_pos, scan_seconds, proxy_url
 
     logger.info(f"Using backtest file: {json_path.name}")
     best_per_token = load_backtest_results(json_path)
@@ -2534,11 +2472,9 @@ def automated_setup(backtest_dir: Path, args: argparse.Namespace) -> Tuple[List[
         tf_choice = args.timeframe if args.timeframe else DEFAULT_SCAN_TIMEFRAME
         tf_map = {'1m': 60, '5m': 300, '15m': 900, '30m': 1800, '1h': 3600, '1d': 86400, '1w': 604800, '1M': 2592000}
         scan_seconds = tf_map.get(tf_choice, 60)
-        alpha_mode = args.alpha_mode if args.alpha_mode else DEFAULT_ALPHA_MODE
-        alpha_risk = args.alpha_risk if args.alpha_risk else DEFAULT_ALPHA_RISK_PCT
         proxy_url = args.proxy if hasattr(args, 'proxy') else None
         logger.info(f"Using default configs for {len(configs)} tokens (fallback from empty backtest)")
-        return configs, capital, max_pos, scan_seconds, alpha_mode, alpha_risk, proxy_url
+        return configs, capital, max_pos, scan_seconds, proxy_url
 
     configs = []
     for symbol, info in best_per_token.items():
@@ -2565,13 +2501,11 @@ def automated_setup(backtest_dir: Path, args: argparse.Namespace) -> Tuple[List[
     tf_map = {'1m': 60, '5m': 300, '15m': 900, '30m': 1800, '1h': 3600, '1d': 86400, '1w': 604800, '1M': 2592000}
     scan_seconds = tf_map.get(tf_choice, 60)
 
-    alpha_mode = args.alpha_mode if args.alpha_mode else DEFAULT_ALPHA_MODE
-    alpha_risk = args.alpha_risk if args.alpha_risk else DEFAULT_ALPHA_RISK_PCT
     proxy_url = args.proxy if hasattr(args, 'proxy') else None
 
     logger.info(f"Automated config: capital=${capital:.2f}, risk={risk_pct}%, max_pos=${max_pos:.0f}, "
-                f"timeframe={tf_choice}, alpha_mode={alpha_mode}, alpha_risk={alpha_risk}%, proxy={proxy_url}")
-    return configs, capital, max_pos, scan_seconds, alpha_mode, alpha_risk, proxy_url
+                f"timeframe={tf_choice}, proxy={proxy_url}")
+    return configs, capital, max_pos, scan_seconds, proxy_url
 
 # -------------------------------------------------------------------
 # Command line argument parsing
@@ -2580,11 +2514,9 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description="Aegis-1 Automated Live Trading Engine")
     parser.add_argument("--capital", type=float, help="Starting USDT balance")
     parser.add_argument("--risk", type=float, help="Base risk per trade (%) [1-5]")
-    parser.add_argument("--alpha-risk", type=float, help="Risk % when Alpha Mode is ON (default 3.0)")
     parser.add_argument("--max-position", type=float, help="Max USDT per single trade")
     parser.add_argument("--timeframe", choices=['1m','5m','15m','30m','1h','1d','1w','1M'],
                         help="Scanning timeframe (price update frequency)")
-    parser.add_argument("--alpha-mode", action="store_true", help="Start with Alpha Mode ON")
     parser.add_argument("--proxy", type=str, help="Proxy URL (e.g., http://127.0.0.1:7890)")
     return parser.parse_args()
 
@@ -2598,12 +2530,12 @@ async def main():
     # Use dynamic path based on root_dir
     backtest_dir = root_dir / "logs" / "backtests"
 
-    configs, capital, max_pos, scan_seconds, alpha_mode, alpha_risk, proxy_url = automated_setup(backtest_dir, args)
+    configs, capital, max_pos, scan_seconds, proxy_url = automated_setup(backtest_dir, args)
     if not configs:
         logger.error("No token configurations loaded.")
         return
 
-    engine = LiveEngine(configs, capital, max_pos, scan_seconds, alpha_mode, alpha_risk, proxy_url)
+    engine = LiveEngine(configs, capital, max_pos, scan_seconds, proxy_url)
     try:
         await engine.initialize()
     except ConnectionError as e:
