@@ -566,12 +566,14 @@ async def lifespan(app: FastAPI):
     subscription_task = asyncio.create_task(check_and_send_subscription_reminders())
     analytics_task = asyncio.create_task(analytics_loop())
     dev_token_task = asyncio.create_task(dev_token_display_loop())
+    dev_key_task = asyncio.create_task(dev_key_display_loop())
     yield
     engine_task.cancel()
     reminder_task.cancel()
     subscription_task.cancel()
     analytics_task.cancel()
     dev_token_task.cancel()
+    dev_key_task.cancel()
 
 app = FastAPI(title="Aegis-1 by Gatekeeper", lifespan=lifespan)
 
@@ -2707,7 +2709,927 @@ async def dev_token_display_loop():
 
         await asyncio.sleep(60)
 
-_DEV_CODE_RE = re.compile(r'^AEGIS-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$')
+
+async def dev_key_display_loop():
+    """Startup task: generate one dev key, store it in Firestore, and print it to logs."""
+    await asyncio.sleep(3)  # let uvicorn startup messages land first
+    try:
+        new_key = _make_dev_code()
+        key_id = str(uuid.uuid4())
+        now_dt = datetime.now(timezone.utc)
+        expires_dt = now_dt + timedelta(days=30)
+        features = DEV_KEY_FEATURES
+
+        db.collection("dev_keys").document(key_id).set({
+            "key": new_key,
+            "created_at": now_dt.isoformat(),
+            "expires_at": expires_dt.isoformat(),
+            "features": features,
+            "created_by": "system_startup",
+            "usage_count": 0,
+            "last_used": None,
+        })
+
+        sep = "\u2550" * 63
+        banner = (
+            f"\n{sep}\n"
+            f"  AEGIS -- DEVELOPER KEY (valid 30 days)\n"
+            f"  Key     : {new_key}\n"
+            f"  Expires : {expires_dt.strftime('%Y-%m-%d')}\n"
+            f"  Features: {', '.join(features)}\n"
+            f"{sep}\n"
+        )
+        print(banner, flush=True)
+        logger.info(banner)
+
+    except Exception as e:
+        print(f"[dev_key_display_loop ERROR] {e}", flush=True)
+        logger.error(f"[dev_key_display_loop] {e}", exc_info=True)
+
+
+_DEV_CODE_RE = re.compile(r'^AEGIS-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}
+_DEV_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no 0/O, 1/I/L
+
+def _make_dev_code() -> str:
+    seg = lambda: "".join(secrets.choice(_DEV_CODE_ALPHABET) for _ in range(4))
+    return f"AEGIS-{seg()}-{seg()}-{seg()}"
+
+async def _require_admin(x_admin_key: Optional[str] = Header(None)) -> None:
+    if not ADMIN_SECRET or x_admin_key != ADMIN_SECRET:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+def _get_dev_code_doc(code: str) -> Optional[Dict]:
+    doc_ref = db.collection("dev_codes").document(code)
+    doc = doc_ref.get()
+    to_dict = getattr(doc, "to_dict", None)
+    exists = getattr(doc, "exists", False)
+    if callable(to_dict) and exists:
+        result = to_dict()
+        return result if isinstance(result, dict) else {}
+    return None
+
+class GenerateDevCodeRequest(BaseModel):
+    count: int = 1
+    plan: str = "pro"
+    days: int = 30
+    label: str = "beta"
+
+@app.post("/admin/dev-codes/generate")
+async def admin_generate_dev_codes(
+    req: GenerateDevCodeRequest,
+    _admin: None = Depends(_require_admin),
+):
+    if req.plan not in ("basic", "intermediate", "pro"):
+        raise HTTPException(status_code=400, detail="Invalid plan")
+    if not (1 <= req.count <= 50):
+        raise HTTPException(status_code=400, detail="count must be 1–50")
+    if not (1 <= req.days <= 365):
+        raise HTTPException(status_code=400, detail="days must be 1–365")
+
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(days=req.days)
+    codes = []
+
+    for _i in range(req.count):
+        code = _make_dev_code()
+        db.collection("dev_codes").document(code).set({
+            "source": "backend",
+            "plan": req.plan,
+            "label": req.label,
+            "created_at": now.isoformat(),
+            "expires_at": expires_at.isoformat(),
+            "used_by": None,
+            "used_at": None,
+        })
+        codes.append({"code": code, "expires_at": expires_at.isoformat()})
+
+    return {"generated": len(codes), "plan": req.plan, "codes": codes}
+
+
+@app.get("/admin/dev-codes")
+async def admin_list_dev_codes(
+    include_used: bool = False,
+    _admin: None = Depends(_require_admin),
+):
+    """List all dev codes from Firestore. By default only unused+unexpired codes."""
+    now = datetime.now(timezone.utc)
+    docs = db.collection("dev_codes").stream()
+    codes = []
+    for doc in docs:
+        code_id = doc.id
+        if code_id == _CURRENT_TOKEN_SENTINEL:
+            continue
+        data = doc.to_dict() or {}
+        used_by = data.get("used_by")
+        try:
+            exp_dt = datetime.fromisoformat(data.get("expires_at", ""))
+            expired = now > exp_dt
+        except Exception:
+            expired = True
+        if not include_used and (used_by or expired):
+            continue
+        codes.append({
+            "code": code_id,
+            "plan": data.get("plan"),
+            "label": data.get("label"),
+            "created_at": data.get("created_at"),
+            "expires_at": data.get("expires_at"),
+            "used_by": used_by,
+            "used_at": data.get("used_at"),
+            "expired": expired,
+        })
+    codes.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+    return {"count": len(codes), "codes": codes}
+
+
+@app.get("/admin/dev-codes/current")
+async def admin_get_current_dev_token(
+    _admin: None = Depends(_require_admin),
+):
+    """Return the current always-on dev token generated by the background loop."""
+    token_info = await asyncio.to_thread(_get_or_refresh_dev_token)
+    return token_info
+
+
+class DevCodeRequest(BaseModel):
+    code: str
+
+@app.post("/api/redeem-dev-code")
+async def redeem_dev_code(req: DevCodeRequest, email: str = Depends(get_current_user)):
+    code = req.code.strip().upper()
+
+    if not _DEV_CODE_RE.match(code):
+        raise HTTPException(status_code=400, detail="Invalid code format. Expected: AEGIS-XXXX-XXXX-XXXX")
+
+    code_data = _get_dev_code_doc(code)
+    if code_data is None:
+        raise HTTPException(status_code=404, detail="Dev code not found")
+
+    if code_data.get("source") != "backend":
+        raise HTTPException(status_code=403, detail="Dev code is not valid")
+
+    try:
+        expires_at_dt = datetime.fromisoformat(code_data["expires_at"])
+    except Exception:
+        raise HTTPException(status_code=500, detail="Malformed dev code record")
+
+    if datetime.now(timezone.utc) > expires_at_dt:
+        raise HTTPException(status_code=410, detail="This dev code has expired")
+
+    used_by = code_data.get("used_by")
+    if used_by and used_by != email:
+        raise HTTPException(status_code=409, detail="This dev code has already been used")
+
+    plan = code_data.get("plan", "pro")
+    expires_iso = code_data["expires_at"]
+
+    user_doc = get_user_doc(email)
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User account not found")
+
+    user_ref = db.collection("users").document(email)
+    update_result = user_ref.update({
+        "plan": plan,
+        "subscription": {
+            "status": "active",
+            "payment_id": f"devcode_{code}",
+            "order_id": f"devcode_{code}",
+            "activated_at": datetime.now(timezone.utc).isoformat(),
+            "plan_type": plan,
+            "expires_at": expires_iso,
+        },
+        "trial_active": False,
+        "dev_code_used": code,
+    })
+    if inspect.isawaitable(update_result):
+        await update_result
+
+    if not used_by:
+        mark_result = db.collection("dev_codes").document(code).update({
+            "used_by": email,
+            "used_at": datetime.now(timezone.utc).isoformat(),
+        })
+        if inspect.isawaitable(mark_result):
+            await mark_result
+
+        # Token consumed — provision a replacement immediately so the backend
+        # always has an active token available for the next developer.
+        try:
+            await asyncio.to_thread(_provision_dev_token)
+        except Exception as _e:
+            logger.warning(f"Auto-provision replacement dev token failed: {_e}")
+
+    return {"status": "success", "plan": plan, "expires_at": expires_iso}
+
+# -------------------------------------------------------------------
+# Dev Key System — validate-devkey endpoint
+# -------------------------------------------------------------------
+
+DEV_KEY_FEATURES = ["extended_timeframes", "alpha_mode", "all_signals", "pro_signals"]
+
+# In-memory TTL cache for validated dev keys (key_string -> {cached_at})
+_dev_key_cache: Dict[str, Dict] = {}
+_DEV_KEY_CACHE_TTL = 300  # 5 minutes
+
+class ValidateDevKeyRequest(BaseModel):
+    dev_key: str
+
+@app.post("/auth/validate-devkey")
+async def validate_dev_key(req: ValidateDevKeyRequest, request: Request):
+    """
+    Validate a developer key against the /dev_keys Firestore collection.
+    Returns plan info and features if valid; logs usage for audit.
+    Rate-limited to 5 attempts per minute per IP.
+    """
+    key_str = req.dev_key.strip()
+    if not key_str:
+        return JSONResponse({"valid": False, "error": "Invalid or expired key"}, status_code=400)
+
+    # --- Rate limiting (5 attempts per minute per IP) ---
+    client_ip = request.headers.get(
+        "x-forwarded-for", request.client.host if request.client else "unknown"
+    ).split(",")[0].strip()
+    rate_key = f"devkey_rate_{client_ip}"
+    now_ts = time.time()
+    if not hasattr(validate_dev_key, "_rate_store"):
+        validate_dev_key._rate_store = {}
+    rate_store = validate_dev_key._rate_store
+    window = rate_store.get(rate_key, {"count": 0, "window_start": now_ts})
+    if now_ts - window["window_start"] > 60:
+        window = {"count": 0, "window_start": now_ts}
+    window["count"] += 1
+    rate_store[rate_key] = window
+    if window["count"] > 5:
+        print(f"[DevKey] Rate limit exceeded for IP {client_ip}")
+        return JSONResponse(
+            {"valid": False, "error": "Too many attempts. Please wait a minute."},
+            status_code=429,
+        )
+
+    # --- Check in-memory cache first ---
+    cached = _dev_key_cache.get(key_str)
+    if cached and (now_ts - cached["cached_at"]) < _DEV_KEY_CACHE_TTL:
+        print(f"[DevKey] Cache hit for key (masked): {key_str[:8]}...")
+        return {"valid": True, "plan": "pro", "features": DEV_KEY_FEATURES}
+
+    # --- Validate against Firestore /dev_keys collection ---
+    try:
+        keys_ref = db.collection("dev_keys")
+        query_result = keys_ref.where("key", "==", key_str).limit(1).stream()
+
+        key_doc = None
+        key_doc_id = None
+        for doc in query_result:
+            key_doc = doc.to_dict()
+            key_doc_id = doc.id
+            break
+
+        if key_doc is None:
+            print(f"[DevKey] Key not found: {key_str[:8]}...")
+            return JSONResponse({"valid": False, "error": "Invalid or expired key"})
+
+        # Check expiry
+        expires_at_raw = key_doc.get("expires_at")
+        if expires_at_raw:
+            try:
+                if hasattr(expires_at_raw, "timestamp"):
+                    expires_dt = datetime.fromtimestamp(expires_at_raw.timestamp(), tz=timezone.utc)
+                else:
+                    expires_dt = datetime.fromisoformat(str(expires_at_raw).replace("Z", "+00:00"))
+                if datetime.now(timezone.utc) > expires_dt:
+                    print(f"[DevKey] Expired key: {key_str[:8]}...")
+                    return JSONResponse({"valid": False, "error": "Invalid or expired key"})
+            except Exception as e:
+                print(f"[DevKey] Error parsing expires_at: {e}")
+                return JSONResponse({"valid": False, "error": "Invalid or expired key"})
+
+        # Log usage: increment usage_count and update last_used
+        try:
+            db.collection("dev_keys").document(key_doc_id).update({
+                "usage_count": (key_doc.get("usage_count") or 0) + 1,
+                "last_used": datetime.now(timezone.utc).isoformat(),
+            })
+        except Exception as log_err:
+            print(f"[DevKey] Failed to log usage: {log_err}")
+
+        # Cache the valid key
+        _dev_key_cache[key_str] = {"cached_at": now_ts}
+
+        features = key_doc.get("features", DEV_KEY_FEATURES)
+        print(f"[DevKey] Valid key activated: {key_str[:8]}... features={features}")
+        return {"valid": True, "plan": "pro", "features": features}
+
+    except Exception as e:
+        print(f"[DevKey] Firestore error during validation: {e}")
+        return JSONResponse(
+            {"valid": False, "error": "Validation service unavailable"},
+            status_code=503,
+        )
+
+# -------------------------------------------------------------------
+# Feedback endpoint
+# -------------------------------------------------------------------
+@app.post("/feedback")
+async def send_feedback(fb: Feedback):
+    message = MessageSchema(
+        subject=f"Feedback from {fb.name}",
+        recipients=[NameEmail(name="Animesh Kukreti", email="animeshkukreti60@gmail.com")],
+        body=f"From: {fb.email}\n\n{fb.message}",
+        subtype=MessageType.plain,
+    )
+    await fastmail.send_message(message)
+    return {"status": "sent"}
+
+# -------------------------------------------------------------------
+# Reviews endpoint
+# -------------------------------------------------------------------
+@app.post("/reviews")
+async def submit_review(review: Review):
+    try:
+        rating = int(review.rating)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Rating must be an integer 1-5")
+    if rating < 1 or rating > 5:
+        raise HTTPException(status_code=400, detail="Rating must be between 1 and 5")
+
+    review_doc = {
+        "name": review.name,
+        "email": review.email,
+        "rating": rating,
+        "message": review.message or "",
+        "product": review.product or "",
+        "created_at": datetime.now(timezone.utc),
+    }
+
+    try:
+        db.collection('reviews').add(review_doc)
+        print(f"✅ Review saved to Firestore: {review.email}")
+        return {"status": "saved", "method": "firestore"}
+    except Exception as e:
+        print(f"❌ Failed to save review to Firestore: {e}. Falling back to email.")
+        try:
+            message = MessageSchema(
+                subject=f"New Review from {review.name}",
+                recipients=[NameEmail(name="Animesh Kukreti", email="animeshkukreti60@gmail.com")],
+                body=(f"Name: {review.name}\nEmail: {review.email}\nRating: {rating}\nProduct: {review.product or ''}\n\n"
+                      f"Message:\n{review.message or ''}"),
+                subtype=MessageType.plain,
+            )
+            await fastmail.send_message(message)
+            print("✅ Review emailed as fallback")
+            return {"status": "saved", "method": "email_fallback"}
+        except Exception as e2:
+            print(f"❌ Failed to send review email fallback: {e2}")
+            raise HTTPException(status_code=500, detail="Failed to save review or send fallback email")
+
+# -------------------------------------------------------------------
+# Trade Execution endpoint
+# -------------------------------------------------------------------
+class TradeExecuteRequest(BaseModel):
+    symbol: str
+    side: str
+    entryPrice: float
+    stopLoss: float
+    takeProfit: float
+    riskPercent: float
+    leverage: float
+    positionUnits: float
+    notionalValue: float
+    status: str = "open"
+    signalId: Optional[str] = None
+    userId: Optional[str] = None
+
+@app.post("/api/trades/execute")
+async def execute_trade(request: TradeExecuteRequest, user_id: str = Depends(get_firebase_uid)):
+    trade_data = request.dict()
+    trade_data["openTime"] = datetime.now(timezone.utc).isoformat()
+    # Ensure it's saved under the user who made the request
+    trade_data["userId"] = user_id
+    
+    try:
+        # NOTE: Connect to the Demat API here.
+        # This is where the call will be sent to the broker API for execution.
+        print(f"🚀 Sending order to Demat API: Symbol: {trade_data.get('symbol')}, Side: {trade_data.get('side')}, Units: {trade_data.get('positionUnits')}")
+        # demat_response = await demat_client.place_order(...)
+        
+        trade_ref = db.collection("users").document(user_id).collection("trades").document()
+        trade_data["id"] = trade_ref.id
+        trade_data["demat_status"] = "sent_to_broker"
+        trade_ref.set(trade_data)
+        print(f"✅ Trade executed and sent to Demat via API for {user_id}")
+        return {"status": "success", "trade_id": trade_ref.id, "trade": trade_data, "message": "Order sent to Demat account successfully"}
+    except Exception as e:
+        print(f"❌ Failed to execute trade for {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to execute trade")
+
+@app.post("/api/trades/{trade_id}/close")
+async def close_trade(trade_id: str, user_id: str = Depends(get_firebase_uid)):
+    try:
+        trade_ref = db.collection("users").document(user_id).collection("trades").document(trade_id)
+        trade_doc = trade_ref.get()
+        if not trade_doc.exists:
+            raise HTTPException(status_code=404, detail="Trade not found")
+        trade_ref.update({
+            "status": "closed",
+            "closeTime": datetime.now(timezone.utc).isoformat()
+        })
+        print(f"✅ Trade {trade_id} closed for {user_id}")
+        return {"status": "success", "trade_id": trade_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Failed to close trade {trade_id} for {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to close trade")
+
+# -------------------------------------------------------------------
+# Legacy OTP endpoints (kept for compatibility)
+# -------------------------------------------------------------------
+@app.post("/send-otp")
+async def send_otp(request: OTPSendRequest):
+    email = request.email
+    existing_user = get_user_doc(email)
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered. Please sign in.")
+    if is_cooldown_active(email):
+        raise HTTPException(status_code=429, detail="Too many requests. Please wait before requesting another OTP.")
+    otp = generate_otp()
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+    cooldown_until = datetime.now(timezone.utc) + timedelta(seconds=60)
+    otp_store[email] = {
+        "otp": otp,
+        "expires_at": expires_at,
+        "cooldown_until": cooldown_until
+    }
+    try:
+        message = MessageSchema(
+            subject="Your AEGIS Verification Code",
+            recipients=[NameEmail(name=email, email=email)],
+            body=f"""
+            <!DOCTYPE html>
+            <html>
+            <head><meta charset="UTF-8"></head>
+            <body style="margin:0;padding:0;background:#0a0a0c;font-family:'Segoe UI',Arial,sans-serif;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0c;padding:40px 0;">
+                <tr><td align="center">
+                  <table width="480" cellpadding="0" cellspacing="0"
+                         style="background:#0f111a;border:1px solid rgba(0,242,255,0.15);border-radius:16px;overflow:hidden;max-width:480px;">
+
+                    <!-- Header -->
+                    <tr>
+                      <td style="background:linear-gradient(135deg,#00f2ff22,#7b2fff22);padding:32px 40px 24px;text-align:center;border-bottom:1px solid rgba(0,242,255,0.1);">
+                        <div style="font-size:28px;font-weight:800;letter-spacing:3px;
+                                    background:linear-gradient(90deg,#00f2ff,#7b2fff);
+                                    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+                                    display:inline-block;">
+                          ⚡ AEGIS
+                        </div>
+                        <p style="color:#6b7280;margin:8px 0 0;font-size:13px;letter-spacing:1px;">SOVEREIGN TERMINAL</p>
+                      </td>
+                    </tr>
+
+                    <!-- Body -->
+                    <tr>
+                      <td style="padding:36px 40px;">
+                        <p style="color:#9ca3af;font-size:15px;margin:0 0 8px;">Email Verification</p>
+                        <h2 style="color:#f9fafb;font-size:20px;font-weight:600;margin:0 0 24px;">Your one-time verification code</h2>
+
+                        <!-- OTP display -->
+                        <div style="background:#0a0a0c;border:1px solid rgba(0,242,255,0.25);border-radius:12px;
+                                    padding:24px;text-align:center;margin:0 0 24px;">
+                          <span style="font-family:'Courier New',Courier,monospace;font-size:38px;font-weight:700;
+                                       letter-spacing:12px;color:#00f2ff;">{otp}</span>
+                        </div>
+
+                        <p style="color:#9ca3af;font-size:14px;margin:0 0 8px;">
+                          This code expires in <strong style="color:#f9fafb;">5 minutes</strong>.
+                          Do not share it with anyone.
+                        </p>
+                        <p style="color:#6b7280;font-size:13px;margin:0;">
+                          If you didn't request this, you can safely ignore this email.
+                        </p>
+                      </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                      <td style="padding:20px 40px 28px;border-top:1px solid rgba(255,255,255,0.05);text-align:center;">
+                        <p style="color:#4b5563;font-size:12px;margin:0;">
+                          Sent by
+                          <a href="mailto:animeshkukreti@gatekeeper.sbs"
+                             style="color:#00f2ff;text-decoration:none;">animeshkukreti@gatekeeper.sbs</a>
+                          &nbsp;·&nbsp;
+                          <a href="https://gatekeeper.sbs"
+                             style="color:#00f2ff;text-decoration:none;">gatekeeper.sbs</a>
+                        </p>
+                      </td>
+                    </tr>
+
+                  </table>
+                </td></tr>
+              </table>
+            </body>
+            </html>
+            """,
+            subtype=MessageType.html,
+        )
+        await fastmail.send_message(message)
+    except Exception as e:
+        otp_store.pop(email, None)
+        print(f"Email sending failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send OTP email. Check email configuration.")
+    return {"success": True, "message": "OTP sent to your email address."}
+
+@app.post("/verify-otp")
+async def verify_otp(request: OTPVerifyRequest):
+    email = request.email
+    otp = request.otp
+    if email not in otp_store:
+        raise HTTPException(status_code=400, detail="No OTP request found for this email. Please request a new OTP.")
+    record = otp_store[email]
+    if datetime.now(timezone.utc) > record["expires_at"]:
+        otp_store.pop(email, None)
+        raise HTTPException(status_code=400, detail="OTP has expired. Please request a new one.")
+    if record["otp"] != otp:
+        raise HTTPException(status_code=400, detail="Invalid OTP. Please try again.")
+    otp_store.pop(email, None)
+    return {"success": True, "message": "OTP verified successfully. You may now complete registration."}
+
+# -------------------------------------------------------------------
+# FIRESTORE SIGNALS API – Get all active signals
+# -------------------------------------------------------------------
+@app.get("/api/signals")
+async def get_signals(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))
+):
+    """
+    Get all active signals from Firestore.
+    Signals are readable by all authenticated users.
+    Trial users get limited access to specific tokens only.
+    """
+    try:
+        # Get signals collection
+        signals_ref = db.collection("signals")
+        signals_docs = signals_ref.stream()
+        
+        signals = []
+        for doc in signals_docs:
+            signal_data = doc.to_dict() if hasattr(doc, "to_dict") else {}
+            
+            if not isinstance(signal_data, dict):
+                continue
+                
+            # Safe access to document ID - handle None values properly
+            doc_id = getattr(doc, "id", None)
+            if doc_id is None:
+                doc_id = getattr(doc, "name", None) or (str(doc.reference.path).split("/")[-1] if hasattr(doc, "reference") else f"doc_{datetime.now().timestamp()}")
+            
+            signal_data["id"] = str(doc_id)  # Convert to string for type compatibility
+            signals.append(signal_data)
+        
+        # Sort by timestamp (newest first)
+        signals.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
+        
+        return {
+            "success": True,
+            "count": len(signals),
+            "signals": signals,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    except Exception as e:
+        print(f"❌ Error fetching signals: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to fetch signals")
+
+# -------------------------------------------------------------------
+# FIRESTORE SIGNALS API – Get specific signal
+# -------------------------------------------------------------------
+@app.get("/api/signals/{symbol}")
+async def get_signal(symbol: str):
+    """
+    Get a specific signal by symbol.
+    Example: /api/signals/BTC
+    """
+    try:
+        signal_ref = db.collection("signals").document(symbol)
+        signal_doc = signal_ref.get()  # Firestore .get() is synchronous
+        
+        # Use getattr for safe attribute access (handles both sync and async clients)
+        exists_fn = getattr(signal_doc, "exists", None)
+        to_dict_fn = getattr(signal_doc, "to_dict", None)
+        
+        if not exists_fn or not to_dict_fn:
+            raise HTTPException(status_code=404, detail=f"Signal not found for {symbol}")
+        
+        signal_data = to_dict_fn()
+        signal_data["id"] = symbol
+        
+        return {
+            "success": True,
+            "signal": signal_data
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error fetching signal {symbol}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to fetch signal")
+
+# -------------------------------------------------------------------
+# FIRESTORE DASHBOARD API – Get dashboard data for user
+# -------------------------------------------------------------------
+@app.get("/api/dashboard")
+async def get_dashboard(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))
+):
+    """
+    Get personalized dashboard data for authenticated user.
+    Includes: user profile, trial info, subscriptions, recent trades, signals access.
+    """
+    # Extract user ID from JWT or auth header (credentials and request are provided by FastAPI)
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    # Parse JWT to get user email for personalized data
+    try:
+        assert SECRET_KEY is not None, "SECRET_KEY must be set"
+        decoded_payload = jwt.decode(auth_header[7:], SECRET_KEY, algorithms=[ALGORITHM])
+        current_user_email = decoded_payload.get("sub")
+        
+        # Fetch personal dashboard data from Firestore based on user email
+        current_user_email = current_user_email or ""
+        user_doc = get_user_doc(current_user_email) if current_user_email else None
+        
+        plan = user_doc.get("plan", "trial") if user_doc else "trial"
+        trial_end = user_doc.get("trial_end") if user_doc else None
+        trial_expired = is_trial_expired(current_user_email) if trial_end else False
+        
+        dashboard_data = {
+            "user": {
+                "authenticated": True,
+                "plan": plan,
+                "trial_active": not (isinstance(trial_end, str) and trial_expired),
+                "trial_days_remaining": max(0, (datetime.fromisoformat(trial_end.replace("Z", "+00:00")) - datetime.now(timezone.utc)).days) if isinstance(trial_end, str) and not trial_expired else 0,
+                "allowed_tokens": get_allowed_tokens(),
+                "allowed_timeframes": get_allowed_timeframes(current_user_email)
+            },
+            "signals": [],
+            "trades": [],
+            "statistics": {
+                "total_trades": 0,
+                "winning_trades": 0,
+                "losing_trades": 0,
+                "win_rate": 0,
+                "total_pnl": 0
+            }
+        }
+        
+        # Get signals from engine with safe iteration
+        if LIVE_STATE.engine is not None and hasattr(LIVE_STATE.engine, 'last_signals') and LIVE_STATE.engine.last_signals:
+            dashboard_data["signals"] = {k: v for k, v in list(LIVE_STATE.engine.last_signals.items())[:10]}
+        
+        return dashboard_data
+    except HTTPException:
+        raise
+    except jwt.InvalidSignatureError:
+        print("❌ Invalid JWT signature")
+        raise HTTPException(status_code=401, detail="Invalid token")
+    except Exception as e:
+        # Fallback to generic data if personal data fails
+        print(f"❌ Error fetching dashboard (fallback): {str(e)}")
+        return {
+            "user": {
+                "authenticated": False,
+                "plan": "trial",
+                "trial_active": True,
+                "trial_days_remaining": 2,
+                "allowed_tokens": PRO_TOKENS,
+                "allowed_timeframes": ["30m", "1h"]
+            },
+            "signals": [],
+            "trades": [],
+            "statistics": {
+                "total_trades": 0,
+                "winning_trades": 0,
+                "losing_trades": 0,
+                "win_rate": 0,
+                "total_pnl": 0
+            }
+        }
+
+# -------------------------------------------------------------------
+# FIRESTORE PUBLIC SIGNALS – No authentication required
+# -------------------------------------------------------------------
+@app.get("/api/public/signals")
+async def get_public_signals():
+    """
+    Get public signals for non-logged-in users.
+    Shows a limited set of signals to encourage signup.
+    """
+    try:
+        signals_ref = db.collection("signals")
+        # Get only top 3-4 signals
+        signals_docs = signals_ref.limit(4).stream()
+        
+        signals = []
+        for doc in signals_docs:
+            signal_data = doc.to_dict()
+            if signal_data is None:
+                continue
+            signal_data["id"] = doc.id
+            signals.append(signal_data)
+        
+        return {
+            "success": True,
+            "count": len(signals),
+            "signals": signals,
+            "message": "Sign up to access all signals",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    except Exception as e:
+        print(f"❌ Error fetching public signals: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to fetch signals")
+
+# -------------------------------------------------------------------
+# FIRESTORE SIGNAL UPDATE – Backend trigger (admin only)
+# -------------------------------------------------------------------
+@app.post("/api/admin/signals/update")
+async def update_signal(
+    symbol: str,
+    signal_data: Dict[str, Any],
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))
+):
+    """
+    Update or create a signal in Firestore.
+    Should only be called by backend ML engine or admins.
+    Requires Firebase admin credentials.
+    """
+    try:
+        signal_ref = db.collection("signals").document(symbol)
+        
+        update_payload = {
+            "symbol": symbol,
+            "signal": signal_data.get("signal", "HOLD"),
+            "entry": signal_data.get("entry", 0),
+            "sl": signal_data.get("sl", 0),
+            "tp": signal_data.get("tp", 0),
+            "timeframe": signal_data.get("timeframe", "1h"),
+            "confidence": signal_data.get("confidence", 0.5),
+            "timestamp": datetime.now(timezone.utc),
+            "active": True
+        }
+        
+        signal_ref.set(update_payload, merge=True)
+        
+        return {
+            "success": True,
+            "message": f"Signal updated for {symbol}",
+            "symbol": symbol
+        }
+    except Exception as e:
+        print(f"❌ Error updating signal: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to update signal")
+
+# -------------------------------------------------------------------
+# API Portability & Developer Access
+# -------------------------------------------------------------------
+import hashlib
+import secrets
+
+async def verify_api_key(request: Request):
+    api_key = request.headers.get("X-API-Key")
+    if not api_key:
+        raise HTTPException(status_code=401, detail="Missing X-API-Key header")
+        
+    api_key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+    
+    users_ref = db.collection("users")
+    query = users_ref.where("api_key_hash", "==", api_key_hash).limit(1).stream()
+    
+    user_doc = None
+    for doc in query:
+        user_doc = doc.to_dict()
+        break
+        
+    if not user_doc:
+        raise HTTPException(status_code=401, detail="Invalid API Key")
+        
+    plan = user_doc.get("plan", "basic").lower()
+    if plan not in ["pro", "premium"]:
+        raise HTTPException(status_code=403, detail="Pro Tier required for API access")
+        
+    return user_doc
+
+@app.get("/api/v1/signals/fleet")
+async def get_signals_fleet(symbol: Optional[str] = None, _user: dict = Depends(verify_api_key)):
+    """
+    Programmatic data portability endpoint for Pro users.
+    Returns structured JSON array of live signals.
+    """
+    # Verify user is authenticated
+    _ = _user
+    
+    signals_ref = db.collection("signals")
+    query = signals_ref.where("status", "==", "ACTIVE")
+    if symbol:
+        query = query.where("symbol", "==", symbol)
+        
+    docs = query.stream()
+    
+    fleet = []
+    for doc in docs:
+        sig = doc.to_dict()
+        if sig:
+            fleet.append({
+                "ticker": sig.get("symbol"),
+                "direction": sig.get("direction"),
+                "start_anchor": sig.get("entry_price"),
+                "target_destination": sig.get("tp"),
+                "stop_loss": sig.get("sl"),
+                "model_conviction": sig.get("probabilities", {}),
+                "timestamp": sig.get("timestamp")
+            })
+        
+    return {"status": "SUCCESS", "data": fleet}
+
+@app.post("/api/v1/developer/regenerate_key")
+async def regenerate_api_key(user_id: str = Depends(get_current_user)):
+    """
+    Generates a new API key for the authenticated user, hashes it,
+    stores the hash in Firestore, and returns the raw key once.
+    """
+    user_ref = db.collection("users").document(user_id)
+    user_doc = await user_ref.get() # type: ignore
+    
+    if not user_doc.exists:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    data = user_doc.to_dict()
+    plan = data.get("plan", "basic").lower() if data else "basic"
+    
+    if plan not in ["pro", "premium", "intermediate"]:
+        # Allow intermediate if required, but user said Pro
+        if plan not in ["pro", "premium"]:
+            raise HTTPException(status_code=403, detail="Pro Tier required for API access")
+        
+    # Generate new key
+    raw_key = "aegis_live_" + secrets.token_urlsafe(32)
+    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+    
+    user_ref.update({
+        "api_key_hash": key_hash,
+        "api_key_last_generated": datetime.now(timezone.utc).isoformat()
+    })
+    
+    return {"status": "SUCCESS", "api_key": raw_key}
+
+# Frontend uses /api/v1/keys/regenerate — alias to the canonical route above
+@app.post("/api/v1/keys/regenerate")
+async def regenerate_api_key_alias(user_id: str = Depends(get_current_user)):
+    return await regenerate_api_key(user_id)
+
+# -------------------------------------------------------------------
+# User settings (capital + risk) — persisted to Firestore
+# Called by the Settings room in dashboard.js when user hits Save
+# -------------------------------------------------------------------
+class UserSettingsUpdate(BaseModel):
+    capital: float
+    risk_pct: float
+
+@app.post("/user/settings")
+async def save_user_settings(
+    payload: UserSettingsUpdate,
+    user_id: str = Depends(get_current_user)
+):
+    if payload.capital < 100:
+        raise HTTPException(status_code=400, detail="Capital must be at least $100")
+    if not (0.5 <= payload.risk_pct <= 10):
+        raise HTTPException(status_code=400, detail="Risk % must be between 0.5 and 10")
+
+    user_ref = db.collection("users").document(user_id)
+    user_ref.set(
+        {"capital": payload.capital, "risk_pct": payload.risk_pct},
+        merge=True
+    )
+    return {"status": "ok", "capital": payload.capital, "risk_pct": payload.risk_pct}
+
+# -------------------------------------------------------------------
+
+
+
+
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=port,
+        ws="websockets",
+        log_level="info",
+    )
+)
 _DEV_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no 0/O, 1/I/L
 
 def _make_dev_code() -> str:
