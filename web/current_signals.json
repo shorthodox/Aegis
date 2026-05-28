@@ -1,0 +1,2816 @@
+{
+  "signals": [
+    {
+      "signal_id": "0d0eb0f7-357d-4444-a9cd-4f44bebca6cc",
+      "symbol": "BTC/USDT",
+      "timestamp": "2026-05-26T19:26:09.317223",
+      "direction": "NEUTRAL",
+      "confidence": 0.6463807463645935,
+      "entry_price": 77312.0,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 295.21928571428543,
+      "raw_probabilities": {
+        "SHORT": 66.06,
+        "HOLD": 1.03,
+        "LONG": 32.91
+      },
+      "shap_contributions": [
+        {
+          "feature": "stoch_d",
+          "impact": 0.05074816197156906
+        },
+        {
+          "feature": "ema_50",
+          "impact": -0.028605535626411438
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "high",
+        "volume": "high",
+        "trend": "Misaligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.37,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 77312.0,
+        "resistance_tp": 77312.0,
+        "market_regime": "high",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.07,
+        "profitability_index": 0.0007,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 76475.59,
+        "resistance_line": 77905.52,
+        "dist_to_support_pct": 1.0819,
+        "dist_to_resistance_pct": 0.7677,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "9c679630-3520-4d17-b8ed-0dbe9ad0ba4b",
+      "symbol": "ETH/USDT",
+      "timestamp": "2026-05-26T19:26:09.317231",
+      "direction": "NEUTRAL",
+      "confidence": 0.5814322352409363,
+      "entry_price": 2124.09,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 11.053392857142804,
+      "raw_probabilities": {
+        "SHORT": 43.95,
+        "HOLD": 0.81,
+        "LONG": 55.24
+      },
+      "shap_contributions": [
+        {
+          "feature": "low",
+          "impact": -0.13823412358760834
+        },
+        {
+          "feature": "stoch_d",
+          "impact": 0.11176341027021408
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "high",
+        "volume": "high",
+        "trend": "Aligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.5,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 2124.09,
+        "resistance_tp": 2124.09,
+        "market_regime": "high",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.07,
+        "profitability_index": 0.0007,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 2084.52,
+        "resistance_line": 2141.98,
+        "dist_to_support_pct": 1.8629,
+        "dist_to_resistance_pct": 0.8422,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "6b7bce73-8b51-4250-b9da-30f235fb4c25",
+      "symbol": "SOL/USDT",
+      "timestamp": "2026-05-26T19:26:09.317236",
+      "direction": "NEUTRAL",
+      "confidence": 0.5568623065948487,
+      "entry_price": 85.45,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 0.4842857142857123,
+      "raw_probabilities": {
+        "SHORT": 51.14,
+        "HOLD": 4.39,
+        "LONG": 44.47
+      },
+      "shap_contributions": [
+        {
+          "feature": "efficiency_ratio_10",
+          "impact": 0.017150476574897766
+        },
+        {
+          "feature": "volatility_regime",
+          "impact": -0.011802226305007935
+        },
+        {
+          "feature": "dist_ema_9",
+          "impact": -0.011784614063799381
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "normal",
+        "volume": "high",
+        "trend": "Misaligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.48,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 85.45,
+        "resistance_tp": 85.45,
+        "market_regime": "normal",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.04,
+        "profitability_index": 0.0004,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 83.85,
+        "resistance_line": 86.52,
+        "dist_to_support_pct": 1.8724,
+        "dist_to_resistance_pct": 1.2522,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "e9889974-4393-4012-8517-05fd684095a8",
+      "symbol": "BNB/USDT",
+      "timestamp": "2026-05-26T19:26:09.317239",
+      "direction": "NEUTRAL",
+      "confidence": 0.5972213625907898,
+      "entry_price": 663.51,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 2.476071428571436,
+      "raw_probabilities": {
+        "SHORT": 36.81,
+        "HOLD": 5.32,
+        "LONG": 57.87
+      },
+      "shap_contributions": [
+        {
+          "feature": "atr_14",
+          "impact": -0.16667740046977997
+        },
+        {
+          "feature": "volatility_regime",
+          "impact": 0.09902656078338623
+        },
+        {
+          "feature": "efficiency_ratio_10",
+          "impact": -0.020187372341752052
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "normal",
+        "volume": "high",
+        "trend": "Misaligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.5,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 663.51,
+        "resistance_tp": 663.51,
+        "market_regime": "normal",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": -0.03,
+        "profitability_index": -0.0003,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 655.34,
+        "resistance_line": 673.07,
+        "dist_to_support_pct": 1.2313,
+        "dist_to_resistance_pct": 1.4408,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "be38b02b-dee5-494e-be78-76415e71b56c",
+      "symbol": "XRP/USDT",
+      "timestamp": "2026-05-26T19:26:09.317243",
+      "direction": "NEUTRAL",
+      "confidence": 0.6201981663703919,
+      "entry_price": 1.3566,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 0.006042857142857155,
+      "raw_probabilities": {
+        "SHORT": 36.54,
+        "HOLD": 1.76,
+        "LONG": 61.7
+      },
+      "shap_contributions": [
+        {
+          "feature": "efficiency_ratio_10",
+          "impact": 0.08245722949504852
+        },
+        {
+          "feature": "low",
+          "impact": -0.03547721728682518
+        },
+        {
+          "feature": "vwap",
+          "impact": -0.0004564932023640722
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "normal",
+        "volume": "normal",
+        "trend": "Misaligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.4,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 1.3566,
+        "resistance_tp": 1.3566,
+        "market_regime": "normal",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.09,
+        "profitability_index": 0.0009,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 1.3342,
+        "resistance_line": 1.3657,
+        "dist_to_support_pct": 1.6512,
+        "dist_to_resistance_pct": 0.6708,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "10f41307-731e-42e7-a8b7-e595913047b2",
+      "symbol": "ASTER/USDT",
+      "timestamp": "2026-05-26T19:26:09.317248",
+      "direction": "NEUTRAL",
+      "confidence": 0.8277819204330444,
+      "entry_price": 0.692,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.7222,
+      "profitability_index": 0.008595835714285616,
+      "raw_probabilities": {
+        "SHORT": 0.27,
+        "HOLD": 99.45,
+        "LONG": 0.28
+      },
+      "shap_contributions": [
+        {
+          "feature": "dist_vwap",
+          "impact": 0.0890883356332779
+        },
+        {
+          "feature": "efficiency_ratio_10",
+          "impact": -0.06098219379782677
+        },
+        {
+          "feature": "adx_14",
+          "impact": 0.0008231653482653201
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "low",
+        "volume": "low",
+        "trend": "Misaligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.23,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 0.692,
+        "resistance_tp": 0.692,
+        "market_regime": "low",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.97,
+        "profitability_index": 0.0097,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 0.681,
+        "resistance_line": 0.708,
+        "dist_to_support_pct": 1.5896,
+        "dist_to_resistance_pct": 2.3121,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "f2562e55-9119-40ff-9850-f213deb71eb7",
+      "symbol": "SUI/USDT",
+      "timestamp": "2026-05-26T19:26:09.317251",
+      "direction": "NEUTRAL",
+      "confidence": 0.6613477230072022,
+      "entry_price": 1.0455,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.8674,
+      "profitability_index": 0.027853701428571458,
+      "raw_probabilities": {
+        "SHORT": 29.57,
+        "HOLD": 1.88,
+        "LONG": 68.56
+      },
+      "shap_contributions": [
+        {
+          "feature": "efficiency_ratio_10",
+          "impact": 0.24756522476673126
+        },
+        {
+          "feature": "atr_14",
+          "impact": -0.2432834357023239
+        },
+        {
+          "feature": "adx_14",
+          "impact": -0.07005298137664795
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "normal",
+        "volume": "high",
+        "trend": "Misaligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.4,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 1.0455,
+        "resistance_tp": 1.0455,
+        "market_regime": "normal",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.84,
+        "profitability_index": 0.0084,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 1.0167,
+        "resistance_line": 1.064,
+        "dist_to_support_pct": 2.7547,
+        "dist_to_resistance_pct": 1.7695,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "d8986d80-4f86-404e-8121-99e324475687",
+      "symbol": "TAO/USDT",
+      "timestamp": "2026-05-26T19:26:09.317255",
+      "direction": "NEUTRAL",
+      "confidence": 0.6206509590148926,
+      "entry_price": 287.3,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 6.235714285714289,
+      "raw_probabilities": {
+        "SHORT": 33.68,
+        "HOLD": 4.55,
+        "LONG": 61.78
+      },
+      "shap_contributions": [
+        {
+          "feature": "dist_ema_9",
+          "impact": -0.05327778682112694
+        },
+        {
+          "feature": "dist_ema_21",
+          "impact": 0.02549806237220764
+        },
+        {
+          "feature": "vwap",
+          "impact": -0.002192167332395911
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "high",
+        "volume": "normal",
+        "trend": "Misaligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.37,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 287.3,
+        "resistance_tp": 287.3,
+        "market_regime": "high",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 1.2,
+        "profitability_index": 0.012,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 273.2,
+        "resistance_line": 290.5,
+        "dist_to_support_pct": 4.9078,
+        "dist_to_resistance_pct": 1.1138,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "4c53dd5c-0217-4f80-9ad0-1476ba2b9857",
+      "symbol": "RENDER/USDT",
+      "timestamp": "2026-05-26T19:26:09.317259",
+      "direction": "NEUTRAL",
+      "confidence": 0.6041836977005005,
+      "entry_price": 2.364,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "HIGH",
+      "trading_accuracy": 0.65,
+      "profitability_index": 0.07593750000000002,
+      "raw_probabilities": {
+        "SHORT": 59.03,
+        "HOLD": 2.01,
+        "LONG": 38.96
+      },
+      "shap_contributions": [
+        {
+          "feature": "adx_14",
+          "impact": -0.18887048959732056
+        },
+        {
+          "feature": "vwap",
+          "impact": 0.0775342509150505
+        },
+        {
+          "feature": "cmf_20",
+          "impact": -0.012442606501281261
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "high",
+        "volume": "low",
+        "trend": "Misaligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.38,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 2.364,
+        "resistance_tp": 2.364,
+        "market_regime": "HIGH_VOLATILITY",
+        "alpha_risk_level": "HIGH"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 1.79,
+        "profitability_index": 0.0179,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 2.071,
+        "resistance_line": 2.423,
+        "dist_to_support_pct": 12.3942,
+        "dist_to_resistance_pct": 2.4958,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "0aca2089-571c-4ab6-9ae1-cbc051aac778",
+      "symbol": "ADA/USDT",
+      "timestamp": "2026-05-26T19:26:09.317263",
+      "direction": "NEUTRAL",
+      "confidence": 0.6425642132759095,
+      "entry_price": 0.245,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 0.002025,
+      "raw_probabilities": {
+        "SHORT": 31.24,
+        "HOLD": 3.33,
+        "LONG": 65.43
+      },
+      "shap_contributions": [
+        {
+          "feature": "dist_ema_9",
+          "impact": -0.011491081677377224
+        },
+        {
+          "feature": "rsi_14",
+          "impact": -0.005759751424193382
+        },
+        {
+          "feature": "vwap",
+          "impact": 0.002422239165753126
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "normal",
+        "volume": "normal",
+        "trend": "Aligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.55,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 0.245,
+        "resistance_tp": 0.245,
+        "market_regime": "normal",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.27,
+        "profitability_index": 0.0027,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 0.2394,
+        "resistance_line": 0.248,
+        "dist_to_support_pct": 2.2857,
+        "dist_to_resistance_pct": 1.2245,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "44c6623f-2ea3-4570-aafa-822c9d369479",
+      "symbol": "AVAX/USDT",
+      "timestamp": "2026-05-26T19:26:09.317267",
+      "direction": "NEUTRAL",
+      "confidence": 0.584820294380188,
+      "entry_price": 9.41,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 0.08389285714285746,
+      "raw_probabilities": {
+        "SHORT": 55.8,
+        "HOLD": 1.81,
+        "LONG": 42.38
+      },
+      "shap_contributions": [
+        {
+          "feature": "dist_ema_9",
+          "impact": 0.07108873128890991
+        },
+        {
+          "feature": "efficiency_ratio_10",
+          "impact": -0.06299982964992523
+        },
+        {
+          "feature": "adx_14",
+          "impact": 0.0034682138357311487
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "normal",
+        "volume": "normal",
+        "trend": "Aligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.53,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 9.41,
+        "resistance_tp": 9.41,
+        "market_regime": "normal",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.15,
+        "profitability_index": 0.0015,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 9.168,
+        "resistance_line": 9.506,
+        "dist_to_support_pct": 2.5717,
+        "dist_to_resistance_pct": 1.0202,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "223a64bf-5137-4f1e-9f6b-c319ba89737c",
+      "symbol": "LINK/USDT",
+      "timestamp": "2026-05-26T19:26:09.317271",
+      "direction": "NEUTRAL",
+      "confidence": 0.6753114819526673,
+      "entry_price": 9.606,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.8561,
+      "profitability_index": 0.17489806071428615,
+      "raw_probabilities": {
+        "SHORT": 70.89,
+        "HOLD": 0.67,
+        "LONG": 28.45
+      },
+      "shap_contributions": [
+        {
+          "feature": "dist_ema_9",
+          "impact": -0.0302727147936821
+        },
+        {
+          "feature": "vwap",
+          "impact": -0.006109427660703659
+        },
+        {
+          "feature": "rsi_14",
+          "impact": 0.0020743021741509438
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "normal",
+        "volume": "normal",
+        "trend": "Misaligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.41,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 9.606,
+        "resistance_tp": 9.606,
+        "market_regime": "normal",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.52,
+        "profitability_index": 0.0052,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 9.36,
+        "resistance_line": 9.672,
+        "dist_to_support_pct": 2.5609,
+        "dist_to_resistance_pct": 0.6871,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "ddd81e20-82a5-4956-9f9c-19104a22c787",
+      "symbol": "TRX/USDT",
+      "timestamp": "2026-05-26T19:26:09.317274",
+      "direction": "NEUTRAL",
+      "confidence": 0.8289036083221435,
+      "entry_price": 0.3757,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 0.0019205357142857127,
+      "raw_probabilities": {
+        "SHORT": 0.13,
+        "HOLD": 99.73,
+        "LONG": 0.14
+      },
+      "shap_contributions": [
+        {
+          "feature": "low",
+          "impact": 0.1270476132631302
+        },
+        {
+          "feature": "dist_ema_21",
+          "impact": -0.09692280739545822
+        },
+        {
+          "feature": "dist_ema_9",
+          "impact": 0.0618823878467083
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "high",
+        "volume": "normal",
+        "trend": "Misaligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.13,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 0.3757,
+        "resistance_tp": 0.3757,
+        "market_regime": "high",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.33,
+        "profitability_index": 0.0033,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 0.3675,
+        "resistance_line": 0.3775,
+        "dist_to_support_pct": 2.1826,
+        "dist_to_resistance_pct": 0.4791,
+        "alert_state": "NEAR_RESISTANCE"
+      }
+    },
+    {
+      "signal_id": "c7f2fb41-5552-4809-862e-4ac11f988a7f",
+      "symbol": "DOT/USDT",
+      "timestamp": "2026-05-26T19:26:09.317278",
+      "direction": "NEUTRAL",
+      "confidence": 0.6059308171272278,
+      "entry_price": 1.281,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.8594,
+      "profitability_index": 0.02997584999999992,
+      "raw_probabilities": {
+        "SHORT": 59.32,
+        "HOLD": 1.61,
+        "LONG": 39.07
+      },
+      "shap_contributions": [
+        {
+          "feature": "vwap",
+          "impact": -0.031869109719991684
+        },
+        {
+          "feature": "rsi_14",
+          "impact": 0.0043568918481469154
+        },
+        {
+          "feature": "dist_ema_9",
+          "impact": -0.0013941614888608456
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "normal",
+        "volume": "normal",
+        "trend": "Aligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.54,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 1.281,
+        "resistance_tp": 1.281,
+        "market_regime": "normal",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.47,
+        "profitability_index": 0.0047,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 1.235,
+        "resistance_line": 1.295,
+        "dist_to_support_pct": 3.5909,
+        "dist_to_resistance_pct": 1.0929,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "23600fcc-2fc1-42eb-aacf-383c05e5a6a9",
+      "symbol": "NEAR/USDT",
+      "timestamp": "2026-05-26T19:26:09.317281",
+      "direction": "NEUTRAL",
+      "confidence": 0.8284328985214233,
+      "entry_price": 2.841,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 0.09891964285714286,
+      "raw_probabilities": {
+        "SHORT": 0.19,
+        "HOLD": 99.61,
+        "LONG": 0.2
+      },
+      "shap_contributions": [
+        {
+          "feature": "efficiency_ratio_10",
+          "impact": -0.05867847800254822
+        },
+        {
+          "feature": "bb_width_percentile",
+          "impact": 0.01465464849025011
+        },
+        {
+          "feature": "adx_14",
+          "impact": -0.0017072991468012333
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "high",
+        "volume": "normal",
+        "trend": "Misaligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.23,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 2.841,
+        "resistance_tp": 2.841,
+        "market_regime": "high",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 4.57,
+        "profitability_index": 0.0457,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 2.48,
+        "resistance_line": 2.978,
+        "dist_to_support_pct": 12.7068,
+        "dist_to_resistance_pct": 4.8222,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "8aff9a48-1152-4a0f-8ca2-8aca38e83a5b",
+      "symbol": "LTC/USDT",
+      "timestamp": "2026-05-26T19:26:09.317286",
+      "direction": "NEUTRAL",
+      "confidence": 0.5906085014343262,
+      "entry_price": 52.76,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 0.3278571428571433,
+      "raw_probabilities": {
+        "SHORT": 39.81,
+        "HOLD": 3.42,
+        "LONG": 56.77
+      },
+      "shap_contributions": [
+        {
+          "feature": "adx_14",
+          "impact": 0.0558171421289444
+        },
+        {
+          "feature": "dist_ema_9",
+          "impact": -0.020022865384817123
+        },
+        {
+          "feature": "efficiency_ratio_10",
+          "impact": -0.012159702368080616
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "normal",
+        "volume": "high",
+        "trend": "Misaligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.34,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 52.76,
+        "resistance_tp": 52.76,
+        "market_regime": "normal",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": -0.01,
+        "profitability_index": -0.0001,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 52.11,
+        "resistance_line": 53.2,
+        "dist_to_support_pct": 1.232,
+        "dist_to_resistance_pct": 0.834,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "9520d99a-890b-4eef-8a51-7a763e76f806",
+      "symbol": "BCH/USDT",
+      "timestamp": "2026-05-26T19:26:09.317289",
+      "direction": "NEUTRAL",
+      "confidence": 0.6391961455345154,
+      "entry_price": 353.8,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 3.302678571428574,
+      "raw_probabilities": {
+        "SHORT": 32.52,
+        "HOLD": 2.62,
+        "LONG": 64.87
+      },
+      "shap_contributions": [
+        {
+          "feature": "obv",
+          "impact": 0.17622725665569305
+        },
+        {
+          "feature": "close",
+          "impact": -0.11595100164413452
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "normal",
+        "volume": "low",
+        "trend": "Aligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.51,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 353.8,
+        "resistance_tp": 353.8,
+        "market_regime": "normal",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.34,
+        "profitability_index": 0.0034,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 344.1,
+        "resistance_line": 355.2,
+        "dist_to_support_pct": 2.7417,
+        "dist_to_resistance_pct": 0.3957,
+        "alert_state": "NEAR_RESISTANCE"
+      }
+    },
+    {
+      "signal_id": "2d643ecf-7153-41ca-aeee-f5d28f67390c",
+      "symbol": "SHIB/USDT",
+      "timestamp": "2026-05-26T19:26:09.317293",
+      "direction": "NEUTRAL",
+      "confidence": 0.6315702676773072,
+      "entry_price": 5.6e-06,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 4.7410714285714386e-08,
+      "raw_probabilities": {
+        "SHORT": 63.6,
+        "HOLD": 1.5,
+        "LONG": 34.91
+      },
+      "shap_contributions": [
+        {
+          "feature": "stoch_d",
+          "impact": 0.02903701178729534
+        },
+        {
+          "feature": "dist_vwap",
+          "impact": -0.005704368464648724
+        },
+        {
+          "feature": "rsi_14",
+          "impact": -0.005026331637054682
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "normal",
+        "volume": "normal",
+        "trend": "Misaligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.47,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 5.6e-06,
+        "resistance_tp": 5.6e-06,
+        "market_regime": "normal",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.25,
+        "profitability_index": 0.0025,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 5.49e-06,
+        "resistance_line": 5.67e-06,
+        "dist_to_support_pct": 1.9639,
+        "dist_to_resistance_pct": 1.2498,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "988ddf8e-9890-44b0-a7cf-1e1ca7a13ac4",
+      "symbol": "TON/USDT",
+      "timestamp": "2026-05-26T19:26:09.317297",
+      "direction": "NEUTRAL",
+      "confidence": 0.5525590062141419,
+      "entry_price": 1.971,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 0.04347321428571428,
+      "raw_probabilities": {
+        "SHORT": 50.43,
+        "HOLD": 3.24,
+        "LONG": 46.34
+      },
+      "shap_contributions": [
+        {
+          "feature": "efficiency_ratio_10",
+          "impact": -0.1580377072095871
+        },
+        {
+          "feature": "adx_14",
+          "impact": 0.06654100865125656
+        },
+        {
+          "feature": "volatility_regime",
+          "impact": 0.013510669581592083
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "high",
+        "volume": "high",
+        "trend": "Misaligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.34,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 1.971,
+        "resistance_tp": 1.971,
+        "market_regime": "high",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.72,
+        "profitability_index": 0.0072,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 1.807,
+        "resistance_line": 2.198,
+        "dist_to_support_pct": 8.3206,
+        "dist_to_resistance_pct": 11.517,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "1c1a2be6-714d-4f0d-a63b-6ec44baed94c",
+      "symbol": "ICP/USDT",
+      "timestamp": "2026-05-26T19:26:09.317301",
+      "direction": "NEUTRAL",
+      "confidence": 0.6642473340034485,
+      "entry_price": 2.749,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 0.05319642857142856,
+      "raw_probabilities": {
+        "SHORT": 69.04,
+        "HOLD": 2.16,
+        "LONG": 28.8
+      },
+      "shap_contributions": [
+        {
+          "feature": "close",
+          "impact": 0.055053312331438065
+        },
+        {
+          "feature": "ema_200",
+          "impact": -0.03296719864010811
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "normal",
+        "volume": "high",
+        "trend": "Aligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.53,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 2.749,
+        "resistance_tp": 2.749,
+        "market_regime": "normal",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 1.3,
+        "profitability_index": 0.013,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 2.601,
+        "resistance_line": 2.776,
+        "dist_to_support_pct": 5.3838,
+        "dist_to_resistance_pct": 0.9822,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "e71501bb-ccf9-4d9e-98cf-f8c5bf578ca7",
+      "symbol": "HBAR/USDT",
+      "timestamp": "2026-05-26T19:26:09.317305",
+      "direction": "NEUTRAL",
+      "confidence": 0.5760986089706421,
+      "entry_price": 0.08865,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 0.0006910714285714272,
+      "raw_probabilities": {
+        "SHORT": 54.35,
+        "HOLD": 2.03,
+        "LONG": 43.62
+      },
+      "shap_contributions": [
+        {
+          "feature": "efficiency_ratio_10",
+          "impact": -0.15334108471870422
+        },
+        {
+          "feature": "volatility_regime",
+          "impact": 0.024060066789388657
+        },
+        {
+          "feature": "adx_14",
+          "impact": -0.006571295205503702
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "normal",
+        "volume": "normal",
+        "trend": "Misaligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.48,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 0.08865,
+        "resistance_tp": 0.08865,
+        "market_regime": "normal",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.06,
+        "profitability_index": 0.0006,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 0.08671,
+        "resistance_line": 0.08979,
+        "dist_to_support_pct": 2.1884,
+        "dist_to_resistance_pct": 1.286,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "7e001fc7-252d-44a4-bd07-33b1925a9992",
+      "symbol": "APT/USDT",
+      "timestamp": "2026-05-26T19:26:09.317309",
+      "direction": "NEUTRAL",
+      "confidence": 0.5586941838264465,
+      "entry_price": 1.0,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 0.01470535714285714,
+      "raw_probabilities": {
+        "SHORT": 46.99,
+        "HOLD": 1.57,
+        "LONG": 51.45
+      },
+      "shap_contributions": [
+        {
+          "feature": "adx_14",
+          "impact": -0.04973961040377617
+        },
+        {
+          "feature": "efficiency_ratio_10",
+          "impact": 0.0314195416867733
+        },
+        {
+          "feature": "dist_ema_9",
+          "impact": 0.022507252171635628
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "high",
+        "volume": "high",
+        "trend": "Aligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.62,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 1.0,
+        "resistance_tp": 1.0,
+        "market_regime": "high",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.38,
+        "profitability_index": 0.0038,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 0.951,
+        "resistance_line": 1.001,
+        "dist_to_support_pct": 4.9,
+        "dist_to_resistance_pct": 0.1,
+        "alert_state": "NEAR_RESISTANCE"
+      }
+    },
+    {
+      "signal_id": "f3af06ec-d72c-4646-a0d4-be93109b2d90",
+      "symbol": "ARB/USDT",
+      "timestamp": "2026-05-26T19:26:09.317312",
+      "direction": "NEUTRAL",
+      "confidence": 0.5726653456687928,
+      "entry_price": 0.1116,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 0.0017035714285714282,
+      "raw_probabilities": {
+        "SHORT": 53.78,
+        "HOLD": 1.44,
+        "LONG": 44.79
+      },
+      "shap_contributions": [
+        {
+          "feature": "dist_ema_200",
+          "impact": 0.011193277314305305
+        },
+        {
+          "feature": "volatility_kurt",
+          "impact": -0.009270843118429184
+        },
+        {
+          "feature": "dist_ema_9",
+          "impact": 0.0021732565946877003
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "high",
+        "volume": "high",
+        "trend": "Misaligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.49,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 0.1116,
+        "resistance_tp": 0.1116,
+        "market_regime": "high",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.48,
+        "profitability_index": 0.0048,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 0.1064,
+        "resistance_line": 0.1129,
+        "dist_to_support_pct": 4.6595,
+        "dist_to_resistance_pct": 1.1649,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "7cf4b85f-5e83-470e-8660-fa7f9eea3d74",
+      "symbol": "OP/USDT",
+      "timestamp": "2026-05-26T19:26:09.317316",
+      "direction": "NEUTRAL",
+      "confidence": 0.5531157612800599,
+      "entry_price": 0.1327,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 0.0018723214285714322,
+      "raw_probabilities": {
+        "SHORT": 48.6,
+        "HOLD": 0.89,
+        "LONG": 50.52
+      },
+      "shap_contributions": [
+        {
+          "feature": "efficiency_ratio_10",
+          "impact": -0.3180137872695923
+        },
+        {
+          "feature": "bb_width_percentile",
+          "impact": 0.010116096585988998
+        },
+        {
+          "feature": "adx_14",
+          "impact": -0.0011495447251945734
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "high",
+        "volume": "normal",
+        "trend": "Aligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.63,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 0.1327,
+        "resistance_tp": 0.1327,
+        "market_regime": "high",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.32,
+        "profitability_index": 0.0032,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 0.1273,
+        "resistance_line": 0.1345,
+        "dist_to_support_pct": 4.0693,
+        "dist_to_resistance_pct": 1.3564,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "defefb0a-557b-454e-8d45-a6e84b1b02f6",
+      "symbol": "STX/USDT",
+      "timestamp": "2026-05-26T19:26:09.317321",
+      "direction": "NEUTRAL",
+      "confidence": 0.5920548558235169,
+      "entry_price": 0.2511,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 0.002989285714285716,
+      "raw_probabilities": {
+        "SHORT": 57.01,
+        "HOLD": 1.07,
+        "LONG": 41.93
+      },
+      "shap_contributions": [
+        {
+          "feature": "dist_vwap",
+          "impact": 0.10869579017162323
+        },
+        {
+          "feature": "efficiency_ratio_10",
+          "impact": -0.09427624940872192
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "normal",
+        "volume": "normal",
+        "trend": "Misaligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.49,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 0.2511,
+        "resistance_tp": 0.2511,
+        "market_regime": "normal",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.36,
+        "profitability_index": 0.0036,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 0.2418,
+        "resistance_line": 0.2528,
+        "dist_to_support_pct": 3.7037,
+        "dist_to_resistance_pct": 0.677,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "4fa560e3-a72e-49c7-91ef-b0ece8597b23",
+      "symbol": "FIL/USDT",
+      "timestamp": "2026-05-26T19:26:09.317325",
+      "direction": "NEUTRAL",
+      "confidence": 0.6532103300094605,
+      "entry_price": 1.032,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.7709,
+      "profitability_index": 0.02277061071428571,
+      "raw_probabilities": {
+        "SHORT": 67.2,
+        "HOLD": 1.49,
+        "LONG": 31.3
+      },
+      "shap_contributions": [
+        {
+          "feature": "efficiency_ratio_10",
+          "impact": 0.11633287370204926
+        },
+        {
+          "feature": "adx_14",
+          "impact": -0.07205402106046677
+        },
+        {
+          "feature": "dist_ema_9",
+          "impact": 0.020547224208712578
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "high",
+        "volume": "high",
+        "trend": "Aligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.74,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 1.032,
+        "resistance_tp": 1.032,
+        "market_regime": "high",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.86,
+        "profitability_index": 0.0086,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 0.967,
+        "resistance_line": 1.02,
+        "dist_to_support_pct": 6.2984,
+        "dist_to_resistance_pct": -1.1628,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "a8c21021-5321-4b72-8149-56c4b66409d6",
+      "symbol": "AAVE/USDT",
+      "timestamp": "2026-05-26T19:26:09.317329",
+      "direction": "NEUTRAL",
+      "confidence": 0.6176733493804932,
+      "entry_price": 87.68,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 0.8951785714285729,
+      "raw_probabilities": {
+        "SHORT": 61.28,
+        "HOLD": 1.56,
+        "LONG": 37.16
+      },
+      "shap_contributions": [
+        {
+          "feature": "efficiency_ratio_10",
+          "impact": -0.09190604090690613
+        },
+        {
+          "feature": "adx_14",
+          "impact": 0.021333275362849236
+        },
+        {
+          "feature": "bb_width_percentile",
+          "impact": -0.00614037923514843
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "normal",
+        "volume": "high",
+        "trend": "Aligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.55,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 87.68,
+        "resistance_tp": 87.68,
+        "market_regime": "normal",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.34,
+        "profitability_index": 0.0034,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 85.03,
+        "resistance_line": 88.39,
+        "dist_to_support_pct": 3.0224,
+        "dist_to_resistance_pct": 0.8098,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "6918f5b5-2928-4e23-9775-9eb2aa2676af",
+      "symbol": "VET/USDT",
+      "timestamp": "2026-05-26T19:26:09.317333",
+      "direction": "NEUTRAL",
+      "confidence": 0.8282516288757324,
+      "entry_price": 0.006614,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 7.995535714285715e-05,
+      "raw_probabilities": {
+        "SHORT": 0.24,
+        "HOLD": 99.56,
+        "LONG": 0.2
+      },
+      "shap_contributions": [
+        {
+          "feature": "adx_14",
+          "impact": 0.033658094704151154
+        },
+        {
+          "feature": "efficiency_ratio_10",
+          "impact": -0.02666742540895939
+        },
+        {
+          "feature": "dist_ema_9",
+          "impact": -0.01219116896390915
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "high",
+        "volume": "high",
+        "trend": "Misaligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.09,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 0.006614,
+        "resistance_tp": 0.006614,
+        "market_regime": "high",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 1.33,
+        "profitability_index": 0.0133,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 0.006517,
+        "resistance_line": 0.006774,
+        "dist_to_support_pct": 1.4666,
+        "dist_to_resistance_pct": 2.4191,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "2671069e-0097-4445-a208-0b5794f08107",
+      "symbol": "INJ/USDT",
+      "timestamp": "2026-05-26T19:26:09.317336",
+      "direction": "NEUTRAL",
+      "confidence": 0.5751392006874085,
+      "entry_price": 6.016,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 0.16135714285714303,
+      "raw_probabilities": {
+        "SHORT": 41.65,
+        "HOLD": 4.16,
+        "LONG": 54.19
+      },
+      "shap_contributions": [
+        {
+          "feature": "efficiency_ratio_10",
+          "impact": 0.06389587372541428
+        },
+        {
+          "feature": "volatility_skew",
+          "impact": -0.04563883692026138
+        },
+        {
+          "feature": "adx_14",
+          "impact": -0.0035158232785761356
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "high",
+        "volume": "high",
+        "trend": "Aligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.58,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 6.016,
+        "resistance_tp": 6.016,
+        "market_regime": "high",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 1.17,
+        "profitability_index": 0.0117,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 5.458,
+        "resistance_line": 5.912,
+        "dist_to_support_pct": 9.2753,
+        "dist_to_resistance_pct": -1.7287,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "194c31f2-8649-41a7-b8c3-0c5209343e72",
+      "symbol": "TIA/USDT",
+      "timestamp": "2026-05-26T19:26:09.317340",
+      "direction": "NEUTRAL",
+      "confidence": 0.6056728959083557,
+      "entry_price": 0.4842,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 0.013355357142857148,
+      "raw_probabilities": {
+        "SHORT": 59.28,
+        "HOLD": 0.97,
+        "LONG": 39.75
+      },
+      "shap_contributions": [
+        {
+          "feature": "adx_14",
+          "impact": -0.017982281744480133
+        },
+        {
+          "feature": "efficiency_ratio_10",
+          "impact": -0.008183160796761513
+        },
+        {
+          "feature": "dist_ema_9",
+          "impact": 0.00019124062964692712
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "high",
+        "volume": "normal",
+        "trend": "Misaligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.45,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 0.4842,
+        "resistance_tp": 0.4842,
+        "market_regime": "high",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 1.49,
+        "profitability_index": 0.0149,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 0.4352,
+        "resistance_line": 0.4936,
+        "dist_to_support_pct": 10.1198,
+        "dist_to_resistance_pct": 1.9413,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "21e77e09-e89c-413c-8d90-0366f87ff839",
+      "symbol": "SEI/USDT",
+      "timestamp": "2026-05-26T19:26:09.317344",
+      "direction": "NEUTRAL",
+      "confidence": 0.5828119277954102,
+      "entry_price": 0.06576,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.8889,
+      "profitability_index": 0.0021811924285714294,
+      "raw_probabilities": {
+        "SHORT": 42.5,
+        "HOLD": 2.03,
+        "LONG": 55.47
+      },
+      "shap_contributions": [
+        {
+          "feature": "rolling_volatility",
+          "impact": -0.018884334713220596
+        },
+        {
+          "feature": "adx_14",
+          "impact": 0.015311668626964092
+        },
+        {
+          "feature": "dist_ema_9",
+          "impact": 0.005079247057437897
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "high",
+        "volume": "high",
+        "trend": "Aligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.78,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 0.06576,
+        "resistance_tp": 0.06576,
+        "market_regime": "high",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.63,
+        "profitability_index": 0.0063,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 0.06087,
+        "resistance_line": 0.0656,
+        "dist_to_support_pct": 7.4361,
+        "dist_to_resistance_pct": -0.2433,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "86371da1-0a6e-4eb3-88a7-37978555c0d0",
+      "symbol": "FET/USDT",
+      "timestamp": "2026-05-26T19:26:09.317348",
+      "direction": "NEUTRAL",
+      "confidence": 0.6998617410659791,
+      "entry_price": 0.2517,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "HIGH",
+      "trading_accuracy": 0.9048,
+      "profitability_index": 0.016809839999999996,
+      "raw_probabilities": {
+        "SHORT": 24.51,
+        "HOLD": 0.51,
+        "LONG": 74.98
+      },
+      "shap_contributions": [
+        {
+          "feature": "high",
+          "impact": 0.06436842679977417
+        },
+        {
+          "feature": "close",
+          "impact": -0.003428650787100196
+        },
+        {
+          "feature": "low",
+          "impact": -0.0001630941405892372
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "high",
+        "volume": "high",
+        "trend": "Aligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.56,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 0.2517,
+        "resistance_tp": 0.2517,
+        "market_regime": "HIGH_VOLATILITY",
+        "alpha_risk_level": "HIGH"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 2.91,
+        "profitability_index": 0.0291,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 0.2126,
+        "resistance_line": 0.2619,
+        "dist_to_support_pct": 15.5344,
+        "dist_to_resistance_pct": 4.0524,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "89989ca0-ee97-433b-8c31-ed902f2075a6",
+      "symbol": "THETA/USDT",
+      "timestamp": "2026-05-26T19:26:09.317352",
+      "direction": "NEUTRAL",
+      "confidence": 0.5748171567916871,
+      "entry_price": 0.197,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 0.00329464285714286,
+      "raw_probabilities": {
+        "SHORT": 44.16,
+        "HOLD": 1.7,
+        "LONG": 54.14
+      },
+      "shap_contributions": [
+        {
+          "feature": "efficiency_ratio_10",
+          "impact": -0.10951047390699387
+        },
+        {
+          "feature": "volatility_regime",
+          "impact": 0.01955042965710163
+        },
+        {
+          "feature": "adx_14",
+          "impact": 0.015124178491532803
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "high",
+        "volume": "high",
+        "trend": "Misaligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.43,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 0.197,
+        "resistance_tp": 0.197,
+        "market_regime": "high",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.57,
+        "profitability_index": 0.0057,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 0.189,
+        "resistance_line": 0.2,
+        "dist_to_support_pct": 4.0609,
+        "dist_to_resistance_pct": 1.5228,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "fb25e380-a209-4ca9-9c49-44cd4f0ab300",
+      "symbol": "GRT/USDT",
+      "timestamp": "2026-05-26T19:26:09.317356",
+      "direction": "NEUTRAL",
+      "confidence": 0.5677402019500732,
+      "entry_price": 0.02934,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "HIGH",
+      "trading_accuracy": 0.65,
+      "profitability_index": 0.0008807142857142859,
+      "raw_probabilities": {
+        "SHORT": 52.96,
+        "HOLD": 1.23,
+        "LONG": 45.82
+      },
+      "shap_contributions": [
+        {
+          "feature": "efficiency_ratio_10",
+          "impact": 0.03858792781829834
+        },
+        {
+          "feature": "dist_ema_200",
+          "impact": -0.030423380434513092
+        },
+        {
+          "feature": "adx_14",
+          "impact": -0.0007214503712020814
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "high",
+        "volume": "high",
+        "trend": "Aligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.65,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 0.02934,
+        "resistance_tp": 0.02934,
+        "market_regime": "HIGH_VOLATILITY",
+        "alpha_risk_level": "HIGH"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 1.28,
+        "profitability_index": 0.0128,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 0.02642,
+        "resistance_line": 0.0295,
+        "dist_to_support_pct": 9.9523,
+        "dist_to_resistance_pct": 0.5453,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "ad5d7259-ec4f-4870-88b0-c7aee8261b9d",
+      "symbol": "LDO/USDT",
+      "timestamp": "2026-05-26T19:26:09.317360",
+      "direction": "NEUTRAL",
+      "confidence": 0.4987129271030426,
+      "entry_price": 0.3507,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 0.003985714285714289,
+      "raw_probabilities": {
+        "SHORT": 48.53,
+        "HOLD": 1.6,
+        "LONG": 49.87
+      },
+      "shap_contributions": [
+        {
+          "feature": "efficiency_ratio_10",
+          "impact": -0.07743166387081146
+        },
+        {
+          "feature": "adx_14",
+          "impact": 0.008498935960233212
+        },
+        {
+          "feature": "bb_width_percentile",
+          "impact": 0.004193271975964308
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "normal",
+        "volume": "high",
+        "trend": "Aligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.58,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 0.3507,
+        "resistance_tp": 0.3507,
+        "market_regime": "normal",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": -0.03,
+        "profitability_index": -0.0003,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 0.3398,
+        "resistance_line": 0.3537,
+        "dist_to_support_pct": 3.1081,
+        "dist_to_resistance_pct": 0.8554,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "1cdc271a-f0b0-43b9-843f-365d7dc355c9",
+      "symbol": "PYTH/USDT",
+      "timestamp": "2026-05-26T19:26:09.317364",
+      "direction": "NEUTRAL",
+      "confidence": 0.5787832498550416,
+      "entry_price": 0.042,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 0.0005303571428571425,
+      "raw_probabilities": {
+        "SHORT": 54.8,
+        "HOLD": 1.39,
+        "LONG": 43.81
+      },
+      "shap_contributions": [
+        {
+          "feature": "dist_vwap",
+          "impact": -0.0514565147459507
+        },
+        {
+          "feature": "dist_ema_9",
+          "impact": 0.014876201748847961
+        },
+        {
+          "feature": "adx_14",
+          "impact": 0.0020745238289237022
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "low",
+        "volume": "high",
+        "trend": "Aligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.7,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 0.042,
+        "resistance_tp": 0.042,
+        "market_regime": "low",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.35,
+        "profitability_index": 0.0035,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 0.0403,
+        "resistance_line": 0.042,
+        "dist_to_support_pct": 4.0476,
+        "dist_to_resistance_pct": 0.0,
+        "alert_state": "NEAR_RESISTANCE"
+      }
+    },
+    {
+      "signal_id": "a71bee4b-d322-416e-a5f5-fff0edbc9ad1",
+      "symbol": "JUP/USDT",
+      "timestamp": "2026-05-26T19:26:09.317367",
+      "direction": "NEUTRAL",
+      "confidence": 0.5750789046287537,
+      "entry_price": 0.2071,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 0.0029973214285714243,
+      "raw_probabilities": {
+        "SHORT": 54.18,
+        "HOLD": 1.24,
+        "LONG": 44.58
+      },
+      "shap_contributions": [
+        {
+          "feature": "dist_vwap",
+          "impact": -0.01760261505842209
+        },
+        {
+          "feature": "adx_14",
+          "impact": 0.004788408055901527
+        },
+        {
+          "feature": "dist_ema_9",
+          "impact": -0.00031057605519890785
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "normal",
+        "volume": "normal",
+        "trend": "Aligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.81,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 0.2071,
+        "resistance_tp": 0.2071,
+        "market_regime": "normal",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.44,
+        "profitability_index": 0.0044,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 0.1979,
+        "resistance_line": 0.2083,
+        "dist_to_support_pct": 4.4423,
+        "dist_to_resistance_pct": 0.5794,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "84e1c97c-24bc-4bb3-bb47-003bcac5473e",
+      "symbol": "ONDO/USDT",
+      "timestamp": "2026-05-26T19:26:09.317371",
+      "direction": "NEUTRAL",
+      "confidence": 0.8282857465744018,
+      "entry_price": 0.4198,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 0.010237499999999986,
+      "raw_probabilities": {
+        "SHORT": 0.21,
+        "HOLD": 99.57,
+        "LONG": 0.22
+      },
+      "shap_contributions": [
+        {
+          "feature": "ema_200",
+          "impact": 0.06429902464151382
+        },
+        {
+          "feature": "dist_ema_9",
+          "impact": -0.031412456184625626
+        },
+        {
+          "feature": "adx_14",
+          "impact": -0.001972187776118517
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "low",
+        "volume": "normal",
+        "trend": "Misaligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.17,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 0.4198,
+        "resistance_tp": 0.4198,
+        "market_regime": "low",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 3.08,
+        "profitability_index": 0.0308,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 0.4086,
+        "resistance_line": 0.444,
+        "dist_to_support_pct": 2.6679,
+        "dist_to_resistance_pct": 5.7646,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "ccf90646-c121-43b3-a44f-8cd3c112288f",
+      "symbol": "PEPE/USDT",
+      "timestamp": "2026-05-26T19:26:09.317375",
+      "direction": "NEUTRAL",
+      "confidence": 0.6927034974098206,
+      "entry_price": 3.62e-06,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.8211,
+      "profitability_index": 7.715153571428567e-08,
+      "raw_probabilities": {
+        "SHORT": 24.98,
+        "HOLD": 1.24,
+        "LONG": 73.78
+      },
+      "shap_contributions": [
+        {
+          "feature": "macd_hist",
+          "impact": -0.02724708616733551
+        },
+        {
+          "feature": "rsi_14",
+          "impact": 0.014442628249526024
+        },
+        {
+          "feature": "dist_ema_9",
+          "impact": 0.012551960535347462
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "normal",
+        "volume": "normal",
+        "trend": "Misaligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.4,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 3.62e-06,
+        "resistance_tp": 3.62e-06,
+        "market_regime": "normal",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.83,
+        "profitability_index": 0.0083,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 3.52e-06,
+        "resistance_line": 3.66e-06,
+        "dist_to_support_pct": 2.7617,
+        "dist_to_resistance_pct": 1.1047,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "7d7d14b3-113b-4122-8558-717078329b1e",
+      "symbol": "DOGE/USDT",
+      "timestamp": "2026-05-26T19:26:09.317379",
+      "direction": "NEUTRAL",
+      "confidence": 0.6419339299201966,
+      "entry_price": 0.10267,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 0.0008533928571428531,
+      "raw_probabilities": {
+        "SHORT": 65.32,
+        "HOLD": 1.97,
+        "LONG": 32.71
+      },
+      "shap_contributions": [
+        {
+          "feature": "efficiency_ratio_10",
+          "impact": -0.16679397225379944
+        },
+        {
+          "feature": "bb_width_percentile",
+          "impact": 0.004096864722669125
+        },
+        {
+          "feature": "adx_14",
+          "impact": 0.003093468025326729
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "normal",
+        "volume": "high",
+        "trend": "Misaligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.5,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 0.10267,
+        "resistance_tp": 0.10267,
+        "market_regime": "normal",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.27,
+        "profitability_index": 0.0027,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 0.10043,
+        "resistance_line": 0.1038,
+        "dist_to_support_pct": 2.1817,
+        "dist_to_resistance_pct": 1.1006,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "3f0ffa7f-ef64-445f-bfbd-eb61699d2fd1",
+      "symbol": "WIF/USDT",
+      "timestamp": "2026-05-26T19:26:09.317383",
+      "direction": "NEUTRAL",
+      "confidence": 0.5932473659515382,
+      "entry_price": 0.197,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 0.003776785714285718,
+      "raw_probabilities": {
+        "SHORT": 39.37,
+        "HOLD": 3.42,
+        "LONG": 57.21
+      },
+      "shap_contributions": [
+        {
+          "feature": "adx_14",
+          "impact": 0.13695962727069855
+        },
+        {
+          "feature": "ema_100",
+          "impact": -0.06998523324728012
+        },
+        {
+          "feature": "atr_14",
+          "impact": -0.01280725933611393
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "high",
+        "volume": "high",
+        "trend": "Aligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.54,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 0.197,
+        "resistance_tp": 0.197,
+        "market_regime": "high",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.83,
+        "profitability_index": 0.0083,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 0.188,
+        "resistance_line": 0.2,
+        "dist_to_support_pct": 4.5685,
+        "dist_to_resistance_pct": 1.5228,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "3c0adbcd-a6d8-4ae3-969e-d6f078f2748d",
+      "symbol": "FLOKI/USDT",
+      "timestamp": "2026-05-26T19:26:09.317388",
+      "direction": "NEUTRAL",
+      "confidence": 0.6467877268791199,
+      "entry_price": 2.987e-05,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 2.876785714285709e-07,
+      "raw_probabilities": {
+        "SHORT": 32.87,
+        "HOLD": 1.0,
+        "LONG": 66.13
+      },
+      "shap_contributions": [
+        {
+          "feature": "dist_vwap",
+          "impact": 0.10501915216445923
+        },
+        {
+          "feature": "efficiency_ratio_10",
+          "impact": -0.08237561583518982
+        },
+        {
+          "feature": "adx_14",
+          "impact": -0.00031980889616534114
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "normal",
+        "volume": "high",
+        "trend": "Aligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.54,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 2.987e-05,
+        "resistance_tp": 2.987e-05,
+        "market_regime": "normal",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.39,
+        "profitability_index": 0.0039,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 2.897e-05,
+        "resistance_line": 3.008e-05,
+        "dist_to_support_pct": 3.013,
+        "dist_to_resistance_pct": 0.703,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "0a4d1ee3-da16-4a23-a9b8-b50f3de1f8f2",
+      "symbol": "BONK/USDT",
+      "timestamp": "2026-05-26T19:26:09.317391",
+      "direction": "NEUTRAL",
+      "confidence": 0.6613629579544068,
+      "entry_price": 6.1e-06,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 7.151785714285702e-08,
+      "raw_probabilities": {
+        "SHORT": 30.67,
+        "HOLD": 0.77,
+        "LONG": 68.56
+      },
+      "shap_contributions": [
+        {
+          "feature": "efficiency_ratio_10",
+          "impact": -0.24437136948108673
+        },
+        {
+          "feature": "bb_width_percentile",
+          "impact": 0.020387452095746994
+        },
+        {
+          "feature": "adx_14",
+          "impact": 0.004269646946340799
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "normal",
+        "volume": "high",
+        "trend": "Misaligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.47,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 6.1e-06,
+        "resistance_tp": 6.1e-06,
+        "market_regime": "normal",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.62,
+        "profitability_index": 0.0062,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 5.93e-06,
+        "resistance_line": 6.17e-06,
+        "dist_to_support_pct": 2.7864,
+        "dist_to_resistance_pct": 1.1474,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "5bc1ceb8-def4-4de6-be88-5f27f1da5e83",
+      "symbol": "WLFI/USDT",
+      "timestamp": "2026-05-26T19:26:09.317395",
+      "direction": "NEUTRAL",
+      "confidence": 0.5781412720680237,
+      "entry_price": 0.0619,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.9082,
+      "profitability_index": 0.0015354899999999985,
+      "raw_probabilities": {
+        "SHORT": 42.37,
+        "HOLD": 2.93,
+        "LONG": 54.69
+      },
+      "shap_contributions": [
+        {
+          "feature": "adx_14",
+          "impact": -0.1034301146864891
+        },
+        {
+          "feature": "efficiency_ratio_10",
+          "impact": 0.09993313252925873
+        },
+        {
+          "feature": "dist_ema_9",
+          "impact": 0.002174612134695053
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "normal",
+        "volume": "normal",
+        "trend": "Misaligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.33,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 0.0619,
+        "resistance_tp": 0.0619,
+        "market_regime": "normal",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.32,
+        "profitability_index": 0.0032,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 0.0597,
+        "resistance_line": 0.0631,
+        "dist_to_support_pct": 3.5541,
+        "dist_to_resistance_pct": 1.9386,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "4deb52f3-f39d-4f15-8dae-cf5305fbb57c",
+      "symbol": "ENA/USDT",
+      "timestamp": "2026-05-26T19:26:09.317399",
+      "direction": "NEUTRAL",
+      "confidence": 0.6617363214492799,
+      "entry_price": 0.1017,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 0.0016955357142857154,
+      "raw_probabilities": {
+        "SHORT": 30.3,
+        "HOLD": 1.08,
+        "LONG": 68.62
+      },
+      "shap_contributions": [
+        {
+          "feature": "dist_ema_9",
+          "impact": 0.01921510137617588
+        },
+        {
+          "feature": "dist_ema_200",
+          "impact": -0.004076633136719465
+        },
+        {
+          "feature": "ema_200",
+          "impact": 0.002372464630752802
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "normal",
+        "volume": "high",
+        "trend": "Misaligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.47,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 0.1017,
+        "resistance_tp": 0.1017,
+        "market_regime": "normal",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 1.05,
+        "profitability_index": 0.0105,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 0.0971,
+        "resistance_line": 0.1024,
+        "dist_to_support_pct": 4.5231,
+        "dist_to_resistance_pct": 0.6883,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "6025a4e7-e3ff-4f85-a388-3145d1d6b872",
+      "symbol": "SKY/USDT",
+      "timestamp": "2026-05-26T19:26:09.317403",
+      "direction": "NEUTRAL",
+      "confidence": 0.8279509115219116,
+      "entry_price": 0.07022,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 0.000473303571428572,
+      "raw_probabilities": {
+        "SHORT": 0.25,
+        "HOLD": 99.49,
+        "LONG": 0.26
+      },
+      "shap_contributions": [
+        {
+          "feature": "dist_vwap",
+          "impact": 0.07258825749158859
+        },
+        {
+          "feature": "atr_14",
+          "impact": -0.05145103111863136
+        },
+        {
+          "feature": "dist_ema_9",
+          "impact": -0.029801683500409126
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "normal",
+        "volume": "high",
+        "trend": "Misaligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.1,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 0.07022,
+        "resistance_tp": 0.07022,
+        "market_regime": "normal",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.56,
+        "profitability_index": 0.0056,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 0.06967,
+        "resistance_line": 0.07097,
+        "dist_to_support_pct": 0.7833,
+        "dist_to_resistance_pct": 1.0681,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "78559d29-c1f4-4ddd-bbe2-115346e71468",
+      "symbol": "TRUMP/USDT",
+      "timestamp": "2026-05-26T19:26:09.317406",
+      "direction": "NEUTRAL",
+      "confidence": 0.8280039596557617,
+      "entry_price": 2.075,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.65,
+      "profitability_index": 0.023866071428571483,
+      "raw_probabilities": {
+        "SHORT": 0.27,
+        "HOLD": 99.5,
+        "LONG": 0.23
+      },
+      "shap_contributions": [
+        {
+          "feature": "efficiency_ratio_10",
+          "impact": -0.05239158123731613
+        },
+        {
+          "feature": "dist_vwap",
+          "impact": 0.03786325827240944
+        },
+        {
+          "feature": "adx_14",
+          "impact": 0.00038392210262827575
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "normal",
+        "volume": "high",
+        "trend": "Misaligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.26,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 2.075,
+        "resistance_tp": 2.075,
+        "market_regime": "normal",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 1.24,
+        "profitability_index": 0.0124,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 2.038,
+        "resistance_line": 2.115,
+        "dist_to_support_pct": 1.7831,
+        "dist_to_resistance_pct": 1.9277,
+        "alert_state": "NONE"
+      }
+    },
+    {
+      "signal_id": "e6eb01dd-6fff-4090-85ab-3a8bd9f750e2",
+      "symbol": "NIGHT/USDT",
+      "timestamp": "2026-05-26T19:26:09.317410",
+      "direction": "NEUTRAL",
+      "confidence": 0.605498766899109,
+      "entry_price": 0.03358,
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "alpha_risk_level": "NORMAL",
+      "trading_accuracy": 0.9603,
+      "profitability_index": 0.0010481612142857152,
+      "raw_probabilities": {
+        "SHORT": 20.46,
+        "HOLD": 20.29,
+        "LONG": 59.25
+      },
+      "shap_contributions": [
+        {
+          "feature": "dist_ema_50",
+          "impact": -0.06581024080514908
+        },
+        {
+          "feature": "ema_21",
+          "impact": 0.010020033456385136
+        },
+        {
+          "feature": "dist_ema_9",
+          "impact": 0.009598382748663425
+        }
+      ],
+      "confluence_scorecards": {
+        "volatility": "normal",
+        "volume": "low",
+        "trend": "Aligned",
+        "btc_anchor": "Healthy",
+        "efficiency": 0.63,
+        "news_sentiment": -0.05
+      },
+      "visual_zone_tracking": {
+        "support_sl": 0.03358,
+        "resistance_tp": 0.03358,
+        "market_regime": "normal",
+        "alpha_risk_level": "NORMAL"
+      },
+      "expectancy_matrix": {
+        "expected_net_pct": 0.55,
+        "profitability_index": 0.0055,
+        "max_dd_pct": 0.0,
+        "historical_expectancy": 0.0
+      },
+      "sr_telemetry": {
+        "support_line": 0.03183,
+        "resistance_line": 0.03404,
+        "dist_to_support_pct": 5.2114,
+        "dist_to_resistance_pct": 1.3699,
+        "alert_state": "NONE"
+      }
+    }
+  ]
+}

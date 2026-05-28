@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Track Record | AEGIS v1.0</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap"></noscript>
+    <link rel="stylesheet" href="/web/dist/styles.css?v=1.1">
+    <link rel="stylesheet" href="/web/src/styles/main.css">
+    <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"></noscript>
+    <link rel="canonical" href="https://gatekeeper.sbs/web/src/pages/track-record.html">
+    <meta name="author" content="Animesh Kukreti &amp; Aman Juiyal">
+    <meta name="description" content="AEGIS v1.0 public signal track record — every signal logged with timestamp, direction, and outcome. Wins and losses, no cherry-picking.">
+
+    <style>
+        /* ===== BASE (copied from index.html to keep page native) ===== */
+        body {
+            padding-top: 80px;
+            overflow-y: auto;
+            background: #0a0a0c;
+            color: #e2e8f0;
+            font-family: 'Inter', sans-serif;
+        }
+        .fixed-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.8rem 2rem;
+            background: rgba(10, 10, 12, 0.8);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(0, 242, 255, 0.2);
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 1000;
+            box-sizing: border-box;
+        }
+        .logo {
+            font-size: 1.3rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #fff, var(--primary-cyan, #00f2ff));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            text-decoration: none;
+        }
+        .nav-links-centered {
+            display: flex;
+            gap: 2rem;
+            flex: 1;
+            justify-content: center;
+            overflow: hidden;
+            scrollbar-width: none;
+        }
+        .nav-links-centered::-webkit-scrollbar { display: none; }
+        .nav-link {
+            color: var(--dim, #94a3b8);
+            text-decoration: none;
+            font-weight: 500;
+            transition: 0.2s;
+            font-size: 0.9rem;
+        }
+        .nav-link:hover, .nav-link.active { color: var(--primary-cyan, #00f2ff); }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 2rem;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            margin-top: 3rem;
+        }
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+        .footer-links a {
+            color: #6b7280;
+            text-decoration: none;
+            font-size: 0.8rem;
+        }
+        .footer-links a:hover { color: #00f2ff; }
+        .separator { color: #374151; }
+        .footer-proprietor { font-size: 0.75rem; color: #4b5563; margin-bottom: 0.5rem; }
+        .footer p { font-size: 0.7rem; color: #374151; }
+
+        @media (max-width: 768px) {
+            body { padding-top: 70px; }
+            .fixed-header { padding: 0.6rem 1rem; }
+            .nav-links-centered { display: none; }
+            .footer-links { gap: 0.5rem; }
+            .footer-links a, .footer p { font-size: 0.7rem; }
+            .footer { padding: 1.5rem 1rem; }
+        }
+
+        /* ===== TRACK RECORD — .tr- namespaced ===== */
+        .tr-page {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 3rem 2rem 5rem;
+        }
+        .tr-hero {
+            text-align: center;
+            margin-bottom: 2.5rem;
+        }
+        .tr-eyebrow {
+            display: inline-block;
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: rgba(0,242,255,0.6);
+            font-family: 'JetBrains Mono', monospace;
+            margin-bottom: 0.6rem;
+        }
+        .tr-title {
+            font-size: 2.2rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #fff, #00f2ff);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            margin: 0.3rem 0 0.8rem;
+        }
+        .tr-sub {
+            color: #8892a4;
+            max-width: 680px;
+            margin: 0 auto;
+            line-height: 1.75;
+            font-size: 0.93rem;
+        }
+
+        /* Disclaimer banner */
+        .tr-disclaimer {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            background: rgba(255, 200, 0, 0.06);
+            border: 1px solid rgba(255, 200, 0, 0.22);
+            border-radius: 12px;
+            padding: 0.9rem 1.2rem;
+            margin-bottom: 2.5rem;
+            font-size: 0.82rem;
+            color: rgba(255, 220, 100, 0.85);
+            line-height: 1.65;
+        }
+        .tr-disclaimer i {
+            flex-shrink: 0;
+            margin-top: 0.12rem;
+            color: rgba(255, 200, 0, 0.7);
+        }
+
+        /* History-gap notice */
+        .tr-history-note {
+            background: rgba(0,242,255,0.04);
+            border: 1px solid rgba(0,242,255,0.14);
+            border-left: 3px solid rgba(0,242,255,0.5);
+            border-radius: 8px;
+            padding: 0.8rem 1rem;
+            font-size: 0.78rem;
+            color: #7ba8b0;
+            margin-bottom: 2rem;
+            line-height: 1.7;
+        }
+        .tr-history-note strong { color: #00f2ff; }
+
+        /* Summary strip */
+        .tr-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2.5rem;
+        }
+        .tr-stat {
+            background: rgba(0,0,0,0.45);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 14px;
+            padding: 1.1rem 1rem;
+            text-align: center;
+        }
+        .tr-stat-value {
+            font-size: 1.6rem;
+            font-weight: 800;
+            font-family: 'JetBrains Mono', monospace;
+            color: #00f2ff;
+            display: block;
+            margin-bottom: 0.3rem;
+        }
+        .tr-stat-value.tr-win  { color: #00ff88; }
+        .tr-stat-value.tr-loss { color: #ff5555; }
+        .tr-stat-value.tr-na   { color: #6b7280; font-size: 1rem; padding-top: 0.35rem; }
+        .tr-stat-label {
+            font-size: 0.68rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: #6b7280;
+            font-weight: 600;
+        }
+        .tr-stat-sub {
+            font-size: 0.65rem;
+            color: #4b5563;
+            margin-top: 0.2rem;
+            line-height: 1.45;
+        }
+
+        /* Table */
+        .tr-table-wrap {
+            overflow-x: auto;
+            border-radius: 14px;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        .tr-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: rgba(0,0,0,0.4);
+            font-size: 0.85rem;
+        }
+        .tr-table thead tr {
+            border-bottom: 1px solid rgba(0,242,255,0.15);
+            background: rgba(0,0,0,0.6);
+        }
+        .tr-table th {
+            padding: 0.9rem 1rem;
+            text-align: left;
+            font-size: 0.68rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: rgba(0,242,255,0.7);
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .tr-table td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            color: #c0cad8;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem;
+            white-space: nowrap;
+        }
+        .tr-table tbody tr:hover { background: rgba(0,242,255,0.03); }
+        .tr-table tbody tr:last-child td { border-bottom: none; }
+
+        /* Outcome badges */
+        .tr-badge {
+            display: inline-block;
+            padding: 0.15rem 0.55rem;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+        .tr-badge-win  { background: rgba(0,255,136,0.12); color: #00ff88; border: 1px solid rgba(0,255,136,0.25); }
+        .tr-badge-loss { background: rgba(255,85,85,0.12);  color: #ff5555; border: 1px solid rgba(255,85,85,0.25); }
+        .tr-badge-open { background: rgba(0,242,255,0.08);  color: #00f2ff; border: 1px solid rgba(0,242,255,0.2); }
+        .tr-badge-hold { background: rgba(255,255,255,0.06); color: #6b7280; border: 1px solid rgba(255,255,255,0.1); }
+
+        /* Direction chip */
+        .tr-dir-long  { color: #00ff88; }
+        .tr-dir-short { color: #ff5555; }
+        .tr-dir-hold  { color: #6b7280; }
+
+        /* Loading / empty states */
+        .tr-loading, .tr-empty {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: #4b5563;
+        }
+        .tr-loading i { font-size: 2rem; color: rgba(0,242,255,0.3); animation: tr-spin 1s linear infinite; }
+        .tr-empty i   { font-size: 2.5rem; color: rgba(0,242,255,0.15); margin-bottom: 1rem; }
+        .tr-empty h3  { color: #374151; font-size: 1rem; margin-bottom: 0.5rem; }
+        .tr-empty p   { font-size: 0.82rem; line-height: 1.75; max-width: 500px; margin: 0 auto; }
+        @keyframes tr-spin { to { transform: rotate(360deg); } }
+
+        .tr-winrate-note {
+            font-size: 0.68rem;
+            color: #4b5563;
+            text-align: center;
+            margin-top: 1.8rem;
+            line-height: 1.7;
+        }
+
+        @media (max-width: 600px) {
+            .tr-page { padding: 2rem 1rem 4rem; }
+            .tr-title { font-size: 1.7rem; }
+            .tr-table th, .tr-table td { padding: 0.65rem 0.6rem; font-size: 0.75rem; }
+            .tr-summary { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Fixed Glass Header — same structure as index.html -->
+    <header class="fixed-header" id="main-nav">
+        <a href="/web/src/pages/index.html" class="logo" style="text-decoration:none;">⚡ AEGIS <span>v1.0</span> <span style="font-size:0.52rem;font-weight:800;font-family:monospace;letter-spacing:0.1em;background:rgba(0,242,255,0.1);border:1px solid rgba(0,242,255,0.3);color:#00f2ff;padding:1px 6px;border-radius:4px;text-transform:uppercase;vertical-align:middle;margin-left:5px;position:relative;top:-1px;">BETA</span></a>
+
+        <nav class="nav-links-centered" aria-label="Main navigation">
+            <a href="/web/src/pages/index.html" class="nav-link">Home</a>
+            <a href="/web/src/pages/index.html#sentinel" class="nav-link">Sentinel</a>
+            <a href="/web/src/pages/index.html#cockpit" class="nav-link">Cockpit</a>
+            <a href="/web/src/pages/index.html#security" class="nav-link">Security</a>
+            <a href="/web/src/pages/review.html" class="nav-link">Reviews</a>
+            <a href="/web/src/pages/pricing.html" class="nav-link">Pricing</a>
+            <a href="/web/src/pages/track-record.html" class="nav-link active">Track Record</a>
+        </nav>
+
+        <div id="authButtonContainer" class="nav-auth-desktop" style="display:flex;align-items:center;gap:0.5rem;">
+            <button id="portalBtn" class="nav-btn-login">
+                <i class="fas fa-user-shield"></i> Sign In
+            </button>
+            <button id="dashboardBtn" class="nav-btn-dashboard" style="display:none;">
+                <i class="fas fa-chart-line"></i> Dashboard
+            </button>
+            <button id="signOutBtn" class="nav-btn-signout" style="display:none;">
+                <i class="fas fa-sign-out-alt"></i> Sign Out
+            </button>
+            <button id="createAccountBtn" class="nav-btn-cta">
+                Get Started
+            </button>
+        </div>
+
+        <button class="nav-hamburger-btn" id="navHamburger" aria-label="Toggle navigation" aria-expanded="false">
+            <i class="fas fa-bars"></i>
+        </button>
+    </header>
+
+    <div class="nav-mobile-drawer" id="navMobileDrawer">
+        <a href="/web/src/pages/index.html" class="nav-mobile-link"><i class="fas fa-home"></i> Home</a>
+        <a href="/web/src/pages/index.html#sentinel" class="nav-mobile-link" style="padding-left:2.2rem;font-size:0.82rem;opacity:0.85;"><i class="fas fa-satellite-dish"></i> Sentinel</a>
+        <a href="/web/src/pages/index.html#cockpit" class="nav-mobile-link" style="padding-left:2.2rem;font-size:0.82rem;opacity:0.85;"><i class="fas fa-desktop"></i> Cockpit</a>
+        <a href="/web/src/pages/index.html#security" class="nav-mobile-link" style="padding-left:2.2rem;font-size:0.82rem;opacity:0.85;"><i class="fas fa-shield-alt"></i> Security</a>
+        <a href="/web/src/pages/review.html" class="nav-mobile-link"><i class="fas fa-star"></i> Reviews</a>
+        <a href="/web/src/pages/pricing.html" class="nav-mobile-link"><i class="fas fa-tag"></i> Pricing</a>
+        <a href="/web/src/pages/track-record.html" class="nav-mobile-link mobile-active"><i class="fas fa-chart-bar"></i> Track Record</a>
+        <div class="nav-mobile-auth">
+            <button class="nav-btn-login" id="mPortalProxy"><i class="fas fa-user-shield"></i> Sign In</button>
+            <button class="nav-btn-dashboard" id="mDashProxy" style="display:none;"><i class="fas fa-chart-line"></i> Dashboard</button>
+            <button class="nav-btn-signout" id="mSignoutProxy" style="display:none;"><i class="fas fa-sign-out-alt"></i> Sign Out</button>
+            <button class="nav-btn-cta" id="mCtaProxy">Get Started</button>
+        </div>
+    </div>
+
+    <!-- ===== TRACK RECORD PAGE ===== -->
+    <div class="tr-page">
+
+        <!-- Hero -->
+        <div class="tr-hero">
+            <span class="tr-eyebrow">Public Signal Log</span>
+            <h1 class="tr-title">AEGIS Track Record</h1>
+            <p class="tr-sub">Every signal Aegis-1 fires — wins and losses — logged publicly with timestamp, direction, and recorded outcome. No cherry-picking. No curated screenshots. Just the engine's actual calls.</p>
+        </div>
+
+        <!-- Disclaimer -->
+        <div class="tr-disclaimer">
+            <i class="fas fa-exclamation-triangle"></i>
+            <span>
+                <strong>Not financial advice.</strong> Aegis-1 generates analytical signals based on probabilistic models. Past performance does not guarantee future results. Crypto markets carry significant risk. Never trade more than you can afford to lose.
+            </span>
+        </div>
+
+        <!-- History-gap notice -->
+        <div class="tr-history-note">
+            <strong>How this page works:</strong> Outcomes are read directly from the live <code>signals</code> Firestore collection and derived from the <code>status</code> field set by the engine (TARGET HIT → WIN, STOP LOSS HIT → LOSS, all others → OPEN). Currently active signals show as OPEN. A dedicated <strong>signal_history</strong> collection to persist every closed trade historically is on the roadmap — until it ships, WIN/LOSS rows will only appear when a signal's current state is closed.
+        </div>
+
+        <!-- Summary strip -->
+        <div class="tr-summary" id="trSummary">
+            <div class="tr-stat">
+                <span class="tr-stat-value" id="trTotalVal">—</span>
+                <div class="tr-stat-label">Total Signals</div>
+                <div class="tr-stat-sub" id="trSinceVal">loading…</div>
+            </div>
+            <div class="tr-stat">
+                <span class="tr-stat-value tr-win" id="trWinsVal">—</span>
+                <div class="tr-stat-label">Wins</div>
+                <div class="tr-stat-sub">Target hit</div>
+            </div>
+            <div class="tr-stat">
+                <span class="tr-stat-value tr-loss" id="trLossVal">—</span>
+                <div class="tr-stat-label">Losses</div>
+                <div class="tr-stat-sub">Stop loss hit</div>
+            </div>
+            <div class="tr-stat">
+                <span class="tr-stat-value tr-na" id="trRateVal">—</span>
+                <div class="tr-stat-label">Win Rate</div>
+                <div class="tr-stat-sub" id="trRateNote">computed from closed signals</div>
+            </div>
+            <div class="tr-stat">
+                <span class="tr-stat-value" id="trOpenVal">—</span>
+                <div class="tr-stat-label">Open</div>
+                <div class="tr-stat-sub">Active positions</div>
+            </div>
+        </div>
+
+        <!-- Loading state -->
+        <div id="trLoading" class="tr-loading">
+            <i class="fas fa-circle-notch"></i>
+            <p style="margin-top:1rem;font-size:0.85rem;">Loading signals from Firestore…</p>
+        </div>
+
+        <!-- Table -->
+        <div id="trTableWrap" class="tr-table-wrap" style="display:none;">
+            <table class="tr-table" id="trTable">
+                <thead>
+                    <tr>
+                        <th>Timestamp (UTC)</th>
+                        <th>Token</th>
+                        <th>Timeframe</th>
+                        <th>Direction</th>
+                        <th>Entry Price</th>
+                        <th>TP</th>
+                        <th>SL</th>
+                        <th>Outcome</th>
+                    </tr>
+                </thead>
+                <tbody id="trTableBody"></tbody>
+            </table>
+        </div>
+
+        <!-- Empty state -->
+        <div id="trEmpty" class="tr-empty" style="display:none;">
+            <i class="fas fa-database"></i>
+            <h3>Track record logging begins now</h3>
+            <p>No closed signals were found in the database. As the engine fires and closes signals, their outcomes will appear here automatically. Refresh any time to see the latest state.</p>
+        </div>
+
+        <!-- Win-rate attribution note -->
+        <p class="tr-winrate-note" id="trWinrateNote" style="display:none;"></p>
+
+    </div>
+
+    <!-- Footer — same as index.html -->
+    <footer class="footer">
+        <div class="footer-links">
+            <a href="/web/src/pages/terms.html">Terms of Service</a>
+            <span class="separator">•</span>
+            <a href="/web/src/pages/conditions.html">Conditions</a>
+            <span class="separator">•</span>
+            <a href="/web/src/pages/privacy_policy.html">Privacy Policy</a>
+            <span class="separator">•</span>
+            <a href="/web/src/pages/refund_policy.html">Refund Policy</a>
+            <span class="separator">•</span>
+            <a href="/web/src/pages/risk_disclosure.html">Risk Disclosure</a>
+            <span class="separator">•</span>
+            <a href="/web/src/pages/track-record.html" style="color:#00f2ff;">Track Record</a>
+        </div>
+        <div class="footer-proprietor">
+            Operated by <strong>Animesh Kukreti &amp; Aman Juiyal</strong> &nbsp;|&nbsp; Dehradun, Uttarakhand, India
+        </div>
+        <p>© 2026 Animesh Kukreti &amp; Aman Juiyal &nbsp;·&nbsp; AEGIS v1.0 — Sovereign Intelligence Terminal</p>
+    </footer>
+
+    <!-- Hamburger nav (same IIFE as pricing.html) -->
+    <script>
+    (function(){
+        var btn = document.getElementById('navHamburger');
+        var drawer = document.getElementById('navMobileDrawer');
+        if (!btn || !drawer) return;
+        function closeDrawer() {
+            drawer.classList.remove('open');
+            drawer.setAttribute('aria-hidden','true');
+            btn.setAttribute('aria-expanded','false');
+            var ico = btn.querySelector('i');
+            if (ico) ico.className = 'fas fa-bars';
+        }
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var open = drawer.classList.toggle('open');
+            drawer.setAttribute('aria-hidden', !open);
+            btn.setAttribute('aria-expanded', open);
+            var ico = btn.querySelector('i');
+            if (ico) ico.className = open ? 'fas fa-times' : 'fas fa-bars';
+        });
+        document.addEventListener('click', function(e) {
+            if (!btn.contains(e.target) && !drawer.contains(e.target)) closeDrawer();
+        });
+        drawer.querySelectorAll('.nav-mobile-link').forEach(function(a) {
+            a.addEventListener('click', closeDrawer);
+        });
+        function proxyAuth(proxyId, targetId) {
+            var proxy = document.getElementById(proxyId);
+            var target = document.getElementById(targetId);
+            if (!proxy || !target) return;
+            proxy.style.display = target.style.display || '';
+            proxy.addEventListener('click', function() { closeDrawer(); target.click(); });
+            new MutationObserver(function() {
+                proxy.style.display = target.style.display;
+            }).observe(target, { attributes: true, attributeFilter: ['style'] });
+        }
+        proxyAuth('mPortalProxy',  'portalBtn');
+        proxyAuth('mDashProxy',    'dashboardBtn');
+        proxyAuth('mSignoutProxy', 'signOutBtn');
+        proxyAuth('mCtaProxy',     'createAccountBtn');
+    })();
+    </script>
+
+    <!-- Auth nav state (same as pricing.html — read-only, no payment logic) -->
+    <script type="module">
+        import { initSignInUI } from '../scripts/signin-ui.js';
+        import { initSignUpUI } from '../scripts/signup-ui.js';
+        document.addEventListener('DOMContentLoaded', () => {
+            try { initSignInUI(); } catch(e) {}
+            try { initSignUpUI(); } catch(e) {}
+        });
+    </script>
+
+    <!-- ===== AegisTrackRecord — all new logic namespaced, no globals polluted ===== -->
+    <script type="module">
+    (function() {
+        'use strict';
+
+        // ----------------------------------------------------------------
+        // Firebase config — identical to gatekeeper.js, read-only usage
+        // ----------------------------------------------------------------
+        const firebaseConfig = {
+            apiKey: "AIzaSyDtudUL2sE1_fKbzIro5d2IP0-M2dYI6x4",
+            authDomain: "aegis-d78e1.firebaseapp.com",
+            databaseURL: "https://aegis-d78e1-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "aegis-d78e1",
+            storageBucket: "aegis-d78e1.firebasestorage.app",
+            messagingSenderId: "623998601232",
+            appId: "1:623998601232:web:288a89514d84ac3573a295",
+            measurementId: "G-V6RWEEWT7L"
+        };
+
+        // ----------------------------------------------------------------
+        // loadSignals — reads from the live 'signals' Firestore collection.
+        //
+        // DATA SOURCE NOTE:
+        //   The 'signals' collection stores the CURRENT state of each
+        //   symbol+timeframe slot (upserted on every engine tick).
+        //   Outcomes (WIN/LOSS) are derived from the 'status' field:
+        //     "TARGET HIT"    → WIN
+        //     "STOP LOSS HIT" → LOSS
+        //     anything else   → OPEN
+        //
+        // TODO — signal_history collection:
+        //   The current engine never writes 'status: "TARGET HIT"' to
+        //   Firestore (compute_system_analytics in main.py line ~309 queries
+        //   this field but nothing sets it). To get a real historical WIN/LOSS
+        //   log:
+        //     1. In scripts/live_engine.py, emit a Firestore write to
+        //        db.collection('signal_history') when wallet.close_trade()
+        //        fires, including: symbol, direction, entry_price, close_price,
+        //        outcome ("WIN"/"LOSS"), timestamp.
+        //     2. Update compute_system_analytics() in main.py to query
+        //        'signal_history' instead of 'signals'.
+        //     3. Update this page to additionally query 'signal_history' for
+        //        historical rows alongside current 'signals' for open positions.
+        //   Until this ships, all records will show as OPEN.
+        // ----------------------------------------------------------------
+        async function loadSignals() {
+            // Use the same Firebase singleton pattern as gatekeeper.js
+            let app;
+            try {
+                const { initializeApp, getApps, getApp } = await import(
+                    'https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js'
+                );
+                app = getApps().length === 0
+                    ? initializeApp(firebaseConfig)
+                    : getApp();
+            } catch (err) {
+                // If a Firebase app was already initialized under a different name,
+                // try reusing the global one registered by gatekeeper.js
+                if (typeof globalThis._firebaseApp !== 'undefined') {
+                    app = globalThis._firebaseApp;
+                } else {
+                    throw err;
+                }
+            }
+
+            const { getFirestore, collection, getDocs, query, orderBy, limit } = await import(
+                'https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js'
+            );
+
+            const db = getFirestore(app);
+
+            // Query ALL signals, ordered by timestamp desc, capped at 500
+            // to avoid reading the entire collection on each page load.
+            const q = query(
+                collection(db, 'signals'),
+                orderBy('timestamp', 'desc'),
+                limit(500)
+            );
+
+            const snapshot = await getDocs(q);
+            const rows = [];
+            snapshot.forEach(doc => {
+                const d = doc.data();
+                // Derive outcome
+                const statusRaw = (d.status || '').toString().toUpperCase();
+                let outcome;
+                if (statusRaw === 'TARGET HIT') {
+                    outcome = 'WIN';
+                } else if (statusRaw === 'STOP LOSS HIT') {
+                    outcome = 'LOSS';
+                } else {
+                    const sigStatus = (d.signal_status || '').toUpperCase();
+                    const sig = (d.signal || '').toUpperCase();
+                    // Treat explicit HOLD or suppressed states as HOLD, else OPEN
+                    outcome = (sig === 'HOLD' || sigStatus.startsWith('HOLDING')) ? 'HOLD' : 'OPEN';
+                }
+
+                rows.push({
+                    ts:        d.data_timestamp || d.timestamp || '',
+                    symbol:    d.symbol || doc.id,
+                    timeframe: d.timeframe || '—',
+                    direction: (d.direction || d.signal || '').toUpperCase(),
+                    entry:     d.entry_price,
+                    tp:        d.tp,
+                    sl:        d.sl,
+                    outcome
+                });
+            });
+
+            return rows;
+        }
+
+        // ----------------------------------------------------------------
+        // Format helpers
+        // ----------------------------------------------------------------
+        function fmtTs(ts) {
+            if (!ts) return '—';
+            try {
+                const d = new Date(ts);
+                if (isNaN(d)) return ts;
+                return d.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+            } catch { return ts; }
+        }
+
+        function fmtPrice(v) {
+            if (v == null) return '—';
+            const n = parseFloat(v);
+            if (isNaN(n)) return '—';
+            return n >= 1000 ? n.toLocaleString('en-US', { maximumFractionDigits: 2 })
+                             : n.toPrecision(5);
+        }
+
+        function dirClass(dir) {
+            if (dir.includes('LONG') || dir === 'BUY' || dir === 'STRONG_BUY') return 'tr-dir-long';
+            if (dir.includes('SHORT') || dir === 'SELL' || dir === 'STRONG_SELL') return 'tr-dir-short';
+            return 'tr-dir-hold';
+        }
+
+        function dirLabel(dir) {
+            if (dir.includes('LONG') || dir === 'BUY' || dir === 'STRONG_BUY') return 'LONG';
+            if (dir.includes('SHORT') || dir === 'SELL' || dir === 'STRONG_SELL') return 'SHORT';
+            if (dir === 'NEUTRAL' || dir === 'HOLD' || dir === '') return 'HOLD';
+            return dir;
+        }
+
+        function outcomeBadge(outcome) {
+            switch (outcome) {
+                case 'WIN':  return '<span class="tr-badge tr-badge-win">WIN</span>';
+                case 'LOSS': return '<span class="tr-badge tr-badge-loss">LOSS</span>';
+                case 'HOLD': return '<span class="tr-badge tr-badge-hold">HOLD</span>';
+                default:     return '<span class="tr-badge tr-badge-open">OPEN</span>';
+            }
+        }
+
+        // ----------------------------------------------------------------
+        // Render
+        // ----------------------------------------------------------------
+        function render(rows) {
+            const loadEl  = document.getElementById('trLoading');
+            const wrapEl  = document.getElementById('trTableWrap');
+            const emptyEl = document.getElementById('trEmpty');
+            const tbody   = document.getElementById('trTableBody');
+            const noteEl  = document.getElementById('trWinrateNote');
+
+            if (loadEl) loadEl.style.display = 'none';
+
+            if (!rows || rows.length === 0) {
+                if (emptyEl) emptyEl.style.display = 'block';
+                updateStats([], noteEl);
+                return;
+            }
+
+            if (wrapEl) wrapEl.style.display = 'block';
+
+            if (tbody) {
+                tbody.innerHTML = rows.map(r => `
+                    <tr>
+                        <td>${fmtTs(r.ts)}</td>
+                        <td style="color:#e2e8f0;font-weight:600;">${r.symbol}</td>
+                        <td>${r.timeframe}</td>
+                        <td class="${dirClass(r.direction)}">${dirLabel(r.direction)}</td>
+                        <td>${fmtPrice(r.entry)}</td>
+                        <td style="color:rgba(0,255,136,0.7);">${fmtPrice(r.tp)}</td>
+                        <td style="color:rgba(255,85,85,0.7);">${fmtPrice(r.sl)}</td>
+                        <td>${outcomeBadge(r.outcome)}</td>
+                    </tr>
+                `).join('');
+            }
+
+            updateStats(rows, noteEl);
+        }
+
+        function updateStats(rows, noteEl) {
+            const wins    = rows.filter(r => r.outcome === 'WIN').length;
+            const losses  = rows.filter(r => r.outcome === 'LOSS').length;
+            const open    = rows.filter(r => r.outcome === 'OPEN').length;
+            const total   = rows.length;
+            const closed  = wins + losses;
+            const winRate = closed > 0 ? (wins / closed * 100).toFixed(1) : null;
+
+            // Find earliest timestamp for "since" label
+            let earliest = '';
+            if (rows.length > 0) {
+                const tsList = rows.map(r => r.ts).filter(Boolean).sort();
+                if (tsList.length) {
+                    try {
+                        const d = new Date(tsList[0]);
+                        if (!isNaN(d)) earliest = d.toISOString().slice(0, 10);
+                    } catch {}
+                }
+            }
+
+            const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+
+            set('trTotalVal', total > 0 ? total : '0');
+            set('trWinsVal',  wins);
+            set('trLossVal',  losses);
+            set('trOpenVal',  open);
+            set('trSinceVal', earliest ? `since ${earliest}` : 'no data yet');
+
+            const rateEl = document.getElementById('trRateVal');
+            const rateNoteEl = document.getElementById('trRateNote');
+            if (winRate !== null) {
+                if (rateEl) {
+                    rateEl.textContent = winRate + '%';
+                    rateEl.className = 'tr-stat-value';
+                }
+                if (rateNoteEl) rateNoteEl.textContent = `from ${closed} closed signal${closed !== 1 ? 's' : ''}`;
+            } else {
+                if (rateEl) {
+                    rateEl.textContent = 'N/A';
+                    rateEl.className = 'tr-stat-value tr-na';
+                }
+                if (rateNoteEl) rateNoteEl.textContent = 'no closed signals yet';
+            }
+
+            if (noteEl) {
+                noteEl.style.display = 'block';
+                if (winRate !== null) {
+                    noteEl.textContent = `Win rate of ${winRate}% is self-computed from ${closed} publicly logged closed signal${closed !== 1 ? 's' : ''} since ${earliest || 'launch'}. Both wins and losses are included. This is not a marketing claim.`;
+                } else {
+                    noteEl.textContent = `Win rate will be displayed once closed signals are logged. Currently showing ${total} active/hold signal${total !== 1 ? 's' : ''}. Track record logging is live — check back as signals close.`;
+                }
+            }
+        }
+
+        // ----------------------------------------------------------------
+        // Init
+        // ----------------------------------------------------------------
+        async function init() {
+            try {
+                const rows = await loadSignals();
+                render(rows);
+            } catch (err) {
+                const loadEl = document.getElementById('trLoading');
+                if (loadEl) {
+                    loadEl.innerHTML = `<i class="fas fa-exclamation-triangle" style="color:rgba(255,85,85,0.5);font-size:1.5rem;"></i><p style="margin-top:1rem;font-size:0.82rem;color:#4b5563;">Could not load signal data. Check your connection and try refreshing.<br><small style="opacity:0.6;">${err.message || ''}</small></p>`;
+                }
+                console.warn('[AegisTrackRecord] loadSignals error:', err);
+            }
+        }
+
+        // Export for external access if needed (guarded)
+        if (typeof window !== 'undefined') {
+            window.AegisTrackRecord = { loadSignals, init };
+        }
+
+        // Auto-run on DOM ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+
+    })();
+    </script>
+
+</body>
+</html>
