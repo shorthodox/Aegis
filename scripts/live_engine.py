@@ -129,9 +129,9 @@ THRESHOLD_CEIL = 3.00
 
 PROXIMITY_THRESHOLD = 0.005  # 0.5% proximity to S&R boundary triggers alert
 
-CANDLE_CONFIRM_REQUIRED = 1    # consecutive candles needed before emitting signal
+CANDLE_CONFIRM_REQUIRED = 3    # 3 consecutive confirming candles required before emitting signal
 SIGNAL_EXPIRY_MOVE_PCT = 0.60  # if price moves 60% of expected TP before action → expired
-REVERSAL_SCORE_THRESHOLD = 0.35  # minimum technical score to begin candle counting
+REVERSAL_SCORE_THRESHOLD = 0.50  # minimum technical pattern score — raised for strong shapes only
 SR_SIGNAL_ZONE = 0.010         # 1% proximity band — price within 1% of S/R triggers S/R signal path
 
 MODE_PARAMS = {
@@ -1228,7 +1228,7 @@ class SignalGenerator:
                 pass
             _sup_lvl = float(sr_telemetry.get("support_line") or 0.0)
             _res_lvl = float(sr_telemetry.get("resistance_line") or 0.0)
-            _sr_conf = 0.47
+            _sr_conf = 0.57  # raised from 0.47 — stronger AI confidence required at S/R
             if _sup_lvl > 0 and 0 <= _pre_sup <= SR_SIGNAL_ZONE and predicted_class == 2 and ai_prob >= _sr_conf:
                 base_signal = "LONG"
             elif _res_lvl > 0 and 0 <= _pre_res <= SR_SIGNAL_ZONE and predicted_class == 0 and ai_prob >= _sr_conf:
@@ -1348,10 +1348,15 @@ class SignalGenerator:
                     base_signal = "NEUTRAL"
 
             else:
-                # ── Mid-range: pass on normal or strong momentum; suppress only weak ──
-                if trend_str in ("strong", "normal"):
-                    signal_status = "MOMENTUM_BREAKOUT"
-                    base_signal = "LONG"
+                # ── Mid-range: only fire on strong trend + high volume + 3 confirmed candles ──
+                if trend_str == "strong" and volume_cond == "high":
+                    _mb_candles = ReversalDetector.count_confirming_candles(df_1h, "LONG")
+                    if _mb_candles >= CANDLE_CONFIRM_REQUIRED:
+                        signal_status = "MOMENTUM_BREAKOUT"
+                        candles_confirmed = _mb_candles
+                    else:
+                        signal_status = "AWAITING_CONFIRMATION"
+                        base_signal = "NEUTRAL"
                 else:
                     self.reversal_candidates.pop(f"{rev_key}_LONG", None)
                     base_signal = "NEUTRAL"
@@ -1398,10 +1403,15 @@ class SignalGenerator:
                     }
 
             else:
-                # ── Mid-range: pass on normal or strong momentum; suppress only weak ──
-                if trend_str in ("strong", "normal"):
-                    signal_status = "MOMENTUM_BREAKOUT"
-                    base_signal = "SHORT"
+                # ── Mid-range: only fire on strong trend + high volume + 3 confirmed candles ──
+                if trend_str == "strong" and volume_cond == "high":
+                    _mb_candles = ReversalDetector.count_confirming_candles(df_1h, "SHORT")
+                    if _mb_candles >= CANDLE_CONFIRM_REQUIRED:
+                        signal_status = "MOMENTUM_BREAKOUT"
+                        candles_confirmed = _mb_candles
+                    else:
+                        signal_status = "AWAITING_CONFIRMATION"
+                        base_signal = "NEUTRAL"
                 else:
                     self.reversal_candidates.pop(f"{rev_key}_SHORT", None)
                     base_signal = "NEUTRAL"
@@ -1416,7 +1426,7 @@ class SignalGenerator:
         confluence_volume = 78 if volume_cond == "high" else (58 if volume_cond == "normal" else 38)
         confluence_rate = (confluence_trend + confluence_momentum + confluence_volume) / 3.0
         
-        if confluence_rate < 50.0 and base_signal in ("LONG", "SHORT"):
+        if confluence_rate < 62.0 and base_signal in ("LONG", "SHORT"):
             base_signal = "NEUTRAL"
             signal_status = "WEAK_CONFLUENCE"
 
@@ -1459,7 +1469,7 @@ class SignalGenerator:
                 _tp_pct = suggested_tp_distance / current_price
                 _sl_pct = suggested_sl_distance / current_price
             _ev = ai_prob * _tp_pct - (1 - ai_prob) * _sl_pct - TOTAL_COST_PCT
-            if _ev < 0:
+            if _ev < 0.002:  # require at least 0.2% positive EV above transaction costs
                 base_signal = "NEUTRAL"
                 signal_status = "NEGATIVE_EV"
                 final_signal = "HOLD"
@@ -2234,56 +2244,10 @@ class LiveEngine:
                         await self.announce(f"Take profit secured on {symbol} (short)")
                         self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] 🟢 TAKE PROFIT (short) on {symbol} @ {current_price:.4f}")
 
-            # OPEN NEW TRADES (BUY or SELL) – only if signal not suppressed
-            for sig in signals:
-                if not sig:
-                    continue
-                symbol = sig["symbol"]
-                if symbol in self.wallet.open_trades:
-                    continue
-
-                signal_type = sig["signal"]
-                # Skip suppressed signals (HOLD variants) for entry
-                if "HOLD" in signal_type:
-                    continue
-
-                price = sig["price"]
-                atr_val = sig["atr"]
-                risk_pct = sig["risk_pct"]
-                atr_sl = sig["atr_sl"]
-                atr_tp = sig["atr_tp"]
-
-                if signal_type in ("STRONG_BUY", "BUY") and self.wallet.can_open_trade(symbol, price):
-                    sl_price = price - atr_sl * atr_val
-                    tp_price = price + atr_tp * atr_val
-                    confidence = 1.0 if signal_type == "STRONG_BUY" else 0.6
-                    units = self.wallet.get_position_units(symbol, price, sl_price, risk_pct, confidence)
-                    if units > 0:
-                        trade = LiveTrade(
-                            symbol=symbol, entry_price=price, position_units=units,
-                            stop_loss=sl_price, take_profit=tp_price, entry_time=datetime.now(),
-                            mode=sig["mode"], master_score=sig["ai_prob"], trade_type="LONG"
-                        )
-                        self.wallet.open_trade(trade)
-                        action = "Strong Buy" if signal_type == "STRONG_BUY" else "Buy"
-                        await self.announce(f"{action} {symbol}")
-                        self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] 🟢 {action.upper()} {symbol} @ {price:.4f} (risk {risk_pct}%)")
-
-                elif signal_type in ("STRONG_SELL", "SELL") and self.wallet.can_open_trade(symbol, price):
-                    sl_price = price + atr_sl * atr_val
-                    tp_price = price - atr_tp * atr_val
-                    confidence = 1.0 if signal_type == "STRONG_SELL" else 0.6
-                    units = self.wallet.get_position_units(symbol, price, sl_price, risk_pct, confidence)
-                    if units > 0:
-                        trade = LiveTrade(
-                            symbol=symbol, entry_price=price, position_units=units,
-                            stop_loss=sl_price, take_profit=tp_price, entry_time=datetime.now(),
-                            mode=sig["mode"], master_score=sig["ai_prob"], trade_type="SHORT"
-                        )
-                        self.wallet.open_trade(trade)
-                        action = "Strong Sell" if signal_type == "STRONG_SELL" else "Sell"
-                        await self.announce(f"{action} {symbol}")
-                        self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] 🔴 {action.upper()} {symbol} @ {price:.4f} (risk {risk_pct}%)")
+            # Auto-execution is intentionally disabled.
+            # Trades are only opened when the user executes a signal manually
+            # via the web UI — those appear in the analytics and terminal cockpit.
+            # SL/TP and conviction exits above continue to manage any such trades.
 
             elapsed = time.time() - loop_start
             sleep_time = max(0, self.scan_interval - elapsed)
