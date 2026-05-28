@@ -2608,7 +2608,7 @@ ADMIN_SECRET = os.getenv("ADMIN_SECRET", "")
 
 # Sentinel document key inside dev_codes collection that tracks the single
 # "always-active" developer token the backend continuously displays.
-_CURRENT_TOKEN_SENTINEL = "__current__"
+_CURRENT_TOKEN_SENTINEL = "current_token"
 _DEV_TOKEN_VALIDITY_DAYS = 5
 
 
