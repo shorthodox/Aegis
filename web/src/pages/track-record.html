@@ -278,7 +278,8 @@
         .tr-empty i   { font-size: 2.5rem; color: rgba(0,242,255,0.15); margin-bottom: 1rem; }
         .tr-empty h3  { color: #374151; font-size: 1rem; margin-bottom: 0.5rem; }
         .tr-empty p   { font-size: 0.82rem; line-height: 1.75; max-width: 500px; margin: 0 auto; }
-        @keyframes tr-spin { to { transform: rotate(360deg); } }
+        @keyframes tr-spin  { to { transform: rotate(360deg); } }
+        @keyframes tr-pulse { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
 
         .tr-filter-btn {
             padding: 0.3rem 0.75rem;
@@ -383,7 +384,7 @@
 
         <!-- History-gap notice -->
         <div class="tr-history-note">
-            <strong>How this page works:</strong> Outcomes are read directly from the live <code>signals</code> Firestore collection and derived from the <code>status</code> field set by the engine (TARGET HIT → WIN, STOP LOSS HIT → LOSS, all others → OPEN). Currently active signals show as OPEN. A dedicated <strong>signal_history</strong> collection to persist every closed trade historically is on the roadmap — until it ships, WIN/LOSS rows will only appear when a signal's current state is closed.
+            <strong>How this page works:</strong> Every BUY or SELL signal the engine fires is logged with its entry price, TP, and SL. When price reaches TP the record is marked <strong>WIN</strong>; when it reaches SL it is marked <strong>LOSS</strong>. Only <em>closed</em> signals are shown here — live open signals are visible exclusively on the subscriber dashboard to preserve the value of the product.
         </div>
 
         <!-- Summary strip -->
@@ -420,7 +421,15 @@
             </div>
         </div>
 
-        <!-- Filter bar -->
+        <!-- Live signal teaser — populated by JS, hidden until open count known -->
+        <div id="trLiveTeaser" style="
+            display:none; align-items:center; gap:1rem;
+            background:rgba(0,255,136,0.04); border:1px solid rgba(0,255,136,0.18);
+            border-radius:12px; padding:0.85rem 1.2rem; margin-bottom:1.5rem;
+            font-size:0.85rem; color:rgba(255,255,255,0.7); line-height:1.5;
+        "></div>
+
+        <!-- Filter bar — only closed signals shown publicly -->
         <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:1.5rem;align-items:center;">
             <span style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.1em;color:#4b5563;margin-right:0.25rem;">Direction:</span>
             <button class="tr-filter-btn active" data-tr-filter-dir="ALL">All</button>
@@ -431,7 +440,6 @@
             <button class="tr-filter-btn active" data-tr-filter-out="ALL">All</button>
             <button class="tr-filter-btn" data-tr-filter-out="WIN">Wins</button>
             <button class="tr-filter-btn" data-tr-filter-out="LOSS">Losses</button>
-            <button class="tr-filter-btn" data-tr-filter-out="OPEN">Open</button>
         </div>
 
         <!-- Loading state -->

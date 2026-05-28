@@ -140,13 +140,39 @@ function renderStats(summary) {
     }
 }
 
-// ── Table ─────────────────────────────────────────────────────────────────────
+// ── Live signal teaser (shown above the table) ────────────────────────────────
+function renderLiveTeaser(openCount) {
+    const el = document.getElementById('trLiveTeaser');
+    if (!el) return;
+    if (openCount <= 0) { el.style.display = 'none'; return; }
+    el.style.display = 'flex';
+    el.innerHTML = `
+        <div style="display:flex;align-items:center;gap:0.6rem;flex:1;">
+            <span style="width:8px;height:8px;border-radius:50%;background:#00ff88;box-shadow:0 0 6px #00ff88;flex-shrink:0;animation:tr-pulse 1.5s ease-in-out infinite;"></span>
+            <span><strong style="color:#00ff88;">${openCount} live signal${openCount !== 1 ? 's' : ''}</strong> active right now — entry price, TP &amp; SL visible on the dashboard.</span>
+        </div>
+        <a href="/web/src/pages/pricing.html" style="
+            padding:0.4rem 1rem;background:rgba(0,242,255,0.12);border:1px solid rgba(0,242,255,0.35);
+            border-radius:20px;color:#00f2ff;font-size:0.8rem;font-weight:700;text-decoration:none;
+            white-space:nowrap;transition:background 0.2s;flex-shrink:0;
+        " onmouseover="this.style.background='rgba(0,242,255,0.22)'" onmouseout="this.style.background='rgba(0,242,255,0.12)'">
+            Get Access →
+        </a>
+    `;
+}
+
+// ── Table — only closed signals are shown publicly ────────────────────────────
 function applyFilters(rows) {
-    return rows.filter(r => {
+    // Strip open signals from public view — they contain live actionable data
+    const closed = rows.filter(r => (r.outcome || '').toUpperCase() !== 'OPEN');
+    return closed.filter(r => {
         const dir = _activeFilter.direction;
         const out = _activeFilter.outcome;
         const matchDir = dir === 'ALL' || dirLabel(r.direction) === dir;
-        const matchOut = out === 'ALL' || (r.outcome || 'OPEN').toUpperCase() === out;
+        // "Open" filter button is hidden for closed-only table, but guard anyway
+        const matchOut = out === 'ALL' || out === 'OPEN'
+            ? true
+            : (r.outcome || '').toUpperCase() === out;
         return matchDir && matchOut;
     });
 }
@@ -157,13 +183,15 @@ function renderTable(rows) {
     const filtered = applyFilters(rows);
 
     if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:2rem;color:#4b5563;">No signals match the current filter.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:2.5rem;color:#4b5563;">
+            No closed signals yet. Signals appear here once their TP or SL is hit.
+        </td></tr>`;
         return;
     }
 
     tbody.innerHTML = filtered.map(r => `
         <tr>
-            <td>${fmtTs(r.entry_time)}</td>
+            <td>${fmtTs(r.close_time || r.entry_time)}</td>
             <td style="color:#e2e8f0;font-weight:600;">${r.symbol || '—'}</td>
             <td>${r.timeframe || '—'}</td>
             <td class="${dirClass(r.direction)}">${dirLabel(r.direction)}</td>
@@ -206,11 +234,14 @@ function render(data) {
 
     if (loadEl) loadEl.style.display = 'none';
 
-    renderStats(data.summary || {});
+    const summary = data.summary || {};
+    renderStats(summary);
+    renderLiveTeaser(summary.open ?? 0);
 
     _allRows = data.signals || [];
+    const closedRows = _allRows.filter(r => (r.outcome || '').toUpperCase() !== 'OPEN');
 
-    if (_allRows.length === 0) {
+    if (closedRows.length === 0) {
         if (emptyEl) emptyEl.style.display = 'block';
         return;
     }
