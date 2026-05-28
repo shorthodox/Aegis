@@ -130,10 +130,10 @@ THRESHOLD_CEIL = 3.00
 PROXIMITY_THRESHOLD = 0.005  # 0.5% proximity to S&R boundary triggers alert
 
 SR_CANDLE_CONFIRM_REQUIRED = 2       # candles for S/R reversal — the level is the anchor
-MOMENTUM_CANDLE_CONFIRM_REQUIRED = 3  # candles for mid-range breakout — no S/R anchor
+MOMENTUM_CANDLE_CONFIRM_REQUIRED = 2  # candles for mid-range breakout — 2 is enough to confirm direction
 SIGNAL_EXPIRY_MOVE_PCT = 0.60  # if price moves 60% of expected TP before action → expired
 REVERSAL_SCORE_THRESHOLD = 0.42  # minimum technical pattern score — requires at least 2 independent confirmations
-SR_SIGNAL_ZONE = 0.010         # 1% proximity band — price within 1% of S/R triggers S/R signal path
+SR_SIGNAL_ZONE = 0.015         # 1.5% proximity band — wider band gives S/R path more opportunity to trigger
 
 MODE_PARAMS = {
     "conservative": {"entry_prob": 0.75, "risk_pct": 0.015, "atr_sl": 1.2, "atr_tp": 1.8},
@@ -2109,14 +2109,21 @@ class LiveEngine:
                 lower_tfs = ['1m','5m','15m','30m','1h','4h']
                 if sig and tf in lower_tfs:
                     direction = sig.get('direction', 'NEUTRAL')
-                    if macro == 'BULL' and direction == 'SHORT':
-                        sig['signal'] = 'HOLD'
-                        sig['signal_strength'] = 'HOLD'
-                        sig['direction'] = 'NEUTRAL'
-                    elif macro == 'BEAR' and direction == 'LONG':
-                        sig['signal'] = 'HOLD'
-                        sig['signal_strength'] = 'HOLD'
-                        sig['direction'] = 'NEUTRAL'
+                    sig_status = sig.get('signal_status', '')
+                    # S/R reversal signals are countertrend by design — a SHORT at resistance
+                    # in a BULL macro and a LONG at support in a BEAR macro are exactly the
+                    # high-quality setups the S/R engine produces.  Only suppress momentum
+                    # breakouts that are counter-trend; never suppress confirmed S/R signals.
+                    is_sr_confirmed = sig_status in ('SR_REVERSAL_CONFIRMED', 'SR_BREAK_CONFIRMED')
+                    if not is_sr_confirmed:
+                        if macro == 'BULL' and direction == 'SHORT':
+                            sig['signal'] = 'HOLD'
+                            sig['signal_strength'] = 'HOLD'
+                            sig['direction'] = 'NEUTRAL'
+                        elif macro == 'BEAR' and direction == 'LONG':
+                            sig['signal'] = 'HOLD'
+                            sig['signal_strength'] = 'HOLD'
+                            sig['direction'] = 'NEUTRAL'
 
                 if isinstance(sig, dict):
                     sig['timeframe'] = tf
