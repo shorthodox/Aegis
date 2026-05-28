@@ -1459,6 +1459,10 @@ function renderSignals(signals) {
     const signalStatus = signal.status || getSignalStatus(signal);
     const signalClass = getSignalClass(signalType, signalStatus);
     const cardTypeClass = getSignalCardType(signal.direction);
+    const sigUp = signalType.toUpperCase();
+    const dirAttr = (sigUp.includes('BUY') || signal.direction === 'LONG') ? 'buy'
+                  : (sigUp.includes('SELL') || signal.direction === 'SHORT') ? 'sell'
+                  : 'hold';
     const confidence = (signal.ai_prob || 0) * 100;
 
     // Determine status badge
@@ -1534,7 +1538,7 @@ function renderSignals(signals) {
     })() : '';
 
     return `
-      <div class="signal-card ${cardTypeClass}${statusIndicator} cursor-pointer hover:shadow-[0_0_15px_rgba(0,242,255,0.2)] transition-all transform hover:-translate-y-1 overflow-hidden ${matchClasses}" onclick="window.openSignalDetails('${symbol}', '${timeframe}')" data-symbol="${symbol}" data-status="${signalStatus}">
+      <div class="signal-card ${cardTypeClass}${statusIndicator} cursor-pointer hover:shadow-[0_0_15px_rgba(0,242,255,0.2)] transition-all transform hover:-translate-y-1 overflow-hidden ${matchClasses}" onclick="window.openSignalDetails('${symbol}', '${timeframe}')" data-symbol="${symbol}" data-status="${signalStatus}" data-dir="${dirAttr}">
         <div class="signal-header flex justify-between items-center">
           <div class="flex items-center">
             <span class="signal-symbol font-bold">${symbol}</span>

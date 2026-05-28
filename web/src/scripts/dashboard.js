@@ -2143,10 +2143,10 @@ function _syncDirectionalRooms() {
   const sellContainer = document.getElementById('sellSignalsContainer');
   if (!source || !buyContainer || !sellContainer) return;
 
-  const cards = Array.from(source.querySelectorAll('.signal-card[data-symbol]'));
+  const cards = Array.from(source.querySelectorAll('.signal-card[data-dir]'));
 
-  const isBuy  = c => { const b = c.querySelector('.signal-badge'); if (!b) return false; const t = b.textContent.trim().toUpperCase(); return t.includes('BUY') || t.includes('LONG'); };
-  const isSell = c => { const b = c.querySelector('.signal-badge'); if (!b) return false; const t = b.textContent.trim().toUpperCase(); return t.includes('SELL') || t.includes('SHORT'); };
+  const isBuy  = c => c.dataset.dir === 'buy';
+  const isSell = c => c.dataset.dir === 'sell';
 
   const buyCards  = cards.filter(isBuy);
   const sellCards = cards.filter(isSell);
@@ -2201,9 +2201,9 @@ window.syncDirectionalRooms = _syncDirectionalRooms;
     if (!source) return;
     new MutationObserver(() => {
       // Always update nav badge counts (regardless of active room)
-      const cards = Array.from(source.querySelectorAll('.signal-card[data-symbol]'));
-      const buyCount  = cards.filter(c => { const b = c.querySelector('.signal-badge'); return b && (b.textContent.includes('BUY') || b.textContent.includes('LONG')); }).length;
-      const sellCount = cards.filter(c => { const b = c.querySelector('.signal-badge'); return b && (b.textContent.includes('SELL') || b.textContent.includes('SHORT')); }).length;
+      const cards = Array.from(source.querySelectorAll('.signal-card[data-dir]'));
+      const buyCount  = cards.filter(c => c.dataset.dir === 'buy').length;
+      const sellCount = cards.filter(c => c.dataset.dir === 'sell').length;
       const navBuy  = document.getElementById('nav-buy-count');
       const navSell = document.getElementById('nav-sell-count');
       if (navBuy)  { navBuy.textContent  = buyCount;  navBuy.classList.toggle('hidden',  buyCount  === 0); }
