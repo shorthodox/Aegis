@@ -1405,6 +1405,20 @@ class SignalGenerator:
                 else:
                     self.reversal_candidates.pop(f"{rev_key}_SHORT", None)
                     base_signal = "NEUTRAL"
+        # ──────────────────────────────────────────────────────────────
+        # CONFLUENCE RATE CHECK
+        # Enforce a minimum confluence rate before generating a BUY/SELL signal,
+        # even if market is at support/resistance and has candle confirmation.
+        # ──────────────────────────────────────────────────────────────
+        confluence_trend = 80 if trend_aligned else 35
+        _er_val = 0.5 if pd.isna(er) else float(er)
+        confluence_momentum = min(100, max(0, int(_er_val * 100)))
+        confluence_volume = 78 if volume_cond == "high" else (58 if volume_cond == "normal" else 38)
+        confluence_rate = (confluence_trend + confluence_momentum + confluence_volume) / 3.0
+        
+        if confluence_rate < 50.0 and base_signal in ("LONG", "SHORT"):
+            base_signal = "NEUTRAL"
+            signal_status = "WEAK_CONFLUENCE"
 
         # SL/TP Logic based on asset classification
         heavy_caps = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT"]
