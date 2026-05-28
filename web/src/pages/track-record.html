@@ -280,6 +280,21 @@
         .tr-empty p   { font-size: 0.82rem; line-height: 1.75; max-width: 500px; margin: 0 auto; }
         @keyframes tr-spin { to { transform: rotate(360deg); } }
 
+        .tr-filter-btn {
+            padding: 0.3rem 0.75rem;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 20px;
+            color: #6b7280;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+            letter-spacing: 0.04em;
+        }
+        .tr-filter-btn:hover  { border-color: rgba(0,242,255,0.3); color: #00f2ff; }
+        .tr-filter-btn.active { background: rgba(0,242,255,0.1); border-color: rgba(0,242,255,0.4); color: #00f2ff; }
+
         .tr-winrate-note {
             font-size: 0.68rem;
             color: #4b5563;
@@ -394,10 +409,29 @@
                 <div class="tr-stat-sub" id="trRateNote">computed from closed signals</div>
             </div>
             <div class="tr-stat">
+                <span class="tr-stat-value" id="trAvgPnlVal">—</span>
+                <div class="tr-stat-label">Avg PnL</div>
+                <div class="tr-stat-sub">closed signals</div>
+            </div>
+            <div class="tr-stat">
                 <span class="tr-stat-value" id="trOpenVal">—</span>
                 <div class="tr-stat-label">Open</div>
-                <div class="tr-stat-sub">Active positions</div>
+                <div class="tr-stat-sub">Active signals</div>
             </div>
+        </div>
+
+        <!-- Filter bar -->
+        <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:1.5rem;align-items:center;">
+            <span style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.1em;color:#4b5563;margin-right:0.25rem;">Direction:</span>
+            <button class="tr-filter-btn active" data-tr-filter-dir="ALL">All</button>
+            <button class="tr-filter-btn" data-tr-filter-dir="LONG">Long</button>
+            <button class="tr-filter-btn" data-tr-filter-dir="SHORT">Short</button>
+            <span style="margin:0 0.5rem;color:#374151;">|</span>
+            <span style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.1em;color:#4b5563;margin-right:0.25rem;">Outcome:</span>
+            <button class="tr-filter-btn active" data-tr-filter-out="ALL">All</button>
+            <button class="tr-filter-btn" data-tr-filter-out="WIN">Wins</button>
+            <button class="tr-filter-btn" data-tr-filter-out="LOSS">Losses</button>
+            <button class="tr-filter-btn" data-tr-filter-out="OPEN">Open</button>
         </div>
 
         <!-- Loading state -->
@@ -413,11 +447,13 @@
                     <tr>
                         <th>Timestamp (UTC)</th>
                         <th>Token</th>
-                        <th>Timeframe</th>
+                        <th>TF</th>
                         <th>Direction</th>
-                        <th>Entry Price</th>
+                        <th>Signal</th>
+                        <th>Entry</th>
                         <th>TP</th>
                         <th>SL</th>
+                        <th>PnL %</th>
                         <th>Outcome</th>
                     </tr>
                 </thead>
@@ -512,282 +548,8 @@
         });
     </script>
 
-    <!-- ===== AegisTrackRecord — all new logic namespaced, no globals polluted ===== -->
-    <script type="module">
-    (function() {
-        'use strict';
-
-        // ----------------------------------------------------------------
-        // Firebase config — identical to gatekeeper.js, read-only usage
-        // ----------------------------------------------------------------
-        const firebaseConfig = {
-            apiKey: "AIzaSyDtudUL2sE1_fKbzIro5d2IP0-M2dYI6x4",
-            authDomain: "aegis-d78e1.firebaseapp.com",
-            databaseURL: "https://aegis-d78e1-default-rtdb.asia-southeast1.firebasedatabase.app",
-            projectId: "aegis-d78e1",
-            storageBucket: "aegis-d78e1.firebasestorage.app",
-            messagingSenderId: "623998601232",
-            appId: "1:623998601232:web:288a89514d84ac3573a295",
-            measurementId: "G-V6RWEEWT7L"
-        };
-
-        // ----------------------------------------------------------------
-        // loadSignals — reads from the live 'signals' Firestore collection.
-        //
-        // DATA SOURCE NOTE:
-        //   The 'signals' collection stores the CURRENT state of each
-        //   symbol+timeframe slot (upserted on every engine tick).
-        //   Outcomes (WIN/LOSS) are derived from the 'status' field:
-        //     "TARGET HIT"    → WIN
-        //     "STOP LOSS HIT" → LOSS
-        //     anything else   → OPEN
-        //
-        // TODO — signal_history collection:
-        //   The current engine never writes 'status: "TARGET HIT"' to
-        //   Firestore (compute_system_analytics in main.py line ~309 queries
-        //   this field but nothing sets it). To get a real historical WIN/LOSS
-        //   log:
-        //     1. In scripts/live_engine.py, emit a Firestore write to
-        //        db.collection('signal_history') when wallet.close_trade()
-        //        fires, including: symbol, direction, entry_price, close_price,
-        //        outcome ("WIN"/"LOSS"), timestamp.
-        //     2. Update compute_system_analytics() in main.py to query
-        //        'signal_history' instead of 'signals'.
-        //     3. Update this page to additionally query 'signal_history' for
-        //        historical rows alongside current 'signals' for open positions.
-        //   Until this ships, all records will show as OPEN.
-        // ----------------------------------------------------------------
-        async function loadSignals() {
-            // Use the same Firebase singleton pattern as gatekeeper.js
-            let app;
-            try {
-                const { initializeApp, getApps, getApp } = await import(
-                    'https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js'
-                );
-                app = getApps().length === 0
-                    ? initializeApp(firebaseConfig)
-                    : getApp();
-            } catch (err) {
-                // If a Firebase app was already initialized under a different name,
-                // try reusing the global one registered by gatekeeper.js
-                if (typeof globalThis._firebaseApp !== 'undefined') {
-                    app = globalThis._firebaseApp;
-                } else {
-                    throw err;
-                }
-            }
-
-            const { getFirestore, collection, getDocs, query, orderBy, limit } = await import(
-                'https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js'
-            );
-
-            const db = getFirestore(app);
-
-            // Query ALL signals, ordered by timestamp desc, capped at 500
-            // to avoid reading the entire collection on each page load.
-            const q = query(
-                collection(db, 'signals'),
-                orderBy('timestamp', 'desc'),
-                limit(500)
-            );
-
-            const snapshot = await getDocs(q);
-            const rows = [];
-            snapshot.forEach(doc => {
-                const d = doc.data();
-                // Derive outcome
-                const statusRaw = (d.status || '').toString().toUpperCase();
-                let outcome;
-                if (statusRaw === 'TARGET HIT') {
-                    outcome = 'WIN';
-                } else if (statusRaw === 'STOP LOSS HIT') {
-                    outcome = 'LOSS';
-                } else {
-                    const sigStatus = (d.signal_status || '').toUpperCase();
-                    const sig = (d.signal || '').toUpperCase();
-                    // Treat explicit HOLD or suppressed states as HOLD, else OPEN
-                    outcome = (sig === 'HOLD' || sigStatus.startsWith('HOLDING')) ? 'HOLD' : 'OPEN';
-                }
-
-                rows.push({
-                    ts:        d.data_timestamp || d.timestamp || '',
-                    symbol:    d.symbol || doc.id,
-                    timeframe: d.timeframe || '—',
-                    direction: (d.direction || d.signal || '').toUpperCase(),
-                    entry:     d.entry_price,
-                    tp:        d.tp,
-                    sl:        d.sl,
-                    outcome
-                });
-            });
-
-            return rows;
-        }
-
-        // ----------------------------------------------------------------
-        // Format helpers
-        // ----------------------------------------------------------------
-        function fmtTs(ts) {
-            if (!ts) return '—';
-            try {
-                const d = new Date(ts);
-                if (isNaN(d)) return ts;
-                return d.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
-            } catch { return ts; }
-        }
-
-        function fmtPrice(v) {
-            if (v == null) return '—';
-            const n = parseFloat(v);
-            if (isNaN(n)) return '—';
-            return n >= 1000 ? n.toLocaleString('en-US', { maximumFractionDigits: 2 })
-                             : n.toPrecision(5);
-        }
-
-        function dirClass(dir) {
-            if (dir.includes('LONG') || dir === 'BUY' || dir === 'STRONG_BUY') return 'tr-dir-long';
-            if (dir.includes('SHORT') || dir === 'SELL' || dir === 'STRONG_SELL') return 'tr-dir-short';
-            return 'tr-dir-hold';
-        }
-
-        function dirLabel(dir) {
-            if (dir.includes('LONG') || dir === 'BUY' || dir === 'STRONG_BUY') return 'LONG';
-            if (dir.includes('SHORT') || dir === 'SELL' || dir === 'STRONG_SELL') return 'SHORT';
-            if (dir === 'NEUTRAL' || dir === 'HOLD' || dir === '') return 'HOLD';
-            return dir;
-        }
-
-        function outcomeBadge(outcome) {
-            switch (outcome) {
-                case 'WIN':  return '<span class="tr-badge tr-badge-win">WIN</span>';
-                case 'LOSS': return '<span class="tr-badge tr-badge-loss">LOSS</span>';
-                case 'HOLD': return '<span class="tr-badge tr-badge-hold">HOLD</span>';
-                default:     return '<span class="tr-badge tr-badge-open">OPEN</span>';
-            }
-        }
-
-        // ----------------------------------------------------------------
-        // Render
-        // ----------------------------------------------------------------
-        function render(rows) {
-            const loadEl  = document.getElementById('trLoading');
-            const wrapEl  = document.getElementById('trTableWrap');
-            const emptyEl = document.getElementById('trEmpty');
-            const tbody   = document.getElementById('trTableBody');
-            const noteEl  = document.getElementById('trWinrateNote');
-
-            if (loadEl) loadEl.style.display = 'none';
-
-            if (!rows || rows.length === 0) {
-                if (emptyEl) emptyEl.style.display = 'block';
-                updateStats([], noteEl);
-                return;
-            }
-
-            if (wrapEl) wrapEl.style.display = 'block';
-
-            if (tbody) {
-                tbody.innerHTML = rows.map(r => `
-                    <tr>
-                        <td>${fmtTs(r.ts)}</td>
-                        <td style="color:#e2e8f0;font-weight:600;">${r.symbol}</td>
-                        <td>${r.timeframe}</td>
-                        <td class="${dirClass(r.direction)}">${dirLabel(r.direction)}</td>
-                        <td>${fmtPrice(r.entry)}</td>
-                        <td style="color:rgba(0,255,136,0.7);">${fmtPrice(r.tp)}</td>
-                        <td style="color:rgba(255,85,85,0.7);">${fmtPrice(r.sl)}</td>
-                        <td>${outcomeBadge(r.outcome)}</td>
-                    </tr>
-                `).join('');
-            }
-
-            updateStats(rows, noteEl);
-        }
-
-        function updateStats(rows, noteEl) {
-            const wins    = rows.filter(r => r.outcome === 'WIN').length;
-            const losses  = rows.filter(r => r.outcome === 'LOSS').length;
-            const open    = rows.filter(r => r.outcome === 'OPEN').length;
-            const total   = rows.length;
-            const closed  = wins + losses;
-            const winRate = closed > 0 ? (wins / closed * 100).toFixed(1) : null;
-
-            // Find earliest timestamp for "since" label
-            let earliest = '';
-            if (rows.length > 0) {
-                const tsList = rows.map(r => r.ts).filter(Boolean).sort();
-                if (tsList.length) {
-                    try {
-                        const d = new Date(tsList[0]);
-                        if (!isNaN(d)) earliest = d.toISOString().slice(0, 10);
-                    } catch {}
-                }
-            }
-
-            const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-
-            set('trTotalVal', total > 0 ? total : '0');
-            set('trWinsVal',  wins);
-            set('trLossVal',  losses);
-            set('trOpenVal',  open);
-            set('trSinceVal', earliest ? `since ${earliest}` : 'no data yet');
-
-            const rateEl = document.getElementById('trRateVal');
-            const rateNoteEl = document.getElementById('trRateNote');
-            if (winRate !== null) {
-                if (rateEl) {
-                    rateEl.textContent = winRate + '%';
-                    rateEl.className = 'tr-stat-value';
-                }
-                if (rateNoteEl) rateNoteEl.textContent = `from ${closed} closed signal${closed !== 1 ? 's' : ''}`;
-            } else {
-                if (rateEl) {
-                    rateEl.textContent = 'N/A';
-                    rateEl.className = 'tr-stat-value tr-na';
-                }
-                if (rateNoteEl) rateNoteEl.textContent = 'no closed signals yet';
-            }
-
-            if (noteEl) {
-                noteEl.style.display = 'block';
-                if (winRate !== null) {
-                    noteEl.textContent = `Win rate of ${winRate}% is self-computed from ${closed} publicly logged closed signal${closed !== 1 ? 's' : ''} since ${earliest || 'launch'}. Both wins and losses are included. This is not a marketing claim.`;
-                } else {
-                    noteEl.textContent = `Win rate will be displayed once closed signals are logged. Currently showing ${total} active/hold signal${total !== 1 ? 's' : ''}. Track record logging is live — check back as signals close.`;
-                }
-            }
-        }
-
-        // ----------------------------------------------------------------
-        // Init
-        // ----------------------------------------------------------------
-        async function init() {
-            try {
-                const rows = await loadSignals();
-                render(rows);
-            } catch (err) {
-                const loadEl = document.getElementById('trLoading');
-                if (loadEl) {
-                    loadEl.innerHTML = `<i class="fas fa-exclamation-triangle" style="color:rgba(255,85,85,0.5);font-size:1.5rem;"></i><p style="margin-top:1rem;font-size:0.82rem;color:#4b5563;">Could not load signal data. Check your connection and try refreshing.<br><small style="opacity:0.6;">${err.message || ''}</small></p>`;
-                }
-                console.warn('[AegisTrackRecord] loadSignals error:', err);
-            }
-        }
-
-        // Export for external access if needed (guarded)
-        if (typeof window !== 'undefined') {
-            window.AegisTrackRecord = { loadSignals, init };
-        }
-
-        // Auto-run on DOM ready
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', init);
-        } else {
-            init();
-        }
-
-    })();
-    </script>
+    <!-- Track Record logic — fetches /api/track-record (no Firestore) -->
+    <script type="module" src="../scripts/track-record.js"></script>
 
 </body>
 </html>

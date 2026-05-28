@@ -276,6 +276,148 @@ class LiveState:
 LIVE_STATE = LiveState()
 
 # -------------------------------------------------------------------
+# Track Record System
+# Logs every actionable BUY/SELL signal, monitors TP/SL hits, and
+# persists outcomes to web/track_record.json for the public page.
+# -------------------------------------------------------------------
+TRACK_RECORD_PATH = WEB_ROOT_PATH / "track_record.json"
+_track_store: list = []       # in-memory list of signal records
+_tr_seen_ids: set = set()     # signal_ids already in store
+_tr_last_save: float = 0.0   # epoch of last disk write
+
+def _load_track_record() -> None:
+    global _track_store, _tr_seen_ids
+    if TRACK_RECORD_PATH.exists():
+        try:
+            with open(TRACK_RECORD_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            _track_store = data.get("signals", [])
+            _tr_seen_ids = {r["signal_id"] for r in _track_store if r.get("signal_id")}
+            print(f"[TrackRecord] Loaded {len(_track_store)} records from disk")
+        except Exception as e:
+            print(f"[TrackRecord] Load error: {e}")
+
+def _compute_track_summary() -> dict:
+    wins   = sum(1 for r in _track_store if r.get("outcome") == "WIN")
+    losses = sum(1 for r in _track_store if r.get("outcome") == "LOSS")
+    open_c = sum(1 for r in _track_store if r.get("outcome") == "OPEN")
+    closed = wins + losses
+    win_rate = round(wins / closed * 100, 1) if closed > 0 else None
+    closed_pnls = [r.get("pnl_pct", 0.0) for r in _track_store if r.get("outcome") in ("WIN", "LOSS")]
+    avg_pnl   = round(sum(closed_pnls) / len(closed_pnls), 3) if closed_pnls else None
+    total_pnl = round(sum(closed_pnls), 3) if closed_pnls else 0.0
+    times = [r["entry_time"] for r in _track_store if r.get("entry_time")]
+    return {
+        "total_signals": len(_track_store),
+        "wins": wins,
+        "losses": losses,
+        "open": open_c,
+        "win_rate_pct": win_rate,
+        "avg_pnl_pct": avg_pnl,
+        "total_pnl_pct": total_pnl,
+        "tracking_since": min(times) if times else None,
+    }
+
+def _save_track_record() -> None:
+    global _tr_last_save
+    try:
+        payload = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "summary": _compute_track_summary(),
+            "signals": sorted(_track_store, key=lambda r: r.get("entry_time") or "", reverse=True)[:500],
+        }
+        TRACK_RECORD_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(TRACK_RECORD_PATH, "w", encoding="utf-8") as f:
+            json.dump(payload, f, default=str)
+        _tr_last_save = time.time()
+    except Exception as e:
+        print(f"[TrackRecord] Save error: {e}")
+
+_ACTIONABLE = {"BUY", "SELL", "STRONG_BUY", "STRONG_SELL"}
+
+def _update_track_record(signals_data: dict, live_prices: dict) -> None:
+    """Called from update_state on every engine tick."""
+    global _track_store, _tr_seen_ids
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    for sym, sig_map in signals_data.items():
+        # Resolve nested timeframe map → use 1h summary signal
+        if isinstance(sig_map, dict) and any(tf in sig_map for tf in ("1m","5m","15m","30m","1h","4h","1d")):
+            sig = sig_map.get("1h") or next((v for v in sig_map.values() if isinstance(v, dict)), None)
+        else:
+            sig = sig_map
+        if not isinstance(sig, dict):
+            continue
+
+        signal_type = sig.get("signal", "HOLD")
+        signal_id   = sig.get("signal_id")
+        if not signal_id:
+            continue
+
+        current_price = float(live_prices.get(sym, sig.get("price", 0) or 0))
+
+        if signal_id in _tr_seen_ids:
+            # Update outcome for any still-open records with this id
+            for rec in _track_store:
+                if rec.get("signal_id") != signal_id or rec.get("outcome") != "OPEN":
+                    continue
+                tp  = float(rec.get("take_profit") or 0)
+                sl  = float(rec.get("stop_loss") or 0)
+                entry = float(rec.get("entry_price") or current_price or 1)
+                direction = rec.get("direction", "LONG")
+                if current_price <= 0 or tp <= 0 or sl <= 0:
+                    continue
+                if direction == "LONG":
+                    if current_price >= tp:
+                        rec.update({"outcome": "WIN",  "exit_price": current_price, "close_time": now_iso,
+                                    "pnl_pct": round((current_price - entry) / entry * 100, 3), "exit_reason": "TARGET_HIT"})
+                    elif current_price <= sl:
+                        rec.update({"outcome": "LOSS", "exit_price": current_price, "close_time": now_iso,
+                                    "pnl_pct": round((current_price - entry) / entry * 100, 3), "exit_reason": "STOP_HIT"})
+                else:  # SHORT
+                    if current_price <= tp:
+                        rec.update({"outcome": "WIN",  "exit_price": current_price, "close_time": now_iso,
+                                    "pnl_pct": round((entry - current_price) / entry * 100, 3), "exit_reason": "TARGET_HIT"})
+                    elif current_price >= sl:
+                        rec.update({"outcome": "LOSS", "exit_price": current_price, "close_time": now_iso,
+                                    "pnl_pct": round((entry - current_price) / entry * 100, 3), "exit_reason": "STOP_HIT"})
+            continue
+
+        # New actionable signal — add to store
+        if signal_type not in _ACTIONABLE:
+            continue
+
+        direction = sig.get("direction", "LONG")
+        entry_price = float(sig.get("price") or sig.get("entry_price") or 0)
+        _track_store.append({
+            "signal_id":      signal_id,
+            "symbol":         sym,
+            "timeframe":      sig.get("timeframe", "1h"),
+            "direction":      direction,
+            "signal_type":    signal_type,
+            "signal_status":  sig.get("signal_status", "ACTIVE"),
+            "entry_price":    entry_price,
+            "take_profit":    float(sig.get("tp") or sig.get("suggested_tp") or 0),
+            "stop_loss":      float(sig.get("sl") or sig.get("suggested_sl") or 0),
+            "exit_price":     None,
+            "entry_time":     sig.get("data_timestamp", now_iso),
+            "close_time":     None,
+            "pnl_pct":        0.0,
+            "outcome":        "OPEN",
+            "exit_reason":    None,
+            "ai_prob":        round(float(sig.get("ai_prob") or 0), 3),
+            "confluence_rate": round(float(
+                (sig.get("confluence_scorecards") or {}).get("efficiency", 0) or 0
+            ), 2),
+        })
+        _tr_seen_ids.add(signal_id)
+
+    # Cap store at 1 000 records (newest first)
+    if len(_track_store) > 1000:
+        _track_store = sorted(_track_store, key=lambda r: r.get("entry_time") or "", reverse=True)[:1000]
+        _tr_seen_ids = {r["signal_id"] for r in _track_store if r.get("signal_id")}
+
+# -------------------------------------------------------------------
 # OTP Store (in-memory)
 # -------------------------------------------------------------------
 otp_store: Dict[str, Dict] = {}
@@ -545,6 +687,18 @@ async def run_engine_background():
                         print(f"[PRODUCER SUCCESS] Batch committed {count} signals. Last commit timestamp: {results[-1].update_time if results else 'N/A'}")
                 except Exception as _e:
                     print(f"[PRODUCER ERROR] ⚠️ Failed to write signals to Firestore: {_e}")
+
+                # --- update track record (save to disk every 5 min) ---
+                try:
+                    _update_track_record(
+                        LIVE_STATE.data.get("signals", {}),
+                        LIVE_STATE.data.get("tickers", {}),
+                    )
+                    if time.time() - _tr_last_save >= 300:
+                        _save_track_record()
+                except Exception as _te:
+                    print(f"[TrackRecord] Update error: {_te}")
+
             except Exception as e:
                 print(f"State update error: {e}")
             await asyncio.sleep(1)
@@ -561,6 +715,7 @@ async def run_engine_background():
 # -------------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _load_track_record()
     engine_task = asyncio.create_task(run_engine_background())
     reminder_task = asyncio.create_task(check_and_send_trial_reminders())
     subscription_task = asyncio.create_task(check_and_send_subscription_reminders())
@@ -1876,6 +2031,23 @@ async def _get_fx_rates() -> Dict[str, float]:
     except Exception as exc:
         print(f"[FX] Rate fetch failed, using cached: {exc}")
     return _fx["rates"]
+
+
+@app.get("/api/track-record")
+async def track_record_endpoint():
+    """Public endpoint — returns the persisted track_record.json."""
+    if TRACK_RECORD_PATH.exists():
+        try:
+            with open(TRACK_RECORD_PATH, "r", encoding="utf-8") as f:
+                return JSONResponse(json.load(f))
+        except Exception as e:
+            print(f"[TrackRecord] Read error: {e}")
+    # Return live in-memory snapshot if file not yet written
+    return JSONResponse({
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "summary": _compute_track_summary(),
+        "signals": sorted(_track_store, key=lambda r: r.get("entry_time") or "", reverse=True)[:500],
+    })
 
 
 @app.get("/api/exchange-rates")
