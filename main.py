@@ -2564,6 +2564,20 @@ async def websocket_dashboard(websocket: WebSocket):
                 raise
             except WebSocketDisconnect:
                 raise
+            except RuntimeError as loop_err:
+                # ASGI raises RuntimeError when we try to send after the socket
+                # has already been closed (e.g. client disconnected mid-tick).
+                # Treat it as a clean disconnect and exit the loop.
+                if "websocket.close" in str(loop_err) or "response already completed" in str(loop_err):
+                    break
+                _err_key = type(loop_err).__name__
+                if not getattr(websocket_dashboard, '_last_loop_err', None) == _err_key:
+                    import traceback
+                    print(f"[WS] Loop error ({current_user_email}): {_err_key}: {loop_err}")
+                    print(traceback.format_exc())
+                    websocket_dashboard._last_loop_err = _err_key
+                await asyncio.sleep(TICKER_INTERVAL)
+                continue
             except Exception as loop_err:
                 # Rate-limit error logging: print once, not every 100ms tick.
                 _err_key = type(loop_err).__name__
@@ -2720,16 +2734,6 @@ async def dev_key_display_loop():
         expires_dt = now_dt + timedelta(days=30)
         features = DEV_KEY_FEATURES
 
-        db.collection("dev_keys").document(key_id).set({
-            "key": new_key,
-            "created_at": now_dt.isoformat(),
-            "expires_at": expires_dt.isoformat(),
-            "features": features,
-            "created_by": "system_startup",
-            "usage_count": 0,
-            "last_used": None,
-        })
-
         sep = "\u2550" * 63
         banner = (
             f"\n{sep}\n"
@@ -2741,6 +2745,16 @@ async def dev_key_display_loop():
         )
         print(banner, flush=True)
         logger.info(banner)
+
+        db.collection("dev_keys").document(key_id).set({
+            "key": new_key,
+            "created_at": now_dt.isoformat(),
+            "expires_at": expires_dt.isoformat(),
+            "features": features,
+            "created_by": "system_startup",
+            "usage_count": 0,
+            "last_used": None,
+        })
 
     except Exception as e:
         print(f"[dev_key_display_loop ERROR] {e}", flush=True)
