@@ -952,9 +952,9 @@ class SignalGenerator:
         self.threshold_engine = ThresholdEngine()
         self.score_history: Dict[str, Deque[float]] = {norm_sym: deque(maxlen=5) for norm_sym in self.configs.keys()}
         self.macro_cache: Dict[str, Dict[str, float]] = {}
-        # Tracks reversal candidates per "sym_tf_DIR" key until candle confirmation
         self.reversal_candidates: Dict[str, dict] = {}
         self.models: Dict[str, xgb.XGBClassifier] = {}
+        self._news_cache: Dict[str, Any] = {"score": 0.0, "ts": 0.0}  # 5-min TTL
 
     def _align_features(self, df: pd.DataFrame, expected_features: List[str]) -> Optional[pd.DataFrame]:
         missing = [f for f in expected_features if f not in df.columns]
@@ -1033,14 +1033,18 @@ class SignalGenerator:
             return None
         current_price = float(df_tf['close'].iloc[-1])
 
-        # Context: keep 1h features for the ML model preprocessing (model was trained on 1h features)
-        df_1h = await fetcher.get_data(norm_sym, '1h', lookback_hours=200)
-        if df_1h.empty or len(df_1h) < 20:
-            df_1h = df_tf.copy()
+        # ML model was trained on 1h features — always use 1h for feature engineering.
+        # When the requested timeframe IS 1h, df_tf is already that data; reuse it
+        # directly instead of making a second identical API call.
+        if timeframe == '1h':
+            df_1h = df_tf
+        else:
+            df_1h = await fetcher.get_data(norm_sym, '1h', lookback_hours=200)
+            if df_1h.empty or len(df_1h) < 20:
+                df_1h = df_tf.copy()
 
-        # Reversal/pattern detection uses the REQUESTED timeframe data so that a
-        # 4h signal checks 4h candle patterns, not 1h ones.  Fall back to df_1h
-        # only when df_tf is too short (e.g. very new token or low-liquidity pair).
+        # Reversal/pattern detection uses the REQUESTED timeframe so that a 4h signal
+        # checks 4h candle patterns, not 1h ones.  Fall back to df_1h for thin pairs.
         df_reversal = df_tf if len(df_tf) >= 20 else df_1h
 
         df_1h['atr'] = compute_atr(df_1h, 14)
@@ -1057,17 +1061,23 @@ class SignalGenerator:
         trend_aligned = trend_str == "strong"
 
         btc_df = await fetcher.get_data('BTC/USDT', '1h', lookback_hours=200)
-        news_score = 0.0
-        news_file = DATA_DIR / "news_data.json"
-        if news_file.exists():
-            try:
-                with open(news_file, 'r') as f:
-                    news_data = json.load(f)
-                if isinstance(news_data, list) and news_data:
-                    recent = news_data[-20:]
-                    news_score = sum(item.get('sentiment', 0.0) for item in recent) / len(recent)
-            except:
-                pass
+
+        # News score: cached for 5 minutes — reading from disk on every symbol tick
+        # (58 symbols × 7 TFs = 400+ disk reads per scan cycle) is needlessly expensive.
+        if time.time() - self._news_cache["ts"] > 300:
+            _ns = 0.0
+            news_file = DATA_DIR / "news_data.json"
+            if news_file.exists():
+                try:
+                    with open(news_file, 'r') as f:
+                        news_data = json.load(f)
+                    if isinstance(news_data, list) and news_data:
+                        recent = news_data[-20:]
+                        _ns = sum(item.get('sentiment', 0.0) for item in recent) / len(recent)
+                except Exception:
+                    pass
+            self._news_cache = {"score": _ns, "ts": time.time()}
+        news_score = self._news_cache["score"]
 
         full_1h = df_1h.reset_index()
         macro_state = self.macro_cache.get(norm_sym)
@@ -1137,9 +1147,14 @@ class SignalGenerator:
             logger.critical(f"Feature mismatch for {norm_sym}: cannot predict")
             return None
 
-        # Convert to numpy array to avoid XGBoost internal dtype alignment errors
-        # when a sliced Pandas DataFrame is passed directly into predict_proba.
+        # Match the NaN contract that training enforced: training rejected folds with
+        # ANY NaN; inference must not silently pass NaN-filled rows to the model.
+        # Fill remaining NaNs (from sparse market data) then hard-fail if any persist.
+        aligned_features = aligned_features.ffill().bfill().fillna(0.0)
         aligned_features_np = aligned_features.to_numpy().astype(np.float32)
+        if np.isnan(aligned_features_np).any():
+            logger.warning(f"{norm_sym} {timeframe}: NaN in features after fill — skipping signal")
+            return None
 
         try:
             probs = model.predict_proba(aligned_features_np)[0]
@@ -1543,9 +1558,9 @@ class SignalGenerator:
 
         btc_ai = 0.5
         if self.btc_model:
-            btc_1h = await fetcher.get_data('BTC/USDT', '1h', lookback_hours=200)
-            if not btc_1h.empty:
-                btc_features = prepare_features(btc_1h.reset_index(), None, None)
+            # btc_df was already fetched above for ML feature engineering — reuse it.
+            if not btc_df.empty:
+                btc_features = prepare_features(btc_df.reset_index(), None, None)
                 if btc_features is not None and not btc_features.empty:
                     btc_latest = btc_features.iloc[-1:].drop(columns=['timestamp', 'target'], errors='ignore')
                     try:
