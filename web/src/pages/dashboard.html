@@ -738,6 +738,83 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- ADMIN PANEL — only visible to owner, gated by ADMIN_SECRET -->
+                <div id="admin-panel-wrap" class="mt-6 max-w-2xl hidden">
+                    <div class="p-5 rounded-xl border border-amber-500/25 bg-amber-500/5">
+                        <div class="flex items-center gap-2 mb-5 pb-3 border-b border-amber-500/15">
+                            <i class="fas fa-shield-halved text-amber-400"></i>
+                            <span class="text-sm font-bold text-amber-300 uppercase tracking-wider">Admin Panel</span>
+                        </div>
+
+                        <!-- Admin key input -->
+                        <div class="mb-5">
+                            <label class="text-xs text-gray-400 block mb-1.5">Admin Secret Key</label>
+                            <div class="flex gap-2">
+                                <input type="password" id="admin-key-input"
+                                    placeholder="Enter ADMIN_SECRET…"
+                                    class="flex-1 bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/30"
+                                    onkeydown="if(event.key==='Enter') adminSaveKey()">
+                                <button onclick="adminSaveKey()"
+                                    class="px-3 py-2 bg-amber-500/20 border border-amber-500/40 rounded-lg text-xs text-amber-300 hover:bg-amber-500/30 transition-colors font-bold">
+                                    Authenticate
+                                </button>
+                            </div>
+                            <div id="admin-key-status" class="mt-1.5 text-[11px]"></div>
+                        </div>
+
+                        <!-- Current always-on token -->
+                        <div class="mb-5 p-3 rounded-lg bg-black/30 border border-white/5">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-xs text-gray-400 font-bold uppercase tracking-wider">Current Dev Token</span>
+                                <button onclick="adminFetchCurrent()" class="text-[11px] text-cyan/70 hover:text-cyan transition-colors">↻ Refresh</button>
+                            </div>
+                            <div id="admin-current-token" class="font-mono text-sm text-amber-300 tracking-wider break-all">—</div>
+                            <div id="admin-current-expires" class="text-[11px] text-gray-500 mt-1"></div>
+                        </div>
+
+                        <!-- Generate on-demand code -->
+                        <div class="mb-5">
+                            <div class="text-xs text-gray-400 font-bold uppercase tracking-wider mb-2.5">Generate On-Demand Code</div>
+                            <div class="flex flex-wrap gap-2 items-center mb-3">
+                                <select id="admin-plan-select"
+                                    class="bg-black/50 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-cyan/40">
+                                    <option value="pro">Pro</option>
+                                    <option value="intermediate">Intermediate</option>
+                                    <option value="basic">Basic</option>
+                                </select>
+                                <input type="number" id="admin-days-input" value="30" min="1" max="365"
+                                    class="w-16 bg-black/50 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white text-center focus:outline-none focus:border-cyan/40">
+                                <span class="text-xs text-gray-500">days</span>
+                                <input type="text" id="admin-label-input" value="beta" placeholder="label"
+                                    class="w-20 bg-black/50 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-cyan/40">
+                                <button onclick="adminGenerateCode()"
+                                    class="ml-auto px-4 py-1.5 bg-cyan/15 border border-cyan/35 rounded-lg text-xs text-cyan hover:bg-cyan/25 transition-colors font-bold">
+                                    + Generate
+                                </button>
+                            </div>
+                            <div id="admin-generate-result" class="hidden font-mono text-sm text-green-400 bg-green-500/10 border border-green-500/25 rounded-lg px-3 py-2 break-all"></div>
+                        </div>
+
+                        <!-- List active codes -->
+                        <div>
+                            <div class="flex items-center justify-between mb-2.5">
+                                <span class="text-xs text-gray-400 font-bold uppercase tracking-wider">Active Codes</span>
+                                <div class="flex items-center gap-3">
+                                    <label class="flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer">
+                                        <input type="checkbox" id="admin-show-used" class="accent-amber-400 w-3 h-3" onchange="adminListCodes()">
+                                        Show used/expired
+                                    </label>
+                                    <button onclick="adminListCodes()" class="text-[11px] text-cyan/70 hover:text-cyan transition-colors">↻ Refresh</button>
+                                </div>
+                            </div>
+                            <div id="admin-codes-list"
+                                class="max-h-56 overflow-y-auto space-y-1.5 rounded-lg bg-black/20 border border-white/5 p-2">
+                                <div class="text-xs text-gray-600 text-center py-3">Authenticate above to load codes</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </main>
     </div>

@@ -2264,3 +2264,153 @@ window.syncDirectionalRooms = _syncDirectionalRooms;
   }
 }());
 
+// ============================================================
+// ADMIN PANEL — Settings room, owner-only
+// ============================================================
+
+const _ADMIN_PANEL_OWNER = 'animeshkukreti60@gmail.com';
+const _ADMIN_KEY_STORAGE = 'aegis_admin_key';
+
+// Show admin panel if the logged-in user is the owner
+document.addEventListener('dashboardUserLoaded', (e) => {
+  const email = e?.detail?.userData?.email || window.currentUserData?.email || '';
+  if (email === _ADMIN_PANEL_OWNER) {
+    const wrap = document.getElementById('admin-panel-wrap');
+    if (wrap) wrap.classList.remove('hidden');
+    // Restore saved key from sessionStorage and auto-fetch if present
+    const saved = sessionStorage.getItem(_ADMIN_KEY_STORAGE);
+    if (saved) {
+      const input = document.getElementById('admin-key-input');
+      if (input) input.value = saved;
+      adminFetchCurrent();
+      adminListCodes();
+    }
+  }
+});
+
+function _adminKey() {
+  return sessionStorage.getItem(_ADMIN_KEY_STORAGE) || '';
+}
+
+window.adminSaveKey = async function() {
+  const input = document.getElementById('admin-key-input');
+  const statusEl = document.getElementById('admin-key-status');
+  const key = (input?.value || '').trim();
+  if (!key) return;
+
+  // Validate key by hitting the list endpoint
+  try {
+    const res = await fetch('/admin/dev-codes?include_used=false', {
+      headers: { 'X-Admin-Key': key }
+    });
+    if (res.ok) {
+      sessionStorage.setItem(_ADMIN_KEY_STORAGE, key);
+      if (statusEl) { statusEl.textContent = '✓ Authenticated'; statusEl.className = 'mt-1.5 text-[11px] text-green-400'; }
+      adminFetchCurrent();
+      adminListCodes();
+    } else {
+      if (statusEl) { statusEl.textContent = '✗ Wrong key'; statusEl.className = 'mt-1.5 text-[11px] text-red-400'; }
+    }
+  } catch (e) {
+    if (statusEl) { statusEl.textContent = '✗ Network error'; statusEl.className = 'mt-1.5 text-[11px] text-red-400'; }
+  }
+};
+
+window.adminFetchCurrent = async function() {
+  const key = _adminKey();
+  if (!key) return;
+  const tokenEl = document.getElementById('admin-current-token');
+  const expiresEl = document.getElementById('admin-current-expires');
+  try {
+    const res = await fetch('/admin/dev-codes/current', { headers: { 'X-Admin-Key': key } });
+    if (res.ok) {
+      const data = await res.json();
+      if (tokenEl) tokenEl.textContent = data.code || '—';
+      if (expiresEl) {
+        try {
+          const exp = new Date(data.expires_at);
+          expiresEl.textContent = `Expires: ${exp.toLocaleDateString()} ${exp.toLocaleTimeString()}`;
+        } catch { expiresEl.textContent = data.expires_at || ''; }
+      }
+    }
+  } catch { /* silent */ }
+};
+
+window.adminGenerateCode = async function() {
+  const key = _adminKey();
+  if (!key) { _showToast('Authenticate first', 'error'); return; }
+  const plan = document.getElementById('admin-plan-select')?.value || 'pro';
+  const days = parseInt(document.getElementById('admin-days-input')?.value || '30');
+  const label = (document.getElementById('admin-label-input')?.value || 'beta').trim();
+  const resultEl = document.getElementById('admin-generate-result');
+
+  try {
+    const res = await fetch('/admin/dev-codes/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Key': key },
+      body: JSON.stringify({ count: 1, plan, days, label }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const code = data.codes?.[0]?.code || '—';
+      if (resultEl) {
+        resultEl.textContent = code;
+        resultEl.classList.remove('hidden');
+        // Auto-hide after 30s so it doesn't linger
+        setTimeout(() => resultEl.classList.add('hidden'), 30000);
+      }
+      adminListCodes();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      _showToast(err.detail || 'Generate failed', 'error');
+    }
+  } catch (e) {
+    _showToast('Network error', 'error');
+  }
+};
+
+window.adminListCodes = async function() {
+  const key = _adminKey();
+  if (!key) return;
+  const listEl = document.getElementById('admin-codes-list');
+  const includeUsed = document.getElementById('admin-show-used')?.checked || false;
+  if (!listEl) return;
+  listEl.innerHTML = '<div class="text-xs text-gray-500 text-center py-3">Loading…</div>';
+  try {
+    const res = await fetch(`/admin/dev-codes?include_used=${includeUsed}`, {
+      headers: { 'X-Admin-Key': key }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (!data.codes || data.codes.length === 0) {
+        listEl.innerHTML = '<div class="text-xs text-gray-600 text-center py-3">No active codes found</div>';
+        return;
+      }
+      listEl.innerHTML = data.codes.map(c => {
+        const used = c.used_by ? `<span class="text-gray-600 text-[10px] truncate max-w-[120px]">→ ${c.used_by}</span>` : '';
+        const expired = c.expired ? '<span class="text-red-400/60 text-[10px]">expired</span>' : '';
+        const badge = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${c.plan === 'pro' ? 'bg-amber-500/20 text-amber-300' : c.plan === 'intermediate' ? 'bg-cyan/20 text-cyan' : 'bg-white/10 text-gray-400'}">${c.plan}</span>`;
+        return `
+          <div class="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-black/30 border border-white/5 hover:border-white/10 group">
+            <code class="font-mono text-[11px] text-green-300 flex-1 min-w-0 truncate cursor-pointer" onclick="navigator.clipboard.writeText('${c.code}');_showToast('Copied!','success')" title="Click to copy">${c.code}</code>
+            ${badge}
+            <span class="text-[10px] text-gray-600">${c.label || ''}</span>
+            ${used}${expired}
+            <button onclick="adminDeleteCode('${c.code}')" class="opacity-0 group-hover:opacity-100 ml-1 text-red-400/60 hover:text-red-400 transition-all text-[10px]" title="Delete">✕</button>
+          </div>`;
+      }).join('');
+    } else {
+      listEl.innerHTML = '<div class="text-xs text-red-400 text-center py-3">Failed to load — check admin key</div>';
+    }
+  } catch {
+    listEl.innerHTML = '<div class="text-xs text-red-400 text-center py-3">Network error</div>';
+  }
+};
+
+window.adminDeleteCode = async function(code) {
+  const key = _adminKey();
+  if (!key) return;
+  // No dedicated delete endpoint yet — placeholder for future
+  _showToast('Delete endpoint not implemented yet', 'info');
+};
+
