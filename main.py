@@ -39,9 +39,12 @@ import uvicorn
 from dataclasses import asdict
 from starlette.middleware.sessions import SessionMiddleware
 import numpy as np
+import logging
 from email_validator import validate_email, EmailNotValidError
 from functools import partial
 from generate_dev_code import generate_dev_key
+
+logger = logging.getLogger("aegis")
 
 # -------------------------------------------------------------------
 # Helper: Recursively convert numpy types to native Python types
@@ -2663,14 +2666,19 @@ async def dev_token_display_loop():
                 exp_display = expires_str
 
             sep = "=" * 58
-            logger.info(sep)
-            logger.info("  AEGIS -- DEV TOKEN (rotates every 60s, one-time use)")
-            logger.info(sep)
-            logger.info(f"  Token   : {code}")
-            logger.info(f"  Expires : {exp_display}  (5-day window)")
-            logger.info(sep)
+            banner = (
+                f"\n{sep}\n"
+                f"  AEGIS -- DEV TOKEN  (valid 5 days, one-time use)\n"
+                f"{sep}\n"
+                f"  Token   : {code}\n"
+                f"  Expires : {exp_display}\n"
+                f"{sep}\n"
+            )
+            print(banner, flush=True)
+            logger.info(banner)
 
         except Exception as e:
+            print(f"[dev_token_display_loop ERROR] {e}", flush=True)
             logger.error(f"[dev_token_display_loop] {e}", exc_info=True)
 
         await asyncio.sleep(60)
