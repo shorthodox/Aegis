@@ -1033,10 +1033,15 @@ class SignalGenerator:
             return None
         current_price = float(df_tf['close'].iloc[-1])
 
-        # Context: keep 1h features for the core model preprocessing (backward compatible)
+        # Context: keep 1h features for the ML model preprocessing (model was trained on 1h features)
         df_1h = await fetcher.get_data(norm_sym, '1h', lookback_hours=200)
         if df_1h.empty or len(df_1h) < 20:
             df_1h = df_tf.copy()
+
+        # Reversal/pattern detection uses the REQUESTED timeframe data so that a
+        # 4h signal checks 4h candle patterns, not 1h ones.  Fall back to df_1h
+        # only when df_tf is too short (e.g. very new token or low-liquidity pair).
+        df_reversal = df_tf if len(df_tf) >= 20 else df_1h
 
         df_1h['atr'] = compute_atr(df_1h, 14)
         df_1h['volume_ma'] = df_1h['volume'].rolling(VOLUME_LOOKBACK).mean()
@@ -1352,11 +1357,11 @@ class SignalGenerator:
             if near_support:
                 # ── Best setup: LONG bouncing off support ─────────────────────
                 bull_score, bull_sigs = ReversalDetector.detect_bullish_reversal_setup(
-                    df_1h, support=support_lvl
+                    df_reversal, support=support_lvl
                 )
                 reversal_score_val = bull_score
                 reversal_signals_list = bull_sigs
-                candles_confirmed = ReversalDetector.count_confirming_candles(df_1h, "LONG")
+                candles_confirmed = ReversalDetector.count_confirming_candles(df_reversal, "LONG")
 
                 cand_key = f"{rev_key}_LONG"
                 if bull_score >= effective_sr_threshold:
@@ -1389,7 +1394,7 @@ class SignalGenerator:
                 # ── Mid-range: strong trend OR (normal trend + high volume) ──
                 _mid_ok = trend_str == "strong" or (trend_str == "normal" and volume_cond == "high")
                 if _mid_ok:
-                    _mb_candles = ReversalDetector.count_confirming_candles(df_1h, "LONG")
+                    _mb_candles = ReversalDetector.count_confirming_candles(df_reversal, "LONG")
                     if _mb_candles >= MOMENTUM_CANDLE_CONFIRM_REQUIRED:
                         signal_status = "MOMENTUM_BREAKOUT"
                         candles_confirmed = _mb_candles
@@ -1404,11 +1409,11 @@ class SignalGenerator:
             if near_resistance:
                 # ── Best setup: SHORT rejecting off resistance ─────────────────
                 bear_score, bear_sigs = ReversalDetector.detect_bearish_reversal_setup(
-                    df_1h, resistance=resistance_lvl
+                    df_reversal, resistance=resistance_lvl
                 )
                 reversal_score_val = bear_score
                 reversal_signals_list = bear_sigs
-                candles_confirmed = ReversalDetector.count_confirming_candles(df_1h, "SHORT")
+                candles_confirmed = ReversalDetector.count_confirming_candles(df_reversal, "SHORT")
 
                 cand_key = f"{rev_key}_SHORT"
                 if bear_score >= effective_sr_threshold:
@@ -1444,7 +1449,7 @@ class SignalGenerator:
                 # ── Mid-range: strong trend OR (normal trend + high volume) ──
                 _mid_ok = trend_str == "strong" or (trend_str == "normal" and volume_cond == "high")
                 if _mid_ok:
-                    _mb_candles = ReversalDetector.count_confirming_candles(df_1h, "SHORT")
+                    _mb_candles = ReversalDetector.count_confirming_candles(df_reversal, "SHORT")
                     if _mb_candles >= MOMENTUM_CANDLE_CONFIRM_REQUIRED:
                         signal_status = "MOMENTUM_BREAKOUT"
                         candles_confirmed = _mb_candles
