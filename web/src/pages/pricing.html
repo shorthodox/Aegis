@@ -628,6 +628,14 @@
                         devCodeMsg.style.color = '#00ff88';
                         devCodeMsg.textContent = `✅ ${data.plan.toUpperCase()} access activated${exp ? ' until ' + exp : ''}. Redirecting…`;
                         setTimeout(() => { window.location.href = '/web/src/pages/dashboard.html'; }, 1500);
+                    } else if (res.status === 401) {
+                        // Token missing or expired — clear stale token and re-login
+                        ['authToken','access_token','authenticated','userSession','refresh_token'].forEach(k => localStorage.removeItem(k));
+                        devCodeMsg.style.color = '#ff6464';
+                        devCodeMsg.textContent = 'Session expired. Please sign in again — your code is valid.';
+                        if (devCodeSubmit) { devCodeSubmit.disabled = false; devCodeSubmit.textContent = 'Redeem'; }
+                        window.pendingAction = 'redeemDevCode';
+                        setTimeout(() => openSignInModal(), 1000);
                     } else {
                         devCodeMsg.style.color = '#ff6464';
                         devCodeMsg.textContent = '✗ ' + (data.detail || 'Could not redeem code. Please try again.');
