@@ -546,13 +546,43 @@
     })();
     </script>
 
-    <!-- Auth nav state (same as pricing.html — read-only, no payment logic) -->
+    <!-- Auth nav state — mirrors pricing.html so header buttons reflect login state -->
     <script type="module">
-        import { initSignInUI } from '../scripts/signin-ui.js';
-        import { initSignUpUI } from '../scripts/signup-ui.js';
+        import { initSignInUI, openSignInModal } from '../scripts/signin-ui.js';
+        import { initSignUpUI, openSignUpModal } from '../scripts/signup-ui.js';
+        import { handleLogout, subscribeToAuthState } from '../scripts/auth.js';
+
         document.addEventListener('DOMContentLoaded', () => {
             try { initSignInUI(); } catch(e) {}
             try { initSignUpUI(); } catch(e) {}
+
+            const portalBtn       = document.getElementById('portalBtn');
+            const dashboardBtn    = document.getElementById('dashboardBtn');
+            const signOutBtn      = document.getElementById('signOutBtn');
+            const createAccountBtn = document.getElementById('createAccountBtn');
+
+            const show = el => { if (el) el.style.display = 'inline-flex'; };
+            const hide = el => { if (el) el.style.display = 'none'; };
+
+            subscribeToAuthState(state => {
+                if (state.authenticated) {
+                    hide(portalBtn); hide(createAccountBtn);
+                    show(dashboardBtn); show(signOutBtn);
+                } else {
+                    show(portalBtn); show(createAccountBtn);
+                    hide(dashboardBtn); hide(signOutBtn);
+                }
+            });
+
+            if (portalBtn) portalBtn.addEventListener('click', e => { e.preventDefault(); openSignInModal(); });
+            if (createAccountBtn) createAccountBtn.addEventListener('click', e => { e.preventDefault(); openSignUpModal(); });
+            if (dashboardBtn) dashboardBtn.addEventListener('click', e => { e.preventDefault(); window.location.href = '/web/src/pages/dashboard.html'; });
+            if (signOutBtn) signOutBtn.addEventListener('click', async e => {
+                e.preventDefault();
+                ['authToken','access_token','authenticated','userSession','refresh_token'].forEach(k => localStorage.removeItem(k));
+                try { await handleLogout(); } catch(_) {}
+                window.location.href = '/web/src/pages/index.html';
+            });
         });
     </script>
 
