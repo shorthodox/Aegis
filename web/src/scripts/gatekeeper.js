@@ -323,6 +323,9 @@ function initGatekeeper() {
     loadUserFromBackend(_cachedToken).catch(() => {});
   }
 
+  // Check for a stored dev key and re-validate it on startup
+  _checkStoredDevKey().catch(() => {});
+
   onAuthStateChanged(auth, async (user) => {
     if (user) {
       console.log("Firebase user detected:", user.uid);
@@ -878,7 +881,10 @@ function updateUI() {
     const isTrialValid = typeof AuthManager !== 'undefined' ? AuthManager.isTrialValid() : trialActive;
     const p = (userPlan || 'trial').toLowerCase();
 
-    if (p === 'pro' || p === 'premium') {
+    if (p === 'pro-dev') {
+      planBadge.innerHTML = '<i class="fas fa-code"></i> PRO (DEV)';
+      planBadge.classList.add('text-violet-400');
+    } else if (p === 'pro' || p === 'premium') {
       planBadge.innerHTML = '<i class="fas fa-crown"></i> PRO';
       planBadge.classList.add('text-yellow-500');
     } else if (p === 'intermediate') {
@@ -924,8 +930,8 @@ function updateUI() {
     }
   }
 
-  // Unlock timeframe buttons for paid plans
-  if (['pro', 'premium', 'intermediate'].includes(userPlan)) {
+  // Unlock timeframe buttons for paid plans (including dev key sessions)
+  if (['pro', 'premium', 'intermediate', 'pro-dev'].includes(userPlan) || localStorage.getItem('dev_key_active')) {
     document.querySelectorAll('.tf-btn[data-pro="true"]').forEach(btn => {
       const lockIcon = btn.querySelector('.fa-lock');
       if (lockIcon) lockIcon.remove();
@@ -2218,6 +2224,151 @@ function showUpgradeModal() {
 }
 
 // -------------------------------------------------------------------
+// Dev Key Validation
+// -------------------------------------------------------------------
+
+/**
+ * Validate a developer key against the backend /auth/validate-devkey endpoint.
+ * On success: elevates the session to Pro (Dev), updates the plan badge,
+ * stores the key in localStorage, and unblocks all premium UI elements.
+ */
+async function validateDevKey(keyString) {
+  const key = (keyString || '').trim();
+  if (!key) return { valid: false, error: 'Please enter a dev key.' };
+
+  try {
+    const resp = await fetch(`${API_BASE_URL}/auth/validate-devkey`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dev_key: key }),
+    });
+
+    const data = await resp.json().catch(() => ({}));
+
+    if (resp.ok && data.valid) {
+      // Elevate plan state
+      userPlan = 'pro';
+      _subState.active = true;
+      _subState.isPremium = true;
+      _lastVerifiedAt = Date.now();
+
+      // Persist key for startup re-validation
+      localStorage.setItem('dev_key_active', key);
+
+      // Update plan badge to "Pro (Dev)"
+      _setDevPlanBadge();
+
+      // Unlock all premium UI elements
+      clearExpiredView();
+      unblockFeatures();
+
+      // Hide trial countdown
+      document.querySelectorAll('.trial-countdown, [data-trial-countdown], #countdown-display, #trialBanner')
+        .forEach(el => { el.style.display = 'none'; });
+
+      // Unlock pro timeframe buttons
+      document.querySelectorAll('.tf-btn[data-pro="true"]').forEach(btn => {
+        const lockIcon = btn.querySelector('.fa-lock');
+        if (lockIcon) lockIcon.remove();
+        btn.disabled = false;
+        btn.classList.remove('opacity-50', 'cursor-not-allowed', 'text-gray-500');
+      });
+
+      // Show success toast
+      _showDevKeyToast('Dev key activated! Premium features unlocked.', 'success');
+
+      return { valid: true };
+    } else {
+      const errMsg = data.error || 'Invalid or expired key';
+      _showDevKeyToast(errMsg, 'error');
+      return { valid: false, error: errMsg };
+    }
+  } catch (err) {
+    console.error('[DevKey] Validation error:', err);
+    const errMsg = 'Network error. Please try again.';
+    _showDevKeyToast(errMsg, 'error');
+    return { valid: false, error: errMsg };
+  }
+}
+
+/** Update all plan badge slots to show "Pro (Dev)" */
+function _setDevPlanBadge() {
+  const badgeHTML = `<span class="px-2 py-0.5 text-xs font-semibold rounded-full border bg-violet-500/20 text-violet-300 border-violet-500/40">Pro (Dev)</span>`;
+  ['planBadge', 'sidebar-plan-badge', 'header-plan-badge'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = badgeHTML;
+  });
+  // Also update the inline planBadge used in the analytics room
+  if (planBadge) {
+    planBadge.className = 'text-sm font-bold mt-1';
+    planBadge.innerHTML = '<i class="fas fa-code"></i> PRO (DEV)';
+    planBadge.classList.add('text-violet-400');
+  }
+}
+
+/** Lightweight toast specifically for dev key feedback */
+function _showDevKeyToast(msg, type = 'info') {
+  const existing = document.getElementById('_devkey-toast');
+  if (existing) existing.remove();
+  const c = { success: '#8b5cf6', error: '#ef4444', info: '#06b6d4' };
+  const ic = { success: 'fa-key', error: 'fa-exclamation-circle', info: 'fa-info-circle' };
+  const el = document.createElement('div');
+  el.id = '_devkey-toast';
+  el.style.cssText = `position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);z-index:99999;display:flex;align-items:center;gap:10px;padding:14px 24px;border-radius:12px;background:#111827;border:1px solid ${c[type]};color:${c[type]};font-size:.9rem;font-weight:600;box-shadow:0 0 24px ${c[type]}50;max-width:420px;white-space:nowrap;`;
+  el.innerHTML = `<i class="fas ${ic[type]}"></i><span>${msg}</span>`;
+  document.body.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .4s'; setTimeout(() => el.remove(), 400); }, 5000);
+}
+
+/**
+ * On page load: if a dev_key_active exists in localStorage, re-validate it.
+ * If invalid/expired, clear it and show a warning.
+ */
+async function _checkStoredDevKey() {
+  const storedKey = localStorage.getItem('dev_key_active');
+  if (!storedKey) return;
+
+  console.log('[DevKey] Found stored dev key, re-validating...');
+  try {
+    const resp = await fetch(`${API_BASE_URL}/auth/validate-devkey`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dev_key: storedKey }),
+    });
+    const data = await resp.json().catch(() => ({}));
+
+    if (resp.ok && data.valid) {
+      userPlan = 'pro';
+      _subState.active = true;
+      _subState.isPremium = true;
+      _lastVerifiedAt = Date.now();
+      _setDevPlanBadge();
+      clearExpiredView();
+      unblockFeatures();
+      document.querySelectorAll('.trial-countdown, [data-trial-countdown], #countdown-display, #trialBanner')
+        .forEach(el => { el.style.display = 'none'; });
+      document.querySelectorAll('.tf-btn[data-pro="true"]').forEach(btn => {
+        const lockIcon = btn.querySelector('.fa-lock');
+        if (lockIcon) lockIcon.remove();
+        btn.disabled = false;
+        btn.classList.remove('opacity-50', 'cursor-not-allowed', 'text-gray-500');
+      });
+      console.log('[DevKey] Stored dev key re-validated successfully.');
+    } else {
+      console.warn('[DevKey] Stored dev key is invalid or expired — clearing.');
+      localStorage.removeItem('dev_key_active');
+      _showDevKeyToast('Your dev key has expired. Please enter a new one.', 'error');
+    }
+  } catch (err) {
+    console.warn('[DevKey] Could not re-validate stored dev key (network error):', err);
+    // Don't clear on network error — key may still be valid
+  }
+}
+
+// Expose validateDevKey globally so the modal can call it
+window.validateDevKey = validateDevKey;
+
+// -------------------------------------------------------------------
 // Logout
 // -------------------------------------------------------------------
 async function handleLogout() {
@@ -2235,6 +2386,7 @@ async function handleLogout() {
     localStorage.removeItem('trial_end_timestamp');
     localStorage.removeItem('trial_end_sig');
     localStorage.removeItem('cached_uid');
+    localStorage.removeItem('dev_key_active');
     Object.keys(localStorage).forEach(k => {
       if (k.startsWith('trialStart_')) localStorage.removeItem(k);
     });
