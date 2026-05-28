@@ -129,7 +129,8 @@ THRESHOLD_CEIL = 3.00
 
 PROXIMITY_THRESHOLD = 0.005  # 0.5% proximity to S&R boundary triggers alert
 
-CANDLE_CONFIRM_REQUIRED = 3    # 3 consecutive confirming candles required before emitting signal
+SR_CANDLE_CONFIRM_REQUIRED = 2       # candles for S/R reversal — the level is the anchor
+MOMENTUM_CANDLE_CONFIRM_REQUIRED = 3  # candles for mid-range breakout — no S/R anchor
 SIGNAL_EXPIRY_MOVE_PCT = 0.60  # if price moves 60% of expected TP before action → expired
 REVERSAL_SCORE_THRESHOLD = 0.42  # minimum technical pattern score — requires at least 2 independent confirmations
 SR_SIGNAL_ZONE = 0.010         # 1% proximity band — price within 1% of S/R triggers S/R signal path
@@ -1228,7 +1229,7 @@ class SignalGenerator:
                 pass
             _sup_lvl = float(sr_telemetry.get("support_line") or 0.0)
             _res_lvl = float(sr_telemetry.get("resistance_line") or 0.0)
-            _sr_conf = 0.57  # raised from 0.47 — stronger AI confidence required at S/R
+            _sr_conf = 0.52  # lower than normal gate (0.60) — S/R level provides extra confirmation
             if _sup_lvl > 0 and 0 <= _pre_sup <= SR_SIGNAL_ZONE and predicted_class == 2 and ai_prob >= _sr_conf:
                 base_signal = "LONG"
             elif _res_lvl > 0 and 0 <= _pre_res <= SR_SIGNAL_ZONE and predicted_class == 0 and ai_prob >= _sr_conf:
@@ -1239,18 +1240,48 @@ class SignalGenerator:
             base_signal = "NEUTRAL"
 
         # ──────────────────────────────────────────────────────────────
-        # CONFLUENCE + SHAP ALIGNMENT CHECK
-        # Compute an effective reversal threshold that tightens or relaxes
-        # based on market quality and whether the model's own top features
-        # corroborate the S/R context.
+        # CONFLUENCE SCORE — computed early so it informs both the
+        # effective reversal threshold and the candle requirement.
         #
-        # Confluence adjustment (volume + trend):
-        #   high volume & aligned trend → threshold −0.10 (market quality confirms)
-        #   low volume  | misaligned   → threshold +0.05 (noisy conditions, raise bar)
+        # Components (0-100 each):
+        #   trend     : 80 if trend-aligned, else 35
+        #   momentum  : efficiency_ratio × 100 (market directional strength)
+        #   volume    : 78 high / 58 normal / 38 low
         #
-        # SHAP S/R alignment bonus:
-        #   if any top-3 SHAP feature is an S/R-related column, model and
-        #   technical analysis agree → threshold −0.05 additional
+        # The score is used in three ways:
+        #   1. Adjusts effective_sr_threshold (strong confluence → lower bar)
+        #   2. Sets the S/R candle requirement dynamically
+        #   3. Acts as a final kill-switch below 52 (weak/choppy market)
+        # ──────────────────────────────────────────────────────────────
+        _conf_trend    = 80 if trend_aligned else 35
+        _conf_er       = 0.5 if pd.isna(er) else float(er)
+        _conf_momentum = min(100, max(0, int(_conf_er * 100)))
+        _conf_volume   = 78 if volume_cond == "high" else (58 if volume_cond == "normal" else 38)
+        confluence_rate = (_conf_trend + _conf_momentum + _conf_volume) / 3.0
+
+        # Dynamic S/R candle requirement:
+        #   strong confluence (≥65) → 2 candles (market confirms the level)
+        #   weaker confluence       → 3 candles (need more price evidence)
+        _sr_candle_req = SR_CANDLE_CONFIRM_REQUIRED if confluence_rate >= 65 else SR_CANDLE_CONFIRM_REQUIRED + 1
+
+        # ──────────────────────────────────────────────────────────────
+        # REVERSAL THRESHOLD — adjusted by confluence + SHAP alignment
+        #
+        # Volume / trend contributions (same as before):
+        #   high volume       → −0.05
+        #   low volume        → +0.05
+        #   trend aligned     → −0.05
+        #
+        # Confluence rate contribution (new):
+        #   confluence ≥ 65   → −0.05 (strong market quality, lower bar)
+        #   confluence < 48   → +0.05 (choppy/thin, raise bar)
+        #
+        # ER/momentum contribution (new):
+        #   ER > 0.50         → −0.03 (directional market confirms)
+        #   ER < 0.25         → +0.03 (choppy/ranging, raise bar)
+        #
+        # SHAP S/R alignment bonus (unchanged):
+        #   top SHAP features are S/R columns → −0.05
         # ──────────────────────────────────────────────────────────────
         _sr_adj = 0.0
         if volume_cond == "high":
@@ -1259,6 +1290,16 @@ class SignalGenerator:
             _sr_adj += 0.05
         if trend_aligned:
             _sr_adj -= 0.05
+
+        if confluence_rate >= 65:
+            _sr_adj -= 0.05
+        elif confluence_rate < 48:
+            _sr_adj += 0.05
+
+        if _conf_er > 0.50:
+            _sr_adj -= 0.03
+        elif _conf_er < 0.25:
+            _sr_adj += 0.03
 
         _SR_SHAP_FEATURES = {
             "pct_dist_to_support", "pct_dist_to_resistance",
@@ -1278,15 +1319,15 @@ class SignalGenerator:
         # S/R-FIRST SIGNAL CLASSIFICATION ENGINE
         #
         # Priority 1 — S/R Zone (price within SR_SIGNAL_ZONE of support/resistance):
-        #   LONG at support   → detect bullish setup (score + 3 candles) → SR_REVERSAL_CONFIRMED
-        #   SHORT at resistance→ detect bearish setup (score + 3 candles) → SR_REVERSAL_CONFIRMED
-        #   SHORT at support  → wait for actual support break             → SR_BREAK_CONFIRMED
-        #   LONG  at resistance→ only valid if resistance actually broken  → MOMENTUM_BREAKOUT
+        #   LONG at support    → bullish setup (score + candles) → SR_REVERSAL_CONFIRMED
+        #   SHORT at resistance→ bearish setup (score + candles) → SR_REVERSAL_CONFIRMED
+        #   SHORT at support   → wait for actual break           → SR_BREAK_CONFIRMED
+        #   LONG at resistance → only if resistance broken       → MOMENTUM_BREAKOUT
         #
-        # Priority 2 — Momentum (not near S/R, but trend_str == "strong"):
-        #   Any direction     → MOMENTUM_BREAKOUT (breakout mid-range)
+        # Priority 2 — Momentum (mid-range, strong trend OR high-volume normal trend):
+        #   Any direction      → MOMENTUM_BREAKOUT (requires MOMENTUM_CANDLE_CONFIRM_REQUIRED)
         #
-        # Priority 3 — Mid-range + no momentum → suppressed (too much noise)
+        # Priority 3 — Mid-range + weak conditions → suppressed
         # ──────────────────────────────────────────────────────────────
         rev_key = f"{norm_sym}_{timeframe}"
         signal_status = "ACTIVE"
@@ -1297,7 +1338,6 @@ class SignalGenerator:
         support_lvl = float(sr_telemetry.get("support_line") or 0.0)
         resistance_lvl = float(sr_telemetry.get("resistance_line") or 0.0)
 
-        # Raw proximity fractions — SR_SIGNAL_ZONE = 1%, wider than alert display threshold
         try:
             raw_dist_sup = float(_current_row["pct_dist_to_support"])
             raw_dist_res = float(_current_row["pct_dist_to_resistance"])
@@ -1328,30 +1368,29 @@ class SignalGenerator:
                     else:
                         self.reversal_candidates[cand_key]["candles_confirmed"] = candles_confirmed
 
-                    if candles_confirmed >= CANDLE_CONFIRM_REQUIRED:
+                    if candles_confirmed >= _sr_candle_req:
                         signal_status = "SR_REVERSAL_CONFIRMED"
                         self.reversal_candidates.pop(cand_key, None)
                     else:
                         signal_status = "AWAITING_SR_CONFIRMATION"
                 else:
-                    # Reversal score insufficient — no buy at support
                     self.reversal_candidates.pop(cand_key, None)
                     base_signal = "NEUTRAL"
 
             elif near_resistance:
-                # ── LONG near resistance: valid if resistance is broken (breakout) ──
+                # ── LONG near resistance: valid only if resistance is broken ──
                 if ReversalDetector.is_resistance_broken(current_price, resistance_lvl):
                     signal_status = "MOMENTUM_BREAKOUT"
                 else:
-                    # Buying into unbroken resistance = low-quality setup → suppress
                     self.reversal_candidates.pop(f"{rev_key}_LONG", None)
                     base_signal = "NEUTRAL"
 
             else:
-                # ── Mid-range: only fire on strong trend + high volume + 3 confirmed candles ──
-                if trend_str == "strong" and volume_cond == "high":
+                # ── Mid-range: strong trend OR (normal trend + high volume) ──
+                _mid_ok = trend_str == "strong" or (trend_str == "normal" and volume_cond == "high")
+                if _mid_ok:
                     _mb_candles = ReversalDetector.count_confirming_candles(df_1h, "LONG")
-                    if _mb_candles >= CANDLE_CONFIRM_REQUIRED:
+                    if _mb_candles >= MOMENTUM_CANDLE_CONFIRM_REQUIRED:
                         signal_status = "MOMENTUM_BREAKOUT"
                         candles_confirmed = _mb_candles
                     else:
@@ -1381,13 +1420,12 @@ class SignalGenerator:
                     else:
                         self.reversal_candidates[cand_key]["candles_confirmed"] = candles_confirmed
 
-                    if candles_confirmed >= CANDLE_CONFIRM_REQUIRED:
+                    if candles_confirmed >= _sr_candle_req:
                         signal_status = "SR_REVERSAL_CONFIRMED"
                         self.reversal_candidates.pop(cand_key, None)
                     else:
                         signal_status = "AWAITING_SR_CONFIRMATION"
                 else:
-                    # Reversal score insufficient — no sell at resistance
                     self.reversal_candidates.pop(cand_key, None)
                     base_signal = "NEUTRAL"
 
@@ -1403,10 +1441,11 @@ class SignalGenerator:
                     }
 
             else:
-                # ── Mid-range: only fire on strong trend + high volume + 3 confirmed candles ──
-                if trend_str == "strong" and volume_cond == "high":
+                # ── Mid-range: strong trend OR (normal trend + high volume) ──
+                _mid_ok = trend_str == "strong" or (trend_str == "normal" and volume_cond == "high")
+                if _mid_ok:
                     _mb_candles = ReversalDetector.count_confirming_candles(df_1h, "SHORT")
-                    if _mb_candles >= CANDLE_CONFIRM_REQUIRED:
+                    if _mb_candles >= MOMENTUM_CANDLE_CONFIRM_REQUIRED:
                         signal_status = "MOMENTUM_BREAKOUT"
                         candles_confirmed = _mb_candles
                     else:
@@ -1415,18 +1454,9 @@ class SignalGenerator:
                 else:
                     self.reversal_candidates.pop(f"{rev_key}_SHORT", None)
                     base_signal = "NEUTRAL"
-        # ──────────────────────────────────────────────────────────────
-        # CONFLUENCE RATE CHECK
-        # Enforce a minimum confluence rate before generating a BUY/SELL signal,
-        # even if market is at support/resistance and has candle confirmation.
-        # ──────────────────────────────────────────────────────────────
-        confluence_trend = 80 if trend_aligned else 35
-        _er_val = 0.5 if pd.isna(er) else float(er)
-        confluence_momentum = min(100, max(0, int(_er_val * 100)))
-        confluence_volume = 78 if volume_cond == "high" else (58 if volume_cond == "normal" else 38)
-        confluence_rate = (confluence_trend + confluence_momentum + confluence_volume) / 3.0
-        
-        if confluence_rate < 62.0 and base_signal in ("LONG", "SHORT"):
+
+        # ── Confluence kill-switch: block genuinely weak/choppy setups ────────
+        if confluence_rate < 52.0 and base_signal in ("LONG", "SHORT"):
             base_signal = "NEUTRAL"
             signal_status = "WEAK_CONFLUENCE"
 
@@ -1469,7 +1499,7 @@ class SignalGenerator:
                 _tp_pct = suggested_tp_distance / current_price
                 _sl_pct = suggested_sl_distance / current_price
             _ev = ai_prob * _tp_pct - (1 - ai_prob) * _sl_pct - TOTAL_COST_PCT
-            if _ev < 0.002:  # require at least 0.2% positive EV above transaction costs
+            if _ev < 0:  # block only genuinely negative expected value
                 base_signal = "NEUTRAL"
                 signal_status = "NEGATIVE_EV"
                 final_signal = "HOLD"
