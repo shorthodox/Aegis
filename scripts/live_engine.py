@@ -131,7 +131,7 @@ PROXIMITY_THRESHOLD = 0.005  # 0.5% proximity to S&R boundary triggers alert
 
 CANDLE_CONFIRM_REQUIRED = 3    # 3 consecutive confirming candles required before emitting signal
 SIGNAL_EXPIRY_MOVE_PCT = 0.60  # if price moves 60% of expected TP before action → expired
-REVERSAL_SCORE_THRESHOLD = 0.50  # minimum technical pattern score — raised for strong shapes only
+REVERSAL_SCORE_THRESHOLD = 0.42  # minimum technical pattern score — requires at least 2 independent confirmations
 SR_SIGNAL_ZONE = 0.010         # 1% proximity band — price within 1% of S/R triggers S/R signal path
 
 MODE_PARAMS = {
