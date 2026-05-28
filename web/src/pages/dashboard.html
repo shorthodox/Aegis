@@ -222,6 +222,42 @@
                     </div>
                 </a>
 
+                <a href="javascript:void(0)" onclick="switchRoom('buys')"
+                    class="nav-room block glass-panel p-4 rounded-xl text-gray-400 hover:text-white hover:border-green-500/50 hover:shadow-[0_0_15px_rgba(34,197,94,0.2)] transition-all group min-h-[44px]"
+                    data-room="buys">
+                    <div class="flex items-center gap-3">
+                        <div
+                            class="icon-container w-10 h-10 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-green-500/20 transition-colors">
+                            <i class="fas fa-arrow-trend-up"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="font-bold uppercase tracking-wider text-sm flex items-center gap-2">
+                                BUY Cockpit
+                                <span id="nav-buy-count" class="nav-dir-count buy hidden"></span>
+                            </div>
+                            <div class="text-xs text-gray-500">Active long setups</div>
+                        </div>
+                    </div>
+                </a>
+
+                <a href="javascript:void(0)" onclick="switchRoom('sells')"
+                    class="nav-room block glass-panel p-4 rounded-xl text-gray-400 hover:text-white hover:border-red-500/50 hover:shadow-[0_0_15px_rgba(239,68,68,0.2)] transition-all group min-h-[44px]"
+                    data-room="sells">
+                    <div class="flex items-center gap-3">
+                        <div
+                            class="icon-container w-10 h-10 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-red-500/20 transition-colors">
+                            <i class="fas fa-arrow-trend-down"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="font-bold uppercase tracking-wider text-sm flex items-center gap-2">
+                                SELL Cockpit
+                                <span id="nav-sell-count" class="nav-dir-count sell hidden"></span>
+                            </div>
+                            <div class="text-xs text-gray-500">Active short setups</div>
+                        </div>
+                    </div>
+                </a>
+
                 <a href="javascript:void(0)" onclick="switchRoom('settings')"
                     class="nav-room block glass-panel p-4 rounded-xl text-gray-400 hover:text-white hover:border-white/30 transition-all group min-h-[44px]"
                     data-room="settings">
@@ -613,6 +649,42 @@
                 </div>
             </div>
 
+            <!-- ROOM: BUY COCKPIT -->
+            <div id="room-buys" class="room-section hidden">
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between border-b border-green-500/20 mb-6 pb-3 gap-4">
+                    <h2 class="text-xl lg:text-2xl font-black uppercase tracking-widest text-white flex items-center gap-3">
+                        <i class="fas fa-arrow-trend-up text-green-400"></i> BUY Cockpit
+                        <span id="buy-cockpit-count" class="text-sm font-mono font-normal normal-case tracking-normal text-green-400/60"></span>
+                    </h2>
+                    <p class="text-xs text-gray-500">Tokens with an active BUY / LONG signal right now — updates live</p>
+                </div>
+                <div id="buySignalsContainer"
+                    class="signals-grid grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
+                    <div class="no-signals buy-empty" style="grid-column:1/-1">
+                        <i class="fas fa-arrow-trend-up" style="color:#4ade80;opacity:0.35"></i>
+                        <p>No active BUY signals</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ROOM: SELL COCKPIT -->
+            <div id="room-sells" class="room-section hidden">
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between border-b border-red-500/20 mb-6 pb-3 gap-4">
+                    <h2 class="text-xl lg:text-2xl font-black uppercase tracking-widest text-white flex items-center gap-3">
+                        <i class="fas fa-arrow-trend-down text-red-400"></i> SELL Cockpit
+                        <span id="sell-cockpit-count" class="text-sm font-mono font-normal normal-case tracking-normal text-red-400/60"></span>
+                    </h2>
+                    <p class="text-xs text-gray-500">Tokens with an active SELL / SHORT signal right now — updates live</p>
+                </div>
+                <div id="sellSignalsContainer"
+                    class="signals-grid grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
+                    <div class="no-signals sell-empty" style="grid-column:1/-1">
+                        <i class="fas fa-arrow-trend-down" style="color:#f87171;opacity:0.35"></i>
+                        <p>No active SELL signals</p>
+                    </div>
+                </div>
+            </div>
+
             <!-- ROOM: SETTINGS -->
             <div id="room-settings" class="room-section hidden">
                 <h2
@@ -773,30 +845,61 @@
                 window.forceTradesRefresh();
             }
 
+            // Sync directional rooms on activation
+            if ((roomName === 'buys' || roomName === 'sells') && typeof window.syncDirectionalRooms === 'function') {
+                window.syncDirectionalRooms();
+            }
+
             // Update nav styles
             document.querySelectorAll('.nav-room').forEach(el => {
-                el.classList.remove('border-cyan/50', 'shadow-[0_0_15px_rgba(0,242,255,0.2)]', 'text-white');
+                el.classList.remove(
+                    'border-cyan/50', 'shadow-[0_0_15px_rgba(0,242,255,0.2)]',
+                    'border-green-500/50', 'shadow-[0_0_15px_rgba(34,197,94,0.2)]',
+                    'border-red-500/50', 'shadow-[0_0_15px_rgba(239,68,68,0.2)]',
+                    'text-white'
+                );
                 el.classList.add('text-gray-400', 'border-transparent');
 
                 const iconContainer = el.querySelector('.icon-container');
                 if (iconContainer) {
-                    iconContainer.classList.remove('bg-cyan/10', 'text-cyan', 'bg-orange/10', 'text-orange', 'bg-blue-400/10', 'text-blue-400', 'bg-purple-500/10', 'text-purple-400');
+                    iconContainer.classList.remove(
+                        'bg-cyan/10', 'text-cyan',
+                        'bg-orange/10', 'text-orange',
+                        'bg-blue-400/10', 'text-blue-400',
+                        'bg-purple-500/10', 'text-purple-400',
+                        'bg-green-500/10', 'text-green-400',
+                        'bg-red-500/10', 'text-red-400'
+                    );
                     iconContainer.classList.add('bg-white/5');
                 }
             });
 
             const activeNav = document.querySelector('.nav-room[data-room="' + roomName + '"]');
             if (activeNav) {
-                activeNav.classList.add('border-cyan/50', 'shadow-[0_0_15px_rgba(0,242,255,0.2)]', 'text-white');
                 activeNav.classList.remove('text-gray-400', 'border-transparent');
+                activeNav.classList.add('text-white');
 
                 const iconContainer = activeNav.querySelector('.icon-container');
-                if (iconContainer) {
-                    iconContainer.classList.remove('bg-white/5');
-                    if (roomName === 'signals') iconContainer.classList.add('bg-cyan/10', 'text-cyan');
-                    else if (roomName === 'terminal') iconContainer.classList.add('bg-orange/10', 'text-orange');
-                    else if (roomName === 'analytics') iconContainer.classList.add('bg-blue-400/10', 'text-blue-400');
-                    else if (roomName === 'history') iconContainer.classList.add('bg-purple-500/10', 'text-purple-400');
+                if (iconContainer) iconContainer.classList.remove('bg-white/5');
+
+                if (roomName === 'signals') {
+                    activeNav.classList.add('border-cyan/50', 'shadow-[0_0_15px_rgba(0,242,255,0.2)]');
+                    if (iconContainer) iconContainer.classList.add('bg-cyan/10', 'text-cyan');
+                } else if (roomName === 'terminal') {
+                    activeNav.classList.add('border-cyan/50', 'shadow-[0_0_15px_rgba(0,242,255,0.2)]');
+                    if (iconContainer) iconContainer.classList.add('bg-orange/10', 'text-orange');
+                } else if (roomName === 'analytics') {
+                    activeNav.classList.add('border-cyan/50', 'shadow-[0_0_15px_rgba(0,242,255,0.2)]');
+                    if (iconContainer) iconContainer.classList.add('bg-blue-400/10', 'text-blue-400');
+                } else if (roomName === 'history') {
+                    activeNav.classList.add('border-cyan/50', 'shadow-[0_0_15px_rgba(0,242,255,0.2)]');
+                    if (iconContainer) iconContainer.classList.add('bg-purple-500/10', 'text-purple-400');
+                } else if (roomName === 'buys') {
+                    activeNav.classList.add('border-green-500/50', 'shadow-[0_0_15px_rgba(34,197,94,0.2)]');
+                    if (iconContainer) iconContainer.classList.add('bg-green-500/10', 'text-green-400');
+                } else if (roomName === 'sells') {
+                    activeNav.classList.add('border-red-500/50', 'shadow-[0_0_15px_rgba(239,68,68,0.2)]');
+                    if (iconContainer) iconContainer.classList.add('bg-red-500/10', 'text-red-400');
                 }
             }
 

@@ -2133,6 +2133,91 @@ function _applyTokenSearch(query) {
   }
 }
 
+// ============================================================
+// DIRECTIONAL ROOMS — BUY / SELL filtered signal cockpits
+// ============================================================
+
+function _syncDirectionalRooms() {
+  const source      = document.getElementById('signalsContainer');
+  const buyContainer  = document.getElementById('buySignalsContainer');
+  const sellContainer = document.getElementById('sellSignalsContainer');
+  if (!source || !buyContainer || !sellContainer) return;
+
+  const cards = Array.from(source.querySelectorAll('.signal-card[data-symbol]'));
+
+  const isBuy  = c => { const b = c.querySelector('.signal-badge'); if (!b) return false; const t = b.textContent.trim().toUpperCase(); return t.includes('BUY') || t.includes('LONG'); };
+  const isSell = c => { const b = c.querySelector('.signal-badge'); if (!b) return false; const t = b.textContent.trim().toUpperCase(); return t.includes('SELL') || t.includes('SHORT'); };
+
+  const buyCards  = cards.filter(isBuy);
+  const sellCards = cards.filter(isSell);
+
+  if (buyCards.length > 0) {
+    buyContainer.innerHTML = '';
+    buyCards.forEach(card => buyContainer.appendChild(card.cloneNode(true)));
+  } else {
+    buyContainer.innerHTML = `
+      <div class="no-signals" style="grid-column:1/-1">
+        <i class="fas fa-arrow-trend-up" style="color:#4ade80;opacity:0.35;font-size:2.5rem;margin-bottom:1rem"></i>
+        <p>No active BUY signals right now</p>
+      </div>`;
+  }
+
+  if (sellCards.length > 0) {
+    sellContainer.innerHTML = '';
+    sellCards.forEach(card => sellContainer.appendChild(card.cloneNode(true)));
+  } else {
+    sellContainer.innerHTML = `
+      <div class="no-signals" style="grid-column:1/-1">
+        <i class="fas fa-arrow-trend-down" style="color:#f87171;opacity:0.35;font-size:2.5rem;margin-bottom:1rem"></i>
+        <p>No active SELL signals right now</p>
+      </div>`;
+  }
+
+  // Update header counts
+  const buyCount  = document.getElementById('buy-cockpit-count');
+  const sellCount = document.getElementById('sell-cockpit-count');
+  if (buyCount)  buyCount.textContent  = buyCards.length  > 0 ? `— ${buyCards.length} signal${buyCards.length  !== 1 ? 's' : ''}` : '';
+  if (sellCount) sellCount.textContent = sellCards.length > 0 ? `— ${sellCards.length} signal${sellCards.length !== 1 ? 's' : ''}` : '';
+
+  // Update nav badge counts
+  const navBuy  = document.getElementById('nav-buy-count');
+  const navSell = document.getElementById('nav-sell-count');
+  if (navBuy) {
+    navBuy.textContent = buyCards.length;
+    navBuy.classList.toggle('hidden', buyCards.length === 0);
+  }
+  if (navSell) {
+    navSell.textContent = sellCards.length;
+    navSell.classList.toggle('hidden', sellCards.length === 0);
+  }
+}
+
+window.syncDirectionalRooms = _syncDirectionalRooms;
+
+// Keep directional rooms in sync whenever signalsContainer updates
+(function _initDirectionalRoomsSync() {
+  function attach() {
+    const source = document.getElementById('signalsContainer');
+    if (!source) return;
+    new MutationObserver(() => {
+      // Always update nav badge counts (regardless of active room)
+      const cards = Array.from(source.querySelectorAll('.signal-card[data-symbol]'));
+      const buyCount  = cards.filter(c => { const b = c.querySelector('.signal-badge'); return b && (b.textContent.includes('BUY') || b.textContent.includes('LONG')); }).length;
+      const sellCount = cards.filter(c => { const b = c.querySelector('.signal-badge'); return b && (b.textContent.includes('SELL') || b.textContent.includes('SHORT')); }).length;
+      const navBuy  = document.getElementById('nav-buy-count');
+      const navSell = document.getElementById('nav-sell-count');
+      if (navBuy)  { navBuy.textContent  = buyCount;  navBuy.classList.toggle('hidden',  buyCount  === 0); }
+      if (navSell) { navSell.textContent = sellCount; navSell.classList.toggle('hidden', sellCount === 0); }
+      // Sync room content only if a directional room is currently visible
+      const buysActive  = document.getElementById('room-buys')?.classList.contains('active');
+      const sellsActive = document.getElementById('room-sells')?.classList.contains('active');
+      if (buysActive || sellsActive) _syncDirectionalRooms();
+    }).observe(source, { childList: true });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attach);
+  else attach();
+}());
+
 // Wire up once DOM is ready
 (function _initTokenSearch() {
   function attach() {
