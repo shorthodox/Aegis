@@ -559,7 +559,7 @@ async def run_engine_background():
     backtest_dir = Path(__file__).parent / "logs" / "backtests"
 
     try:
-        configs, capital, max_pos, scan_seconds, alpha_mode, alpha_risk, proxy = automated_setup(backtest_dir, args)
+        configs, capital, max_pos, scan_seconds, proxy = automated_setup(backtest_dir, args)
     except Exception as e:
         print(f"❌ automated_setup failed: {e}")
         await asyncio.sleep(1)
@@ -570,8 +570,6 @@ async def run_engine_background():
         capital=capital,
         max_position_usdt=max_pos,
         scan_interval_seconds=scan_seconds,
-        alpha_mode=alpha_mode,
-        alpha_risk_pct=alpha_risk,
         proxy_url=proxy
     )
     LIVE_STATE.engine = engine
@@ -936,18 +934,29 @@ def create_token(email: str) -> str:
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 def decode_token(token: str) -> Optional[str]:
-    # Try decoding as Firebase token first
+    # Try Firebase ID token first
     try:
         decoded_token = firebase_auth.verify_id_token(token)
-        return decoded_token.get("email") or decoded_token.get("uid")
+        email = decoded_token.get("email")
+        if email:
+            return email
+        # UID-only token (some OAuth flows omit email) — look up email via Admin SDK
+        uid = decoded_token.get("uid")
+        if uid:
+            try:
+                user_record = firebase_auth.get_user(uid)
+                return user_record.email or uid
+            except Exception:
+                return uid
     except Exception:
-        # Fallback to custom JWT
-        try:
-            assert SECRET_KEY is not None, "SECRET_KEY must be set"
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-            return payload.get("sub")
-        except:
-            return None
+        pass
+    # Fallback to custom JWT (email/password signup)
+    try:
+        assert SECRET_KEY is not None, "SECRET_KEY must be set"
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload.get("sub")
+    except Exception:
+        return None
 
 def decode_uid_from_token(token: str) -> Optional[str]:
     """Return Firebase UID (not email) — used for Firestore paths shared with the frontend."""
