@@ -1,5 +1,50 @@
 {
-  "balance": 10000.0,
-  "open_trades": [],
-  "trade_history": []
+  "balance": 7979.374621660283,
+  "open_trades": [
+    {
+      "symbol": "TIA/USDT",
+      "entry_price": 0.4181,
+      "position_units": 4783.544606553456,
+      "stop_loss": 0.4304964285714286,
+      "take_profit": 0.3995053571428572,
+      "entry_time": "2026-05-28T14:09:46.713129",
+      "mode": "balanced",
+      "master_score": 0.6057030439376831,
+      "trade_type": "SHORT",
+      "closed": false,
+      "exit_price": 0.0,
+      "exit_reason": "",
+      "pnl": 0.0,
+      "close_time": null
+    }
+  ],
+  "trade_history": [
+    {
+      "symbol": "TIA/USDT",
+      "entry_price": 0.4196,
+      "exit_price": 0.4182,
+      "pnl": 4.679694947568908,
+      "exit_reason": "BULLISH_CONVICTION",
+      "entry_time": "2026-05-28T13:54:42.219028",
+      "close_time": "2026-05-28T13:59:06.626655"
+    },
+    {
+      "symbol": "TIA/USDT",
+      "entry_price": 0.4199,
+      "exit_price": 0.4179,
+      "pnl": 7.5356037151702875,
+      "exit_reason": "BULLISH_CONVICTION",
+      "entry_time": "2026-05-28T13:59:12.376625",
+      "close_time": "2026-05-28T14:03:49.403857"
+    },
+    {
+      "symbol": "TIA/USDT",
+      "entry_price": 0.4181,
+      "exit_price": 0.4201,
+      "pnl": -11.576656302319762,
+      "exit_reason": "BULLISH_CONVICTION",
+      "entry_time": "2026-05-28T14:03:55.271251",
+      "close_time": "2026-05-28T14:09:40.314303"
+    }
+  ]
 }
