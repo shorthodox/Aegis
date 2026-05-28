@@ -2729,7 +2729,6 @@ async def dev_key_display_loop():
     await asyncio.sleep(3)  # let uvicorn startup messages land first
     try:
         new_key = _make_dev_code()
-        key_id = str(uuid.uuid4())
         now_dt = datetime.now(timezone.utc)
         expires_dt = now_dt + timedelta(days=30)
         features = DEV_KEY_FEATURES
@@ -2746,14 +2745,17 @@ async def dev_key_display_loop():
         print(banner, flush=True)
         logger.info(banner)
 
-        db.collection("dev_keys").document(key_id).set({
-            "key": new_key,
+        # Write to dev_codes (document ID = the code itself) so /api/redeem-dev-code
+        # can look it up via _get_dev_code_doc() which does .document(code).get()
+        db.collection("dev_codes").document(new_key).set({
+            "source": "backend",
+            "plan": "pro",
+            "label": "startup_key",
             "created_at": now_dt.isoformat(),
             "expires_at": expires_dt.isoformat(),
             "features": features,
             "created_by": "system_startup",
-            "usage_count": 0,
-            "last_used": None,
+            "used_by": None,
         })
 
     except Exception as e:
