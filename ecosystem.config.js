@@ -2,10 +2,11 @@ module.exports = {
   apps: [
     {
       name: 'aegis',
-      script: 'python',
+      script: 'D:\\Content\\Animesh\\bots\\ai_signal_bot\\.venv\\Scripts\\python.exe',
       args: 'main.py',
       cwd: 'D:\\Content\\Animesh\\bots\\ai_signal_bot',
       interpreter: 'none',
+      windowsHide: true,
       autorestart: true,
       watch: false,
       max_restarts: 10,

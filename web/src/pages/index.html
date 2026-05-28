@@ -824,6 +824,97 @@
                 scroll-margin-top: 70px;
             }
         }
+
+        /* ===== Honest Edge Section ===== */
+        #honest-edge.he-section {
+            padding: 5rem 2rem;
+            background: rgba(0,0,0,0.3);
+            border-top: 1px solid rgba(255,255,255,0.06);
+        }
+        .he-container {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+        .he-header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+        .he-eyebrow {
+            display: inline-block;
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: rgba(0,242,255,0.6);
+            margin-bottom: 0.75rem;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .he-title {
+            font-size: 2rem;
+            font-weight: 800;
+            color: #f1f5f9;
+            margin: 0.4rem 0 0.8rem;
+        }
+        .he-desc {
+            color: var(--text-dim, #8892a4);
+            max-width: 720px;
+            margin: 0 auto;
+            line-height: 1.8;
+            font-size: 0.95rem;
+        }
+        .he-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+        .he-card {
+            background: rgba(0,0,0,0.4);
+            border-radius: 16px;
+            padding: 1.75rem;
+            border: 1px solid rgba(255,255,255,0.07);
+        }
+        .he-ahead { border-top: 3px solid #00f2ff; }
+        .he-behind { border-top: 3px solid rgba(255,255,255,0.2); }
+        .he-roadmap { border-top: 3px solid #ffd700; }
+        .he-icon {
+            font-size: 1.5rem;
+            margin-bottom: 0.75rem;
+            opacity: 0.7;
+        }
+        .he-ahead .he-icon { color: #00f2ff; }
+        .he-behind .he-icon { color: rgba(255,255,255,0.4); }
+        .he-roadmap .he-icon { color: #ffd700; }
+        .he-card-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #f1f5f9;
+            margin: 0 0 1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+        .he-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.7rem;
+        }
+        .he-list li {
+            font-size: 0.875rem;
+            color: #8892a4;
+            line-height: 1.65;
+            padding-left: 1rem;
+            position: relative;
+        }
+        .he-list li::before {
+            content: '–';
+            position: absolute;
+            left: 0;
+            color: rgba(255,255,255,0.25);
+        }
+        .he-ahead .he-list li::before { color: rgba(0,242,255,0.4); }
+        .he-roadmap .he-list li::before { color: rgba(255,215,0,0.4); }
     </style>
 </head>
 <body>
@@ -891,7 +982,7 @@
             </div>
             <div class="hero-cta">
                 <button id="heroMathBtn" class="btn-primary-glow">⚡ Start Your 3‑Day Trial</button>
-                <p class="hero-footnote">No credit card • 3‑day free trial • Limited sample signals</p>
+                <p class="hero-footnote">No credit card • 3‑day free trial • Full 42-token fleet</p>
                 <div id="trialCountdown" class="trial-countdown" style="display: none;"></div>
             </div>
         </div>
@@ -905,7 +996,7 @@
                 Most trading signal tools are like a simple alarm clock — they ring every time one number crosses another, with no understanding of <em>where</em> price is, how the market is behaving, or whether the move has any real follow-through. Aegis-1 was built around the opposite idea. Every signal goes through a layered decision process that mirrors how a professional discretionary trader thinks — except it runs across <strong style="color:#00f2ff;">58 crypto assets simultaneously</strong>, 24 hours a day, with zero emotional interference.
             </p>
             <div class="feature-stats" style="margin-top:1.8rem; flex-wrap:wrap; gap:2rem;">
-                <div><strong>58</strong><br><small style="color:var(--text-dim)">Tokens Covered</small></div>
+                <div><strong>58</strong><br><small style="color:var(--text-dim)">Tokens (42 live)</small></div>
                 <div><strong>8</strong><br><small style="color:var(--text-dim)">Signal Layers</small></div>
                 <div><strong>3</strong><br><small style="color:var(--text-dim)">Candle Confirmation</small></div>
                 <div><strong>99.9%</strong><br><small style="color:var(--text-dim)">Uptime</small></div>
@@ -1124,8 +1215,8 @@
                     <h3>Explorer Trial</h3>
                     <div class="plan-price">$0 <span>/ 3 days</span></div>
                     <ul>
-                        <li><i class="fas fa-check-circle"></i> Live signals sample</li>
-                        <li><i class="fas fa-check-circle"></i> BTC, ETH & SOL access</li>
+                        <li><i class="fas fa-check-circle"></i> All 42 live tokens</li>
+                        <li><i class="fas fa-check-circle"></i> View Logic on every signal</li>
                         <li><i class="fas fa-check-circle"></i> Simulator + risk guidance</li>
                         <li><i class="fas fa-check-circle"></i> No credit card required</li>
                     </ul>
@@ -1151,7 +1242,7 @@
                         <li><i class="fas fa-check-circle"></i> Confluence Scorecards</li>
                         <li><i class="fas fa-check-circle"></i> Token Win-Rate Badges</li>
                         <li><i class="fas fa-check-circle"></i> Visual Zone Tracking</li>
-                        <li><i class="fas fa-check-circle"></i> Full 42-token fleet</li>
+                        <li><i class="fas fa-check-circle"></i> 42 of 58 tokens live</li>
                     </ul>
                     <a href="/web/src/pages/pricing.html" class="btn-outline">Get Intermediate</a>
                 </div>
@@ -1161,12 +1252,56 @@
                     <h3>Professional</h3>
                     <div class="plan-price">$40.00 <span>/ mo</span></div>
                     <ul>
-                        <li><i class="fas fa-check-circle"></i> Full 42-token fleet + Moonshot 1:5 R:R</li>
+                        <li><i class="fas fa-check-circle"></i> 42 of 58 tokens live + Moonshot 1:5 R:R</li>
                         <li><i class="fas fa-check-circle"></i> Expectancy Matrix & Max DD</li>
                         <li><i class="fas fa-check-circle"></i> Raw Probabilities & SHAP</li>
                         <li><i class="fas fa-check-circle"></i> Personal API / JSON endpoints</li>
                     </ul>
                     <a href="/web/src/pages/pricing.html" class="btn-pro">Go Pro Access</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Honest Edge — transparent assessment of where Aegis-1 stands -->
+    <section id="honest-edge" class="he-section">
+        <div class="he-container">
+            <div class="he-header">
+                <span class="he-eyebrow">Honest Assessment</span>
+                <h2 class="he-title">Where We Actually Stand</h2>
+                <p class="he-desc">We'd rather tell you the truth up front than have you find out later. Here's a transparent read on what Aegis-1 does well, where we're still building, and what's on the roadmap.</p>
+            </div>
+            <div class="he-grid">
+                <div class="he-card he-ahead">
+                    <div class="he-icon">&#8593;</div>
+                    <h3 class="he-card-title">Where We Lead</h3>
+                    <ul class="he-list">
+                        <li>58 trained models — each token has its own dedicated AI brain, not a one-size-fits-all classifier</li>
+                        <li>8-layer signal filter; the majority of potential triggers are <em>intentionally rejected</em> before you see them</li>
+                        <li>Institutional risk controls (R:R gates, stop-loss discipline) baked into the engine, not bolted on after</li>
+                        <li>SHAP explainability on every signal — you see exactly which features drove the AI's decision</li>
+                        <li>Sub-second live delivery across 42 tokens, 24/7, without manual intervention</li>
+                    </ul>
+                </div>
+                <div class="he-card he-behind">
+                    <div class="he-icon">&#8595;</div>
+                    <h3 class="he-card-title">Still Building</h3>
+                    <ul class="he-list">
+                        <li>16 of 58 models are trained and validated but not yet live — we deploy cautiously, not quickly</li>
+                        <li>In-terminal backtesting dashboard is in development; historical equity curves are not yet in the UI</li>
+                        <li>Mobile app is on the roadmap, not shipped</li>
+                        <li>We're in beta — pricing reflects that and will increase at General Availability</li>
+                    </ul>
+                </div>
+                <div class="he-card he-roadmap">
+                    <div class="he-icon">&#8594;</div>
+                    <h3 class="he-card-title">On the Roadmap</h3>
+                    <ul class="he-list">
+                        <li>Remaining 16 tokens going live as per-model validation completes</li>
+                        <li>Portfolio-level risk dashboard with drawdown attribution by token</li>
+                        <li>Telegram &amp; webhook delivery for signal alerts</li>
+                        <li>Optional algorithmic execution layer — auto-trade mode for the disciplined</li>
+                    </ul>
                 </div>
             </div>
         </div>
@@ -1469,7 +1604,7 @@
               <div style="padding:1rem;border-radius:14px;background:rgba(0,242,255,0.04);border:1px solid rgba(0,242,255,0.18);">
                 <p style="font-size:0.65rem;font-family:monospace;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#00f2ff;margin:0 0 10px;">3-Day Trial</p>
                 <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px;">
-                  <li style="font-size:0.78rem;color:#94a3b8;display:flex;align-items:center;gap:7px;"><i class="fas fa-check" style="color:#00f2ff;font-size:0.65rem;flex-shrink:0;"></i> BTC, ETH &amp; SOL signals</li>
+                  <li style="font-size:0.78rem;color:#94a3b8;display:flex;align-items:center;gap:7px;"><i class="fas fa-check" style="color:#00f2ff;font-size:0.65rem;flex-shrink:0;"></i> All 42 live tokens</li>
                   <li style="font-size:0.78rem;color:#94a3b8;display:flex;align-items:center;gap:7px;"><i class="fas fa-check" style="color:#00f2ff;font-size:0.65rem;flex-shrink:0;"></i> Live signal cockpit</li>
                   <li style="font-size:0.78rem;color:#94a3b8;display:flex;align-items:center;gap:7px;"><i class="fas fa-check" style="color:#00f2ff;font-size:0.65rem;flex-shrink:0;"></i> Paper trade simulator</li>
                   <li style="font-size:0.78rem;color:#94a3b8;display:flex;align-items:center;gap:7px;"><i class="fas fa-check" style="color:#00f2ff;font-size:0.65rem;flex-shrink:0;"></i> No credit card required</li>
@@ -1478,7 +1613,7 @@
               <div style="padding:1rem;border-radius:14px;background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);">
                 <p style="font-size:0.65rem;font-family:monospace;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#cbd5e1;margin:0 0 10px;">Pro Upgrade</p>
                 <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px;">
-                  <li style="font-size:0.78rem;color:#94a3b8;display:flex;align-items:center;gap:7px;"><i class="fas fa-check" style="color:#64748b;font-size:0.65rem;flex-shrink:0;"></i> Full 42-token fleet</li>
+                  <li style="font-size:0.78rem;color:#94a3b8;display:flex;align-items:center;gap:7px;"><i class="fas fa-check" style="color:#64748b;font-size:0.65rem;flex-shrink:0;"></i> 42 of 58 tokens live</li>
                   <li style="font-size:0.78rem;color:#94a3b8;display:flex;align-items:center;gap:7px;"><i class="fas fa-check" style="color:#64748b;font-size:0.65rem;flex-shrink:0;"></i> SHAP feature explainability</li>
                   <li style="font-size:0.78rem;color:#94a3b8;display:flex;align-items:center;gap:7px;"><i class="fas fa-check" style="color:#64748b;font-size:0.65rem;flex-shrink:0;"></i> Expectancy &amp; Max DD matrix</li>
                   <li style="font-size:0.78rem;color:#94a3b8;display:flex;align-items:center;gap:7px;"><i class="fas fa-check" style="color:#64748b;font-size:0.65rem;flex-shrink:0;"></i> Multi-timeframe confluence</li>
@@ -1488,7 +1623,7 @@
 
             <div style="padding:0.75rem 1rem;border-radius:10px;background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.06);display:flex;align-items:flex-start;gap:10px;">
               <i class="fas fa-info-circle" style="color:rgba(0,242,255,0.5);font-size:0.8rem;margin-top:2px;flex-shrink:0;"></i>
-              <p style="font-size:0.75rem;color:#64748b;margin:0;line-height:1.5;">Upgrade to unlock advanced XGBoost strategy profiles and the full token fleet from the terminal settings pane.</p>
+              <p style="font-size:0.75rem;color:#64748b;margin:0;line-height:1.5;">Upgrade to unlock Confluence Scorecards, token win-rate badges, and advanced analytics. All plans include the full 42-token fleet.</p>
             </div>
 
           </div>

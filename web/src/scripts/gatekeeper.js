@@ -701,13 +701,7 @@ function applyUserData(userData, token) {
   const isActive = userData.trial_active ?? true;
   trialActive = typeof AuthManager !== 'undefined' ? AuthManager.isTrialValid() : isActive;
 
-  if (!['pro', 'premium', 'intermediate'].includes(userPlan)) {
-    allowedTokens = BIG5_TOKENS;
-    localStorage.setItem('cachedAllowedTokens', JSON.stringify(allowedTokens));
-  }
-
   // Start WebSocket immediately — don't block on the /user/limits round-trip.
-  // BIG5_TOKENS is already set above as a safe fallback for trial users.
   updateUI();
   startWebSocket(token);
 
@@ -1409,14 +1403,8 @@ function renderSignals(signals) {
   }
 
 
-  // Filter signals based on plan tier
-  const filteredEntries = signalEntries.filter(([key, signal]) => {
-    const symbol = signal.symbol;
-    // PRO and INTERMEDIATE subscribers see all incoming tokens — no filter
-    if (userPlan === 'pro' || userPlan === 'premium' || userPlan === 'intermediate') return true;
-    // Trial/basic: restrict to allowedTokens (BIG5 by default)
-    return allowedTokens.includes(symbol);
-  });
+  // All users see all live tokens; Confluence Scorecard is the paid gate (Intermediate+)
+  const filteredEntries = signalEntries;
 
   if (filteredEntries.length === 0) {
     const isExplicitlyExpired = userPlan === 'expired' || userPlan === 'none' || window.trialExpiredTriggered === true;
@@ -1444,7 +1432,7 @@ function renderSignals(signals) {
       <div class="no-signals">
         <i class="fas fa-chart-line"></i>
         <p>No signals available for your plan</p>
-        ${userPlan !== 'pro' ? '<a href="/web/src/pages/pricing.html" class="upgrade-link">Upgrade to Pro for 58 tokens →</a>' : ''}
+        ${userPlan !== 'pro' ? '<a href="/web/src/pages/pricing.html" class="upgrade-link">Upgrade to unlock Confluence Scorecards →</a>' : ''}
       </div>
     `;
     return;
@@ -2074,12 +2062,12 @@ function getUpgradeModal() {
       <div class="modal-card">
         <span class="close-modal">&times;</span>
         <h3>🚀 Unlock Full Power</h3>
-        <p>Upgrade to Pro for:</p>
+        <p>Upgrade to unlock:</p>
         <ul>
-          <li>All 58 trading signals</li>
-          <li>Alpha Mode (AI conviction)</li>
-          <li>Real-time WebSocket feed</li>
-          <li>Priority execution alerts</li>
+          <li>Confluence Scorecard (signal strength 0–100)</li>
+          <li>Token win-rate badges &amp; Visual Zone Tracking</li>
+          <li>Expectancy Matrix &amp; Max Drawdown stats</li>
+          <li>Raw XGBoost Probabilities &amp; SHAP</li>
         </ul>
         <div class="pricing-options" style="display:flex; flex-direction:column; gap:0.5rem; margin-bottom:1rem;">
           <button onclick="window.AegisDashboard?.subscribeToPlan('basic')" class="btn-outline" style="padding: 0.6rem; font-size: 0.85rem;">Basic ($3.60/mo)</button>
