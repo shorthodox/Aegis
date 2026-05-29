@@ -1,6 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <!-- Preload Firebase & Core Modules to prevent module waterfall blocking -->
+    <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js">
+    <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js">
+    <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js">
+    <link rel="modulepreload" href="/web/src/scripts/gatekeeper.js">
+    <link rel="modulepreload" href="/web/src/scripts/auth.js">
+    <link rel="modulepreload" href="/web/src/auth/authManager.js">
+    <link rel="modulepreload" href="/web/src/scripts/iframeGuard.js">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AEGIS v1.0 | Risk Disclosure & Terms</title>
