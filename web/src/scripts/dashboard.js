@@ -651,6 +651,17 @@ function fetchLiveMarketData() {
       });
       container.innerHTML = html;
       marketCardsInitialized = true;
+      
+      // Fallback: manually update market cards on priceUpdate if gatekeeper querySelector fails
+      window.addEventListener('priceUpdate', (e) => {
+        const { symbol, price } = e.detail;
+        const id = symbol.replace('/', '-');
+        const el = document.getElementById(`market-card-price-${id}`);
+        if (el) {
+          const priceStr = price < 0.01 ? price.toFixed(6) : price.toFixed(4);
+          el.textContent = `$${priceStr}`;
+        }
+      });
     }
 
     if (typeof window.updateMarketCardSignalBadges === 'function') {

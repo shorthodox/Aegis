@@ -1610,6 +1610,11 @@ function renderSignals(signals) {
       </div>
     `;
   }).join('');
+
+  // IMPORTANT: Re-run price updates on new DOM elements created during dashboard refresh
+  if (typeof _refreshPriceElements === 'function') {
+    _refreshPriceElements();
+  }
 }
 
 window.toggleScorecard = function (event, symbol) {
