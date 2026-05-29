@@ -151,7 +151,7 @@ def create_triple_barrier_labels(df: pd.DataFrame, atr_multiplier: float,
             labels.iloc[i] = 1
             continue
 
-        if efficiency_ratio is not None and efficiency_ratio.iloc[i] < 0.3:
+        if efficiency_ratio is not None and efficiency_ratio.iloc[i] < 0.2:
             labels.iloc[i] = 1
             continue
 
@@ -173,9 +173,9 @@ def create_triple_barrier_labels(df: pd.DataFrame, atr_multiplier: float,
                 hit = 0  # SELL signal
                 break
 
-        if hit == 2 and macro_confluence_score is not None and macro_confluence_score.iloc[i] == 2.0:
+        if hit == 2 and macro_confluence_score is not None and macro_confluence_score.iloc[i] == -2.0:
             hit = None
-        if hit == 0 and macro_confluence_score is not None and macro_confluence_score.iloc[i] == -2.0:
+        if hit == 0 and macro_confluence_score is not None and macro_confluence_score.iloc[i] == 2.0:
             hit = None
 
         labels.iloc[i] = hit if hit is not None else 1  # 1 = HOLD (default)

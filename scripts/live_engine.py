@@ -1164,15 +1164,17 @@ class SignalGenerator:
                 prob_hold = float(probs[1])
                 prob_long = float(probs[2])
                 predicted_class = int(np.argmax(probs))
-                raw_prob = float(probs[predicted_class])
+                
+                # Use max of long/short probabilities for the ui 'ai_prob' rather than hold prob
+                dominant_dir_prob = max(prob_short, prob_long)
                 
                 # Calibrate probabilities to realistic confidence ranges (avoids 99% overconfidence)
-                if raw_prob > 0.8:
-                    ai_prob = 0.75 + (raw_prob - 0.8) * 0.4
-                elif raw_prob > 0.5:
-                    ai_prob = 0.55 + (raw_prob - 0.5) * 0.6
+                if dominant_dir_prob > 0.8:
+                    ai_prob = 0.75 + (dominant_dir_prob - 0.8) * 0.4
+                elif dominant_dir_prob > 0.5:
+                    ai_prob = 0.55 + (dominant_dir_prob - 0.5) * 0.6
                 else:
-                    ai_prob = raw_prob
+                    ai_prob = dominant_dir_prob
             else:
                 raw_prob = float(probs[1]) if len(probs) > 1 else 0.0
                 predicted_class = 2 if raw_prob >= 0.5 else 0
