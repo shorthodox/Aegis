@@ -329,6 +329,48 @@ def add_support_resistance_features(df: pd.DataFrame, window: int = 24) -> pd.Da
     }, index=df.index)
     return output
 
+def compute_candlestick_patterns(df: pd.DataFrame) -> pd.DataFrame:
+    """Pure Python implementation of common candlestick patterns."""
+    o, h, l, c = df['open'], df['high'], df['low'], df['close']
+    body = abs(c - o)
+    range_hl = h - l
+    upper_shadow = h - np.maximum(o, c)
+    lower_shadow = np.minimum(o, c) - l
+    
+    # 1. Doji
+    is_doji = (body / (range_hl + 1e-9)) < 0.1
+    
+    # 2. Hammer & Shooting Star
+    is_hammer = (lower_shadow > 2 * body) & (upper_shadow < 0.2 * body)
+    is_shootingstar = (upper_shadow > 2 * body) & (lower_shadow < 0.2 * body)
+    
+    # 3. Engulfing
+    is_green = c > o
+    is_red = o > c
+    prev_green = is_green.shift(1)
+    prev_red = is_red.shift(1)
+    
+    bullish_engulfing = prev_red & is_green & (c > o.shift(1)) & (o < c.shift(1))
+    bearish_engulfing = prev_green & is_red & (c < o.shift(1)) & (o > c.shift(1))
+    
+    # 4. Morning & Evening Star
+    prev2_red = is_red.shift(2)
+    prev2_green = is_green.shift(2)
+    prev1_small_body = (body.shift(1) / (range_hl.shift(1) + 1e-9)) < 0.3
+    
+    morning_star = prev2_red & prev1_small_body & is_green & (c > o.shift(2) - (body.shift(2) * 0.5))
+    evening_star = prev2_green & prev1_small_body & is_red & (c < o.shift(2) + (body.shift(2) * 0.5))
+    
+    return pd.DataFrame({
+        'CDL_DOJI': is_doji.astype(int),
+        'CDL_HAMMER': is_hammer.astype(int),
+        'CDL_SHOOTINGSTAR': is_shootingstar.astype(int),
+        'CDL_BULL_ENGULFING': bullish_engulfing.astype(int),
+        'CDL_BEAR_ENGULFING': bearish_engulfing.astype(int),
+        'CDL_MORNINGSTAR': morning_star.astype(int),
+        'CDL_EVENINGSTAR': evening_star.astype(int)
+    }, index=df.index)
+
 
 def add_macro_regime_features(df: pd.DataFrame, df_1d: Optional[pd.DataFrame], df_1w: Optional[pd.DataFrame], macro_state: Optional[Dict[str, Any]] = None) -> pd.DataFrame:
     """
@@ -629,8 +671,16 @@ def prepare_features(df: pd.DataFrame,
         sr_features = add_support_resistance_features(df[['high', 'low', 'close']].copy(), window=24)
         for col in sr_features.columns:
             compiled_features[col] = sr_features[col]
+            
+        compiled_features['is_at_support'] = (compiled_features['pct_dist_to_support'] <= 0.015).astype(int)
+        compiled_features['is_at_resistance'] = (compiled_features['pct_dist_to_resistance'] <= 0.015).astype(int)
     except Exception:
         pass
+
+    # ----- Candlestick Patterns -----
+    cdl_patterns = compute_candlestick_patterns(df[['open', 'high', 'low', 'close']])
+    for col in cdl_patterns.columns:
+        compiled_features[col] = cdl_patterns[col]
 
     # Bulk-attach all generated feature columns in one allocation pass.
     df = pd.concat([df, pd.DataFrame(compiled_features, index=df.index)], axis=1)

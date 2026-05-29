@@ -90,10 +90,13 @@ FLEET_SYMBOLS = [
     'SKY/USDT', 'TRUMP/USDT', 'NIGHT/USDT'
 ]
 
-# Explicitly ensure these new multi-timeframe structural features are included
 FEATURE_ADDONS = [
     'pct_dist_to_resistance', 'pct_dist_to_support', 'range_position_score',
-    'macro_trend_1d', 'macro_trend_1w', 'macro_confluence_score'
+    'macro_trend_1d', 'macro_trend_1w', 'macro_confluence_score',
+    'is_at_support', 'is_at_resistance',
+    'CDL_DOJI', 'CDL_HAMMER', 'CDL_SHOOTINGSTAR', 
+    'CDL_BULL_ENGULFING', 'CDL_BEAR_ENGULFING',
+    'CDL_MORNINGSTAR', 'CDL_EVENINGSTAR'
 ]
 
 # News configuration
@@ -159,8 +162,16 @@ def create_triple_barrier_labels(df: pd.DataFrame, atr_multiplier: float,
         atr_val = atr.iloc[i]
         if atr_val == 0 or np.isnan(atr_val):
             atr_val = entry_price * 0.001
-        upper = entry_price + atr_multiplier * atr_val
-        lower = entry_price - atr_multiplier * atr_val
+            
+        # Dynamically scale the barrier based on the current volatility regime
+        dynamic_mult = atr_multiplier
+        if volatility_regime is not None and not pd.isna(volatility_regime.iloc[i]):
+            # Cap the multiplier expansion/contraction to sensible limits [0.8x to 1.5x]
+            vol_factor = np.clip(volatility_regime.iloc[i], 0.8, 1.5)
+            dynamic_mult = atr_multiplier * vol_factor
+            
+        upper = entry_price + dynamic_mult * atr_val
+        lower = entry_price - dynamic_mult * atr_val
 
         hit = None
         for j in range(1, min(max_lookahead, len(df) - i)):
@@ -255,7 +266,7 @@ def smooth_labels(y: np.ndarray, smoothing: float = 0.05) -> np.ndarray:
 # ------------------------------
 # TIME‑SERIES CROSS‑VALIDATION
 # ------------------------------
-def time_series_cv_score(X, y, params, n_splits=5):
+def time_series_cv_score(X, y, params, n_splits=10):
     """
     Evaluate XGBoost using TimeSeriesSplit (5 folds). Returns average logloss.
     """
@@ -547,14 +558,14 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         print(f"⚖️ Class distribution:")
         print(f"   SELL (0): {class_counts[0]} samples | HOLD (1): {class_counts[1]} samples | BUY (2): {class_counts[2]} samples")
 
-        # Time‑series cross‑validation (5 folds)
-        tscv = TimeSeriesSplit(n_splits=5)
+        # Time‑series cross‑validation (10 folds)
+        tscv = TimeSeriesSplit(n_splits=10)
         fold_scores = []
         best_models = []
         best_params = None
 
         for fold, (train_idx, val_idx) in enumerate(tscv.split(df)):
-            print(f"   Fold {fold+1}/5...")
+            print(f"   Fold {fold+1}/10...")
             train_df = df.iloc[train_idx]
             val_df = df.iloc[val_idx]
             X_train = train_df[feature_cols]
@@ -603,7 +614,7 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             best_models.append(model)
 
         avg_acc = np.mean(fold_scores)
-        print(f"✅ Cross‑validation accuracy: {avg_acc:.4f} (5 folds)")
+        print(f"✅ Cross‑validation accuracy: {avg_acc:.4f} (10 folds)")
 
         # Retrain on full data with best parameters and SHAP pruning
         print("   Retraining on full dataset with SHAP pruning...")
@@ -698,7 +709,7 @@ def train_fleet(hours: int = 5000):
     print("🚀 AEGIS‑1 FLEET TRAINING (OPTUNA + SHAP + TSCV)")
     print("   Features: 60+ technicals + BTC anchor + news sentiment")
     print("   Regime‑adaptive labeling | Asset‑specific ATR multipliers")
-    print("   TimeSeriesCV (5 folds) | SHAP feature pruning | Label smoothing")
+    print("   TimeSeriesCV (10 folds) | SHAP feature pruning | Label smoothing")
     print("=" * 70)
 
     for idx, symbol in enumerate(FLEET_SYMBOLS, 1):

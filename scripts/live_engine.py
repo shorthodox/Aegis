@@ -1251,6 +1251,13 @@ class SignalGenerator:
             elif _res_lvl > 0 and 0 <= _pre_res <= SR_SIGNAL_ZONE and predicted_class == 0 and ai_prob >= _sr_conf:
                 base_signal = "SHORT"
 
+        # Strict Macro Confluence Check
+        macro_conf = float(features_dict.get('macro_confluence_score', 0.0))
+        if base_signal == "LONG" and macro_conf < 1.0:
+            base_signal = "NEUTRAL"
+        elif base_signal == "SHORT" and macro_conf > -1.0:
+            base_signal = "NEUTRAL"
+
         # BTC safety downgrade for LONG signals
         if not btc_healthy and base_signal == "LONG":
             base_signal = "NEUTRAL"
@@ -1275,10 +1282,20 @@ class SignalGenerator:
         _conf_volume   = 78 if volume_cond == "high" else (58 if volume_cond == "normal" else 38)
         confluence_rate = (_conf_trend + _conf_momentum + _conf_volume) / 3.0
 
-        # Dynamic S/R candle requirement:
-        #   strong confluence (≥65) → 2 candles (market confirms the level)
-        #   weaker confluence       → 3 candles (need more price evidence)
-        _sr_candle_req = SR_CANDLE_CONFIRM_REQUIRED if confluence_rate >= 65 else SR_CANDLE_CONFIRM_REQUIRED + 1
+        # Dynamic S/R candle requirement: Must be at least 2 for trend reversal confirmation
+        _sr_candle_req = 2 if confluence_rate >= 65 else 3
+        
+        # Candlestick Pattern Bonus
+        cdl_bonus = False
+        if base_signal == "LONG":
+            if features_dict.get("CDL_HAMMER", 0) > 0 or features_dict.get("CDL_BULL_ENGULFING", 0) > 0 or features_dict.get("CDL_MORNINGSTAR", 0) > 0:
+                cdl_bonus = True
+        elif base_signal == "SHORT":
+            if features_dict.get("CDL_SHOOTINGSTAR", 0) > 0 or features_dict.get("CDL_BEAR_ENGULFING", 0) > 0 or features_dict.get("CDL_EVENINGSTAR", 0) > 0:
+                cdl_bonus = True
+                
+        if cdl_bonus:
+            _sr_candle_req = max(1, _sr_candle_req - 1)  # Explosive shape at SR zone grants faster entry
 
         # ──────────────────────────────────────────────────────────────
         # REVERSAL THRESHOLD — adjusted by confluence + SHAP alignment
@@ -1406,7 +1423,7 @@ class SignalGenerator:
                 _mid_ok = trend_str == "strong" or (trend_str == "normal" and volume_cond == "high")
                 if _mid_ok:
                     _mb_candles = ReversalDetector.count_confirming_candles(df_reversal, "LONG")
-                    if _mb_candles >= MOMENTUM_CANDLE_CONFIRM_REQUIRED:
+                    if _mb_candles >= max(2, MOMENTUM_CANDLE_CONFIRM_REQUIRED):
                         signal_status = "MOMENTUM_BREAKOUT"
                         candles_confirmed = _mb_candles
                     else:
@@ -1461,7 +1478,7 @@ class SignalGenerator:
                 _mid_ok = trend_str == "strong" or (trend_str == "normal" and volume_cond == "high")
                 if _mid_ok:
                     _mb_candles = ReversalDetector.count_confirming_candles(df_reversal, "SHORT")
-                    if _mb_candles >= MOMENTUM_CANDLE_CONFIRM_REQUIRED:
+                    if _mb_candles >= max(2, MOMENTUM_CANDLE_CONFIRM_REQUIRED):
                         signal_status = "MOMENTUM_BREAKOUT"
                         candles_confirmed = _mb_candles
                     else:
