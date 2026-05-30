@@ -900,6 +900,11 @@ def compute_weekly_features(df_1h: pd.DataFrame,
     try:
         d = df_1d.copy()
         d['timestamp'] = pd.to_datetime(d['timestamp'])
+        # Strip timezone so merge_asof never throws TypeError when df_1d and
+        # df_1h have different tz-awareness (e.g. one UTC-aware, one naive).
+        if d['timestamp'].dt.tz is not None:
+            d['timestamp'] = d['timestamp'].dt.tz_convert(None)
+
         w = (d.sort_values('timestamp')
               .set_index('timestamp')
               .resample('W')
@@ -910,41 +915,44 @@ def compute_weekly_features(df_1h: pd.DataFrame,
         if len(w) < 14:
             return empty
 
-        c = w['close']
-        ema12 = c.ewm(span=12, adjust=False).mean()
-        ema26 = c.ewm(span=26, adjust=False).mean()
+        c      = w['close']
+        ema12  = c.ewm(span=12, adjust=False).mean()
+        ema26  = c.ewm(span=26, adjust=False).mean()
         w_macd = ema12 - ema26
         w_sig  = w_macd.ewm(span=9, adjust=False).mean()
-        w_rsi  = compute_rsi(c, 14)
+        # fillna(50) before storing: RSI is NaN for the first period-1 bars;
+        # 0 would signal "maximally oversold" to the model — 50 is neutral.
+        w_rsi  = compute_rsi(c, 14).fillna(50.0)
         w_e200 = c.ewm(span=200, adjust=False).mean()
         w_s200 = c.rolling(200, min_periods=1).mean()
         bos    = compute_bos_choch(w, lookback=min(20, len(w) // 4))
-        w_trend = pd.Series(np.sign(c.values - w_s200.values), index=w.index)
+        w_trend = np.sign(c - w_s200)  # pandas aligns by index; no .values dance
 
         wf = pd.DataFrame({
             'timestamp':             w['timestamp'],
-            'weekly_macd':           w_macd.values,
-            'weekly_macd_signal':    w_sig.values,
-            'weekly_macd_hist':      (w_macd - w_sig).values,
-            'weekly_rsi':            w_rsi.values,
-            'weekly_ema200':         w_e200.values,
-            'weekly_sma200':         w_s200.values,
-            'dist_weekly_ema200':    (c.values / (w_e200.values + 1e-9) - 1),
-            'dist_weekly_sma200':    (c.values / (w_s200.values + 1e-9) - 1),
-            'weekly_bos_up':         bos['bos_up'].values,
-            'weekly_bos_down':       bos['bos_down'].values,
-            'weekly_structure_bias': bos['structure_bias'].values,
-            'weekly_trend':          w_trend.values,
+            'weekly_macd':           w_macd.to_numpy(),
+            'weekly_macd_signal':    w_sig.to_numpy(),
+            'weekly_macd_hist':      (w_macd - w_sig).to_numpy(),
+            'weekly_rsi':            w_rsi.to_numpy(),
+            'weekly_ema200':         w_e200.to_numpy(),
+            'weekly_sma200':         w_s200.to_numpy(),
+            'dist_weekly_ema200':    (c / (w_e200 + 1e-9) - 1).to_numpy(),
+            'dist_weekly_sma200':    (c / (w_s200 + 1e-9) - 1).to_numpy(),
+            'weekly_bos_up':         bos['bos_up'].to_numpy(),
+            'weekly_bos_down':       bos['bos_down'].to_numpy(),
+            'weekly_structure_bias': bos['structure_bias'].to_numpy(),
+            'weekly_trend':          w_trend.to_numpy(),
         })
+
         h = df_1h[['timestamp']].copy()
         h['timestamp'] = pd.to_datetime(h['timestamp'])
-        # Sort for merge_asof but keep original index labels so we can restore order.
+        if h['timestamp'].dt.tz is not None:
+            h['timestamp'] = h['timestamp'].dt.tz_convert(None)
+
         h_sorted = h.sort_values('timestamp')
         merged = pd.merge_asof(h_sorted,
                                wf.sort_values('timestamp'),
                                on='timestamp', direction='backward')
-        # h_sorted.index carries the original df_1h row labels; reindex restores
-        # the original row order after the sort (handles unsorted input correctly).
         merged.index = h_sorted.index
         return merged[_cols].reindex(df_1h.index).fillna(0.0)
     except Exception as e:
