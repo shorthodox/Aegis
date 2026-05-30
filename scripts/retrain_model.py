@@ -1505,19 +1505,27 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             if hit_target and (not holdout_reliable or combined_ok):
                 tradeable_final = True
 
-            # Final safety veto: never ship a token whose combined holdout
-            # expectancy is negative when the sample is large enough to trust.
-            # This catches tokens saved by the per-side bypass despite overall
-            # negative PnL (e.g. FIDA -4.21%, NMR -0.80%, BAND -0.43%).
-            if holdout_reliable and bt['expectancy_pct'] <= 0:
+            # Final safety veto: disables tokens where no per-side precision
+            # check passed AND the combined holdout expectancy is negative.
+            # Scoped to "no per-side approval" because bt['expectancy_pct'] is
+            # computed from the combined rank-gate threshold, which fires a
+            # different (often worse) subset of signals than the per-side
+            # thresholds used by the live engine. When a side earned per-side
+            # approval (precision >= breakeven), that side is profitable live —
+            # applying the combined veto there would incorrectly kill it.
+            per_side_approved = tradeable_buy_holdout or tradeable_sell_holdout
+            veto_fires = (holdout_reliable
+                          and bt['expectancy_pct'] <= 0
+                          and not per_side_approved)
+            if veto_fires:
                 tradeable_final = False
 
             oof_holdout_gap = abs(dev_prec - fired_prec)
 
             if not tradeable_final:
-                if holdout_reliable and bt['expectancy_pct'] <= 0:
+                if veto_fires:
                     print(f"      DISABLED: negative expectancy ({bt['expectancy_pct']:+.3f}%) "
-                          f"vetoed per-side approval (combined prec {fired_prec:.1%}).")
+                          f"with no per-side precision approval (combined prec {fired_prec:.1%}).")
                 else:
                     print(f"      DISABLED: neither side cleared holdout breakeven "
                           f"{breakeven:.1%} with ≥{_MIN_SIDE} trades and prec ≥50%.")
