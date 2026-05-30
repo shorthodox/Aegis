@@ -697,8 +697,19 @@ async def run_engine_background():
                     print(f"⚠️ Failed to write live_signals.json: {_e}")
                 
                 # --- write latest signals to Firebase Firestore ---
+                # Skip during warmup: bootstrap_done < bootstrap_total means the
+                # first full scan hasn't finished yet. Pushing partial results
+                # would write incomplete signal data to Firestore for every symbol
+                # as it completes, flooding the DB with warmup-state entries.
+                _eng = LIVE_STATE.engine
+                _warming_up = (_eng is not None and
+                               _eng.bootstrap_done < _eng.bootstrap_total)
+                if _warming_up:
+                    print(f"[PRODUCER] Warmup in progress "
+                          f"({_eng.bootstrap_done}/{_eng.bootstrap_total}) "
+                          f"— Firestore push deferred.")
                 try:
-                    signals_data = LIVE_STATE.data.get('signals', {})
+                    signals_data = {} if _warming_up else LIVE_STATE.data.get('signals', {})
                     if signals_data:
                         print(f"[PRODUCER] Attempting to push {len(signals_data)} signals to Firestore...")
                     batch = db.batch()
