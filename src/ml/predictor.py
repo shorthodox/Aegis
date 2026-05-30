@@ -283,6 +283,40 @@ class Predictor:
         T = float(self.meta.get("calibration_temperature", 1.0))
         return self._apply_temperature(proba, T)
 
+    def predict_meta_batch(self, df_features: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
+        """Run primary + meta models on the full dataframe (batch, no lookahead).
+
+        Returns
+        -------
+        proba     : ndarray (n, 3)  — primary [p_sell, p_hold, p_buy]
+        meta_conf : ndarray (n,)    — meta model confidence per row
+                    (falls back to max primary prob when meta model absent)
+        """
+        proba = self.predict_proba(df_features)          # (n, 3)
+        if self.meta_model is None:
+            return proba, proba.max(axis=1)
+
+        mcols     = self.meta.get("meta_feature_cols")
+        feat_cols = self.meta.get("feature_cols") or (
+            self.model.feature_names if self.model else []
+        )
+        base = self._align(df_features, feat_cols).copy()
+
+        if mcols and any(c.startswith("_p_") for c in mcols):
+            base["_p_sell"]    = proba[:, 0]
+            base["_p_hold"]    = proba[:, 1]
+            base["_p_buy"]     = proba[:, 2]
+            base["_p_max"]     = proba.max(axis=1)
+            base["_p_dir_gap"] = np.abs(proba[:, 2] - proba[:, 0])
+
+        if mcols:
+            base = base.reindex(columns=mcols, fill_value=0)
+
+        meta_conf = self.meta_model.predict(
+            xgb.DMatrix(base, feature_names=list(base.columns))
+        ).astype(float)
+        return proba, meta_conf
+
     def predict_signal(self, df_features: pd.DataFrame) -> Dict[str, Any]:
         """Return the gated trading decision for the LAST row of df_features.
         This is what the bot should emit. Honours the meta gate + threshold so

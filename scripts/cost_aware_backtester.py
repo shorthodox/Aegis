@@ -363,12 +363,26 @@ def _cost_adjusted_expected_return(prob: float, atr: float, entry: float, atr_sl
 # ADAPTIVE BACKTESTER (simplified, no external JSON load)
 # ============================================================
 class AdaptiveBacktester:
+    # Class-level cache: prepared df is shared across all three modes for a symbol
+    # so models are loaded and features computed only once per symbol run.
+    _df_cache: Dict[str, pd.DataFrame] = {}
+
     def __init__(self, symbol: str, mode: str, initial_balance: float = INITIAL_BALANCE):
         self.symbol = symbol
         self.mode = mode
         self.initial_balance = initial_balance
         self.params = MODE_PARAMS[mode]
         self.mode_base = MODE_BASE_THRESHOLDS[mode]
+
+        # Load predictor once and read model metadata for this symbol.
+        self.predictor = Predictor(symbol)
+        meta = self.predictor.meta
+        self.thr_buy       = float(meta.get("meta_threshold_buy",
+                                   meta.get("meta_threshold", 0.62)))
+        self.thr_sell      = float(meta.get("meta_threshold_sell",
+                                   meta.get("meta_threshold", 0.62)))
+        self.tradeable_buy  = bool(meta.get("tradeable_buy",  meta.get("tradeable", True)))
+        self.tradeable_sell = bool(meta.get("tradeable_sell", meta.get("tradeable", True)))
 
     def run(self, hours: int = DATA_HOURS) -> BacktestResult:
         result = BacktestResult(symbol=self.symbol, mode=self.mode)
@@ -382,7 +396,6 @@ class AdaptiveBacktester:
             df["efficiency_ratio_10"] = compute_efficiency_ratio(df["close"], period=10)
 
         p = self.params
-        entry_prob = p["entry_prob"]
         risk_pct = p["risk_pct"]
         atr_sl = p["atr_sl"]
         atr_tp = p["atr_tp"]
@@ -450,17 +463,25 @@ class AdaptiveBacktester:
                 continue
 
             # ── Signal filter ─────────────────────────────────────────────
-            # Use the stronger of buy/sell probability to determine direction.
-            # Gate against entry_prob (mode threshold) — raw primary probability
-            # is the best proxy available for batch backtesting without running
-            # the meta model per-row.
-            prob_buy  = float(row.get("prob_buy",  0.0))
-            prob_sell = float(row.get("prob_sell", 0.0))
-            if max(prob_buy, prob_sell) <= entry_prob:
-                continue
+            # Use the meta model confidence (not raw primary probability) and
+            # per-symbol tradeability flags, exactly mirroring the live engine.
+            # `meta_conf` and `meta_direction` are pre-computed in _fetch_and_prepare.
+            meta_conf = float(row.get("meta_conf", 0.0))
+            meta_dir  = int(row.get("meta_direction", 1))  # 2=BUY, 0=SELL, 1=HOLD
 
-            direction = "long" if prob_buy >= prob_sell else "short"
-            prob = prob_buy if direction == "long" else prob_sell
+            if meta_dir == 2:   # BUY proposal
+                if not self.tradeable_buy or meta_conf < self.thr_buy:
+                    continue
+                direction = "long"
+                prob = float(row.get("prob_buy", meta_conf))
+            elif meta_dir == 0: # SELL proposal
+                if not self.tradeable_sell or meta_conf < self.thr_sell:
+                    continue
+                direction = "short"
+                prob = float(row.get("prob_sell", meta_conf))
+            else:
+                continue        # HOLD proposal — never trade
+
             total_signals += 1
 
             # Regime detection
@@ -557,12 +578,15 @@ class AdaptiveBacktester:
         return None
 
     def _fetch_and_prepare(self, hours: int) -> Optional[pd.DataFrame]:
-        predictor = Predictor(self.symbol)
-        df = predictor.fetch_live_data(limit=hours)
+        # Return cached result so all three modes share one model-load + feature-compute.
+        if self.symbol in AdaptiveBacktester._df_cache:
+            return AdaptiveBacktester._df_cache[self.symbol]
+
+        df = self.predictor.fetch_live_data(limit=hours)
         if df is None or df.empty:
             return None
-        btc_df = predictor.fetch_btc_data(limit=hours)
-        news_df = predictor.load_news_data()
+        btc_df = self.predictor.fetch_btc_data(limit=hours)
+        news_df = self.predictor.load_news_data()
         if btc_df is None or btc_df.empty:
             btc_df = pd.DataFrame({"timestamp": df["timestamp"], "close": 0.0})
             btc_df["open"] = btc_df["high"] = btc_df["low"] = btc_df["close"]
@@ -572,7 +596,8 @@ class AdaptiveBacktester:
 
         df_1d = None
         try:
-            df_1d = predictor.fetch_live_data(timeframe='1d', limit=max(1000, int(hours / 24) + 50))
+            df_1d = self.predictor.fetch_live_data(
+                timeframe='1d', limit=max(1000, int(hours / 24) + 50))
         except Exception:
             df_1d = None
 
@@ -590,20 +615,21 @@ class AdaptiveBacktester:
             return None
         df = df.sort_values('timestamp').reset_index(drop=True)
 
-        probabilities = predictor.predict_proba(df)
-        if isinstance(probabilities, np.ndarray) and probabilities.ndim == 2:
-            df['prob_sell'] = [row[0] for row in probabilities]
-            df['prob_hold'] = [row[1] for row in probabilities]
-            df['prob_buy'] = [row[2] for row in probabilities]
-            df['prob'] = df['prob_buy']
-        else:
-            prob_values = [float(x) for x in list(probabilities)] if hasattr(probabilities, '__iter__') else [float(probabilities)]
-            df['prob'] = prob_values
-            df['prob_buy'] = df['prob']
-            df['prob_hold'] = 0.0
-            df['prob_sell'] = 0.0
+        # Run primary + meta models in batch — mirrors live engine gating exactly.
+        proba, meta_conf = self.predictor.predict_meta_batch(df)
+        df['prob_sell']      = proba[:, 0]
+        df['prob_hold']      = proba[:, 1]
+        df['prob_buy']       = proba[:, 2]
+        # meta_direction: 2=BUY proposal, 0=SELL proposal, 1=HOLD (neither dominant)
+        direction_raw        = np.where(proba[:, 2] >= proba[:, 0], 2, 0)
+        df['meta_direction'] = np.where(
+            np.maximum(proba[:, 2], proba[:, 0]) > proba[:, 1],
+            direction_raw, 1
+        )
+        df['meta_conf'] = meta_conf
+        df['atr_14']    = compute_atr(df, 14)
 
-        df['atr_14'] = compute_atr(df, 14)
+        AdaptiveBacktester._df_cache[self.symbol] = df
         return df
 
 
@@ -611,6 +637,7 @@ class AdaptiveBacktester:
 # FLEET RUNNER
 # ============================================================
 def run_backtest_fleet():
+    AdaptiveBacktester._df_cache.clear()   # fresh run, no stale cached frames
     print("=" * 80)
     print("🧠 ADAPTIVE BACKTESTER v2.1 – Generating results for live engine")
     print(f"   Balance ${INITIAL_BALANCE:,.0f} | Data {DATA_HOURS} hrs | {len(FLEET)} symbols")
