@@ -928,8 +928,15 @@ def compute_weekly_features(df_1h: pd.DataFrame,
         bos    = compute_bos_choch(w, lookback=min(20, len(w) // 4))
         w_trend = np.sign(c - w_s200)  # pandas aligns by index; no .values dance
 
+        # Binance 1d candle timestamps are open times (Sunday 00:00 UTC).
+        # resample('W') labels the weekly bar at Sunday 00:00, but the bar's
+        # close='last' is Sunday's daily close which completes at 23:59 UTC.
+        # Shift +1 day so the completed weekly bar is only available from
+        # Monday 00:00 onward — eliminates the full-day Sunday lookahead.
+        available_from = w['timestamp'] + pd.Timedelta(days=1)
+
         wf = pd.DataFrame({
-            'timestamp':             w['timestamp'],
+            'timestamp':             available_from.to_numpy(),
             'weekly_macd':           w_macd.to_numpy(),
             'weekly_macd_signal':    w_sig.to_numpy(),
             'weekly_macd_hist':      (w_macd - w_sig).to_numpy(),
