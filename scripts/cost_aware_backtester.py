@@ -563,7 +563,7 @@ class AdaptiveBacktester:
             return None
         df = df.sort_values('timestamp').reset_index(drop=True)
 
-        probabilities = predictor.predict(df)
+        probabilities = predictor.predict_proba(df)
         if isinstance(probabilities, np.ndarray) and probabilities.ndim == 2:
             df['prob_sell'] = [row[0] for row in probabilities]
             df['prob_hold'] = [row[1] for row in probabilities]
