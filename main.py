@@ -304,30 +304,6 @@ class _TrackRecordManager:
 _tr_ws_manager = _TrackRecordManager()
 
 
-@app.websocket("/ws/track-record")
-async def websocket_track_record(websocket: WebSocket):
-    """Stream live track-record updates to the frontend track-record page."""
-    await _tr_ws_manager.connect(websocket)
-    try:
-        # Send current snapshot immediately on connect
-        from scripts.live_engine import TRACK_RECORD_PATH as _TR_PATH
-        _tr_path = _TR_PATH
-        if _tr_path.exists():
-            try:
-                with open(_tr_path, 'r', encoding='utf-8') as _f:
-                    await websocket.send_json(json.load(_f))
-            except Exception:
-                pass
-        # Keep connection alive; engine broadcasts push new data
-        while True:
-            await asyncio.sleep(30)
-            await websocket.send_json({"type": "ping"})
-    except WebSocketDisconnect:
-        _tr_ws_manager.disconnect(websocket)
-    except Exception:
-        _tr_ws_manager.disconnect(websocket)
-
-
 # -------------------------------------------------------------------
 # Track Record System
 # Logs every actionable BUY/SELL signal, monitors TP/SL hits, and
@@ -853,6 +829,31 @@ async def lifespan(app: FastAPI):
     dev_key_task.cancel()
 
 app = FastAPI(title="Aegis-1 by Gatekeeper", lifespan=lifespan)
+
+
+@app.websocket("/ws/track-record")
+async def websocket_track_record(websocket: WebSocket):
+    """Stream live track-record updates to the frontend track-record page."""
+    await _tr_ws_manager.connect(websocket)
+    try:
+        # Send current snapshot immediately on connect
+        from scripts.live_engine import TRACK_RECORD_PATH as _TR_PATH
+        _tr_path = _TR_PATH
+        if _tr_path.exists():
+            try:
+                with open(_tr_path, 'r', encoding='utf-8') as _f:
+                    await websocket.send_json(json.load(_f))
+            except Exception:
+                pass
+        # Keep connection alive; engine broadcasts push new data
+        while True:
+            await asyncio.sleep(30)
+            await websocket.send_json({"type": "ping"})
+    except WebSocketDisconnect:
+        _tr_ws_manager.disconnect(websocket)
+    except Exception:
+        _tr_ws_manager.disconnect(websocket)
+
 
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
 app.add_middleware(
