@@ -989,27 +989,23 @@ def compute_category_confluence(df: pd.DataFrame) -> pd.DataFrame:
     """
     get = df.get  # shorthand
 
-    def _s(*cols: str) -> Optional[pd.Series]:
-        """Mean of sign(col) for existing columns. Returns None if none exist."""
-        parts = [np.sign(df[c]).astype(float) for c in cols if c in df.columns]
-        if not parts:
-            return None
-        return pd.concat(parts, axis=1).mean(axis=1)
-
     def _centered(*pairs) -> Optional[pd.Series]:
         """Mean of sign(col - center) for (col, center) pairs."""
-        parts = [np.sign(df[c] - v).astype(float)
+        parts = [np.sign((df[c] - v).to_numpy(dtype=float))
                  for c, v in pairs if c in df.columns]
         if not parts:
             return None
-        return pd.concat(parts, axis=1).mean(axis=1)
+        return pd.Series(np.nanmean(np.stack(parts, axis=1), axis=1), index=df.index)
 
     def _pos(*cols: str) -> Optional[pd.Series]:
         """Map [0,1] position columns to [-1,+1] and average."""
-        parts = [(df[c] * 2 - 1) for c in cols if c in df.columns]
+        # Clip each part before averaging so outliers (e.g. bb_pct_b outside [0,1])
+        # don't skew the mean; the per-part clamp makes the final average also in [-1,+1].
+        parts = [np.clip(df[c].to_numpy(dtype=float) * 2 - 1, -1.0, 1.0)
+                 for c in cols if c in df.columns]
         if not parts:
             return None
-        return pd.concat(parts, axis=1).mean(axis=1).clip(-1, 1)
+        return pd.Series(np.nanmean(np.stack(parts, axis=1), axis=1), index=df.index)
 
     scores: Dict[str, pd.Series] = {}
 
