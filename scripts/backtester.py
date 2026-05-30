@@ -18,26 +18,6 @@ if root_dir not in sys.path:
 
 from src.ml.predictor import Predictor
 from src.ml.feature_engine import prepare_features, compute_atr
-from src.ml.delltandecay import adjust_threshold_by_technical_and_fundamental
-
-# -------------------------------------------------------------------
-# ATR Multiplier for Triple Barriers
-# -------------------------------------------------------------------
-def get_atr_multiplier(symbol: str) -> float:
-    """
-    ATR multipliers for triple barriers (aligned with retrain_model.py).
-    Heavy caps use 1.2x ATR.
-    Low-accuracy assets (like SUI, DOT) get wider barriers (1.8x) to avoid stop-outs.
-    Others use 1.5x.
-    """
-    high_cap = ['BTC/USDT', 'ETH/USDT', 'BNB/USDT']
-    low_accuracy = ['SUI/USDT', 'DOT/USDT', 'SEI/USDT', 'KAS/USDT']
-    if symbol in high_cap:
-        return 1.2
-    elif symbol in low_accuracy:
-        return 1.8
-    else:
-        return 1.5
 
 # -------------------------------------------------------------------
 # CONFIGURATION
@@ -130,22 +110,21 @@ def get_dynamic_barrier_multiplier(vol_regime: Any, alpha_flag: str) -> float:
 
 def select_signal(buy_prob: float, sell_prob: float, hold_prob: float,
                   btc_buy_prob: float, btc_sell_prob: float,
-                  threshold: float, row: pd.Series) -> str:
-    if hold_prob >= max(buy_prob, sell_prob) and hold_prob > 0.55:
-        return 'HOLD'
+                  thr_buy: float, thr_sell: float,
+                  tradeable_buy: bool, tradeable_sell: bool) -> str:
+    """Gate signals using the per-symbol thresholds stored in the trained model JSON.
+    BTC guard still applies so we only trade when BTC context aligns."""
+    buy_ok  = tradeable_buy  and buy_prob  >= thr_buy  and btc_buy_prob  >= BTC_GUARD_BUY
+    sell_ok = tradeable_sell and sell_prob >= thr_sell and btc_sell_prob >= BTC_GUARD_SELL
 
-    buy_strength = buy_prob - max(hold_prob, sell_prob)
-    sell_strength = sell_prob - max(hold_prob, buy_prob)
-    momentum = float(row.get('close_delta_4', 0.0))
+    if buy_ok and sell_ok:
+        # Both sides clear — take the stronger conviction
+        buy_ok, sell_ok = (True, False) if buy_prob >= sell_prob else (False, True)
 
-    if buy_prob >= threshold and buy_strength >= CONVICTION_SPREAD and btc_buy_prob >= BTC_GUARD_BUY:
-        if momentum >= 0 or buy_prob > 0.75:
-            return 'BUY'
-
-    if sell_prob >= threshold and sell_strength >= CONVICTION_SPREAD and btc_sell_prob >= BTC_GUARD_SELL:
-        if momentum <= 0 or sell_prob > 0.75:
-            return 'SELL'
-
+    if buy_ok:
+        return 'BUY'
+    if sell_ok:
+        return 'SELL'
     return 'HOLD'
 
 
@@ -158,7 +137,16 @@ class SignalAnalyzer:
         self.lookahead = lookahead
         self.predictor = Predictor(symbol)
         self.btc_predictor = Predictor('BTC/USDT')
-        self.multiplier = get_atr_multiplier(symbol)
+        # Read ATR multiplier and per-side meta thresholds from the trained model JSON
+        # so the backtester uses exactly the same gates as the live engine.
+        meta = self.predictor.meta
+        self.multiplier    = float(meta.get('atr_multiplier', 1.5))
+        self.thr_buy       = float(meta.get('meta_threshold_buy',
+                                   meta.get('meta_threshold', MIN_CONFIDENCE_FOR_TRADE)))
+        self.thr_sell      = float(meta.get('meta_threshold_sell',
+                                   meta.get('meta_threshold', MIN_CONFIDENCE_FOR_TRADE)))
+        self.tradeable_buy  = bool(meta.get('tradeable_buy',  meta.get('tradeable', True)))
+        self.tradeable_sell = bool(meta.get('tradeable_sell', meta.get('tradeable', True)))
 
     def fetch_and_prepare_data(self, hours: int = DATA_HOURS) -> Optional[pd.DataFrame]:
         """Fetch OHLCV, BTC data, news, apply feature engineering, return DataFrame with 'prob'."""
@@ -205,7 +193,7 @@ class SignalAnalyzer:
 
         # Generate predictions
         print(f"   Generating predictions...")
-        predictions = self.predictor.predict(df)
+        predictions = self.predictor.predict_proba(df)
         if isinstance(predictions, np.ndarray) and predictions.ndim == 2:
             df['prob_sell'] = [row[0] for row in predictions]
             df['prob_hold'] = [row[1] for row in predictions]
@@ -233,7 +221,7 @@ class SignalAnalyzer:
         )
         if btc_features is not None and not btc_features.empty:
             btc_features = btc_features[btc_features['timestamp'].isin(df['timestamp'])].sort_values('timestamp').reset_index(drop=True)
-            btc_predictions = self.btc_predictor.predict(btc_features)
+            btc_predictions = self.btc_predictor.predict_proba(btc_features)
             if isinstance(btc_predictions, np.ndarray) and btc_predictions.ndim == 2:
                 btc_prob_series = pd.Series(index=btc_features['timestamp'], data=[row.tolist() for row in btc_predictions])
             else:
@@ -302,23 +290,13 @@ class SignalAnalyzer:
                 continue
 
             sell_prob, hold_prob, buy_prob = normalize_probability(prob)
-            btc_sell_prob, btc_hold_prob, btc_buy_prob = normalize_probability(row.get('btc_prob', [0.0, 1.0, 0.0]))
-
-            base_thresh = 0.72 if row['alpha_risk_flag'] == 'HIGH_RISK_VOLATILITY' else DYNAMIC_THRESHOLD_BASE
-            threshold = adjust_threshold_by_technical_and_fundamental(
-                base_thresh,
-                vol_regime=row.get('volatility_regime', None),
-                news_score=row.get('news_score', 0.0),
-                efficiency_ratio=row.get('efficiency_ratio', row.get('efficiency_ratio_10', 0.0)),
-                btc_anchor=row.get('btc_dist_ema200', 0.0)
-            )
-            threshold = max(threshold, MIN_CONFIDENCE_FOR_TRADE)
+            btc_sell_prob, _, btc_buy_prob = normalize_probability(row.get('btc_prob', [0.0, 1.0, 0.0]))
 
             predicted = select_signal(
                 buy_prob, sell_prob, hold_prob,
                 btc_buy_prob, btc_sell_prob,
-                threshold,
-                row
+                self.thr_buy, self.thr_sell,
+                self.tradeable_buy, self.tradeable_sell,
             )
 
             entry = row['close']
@@ -427,7 +405,8 @@ class SignalAnalyzer:
                     'prob_sell': round(sell_prob, 4),
                     'prob_hold': round(hold_prob, 4),
                     'prob_buy': round(buy_prob, 4),
-                    'threshold': round(threshold, 4),
+                    'thr_buy': round(self.thr_buy, 4),
+                    'thr_sell': round(self.thr_sell, 4),
                     'btc_buy_prob': round(btc_buy_prob, 4),
                     'btc_sell_prob': round(btc_sell_prob, 4),
                     'future_return_pct': round(future_return * 100, 2),
