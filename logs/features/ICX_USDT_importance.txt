@@ -1,0 +1,32 @@
+Feature importance (gain) for ICX/USDT
+==================================================
+efficiency_ratio_10                 : 66.800514
+linreg_r2_14                        : 15.943588
+volatility_regime                   : 11.295820
+atr_band_position                   : 10.374154
+r2                                  : 6.955287
+dist_ema_100                        : 6.867177
+returns_1h_decay_mean_24            : 6.361001
+dist_s2                             : 6.355026
+market_phase                        : 6.300949
+weekly_macd_signal                  : 6.262494
+gk_vol                              : 6.254984
+weekly_macd_hist                    : 6.247622
+hurst                               : 6.242728
+dist_avwap_200                      : 6.170832
+atr_14                              : 6.111029
+weekly_rsi                          : 5.785422
+trend_regime                        : 5.675726
+vwap_decay_std_24                   : 5.662200
+vwap                                : 5.644995
+vwap_decay_mean_24                  : 5.593774
+close_decay_std_24                  : 5.408147
+fib_range_pct                       : 5.310704
+fib_dist_618                        : 5.212707
+adx_14                              : 5.192344
+fib_dist_236                        : 5.182069
+volume_decay_std_24                 : 5.125430
+dow_sin                             : 5.025557
+volume_decay_mean_24                : 5.015421
+returns_1h_decay_std_24             : 4.868909
+btc_corr_24h                        : 4.696688

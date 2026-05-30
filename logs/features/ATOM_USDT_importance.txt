@@ -1,0 +1,32 @@
+Feature importance (gain) for ATOM/USDT
+==================================================
+efficiency_ratio_10                 : 50.215092
+trend_regime                        : 7.032522
+volatility_regime                   : 6.685899
+atr_14                              : 3.748148
+market_phase                        : 3.708159
+weekly_macd                         : 3.599844
+linreg_r2_14                        : 3.557615
+avwap_200                           : 3.225042
+acc_dist                            : 3.191621
+vwap_delta_12                       : 3.179068
+vwap                                : 2.967874
+starc_position                      : 2.951759
+kvo                                 : 2.902296
+hurst                               : 2.778075
+ema_200                             : 2.765434
+r2                                  : 2.622864
+atr_band_position                   : 2.577843
+adx_14                              : 2.534292
+dist_avwap_200                      : 2.428535
+dist_vwap                           : 2.426427
+kvo_signal                          : 2.368041
+gk_vol                              : 2.361807
+fib_range_pct                       : 2.347317
+rolling_volatility                  : 2.326607
+dist_r2                             : 2.279150
+weekly_macd_hist                    : 2.269565
+aroon_osc                           : 2.180389
+close_decay_std_24                  : 2.141947
+volume_decay_std_24                 : 2.117956
+donchian_width                      : 2.087819

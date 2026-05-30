@@ -706,21 +706,43 @@ class LiveEngine:
             for sig in signals:
                 if sig is None:
                     continue
-                symbol = sig["symbol"]
-                existing = self.wallet.open_trades.get(symbol)
+                symbol       = sig["symbol"]
+                current_price = sig["price"]
+                signal_type  = sig.get("signal", "HOLD")
+                existing     = self.wallet.open_trades.get(symbol)
+
                 if existing:
-                    current_price = sig["price"]
+                    # ── Dynamic TP: exit when the model fires the opposite direction ──
+                    # This is the trend-reversal TP: we entered on one reversal signal;
+                    # we exit when the model detects the next reversal in the other direction.
+                    opposite_fired = (
+                        (existing.trade_type == "LONG"  and signal_type in ("SELL", "STRONG_SELL")) or
+                        (existing.trade_type == "SHORT" and signal_type in ("BUY", "WEAK_BUY", "STRONG_BUY"))
+                    )
+
                     if existing.trade_type == "LONG":
                         if current_price <= existing.stop_loss:
                             self.wallet.close_trade(symbol, existing.stop_loss, "STOP_LOSS")
-                        elif current_price >= existing.take_profit:
+                        elif opposite_fired:
+                            self.wallet.close_trade(symbol, current_price, "MODEL_REVERSAL_TP")
+                        elif current_price >= existing.take_profit > 0:
+                            # Hard ceiling fallback (wide ATR multiple) — only if no reversal signal yet
                             self.wallet.close_trade(symbol, existing.take_profit, "TAKE_PROFIT")
+
+                    elif existing.trade_type == "SHORT":
+                        if current_price >= existing.stop_loss:
+                            self.wallet.close_trade(symbol, existing.stop_loss, "STOP_LOSS")
+                        elif opposite_fired:
+                            self.wallet.close_trade(symbol, current_price, "MODEL_REVERSAL_TP")
+                        elif current_price <= existing.take_profit > 0:
+                            self.wallet.close_trade(symbol, existing.take_profit, "TAKE_PROFIT")
+
                 else:
-                    if sig["signal"] in ("BUY", "WEAK_BUY") and self.wallet.can_open_trade(symbol, sig["price"]):
+                    if signal_type in ("BUY", "WEAK_BUY") and self.wallet.can_open_trade(symbol, sig["price"]):
                         risk_pct = sig["risk_pct"]
                         sl_price = sig["price"] - sig["atr_sl"] * sig["atr"]
                         tp_price = sig["price"] + sig["atr_tp"] * sig["atr"]
-                        confidence = 1.0 if sig["signal"] == "BUY" else 0.6
+                        confidence = 1.0 if signal_type == "BUY" else 0.6
                         units = self.wallet.get_position_units(symbol, sig["price"], sl_price, risk_pct, confidence)
                         if units > 0:
                             trade = LiveTrade(

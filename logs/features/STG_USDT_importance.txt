@@ -1,0 +1,32 @@
+Feature importance (gain) for STG/USDT
+==================================================
+efficiency_ratio_10                 : 41.710651
+trend_regime                        : 6.751595
+volatility_regime                   : 6.018088
+atr_band_position                   : 6.000370
+linreg_r2_14                        : 5.724716
+supertrend_dir                      : 5.353707
+vwap                                : 4.045135
+weekly_macd                         : 3.782523
+rolling_volatility                  : 3.590096
+weekly_macd_signal                  : 3.420438
+market_phase                        : 3.416788
+vwap_decay_mean_24                  : 3.416420
+ema_200                             : 3.375155
+weekly_macd_hist                    : 3.344236
+dist_avwap_200                      : 3.226836
+funding_rate                        : 3.196687
+s2                                  : 3.182292
+vwap_decay_std_24                   : 3.167372
+dist_s2                             : 3.155065
+fib_dist_500                        : 3.147260
+dow_sin                             : 3.146144
+dist_ema_200                        : 3.142653
+atr_14                              : 3.108867
+adx_14                              : 3.075033
+supertrend                          : 3.032954
+funding_rate_ma8                    : 2.995318
+rsi_7                               : 2.964179
+btc_dist_ema200                     : 2.900303
+aroon_up                            : 2.845461
+supertrend_dist                     : 2.827206

@@ -1,0 +1,32 @@
+Feature importance (gain) for ARKM/USDT
+==================================================
+efficiency_ratio_10                 : 84.213478
+linreg_r2_14                        : 34.226227
+atr_band_position                   : 17.472580
+starc_position                      : 13.185353
+volatility_regime                   : 12.944221
+dist_weekly_ema200                  : 11.163851
+tsi                                 : 10.792689
+bb_width_percentile                 : 10.601717
+weekly_macd_hist                    : 10.592288
+market_phase                        : 10.150854
+gk_vol                              : 9.843335
+donchian_width                      : 9.710545
+weekly_rsi                          : 9.613421
+vwap                                : 9.583076
+fib_range_pct                       : 9.352915
+returns_1h_decay_std_24             : 9.331791
+keltner_width                       : 9.261912
+dist_ema_100                        : 9.188484
+macd                                : 9.089756
+vwap_decay_std_24                   : 8.933805
+dist_vwap                           : 8.909601
+close_decay_std_24                  : 8.612827
+weekly_macd_signal                  : 8.563659
+weekly_macd                         : 8.499958
+volume_decay_std_24                 : 8.426537
+cmf_20                              : 8.420837
+entropy                             : 8.404222
+supertrend                          : 8.176537
+dist_bear_ob                        : 8.074931
+dow_sin                             : 7.931662

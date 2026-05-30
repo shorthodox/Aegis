@@ -1,0 +1,32 @@
+Feature importance (gain) for MANTA/USDT
+==================================================
+efficiency_ratio_10                 : 67.504005
+linreg_r2_14                        : 11.175291
+volatility_regime                   : 10.665072
+atr_band_position                   : 9.603703
+market_phase                        : 9.122054
+starc_position                      : 6.729188
+macd_signal                         : 5.932469
+fib_range_pct                       : 5.447758
+vwap_delta_4                        : 5.333489
+ema_50_200_cross                    : 5.303192
+btc_dist_ema200                     : 5.267957
+dist_avwap_200                      : 5.254029
+dist_rolling_vwap                   : 5.188624
+r2                                  : 5.085243
+vwap_delta_1                        : 5.062935
+fib_dist_382                        : 4.975578
+ichimoku_senkou_a                   : 4.970765
+trend_regime                        : 4.949654
+vwap_delta_12                       : 4.920495
+close_decay_std_24                  : 4.895251
+atr_14                              : 4.883732
+fvg_distance                        : 4.832441
+aroon_up                            : 4.790790
+weekly_macd                         : 4.741695
+keltner_width                       : 4.717650
+vwap                                : 4.685255
+dist_ema_200                        : 4.684545
+dist_vwap                           : 4.631207
+aroon_osc                           : 4.587914
+vwap_decay_std_24                   : 4.547857

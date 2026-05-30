@@ -1,0 +1,32 @@
+Feature importance (gain) for ENS/USDT
+==================================================
+efficiency_ratio_10                 : 51.231552
+linreg_r2_14                        : 6.873120
+volatility_regime                   : 6.866971
+trend_regime                        : 6.252695
+market_phase                        : 5.393806
+pct_dist_to_support                 : 3.631841
+atr_band_position                   : 3.387690
+fib_range_pct                       : 3.310785
+hurst                               : 3.190969
+ema_100                             : 3.187515
+acc_dist                            : 3.146903
+volume_decay_std_24                 : 3.106751
+vwap                                : 3.065374
+weekly_macd                         : 3.047359
+vwap_decay_std_24                   : 2.998042
+weekly_macd_signal                  : 2.988041
+fib_dist_236                        : 2.861569
+supertrend_dist                     : 2.757063
+volume_decay_mean_24                : 2.749236
+returns_1h_decay_std_24             : 2.697356
+close                               : 2.663230
+pvt                                 : 2.587959
+atr_14                              : 2.552810
+vwap_delta_4                        : 2.552088
+close_decay_std_24                  : 2.517606
+avwap_200                           : 2.507887
+dist_vwap                           : 2.501743
+funding_rate_zscore                 : 2.470031
+vwap_delta_12                       : 2.450950
+keltner_width                       : 2.447336

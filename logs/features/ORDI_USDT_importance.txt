@@ -1,0 +1,32 @@
+Feature importance (gain) for ORDI/USDT
+==================================================
+efficiency_ratio_10                 : 46.147972
+trend_regime                        : 6.412408
+volatility_regime                   : 6.251266
+market_phase                        : 5.901177
+linreg_r2_14                        : 5.136325
+atr_band_position                   : 4.334550
+weekly_rsi                          : 3.258120
+weekly_macd_signal                  : 3.229449
+vwap                                : 3.114072
+starc_position                      : 3.106684
+adx_14                              : 2.990426
+vwap_decay_mean_24                  : 2.799412
+rolling_volatility                  : 2.741310
+weekly_macd                         : 2.737918
+supertrend                          : 2.717991
+volume_decay_mean_24                : 2.663375
+dist_vwap                           : 2.599719
+fib_range_pct                       : 2.550848
+returns_1h_decay_std_24             : 2.544246
+dist_avwap_100                      : 2.521718
+close_decay_std_24                  : 2.512113
+vwap_decay_std_24                   : 2.504647
+pvt                                 : 2.490754
+ichimoku_senkou_a                   : 2.490212
+ppo                                 : 2.458751
+funding_rate_zscore                 : 2.361004
+keltner_width                       : 2.331805
+gk_vol                              : 2.327294
+parkinson_vol                       : 2.306587
+dist_avwap_200                      : 2.279603

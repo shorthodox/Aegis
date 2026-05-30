@@ -1,0 +1,32 @@
+Feature importance (gain) for IOTA/USDT
+==================================================
+efficiency_ratio_10                 : 86.172600
+linreg_r2_14                        : 13.438980
+volatility_regime                   : 11.288078
+atr_band_position                   : 8.724846
+market_phase                        : 8.211866
+vwap                                : 7.714894
+price_zscore_200                    : 7.069787
+fib_range_pct                       : 7.059521
+ichimoku_kijun                      : 6.998948
+keltner_width                       : 6.858935
+vwap_decay_std_24                   : 6.825911
+parkinson_vol                       : 6.749917
+dist_vwap                           : 6.722272
+atr_14                              : 6.643701
+trend_regime                        : 6.480553
+pvt                                 : 6.431761
+vwap_decay_mean_24                  : 6.389424
+gk_vol                              : 6.196522
+starc_position                      : 6.144553
+dist_avwap_200                      : 6.123832
+dow_sin                             : 5.955832
+weekly_macd                         : 5.943353
+quantile_position                   : 5.773646
+close_decay_std_24                  : 5.676048
+volume_decay_mean_24                : 5.598335
+fib_dist_236                        : 5.561502
+volume_decay_std_24                 : 5.552992
+vwap_delta_4                        : 5.551861
+adx_14                              : 5.438529
+vwap_delta_12                       : 5.103703

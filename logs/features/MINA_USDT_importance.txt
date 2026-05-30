@@ -1,0 +1,32 @@
+Feature importance (gain) for MINA/USDT
+==================================================
+efficiency_ratio_10                 : 114.024681
+market_phase                        : 18.185637
+volatility_regime                   : 14.370642
+force_index                         : 11.286675
+linreg_r2_14                        : 9.930801
+aroon_up                            : 9.262239
+pct_dist_to_resistance              : 8.191791
+weekly_macd_hist                    : 7.638456
+returns_1h_decay_std_24             : 7.224835
+volume_decay_mean_24                : 7.133289
+atr_14                              : 7.078269
+vwap                                : 7.056238
+gk_vol                              : 7.052307
+fib_range_pct                       : 7.013380
+vwap_decay_std_24                   : 6.829204
+volume_decay_std_24                 : 6.814723
+bb_width_percentile                 : 6.783009
+weekly_rsi                          : 6.740800
+kvo_signal                          : 6.672643
+rolling_resistance                  : 6.624595
+dist_weekly_ema200                  : 6.608016
+atr_band_position                   : 6.508211
+starc_position                      : 6.458147
+rolling_volatility                  : 6.281783
+btc_corr_24h                        : 6.255542
+donchian_width                      : 6.255264
+keltner_width                       : 6.251930
+funding_rate                        : 6.249115
+avwap_200                           : 6.223339
+dist_bull_ob                        : 6.196509

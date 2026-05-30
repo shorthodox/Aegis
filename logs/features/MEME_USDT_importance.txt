@@ -1,0 +1,32 @@
+Feature importance (gain) for MEME/USDT
+==================================================
+efficiency_ratio_10                 : 56.669857
+volatility_regime                   : 7.587102
+trend_regime                        : 7.573185
+starc_position                      : 6.405078
+market_phase                        : 5.776524
+weekly_rsi                          : 5.130260
+r1                                  : 4.790247
+donchian_width                      : 4.774965
+vwap_delta_12                       : 4.704392
+dist_vwap                           : 4.682005
+ema_100                             : 4.650082
+dist_ema_100                        : 4.548186
+price_zscore_200                    : 4.367899
+s2                                  : 4.265029
+vwap                                : 4.224047
+r2                                  : 4.093092
+vwap_decay_std_24                   : 4.082844
+rolling_volatility                  : 4.070913
+kvo                                 : 4.050793
+returns_1h_decay_std_24             : 4.041838
+avwap_200                           : 3.992692
+parkinson_vol                       : 3.986712
+ema_200                             : 3.951660
+dow_sin                             : 3.905713
+dist_r2                             : 3.891357
+adx_14                              : 3.879601
+macd_signal                         : 3.818607
+fib_range_pct                       : 3.792590
+dow_cos                             : 3.751535
+hurst                               : 3.638503

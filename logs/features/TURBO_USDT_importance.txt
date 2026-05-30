@@ -1,0 +1,32 @@
+Feature importance (gain) for TURBO/USDT
+==================================================
+efficiency_ratio_10                 : 59.592117
+volatility_regime                   : 10.473898
+returns_1h_decay_std_24             : 7.635196
+trend_regime                        : 7.611981
+linreg_r2_14                        : 7.605452
+avwap_100                           : 6.683261
+atr_band_position                   : 6.620849
+fib_range_pct                       : 6.491308
+weekly_macd                         : 6.471918
+rolling_resistance                  : 6.400830
+weekly_rsi                          : 6.337539
+vwap                                : 6.304216
+market_phase                        : 6.274054
+weekly_macd_hist                    : 6.252745
+donchian_width                      : 6.186444
+close_decay_std_24                  : 6.160749
+funding_rate_ma8                    : 6.156107
+atr_14                              : 6.054590
+dist_vwap                           : 6.026932
+avwap_200                           : 5.931025
+funding_rate_zscore                 : 5.920633
+vwap_decay_std_24                   : 5.499667
+btc_dist_ema200                     : 5.444784
+dist_avwap_100                      : 5.215515
+dist_bull_ob                        : 5.210158
+dist_bear_ob                        : 5.158704
+dist_avwap_200                      : 5.121285
+keltner_width                       : 5.029459
+parkinson_vol                       : 4.591129
+dow_cos                             : 4.503516

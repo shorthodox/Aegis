@@ -1,0 +1,32 @@
+Feature importance (gain) for MASK/USDT
+==================================================
+efficiency_ratio_10                 : 28.677912
+market_phase                        : 7.026040
+volatility_regime                   : 3.148557
+trend_regime                        : 2.683125
+gk_vol                              : 1.970159
+atr_band_position                   : 1.938716
+atr_14                              : 1.846442
+vwap_decay_std_24                   : 1.780368
+weekly_rsi                          : 1.744154
+tema_21                             : 1.721567
+fib_dist_236                        : 1.681779
+weekly_macd_signal                  : 1.679214
+aroon_osc                           : 1.668823
+avwap_200                           : 1.633066
+weekly_macd                         : 1.571583
+vwap                                : 1.559487
+dist_ema_100                        : 1.523679
+linreg_r2_14                        : 1.492956
+dist_avwap_200                      : 1.475071
+weekly_macd_hist                    : 1.458202
+starc_position                      : 1.455381
+hurst                               : 1.407634
+dist_vwap                           : 1.406994
+funding_rate_zscore                 : 1.403745
+close_decay_std_24                  : 1.365246
+volume_decay_mean_24                : 1.363010
+vwap_delta_12                       : 1.350891
+funding_rate_ma8                    : 1.342140
+volume_decay_std_24                 : 1.328544
+fib_range_pct                       : 1.316815

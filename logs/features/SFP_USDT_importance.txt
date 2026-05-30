@@ -1,0 +1,32 @@
+Feature importance (gain) for SFP/USDT
+==================================================
+efficiency_ratio_10                 : 98.664207
+linreg_r2_14                        : 32.173386
+starc_position                      : 22.901558
+atr_band_position                   : 15.971287
+market_phase                        : 15.860065
+adx_14                              : 15.146420
+volatility_regime                   : 12.994350
+keltner_width                       : 12.137416
+volume_decay_std_24                 : 10.774395
+fib_dist_618                        : 10.314166
+ichimoku_senkou_b                   : 10.153224
+trend_regime                        : 9.894364
+vwap                                : 9.862807
+ema_200                             : 9.643565
+pvt                                 : 9.630645
+weekly_macd_signal                  : 9.498159
+avwap_100                           : 9.464127
+weekly_macd                         : 9.265291
+fvg_distance                        : 9.204974
+ichimoku_kijun                      : 9.037848
+close_decay_std_24                  : 8.848415
+vwap_delta_12                       : 8.778014
+vwap_decay_std_24                   : 8.774370
+returns_1h_decay_std_24             : 8.703106
+vwap_decay_mean_24                  : 8.694678
+parkinson_vol                       : 8.623436
+dist_bull_ob                        : 8.583505
+hurst                               : 8.514338
+fib_range_pct                       : 8.441857
+kst_signal                          : 8.433064

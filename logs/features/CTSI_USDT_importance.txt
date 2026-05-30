@@ -1,0 +1,32 @@
+Feature importance (gain) for CTSI/USDT
+==================================================
+efficiency_ratio_10                 : 96.589012
+linreg_r2_14                        : 24.854248
+atr_band_position                   : 18.968153
+volatility_regime                   : 17.932497
+starc_position                      : 11.917249
+returns_1h_decay_mean_24            : 11.905467
+ultimate_osc                        : 11.801292
+weekly_macd_signal                  : 10.252987
+trend_regime                        : 10.062016
+gk_vol                              : 9.646309
+weekly_macd                         : 9.246208
+dist_r1                             : 9.018569
+eom_14                              : 8.939322
+dist_ema_200                        : 8.909613
+vwap_decay_std_24                   : 8.902625
+macd                                : 8.821627
+market_phase                        : 8.813298
+aroon_osc                           : 8.482320
+fib_range_pct                       : 8.251061
+vwap_delta_12                       : 8.217990
+donchian_width                      : 7.903936
+btc_dist_ema200                     : 7.792172
+keltner_width                       : 7.769394
+funding_rate_zscore                 : 7.712757
+avwap_100                           : 7.493130
+funding_rate_ma8                    : 7.372307
+btc_corr_24h                        : 7.368605
+adx_14                              : 7.229733
+dist_bear_ob                        : 7.118373
+s2                                  : 7.078578

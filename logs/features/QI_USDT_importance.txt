@@ -1,0 +1,32 @@
+Feature importance (gain) for QI/USDT
+==================================================
+efficiency_ratio_10                 : 39.888187
+pvt                                 : 5.890487
+atr_band_position                   : 5.443027
+volatility_regime                   : 5.282092
+linreg_r2_14                        : 4.794810
+starc_position                      : 4.411574
+trend_regime                        : 3.489952
+market_phase                        : 3.273787
+weekly_macd                         : 3.183223
+dist_r2                             : 2.997905
+vwap                                : 2.895324
+dist_avwap_200                      : 2.674905
+ema_100                             : 2.606212
+weekly_macd_hist                    : 2.557338
+ichimoku_senkou_b                   : 2.519372
+weekly_macd_signal                  : 2.512480
+fib_range_pct                       : 2.500757
+parkinson_vol                       : 2.452282
+pct_dist_to_support                 : 2.400604
+fib_dist_236                        : 2.379549
+schaff_tc                           : 2.360067
+vwap_decay_std_24                   : 2.316643
+returns_1h_decay_std_24             : 2.298493
+keltner_width                       : 2.267509
+s2                                  : 2.265538
+dow_sin                             : 2.249413
+atr_14                              : 2.208501
+dist_s2                             : 2.159841
+gk_vol                              : 2.109103
+dist_bear_ob                        : 2.061087

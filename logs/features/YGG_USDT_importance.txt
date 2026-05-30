@@ -1,0 +1,32 @@
+Feature importance (gain) for YGG/USDT
+==================================================
+efficiency_ratio_10                 : 67.156487
+market_phase                        : 13.633191
+volatility_regime                   : 7.547073
+linreg_r2_14                        : 6.669192
+ema_100                             : 4.753217
+atr_band_position                   : 4.555699
+trend_regime                        : 4.316903
+ema_9                               : 4.189764
+rolling_resistance                  : 4.041153
+starc_position                      : 4.005284
+weekly_macd_signal                  : 3.963952
+r1                                  : 3.941571
+weekly_macd                         : 3.883215
+vwap_decay_std_24                   : 3.853231
+ema_200                             : 3.848264
+keltner_width                       : 3.839920
+avwap_200                           : 3.748059
+choppiness                          : 3.678132
+fib_range_pct                       : 3.658233
+returns_1h_decay_std_24             : 3.633962
+avwap_100                           : 3.617487
+s2                                  : 3.554332
+vwap_decay_mean_24                  : 3.535498
+funding_rate_ma8                    : 3.455355
+weekly_rsi                          : 3.367577
+hurst                               : 3.295802
+adx_14                              : 3.286288
+supertrend_dist                     : 3.174373
+volume_decay_std_24                 : 3.131699
+gk_vol                              : 3.107836

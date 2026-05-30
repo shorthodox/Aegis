@@ -1,0 +1,32 @@
+Feature importance (gain) for CHR/USDT
+==================================================
+efficiency_ratio_10                 : 205.516541
+linreg_r2_14                        : 52.851845
+market_phase                        : 39.540276
+volatility_regime                   : 26.399546
+atr_band_position                   : 23.877924
+dpo_20                              : 23.404819
+weekly_macd                         : 23.058237
+vwap                                : 22.258602
+vwap_decay_mean_24                  : 21.192045
+starc_position                      : 21.156435
+macd_hist                           : 20.476349
+close_decay_std_24                  : 18.859720
+atr_14                              : 17.178217
+avwap_200                           : 17.155756
+macd                                : 16.987053
+dist_s1                             : 16.959480
+btc_corr_24h                        : 16.121483
+rolling_resistance                  : 16.029247
+high                                : 15.997585
+volume_decay_std_24                 : 15.296178
+adx_14                              : 15.161396
+dist_bear_ob                        : 14.583318
+dist_bull_ob                        : 14.517843
+fib_dist_618                        : 14.327253
+vwap_delta_12                       : 14.246296
+fib_dist_236                        : 14.135462
+ema_200                             : 13.860429
+fib_range_pct                       : 13.732325
+funding_rate_zscore                 : 13.666450
+vwap_decay_std_24                   : 13.499960

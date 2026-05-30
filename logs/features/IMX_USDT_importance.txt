@@ -1,0 +1,32 @@
+Feature importance (gain) for IMX/USDT
+==================================================
+efficiency_ratio_10                 : 42.540798
+linreg_r2_14                        : 5.788766
+market_phase                        : 5.735168
+volatility_regime                   : 5.491501
+trend_regime                        : 4.248233
+ema_100                             : 3.435605
+starc_position                      : 3.187373
+returns_1h_decay_std_24             : 3.182485
+atr_band_position                   : 3.005050
+weekly_ema200                       : 2.964126
+adx_14                              : 2.952812
+rel_perf_24h                        : 2.928016
+weekly_rsi                          : 2.846933
+rsi_21                              : 2.836708
+weekly_macd_hist                    : 2.822517
+vwap_decay_std_24                   : 2.734142
+ultimate_osc                        : 2.543431
+vwap_delta_12                       : 2.529152
+avwap_100                           : 2.469424
+ema_200                             : 2.407207
+volume_decay_mean_24                : 2.389049
+kvo                                 : 2.378683
+dist_vwap                           : 2.376860
+volume_decay_std_24                 : 2.376473
+weekly_macd_signal                  : 2.358072
+dow_sin                             : 2.357499
+vwap_decay_mean_24                  : 2.355033
+vwap                                : 2.293792
+keltner_width                       : 2.276964
+ichimoku_senkou_b                   : 2.250653

@@ -1,0 +1,32 @@
+Feature importance (gain) for NOT/USDT
+==================================================
+efficiency_ratio_10                 : 37.479168
+starc_position                      : 5.310987
+volatility_regime                   : 5.016540
+trend_regime                        : 4.376887
+atr_band_position                   : 4.122965
+market_phase                        : 3.326180
+returns_1h_decay_std_24             : 3.136164
+parkinson_vol                       : 2.907304
+gk_vol                              : 2.805582
+dist_avwap_100                      : 2.631862
+dist_vwap                           : 2.569168
+bb_width_percentile                 : 2.510880
+vwap                                : 2.509657
+avwap_100                           : 2.483786
+atr_14                              : 2.422171
+fib_dist_500                        : 2.390903
+r2                                  : 2.376127
+fib_dist_236                        : 2.281747
+weekly_macd_signal                  : 2.234574
+adx_14                              : 2.209358
+close_decay_std_24                  : 2.199123
+weekly_rsi                          : 2.148487
+keltner_width                       : 2.116900
+vwap_decay_std_24                   : 2.072617
+fib_range_pct                       : 2.049746
+weekly_macd                         : 1.998803
+hurst                               : 1.989644
+entropy                             : 1.975863
+pct_dist_to_resistance              : 1.975573
+rolling_volatility                  : 1.929917

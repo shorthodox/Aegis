@@ -1,0 +1,32 @@
+Feature importance (gain) for CKB/USDT
+==================================================
+efficiency_ratio_10                 : 69.971893
+starc_position                      : 10.691451
+market_phase                        : 9.929897
+linreg_r2_14                        : 9.567377
+atr_band_position                   : 9.478151
+volatility_regime                   : 9.195004
+returns_1h_decay_std_24             : 6.909137
+vwap_delta_12                       : 6.148353
+weekly_macd                         : 5.776687
+weekly_macd_signal                  : 5.749938
+trend_regime                        : 5.663709
+fib_range_pct                       : 5.511165
+vwap                                : 5.060483
+weekly_rsi                          : 5.030477
+dist_vwap                           : 5.025226
+ema_200                             : 5.018647
+dist_weekly_ema200                  : 5.015822
+vwap_decay_std_24                   : 4.972900
+supertrend                          : 4.840118
+keltner_width                       : 4.772446
+price_zscore_200                    : 4.763770
+gk_vol                              : 4.684430
+vwap_delta_4                        : 4.672919
+dist_avwap_200                      : 4.654732
+kvo                                 : 4.649001
+adx_14                              : 4.638317
+fib_dist_236                        : 4.552205
+btc_dist_ema200                     : 4.457876
+kvo_signal                          : 4.454979
+dow_sin                             : 4.385252

@@ -1,0 +1,32 @@
+Feature importance (gain) for ETC/USDT
+==================================================
+efficiency_ratio_10                 : 35.467926
+market_phase                        : 4.687765
+volatility_regime                   : 4.622499
+linreg_r2_14                        : 3.976300
+trend_regime                        : 3.333246
+volume_decay_mean_24                : 3.027544
+avwap_50                            : 2.886963
+atr_band_position                   : 2.656316
+starc_position                      : 2.345960
+dow_sin                             : 2.051380
+vwap_delta_12                       : 2.042726
+weekly_ema200                       : 2.016237
+vwap                                : 1.956668
+pvt                                 : 1.934613
+weekly_macd_hist                    : 1.930415
+fib_dist_618                        : 1.928163
+ichimoku_senkou_a                   : 1.924304
+dist_avwap_200                      : 1.914507
+dist_vwap                           : 1.905232
+price_zscore_200                    : 1.859159
+bb_width_percentile                 : 1.850030
+obv                                 : 1.832706
+keltner_width                       : 1.767855
+weekly_rsi                          : 1.740141
+acc_dist                            : 1.728583
+adx_14                              : 1.692187
+funding_rate_zscore                 : 1.637569
+atr_14                              : 1.617889
+ema_200                             : 1.611908
+volume_decay_std_24                 : 1.611341

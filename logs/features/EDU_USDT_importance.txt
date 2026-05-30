@@ -1,0 +1,32 @@
+Feature importance (gain) for EDU/USDT
+==================================================
+efficiency_ratio_10                 : 30.931602
+volatility_regime                   : 5.297913
+trend_regime                        : 4.315202
+close                               : 4.058337
+vwap_decay_mean_24                  : 3.567925
+market_phase                        : 3.360571
+vwap                                : 3.283716
+weekly_ema200                       : 3.207913
+rolling_support                     : 2.900428
+rolling_resistance                  : 2.897225
+linreg_r2_14                        : 2.868422
+ema_200                             : 2.796747
+weekly_macd_hist                    : 2.686710
+dist_vwap                           : 2.604774
+avwap_200                           : 2.602008
+atr_band_position                   : 2.395002
+s1                                  : 2.362829
+vwap_decay_std_24                   : 2.322461
+supertrend_dist                     : 2.316773
+parkinson_vol                       : 2.167665
+kvo_signal                          : 2.105294
+keltner_width                       : 2.090472
+gk_vol                              : 2.046158
+close_decay_std_24                  : 2.025315
+vwap_delta_12                       : 2.020662
+btc_dist_ema200                     : 2.001238
+volume_decay_mean_24                : 1.978318
+starc_position                      : 1.905430
+volume_decay_std_24                 : 1.890468
+aroon_osc                           : 1.883666

@@ -1,0 +1,32 @@
+Feature importance (gain) for MOVR/USDT
+==================================================
+efficiency_ratio_10                 : 100.739853
+linreg_r2_14                        : 25.236412
+market_phase                        : 18.813828
+volatility_regime                   : 16.332157
+returns_1h_decay_std_24             : 12.330192
+ichimoku_senkou_b                   : 10.887936
+atr_band_position                   : 9.325840
+starc_position                      : 9.178140
+funding_rate_zscore                 : 8.759672
+dist_pivot                          : 8.716640
+volume_decay_mean_24                : 8.475045
+weekly_macd                         : 8.298669
+adx_14                              : 7.950997
+trend_regime                        : 7.737392
+vwap_delta_12                       : 7.694718
+weekly_macd_signal                  : 7.642421
+dist_r2                             : 7.622873
+funding_rate_ma8                    : 7.517043
+macd_signal                         : 7.304922
+rolling_resistance                  : 7.267035
+vwap                                : 7.242504
+fib_range_pct                       : 7.141469
+hurst                               : 7.068316
+s2                                  : 6.920114
+volume_decay_std_24                 : 6.883628
+btc_corr_24h                        : 6.850651
+weekly_macd_hist                    : 6.750026
+dist_bull_ob                        : 6.590034
+keltner_width                       : 6.505626
+fib_dist_236                        : 6.353550

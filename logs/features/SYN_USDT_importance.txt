@@ -1,0 +1,32 @@
+Feature importance (gain) for SYN/USDT
+==================================================
+efficiency_ratio_10                 : 101.755478
+linreg_r2_14                        : 18.494804
+volatility_regime                   : 17.945332
+atr_band_position                   : 12.472825
+dist_vwap                           : 11.346142
+weekly_macd                         : 10.368618
+weekly_macd_signal                  : 10.242853
+starc_position                      : 9.984050
+market_phase                        : 9.899695
+avwap_200                           : 9.694266
+ema_200                             : 9.615494
+pvt                                 : 9.033889
+atr_14                              : 8.311891
+trend_regime                        : 7.849251
+keltner_lower                       : 7.805137
+keltner_upper                       : 7.748680
+weekly_rsi                          : 7.637855
+weekly_macd_hist                    : 7.545633
+fib_dist_382                        : 7.530795
+ema_9                               : 7.473067
+rolling_volatility                  : 7.373208
+returns_1h_decay_std_24             : 7.225175
+vwap_delta_4                        : 7.222738
+vwap                                : 7.177106
+kama_10                             : 7.119957
+aroon_up                            : 7.081289
+fisher_sig                          : 7.062579
+dist_bull_ob                        : 6.998574
+total_confluence                    : 6.994180
+aroon_osc                           : 6.887537

@@ -1,0 +1,32 @@
+Feature importance (gain) for FXS/USDT
+==================================================
+efficiency_ratio_10                 : 35.956532
+ichimoku_senkou_a                   : 7.912524
+volatility_regime                   : 7.852297
+kvo_signal                          : 5.629213
+vwap                                : 5.334639
+price_zscore_200                    : 5.266644
+linreg_r2_14                        : 5.152126
+dow_sin                             : 4.957196
+dist_s2                             : 4.604632
+obv                                 : 4.544822
+fib_range_pct                       : 4.398021
+r2                                  : 4.160559
+gk_vol                              : 4.149683
+close_decay_std_24                  : 4.113795
+rvi_osc                             : 4.110041
+kvo                                 : 4.074788
+vwap_decay_mean_24                  : 3.916814
+market_phase                        : 3.859534
+dow_cos                             : 3.859458
+pvt                                 : 3.851520
+atr_14                              : 3.804818
+weekly_macd_hist                    : 3.792222
+returns_1h_decay_std_24             : 3.512212
+btc_dist_ema200                     : 3.311277
+parkinson_vol                       : 3.299875
+dist_pivot                          : 3.295873
+dist_avwap_200                      : 3.232100
+vwap_decay_std_24                   : 3.188160
+keltner_width                       : 3.141115
+volume_decay_std_24                 : 3.108442

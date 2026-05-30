@@ -1,0 +1,32 @@
+Feature importance (gain) for SYS/USDT
+==================================================
+efficiency_ratio_10                 : 73.221596
+linreg_r2_14                        : 15.255561
+market_phase                        : 13.458875
+volatility_regime                   : 10.444057
+atr_band_position                   : 8.977251
+vwap_delta_12                       : 7.570404
+supertrend                          : 6.442673
+trend_regime                        : 6.384385
+dist_weekly_ema200                  : 6.298046
+vwap                                : 6.180356
+weekly_macd_signal                  : 6.114727
+vwap_delta_4                        : 6.105811
+weekly_macd_hist                    : 5.749629
+parkinson_vol                       : 5.731113
+ema_200                             : 5.710769
+fib_range_pct                       : 5.575005
+keltner_width                       : 5.415357
+donchian_width                      : 5.241509
+dist_vwap                           : 5.228239
+hurst                               : 5.218568
+weekly_macd                         : 5.195533
+volume_decay_mean_24                : 5.153249
+vwap_decay_std_24                   : 5.047771
+macd_signal                         : 5.042737
+gk_vol                              : 5.012562
+weekly_rsi                          : 4.994123
+dist_bull_ob                        : 4.856517
+atr_14                              : 4.847861
+rolling_volatility                  : 4.729589
+dist_r2                             : 4.705677

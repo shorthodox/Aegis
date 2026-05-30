@@ -1,0 +1,32 @@
+Feature importance (gain) for GALA/USDT
+==================================================
+efficiency_ratio_10                 : 21.356190
+market_phase                        : 3.843145
+linreg_r2_14                        : 3.489313
+starc_position                      : 3.058491
+volatility_regime                   : 2.569443
+trend_regime                        : 2.290319
+atr_band_position                   : 2.186365
+gk_vol                              : 1.715499
+fib_range_pct                       : 1.657680
+weekly_macd                         : 1.562985
+avwap_200                           : 1.550021
+parkinson_vol                       : 1.547230
+trix_15                             : 1.484212
+keltner_width                       : 1.463771
+vwap_decay_mean_24                  : 1.427598
+rolling_volatility                  : 1.398275
+historical_volatility               : 1.394197
+btc_dist_ema200                     : 1.376479
+s2                                  : 1.371486
+adx_14                              : 1.349963
+supertrend                          : 1.348561
+dist_r2                             : 1.340764
+vwap_delta_12                       : 1.305355
+vwap                                : 1.285365
+vwap_decay_std_24                   : 1.277088
+dist_bull_ob                        : 1.260500
+atr_14                              : 1.258289
+funding_rate_zscore                 : 1.254757
+returns_1h_decay_std_24             : 1.243304
+entropy                             : 1.224583

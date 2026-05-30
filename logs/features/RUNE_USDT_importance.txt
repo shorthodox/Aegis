@@ -1,0 +1,32 @@
+Feature importance (gain) for RUNE/USDT
+==================================================
+efficiency_ratio_10                 : 40.462715
+volatility_regime                   : 5.005456
+trend_regime                        : 4.426513
+weekly_macd                         : 4.201681
+pvt                                 : 4.007770
+vwap                                : 3.780571
+weekly_rsi                          : 3.252127
+linreg_r2_14                        : 3.233063
+avwap_200                           : 3.032628
+pct_dist_to_support                 : 2.766490
+starc_position                      : 2.753155
+low                                 : 2.747742
+market_phase                        : 2.713370
+weekly_macd_hist                    : 2.690166
+dist_vwap                           : 2.601440
+vwap_decay_std_24                   : 2.588540
+weekly_macd_signal                  : 2.573704
+fib_range_pct                       : 2.569576
+atr_14                              : 2.530102
+price_zscore_200                    : 2.516548
+gk_vol                              : 2.386609
+hurst                               : 2.358110
+vwap_delta_12                       : 2.272377
+dow_sin                             : 2.270083
+macd_signal                         : 2.253763
+entropy                             : 2.242521
+close_decay_std_24                  : 2.229787
+dist_avwap_200                      : 2.225390
+fib_dist_236                        : 2.221352
+funding_rate_ma8                    : 2.219153

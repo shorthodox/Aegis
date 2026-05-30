@@ -1,0 +1,32 @@
+Feature importance (gain) for LQTY/USDT
+==================================================
+efficiency_ratio_10                 : 137.312271
+linreg_r2_14                        : 25.009666
+starc_position                      : 18.027363
+atr_band_position                   : 15.408407
+volatility_regime                   : 13.891850
+market_phase                        : 13.614096
+dow_cos                             : 13.167755
+dist_bear_ob                        : 12.366569
+dist_vwap                           : 10.483693
+dist_ema_100                        : 10.314580
+dist_bull_ob                        : 10.204182
+volume_decay_std_24                 : 9.933740
+volume_decay_mean_24                : 9.699953
+pct_dist_to_support                 : 9.435076
+weekly_rsi                          : 9.413255
+btc_dist_ema200                     : 9.089309
+sar_dist                            : 9.024424
+cmf_20                              : 9.006358
+close_decay_std_24                  : 8.817169
+vwap                                : 8.147131
+dist_ema_200                        : 8.066491
+bb_width_percentile                 : 7.933689
+vwap_decay_std_24                   : 7.879877
+acc_dist                            : 7.842251
+avwap_100                           : 7.771353
+returns_1h_decay_std_24             : 7.739396
+ichimoku_senkou_a                   : 7.726242
+fib_range_pct                       : 7.644866
+donchian_width                      : 7.507019
+force_index                         : 7.479137

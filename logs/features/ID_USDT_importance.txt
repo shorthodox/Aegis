@@ -1,0 +1,32 @@
+Feature importance (gain) for ID/USDT
+==================================================
+efficiency_ratio_10                 : 59.247223
+linreg_r2_14                        : 13.407689
+market_phase                        : 9.169310
+starc_position                      : 8.712011
+volatility_regime                   : 7.981043
+atr_band_position                   : 6.751585
+atr_14                              : 5.710242
+trend_regime                        : 5.487673
+weekly_macd_signal                  : 4.859857
+gk_vol                              : 4.262852
+vwap_decay_std_24                   : 4.253939
+dist_avwap_200                      : 3.995753
+weekly_macd                         : 3.982310
+keltner_width                       : 3.880940
+volume_decay_mean_24                : 3.876484
+dist_vwap                           : 3.786456
+returns_1h_decay_std_24             : 3.633789
+weekly_macd_hist                    : 3.604902
+fib_range_pct                       : 3.600853
+vwap                                : 3.598604
+kst_signal                          : 3.550445
+weekly_rsi                          : 3.542128
+dow_sin                             : 3.511430
+dist_ema_200                        : 3.507273
+hurst                               : 3.459653
+cmf_20                              : 3.457296
+donchian_width                      : 3.456642
+adx_14                              : 3.392656
+dist_avwap_100                      : 3.315382
+choppiness                          : 3.265038

@@ -1,0 +1,32 @@
+Feature importance (gain) for CELR/USDT
+==================================================
+efficiency_ratio_10                 : 108.831184
+linreg_r2_14                        : 35.968285
+atr_band_position                   : 23.090097
+gk_vol                              : 19.473129
+volatility_regime                   : 18.132978
+r1                                  : 16.260208
+fib_dist_618                        : 16.187765
+keltner_width                       : 15.200871
+ichimoku_kijun                      : 14.835642
+fib_range_pct                       : 14.585323
+ichimoku_senkou_a                   : 14.479305
+vwap_decay_mean_24                  : 14.372947
+dist_vwap                           : 14.145581
+vwap                                : 13.944463
+parkinson_vol                       : 13.674242
+avwap_200                           : 12.775230
+fib_dist_236                        : 12.361179
+vwap_delta_12                       : 12.136284
+vwap_delta_4                        : 11.712876
+funding_rate_zscore                 : 11.249820
+weekly_macd_hist                    : 11.203478
+s1                                  : 11.176902
+vwap_decay_std_24                   : 11.131371
+trend_regime                        : 10.944015
+market_phase                        : 10.576851
+close_decay_std_24                  : 10.528594
+dist_bull_ob                        : 10.471678
+fib_dist_500                        : 10.426887
+dist_ema_100                        : 10.386032
+force_index                         : 10.307555

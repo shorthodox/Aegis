@@ -1,0 +1,32 @@
+Feature importance (gain) for SUPER/USDT
+==================================================
+efficiency_ratio_10                 : 36.662422
+volatility_regime                   : 8.458873
+trend_regime                        : 6.774662
+weekly_macd                         : 4.864578
+linreg_r2_14                        : 4.306813
+market_phase                        : 4.106665
+s1                                  : 3.890985
+avwap_200                           : 3.888014
+fib_range_pct                       : 3.833838
+weekly_macd_hist                    : 3.790106
+pvt                                 : 3.622541
+rel_perf_24h                        : 3.555098
+ichimoku_senkou_a                   : 3.492224
+dow_cos                             : 3.458258
+volume_decay_mean_24                : 3.454180
+atr_band_position                   : 3.443371
+close_decay_std_24                  : 3.427943
+r2                                  : 3.393223
+vwap_decay_std_24                   : 3.314610
+adx_14                              : 3.281205
+vwap                                : 3.279015
+fib_dist_618                        : 3.264048
+rolling_resistance                  : 3.219809
+volume_decay_std_24                 : 3.132509
+atr_14                              : 3.066436
+dist_ema_200                        : 3.063990
+dist_vwap                           : 3.060305
+returns_1h_decay_std_24             : 2.787489
+gk_vol                              : 2.729250
+vwap_delta_12                       : 2.700729

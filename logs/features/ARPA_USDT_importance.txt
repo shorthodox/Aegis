@@ -1,0 +1,32 @@
+Feature importance (gain) for ARPA/USDT
+==================================================
+efficiency_ratio_10                 : 120.384598
+linreg_r2_14                        : 61.113949
+volatility_regime                   : 27.212067
+market_phase                        : 22.533607
+atr_band_position                   : 20.392260
+avwap_100                           : 19.294104
+fib_range_pct                       : 18.028511
+vwap                                : 16.181019
+avwap_200                           : 15.158068
+starc_position                      : 15.134198
+ema_100                             : 15.122817
+close_decay_std_24                  : 14.991180
+vwap_decay_std_24                   : 14.807898
+adx_14                              : 14.373206
+dist_ema_200                        : 14.139774
+rolling_support                     : 13.243262
+atr_14                              : 13.158988
+dist_bear_ob                        : 12.937490
+dist_ema_100                        : 12.724465
+weekly_macd                         : 12.540069
+weekly_macd_signal                  : 12.034987
+btc_ratio_ma_dist                   : 11.178435
+fib_dist_618                        : 11.084202
+supertrend_dist                     : 10.839873
+quantile_position                   : 10.739599
+parkinson_vol                       : 10.617903
+mfi_14                              : 10.553776
+returns_1h_decay_std_24             : 9.975817
+funding_rate_ma8                    : 9.841198
+btc_dist_ema200                     : 9.810544

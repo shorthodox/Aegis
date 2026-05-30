@@ -1,0 +1,32 @@
+Feature importance (gain) for GMX/USDT
+==================================================
+efficiency_ratio_10                 : 89.768959
+linreg_r2_14                        : 32.181808
+starc_position                      : 17.046001
+trend_regime                        : 15.544710
+atr_band_position                   : 14.992202
+market_phase                        : 13.133116
+adx_14                              : 11.765424
+volatility_regime                   : 11.113545
+keltner_width                       : 11.050045
+parkinson_vol                       : 10.595624
+macd_signal                         : 10.397388
+macd                                : 9.761483
+dist_avwap_100                      : 9.229987
+weekly_macd_signal                  : 9.188656
+gk_vol                              : 9.177706
+linreg_slope_14                     : 9.120360
+dist_avwap_200                      : 8.981865
+fib_range_pct                       : 8.853684
+vwap                                : 8.538221
+obv                                 : 8.494081
+dist_ema_200                        : 8.414546
+avwap_200                           : 8.204531
+vwap_decay_std_24                   : 8.129519
+pvt                                 : 8.086328
+btc_dist_ema200                     : 8.004316
+volume_decay_std_24                 : 7.913972
+rolling_volatility                  : 7.844983
+dist_r2                             : 7.760849
+fib_dist_236                        : 7.696074
+price_zscore_200                    : 7.619853

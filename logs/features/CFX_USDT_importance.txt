@@ -1,0 +1,32 @@
+Feature importance (gain) for CFX/USDT
+==================================================
+efficiency_ratio_10                 : 63.941006
+linreg_r2_14                        : 14.845992
+volatility_regime                   : 7.592875
+atr_band_position                   : 7.580504
+market_phase                        : 6.709804
+pvt                                 : 6.505936
+trend_regime                        : 6.359633
+atr_14                              : 5.335020
+hurst                               : 5.132885
+vwap_delta_4                        : 4.918690
+vwap_decay_std_24                   : 4.914193
+ema_200                             : 4.666192
+vwap_decay_mean_24                  : 4.644913
+supertrend                          : 4.642555
+returns_1h_decay_std_24             : 4.583759
+quantile_position                   : 4.244476
+vwap                                : 4.154846
+keltner_width                       : 4.105138
+rolling_support                     : 3.909739
+dist_vwap                           : 3.851885
+dist_s1                             : 3.813141
+cmf_20                              : 3.747959
+dow_sin                             : 3.738271
+dow_cos                             : 3.735613
+fib_range_pct                       : 3.683247
+vwap_delta_12                       : 3.670423
+funding_rate_zscore                 : 3.669357
+weekly_macd_signal                  : 3.625827
+funding_rate                        : 3.534614
+ichimoku_senkou_b                   : 3.499813

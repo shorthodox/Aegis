@@ -1,0 +1,32 @@
+Feature importance (gain) for FIDA/USDT
+==================================================
+efficiency_ratio_10                 : 114.732475
+linreg_r2_14                        : 40.712208
+atr_band_position                   : 22.056377
+starc_position                      : 21.913464
+volatility_regime                   : 17.225582
+market_phase                        : 13.893283
+fib_range_pct                       : 11.438553
+weekly_rsi                          : 11.280063
+trend_regime                        : 10.967288
+pvt                                 : 10.838396
+adx_14                              : 10.564705
+rvi_osc                             : 10.266995
+volume_decay_mean_24                : 10.178459
+keltner_width                       : 9.829687
+returns_1h_decay_std_24             : 9.660406
+macd_signal                         : 9.592216
+dist_bull_ob                        : 9.576083
+atr_14                              : 9.418342
+kvo_signal                          : 9.308775
+dist_vwap                           : 8.980047
+close_decay_std_24                  : 8.787896
+weekly_macd_signal                  : 8.683847
+entropy                             : 8.634119
+vwap_decay_std_24                   : 8.521401
+vwap                                : 8.459341
+dow_sin                             : 8.440084
+fib_dist_236                        : 8.343777
+s2                                  : 8.266438
+dist_ema_200                        : 8.177824
+btc_dist_ema200                     : 8.111252

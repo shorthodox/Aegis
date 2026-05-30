@@ -1,0 +1,32 @@
+Feature importance (gain) for ALGO/USDT
+==================================================
+efficiency_ratio_10                 : 76.212540
+linreg_r2_14                        : 12.900421
+volatility_regime                   : 10.057155
+market_phase                        : 8.191467
+trend_regime                        : 7.418585
+atr_14                              : 6.304697
+dist_avwap_100                      : 6.137975
+close_decay_mean_24                 : 5.846699
+weekly_rsi                          : 5.704413
+atr_band_position                   : 5.509730
+ema_100                             : 5.484007
+avwap_100                           : 5.459033
+gk_vol                              : 5.137798
+adx_14                              : 5.069868
+macd_signal                         : 5.032222
+weekly_macd                         : 4.763233
+weekly_macd_signal                  : 4.754526
+rolling_resistance                  : 4.716953
+avwap_200                           : 4.631654
+funding_rate                        : 4.547475
+pct_dist_to_support                 : 4.508990
+vwap_delta_4                        : 4.476591
+vwap                                : 4.431171
+parkinson_vol                       : 4.349091
+fib_range_pct                       : 4.298863
+vwap_decay_std_24                   : 4.236302
+dist_vwap                           : 4.153423
+vwap_delta_12                       : 4.138651
+dow_cos                             : 4.030908
+funding_rate_zscore                 : 4.024168

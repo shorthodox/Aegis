@@ -1,0 +1,32 @@
+Feature importance (gain) for PYR/USDT
+==================================================
+efficiency_ratio_10                 : 104.497864
+linreg_r2_14                        : 28.155413
+atr_band_position                   : 17.990807
+market_phase                        : 15.629723
+volatility_regime                   : 15.230007
+weekly_rsi                          : 13.052846
+williams_r                          : 11.543050
+keltner_width                       : 10.870651
+returns_1h_decay_std_24             : 10.788422
+rolling_volatility                  : 10.358115
+volume_decay_mean_24                : 10.185093
+returns_1h_decay_mean_24            : 10.026186
+dist_avwap_100                      : 9.508242
+dist_s2                             : 9.313812
+dist_bear_ob                        : 9.245963
+fib_range_pct                       : 9.081374
+weekly_macd                         : 9.066103
+volume_decay_std_24                 : 9.030656
+dist_vwap                           : 8.950597
+quantile_position                   : 8.941992
+dow_sin                             : 8.550599
+fib_dist_382                        : 8.482779
+s1                                  : 8.410254
+ultimate_osc                        : 8.393268
+dist_ema_200                        : 8.182903
+parkinson_vol                       : 8.136432
+fib_dist_618                        : 8.135853
+pvt                                 : 8.041455
+close_decay_std_24                  : 7.977918
+btc_dist_ema200                     : 7.963358

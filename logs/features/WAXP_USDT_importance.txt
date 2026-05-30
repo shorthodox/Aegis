@@ -1,0 +1,32 @@
+Feature importance (gain) for WAXP/USDT
+==================================================
+efficiency_ratio_10                 : 93.721535
+linreg_r2_14                        : 22.891642
+volatility_regime                   : 14.448358
+market_phase                        : 14.062865
+atr_band_position                   : 11.141257
+weekly_macd_signal                  : 9.751075
+returns_1h_decay_std_24             : 8.887568
+vwap_delta_12                       : 8.659863
+trend_regime                        : 8.625479
+price_zscore_200                    : 8.533678
+ema_200                             : 8.476204
+avwap_200                           : 8.442855
+fib_dist_618                        : 8.300439
+rolling_vwap_24                     : 8.114010
+dist_vwap                           : 7.968243
+vwap                                : 7.899974
+ichimoku_kijun                      : 7.887043
+fib_range_pct                       : 7.834734
+weekly_macd                         : 7.682629
+cci_20                              : 7.672588
+dist_weekly_ema200                  : 7.560572
+r2                                  : 7.482260
+btc_dist_ema200                     : 7.434436
+dist_ema_200                        : 7.308139
+vwap_decay_std_24                   : 7.259686
+weekly_rsi                          : 7.026828
+r1                                  : 7.007090
+atr_14                              : 6.878839
+dist_s2                             : 6.843422
+kvo_signal                          : 6.681102

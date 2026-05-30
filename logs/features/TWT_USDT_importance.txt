@@ -1,0 +1,32 @@
+Feature importance (gain) for TWT/USDT
+==================================================
+efficiency_ratio_10                 : 64.426674
+starc_position                      : 9.235960
+linreg_r2_14                        : 9.015842
+trend_regime                        : 7.451934
+atr_band_position                   : 7.024220
+volatility_regime                   : 6.150466
+acc_dist                            : 5.140127
+market_phase                        : 4.608739
+close_decay_std_24                  : 3.649489
+keltner_width                       : 3.553605
+adx_14                              : 3.538768
+volume_decay_mean_24                : 3.279871
+dist_ema_200                        : 3.207671
+dist_vwap                           : 3.121355
+dow_cos                             : 2.919433
+btc_dist_ema200                     : 2.902659
+price_zscore_200                    : 2.820964
+vwap                                : 2.803386
+returns_1h_decay_std_24             : 2.777716
+gk_vol                              : 2.719082
+dist_s2                             : 2.670167
+vwap_decay_mean_24                  : 2.621088
+vwap_decay_std_24                   : 2.613267
+aroon_osc                           : 2.564037
+bb_width_percentile                 : 2.534312
+weekly_ema200                       : 2.507993
+atr_14                              : 2.433252
+mfi_14                              : 2.423317
+avwap_200                           : 2.412379
+fib_dist_618                        : 2.394200

@@ -1,0 +1,32 @@
+Feature importance (gain) for ETHFI/USDT
+==================================================
+efficiency_ratio_10                 : 153.762573
+linreg_r2_14                        : 41.292160
+market_phase                        : 27.573364
+volatility_regime                   : 22.238991
+pvt                                 : 20.401543
+starc_position                      : 18.902727
+atr_band_position                   : 18.051121
+weekly_ema200                       : 17.121382
+dist_avwap_200                      : 15.919426
+dist_avwap_100                      : 15.094785
+quantile_position                   : 14.904961
+volatility_skew                     : 14.562022
+ichimoku_senkou_b                   : 14.397659
+dist_vwap                           : 14.308894
+vwap_decay_std_24                   : 13.757288
+weekly_macd_signal                  : 13.471438
+keltner_width                       : 13.141943
+ema_200                             : 12.771194
+vwap_decay_mean_24                  : 12.647180
+s2                                  : 12.240541
+fib_dist_236                        : 12.217642
+hurst                               : 12.112592
+vwap_delta_12                       : 12.050582
+volume_decay_std_24                 : 11.532612
+close_decay_std_24                  : 11.443073
+bb_width_percentile                 : 11.254651
+ppo                                 : 10.920393
+weekly_rsi                          : 10.725651
+btc_corr_24h                        : 10.721823
+dist_ema_200                        : 10.256292

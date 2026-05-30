@@ -1,0 +1,32 @@
+Feature importance (gain) for ANKR/USDT
+==================================================
+efficiency_ratio_10                 : 63.164131
+volatility_regime                   : 8.217305
+trend_regime                        : 6.881529
+linreg_r2_14                        : 6.273890
+vwap                                : 5.495438
+market_phase                        : 5.375872
+ema_200                             : 4.876975
+r2                                  : 4.839739
+vwap_decay_mean_24                  : 4.773421
+keltner_upper                       : 4.715528
+weekly_rsi                          : 3.885842
+ichimoku_senkou_b                   : 3.874471
+fib_range_pct                       : 3.862676
+rolling_support                     : 3.816967
+atr_band_position                   : 3.661890
+btc_dist_ema200                     : 3.619280
+dow_sin                             : 3.563666
+avwap_100                           : 3.519438
+adx_14                              : 3.437543
+r1                                  : 3.313365
+weekly_macd                         : 3.304079
+dist_vwap                           : 3.292700
+vwap_decay_std_24                   : 3.250988
+returns_1h_decay_std_24             : 3.158805
+dist_avwap_200                      : 3.152987
+dist_r1                             : 3.022517
+atr_14                              : 3.009799
+kvo_signal                          : 2.999965
+dist_bear_ob                        : 2.940311
+rolling_volatility                  : 2.914613

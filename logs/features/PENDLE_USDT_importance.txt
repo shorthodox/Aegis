@@ -1,0 +1,32 @@
+Feature importance (gain) for PENDLE/USDT
+==================================================
+efficiency_ratio_10                 : 76.406723
+linreg_r2_14                        : 9.773904
+volatility_regime                   : 9.451796
+market_phase                        : 8.285037
+trend_regime                        : 7.194957
+atr_band_position                   : 6.412488
+starc_position                      : 5.769782
+vwap                                : 5.305301
+weekly_rsi                          : 5.111547
+fib_range_pct                       : 5.039126
+close_decay_std_24                  : 4.584347
+adx_14                              : 4.429481
+close                               : 4.339875
+vwap_decay_std_24                   : 4.332226
+dow_cos                             : 4.175853
+ema_200                             : 4.174730
+avwap_200                           : 4.095946
+returns_1h_decay_std_24             : 4.080462
+volume_decay_std_24                 : 3.990876
+supertrend                          : 3.987860
+parkinson_vol                       : 3.950465
+weekly_macd                         : 3.876144
+volume_decay_mean_24                : 3.817753
+pvt                                 : 3.707306
+dist_bear_ob                        : 3.697763
+btc_dist_ema200                     : 3.622454
+dist_ema_200                        : 3.507929
+funding_rate                        : 3.368014
+dist_s2                             : 3.282414
+keltner_width                       : 3.269212

@@ -1,0 +1,32 @@
+Feature importance (gain) for TRB/USDT
+==================================================
+efficiency_ratio_10                 : 89.062767
+linreg_r2_14                        : 35.787529
+market_phase                        : 19.437244
+volatility_regime                   : 14.198010
+atr_band_position                   : 13.690834
+ppo                                 : 10.938188
+pvt                                 : 9.395276
+parkinson_vol                       : 9.321796
+macd                                : 8.578317
+dist_rolling_vwap                   : 8.511409
+vwap_delta_12                       : 8.457937
+macd_signal                         : 8.311535
+fib_dist_236                        : 8.248582
+obv                                 : 8.136695
+quantile_position                   : 7.980898
+donchian_width                      : 7.940256
+weekly_macd_signal                  : 7.871774
+vwap_decay_mean_24                  : 7.860924
+avwap_50                            : 7.858384
+vwap_decay_std_24                   : 7.664602
+aroon_osc                           : 7.597105
+weekly_macd_hist                    : 7.579279
+fib_range_pct                       : 7.476746
+close_decay_std_24                  : 7.452152
+ema_200                             : 7.332318
+gk_vol                              : 7.293007
+volume_decay_std_24                 : 7.286430
+acc_dist                            : 7.131925
+starc_position                      : 7.086205
+returns_1h_decay_std_24             : 7.079005

@@ -1,0 +1,32 @@
+Feature importance (gain) for C98/USDT
+==================================================
+efficiency_ratio_10                 : 68.946678
+market_phase                        : 10.993584
+linreg_r2_14                        : 10.965085
+volatility_regime                   : 9.644915
+starc_position                      : 9.367488
+gk_vol                              : 7.061837
+avwap_100                           : 7.029925
+weekly_macd_signal                  : 7.005198
+ema_100                             : 6.704017
+aroon_osc                           : 6.599927
+parkinson_vol                       : 6.538782
+keltner_width                       : 6.507013
+vwap                                : 6.173494
+dow_sin                             : 6.168946
+atr_band_position                   : 6.117045
+price_zscore_200                    : 6.024718
+vwap_delta_12                       : 6.020272
+avwap_200                           : 5.525936
+weekly_macd_hist                    : 5.490275
+bb_width_percentile                 : 5.361366
+vwap_delta_4                        : 5.353340
+close_decay_std_24                  : 5.233520
+vwap_decay_std_24                   : 5.130477
+entropy                             : 5.064476
+dist_avwap_100                      : 5.058182
+kvo                                 : 5.004675
+dist_weekly_ema200                  : 4.966391
+dist_ema_100                        : 4.942617
+dow_cos                             : 4.935781
+fib_range_pct                       : 4.926569

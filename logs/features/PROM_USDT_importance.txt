@@ -1,0 +1,32 @@
+Feature importance (gain) for PROM/USDT
+==================================================
+efficiency_ratio_10                 : 26.512983
+linreg_r2_14                        : 4.473506
+volatility_regime                   : 4.199171
+starc_position                      : 3.371926
+vwap                                : 3.262955
+ema_100                             : 3.221988
+market_phase                        : 3.190081
+atr_band_position                   : 3.178481
+obv                                 : 3.165641
+s2                                  : 3.155330
+vwap_decay_mean_24                  : 3.141179
+weekly_rsi                          : 3.114321
+weekly_macd                         : 3.064148
+weekly_macd_hist                    : 3.018002
+fib_range_pct                       : 2.719071
+dist_avwap_200                      : 2.701427
+pvt                                 : 2.687047
+keltner_lower                       : 2.603021
+vwap_decay_std_24                   : 2.487283
+adx_14                              : 2.417916
+gk_vol                              : 2.344141
+dow_cos                             : 2.314971
+keltner_width                       : 2.160235
+ema_50_200_cross                    : 2.131393
+volume_decay_mean_24                : 2.103958
+acc_dist                            : 2.020230
+price_zscore_200                    : 2.008053
+dist_bull_ob                        : 1.974427
+eom_14                              : 1.957971
+kvo_signal                          : 1.925454

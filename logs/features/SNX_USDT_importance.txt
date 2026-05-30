@@ -1,0 +1,32 @@
+Feature importance (gain) for SNX/USDT
+==================================================
+efficiency_ratio_10                 : 92.070564
+market_phase                        : 19.492918
+linreg_r2_14                        : 19.457932
+volatility_regime                   : 12.597494
+atr_band_position                   : 9.265217
+vwap                                : 8.161003
+ema_50                              : 8.035913
+funding_rate_zscore                 : 7.581854
+weekly_ema200                       : 7.240852
+pvt                                 : 7.213497
+weekly_macd_hist                    : 7.086683
+cmf_20                              : 6.930698
+trend_regime                        : 6.633719
+dist_bear_ob                        : 6.563888
+ichimoku_senkou_b                   : 6.487393
+starc_position                      : 6.443863
+weekly_macd                         : 6.424240
+weekly_rsi                          : 6.415578
+pct_dist_to_resistance              : 6.359218
+obv                                 : 6.129298
+adx_14                              : 6.092933
+vwap_decay_mean_24                  : 6.030440
+returns_1h_decay_std_24             : 5.880994
+vwap_decay_std_24                   : 5.861648
+ema_200                             : 5.830637
+ichimoku_senkou_a                   : 5.825640
+btc_dist_ema200                     : 5.636372
+dist_avwap_200                      : 5.520795
+rolling_volatility                  : 5.386127
+dist_s2                             : 5.334368

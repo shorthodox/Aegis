@@ -1,0 +1,32 @@
+Feature importance (gain) for ALICE/USDT
+==================================================
+efficiency_ratio_10                 : 68.840767
+volatility_regime                   : 13.866816
+linreg_r2_14                        : 7.852714
+starc_position                      : 7.446741
+trend_regime                        : 7.427390
+market_phase                        : 6.870144
+r2                                  : 6.337184
+close                               : 6.037771
+volume_decay_std_24                 : 5.942770
+vwap                                : 5.860255
+donchian_width                      : 5.813854
+avwap_200                           : 5.677433
+funding_rate_zscore                 : 5.508931
+atr_band_position                   : 5.499645
+weekly_rsi                          : 5.363012
+vwap_decay_mean_24                  : 5.323397
+rolling_resistance                  : 5.279948
+vwap_delta_12                       : 5.244577
+volume_decay_mean_24                : 5.242030
+bb_width_percentile                 : 5.201009
+weekly_macd                         : 4.892036
+vwap_decay_std_24                   : 4.856019
+rolling_volatility                  : 4.832901
+btc_dist_ema200                     : 4.827163
+trix_15                             : 4.682250
+kst_signal                          : 4.634320
+adx_14                              : 4.623337
+fib_dist_236                        : 4.492329
+quantile_position                   : 4.441624
+fib_range_pct                       : 4.280500

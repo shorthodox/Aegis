@@ -1,0 +1,32 @@
+Feature importance (gain) for RAY/USDT
+==================================================
+efficiency_ratio_10                 : 113.660042
+linreg_r2_14                        : 39.557850
+atr_band_position                   : 20.206690
+trend_regime                        : 19.099567
+market_phase                        : 16.736462
+volatility_regime                   : 15.351270
+weekly_rsi                          : 12.296540
+adx_14                              : 12.256968
+gk_vol                              : 12.037291
+vwap_decay_mean_24                  : 11.629389
+ema_200                             : 10.971885
+hurst                               : 10.933322
+r2                                  : 10.155388
+rolling_resistance                  : 9.648807
+r1                                  : 9.094378
+weekly_macd                         : 9.028133
+dow_cos                             : 8.934204
+close_decay_mean_24                 : 8.917892
+pvt                                 : 8.766465
+keltner_width                       : 8.526171
+volume_decay_std_24                 : 8.488000
+dist_avwap_200                      : 8.425884
+weekly_macd_hist                    : 8.197716
+volume_decay_mean_24                : 8.187619
+dist_vwap                           : 8.063838
+dist_avwap_100                      : 7.844002
+entropy                             : 7.818907
+vwap                                : 7.816013
+fib_range_pct                       : 7.764584
+parkinson_vol                       : 7.682117

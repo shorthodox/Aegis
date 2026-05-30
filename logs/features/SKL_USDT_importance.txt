@@ -1,0 +1,32 @@
+Feature importance (gain) for SKL/USDT
+==================================================
+efficiency_ratio_10                 : 106.529816
+linreg_r2_14                        : 64.508705
+volatility_regime                   : 27.758762
+starc_position                      : 24.416359
+market_phase                        : 19.243698
+atr_14                              : 17.350031
+vwap_delta_4                        : 16.215479
+atr_band_position                   : 15.474486
+vwap_decay_std_24                   : 12.853814
+kvo_signal                          : 12.796921
+trend_regime                        : 12.084170
+fib_dist_236                        : 11.820761
+s1                                  : 11.199433
+vwap_delta_12                       : 11.060947
+funding_rate_ma8                    : 10.597262
+btc_corr_24h                        : 10.572217
+dist_s1                             : 10.411431
+returns_1h_decay_std_24             : 10.217841
+fib_range_pct                       : 10.194675
+rel_perf_24h                        : 10.112082
+r2                                  : 9.647384
+macd                                : 9.633402
+weekly_macd                         : 9.503397
+dow_sin                             : 9.444610
+vwap                                : 9.258761
+weekly_macd_hist                    : 9.235730
+adx_14                              : 9.202118
+gk_vol                              : 9.118736
+close_decay_std_24                  : 9.091062
+dist_bear_ob                        : 8.980336

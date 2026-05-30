@@ -1,0 +1,32 @@
+Feature importance (gain) for NMR/USDT
+==================================================
+efficiency_ratio_10                 : 110.831917
+linreg_r2_14                        : 39.086514
+atr_band_position                   : 19.373432
+volatility_regime                   : 17.526152
+rolling_volatility                  : 11.708270
+donchian_width                      : 11.687409
+dist_s1                             : 11.414320
+volume_decay_std_24                 : 10.955955
+vwap_decay_std_24                   : 10.520470
+vwap_delta_12                       : 10.127357
+dist_pivot                          : 10.093348
+dist_r1                             : 10.059746
+gk_vol                              : 9.908627
+market_phase                        : 9.896161
+weekly_macd_signal                  : 9.861367
+returns_1h_decay_std_24             : 9.640177
+dist_ema_200                        : 9.237693
+weekly_macd_hist                    : 9.173054
+dist_s2                             : 8.953044
+dow_sin                             : 8.927343
+fib_dist_236                        : 8.790030
+close_decay_std_24                  : 8.786711
+fib_dist_500                        : 8.625358
+vwap                                : 8.562630
+trend_regime                        : 8.275045
+quantile_position                   : 8.262030
+adx_14                              : 8.248876
+weekly_rsi                          : 8.222592
+dist_bear_ob                        : 8.219405
+dist_avwap_200                      : 8.116703

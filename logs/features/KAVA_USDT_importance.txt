@@ -1,0 +1,32 @@
+Feature importance (gain) for KAVA/USDT
+==================================================
+efficiency_ratio_10                 : 76.053925
+trend_regime                        : 21.567621
+linreg_r2_14                        : 18.400562
+volatility_regime                   : 15.098508
+starc_position                      : 10.667913
+market_phase                        : 10.259170
+atr_band_position                   : 10.057308
+atr_14                              : 9.306893
+returns_1h_decay_std_24             : 8.267715
+dist_vwap                           : 8.213448
+gk_vol                              : 8.111825
+rolling_resistance                  : 7.936845
+close                               : 7.875275
+kvo_signal                          : 7.675154
+dist_ema_200                        : 7.499650
+dist_bear_ob                        : 7.386269
+fib_range_pct                       : 7.373228
+vwap_decay_std_24                   : 7.362627
+volume_decay_mean_24                : 7.331018
+hour_sin                            : 7.083530
+fib_dist_618                        : 7.082823
+kst_signal                          : 7.061037
+pvt                                 : 6.930217
+ema_100                             : 6.796994
+weekly_macd                         : 6.770136
+weekly_rsi                          : 6.723266
+dist_avwap_100                      : 6.638082
+hurst                               : 6.619843
+vwap                                : 6.537822
+dow_sin                             : 6.487412

@@ -1,0 +1,32 @@
+Feature importance (gain) for PORTO/USDT
+==================================================
+efficiency_ratio_10                 : 65.190269
+linreg_r2_14                        : 14.384752
+volatility_regime                   : 8.491094
+atr_band_position                   : 8.282383
+parkinson_vol                       : 7.639751
+pct_dist_to_resistance              : 6.903490
+keltner_width                       : 6.492640
+gk_vol                              : 5.902474
+vwap_decay_mean_24                  : 5.657003
+dist_weekly_ema200                  : 5.601065
+s2                                  : 5.502584
+ema_100                             : 5.436126
+atr_14                              : 5.366826
+vwap                                : 5.187502
+weekly_rsi                          : 5.156229
+avwap_200                           : 5.089202
+market_phase                        : 5.050059
+vwap_decay_std_24                   : 4.998006
+low                                 : 4.994484
+dist_bear_ob                        : 4.793603
+aroon_up                            : 4.789704
+dist_vwap                           : 4.768315
+avwap_50                            : 4.743940
+volume_decay_mean_24                : 4.691482
+kvo                                 : 4.561808
+ema_200                             : 4.552567
+dist_avwap_200                      : 4.435883
+returns_1h_decay_std_24             : 4.373168
+avwap_100                           : 4.350474
+r2                                  : 4.316075

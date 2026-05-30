@@ -1,0 +1,32 @@
+Feature importance (gain) for LPT/USDT
+==================================================
+efficiency_ratio_10                 : 37.948689
+volatility_regime                   : 6.936080
+trend_regime                        : 6.768535
+market_phase                        : 5.897710
+obv                                 : 3.298539
+fib_dist_236                        : 3.212451
+pvt                                 : 3.142524
+ema_200                             : 2.996973
+fib_range_pct                       : 2.922891
+vwap_decay_mean_24                  : 2.801371
+volume_decay_mean_24                : 2.791480
+kst_signal                          : 2.737047
+weekly_macd_hist                    : 2.723737
+fvg_distance                        : 2.716729
+price_zscore_200                    : 2.595010
+supertrend                          : 2.587101
+returns_1h_decay_std_24             : 2.563267
+avwap_50                            : 2.562696
+volume_decay_std_24                 : 2.539699
+supertrend_dist                     : 2.514032
+gk_vol                              : 2.508822
+linreg_r2_14                        : 2.482975
+weekly_macd                         : 2.472707
+close_decay_mean_24                 : 2.465894
+atr_band_position                   : 2.429359
+dist_ema_200                        : 2.409172
+vwap_decay_std_24                   : 2.389627
+adx_14                              : 2.376052
+kvo_signal                          : 2.325616
+dist_s2                             : 2.247385

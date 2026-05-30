@@ -1,0 +1,32 @@
+Feature importance (gain) for PHA/USDT
+==================================================
+efficiency_ratio_10                 : 98.689316
+linreg_r2_14                        : 34.265129
+atr_band_position                   : 20.296040
+ichimoku_senkou_b                   : 15.022006
+volatility_regime                   : 14.840221
+weekly_macd_signal                  : 11.977692
+trend_regime                        : 10.733581
+market_phase                        : 10.583442
+dist_weekly_ema200                  : 10.444567
+adx_14                              : 9.633681
+r2                                  : 9.438919
+ema_200                             : 9.368679
+vwap_delta_12                       : 8.956422
+volume_decay_std_24                 : 8.751051
+price_zscore_200                    : 8.623874
+fib_dist_236                        : 8.421817
+vwap                                : 8.405464
+vwap_decay_mean_24                  : 8.217604
+dist_vwap                           : 8.070052
+kvo                                 : 8.054587
+fib_range_pct                       : 8.048105
+bb_width_percentile                 : 8.025542
+gk_vol                              : 7.911930
+vwap_decay_std_24                   : 7.835779
+s1                                  : 7.779926
+dow_sin                             : 7.720508
+btc_dist_ema200                     : 7.710914
+choppiness                          : 7.687621
+weekly_macd                         : 7.600165
+returns_1h_decay_std_24             : 7.475029

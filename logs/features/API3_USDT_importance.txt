@@ -1,0 +1,32 @@
+Feature importance (gain) for API3/USDT
+==================================================
+efficiency_ratio_10                 : 79.942657
+volatility_regime                   : 14.211334
+linreg_r2_14                        : 10.133976
+market_phase                        : 9.389212
+atr_14                              : 7.845024
+weekly_macd                         : 7.561080
+trend_regime                        : 7.315464
+atr_band_position                   : 7.104653
+rolling_volatility                  : 6.587650
+dist_vwap                           : 6.584840
+vwap                                : 6.284417
+dist_bear_ob                        : 6.206332
+aroon_osc                           : 6.134362
+parkinson_vol                       : 6.065002
+donchian_width                      : 6.043631
+hurst                               : 5.997853
+btc_dist_ema200                     : 5.959217
+close_decay_std_24                  : 5.727702
+volume_decay_std_24                 : 5.701922
+dist_ema_200                        : 5.674277
+r2                                  : 5.613835
+fib_range_pct                       : 5.476979
+volume_decay_mean_24                : 5.453613
+gk_vol                              : 5.302198
+kvo_signal                          : 5.209047
+rolling_vwap_24                     : 5.112409
+hour_sin                            : 5.043561
+price_zscore_200                    : 5.033947
+vwap_delta_12                       : 4.971132
+vwap_decay_std_24                   : 4.901147

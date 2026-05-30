@@ -1,0 +1,32 @@
+Feature importance (gain) for ZIL/USDT
+==================================================
+efficiency_ratio_10                 : 72.184761
+volatility_regime                   : 8.670834
+market_phase                        : 5.539394
+atr_14                              : 4.906838
+weekly_ema200                       : 4.551263
+atr_band_position                   : 4.357302
+vwap                                : 4.215976
+keltner_lower                       : 4.185450
+dist_vwap                           : 4.164449
+linreg_r2_14                        : 4.046672
+funding_rate                        : 3.991110
+force_index                         : 3.948671
+weekly_macd                         : 3.946928
+gk_vol                              : 3.901916
+dist_ema_200                        : 3.866043
+keltner_width                       : 3.863773
+weekly_rsi                          : 3.801249
+returns_1h_decay_std_24             : 3.704721
+parkinson_vol                       : 3.656600
+dist_bear_ob                        : 3.599442
+fib_range_pct                       : 3.596261
+hurst                               : 3.552980
+starc_position                      : 3.551245
+trend_regime                        : 3.501029
+ichimoku_senkou_a                   : 3.483213
+btc_corr_24h                        : 3.446780
+vwap_decay_std_24                   : 3.302660
+cmf_20                              : 3.089362
+funding_rate_zscore                 : 2.990447
+fib_dist_236                        : 2.927850

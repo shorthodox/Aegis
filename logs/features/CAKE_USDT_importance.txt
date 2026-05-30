@@ -1,0 +1,32 @@
+Feature importance (gain) for CAKE/USDT
+==================================================
+efficiency_ratio_10                 : 56.002026
+linreg_r2_14                        : 8.509516
+starc_position                      : 7.030701
+volatility_regime                   : 6.683948
+market_phase                        : 5.999437
+trend_regime                        : 5.991627
+atr_band_position                   : 5.003676
+gk_vol                              : 4.432914
+weekly_macd_hist                    : 4.096867
+supertrend                          : 4.082298
+volume_decay_std_24                 : 4.055468
+vwap_decay_mean_24                  : 4.051526
+weekly_macd                         : 3.957597
+adx_14                              : 3.855667
+vwap                                : 3.847915
+rolling_support                     : 3.808394
+dist_ema_100                        : 3.770229
+volume_delta_12                     : 3.668103
+s2                                  : 3.584677
+dist_avwap_100                      : 3.557210
+vwap_delta_12                       : 3.554853
+vwap_decay_std_24                   : 3.409659
+weekly_ema200                       : 3.297950
+dow_sin                             : 3.280653
+btc_dist_ema200                     : 3.153295
+returns_1h_decay_std_24             : 3.047448
+hour_cos                            : 3.030754
+dist_r1                             : 3.019148
+force_index                         : 2.856566
+weekly_rsi                          : 2.829359

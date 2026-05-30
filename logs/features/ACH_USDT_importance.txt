@@ -1,0 +1,32 @@
+Feature importance (gain) for ACH/USDT
+==================================================
+efficiency_ratio_10                 : 48.290993
+linreg_r2_14                        : 8.488597
+starc_position                      : 8.288215
+market_phase                        : 5.801259
+atr_band_position                   : 5.476974
+weekly_macd_signal                  : 5.142111
+volatility_regime                   : 5.097178
+volume_delta_14                     : 4.185901
+trend_regime                        : 3.897762
+dist_vwap                           : 3.548771
+weekly_macd                         : 3.426798
+vwap_decay_std_24                   : 3.407331
+atr_14                              : 3.341990
+hurst                               : 3.278306
+fib_dist_618                        : 3.164851
+avwap_200                           : 3.129789
+price_zscore_200                    : 3.127498
+vwap                                : 3.069129
+ema_200                             : 3.049171
+aroon_osc                           : 3.025710
+dist_weekly_ema200                  : 2.917972
+close_decay_std_24                  : 2.891256
+vwap_delta_12                       : 2.868721
+returns_1h_decay_std_24             : 2.862860
+dist_avwap_200                      : 2.859452
+donchian_width                      : 2.840657
+fib_range_pct                       : 2.810153
+mfi_14                              : 2.704606
+parkinson_vol                       : 2.686748
+dist_bear_ob                        : 2.681714

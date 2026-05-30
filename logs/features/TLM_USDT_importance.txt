@@ -1,0 +1,32 @@
+Feature importance (gain) for TLM/USDT
+==================================================
+efficiency_ratio_10                 : 91.771843
+volatility_regime                   : 13.167619
+ema_200                             : 10.328338
+linreg_r2_14                        : 10.113716
+pvt                                 : 10.059443
+trend_regime                        : 9.080039
+atr_band_position                   : 8.932497
+starc_position                      : 8.056929
+avwap_200                           : 7.923144
+pct_dist_to_resistance              : 7.784713
+vwap_delta_12                       : 7.523655
+dist_avwap_200                      : 7.520394
+dist_weekly_ema200                  : 7.519939
+quantile_position                   : 7.481719
+fib_range_pct                       : 7.426082
+dist_avwap_100                      : 7.424481
+dow_sin                             : 7.210715
+vwap                                : 7.101561
+fib_dist_236                        : 7.079817
+avwap_100                           : 6.928341
+dist_vwap                           : 6.836652
+weekly_macd_signal                  : 6.835658
+kvo                                 : 6.806653
+close_decay_std_24                  : 6.704971
+weekly_rsi                          : 6.501032
+dow_cos                             : 6.212793
+market_phase                        : 6.059057
+dist_r1                             : 5.973837
+kvo_signal                          : 5.909955
+bb_width_percentile                 : 5.826545

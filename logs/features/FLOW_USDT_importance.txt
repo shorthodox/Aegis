@@ -1,0 +1,32 @@
+Feature importance (gain) for FLOW/USDT
+==================================================
+efficiency_ratio_10                 : 99.377518
+linreg_r2_14                        : 27.545982
+starc_position                      : 21.398565
+volatility_regime                   : 15.950010
+atr_band_position                   : 12.113177
+market_phase                        : 10.812895
+ema_100                             : 10.125418
+weekly_macd_hist                    : 9.742935
+historical_volatility               : 8.708179
+vwap                                : 8.424088
+avwap_200                           : 8.284414
+rolling_volatility                  : 8.275088
+weekly_macd                         : 7.936264
+dist_ema_200                        : 7.765123
+hurst                               : 7.629222
+force_index                         : 7.599113
+dist_avwap_200                      : 7.583921
+aroon_osc                           : 7.484852
+atr_14                              : 7.444020
+gk_vol                              : 7.349133
+close_decay_std_24                  : 7.340259
+vwap_decay_std_24                   : 7.325577
+fib_range_pct                       : 7.154660
+dist_bear_ob                        : 7.090752
+roc_14                              : 7.055745
+fib_dist_500                        : 7.049232
+kvo_signal                          : 7.035219
+btc_dist_ema200                     : 6.944072
+choppiness                          : 6.882061
+price_zscore_200                    : 6.830684

@@ -1,0 +1,32 @@
+Feature importance (gain) for STRK/USDT
+==================================================
+efficiency_ratio_10                 : 61.087479
+linreg_r2_14                        : 10.503041
+market_phase                        : 7.184790
+volatility_regime                   : 6.937734
+atr_band_position                   : 4.667712
+starc_position                      : 4.270091
+s1                                  : 4.120739
+trend_regime                        : 3.903266
+weekly_ema200                       : 3.525583
+dow_cos                             : 3.439380
+pivot                               : 3.438565
+dist_avwap_100                      : 3.271810
+funding_rate_ma8                    : 3.209603
+returns_1h_decay_std_24             : 3.139059
+ichimoku_senkou_b                   : 3.092462
+dow_sin                             : 3.080668
+vwap_decay_mean_24                  : 3.040581
+weekly_rsi                          : 2.976976
+vwap                                : 2.958134
+vwap_delta_4                        : 2.857777
+ema_200                             : 2.844416
+fib_dist_236                        : 2.785425
+btc_dist_ema200                     : 2.745777
+quantile_position                   : 2.680604
+fib_range_pct                       : 2.665747
+entropy                             : 2.586814
+dist_r2                             : 2.567590
+hurst                               : 2.562387
+close_decay_std_24                  : 2.456878
+vwap_decay_std_24                   : 2.443510

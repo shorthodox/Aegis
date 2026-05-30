@@ -1,0 +1,32 @@
+Feature importance (gain) for STORJ/USDT
+==================================================
+efficiency_ratio_10                 : 58.252323
+volatility_regime                   : 10.494476
+market_phase                        : 8.239960
+trend_regime                        : 7.921592
+fib_range_pct                       : 6.130724
+dist_vwap                           : 6.070004
+funding_rate_zscore                 : 5.942677
+avwap_100                           : 5.912621
+linreg_r2_14                        : 5.472454
+gk_vol                              : 5.453028
+vwap_delta_12                       : 5.317553
+weekly_macd                         : 5.288903
+dist_s2                             : 5.157959
+starc_position                      : 5.153547
+btc_dist_ema200                     : 5.132790
+vwap_delta_4                        : 4.928620
+atr_14                              : 4.921873
+atr_band_position                   : 4.833033
+fvg_distance                        : 4.827637
+price_zscore_200                    : 4.799238
+dist_bear_ob                        : 4.755309
+fib_dist_382                        : 4.728213
+fib_dist_236                        : 4.721221
+weekly_macd_hist                    : 4.716114
+vwap_decay_std_24                   : 4.714484
+dist_ema_100                        : 4.677221
+vwap                                : 4.565691
+bb_width_percentile                 : 4.399079
+kvo                                 : 4.391428
+pct_dist_to_support                 : 4.328248

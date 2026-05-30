@@ -1,0 +1,32 @@
+Feature importance (gain) for AUDIO/USDT
+==================================================
+efficiency_ratio_10                 : 32.600948
+volatility_regime                   : 5.285193
+atr_band_position                   : 4.559982
+linreg_r2_14                        : 3.986353
+market_phase                        : 3.476316
+dpo_20                              : 3.431597
+atr_14                              : 3.354017
+weekly_macd_hist                    : 3.304622
+starc_position                      : 3.266487
+weekly_macd_signal                  : 2.996992
+weekly_macd                         : 2.939926
+fib_dist_236                        : 2.932747
+btc_ratio_ma_dist                   : 2.858799
+dist_vwap                           : 2.854546
+gaussian_position                   : 2.833272
+fib_dist_382                        : 2.824600
+dist_r2                             : 2.807565
+fib_dist_618                        : 2.789038
+fib_range_pct                       : 2.752459
+kvo_signal                          : 2.656005
+vwap_delta_12                       : 2.585884
+close_decay_std_24                  : 2.585644
+dow_sin                             : 2.571202
+fib_dist_500                        : 2.565124
+vwap_decay_std_24                   : 2.562968
+aroon_osc                           : 2.559583
+btc_dist_ema200                     : 2.557915
+force_index                         : 2.534383
+bb_width_percentile                 : 2.493967
+pct_dist_to_resistance              : 2.460571

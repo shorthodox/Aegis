@@ -1,0 +1,32 @@
+Feature importance (gain) for CRV/USDT
+==================================================
+efficiency_ratio_10                 : 105.096573
+linreg_r2_14                        : 14.136273
+market_phase                        : 12.662448
+volatility_regime                   : 11.739642
+atr_band_position                   : 10.715409
+starc_position                      : 6.767259
+trend_regime                        : 6.563281
+close                               : 5.763473
+keltner_width                       : 5.573629
+dist_vwap                           : 4.896178
+weekly_rsi                          : 4.887504
+vwap_decay_mean_24                  : 4.814069
+s2                                  : 4.772722
+weekly_macd_hist                    : 4.763706
+vwap                                : 4.712208
+vwap_decay_std_24                   : 4.703077
+dist_ema_200                        : 4.607172
+dist_s1                             : 4.593058
+gk_vol                              : 4.485200
+ichimoku_senkou_b                   : 4.408039
+volume_decay_std_24                 : 4.273439
+fib_range_pct                       : 4.155921
+vwap_delta_12                       : 4.063617
+stoch_k                             : 3.999024
+choppiness                          : 3.972713
+dist_r1                             : 3.966140
+hurst                               : 3.960638
+dist_bear_ob                        : 3.938930
+close_decay_std_24                  : 3.880597
+adx_14                              : 3.779008

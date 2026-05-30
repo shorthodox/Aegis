@@ -1,0 +1,32 @@
+Feature importance (gain) for CHZ/USDT
+==================================================
+efficiency_ratio_10                 : 87.489548
+linreg_r2_14                        : 14.663596
+volatility_regime                   : 12.410494
+market_phase                        : 11.090091
+r2                                  : 8.674366
+atr_band_position                   : 8.623572
+starc_position                      : 8.617249
+weekly_rsi                          : 8.182208
+weekly_macd                         : 8.142134
+vwap_decay_mean_24                  : 7.632523
+r1                                  : 7.620486
+donchian_width                      : 7.460520
+vwap                                : 7.357385
+acc_dist                            : 7.297745
+dist_vwap                           : 7.086449
+avwap_200                           : 6.945873
+dist_weekly_ema200                  : 6.760410
+weekly_macd_signal                  : 6.497489
+keltner_width                       : 6.439300
+supertrend                          : 6.399832
+vwap_decay_std_24                   : 6.353745
+rolling_resistance                  : 6.337976
+dist_s2                             : 6.331052
+funding_rate                        : 6.311165
+fib_range_pct                       : 6.137063
+price_zscore_200                    : 6.127334
+close_decay_std_24                  : 6.084883
+funding_rate_zscore                 : 5.999473
+dist_ema_100                        : 5.903931
+btc_corr_24h                        : 5.835285

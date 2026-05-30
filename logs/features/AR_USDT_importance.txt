@@ -1,0 +1,32 @@
+Feature importance (gain) for AR/USDT
+==================================================
+efficiency_ratio_10                 : 26.305433
+market_phase                        : 3.824536
+obv                                 : 3.278623
+volatility_regime                   : 3.244115
+vwap                                : 2.896991
+r2                                  : 2.727231
+ichimoku_senkou_b                   : 2.710449
+weekly_macd                         : 2.672757
+weekly_macd_signal                  : 2.641518
+s1                                  : 2.632130
+avwap_200                           : 2.579270
+pvt                                 : 2.529543
+avwap_100                           : 2.144445
+dist_vwap                           : 2.095229
+hurst                               : 1.956849
+atr_band_position                   : 1.913620
+vwap_decay_std_24                   : 1.865928
+parkinson_vol                       : 1.853799
+close_decay_std_24                  : 1.829273
+keltner_width                       : 1.821507
+volume_decay_mean_24                : 1.802404
+linreg_r2_14                        : 1.779849
+btc_dist_ema200                     : 1.779342
+eom_14                              : 1.754447
+fib_range_pct                       : 1.748204
+dist_bull_ob                        : 1.730767
+returns_1h_decay_std_24             : 1.705033
+price_zscore_200                    : 1.693046
+starc_position                      : 1.691319
+bb_width_percentile                 : 1.653447

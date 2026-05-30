@@ -1,0 +1,32 @@
+Feature importance (gain) for JOE/USDT
+==================================================
+efficiency_ratio_10                 : 134.810745
+linreg_r2_14                        : 60.659134
+starc_position                      : 32.475025
+volatility_regime                   : 26.449686
+atr_band_position                   : 25.933384
+trend_regime                        : 20.072495
+donchian_width                      : 19.988056
+avwap_50                            : 18.465912
+adx_14                              : 17.024605
+market_phase                        : 16.398010
+pivot                               : 14.315568
+weekly_ema200                       : 14.271955
+gk_vol                              : 13.812027
+fib_range_pct                       : 13.783503
+rolling_volatility                  : 13.299962
+volume_decay_std_24                 : 13.093143
+vwap                                : 13.015397
+ema_200                             : 12.787003
+close_decay_std_24                  : 12.528121
+macd                                : 12.417127
+macd_signal                         : 11.964913
+funding_rate                        : 11.645251
+choppiness                          : 11.161285
+keltner_width                       : 10.849895
+vwap_delta_12                       : 10.825929
+dist_bull_ob                        : 10.716331
+weekly_macd_signal                  : 10.705752
+s2                                  : 10.573916
+kvo                                 : 10.510718
+dow_cos                             : 10.295982

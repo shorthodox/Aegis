@@ -1,0 +1,32 @@
+Feature importance (gain) for ENJ/USDT
+==================================================
+efficiency_ratio_10                 : 106.481239
+linreg_r2_14                        : 31.998297
+atr_band_position                   : 20.480906
+volatility_regime                   : 19.266169
+weekly_macd                         : 16.189529
+weekly_macd_signal                  : 12.034040
+starc_position                      : 11.795543
+market_phase                        : 10.915589
+weekly_rsi                          : 10.419862
+btc_ratio_ma_dist                   : 10.392432
+volatility_skew                     : 10.267317
+bb_width_percentile                 : 10.047564
+keltner_lower                       : 9.989878
+volume_decay_mean_24                : 9.881098
+keltner_width                       : 9.814520
+vwap_decay_std_24                   : 9.749454
+price_zscore_200                    : 9.693634
+dist_r2                             : 9.431847
+fib_range_pct                       : 9.390865
+rolling_support                     : 9.375974
+ret_24h                             : 9.370836
+r2                                  : 9.342989
+dist_s2                             : 9.306875
+dist_ema_100                        : 9.300736
+dist_ema_200                        : 8.973348
+dist_avwap_100                      : 8.808238
+gk_vol                              : 8.746243
+ichimoku_kijun                      : 8.693076
+rolling_volatility                  : 8.557952
+vwap_delta_12                       : 8.555206

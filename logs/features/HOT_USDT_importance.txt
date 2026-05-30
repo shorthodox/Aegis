@@ -1,0 +1,32 @@
+Feature importance (gain) for HOT/USDT
+==================================================
+efficiency_ratio_10                 : 50.918419
+atr_band_position                   : 9.086747
+volatility_regime                   : 6.464771
+starc_position                      : 5.710561
+hurst                               : 5.380973
+adx_14                              : 5.260908
+vwap                                : 5.203085
+pct_dist_to_resistance              : 5.176960
+dist_bull_ob                        : 5.054274
+vwap_decay_std_24                   : 4.844112
+market_phase                        : 4.747145
+weekly_macd                         : 4.715802
+weekly_rsi                          : 4.673476
+ema_200                             : 4.642672
+s2                                  : 4.577029
+dist_vwap                           : 4.529410
+keltner_width                       : 4.523693
+atr_14                              : 4.519010
+vwap_delta_12                       : 4.412939
+parkinson_vol                       : 4.411643
+dist_r2                             : 4.353053
+dist_avwap_200                      : 4.350434
+kvo_signal                          : 4.215008
+funding_rate_zscore                 : 4.203556
+weekly_macd_signal                  : 4.160239
+gk_vol                              : 4.077689
+dist_bear_ob                        : 4.065995
+price_zscore_200                    : 4.035410
+fib_range_pct                       : 4.029634
+cmf_20                              : 4.028113

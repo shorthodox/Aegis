@@ -276,6 +276,59 @@ class LiveState:
 LIVE_STATE = LiveState()
 
 # -------------------------------------------------------------------
+# Track-record WebSocket connection manager
+# Clients connecting to /ws/track-record receive the full track_record
+# JSON on connect, then a fresh push every time the engine saves it.
+# -------------------------------------------------------------------
+class _TrackRecordManager:
+    def __init__(self) -> None:
+        self._clients: list = []
+
+    async def connect(self, ws: WebSocket) -> None:
+        await ws.accept()
+        self._clients.append(ws)
+
+    def disconnect(self, ws: WebSocket) -> None:
+        self._clients = [c for c in self._clients if c is not ws]
+
+    async def broadcast(self, payload: dict) -> None:
+        dead = []
+        for ws in list(self._clients):
+            try:
+                await ws.send_json(payload)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self.disconnect(ws)
+
+_tr_ws_manager = _TrackRecordManager()
+
+
+@app.websocket("/ws/track-record")
+async def websocket_track_record(websocket: WebSocket):
+    """Stream live track-record updates to the frontend track-record page."""
+    await _tr_ws_manager.connect(websocket)
+    try:
+        # Send current snapshot immediately on connect
+        from scripts.live_engine import TRACK_RECORD_PATH as _TR_PATH
+        _tr_path = _TR_PATH
+        if _tr_path.exists():
+            try:
+                with open(_tr_path, 'r', encoding='utf-8') as _f:
+                    await websocket.send_json(json.load(_f))
+            except Exception:
+                pass
+        # Keep connection alive; engine broadcasts push new data
+        while True:
+            await asyncio.sleep(30)
+            await websocket.send_json({"type": "ping"})
+    except WebSocketDisconnect:
+        _tr_ws_manager.disconnect(websocket)
+    except Exception:
+        _tr_ws_manager.disconnect(websocket)
+
+
+# -------------------------------------------------------------------
 # Track Record System
 # Logs every actionable BUY/SELL signal, monitors TP/SL hits, and
 # persists outcomes to web/track_record.json for the public page.
@@ -333,10 +386,23 @@ def _save_track_record() -> None:
     except Exception as e:
         print(f"[TrackRecord] Save error: {e}")
 
-_ACTIONABLE = {"BUY", "SELL", "STRONG_BUY", "STRONG_SELL"}
+_BUY_SIGNALS  = {"BUY", "STRONG_BUY"}
+_SELL_SIGNALS = {"SELL", "STRONG_SELL"}
+_ACTIONABLE   = _BUY_SIGNALS | _SELL_SIGNALS
 
 def _update_track_record(signals_data: dict, live_prices: dict) -> None:
-    """Called from update_state on every engine tick."""
+    """Called from update_state on every engine tick.
+
+    Exit logic (dynamic TP):
+      - Primary TP : the same model fires the OPPOSITE signal  → MODEL_REVERSAL_TP.
+                     This is the trend-reversal take-profit the user requested:
+                     enter on one reversal, exit when the next reversal fires.
+      - Safety SL  : price crosses the ATR stop stored at entry → STOP_HIT.
+      - Hard ceiling: the stored take_profit price (wide ATR fallback) → TARGET_HIT.
+                     Prevents a position staying open forever if the model never
+                     generates an opposite signal (e.g. a slow grind with no clean
+                     re-entry signal on the other side).
+    """
     global _track_store, _tr_seen_ids
     now_iso = datetime.now(timezone.utc).isoformat()
 
@@ -349,63 +415,107 @@ def _update_track_record(signals_data: dict, live_prices: dict) -> None:
         if not isinstance(sig, dict):
             continue
 
-        signal_type = sig.get("signal", "HOLD")
-        signal_id   = sig.get("signal_id")
+        signal_type   = sig.get("signal", "HOLD")
+        signal_id     = sig.get("signal_id")
         if not signal_id:
             continue
 
         current_price = float(live_prices.get(sym, sig.get("price", 0) or 0))
 
-        if signal_id in _tr_seen_ids:
-            # Update outcome for any still-open records with this id
-            for rec in _track_store:
-                if rec.get("signal_id") != signal_id or rec.get("outcome") != "OPEN":
-                    continue
-                tp  = float(rec.get("take_profit") or 0)
-                sl  = float(rec.get("stop_loss") or 0)
-                entry = float(rec.get("entry_price") or current_price or 1)
-                direction = rec.get("direction", "LONG")
-                if current_price <= 0 or tp <= 0 or sl <= 0:
-                    continue
-                if direction == "LONG":
-                    if current_price >= tp:
-                        rec.update({"outcome": "WIN",  "exit_price": current_price, "close_time": now_iso,
-                                    "pnl_pct": round((current_price - entry) / entry * 100, 3), "exit_reason": "TARGET_HIT"})
-                    elif current_price <= sl:
-                        rec.update({"outcome": "LOSS", "exit_price": current_price, "close_time": now_iso,
-                                    "pnl_pct": round((current_price - entry) / entry * 100, 3), "exit_reason": "STOP_HIT"})
-                else:  # SHORT
-                    if current_price <= tp:
-                        rec.update({"outcome": "WIN",  "exit_price": current_price, "close_time": now_iso,
-                                    "pnl_pct": round((entry - current_price) / entry * 100, 3), "exit_reason": "TARGET_HIT"})
-                    elif current_price >= sl:
-                        rec.update({"outcome": "LOSS", "exit_price": current_price, "close_time": now_iso,
-                                    "pnl_pct": round((entry - current_price) / entry * 100, 3), "exit_reason": "STOP_HIT"})
-            continue
+        # ── Find the one open position for this symbol (if any) ────────────
+        open_rec = next(
+            (r for r in _track_store if r.get("symbol") == sym and r.get("outcome") == "OPEN"),
+            None
+        )
 
-        # New actionable signal — add to store
+        if open_rec:
+            direction = open_rec.get("direction", "LONG")
+            entry     = float(open_rec.get("entry_price") or current_price or 1)
+            sl        = float(open_rec.get("stop_loss") or 0)
+            tp        = float(open_rec.get("take_profit") or 0)
+
+            pnl_pct = round(
+                ((current_price - entry) / entry * 100) if direction == "LONG"
+                else ((entry - current_price) / entry * 100),
+                3
+            )
+
+            # Primary TP: opposite model signal fires (this is the reversal exit)
+            opposite_fired = signal_id not in _tr_seen_ids and (
+                (direction == "LONG"  and signal_type in _SELL_SIGNALS) or
+                (direction == "SHORT" and signal_type in _BUY_SIGNALS)
+            )
+
+            # Safety SL: price crosses the ATR-based hard stop
+            sl_hit = current_price > 0 and sl > 0 and (
+                (direction == "LONG"  and current_price <= sl) or
+                (direction == "SHORT" and current_price >= sl)
+            )
+
+            # Hard ceiling fallback TP (wide ATR multiple, only as a safety net)
+            ceiling_hit = current_price > 0 and tp > 0 and (
+                (direction == "LONG"  and current_price >= tp) or
+                (direction == "SHORT" and current_price <= tp)
+            )
+
+            if opposite_fired:
+                open_rec.update({
+                    "outcome":     "WIN" if pnl_pct > 0 else "LOSS",
+                    "exit_price":  current_price,
+                    "close_time":  now_iso,
+                    "pnl_pct":     pnl_pct,
+                    "exit_reason": "MODEL_REVERSAL_TP",
+                })
+                # Fall through: open the new opposite-direction position below
+
+            elif sl_hit:
+                open_rec.update({
+                    "outcome":     "LOSS",
+                    "exit_price":  current_price,
+                    "close_time":  now_iso,
+                    "pnl_pct":     pnl_pct,
+                    "exit_reason": "STOP_HIT",
+                })
+                continue  # SL hit — do not open a new position this tick
+
+            elif ceiling_hit:
+                open_rec.update({
+                    "outcome":     "WIN" if pnl_pct > 0 else "LOSS",
+                    "exit_price":  current_price,
+                    "close_time":  now_iso,
+                    "pnl_pct":     pnl_pct,
+                    "exit_reason": "TARGET_HIT",
+                })
+                continue  # Hard ceiling hit — do not immediately re-enter
+
+            else:
+                continue  # Position still open, nothing to do
+
+        # ── Open a new position if the signal is actionable and fresh ───────
         if signal_type not in _ACTIONABLE:
             continue
+        if signal_id in _tr_seen_ids:
+            continue
 
-        direction = sig.get("direction", "LONG")
+        direction   = sig.get("direction", "LONG" if signal_type in _BUY_SIGNALS else "SHORT")
         entry_price = float(sig.get("price") or sig.get("entry_price") or 0)
         _track_store.append({
-            "signal_id":      signal_id,
-            "symbol":         sym,
-            "timeframe":      sig.get("timeframe", "1h"),
-            "direction":      direction,
-            "signal_type":    signal_type,
-            "signal_status":  sig.get("signal_status", "ACTIVE"),
-            "entry_price":    entry_price,
-            "take_profit":    float(sig.get("tp") or sig.get("suggested_tp") or 0),
-            "stop_loss":      float(sig.get("sl") or sig.get("suggested_sl") or 0),
-            "exit_price":     None,
-            "entry_time":     sig.get("data_timestamp", now_iso),
-            "close_time":     None,
-            "pnl_pct":        0.0,
-            "outcome":        "OPEN",
-            "exit_reason":    None,
-            "ai_prob":        round(float(sig.get("ai_prob") or 0), 3),
+            "signal_id":       signal_id,
+            "symbol":          sym,
+            "timeframe":       sig.get("timeframe", "1h"),
+            "direction":       direction,
+            "signal_type":     signal_type,
+            "signal_status":   sig.get("signal_status", "ACTIVE"),
+            "entry_price":     entry_price,
+            "take_profit":     float(sig.get("tp") or sig.get("suggested_tp") or 0),
+            "stop_loss":       float(sig.get("sl") or sig.get("suggested_sl") or 0),
+            "exit_price":      None,
+            "entry_time":      sig.get("data_timestamp", now_iso),
+            "close_time":      None,
+            "pnl_pct":         0.0,
+            "outcome":         "OPEN",
+            "exit_reason":     None,
+            "ai_prob":         round(float(sig.get("ai_prob") or 0), 3),
             "confluence_rate": round(float(
                 (sig.get("confluence_scorecards") or {}).get("efficiency", 0) or 0
             ), 2),
@@ -541,49 +651,63 @@ async def analytics_loop():
 # -------------------------------------------------------------------
 async def run_engine_background():
     """Run the live engine in the background without blocking startup."""
-    from scripts.live_engine import LiveEngine, automated_setup
+    from scripts.live_engine import LiveEngine, automated_setup, TRACK_RECORD_PATH as _TR_PATH
     import argparse
 
-    base_url = os.getenv("BASE_URL", "http://localhost:8000")
-    print(f"🚀 Engine background task starting. BASE_URL = {base_url}")
+    print("Engine background task starting.")
 
     args = argparse.Namespace()
-    args.capital = 10000.0
-    args.risk = 2.0
-    args.alpha_risk = 3.0
-    args.max_position = 2000.0
-    args.timeframe = '1m'
-    args.alpha_mode = False
-    args.proxy = None
+    args.capital      = 10_000.0
+    args.max_position = 1_000.0
+    args.scan_seconds = 300
+    args.proxy        = None
 
     backtest_dir = Path(__file__).parent / "logs" / "backtests"
 
     try:
         configs, capital, max_pos, scan_seconds, proxy = automated_setup(backtest_dir, args)
     except Exception as e:
-        print(f"❌ automated_setup failed: {e}")
+        print(f"automated_setup failed: {e}")
         await asyncio.sleep(1)
         return
 
     engine = LiveEngine(
-        token_configs=configs,
-        capital=capital,
-        max_position_usdt=max_pos,
-        scan_interval_seconds=scan_seconds,
-        proxy_url=proxy
+        token_configs         = configs,
+        capital               = capital,
+        max_position_usdt     = max_pos,
+        scan_interval_seconds = scan_seconds,
+        proxy_url             = proxy,
     )
     LIVE_STATE.engine = engine
 
+    _last_tr_mtime: float = 0.0
+
     async def update_state():
+        nonlocal _last_tr_mtime
         while True:
             try:
-                LIVE_STATE.data["tickers"] = engine.live_prices.copy()
-                LIVE_STATE.data["signals"] = engine.last_signals.copy()
-                LIVE_STATE.data["open_trades"] = [asdict(t) for t in engine.wallet.open_trades.values()]
-                LIVE_STATE.data["balance"] = engine.wallet.balance
-                LIVE_STATE.data["alpha_mode"] = engine.alpha_mode
-                if hasattr(engine, 'bootstrap_total'):
-                    LIVE_STATE.data["warmup_progress"] = f"{engine.bootstrap_done}/{engine.bootstrap_total}"
+                LIVE_STATE.data["tickers"]  = engine.live_prices.copy()
+                LIVE_STATE.data["signals"]  = engine.last_signals.copy()
+                LIVE_STATE.data["open_trades"] = [
+                    asdict(p) for p in engine.wallet.open_positions.values()
+                ]
+                LIVE_STATE.data["balance"]  = engine.wallet.balance
+                LIVE_STATE.data["alpha_mode"] = False
+                LIVE_STATE.data["warmup_progress"] = (
+                    f"{engine.bootstrap_done}/{engine.bootstrap_total}"
+                )
+
+                # Broadcast track_record.json to WebSocket clients whenever
+                # the engine saves a new version (detected via mtime change).
+                try:
+                    mtime = _TR_PATH.stat().st_mtime if _TR_PATH.exists() else 0.0
+                    if mtime > _last_tr_mtime:
+                        _last_tr_mtime = mtime
+                        with open(_TR_PATH, 'r', encoding='utf-8') as _f:
+                            _payload = json.load(_f)
+                        await _tr_ws_manager.broadcast(_payload)
+                except Exception:
+                    pass
                 # --- write latest signals to a JSON file for frontend consumption ---
                 try:
                     signals_dir = WEB_ROOT_PATH / 'src' / 'data'

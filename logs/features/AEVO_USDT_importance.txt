@@ -1,0 +1,32 @@
+Feature importance (gain) for AEVO/USDT
+==================================================
+efficiency_ratio_10                 : 37.376572
+volatility_regime                   : 5.116664
+pvt                                 : 4.492140
+trend_regime                        : 3.749258
+market_phase                        : 3.590424
+vwap_decay_mean_24                  : 3.246515
+fib_range_pct                       : 3.165339
+weekly_macd_hist                    : 3.030205
+atr_band_position                   : 2.874136
+vwap_decay_std_24                   : 2.782990
+rolling_volatility                  : 2.733173
+vwap                                : 2.693395
+dpo_20                              : 2.683216
+linreg_r2_14                        : 2.659588
+weekly_macd                         : 2.566484
+dow_sin                             : 2.566272
+macd                                : 2.556588
+close_decay_std_24                  : 2.425336
+hurst                               : 2.420226
+volume_decay_std_24                 : 2.411409
+parkinson_vol                       : 2.409817
+vwap_delta_12                       : 2.385082
+dist_avwap_200                      : 2.370513
+fib_dist_236                        : 2.314506
+fib_dist_500                        : 2.231114
+aroon_osc                           : 2.200860
+funding_rate_ma8                    : 2.198487
+btc_dist_ema200                     : 2.195505
+dist_s1                             : 2.185515
+adx_14                              : 2.145715

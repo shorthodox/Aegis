@@ -1,0 +1,32 @@
+Feature importance (gain) for XLM/USDT
+==================================================
+efficiency_ratio_10                 : 102.675621
+linreg_r2_14                        : 30.431217
+starc_position                      : 15.482395
+volatility_regime                   : 13.265849
+avwap_200                           : 12.701952
+trend_regime                        : 11.964653
+atr_band_position                   : 11.648812
+market_phase                        : 11.493618
+atr_14                              : 10.408391
+avwap_100                           : 8.588387
+adx_14                              : 7.926940
+gk_vol                              : 7.717155
+dist_r2                             : 7.456674
+vwap                                : 7.229487
+dist_avwap_100                      : 7.005111
+rolling_volatility                  : 6.912456
+funding_rate                        : 6.842998
+relative_volume                     : 6.715976
+ema_200                             : 6.687274
+s2                                  : 6.614209
+parkinson_vol                       : 6.283605
+vwap_decay_std_24                   : 6.243982
+vwap_delta_12                       : 6.243560
+funding_rate_ma8                    : 6.231628
+fib_dist_236                        : 6.229896
+kvo                                 : 6.046743
+btc_dist_ema200                     : 6.023222
+dist_ema_200                        : 6.005941
+keltner_width                       : 5.997919
+bb_width_percentile                 : 5.915596

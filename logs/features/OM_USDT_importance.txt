@@ -1,0 +1,32 @@
+Feature importance (gain) for OM/USDT
+==================================================
+efficiency_ratio_10                 : 22.398199
+volatility_regime                   : 4.368340
+volume_decay_mean_24                : 4.210617
+trend_regime                        : 3.288979
+volume_decay_std_24                 : 3.204759
+s1                                  : 2.922099
+supertrend                          : 2.682803
+vwap                                : 2.672072
+pvt                                 : 2.654994
+linreg_r2_14                        : 2.449272
+avwap_100                           : 2.400264
+weekly_macd_hist                    : 2.388254
+kvo_signal                          : 2.374112
+atr_band_position                   : 2.221908
+aroon_osc                           : 2.176743
+dist_ema_200                        : 2.115182
+ichimoku_senkou_b                   : 2.074187
+adx_14                              : 2.056192
+dist_r2                             : 2.029037
+hurst                               : 2.028963
+vwap_decay_std_24                   : 2.018578
+market_phase                        : 2.016705
+pct_dist_to_resistance              : 1.899122
+avwap_200                           : 1.853064
+fib_dist_382                        : 1.836476
+fib_dist_236                        : 1.790507
+parkinson_vol                       : 1.783391
+fib_range_pct                       : 1.762924
+dow_sin                             : 1.757895
+btc_corr_24h                        : 1.733444

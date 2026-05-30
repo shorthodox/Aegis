@@ -1,0 +1,32 @@
+Feature importance (gain) for XVG/USDT
+==================================================
+efficiency_ratio_10                 : 77.272247
+starc_position                      : 21.621309
+linreg_r2_14                        : 18.329229
+market_phase                        : 17.921106
+volatility_regime                   : 13.719500
+dist_r2                             : 11.152492
+close                               : 10.400845
+low                                 : 10.399392
+dist_vwap                           : 9.991589
+weekly_sma200                       : 9.217577
+parkinson_vol                       : 9.002375
+kama_10                             : 8.911140
+aroon_up                            : 8.048205
+avwap_200                           : 7.852273
+ema_200                             : 7.676416
+high                                : 7.663751
+weekly_macd_signal                  : 7.647019
+returns_1h_decay_std_24             : 7.616579
+weekly_rsi                          : 7.539119
+vwap_decay_std_24                   : 7.434387
+weekly_macd                         : 7.203414
+weekly_ema200                       : 7.140330
+dist_pivot                          : 7.064139
+cmf_20                              : 7.051255
+vwap                                : 7.025868
+btc_corr_24h                        : 7.016880
+s2                                  : 6.961005
+entropy                             : 6.794469
+vwap_decay_mean_24                  : 6.691719
+bb_width_percentile                 : 6.561827

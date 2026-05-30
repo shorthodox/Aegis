@@ -1,0 +1,32 @@
+Feature importance (gain) for BLUR/USDT
+==================================================
+efficiency_ratio_10                 : 125.359306
+linreg_r2_14                        : 50.495399
+market_phase                        : 22.598200
+atr_band_position                   : 22.581226
+starc_position                      : 19.217234
+volatility_regime                   : 18.460293
+weekly_macd                         : 11.307877
+fib_range_pct                       : 11.245405
+weekly_macd_signal                  : 10.373032
+dist_vwap                           : 9.515606
+cmf_20                              : 9.167543
+adx_14                              : 8.967753
+btc_corr_24h                        : 8.898965
+trend_regime                        : 8.894184
+macd_signal                         : 8.786554
+atr_14                              : 8.733791
+vwap_delta_12                       : 8.687930
+vwap_decay_std_24                   : 8.573475
+close_decay_std_24                  : 8.450026
+keltner_width                       : 8.410262
+vwap                                : 8.383265
+weekly_rsi                          : 8.375066
+bb_width_percentile                 : 8.340640
+avwap_200                           : 8.183907
+btc_dist_ema200                     : 8.051192
+kst_signal                          : 7.924272
+kvo_signal                          : 7.915780
+price_zscore_200                    : 7.900054
+funding_rate_zscore                 : 7.813234
+dist_s1                             : 7.788769

@@ -1,0 +1,32 @@
+Feature importance (gain) for BOME/USDT
+==================================================
+efficiency_ratio_10                 : 79.561310
+trend_regime                        : 15.313483
+volatility_regime                   : 13.456329
+atr_14                              : 11.534914
+dist_bull_ob                        : 10.809748
+weekly_rsi                          : 9.950652
+ichimoku_senkou_a                   : 9.661482
+keltner_width                       : 9.419896
+market_phase                        : 9.216805
+dow_cos                             : 8.738975
+ema_200                             : 8.152136
+s1                                  : 8.018333
+avwap_200                           : 7.474025
+adx_14                              : 7.439066
+bb_width_percentile                 : 7.408356
+rolling_volatility                  : 7.282748
+supertrend                          : 7.095792
+dist_vwap                           : 7.068089
+weekly_macd_hist                    : 7.067776
+macd                                : 7.008252
+ichimoku_senkou_b                   : 6.968190
+pivot                               : 6.952503
+linreg_r2_14                        : 6.723646
+vwap                                : 6.584120
+weekly_macd_signal                  : 6.570013
+parkinson_vol                       : 6.420184
+fib_range_pct                       : 6.346585
+dpo_20                              : 6.228827
+atr_band_position                   : 6.153605
+returns_1h_decay_std_24             : 6.089282

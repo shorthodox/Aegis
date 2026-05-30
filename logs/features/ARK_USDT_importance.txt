@@ -1,0 +1,32 @@
+Feature importance (gain) for ARK/USDT
+==================================================
+efficiency_ratio_10                 : 95.120621
+linreg_r2_14                        : 35.225151
+volatility_regime                   : 14.881741
+atr_band_position                   : 11.879070
+market_phase                        : 10.233500
+weekly_rsi                          : 9.795197
+funding_rate_ma8                    : 9.741669
+btc_dist_ema200                     : 9.723734
+trend_regime                        : 9.700273
+vwap                                : 9.220927
+range_position_score                : 8.723998
+weekly_macd_hist                    : 8.601104
+funding_rate_zscore                 : 8.451117
+pvt                                 : 8.394287
+fib_range_pct                       : 8.392386
+price_zscore_200                    : 8.377086
+pivot                               : 8.244852
+keltner_width                       : 8.239440
+vwap_delta_12                       : 8.199025
+supertrend                          : 8.137554
+fib_dist_236                        : 7.974599
+avwap_200                           : 7.957145
+dist_ema_200                        : 7.850743
+dist_vwap                           : 7.821229
+donchian_width                      : 7.777892
+rolling_resistance                  : 7.667761
+close_decay_std_24                  : 7.474860
+volume_decay_mean_24                : 7.453139
+funding_rate                        : 7.429681
+vwap_decay_std_24                   : 7.410653

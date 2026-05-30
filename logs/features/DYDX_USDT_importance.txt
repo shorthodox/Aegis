@@ -1,0 +1,32 @@
+Feature importance (gain) for DYDX/USDT
+==================================================
+efficiency_ratio_10                 : 92.101700
+linreg_r2_14                        : 28.608833
+starc_position                      : 17.914764
+market_phase                        : 12.978348
+volatility_regime                   : 12.648979
+atr_band_position                   : 11.610326
+gk_vol                              : 9.146968
+parkinson_vol                       : 8.564375
+vwap                                : 8.440646
+weekly_macd                         : 8.422723
+dist_vwap                           : 8.322204
+trend_regime                        : 8.235581
+dow_cos                             : 8.006355
+adx_14                              : 7.955173
+weekly_macd_hist                    : 7.795122
+dist_bull_ob                        : 7.790757
+macd                                : 7.751930
+close_decay_std_24                  : 7.715337
+volume_decay_std_24                 : 7.696528
+weekly_macd_signal                  : 7.367252
+avwap_200                           : 7.298817
+vwap_decay_std_24                   : 7.263368
+btc_dist_ema200                     : 7.259328
+fib_range_pct                       : 7.228366
+keltner_width                       : 7.175971
+atr_14                              : 7.128009
+awesome_osc                         : 7.091499
+dist_avwap_200                      : 7.055351
+hurst                               : 6.927005
+returns_1h_decay_std_24             : 6.881307

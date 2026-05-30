@@ -1,0 +1,32 @@
+Feature importance (gain) for LRC/USDT
+==================================================
+efficiency_ratio_10                 : 73.182068
+linreg_r2_14                        : 25.448738
+atr_band_position                   : 17.986935
+volatility_regime                   : 17.011145
+starc_position                      : 16.348324
+returns_1h_decay_mean_24            : 14.496285
+macd                                : 13.373457
+obv                                 : 11.890869
+rel_perf_24h                        : 11.758814
+dist_r1                             : 11.609159
+macd_signal                         : 11.097175
+fvg_distance                        : 10.787705
+rolling_volatility                  : 10.585328
+market_phase                        : 10.142111
+dist_avwap_100                      : 10.057296
+dist_vwap                           : 9.734237
+s1                                  : 9.282502
+vwap_decay_mean_24                  : 9.167347
+aroon_up                            : 9.010053
+avwap_200                           : 8.896106
+gk_vol                              : 8.886914
+close_decay_std_24                  : 8.861777
+dist_r2                             : 8.668876
+weekly_macd_signal                  : 8.621056
+dist_bear_ob                        : 8.613471
+aroon_osc                           : 8.542389
+fib_range_pct                       : 8.511540
+vwap                                : 8.271419
+dist_weekly_ema200                  : 8.242242
+parkinson_vol                       : 8.179660

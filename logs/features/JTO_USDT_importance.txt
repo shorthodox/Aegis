@@ -1,0 +1,32 @@
+Feature importance (gain) for JTO/USDT
+==================================================
+efficiency_ratio_10                 : 70.434242
+linreg_r2_14                        : 15.445732
+volatility_regime                   : 12.422683
+atr_band_position                   : 10.479923
+market_phase                        : 10.260572
+trend_regime                        : 9.272134
+avwap_200                           : 8.581418
+weekly_rsi                          : 7.821853
+atr_14                              : 7.784588
+r2                                  : 7.759354
+weekly_macd                         : 7.414550
+vwap                                : 7.305078
+ema_200                             : 7.185593
+vwap_decay_std_24                   : 6.875257
+hurst                               : 6.779078
+volume_decay_mean_24                : 6.644525
+gk_vol                              : 6.637014
+dist_vwap                           : 6.592977
+dist_ema_200                        : 6.589119
+pvt                                 : 6.542842
+returns_1h_decay_std_24             : 6.540977
+s2                                  : 6.535882
+btc_dist_ema200                     : 6.512067
+adx_14                              : 6.511537
+dist_avwap_200                      : 6.483751
+rolling_volatility                  : 6.432702
+dist_r2                             : 6.322305
+bb_width_percentile                 : 6.248412
+fib_range_pct                       : 6.226087
+volume_decay_std_24                 : 6.128939

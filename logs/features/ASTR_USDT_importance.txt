@@ -1,0 +1,32 @@
+Feature importance (gain) for ASTR/USDT
+==================================================
+efficiency_ratio_10                 : 88.233353
+linreg_r2_14                        : 29.737652
+atr_band_position                   : 18.440134
+market_phase                        : 15.928653
+volatility_regime                   : 15.872335
+avwap_200                           : 11.285868
+keltner_width                       : 9.785224
+trend_regime                        : 9.683863
+btc_dist_ema200                     : 9.200709
+weekly_macd_signal                  : 9.192775
+close_decay_std_24                  : 9.134243
+kvo_signal                          : 8.961487
+ema_200                             : 8.923932
+ichimoku_senkou_a                   : 8.896794
+fib_range_pct                       : 8.745504
+returns_1h_decay_std_24             : 8.714252
+adx_14                              : 8.634269
+bb_width_percentile                 : 8.539863
+funding_rate                        : 8.393503
+vwap                                : 8.318124
+hurst                               : 8.216780
+gk_vol                              : 8.189653
+eom_14                              : 8.186693
+atr_14                              : 8.138406
+funding_rate_zscore                 : 8.049734
+dow_cos                             : 8.020463
+donchian_width                      : 8.016519
+dist_bear_ob                        : 7.984614
+weekly_macd                         : 7.981269
+dow_sin                             : 7.978001

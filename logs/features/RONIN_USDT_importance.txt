@@ -1,0 +1,32 @@
+Feature importance (gain) for RONIN/USDT
+==================================================
+efficiency_ratio_10                 : 61.443207
+linreg_r2_14                        : 18.470297
+volatility_regime                   : 10.213572
+trend_regime                        : 9.367248
+ema_100                             : 9.125494
+atr_band_position                   : 7.919951
+atr_14                              : 5.918532
+obv                                 : 5.694479
+weekly_macd_signal                  : 5.609289
+ichimoku_senkou_b                   : 5.371106
+vwap_decay_mean_24                  : 5.274141
+fib_dist_236                        : 5.099699
+dist_vwap                           : 4.919970
+returns_1h_decay_std_24             : 4.863137
+close_decay_mean_24                 : 4.849702
+donchian_width                      : 4.746385
+fib_range_pct                       : 4.480922
+ichimoku_kijun                      : 4.435737
+market_phase                        : 4.431337
+weekly_rsi                          : 4.390539
+volume_decay_std_24                 : 4.340765
+vwap_decay_std_24                   : 4.115521
+dist_bull_ob                        : 4.103248
+weekly_macd                         : 4.092049
+vwap                                : 4.078245
+fib_dist_382                        : 3.986236
+force_index                         : 3.953559
+ichimoku_senkou_a                   : 3.934879
+entropy                             : 3.737499
+keltner_width                       : 3.733608

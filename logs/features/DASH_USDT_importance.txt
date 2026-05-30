@@ -1,0 +1,32 @@
+Feature importance (gain) for DASH/USDT
+==================================================
+efficiency_ratio_10                 : 77.755463
+volatility_regime                   : 11.311849
+market_phase                        : 10.029016
+linreg_r2_14                        : 9.962524
+trend_regime                        : 7.805254
+funding_rate                        : 7.047389
+dist_vwap                           : 6.760086
+avwap_200                           : 6.316445
+atr_band_position                   : 6.199403
+starc_position                      : 5.674470
+weekly_rsi                          : 5.550315
+pvt                                 : 5.243016
+vwap_decay_mean_24                  : 5.226201
+dow_cos                             : 5.204530
+ichimoku_senkou_b                   : 5.169671
+weekly_macd_signal                  : 5.029124
+kvo                                 : 4.891704
+supertrend_dist                     : 4.776554
+vwap_delta_12                       : 4.703887
+avwap_100                           : 4.560627
+funding_rate_ma8                    : 4.547202
+donchian_width                      : 4.540472
+dist_bear_ob                        : 4.531449
+vwap                                : 4.488806
+fib_range_pct                       : 4.481179
+kvo_signal                          : 4.374157
+btc_dist_ema200                     : 4.272065
+adx_14                              : 4.224831
+dist_ema_200                        : 4.173512
+fib_dist_618                        : 3.991186

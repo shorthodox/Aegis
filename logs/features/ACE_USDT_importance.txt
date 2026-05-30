@@ -1,0 +1,32 @@
+Feature importance (gain) for ACE/USDT
+==================================================
+efficiency_ratio_10                 : 33.039223
+pvt                                 : 6.744426
+volatility_regime                   : 5.469403
+weekly_rsi                          : 5.291763
+vwap_decay_mean_24                  : 3.406626
+dist_vwap                           : 3.201638
+quantile_position                   : 3.200309
+fib_dist_236                        : 3.137015
+dist_pivot                          : 3.086816
+vwap_decay_std_24                   : 2.923823
+dist_bull_ob                        : 2.874116
+dist_weekly_ema200                  : 2.791201
+parkinson_vol                       : 2.775702
+price_zscore_200                    : 2.687036
+volume_decay_std_24                 : 2.648515
+kvo_signal                          : 2.643732
+fib_range_pct                       : 2.619995
+volume_decay_mean_24                : 2.613305
+vwap                                : 2.602420
+linreg_r2_14                        : 2.585543
+dist_r2                             : 2.560786
+market_phase                        : 2.515445
+fib_dist_382                        : 2.509083
+dist_bear_ob                        : 2.508981
+rolling_volatility                  : 2.405534
+dist_avwap_100                      : 2.398146
+gk_vol                              : 2.364410
+btc_dist_ema200                     : 2.356324
+dist_r1                             : 2.319417
+dist_avwap_50                       : 2.302917

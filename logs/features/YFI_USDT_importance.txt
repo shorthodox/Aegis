@@ -1,0 +1,32 @@
+Feature importance (gain) for YFI/USDT
+==================================================
+efficiency_ratio_10                 : 39.824276
+linreg_r2_14                        : 5.723385
+volatility_regime                   : 5.674192
+trend_regime                        : 5.530434
+market_phase                        : 4.889869
+starc_position                      : 3.612960
+ema_200                             : 3.089928
+atr_band_position                   : 3.081403
+dow_cos                             : 3.062177
+fib_range_pct                       : 2.981777
+volume_decay_std_24                 : 2.919964
+adx_14                              : 2.881662
+rel_perf_24h                        : 2.807352
+weekly_macd_hist                    : 2.805465
+weekly_rsi                          : 2.803970
+macd_signal                         : 2.777799
+vwap_decay_std_24                   : 2.748472
+returns_1h_decay_std_24             : 2.700161
+supertrend_dist                     : 2.676508
+historical_volatility               : 2.665946
+ichimoku_senkou_a                   : 2.660498
+rolling_volatility                  : 2.581939
+avwap_200                           : 2.502705
+dist_s2                             : 2.486711
+linreg_slope_14                     : 2.462694
+acc_dist                            : 2.392196
+price_zscore_200                    : 2.287663
+close_decay_std_24                  : 2.282671
+btc_dist_ema200                     : 2.265001
+dist_bear_ob                        : 2.223444

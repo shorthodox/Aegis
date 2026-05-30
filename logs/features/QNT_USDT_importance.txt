@@ -1,0 +1,32 @@
+Feature importance (gain) for QNT/USDT
+==================================================
+efficiency_ratio_10                 : 163.064392
+linreg_r2_14                        : 29.421938
+starc_position                      : 24.121107
+market_phase                        : 17.340862
+atr_band_position                   : 15.008196
+adx_14                              : 14.598160
+volatility_regime                   : 13.246603
+kvo                                 : 11.796426
+returns_1h_decay_mean_24            : 11.011693
+bb_pct_b                            : 10.609533
+s1                                  : 10.347048
+acc_dist                            : 10.073636
+r2                                  : 9.796226
+obv                                 : 9.744159
+hurst                               : 9.620908
+avwap_50                            : 9.543356
+avwap_200                           : 9.420786
+dist_r1                             : 9.300594
+pct_dist_to_support                 : 9.297385
+vwap_decay_std_24                   : 9.197371
+fib_dist_236                        : 9.161331
+avwap_100                           : 8.917910
+trend_regime                        : 8.586539
+pvt                                 : 8.280376
+close_decay_std_24                  : 8.185667
+keltner_width                       : 7.718073
+btc_dist_ema200                     : 7.702162
+volume_decay_std_24                 : 7.636744
+weekly_rsi                          : 7.247789
+dist_vwap                           : 7.200106

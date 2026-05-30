@@ -1,0 +1,32 @@
+Feature importance (gain) for CVX/USDT
+==================================================
+efficiency_ratio_10                 : 109.698990
+linreg_r2_14                        : 32.124718
+atr_band_position                   : 17.890041
+ema_100                             : 16.769892
+gk_vol                              : 16.577915
+rolling_vwap_24                     : 15.539602
+keltner_width                       : 13.713574
+volatility_regime                   : 12.918903
+avwap_200                           : 10.701089
+obv                                 : 10.351706
+close_decay_std_24                  : 10.303002
+vwap                                : 10.172018
+parkinson_vol                       : 10.067000
+r1                                  : 9.870828
+dist_vwap                           : 9.531523
+pvt                                 : 9.209348
+fib_range_pct                       : 9.190267
+kvo_signal                          : 9.168262
+market_phase                        : 9.059228
+weekly_rsi                          : 8.884109
+vwap_decay_std_24                   : 8.873901
+donchian_width                      : 8.833209
+avwap_100                           : 8.763859
+close_decay_mean_24                 : 8.712641
+ichimoku_senkou_b                   : 8.561559
+aroon_osc                           : 8.544600
+weekly_macd_signal                  : 8.405077
+btc_dist_ema200                     : 8.380048
+dist_bear_ob                        : 8.210180
+rolling_volatility                  : 8.199904

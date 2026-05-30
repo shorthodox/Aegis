@@ -1,0 +1,32 @@
+Feature importance (gain) for NEO/USDT
+==================================================
+efficiency_ratio_10                 : 84.066933
+linreg_r2_14                        : 20.598120
+atr_band_position                   : 12.788984
+volatility_regime                   : 11.564722
+starc_position                      : 10.691494
+market_phase                        : 9.210640
+pct_dist_to_resistance              : 8.543322
+atr_14                              : 6.976622
+avwap_100                           : 6.779069
+force_index                         : 6.725911
+dist_weekly_ema200                  : 6.481041
+weekly_macd                         : 6.384518
+trend_regime                        : 6.235847
+weekly_macd_hist                    : 6.233809
+dpo_20                              : 6.094760
+vwap_decay_mean_24                  : 5.910892
+pct_dist_to_support                 : 5.880591
+weekly_macd_signal                  : 5.723842
+vwap                                : 5.646854
+volume_decay_std_24                 : 5.635859
+gk_vol                              : 5.627094
+ppo_signal                          : 5.595727
+dist_vwap                           : 5.575219
+dow_sin                             : 5.572253
+rolling_vwap_24                     : 5.528748
+kst                                 : 5.477065
+funding_rate_zscore                 : 5.403518
+pvt                                 : 5.321437
+weekly_rsi                          : 5.284668
+keltner_width                       : 5.267866

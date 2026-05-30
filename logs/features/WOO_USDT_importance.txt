@@ -1,0 +1,32 @@
+Feature importance (gain) for WOO/USDT
+==================================================
+efficiency_ratio_10                 : 23.597775
+volatility_regime                   : 2.641542
+trend_regime                        : 2.326296
+rolling_support                     : 1.747794
+weekly_macd_signal                  : 1.616684
+gk_vol                              : 1.609571
+parkinson_vol                       : 1.590681
+weekly_macd                         : 1.545725
+vwap_decay_mean_24                  : 1.511356
+market_phase                        : 1.501967
+weekly_macd_hist                    : 1.490716
+r2                                  : 1.388893
+weekly_rsi                          : 1.365289
+avwap_200                           : 1.332596
+close_decay_std_24                  : 1.253567
+avwap_100                           : 1.243444
+vwap                                : 1.218387
+atr_band_position                   : 1.217471
+fvg_distance                        : 1.213178
+keltner_width                       : 1.174072
+fib_range_pct                       : 1.173974
+returns_1h_decay_std_24             : 1.154157
+macd_signal                         : 1.139325
+supertrend                          : 1.127240
+dist_avwap_100                      : 1.113718
+dist_vwap                           : 1.058851
+ichimoku_senkou_a                   : 1.052563
+linreg_r2_14                        : 1.034282
+dow_sin                             : 1.015793
+vwap_decay_std_24                   : 0.966935

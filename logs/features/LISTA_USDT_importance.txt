@@ -1,0 +1,32 @@
+Feature importance (gain) for LISTA/USDT
+==================================================
+efficiency_ratio_10                 : 59.723389
+linreg_r2_14                        : 14.579141
+volatility_regime                   : 8.641587
+obv                                 : 8.094509
+starc_position                      : 7.571144
+atr_band_position                   : 7.219727
+trend_regime                        : 7.198327
+market_phase                        : 6.994661
+vwap_decay_mean_24                  : 5.641611
+vwap                                : 5.633179
+weekly_macd_signal                  : 5.553345
+weekly_macd                         : 5.431912
+weekly_rsi                          : 5.373746
+btc_dist_ema200                     : 5.371829
+r1                                  : 5.235812
+dist_ema_200                        : 5.197629
+s2                                  : 5.157792
+gk_vol                              : 5.134974
+weekly_macd_hist                    : 5.120181
+vwap_decay_std_24                   : 5.052270
+volume_decay_std_24                 : 5.003898
+vwap_delta_12                       : 4.969665
+keltner_width                       : 4.897274
+dist_avwap_100                      : 4.883391
+close_decay_std_24                  : 4.881965
+dist_r1                             : 4.857209
+parkinson_vol                       : 4.832679
+dist_r2                             : 4.809779
+volume_decay_mean_24                : 4.798226
+fib_range_pct                       : 4.782659

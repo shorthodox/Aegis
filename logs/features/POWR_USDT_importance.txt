@@ -1,0 +1,32 @@
+Feature importance (gain) for POWR/USDT
+==================================================
+efficiency_ratio_10                 : 114.364891
+linreg_r2_14                        : 52.509422
+trend_regime                        : 24.435408
+atr_band_position                   : 21.468561
+market_phase                        : 20.338303
+volatility_regime                   : 17.950521
+weekly_macd                         : 14.905510
+kvo_signal                          : 14.291082
+adx_14                              : 12.962446
+rolling_volatility                  : 12.925397
+pvt                                 : 12.760350
+starc_position                      : 12.557900
+ichimoku_senkou_b                   : 12.228346
+bb_width_percentile                 : 12.021941
+volume_delta_14                     : 11.871704
+weekly_macd_signal                  : 11.799211
+force_index                         : 11.591689
+dist_r1                             : 11.527983
+fvg_distance                        : 11.463616
+rel_perf_24h                        : 11.339272
+volume_decay_mean_24                : 11.133260
+btc_dist_ema200                     : 10.975275
+keltner_width                       : 10.772079
+btc_ratio_ma_dist                   : 10.688468
+quantile_position                   : 10.616486
+vwap_decay_std_24                   : 10.611430
+kvo                                 : 10.521509
+hurst                               : 10.498659
+gk_vol                              : 10.405098
+fib_range_pct                       : 10.153321

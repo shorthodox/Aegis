@@ -1,0 +1,32 @@
+Feature importance (gain) for ONE/USDT
+==================================================
+efficiency_ratio_10                 : 102.036613
+linreg_r2_14                        : 30.893293
+atr_band_position                   : 20.404898
+starc_position                      : 16.113733
+market_phase                        : 13.755361
+volatility_regime                   : 13.457777
+weekly_macd                         : 10.140715
+gk_vol                              : 10.032216
+keltner_width                       : 9.606740
+dist_s2                             : 9.409722
+dist_r1                             : 9.388959
+funding_rate_zscore                 : 9.360588
+dist_pivot                          : 9.326225
+fib_range_pct                       : 8.566536
+weekly_rsi                          : 8.563850
+williams_r                          : 8.503493
+vwap                                : 8.454216
+btc_dist_ema200                     : 8.386725
+rel_perf_24h                        : 8.295513
+pivot                               : 7.964539
+returns_1h_decay_std_24             : 7.889130
+ultimate_osc                        : 7.729133
+r2                                  : 7.686410
+rsi_7                               : 7.634602
+hurst                               : 7.594420
+dist_ema_200                        : 7.542753
+weekly_ema200                       : 7.127242
+adx_14                              : 7.098132
+vwap_decay_std_24                   : 6.972101
+dist_ema_100                        : 6.952569

@@ -1,0 +1,32 @@
+Feature importance (gain) for ROSE/USDT
+==================================================
+efficiency_ratio_10                 : 96.136940
+starc_position                      : 32.093304
+linreg_r2_14                        : 31.474743
+market_phase                        : 20.548483
+atr_band_position                   : 18.397467
+volatility_regime                   : 16.152229
+bb_width_percentile                 : 12.575169
+ema_200                             : 11.258658
+adx_14                              : 10.474217
+btc_ratio_ma_dist                   : 9.548139
+parkinson_vol                       : 9.517324
+trend_regime                        : 9.513988
+price_zscore_200                    : 9.444707
+weekly_rsi                          : 9.393058
+funding_rate_zscore                 : 9.278454
+vwap_delta_12                       : 9.141626
+weekly_macd_signal                  : 9.090988
+keltner_width                       : 9.040897
+close_decay_std_24                  : 8.673662
+dist_ema_200                        : 8.508595
+dist_avwap_200                      : 8.480709
+supertrend                          : 8.286994
+vwap                                : 8.281524
+dist_r2                             : 8.280650
+cmf_20                              : 8.102274
+btc_corr_24h                        : 7.984107
+vwap_decay_std_24                   : 7.956881
+gk_vol                              : 7.791707
+fib_range_pct                       : 7.710175
+choppiness                          : 7.515379

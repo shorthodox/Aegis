@@ -1,0 +1,32 @@
+Feature importance (gain) for CYBER/USDT
+==================================================
+efficiency_ratio_10                 : 79.882500
+market_phase                        : 10.645181
+volatility_regime                   : 9.305309
+linreg_r2_14                        : 6.522090
+gk_vol                              : 6.427872
+weekly_rsi                          : 5.883841
+starc_position                      : 5.043366
+ema_200                             : 4.933204
+trend_regime                        : 4.365223
+vwap                                : 4.154964
+atr_band_position                   : 3.910156
+dist_vwap                           : 3.893204
+fib_range_pct                       : 3.847940
+parkinson_vol                       : 3.672920
+dist_avwap_50                       : 3.528103
+aroon_osc                           : 3.472131
+bb_width_percentile                 : 3.359816
+dow_sin                             : 3.271079
+kvo                                 : 3.225657
+weekly_macd                         : 3.216271
+dist_s2                             : 3.163852
+entropy                             : 3.151726
+atr_14                              : 3.032072
+dist_r2                             : 2.902314
+volume_decay_std_24                 : 2.810618
+dist_bear_ob                        : 2.784786
+hurst                               : 2.784135
+adx_14                              : 2.718651
+ichimoku_senkou_a                   : 2.680034
+volume_decay_mean_24                : 2.678813

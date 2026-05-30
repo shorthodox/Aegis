@@ -1,0 +1,32 @@
+Feature importance (gain) for TFUEL/USDT
+==================================================
+efficiency_ratio_10                 : 58.223450
+linreg_r2_14                        : 11.934977
+volatility_regime                   : 6.717846
+atr_band_position                   : 6.665141
+market_phase                        : 6.353740
+weekly_rsi                          : 5.546846
+vwap_decay_mean_24                  : 5.450969
+donchian_position                   : 5.442245
+ultimate_osc                        : 5.199346
+kvo_signal                          : 5.106020
+keltner_width                       : 5.028075
+range_position_score                : 4.896360
+vwap                                : 4.617261
+dist_vwap                           : 4.527878
+returns_1h_decay_std_24             : 4.418587
+weekly_macd                         : 4.227634
+kvo                                 : 4.169092
+dist_ema_100                        : 4.059450
+weekly_macd_hist                    : 4.042043
+trend_regime                        : 4.031992
+dist_ema_200                        : 3.934212
+volume_decay_std_24                 : 3.926035
+hurst                               : 3.916225
+s2                                  : 3.901634
+r2                                  : 3.839620
+pct_dist_to_support                 : 3.836261
+adx_14                              : 3.666510
+gk_vol                              : 3.664777
+volatility_skew                     : 3.596847
+dist_kama                           : 3.406974

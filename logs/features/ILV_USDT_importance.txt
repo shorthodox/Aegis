@@ -1,0 +1,32 @@
+Feature importance (gain) for ILV/USDT
+==================================================
+efficiency_ratio_10                 : 26.998011
+linreg_r2_14                        : 3.696543
+volatility_regime                   : 3.499390
+market_phase                        : 3.369941
+atr_band_position                   : 3.038339
+volume_decay_std_24                 : 1.995736
+avwap_50                            : 1.947582
+rolling_resistance                  : 1.889945
+ichimoku_senkou_a                   : 1.843557
+volume_decay_mean_24                : 1.840336
+pvt                                 : 1.783017
+vwap                                : 1.748884
+donchian_width                      : 1.739629
+fib_range_pct                       : 1.735712
+keltner_width                       : 1.729875
+vwap_decay_std_24                   : 1.703853
+hurst                               : 1.698950
+funding_rate                        : 1.697748
+avwap_200                           : 1.693007
+adx_14                              : 1.678146
+dist_avwap_100                      : 1.635029
+weekly_macd                         : 1.606701
+obv                                 : 1.593583
+dist_s1                             : 1.590915
+parkinson_vol                       : 1.531109
+returns_1h_decay_std_24             : 1.491009
+kvo                                 : 1.476229
+weekly_rsi                          : 1.455917
+price_zscore_200                    : 1.441753
+kvo_signal                          : 1.438003

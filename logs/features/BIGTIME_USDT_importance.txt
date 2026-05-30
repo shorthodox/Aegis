@@ -1,0 +1,32 @@
+Feature importance (gain) for BIGTIME/USDT
+==================================================
+efficiency_ratio_10                 : 40.363556
+market_phase                        : 8.544183
+trend_regime                        : 8.043040
+volatility_regime                   : 7.360621
+weekly_macd                         : 5.557426
+linreg_r2_14                        : 5.314036
+weekly_macd_signal                  : 5.154773
+weekly_macd_hist                    : 5.023452
+vwap                                : 4.910346
+supertrend                          : 4.719650
+starc_position                      : 4.622909
+fib_dist_236                        : 4.575048
+adx_14                              : 4.514464
+vwap_decay_std_24                   : 4.468619
+dist_bull_ob                        : 4.415683
+r2                                  : 4.397647
+atr_band_position                   : 4.368230
+close_decay_std_24                  : 4.256489
+gk_vol                              : 4.226664
+dist_vwap                           : 4.214517
+fib_range_pct                       : 4.186691
+cmf_20                              : 4.186389
+rolling_support                     : 4.126450
+atr_14                              : 4.111111
+volume_decay_mean_24                : 4.040438
+fvg_distance                        : 3.947814
+returns_1h_decay_std_24             : 3.777961
+dist_r2                             : 3.752230
+dist_ema_100                        : 3.739749
+volatility_kurt                     : 3.723258

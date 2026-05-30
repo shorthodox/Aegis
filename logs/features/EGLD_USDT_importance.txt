@@ -1,0 +1,32 @@
+Feature importance (gain) for EGLD/USDT
+==================================================
+efficiency_ratio_10                 : 74.377861
+linreg_r2_14                        : 14.851796
+market_phase                        : 12.273346
+atr_band_position                   : 11.964521
+volatility_regime                   : 9.257936
+trend_regime                        : 7.656885
+starc_position                      : 7.531309
+s2                                  : 5.948749
+pvt                                 : 5.816546
+atr_14                              : 5.550669
+vwap_delta_12                       : 5.352413
+dow_cos                             : 5.261721
+dist_vwap                           : 5.232243
+force_index                         : 5.093044
+dist_s1                             : 4.975697
+dist_s2                             : 4.875785
+r1                                  : 4.845527
+vwap_decay_std_24                   : 4.823810
+obv                                 : 4.818530
+fib_range_pct                       : 4.694022
+weekly_macd_signal                  : 4.674112
+adx_14                              : 4.611406
+volume_delta_14                     : 4.594295
+gk_vol                              : 4.435453
+bb_width_percentile                 : 4.366139
+hurst                               : 4.354680
+eom_14                              : 4.236917
+price_zscore_200                    : 4.194009
+supertrend_dist                     : 4.182176
+volume_decay_std_24                 : 4.121225

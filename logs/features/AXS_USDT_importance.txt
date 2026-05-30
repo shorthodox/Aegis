@@ -1,0 +1,32 @@
+Feature importance (gain) for AXS/USDT
+==================================================
+efficiency_ratio_10                 : 91.396683
+linreg_r2_14                        : 59.179443
+market_phase                        : 22.006760
+volatility_regime                   : 18.842896
+atr_band_position                   : 16.752094
+vwap                                : 15.586691
+starc_position                      : 13.393619
+trend_regime                        : 13.295727
+vwap_decay_mean_24                  : 13.227774
+kvo_signal                          : 12.144213
+weekly_macd_hist                    : 10.434112
+weekly_macd                         : 10.385713
+r1                                  : 10.058422
+s2                                  : 9.991546
+fib_range_pct                       : 9.891982
+entropy                             : 9.860584
+weekly_macd_signal                  : 9.578454
+adx_14                              : 9.564041
+weekly_rsi                          : 9.433745
+rolling_volatility                  : 9.166262
+parkinson_vol                       : 9.056417
+close_decay_std_24                  : 8.787520
+dow_sin                             : 8.630627
+r2                                  : 8.381088
+dist_r2                             : 8.355633
+vwap_decay_std_24                   : 8.263250
+hurst                               : 8.124140
+cmf_20                              : 7.898674
+ema_200                             : 7.724594
+dist_vwap                           : 7.644592

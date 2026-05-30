@@ -1,0 +1,32 @@
+Feature importance (gain) for SC/USDT
+==================================================
+efficiency_ratio_10                 : 64.200714
+atr_band_position                   : 16.626951
+volatility_regime                   : 11.200143
+market_phase                        : 11.162535
+trend_regime                        : 11.149079
+linreg_r2_14                        : 8.396844
+adx_14                              : 7.900744
+weekly_macd                         : 7.468007
+weekly_rsi                          : 7.185221
+weekly_macd_signal                  : 7.099771
+supertrend                          : 6.950499
+weekly_macd_hist                    : 6.685308
+fib_dist_236                        : 6.629838
+dist_avwap_200                      : 6.568273
+dist_bear_ob                        : 6.527633
+price_zscore_200                    : 6.412061
+dist_ema_200                        : 6.173281
+dist_vwap                           : 6.168164
+bb_width_percentile                 : 6.158542
+rolling_volatility                  : 6.043828
+btc_dist_ema200                     : 5.988362
+atr_14                              : 5.819386
+vwap_delta_12                       : 5.760225
+keltner_width                       : 5.724746
+vwap                                : 5.679338
+avwap_200                           : 5.633302
+choppiness                          : 5.607926
+vwap_decay_std_24                   : 5.591053
+fib_range_pct                       : 5.531304
+parkinson_vol                       : 5.234725

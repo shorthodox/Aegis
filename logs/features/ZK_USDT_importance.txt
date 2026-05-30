@@ -1,0 +1,32 @@
+Feature importance (gain) for ZK/USDT
+==================================================
+efficiency_ratio_10                 : 79.910561
+linreg_r2_14                        : 21.163639
+atr_band_position                   : 12.743079
+volatility_regime                   : 12.270147
+starc_position                      : 9.372104
+aroon_up                            : 7.815734
+market_phase                        : 7.299490
+keltner_width                       : 7.075469
+trend_regime                        : 6.951370
+weekly_macd_hist                    : 6.648524
+vwap_decay_mean_24                  : 6.504497
+r2                                  : 6.204350
+fib_range_pct                       : 6.195838
+weekly_macd                         : 6.187757
+cmf_20                              : 5.936144
+vwap_decay_std_24                   : 5.928110
+adx_14                              : 5.508960
+btc_dist_ema200                     : 5.467976
+vwap                                : 5.385997
+dow_cos                             : 5.368555
+gk_vol                              : 5.342556
+dist_bear_ob                        : 5.297522
+supertrend                          : 5.276238
+dist_bull_ob                        : 5.266135
+bb_width_percentile                 : 5.225030
+macd_signal                         : 5.180225
+volatility_skew                     : 5.111654
+atr_14                              : 5.109420
+dist_avwap_200                      : 4.885734
+pct_dist_to_resistance              : 4.876257

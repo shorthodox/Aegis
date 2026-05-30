@@ -1,0 +1,32 @@
+Feature importance (gain) for RSR/USDT
+==================================================
+efficiency_ratio_10                 : 48.814899
+linreg_r2_14                        : 9.506216
+market_phase                        : 7.873750
+volatility_regime                   : 6.831514
+trend_regime                        : 6.688537
+weekly_sma200                       : 5.457416
+atr_band_position                   : 5.115753
+starc_position                      : 5.046679
+avwap_200                           : 4.725802
+vwap                                : 4.703382
+vwap_decay_std_24                   : 4.524216
+close_decay_std_24                  : 4.066954
+gk_vol                              : 3.993761
+ema_100                             : 3.823468
+eom_14                              : 3.711858
+keltner_lower                       : 3.550596
+ema_200                             : 3.531560
+adx_14                              : 3.498358
+dist_vwap                           : 3.479964
+returns_1h_decay_std_24             : 3.444906
+weekly_macd_hist                    : 3.404677
+weekly_rsi                          : 3.251109
+close_delta_12                      : 3.189236
+fib_range_pct                       : 3.091171
+macd_signal                         : 3.061403
+parkinson_vol                       : 3.041778
+dist_r2                             : 2.998110
+atr_14                              : 2.962803
+vwap_delta_12                       : 2.922476
+dist_bull_ob                        : 2.895260

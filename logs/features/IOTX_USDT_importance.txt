@@ -1,0 +1,32 @@
+Feature importance (gain) for IOTX/USDT
+==================================================
+efficiency_ratio_10                 : 73.029854
+linreg_r2_14                        : 13.172245
+volatility_regime                   : 10.989400
+atr_band_position                   : 8.359538
+market_phase                        : 7.651281
+funding_rate_ma8                    : 6.899925
+weekly_macd                         : 6.840142
+avwap_200                           : 6.404469
+trend_regime                        : 6.292371
+dist_r2                             : 6.257511
+hurst                               : 6.188405
+vwap                                : 6.148098
+s2                                  : 6.052512
+dist_avwap_100                      : 5.929375
+force_index                         : 5.927147
+vwap_decay_std_24                   : 5.845251
+dist_avwap_200                      : 5.809932
+adx_14                              : 5.730787
+kvo_signal                          : 5.715043
+vwap_delta_4                        : 5.623016
+vwap_delta_12                       : 5.614976
+donchian_width                      : 5.565344
+kvo                                 : 5.551592
+close_decay_std_24                  : 5.551392
+fib_range_pct                       : 5.550165
+funding_rate_zscore                 : 5.489845
+dist_ema_200                        : 5.394194
+price_zscore_200                    : 5.389508
+btc_dist_ema200                     : 5.174908
+bb_width_percentile                 : 4.984045

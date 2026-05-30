@@ -1,0 +1,32 @@
+Feature importance (gain) for BAND/USDT
+==================================================
+efficiency_ratio_10                 : 129.535522
+linreg_r2_14                        : 16.264675
+volatility_regime                   : 15.637385
+starc_position                      : 11.505544
+weekly_rsi                          : 10.914047
+market_phase                        : 10.565133
+weekly_macd                         : 9.471207
+atr_band_position                   : 9.305151
+vwap_decay_mean_24                  : 8.982413
+weekly_macd_signal                  : 8.950763
+s1                                  : 8.740026
+keltner_width                       : 8.568824
+vwap                                : 8.344640
+dist_ema_200                        : 8.336139
+volume_decay_mean_24                : 8.187014
+supertrend_dist                     : 8.145780
+dist_avwap_200                      : 7.970698
+fib_range_pct                       : 7.686826
+gk_vol                              : 7.624424
+r2                                  : 7.595962
+vwap_decay_std_24                   : 7.478217
+dist_avwap_100                      : 7.366598
+price_zscore_200                    : 7.267091
+aroon_osc                           : 7.167616
+btc_dist_ema200                     : 7.092978
+dist_bear_ob                        : 7.024479
+vwap_delta_12                       : 6.929010
+trend_regime                        : 6.780679
+force_index                         : 6.658037
+dist_r2                             : 6.633380

@@ -1,0 +1,32 @@
+Feature importance (gain) for METIS/USDT
+==================================================
+efficiency_ratio_10                 : 27.640085
+market_phase                        : 4.552192
+volatility_regime                   : 3.688397
+starc_position                      : 2.860311
+linreg_r2_14                        : 2.779633
+trend_regime                        : 2.252395
+returns_1h_decay_std_24             : 1.991632
+r2                                  : 1.990081
+weekly_macd                         : 1.906957
+fib_range_pct                       : 1.855957
+pvt                                 : 1.822657
+vwap_decay_std_24                   : 1.805501
+atr_band_position                   : 1.781876
+parkinson_vol                       : 1.771273
+volume_decay_mean_24                : 1.770764
+dow_sin                             : 1.758455
+gk_vol                              : 1.730519
+volume_decay_std_24                 : 1.724664
+weekly_macd_signal                  : 1.624812
+dist_vwap                           : 1.622562
+dist_avwap_200                      : 1.577071
+keltner_width                       : 1.526451
+ichimoku_senkou_b                   : 1.512414
+hurst                               : 1.482386
+dist_r2                             : 1.464471
+vwap_delta_12                       : 1.450367
+close_decay_std_24                  : 1.430096
+obv                                 : 1.403960
+btc_dist_ema200                     : 1.390494
+dist_bull_ob                        : 1.338076
