@@ -166,11 +166,11 @@ class Predictor:
                     if not chunk:
                         break
                     all_fr.extend(chunk)
-                    last_ts = int(chunk[-1]['timestamp'])
-                    if last_ts <= current_since:
+                    last_ts = int(chunk[-1].get('timestamp', 0))
+                    if last_ts <= current_since or len(chunk) < 1000:
                         break
                     current_since = last_ts + 1
-                    time.sleep(0.5)
+                    time.sleep(0.3)
                 except Exception as e:
                     logger.warning(f"Funding rate fetch stopped: {e}")
                     break
@@ -182,12 +182,11 @@ class Predictor:
                 funding_df['timestamp'] = pd.to_datetime(funding_df['timestamp'], unit='ms')
                 funding_df = funding_df.drop_duplicates('timestamp').sort_values('timestamp')
 
-            # Fetch Open Interest (paginated)
+            # Fetch Open Interest (paginated; Binance caps OI history to ~30 days)
             all_oi = []
-            oi_target = n
-            
             safe_oi_since = int(time.time() * 1000) - (29 * 24 * 60 * 60 * 1000)
             current_since = max(since_ms, safe_oi_since)
+            oi_target = min(n, 29 * 24)  # cap to what Binance actually serves
 
             while len(all_oi) < oi_target:
                 try:
@@ -195,11 +194,11 @@ class Predictor:
                     if not chunk:
                         break
                     all_oi.extend(chunk)
-                    last_ts = int(dict(chunk[-1]).get('timestamp', 0))
-                    if last_ts <= current_since:
+                    last_ts = int(chunk[-1].get('timestamp', 0))
+                    if last_ts <= current_since or len(chunk) < 500:
                         break
                     current_since = last_ts + 1
-                    time.sleep(0.5)
+                    time.sleep(0.3)
                 except Exception as e:
                     logger.warning(f"OI fetch stopped: {e}")
                     break
