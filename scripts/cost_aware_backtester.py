@@ -392,6 +392,7 @@ class AdaptiveBacktester:
         position_units = 0.0
         entry_price = 0.0
         entry_atr = 0.0
+        entry_bar = -1
         direction: Optional[str] = None
         trade_returns: List[float] = []
         max_drawdown = 0.0
@@ -405,20 +406,29 @@ class AdaptiveBacktester:
 
         for i in range(n - MAX_HOLD_CANDLES - 1):
             row = df.iloc[i]
-            prob = float(row["prob"]) if not pd.isna(row["prob"]) else np.nan
-            if np.isnan(prob):
-                continue
 
-            # Exit logic
+            # ── Exit logic ────────────────────────────────────────────────
+            # Only check the CURRENT bar for TP/SL or time-based exit.
+            # Do NOT scan future bars — that would be look-ahead bias.
             if position_units != 0:
-                exit_px = self._scan_exit(df, i, entry_price, entry_atr, atr_sl, atr_tp, direction)
+                bars_held = i - entry_bar
+                exit_px = self._check_exit_bar(row, entry_price, entry_atr,
+                                               atr_sl, atr_tp, direction)
+                if exit_px is None and bars_held >= MAX_HOLD_CANDLES:
+                    exit_px = float(row["close"])   # time-based exit at bar close
+
                 if exit_px is not None:
-                    exit_slipped = exit_px * (1.0 - SLIPPAGE_PCT)
-                    gross_pnl = position_units * (exit_slipped - entry_price)
+                    if direction == "long":
+                        exit_slipped = exit_px * (1.0 - SLIPPAGE_PCT)
+                        gross_pnl = position_units * (exit_slipped - entry_price)
+                    else:  # short
+                        exit_slipped = exit_px * (1.0 + SLIPPAGE_PCT)
+                        gross_pnl = position_units * (entry_price - exit_slipped)
                     exit_cost = abs(position_units) * exit_slipped * (EXCHANGE_FEE_PCT + SLIPPAGE_PCT)
                     net_pnl = gross_pnl - exit_cost
                     capital += net_pnl
-                    ret_pct = (net_pnl / (entry_price * position_units) * 100) if entry_price * position_units > 0 else 0.0
+                    position_value = entry_price * position_units
+                    ret_pct = (net_pnl / position_value * 100) if position_value > 0 else 0.0
                     trade_returns.append(ret_pct / 100.0)
                     if net_pnl > 0:
                         result.wins += 1
@@ -439,11 +449,19 @@ class AdaptiveBacktester:
                     position_units = 0.0
                 continue
 
-            # Signal filter
-            if prob <= entry_prob:
+            # ── Signal filter ─────────────────────────────────────────────
+            # Use the stronger of buy/sell probability to determine direction.
+            # Gate against entry_prob (mode threshold) — raw primary probability
+            # is the best proxy available for batch backtesting without running
+            # the meta model per-row.
+            prob_buy  = float(row.get("prob_buy",  0.0))
+            prob_sell = float(row.get("prob_sell", 0.0))
+            if max(prob_buy, prob_sell) <= entry_prob:
                 continue
+
+            direction = "long" if prob_buy >= prob_sell else "short"
+            prob = prob_buy if direction == "long" else prob_sell
             total_signals += 1
-            direction = "long"
 
             # Regime detection
             vol_regime = RegimeDetector.volatility(df["atr_14"], i)
@@ -499,8 +517,10 @@ class AdaptiveBacktester:
         result.win_rate = round(result.wins / result.total_trades * 100, 2)
         if result.gross_loss > 0:
             result.profit_factor = round(result.gross_profit / result.gross_loss, 3)
+        elif result.gross_profit > 0:
+            result.profit_factor = None   # infinity: all wins, no losses
         else:
-            result.profit_factor = round(result.net_return_pct, 3)
+            result.profit_factor = 0.0
         result.avg_trade_return_pct = round(float(np.mean(trade_returns)) * 100, 4) if trade_returns else 0.0
         result.sharpe_ratio = round(_sharpe(trade_returns), 3)
         total_skipped = skipped_below_threshold + skipped_cost
@@ -513,20 +533,27 @@ class AdaptiveBacktester:
         result.final_threshold = round(safety.threshold, 4)
         return result
 
-    def _scan_exit(self, df: pd.DataFrame, i: int, entry_price: float, entry_atr: float,
-                   atr_sl: float, atr_tp: float, direction: Optional[str]) -> Optional[float]:
-        tp = entry_price + atr_tp * entry_atr
-        sl = entry_price - atr_sl * entry_atr
-        for j in range(1, MAX_HOLD_CANDLES + 1):
-            future = df.iloc[i + j]
-            if direction == "long":
-                both = future["high"] >= tp and future["low"] <= sl
-                if both:
-                    return sl
-                if future["high"] >= tp:
-                    return tp
-                if future["low"] <= sl:
-                    return sl
+    def _check_exit_bar(self, row: pd.Series, entry_price: float, entry_atr: float,
+                        atr_sl: float, atr_tp: float, direction: Optional[str]) -> Optional[float]:
+        """Check only the current bar's high/low for TP or SL. No lookahead."""
+        if direction == "long":
+            tp = entry_price + atr_tp * entry_atr
+            sl = entry_price - atr_sl * entry_atr
+            if row["high"] >= tp and row["low"] <= sl:
+                return sl   # gap through both — assume SL hit first (conservative)
+            if row["high"] >= tp:
+                return tp
+            if row["low"] <= sl:
+                return sl
+        else:  # short
+            tp = entry_price - atr_tp * entry_atr
+            sl = entry_price + atr_sl * entry_atr
+            if row["low"] <= tp and row["high"] >= sl:
+                return sl
+            if row["low"] <= tp:
+                return tp
+            if row["high"] >= sl:
+                return sl
         return None
 
     def _fetch_and_prepare(self, hours: int) -> Optional[pd.DataFrame]:
