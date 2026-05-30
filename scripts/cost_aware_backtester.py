@@ -363,9 +363,10 @@ def _cost_adjusted_expected_return(prob: float, atr: float, entry: float, atr_sl
 # ADAPTIVE BACKTESTER (simplified, no external JSON load)
 # ============================================================
 class AdaptiveBacktester:
-    # Class-level cache: prepared df is shared across all three modes for a symbol
-    # so models are loaded and features computed only once per symbol run.
+    # Class-level caches: shared across all three modes for a given symbol so
+    # model weights are loaded only once and feature engineering runs once.
     _df_cache: Dict[str, pd.DataFrame] = {}
+    _predictor_cache: Dict[str, "Predictor"] = {}
 
     def __init__(self, symbol: str, mode: str, initial_balance: float = INITIAL_BALANCE):
         self.symbol = symbol
@@ -374,8 +375,10 @@ class AdaptiveBacktester:
         self.params = MODE_PARAMS[mode]
         self.mode_base = MODE_BASE_THRESHOLDS[mode]
 
-        # Load predictor once and read model metadata for this symbol.
-        self.predictor = Predictor(symbol)
+        # Reuse existing Predictor for this symbol if already created.
+        if symbol not in AdaptiveBacktester._predictor_cache:
+            AdaptiveBacktester._predictor_cache[symbol] = Predictor(symbol)
+        self.predictor = AdaptiveBacktester._predictor_cache[symbol]
         meta = self.predictor.meta
         self.thr_buy       = float(meta.get("meta_threshold_buy",
                                    meta.get("meta_threshold", 0.62)))
@@ -473,14 +476,19 @@ class AdaptiveBacktester:
                 if not self.tradeable_buy or meta_conf < self.thr_buy:
                     continue
                 direction = "long"
-                prob = float(row.get("prob_buy", meta_conf))
             elif meta_dir == 0: # SELL proposal
                 if not self.tradeable_sell or meta_conf < self.thr_sell:
                     continue
                 direction = "short"
-                prob = float(row.get("prob_sell", meta_conf))
             else:
                 continue        # HOLD proposal — never trade
+
+            # Use meta_conf as win probability for EV calculation.
+            # meta_conf = P(direction correct) — the right number for Kelly/EV.
+            # Raw primary class prob (~0.35 in a 3-class model) is NOT a win
+            # rate: it's a softmax class weight and would give a false-negative
+            # expected return, causing the cost filter to skip valid signals.
+            prob = meta_conf
 
             total_signals += 1
 
@@ -637,7 +645,8 @@ class AdaptiveBacktester:
 # FLEET RUNNER
 # ============================================================
 def run_backtest_fleet():
-    AdaptiveBacktester._df_cache.clear()   # fresh run, no stale cached frames
+    AdaptiveBacktester._df_cache.clear()        # fresh run, no stale cached frames
+    AdaptiveBacktester._predictor_cache.clear() # reload models with fresh weights
     print("=" * 80)
     print("🧠 ADAPTIVE BACKTESTER v2.1 – Generating results for live engine")
     print(f"   Balance ${INITIAL_BALANCE:,.0f} | Data {DATA_HOURS} hrs | {len(FLEET)} symbols")
