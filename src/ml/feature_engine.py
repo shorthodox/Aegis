@@ -938,12 +938,17 @@ def compute_weekly_features(df_1h: pd.DataFrame,
         })
         h = df_1h[['timestamp']].copy()
         h['timestamp'] = pd.to_datetime(h['timestamp'])
-        merged = pd.merge_asof(h.sort_values('timestamp'),
+        # Sort for merge_asof but keep original index labels so we can restore order.
+        h_sorted = h.sort_values('timestamp')
+        merged = pd.merge_asof(h_sorted,
                                wf.sort_values('timestamp'),
                                on='timestamp', direction='backward')
-        merged.index = df_1h.index
-        return merged[_cols].fillna(0.0)
-    except Exception:
+        # h_sorted.index carries the original df_1h row labels; reindex restores
+        # the original row order after the sort (handles unsorted input correctly).
+        merged.index = h_sorted.index
+        return merged[_cols].reindex(df_1h.index).fillna(0.0)
+    except Exception as e:
+        logger.warning(f"compute_weekly_features failed: {e}")
         return empty
 
 
