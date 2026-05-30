@@ -10,7 +10,7 @@ import json
 import time
 import logging
 from pathlib import Path
-from typing import Optional, Dict, Any, cast
+from typing import Optional, Dict, Any, Tuple, cast
 
 logger = logging.getLogger(__name__)
 
