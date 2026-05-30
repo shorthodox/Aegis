@@ -1,2577 +1,470 @@
 #!/usr/bin/env python3
 """
-Aegis-1 Production Live Engine v4.0 – ASYMMETRIC SIGNALS + RESET PROTOCOL
-- Asymmetric thresholds: STRONG_BUY>0.75, BUY>0.60, HOLD 0.20-0.60, SELL<0.20, STRONG_SELL<0.15
-- Sellability brake: suppress sell signals during low volatility / choppy markets
-- Wallet reset (C key) with backup and activity log purge
-- Coloured terminal output for signals
+live_engine.py — Aegis-1 Live Signal Engine
+============================================
+Loads trained XGBoost models from the model store, runs Predictor.predict_realtime()
+for every tradeable symbol on a configurable interval, manages a virtual paper-trading
+wallet ($10 000 default), and writes data/track_record.json which main.py WebSocket
+clients consume in real time.
+
+Exported for main.py
+--------------------
+    LiveEngine      – async engine class
+    TokenConfig     – per-symbol config dataclass
+    automated_setup – reads tradeable models, returns run config
 """
 
 import asyncio
-import argparse
 import json
-import logging
-import os
-import subprocess
 import sys
-import threading
-import uuid
 import time
-import random
-import shutil
-from dataclasses import dataclass, field
-from datetime import datetime
+import uuid
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Deque
-from collections import deque
+from typing import Any, Dict, List, Optional
 
-import aiohttp
-import ccxt.async_support as ccxt_async
-import numpy as np
-import pandas as pd
-import xgboost as xgb
-import socket
-from aiohttp import ClientTimeout
-from aiohttp.resolver import AbstractResolver
-from socket import AddressFamily
+# ── project root on sys.path ──────────────────────────────────────────────────
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
-# Voice synthesis
-try:
-    import pyttsx3
-    VOICE_AVAILABLE = True
-except ImportError:
-    VOICE_AVAILABLE = False
-    logging.warning("pyttsx3 not installed. Voice notifications disabled.")
+MODEL_STORE       = _ROOT / 'src' / 'ml' / 'model_store'
+TRACK_RECORD_PATH = _ROOT / 'data' / 'track_record.json'
 
-# -------------------------------------------------------------------
-# Path setup
-# -------------------------------------------------------------------
-root_dir = Path(__file__).parent.parent
-sys.path.insert(0, str(root_dir))
 
-from src.ml.feature_engine import prepare_features, compute_atr, compute_efficiency_ratio
-from src.ml.delltandecay import adjust_threshold_by_technical_and_fundamental
-from scripts.telemetry import extract_prediction_telemetry
-
-# -------------------------------------------------------------------
-# Logging
-# -------------------------------------------------------------------
-logging.basicConfig(
-    level=logging.INFO,
-    format='[%(asctime)s] [%(levelname)s] %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-logger = logging.getLogger(__name__)
-
-# -------------------------------------------------------------------
-# Configuration
-# -------------------------------------------------------------------
-CONFIG_DIR = root_dir / "config"
-DATA_DIR = root_dir / "data"
-LOGS_DIR = root_dir / "logs"
-MODEL_STORE = root_dir / "src" / "ml" / "model_store"
-
-CONFIG_DIR.mkdir(exist_ok=True)
-DATA_DIR.mkdir(exist_ok=True)
-LOGS_DIR.mkdir(exist_ok=True)
-
-EXCHANGE_ID = 'binance'
-EXCHANGE_FEE = 0.001
-SLIPPAGE = 0.001
-TOTAL_COST_PCT = 2 * (EXCHANGE_FEE + SLIPPAGE)
-
-TIMEFRAMES = {
-    '1m': 60,
-    '5m': 300,
-    '15m': 900,
-    '30m': 1800,
-    '1h': 3600,
-    '4h': 14400,
-    '1d': 86400,
-    '1w': 604800,
-    '1M': 2592000,
-}
-
-def get_limit_for_timeframe(timeframe: str, lookback_hours: int = 200) -> int:
-    tf_seconds = TIMEFRAMES.get(timeframe, 3600)
-    return max(50, (lookback_hours * 3600) // tf_seconds + 50)
-
-CACHE_DURATION = {}
-for tf, seconds in TIMEFRAMES.items():
-    if tf in ('1h', '4h'):
-        CACHE_DURATION[tf] = 300
-    else:
-        CACHE_DURATION[tf] = seconds
-
-VOLATILITY_LOOKBACK = 100
-VOLUME_LOOKBACK = 50
-VOL_PERCENTILE_LOW = 30
-VOL_PERCENTILE_HIGH = 70
-VOLUME_RATIO_HIGH = 1.20
-VOLUME_RATIO_LOW = 0.80
-ER_STRONG_TREND = 0.50
-ER_WEAK_TREND = 0.30
-
-CONF_VERY_HIGH = 0.75
-CONF_NORMAL = 1.00
-CONF_WEAK = 1.25
-TREND_ALIGNED_FACTOR = 0.85
-TREND_MISALIGNED_FACTOR = 1.20
-VOL_HIGH_FACTOR = 0.85
-VOL_NORMAL_FACTOR = 1.00
-VOL_LOW_FACTOR = 1.20
-VOL_EXTREME_LOW_FACTOR = 1.50
-VOLUME_HIGH_FACTOR = 0.90
-VOLUME_NORMAL_FACTOR = 1.00
-VOLUME_LOW_FACTOR = 1.10
-THRESHOLD_FLOOR = 0.05
-THRESHOLD_CEIL = 3.00
-
-PROXIMITY_THRESHOLD = 0.005  # 0.5% proximity to S&R boundary triggers alert
-
-SR_CANDLE_CONFIRM_REQUIRED = 2       # candles for S/R reversal — the level is the anchor
-MOMENTUM_CANDLE_CONFIRM_REQUIRED = 2  # candles for mid-range breakout — 2 is enough to confirm direction
-SIGNAL_EXPIRY_MOVE_PCT = 0.60  # if price moves 60% of expected TP before action → expired
-REVERSAL_SCORE_THRESHOLD = 0.42  # minimum technical pattern score — requires at least 2 independent confirmations
-SR_SIGNAL_ZONE = 0.015         # 1.5% proximity band — wider band gives S/R path more opportunity to trigger
-
-MODE_PARAMS = {
-    "conservative": {"entry_prob": 0.75, "risk_pct": 0.015, "atr_sl": 1.2, "atr_tp": 1.8},
-    "balanced":     {"entry_prob": 0.70, "risk_pct": 0.020, "atr_sl": 1.5, "atr_tp": 2.0},
-    "aggressive":   {"entry_prob": 0.65, "risk_pct": 0.030, "atr_sl": 1.8, "atr_tp": 2.5},
-}
-
-BTC_BULL_THRESHOLD = 0.55   # BTC healthy for longs
-BTC_BEAR_THRESHOLD = 0.45   # BTC weak -> allow shorts
-RR_RATIO = 1.5
-
-DEFAULT_CAPITAL = 10000.0
-DEFAULT_RISK_PCT = 2.0
-DEFAULT_MAX_POSITION = 2000.0
-DEFAULT_SCAN_TIMEFRAME = '1m'
-
-CONVICTION_LONG_BAILOUT = 0.40   # close LONG if ai_prob < 0.40
-CONVICTION_SHORT_BAILOUT = 0.60  # close SHORT if ai_prob > 0.60
-
-FLEET = [
-    'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT',
-    'HYPE/USDT', 'ASTER/USDT', 'SUI/USDT', 'TAO/USDT', 'RENDER/USDT',
-    'ADA/USDT', 'AVAX/USDT', 'LINK/USDT', 'TRX/USDT', 'DOT/USDT',
-    'NEAR/USDT', 'MATIC/USDT', 'LTC/USDT', 'BCH/USDT', 'SHIB/USDT',
-    'TON/USDT', 'ICP/USDT', 'HBAR/USDT', 'APT/USDT', 'ARB/USDT',
-    'OP/USDT', 'STX/USDT', 'FIL/USDT', 'AAVE/USDT', 'VET/USDT',
-    'RNDR/USDT', 'INJ/USDT', 'TIA/USDT', 'SEI/USDT', 'KAS/USDT',
-    'FET/USDT', 'AGIX/USDT', 'OCEAN/USDT', 'AKT/USDT', 'THETA/USDT',
-    'GRT/USDT', 'LDO/USDT', 'PYTH/USDT', 'JUP/USDT', 'ONDO/USDT',
-    'PEPE/USDT', 'DOGE/USDT', 'WIF/USDT', 'FLOKI/USDT', 'BONK/USDT',
-    'WLFI/USDT', 'MNT/USDT', 'ENA/USDT', 'BGB/USDT', 'PI/USDT',
-    'SKY/USDT', 'TRUMP/USDT', 'NIGHT/USDT'
-]
-
-# -------------------------------------------------------------------
-# Helper: Normalize symbol (underscore -> slash)
-# -------------------------------------------------------------------
-def normalize_symbol(symbol: str) -> str:
-    """Convert symbol format: replace '_' with '/'."""
-    if not symbol:
-        return symbol
-    return symbol.replace('_', '/')
-
-# -------------------------------------------------------------------
+# =============================================================================
 # Data classes
-# -------------------------------------------------------------------
+# =============================================================================
+
 @dataclass
 class TokenConfig:
     symbol: str
-    mode: str
-    base_threshold: float
-    entry_prob_threshold: float
-    atr_sl: float
-    atr_tp: float
-    risk_pct: float
-    max_dd: float = 0.0
-    expectancy: float = 0.0
-    optimizer_thresholds: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    mode:   str   = 'balanced'
+
 
 @dataclass
-class LiveTrade:
-    symbol: str
-    entry_price: float
-    position_units: float
-    stop_loss: float
-    take_profit: float
-    entry_time: datetime
-    mode: str
-    master_score: float
-    trade_type: str = "LONG"
-    closed: bool = False
-    exit_price: float = 0.0
-    exit_reason: str = ""
-    pnl: float = 0.0
-    close_time: Optional[datetime] = None
-
-# -------------------------------------------------------------------
-# Clean start
-# -------------------------------------------------------------------
-def flush_dns_caches():
-    try:
-        subprocess.run(["ipconfig", "/flushdns"], capture_output=True, check=True)
-        logger.info("Flushed ipconfig DNS cache")
-    except Exception as e:
-        logger.warning(f"ipconfig /flushdns failed: {e}")
-    try:
-        subprocess.run(
-            ["powershell", "-Command", "Clear-DnsClientCache"],
-            capture_output=True, check=True
-        )
-        logger.info("Flushed PowerShell DNS client cache")
-    except Exception as e:
-        logger.warning(f"Clear-DnsClientCache failed: {e}")
-
-# -------------------------------------------------------------------
-# Backtest file discovery & JSON loader
-# -------------------------------------------------------------------
-def get_latest_backtest_file(directory):
-    """Return the most recently modified .json file in the directory, or None."""
-    dir_path = Path(directory)
-    if not dir_path.exists():
-        logger.warning(f"Backtest directory does not exist: {dir_path}")
-        return None
-
-    # Find all .json files
-    json_files = list(dir_path.glob("*.json"))
-    if not json_files:
-        logger.warning(f"No JSON files found in {dir_path}")
-        return None
-
-    # Return the most recent file by modification time
-    latest = max(json_files, key=lambda f: f.stat().st_mtime)
-    logger.info(f"Latest backtest file: {latest}")
-    return latest
-
-def load_backtest_results(json_path: Path) -> Dict[str, Dict[str, Any]]:
-    with open(json_path, 'r') as f:
-        try:
-            data = json.load(f)
-        except json.JSONDecodeError:
-            logger.error(f"Failed to decode JSON: {json_path}")
-            return {}
-
-    # --- ENHANCED NORMALIZATION ---
-    if isinstance(data, dict):
-        new_data = []
-        # If it's a symbol map: {"BTC/USDT": {"net_return": 10}, "version": "1.0"}
-        for k, v in data.items():
-            if isinstance(v, dict):
-                # Only unpack if v is actually a dictionary
-                new_data.append({"symbol": k, **v})
-            elif k == "symbol":
-                # If the dict itself is the result: {"symbol": "BTC", "mar": 2}
-                new_data = [data]
-                break
-        
-        if new_data:
-            data = new_data
-        else:
-            # Fallback for simple flat dictionaries
-            data = [data]
-
-    if not isinstance(data, list):
-        logger.error(f"Unexpected data format in {json_path.name}: {type(data)}")
-        return {}
-    # --- END NORMALIZATION ---
-
-    symbol_entries: Dict[str, List[Dict]] = {}
-    for entry in data:
-        if not isinstance(entry, dict):
-            continue
-            
-        symbol = entry.get("symbol")
-        if not symbol:
-            continue
-            
-        mode = entry.get("mode")
-        if not mode:
-            continue
-            
-        net_return = entry.get("net_return_pct", 0.0)
-        max_dd = entry.get("max_drawdown_pct", 0.0)
-        # SAFETY: prevent division by zero or extremely small values
-        safe_dd = max(float(max_dd), 0.1) if isinstance(max_dd, (int, float)) else 0.1
-        mar = float(net_return) / safe_dd if isinstance(net_return, (int, float)) else 0.0
-        
-        params = MODE_PARAMS.get(mode)
-        if params is None:
-            logger.warning(f"Unknown mode '{mode}' for {symbol}, falling back to 'balanced'")
-            params = MODE_PARAMS["balanced"]
-        
-        symbol_entries.setdefault(symbol, []).append({
-            "mode": mode,
-            "mar": mar,
-            "net_return_pct": net_return,
-            "max_drawdown_pct": max_dd,
-            "final_threshold": entry.get("final_threshold", 0.30),
-            "entry_prob_threshold": params["entry_prob"],
-            "atr_sl": params["atr_sl"],
-            "atr_tp": params["atr_tp"],
-            "risk_pct": params["risk_pct"],
-        })
-
-    best_per_token = {}
-    for sym, entries in symbol_entries.items():
-        best = max(entries, key=lambda x: x["mar"])
-        best_per_token[sym] = best
-
-    logger.info(f"Successfully loaded {len(best_per_token)} tokens from {json_path.name}")
-    return best_per_token
-
-# -------------------------------------------------------------------
-# Regime & Threshold Engines
-# -------------------------------------------------------------------
-class RegimeDetector:
-    @staticmethod
-    def volatility(atr_series: pd.Series, idx: int) -> str:
-        if idx < VOLATILITY_LOOKBACK:
-            return "normal"
-        window = atr_series.iloc[max(0, idx - VOLATILITY_LOOKBACK): idx + 1]
-        if len(window) < VOLATILITY_LOOKBACK // 2:
-            return "normal"
-        pct = float((window <= atr_series.iat[idx]).mean() * 100)
-        if pct <= VOL_PERCENTILE_LOW:
-            return "low"
-        if pct >= VOL_PERCENTILE_HIGH:
-            return "high"
-        return "normal"
-
-    @staticmethod
-    def volume(volume: float, volume_ma: float) -> str:
-        if np.isnan(volume_ma) or volume_ma <= 0:
-            return "normal"
-        ratio = volume / volume_ma
-        if ratio > VOLUME_RATIO_HIGH:
-            return "high"
-        if ratio < VOLUME_RATIO_LOW:
-            return "low"
-        return "normal"
-
-    @staticmethod
-    def trend(efficiency_ratio: float) -> str:
-        if np.isnan(efficiency_ratio):
-            return "normal"
-        if efficiency_ratio > ER_STRONG_TREND:
-            return "strong"
-        if efficiency_ratio < ER_WEAK_TREND:
-            return "weak"
-        return "normal"
-
-    @staticmethod
-    def is_trend_aligned(direction: str, trend_strength: str) -> bool:
-        return direction == "long" and trend_strength == "strong"
-
-class ThresholdEngine:
-    @staticmethod
-    def confidence_factor(prob: float) -> Tuple[float, str]:
-        if prob > 0.80 or prob < 0.20:
-            return CONF_VERY_HIGH, "very_high"
-        if 0.60 <= prob <= 0.80:
-            return CONF_NORMAL, "normal"
-        return CONF_WEAK, "weak"
-
-    @staticmethod
-    def vol_factor(vol_regime: str, atr: float, price: float) -> float:
-        atr_ratio = atr / price if price > 0 else 0.0
-        if vol_regime == "low" and atr_ratio < 0.003:
-            return VOL_EXTREME_LOW_FACTOR
-        return {"high": VOL_HIGH_FACTOR, "normal": VOL_NORMAL_FACTOR, "low": VOL_LOW_FACTOR}.get(vol_regime, VOL_NORMAL_FACTOR)
-
-    @staticmethod
-    def volume_factor(vol_cond: str) -> float:
-        return {"high": VOLUME_HIGH_FACTOR, "normal": VOLUME_NORMAL_FACTOR, "low": VOLUME_LOW_FACTOR}.get(vol_cond, VOLUME_NORMAL_FACTOR)
-
-    @staticmethod
-    def trend_factor(trend_aligned: bool) -> float:
-        return TREND_ALIGNED_FACTOR if trend_aligned else TREND_MISALIGNED_FACTOR
-
-    @classmethod
-    def compute(cls, base: float, prob: float, vol_regime: str, volume_condition: str,
-                trend_aligned: bool, atr: float, price: float) -> Tuple[float, str]:
-        cf, conf_label = cls.confidence_factor(prob)
-        adjusted = base * cf
-        adjusted *= cls.vol_factor(vol_regime, atr, price)
-        adjusted *= cls.volume_factor(volume_condition)
-        adjusted *= cls.trend_factor(trend_aligned)
-        adjusted = float(np.clip(adjusted, THRESHOLD_FLOOR, THRESHOLD_CEIL))
-        return adjusted, conf_label
-
-# -------------------------------------------------------------------
-# LiveWallet (with reset feature)
-# -------------------------------------------------------------------
-# -------------------------------------------------------------------
-# Reversal Anticipation Engine
-# -------------------------------------------------------------------
-class ReversalDetector:
-    """Detects early signs of trend reversal using RSI, candlestick patterns, and S/R proximity."""
-
-    @staticmethod
-    def _rsi(series: pd.Series, period: int = 14) -> pd.Series:
-        delta = series.diff()
-        gain = delta.clip(lower=0)
-        loss = -delta.clip(upper=0)
-        avg_gain = gain.ewm(com=period - 1, adjust=False).mean()
-        avg_loss = loss.ewm(com=period - 1, adjust=False).mean()
-        rs = avg_gain / (avg_loss + 1e-9)
-        return 100 - (100 / (1 + rs))
-
-    @classmethod
-    def detect_bearish_reversal_setup(
-        cls, df: pd.DataFrame, resistance: float = 0.0
-    ) -> tuple:
-        """Return (score 0-1, [signal_tags]) indicating how ripe a bearish reversal is."""
-        if len(df) < 20:
-            return 0.0, []
-        close = df['close']
-        signals: list = []
-        score = 0.0
-
-        rsi_s = cls._rsi(close)
-        rsi_now = float(rsi_s.iloc[-1])
-        if rsi_now > 70:
-            signals.append(f"RSI_OB_{rsi_now:.0f}")
-            score += 0.25
-        elif rsi_now > 65:
-            score += 0.10
-
-        # Bearish divergence: price higher high, RSI lower high
-        if len(df) >= 10:
-            rsi_window = rsi_s.iloc[-6:-1]
-            close_window = close.iloc[-6:-1]
-            if not rsi_window.empty and close.iloc[-1] >= close_window.max() and rsi_now <= float(rsi_window.max()):
-                signals.append("BEARISH_RSI_DIV")
-                score += 0.30
-
-        # Exhaustion candle: small body + long upper wick
-        c = df.iloc[-1]
-        body = abs(float(c['close']) - float(c['open']))
-        up_wick = float(c['high']) - max(float(c['close']), float(c['open']))
-        total = float(c['high']) - float(c['low'])
-        if total > 0 and up_wick / total > 0.50 and body / total < 0.35:
-            signals.append("SHOOTING_STAR")
-            score += 0.20
-
-        # Bearish engulfing
-        if len(df) >= 2:
-            prev = df.iloc[-2]
-            if (float(c['close']) < float(c['open']) and float(prev['close']) > float(prev['open'])
-                    and float(c['open']) >= float(prev['close']) * 0.997
-                    and float(c['close']) < float(prev['open'])):
-                signals.append("BEARISH_ENGULF")
-                score += 0.25
-
-        # Near resistance
-        cp = float(close.iloc[-1])
-        if resistance > 0:
-            dist = (resistance - cp) / cp
-            if 0 <= dist <= 0.005:
-                signals.append("AT_RESISTANCE")
-                score += 0.20
-
-        # Price overextended above EMA-20
-        ema20 = close.ewm(span=20, adjust=False).mean()
-        if float(ema20.iloc[-1]) > 0:
-            ext = (cp - float(ema20.iloc[-1])) / float(ema20.iloc[-1])
-            if ext > 0.03:
-                signals.append(f"OVEREXT_{ext*100:.1f}%")
-                score += 0.15
-
-        return min(score, 1.0), signals
-
-    @classmethod
-    def detect_bullish_reversal_setup(
-        cls, df: pd.DataFrame, support: float = 0.0
-    ) -> tuple:
-        """Return (score 0-1, [signal_tags]) indicating how ripe a bullish reversal is."""
-        if len(df) < 20:
-            return 0.0, []
-        close = df['close']
-        signals: list = []
-        score = 0.0
-
-        rsi_s = cls._rsi(close)
-        rsi_now = float(rsi_s.iloc[-1])
-        if rsi_now < 30:
-            signals.append(f"RSI_OS_{rsi_now:.0f}")
-            score += 0.25
-        elif rsi_now < 35:
-            score += 0.10
-
-        # Bullish divergence: price lower low, RSI higher low
-        if len(df) >= 10:
-            rsi_window = rsi_s.iloc[-6:-1]
-            close_window = close.iloc[-6:-1]
-            if not rsi_window.empty and close.iloc[-1] <= close_window.min() and rsi_now >= float(rsi_window.min()):
-                signals.append("BULLISH_RSI_DIV")
-                score += 0.30
-
-        # Hammer candle: small body + long lower wick
-        c = df.iloc[-1]
-        body = abs(float(c['close']) - float(c['open']))
-        low_wick = min(float(c['close']), float(c['open'])) - float(c['low'])
-        total = float(c['high']) - float(c['low'])
-        if total > 0 and low_wick / total > 0.50 and body / total < 0.35:
-            signals.append("HAMMER")
-            score += 0.20
-
-        # Bullish engulfing
-        if len(df) >= 2:
-            prev = df.iloc[-2]
-            if (float(c['close']) > float(c['open']) and float(prev['close']) < float(prev['open'])
-                    and float(c['open']) <= float(prev['close']) * 1.003
-                    and float(c['close']) > float(prev['open'])):
-                signals.append("BULLISH_ENGULF")
-                score += 0.25
-
-        # Near support
-        cp = float(close.iloc[-1])
-        if support > 0:
-            dist = (cp - support) / cp
-            if 0 <= dist <= 0.005:
-                signals.append("AT_SUPPORT")
-                score += 0.20
-
-        # Price overextended below EMA-20
-        ema20 = close.ewm(span=20, adjust=False).mean()
-        if float(ema20.iloc[-1]) > 0:
-            ext = (cp - float(ema20.iloc[-1])) / float(ema20.iloc[-1])
-            if ext < -0.03:
-                signals.append(f"OVEREXT_{ext*100:.1f}%")
-                score += 0.15
-
-        return min(score, 1.0), signals
-
-    @staticmethod
-    def count_confirming_candles(df: pd.DataFrame, direction: str, max_look: int = 5) -> int:
-        if len(df) < 5:
-            return 0
-        # Access contiguous underlying numpy matrix locations directly to prevent IndexErrors
-        closes = df['close'].to_numpy()
-        opens = df['open'].to_numpy()
-
-        count = 0
-        # Loop backwards starting from the last completed candle (-2) down to lookback limits
-        for i in range(2, min(max_look + 2, len(df))):
-            idx = -i
-            if direction == "LONG" and closes[idx] > opens[idx]:
-                count += 1
-            elif direction == "SHORT" and closes[idx] < opens[idx]:
-                count += 1
-            else:
-                break
-        return count
-
-    @staticmethod
-    def is_support_broken(current_close: float, support: float, buffer_pct: float = 0.001) -> bool:
-        """True when close is below support by more than buffer."""
-        if support <= 0:
-            return False
-        return current_close < support * (1 - buffer_pct)
-
-    @staticmethod
-    def is_resistance_broken(current_close: float, resistance: float, buffer_pct: float = 0.001) -> bool:
-        """True when close is above resistance by more than buffer."""
-        if resistance <= 0:
-            return False
-        return current_close > resistance * (1 + buffer_pct)
+class Position:
+    symbol:          str
+    direction:       str    # LONG | SHORT
+    side:            str    # BUY  | SELL
+    entry_price:     float
+    position_value:  float  # USDT allocated
+    stop_loss:       float
+    signal_id:       str
+    entry_time:      str
+    meta_confidence: float
+    atr_multiplier:  float
 
 
-class LiveWallet:
-    def __init__(self, initial_balance: float, max_position_usdt: float):
-        self.initial_balance = initial_balance   # store for reset
-        self.balance = initial_balance
+@dataclass
+class TradeRecord:
+    signal_id:       str
+    symbol:          str
+    direction:       str
+    side:            str
+    entry_price:     float
+    exit_price:      Optional[float]
+    entry_time:      str
+    close_time:      Optional[str]
+    pnl_pct:         float
+    pnl_usdt:        float
+    outcome:         str              # OPEN | WIN | LOSS
+    exit_reason:     Optional[str]
+    meta_confidence: float
+    position_value:  float
+    signal_strength: str = ''
+
+
+# =============================================================================
+# Virtual wallet  (paper trading, $10 000 default)
+# =============================================================================
+
+class VirtualWallet:
+    """Risk 10 % of balance per trade, capped at max_position_usdt."""
+
+    def __init__(self, initial_capital: float, max_position_usdt: float = 1_000.0):
+        self.initial_capital   = initial_capital
+        self.balance           = initial_capital
         self.max_position_usdt = max_position_usdt
-        self.open_trades: Dict[str, LiveTrade] = {}
-        self.trade_history: List[LiveTrade] = []
-        self._load_state()
+        self.open_positions:   Dict[str, Position]   = {}
+        self.trade_history:    List[TradeRecord]      = []
 
-    def _load_state(self):
-        wallet_file = CONFIG_DIR / "live_wallet.json"
-        if wallet_file.exists():
-            try:
-                with open(wallet_file, 'r') as f:
-                    data = json.load(f)
-                self.balance = data.get("balance", self.balance)
-                for tdata in data.get("open_trades", []):
-                    trade = LiveTrade(**tdata)
-                    trade.entry_time = datetime.fromisoformat(tdata["entry_time"])
-                    if tdata.get("close_time"):
-                        trade.close_time = datetime.fromisoformat(tdata["close_time"])
-                    self.open_trades[trade.symbol] = trade
-                logger.info(f"Loaded wallet: balance={self.balance:.2f}, open trades={len(self.open_trades)}")
-            except Exception as e:
-                logger.warning(f"Could not load wallet state: {e}")
+    def position_size(self) -> float:
+        return min(self.balance * 0.10, self.max_position_usdt)
 
-    def _save_state(self):
-        wallet_file = CONFIG_DIR / "live_wallet.json"
-        data = {
-            "balance": self.balance,
-            "open_trades": [
-                {
-                    "symbol": t.symbol,
-                    "entry_price": t.entry_price,
-                    "position_units": t.position_units,
-                    "stop_loss": t.stop_loss,
-                    "take_profit": t.take_profit,
-                    "entry_time": t.entry_time.isoformat(),
-                    "mode": t.mode,
-                    "master_score": t.master_score,
-                    "trade_type": t.trade_type,
-                    "closed": t.closed,
-                    "exit_price": t.exit_price,
-                    "exit_reason": t.exit_reason,
-                    "pnl": t.pnl,
-                    "close_time": t.close_time.isoformat() if t.close_time else None,
-                }
-                for t in self.open_trades.values()
-            ],
-            "trade_history": [
-                {
-                    "symbol": t.symbol,
-                    "entry_price": t.entry_price,
-                    "exit_price": t.exit_price,
-                    "pnl": t.pnl,
-                    "exit_reason": t.exit_reason,
-                    "entry_time": t.entry_time.isoformat(),
-                    "close_time": t.close_time.isoformat() if t.close_time else None,
-                }
-                for t in self.trade_history[-100:]
-            ]
-        }
-        with open(wallet_file, 'w') as f:
-            json.dump(data, f, indent=2)
+    def open_trade(self, pos: Position) -> None:
+        self.open_positions[pos.symbol] = pos
 
-    def reset_wallet(self) -> bool:
-        """Backup current wallet, clear trades, reset balance to initial."""
-        wallet_file = CONFIG_DIR / "live_wallet.json"
-        backup_file = CONFIG_DIR / "live_wallet_backup.json"
-        try:
-            if wallet_file.exists():
-                shutil.copy2(wallet_file, backup_file)
-                logger.info(f"Wallet backed up to {backup_file}")
-        except Exception as e:
-            logger.warning(f"Backup failed: {e}")
-
-        self.open_trades.clear()
-        self.trade_history.clear()
-        self.balance = self.initial_balance
-        self._save_state()
-        logger.info("Wallet reset: balance restored, all trades purged.")
-        return True
-
-    def can_open_trade(self, symbol: str, entry_price: float) -> bool:
-        if symbol in self.open_trades:
-            return False
-        position_value = self.max_position_usdt
-        if position_value > self.balance:
-            position_value = self.balance
-        return position_value > 0 and self.balance >= position_value * 0.01
-
-    def open_trade(self, trade: LiveTrade):
-        cost = trade.position_units * trade.entry_price
-        fee = cost * EXCHANGE_FEE
-        self.balance -= (cost + fee)
-        self.open_trades[trade.symbol] = trade
-        self._save_state()
-        logger.info(f"🟢 OPEN {trade.symbol} ({trade.trade_type}) | Units={trade.position_units:.6f} | Entry={trade.entry_price:.4f} | "
-                    f"SL={trade.stop_loss:.4f} TP={trade.take_profit:.4f} | Balance=${self.balance:.2f}")
-
-    def close_trade(self, symbol: str, exit_price: float, reason: str):
-        trade = self.open_trades.pop(symbol, None)
-        if not trade:
-            return
-        if trade.trade_type == "LONG":
-            raw_pnl = trade.position_units * (exit_price - trade.entry_price)
-        else:  # SHORT
-            raw_pnl = trade.position_units * (trade.entry_price - exit_price)
-        exit_fee = trade.position_units * exit_price * EXCHANGE_FEE
-        pnl = raw_pnl - exit_fee
-        self.balance += (trade.position_units * exit_price - exit_fee)
-        trade.pnl = pnl
-        trade.exit_price = exit_price
-        trade.exit_reason = reason
-        trade.closed = True
-        trade.close_time = datetime.now()
-        self.trade_history.append(trade)
-        self._save_state()
-        logger.info(f"🔴 CLOSE {symbol} | Exit={exit_price:.4f} | Reason={reason} | PnL={pnl:+.2f} | Balance=${self.balance:.2f}")
-
-    def get_position_units(self, symbol: str, entry_price: float, sl_price: float, risk_pct: float, confidence_scalar: float = 1.0) -> float:
-        risk_amount = self.balance * (risk_pct / 100) * confidence_scalar
-        sl_distance = abs(entry_price - sl_price)
-        if sl_distance <= 0:
-            return 0.0
-        units_by_risk = risk_amount / sl_distance
-        max_units_by_cap = self.max_position_usdt / entry_price
-        units = min(units_by_risk, max_units_by_cap)
-        max_units_by_balance = self.balance / entry_price
-        return min(units, max_units_by_balance)
-
-# -------------------------------------------------------------------
-# Hardcoded DNS resolver (unchanged)
-# -------------------------------------------------------------------
-class HardcodedResolver(AbstractResolver):
-    def __init__(self, mapping: Dict[str, str]):
-        self._mapping = mapping
-
-    async def resolve(self, hostname: str, port: int = 443, family: AddressFamily = AddressFamily.AF_UNSPEC):
-        ip = self._mapping.get(hostname)
-        if ip is None:
-            from aiohttp.resolver import DefaultResolver
-            default_resolver = DefaultResolver()
-            return await default_resolver.resolve(hostname, port, family)
-        return [{'hostname': hostname, 'host': ip, 'port': port, 'family': family.value, 'proto': 0, 'flags': 0}]
-
-    async def close(self):
-        pass
-
-# -------------------------------------------------------------------
-# MarketDataFetcher (unchanged)
-# -------------------------------------------------------------------
-class MarketDataFetcher:
-    def __init__(self, proxy_url: Optional[str] = None, activity_log: Optional[deque] = None):
-        self.proxy_url = proxy_url
-        self.exchange: Optional[Any] = None
-        self.cache: Dict[str, Dict[str, Any]] = {}
-        self._connector: Optional[aiohttp.TCPConnector] = None
-        self._session: Optional[aiohttp.ClientSession] = None
-        self.activity_log = activity_log
-
-    def _log_activity(self, msg: str):
-        if self.activity_log is not None:
-            self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
-            if len(self.activity_log) > 12:
-                self.activity_log.pop()
-        logger.info(msg)
-
-    async def start(self):
-        self._log_activity("🌐 Starting exchange connection...")
-        try:
-            async with aiohttp.ClientSession(timeout=ClientTimeout(total=5)) as temp_session:
-                async with temp_session.get('https://api.ipify.org') as resp:
-                    if resp.status == 200:
-                        ip = await resp.text()
-                        self._log_activity(f"🌐 Public IP detected: {ip.strip()}")
-                    else:
-                        self._log_activity("⚠️ Could not determine public IP (HTTP error)")
-        except Exception as e:
-            self._log_activity(f"⚠️ Public IP detection skipped: {e}")
-
-        endpoints = [
-            'https://api.binance.com',
-            'https://api1.binance.com',
-            'https://api2.binance.com',
-            'https://api3.binance.com',
-            'https://api-gcp.binance.com',
-        ]
-
-        custom = os.getenv("BINANCE_ENDPOINT")
-        if custom and custom.startswith("http"):
-            endpoints.insert(0, custom)
-
-        user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-
-        dns_mapping = {ep.split('/')[-1]: '99.86.16.124' for ep in endpoints if 'api' in ep}
-        resolver = HardcodedResolver(dns_mapping)
-
-        self._connector = aiohttp.TCPConnector(
-            resolver=resolver,
-            family=socket.AF_INET,
-            ssl=False,
-            use_dns_cache=True,
-            enable_cleanup_closed=True,
-        )
-
-        session_kwargs = {
-            'connector': self._connector,
-            'timeout': ClientTimeout(total=60),
-            'headers': {'User-Agent': user_agent},
-            'trust_env': True,
-        }
-        if self.proxy_url:
-            session_kwargs['proxy'] = self.proxy_url
-            self._log_activity(f"🔌 Using proxy: {self.proxy_url}")
-
-        self._session = aiohttp.ClientSession(**session_kwargs)
-
-        exchange_cls = getattr(ccxt_async, EXCHANGE_ID, None)
-        if exchange_cls is None:
-            self._log_activity(f"❌ Exchange '{EXCHANGE_ID}' not found")
-            await self.stop()
-            raise RuntimeError(f"CCXT exchange {EXCHANGE_ID} not available")
-
-        max_attempts_per_endpoint = 2
-        last_error = None
-        connection_success = False
-
-        try:
-            for base_url in endpoints:
-                for attempt in range(1, max_attempts_per_endpoint + 1):
-                    if self.exchange:
-                        try:
-                            await self.exchange.close()
-                        except Exception:
-                            pass
-                        self.exchange = None
-
-                    try:
-                        self._log_activity(f"🔌 Connecting to {base_url} (attempt {attempt})")
-                        exchange_config = {
-                            'enableRateLimit': True,
-                            'aiohttp_trust_env': True,
-                            'connector': self._connector,
-                            'session': self._session,
-                            'options': {'defaultType': 'spot'},
-                            'timeout': 30000,
-                            'urls': {
-                                'api': {
-                                    'public': f'{base_url}/api/v3',
-                                    'private': f'{base_url}/api/v3',
-                                }
-                            },
-                            'headers': {'User-Agent': user_agent},
-                        }
-                        if self.proxy_url:
-                            exchange_config['aiohttp_proxy'] = self.proxy_url
-                        self.exchange = exchange_cls(exchange_config)
-                        if self.exchange is None:
-                            raise ConnectionError(f"Failed to create exchange instance for {base_url}")
-                        await self.exchange.load_markets()
-                        self._log_activity(f"✅ Connected to {base_url}")
-                        connection_success = True
-                        return
-                    except Exception as e:
-                        last_error = e
-                        self._log_activity(f"⚠️ Failed {base_url} attempt {attempt}: {e}")
-                        if self.exchange:
-                            try:
-                                await self.exchange.close()
-                            except Exception:
-                                pass
-                            self.exchange = None
-                        if attempt == max_attempts_per_endpoint:
-                            break
-                        await asyncio.sleep(2 ** attempt)
-
-            if not connection_success:
-                self._log_activity("❌ CRITICAL: Hardcoded IP unreachable. VPN may not be routing raw socket traffic.")
-                raise ConnectionError(f"All Binance endpoints failed. Last error: {last_error}")
-        except Exception as e:
-            await self.stop()
-            raise
-
-    async def stop(self):
-        if self.exchange:
-            try:
-                await self.exchange.close()
-                self.exchange = None
-            except Exception as e:
-                self._log_activity(f"Exchange close error: {e}")
-        if self._session:
-            try:
-                await self._session.close()
-                self._session = None
-            except Exception as e:
-                self._log_activity(f"Session close error: {e}")
-        if self._connector:
-            try:
-                await self._connector.close()
-                self._connector = None
-            except Exception as e:
-                self._log_activity(f"Connector close error: {e}")
-
-    async def fetch_ohlcv(self, symbol: str, timeframe: str, limit: int = 500) -> pd.DataFrame:
-        if not self.exchange:
-            self._log_activity(f"⚠️ No exchange instance for {symbol} {timeframe}")
-            return pd.DataFrame()
-
-        for attempt in range(1, 4):
-            try:
-                raw = await self.exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
-                df = pd.DataFrame(raw, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-                df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-                df.set_index('timestamp', inplace=True)
-                if attempt > 1:
-                    self._log_activity(f"✅ Successfully fetched {symbol} {timeframe} (after retry)")
-                return df
-            except Exception as e:
-                error_str = str(e)
-                if '429' in error_str:
-                    self._log_activity(f"⚠️ Rate limit (429) for {symbol} {timeframe} (attempt {attempt}/3)")
-                elif 'timeout' in error_str.lower():
-                    self._log_activity(f"⏱️ Timeout for {symbol} {timeframe} (attempt {attempt}/3)")
-                else:
-                    self._log_activity(f"❌ Fetch failed for {symbol} {timeframe}: {error_str} (attempt {attempt}/3)")
-                if attempt < 3:
-                    sleep_seconds = attempt * 2
-                    self._log_activity(f"⏳ Waiting {sleep_seconds}s before retry...")
-                    await asyncio.sleep(sleep_seconds)
-                else:
-                    self._log_activity(f"❌ All 3 attempts failed for {symbol} {timeframe}")
-        return pd.DataFrame()
-
-    async def get_data(self, symbol: str, timeframe: str, lookback_hours: int) -> pd.DataFrame:
-        now = time.time()
-        cache_key = f"{symbol}_{timeframe}"
-        if cache_key in self.cache:
-            cached = self.cache[cache_key]
-            if now - cached['timestamp'] < CACHE_DURATION.get(timeframe, 60):
-                return cached['df'].copy()
-        limit = get_limit_for_timeframe(timeframe, lookback_hours)
-        self._log_activity(f"📥 Fetching {symbol} {timeframe} (limit={limit})")
-        df = await self.fetch_ohlcv(symbol, timeframe, limit=limit)
-        if not df.empty:
-            self.cache[cache_key] = {'df': df, 'timestamp': now}
-            self._log_activity(f"✓ Cached {symbol} {timeframe}")
-        return df
-
-# -------------------------------------------------------------------
-# SignalGenerator – ASYMMETRIC THRESHOLDS + SELLABILITY BRAKE
-# -------------------------------------------------------------------
-class SignalGenerator:
-    def __init__(self, token_configs: List[TokenConfig], btc_model: Optional[xgb.XGBClassifier]):
-        self.configs = {}
-        for cfg in token_configs:
-            norm_sym = normalize_symbol(cfg.symbol)
-            self.configs[norm_sym] = cfg
-        self.btc_model = btc_model
-        self.regime_detector = RegimeDetector()
-        self.threshold_engine = ThresholdEngine()
-        self.score_history: Dict[str, Deque[float]] = {norm_sym: deque(maxlen=5) for norm_sym in self.configs.keys()}
-        self.macro_cache: Dict[str, Dict[str, float]] = {}
-        self.reversal_candidates: Dict[str, dict] = {}
-        self.models: Dict[str, xgb.XGBClassifier] = {}
-        self._news_cache: Dict[str, Any] = {"score": 0.0, "ts": 0.0}  # 5-min TTL
-
-    def _align_features(self, df: pd.DataFrame, expected_features: List[str]) -> Optional[pd.DataFrame]:
-        missing = [f for f in expected_features if f not in df.columns]
-        if missing:
-            logger.critical(f"Missing expected features: {missing}")
-            return None
-        aligned = df[expected_features].copy()
-        return aligned
-
-    async def compute_macro_trend(self, symbol: str, fetcher: MarketDataFetcher) -> Tuple[str, Dict]:
-        norm_sym = normalize_symbol(symbol)
-        try:
-            # Request an expanded daily history pool (4500 hours / ~180 days) to construct a valid weekly matrix
-            df_1d = await fetcher.get_data(norm_sym, '1d', lookback_hours=4500)
-            if df_1d.empty or len(df_1d) < 50:
-                return 'DIVERGENT', {}
-
-            # Synthetically resample the clean daily dataframe into chronological weekly blocks (ending Sundays)
-            df_1w = df_1d.resample('W').agg({
-                'open': 'first',
-                'high': 'max',
-                'low': 'min',
-                'close': 'last',
-                'volume': 'sum'
-            })
-
-            if df_1w.empty or len(df_1w) < 2:
-                return 'DIVERGENT', {}
-
-            # Calculate 50-period Exponential Moving Averages across both horizons safely
-            ema50_1d = df_1d['close'].ewm(span=50, adjust=False).mean().iloc[-1]
-            ema50_1w = df_1w['close'].ewm(span=50, adjust=False).mean().iloc[-1]
-
-            close_1d = float(df_1d['close'].iloc[-1])
-            close_1w = float(df_1w['close'].iloc[-1])
-
-            bull_1d = close_1d > ema50_1d
-            bull_1w = close_1w > ema50_1w
-
-            macro_state = {
-                'trend_1d': 1.0 if bull_1d else -1.0,
-                'trend_1w': 1.0 if bull_1w else -1.0,
-                'confluence_score': float((1.0 if bull_1d else -1.0) + (1.0 if bull_1w else -1.0))
-            }
-            self.macro_cache[norm_sym] = macro_state
-
-            if bull_1d and bull_1w:
-                return 'BULL', { 'ema50_1d': float(ema50_1d), 'ema50_1w': float(ema50_1w), 'close_1d': close_1d, 'close_1w': close_1w }
-            if not bull_1d and not bull_1w:
-                return 'BEAR', { 'ema50_1d': float(ema50_1d), 'ema50_1w': float(ema50_1w), 'close_1d': close_1d, 'close_1w': close_1w }
-
-            return 'DIVERGENT', { 'ema50_1d': float(ema50_1d), 'ema50_1w': float(ema50_1w), 'close_1d': close_1d, 'close_1w': close_1w }
-        except Exception as e:
-            logger.debug(f"Synthetic macro trend compute failed for {symbol}: {e}")
-            return 'DIVERGENT', {}
-
-    async def compute_signal(self, symbol: str, fetcher: MarketDataFetcher, timeframe: str = '1h', btc_healthy: bool = True, macro_trend: Optional[str] = None) -> Optional[Dict]:
-        # Normalize incoming symbol (e.g., BTC_USDT -> BTC/USDT)
-        norm_sym = normalize_symbol(symbol)
-        cfg = self.configs.get(norm_sym)
-        if not cfg:
-            logger.debug(f"No config for symbol {norm_sym} (original {symbol})")
+    def close_trade(self, symbol: str, exit_price: float,
+                    exit_reason: str) -> Optional[TradeRecord]:
+        pos = self.open_positions.pop(symbol, None)
+        if pos is None:
             return None
 
-        current_risk_pct = cfg.risk_pct
-
-        # Primary timeframe data (allows generating signals per timeframe)
-        tf_lookbacks = {
-            '1m': 2, '5m': 6, '15m': 24, '30m': 48,
-            '1h': 200, '4h': 400, '1d': 800, '1w': 4000
-        }
-        lookback = tf_lookbacks.get(timeframe, 200)
-        df_tf = await fetcher.get_data(norm_sym, timeframe, lookback_hours=lookback)
-        if df_tf.empty or len(df_tf) < 20:
-            logger.debug(f"{norm_sym} {timeframe}: insufficient data (len={len(df_tf)})")
-            return None
-        current_price = float(df_tf['close'].iloc[-1])
-
-        # ML model was trained on 1h features — always use 1h for feature engineering.
-        # When the requested timeframe IS 1h, df_tf is already that data; reuse it
-        # directly instead of making a second identical API call.
-        if timeframe == '1h':
-            df_1h = df_tf
+        if pos.direction == 'LONG':
+            pnl_pct = (exit_price - pos.entry_price) / pos.entry_price * 100
         else:
-            df_1h = await fetcher.get_data(norm_sym, '1h', lookback_hours=200)
-            if df_1h.empty or len(df_1h) < 20:
-                df_1h = df_tf.copy()
+            pnl_pct = (pos.entry_price - exit_price) / pos.entry_price * 100
 
-        # Reversal/pattern detection uses the REQUESTED timeframe so that a 4h signal
-        # checks 4h candle patterns, not 1h ones.  Fall back to df_1h for thin pairs.
-        df_reversal = df_tf if len(df_tf) >= 20 else df_1h
+        pnl_usdt = round(pos.position_value * pnl_pct / 100, 2)
+        self.balance += pnl_usdt
 
-        df_1h['atr'] = compute_atr(df_1h, 14)
-        df_1h['volume_ma'] = df_1h['volume'].rolling(VOLUME_LOOKBACK).mean()
-        df_1h['efficiency_ratio'] = compute_efficiency_ratio(df_1h['close'], period=10)
-
-        last_idx = len(df_1h) - 1
-        vol_regime = RegimeDetector.volatility(df_1h['atr'], last_idx)
-        volume_cond = RegimeDetector.volume(df_1h['volume'].iloc[-1], df_1h['volume_ma'].iloc[-1])
-        er = df_1h['efficiency_ratio'].iloc[-1]
-        trend_str = RegimeDetector.trend(er)
-        # Use actual signal direction once known; pre-compute for confluence adjustments.
-        # We re-evaluate after base_signal is set, so use a neutral default here.
-        trend_aligned = trend_str == "strong"
-
-        btc_df = await fetcher.get_data('BTC/USDT', '1h', lookback_hours=200)
-
-        # News score: cached for 5 minutes — reading from disk on every symbol tick
-        # (58 symbols × 7 TFs = 400+ disk reads per scan cycle) is needlessly expensive.
-        if time.time() - self._news_cache["ts"] > 300:
-            _ns = 0.0
-            news_file = DATA_DIR / "news_data.json"
-            if news_file.exists():
-                try:
-                    with open(news_file, 'r') as f:
-                        news_data = json.load(f)
-                    if isinstance(news_data, list) and news_data:
-                        recent = news_data[-20:]
-                        _ns = sum(item.get('sentiment', 0.0) for item in recent) / len(recent)
-                except Exception:
-                    pass
-            self._news_cache = {"score": _ns, "ts": time.time()}
-        news_score = self._news_cache["score"]
-
-        full_1h = df_1h.reset_index()
-        macro_state = self.macro_cache.get(norm_sym)
-        features_df = prepare_features(
-            full_1h,
-            btc_df.reset_index() if not btc_df.empty else None,
-            pd.DataFrame([{'timestamp': datetime.now(), 'sentiment': news_score}]),
-            add_target_flag=False,
-            forward_hours=1,
-            df_1d=None,
-            df_1w=None,
-            macro_state=macro_state
+        rec = TradeRecord(
+            signal_id       = pos.signal_id,
+            symbol          = symbol,
+            direction       = pos.direction,
+            side            = pos.side,
+            entry_price     = pos.entry_price,
+            exit_price      = round(exit_price, 8),
+            entry_time      = pos.entry_time,
+            close_time      = datetime.now(timezone.utc).isoformat(),
+            pnl_pct         = round(pnl_pct, 3),
+            pnl_usdt        = pnl_usdt,
+            outcome         = 'WIN' if pnl_pct > 0 else 'LOSS',
+            exit_reason     = exit_reason,
+            meta_confidence = pos.meta_confidence,
+            position_value  = pos.position_value,
         )
-        if features_df is None or features_df.empty:
-            return None
+        self.trade_history.append(rec)
+        return rec
 
-        _current_row = features_df.iloc[-1]
-        latest_features = features_df.iloc[-1:].drop(columns=['timestamp', 'target'], errors='ignore')
-
-        try:
-            dist_to_support = float(_current_row["pct_dist_to_support"])
-            dist_to_resistance = float(_current_row["pct_dist_to_resistance"])
-            # Only flag NEAR_SUPPORT when price is *above* support (positive dist) within threshold.
-            # A negative dist_to_support means price is already below support (broken).
-            if 0 <= dist_to_support <= PROXIMITY_THRESHOLD:
-                sr_alert_state = "NEAR_SUPPORT"
-            elif 0 <= dist_to_resistance <= PROXIMITY_THRESHOLD:
-                sr_alert_state = "NEAR_RESISTANCE"
-            else:
-                sr_alert_state = "NONE"
-            sr_telemetry = {
-                "support_line": float(_current_row["rolling_support"]),
-                "resistance_line": float(_current_row["rolling_resistance"]),
-                "dist_to_support_pct": round(dist_to_support * 100, 4),
-                "dist_to_resistance_pct": round(dist_to_resistance * 100, 4),
-                "alert_state": sr_alert_state,
-            }
-        except (KeyError, TypeError, ValueError):
-            sr_telemetry = {
-                "support_line": None, "resistance_line": None,
-                "dist_to_support_pct": None, "dist_to_resistance_pct": None,
-                "alert_state": "NONE",
-            }
-
-        macro_regime = {
-            "confluence_score": float(_current_row.get("macro_confluence_score", 0.0)),
-            "trend_1d": float(_current_row.get("macro_trend_1d", 0.0)),
+    @property
+    def summary(self) -> Dict[str, Any]:
+        won   = sum(1 for t in self.trade_history if t.outcome == 'WIN')
+        lost  = sum(1 for t in self.trade_history if t.outcome == 'LOSS')
+        total = won + lost
+        pnl_u = round(self.balance - self.initial_capital, 2)
+        return {
+            'initial_capital': self.initial_capital,
+            'balance':         round(self.balance, 2),
+            'total_pnl_usdt':  pnl_u,
+            'total_pnl_pct':   round(pnl_u / self.initial_capital * 100, 3),
+            'total_trades':    total,
+            'won':             won,
+            'lost':            lost,
+            'win_rate':        round(won / total, 3) if total else 0.0,
+            'open_positions':  len(self.open_positions),
         }
 
-        model = self.models.get(norm_sym)
-        if model is None:
-            logger.warning(f"No cached model for {norm_sym}")
-            return None
 
-        try:
-            expected_feature_names = model.get_booster().feature_names
-            expected_features = list(expected_feature_names) if expected_feature_names else []
-        except Exception as e:
-            logger.critical(f"Could not extract feature names from model for {norm_sym}: {e}")
-            return None
-        if not expected_features:
-            logger.critical(f"No expected features extracted from model for {norm_sym}")
-            return None
+# =============================================================================
+# Live engine
+# =============================================================================
 
-        aligned_features = self._align_features(latest_features, expected_features)
-        if aligned_features is None:
-            logger.critical(f"Feature mismatch for {norm_sym}: cannot predict")
-            return None
+class LiveEngine:
+    """
+    Prediction loop that scores every tradeable symbol every scan_interval_seconds.
 
-        # Match the NaN contract that training enforced: training rejected folds with
-        # ANY NaN; inference must not silently pass NaN-filled rows to the model.
-        # Fill remaining NaNs (from sparse market data) then hard-fail if any persist.
-        aligned_features = aligned_features.ffill().bfill().fillna(0.0)
-        aligned_features_np = aligned_features.to_numpy().astype(np.float32)
-        if np.isnan(aligned_features_np).any():
-            logger.warning(f"{norm_sym} {timeframe}: NaN in features after fill — skipping signal")
-            return None
+    Signal flow
+    -----------
+    1. Predictor.predict_realtime() → dict with fire/side/meta_confidence/price/atr
+    2. If fire=True and no open position  → open paper trade (VirtualWallet)
+    3. If fire=True and opposite position → MODEL_REVERSAL_TP exit, then re-enter
+    4. If price hits ATR stop             → STOP_HIT exit
+    5. After every cycle  → write data/track_record.json
+    """
 
-        try:
-            probs = model.predict_proba(aligned_features_np)[0]
+    MAX_CONCURRENT = 8      # parallel predictor goroutines (semaphore)
+    HOURS_CONTEXT  = 300    # bars fed to predictor (300 h ≈ 12.5 days of 1-h data)
 
-            # --- NEW TELEMETRY ---
-            telemetry_data = extract_prediction_telemetry(model, aligned_features, expected_features)
-            shap_contribs = telemetry_data.get("shap_contributions", [])
-            raw_probs_dict = telemetry_data.get("probabilities", {})
-            # --- END TELEMETRY ---
+    def __init__(
+        self,
+        token_configs:         List[TokenConfig],
+        capital:               float       = 10_000.0,
+        max_position_usdt:     float       = 1_000.0,
+        scan_interval_seconds: int          = 300,
+        proxy_url:             Optional[str] = None,  # reserved for future ccxt proxy support
+    ):
+        self.scan_interval_seconds = scan_interval_seconds
+        self.wallet    = VirtualWallet(capital, max_position_usdt)
+        self._executor = ThreadPoolExecutor(
+            max_workers=self.MAX_CONCURRENT, thread_name_prefix='aegis_pred')
 
-            if len(probs) >= 3:
-                prob_short = float(probs[0])
-                prob_hold = float(probs[1])
-                prob_long = float(probs[2])
-                predicted_class = int(np.argmax(probs))
-                
-                # Use max of long/short probabilities for the ui 'ai_prob' rather than hold prob
-                dominant_dir_prob = max(prob_short, prob_long)
-                
-                # Calibrate probabilities to realistic confidence ranges (avoids 99% overconfidence)
-                if dominant_dir_prob > 0.8:
-                    ai_prob = 0.75 + (dominant_dir_prob - 0.8) * 0.4
-                elif dominant_dir_prob > 0.5:
-                    ai_prob = 0.55 + (dominant_dir_prob - 0.5) * 0.6
-                else:
-                    ai_prob = dominant_dir_prob
-            else:
-                raw_prob = float(probs[1]) if len(probs) > 1 else 0.0
-                predicted_class = 2 if raw_prob >= 0.5 else 0
-                
-                # Calibrate probabilities to enhance signal generation
-                base_prob = raw_prob if predicted_class == 2 else (1 - raw_prob)
-                if base_prob > 0.8:
-                    ai_prob = 0.75 + (base_prob - 0.8) * 0.4
-                elif base_prob > 0.5:
-                    ai_prob = 0.55 + (base_prob - 0.5) * 0.6
-                else:
-                    ai_prob = base_prob
-                    
-                prob_short, prob_hold, prob_long = (1-ai_prob, 0.0, ai_prob) if predicted_class == 2 else (ai_prob, 0.0, 1-ai_prob)
-        except Exception as e:
-            ai_prob = 0.0
-            prob_short, prob_hold, prob_long = 0.0, 1.0, 0.0
-            predicted_class = 1
-            shap_contribs = []
-            raw_probs_dict = {}
+        self.predictors:   Dict[str, Any]   = {}
+        self.last_signals: Dict[str, Any]   = {}
+        self.live_prices:  Dict[str, float] = {}
 
-        atr_val = df_1h['atr'].iloc[-1] if not pd.isna(df_1h['atr'].iloc[-1]) else current_price * 0.01
+        self.bootstrap_done  = 0
+        self.bootstrap_total = len(token_configs)
 
-        # Alpha Risk Monitor logic
-        atr_series = df_1h['atr'].dropna()
-        atr_mean = atr_series.mean() if len(atr_series) > 0 else atr_val
-        market_regime = vol_regime
-        alpha_risk_level = "NORMAL"
-        if atr_val > 3 * atr_mean:
-            market_regime = "CRITICAL_VOLATILITY"
-            alpha_risk_level = "CRITICAL"
-        elif atr_val > 2 * atr_mean:
-            market_regime = "HIGH_VOLATILITY"
-            alpha_risk_level = "HIGH"
+        self._load_predictors([c.symbol for c in token_configs])
 
-        # Minimum confidence gate — lower the bar by 0.10 from the backtest
-        # config so mid-range signals can fire at raw_prob ~0.55+.
-        # During elevated volatility, raise back up by 0.10 to stay conservative.
-        req_confidence = (
-            min(0.90, cfg.entry_prob_threshold + 0.10)
-            if market_regime in ["CRITICAL_VOLATILITY", "HIGH_VOLATILITY"]
-            else max(0.55, cfg.entry_prob_threshold - 0.10)
-        )
+    # ── initialisation ────────────────────────────────────────────────────────
 
-        # Conviction Spread — lowered from 0.05 to 0.01 so a clear lean toward
-        # LONG/SHORT over HOLD is sufficient; 0.05 was blocking calibrated probs.
-        conviction_spread = ai_prob - prob_hold
-
-        # Direction logic: Class 2 = LONG, Class 0 = SHORT, Class 1 = NEUTRAL.
-        base_signal = "NEUTRAL"
-        if market_regime == "CRITICAL_VOLATILITY":
-            base_signal = "NEUTRAL"
-        elif predicted_class == 2 and ai_prob >= req_confidence and conviction_spread > 0.01:
-            base_signal = "LONG"
-        elif predicted_class == 0 and ai_prob >= req_confidence and conviction_spread > 0.01:
-            base_signal = "SHORT"
-
-        # S/R zone override — when price is already within SR_SIGNAL_ZONE of a
-        # key level, accept a lower confidence bar (0.47) because the reversal
-        # pattern score provides independent technical confirmation.
-        # Only activates when the standard gate produced NEUTRAL.
-        if base_signal == "NEUTRAL" and market_regime != "CRITICAL_VOLATILITY":
-            _pre_sup = _pre_res = 999.0
+    def _load_predictors(self, symbols: List[str]) -> None:
+        from src.ml.predictor import Predictor
+        loaded = 0
+        for sym in symbols:
             try:
-                _pre_sup = float(_current_row["pct_dist_to_support"])
-                _pre_res = float(_current_row["pct_dist_to_resistance"])
-            except (KeyError, TypeError, ValueError):
+                p = Predictor(sym)
+                if p.model is not None and p.meta.get('tradeable', False):
+                    self.predictors[sym] = p
+                    loaded += 1
+            except Exception:
                 pass
-            _sup_lvl = float(sr_telemetry.get("support_line") or 0.0)
-            _res_lvl = float(sr_telemetry.get("resistance_line") or 0.0)
-            _sr_conf = 0.52  # lower than normal gate (0.60) — S/R level provides extra confirmation
-            if _sup_lvl > 0 and 0 <= _pre_sup <= SR_SIGNAL_ZONE and predicted_class == 2 and ai_prob >= _sr_conf:
-                base_signal = "LONG"
-            elif _res_lvl > 0 and 0 <= _pre_res <= SR_SIGNAL_ZONE and predicted_class == 0 and ai_prob >= _sr_conf:
-                base_signal = "SHORT"
+        self.bootstrap_total = max(loaded, 1)
+        print(f'[LiveEngine] {loaded} tradeable predictors loaded '
+              f'from {len(symbols)} configured symbols.')
 
-        # Strict Macro Confluence Check
-        macro_conf = float(features_dict.get('macro_confluence_score', 0.0))
-        if base_signal == "LONG" and macro_conf < 1.0:
-            base_signal = "NEUTRAL"
-        elif base_signal == "SHORT" and macro_conf > -1.0:
-            base_signal = "NEUTRAL"
+    # ── main loop ─────────────────────────────────────────────────────────────
 
-        # BTC safety downgrade for LONG signals
-        if not btc_healthy and base_signal == "LONG":
-            base_signal = "NEUTRAL"
+    async def run(self) -> None:
+        print(f'[LiveEngine] Starting — interval={self.scan_interval_seconds}s '
+              f'symbols={len(self.predictors)}')
+        while True:
+            t0 = time.time()
+            await self._scan_all()
+            self._save_track_record()
+            sleep = max(0.0, self.scan_interval_seconds - (time.time() - t0))
+            await asyncio.sleep(sleep)
 
-        # ──────────────────────────────────────────────────────────────
-        # CONFLUENCE SCORE — computed early so it informs both the
-        # effective reversal threshold and the candle requirement.
-        #
-        # Components (0-100 each):
-        #   trend     : 80 if trend-aligned, else 35
-        #   momentum  : efficiency_ratio × 100 (market directional strength)
-        #   volume    : 78 high / 58 normal / 38 low
-        #
-        # The score is used in three ways:
-        #   1. Adjusts effective_sr_threshold (strong confluence → lower bar)
-        #   2. Sets the S/R candle requirement dynamically
-        #   3. Acts as a final kill-switch below 52 (weak/choppy market)
-        # ──────────────────────────────────────────────────────────────
-        _conf_trend    = 80 if trend_aligned else 35
-        _conf_er       = 0.5 if pd.isna(er) else float(er)
-        _conf_momentum = min(100, max(0, int(_conf_er * 100)))
-        _conf_volume   = 78 if volume_cond == "high" else (58 if volume_cond == "normal" else 38)
-        confluence_rate = (_conf_trend + _conf_momentum + _conf_volume) / 3.0
+    async def _scan_all(self) -> None:
+        sem = asyncio.Semaphore(self.MAX_CONCURRENT)
+        tasks = [self._process_symbol(sym, pred, sem)
+                 for sym, pred in self.predictors.items()]
+        await asyncio.gather(*tasks, return_exceptions=True)
+        self.bootstrap_done = len(self.predictors)
 
-        # Dynamic S/R candle requirement: Must be at least 2 for trend reversal confirmation
-        _sr_candle_req = 2 if confluence_rate >= 65 else 3
-        
-        # Candlestick Pattern Bonus
-        cdl_bonus = False
-        if base_signal == "LONG":
-            if features_dict.get("CDL_HAMMER", 0) > 0 or features_dict.get("CDL_BULL_ENGULFING", 0) > 0 or features_dict.get("CDL_MORNINGSTAR", 0) > 0:
-                cdl_bonus = True
-        elif base_signal == "SHORT":
-            if features_dict.get("CDL_SHOOTINGSTAR", 0) > 0 or features_dict.get("CDL_BEAR_ENGULFING", 0) > 0 or features_dict.get("CDL_EVENINGSTAR", 0) > 0:
-                cdl_bonus = True
-                
-        if cdl_bonus:
-            _sr_candle_req = max(1, _sr_candle_req - 1)  # Explosive shape at SR zone grants faster entry
+    async def _process_symbol(
+        self, symbol: str, predictor: Any, sem: asyncio.Semaphore
+    ) -> None:
+        async with sem:
+            loop = asyncio.get_event_loop()
+            try:
+                result: Dict[str, Any] = await loop.run_in_executor(
+                    self._executor, predictor.predict_realtime)
+            except Exception:
+                return
+            if not isinstance(result, dict):
+                return
 
-        # ──────────────────────────────────────────────────────────────
-        # REVERSAL THRESHOLD — adjusted by confluence + SHAP alignment
-        #
-        # Volume / trend contributions (same as before):
-        #   high volume       → −0.05
-        #   low volume        → +0.05
-        #   trend aligned     → −0.05
-        #
-        # Confluence rate contribution (new):
-        #   confluence ≥ 65   → −0.05 (strong market quality, lower bar)
-        #   confluence < 48   → +0.05 (choppy/thin, raise bar)
-        #
-        # ER/momentum contribution (new):
-        #   ER > 0.50         → −0.03 (directional market confirms)
-        #   ER < 0.25         → +0.03 (choppy/ranging, raise bar)
-        #
-        # SHAP S/R alignment bonus (unchanged):
-        #   top SHAP features are S/R columns → −0.05
-        # ──────────────────────────────────────────────────────────────
-        _sr_adj = 0.0
-        if volume_cond == "high":
-            _sr_adj -= 0.05
-        elif volume_cond == "low":
-            _sr_adj += 0.05
-        if trend_aligned:
-            _sr_adj -= 0.05
+            price = float(result.get('price', 0) or 0)
+            if price > 0:
+                self.live_prices[symbol] = price
+            else:
+                price = self.live_prices.get(symbol, 0)
 
-        if confluence_rate >= 65:
-            _sr_adj -= 0.05
-        elif confluence_rate < 48:
-            _sr_adj += 0.05
+            self.last_signals[symbol] = self._build_signal_entry(
+                symbol, result, price)
 
-        if _conf_er > 0.50:
-            _sr_adj -= 0.03
-        elif _conf_er < 0.25:
-            _sr_adj += 0.03
+            existing = self.wallet.open_positions.get(symbol)
+            if existing:
+                self._manage_exit(symbol, existing, result, price)
+            elif result.get('fire') and result.get('tradeable', True) and price > 0:
+                self._open_position(symbol, result, price)
 
-        _SR_SHAP_FEATURES = {
-            "pct_dist_to_support", "pct_dist_to_resistance",
-            "rolling_support", "rolling_resistance", "range_position_score",
-        }
-        _shap_sr_present = any(
-            c.get("feature") in _SR_SHAP_FEATURES
-            for c in shap_contribs
-            if isinstance(c, dict)
+    # ── trade management ──────────────────────────────────────────────────────
+
+    def _manage_exit(self, symbol: str, pos: Position,
+                     result: Dict[str, Any], price: float) -> None:
+        side = result.get('side', 'FLAT')
+        fire = bool(result.get('fire', False))
+
+        # Dynamic TP: the meta gate fired the opposite direction
+        opposite = (
+            (pos.direction == 'LONG'  and side == 'SELL' and fire) or
+            (pos.direction == 'SHORT' and side == 'BUY'  and fire)
         )
-        if _shap_sr_present:
-            _sr_adj -= 0.05
+        if opposite:
+            rec = self.wallet.close_trade(symbol, price, 'MODEL_REVERSAL_TP')
+            if rec:
+                print(f'[{symbol}] TP {rec.outcome} {rec.pnl_pct:+.2f}% '
+                      f'MODEL_REVERSAL_TP @ {price}')
+            # Immediately open the new position in the reversed direction
+            if result.get('tradeable', True) and price > 0:
+                self._open_position(symbol, result, price)
+            return
 
-        effective_sr_threshold = max(0.20, min(0.55, REVERSAL_SCORE_THRESHOLD + _sr_adj))
-
-        # ──────────────────────────────────────────────────────────────
-        # S/R-FIRST SIGNAL CLASSIFICATION ENGINE
-        #
-        # Priority 1 — S/R Zone (price within SR_SIGNAL_ZONE of support/resistance):
-        #   LONG at support    → bullish setup (score + candles) → SR_REVERSAL_CONFIRMED
-        #   SHORT at resistance→ bearish setup (score + candles) → SR_REVERSAL_CONFIRMED
-        #   SHORT at support   → wait for actual break           → SR_BREAK_CONFIRMED
-        #   LONG at resistance → only if resistance broken       → MOMENTUM_BREAKOUT
-        #
-        # Priority 2 — Momentum (mid-range, strong trend OR high-volume normal trend):
-        #   Any direction      → MOMENTUM_BREAKOUT (requires MOMENTUM_CANDLE_CONFIRM_REQUIRED)
-        #
-        # Priority 3 — Mid-range + weak conditions → suppressed
-        # ──────────────────────────────────────────────────────────────
-        rev_key = f"{norm_sym}_{timeframe}"
-        signal_status = "ACTIVE"
-        candles_confirmed = 0
-        reversal_score_val = 0.0
-        reversal_signals_list: list = []
-
-        support_lvl = float(sr_telemetry.get("support_line") or 0.0)
-        resistance_lvl = float(sr_telemetry.get("resistance_line") or 0.0)
-
-        try:
-            raw_dist_sup = float(_current_row["pct_dist_to_support"])
-            raw_dist_res = float(_current_row["pct_dist_to_resistance"])
-        except (KeyError, TypeError, ValueError):
-            raw_dist_sup = 999.0
-            raw_dist_res = 999.0
-
-        near_support    = support_lvl > 0    and 0 <= raw_dist_sup <= SR_SIGNAL_ZONE
-        near_resistance = resistance_lvl > 0 and 0 <= raw_dist_res <= SR_SIGNAL_ZONE
-
-        if base_signal == "LONG":
-            if near_support:
-                # ── Best setup: LONG bouncing off support ─────────────────────
-                bull_score, bull_sigs = ReversalDetector.detect_bullish_reversal_setup(
-                    df_reversal, support=support_lvl
-                )
-                reversal_score_val = bull_score
-                reversal_signals_list = bull_sigs
-                candles_confirmed = ReversalDetector.count_confirming_candles(df_reversal, "LONG")
-
-                cand_key = f"{rev_key}_LONG"
-                if bull_score >= effective_sr_threshold:
-                    if cand_key not in self.reversal_candidates:
-                        self.reversal_candidates[cand_key] = {
-                            "direction": "LONG", "first_price": current_price,
-                            "candles_confirmed": candles_confirmed, "score": bull_score,
-                        }
-                    else:
-                        self.reversal_candidates[cand_key]["candles_confirmed"] = candles_confirmed
-
-                    if candles_confirmed >= _sr_candle_req:
-                        signal_status = "SR_REVERSAL_CONFIRMED"
-                        self.reversal_candidates.pop(cand_key, None)
-                    else:
-                        signal_status = "AWAITING_SR_CONFIRMATION"
-                else:
-                    self.reversal_candidates.pop(cand_key, None)
-                    base_signal = "NEUTRAL"
-
-            elif near_resistance:
-                # ── LONG near resistance: valid only if resistance is broken ──
-                if ReversalDetector.is_resistance_broken(current_price, resistance_lvl):
-                    signal_status = "MOMENTUM_BREAKOUT"
-                else:
-                    self.reversal_candidates.pop(f"{rev_key}_LONG", None)
-                    base_signal = "NEUTRAL"
-
-            else:
-                # ── Mid-range: strong trend OR (normal trend + high volume) ──
-                _mid_ok = trend_str == "strong" or (trend_str == "normal" and volume_cond == "high")
-                if _mid_ok:
-                    _mb_candles = ReversalDetector.count_confirming_candles(df_reversal, "LONG")
-                    if _mb_candles >= max(2, MOMENTUM_CANDLE_CONFIRM_REQUIRED):
-                        signal_status = "MOMENTUM_BREAKOUT"
-                        candles_confirmed = _mb_candles
-                    else:
-                        signal_status = "AWAITING_CONFIRMATION"
-                        base_signal = "NEUTRAL"
-                else:
-                    self.reversal_candidates.pop(f"{rev_key}_LONG", None)
-                    base_signal = "NEUTRAL"
-
-        elif base_signal == "SHORT":
-            if near_resistance:
-                # ── Best setup: SHORT rejecting off resistance ─────────────────
-                bear_score, bear_sigs = ReversalDetector.detect_bearish_reversal_setup(
-                    df_reversal, resistance=resistance_lvl
-                )
-                reversal_score_val = bear_score
-                reversal_signals_list = bear_sigs
-                candles_confirmed = ReversalDetector.count_confirming_candles(df_reversal, "SHORT")
-
-                cand_key = f"{rev_key}_SHORT"
-                if bear_score >= effective_sr_threshold:
-                    if cand_key not in self.reversal_candidates:
-                        self.reversal_candidates[cand_key] = {
-                            "direction": "SHORT", "first_price": current_price,
-                            "candles_confirmed": candles_confirmed, "score": bear_score,
-                        }
-                    else:
-                        self.reversal_candidates[cand_key]["candles_confirmed"] = candles_confirmed
-
-                    if candles_confirmed >= _sr_candle_req:
-                        signal_status = "SR_REVERSAL_CONFIRMED"
-                        self.reversal_candidates.pop(cand_key, None)
-                    else:
-                        signal_status = "AWAITING_SR_CONFIRMATION"
-                else:
-                    self.reversal_candidates.pop(cand_key, None)
-                    base_signal = "NEUTRAL"
-
-            elif near_support:
-                # ── SHORT near support: wait for support to actually break ──────
-                if ReversalDetector.is_support_broken(current_price, support_lvl):
-                    signal_status = "SR_BREAK_CONFIRMED"
-                    self.reversal_candidates.pop(f"{rev_key}_SR_BREAK", None)
-                else:
-                    signal_status = "AWAITING_SR_BREAK"
-                    self.reversal_candidates[f"{rev_key}_SR_BREAK"] = {
-                        "support_level": support_lvl, "direction": "SHORT",
-                    }
-
-            else:
-                # ── Mid-range: strong trend OR (normal trend + high volume) ──
-                _mid_ok = trend_str == "strong" or (trend_str == "normal" and volume_cond == "high")
-                if _mid_ok:
-                    _mb_candles = ReversalDetector.count_confirming_candles(df_reversal, "SHORT")
-                    if _mb_candles >= max(2, MOMENTUM_CANDLE_CONFIRM_REQUIRED):
-                        signal_status = "MOMENTUM_BREAKOUT"
-                        candles_confirmed = _mb_candles
-                    else:
-                        signal_status = "AWAITING_CONFIRMATION"
-                        base_signal = "NEUTRAL"
-                else:
-                    self.reversal_candidates.pop(f"{rev_key}_SHORT", None)
-                    base_signal = "NEUTRAL"
-
-        # ── Confluence kill-switch: block genuinely weak/choppy setups ────────
-        if confluence_rate < 52.0 and base_signal in ("LONG", "SHORT"):
-            base_signal = "NEUTRAL"
-            signal_status = "WEAK_CONFLUENCE"
-
-        # SL/TP Logic based on asset classification
-        heavy_caps = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT"]
-        atr_multiplier = 1.2 if norm_sym in heavy_caps else 1.8
-        
-        suggested_sl_distance = atr_multiplier * atr_val
-        suggested_tp_distance = RR_RATIO * suggested_sl_distance
-
-        if base_signal == "LONG":
-            suggested_sl = current_price - suggested_sl_distance
-            suggested_tp = current_price + suggested_tp_distance
-            final_signal = "BUY"
-            signal_strength = "STRONG_BUY" if ai_prob > 0.8 else "BUY"
-        elif base_signal == "SHORT":
-            suggested_sl = current_price + suggested_sl_distance
-            suggested_tp = current_price - suggested_tp_distance
-            final_signal = "SELL"
-            signal_strength = "STRONG_SELL" if ai_prob > 0.8 else "SELL"
-        else:
-            suggested_sl = current_price
-            suggested_tp = current_price
-            final_signal = "HOLD"
-            signal_strength = "HOLD"
-
-        # Expectancy gate — suppress any signal where the math says we lose money.
-        # Uses the actual SL/TP distances already computed above so EV is consistent
-        # with what would be traded. Alpha mode bypasses this gate intentionally.
-        # MOMENTUM_BREAKOUT signals get a volatility scaling factor (0.75) applied to
-        # the SL/TP distances before EV is computed — wide ATR bands during breakouts
-        # inflate the risk side of the equation and would wrongly kill valid momentum
-        # setups; tightening by 25% reflects that breakout entries trail a tighter stop.
-        if base_signal != "NEUTRAL" and current_price > 0:
-            if signal_status == "MOMENTUM_BREAKOUT":
-                _vol_scale = 0.75
-                _tp_pct = (suggested_tp_distance * _vol_scale) / current_price
-                _sl_pct = (suggested_sl_distance * _vol_scale) / current_price
-            else:
-                _tp_pct = suggested_tp_distance / current_price
-                _sl_pct = suggested_sl_distance / current_price
-            _ev = ai_prob * _tp_pct - (1 - ai_prob) * _sl_pct - TOTAL_COST_PCT
-            if _ev < 0:  # block only genuinely negative expected value
-                base_signal = "NEUTRAL"
-                signal_status = "NEGATIVE_EV"
-                final_signal = "HOLD"
-                signal_strength = "HOLD"
-
-        # ------------------------------------------------------------------
-        # Legacy calculations (for completeness and compatibility)
-        # ------------------------------------------------------------------
-        base = cfg.base_threshold
-        adj_thresh, _ = self.threshold_engine.compute(
-            base=base, prob=ai_prob, vol_regime=vol_regime, volume_condition=volume_cond,
-            trend_aligned=trend_aligned, atr=atr_val, price=current_price,
-        )
-        # Further adjust threshold with fundamentals & anchor signals
-        _btc_dist = float(btc_df['btc_dist_ema200'].iloc[-1]) if (btc_df is not None and not btc_df.empty and 'btc_dist_ema200' in btc_df.columns) else 0.0
-        try:
-            adj_thresh = adjust_threshold_by_technical_and_fundamental(
-                adj_thresh,
-                vol_regime=vol_regime,
-                news_score=news_score,
-                efficiency_ratio=er,
-                btc_anchor=_btc_dist
+        # Safety SL: price crossed the ATR-based hard stop
+        if pos.stop_loss > 0:
+            sl_hit = (
+                (pos.direction == 'LONG'  and price <= pos.stop_loss) or
+                (pos.direction == 'SHORT' and price >= pos.stop_loss)
             )
-        except Exception:
-            pass
+            if sl_hit:
+                rec = self.wallet.close_trade(symbol, price, 'STOP_HIT')
+                if rec:
+                    print(f'[{symbol}] SL {rec.outcome} {rec.pnl_pct:+.2f}% '
+                          f'STOP_HIT @ {price}')
 
-        # Use actual traded SL/TP distances (same as expectancy gate) so the
-        # dashboard matrix is consistent with what was used to approve the signal.
-        expected_net_pct = 0.0
-        if current_price > 0:
-            tp_move_pct = suggested_tp_distance / current_price
-            sl_move_pct = suggested_sl_distance / current_price
-            expected_net_pct = (ai_prob * tp_move_pct - (1 - ai_prob) * sl_move_pct - TOTAL_COST_PCT) * 100
+    def _open_position(self, symbol: str, result: Dict[str, Any],
+                       price: float) -> None:
+        side = result.get('side', 'FLAT')
+        if side not in ('BUY', 'SELL'):
+            return
 
-        btc_ai = 0.5
-        if self.btc_model:
-            # btc_df was already fetched above for ML feature engineering — reuse it.
-            if not btc_df.empty:
-                btc_features = prepare_features(btc_df.reset_index(), None, None)
-                if btc_features is not None and not btc_features.empty:
-                    btc_latest = btc_features.iloc[-1:].drop(columns=['timestamp', 'target'], errors='ignore')
-                    try:
-                        btc_expected = self.btc_model.get_booster().feature_names
-                        btc_expected = list(btc_expected) if btc_expected else []
-                        btc_aligned = self._align_features(btc_latest, btc_expected)
-                        if btc_aligned is not None:
-                            btc_ai = self.btc_model.predict_proba(btc_aligned.to_numpy().astype(np.float32))[0, 1]
-                    except Exception as e:
-                        logger.warning(f"BTC model prediction error: {e}")
+        direction  = 'LONG' if side == 'BUY' else 'SHORT'
+        meta_conf  = float(result.get('meta_confidence', 0))
+        atr_mult   = float(result.get('atr_multiplier', 1.5))
+        atr        = float(result.get('atr', price * 0.015))
 
-        self.score_history[norm_sym].appendleft(ai_prob)
+        stop_loss  = (price - atr_mult * atr) if direction == 'LONG' \
+                     else (price + atr_mult * atr)
+        pos_value  = self.wallet.position_size()
 
-        confluence_scorecards = {
-            "volatility": vol_regime,
-            "volume": volume_cond,
-            "trend": "Aligned" if trend_aligned else "Misaligned",
-            "btc_anchor": "Healthy" if btc_healthy else "Shaky",
-            "efficiency": round(float(er), 2),
-            "news_sentiment": round(float(news_score), 2)
-        }
+        pos = Position(
+            symbol          = symbol,
+            direction       = direction,
+            side            = side,
+            entry_price     = round(price, 8),
+            position_value  = round(pos_value, 2),
+            stop_loss       = round(stop_loss, 8),
+            signal_id       = str(uuid.uuid4()),
+            entry_time      = datetime.now(timezone.utc).isoformat(),
+            meta_confidence = round(meta_conf, 4),
+            atr_multiplier  = atr_mult,
+        )
+        self.wallet.open_trade(pos)
+        print(f'[{symbol}] OPEN {direction} @ {price} | '
+              f'conf={meta_conf:.3f} SL={stop_loss:.4f} size={pos_value:.0f} USDT')
 
-        visual_zone_tracking = {
-            "support_sl": suggested_sl,
-            "resistance_tp": suggested_tp,
-            "market_regime": market_regime,
-            "alpha_risk_level": alpha_risk_level
-        }
+    # ── signal entry builder (for dashboard / last_signals) ───────────────────
 
-        expectancy_matrix = {
-            "expected_net_pct": round(expected_net_pct, 2) if expected_net_pct else 0.0,
-            "profitability_index": round(expected_net_pct / 100, 4) if expected_net_pct else 0.0,
-            "max_dd_pct": round(cfg.max_dd, 2) if hasattr(cfg, 'max_dd') else 0.0,
-            "historical_expectancy": round(cfg.expectancy, 2) if hasattr(cfg, 'expectancy') else 0.0
-        }
+    @staticmethod
+    def _build_signal_entry(symbol: str, result: Dict[str, Any],
+                            price: float) -> Dict[str, Any]:
+        side = result.get('side', 'FLAT')
+        conf = float(result.get('meta_confidence', 0))
+        thr  = float(result.get('threshold', 0.6))
+        fire = bool(result.get('fire', False))
+
+        if not fire:
+            strength = 'NEUTRAL'
+        elif conf >= thr * 1.15:
+            strength = f'STRONG_{side}'
+        else:
+            strength = side
 
         return {
-            "symbol": norm_sym,
-            "price": current_price,
-            "ai_prob": ai_prob,
-            "raw_probabilities": raw_probs_dict,
-            "shap_contributions": shap_contribs,
-            "confluence_scorecards": confluence_scorecards,
-            "visual_zone_tracking": visual_zone_tracking,
-            "expectancy_matrix": expectancy_matrix,
-            "threshold": adj_thresh,
-            "expected_net_pct": expected_net_pct,
-            "signal": "HOLD" if signal_status in ("AWAITING_CONFIRMATION", "AWAITING_SR_BREAK", "AWAITING_SR_CONFIRMATION") else final_signal,
-            "signal_strength": signal_strength,
-            # Reversal / S/R classification fields
-            "signal_status": signal_status,
-            "candles_confirmed": candles_confirmed,
-            "reversal_score": round(reversal_score_val, 3),
-            "reversal_signals": reversal_signals_list,
-            "btc_ai": btc_ai,
-            "btc_filter_ok": btc_healthy or final_signal not in ("STRONG_BUY", "BUY"),
-            "vol_regime": vol_regime,
-            "volume_cond": volume_cond,
-            "trend_aligned": trend_aligned,
-            "atr": atr_val,
-            "mode": cfg.mode,
-            "risk_pct": current_risk_pct,
-            "atr_sl": cfg.atr_sl,
-            "atr_tp": RR_RATIO * cfg.atr_sl,
-            "efficiency_ratio": er,
-            "direction": "NEUTRAL" if signal_status in ("AWAITING_CONFIRMATION", "AWAITING_SR_BREAK", "AWAITING_SR_CONFIRMATION") else base_signal,
-            "entry_price": current_price,
-            "sl": suggested_sl,
-            "tp": suggested_tp,
-            "suggested_sl_distance": suggested_sl_distance,
-            "suggested_tp_distance": suggested_tp_distance,
-            "alpha_risk_level": alpha_risk_level,
-            "signal_id": str(uuid.uuid4()),
-            "trading_accuracy": ai_prob,  # Using ai_prob as trading accuracy
-            "profitability_index": expected_net_pct / 100 if expected_net_pct else 0.0,
-            "btc_dist_ema200": _btc_dist,
-            "data_timestamp": datetime.now().isoformat(),
-            "sr_telemetry": sr_telemetry,
-            "macro_regime": macro_regime,
+            'symbol':          symbol,
+            'signal':          side,
+            'signal_strength': strength,
+            'fire':            fire,
+            'direction':       'LONG' if side == 'BUY' else ('SHORT' if side == 'SELL' else 'NEUTRAL'),
+            'price':           price,
+            'entry_price':     price,
+            'meta_confidence': round(conf, 4),
+            'threshold':       round(thr, 4),
+            'tradeable':       result.get('tradeable', True),
+            'p_buy':           round(float(result.get('p_buy',  0)), 4),
+            'p_sell':          round(float(result.get('p_sell', 0)), 4),
+            'p_hold':          round(float(result.get('p_hold', 0)), 4),
+            'signal_id':       str(uuid.uuid4()),
+            'data_timestamp':  datetime.now(timezone.utc).isoformat(),
+            'timestamp':       datetime.now(timezone.utc).isoformat(),
+            'timeframe':       '1h',
         }
 
-# -------------------------------------------------------------------
-# Confirmation Engine – four-gate signal validation guardrail
-# -------------------------------------------------------------------
-_CRITICAL_NUMERIC_FIELDS = ("price", "atr", "ai_prob")
+    # ── track record persistence ──────────────────────────────────────────────
 
-async def confirm_live_signal(
-    symbol: str,
-    raw_prediction: dict,
-    df_row: pd.Series,
-) -> Tuple[bool, str]:
+    def _save_track_record(self) -> None:
+        try:
+            TRACK_RECORD_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+            open_records = [
+                {
+                    'signal_id':       p.signal_id,
+                    'symbol':          p.symbol,
+                    'direction':       p.direction,
+                    'side':            p.side,
+                    'entry_price':     p.entry_price,
+                    'exit_price':      None,
+                    'entry_time':      p.entry_time,
+                    'close_time':      None,
+                    'pnl_pct':         0.0,
+                    'pnl_usdt':        0.0,
+                    'outcome':         'OPEN',
+                    'exit_reason':     None,
+                    'meta_confidence': p.meta_confidence,
+                    'position_value':  p.position_value,
+                    'signal_strength': '',
+                }
+                for p in self.wallet.open_positions.values()
+            ]
+
+            all_records = sorted(
+                [asdict(t) for t in self.wallet.trade_history] + open_records,
+                key=lambda r: r.get('entry_time') or '',
+                reverse=True,
+            )[:500]
+
+            payload: Dict[str, Any] = {
+                'generated_at': datetime.now(timezone.utc).isoformat(),
+                'summary':      self.wallet.summary,
+                'signals':      all_records,
+            }
+
+            with open(TRACK_RECORD_PATH, 'w', encoding='utf-8') as f:
+                json.dump(payload, f, indent=2, default=str)
+        except Exception as e:
+            print(f'[LiveEngine] track_record save failed: {e}')
+
+    async def shutdown(self) -> None:
+        self._save_track_record()
+        self._executor.shutdown(wait=False)
+        print('[LiveEngine] Shutdown complete.')
+
+
+# =============================================================================
+# Setup helpers
+# =============================================================================
+
+def automated_setup(_: Path, args: Any):
     """
-    Async guardrail executed before every signal transmission.
-    Returns (True, 'OK') when all gates pass, (False, REJECTION_CODE) on first failure.
+    Scan MODEL_STORE for tradeable symbols and return engine config.
+    Only sidecar JSONs with tradeable=True are included.
+    Falls back to BTC/USDT if the store is empty or no models are trained yet.
     """
-    # Gate 1a — Time sync: reject if signal data is older than 90 seconds
-    # (58 tokens × 7 timeframes run in parallel; last signals may be stamped
-    #  60-70 seconds before confirm_live_signal is reached in the loop)
-    try:
-        data_ts_str = raw_prediction.get("data_timestamp", "")
-        if data_ts_str:
-            data_ts = datetime.fromisoformat(data_ts_str)
-            if (datetime.now() - data_ts).total_seconds() > 180:
-                return False, "STALE_DATA_TIMEOUT"
-    except Exception:
-        pass
+    configs: List[TokenConfig] = []
 
-    # Gate 1b — Feature stream integrity: critical numeric fields must be finite and non-zero
-    for field in _CRITICAL_NUMERIC_FIELDS:
-        val = raw_prediction.get(field)
-        if val is None:
-            return False, "CORRUPTED_FEATURE_STREAM"
-        try:
-            fval = float(val)
-            if np.isnan(fval) or (fval == 0.0 and field in ("price", "atr")):
-                return False, "CORRUPTED_FEATURE_STREAM"
-        except (TypeError, ValueError):
-            return False, "CORRUPTED_FEATURE_STREAM"
-
-    # Gate 2 — BTC macro confluence: suppress LONG when BTC is deeply below EMA-200
-    direction = raw_prediction.get("direction", "NEUTRAL")
-    logger.debug(f"[ConfirmationEngine] {symbol} direction={direction}")
-    if direction == "LONG":
-        btc_dist = raw_prediction.get("btc_dist_ema200")
-        if btc_dist is None and "btc_dist_ema200" in df_row.index:
-            btc_dist = df_row["btc_dist_ema200"]
-        btc_dist = btc_dist if btc_dist is not None else 0.0
-        try:
-            if float(btc_dist) < -0.02:
-                return False, "MACRO_TREND_DIVERGENT"
-        except (TypeError, ValueError):
-            pass
-
-    # Gate 3 — Liquidity / slippage risk: high volatility paired with thin volume
-    vol_regime = raw_prediction.get("vol_regime", "normal")
-    volume_cond = raw_prediction.get("volume_cond", "normal")
-    if vol_regime == "high" and volume_cond == "low":
-        return False, "EXCESSIVE_SLIPPAGE_RISK"
-
-    return True, "OK"
-
-# -------------------------------------------------------------------
-# LiveEngine – with RESET (C key) and colour‑coded dashboard
-# -------------------------------------------------------------------
-class LiveEngine:
-    def __init__(self, token_configs: List[TokenConfig], capital: float, max_position_usdt: float,
-                 scan_interval_seconds: int, proxy_url: Optional[str] = None):
-        self.token_configs = token_configs
-        self.wallet = LiveWallet(capital, max_position_usdt)
-        self.activity_log = deque(maxlen=12)
-        self.fetcher = MarketDataFetcher(proxy_url, self.activity_log)
-        self.btc_model = None
-        self.signal_gen = None
-        self.models: Dict[str, xgb.XGBClassifier] = {}
-        self.scan_interval = scan_interval_seconds
-        self.trading_accuracies = {}
-
-        # Load backtest summary for trading accuracy
-        summary_file = LOGS_DIR / "backtests" / "signal_analysis_summary.json"
-        if summary_file.exists():
+    if MODEL_STORE.exists():
+        for meta_file in sorted(MODEL_STORE.glob('*_meta.json')):
             try:
-                with open(summary_file, 'r') as f:
-                    summary_data = json.load(f)
-                for item in summary_data.get("best_by_accuracy", []):
-                    if len(item) >= 3:
-                        self.trading_accuracies[item[0]] = float(item[2])
-            except Exception as e:
-                logger.error(f"Error loading accuracy data: {e}")
-
-        self.bootstrap_total = len(token_configs) * 2
-        self.bootstrap_done = 0
-        self.bootstrap_complete = False
-        self.last_context_refresh = 0
-
-        self.live_prices: Dict[str, float] = {}
-        self.prev_prices: Dict[str, float] = {}
-        self.last_signals: Dict[str, Optional[Dict]] = {}
-        # Tracks issued signals per "sym_tf" to detect when they expire (>60% move before action)
-        self.signal_expiry_tracker: Dict[str, dict] = {}
-        self._ticker_task: Optional[asyncio.Task] = None
-        self._signal_task: Optional[asyncio.Task] = None
-        self._keyboard_task: Optional[asyncio.Task] = None
-        self._shutdown_event = asyncio.Event()
-
-    # --------------------------------------------------------------
-    # BTC Safety Check (unchanged)
-    # --------------------------------------------------------------
-    async def _is_btc_safe(self) -> bool:
-        try:
-            btc_df = await self.fetcher.get_data('BTC/USDT', '1h', lookback_hours=50)
-            if btc_df.empty or len(btc_df) < 30:
-                logger.warning("Insufficient BTC data, assuming unsafe.")
-                return False
-
-            last_close = float(btc_df['close'].iloc[-1])
-            prev_close = float(btc_df['close'].iloc[-2]) if len(btc_df) >= 2 else last_close
-            pct_change = (last_close - prev_close) / prev_close * 100.0
-            if pct_change >= 0:
-                return True
-
-            ema20 = btc_df['close'].ewm(span=20, adjust=False).mean().iloc[-1]
-            if last_close > ema20:
-                return True
-
-            return False
-        except Exception as e:
-            logger.error(f"BTC safety check failed: {e}")
-            return False
-
-    async def announce(self, text: str):
-        if not VOICE_AVAILABLE:
-            return
-        def _speak():
-            try:
-                engine = pyttsx3.init()
-                engine.setProperty('rate', 175)
-                engine.setProperty('volume', 1.0)
-                engine.say(text)
-                engine.runAndWait()
-                engine.stop()
-            except Exception as e:
-                logger.warning(f"Voice announcement failed: {e}")
-        await asyncio.to_thread(_speak)
-
-    def sync_to_dashboard(self, signals_list):
-        output_file = root_dir / "web" / "current_signals.json"
-        output_file.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            with open(output_file, 'w') as f:
-                json.dump({"signals": signals_list}, f, indent=2)
-        except Exception as e:
-            logger.error(f"Failed to sync dashboard: {e}")
-
-    # --------------------------------------------------------------
-    # Keyboard listener – added 'C' for reset
-    # --------------------------------------------------------------
-    async def _keyboard_listener(self):
-        loop = asyncio.get_event_loop()
-        while not self._shutdown_event.is_set():
-            try:
-                inp = await loop.run_in_executor(None, sys.stdin.readline)
-                if not inp:
-                    continue
-                inp = inp.strip().lower()
-                if inp == 'c':
-                    print("\n⚠️  DATA PURGE CONFIRMATION ⚠️")
-                    confirm = await loop.run_in_executor(None, lambda: input("Confirm Data Purge? [Y/N]: ").strip().upper())
-                    if confirm == 'Y':
-                        self.wallet.reset_wallet()
-                        self.activity_log.clear()
-                        self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] 🔄 Wallet reset and activity log purged.")
-                        logger.info("Wallet reset and activity log cleared.")
-                        await self.announce("Data purge complete")
-                    else:
-                        print("Reset cancelled.")
-                        self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] Reset cancelled by user.")
-                elif inp == 'q':
-                    logger.info("Quit command received, shutting down...")
-                    self._shutdown_event.set()
-                    break
-            except Exception as e:
-                logger.warning(f"Keyboard listener error: {e}")
-
-    async def initialize(self):
-        await self.fetcher.start()
-        asyncio.create_task(self.announce("Aegis-1 System Online and Scanning"))
-
-        logger.info("Loading BTC model...")
-        btc_model_path = MODEL_STORE / "BTC_USDT_model.json"
-        if btc_model_path.exists():
-            try:
-                await asyncio.wait_for(
-                    asyncio.to_thread(lambda: xgb.XGBClassifier().load_model(str(btc_model_path))),
-                    timeout=15.0
-                )
-                self.btc_model = xgb.XGBClassifier()
-                self.btc_model.load_model(str(btc_model_path))
-                self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] BTC model loaded")
-                logger.info("BTC model loaded")
-            except asyncio.TimeoutError:
-                logger.critical("BTC model loading timed out (15s) – continuing without BTC filter")
-                self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] ⚠️ BTC model timeout – filter disabled")
-                self.btc_model = None
-            except Exception as e:
-                logger.critical(f"BTC model load error: {e}")
-                self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] ❌ BTC model load error")
-                self.btc_model = None
-        else:
-            logger.warning("BTC model not found – BTC filter disabled")
-            self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] ℹ️ BTC model not found – filter disabled")
-
-        logger.info("Pre-loading all token models into RAM memory cache...")
-        for cfg in self.token_configs:
-            norm_sym = normalize_symbol(cfg.symbol)
-            model_path = MODEL_STORE / f"{norm_sym.replace('/', '_')}_model.json"
-            if model_path.exists():
-                try:
-                    cached_model = xgb.XGBClassifier()
-                    cached_model.load_model(str(model_path))
-                    self.models[norm_sym] = cached_model
-                except Exception as e:
-                    logger.error(f"Failed to pre-load model for {norm_sym} into RAM: {e}")
-        logger.info(f"Successfully cached {len(self.models)} token models in RAM.")
-        self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] {len(self.models)} token models cached in RAM")
-
-        logger.info("Starting Signal Generator...")
-        self.signal_gen = SignalGenerator(self.token_configs, self.btc_model)
-        self.signal_gen.models = self.models
-        self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] Signal Generator ready")
-        logger.info("Live engine initialized – starting lazy data load")
-
-        try:
-            test_btc = await self.fetcher.get_data('BTC/USDT', '1h', lookback_hours=2)
-            if test_btc.empty:
-                self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] ❌ Data fetch test FAILED – no data")
-                logger.critical("ERROR: Markets loaded but price data is empty. Check VPN/DNS.")
-                raise ConnectionError("No price data after exchange connection")
-            self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] ✓ Data fetch test passed")
-            logger.info("Data fetch test passed")
-        except Exception as e:
-            logger.critical(f"Data fetch test failed: {e}")
-            raise
-
-        # Validate all token symbols against the exchange market list.
-        # Symbols not listed on Binance Spot are removed so they never cause
-        # ticker fallbacks or failed data fetches further down the pipeline.
-        if self.fetcher.exchange and self.fetcher.exchange.markets:
-            available = set(self.fetcher.exchange.markets.keys())
-            valid_configs, skipped = [], []
-            for cfg in self.token_configs:
-                sym = normalize_symbol(cfg.symbol)
-                if sym in available:
-                    valid_configs.append(cfg)
-                else:
-                    skipped.append(sym)
-            if skipped:
-                logger.warning(f"Removing {len(skipped)} symbols not on Binance Spot: {', '.join(skipped)}")
-                self.activity_log.appendleft(
-                    f"[{datetime.now().strftime('%H:%M:%S')}] ⚠️ Skipped {len(skipped)} invalid: {', '.join(skipped)}"
-                )
-                self.token_configs = valid_configs
-                self.bootstrap_total = len(valid_configs) * 2
-                if self.signal_gen:
-                    for sym in skipped:
-                        self.signal_gen.configs.pop(sym, None)
-
-    async def _fetch_all_tickers(self):
-        if not self.fetcher.exchange:
-            return
-        symbols = [cfg.symbol for cfg in self.token_configs]
-        try:
-            tickers = await self.fetcher.exchange.fetch_tickers(symbols)
-        except Exception as e:
-            # Identify and permanently remove the bad symbol so future cycles are clean
-            error_str = str(e)
-            bad_sym = next((s for s in symbols if s in error_str), None)
-            if bad_sym:
-                norm_bad = normalize_symbol(bad_sym)
-                logger.warning(f"Removing invalid symbol {bad_sym} from active fleet")
-                self.activity_log.appendleft(
-                    f"[{datetime.now().strftime('%H:%M:%S')}] ⚠️ Removed invalid symbol: {bad_sym}"
-                )
-                self.token_configs = [cfg for cfg in self.token_configs if cfg.symbol != bad_sym]
-                if self.signal_gen:
-                    self.signal_gen.configs.pop(norm_bad, None)
-                symbols = [cfg.symbol for cfg in self.token_configs]
-            try:
-                tickers = await self.fetcher.exchange.fetch_tickers(symbols)
+                with open(meta_file, 'r', encoding='utf-8') as f:
+                    meta = json.load(f)
+                if meta.get('tradeable', False):
+                    sym = meta.get('symbol', '')
+                    if sym:
+                        configs.append(TokenConfig(symbol=sym))
             except Exception:
-                try:
-                    tickers = await self.fetcher.exchange.fetch_tickers()
-                except Exception as e_all:
-                    self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] ⚠️ Ticker fetch error: {e_all}")
-                    logger.warning(f"Ticker fetch fallback error: {e_all}")
-                    return
+                pass
 
-        for sym in symbols:
-            ticker = tickers.get(sym)
-            if ticker and 'last' in ticker and ticker['last'] is not None:
-                price = float(ticker['last'])
-                if sym in self.live_prices:
-                    self.prev_prices[sym] = self.live_prices[sym]
-                self.live_prices[sym] = price
-
-    async def _run_ticker_loop(self):
-        while not self._shutdown_event.is_set():
-            try:
-                await self._fetch_all_tickers()
-            except Exception as e:
-                logger.warning(f"Ticker loop error: {e}")
-            await asyncio.sleep(0.1)
-            await asyncio.sleep(max(0, 1 - 0.1))
-
-    async def _refresh_context(self):
-        self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] 🔄 Refreshing 1h/4h context data...")
-        symbols = [cfg.symbol for cfg in self.token_configs] + ['BTC/USDT']
-        tasks = []
-        for sym in symbols:
-            tasks.append(self.fetcher.get_data(sym, '1h', lookback_hours=200))
-            tasks.append(self.fetcher.get_data(sym, '4h', lookback_hours=200))
-        await asyncio.gather(*tasks)
-        self.last_context_refresh = time.time()
-        self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] ✓ Context data refresh complete")
-        logger.debug("Context data refreshed (1h/4h)")
-
-    async def _run_signal_loop(self):
-        token_count = 0
-        self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] 🚀 Starting bootstrap data load...")
-        for cfg in self.token_configs:
-            for tf in ['1h', '4h']:
-                self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] 📥 {cfg.symbol} {tf}...")
-                try:
-                    df = await self.fetcher.get_data(cfg.symbol, tf, lookback_hours=200)
-                    if not df.empty:
-                        self.bootstrap_done += 1
-                        self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] ✓ {cfg.symbol} {tf} cached ({self.bootstrap_done}/{self.bootstrap_total})")
-                        logger.debug(f"Cached {cfg.symbol} {tf} history")
-                    else:
-                        self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] ⚠️ Empty data for {cfg.symbol} {tf}")
-                except Exception as e:
-                    self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] ❌ Error fetching {cfg.symbol} {tf}: {e}")
-                await asyncio.sleep(random.uniform(0.6, 1.2))
-            token_count += 1
-            if token_count % 10 == 0:
-                self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] 💤 Cool‑down: paused 5s after {token_count} tokens")
-                await asyncio.sleep(5)
-            if self.signal_gen:
-                try:
-                    sig = await self.signal_gen.compute_signal(cfg.symbol, self.fetcher, btc_healthy=True)
-                    if sig:
-                        sig['timeframe'] = '1h'
-                        self.last_signals[cfg.symbol] = {
-                            tf: dict(sig, timeframe=tf) for tf in ['1m', '5m', '15m', '30m', '1h', '4h', '1d']
-                        }
-                except Exception as e:
-                    logger.warning(f"Initial signal compute error for {cfg.symbol}: {e}")
-        self.bootstrap_complete = True
-        self.last_context_refresh = time.time()
-        self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] ✅ Bootstrap complete! Loaded {self.bootstrap_done}/{self.bootstrap_total} datasets")
-        logger.info(f"Bootstrap complete: loaded {self.bootstrap_done}/{self.bootstrap_total} context datasets")
-
-        # ====== MAIN SIGNAL LOOP ======
-        while not self._shutdown_event.is_set():
-            loop_start = time.time()
-
-            # 1. Refresh context every hour
-            if time.time() - self.last_context_refresh > 3600:
-                await self._refresh_context()
-
-            # 2. BTC safety check — suppress LONG signals when BTC is shaky
-            btc_safe = await self._is_btc_safe()
-            if not btc_safe:
-                logger.warning("BTC is shaky – BUY signals will be downgraded to HOLD.")
-                self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] 🛑 BTC BRAKE – Buy signals suppressed.")
-
-            # 4. Compute signals for all tokens (pass btc_safe flag)
-            if self.signal_gen is None:
-                logger.warning("Signal generator not initialized, skipping signal computation")
-                await asyncio.sleep(self.scan_interval)
-                continue
-
-
-            # Macro-first multi-timeframe signal computation
-            # Remove '1w' from live prediction blocks; weekly context is handled synthetically via compute_macro_trend
-            tf_blocks = ['1m', '5m', '15m', '30m', '1h', '4h', '1d']
-
-            # 1) Macro trend computation (parallel)
-            macro_tasks = {cfg.symbol: asyncio.create_task(self.signal_gen.compute_macro_trend(cfg.symbol, self.fetcher)) for cfg in self.token_configs}
-            macro_results: Dict[str, str] = {}
-            for sym, task in macro_tasks.items():
-                try:
-                    trend, _tele = await task
-                    macro_results[sym] = trend
-                except Exception:
-                    macro_results[sym] = 'DIVERGENT'
-
-            # 2) Per-timeframe compute tasks
-            compute_tasks = []
-            for cfg in self.token_configs:
-                sym = cfg.symbol
-                for tf in tf_blocks:
-                    compute_tasks.append((sym, tf, asyncio.create_task(self.signal_gen.compute_signal(sym, self.fetcher, timeframe=tf, btc_healthy=btc_safe, macro_trend=macro_results.get(sym)))))
-
-            # 3) Await per-timeframe tasks and apply macro filtering rules
-            nested_signals: Dict[str, Dict[str, Optional[Dict]]] = {cfg.symbol: {} for cfg in self.token_configs}
-            for sym, tf, task in compute_tasks:
-                sig = None
-                try:
-                    sig = await task
-                except Exception:
-                    sig = None
-
-                macro = macro_results.get(sym, 'DIVERGENT')
-                lower_tfs = ['1m','5m','15m','30m','1h','4h']
-                if sig and tf in lower_tfs:
-                    direction = sig.get('direction', 'NEUTRAL')
-                    sig_status = sig.get('signal_status', '')
-                    # S/R reversal signals are countertrend by design — a SHORT at resistance
-                    # in a BULL macro and a LONG at support in a BEAR macro are exactly the
-                    # high-quality setups the S/R engine produces.  Only suppress momentum
-                    # breakouts that are counter-trend; never suppress confirmed S/R signals.
-                    is_sr_confirmed = sig_status in ('SR_REVERSAL_CONFIRMED', 'SR_BREAK_CONFIRMED')
-                    if not is_sr_confirmed:
-                        if macro == 'BULL' and direction == 'SHORT':
-                            sig['signal'] = 'HOLD'
-                            sig['signal_strength'] = 'HOLD'
-                            sig['direction'] = 'NEUTRAL'
-                        elif macro == 'BEAR' and direction == 'LONG':
-                            sig['signal'] = 'HOLD'
-                            sig['signal_strength'] = 'HOLD'
-                            sig['direction'] = 'NEUTRAL'
-
-                if isinstance(sig, dict):
-                    sig['timeframe'] = tf
-
-                nested_signals[sym][tf] = sig
-
-            # 4) Confirmation engine per-timeframe (suppress signals if confirmation rejects)
-            for sym, tf_map in nested_signals.items():
-                for tf, s in tf_map.items():
-                    if not s or s.get('direction', 'NEUTRAL') == 'NEUTRAL':
-                        continue
-                    try:
-                        ok, reason = await confirm_live_signal(s['symbol'], s, pd.Series(s))
-                        if not ok:
-                            logger.warning(f"⚠️ Signal for {s['symbol']} {tf} suppressed by Confirmation Engine. Reason: {reason}")
-                            nested_signals[sym][tf] = None
-                    except Exception as e:
-                        logger.debug(f"Confirmation check failed for {sym} {tf}: {e}")
-
-            # 4b) Signal expiry: if price has moved ≥60% of expected TP from entry without
-            #     action, mark signal_status = "EXPIRED" so the dashboard can display it.
-            for sym, tf_map in nested_signals.items():
-                for tf, sig in tf_map.items():
-                    if sig is None:
-                        continue
-                    direction = sig.get('direction', 'NEUTRAL')
-                    current_price_now = sig.get('price', 0.0)
-                    sig_key = f"{sym}_{tf}"
-
-                    if direction in ('LONG', 'SHORT') and current_price_now > 0:
-                        entry_px = float(sig.get('entry_price', current_price_now))
-                        tp_px = float(sig.get('tp', 0.0))
-                        expected_move = abs(tp_px - entry_px) if tp_px else 0.0
-
-                        tracked = self.signal_expiry_tracker.get(sig_key)
-                        if tracked is None or tracked.get('direction') != direction:
-                            # New or direction-changed signal — start fresh tracker
-                            self.signal_expiry_tracker[sig_key] = {
-                                'entry_price': entry_px,
-                                'direction': direction,
-                                'expected_move': expected_move,
-                            }
-                        elif expected_move > 0:
-                            orig_entry = tracked['entry_price']
-                            if direction == 'LONG':
-                                completion = (current_price_now - orig_entry) / expected_move
-                            else:
-                                completion = (orig_entry - current_price_now) / expected_move
-
-                            if completion >= SIGNAL_EXPIRY_MOVE_PCT:
-                                sig['signal_status'] = 'EXPIRED'
-                                sig['signal'] = 'EXPIRED'
-                                self.signal_expiry_tracker.pop(sig_key, None)
-                                logger.info(f"⏰ Signal EXPIRED: {sym} {tf} moved {completion*100:.0f}% of expected range before action")
-                    else:
-                        # NEUTRAL — clear any stale expiry tracker for this pair/tf
-                        self.signal_expiry_tracker.pop(sig_key, None)
-
-            # 5) Persist nested results into last_signals (symbol -> timeframe -> signal)
-            for sym, tf_map in nested_signals.items():
-                self.last_signals[sym] = tf_map
-
-            # 6) Build a flattened frontend_signals list used by older UI paths: pick 1h as summary if present
-            signals = []
-            for sym, tf_map in nested_signals.items():
-                chosen = tf_map.get('1h')
-                if not chosen:
-                    # Pick first available non-null timeframe in order
-                    for tf in tf_blocks:
-                        if tf_map.get(tf):
-                            chosen = tf_map.get(tf)
-                            break
-                if chosen:
-                    if 'signal_id' not in chosen:
-                        chosen['signal_id'] = str(uuid.uuid4())
-                    signals.append(chosen)
-
-            frontend_signals = []
-            for sig in signals:
-                if sig:
-                    if "signal_id" not in sig:
-                        sig["signal_id"] = str(uuid.uuid4())
-
-                    sym = sig["symbol"]
-                    acc = self.trading_accuracies.get(sym, 0.65)
-                    tp_dist = sig.get("suggested_tp_distance", 0)
-                    sl_dist = sig.get("suggested_sl_distance", 0)
-                    profitability_index = (acc * tp_dist) - ((1 - acc) * sl_dist)
-
-                    frontend_signals.append({
-                        "signal_id": sig["signal_id"],
-                        "symbol": sym,
-                        "timestamp": datetime.now().isoformat(),
-                        "direction": sig.get("direction", "NEUTRAL"),
-                        "confidence": sig["ai_prob"],
-                        "entry_price": sig["price"],
-                        "suggested_sl": sig.get("suggested_sl"),
-                        "suggested_tp": sig.get("suggested_tp"),
-                        "alpha_risk_level": sig.get("alpha_risk_level", "NORMAL"),
-                        "trading_accuracy": acc,
-                        "profitability_index": profitability_index,
-                        "raw_probabilities": sig.get("raw_probabilities", {}),
-                        "shap_contributions": sig.get("shap_contributions", []),
-                        "confluence_scorecards": sig.get("confluence_scorecards", {}),
-                        "visual_zone_tracking": sig.get("visual_zone_tracking", {}),
-                        "expectancy_matrix": sig.get("expectancy_matrix", {}),
-                        "sr_telemetry": sig.get("sr_telemetry", {}),
-                    })
-
-            # Push signals to dashboard
-            if frontend_signals:
-                self.sync_to_dashboard(frontend_signals)
-
-            # CONVICTION-BASED EXITS
-            for sig in signals:
-                if not sig:
-                    continue
-                symbol = sig["symbol"]
-                trade = self.wallet.open_trades.get(symbol)
-                if not trade:
-                    continue
-
-                current_price = self.live_prices.get(symbol)
-                if current_price is None:
-                    current_price = sig.get("price") if sig and "price" in sig else trade.entry_price
-                try:
-                    current_price = float(current_price) if current_price is not None else float(trade.entry_price)
-                except (TypeError, ValueError):
-                    current_price = float(trade.entry_price)
-
-                ai_prob = float(sig.get("ai_prob", 0.0))
-
-                if trade.trade_type == "LONG" and ai_prob < CONVICTION_LONG_BAILOUT:
-                    self.wallet.close_trade(symbol, current_price, "BEARISH_CONVICTION")
-                    await self.announce(f"Bearish conviction on {symbol}, exiting long")
-                    self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] 🔴 BEARISH_CONVICTION on {symbol} @ {current_price:.4f} (AI prob {ai_prob:.2f})")
-                elif trade.trade_type == "SHORT" and ai_prob > CONVICTION_SHORT_BAILOUT:
-                    self.wallet.close_trade(symbol, current_price, "BULLISH_CONVICTION")
-                    await self.announce(f"Bullish conviction on {symbol}, exiting short")
-                    self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] 🔴 BULLISH_CONVICTION on {symbol} @ {current_price:.4f} (AI prob {ai_prob:.2f})")
-
-            # STOP LOSS / TAKE PROFIT
-            for sig in signals:
-                if not sig:
-                    continue
-                symbol = sig["symbol"]
-                trade = self.wallet.open_trades.get(symbol)
-                if not trade:
-                    continue
-
-                current_price = self.live_prices.get(symbol)
-                if current_price is None:
-                    current_price = sig.get("price") if sig and "price" in sig else trade.entry_price
-                try:
-                    current_price = float(current_price) if current_price is not None else float(trade.entry_price)
-                except (TypeError, ValueError):
-                    current_price = float(trade.entry_price)
-
-                if trade.trade_type == "LONG":
-                    if trade.stop_loss is not None and current_price <= trade.stop_loss:
-                        self.wallet.close_trade(symbol, trade.stop_loss, "STOP_LOSS")
-                        await self.announce(f"Stop loss triggered on {symbol}")
-                        self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] 🔴 STOP LOSS on {symbol} @ {current_price:.4f}")
-                    elif trade.take_profit is not None and current_price >= trade.take_profit:
-                        self.wallet.close_trade(symbol, trade.take_profit, "TAKE_PROFIT")
-                        await self.announce(f"Take profit secured on {symbol}")
-                        self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] 🟢 TAKE PROFIT on {symbol} @ {current_price:.4f}")
-                else:  # SHORT
-                    if trade.stop_loss is not None and current_price >= trade.stop_loss:
-                        self.wallet.close_trade(symbol, trade.stop_loss, "STOP_LOSS")
-                        await self.announce(f"Stop loss triggered on {symbol} (short)")
-                        self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] 🔴 STOP LOSS (short) on {symbol} @ {current_price:.4f}")
-                    elif trade.take_profit is not None and current_price <= trade.take_profit:
-                        self.wallet.close_trade(symbol, trade.take_profit, "TAKE_PROFIT")
-                        await self.announce(f"Take profit secured on {symbol} (short)")
-                        self.activity_log.appendleft(f"[{datetime.now().strftime('%H:%M:%S')}] 🟢 TAKE PROFIT (short) on {symbol} @ {current_price:.4f}")
-
-            # Auto-execution is intentionally disabled.
-            # Trades are only opened when the user executes a signal manually
-            # via the web UI — those appear in the analytics and terminal cockpit.
-            # SL/TP and conviction exits above continue to manage any such trades.
-
-            elapsed = time.time() - loop_start
-            sleep_time = max(0, self.scan_interval - elapsed)
-            await asyncio.sleep(sleep_time)
-
-    # ------------------------------------------------------------------
-    # Colour‑coded dashboard display
-    # ------------------------------------------------------------------
-    @staticmethod
-    def _fmt_price(price: float) -> str:
-        if price <= 0:
-            return f"{'0':>10}"
-        if price < 0.0001:
-            return f"{price:>10.8f}"
-        if price < 0.001:
-            return f"{price:>10.6f}"
-        return f"{price:>10.4f}"
-
-    def _colorize_signal(self, signal: str) -> str:
-        """Return ANSI coloured signal string."""
-        if signal.startswith("STRONG_BUY") or signal.startswith("BUY"):
-            return f"\033[36m{signal}\033[0m"          # Cyan
-        elif signal.startswith("STRONG_SELL") or signal.startswith("SELL"):
-            return f"\033[31m{signal}\033[0m"          # Red
-        else:
-            return f"\033[90m{signal}\033[0m"          # Dim grey
-
-    async def _display_dashboard(self):
-        while not self._shutdown_event.is_set():
-            os.system('cls' if os.name == 'nt' else 'clear')
-            now = datetime.now()
-            total_unrealized_usd = 0.0
-            for sym, trade in self.wallet.open_trades.items():
-                current = self.live_prices.get(sym, trade.entry_price)
-                if trade.trade_type == "LONG":
-                    pnl_raw = trade.position_units * (current - trade.entry_price)
-                else:
-                    pnl_raw = trade.position_units * (trade.entry_price - current)
-                pnl_usd = pnl_raw - (trade.position_units * current * EXCHANGE_FEE)
-                total_unrealized_usd += pnl_usd
-
-            total_equity = self.wallet.balance + total_unrealized_usd
-
-            if not self.bootstrap_complete:
-                ai_status = f"WARMING UP - {self.bootstrap_done}/{self.bootstrap_total}"
-            else:
-                ai_status = "ACTIVE"
-
-            print("\n" + "="*140)
-            print(f"AEGIS‑1 DASHBOARD – {now.strftime('%Y-%m-%d %H:%M:%S')}")
-            print(f"Balance: ${self.wallet.balance:.2f} | Unrealized PnL: ${total_unrealized_usd:+.2f} | Equity: ${total_equity:.2f}")
-            print(f"Max Position: ${self.wallet.max_position_usdt:.0f} | Scan Interval: {self.scan_interval}s")
-            print(f"Open Trades: {len(self.wallet.open_trades)} | Total History: {len(self.wallet.trade_history)}")
-            print(f"AI STATUS: [{ai_status}]")
-            print("Keys: [C] RESET Wallet (purge trades)  |  [Q] Quit")
-            print("="*140)
-            print(f"{'Symbol':<12} | {'Mode':<10} | {'Live Price':>10} | {'Δ':<2} | {'AI Prob':>6} | {'Thresh':>6} | {'Signal':<20} | {'Risk':<12} | {'PnL %':>8} | {'Status':<10}")
-            print("-"*140)
-
-            for cfg in self.token_configs:
-                sym = cfg.symbol
-                price = self.live_prices.get(sym, 0.0)
-                if price == 0.0:
-                    continue
-                prev = self.prev_prices.get(sym, price)
-                delta_symbol = "▲" if price > prev else ("▼" if price < prev else " ")
-                sig = self.last_signals.get(sym)
-                # Resolve nested timeframe dictionary to summary signal
-                if sig is not None and isinstance(sig, dict) and any(tf in sig for tf in ('1m','5m','15m','30m','1h','4h','1d','1w')):
-                    tf_sig = sig.get('1h')
-                    if tf_sig is None:
-                        for tf in ('4h','15m','30m','1m','5m','1d','1w'):
-                            if sig.get(tf) is not None:
-                                tf_sig = sig[tf]
-                                break
-                    sig = tf_sig
-
-                if sig is None:
-                    ai_str, thresh_str, signal_str, risk_str = "0.000", "0.00", "WAITING", "-"
-                else:
-                    ai_str = f"{sig['ai_prob']:.3f}"
-                    thresh_str = f"{sig['threshold']:.3f}"
-                    signal_str = self._colorize_signal(sig.get("signal", "UNKNOWN")[:20])
-                    risk_str = f"{sig['risk_pct']:.1f}%" if 'risk_pct' in sig else "-"
-                mode_display = cfg.mode.capitalize()[:10]
-                trade = self.wallet.open_trades.get(sym)
-                if trade:
-                    if trade.trade_type == "LONG":
-                        pnl_pct = (price - trade.entry_price) / trade.entry_price * 100
-                    else:
-                        pnl_pct = (trade.entry_price - price) / trade.entry_price * 100
-                    pnl_str = f"{pnl_pct:+.2f}%"
-                else:
-                    pnl_str = "   -   "
-                status = f"{trade.trade_type[:4]}" if trade else "SCANNING"
-                print(f"{sym:<12} | {mode_display:<10} | {self._fmt_price(price)} | {delta_symbol:2} | {ai_str:>6} | {thresh_str:>6} | {signal_str:<20} | {risk_str:<12} | {pnl_str:>8} | {status:<10}")
-
-            if self.wallet.open_trades:
-                print("\n" + "*"*140)
-                print("OPEN POSITIONS DETAILS:")
-                for sym, trade in self.wallet.open_trades.items():
-                    current = self.live_prices.get(sym, trade.entry_price)
-                    if trade.trade_type == "LONG":
-                        pnl_pct = (current - trade.entry_price) / trade.entry_price * 100
-                        unreal_pnl_usd = trade.position_units * (current - trade.entry_price) - (trade.position_units * current * EXCHANGE_FEE)
-                    else:
-                        pnl_pct = (trade.entry_price - current) / trade.entry_price * 100
-                        unreal_pnl_usd = trade.position_units * (trade.entry_price - current) - (trade.position_units * current * EXCHANGE_FEE)
-                    print(f"  {sym:<12} | {trade.trade_type:<5} | Entry: {trade.entry_price:.4f} | Units: {trade.position_units:.4f} | Current: {current:.4f} | PnL: {pnl_pct:+.2f}% (${unreal_pnl_usd:+.2f}) | SL: {trade.stop_loss:.4f} | TP: {trade.take_profit:.4f}")
-                print("*"*140)
-
-            if self.activity_log:
-                print("\n" + "─"*140)
-                print("📋 RECENT ACTIVITY:")
-                for line in list(self.activity_log)[:8]:
-                    print(f"  {line}")
-                print("─"*140)
-
-            await asyncio.sleep(1)
-
-    async def run(self):
-        # Start fetching live prices immediately so the dashboard shows real prices
-        # during the bootstrap phase rather than waiting for initialize() to complete.
-        self._ticker_task = asyncio.create_task(self._run_ticker_loop())
-        await self.initialize()
-        logger.info("Entering Main Loop Heartbeat...")
-
-        guidelines = """
-┌───────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                              TRADER GUIDELINES – READ CAREFULLY                                      │
-├───────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ 1. PAPER TRADE FIRST – Run in simulation mode for at least 48 hours before real funds.              │
-│ 2. STOP LOSS IS HOLY – Never manually remove or move an AI‑set stop loss.                           │
-│ 3. THE 3% RULE – Never risk more than 3% of total capital on a single trade.                        │
-│ 4. INTERNET STABILITY – Ensure VPN is stable; a disconnection could prevent closing trades.         │
-│ 5. MONITOR DASHBOARD – Watch for abnormal PnL or connectivity warnings.                             │
-│ 6. LOGS ARE YOUR FRIEND – Check logs/ live_engine.log after any unexpected behavior.               │
-│ 7. SIGNALS START AFTER BOOTSTRAP – engine scans once data loads for all tokens (~15 min).          │
-│ 8. BTC BRAKE – LONG signals are suppressed when BTC is trending below its 20-period EMA.           │
-│ 9. BI-DIRECTIONAL TRADING – BUY and SELL signals are asymmetric (sell thresholds stricter).        │
-│10. CONVICTION EXITS – Longs exit if AI < 40%, Shorts exit if AI > 60%.                             │
-│11. SIGNAL GRID – Asymmetric thresholds: SELL<0.20, STRONG_SELL<0.15, expanded HOLD 0.20-0.60.      │
-│12. SELLABILITY BRAKE – Sell signals suppressed during low volatility or choppy markets.            │
-│13. DATA PURGE – Press 'C' to reset wallet (backup created) and clear activity log.                │
-└───────────────────────────────────────────────────────────────────────────────────────────────────┘
-"""
-        print(guidelines)
-        self._signal_task = asyncio.create_task(self._run_signal_loop())
-        self._keyboard_task = asyncio.create_task(self._keyboard_listener())
-        await self._display_dashboard()
-
-    async def shutdown(self):
-        self._shutdown_event.set()
-        if self._ticker_task:
-            self._ticker_task.cancel()
-        if self._signal_task:
-            self._signal_task.cancel()
-        if self._keyboard_task:
-            self._keyboard_task.cancel()
-        await self.fetcher.stop()
-        logger.info("Engine stopped")
-
-# -------------------------------------------------------------------
-# Automated setup (with fallback to default configs)
-# -------------------------------------------------------------------
-def automated_setup(backtest_dir: Path, args: argparse.Namespace) -> Tuple[List[TokenConfig], float, float, int, Optional[str]]:
-    # Ensure backtest directory exists (create if missing)
-    backtest_dir.mkdir(parents=True, exist_ok=True)
-
-    json_path = get_latest_backtest_file(backtest_dir)
-    if not json_path:
-        logger.critical("⚠️ No backtest JSON found. Switching to DEFAULT configuration for all tokens.")
-        # Fallback: create default TokenConfig for every symbol in FLEET using balanced mode
-        configs = []
-        # Safely retrieve balanced mode parameters, fallback to hardcoded values
-        balanced_params = MODE_PARAMS.get("balanced", {"entry_prob": 0.70, "risk_pct": 0.020, "atr_sl": 1.5, "atr_tp": 2.0})
-        for symbol in FLEET:
-            configs.append(TokenConfig(
-                symbol=symbol,
-                mode="balanced",
-                base_threshold=0.30,
-                entry_prob_threshold=balanced_params["entry_prob"],
-                atr_sl=balanced_params["atr_sl"],
-                atr_tp=balanced_params["atr_tp"],
-                risk_pct=float(balanced_params["risk_pct"] * 100),   # explicit float conversion
-                optimizer_thresholds={},
-            ))
-        capital = args.capital if args.capital else DEFAULT_CAPITAL
-        risk_pct = args.risk if args.risk else DEFAULT_RISK_PCT
-        max_pos = args.max_position if args.max_position else DEFAULT_MAX_POSITION
-        if max_pos <= 0 or max_pos > capital:
-            max_pos = capital
-        tf_choice = args.timeframe if args.timeframe else DEFAULT_SCAN_TIMEFRAME
-        tf_map = {'1m': 60, '5m': 300, '15m': 900, '30m': 1800, '1h': 3600, '1d': 86400, '1w': 604800, '1M': 2592000}
-        scan_seconds = tf_map.get(tf_choice, 60)
-        proxy_url = args.proxy if hasattr(args, 'proxy') else None
-        logger.info(f"Using default configs for {len(configs)} tokens (no backtest file)")
-        return configs, capital, max_pos, scan_seconds, proxy_url
-
-    logger.info(f"Using backtest file: {json_path.name}")
-    best_per_token = load_backtest_results(json_path)
-
-    if not best_per_token:
-        logger.critical("⚠️ No valid tokens found in backtest JSON. Falling back to default configuration.")
-        configs = []
-        balanced_params = MODE_PARAMS.get("balanced", {"entry_prob": 0.70, "risk_pct": 0.020, "atr_sl": 1.5, "atr_tp": 2.0})
-        for symbol in FLEET:
-            configs.append(TokenConfig(
-                symbol=symbol,
-                mode="balanced",
-                base_threshold=0.30,
-                entry_prob_threshold=balanced_params["entry_prob"],
-                atr_sl=balanced_params["atr_sl"],
-                atr_tp=balanced_params["atr_tp"],
-                risk_pct=float(balanced_params["risk_pct"] * 100),
-                max_dd=0.0,
-                expectancy=0.0,
-                optimizer_thresholds={},
-            ))
-        capital = args.capital if args.capital else DEFAULT_CAPITAL
-        risk_pct = args.risk if args.risk else DEFAULT_RISK_PCT
-        max_pos = args.max_position if args.max_position else DEFAULT_MAX_POSITION
-        if max_pos <= 0 or max_pos > capital:
-            max_pos = capital
-        tf_choice = args.timeframe if args.timeframe else DEFAULT_SCAN_TIMEFRAME
-        tf_map = {'1m': 60, '5m': 300, '15m': 900, '30m': 1800, '1h': 3600, '1d': 86400, '1w': 604800, '1M': 2592000}
-        scan_seconds = tf_map.get(tf_choice, 60)
-        proxy_url = args.proxy if hasattr(args, 'proxy') else None
-        logger.info(f"Using default configs for {len(configs)} tokens (fallback from empty backtest)")
-        return configs, capital, max_pos, scan_seconds, proxy_url
-
-    configs = []
-    for symbol, info in best_per_token.items():
-        configs.append(TokenConfig(
-            symbol=symbol,
-            mode=info["mode"],
-            base_threshold=info["final_threshold"],
-            entry_prob_threshold=info["entry_prob_threshold"],
-            atr_sl=info["atr_sl"],
-            atr_tp=info["atr_tp"],
-            risk_pct=info["risk_pct"],
-            max_dd=info.get("max_drawdown_pct", 0.0),
-            expectancy=info.get("net_return_pct", 0.0),
-            optimizer_thresholds={},
-        ))
-
-    capital = args.capital if args.capital else DEFAULT_CAPITAL
-    risk_pct = args.risk if args.risk else DEFAULT_RISK_PCT
-    max_pos = args.max_position if args.max_position else DEFAULT_MAX_POSITION
-    if max_pos <= 0 or max_pos > capital:
-        max_pos = capital
-
-    tf_choice = args.timeframe if args.timeframe else DEFAULT_SCAN_TIMEFRAME
-    tf_map = {'1m': 60, '5m': 300, '15m': 900, '30m': 1800, '1h': 3600, '1d': 86400, '1w': 604800, '1M': 2592000}
-    scan_seconds = tf_map.get(tf_choice, 60)
-
-    proxy_url = args.proxy if hasattr(args, 'proxy') else None
-
-    logger.info(f"Automated config: capital=${capital:.2f}, risk={risk_pct}%, max_pos=${max_pos:.0f}, "
-                f"timeframe={tf_choice}, proxy={proxy_url}")
-    return configs, capital, max_pos, scan_seconds, proxy_url
-
-# -------------------------------------------------------------------
-# Command line argument parsing
-# -------------------------------------------------------------------
-def parse_arguments():
-    parser = argparse.ArgumentParser(description="Aegis-1 Automated Live Trading Engine")
-    parser.add_argument("--capital", type=float, help="Starting USDT balance")
-    parser.add_argument("--risk", type=float, help="Base risk per trade (%) [1-5]")
-    parser.add_argument("--max-position", type=float, help="Max USDT per single trade")
-    parser.add_argument("--timeframe", choices=['1m','5m','15m','30m','1h','1d','1w','1M'],
-                        help="Scanning timeframe (price update frequency)")
-    parser.add_argument("--proxy", type=str, help="Proxy URL (e.g., http://127.0.0.1:7890)")
-    return parser.parse_args()
-
-# -------------------------------------------------------------------
-# Main entry point (environment-aware path)
-# -------------------------------------------------------------------
-async def main():
-    flush_dns_caches()
-
-    args = parse_arguments()
-    # Use dynamic path based on root_dir
-    backtest_dir = root_dir / "logs" / "backtests"
-
-    configs, capital, max_pos, scan_seconds, proxy_url = automated_setup(backtest_dir, args)
     if not configs:
-        logger.error("No token configurations loaded.")
-        return
+        print('[automated_setup] No tradeable models found — falling back to BTC/USDT.')
+        configs = [TokenConfig(symbol='BTC/USDT')]
 
-    engine = LiveEngine(configs, capital, max_pos, scan_seconds, proxy_url)
-    try:
-        await engine.initialize()
-    except ConnectionError as e:
-        logger.critical(f"Connection failed: {e}")
-        print("\n❌ Could not connect to Binance. Check your network or VPN.")
-        return
-    except Exception as e:
-        logger.critical(f"Initialization error: {e}")
-        return
+    capital      = float(getattr(args, 'capital',      10_000.0))
+    max_pos      = float(getattr(args, 'max_position',  1_000.0))
+    scan_seconds = int(getattr(args,   'scan_seconds',    300))
+    proxy        = getattr(args, 'proxy', None)
 
-    try:
-        await engine.run()
-    except KeyboardInterrupt:
-        logger.info("Shutdown by user")
-    finally:
-        await engine.shutdown()
+    print(f'[automated_setup] {len(configs)} tradeable symbols | '
+          f'capital={capital} | max_pos={max_pos} | scan={scan_seconds}s')
+    return configs, capital, max_pos, scan_seconds, proxy
 
-if __name__ == "__main__":
-    import socket
-    asyncio.run(main())
+
+# =============================================================================
+# CLI entry point
+# =============================================================================
+
+if __name__ == '__main__':
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Aegis-1 Live Signal Engine')
+    parser.add_argument('--capital',      type=float, default=10_000.0)
+    parser.add_argument('--max-position', type=float, default=1_000.0, dest='max_position')
+    parser.add_argument('--scan-seconds', type=int,   default=300,     dest='scan_seconds')
+    parser.add_argument('--proxy',        type=str,   default=None)
+    cli_args = parser.parse_args()
+
+    _configs, _cap, _maxp, _scan, _proxy = automated_setup(Path('.'), cli_args)
+    _engine = LiveEngine(
+        token_configs         = _configs,
+        capital               = _cap,
+        max_position_usdt     = _maxp,
+        scan_interval_seconds = _scan,
+        proxy_url             = _proxy,
+    )
+    asyncio.run(_engine.run())

@@ -10,31 +10,34 @@ def clean_infinite_values(df: pd.DataFrame, max_value: float = 1e6, fill_method:
     """
     Replace infinite values with NaN, then fill NaNs.
     Prevents XGBoost error: "Input data contains `inf` or a value too large, while `missing` is not set"
-    
+
     Args:
         df: Input dataframe
         max_value: Clip absolute values above this threshold
         fill_method: 'zero' (fill 0) or 'mean' (fill with column mean)
-    
+
     Returns:
         Cleaned dataframe
     """
     df = df.copy()
-    
+
     # Replace inf with NaN
     df.replace([np.inf, -np.inf], np.nan, inplace=True)
-    
+
     # Clip extreme values
     numeric_cols = df.select_dtypes(include=[np.number]).columns
     for col in numeric_cols:
         df[col] = df[col].clip(-max_value, max_value)
-    
+
     # Fill NaNs
     if fill_method == 'mean':
+        # NOTE: column mean is computed over the whole series. For leakage-strict
+        # use during training, prefer fill_method='zero' (the default), since a
+        # global mean technically peeks at future rows.
         df[numeric_cols] = df[numeric_cols].fillna(df[numeric_cols].mean())
     else:  # zero
         df[numeric_cols] = df[numeric_cols].fillna(0)
-    
+
     return df
 
 # ------------------------------------------------------------------
@@ -140,9 +143,11 @@ def compute_fvg_distance(df: pd.DataFrame) -> pd.Series:
     distance = pd.Series(index=df.index, dtype=float).fillna(0.0)
     current_price = df['close']
     MAX_DIST = 1e6  # Use large finite value instead of inf
+    # NOTE: scan only backward (j <= i). Scanning forward (i+50) would let a FVG
+    # formed in the future affect the present row -> lookahead. Fixed here.
     for i in range(len(df)):
         best_dist = MAX_DIST
-        for j in range(max(0, i-50), min(len(df), i+50)):
+        for j in range(max(0, i-50), i + 1):
             if not pd.isna(fvg_low.iloc[j]) and not pd.isna(fvg_high.iloc[j]):
                 if current_price.iloc[i] < fvg_low.iloc[j]:
                     dist = (fvg_low.iloc[j] - current_price.iloc[i]) / (current_price.iloc[i] + 1e-9)
@@ -198,18 +203,26 @@ def compute_choppiness_index(df: pd.DataFrame, period: int = 14) -> pd.Series:
     return choppiness.clip(0, 100)
 
 def compute_ichimoku(df: pd.DataFrame, tenkan_period=9, kijun_period=26, senkou_b=52) -> pd.DataFrame:
-    """Add Ichimoku Cloud components."""
+    """
+    Ichimoku Cloud components — LEAKAGE-SAFE.
+
+    The classic 'chikou span' (close shifted -26) is intentionally OMITTED: as a
+    model feature it would expose the close price 26 bars in the future at the
+    current row, which is direct lookahead leakage.
+
+    senkou_a / senkou_b use .shift(+kijun_period), which moves PAST values forward.
+    That is correct and NOT a leak: the current row only sees data from 26 bars ago.
+    """
     tenkan = (df['high'].rolling(tenkan_period).max() + df['low'].rolling(tenkan_period).min()) / 2
     kijun = (df['high'].rolling(kijun_period).max() + df['low'].rolling(kijun_period).min()) / 2
     senkou_a = ((tenkan + kijun) / 2).shift(kijun_period)
     senkou_b = ((df['high'].rolling(senkou_b).max() + df['low'].rolling(senkou_b).min()) / 2).shift(kijun_period)
-    chikou = df['close'].shift(-kijun_period)
     ichimoku = pd.DataFrame({
         'ichimoku_tenkan': tenkan,
         'ichimoku_kijun': kijun,
         'ichimoku_senkou_a': senkou_a,
         'ichimoku_senkou_b': senkou_b,
-        'ichimoku_chikou': chikou
+        # 'ichimoku_chikou' deliberately removed (future leak).
     })
     return ichimoku
 
@@ -294,6 +307,812 @@ def compute_accumulation_distribution(df: pd.DataFrame) -> pd.Series:
     return (clv * df['volume']).cumsum()
 
 
+def compute_volume_delta(df: pd.DataFrame, period: int = 14) -> Tuple[pd.Series, pd.Series]:
+    """CVD proxy: bar-level directional volume — (close-open)/(high-low)*volume.
+    Positive = buyer-dominated bar, negative = seller-dominated. Rolling sum tracks
+    cumulative positioning pressure over the window."""
+    bar_range = df['high'] - df['low'] + 1e-9
+    delta = (df['close'] - df['open']) / bar_range * df['volume']
+    return delta, delta.rolling(period, min_periods=1).sum()
+
+
+def compute_bar_structure(df: pd.DataFrame) -> pd.DataFrame:
+    """Continuous bar microstructure features — more information than binary candlestick flags."""
+    bar_range = df['high'] - df['low'] + 1e-9
+    body = (df['close'] - df['open']).abs()
+    hi_body = df[['close', 'open']].max(axis=1)
+    lo_body = df[['close', 'open']].min(axis=1)
+    return pd.DataFrame({
+        'close_position':  (df['close'] - df['low']) / bar_range,        # 0=closed at low, 1=at high
+        'bar_body_pct':    body / bar_range,                              # body as share of range
+        'upper_wick_pct':  (df['high'] - hi_body) / bar_range,          # upper wick share
+        'lower_wick_pct':  (lo_body - df['low']) / bar_range,           # lower wick share
+        'bar_direction':   np.sign(df['close'] - df['open']).astype(float),  # +1 bull / -1 bear
+    }, index=df.index)
+
+
+def compute_rolling_vwap(df: pd.DataFrame, period: int = 24) -> Tuple[pd.Series, pd.Series]:
+    """Rolling 24-bar VWAP and distance of close from it.
+    Less biased than a cumulative session VWAP that resets arbitrarily."""
+    tp = (df['high'] + df['low'] + df['close']) / 3
+    rvwap = (tp * df['volume']).rolling(period, min_periods=1).sum() / \
+            df['volume'].rolling(period, min_periods=1).sum()
+    return rvwap, (df['close'] / (rvwap + 1e-9)) - 1
+
+
+def compute_time_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Cyclical hour-of-day and day-of-week encoding.
+    Crypto liquidity and volatility differ sharply by session (Asia/EU/US)
+    and within the week — this lets the model see the clock."""
+    ts = pd.to_datetime(df['timestamp'])
+    h, d = ts.dt.hour, ts.dt.dayofweek
+    return pd.DataFrame({
+        'hour_sin': np.sin(2 * np.pi * h / 24),
+        'hour_cos': np.cos(2 * np.pi * h / 24),
+        'dow_sin':  np.sin(2 * np.pi * d / 7),
+        'dow_cos':  np.cos(2 * np.pi * d / 7),
+    }, index=df.index)
+
+
+def add_futures_features(df: pd.DataFrame,
+                         funding_df: Optional[pd.DataFrame] = None,
+                         oi_df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+    """Merge perpetual funding rate and open interest onto hourly df (backward asof join).
+    Falls back to zero-fill when data is unavailable so the pipeline always produces
+    the same columns regardless of whether futures data was fetched."""
+    df = df.copy()
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
+
+    if funding_df is not None and not funding_df.empty:
+        fr = funding_df.copy()
+        fr['timestamp'] = pd.to_datetime(fr['timestamp'])
+        df = pd.merge_asof(df.sort_values('timestamp'),
+                           fr.sort_values('timestamp')[['timestamp', 'funding_rate']],
+                           on='timestamp', direction='backward')
+        df['funding_rate'] = df['funding_rate'].fillna(0.0)
+        df['funding_rate_ma8'] = df['funding_rate'].rolling(8, min_periods=1).mean()
+        lb = 24 * 7
+        df['funding_rate_zscore'] = (
+            (df['funding_rate'] - df['funding_rate'].rolling(lb, min_periods=8).mean()) /
+            (df['funding_rate'].rolling(lb, min_periods=8).std() + 1e-9)
+        )
+    else:
+        df[['funding_rate', 'funding_rate_ma8', 'funding_rate_zscore']] = 0.0
+
+    if oi_df is not None and not oi_df.empty:
+        oi = oi_df.copy()
+        oi['timestamp'] = pd.to_datetime(oi['timestamp'])
+        df = pd.merge_asof(df.sort_values('timestamp'),
+                           oi.sort_values('timestamp')[['timestamp', 'open_interest']],
+                           on='timestamp', direction='backward')
+        df['open_interest'] = df['open_interest'].ffill().fillna(0.0)
+        df['oi_change_1h'] = df['open_interest'].pct_change(1).fillna(0.0)
+        df['oi_change_4h'] = df['open_interest'].pct_change(4).fillna(0.0)
+        lb = 24 * 7
+        df['oi_zscore'] = (
+            (df['open_interest'] - df['open_interest'].rolling(lb, min_periods=24).mean()) /
+            (df['open_interest'].rolling(lb, min_periods=24).std() + 1e-9)
+        )
+    else:
+        df[['open_interest', 'oi_change_1h', 'oi_change_4h', 'oi_zscore']] = 0.0
+
+    return df
+
+
+# ==================================================================
+# EXTENDED INDICATOR LIBRARY
+# ==================================================================
+
+# ── Moving Average Variants ────────────────────────────────────────
+def compute_hma(series: pd.Series, period: int = 20) -> pd.Series:
+    """Hull Moving Average — reduced lag."""
+    def _wma(s, p):
+        weights = np.arange(1, p + 1, dtype=float)
+        return s.rolling(p).apply(lambda x: np.dot(x, weights[-len(x):]) / weights[-len(x):].sum(), raw=True)
+    return _wma(2 * _wma(series, period // 2) - _wma(series, period), max(1, int(np.sqrt(period))))
+
+
+def compute_kama(series: pd.Series, period: int = 10, fast: int = 2, slow: int = 30) -> pd.Series:
+    """Kaufman Adaptive Moving Average — adapts speed to market efficiency."""
+    fast_sc = 2.0 / (fast + 1)
+    slow_sc = 2.0 / (slow + 1)
+    vals: np.ndarray = np.asarray(series, dtype=float)
+    kama = vals.copy()
+    for i in range(period, len(vals)):
+        direction = abs(vals[i] - vals[i - period])
+        chunk: np.ndarray = vals[i - period:i + 1]
+        volatility = float(np.abs(chunk[1:] - chunk[:-1]).sum()) + 1e-9
+        er = direction / volatility
+        sc = (er * (fast_sc - slow_sc) + slow_sc) ** 2
+        kama[i] = kama[i - 1] + sc * (vals[i] - kama[i - 1])
+    return pd.Series(kama, index=series.index)
+
+
+def compute_tema(series: pd.Series, period: int = 21) -> pd.Series:
+    """Triple Exponential Moving Average."""
+    e1 = series.ewm(span=period, adjust=False).mean()
+    e2 = e1.ewm(span=period, adjust=False).mean()
+    e3 = e2.ewm(span=period, adjust=False).mean()
+    return 3 * e1 - 3 * e2 + e3
+
+
+def compute_dema(series: pd.Series, period: int = 21) -> pd.Series:
+    """Double Exponential Moving Average."""
+    e1 = series.ewm(span=period, adjust=False).mean()
+    return 2 * e1 - e1.ewm(span=period, adjust=False).mean()
+
+
+def compute_t3(series: pd.Series, period: int = 5, vfactor: float = 0.7) -> pd.Series:
+    """Tillson T3 — smoother and less noisy than EMA."""
+    c1, c2 = -(vfactor ** 3), 3 * vfactor ** 2 + 3 * vfactor ** 3
+    c3, c4 = -6 * vfactor ** 2 - 3 * vfactor - 3 * vfactor ** 3, 1 + 3 * vfactor + vfactor ** 3 + 3 * vfactor ** 2
+    e = [series]
+    for _ in range(5):
+        e.append(e[-1].ewm(span=period, adjust=False).mean())
+    return c1 * e[6] + c2 * e[5] + c3 * e[4] + c4 * e[3]
+
+
+def compute_vwma(df: pd.DataFrame, period: int = 20) -> pd.Series:
+    """Volume-Weighted Moving Average."""
+    return (df['close'] * df['volume']).rolling(period).sum() / df['volume'].rolling(period).sum()
+
+
+# ── Trend Indicators ──────────────────────────────────────────────
+def compute_supertrend(df: pd.DataFrame, period: int = 10, multiplier: float = 3.0) -> Tuple[pd.Series, pd.Series]:
+    """SuperTrend — ATR-based trend direction. Returns (level, direction +1/-1)."""
+    atr = compute_atr(df, period).values
+    hl2 = ((df['high'] + df['low']) / 2).values
+    close = df['close'].values
+    n = len(df)
+
+    upper = hl2 + multiplier * atr
+    lower = hl2 - multiplier * atr
+    st = np.full(n, np.nan)
+    direction = np.full(n, 1, dtype=int)   # 1 = upper-band (bearish); loop updates from i=1
+
+    for i in range(1, n):
+        upper[i] = upper[i] if upper[i] < upper[i-1] or close[i-1] > upper[i-1] else upper[i-1]
+        lower[i] = lower[i] if lower[i] > lower[i-1] or close[i-1] < lower[i-1] else lower[i-1]
+        if np.isnan(st[i-1]):
+            direction[i] = 1
+        elif st[i-1] == upper[i-1]:
+            direction[i] = -1 if close[i] > upper[i] else 1
+        else:
+            direction[i] = 1 if close[i] < lower[i] else -1
+        st[i] = lower[i] if direction[i] == -1 else upper[i]
+
+    return pd.Series(st, index=df.index), pd.Series(direction, index=df.index)
+
+
+def compute_parabolic_sar(df: pd.DataFrame, step: float = 0.02, max_step: float = 0.2) -> Tuple[pd.Series, pd.Series]:
+    """Parabolic SAR. Returns (sar, trend +1/-1)."""
+    high, low = df['high'].values, df['low'].values
+    n = len(df)
+    sar = np.full(n, np.nan)
+    trend = np.zeros(n, dtype=int)
+    if n < 2:
+        return pd.Series(sar, index=df.index), pd.Series(trend, index=df.index)
+
+    bull, af, ep = True, step, high[0]
+    sar[0], trend[0] = low[0], 1
+
+    for i in range(1, n):
+        if bull:
+            sar[i] = min(sar[i-1] + af * (ep - sar[i-1]), low[i-1], low[max(0, i-2)])
+            if low[i] < sar[i]:
+                bull, sar[i], ep, af, trend[i] = False, ep, low[i], step, -1
+            else:
+                trend[i] = 1
+                if high[i] > ep:
+                    ep = high[i]
+                    af = min(af + step, max_step)
+        else:
+            sar[i] = max(sar[i-1] + af * (ep - sar[i-1]), high[i-1], high[max(0, i-2)])
+            if high[i] > sar[i]:
+                bull, sar[i], ep, af, trend[i] = True, ep, high[i], step, 1
+            else:
+                trend[i] = -1
+                if low[i] < ep:
+                    ep = low[i]
+                    af = min(af + step, max_step)
+
+    return pd.Series(sar, index=df.index), pd.Series(trend, index=df.index)
+
+
+def compute_donchian_channels(df: pd.DataFrame, period: int = 20) -> Tuple[pd.Series, pd.Series, pd.Series]:
+    """Donchian Channels (shift-1 to avoid lookahead)."""
+    upper = df['high'].shift(1).rolling(period).max()
+    lower = df['low'].shift(1).rolling(period).min()
+    return upper, lower, (upper + lower) / 2
+
+
+# ── Momentum / Oscillator Indicators ─────────────────────────────
+def compute_cci(df: pd.DataFrame, period: int = 20) -> pd.Series:
+    """Commodity Channel Index."""
+    tp = (df['high'] + df['low'] + df['close']) / 3
+    ma = tp.rolling(period).mean()
+    mad = tp.rolling(period).apply(lambda x: np.abs(x - x.mean()).mean(), raw=True)
+    return (tp - ma) / (0.015 * mad + 1e-9)
+
+
+def compute_tsi(series: pd.Series, fast: int = 13, slow: int = 25) -> pd.Series:
+    """True Strength Index — double-smoothed momentum."""
+    diff = series.diff()
+    s1 = diff.ewm(span=slow, adjust=False).mean().ewm(span=fast, adjust=False).mean()
+    s2 = diff.abs().ewm(span=slow, adjust=False).mean().ewm(span=fast, adjust=False).mean()
+    return 100 * s1 / (s2 + 1e-9)
+
+
+def compute_cmo(series: pd.Series, period: int = 14) -> pd.Series:
+    """Chande Momentum Oscillator (–100 to +100)."""
+    diff = series.diff()
+    gains = diff.clip(lower=0).rolling(period).sum()
+    losses = diff.clip(upper=0).abs().rolling(period).sum()
+    return 100 * (gains - losses) / (gains + losses + 1e-9)
+
+
+def compute_dpo(series: pd.Series, period: int = 20) -> pd.Series:
+    """Detrended Price Oscillator — removes trend to expose cycles."""
+    return series - series.rolling(period).mean().shift(period // 2 + 1)
+
+
+def compute_ppo(series: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> Tuple[pd.Series, pd.Series]:
+    """Percentage Price Oscillator."""
+    ema_f = series.ewm(span=fast, adjust=False).mean()
+    ema_s = series.ewm(span=slow, adjust=False).mean()
+    ppo = 100 * (ema_f - ema_s) / (ema_s + 1e-9)
+    return ppo, ppo.ewm(span=signal, adjust=False).mean()
+
+
+def compute_trix(series: pd.Series, period: int = 15) -> pd.Series:
+    """TRIX — 1-period % change of triple-smoothed EMA."""
+    e3 = series.ewm(span=period, adjust=False).mean()
+    e3 = e3.ewm(span=period, adjust=False).mean()
+    e3 = e3.ewm(span=period, adjust=False).mean()
+    return e3.pct_change() * 100
+
+
+def compute_kst(series: pd.Series) -> Tuple[pd.Series, pd.Series]:
+    """Know Sure Thing (KST) — multi-period momentum composite."""
+    rc1 = series.pct_change(10).rolling(10).mean()
+    rc2 = series.pct_change(15).rolling(10).mean()
+    rc3 = series.pct_change(20).rolling(10).mean()
+    rc4 = series.pct_change(30).rolling(15).mean()
+    kst = rc1 + 2 * rc2 + 3 * rc3 + 4 * rc4
+    return kst, kst.rolling(9).mean()
+
+
+def compute_schaff_trend_cycle(series: pd.Series, period: int = 10,
+                               fast: int = 23, slow: int = 50) -> pd.Series:
+    """Schaff Trend Cycle — MACD run through a double Stochastic."""
+    macd = series.ewm(span=fast, adjust=False).mean() - series.ewm(span=slow, adjust=False).mean()
+
+    def _stoch(s, p):
+        lo, hi = s.rolling(p).min(), s.rolling(p).max()
+        return 100 * (s - lo) / (hi - lo + 1e-9)
+
+    d1 = _stoch(macd, period).ewm(span=3, adjust=False).mean()
+    return _stoch(d1, period).ewm(span=3, adjust=False).mean()
+
+
+def compute_awesome_oscillator(df: pd.DataFrame, fast: int = 5, slow: int = 34) -> pd.Series:
+    """Awesome Oscillator — midpoint SMA difference."""
+    mid = (df['high'] + df['low']) / 2
+    return mid.rolling(fast).mean() - mid.rolling(slow).mean()
+
+
+def compute_bop(df: pd.DataFrame) -> pd.Series:
+    """Balance of Power — (close-open)/(high-low)."""
+    return (df['close'] - df['open']) / (df['high'] - df['low'] + 1e-9)
+
+
+def compute_eom(df: pd.DataFrame, period: int = 14) -> pd.Series:
+    """Ease of Movement — price change per unit of volume."""
+    mid_diff = ((df['high'] + df['low']) / 2).diff()
+    hl_range = (df['high'] - df['low']).clip(lower=1e-9)
+    volume   = df['volume'].clip(lower=1e-9)
+    return (mid_diff * hl_range / volume).rolling(period).mean()
+
+
+def compute_fisher_transform(df: pd.DataFrame, period: int = 9) -> Tuple[pd.Series, pd.Series]:
+    """Fisher Transform — normalises price to Gaussian distribution."""
+    hl2 = (df['high'] + df['low']) / 2
+    hi = hl2.rolling(period).max()
+    lo = hl2.rolling(period).min()
+    v = (2 * (hl2 - lo) / (hi - lo + 1e-9) - 1).clip(-0.999, 0.999)
+    fish = 0.5 * ((1 + v) / (1 - v + 1e-9)).apply(np.log)
+    return fish, fish.shift(1)
+
+
+def compute_rvi(df: pd.DataFrame, period: int = 10) -> Tuple[pd.Series, pd.Series]:
+    """Relative Vigor Index."""
+    co = df['close'] - df['open']
+    hl = df['high'] - df['low']
+    num = (co + 2*co.shift(1) + 2*co.shift(2) + co.shift(3)) / 6
+    den = (hl + 2*hl.shift(1) + 2*hl.shift(2) + hl.shift(3)) / 6
+    rvi = num.rolling(period).sum() / (den.rolling(period).sum() + 1e-9)
+    sig = (rvi + 2*rvi.shift(1) + 2*rvi.shift(2) + rvi.shift(3)) / 6
+    return rvi, sig
+
+
+def compute_rate_of_change(series: pd.Series, period: int = 14) -> pd.Series:
+    """Rate of Change (%)."""
+    return series.pct_change(period) * 100
+
+
+# ── Volatility Indicators ─────────────────────────────────────────
+def compute_bollinger_pct_b(df: pd.DataFrame, period: int = 20, std_dev: float = 2.0) -> pd.Series:
+    """Bollinger %B — where close sits within the bands (0=lower, 1=upper)."""
+    ma = df['close'].rolling(period).mean()
+    std = df['close'].rolling(period).std()
+    return (df['close'] - (ma - std_dev * std)) / (2 * std_dev * std + 1e-9)
+
+
+def compute_parkinson_volatility(df: pd.DataFrame, period: int = 24) -> pd.Series:
+    """Parkinson volatility — high/low range estimator (more efficient than close-to-close)."""
+    log_hl2 = (df['high'] / df['low'].clip(lower=1e-9)).apply(np.log) ** 2
+    return (log_hl2.rolling(period).mean() / (4 * np.log(2))) ** 0.5
+
+
+def compute_garman_klass_volatility(df: pd.DataFrame, period: int = 24) -> pd.Series:
+    """Garman-Klass volatility — uses full OHLC (most efficient classical estimator).
+    Inner expression clipped to 0 before root: on gap-open bars where the O→C move
+    dominates the H-L range the raw GK term can go negative, producing NaN."""
+    log_hl = (df['high'] / df['low'].clip(lower=1e-9)).apply(np.log) ** 2
+    log_co = (df['close'] / df['open'].clip(lower=1e-9)).apply(np.log) ** 2
+    gk = (0.5 * log_hl - (2 * np.log(2) - 1) * log_co).rolling(period).mean().clip(lower=0)
+    return gk ** 0.5
+
+
+def compute_atr_bands(df: pd.DataFrame, period: int = 14, multiplier: float = 2.0) -> Tuple[pd.Series, pd.Series]:
+    """ATR Bands around rolling MA."""
+    ma = df['close'].rolling(period).mean()
+    atr = compute_atr(df, period)
+    return ma + multiplier * atr, ma - multiplier * atr
+
+
+def compute_starc_bands(df: pd.DataFrame, ma_period: int = 15,
+                        atr_period: int = 5, multiplier: float = 2.0) -> Tuple[pd.Series, pd.Series]:
+    """STARC Bands — SMA ± multiplier * ATR."""
+    sma = df['close'].rolling(ma_period).mean()
+    atr = compute_atr(df, atr_period)
+    return sma + multiplier * atr, sma - multiplier * atr
+
+
+def compute_relative_volatility_index(series: pd.Series, std_period: int = 10, rsi_period: int = 14) -> pd.Series:
+    """Relative Volatility Index — RSI applied to rolling std-dev."""
+    return compute_rsi(series.rolling(std_period).std().fillna(0), rsi_period)
+
+
+def compute_gaussian_channel(series: pd.Series, period: int = 20,
+                              multiplier: float = 2.0) -> Tuple[pd.Series, pd.Series]:
+    """Gaussian Channel — EWM-smoothed midline ± std envelope."""
+    mid = series.ewm(span=period, adjust=False).mean()
+    std = series.rolling(period, min_periods=1).std()
+    return mid + multiplier * std, mid - multiplier * std
+
+
+# ── Volume Indicators ─────────────────────────────────────────────
+def compute_pvt(df: pd.DataFrame) -> pd.Series:
+    """Price Volume Trend — running sum of volume * % price change."""
+    return (df['close'].pct_change() * df['volume']).fillna(0).cumsum()
+
+
+def compute_klinger_oscillator(df: pd.DataFrame,
+                               fast: int = 34, slow: int = 55) -> Tuple[pd.Series, pd.Series]:
+    """Klinger Volume Oscillator."""
+    tp = (df['high'] + df['low'] + df['close']) / 3
+    vf = df['volume'] * np.where(tp.diff() > 0, 1, -1) * (df['high'] - df['low'])
+    vf = pd.Series(vf, index=df.index)
+    kvo = vf.ewm(span=fast, adjust=False).mean() - vf.ewm(span=slow, adjust=False).mean()
+    return kvo, kvo.ewm(span=13, adjust=False).mean()
+
+
+# ── Market Structure Indicators ───────────────────────────────────
+def compute_pivot_points(df_1d: Optional[pd.DataFrame],
+                         df_1h: pd.DataFrame) -> pd.DataFrame:
+    """Standard daily pivot points mapped backward onto hourly bars."""
+    cols = ['pivot', 'r1', 's1', 'r2', 's2']
+    empty = pd.DataFrame(0.0, index=df_1h.index, columns=cols)
+    if df_1d is None or df_1d.empty:
+        return empty
+    try:
+        d = df_1d.copy()
+        d['timestamp'] = pd.to_datetime(d['timestamp'])
+        d = d.sort_values('timestamp')
+        d['pivot'] = (d['high'].shift(1) + d['low'].shift(1) + d['close'].shift(1)) / 3
+        d['r1'] = 2 * d['pivot'] - d['low'].shift(1)
+        d['s1'] = 2 * d['pivot'] - d['high'].shift(1)
+        d['r2'] = d['pivot'] + d['high'].shift(1) - d['low'].shift(1)
+        d['s2'] = d['pivot'] - (d['high'].shift(1) - d['low'].shift(1))
+        h = df_1h.copy()
+        h['timestamp'] = pd.to_datetime(h['timestamp'])
+        merged = pd.merge_asof(h[['timestamp']].sort_values('timestamp'),
+                               d[['timestamp'] + cols].sort_values('timestamp'),
+                               on='timestamp', direction='backward')
+        merged.index = df_1h.index
+        return merged[cols].fillna(0.0)
+    except Exception:
+        return empty
+
+
+def compute_fibonacci_levels(df: pd.DataFrame, lookback: int = 100) -> pd.DataFrame:
+    """Auto Fibonacci from recent swing high/low (shift-1 to avoid lookahead)."""
+    sh = df['high'].shift(1).rolling(lookback).max()
+    sl = df['low'].shift(1).rolling(lookback).min()
+    rng = sh - sl + 1e-9
+    c = df['close']
+    return pd.DataFrame({
+        'fib_dist_236': (c - (sh - 0.236 * rng)) / (c + 1e-9),
+        'fib_dist_382': (c - (sh - 0.382 * rng)) / (c + 1e-9),
+        'fib_dist_500': (c - (sh - 0.500 * rng)) / (c + 1e-9),
+        'fib_dist_618': (c - (sh - 0.618 * rng)) / (c + 1e-9),
+        'fib_range_pct': rng / (c + 1e-9),
+    }, index=df.index)
+
+
+def compute_bos_choch(df: pd.DataFrame, lookback: int = 20) -> pd.DataFrame:
+    """Break of Structure (BOS) and Change of Character (CHoCH).
+
+    BOS up/down are ONE-BAR events (1 only on the candle where price crosses
+    the lookback extreme, 0 every other bar). bos_state is the continuous
+    version (+1 = above high, -1 = below low, 0 = inside range).
+    CHoCH fires when a BOS occurs against the prevailing structural trend,
+    signalling a potential reversal rather than trend continuation.
+    """
+    close = df['close']
+    sh = df['high'].shift(1).rolling(lookback).max()   # previous lookback high
+    sl = df['low'].shift(1).rolling(lookback).min()    # previous lookback low
+
+    above = close > sh
+    below = close < sl
+
+    # Event: fired only on the bar where price first crosses the level
+    bos_up   = (above & ~above.shift(1).fillna(False)).astype(int)
+    bos_down = (below & ~below.shift(1).fillna(False)).astype(int)
+
+    # Continuous state (+1 / 0 / -1)
+    bos_state = above.astype(int) - below.astype(int)
+
+    # Structural bias: higher-high / lower-low slope over lookback
+    structure_bias = pd.Series(np.sign(close - close.shift(lookback)), index=df.index).fillna(0)
+
+    # CHoCH: BOS that contradicts the prevailing structural bias
+    prior_bias = structure_bias.shift(1).fillna(0)
+    choch_bull = (bos_up   == 1) & (prior_bias < 0)   # break up after downtrend
+    choch_bear = (bos_down == 1) & (prior_bias > 0)   # break down after uptrend
+
+    return pd.DataFrame({
+        'bos_up':          bos_up,
+        'bos_down':        bos_down,
+        'bos_state':       bos_state,
+        'choch_bull':      choch_bull.astype(int),
+        'choch_bear':      choch_bear.astype(int),
+        'structure_bias':  structure_bias,
+    }, index=df.index)
+
+
+def compute_order_blocks(df: pd.DataFrame) -> pd.DataFrame:
+    """Approximate order blocks: large-range candles before significant moves."""
+    rng = df['high'] - df['low']
+    rng_ma = rng.rolling(20, min_periods=1).mean()
+    large_bull = (rng > 1.5 * rng_ma) & (df['close'] > df['open'])
+    large_bear = (rng > 1.5 * rng_ma) & (df['close'] < df['open'])
+    ob_bull = df['open'].where(large_bull).shift(1).ffill().fillna(df['close'])
+    ob_bear = df['open'].where(large_bear).shift(1).ffill().fillna(df['close'])
+    c = df['close']
+    return pd.DataFrame({
+        'dist_bull_ob': (c - ob_bull) / (c + 1e-9),
+        'dist_bear_ob': (ob_bear - c) / (c + 1e-9),
+    }, index=df.index)
+
+
+# ── Statistical / Quant Indicators ───────────────────────────────
+def compute_standard_error_bands(series: pd.Series, period: int = 21) -> Tuple[pd.Series, pd.Series, pd.Series]:
+    """Standard Error Bands — regression midline ± 2 × standard error."""
+    def _lr_end(arr):
+        x = np.arange(len(arr))
+        m, b = np.polyfit(x, arr, 1)
+        return m * (len(arr) - 1) + b
+
+    def _se(arr):
+        x = np.arange(len(arr))
+        m, b = np.polyfit(x, arr, 1)
+        return np.std(arr - (m * x + b), ddof=1) + 1e-9
+
+    lr = series.rolling(period).apply(_lr_end, raw=True)
+    se = series.rolling(period).apply(_se, raw=True)
+    return lr + 2 * se, lr, lr - 2 * se
+
+
+def compute_quantile_bands(series: pd.Series, period: int = 100,
+                           q_lo: float = 0.1, q_hi: float = 0.9) -> Tuple[pd.Series, pd.Series, pd.Series]:
+    """Rolling quantile bands."""
+    return (series.rolling(period).quantile(q_hi),
+            series.rolling(period).quantile(0.5),
+            series.rolling(period).quantile(q_lo))
+
+
+def compute_hurst_exponent(series: pd.Series, period: int = 100) -> pd.Series:
+    """Hurst Exponent via variance-ratio (fast). >0.5=trending, <0.5=mean-reverting."""
+    rets = series.pct_change().fillna(0)
+
+    def _hurst(arr):
+        if len(arr) < 10:
+            return 0.5
+        try:
+            v1 = np.var(np.diff(arr)) + 1e-12
+            v4 = np.var(arr[4:] - arr[:-4]) / 4 + 1e-12
+            return float(np.clip(0.5 * np.log(v4 / v1) / np.log(4) + 0.5, 0.0, 1.0))
+        except Exception:
+            return 0.5
+
+    return rets.rolling(period, min_periods=20).apply(_hurst, raw=True).fillna(0.5)
+
+
+def compute_entropy(series: pd.Series, period: int = 20, bins: int = 10) -> pd.Series:
+    """Shannon Entropy of returns — high = random/unpredictable, low = structured."""
+    def _ent(arr):
+        try:
+            counts, _ = np.histogram(arr, bins=bins)
+            p = counts / (counts.sum() + 1e-9)
+            p = p[p > 0]
+            return float(-np.sum(p * np.log(p)))
+        except Exception:
+            return float(np.log(bins))
+
+    return series.pct_change().fillna(0).rolling(period, min_periods=10).apply(_ent, raw=True)
+
+
+# ── Anchored VWAP ─────────────────────────────────────────────────
+def compute_anchored_vwap(df: pd.DataFrame, lookback: int = 100) -> pd.DataFrame:
+    """Anchored VWAP at three lookback windows (50 / 100 / 200 bars).
+    Each window simulates anchoring to the swing high/low that occurred
+    lookback bars ago.  All computation is backward-only — no lookahead."""
+    tp  = (df['high'] + df['low'] + df['close']) / 3
+    tv  = tp * df['volume']
+    vol = df['volume']
+    c   = df['close']
+    avwap = {}
+    for lb in (lookback // 2, lookback, min(200, lookback * 2)):
+        key = f'avwap_{lb}'
+        avwap[key] = tv.rolling(lb, min_periods=1).sum() / vol.rolling(lb, min_periods=1).sum()
+        avwap[f'dist_{key}'] = (c / (avwap[key] + 1e-9)) - 1
+    return pd.DataFrame(avwap, index=df.index)
+
+
+# ── Weekly Timeframe Indicators ───────────────────────────────────
+def compute_weekly_features(df_1h: pd.DataFrame,
+                             df_1d: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+    """MACD, RSI, 200 EMA/SMA, BOS/CHoCH and trend direction on weekly candles,
+    resampled from daily data and mapped backward to the hourly index.
+    All joins are backward (direction='backward') — no lookahead."""
+    _cols = [
+        'weekly_macd', 'weekly_macd_signal', 'weekly_macd_hist',
+        'weekly_rsi', 'weekly_ema200', 'weekly_sma200',
+        'dist_weekly_ema200', 'dist_weekly_sma200',
+        'weekly_bos_up', 'weekly_bos_down', 'weekly_structure_bias',
+        'weekly_trend',
+    ]
+    empty = pd.DataFrame(0.0, index=df_1h.index, columns=_cols)
+    if df_1d is None or df_1d.empty:
+        return empty
+    try:
+        d = df_1d.copy()
+        d['timestamp'] = pd.to_datetime(d['timestamp'])
+        w = (d.sort_values('timestamp')
+              .set_index('timestamp')
+              .resample('W')
+              .agg({'open': 'first', 'high': 'max', 'low': 'min',
+                    'close': 'last', 'volume': 'sum'})
+              .dropna(subset=['close'])
+              .reset_index())
+        if len(w) < 14:
+            return empty
+
+        c = w['close']
+        ema12 = c.ewm(span=12, adjust=False).mean()
+        ema26 = c.ewm(span=26, adjust=False).mean()
+        w_macd = ema12 - ema26
+        w_sig  = w_macd.ewm(span=9, adjust=False).mean()
+        w_rsi  = compute_rsi(c, 14)
+        w_e200 = c.ewm(span=200, adjust=False).mean()
+        w_s200 = c.rolling(200, min_periods=1).mean()
+        bos    = compute_bos_choch(w, lookback=min(20, len(w) // 4))
+        w_trend = pd.Series(np.sign(c.values - w_s200.values), index=w.index)
+
+        wf = pd.DataFrame({
+            'timestamp':             w['timestamp'],
+            'weekly_macd':           w_macd.values,
+            'weekly_macd_signal':    w_sig.values,
+            'weekly_macd_hist':      (w_macd - w_sig).values,
+            'weekly_rsi':            w_rsi.values,
+            'weekly_ema200':         w_e200.values,
+            'weekly_sma200':         w_s200.values,
+            'dist_weekly_ema200':    (c.values / (w_e200.values + 1e-9) - 1),
+            'dist_weekly_sma200':    (c.values / (w_s200.values + 1e-9) - 1),
+            'weekly_bos_up':         bos['bos_up'].values,
+            'weekly_bos_down':       bos['bos_down'].values,
+            'weekly_structure_bias': bos['structure_bias'].values,
+            'weekly_trend':          w_trend.values,
+        })
+        h = df_1h[['timestamp']].copy()
+        h['timestamp'] = pd.to_datetime(h['timestamp'])
+        merged = pd.merge_asof(h.sort_values('timestamp'),
+                               wf.sort_values('timestamp'),
+                               on='timestamp', direction='backward')
+        merged.index = df_1h.index
+        return merged[_cols].fillna(0.0)
+    except Exception:
+        return empty
+
+
+# ── Fear & Greed Index ────────────────────────────────────────────
+def add_fear_greed_features(df: pd.DataFrame,
+                             fg_df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+    """Merge daily Fear & Greed Index onto the hourly frame.
+    fg_df must have columns ['timestamp', 'fear_greed_value'].
+    Falls back to neutral (50) when data is unavailable."""
+    df = df.copy()
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
+    if fg_df is None or fg_df.empty:
+        df['fear_greed_value']  = 50.0
+        df['fear_greed_signal'] = 0.0
+        return df
+    try:
+        fg = fg_df[['timestamp', 'fear_greed_value']].copy()
+        fg['timestamp'] = pd.to_datetime(fg['timestamp'])
+        merged = pd.merge_asof(df.sort_values('timestamp'),
+                               fg.sort_values('timestamp'),
+                               on='timestamp', direction='backward')
+        merged['fear_greed_value']  = merged['fear_greed_value'].fillna(50.0)
+        merged['fear_greed_signal'] = (merged['fear_greed_value'] - 50.0) / 50.0
+        df['fear_greed_value']  = merged['fear_greed_value'].values
+        df['fear_greed_signal'] = merged['fear_greed_signal'].values
+    except Exception:
+        df['fear_greed_value']  = 50.0
+        df['fear_greed_signal'] = 0.0
+    return df
+
+
+# ── Category Confluence (pre-aggregated voter groups) ─────────────
+def compute_category_confluence(df: pd.DataFrame) -> pd.DataFrame:
+    """Aggregate all indicator categories into six [-1, +1] consensus scores
+    plus a weighted total.  Each score represents the net bullish (+1) /
+    bearish (-1) vote from that indicator family.  XGBoost sees these as
+    high-level 'voter group' features alongside the raw indicators.
+
+    Design rules (lookahead-safe):
+      - Only uses columns that are already in df (guard with 'if col in df').
+      - All position indicators are mapped [0,1]→[-1,+1] before averaging.
+      - BOS/CHoCH events are one-bar signals so they decay naturally via rolling.
+    """
+    get = df.get  # shorthand
+
+    def _s(*cols: str) -> Optional[pd.Series]:
+        """Mean of sign(col) for existing columns. Returns None if none exist."""
+        parts = [np.sign(df[c]).astype(float) for c in cols if c in df.columns]
+        if not parts:
+            return None
+        return pd.concat(parts, axis=1).mean(axis=1)
+
+    def _centered(*pairs) -> Optional[pd.Series]:
+        """Mean of sign(col - center) for (col, center) pairs."""
+        parts = [np.sign(df[c] - v).astype(float)
+                 for c, v in pairs if c in df.columns]
+        if not parts:
+            return None
+        return pd.concat(parts, axis=1).mean(axis=1)
+
+    def _pos(*cols: str) -> Optional[pd.Series]:
+        """Map [0,1] position columns to [-1,+1] and average."""
+        parts = [(df[c] * 2 - 1) for c in cols if c in df.columns]
+        if not parts:
+            return None
+        return pd.concat(parts, axis=1).mean(axis=1).clip(-1, 1)
+
+    scores: Dict[str, pd.Series] = {}
+
+    # ── MOMENTUM ─────────────────────────────────────────────────────
+    mom = _centered(
+        ('rsi_7', 50), ('rsi_14', 50), ('rsi_21', 50),
+        ('stoch_k', 50), ('williams_r', -50),
+        ('macd_hist', 0), ('cci_20', 0), ('tsi', 0),
+        ('cmo_14', 0), ('awesome_osc', 0), ('bop', 0),
+        ('kst', 0), ('trix_15', 0), ('roc_14', 0),
+        ('dpo_20', 0), ('ppo', 0), ('schaff_tc', 50),
+        ('fisher', 0), ('rvi_osc', 0),
+    )
+    if mom is not None:
+        scores['momentum_confluence'] = mom.clip(-1, 1)
+
+    # ── TREND ────────────────────────────────────────────────────────
+    trend = _centered(
+        ('dist_ema_50', 0), ('dist_ema_200', 0),
+        ('dist_hma20', 0), ('dist_kama', 0),
+        ('dist_rolling_vwap', 0), ('dist_vwap', 0),
+        ('supertrend_dist', 0), ('sar_dist', 0),
+        ('linreg_slope_14', 0), ('structure_bias', 0),
+        ('macro_trend_1d', 0), ('macro_trend_1w', 0),
+    )
+    if trend is not None:
+        scores['trend_confluence'] = trend.clip(-1, 1)
+
+    # ── VOLUME ───────────────────────────────────────────────────────
+    vol = _centered(
+        ('volume_delta', 0), ('volume_delta_14', 0),
+        ('cmf_20', 0), ('mfi_14', 50),
+        ('eom_14', 0), ('kvo', 0), ('rvi_osc', 0),
+    )
+    if vol is not None:
+        scores['volume_confluence'] = vol.clip(-1, 1)
+
+    # ── BANDS / PRICE POSITION ────────────────────────────────────────
+    bands = _pos(
+        'bb_pct_b', 'atr_band_position', 'donchian_position',
+        'close_position', 'quantile_position', 'se_position',
+        'starc_position', 'gaussian_position',
+    )
+    if bands is not None:
+        scores['bands_confluence'] = bands
+
+    # ── SMART MONEY / MARKET STRUCTURE ───────────────────────────────
+    smc_parts: List[pd.Series] = []
+    for bull_col in ('bos_up', 'choch_bull', 'is_at_support'):
+        if bull_col in df.columns:
+            weight = 1.5 if 'choch' in bull_col else 1.0
+            smc_parts.append(df[bull_col].astype(float) * weight)
+    for bear_col in ('bos_down', 'choch_bear', 'is_at_resistance'):
+        if bear_col in df.columns:
+            weight = 1.5 if 'choch' in bear_col else 1.0
+            smc_parts.append(-df[bear_col].astype(float) * weight)
+    rps = _pos('range_position_score')
+    if rps is not None:
+        smc_parts.append(rps)
+    if 'structure_bias' in df.columns:
+        smc_parts.append(df['structure_bias'].astype(float))
+    if smc_parts:
+        scores['smart_money_confluence'] = (
+            pd.concat(smc_parts, axis=1).mean(axis=1).clip(-1, 1)
+        )
+
+    # ── CANDLESTICK PATTERNS ─────────────────────────────────────────
+    cdl_parts: List[pd.Series] = []
+    for bull_pat in ('CDL_HAMMER', 'CDL_BULL_ENGULFING', 'CDL_MORNINGSTAR'):
+        if bull_pat in df.columns:
+            cdl_parts.append(df[bull_pat].astype(float))
+    for bear_pat in ('CDL_SHOOTINGSTAR', 'CDL_BEAR_ENGULFING', 'CDL_EVENINGSTAR'):
+        if bear_pat in df.columns:
+            cdl_parts.append(-df[bear_pat].astype(float))
+    if 'bar_direction' in df.columns:
+        cdl_parts.append(df['bar_direction'].astype(float) * 0.3)  # bar direction has lower weight
+    if cdl_parts:
+        scores['candle_confluence'] = (
+            pd.concat(cdl_parts, axis=1).mean(axis=1).clip(-1, 1)
+        )
+
+    # ── TOTAL (weighted) ─────────────────────────────────────────────
+    # Trend and smart money get higher weight; candles lower weight.
+    w_map = {
+        'trend_confluence':       2.0,
+        'momentum_confluence':    1.5,
+        'volume_confluence':      1.5,
+        'smart_money_confluence': 1.5,
+        'bands_confluence':       1.0,
+        'candle_confluence':      0.5,
+    }
+    if scores:
+        cat_df = pd.DataFrame(scores, index=df.index)
+        weights = np.array([w_map.get(c, 1.0) for c in cat_df.columns])
+        scores['total_confluence'] = (
+            (cat_df * weights).sum(axis=1) / weights.sum()
+        ).clip(-1, 1)
+
+    if not scores:
+        return pd.DataFrame(index=df.index)
+    return pd.DataFrame(scores, index=df.index).fillna(0)
+
+
 # ------------------------------------------------------------------
 # Support & Resistance (lookahead-bias free) and Macro Regime
 # ------------------------------------------------------------------
@@ -336,31 +1155,31 @@ def compute_candlestick_patterns(df: pd.DataFrame) -> pd.DataFrame:
     range_hl = h - l
     upper_shadow = h - np.maximum(o, c)
     lower_shadow = np.minimum(o, c) - l
-    
+
     # 1. Doji
     is_doji = (body / (range_hl + 1e-9)) < 0.1
-    
+
     # 2. Hammer & Shooting Star
     is_hammer = (lower_shadow > 2 * body) & (upper_shadow < 0.2 * body)
     is_shootingstar = (upper_shadow > 2 * body) & (lower_shadow < 0.2 * body)
-    
+
     # 3. Engulfing
     is_green = c > o
     is_red = o > c
     prev_green = is_green.shift(1)
     prev_red = is_red.shift(1)
-    
+
     bullish_engulfing = prev_red & is_green & (c > o.shift(1)) & (o < c.shift(1))
     bearish_engulfing = prev_green & is_red & (c < o.shift(1)) & (o > c.shift(1))
-    
+
     # 4. Morning & Evening Star
     prev2_red = is_red.shift(2)
     prev2_green = is_green.shift(2)
     prev1_small_body = (body.shift(1) / (range_hl.shift(1) + 1e-9)) < 0.3
-    
+
     morning_star = prev2_red & prev1_small_body & is_green & (c > o.shift(2) - (body.shift(2) * 0.5))
     evening_star = prev2_green & prev1_small_body & is_red & (c < o.shift(2) + (body.shift(2) * 0.5))
-    
+
     return pd.DataFrame({
         'CDL_DOJI': is_doji.astype(int),
         'CDL_HAMMER': is_hammer.astype(int),
@@ -381,8 +1200,9 @@ def add_macro_regime_features(df: pd.DataFrame, df_1d: Optional[pd.DataFrame], d
     - macro_trend_1w: 1.0 if close_1w > ema50_1w else -1.0
     - macro_confluence_score: sum of the two (2, 0, or -2)
 
-    Uses merge_asof to map the lower-frequency macro signals to high-frequency timestamps.
-    Falls back to `macro_state` when `df_1d`/`df_1w` are unavailable.
+    Uses merge_asof with direction='backward' to map lower-frequency macro signals
+    to high-frequency timestamps WITHOUT lookahead (each row only sees the most
+    recent macro bar at or before it).
     """
     df = df.copy()
     # Default neutral values
@@ -413,9 +1233,15 @@ def add_macro_regime_features(df: pd.DataFrame, df_1d: Optional[pd.DataFrame], d
             t1 = df_1d.copy()
             t1['timestamp'] = pd.to_datetime(t1['timestamp'])
             t1 = t1.sort_values('timestamp')
-            t1['ema50_1d'] = t1['close'].ewm(span=50, adjust=False).mean()
-            t1['macro_trend_1d'] = (t1['close'] > t1['ema50_1d']).astype(float).replace({0.0: -1.0, 1.0: 1.0})
-            macro_rows.append(t1[['timestamp', 'macro_trend_1d']])
+            t1['ema50_1d']  = t1['close'].ewm(span=50,  adjust=False).mean()
+            t1['ema200_1d'] = t1['close'].ewm(span=200, adjust=False).mean()
+            t1['sma200_1d'] = t1['close'].rolling(200, min_periods=1).mean()
+            t1['macro_trend_1d']    = (t1['close'] > t1['ema50_1d']).astype(float).replace({0.0: -1.0, 1.0: 1.0})
+            t1['macro_trend_200d']  = (t1['close'] > t1['ema200_1d']).astype(float).replace({0.0: -1.0, 1.0: 1.0})
+            t1['dist_daily_ema200'] = (t1['close'] / (t1['ema200_1d'] + 1e-9)) - 1
+            t1['dist_daily_sma200'] = (t1['close'] / (t1['sma200_1d'] + 1e-9)) - 1
+            macro_rows.append(t1[['timestamp', 'macro_trend_1d', 'macro_trend_200d',
+                                   'dist_daily_ema200', 'dist_daily_sma200']])
 
         if df_1w is not None and not df_1w.empty:
             t2 = df_1w.copy()
@@ -444,26 +1270,32 @@ def add_macro_regime_features(df: pd.DataFrame, df_1d: Optional[pd.DataFrame], d
             macro_rows
         )
 
-        if 'macro_trend_1d' not in macro_df.columns:
-            macro_df['macro_trend_1d'] = 0.0
-        if 'macro_trend_1w' not in macro_df.columns:
-            macro_df['macro_trend_1w'] = 0.0
+        for col in ('macro_trend_1d', 'macro_trend_1w', 'macro_trend_200d',
+                    'dist_daily_ema200', 'dist_daily_sma200'):
+            if col not in macro_df.columns:
+                macro_df[col] = 0.0
 
-        macro_df['macro_confluence_score'] = macro_df['macro_trend_1d'].fillna(0.0) + macro_df['macro_trend_1w'].fillna(0.0)
+        macro_df['macro_confluence_score'] = (
+            macro_df['macro_trend_1d'].fillna(0.0) +
+            macro_df['macro_trend_1w'].fillna(0.0)
+        )
 
         df['timestamp'] = pd.to_datetime(df['timestamp'])
         macro_df = macro_df.sort_values('timestamp')
         df = df.sort_values('timestamp')
+        _macro_cols = ['timestamp', 'macro_trend_1d', 'macro_trend_1w',
+                       'macro_trend_200d', 'dist_daily_ema200', 'dist_daily_sma200',
+                       'macro_confluence_score']
         merged = pd.merge_asof(
             df,
-            macro_df[['timestamp', 'macro_trend_1d', 'macro_trend_1w', 'macro_confluence_score']],
+            macro_df[[c for c in _macro_cols if c in macro_df.columns]],
             on='timestamp',
             direction='backward'
         )
 
-        merged['macro_trend_1d'] = merged['macro_trend_1d'].fillna(0.0)
-        merged['macro_trend_1w'] = merged['macro_trend_1w'].fillna(0.0)
-        merged['macro_confluence_score'] = merged['macro_confluence_score'].fillna(0.0)
+        for col in ('macro_trend_1d', 'macro_trend_1w', 'macro_trend_200d',
+                    'dist_daily_ema200', 'dist_daily_sma200', 'macro_confluence_score'):
+            merged[col] = merged[col].fillna(0.0)
 
         return merged
     except Exception:
@@ -506,20 +1338,72 @@ def classify_market_phase(trend: pd.Series, vol_regime: pd.Series) -> pd.Series:
 # Market Anchor & News Features
 # ------------------------------------------------------------------
 def add_btc_anchor_features(df: pd.DataFrame, btc_df: Optional[pd.DataFrame]) -> pd.DataFrame:
+    _anchor_cols = [
+        'btc_1h_return', 'btc_4h_return', 'btc_dist_ema200',
+        # Relative-performance features (token vs BTC).
+        # These are the most important additions for high-vol alts like ETH:
+        # the model can now see whether the token is leading/lagging BTC,
+        # which is a strong short-term momentum signal.
+        'rel_perf_1h',   # token 1h return − BTC 1h return (alpha vs BTC)
+        'rel_perf_4h',   # token 4h return − BTC 4h return
+        'rel_perf_24h',  # token 24h return − BTC 24h return
+        'btc_ratio_ma_dist',  # (token/BTC ratio) distance from its 24h MA
+                              # — captures mean-reversion / breakout in the ratio
+    ]
     if btc_df is None or btc_df.empty:
-        df['btc_1h_return'] = 0.0
-        df['btc_4h_return'] = 0.0
-        df['btc_dist_ema200'] = 0.0
+        for c in _anchor_cols:
+            df[c] = 0.0
         return df
+
     btc = btc_df.copy()
     btc['timestamp'] = pd.to_datetime(btc['timestamp'])
-    btc['btc_1h_return'] = btc['close'].pct_change()
+    btc['btc_1h_return'] = btc['close'].pct_change(1)
     btc['btc_4h_return'] = btc['close'].pct_change(4)
-    btc['btc_ema_200'] = btc['close'].ewm(span=200, adjust=False).mean()
+    btc['btc_24h_return'] = btc['close'].pct_change(24)
+    btc['btc_ema_200']   = btc['close'].ewm(span=200, adjust=False).mean()
     btc['btc_dist_ema200'] = (btc['close'] / btc['btc_ema_200']) - 1
-    keep = ['timestamp', 'btc_1h_return', 'btc_4h_return', 'btc_dist_ema200']
-    df = df.merge(btc[keep], on='timestamp', how='left')
-    df[['btc_1h_return', 'btc_4h_return', 'btc_dist_ema200']] = df[['btc_1h_return', 'btc_4h_return', 'btc_dist_ema200']].fillna(0)
+
+    keep = ['timestamp', 'btc_1h_return', 'btc_4h_return', 'btc_24h_return', 'btc_dist_ema200', 'close']
+    df_ts = pd.to_datetime(df['timestamp'])
+    btc_ts = pd.to_datetime(btc['timestamp'])
+
+    merged = df.assign(timestamp=df_ts).merge(
+        btc[keep].assign(timestamp=btc_ts).rename(columns={'close': '_btc_close'}),
+        on='timestamp', how='left'
+    )
+
+    # Token returns for relative-performance calculation
+    tok_1h  = merged['close'].pct_change(1)
+    tok_4h  = merged['close'].pct_change(4)
+    tok_24h = merged['close'].pct_change(24)
+
+    merged['btc_1h_return']  = merged['btc_1h_return'].fillna(0)
+    merged['btc_4h_return']  = merged['btc_4h_return'].fillna(0)
+    merged['btc_dist_ema200'] = merged['btc_dist_ema200'].fillna(0)
+
+    # Alpha: how much the token outperforms / underperforms BTC.
+    # For BTC itself these are identically zero — set them explicitly to avoid
+    # the feature consuming SHAP budget or creating rolling-window artefacts.
+    _is_btc = merged['close'].equals(merged['_btc_close'].fillna(merged['close']))
+    if _is_btc:
+        merged['rel_perf_1h']      = 0.0
+        merged['rel_perf_4h']      = 0.0
+        merged['rel_perf_24h']     = 0.0
+        merged['btc_ratio_ma_dist'] = 0.0
+    else:
+        merged['rel_perf_1h']  = (tok_1h  - merged['btc_1h_return']).fillna(0)
+        merged['rel_perf_4h']  = (tok_4h  - merged['btc_4h_return']).fillna(0)
+        merged['rel_perf_24h'] = (tok_24h - merged['btc_24h_return'].fillna(0)).fillna(0)
+
+        # Token/BTC price ratio momentum (mean-reversion / breakout signal)
+        btc_close = merged['_btc_close'].replace(0, np.nan)
+        ratio = merged['close'] / btc_close
+        ratio_ma24 = ratio.rolling(24, min_periods=4).mean()
+        merged['btc_ratio_ma_dist'] = ((ratio - ratio_ma24) / (ratio_ma24 + 1e-9)).fillna(0)
+
+    for c in _anchor_cols:
+        df[c] = merged[c].values
+
     return df
 
 def add_news_features(df: pd.DataFrame, news_df: Optional[pd.DataFrame]) -> pd.DataFrame:
@@ -585,6 +1469,11 @@ def add_target(df: pd.DataFrame, forward_hours: int = 24, atr_multiplier: float 
 # ------------------------------------------------------------------
 # Main Feature Engineering Pipeline (Regime-Adaptive)
 # ------------------------------------------------------------------
+# Any feature whose construction references future bars must be listed here so it
+# can never silently re-enter the training set.
+LOOKAHEAD_BLOCKLIST = ['ichimoku_chikou']
+
+
 def prepare_features(df: pd.DataFrame,
                      btc_df: Optional[pd.DataFrame] = None,
                      news_df: Optional[pd.DataFrame] = None,
@@ -592,7 +1481,10 @@ def prepare_features(df: pd.DataFrame,
                      forward_hours: int = 1,
                      df_1d: Optional[pd.DataFrame] = None,
                      df_1w: Optional[pd.DataFrame] = None,
-                     macro_state: Optional[Dict[str, Any]] = None) -> pd.DataFrame:
+                     macro_state: Optional[Dict[str, Any]] = None,
+                     funding_df: Optional[pd.DataFrame] = None,
+                     oi_df: Optional[pd.DataFrame] = None,
+                     fg_df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
     if df is None or df.empty:
         return df
 
@@ -631,6 +1523,33 @@ def prepare_features(df: pd.DataFrame,
     compiled_features['rolling_volatility'] = compiled_features['log_returns'].rolling(24, min_periods=1).std()
     compiled_features['obv'] = df['close'].diff().apply(np.sign).mul(df['volume']).fillna(0).cumsum()
     compiled_features['acc_dist'] = compute_accumulation_distribution(df)
+
+    # ----- Volume Delta (CVD proxy) -----
+    compiled_features['volume_delta'], compiled_features['volume_delta_14'] = compute_volume_delta(df, period=14)
+
+    # ----- Bar Microstructure -----
+    try:
+        for col, s in compute_bar_structure(df).items():
+            compiled_features[str(col)] = s
+    except Exception:
+        pass
+
+    # ----- Rolling VWAP (24-bar) -----
+    try:
+        compiled_features['rolling_vwap_24'], compiled_features['dist_rolling_vwap'] = compute_rolling_vwap(df, period=24)
+    except Exception:
+        pass
+
+    # ----- Time / Session Features -----
+    try:
+        for col, s in compute_time_features(df).items():
+            compiled_features[str(col)] = s
+    except Exception:
+        pass
+
+    # ----- Multi-period RSI -----
+    compiled_features['rsi_7'] = compute_rsi(df['close'], 7)
+    compiled_features['rsi_21'] = compute_rsi(df['close'], 21)
 
     # ----- Volatility & Statistics -----
     compiled_features['atr_14'] = compute_atr(df, 14)
@@ -671,7 +1590,7 @@ def prepare_features(df: pd.DataFrame,
         sr_features = add_support_resistance_features(df[['high', 'low', 'close']].copy(), window=24)
         for col in sr_features.columns:
             compiled_features[col] = sr_features[col]
-            
+
         compiled_features['is_at_support'] = (compiled_features['pct_dist_to_support'] <= 0.015).astype(int)
         compiled_features['is_at_resistance'] = (compiled_features['pct_dist_to_resistance'] <= 0.015).astype(int)
     except Exception:
@@ -682,8 +1601,135 @@ def prepare_features(df: pd.DataFrame,
     for col in cdl_patterns.columns:
         compiled_features[col] = cdl_patterns[col]
 
+    # ==================== EXTENDED INDICATOR LIBRARY ====================
+
+    # --- MA Variants ---
+    try:
+        compiled_features['hma_20'] = compute_hma(df['close'], 20)
+        compiled_features['dist_hma20'] = (df['close'] / (compiled_features['hma_20'] + 1e-9)) - 1
+        compiled_features['kama_10'] = compute_kama(df['close'], 10)
+        compiled_features['dist_kama'] = (df['close'] / (compiled_features['kama_10'] + 1e-9)) - 1
+        compiled_features['tema_21'] = compute_tema(df['close'], 21)
+        compiled_features['dema_21'] = compute_dema(df['close'], 21)
+        compiled_features['t3_5'] = compute_t3(df['close'], 5)
+        compiled_features['vwma_20'] = compute_vwma(df, 20)
+        compiled_features['dist_vwma20'] = (df['close'] / (compiled_features['vwma_20'] + 1e-9)) - 1
+    except Exception:
+        pass
+
+    # --- Trend ---
+    try:
+        compiled_features['supertrend'], compiled_features['supertrend_dir'] = compute_supertrend(df)
+        compiled_features['supertrend_dist'] = (df['close'] - compiled_features['supertrend']) / (df['close'] + 1e-9)
+    except Exception:
+        pass
+    try:
+        _sar, _sar_trend = compute_parabolic_sar(df)
+        compiled_features['sar_trend'] = _sar_trend
+        compiled_features['sar_dist'] = (df['close'] - _sar) / (df['close'] + 1e-9)
+    except Exception:
+        pass
+    try:
+        _du, _dl, _dm = compute_donchian_channels(df, 20)
+        compiled_features['donchian_width'] = (_du - _dl) / (_dm + 1e-9)
+        compiled_features['donchian_position'] = (df['close'] - _dl) / (_du - _dl + 1e-9)
+    except Exception:
+        pass
+
+    # --- Oscillators ---
+    try:
+        compiled_features['cci_20'] = compute_cci(df, 20)
+        compiled_features['tsi'] = compute_tsi(df['close'])
+        compiled_features['cmo_14'] = compute_cmo(df['close'], 14)
+        compiled_features['dpo_20'] = compute_dpo(df['close'], 20)
+        compiled_features['ppo'], compiled_features['ppo_signal'] = compute_ppo(df['close'])
+        compiled_features['trix_15'] = compute_trix(df['close'], 15)
+        compiled_features['kst'], compiled_features['kst_signal'] = compute_kst(df['close'])
+        compiled_features['schaff_tc'] = compute_schaff_trend_cycle(df['close'])
+        compiled_features['awesome_osc'] = compute_awesome_oscillator(df)
+        compiled_features['bop'] = compute_bop(df)
+        compiled_features['eom_14'] = compute_eom(df, 14)
+        compiled_features['fisher'], compiled_features['fisher_sig'] = compute_fisher_transform(df)
+        compiled_features['rvi_osc'], compiled_features['rvi_sig'] = compute_rvi(df)
+        compiled_features['roc_14'] = compute_rate_of_change(df['close'], 14)
+    except Exception:
+        pass
+
+    # --- Volatility ---
+    try:
+        compiled_features['bb_pct_b'] = compute_bollinger_pct_b(df, 20)
+        compiled_features['parkinson_vol'] = compute_parkinson_volatility(df, 24)
+        compiled_features['gk_vol'] = compute_garman_klass_volatility(df, 24)
+        _ab_u, _ab_l = compute_atr_bands(df, 14, 2.0)
+        compiled_features['atr_band_position'] = (df['close'] - _ab_l) / (_ab_u - _ab_l + 1e-9)
+        _sb_u, _sb_l = compute_starc_bands(df)
+        compiled_features['starc_position'] = (df['close'] - _sb_l) / (_sb_u - _sb_l + 1e-9)
+        compiled_features['rvi_vol'] = compute_relative_volatility_index(df['close'])
+        _gc_u, _gc_l = compute_gaussian_channel(df['close'])
+        compiled_features['gaussian_position'] = (df['close'] - _gc_l) / (_gc_u - _gc_l + 1e-9)
+    except Exception:
+        pass
+
+    # --- Volume ---
+    try:
+        compiled_features['pvt'] = compute_pvt(df)
+        compiled_features['kvo'], compiled_features['kvo_signal'] = compute_klinger_oscillator(df)
+    except Exception:
+        pass
+
+    # --- Market Structure ---
+    try:
+        for col, s in compute_fibonacci_levels(df, lookback=100).items():
+            compiled_features[str(col)] = s
+    except Exception:
+        pass
+    try:
+        for col, s in compute_bos_choch(df, lookback=20).items():
+            compiled_features[str(col)] = s
+    except Exception:
+        pass
+    try:
+        for col, s in compute_order_blocks(df).items():
+            compiled_features[str(col)] = s
+    except Exception:
+        pass
+
+    # --- Statistical / Quant ---
+    try:
+        _se_u, _se_m, _se_l = compute_standard_error_bands(df['close'], 21)
+        compiled_features['se_position'] = (df['close'] - _se_l) / (_se_u - _se_l + 1e-9)
+        compiled_features['se_mid'] = _se_m
+    except Exception:
+        pass
+    try:
+        _qu, _qm, _ql = compute_quantile_bands(df['close'], 100)
+        compiled_features['quantile_position'] = (df['close'] - _ql) / (_qu - _ql + 1e-9)
+    except Exception:
+        pass
+    try:
+        compiled_features['hurst'] = compute_hurst_exponent(df['close'], 100)
+    except Exception:
+        pass
+    try:
+        compiled_features['entropy'] = compute_entropy(df['close'], 20)
+    except Exception:
+        pass
+
+    # Defensive guard: never let a known lookahead feature into the frame.
+    for bad in LOOKAHEAD_BLOCKLIST:
+        compiled_features.pop(bad, None)
+
     # Bulk-attach all generated feature columns in one allocation pass.
     df = pd.concat([df, pd.DataFrame(compiled_features, index=df.index)], axis=1)
+
+    # ----- Pivot Points (from daily OHLC) -----
+    try:
+        pivots = compute_pivot_points(df_1d, df)
+        for col in pivots.columns:
+            df[col] = pivots[col].values
+            df[f'dist_{col}'] = (df['close'] - df[col]) / (df['close'] + 1e-9)
+    except Exception:
+        pass
 
     # ----- Market Anchor (BTC) -----
     df = add_btc_anchor_features(df, btc_df)
@@ -692,6 +1738,13 @@ def prepare_features(df: pd.DataFrame,
 
     # ----- News Sentiment -----
     df = add_news_features(df, news_df)
+
+    # ----- Futures Features (funding rate + open interest) -----
+    if funding_df is not None or oi_df is not None:
+        try:
+            df = add_futures_features(df, funding_df, oi_df)
+        except Exception:
+            pass
 
     # ----- Macro Regime Features (map 1d/1w onto base timeframe) -----
     try:
@@ -714,20 +1767,74 @@ def prepare_features(df: pd.DataFrame,
     except Exception:
         pass
 
-    # ----- Robust fill to remove NaN boundaries introduced by multi-timeframe joins -----
+    # ----- Anchored VWAP (50 / 100 / 200 bar anchors) -----
     try:
-        df = df.sort_values('timestamp').ffill().bfill()
+        avwap = compute_anchored_vwap(df, lookback=100)
+        for col in avwap.columns:
+            df[col] = avwap[col].values
     except Exception:
-        # fall back to forward/backward fill without using fillna(method=...)
-        df = df.ffill().bfill()
+        pass
 
-    # ----- Cleanup: drop rows with essential NaNs -----
+    # ----- Weekly Timeframe (MACD, RSI, 200 EMA/SMA, BOS/CHoCH) -----
+    try:
+        wf = compute_weekly_features(df, df_1d)
+        if not wf.empty:
+            for col in wf.columns:
+                df[col] = wf[col].values
+    except Exception:
+        pass
+
+    # ----- Fear & Greed Index -----
+    try:
+        df = add_fear_greed_features(df, fg_df)
+    except Exception:
+        pass
+
+    # ----- Category Confluence (runs last — needs every other feature present) -----
+    # Computes six pre-aggregated voter-group scores (momentum, trend, volume,
+    # bands, smart-money, candlestick) plus a weighted total.  These composite
+    # features let XGBoost see category-level consensus directly, mimicking the
+    # "majority of indicators must agree" rule without hard-coding it as logic.
+    try:
+        conf = compute_category_confluence(df)
+        if not conf.empty:
+            for col in conf.columns:
+                df[col] = conf[col].values
+    except Exception:
+        pass
+
+    # ----- Final guard: drop any blocklisted lookahead column that slipped through -----
+    df = df.drop(columns=[c for c in LOOKAHEAD_BLOCKLIST if c in df.columns], errors='ignore')
+
+    # ----- Fill NaN boundaries introduced by indicators / multi-timeframe joins -----
+    # CRITICAL: forward-fill ONLY. The previous version used .ffill().bfill();
+    # the .bfill() pulled FUTURE values backward into NaN gaps across the whole
+    # frame (including across the eventual train/test boundary), which is
+    # lookahead leakage. Forward-fill only carries past info forward. Any leading
+    # NaNs that remain are dropped below or zero-filled, never back-filled.
+    try:
+        df = df.sort_values('timestamp').ffill()
+    except Exception:
+        df = df.ffill()
+
+    # ----- Cleanup: drop rows with essential NaNs (warm-up period at the start) -----
     required_cols = ['atr_14', 'rsi_14', 'adx_14', 'volume_atr_efficiency', 'volatility_regime']
     if add_target_flag:
         required_cols.append('target')
     df = df.dropna(subset=required_cols).reset_index(drop=True)
 
-    # ----- Clean infinite values for XGBoost -----
+    # ----- Purge indicator warm-up: drop the leading rows where the WIDEST rolling
+    # window has not yet saturated. The 252-bar Bollinger-width percentile is the
+    # longest lookback; before bar 252 it self-fills to 0.5 (a constant, not real
+    # signal), and the 200-span EMAs / z-scores are still settling. Training on
+    # those rows teaches the model on placeholder values. We drop them outright
+    # rather than zero-filling. This is a one-time trim at the START of the series,
+    # so it costs no recent data and creates no lookahead.
+    MAX_WARMUP = 252  # = longest rolling lookback used in this pipeline
+    if len(df) > MAX_WARMUP * 2:           # only trim if we can spare it
+        df = df.iloc[MAX_WARMUP:].reset_index(drop=True)
+
+    # ----- Clean any remaining infinite values for XGBoost (zero-fill: leakage-safe) -----
     df = clean_infinite_values(df, max_value=1e6, fill_method='zero')
 
     return df
