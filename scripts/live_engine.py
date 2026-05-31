@@ -225,6 +225,8 @@ class LiveEngine:
         tasks = [self._process_symbol(sym, pred, sem)
                  for sym, pred in self.predictors.items()]
         await asyncio.gather(*tasks, return_exceptions=True)
+        # Safety net: ensure bootstrap_done reaches total even if per-symbol
+        # increments were skipped due to early returns.
         self.bootstrap_done = len(self.predictors)
 
     async def _process_symbol(
@@ -233,9 +235,12 @@ class LiveEngine:
         async with sem:
             loop = asyncio.get_event_loop()
             try:
-                result: Dict[str, Any] = await loop.run_in_executor(
-                    self._executor, predictor.predict_realtime)
+                result: Dict[str, Any] = await asyncio.wait_for(
+                    loop.run_in_executor(self._executor, predictor.predict_realtime),
+                    timeout=120,
+                )
             except Exception:
+                self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                 return
             if not isinstance(result, dict):
                 return
@@ -254,6 +259,8 @@ class LiveEngine:
                 self._manage_exit(symbol, existing, result, price)
             elif result.get('fire') and result.get('tradeable', True) and price > 0:
                 self._open_position(symbol, result, price)
+
+            self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
 
     # ── trade management ──────────────────────────────────────────────────────
 

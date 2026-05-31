@@ -243,7 +243,7 @@ class Predictor:
         btc_df = self.fetch_btc_data(timeframe='1h', limit=hours)
         news_df = self.load_news_data()
         try:
-            df_1d = self.fetch_live_data(timeframe='1d', limit=max(1000, int(hours / 24) + 10))
+            df_1d = self.fetch_live_data(timeframe='1d', limit=max(300, int(hours / 24) + 10))
         except Exception:
             df_1d = None
         funding_df, oi_df = self._fetch_futures_data(df)
@@ -404,7 +404,7 @@ class Predictor:
         }
 
     def predict_realtime(self) -> Dict[str, Any]:
-        df = self.get_features_with_context(hours=1000)
+        df = self.get_features_with_context(hours=350)
         if df is None or df.empty:
             return {"symbol": self.symbol, "fire": False, "side": "FLAT", "meta_confidence": 0.0}
         result = self.predict_signal(df)
