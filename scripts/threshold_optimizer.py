@@ -103,8 +103,10 @@ ATR_MULT_GRID  = np.round(np.arange(0.75, 4.25, 0.25), 2).tolist()   # 14 pts
 LOOKAHEAD_GRID = [12, 18, 24, 30, 36, 48, 60, 72]                     #  8 pts
 
 # ── quality gates ─────────────────────────────────────────────────────────────
-MIN_REGIME_BARS = 20    # 27 buckets × 20 min ≈ 540 bars — fits the 600-bar eval window
-MIN_SIGNALS     = 8
+# 600 eval bars / 27 buckets ≈ 22 avg — keep floor low so rare combos aren't
+# all skipped; noisy-but-present is better than falling back to the global.
+MIN_REGIME_BARS = 10
+MIN_SIGNALS     = 5
 # Minimum viable precision: must exceed 50% + fees to have positive expected
 # value. Anything ≤ 50% is worse than a coin flip regardless of coverage.
 BREAKEVEN       = 0.50 + FEE_ROUNDTRIP   # ≈ 50.1%
