@@ -356,8 +356,10 @@ def _save_track_record() -> None:
             "signals": sorted(_track_store, key=lambda r: r.get("entry_time") or "", reverse=True)[:500],
         }
         TRACK_RECORD_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(TRACK_RECORD_PATH, "w", encoding="utf-8") as f:
+        temp_path = TRACK_RECORD_PATH.with_suffix('.tmp')
+        with open(temp_path, "w", encoding="utf-8") as f:
             json.dump(payload, f, default=str)
+        os.replace(temp_path, TRACK_RECORD_PATH)
         _tr_last_save = time.time()
     except Exception as e:
         print(f"[TrackRecord] Save error: {e}")
@@ -689,10 +691,12 @@ async def run_engine_background():
                     signals_dir = WEB_ROOT_PATH / 'src' / 'data'
                     signals_dir.mkdir(parents=True, exist_ok=True)
                     signals_file = signals_dir / 'live_signals.json'
-                    with open(signals_file, 'w', encoding='utf-8') as sf:
+                    temp_file = signals_dir / 'live_signals.json.tmp'
+                    with open(temp_file, 'w', encoding='utf-8') as sf:
                         # use default=str to ensure datetimes/objects are serializable
                         safe_signals = numpy_to_native(LIVE_STATE.data.get('signals', {}))
                         json.dump(safe_signals, sf, default=str)
+                    os.replace(temp_file, signals_file)
                 except Exception as _e:
                     print(f"⚠️ Failed to write live_signals.json: {_e}")
                 

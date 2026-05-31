@@ -9,6 +9,7 @@ import xgboost as xgb
 import json
 import time
 import logging
+import threading
 from pathlib import Path
 from typing import Optional, Dict, Any, Tuple, cast
 
@@ -34,6 +35,7 @@ def map_timeframe_to_ccxt(tf: str) -> str:
 class Predictor:
     _SHARED_SPOT_EX = None
     _SHARED_FUTURES_EX = None
+    _CCXT_LOCK = threading.Lock()
     _NO_PERP_SYMBOLS: set = set()
 
     def __init__(self, symbol: str):
@@ -168,8 +170,9 @@ class Predictor:
         since = self.exchange.milliseconds() - (limit * ms_per_candle)
         while remaining > 0:
             try:
-                bars = self.exchange.fetch_ohlcv(self.symbol, timeframe=ccxt_tf,
-                                                 since=since, limit=min(chunk_size, remaining))
+                with Predictor._CCXT_LOCK:
+                    bars = self.exchange.fetch_ohlcv(self.symbol, timeframe=ccxt_tf,
+                                                     since=since, limit=min(chunk_size, remaining))
                 if not bars:
                     break
                 all_bars.extend(bars)
@@ -258,7 +261,8 @@ class Predictor:
 
             while len(all_fr) < fr_target:
                 try:
-                    chunk = ex.fetch_funding_rate_history(futures_sym, since=current_since, limit=1000)
+                    with Predictor._CCXT_LOCK:
+                        chunk = ex.fetch_funding_rate_history(futures_sym, since=current_since, limit=1000)
                     if not chunk:
                         break
                     all_fr.extend(chunk)
@@ -289,7 +293,8 @@ class Predictor:
 
             while len(all_oi) < oi_target:
                 try:
-                    chunk = ex.fetch_open_interest_history(futures_sym, '1h', since=current_since, limit=500)
+                    with Predictor._CCXT_LOCK:
+                        chunk = ex.fetch_open_interest_history(futures_sym, '1h', since=current_since, limit=500)
                     if not chunk:
                         break
                     all_oi.extend(chunk)
