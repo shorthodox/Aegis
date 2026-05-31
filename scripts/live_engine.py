@@ -441,6 +441,10 @@ def automated_setup(_: Path, args: Any):
     if not configs:
         print('[automated_setup] No tradeable models found — falling back to BTC/USDT.')
         configs = [TokenConfig(symbol='BTC/USDT')]
+        
+    if len(configs) > 60:
+        print(f'[automated_setup] Limiting to 60 tokens (from {len(configs)}) to prevent OOM.')
+        configs = configs[:60]
 
     capital      = float(getattr(args, 'capital',      10_000.0))
     max_pos      = float(getattr(args, 'max_position',  1_000.0))
