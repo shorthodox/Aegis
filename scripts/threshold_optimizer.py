@@ -640,12 +640,19 @@ def optimize_symbol(symbol: str) -> Optional[Dict[str, Any]]:
         json.dump(params, fh, indent=2, default=str)
 
     n_live  = sum(1 for v in regime_results.values() if not v.get("skipped"))
-    buy_ok  = "+" if g_buy["ok"]  else "-"
-    sell_ok = "+" if g_sell["ok"] else "-"
+
+    def _fmt(res: Dict[str, Any]) -> str:
+        if res["ok"]:
+            return f"[+] p>={res['threshold']:.2f} prec={res['precision']:.0%}"
+        # Disabled: show best-achievable precision as a reference, not as a threshold
+        prec = res["precision"]
+        if prec < 0.50:
+            return f"[-] DISABLED (best prec={prec:.0%} < 50%)"
+        return f"[-] DISABLED (best prec={prec:.0%}, below target)"
+
     print(
         f"   [{symbol}] ATR x{best_atr:.2f} | lh={lh_res['lookahead_bars']}h | "
-        f"BUY [{buy_ok}] p>={g_buy['threshold']:.2f} ({g_buy['precision']:.0%}) | "
-        f"SELL [{sell_ok}] p>={g_sell['threshold']:.2f} ({g_sell['precision']:.0%}) | "
+        f"BUY {_fmt(g_buy)} | SELL {_fmt(g_sell)} | "
         f"regimes {n_live}/{len(REGIME_KEYS)} active"
     )
     return params
