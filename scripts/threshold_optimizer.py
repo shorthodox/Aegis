@@ -71,6 +71,12 @@ MODEL_STORE = _ROOT / "src" / "ml" / "model_store"
 HISTORY_HOURS = 2000    # bars per symbol — more history → better regime stats
 MIN_BARS      = 600     # skip if fewer usable bars after feature engineering
 
+# Threshold search uses only the LAST EVAL_WINDOW bars as an out-of-sample
+# proxy.  The primary model was trained on earlier data, so its confidence
+# scores on recent bars are honest (not inflated by memorisation).
+# ATR / lookahead optimisation uses ALL bars (fresh barrier labels only).
+EVAL_WINDOW = 600       # ~25 days of 1h bars; keeps ~67 bars/regime on average
+
 # ── regime grid  (3 volume tiers × 3 volatility tiers = 9 buckets) ───────────
 VOL_TIERS   = ["low", "med", "high"]
 VOLA_TIERS  = ["low", "med", "high"]
@@ -483,19 +489,35 @@ def optimize_symbol(symbol: str) -> Optional[Dict[str, Any]]:
     ).values
     valid_mask = np.asarray(base_labels != CENSORED)
 
-    # ── global threshold optimisation ─────────────────────────────────────────
-    n_g    = int(valid_mask.sum())
-    lbl_g  = np.asarray(base_labels[valid_mask])
-    conf_g = np.asarray(meta_conf[valid_mask])
-    prop_g = np.asarray(proposed[valid_mask])
+    # ── out-of-sample eval window for threshold search ────────────────────────
+    # Use only the last EVAL_WINDOW rows so thresholds are measured on bars
+    # the model hasn't memorised (training data ends before these bars).
+    eval_start  = max(0, n_feat - EVAL_WINDOW)
+    eval_window = np.zeros(n_feat, dtype=bool)
+    eval_window[eval_start:] = True
+    eval_mask   = valid_mask & eval_window
+
+    # Regime series also scoped to eval window
+    regimes_eval = regimes.iloc[eval_start:].reset_index(drop=True)
+
+    # ── global threshold optimisation (eval window) ───────────────────────────
+    n_g    = int(eval_mask.sum())
+    lbl_g  = np.asarray(base_labels[eval_mask])
+    conf_g = np.asarray(meta_conf[eval_mask])
+    prop_g = np.asarray(proposed[eval_mask])
 
     g_buy  = best_threshold(conf_g, prop_g, lbl_g, side=2, n_total=n_g)
     g_sell = best_threshold(conf_g, prop_g, lbl_g, side=0, n_total=n_g)
 
-    # ── per-regime threshold optimisation ─────────────────────────────────────
+    # ── per-regime threshold optimisation (eval window) ───────────────────────
     regime_results: Dict[str, Any] = {}
+    base_labels_eval = base_labels[eval_start:]
+    meta_conf_eval   = meta_conf[eval_start:]
+    proposed_eval    = proposed[eval_start:]
+    valid_eval       = np.asarray(base_labels_eval != CENSORED)
+
     for rk in REGIME_KEYS:
-        rmask = np.asarray(regimes == rk) & valid_mask
+        rmask = np.asarray(regimes_eval == rk) & valid_eval
         n_r   = int(rmask.sum())
         if n_r < MIN_REGIME_BARS:
             regime_results[rk] = {
@@ -504,9 +526,9 @@ def optimize_symbol(symbol: str) -> Optional[Dict[str, Any]]:
             }
             continue
 
-        lbl_r  = np.asarray(base_labels[rmask])
-        conf_r = np.asarray(meta_conf[rmask])
-        prop_r = np.asarray(proposed[rmask])
+        lbl_r  = np.asarray(base_labels_eval[rmask])
+        conf_r = np.asarray(meta_conf_eval[rmask])
+        prop_r = np.asarray(proposed_eval[rmask])
 
         r_buy  = best_threshold(conf_r, prop_r, lbl_r, side=2, n_total=n_r)
         r_sell = best_threshold(conf_r, prop_r, lbl_r, side=0, n_total=n_r)
@@ -528,10 +550,11 @@ def optimize_symbol(symbol: str) -> Optional[Dict[str, Any]]:
 
     # ── assemble JSON ─────────────────────────────────────────────────────────
     params: Dict[str, Any] = {
-        "symbol":     symbol,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-        "n_bars":     n_feat,
-        "n_valid":    n_g,
+        "symbol":      symbol,
+        "updated_at":  datetime.now(timezone.utc).isoformat(),
+        "n_bars":      n_feat,
+        "n_eval_bars": n_g,     # bars in out-of-sample eval window
+        "eval_window": EVAL_WINDOW,
         "global": {
             "atr_multiplier": best_atr,
             "lookahead_bars": lh_res["lookahead_bars"],
