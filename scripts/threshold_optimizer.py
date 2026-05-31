@@ -429,9 +429,12 @@ def optimize_symbol(symbol: str) -> Optional[Dict[str, Any]]:
 
     # ── model input matrix ────────────────────────────────────────────────────
     if feature_cols:
-        for c in feature_cols:
-            if c not in features.columns:
-                features[c] = 0.0
+        missing = [c for c in feature_cols if c not in features.columns]
+        if missing:
+            features = pd.concat(
+                [features, pd.DataFrame(0.0, index=features.index, columns=missing)],
+                axis=1,
+            )
         feat_df = features[feature_cols].copy()
     else:
         drop = [c for c in ("timestamp", "target") if c in features.columns]
