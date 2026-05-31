@@ -83,7 +83,7 @@ VOLA_TIERS  = ["low", "med", "high"]
 REGIME_KEYS = [f"{v}_{va}" for v in VOL_TIERS for va in VOLA_TIERS]  # 9 keys
 
 # ── search grids ──────────────────────────────────────────────────────────────
-THRESHOLD_GRID = np.round(np.arange(0.48, 0.82, 0.02), 3).tolist()   # 17 pts
+THRESHOLD_GRID = np.round(np.arange(0.00, 1.00, 0.02), 3).tolist()   # 50 pts
 ATR_MULT_GRID  = np.round(np.arange(0.75, 4.25, 0.25), 2).tolist()   # 14 pts
 LOOKAHEAD_GRID = [12, 18, 24, 30, 36, 48, 60, 72]                     #  8 pts
 
