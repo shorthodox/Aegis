@@ -105,10 +105,10 @@ TEST_FRAC = 0.20
 N_SPLITS_CV = 10              # purged folds for OOF / dev estimates
 OPTUNA_TRIALS = 60
 
-SHAP_CUMULATIVE_THRESH = 0.85  # keep features covering 85% of total |SHAP| importance
-SHAP_TOP_PCT = 0.40            # also keep at least the top 40% of features by SHAP rank
-MIN_FEATURES = 25              # floor: never drop below this many features
-MAX_FEATURES = 100             # ceiling raised to accommodate top-40% rule
+SHAP_CUMULATIVE_THRESH = 0.70  # keep features covering 70% of total |SHAP| importance
+SHAP_TOP_PCT = 0.10            # drastically lower the floor so we aren't forced to keep 90 features
+MIN_FEATURES = 15              # lower the absolute floor so it can aggressively prune
+MAX_FEATURES = 50              # ceiling lowered to aggressively fight overfitting
 
 MIN_TOTAL_ROWS = 600
 MIN_FIT_ROWS = 300
@@ -857,14 +857,18 @@ def pick_threshold(meta_prob: np.ndarray, proposed: np.ndarray, y_true: np.ndarr
 
     rows = []
     # top-q fraction of signals by meta confidence (most permissive first)
-    for q in [0.50, 0.40, 0.30, 0.25, 0.20, 0.15, 0.10, 0.07, 0.05, 0.04, 0.03, 0.02]:
+    for q in [0.70, 0.60, 0.50, 0.40, 0.30, 0.25, 0.20, 0.15, 0.10, 0.07, 0.05, 0.04, 0.03, 0.02]:
         thr = float(np.quantile(mp, 1.0 - q))
-        fire = mp >= thr
+        fire = (mp >= thr) & ((pr == 2) | (pr == 0))  # only count directional trades!
         n = int(fire.sum())
         if n < min_fires:
             continue
         prec = float((pr[fire] == yt[fire]).mean())
-        rows.append((thr, prec, n / len(mp), n))
+        # cov is the fraction of directional trades out of all directional proposals
+        dir_mask = ((pr == 2) | (pr == 0))
+        total_dir = int(dir_mask.sum())
+        cov = n / total_dir if total_dir > 0 else 0.0
+        rows.append((thr, prec, cov, n))
     if not rows:
         return float(np.quantile(mp, 0.9)), 0.0, 0.0, 0, False
 
@@ -906,7 +910,7 @@ def pick_threshold_by_side(
         0.50 is rejected regardless of OOF precision, because the meta model is
         essentially random at that confidence level.
     """
-    MAX_SIDE_COVERAGE = 0.10   # never fire more than 10 % of one side's signals
+    MAX_SIDE_COVERAGE = 0.60   # allow up to 60% coverage per side
     MIN_ABS_THRESHOLD = 0.50   # meta confidence must be at least 50 %
 
     valid = ~np.isnan(meta_prob)
@@ -923,7 +927,7 @@ def pick_threshold_by_side(
     yt_s = yt[side_mask]
 
     rows = []
-    for q in [0.10, 0.07, 0.05, 0.04, 0.03, 0.02]:  # max 10% coverage per side
+    for q in [0.60, 0.50, 0.40, 0.30, 0.25, 0.20, 0.15, 0.10, 0.07, 0.05, 0.04, 0.03, 0.02]:  # max 60% coverage per side
         thr   = float(np.quantile(mp_s, 1.0 - q))
         if thr < MIN_ABS_THRESHOLD:          # reject thresholds below 50 % conf
             continue
@@ -1253,6 +1257,42 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         # ---- 4) Meta-labeling: build dataset + OOF + pick threshold ----
         meta_X_all = build_meta_X(Xtp, oof)
         prop_all = proposed_side(oof)
+
+        # ── Spot-on market dynamics: Regime-specific directional filter on DEV set ──
+        _opt = load_token_params(symbol)
+        if _opt and "regimes" in _opt and "regime_boundaries" in _opt:
+            bounds = _opt["regime_boundaries"]
+            regimes_dict = _opt["regimes"]
+            
+            # Extract base series from train_pool (unpruned) to avoid KeyError if SHAP dropped them
+            vol_avg = train_pool["volume"].rolling(24, min_periods=1).mean()
+            atr_pct = (train_pool["_atr"] / train_pool["close"]).fillna(0)
+            momentum = train_pool["close"].pct_change(24).fillna(0)
+            
+            def _tier(val, p33, p67): return "low" if val <= p33 else ("med" if val <= p67 else "high")
+            def _trend(val, p33, p67): return "down" if val <= p33 else ("flat" if val <= p67 else "up")
+            
+            vp33, vp67 = bounds.get("vol_p33", 0), bounds.get("vol_p67", 0)
+            ap33, ap67 = bounds.get("atr_pct_p33", 0), bounds.get("atr_pct_p67", 0)
+            mp33, mp67 = bounds.get("momentum_p33", -0.02), bounds.get("momentum_p67", 0.02)
+            
+            regime_strs = [
+                f"{_tier(vol_avg.iloc[i], vp33, vp67)}_{_tier(atr_pct.iloc[i], ap33, ap67)}_{_trend(momentum.iloc[i], mp33, mp67)}"
+                for i in range(len(Xtp))
+            ]
+            
+            for i in range(len(Xtp)):
+                reg = regimes_dict.get(regime_strs[i], {})
+                if not reg or reg.get("skipped"):
+                    prop_all[i] = 1 # Suppress to HOLD
+                    continue
+                p_sell, p_hold, p_buy = oof[i, 0], oof[i, 1], oof[i, 2]
+                side = prop_all[i]
+                if side == 2:
+                    if not reg.get("buy_ok"): prop_all[i] = 1
+                elif side == 0:
+                    if not reg.get("sell_ok"): prop_all[i] = 1
+
         meta_y_all = (prop_all == ytp).astype(int)
 
         mX = meta_X_all[mask].reset_index(drop=True)
@@ -1391,28 +1431,12 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
                 fire = fire & ~trend_suppress
                 print(f"   Trend filter: suppressed {n_ts} counter-trend weak signals")
 
-        # barrier size as a fraction of price, for the PnL backtest
-        vr = holdout['volatility_regime'].to_numpy() if 'volatility_regime' in holdout else np.ones(len(holdout))
-        dyn = atr_mult * np.clip(vr, 0.8, 1.5)
-        close_arr = holdout['close'].to_numpy()
-        barrier_frac = np.divide(dyn * holdout['_atr'].to_numpy(), close_arr,
-                                 out=np.zeros(len(holdout)), where=close_arr != 0)
-
-        fired_n    = int(fire.sum())
-        fired_prec = float((prop_h[fire] == y_test[fire]).mean()) if fired_n > 0 else 0.0
-        coverage   = fired_n / len(y_test)
-        bt         = backtest(fire, prop_h, y_test, barrier_frac)
-
         # ── Per-side holdout precision (using per-side thresholds directly) ──
         # Do NOT intersect with the combined rank gate. The combined gate fires
         # the top-5% by meta confidence which, in a bull regime, is dominated by
         # SELL signals — leaving BUY with 0 holdout trades and a false "insufficient
         # data" conclusion. Use the per-side OOF thresholds (thr_buy, thr_sell)
         # to fire each side independently on the holdout.
-        # Per-side holdout fires using the per-side OOF thresholds directly.
-        # Additionally cap each side at its OOF coverage fraction to prevent
-        # distribution drift (the meta model assigns higher confidence on
-        # out-of-distribution holdout data, firing more signals than intended).
         _h_buy_pool  = (prop_h == 2)
         _h_sell_pool = (prop_h == 0)
         if hit_buy and _h_buy_pool.sum() > 0:
@@ -1428,6 +1452,60 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             sell_fire = (meta_prob_h >= max(thr_sell, _sell_rank_thr)) & _h_sell_pool
         else:
             sell_fire = np.zeros(len(meta_prob_h), dtype=bool)
+
+        # ── Spot-on market dynamics: Regime-specific directional filter ──────
+        if hit_target and _opt and "regimes" in _opt and "regime_boundaries" in _opt:
+            bounds = _opt["regime_boundaries"]
+            regimes_dict = _opt["regimes"]
+            
+            vol_avg = holdout["volume"].rolling(24, min_periods=1).mean()
+            atr_pct = (holdout["_atr"] / holdout["close"]).fillna(0)
+            momentum = holdout["close"].pct_change(24).fillna(0)
+            
+            def _tier(val, p33, p67): return "low" if val <= p33 else ("med" if val <= p67 else "high")
+            def _trend(val, p33, p67): return "down" if val <= p33 else ("flat" if val <= p67 else "up")
+            
+            vp33, vp67 = bounds.get("vol_p33", 0), bounds.get("vol_p67", 0)
+            ap33, ap67 = bounds.get("atr_pct_p33", 0), bounds.get("atr_pct_p67", 0)
+            mp33, mp67 = bounds.get("momentum_p33", -0.02), bounds.get("momentum_p67", 0.02)
+            
+            regime_strs = [
+                f"{_tier(vol_avg.iloc[i], vp33, vp67)}_{_tier(atr_pct.iloc[i], ap33, ap67)}_{_trend(momentum.iloc[i], mp33, mp67)}"
+                for i in range(len(holdout))
+            ]
+            
+            regime_suppress = np.zeros(len(holdout), dtype=bool)
+            for i in range(len(holdout)):
+                if not (buy_fire[i] or sell_fire[i] or fire[i]): continue
+                reg = regimes_dict.get(regime_strs[i], {})
+                if not reg or reg.get("skipped"):
+                    regime_suppress[i] = True
+                    continue
+                p_sell, p_hold, p_buy = raw_probs[i, 0], raw_probs[i, 1], raw_probs[i, 2]
+                side = prop_h[i]
+                if side == 2:
+                    if not reg.get("buy_ok"): regime_suppress[i] = True
+                elif side == 0:
+                    if not reg.get("sell_ok"): regime_suppress[i] = True
+
+            n_regime_supp = int(regime_suppress.sum())
+            if n_regime_supp:
+                fire = fire & ~regime_suppress
+                buy_fire = buy_fire & ~regime_suppress
+                sell_fire = sell_fire & ~regime_suppress
+                print(f"   Regime filter: suppressed {n_regime_supp} signals based on spot-on dynamics")
+
+        # barrier size as a fraction of price, for the PnL backtest
+        vr = holdout['volatility_regime'].to_numpy() if 'volatility_regime' in holdout else np.ones(len(holdout))
+        dyn = atr_mult * np.clip(vr, 0.8, 1.5)
+        close_arr = holdout['close'].to_numpy()
+        barrier_frac = np.divide(dyn * holdout['_atr'].to_numpy(), close_arr,
+                                 out=np.zeros(len(holdout)), where=close_arr != 0)
+
+        fired_n    = int(fire.sum())
+        fired_prec = float((prop_h[fire] == y_test[fire]).mean()) if fired_n > 0 else 0.0
+        coverage   = fired_n / len(y_test)
+        bt         = backtest(fire, prop_h, y_test, barrier_frac)
 
         buy_h_n   = int(buy_fire.sum())
         sell_h_n  = int(sell_fire.sum())

@@ -196,6 +196,11 @@ class AdaptiveBacktester:
         # ATR multiplier = SL distance (same value used to label training data)
         self.atr_mult       = float(meta.get("atr_multiplier", 1.5))
 
+        # Spot-on dynamics regimes
+        _opt = self.predictor._token_params or {}
+        self.regime_thresholds = meta.get("regime_thresholds") or _opt.get("regimes", {})
+        self.regime_boundaries = meta.get("regime_boundaries") or _opt.get("regime_boundaries", {})
+
     # ── Main run ──────────────────────────────────────────────────────────────
 
     def run(self, hours: int = DATA_HOURS) -> BacktestResult:
@@ -288,12 +293,23 @@ class AdaptiveBacktester:
             meta_conf = float(row.get("meta_conf", 0.0))
             meta_dir  = int(row.get("meta_direction", 1))   # 2=BUY, 0=SELL, 1=HOLD
 
+            # ── SPOT-ON DYNAMICS REGIME GATE ─────────────────────────────────
+            regime_str = str(row.get("regime_str", "unknown"))
+            reg = self.regime_thresholds.get(regime_str, {})
+            
+            if not reg or reg.get("skipped"):
+                continue
+
             if meta_dir == 2:
-                if not self.tradeable_buy  or meta_conf < self.thr_buy:
+                if not reg.get("buy_ok"):
+                    continue
+                if not self.tradeable_buy or meta_conf < self.thr_buy:
                     continue
                 direction = "long"
                 thr = self.thr_buy
             elif meta_dir == 0:
+                if not reg.get("sell_ok"):
+                    continue
                 if not self.tradeable_sell or meta_conf < self.thr_sell:
                     continue
                 direction = "short"
@@ -316,6 +332,24 @@ class AdaptiveBacktester:
                 trend_1d = float(row.get("macro_trend_1d", 0.0))
                 if (direction == "long"  and trend_1d < -0.2) or \
                    (direction == "short" and trend_1d >  0.2):
+                    skipped_srt += 1
+                    continue
+                
+                # ----- Feature Engine Confluence & Structure Filters -----
+                total_conf = float(row.get("total_confluence", 0.0))
+                if (direction == "long" and total_conf < -0.1) or \
+                   (direction == "short" and total_conf > 0.1):
+                    skipped_srt += 1
+                    continue
+
+                choppiness = float(row.get("choppiness", 50.0))
+                if choppiness > 60:
+                    skipped_srt += 1
+                    continue
+                
+                bos = float(row.get("bos_state", 0.0))
+                if (direction == "long" and bos < 0) or \
+                   (direction == "short" and bos > 0):
                     skipped_srt += 1
                     continue
 
@@ -439,6 +473,28 @@ class AdaptiveBacktester:
             dir_raw, 1
         )
         df["atr_14"] = compute_atr(df, 14)
+        df["atr_mean_100"] = df["atr_14"].rolling(100, min_periods=1).mean()
+        df["volatility_regime"] = df["atr_14"] / (df["atr_mean_100"] + 1e-9)
+
+        if self.regime_boundaries:
+            bounds = self.regime_boundaries
+            vol_avg = df["volume"].rolling(24, min_periods=1).mean()
+            atr_pct = (df["atr_14"] / df["close"]).fillna(0)
+            momentum = df["close"].pct_change(24).fillna(0)
+            
+            def _tier(val, p33, p67): return "low" if val <= p33 else ("med" if val <= p67 else "high")
+            def _trend(val, p33, p67): return "down" if val <= p33 else ("flat" if val <= p67 else "up")
+            
+            vp33, vp67 = bounds.get("vol_p33", 0), bounds.get("vol_p67", 0)
+            ap33, ap67 = bounds.get("atr_pct_p33", 0), bounds.get("atr_pct_p67", 0)
+            mp33, mp67 = bounds.get("momentum_p33", -0.02), bounds.get("momentum_p67", 0.02)
+            
+            df["regime_str"] = [
+                f"{_tier(vol_avg.iloc[i], vp33, vp67)}_{_tier(atr_pct.iloc[i], ap33, ap67)}_{_trend(momentum.iloc[i], mp33, mp67)}"
+                for i in range(len(df))
+            ]
+        else:
+            df["regime_str"] = "unknown"
 
         AdaptiveBacktester._df_cache[self.symbol] = df
         return df

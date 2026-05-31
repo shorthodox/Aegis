@@ -73,12 +73,12 @@ PARAMS_DIR.mkdir(parents=True, exist_ok=True)
 MODEL_STORE = _ROOT / "src" / "ml" / "model_store"
 
 # ── data ──────────────────────────────────────────────────────────────────────
-HISTORY_HOURS = 2000
+HISTORY_HOURS = 4000
 MIN_BARS      = 800     # need enough for a decent train/eval split
 
 # ── independent local model ───────────────────────────────────────────────────
 TRAIN_FRAC   = 0.70    # first 70% → fit local model
-LOCAL_ROUNDS = 200     # quick fit; no Optuna
+LOCAL_ROUNDS = 300     # quick fit; no Optuna
 
 # ── regime grid  (3 × 3 × 3 = 27 buckets) ───────────────────────────────────
 # Three axes capture the three most independent market dimensions:
@@ -98,7 +98,9 @@ REGIME_KEYS = [
 # ── search grids ──────────────────────────────────────────────────────────────
 # Thresholds are on p_buy / p_sell (softmax output).
 # In a 3-class model the winning class typically sits in 0.35-0.70.
-THRESHOLD_GRID = np.round(np.arange(0.30, 0.78, 0.02), 3).tolist()   # 24 pts
+THRESHOLD_GRID = np.round(np.arange(0.30, 0.90, 0.02), 3).tolist()   # 30 pts
+MARGIN_GRID    = np.round(np.arange(0.00, 0.40, 0.05), 3).tolist()   # 8 pts
+MAX_HOLD_GRID  = [0.40, 0.45, 0.50, 0.60, 1.00]                      # 5 pts
 ATR_MULT_GRID  = np.round(np.arange(0.75, 4.25, 0.25), 2).tolist()   # 14 pts
 LOOKAHEAD_GRID = [12, 18, 24, 30, 36, 48, 60, 72]                     #  8 pts
 
@@ -107,10 +109,9 @@ LOOKAHEAD_GRID = [12, 18, 24, 30, 36, 48, 60, 72]                     #  8 pts
 # all skipped; noisy-but-present is better than falling back to the global.
 MIN_REGIME_BARS = 10
 MIN_SIGNALS     = 5
-# Minimum viable precision: must exceed 50% + fees to have positive expected
-# value. Anything ≤ 50% is worse than a coin flip regardless of coverage.
-BREAKEVEN       = 0.50 + FEE_ROUNDTRIP   # ≈ 50.1%
-TARGET_PREC     = 0.58                   # "green" bar (local model is weaker than production)
+# Minimum viable precision: must exceed 55% to enforce higher quality trades.
+BREAKEVEN       = 0.55                   # Hard floor for score
+TARGET_PREC     = 0.60                   # "green" bar (local model is weaker than production)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -121,7 +122,7 @@ def _fit_local_model(
     feat_df: pd.DataFrame,
     labels:  np.ndarray,    # full barrier labels (including CENSORED)
     train_n: int,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Train a quick XGBoost on feat_df[:train_n] (CENSORED rows excluded).
     Predict on feat_df[train_n:] (the out-of-sample eval window).
@@ -153,12 +154,13 @@ def _fit_local_model(
         "objective":        "multi:softprob",
         "num_class":        3,
         "eval_metric":      "mlogloss",
-        "max_depth":        5,
+        "max_depth":        3,
         "learning_rate":    0.05,
-        "subsample":        0.8,
-        "colsample_bytree": 0.8,
-        "min_child_weight": 5,
+        "subsample":        0.5,
+        "colsample_bytree": 0.5,
+        "min_child_weight": 10,
         "reg_lambda":       2.0,
+        "gamma":            1.0,  # Prune noisy leaves to improve precision
         "seed":             42,
         "tree_method":      "hist",
         "missing":          np.nan,
@@ -174,7 +176,7 @@ def _fit_local_model(
     proposed = np.where(probs[:, 2] >= probs[:, 0], 2, 0).astype(int)
     dir_conf = np.where(proposed == 2, probs[:, 2], probs[:, 0]).astype(float)
 
-    return proposed, dir_conf
+    return proposed, dir_conf, probs
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -243,14 +245,14 @@ def classify_regimes(df: pd.DataFrame) -> Tuple[pd.Series, Dict[str, float]]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def best_threshold(
-    dir_conf: np.ndarray,   # p_buy (BUY bars) or p_sell (SELL bars)
+    probs:    np.ndarray,   # (N, 3): p_sell, p_hold, p_buy
     proposed: np.ndarray,
     labels:   np.ndarray,
     side:     int,          # 2=BUY, 0=SELL
     n_total:  int,
 ) -> Dict[str, Any]:
     """
-    Sweep THRESHOLD_GRID for one direction.
+    Sweep THRESHOLD_GRID, MARGIN_GRID and MAX_HOLD_GRID for one direction.
 
     Score = coverage × (2 × precision − 1 − FEE_ROUNDTRIP)
       — proportional to total expected PnL (1:1 R:R, minus fees).
@@ -262,33 +264,48 @@ def best_threshold(
     """
     sm = proposed == side
     if int(sm.sum()) < MIN_SIGNALS:
-        return {"threshold": 0.50, "precision": 0.0,
+        return {"threshold": 0.50, "margin": 0.0, "max_hold": 1.0, "precision": 0.0,
                 "coverage": 0.0, "n_signals": 0, "ok": False}
 
-    conf_s  = dir_conf[sm]
+    probs_s = probs[sm]
     lbl_s   = labels[sm]
     correct = side
+
+    if side == 2:
+        p_dir = probs_s[:, 2]
+        p_opp = probs_s[:, 0]
+    else:
+        p_dir = probs_s[:, 0]
+        p_opp = probs_s[:, 2]
+        
+    p_hold = probs_s[:, 1]
+    margin = p_dir - p_opp
 
     all_rows: List[Dict[str, Any]] = []
     best: Optional[Dict[str, Any]] = None
     best_score = -np.inf
 
     for thr in THRESHOLD_GRID:
-        fired = conf_s >= thr
-        n = int(fired.sum())
-        if n < MIN_SIGNALS:
-            continue
-        prec = float((lbl_s[fired] == correct).mean())
-        cov  = n / max(n_total, 1)
-        # Financially-correct score: total expected PnL ∝ n × (2p − 1 − fee)
-        # Negative when precision ≤ 50% → losing thresholds are skipped
-        score = cov * (2.0 * prec - 1.0 - FEE_ROUNDTRIP)
-        all_rows.append({"threshold": float(thr), "precision": round(prec, 4),
-                         "coverage": round(cov, 4), "n_signals": n,
-                         "ok": prec >= TARGET_PREC, "_score": score})
-        if prec >= BREAKEVEN and score > best_score:
-            best_score = score
-            best = all_rows[-1]
+        for m in MARGIN_GRID:
+            for h in MAX_HOLD_GRID:
+                fired = (p_dir >= thr) & (margin >= m) & (p_hold <= h)
+                n = int(fired.sum())
+                if n < MIN_SIGNALS:
+                    continue
+                prec = float((lbl_s[fired] == correct).mean())
+                cov  = n / max(n_total, 1)
+                # We want to force precision higher (60-70%).
+                # Using sqrt(cov) reduces the reward for pure volume, pushing the optimizer
+                # to pick higher precision thresholds.
+                score = (cov ** 0.5) * (prec - BREAKEVEN)
+                
+                row = {"threshold": float(thr), "margin": float(m), "max_hold": float(h), 
+                       "precision": round(prec, 4), "coverage": round(cov, 4), 
+                       "n_signals": n, "ok": prec >= TARGET_PREC, "_score": score}
+                all_rows.append(row)
+                if prec >= BREAKEVEN and score > best_score:
+                    best_score = score
+                    best = row
 
     if best is None:
         # No threshold cleared the 50% floor — direction is unprofitable here.
@@ -297,7 +314,7 @@ def best_threshold(
             ref = max(all_rows, key=lambda r: r["precision"])
             ref["ok"] = False
             return {k: v for k, v in ref.items() if k != "_score"}
-        return {"threshold": 0.50, "precision": 0.0,
+        return {"threshold": 0.50, "margin": 0.0, "max_hold": 1.0, "precision": 0.0,
                 "coverage": 0.0, "n_signals": 0, "ok": False}
 
     return {k: v for k, v in best.items() if k != "_score"}
@@ -536,7 +553,7 @@ def optimize_symbol(symbol: str) -> Optional[Dict[str, Any]]:
     print(f"   [{symbol}] Fitting local model "
           f"({train_n} train / {eval_n} eval)...", end=" ", flush=True)
     try:
-        proposed_ev, dir_conf_ev = _fit_local_model(feat_df, np.asarray(labels_all), train_n)
+        proposed_ev, dir_conf_ev, probs_ev = _fit_local_model(feat_df, np.asarray(labels_all), train_n)
     except Exception as exc:
         print(f"FAILED ({exc})")
         return None
@@ -567,13 +584,13 @@ def optimize_symbol(symbol: str) -> Optional[Dict[str, Any]]:
     valid_ev = np.asarray(labels_ev != CENSORED)
 
     # ── global threshold optimisation ─────────────────────────────────────────
-    n_g    = int(valid_ev.sum())
-    lbl_g  = np.asarray(labels_ev[valid_ev])
-    conf_g = np.asarray(dir_conf_ev[valid_ev])
-    prop_g = np.asarray(proposed_ev[valid_ev])
+    n_g     = int(valid_ev.sum())
+    lbl_g   = np.asarray(labels_ev[valid_ev])
+    probs_g = np.asarray(probs_ev[valid_ev])
+    prop_g  = np.asarray(proposed_ev[valid_ev])
 
-    g_buy  = best_threshold(conf_g, prop_g, lbl_g, side=2, n_total=n_g)
-    g_sell = best_threshold(conf_g, prop_g, lbl_g, side=0, n_total=n_g)
+    g_buy  = best_threshold(probs_g, prop_g, lbl_g, side=2, n_total=n_g)
+    g_sell = best_threshold(probs_g, prop_g, lbl_g, side=0, n_total=n_g)
 
     # ── per-regime threshold optimisation ─────────────────────────────────────
     regime_results: Dict[str, Any] = {}
@@ -587,18 +604,22 @@ def optimize_symbol(symbol: str) -> Optional[Dict[str, Any]]:
             }
             continue
 
-        lbl_r  = np.asarray(labels_ev[rmask])
-        conf_r = np.asarray(dir_conf_ev[rmask])
-        prop_r = np.asarray(proposed_ev[rmask])
+        lbl_r   = np.asarray(labels_ev[rmask])
+        probs_r = np.asarray(probs_ev[rmask])
+        prop_r  = np.asarray(proposed_ev[rmask])
 
-        r_buy  = best_threshold(conf_r, prop_r, lbl_r, side=2, n_total=n_r)
-        r_sell = best_threshold(conf_r, prop_r, lbl_r, side=0, n_total=n_r)
+        r_buy  = best_threshold(probs_r, prop_r, lbl_r, side=2, n_total=n_r)
+        r_sell = best_threshold(probs_r, prop_r, lbl_r, side=0, n_total=n_r)
 
         regime_results[rk] = {
             "n_bars":         n_r,
             "skipped":        False,
             "buy_threshold":  r_buy["threshold"],
+            "buy_margin":     r_buy["margin"],
+            "buy_max_hold":   r_buy["max_hold"],
             "sell_threshold": r_sell["threshold"],
+            "sell_margin":    r_sell["margin"],
+            "sell_max_hold":  r_sell["max_hold"],
             "precision_buy":  r_buy["precision"],
             "precision_sell": r_sell["precision"],
             "coverage_buy":   r_buy["coverage"],
@@ -621,7 +642,11 @@ def optimize_symbol(symbol: str) -> Optional[Dict[str, Any]]:
             "atr_multiplier": best_atr,
             "lookahead_bars": lh_res["lookahead_bars"],
             "buy_threshold":  g_buy["threshold"],
+            "buy_margin":     g_buy["margin"],
+            "buy_max_hold":   g_buy["max_hold"],
             "sell_threshold": g_sell["threshold"],
+            "sell_margin":    g_sell["margin"],
+            "sell_max_hold":  g_sell["max_hold"],
             "precision_buy":  g_buy["precision"],
             "precision_sell": g_sell["precision"],
             "coverage_buy":   g_buy["coverage"],
@@ -648,8 +673,8 @@ def optimize_symbol(symbol: str) -> Optional[Dict[str, Any]]:
         prec = res["precision"]
         if res["ok"]:
             return f"[+] p>={thr:.2f} prec={prec:.0%}"
-        if prec < 0.50:
-            return f"[-] p>={thr:.2f} prec={prec:.0%}  (disabled: <50%)"
+        if prec < BREAKEVEN:
+            return f"[-] p>={thr:.2f} prec={prec:.0%}  (disabled: <{BREAKEVEN:.0%})"
         return f"[-] p>={thr:.2f} prec={prec:.0%}  (disabled: below {TARGET_PREC:.0%} target)"
 
     print(
@@ -657,6 +682,12 @@ def optimize_symbol(symbol: str) -> Optional[Dict[str, Any]]:
         f"BUY {_fmt(g_buy)} | SELL {_fmt(g_sell)} | "
         f"regimes {n_live}/{len(REGIME_KEYS)} active"
     )
+    # Print the breakdown so the shifting thresholds across vol, vola, and trend can be monitored
+    for rk, rres in regime_results.items():
+        if not rres.get("skipped"):
+            rb = {"threshold": rres["buy_threshold"], "precision": rres["precision_buy"], "ok": rres["buy_ok"]}
+            rs = {"threshold": rres["sell_threshold"], "precision": rres["precision_sell"], "ok": rres["sell_ok"]}
+            print(f"      -> [{rk:^13}] BUY {_fmt(rb)} | SELL {_fmt(rs)}")
     return params
 
 

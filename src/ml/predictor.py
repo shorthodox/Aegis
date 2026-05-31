@@ -32,13 +32,20 @@ def map_timeframe_to_ccxt(tf: str) -> str:
 
 
 class Predictor:
+    _SHARED_SPOT_EX = None
+    _SHARED_FUTURES_EX = None
+    _NO_PERP_SYMBOLS: set = set()
+
     def __init__(self, symbol: str):
         self.symbol = symbol
-        self.exchange = ccxt.binance()
-        self.exchange.enableRateLimit = True
-        options = cast(Dict[str, Any], self.exchange.options or {})
-        options['defaultType'] = 'spot'
-        self.exchange.options = options
+        
+        if Predictor._SHARED_SPOT_EX is None:
+            Predictor._SHARED_SPOT_EX = ccxt.binance({'enableRateLimit': True, 'timeout': 10000})
+            options = cast(Dict[str, Any], Predictor._SHARED_SPOT_EX.options or {})
+            options['defaultType'] = 'spot'
+            Predictor._SHARED_SPOT_EX.options = options
+            
+        self.exchange = Predictor._SHARED_SPOT_EX
 
         self.model: Optional[xgb.Booster] = None          # primary (Booster)
         self.meta_model: Optional[xgb.Booster] = None      # meta gate (Booster)
@@ -230,8 +237,11 @@ class Predictor:
         if self.symbol in Predictor._NO_PERP_SYMBOLS:
             return None, None
         try:
-            import ccxt as _ccxt
-            ex = _ccxt.binanceusdm({'enableRateLimit': True, 'timeout': 10000})  # type: ignore[arg-type]
+            if Predictor._SHARED_FUTURES_EX is None:
+                import ccxt as _ccxt
+                Predictor._SHARED_FUTURES_EX = _ccxt.binanceusdm({'enableRateLimit': True, 'timeout': 10000})
+            ex = Predictor._SHARED_FUTURES_EX
+            
             ts = pd.to_datetime(df['timestamp'])
             since_ms = int(ts.iloc[0].timestamp() * 1000)
             n = len(df)
@@ -471,12 +481,11 @@ class Predictor:
                 if regime:
                     reg = regime_thresholds.get(regime, {})
                     if reg and not reg.get("skipped"):
-                        if side == 2 and reg.get("buy_ok") and "buy_threshold" in reg:
-                            if float(last[2]) < float(reg["buy_threshold"]):
-                                fire = False
-                        elif side == 0 and reg.get("sell_ok") and "sell_threshold" in reg:
-                            if float(last[0]) < float(reg["sell_threshold"]):
-                                fire = False
+                        p_sell, p_hold, p_buy = float(last[0]), float(last[1]), float(last[2])
+                        if side == 2 and not reg.get("buy_ok"):
+                            fire = False
+                        elif side == 0 and not reg.get("sell_ok"):
+                            fire = False
 
         # ── S&R + trend alignment filters (mirrors training holdout logic) ───
         # These suppress weak signals (below top-25% confidence) that fight a
