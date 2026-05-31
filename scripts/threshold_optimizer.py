@@ -2,27 +2,32 @@
 """
 threshold_optimizer.py — Per-token adaptive threshold, ATR & lookahead optimizer
 =================================================================================
-For each token with a trained model this script:
+Generates thresholds INDEPENDENTLY from the production models:
 
-  1. Loads 2 000 bars of historical OHLCV through the same pipeline as retrain
-  2. Gets batch predictions from the trained primary + meta XGBoost models
-  3. Sweeps 14 ATR multiplier candidates → picks the one that maximises
-     precision × sqrt(coverage) on fired signals
-  4. Sweeps 8 lookahead windows → picks the best precision / trade-duration trade-off
-  5. Classifies every bar into one of 9 regime buckets (3 volume × 3 volatility)
-  6. Per-regime: grid-searches the best BUY / SELL confidence thresholds
-  7. Saves everything to  data/token_params/<BASE>_params.json
+  1. Loads 2 000 bars of OHLCV + features (same pipeline as retrain)
+  2. Splits data: first 70% → train a fresh local XGBoost (200 rounds, no Optuna)
+                  last  30% → out-of-sample evaluation (never seen by local model)
+  3. Predicts directional probabilities on the eval window
+  4. ATR multiplier sweep   → picks best SL distance (eval window)
+  5. Lookahead window sweep → picks best trade-duration trade-off (eval window)
+  6. Classifies eval bars into 9 regime buckets (3 vol x 3 vola)
+  7. Per-regime + global: grid-search the best BUY / SELL thresholds on
+     DIRECTIONAL PROBABILITY (p_buy for BUY proposals, p_sell for SELL)
+  8. Saves data/token_params/<BASE>_params.json
 
-These JSON files are consumed by:
-  - scripts/retrain_model.py  — uses the optimised ATR multiplier instead of the
-                                 static tier table
-  - src/ml/predictor.py       — uses regime-specific thresholds at inference time
+Thresholds are on p_buy / p_sell (0-1 softmax output of the primary model).
+predictor.py applies them directly against the production primary model's
+class probabilities as an additional filter on top of the meta gate.
+
+Consumed by:
+  - scripts/retrain_model.py  — ATR multiplier + lookahead
+  - src/ml/predictor.py       — regime-specific directional-prob thresholds
 
 Usage
 -----
     python scripts/threshold_optimizer.py                  # all fleet symbols
     python scripts/threshold_optimizer.py BTC/USDT ETH/USDT
-    python scripts/threshold_optimizer.py --workers 4      # parallel processes
+    python scripts/threshold_optimizer.py --workers 4
 """
 
 from __future__ import annotations
@@ -62,47 +67,106 @@ from scripts.retrain_model import (
     CENSORED,
 )
 
-# ── output directory ──────────────────────────────────────────────────────────
+# ── output ────────────────────────────────────────────────────────────────────
 PARAMS_DIR  = _ROOT / "data" / "token_params"
 PARAMS_DIR.mkdir(parents=True, exist_ok=True)
 MODEL_STORE = _ROOT / "src" / "ml" / "model_store"
 
-# ── data config ───────────────────────────────────────────────────────────────
-HISTORY_HOURS = 2000    # bars per symbol — more history → better regime stats
-MIN_BARS      = 600     # skip if fewer usable bars after feature engineering
+# ── data ──────────────────────────────────────────────────────────────────────
+HISTORY_HOURS = 2000
+MIN_BARS      = 800     # need enough for a decent train/eval split
 
-# Threshold search uses only the LAST EVAL_WINDOW bars as an out-of-sample
-# proxy.  The primary model was trained on earlier data, so its confidence
-# scores on recent bars are honest (not inflated by memorisation).
-# ATR / lookahead optimisation uses ALL bars (fresh barrier labels only).
-EVAL_WINDOW = 600       # ~25 days of 1h bars; keeps ~67 bars/regime on average
+# ── independent local model ───────────────────────────────────────────────────
+TRAIN_FRAC   = 0.70    # first 70% → fit local model
+LOCAL_ROUNDS = 200     # quick fit; no Optuna
 
-# ── regime grid  (3 volume tiers × 3 volatility tiers = 9 buckets) ───────────
+# ── regime grid ───────────────────────────────────────────────────────────────
 VOL_TIERS   = ["low", "med", "high"]
 VOLA_TIERS  = ["low", "med", "high"]
-REGIME_KEYS = [f"{v}_{va}" for v in VOL_TIERS for va in VOLA_TIERS]  # 9 keys
+REGIME_KEYS = [f"{v}_{va}" for v in VOL_TIERS for va in VOLA_TIERS]
 
 # ── search grids ──────────────────────────────────────────────────────────────
-THRESHOLD_GRID = np.round(np.arange(0.00, 1.00, 0.02), 3).tolist()   # 50 pts
+# Thresholds are on p_buy / p_sell (softmax output).
+# In a 3-class model the winning class typically sits in 0.35-0.70.
+THRESHOLD_GRID = np.round(np.arange(0.30, 0.78, 0.02), 3).tolist()   # 24 pts
 ATR_MULT_GRID  = np.round(np.arange(0.75, 4.25, 0.25), 2).tolist()   # 14 pts
 LOOKAHEAD_GRID = [12, 18, 24, 30, 36, 48, 60, 72]                     #  8 pts
 
 # ── quality gates ─────────────────────────────────────────────────────────────
-MIN_REGIME_BARS = 50     # skip a regime bucket if it has fewer valid bars
-MIN_SIGNALS     = 10     # minimum fired signals to trust a threshold result
-# Precision must exceed 50 % + fees to have positive expected value.
-# Anything below 50 % is worse than a random coin flip regardless of coverage.
-BREAKEVEN       = 0.50 + FEE_ROUNDTRIP   # ~50.1 %
-TARGET_PREC     = 0.60                   # "green" precision target
+MIN_REGIME_BARS = 40
+MIN_SIGNALS     = 8
+BREAKEVEN       = FEE_ROUNDTRIP   # ~0.10 % round-trip
+TARGET_PREC     = 0.58            # slightly lower than retrain's 0.60
+                                  # (local model is weaker than production)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Independent local model
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _fit_local_model(
+    feat_df: pd.DataFrame,
+    labels:  np.ndarray,    # full barrier labels (including CENSORED)
+    train_n: int,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Train a quick XGBoost on feat_df[:train_n] (CENSORED rows excluded).
+    Predict on feat_df[train_n:] (the out-of-sample eval window).
+
+    Returns (proposed, dir_conf) for the eval window:
+      proposed  — 2=BUY or 0=SELL based on argmax of p_buy vs p_sell
+      dir_conf  — p_buy when BUY proposed, p_sell when SELL proposed
+
+    Thresholds found against dir_conf are directly comparable to the
+    production primary model's p_buy / p_sell at inference time.
+    """
+    y_tr_raw = labels[:train_n]
+    valid_tr = y_tr_raw != CENSORED
+    if int(valid_tr.sum()) < 200:
+        raise ValueError(f"Only {int(valid_tr.sum())} valid training bars.")
+
+    cols = list(feat_df.columns)
+    X_tr = feat_df.iloc[:train_n][valid_tr].values
+    y_tr = y_tr_raw[valid_tr].astype(int)
+
+    # Inverse-frequency class weights so HOLD majority doesn't swamp BUY/SELL
+    cnt = np.bincount(y_tr, minlength=3).astype(float)
+    cnt[cnt == 0] = 1.0
+    cw  = (1.0 / cnt)
+    cw  = cw / cw.sum() * 3
+    w_tr = cw[y_tr]
+
+    params: Dict[str, Any] = {
+        "objective":        "multi:softprob",
+        "num_class":        3,
+        "eval_metric":      "mlogloss",
+        "max_depth":        5,
+        "learning_rate":    0.05,
+        "subsample":        0.8,
+        "colsample_bytree": 0.8,
+        "min_child_weight": 5,
+        "reg_lambda":       2.0,
+        "seed":             42,
+        "tree_method":      "hist",
+        "missing":          np.nan,
+        "verbosity":        0,
+    }
+    dm_tr = xgb.DMatrix(X_tr, label=y_tr, weight=w_tr, feature_names=cols)
+    model = xgb.train(params, dm_tr, num_boost_round=LOCAL_ROUNDS, verbose_eval=False)
+
+    X_ev  = feat_df.iloc[train_n:].values
+    dm_ev = xgb.DMatrix(X_ev, feature_names=cols)
+    probs = model.predict(dm_ev)   # (n_eval, 3): [p_sell, p_hold, p_buy]
+
+    proposed = np.where(probs[:, 2] >= probs[:, 0], 2, 0).astype(int)
+    dir_conf = np.where(proposed == 2, probs[:, 2], probs[:, 0]).astype(float)
+
+    return proposed, dir_conf
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
-
-def _dm(X: pd.DataFrame) -> xgb.DMatrix:
-    return xgb.DMatrix(X.values, feature_names=list(X.columns))
-
 
 def _tier(val: float, p33: float, p67: float) -> str:
     if val <= p33:
@@ -116,17 +180,11 @@ def _tier(val: float, p33: float, p67: float) -> str:
 # Regime classification
 # ─────────────────────────────────────────────────────────────────────────────
 
-def classify_regimes(
-    df: pd.DataFrame,
-) -> Tuple[pd.Series, Dict[str, float]]:
+def classify_regimes(df: pd.DataFrame) -> Tuple[pd.Series, Dict[str, float]]:
     """
-    Classify each bar into one of 9 regime strings '<vol>_<vola>'.
-    vol  axis: rolling 24-bar mean volume vs own historical percentiles.
-    vola axis: ATR / close vs own historical percentiles.
-
-    Returns (regime_series, boundaries_dict).
-    boundaries_dict is saved to the JSON output so predictor.py can classify
-    the current bar at inference time without the full historical distribution.
+    Classify all bars into '<vol>_<vola>' regime strings.
+    Boundaries are computed from ALL passed data so percentiles are stable.
+    Returns (series, boundaries_dict); boundaries saved to JSON for inference.
     """
     roll_vol = df["volume"].rolling(24, min_periods=1).mean()
     atr_vals = compute_atr(df, period=14)
@@ -151,41 +209,32 @@ def classify_regimes(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Threshold grid-search for one direction in one data slice
+# Threshold grid-search
 # ─────────────────────────────────────────────────────────────────────────────
 
 def best_threshold(
-    meta_conf: np.ndarray,
-    proposed:  np.ndarray,
-    labels:    np.ndarray,
-    side:      int,        # 2 = BUY, 0 = SELL
-    n_total:   int,
+    dir_conf: np.ndarray,   # p_buy (BUY bars) or p_sell (SELL bars)
+    proposed: np.ndarray,
+    labels:   np.ndarray,
+    side:     int,          # 2=BUY, 0=SELL
+    n_total:  int,
 ) -> Dict[str, Any]:
     """
-    Sweep THRESHOLD_GRID for one direction and find the threshold that
-    maximises TOTAL EXPECTED RETURN:
-
-        score = coverage × (2 × precision - 1 - FEE_ROUNDTRIP)
-
-    This is proportional to the cumulative PnL of all fired signals assuming
-    1:1 R:R (win +1 unit, lose -1 unit, minus fees).  Thresholds with
-    precision ≤ 50 % get a negative score and are never chosen.
-
-    Returns: {threshold, precision, coverage, n_signals, expected_return, ok,
-              curve}   where 'curve' is the full threshold→precision table
-              (top-10 by score) for transparency.
-    'ok' = True only when precision >= TARGET_PREC.
+    Sweep THRESHOLD_GRID for one direction.
+    Score = precision x sqrt(coverage).
+    Returns {threshold, precision, coverage, n_signals, ok}.
     """
     sm = proposed == side
     if int(sm.sum()) < MIN_SIGNALS:
-        return {"threshold": 0.60, "precision": 0.0, "coverage": 0.0,
-                "n_signals": 0, "expected_return": 0.0, "ok": False, "curve": []}
+        return {"threshold": 0.50, "precision": 0.0,
+                "coverage": 0.0, "n_signals": 0, "ok": False}
 
-    conf_s  = meta_conf[sm]
+    conf_s  = dir_conf[sm]
     lbl_s   = labels[sm]
     correct = side
 
-    all_rows: List[Dict[str, Any]] = []
+    best: Optional[Dict[str, Any]] = None
+    best_score = -np.inf
 
     for thr in THRESHOLD_GRID:
         fired = conf_s >= thr
@@ -194,33 +243,35 @@ def best_threshold(
             continue
         prec = float((lbl_s[fired] == correct).mean())
         cov  = n / max(n_total, 1)
-        # Financially-correct objective: total expected PnL ∝ n × (2p − 1 − fee)
-        # Negative when precision ≤ 50 %, so random-or-worse thresholds are rejected.
-        exp_ret = cov * (2.0 * prec - 1.0 - FEE_ROUNDTRIP)
-        all_rows.append({
-            "threshold":       round(float(thr), 2),
-            "precision":       round(prec, 4),
-            "coverage":        round(cov, 4),
-            "n_signals":       n,
-            "expected_return": round(exp_ret, 5),
-            "ok":              prec >= TARGET_PREC,
-        })
+        if prec < BREAKEVEN:
+            continue
+        score = prec * float(np.sqrt(cov))
+        if score > best_score:
+            best_score = score
+            best = {
+                "threshold": float(thr),
+                "precision": round(prec, 4),
+                "coverage":  round(cov, 4),
+                "n_signals": n,
+                "ok":        prec >= TARGET_PREC,
+            }
 
-    if not all_rows:
-        return {"threshold": 0.60, "precision": 0.0, "coverage": 0.0,
-                "n_signals": 0, "expected_return": 0.0, "ok": False, "curve": []}
+    if best is None:
+        rows = []
+        for thr in THRESHOLD_GRID:
+            fired = conf_s >= thr
+            n = int(fired.sum())
+            if n >= max(3, MIN_SIGNALS // 2):
+                prec = float((lbl_s[fired] == correct).mean())
+                rows.append({"threshold": float(thr), "precision": round(prec, 4),
+                              "coverage": round(n / max(n_total, 1), 4),
+                              "n_signals": n, "ok": False})
+        if rows:
+            return max(rows, key=lambda r: r["precision"])
+        return {"threshold": 0.50, "precision": 0.0,
+                "coverage": 0.0, "n_signals": 0, "ok": False}
 
-    # Best = highest total expected return (financially correct)
-    best = max(all_rows, key=lambda r: r["expected_return"])
-
-    # If best still has negative expected return, return reference-only result
-    if best["expected_return"] <= 0:
-        best["ok"] = False
-
-    # Top-10 rows by expected_return for the curve (stored in JSON for analysis)
-    curve = sorted(all_rows, key=lambda r: -r["expected_return"])[:10]
-
-    return {**best, "curve": curve}
+    return best
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -228,19 +279,12 @@ def best_threshold(
 # ─────────────────────────────────────────────────────────────────────────────
 
 def optimize_atr(
-    df:        pd.DataFrame,
-    meta_conf: np.ndarray,
-    proposed:  np.ndarray,
+    df:       pd.DataFrame,   # eval-window OHLCV + regime columns
+    dir_conf: np.ndarray,     # local model directional confidence
+    proposed: np.ndarray,
     base_mult: float,
 ) -> Dict[str, Any]:
-    """
-    Re-label data at each ATR candidate; score the model's precision on signals
-    it would fire (top-10 % confidence per side).
-
-    The multiplier that maximises mean(prec × sqrt(cov)) across BUY + SELL is
-    returned.  This answers: "what SL distance gives the best quality/quantity
-    trade-off for this token right now?"
-    """
+    """Re-label eval window at each ATR candidate; score at top-10% dir_conf."""
     vr = df["volatility_regime"]   if "volatility_regime"   in df.columns else None
     er = df["efficiency_ratio_10"] if "efficiency_ratio_10" in df.columns else None
     tr = df["trend_regime"]        if "trend_regime"        in df.columns else None
@@ -262,7 +306,7 @@ def optimize_atr(
             continue
 
         lbl  = np.asarray(labs[valid])
-        conf = np.asarray(meta_conf[valid])
+        conf = np.asarray(dir_conf[valid])
         prop = np.asarray(proposed[valid])
 
         parts: List[float] = []
@@ -298,16 +342,12 @@ def optimize_atr(
 # ─────────────────────────────────────────────────────────────────────────────
 
 def optimize_lookahead(
-    df:        pd.DataFrame,
-    meta_conf: np.ndarray,
-    proposed:  np.ndarray,
-    atr_mult:  float,
+    df:       pd.DataFrame,
+    dir_conf: np.ndarray,
+    proposed: np.ndarray,
+    atr_mult: float,
 ) -> Dict[str, Any]:
-    """
-    Sweep LOOKAHEAD_GRID and find the window that maximises signal quality.
-    A 5 % rank-decay biases toward shorter windows (faster capital recycling
-    when precision is equal).
-    """
+    """Sweep lookahead windows; 5% decay per step biases toward shorter windows."""
     vr = df["volatility_regime"]   if "volatility_regime"   in df.columns else None
     er = df["efficiency_ratio_10"] if "efficiency_ratio_10" in df.columns else None
     tr = df["trend_regime"]        if "trend_regime"        in df.columns else None
@@ -329,7 +369,7 @@ def optimize_lookahead(
             continue
 
         lbl  = np.asarray(labs[valid])
-        conf = np.asarray(meta_conf[valid])
+        conf = np.asarray(dir_conf[valid])
         prop = np.asarray(proposed[valid])
 
         parts: List[float] = []
@@ -350,8 +390,8 @@ def optimize_lookahead(
         if not parts:
             continue
 
-        rank_decay = 1.0 - (LOOKAHEAD_GRID.index(lh) / len(LOOKAHEAD_GRID)) * 0.05
-        score = float(np.mean(parts)) * rank_decay
+        decay = 1.0 - (LOOKAHEAD_GRID.index(lh) / len(LOOKAHEAD_GRID)) * 0.05
+        score = float(np.mean(parts)) * decay
         scored.append({"lookahead": lh, "score": round(score, 5)})
         if score > best_score:
             best_score = score
@@ -369,36 +409,32 @@ def optimize_lookahead(
 # ─────────────────────────────────────────────────────────────────────────────
 
 def optimize_symbol(symbol: str) -> Optional[Dict[str, Any]]:
-    """Full optimisation pipeline for one symbol. Returns params dict or None."""
+    """Full independent optimisation pipeline for one symbol."""
     base = symbol.replace("/", "_")
 
     if not (MODEL_STORE / f"{base}_model.json").exists():
         print(f"   [{symbol}] No trained model — skipping.")
         return None
 
-    # ── load predictor (models + data-fetch methods) ──────────────────────────
+    # Predictor used ONLY for data fetching + reading feature_cols / base ATR.
+    # p.model and p.meta_model are NOT used for threshold search.
     try:
         p = Predictor(symbol)
     except Exception as exc:
         print(f"   [{symbol}] Predictor init failed: {exc}")
         return None
 
-    if p.model is None:
-        print(f"   [{symbol}] Primary model missing — skipping.")
-        return None
-
     feature_cols: Optional[List[str]] = p.meta.get("feature_cols")
     base_atr_mult = float(p.meta.get("atr_multiplier", get_atr_multiplier(symbol)))
 
-    # ── fetch historical data ─────────────────────────────────────────────────
+    # ── fetch data ────────────────────────────────────────────────────────────
     try:
         df_1h = p.fetch_live_data(timeframe="1h", limit=HISTORY_HOURS)
         if df_1h is None or len(df_1h) < MIN_BARS:
             print(f"   [{symbol}] Not enough data — skipping.")
             return None
-
-        btc_df  = (p.fetch_btc_data(timeframe="1h", limit=HISTORY_HOURS)
-                   if hasattr(p, "fetch_btc_data") else None)
+        btc_df  = p.fetch_btc_data(timeframe="1h", limit=HISTORY_HOURS) \
+                  if hasattr(p, "fetch_btc_data") else None
         news_df = p.load_news_data()
         df_1d   = p.fetch_live_data(timeframe="1d", limit=300)
         fund_df, oi_df = fetch_futures_data(symbol, df_1h)
@@ -425,16 +461,13 @@ def optimize_symbol(symbol: str) -> Optional[Dict[str, Any]]:
     n_feat   = len(features)
 
     # ── align raw OHLCV to feature rows ──────────────────────────────────────
-    # prepare_features drops NaN-heavy leading rows, so we align from the tail.
     df_raw = df_1h.iloc[-n_feat:].reset_index(drop=True).copy()
-
-    # Attach regime-auxiliary columns so create_triple_barrier_labels can use them.
     for col in ("volatility_regime", "efficiency_ratio_10",
                 "trend_regime", "macro_confluence_score"):
         if col in features.columns:
             df_raw[col] = features[col].values
 
-    # ── model input matrix ────────────────────────────────────────────────────
+    # ── feature matrix ────────────────────────────────────────────────────────
     if feature_cols:
         missing = [c for c in feature_cols if c not in features.columns]
         if missing:
@@ -451,74 +484,72 @@ def optimize_symbol(symbol: str) -> Optional[Dict[str, Any]]:
 
     feat_df = feat_df.replace([np.inf, -np.inf], np.nan).fillna(0)
 
-    # ── batch predict ─────────────────────────────────────────────────────────
+    # ── train / eval split ────────────────────────────────────────────────────
+    train_n = int(n_feat * TRAIN_FRAC)
+    eval_n  = n_feat - train_n
+
+    # ── regime boundaries from ALL data (stable percentile anchors) ───────────
+    regimes_all, boundaries = classify_regimes(df_raw)
+
+    # ── barrier labels for all data (base ATR mult) → feeds local model ───────
+    vr_all = df_raw["volatility_regime"]   if "volatility_regime"   in df_raw.columns else None
+    er_all = df_raw["efficiency_ratio_10"] if "efficiency_ratio_10" in df_raw.columns else None
+    tr_all = df_raw["trend_regime"]        if "trend_regime"        in df_raw.columns else None
+    cs_all = df_raw.get("macro_confluence_score")
+
+    labels_all = create_triple_barrier_labels(
+        df_raw, atr_multiplier=base_atr_mult,
+        volatility_regime=vr_all, efficiency_ratio=er_all,
+        trend_regime=tr_all, macro_confluence_score=cs_all,
+    ).values
+
+    # ── fit local model; get OOS directional predictions ─────────────────────
+    print(f"   [{symbol}] Fitting local model "
+          f"({train_n} train / {eval_n} eval)...", end=" ", flush=True)
     try:
-        dmat      = _dm(feat_df)
-        raw_probs = p.model.predict(dmat)      # (n, 3) softmax
-        if raw_probs.ndim != 2 or raw_probs.shape[1] != 3:
-            print(f"   [{symbol}] Unexpected model output shape — skipping.")
-            return None
-
-        proposed  = np.where(raw_probs[:, 2] >= raw_probs[:, 0], 2, 0)
-        meta_conf = (p.meta_model.predict(dmat).astype(float)
-                     if p.meta_model is not None
-                     else raw_probs.max(axis=1))
+        proposed_ev, dir_conf_ev = _fit_local_model(feat_df, np.asarray(labels_all), train_n)
     except Exception as exc:
-        print(f"   [{symbol}] Prediction error: {exc}")
+        print(f"FAILED ({exc})")
         return None
+    print("done")
 
-    # ── regime classification ─────────────────────────────────────────────────
-    regimes, boundaries = classify_regimes(df_raw)
+    # ── eval-window OHLCV + regime series ─────────────────────────────────────
+    df_ev      = df_raw.iloc[train_n:].reset_index(drop=True).copy()
+    regimes_ev = regimes_all.iloc[train_n:].reset_index(drop=True)
 
-    # ── optimise ATR multiplier ───────────────────────────────────────────────
-    atr_res  = optimize_atr(df_raw, meta_conf, proposed, base_atr_mult)
+    # ── ATR optimisation on eval window ──────────────────────────────────────
+    atr_res  = optimize_atr(df_ev, dir_conf_ev, proposed_ev, base_atr_mult)
     best_atr = atr_res["atr_multiplier"]
 
-    # ── optimise lookahead ────────────────────────────────────────────────────
-    lh_res = optimize_lookahead(df_raw, meta_conf, proposed, best_atr)
+    # ── lookahead optimisation on eval window ─────────────────────────────────
+    lh_res = optimize_lookahead(df_ev, dir_conf_ev, proposed_ev, best_atr)
 
-    # ── barrier labels with best ATR for threshold search ────────────────────
-    vr = df_raw["volatility_regime"]   if "volatility_regime"   in df_raw.columns else None
-    er = df_raw["efficiency_ratio_10"] if "efficiency_ratio_10" in df_raw.columns else None
-    tr = df_raw["trend_regime"]        if "trend_regime"        in df_raw.columns else None
-    cs = df_raw.get("macro_confluence_score")
+    # ── recompute labels on eval window with best ATR ─────────────────────────
+    vr_ev = df_ev["volatility_regime"]   if "volatility_regime"   in df_ev.columns else None
+    er_ev = df_ev["efficiency_ratio_10"] if "efficiency_ratio_10" in df_ev.columns else None
+    tr_ev = df_ev["trend_regime"]        if "trend_regime"        in df_ev.columns else None
+    cs_ev = df_ev.get("macro_confluence_score")
 
-    base_labels = create_triple_barrier_labels(
-        df_raw, atr_multiplier=best_atr,
-        volatility_regime=vr, efficiency_ratio=er,
-        trend_regime=tr, macro_confluence_score=cs,
+    labels_ev = create_triple_barrier_labels(
+        df_ev, atr_multiplier=best_atr,
+        volatility_regime=vr_ev, efficiency_ratio=er_ev,
+        trend_regime=tr_ev, macro_confluence_score=cs_ev,
     ).values
-    valid_mask = np.asarray(base_labels != CENSORED)
+    valid_ev = np.asarray(labels_ev != CENSORED)
 
-    # ── out-of-sample eval window for threshold search ────────────────────────
-    # Use only the last EVAL_WINDOW rows so thresholds are measured on bars
-    # the model hasn't memorised (training data ends before these bars).
-    eval_start  = max(0, n_feat - EVAL_WINDOW)
-    eval_window = np.zeros(n_feat, dtype=bool)
-    eval_window[eval_start:] = True
-    eval_mask   = valid_mask & eval_window
-
-    # Regime series also scoped to eval window
-    regimes_eval = regimes.iloc[eval_start:].reset_index(drop=True)
-
-    # ── global threshold optimisation (eval window) ───────────────────────────
-    n_g    = int(eval_mask.sum())
-    lbl_g  = np.asarray(base_labels[eval_mask])
-    conf_g = np.asarray(meta_conf[eval_mask])
-    prop_g = np.asarray(proposed[eval_mask])
+    # ── global threshold optimisation ─────────────────────────────────────────
+    n_g    = int(valid_ev.sum())
+    lbl_g  = np.asarray(labels_ev[valid_ev])
+    conf_g = np.asarray(dir_conf_ev[valid_ev])
+    prop_g = np.asarray(proposed_ev[valid_ev])
 
     g_buy  = best_threshold(conf_g, prop_g, lbl_g, side=2, n_total=n_g)
     g_sell = best_threshold(conf_g, prop_g, lbl_g, side=0, n_total=n_g)
 
-    # ── per-regime threshold optimisation (eval window) ───────────────────────
+    # ── per-regime threshold optimisation ─────────────────────────────────────
     regime_results: Dict[str, Any] = {}
-    base_labels_eval = base_labels[eval_start:]
-    meta_conf_eval   = meta_conf[eval_start:]
-    proposed_eval    = proposed[eval_start:]
-    valid_eval       = np.asarray(base_labels_eval != CENSORED)
-
     for rk in REGIME_KEYS:
-        rmask = np.asarray(regimes_eval == rk) & valid_eval
+        rmask = np.asarray(regimes_ev == rk) & valid_ev
         n_r   = int(rmask.sum())
         if n_r < MIN_REGIME_BARS:
             regime_results[rk] = {
@@ -527,9 +558,9 @@ def optimize_symbol(symbol: str) -> Optional[Dict[str, Any]]:
             }
             continue
 
-        lbl_r  = np.asarray(base_labels_eval[rmask])
-        conf_r = np.asarray(meta_conf_eval[rmask])
-        prop_r = np.asarray(proposed_eval[rmask])
+        lbl_r  = np.asarray(labels_ev[rmask])
+        conf_r = np.asarray(dir_conf_ev[rmask])
+        prop_r = np.asarray(proposed_ev[rmask])
 
         r_buy  = best_threshold(conf_r, prop_r, lbl_r, side=2, n_total=n_r)
         r_sell = best_threshold(conf_r, prop_r, lbl_r, side=0, n_total=n_r)
@@ -549,13 +580,14 @@ def optimize_symbol(symbol: str) -> Optional[Dict[str, Any]]:
             "sell_ok":        r_sell["ok"],
         }
 
-    # ── assemble JSON ─────────────────────────────────────────────────────────
+    # ── assemble + persist ────────────────────────────────────────────────────
     params: Dict[str, Any] = {
-        "symbol":      symbol,
-        "updated_at":  datetime.now(timezone.utc).isoformat(),
-        "n_bars":      n_feat,
-        "n_eval_bars": n_g,     # bars in out-of-sample eval window
-        "eval_window": EVAL_WINDOW,
+        "symbol":          symbol,
+        "updated_at":      datetime.now(timezone.utc).isoformat(),
+        "n_bars":          n_feat,
+        "n_train_bars":    train_n,
+        "n_eval_bars":     eval_n,
+        "threshold_type":  "directional_prob",   # p_buy / p_sell scale (0-1)
         "global": {
             "atr_multiplier": best_atr,
             "lookahead_bars": lh_res["lookahead_bars"],
@@ -585,11 +617,9 @@ def optimize_symbol(symbol: str) -> Optional[Dict[str, Any]]:
     sell_ok = "+" if g_sell["ok"] else "-"
     print(
         f"   [{symbol}] ATR x{best_atr:.2f} | lh={lh_res['lookahead_bars']}h | "
-        f"BUY [{buy_ok}] thr={g_buy['threshold']:.2f} "
-        f"prec={g_buy['precision']:.0%} exp={g_buy['expected_return']:+.4f} | "
-        f"SELL [{sell_ok}] thr={g_sell['threshold']:.2f} "
-        f"prec={g_sell['precision']:.0%} exp={g_sell['expected_return']:+.4f} | "
-        f"regimes {n_live}/9"
+        f"BUY [{buy_ok}] p>={g_buy['threshold']:.2f} ({g_buy['precision']:.0%}) | "
+        f"SELL [{sell_ok}] p>={g_sell['threshold']:.2f} ({g_sell['precision']:.0%}) | "
+        f"regimes {n_live}/9 active"
     )
     return params
 
@@ -613,16 +643,12 @@ def _safe(symbol: str) -> Tuple[str, Optional[Dict[str, Any]]]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Aegis per-token threshold, ATR & lookahead optimizer"
+        description="Aegis per-token threshold + ATR + lookahead optimizer (independent)"
     )
-    parser.add_argument(
-        "symbols", nargs="*",
-        help="Symbols to optimise (default: all FLEET_SYMBOLS with trained models)",
-    )
-    parser.add_argument(
-        "--workers", type=int, default=1,
-        help="Parallel worker processes (default 1; 2-4 recommended for speed)",
-    )
+    parser.add_argument("symbols", nargs="*",
+                        help="Symbols to optimise (default: all FLEET_SYMBOLS with models)")
+    parser.add_argument("--workers", type=int, default=1,
+                        help="Parallel worker processes (default 1)")
     args = parser.parse_args()
 
     targets: List[str] = (
@@ -631,15 +657,19 @@ def main() -> None:
     targets = [s if "/" in s else s.replace("_", "/") for s in targets]
 
     print(f"\n{'='*72}")
-    print("AEGIS — Per-Token Threshold + ATR + Lookahead Optimizer")
+    print("AEGIS — Per-Token Threshold + ATR + Lookahead Optimizer  [independent]")
     print(f"{'='*72}")
-    print(f"Symbols   : {len(targets)}")
-    print(f"History   : {HISTORY_HOURS} bars x 1h per symbol")
-    print(f"Grids     : ATR {len(ATR_MULT_GRID)} pts | "
+    print(f"Symbols      : {len(targets)}")
+    print(f"History      : {HISTORY_HOURS} bars x 1h per symbol")
+    print(f"Train / Eval : {int(TRAIN_FRAC*100)}% / {100-int(TRAIN_FRAC*100)}%  "
+          f"(~{int(HISTORY_HOURS*TRAIN_FRAC)} / ~{HISTORY_HOURS - int(HISTORY_HOURS*TRAIN_FRAC)} bars)")
+    print(f"Local model  : {LOCAL_ROUNDS} rounds, no Optuna, class-balanced weights")
+    print(f"Thresholds   : on p_buy / p_sell  (directional prob, not meta_conf)")
+    print(f"Grids        : ATR {len(ATR_MULT_GRID)} pts | "
           f"Thresh {len(THRESHOLD_GRID)} pts | Lookahead {len(LOOKAHEAD_GRID)} pts")
-    print(f"Regimes   : {len(REGIME_KEYS)} buckets (3 vol x 3 vola)")
-    print(f"Workers   : {args.workers}")
-    print(f"Output    : {PARAMS_DIR}")
+    print(f"Regimes      : {len(REGIME_KEYS)} buckets (3 vol x 3 vola)")
+    print(f"Workers      : {args.workers}")
+    print(f"Output       : {PARAMS_DIR}")
     print(f"{'='*72}\n")
 
     summary: Dict[str, Any] = {}
@@ -662,15 +692,12 @@ def main() -> None:
 
     summary_path = PARAMS_DIR / "_summary.json"
     with open(summary_path, "w") as fh:
-        json.dump(
-            {
-                "generated_at":    datetime.now(timezone.utc).isoformat(),
-                "n_symbols":       len(summary),
-                "elapsed_seconds": round(time.time() - t0, 1),
-                "symbols":         summary,
-            },
-            fh, indent=2, default=str,
-        )
+        json.dump({
+            "generated_at":    datetime.now(timezone.utc).isoformat(),
+            "n_symbols":       len(summary),
+            "elapsed_seconds": round(time.time() - t0, 1),
+            "symbols":         summary,
+        }, fh, indent=2, default=str)
 
     elapsed = time.time() - t0
     print(f"\n{'='*72}")

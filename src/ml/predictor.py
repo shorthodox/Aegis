@@ -436,20 +436,25 @@ class Predictor:
             tradeable = bool(self.meta.get("tradeable_sell",
                                            self.meta.get("tradeable", True)))
 
-        # ── Regime-specific threshold override ───────────────────────────────
-        # If threshold_optimizer.py has run, swap in the optimised threshold for
-        # the current volume × volatility regime (only when that regime's result
-        # passed the precision target, i.e. ok=True).
-        regime = self._detect_regime(df_features)
-        if regime and self._token_params:
-            reg = self._token_params.get("regimes", {}).get(regime, {})
-            if reg and not reg.get("skipped"):
-                if side == 2 and reg.get("buy_ok") and "buy_threshold" in reg:
-                    thr = float(reg["buy_threshold"])
-                elif side == 0 and reg.get("sell_ok") and "sell_threshold" in reg:
-                    thr = float(reg["sell_threshold"])
-
         fire = tradeable and (meta_conf >= thr)
+
+        # ── Regime-specific directional-probability filter ────────────────────
+        # threshold_optimizer.py trains an INDEPENDENT local model and finds
+        # per-regime thresholds on p_buy / p_sell (not meta_conf).
+        # Applied as an additional suppressor: if the production primary model's
+        # directional probability is below the independently-derived floor for
+        # this regime, the signal is suppressed regardless of meta_conf.
+        if fire and self._token_params:
+            regime = self._detect_regime(df_features)
+            if regime:
+                reg = self._token_params.get("regimes", {}).get(regime, {})
+                if reg and not reg.get("skipped"):
+                    if side == 2 and reg.get("buy_ok") and "buy_threshold" in reg:
+                        if float(last[2]) < float(reg["buy_threshold"]):
+                            fire = False
+                    elif side == 0 and reg.get("sell_ok") and "sell_threshold" in reg:
+                        if float(last[0]) < float(reg["sell_threshold"]):
+                            fire = False
 
         # ── S&R + trend alignment filters (mirrors training holdout logic) ───
         # These suppress weak signals (below top-25% confidence) that fight a
