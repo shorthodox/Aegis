@@ -153,87 +153,54 @@ META_PARAMS = {
 }
 
 FLEET_SYMBOLS = [
-    # ── Majors ────────────────────────────────────────────────────────────
+    # ── Majors (20) ───────────────────────────────────────────────────────
     'BTC/USDT', 'ETH/USDT', 'BNB/USDT', 'SOL/USDT', 'XRP/USDT',
     'ADA/USDT', 'DOGE/USDT', 'TRX/USDT', 'AVAX/USDT', 'LINK/USDT',
     'DOT/USDT', 'TON/USDT', 'SHIB/USDT', 'BCH/USDT', 'LTC/USDT',
     'ATOM/USDT', 'XLM/USDT', 'ETC/USDT', 'UNI/USDT', 'NEAR/USDT',
 
-    # ── Layer 1 ───────────────────────────────────────────────────────────
+    # ── Layer 1 (12) ──────────────────────────────────────────────────────
     'APT/USDT', 'SUI/USDT', 'SEI/USDT', 'INJ/USDT', 'TIA/USDT',
     'KAS/USDT', 'EGLD/USDT', 'HBAR/USDT', 'ALGO/USDT', 'VET/USDT',
-    'ICP/USDT', 'FIL/USDT', 'FLOW/USDT', 'XTZ/USDT', 'EOS/USDT',
-    'FTM/USDT', 'ROSE/USDT', 'KAVA/USDT', 'ONE/USDT', 'ZIL/USDT',
+    'ICP/USDT', 'FIL/USDT',
 
-    # ── Layer 2 ───────────────────────────────────────────────────────────
-    'ARB/USDT', 'OP/USDT', 'MATIC/USDT', 'STRK/USDT', 'METIS/USDT',
-    'IMX/USDT', 'MANTA/USDT', 'ZK/USDT', 'POL/USDT', 'LRC/USDT',
-    'STX/USDT',
+    # ── Layer 2 (7) ───────────────────────────────────────────────────────
+    'ARB/USDT', 'OP/USDT', 'MATIC/USDT', 'STRK/USDT', 'IMX/USDT',
+    'STX/USDT', 'ZK/USDT',
 
-    # ── AI / ML ───────────────────────────────────────────────────────────
-    'FET/USDT', 'AGIX/USDT', 'OCEAN/USDT', 'TAO/USDT', 'RNDR/USDT',
-    'RENDER/USDT', 'AKT/USDT', 'NMR/USDT', 'ARKM/USDT',
+    # ── AI / ML (5) ───────────────────────────────────────────────────────
+    'FET/USDT', 'TAO/USDT', 'RNDR/USDT', 'AKT/USDT', 'ARKM/USDT',
 
-    # ── Oracle / Infrastructure ───────────────────────────────────────────
-    'PYTH/USDT', 'API3/USDT', 'BAND/USDT', 'GRT/USDT', 'THETA/USDT',
-    'TFUEL/USDT', 'DIA/USDT', 'TRB/USDT', 'RLC/USDT',
+    # ── Oracle / Infrastructure (4) ───────────────────────────────────────
+    'PYTH/USDT', 'GRT/USDT', 'THETA/USDT', 'TRB/USDT',
 
-    # ── DeFi ─────────────────────────────────────────────────────────────
-    'AAVE/USDT', 'MKR/USDT', 'COMP/USDT', 'SNX/USDT', 'CRV/USDT',
-    'CVX/USDT', 'LDO/USDT', 'DYDX/USDT', 'GMX/USDT', '1INCH/USDT',
-    'SUSHI/USDT', 'YFI/USDT', 'BAL/USDT', 'FXS/USDT', 'PENDLE/USDT',
-    'ONDO/USDT', 'JUP/USDT', 'RAY/USDT', 'JTO/USDT', 'ETHFI/USDT',
-    'ENA/USDT',
+    # ── DeFi (12) ─────────────────────────────────────────────────────────
+    'AAVE/USDT', 'MKR/USDT', 'CRV/USDT', 'LDO/USDT', 'DYDX/USDT',
+    'GMX/USDT', 'PENDLE/USDT', 'ONDO/USDT', 'JUP/USDT', 'ENA/USDT',
+    'COMP/USDT', 'SNX/USDT',
 
-    # ── Storage ───────────────────────────────────────────────────────────
-    'AR/USDT', 'STORJ/USDT', 'SC/USDT', 'BLZ/USDT',
+    # ── Storage (2) ───────────────────────────────────────────────────────
+    'AR/USDT', 'STORJ/USDT',
 
-    # ── Gaming / Metaverse ────────────────────────────────────────────────
-    'AXS/USDT', 'SAND/USDT', 'MANA/USDT', 'GALA/USDT', 'ILV/USDT',
-    'ENJ/USDT', 'MAGIC/USDT', 'YGG/USDT', 'PYR/USDT', 'SUPER/USDT',
-    'ALICE/USDT', 'CHR/USDT', 'XAI/USDT',
+    # ── Gaming / Metaverse (5) ────────────────────────────────────────────
+    'AXS/USDT', 'SAND/USDT', 'MANA/USDT', 'GALA/USDT', 'ENJ/USDT',
 
-    # ── Memes ─────────────────────────────────────────────────────────────
+    # ── Memes (6) ─────────────────────────────────────────────────────────
     'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT', 'BOME/USDT',
-    'MEME/USDT', 'TURBO/USDT', 'BRETT/USDT', 'DOGS/USDT',
+    'BRETT/USDT',
 
-    # ── Exchange tokens ───────────────────────────────────────────────────
-    'BGB/USDT', 'OKB/USDT', 'MNT/USDT',
+    # ── Exchange tokens (1) ───────────────────────────────────────────────
+    'BGB/USDT',
 
-    # ── Privacy ───────────────────────────────────────────────────────────
-    'XMR/USDT', 'ZEC/USDT', 'DASH/USDT',
+    # ── Privacy (1) ───────────────────────────────────────────────────────
+    'XMR/USDT',
 
-    # ── RWA ──────────────────────────────────────────────────────────────
-    'POLYX/USDT', 'MPL/USDT',
-
-    # ── Previously active fleet ───────────────────────────────────────────
-    'HYPE/USDT', 'ASTER/USDT', 'WLFI/USDT', 'PI/USDT', 'SKY/USDT',
-    'TRUMP/USDT', 'NIGHT/USDT',
-
-    # ── High-volume Binance alts ──────────────────────────────────────────
-    'ANKR/USDT', 'ACH/USDT', 'ACE/USDT', 'ADX/USDT', 'AERGO/USDT',
-    'AEVO/USDT', 'AGLD/USDT', 'ALPHA/USDT', 'ALT/USDT', 'AMP/USDT',
-    'ARK/USDT', 'ARPA/USDT', 'ASTR/USDT', 'ATA/USDT', 'AUDIO/USDT',
-    'BAKE/USDT', 'BAT/USDT', 'BEAMX/USDT', 'BEL/USDT', 'BICO/USDT',
-    'BIGTIME/USDT', 'BLUR/USDT', 'BNX/USDT', 'C98/USDT', 'CAKE/USDT',
-    'CELO/USDT', 'CELR/USDT', 'CFX/USDT', 'CHZ/USDT', 'CKB/USDT',
-    'COMBO/USDT', 'COTI/USDT', 'CTSI/USDT', 'CYBER/USDT', 'DAR/USDT',
-    'DENT/USDT', 'DGB/USDT', 'DODO/USDT', 'DUSK/USDT', 'EDU/USDT',
-    'ENS/USDT', 'ERN/USDT', 'FIDA/USDT', 'FLUX/USDT', 'FRONT/USDT',
-    'GAS/USDT', 'GLM/USDT', 'HIGH/USDT', 'HOOK/USDT', 'HOT/USDT',
-    'ICX/USDT', 'ID/USDT', 'IDEX/USDT', 'IO/USDT', 'IOTA/USDT',
-    'IOTX/USDT', 'JOE/USDT', 'KNC/USDT', 'LEVER/USDT', 'LISTA/USDT',
-    'LOKA/USDT', 'LQTY/USDT', 'LPT/USDT', 'LSK/USDT', 'LTO/USDT',
-    'MASK/USDT', 'MINA/USDT', 'MOVR/USDT', 'MTL/USDT', 'NEO/USDT',
-    'NKN/USDT', 'NOT/USDT', 'NULS/USDT', 'OGN/USDT', 'OMG/USDT',
-    'OM/USDT', 'ONG/USDT', 'ORDI/USDT', 'PHA/USDT', 'PORTAL/USDT',
-    'PORTO/USDT', 'POWR/USDT', 'PROM/USDT', 'QI/USDT', 'QNT/USDT',
-    'QTUM/USDT', 'RAD/USDT', 'RARE/USDT', 'REEF/USDT', 'REQ/USDT',
-    'RONIN/USDT', 'RSR/USDT', 'RUNE/USDT', 'SFP/USDT', 'SKL/USDT',
-    'SLP/USDT', 'STEEM/USDT', 'STG/USDT', 'STMX/USDT', 'SUN/USDT',
-    'SXP/USDT', 'SYN/USDT', 'SYS/USDT', 'TLM/USDT', 'TOKEN/USDT',
-    'TROY/USDT', 'TWT/USDT', 'UMA/USDT', 'VANRY/USDT', 'WAXP/USDT',
-    'WOO/USDT', 'XEC/USDT', 'XVG/USDT', 'ZEN/USDT', 'ZRX/USDT',
+    # ── High-volume alts — best liquidity & signal quality (25) ──────────
+    'RUNE/USDT', 'OM/USDT', 'ORDI/USDT', 'NOT/USDT', 'ENS/USDT',
+    'QNT/USDT', 'MASK/USDT', 'MINA/USDT', 'NEO/USDT', 'CHZ/USDT',
+    'CFX/USDT', 'CAKE/USDT', '1INCH/USDT', 'BAT/USDT', 'BLUR/USDT',
+    'CKB/USDT', 'IOTX/USDT', 'FTM/USDT', 'KAVA/USDT', 'YFI/USDT',
+    'RAY/USDT', 'JTO/USDT', 'HYPE/USDT', 'TRUMP/USDT', 'FXS/USDT',
 ]
 
 FEATURE_ADDONS = [
