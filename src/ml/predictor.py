@@ -92,10 +92,11 @@ class Predictor:
 
     def _detect_regime(self, df: pd.DataFrame) -> Optional[str]:
         """
-        Classify the current bar into one of 9 regime buckets using the
-        percentile boundaries stored in the token params JSON.
+        Classify the current bar into one of 27 regime buckets
+        (3 vol × 3 vola × 3 trend) using the percentile boundaries stored
+        in the token params JSON.
 
-        Returns a string like 'high_low' or None if params are not available.
+        Returns a string like 'high_low_up' or None if params unavailable.
         """
         if self._token_params is None:
             return None
@@ -112,6 +113,12 @@ class Predictor:
 
             atr_pct = atr_val / close_val
 
+            # 24-bar momentum (same window used during optimisation)
+            if "close" in df.columns and len(df) >= 25:
+                momentum = float(df["close"].iloc[-1] / df["close"].iloc[-25] - 1)
+            else:
+                momentum = 0.0
+
             def _tier(val: float, p33: float, p67: float) -> str:
                 if val <= p33:
                     return "low"
@@ -119,9 +126,19 @@ class Predictor:
                     return "med"
                 return "high"
 
-            v = _tier(vol_avg, bounds["vol_p33"],     bounds["vol_p67"])
-            a = _tier(atr_pct, bounds["atr_pct_p33"], bounds["atr_pct_p67"])
-            return f"{v}_{a}"
+            def _trend_tier(val: float, p33: float, p67: float) -> str:
+                if val <= p33:
+                    return "down"
+                if val <= p67:
+                    return "flat"
+                return "up"
+
+            v = _tier(vol_avg, bounds["vol_p33"],          bounds["vol_p67"])
+            a = _tier(atr_pct, bounds["atr_pct_p33"],      bounds["atr_pct_p67"])
+            t = _trend_tier(momentum,
+                            bounds.get("momentum_p33", -0.02),
+                            bounds.get("momentum_p67",  0.02))
+            return f"{v}_{a}_{t}"
         except Exception:
             return None
 

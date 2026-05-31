@@ -80,10 +80,20 @@ MIN_BARS      = 800     # need enough for a decent train/eval split
 TRAIN_FRAC   = 0.70    # first 70% → fit local model
 LOCAL_ROUNDS = 200     # quick fit; no Optuna
 
-# ── regime grid ───────────────────────────────────────────────────────────────
-VOL_TIERS   = ["low", "med", "high"]
-VOLA_TIERS  = ["low", "med", "high"]
-REGIME_KEYS = [f"{v}_{va}" for v in VOL_TIERS for va in VOLA_TIERS]
+# ── regime grid  (3 × 3 × 3 = 27 buckets) ───────────────────────────────────
+# Three axes capture the three most independent market dimensions:
+#   vol  : liquidity / participation (rolling 24h volume)
+#   vola : noise / bar size (ATR as % of price)
+#   trend: directional momentum (24h price return vs its own distribution)
+VOL_TIERS   = ["low", "med", "high"]   # volume tiers
+VOLA_TIERS  = ["low", "med", "high"]   # volatility tiers
+TREND_TIERS = ["down", "flat", "up"]   # momentum / trend tiers
+REGIME_KEYS = [
+    f"{v}_{va}_{tr}"
+    for v  in VOL_TIERS
+    for va in VOLA_TIERS
+    for tr in TREND_TIERS
+]  # 27 keys
 
 # ── search grids ──────────────────────────────────────────────────────────────
 # Thresholds are on p_buy / p_sell (softmax output).
@@ -93,7 +103,7 @@ ATR_MULT_GRID  = np.round(np.arange(0.75, 4.25, 0.25), 2).tolist()   # 14 pts
 LOOKAHEAD_GRID = [12, 18, 24, 30, 36, 48, 60, 72]                     #  8 pts
 
 # ── quality gates ─────────────────────────────────────────────────────────────
-MIN_REGIME_BARS = 40
+MIN_REGIME_BARS = 20    # 27 buckets × 20 min ≈ 540 bars — fits the 600-bar eval window
 MIN_SIGNALS     = 8
 BREAKEVEN       = FEE_ROUNDTRIP   # ~0.10 % round-trip
 TARGET_PREC     = 0.58            # slightly lower than retrain's 0.60
@@ -180,28 +190,45 @@ def _tier(val: float, p33: float, p67: float) -> str:
 # Regime classification
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _trend_tier(val: float, p33: float, p67: float) -> str:
+    """Map a momentum value to down / flat / up."""
+    if val <= p33:
+        return "down"
+    if val <= p67:
+        return "flat"
+    return "up"
+
+
 def classify_regimes(df: pd.DataFrame) -> Tuple[pd.Series, Dict[str, float]]:
     """
-    Classify all bars into '<vol>_<vola>' regime strings.
+    Classify all bars into '<vol>_<vola>_<trend>' regime strings (27 buckets).
+
+    Three axes:
+      vol   — rolling 24-bar mean volume (liquidity / participation)
+      vola  — ATR / close (bar-level noise)
+      trend — 24-bar price return (directional momentum)
+
     Boundaries are computed from ALL passed data so percentiles are stable.
     Returns (series, boundaries_dict); boundaries saved to JSON for inference.
     """
     roll_vol = df["volume"].rolling(24, min_periods=1).mean()
     atr_vals = compute_atr(df, period=14)
     atr_pct  = (atr_vals / df["close"].replace(0, np.nan)).fillna(0)
+    momentum = df["close"].pct_change(24).fillna(0)   # 24h return
 
-    vp33 = float(roll_vol.quantile(0.33))
-    vp67 = float(roll_vol.quantile(0.67))
-    ap33 = float(atr_pct.quantile(0.33))
-    ap67 = float(atr_pct.quantile(0.67))
+    vp33 = float(roll_vol.quantile(0.33));  vp67 = float(roll_vol.quantile(0.67))
+    ap33 = float(atr_pct.quantile(0.33));   ap67 = float(atr_pct.quantile(0.67))
+    mp33 = float(momentum.quantile(0.33));  mp67 = float(momentum.quantile(0.67))
 
     boundaries: Dict[str, float] = {
-        "vol_p33": vp33, "vol_p67": vp67,
+        "vol_p33": vp33,  "vol_p67": vp67,
         "atr_pct_p33": ap33, "atr_pct_p67": ap67,
+        "momentum_p33": mp33, "momentum_p67": mp67,
     }
     reg = pd.Series(
         [f"{_tier(float(roll_vol.iloc[i]), vp33, vp67)}"
          f"_{_tier(float(atr_pct.iloc[i]), ap33, ap67)}"
+         f"_{_trend_tier(float(momentum.iloc[i]), mp33, mp67)}"
          for i in range(len(df))],
         index=df.index, dtype=str,
     )
@@ -667,7 +694,7 @@ def main() -> None:
     print(f"Thresholds   : on p_buy / p_sell  (directional prob, not meta_conf)")
     print(f"Grids        : ATR {len(ATR_MULT_GRID)} pts | "
           f"Thresh {len(THRESHOLD_GRID)} pts | Lookahead {len(LOOKAHEAD_GRID)} pts")
-    print(f"Regimes      : {len(REGIME_KEYS)} buckets (3 vol x 3 vola)")
+    print(f"Regimes      : {len(REGIME_KEYS)} buckets (3 vol x 3 vola x 3 trend)")
     print(f"Workers      : {args.workers}")
     print(f"Output       : {PARAMS_DIR}")
     print(f"{'='*72}\n")
