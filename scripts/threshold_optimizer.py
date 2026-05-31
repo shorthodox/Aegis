@@ -105,9 +105,10 @@ LOOKAHEAD_GRID = [12, 18, 24, 30, 36, 48, 60, 72]                     #  8 pts
 # ── quality gates ─────────────────────────────────────────────────────────────
 MIN_REGIME_BARS = 20    # 27 buckets × 20 min ≈ 540 bars — fits the 600-bar eval window
 MIN_SIGNALS     = 8
-BREAKEVEN       = FEE_ROUNDTRIP   # ~0.10 % round-trip
-TARGET_PREC     = 0.58            # slightly lower than retrain's 0.60
-                                  # (local model is weaker than production)
+# Minimum viable precision: must exceed 50% + fees to have positive expected
+# value. Anything ≤ 50% is worse than a coin flip regardless of coverage.
+BREAKEVEN       = 0.50 + FEE_ROUNDTRIP   # ≈ 50.1%
+TARGET_PREC     = 0.58                   # "green" bar (local model is weaker than production)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -248,8 +249,14 @@ def best_threshold(
 ) -> Dict[str, Any]:
     """
     Sweep THRESHOLD_GRID for one direction.
-    Score = precision x sqrt(coverage).
-    Returns {threshold, precision, coverage, n_signals, ok}.
+
+    Score = coverage × (2 × precision − 1 − FEE_ROUNDTRIP)
+      — proportional to total expected PnL (1:1 R:R, minus fees).
+      — Negative when precision ≤ 50%, so losing thresholds are rejected.
+
+    When NO threshold clears the 50% floor (direction unprofitable in this
+    regime/window), we return the highest-precision threshold as a reference
+    so the user can see the best achievable result (ok=False, no live signals).
     """
     sm = proposed == side
     if int(sm.sum()) < MIN_SIGNALS:
@@ -260,6 +267,7 @@ def best_threshold(
     lbl_s   = labels[sm]
     correct = side
 
+    all_rows: List[Dict[str, Any]] = []
     best: Optional[Dict[str, Any]] = None
     best_score = -np.inf
 
@@ -270,35 +278,27 @@ def best_threshold(
             continue
         prec = float((lbl_s[fired] == correct).mean())
         cov  = n / max(n_total, 1)
-        if prec < BREAKEVEN:
-            continue
-        score = prec * float(np.sqrt(cov))
-        if score > best_score:
+        # Financially-correct score: total expected PnL ∝ n × (2p − 1 − fee)
+        # Negative when precision ≤ 50% → losing thresholds are skipped
+        score = cov * (2.0 * prec - 1.0 - FEE_ROUNDTRIP)
+        all_rows.append({"threshold": float(thr), "precision": round(prec, 4),
+                         "coverage": round(cov, 4), "n_signals": n,
+                         "ok": prec >= TARGET_PREC, "_score": score})
+        if prec >= BREAKEVEN and score > best_score:
             best_score = score
-            best = {
-                "threshold": float(thr),
-                "precision": round(prec, 4),
-                "coverage":  round(cov, 4),
-                "n_signals": n,
-                "ok":        prec >= TARGET_PREC,
-            }
+            best = all_rows[-1]
 
     if best is None:
-        rows = []
-        for thr in THRESHOLD_GRID:
-            fired = conf_s >= thr
-            n = int(fired.sum())
-            if n >= max(3, MIN_SIGNALS // 2):
-                prec = float((lbl_s[fired] == correct).mean())
-                rows.append({"threshold": float(thr), "precision": round(prec, 4),
-                              "coverage": round(n / max(n_total, 1), 4),
-                              "n_signals": n, "ok": False})
-        if rows:
-            return max(rows, key=lambda r: r["precision"])
+        # No threshold cleared the 50% floor — direction is unprofitable here.
+        # Return the highest-precision threshold as a reference (ok=False).
+        if all_rows:
+            ref = max(all_rows, key=lambda r: r["precision"])
+            ref["ok"] = False
+            return {k: v for k, v in ref.items() if k != "_score"}
         return {"threshold": 0.50, "precision": 0.0,
                 "coverage": 0.0, "n_signals": 0, "ok": False}
 
-    return best
+    return {k: v for k, v in best.items() if k != "_score"}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -646,7 +646,7 @@ def optimize_symbol(symbol: str) -> Optional[Dict[str, Any]]:
         f"   [{symbol}] ATR x{best_atr:.2f} | lh={lh_res['lookahead_bars']}h | "
         f"BUY [{buy_ok}] p>={g_buy['threshold']:.2f} ({g_buy['precision']:.0%}) | "
         f"SELL [{sell_ok}] p>={g_sell['threshold']:.2f} ({g_sell['precision']:.0%}) | "
-        f"regimes {n_live}/9 active"
+        f"regimes {n_live}/{len(REGIME_KEYS)} active"
     )
     return params
 
