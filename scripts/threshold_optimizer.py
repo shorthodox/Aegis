@@ -642,13 +642,13 @@ def optimize_symbol(symbol: str) -> Optional[Dict[str, Any]]:
     n_live  = sum(1 for v in regime_results.values() if not v.get("skipped"))
 
     def _fmt(res: Dict[str, Any]) -> str:
-        if res["ok"]:
-            return f"[+] p>={res['threshold']:.2f} prec={res['precision']:.0%}"
-        # Disabled: show best-achievable precision as a reference, not as a threshold
+        thr  = res["threshold"]
         prec = res["precision"]
+        if res["ok"]:
+            return f"[+] p>={thr:.2f} prec={prec:.0%}"
         if prec < 0.50:
-            return f"[-] DISABLED (best prec={prec:.0%} < 50%)"
-        return f"[-] DISABLED (best prec={prec:.0%}, below target)"
+            return f"[-] p>={thr:.2f} prec={prec:.0%}  (disabled: <50%)"
+        return f"[-] p>={thr:.2f} prec={prec:.0%}  (disabled: below {TARGET_PREC:.0%} target)"
 
     print(
         f"   [{symbol}] ATR x{best_atr:.2f} | lh={lh_res['lookahead_bars']}h | "
