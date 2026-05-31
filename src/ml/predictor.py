@@ -43,7 +43,9 @@ class Predictor:
         self.model: Optional[xgb.Booster] = None          # primary (Booster)
         self.meta_model: Optional[xgb.Booster] = None      # meta gate (Booster)
         self.meta: Dict[str, Any] = {}                     # sidecar contents
+        self._token_params: Optional[Dict[str, Any]] = None  # optimizer output
         self.load_model()
+        self._token_params = self._load_token_params()
 
     # -------------------------------------------------------------
     # Model loading (Booster format + sidecar)
@@ -76,6 +78,52 @@ class Predictor:
                 self.meta_model = xgb.Booster()
                 self.meta_model.load_model(str(meta_path))
                 logger.info(f"Meta model loaded: {meta_path.name}")
+
+    def _load_token_params(self) -> Optional[Dict[str, Any]]:
+        """Load per-token optimizer output from data/token_params/ if present."""
+        path = (root_dir / "data" / "token_params"
+                / f"{self.symbol.replace('/', '_')}_params.json")
+        if not path.exists():
+            return None
+        try:
+            return json.loads(path.read_text())
+        except Exception:
+            return None
+
+    def _detect_regime(self, df: pd.DataFrame) -> Optional[str]:
+        """
+        Classify the current bar into one of 9 regime buckets using the
+        percentile boundaries stored in the token params JSON.
+
+        Returns a string like 'high_low' or None if params are not available.
+        """
+        if self._token_params is None:
+            return None
+        bounds = self._token_params.get("regime_boundaries")
+        if not bounds:
+            return None
+        try:
+            vol_avg   = float(df["volume"].iloc[-24:].mean()) if "volume" in df.columns else None
+            atr_val   = float(df["_atr"].iloc[-1])            if "_atr"   in df.columns else None
+            close_val = float(df["close"].iloc[-1])            if "close"  in df.columns else None
+
+            if vol_avg is None or atr_val is None or not close_val:
+                return None
+
+            atr_pct = atr_val / close_val
+
+            def _tier(val: float, p33: float, p67: float) -> str:
+                if val <= p33:
+                    return "low"
+                if val <= p67:
+                    return "med"
+                return "high"
+
+            v = _tier(vol_avg, bounds["vol_p33"],     bounds["vol_p67"])
+            a = _tier(atr_pct, bounds["atr_pct_p33"], bounds["atr_pct_p67"])
+            return f"{v}_{a}"
+        except Exception:
+            return None
 
     # -------------------------------------------------------------
     # Data fetch (unchanged logic)
@@ -387,6 +435,19 @@ class Predictor:
                                              self.meta.get("meta_threshold", 0.6)))
             tradeable = bool(self.meta.get("tradeable_sell",
                                            self.meta.get("tradeable", True)))
+
+        # ── Regime-specific threshold override ───────────────────────────────
+        # If threshold_optimizer.py has run, swap in the optimised threshold for
+        # the current volume × volatility regime (only when that regime's result
+        # passed the precision target, i.e. ok=True).
+        regime = self._detect_regime(df_features)
+        if regime and self._token_params:
+            reg = self._token_params.get("regimes", {}).get(regime, {})
+            if reg and not reg.get("skipped"):
+                if side == 2 and reg.get("buy_ok") and "buy_threshold" in reg:
+                    thr = float(reg["buy_threshold"])
+                elif side == 0 and reg.get("sell_ok") and "sell_threshold" in reg:
+                    thr = float(reg["sell_threshold"])
 
         fire = tradeable and (meta_conf >= thr)
 

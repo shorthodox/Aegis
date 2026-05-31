@@ -77,6 +77,22 @@ if root_dir not in sys.path:
 from src.ml.feature_engine import prepare_features, compute_atr
 from src.ml.predictor import Predictor
 
+_RETRAIN_ROOT   = Path(__file__).resolve().parent.parent
+_TOKEN_PARAMS_DIR = _RETRAIN_ROOT / "data" / "token_params"
+
+
+def load_token_params(symbol: str) -> Optional[Dict[str, Any]]:
+    """Load per-token optimizer output from data/token_params/ if it exists."""
+    path = _TOKEN_PARAMS_DIR / f"{symbol.replace('/', '_')}_params.json"
+    if not path.exists():
+        return None
+    try:
+        with open(path) as _f:
+            return json.load(_f)
+    except Exception:
+        return None
+
+
 # ============================================================
 # CONFIG
 # ============================================================
@@ -1135,20 +1151,23 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         # Keep ATR for the PnL backtest (excluded from features via leading underscore).
         df['_atr'] = compute_atr(df, period=14).values
 
-        atr_mult = get_atr_multiplier(symbol)
-        # Show the effective multiplier range this token will see bar-by-bar.
-        # The base value is the tier anchor; the label engine stretches it
-        # continuously between base×0.8 (strong trend) and 4.5 (extreme noise).
+        # ── Load per-token optimizer params (if threshold_optimizer.py has run) ──
+        _opt = load_token_params(symbol)
+        _opt_global = (_opt or {}).get("global", {})
+
+        # ATR multiplier: prefer optimizer result, fall back to static tier table.
+        atr_mult = float(_opt_global.get("atr_multiplier") or get_atr_multiplier(symbol))
+
         _er_med  = float(df['efficiency_ratio_10'].median()) if 'efficiency_ratio_10' in df.columns else 0.5
         _vol_med = float(df['volatility_regime'].median())   if 'volatility_regime' in df.columns else 1.0
         _typical = compute_dynamic_atr_multiplier(atr_mult, _er_med, _vol_med)
 
         # ── Dynamic lookahead ─────────────────────────────────────────────
-        # Trending tokens (high ER) need the full window to let the trade play
-        # out. Choppy tokens (low ER) resolve labels quickly — a shorter window
-        # produces tighter, less noisy labels and censors fewer recent rows.
+        # Prefer the optimizer's per-token lookahead if available; fall back
+        # to the ER-adaptive formula.
+        _opt_lh = _opt_global.get("lookahead_bars")
         token_lookahead = int(np.clip(
-            round(MAX_LOOKAHEAD * (0.4 + _er_med * 1.2)),
+            int(_opt_lh) if _opt_lh else round(MAX_LOOKAHEAD * (0.4 + _er_med * 1.2)),
             12,              # absolute minimum: 12 bars (half a day)
             MAX_LOOKAHEAD,   # never exceed the global cap
         ))
