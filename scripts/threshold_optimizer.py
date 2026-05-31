@@ -90,8 +90,10 @@ LOOKAHEAD_GRID = [12, 18, 24, 30, 36, 48, 60, 72]                     #  8 pts
 # ── quality gates ─────────────────────────────────────────────────────────────
 MIN_REGIME_BARS = 50     # skip a regime bucket if it has fewer valid bars
 MIN_SIGNALS     = 10     # minimum fired signals to trust a threshold result
-BREAKEVEN       = FEE_ROUNDTRIP   # ~0.10 % round-trip — minimum viable precision
-TARGET_PREC     = 0.60            # "green" precision target
+# Precision must exceed 50 % + fees to have positive expected value.
+# Anything below 50 % is worse than a random coin flip regardless of coverage.
+BREAKEVEN       = 0.50 + FEE_ROUNDTRIP   # ~50.1 %
+TARGET_PREC     = 0.60                   # "green" precision target
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -160,23 +162,30 @@ def best_threshold(
     n_total:   int,
 ) -> Dict[str, Any]:
     """
-    Sweep THRESHOLD_GRID for one direction.
-    Score = precision × sqrt(coverage) balances signal quality vs trade count.
+    Sweep THRESHOLD_GRID for one direction and find the threshold that
+    maximises TOTAL EXPECTED RETURN:
 
-    Returns: {threshold, precision, coverage, n_signals, ok}
+        score = coverage × (2 × precision - 1 - FEE_ROUNDTRIP)
+
+    This is proportional to the cumulative PnL of all fired signals assuming
+    1:1 R:R (win +1 unit, lose -1 unit, minus fees).  Thresholds with
+    precision ≤ 50 % get a negative score and are never chosen.
+
+    Returns: {threshold, precision, coverage, n_signals, expected_return, ok,
+              curve}   where 'curve' is the full threshold→precision table
+              (top-10 by score) for transparency.
     'ok' = True only when precision >= TARGET_PREC.
     """
     sm = proposed == side
-    if sm.sum() < MIN_SIGNALS:
-        return {"threshold": 0.60, "precision": 0.0,
-                "coverage": 0.0, "n_signals": 0, "ok": False}
+    if int(sm.sum()) < MIN_SIGNALS:
+        return {"threshold": 0.60, "precision": 0.0, "coverage": 0.0,
+                "n_signals": 0, "expected_return": 0.0, "ok": False, "curve": []}
 
     conf_s  = meta_conf[sm]
     lbl_s   = labels[sm]
     correct = side
 
-    best: Optional[Dict[str, Any]] = None
-    best_score = -np.inf
+    all_rows: List[Dict[str, Any]] = []
 
     for thr in THRESHOLD_GRID:
         fired = conf_s >= thr
@@ -185,41 +194,33 @@ def best_threshold(
             continue
         prec = float((lbl_s[fired] == correct).mean())
         cov  = n / max(n_total, 1)
-        if prec < BREAKEVEN:
-            continue
-        score = prec * float(np.sqrt(cov))
-        if score > best_score:
-            best_score = score
-            best = {
-                "threshold": float(thr),
-                "precision": round(prec, 4),
-                "coverage":  round(cov, 4),
-                "n_signals": n,
-                "ok":        prec >= TARGET_PREC,
-            }
+        # Financially-correct objective: total expected PnL ∝ n × (2p − 1 − fee)
+        # Negative when precision ≤ 50 %, so random-or-worse thresholds are rejected.
+        exp_ret = cov * (2.0 * prec - 1.0 - FEE_ROUNDTRIP)
+        all_rows.append({
+            "threshold":       round(float(thr), 2),
+            "precision":       round(prec, 4),
+            "coverage":        round(cov, 4),
+            "n_signals":       n,
+            "expected_return": round(exp_ret, 5),
+            "ok":              prec >= TARGET_PREC,
+        })
 
-    if best is None:
-        # Nothing cleared the fee floor — return the best-precision entry
-        # as a reference only (ok=False so callers won't act on it)
-        rows = []
-        for thr in THRESHOLD_GRID:
-            fired = conf_s >= thr
-            n = int(fired.sum())
-            if n >= max(3, MIN_SIGNALS // 3):
-                prec = float((lbl_s[fired] == correct).mean())
-                rows.append({
-                    "threshold": float(thr),
-                    "precision": round(prec, 4),
-                    "coverage":  round(n / max(n_total, 1), 4),
-                    "n_signals": n,
-                    "ok":        False,
-                })
-        if rows:
-            return max(rows, key=lambda r: r["precision"])
-        return {"threshold": 0.60, "precision": 0.0,
-                "coverage": 0.0, "n_signals": 0, "ok": False}
+    if not all_rows:
+        return {"threshold": 0.60, "precision": 0.0, "coverage": 0.0,
+                "n_signals": 0, "expected_return": 0.0, "ok": False, "curve": []}
 
-    return best
+    # Best = highest total expected return (financially correct)
+    best = max(all_rows, key=lambda r: r["expected_return"])
+
+    # If best still has negative expected return, return reference-only result
+    if best["expected_return"] <= 0:
+        best["ok"] = False
+
+    # Top-10 rows by expected_return for the curve (stored in JSON for analysis)
+    curve = sorted(all_rows, key=lambda r: -r["expected_return"])[:10]
+
+    return {**best, "curve": curve}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -584,9 +585,11 @@ def optimize_symbol(symbol: str) -> Optional[Dict[str, Any]]:
     sell_ok = "+" if g_sell["ok"] else "-"
     print(
         f"   [{symbol}] ATR x{best_atr:.2f} | lh={lh_res['lookahead_bars']}h | "
-        f"BUY [{buy_ok}] {g_buy['threshold']:.2f} ({g_buy['precision']:.0%}) | "
-        f"SELL [{sell_ok}] {g_sell['threshold']:.2f} ({g_sell['precision']:.0%}) | "
-        f"regimes {n_live}/9 active"
+        f"BUY [{buy_ok}] thr={g_buy['threshold']:.2f} "
+        f"prec={g_buy['precision']:.0%} exp={g_buy['expected_return']:+.4f} | "
+        f"SELL [{sell_ok}] thr={g_sell['threshold']:.2f} "
+        f"prec={g_sell['precision']:.0%} exp={g_sell['expected_return']:+.4f} | "
+        f"regimes {n_live}/9"
     )
     return params
 
