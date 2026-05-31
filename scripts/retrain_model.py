@@ -1618,6 +1618,14 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
                     "target_met": bool(hit_target),
                 },
                 "trained_at": datetime.now().isoformat(),
+                # ── Optimizer regime data (from threshold_optimizer.py) ────────
+                # Embedded here so predictor.py needs only this one file at
+                # inference time. Re-run threshold_optimizer.py after retraining
+                # to refresh these values; retrain then picks them up on the next
+                # training cycle.
+                "regime_thresholds":  (_opt or {}).get("regimes", {}),
+                "regime_boundaries":  (_opt or {}).get("regime_boundaries", {}),
+                "optimizer_updated_at": (_opt or {}).get("updated_at"),
             }, f, indent=2)
 
         log_feature_importance(deploy_primary, feature_cols, symbol)
