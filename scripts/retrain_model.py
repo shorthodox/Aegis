@@ -90,8 +90,9 @@ N_SPLITS_CV = 10              # purged folds for OOF / dev estimates
 OPTUNA_TRIALS = 60
 
 SHAP_CUMULATIVE_THRESH = 0.85  # keep features covering 85% of total |SHAP| importance
+SHAP_TOP_PCT = 0.40            # also keep at least the top 40% of features by SHAP rank
 MIN_FEATURES = 25              # floor: never drop below this many features
-MAX_FEATURES = 60              # ceiling: ~15-20 features per 1000 train rows is the empirical sweet spot
+MAX_FEATURES = 100             # ceiling raised to accommodate top-40% rule
 
 MIN_TOTAL_ROWS = 600
 MIN_FIT_ROWS = 300
@@ -709,16 +710,19 @@ def prune_features_by_shap(model: xgb.Booster, X: pd.DataFrame,
     total = importance.sum()
     if total > 0:
         cumfrac = importance.cumsum() / total
-        # number of top features needed to reach the cumulative threshold
+        # features needed to reach the cumulative threshold
         n_cumul = int((cumfrac < threshold).sum()) + 1
     else:
         n_cumul = min_keep
-    n_keep = int(np.clip(n_cumul, min_keep, MAX_FEATURES))
+    # also keep at least the top SHAP_TOP_PCT fraction of all features
+    n_top_pct = int(len(X.columns) * SHAP_TOP_PCT)
+    n_keep = int(np.clip(max(n_cumul, n_top_pct), min_keep, MAX_FEATURES))
     keep = importance.head(n_keep).index.tolist()
     dropped = [c for c in X.columns if c not in keep]
     if dropped:
+        actual_cumul = float(importance.head(n_keep).sum() / total) if total > 0 else 1.0
         print(f"   SHAP pruning removed {len(dropped)} low-impact features "
-              f"(kept {n_keep}, covers {threshold:.0%} cumulative importance): "
+              f"(kept {n_keep}, covers {actual_cumul:.0%} cumulative importance): "
               f"e.g. {dropped[:5]}")
     return keep
 
