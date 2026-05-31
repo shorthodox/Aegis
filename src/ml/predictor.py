@@ -145,8 +145,24 @@ class Predictor:
             logger.error(f"Failed to load news: {e}")
             return None
 
+    # Symbols confirmed to have no perpetual futures market — skip without API call.
+    _NO_PERP_SYMBOLS: set = set()
+
+    _NO_PERP_PHRASES = (
+        'does not have market symbol',
+        'invalid symbol',
+        'symbol not found',
+        'no data',
+        'does not exist',
+        'not support',
+        'market symbol',
+        'no market',
+    )
+
     def _fetch_futures_data(self, df: pd.DataFrame):
         """Fetch funding rate and OI from Binance perpetual futures. Returns (funding_df, oi_df)."""
+        if self.symbol in Predictor._NO_PERP_SYMBOLS:
+            return None, None
         try:
             import ccxt as _ccxt
             ex = _ccxt.binanceusdm({'enableRateLimit': True, 'timeout': 10000})  # type: ignore[arg-type]
@@ -155,11 +171,15 @@ class Predictor:
             n = len(df)
             futures_sym = self.symbol.replace('/USDT', '/USDT:USDT')
 
+            def _is_no_perp(err: Exception) -> bool:
+                msg = str(err).lower()
+                return any(p in msg for p in Predictor._NO_PERP_PHRASES)
+
             # Fetch Funding Rate (paginated)
             all_fr = []
             fr_target = (n // 8) + 50
             current_since = since_ms
-            
+
             while len(all_fr) < fr_target:
                 try:
                     chunk = ex.fetch_funding_rate_history(futures_sym, since=current_since, limit=1000)
@@ -172,6 +192,9 @@ class Predictor:
                     current_since = last_ts + 1
                     time.sleep(0.3)
                 except Exception as e:
+                    if _is_no_perp(e):
+                        Predictor._NO_PERP_SYMBOLS.add(self.symbol)
+                        return None, None
                     logger.warning(f"Funding rate fetch stopped: {e}")
                     break
 
@@ -200,6 +223,9 @@ class Predictor:
                     current_since = last_ts + 1
                     time.sleep(0.3)
                 except Exception as e:
+                    if _is_no_perp(e):
+                        Predictor._NO_PERP_SYMBOLS.add(self.symbol)
+                        break
                     logger.warning(f"OI fetch stopped: {e}")
                     break
 
