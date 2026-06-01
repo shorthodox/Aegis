@@ -3952,6 +3952,59 @@ async def _require_admin(x_admin_key: Optional[str] = Header(None)) -> None:
     if not ADMIN_SECRET or x_admin_key != ADMIN_SECRET:
         raise HTTPException(status_code=403, detail="Admin access required")
 
+@app.post("/api/admin/reset-track-record")
+async def reset_track_record(_: None = Depends(_require_admin)):
+    """
+    Wipe the track record.  Clears in-memory signal store, resets the on-disk
+    JSON files, and resets the live engine's virtual wallet.
+    Protected by X-Admin-Key header (ADMIN_SECRET env var).
+    """
+    global _track_store, _tr_seen_ids, _tr_last_save
+
+    # Clear in-memory signal log
+    _track_store.clear()
+    _tr_seen_ids.clear()
+    _tr_last_save = 0.0
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    empty_payload: Dict[str, Any] = {
+        "generated_at": now_iso,
+        "summary": {},
+        "signals": [],
+    }
+
+    # Persist empty files
+    for path in (TRACK_RECORD_PATH, WEB_ROOT_PATH / "track_record.json"):
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(".tmp")
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(empty_payload, f)
+            os.replace(tmp, path)
+        except Exception as e:
+            print(f"[reset-track-record] Could not write {path}: {e}")
+
+    # Reset the live engine's virtual wallet (paper trading positions + history)
+    _eng = LIVE_STATE.engine
+    if _eng is not None:
+        try:
+            wallet = _eng.wallet
+            wallet.open_positions.clear()
+            wallet.trade_history.clear()
+            wallet.balance = wallet.initial_capital
+        except Exception as e:
+            print(f"[reset-track-record] Could not reset wallet: {e}")
+
+    # Broadcast empty payload to any connected track-record WebSocket clients
+    try:
+        await _tr_ws_manager.broadcast(empty_payload)
+    except Exception:
+        pass
+
+    print(f"[TrackRecord] Reset by admin at {now_iso}")
+    return {"success": True, "message": "Track record cleared.", "reset_at": now_iso}
+
+
 def _get_dev_code_doc(code: str) -> Optional[Dict]:
     doc_ref = db.collection("dev_codes").document(code)
     doc = doc_ref.get()
