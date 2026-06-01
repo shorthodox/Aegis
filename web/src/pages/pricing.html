@@ -570,14 +570,30 @@
                 });
             }
 
+            const SESSION_CODE_KEY = 'aegis_pending_devcode';
+
+            function _redirectToDashboard() {
+                // sessionStorage.clear so the code isn't re-submitted on back-navigation
+                sessionStorage.removeItem(SESSION_CODE_KEY);
+                // location.replace() is more reliable than href on iOS Safari
+                window.location.replace('/web/src/pages/dashboard.html');
+            }
+
             async function redeemDevCode() {
                 const code = (devCodeInput?.value || '').trim().toUpperCase();
                 if (!code) return;
 
+                // Persist the code across page reloads (OAuth on mobile does a full reload)
+                sessionStorage.setItem(SESSION_CODE_KEY, code);
+
                 const token = localStorage.getItem('access_token') || localStorage.getItem('authToken');
                 if (!token) {
                     window.pendingAction = 'redeemDevCode';
-                    openSignInModal();
+                    if (devCodeMsg) {
+                        devCodeMsg.style.color = 'rgba(0,242,255,0.8)';
+                        devCodeMsg.textContent = 'Please sign in first — your code is saved and will be applied automatically.';
+                    }
+                    setTimeout(() => openSignInModal(), 400);
                     return;
                 }
 
@@ -595,13 +611,17 @@
                     if (res.ok) {
                         const exp = data.expires_at ? new Date(data.expires_at).toLocaleDateString() : '';
                         devCodeMsg.style.color = '#00ff88';
-                        devCodeMsg.textContent = `✅ ${data.plan.toUpperCase()} access activated${exp ? ' until ' + exp : ''}. Redirecting…`;
-                        setTimeout(() => { window.location.href = '/web/src/pages/dashboard.html'; }, 1500);
+                        // Show a tap-able fallback link for mobile browsers that block auto-redirects
+                        devCodeMsg.innerHTML = `✅ ${data.plan.toUpperCase()} access activated${exp ? ' until ' + exp : ''}.
+                            <a href="/web/src/pages/dashboard.html"
+                               style="color:#00f2ff;display:block;margin-top:0.5rem;font-weight:700;font-size:1rem;text-decoration:underline;">
+                               → Go to Dashboard
+                            </a>`;
+                        setTimeout(_redirectToDashboard, 1200);
                     } else if (res.status === 401) {
-                        // Token missing or expired — clear stale token and re-login
                         ['authToken','access_token','authenticated','userSession','refresh_token'].forEach(k => localStorage.removeItem(k));
                         devCodeMsg.style.color = '#ff6464';
-                        devCodeMsg.textContent = 'Session expired. Please sign in again — your code is valid.';
+                        devCodeMsg.textContent = 'Session expired. Please sign in again — your code is saved.';
                         if (devCodeSubmit) { devCodeSubmit.disabled = false; devCodeSubmit.textContent = 'Redeem'; }
                         window.pendingAction = 'redeemDevCode';
                         setTimeout(() => openSignInModal(), 1000);
@@ -609,6 +629,7 @@
                         devCodeMsg.style.color = '#ff6464';
                         devCodeMsg.textContent = '✗ ' + (data.detail || 'Could not redeem code. Please try again.');
                         if (devCodeSubmit) { devCodeSubmit.disabled = false; devCodeSubmit.textContent = 'Redeem'; }
+                        sessionStorage.removeItem(SESSION_CODE_KEY);
                     }
                 } catch (err) {
                     devCodeMsg.style.color = '#ff6464';
@@ -620,12 +641,35 @@
             if (devCodeSubmit) devCodeSubmit.addEventListener('click', redeemDevCode);
             if (devCodeInput) devCodeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') redeemDevCode(); });
 
+            // After OAuth page-reload on mobile: pick up the saved code and re-submit
             window.addEventListener('authStateChange', (ev) => {
-                if (ev.detail?.authenticated && window.pendingAction === 'redeemDevCode') {
-                    window.pendingAction = null;
-                    redeemDevCode();
+                if (ev.detail?.authenticated) {
+                    const savedCode = sessionStorage.getItem(SESSION_CODE_KEY);
+                    if (savedCode && devCodeInput) {
+                        devCodeInput.value = savedCode;
+                        window.pendingAction = null;
+                        redeemDevCode();
+                    } else if (window.pendingAction === 'redeemDevCode') {
+                        window.pendingAction = null;
+                        redeemDevCode();
+                    }
                 }
             });
+
+            // On page load: if a code was saved before a reload, auto-fill and show it
+            const _savedOnLoad = sessionStorage.getItem(SESSION_CODE_KEY);
+            if (_savedOnLoad && devCodeInput) {
+                devCodeInput.value = _savedOnLoad;
+                // Open the devcode section so the user sees the pre-filled field
+                if (devCodeBody && devCodeBody.style.display === 'none') {
+                    devCodeBody.style.display = 'block';
+                    if (devCodeChevron) devCodeChevron.style.transform = 'rotate(180deg)';
+                }
+                if (devCodeMsg) {
+                    devCodeMsg.style.color = 'rgba(0,242,255,0.8)';
+                    devCodeMsg.textContent = 'Your code is ready — sign in to activate it.';
+                }
+            }
         });
     </script>
     <!-- Lightweight server-backed login modal is injected by simple-auth-client.js -->
