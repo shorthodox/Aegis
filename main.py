@@ -3025,7 +3025,41 @@ async def websocket_dashboard(websocket: WebSocket):
                             })
                             filtered_signals[sym] = _out
 
-                    # Fill any ticker gaps with signal entry_price
+                    # Pad filtered_signals with stub entries for every engine-tracked
+                    # symbol not yet covered — ensures all 60 symbols appear in the
+                    # dashboard even during warmup or when a predictor hasn't run yet.
+                    _eng_ref = LIVE_STATE.engine
+                    if _eng_ref is not None:
+                        _warming = _eng_ref.bootstrap_done < _eng_ref.bootstrap_total
+                        for _sym, _pred in _eng_ref.predictors.items():
+                            if _sym in filtered_signals:
+                                continue
+                            _px = float(live_tickers.get(_sym, 0) or
+                                        _cached_tickers.get(_sym, 0))
+                            _is_tradeable = bool(
+                                getattr(_pred, 'meta', {}).get('tradeable', False)
+                            )
+                            filtered_signals[_sym] = {
+                                "symbol":          _sym,
+                                "signal":          "WAITING" if _warming else "NEUTRAL",
+                                "signal_strength": "NONE",
+                                "direction":       "NEUTRAL",
+                                "fire":            False,
+                                "tradeable":       _is_tradeable,
+                                "entry_price":     _px,
+                                "price":           _px,
+                                "ai_prob":         0,
+                                "meta_confidence": 0,
+                                "confidence_score":0,
+                                "atr":             0,
+                                "timeframe":       "1h",
+                                "timestamp":       datetime.now(timezone.utc).isoformat(),
+                                "signal_id":       f"{_sym.replace('/','_')}_FLAT",
+                            }
+                            if _px > 0:
+                                live_tickers[_sym] = _px
+
+                    # Fill any remaining ticker gaps from signal entry_price
                     for _sym, _sd in filtered_signals.items():
                         if _sym not in live_tickers:
                             _ep = _sd.get("entry_price") or _sd.get("price")
