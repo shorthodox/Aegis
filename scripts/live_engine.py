@@ -43,9 +43,16 @@ def _fetch_spot_price(symbol: str) -> float:
     global _spot_ex
     try:
         import ccxt as _ccxt
+        # Double-checked locking: fast path avoids lock when already initialised.
+        # Exchange object is created outside the lock so a slow __init__ doesn't
+        # block unrelated concurrent fetches.
+        if _spot_ex is None:
+            _new = _ccxt.binance({'enableRateLimit': True, 'timeout': 8000})  # type: ignore[arg-type]
+            (_new.options or {})['defaultType'] = 'spot'  # type: ignore[index]  — never route to futures
+            with _spot_ex_lock:
+                if _spot_ex is None:   # second check inside lock (race guard)
+                    _spot_ex = _new
         with _spot_ex_lock:
-            if _spot_ex is None:
-                _spot_ex = _ccxt.binance({'enableRateLimit': True, 'timeout': 8000})
             ticker = _spot_ex.fetch_ticker(symbol)
         return float(ticker.get('last') or ticker.get('close') or 0)
     except Exception:
