@@ -3952,6 +3952,21 @@ async def _require_admin(x_admin_key: Optional[str] = Header(None)) -> None:
     if not ADMIN_SECRET or x_admin_key != ADMIN_SECRET:
         raise HTTPException(status_code=403, detail="Admin access required")
 
+@app.delete("/api/admin/track-record/{signal_id}")
+async def delete_track_record_entry(signal_id: str, _: None = Depends(_require_admin)):
+    """Remove one signal from the in-memory track record and persist to disk."""
+    global _track_store, _tr_seen_ids
+    before = len(_track_store)
+    _track_store = [r for r in _track_store if r.get("signal_id") != signal_id]
+    _tr_seen_ids.discard(signal_id)
+    removed = before - len(_track_store)
+    if removed == 0:
+        raise HTTPException(status_code=404, detail=f"signal_id '{signal_id}' not found")
+    _save_track_record()
+    return {"success": True, "removed": removed, "signal_id": signal_id,
+            "remaining": len(_track_store)}
+
+
 @app.post("/api/admin/reset-track-record")
 async def reset_track_record(_: None = Depends(_require_admin)):
     """
