@@ -33,6 +33,24 @@ if str(_ROOT) not in sys.path:
 MODEL_STORE       = _ROOT / 'src' / 'ml' / 'model_store'
 TRACK_RECORD_PATH = _ROOT / 'data' / 'track_record.json'
 
+# Shared exchange for lightweight index-price fetches (reuses the same instance
+# as Predictor once the class is loaded to avoid creating a second connection).
+_spot_ex = None
+_spot_ex_lock = __import__('threading').Lock()
+
+def _fetch_spot_price(symbol: str) -> float:
+    """Thread-safe single-symbol spot price fetch. Returns 0.0 on any error."""
+    global _spot_ex
+    try:
+        import ccxt as _ccxt
+        with _spot_ex_lock:
+            if _spot_ex is None:
+                _spot_ex = _ccxt.binance({'enableRateLimit': True, 'timeout': 8000})
+        ticker = _spot_ex.fetch_ticker(symbol)
+        return float(ticker.get('last') or ticker.get('close') or 0)
+    except Exception:
+        return 0.0
+
 
 # =============================================================================
 # Data classes
@@ -222,14 +240,40 @@ class LiveEngine:
             sleep = max(0.0, self.scan_interval_seconds - (time.time() - t0))
             await asyncio.sleep(sleep)
 
+    # Symbols always shown in market overview even if not in tradeable fleet.
+    _INDEX_SYMBOLS = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'XRP/USDT', 'BNB/USDT']
+
     async def _scan_all(self) -> None:
         sem = asyncio.Semaphore(self.MAX_CONCURRENT)
         tasks = [self._process_symbol(sym, pred, sem)
                  for sym, pred in self.predictors.items()]
         await asyncio.gather(*tasks, return_exceptions=True)
-        # Safety net: ensure bootstrap_done reaches total even if per-symbol
-        # increments were skipped due to early returns.
+        # Fetch current prices for index/overview symbols not in the tradeable fleet.
+        # These are always displayed in the market overview cards on the dashboard.
+        await self._fetch_index_prices()
+        # Safety net: ensure bootstrap_done reaches total.
         self.bootstrap_done = len(self.predictors)
+
+    async def _fetch_index_prices(self) -> None:
+        """Fetch spot prices for market overview symbols not covered by the tradeable fleet."""
+        from src.ml.predictor import Predictor
+        missing = [s for s in self._INDEX_SYMBOLS if s not in self.live_prices]
+        if not missing:
+            return
+        loop = asyncio.get_event_loop()
+        for sym in missing:
+            try:
+                ticker = await asyncio.wait_for(
+                    loop.run_in_executor(
+                        self._executor,
+                        lambda s=sym: _fetch_spot_price(s),
+                    ),
+                    timeout=10,
+                )
+                if ticker and ticker > 0:
+                    self.live_prices[sym] = ticker
+            except Exception:
+                pass
 
     async def _process_symbol(
         self, symbol: str, predictor: Any, sem: asyncio.Semaphore
