@@ -243,9 +243,8 @@ class LiveEngine:
     async def run(self) -> None:
         print(f'[LiveEngine] Starting — interval={self.scan_interval_seconds}s '
               f'symbols={len(self.predictors)}')
-        # Launch a continuous price ticker alongside the 5-min scan cycle so
-        # live_prices updates every 10 s instead of only once per scan.
-        asyncio.create_task(self._continuous_price_ticker())
+        # Real-time price stream via Binance WebSocket (pushed every ~1s per symbol).
+        asyncio.create_task(self._ws_price_ticker())
         while True:
             t0 = time.time()
             await self._scan_all()
@@ -253,38 +252,48 @@ class LiveEngine:
             sleep = max(0.0, self.scan_interval_seconds - (time.time() - t0))
             await asyncio.sleep(sleep)
 
-    async def _continuous_price_ticker(self) -> None:
-        """Refresh live_prices every 10 s using a single batch fetch_tickers call."""
+    async def _ws_price_ticker(self) -> None:
+        """
+        Real-time price feed via Binance all-market mini-ticker WebSocket stream.
+        Binance pushes the full mini-ticker array every ~1 second; we filter for
+        our 60 symbols and update live_prices immediately on each message.
+        Reconnects automatically on any error.
+        """
+        import json as _json
+
+        # Build a reverse map: "btcusdt" -> "BTC/USDT"
+        all_syms = list(set(list(self.predictors.keys()) + list(self._INDEX_SYMBOLS)))
+        sym_map: Dict[str, str] = {
+            s.replace('/', '').lower(): s for s in all_syms
+        }
+
+        ws_url = 'wss://stream.binance.com:9443/ws/!miniTicker@arr'
+
         while True:
             try:
-                syms = list(set(list(self.predictors.keys()) + list(self._INDEX_SYMBOLS)))
-                loop = asyncio.get_event_loop()
-                prices: Dict[str, float] = await asyncio.wait_for(
-                    loop.run_in_executor(self._executor,
-                                         lambda s=syms: self._batch_fetch_prices(s)),
-                    timeout=20,
-                )
-                self.live_prices.update({k: v for k, v in prices.items() if v > 0})
+                import websockets                                         # type: ignore[import]
+                async with websockets.connect(                           # type: ignore[attr-defined]
+                    ws_url,
+                    ping_interval=20,
+                    ping_timeout=10,
+                    close_timeout=5,
+                ) as ws:
+                    async for raw in ws:
+                        try:
+                            tickers = _json.loads(raw)
+                            if not isinstance(tickers, list):
+                                continue
+                            for t in tickers:
+                                key = t.get('s', '').lower()   # e.g. "btcusdt"
+                                ccxt_sym = sym_map.get(key)
+                                if ccxt_sym:
+                                    price = float(t.get('c') or 0)
+                                    if price > 0:
+                                        self.live_prices[ccxt_sym] = price
+                        except Exception:
+                            pass
             except Exception:
-                pass
-            await asyncio.sleep(10)
-
-    @staticmethod
-    def _batch_fetch_prices(symbols: List[str]) -> Dict[str, float]:
-        """Single fetch_tickers call for all symbols. Returns {symbol: price}."""
-        from src.ml.predictor import Predictor
-        try:
-            with Predictor._CCXT_LOCK:
-                if Predictor._SHARED_SPOT_EX is None:
-                    return {}
-                raw = Predictor._SHARED_SPOT_EX.fetch_tickers(symbols)
-            return {
-                sym: float(t.get('last') or t.get('close') or 0)
-                for sym, t in raw.items()
-                if t.get('last') or t.get('close')
-            }
-        except Exception:
-            return {}
+                await asyncio.sleep(3)   # reconnect after brief pause
 
     # Symbols always shown in market overview even if not in tradeable fleet.
     _INDEX_SYMBOLS = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'XRP/USDT', 'BNB/USDT']
