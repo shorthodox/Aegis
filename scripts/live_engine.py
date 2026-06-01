@@ -243,12 +243,48 @@ class LiveEngine:
     async def run(self) -> None:
         print(f'[LiveEngine] Starting — interval={self.scan_interval_seconds}s '
               f'symbols={len(self.predictors)}')
+        # Launch a continuous price ticker alongside the 5-min scan cycle so
+        # live_prices updates every 10 s instead of only once per scan.
+        asyncio.create_task(self._continuous_price_ticker())
         while True:
             t0 = time.time()
             await self._scan_all()
             self._save_track_record()
             sleep = max(0.0, self.scan_interval_seconds - (time.time() - t0))
             await asyncio.sleep(sleep)
+
+    async def _continuous_price_ticker(self) -> None:
+        """Refresh live_prices every 10 s using a single batch fetch_tickers call."""
+        while True:
+            try:
+                syms = list(set(list(self.predictors.keys()) + list(self._INDEX_SYMBOLS)))
+                loop = asyncio.get_event_loop()
+                prices: Dict[str, float] = await asyncio.wait_for(
+                    loop.run_in_executor(self._executor,
+                                         lambda s=syms: self._batch_fetch_prices(s)),
+                    timeout=20,
+                )
+                self.live_prices.update({k: v for k, v in prices.items() if v > 0})
+            except Exception:
+                pass
+            await asyncio.sleep(10)
+
+    @staticmethod
+    def _batch_fetch_prices(symbols: List[str]) -> Dict[str, float]:
+        """Single fetch_tickers call for all symbols. Returns {symbol: price}."""
+        from src.ml.predictor import Predictor
+        try:
+            with Predictor._CCXT_LOCK:
+                if Predictor._SHARED_SPOT_EX is None:
+                    return {}
+                raw = Predictor._SHARED_SPOT_EX.fetch_tickers(symbols)
+            return {
+                sym: float(t.get('last') or t.get('close') or 0)
+                for sym, t in raw.items()
+                if t.get('last') or t.get('close')
+            }
+        except Exception:
+            return {}
 
     # Symbols always shown in market overview even if not in tradeable fleet.
     _INDEX_SYMBOLS = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'XRP/USDT', 'BNB/USDT']
@@ -758,84 +794,56 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
                 pos_cell,
             )
 
-        # ── Open positions detail ─────────────────────────────────────────────
-        open_t = Table(
-            title='● OPEN POSITIONS',
-            box=box.SIMPLE_HEAVY, border_style='cyan',
-            show_header=True, header_style='bold cyan', expand=True,
-        )
-        open_t.add_column('Symbol',     justify='left')
-        open_t.add_column('Dir',        justify='center')
-        open_t.add_column('Entry',      justify='right')
-        open_t.add_column('Live Price', justify='right')
-        open_t.add_column('PnL %',      justify='right')
-        open_t.add_column('PnL USDT',   justify='right')
-        open_t.add_column('Stop-Loss',  justify='right')
-        open_t.add_column('Size USDT',  justify='right')
-        open_t.add_column('Conf',       justify='right')
-        open_t.add_column('Opened',     justify='left')
-
+        # ── Compact open-positions footer ─────────────────────────────────────
+        # Open positions are already shown inline in the Position column above.
+        # The footer is a single condensed line per position so the token grid
+        # gets almost the full screen height.
+        open_lines: List[str] = []
         for pos in sorted(wallet.open_positions.values(), key=lambda p: p.entry_time):
-            cur   = float(live_px.get(pos.symbol, pos.entry_price) or pos.entry_price)
-            ppct  = ((cur - pos.entry_price) / pos.entry_price * 100) if pos.direction == 'LONG' \
-                    else ((pos.entry_price - cur) / pos.entry_price * 100)
-            pu    = round(pos.position_value * ppct / 100, 2)
+            cur  = float(live_px.get(pos.symbol, pos.entry_price) or pos.entry_price)
+            ppct = ((cur - pos.entry_price) / pos.entry_price * 100) if pos.direction == 'LONG' \
+                   else ((pos.entry_price - cur) / pos.entry_price * 100)
+            pu   = round(pos.position_value * ppct / 100, 2)
             arr, ds = _dir(pos.direction)
-            open_t.add_row(
-                f'[bold]{pos.symbol}[/]',
-                f'[{ds}]{arr} {pos.direction}[/]',
-                f'[white]{_px(pos.entry_price)}[/]',
-                f'[bold]{_px(cur)}[/]',
-                f'[{_pc(ppct)}]{ppct:+.2f}%[/]',
-                f'[{_pc(pu)}]{pu:+.2f}[/]',
-                f'[dim]{_px(pos.stop_loss)}[/]',
-                f'[dim]{pos.position_value:.0f}[/]',
-                f'[cyan]{pos.meta_confidence:.3f}[/]',
-                f'[dim]{pos.entry_time[11:16]} UTC[/]',
+            col  = _pc(ppct)
+            open_lines.append(
+                f"  [{ds}]{arr} {pos.symbol}[/]  "
+                f"entry [white]{_px(pos.entry_price)}[/] → "
+                f"now [bold white]{_px(cur)}[/]  "
+                f"[{col}]{ppct:+.2f}%  {pu:+.2f} USDT[/]  "
+                f"SL [dim]{_px(pos.stop_loss)}[/]  "
+                f"conf [cyan]{pos.meta_confidence:.3f}[/]  "
+                f"[dim]{pos.entry_time[11:16]} UTC[/]"
             )
-        if not wallet.open_positions:
-            open_t.add_row(*(['[dim]—[/]'] * 10))
 
-        # ── Closed trades (last 20) ───────────────────────────────────────────
-        closed_t = Table(
-            title='✔ CLOSED TRADES  (last 20)',
-            box=box.SIMPLE_HEAVY, border_style='dim',
-            show_header=True, header_style='bold white', expand=True,
-        )
-        closed_t.add_column('Symbol',   justify='left')
-        closed_t.add_column('Dir',      justify='center')
-        closed_t.add_column('Entry',    justify='right')
-        closed_t.add_column('Exit',     justify='right')
-        closed_t.add_column('PnL %',    justify='right')
-        closed_t.add_column('PnL USDT', justify='right')
-        closed_t.add_column('Reason',   justify='left')
-        closed_t.add_column('Outcome',  justify='center')
-        closed_t.add_column('Conf',     justify='right')
-
+        # Closed trade summary (last 5, one line each)
+        closed_lines: List[str] = []
         for rec in sorted(wallet.trade_history,
-                          key=lambda t: t.close_time or '', reverse=True)[:20]:
+                          key=lambda t: t.close_time or '', reverse=True)[:5]:
             arr, ds = _dir(rec.direction)
-            closed_t.add_row(
-                f'[bold]{rec.symbol}[/]',
-                f'[{ds}]{arr} {rec.direction}[/]',
-                f'[white]{_px(rec.entry_price)}[/]',
-                f'[white]{_px(rec.exit_price or 0)}[/]',
-                f'[{_pc(rec.pnl_pct)}]{rec.pnl_pct:+.2f}%[/]',
-                f'[{_pc(rec.pnl_usdt)}]{rec.pnl_usdt:+.2f}[/]',
-                f'[dim]{(rec.exit_reason or "—").replace("_", " ")}[/]',
-                _badge(rec.outcome),
-                f'[cyan]{rec.meta_confidence:.3f}[/]',
+            col = _pc(rec.pnl_pct)
+            closed_lines.append(
+                f"  {_badge(rec.outcome)}  [{ds}]{arr} {rec.symbol}[/]  "
+                f"[{col}]{rec.pnl_pct:+.2f}%  {rec.pnl_usdt:+.2f} USDT[/]  "
+                f"[dim]{(rec.exit_reason or '').replace('_',' ')}[/]"
             )
-        if not wallet.trade_history:
-            closed_t.add_row(*(['[dim]—[/]'] * 9))
 
-        # ── Assemble layout ───────────────────────────────────────────────────
+        open_body   = "\n".join(open_lines)   if open_lines   else "  [dim]No open positions[/]"
+        closed_body = "\n".join(closed_lines) if closed_lines else "  [dim]No closed trades yet[/]"
+
+        footer = Panel(
+            f"[bold cyan]● OPEN[/]  ({len(wallet.open_positions)})\n{open_body}\n\n"
+            f"[bold white]✔ RECENT CLOSED[/]  ({len(wallet.trade_history)} total)\n{closed_body}",
+            border_style='dim',
+        )
+
+        # ── Layout: header + full-height grid + compact footer ────────────────
         layout = Layout()
         layout.split_column(
-            Layout(header,   name='hdr',    size=3),
-            Layout(grid,     name='grid',   ratio=5),
-            Layout(open_t,   name='open',   ratio=2),
-            Layout(closed_t, name='closed', ratio=3),
+            Layout(header, name='hdr',    size=3),
+            Layout(grid,   name='grid',   ratio=1),   # grid gets all remaining space
+            Layout(footer, name='footer', size=max(4 + len(open_lines) * 1
+                                                   + len(closed_lines) * 1, 6)),
         )
         return layout
 
