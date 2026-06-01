@@ -545,8 +545,203 @@ def automated_setup(_: Path, args: Any):
 
 
 # =============================================================================
-# CLI entry point
+# CLI entry point  —  rich terminal dashboard
 # =============================================================================
+
+def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
+    """
+    Render a live-updating rich terminal dashboard.
+    Replaces the default bare output when live_engine.py is run directly.
+
+    Layout
+    ──────
+    • Header bar  : capital, balance, total PnL, open positions count
+    • OPEN TRADES : symbol, direction, entry, live price, PnL %, PnL USDT, SL, confidence
+    • CLOSED TRADES (last 20): same columns + exit reason, outcome badge
+    • SIGNALS (first scan only, then suppressed): brief fire log
+    """
+    from rich.console import Console
+    from rich.table import Table
+    from rich.live import Live
+    from rich.panel import Panel
+    from rich.text import Text
+    from rich.layout import Layout
+    from rich import box
+
+    console = Console()
+
+    def _price_str(p: float) -> str:
+        if p == 0:
+            return '—'
+        if p < 0.001:
+            return f'{p:.6f}'
+        if p < 1:
+            return f'{p:.4f}'
+        if p < 100:
+            return f'{p:.3f}'
+        return f'{p:.2f}'
+
+    def _pnl_color(v: float) -> str:
+        return 'green' if v > 0 else ('red' if v < 0 else 'dim white')
+
+    def _dir_style(d: str) -> tuple:
+        if d == 'LONG':
+            return '▲', 'bold green'
+        if d == 'SHORT':
+            return '▼', 'bold red'
+        return '–', 'dim white'
+
+    def _outcome_badge(outcome: str) -> Text:
+        if outcome == 'WIN':
+            return Text(' WIN ', style='bold black on green')
+        if outcome == 'LOSS':
+            return Text(' LOSS ', style='bold white on red')
+        if outcome == 'OPEN':
+            return Text(' OPEN ', style='bold black on cyan')
+        return Text(outcome, style='dim')
+
+    def _build_layout() -> Layout:
+        wallet = engine.wallet
+        live   = engine.live_prices
+
+        # ── Header stats ──────────────────────────────────────────────────────
+        pnl_u   = round(wallet.balance - wallet.initial_capital, 2)
+        pnl_pct = round(pnl_u / wallet.initial_capital * 100, 2)
+        pnl_col = 'green' if pnl_u >= 0 else 'red'
+
+        s = wallet.summary
+        won  = s['won'];  lost = s['lost'];  total = s['total_trades']
+        wr   = round(s['win_rate'] * 100, 1) if total else 0.0
+
+        warmup_done = engine.bootstrap_done >= engine.bootstrap_total
+        status_txt  = '[bold green]LIVE[/]' if warmup_done else f'[yellow]WARMUP {engine.bootstrap_done}/{engine.bootstrap_total}[/]'
+
+        header = Panel(
+            f"  {status_txt}  │  Capital [bold cyan]${wallet.initial_capital:,.0f}[/]  │"
+            f"  Balance [bold cyan]${wallet.balance:,.2f}[/]  │"
+            f"  PnL [{pnl_col}]{pnl_u:+.2f} USDT  ({pnl_pct:+.2f}%)[/]  │"
+            f"  Trades [white]{total}[/] ([green]{won}W[/]/[red]{lost}L[/])  │"
+            f"  Win-Rate [bold]{wr:.1f}%[/]  │"
+            f"  Open [bold cyan]{len(wallet.open_positions)}[/]",
+            title="[bold]AEGIS-1  ·  Virtual Wallet  ·  Paper Trading[/]",
+            border_style='cyan',
+        )
+
+        # ── Open positions table ──────────────────────────────────────────────
+        open_t = Table(
+            title='● OPEN POSITIONS',
+            box=box.SIMPLE_HEAVY,
+            border_style='cyan',
+            show_header=True,
+            header_style='bold cyan',
+            expand=True,
+        )
+        open_t.add_column('Symbol',     justify='left')
+        open_t.add_column('Dir',        justify='center')
+        open_t.add_column('Entry',      justify='right')
+        open_t.add_column('Live Price', justify='right')
+        open_t.add_column('PnL %',      justify='right')
+        open_t.add_column('PnL USDT',   justify='right')
+        open_t.add_column('Stop-Loss',  justify='right')
+        open_t.add_column('Size USDT',  justify='right')
+        open_t.add_column('Conf',       justify='right')
+        open_t.add_column('Opened',     justify='left')
+
+        for pos in sorted(wallet.open_positions.values(), key=lambda p: p.entry_time):
+            cur   = float(live.get(pos.symbol, pos.entry_price) or pos.entry_price)
+            entry = pos.entry_price
+            if pos.direction == 'LONG':
+                pnl_pct_pos = (cur - entry) / entry * 100
+            else:
+                pnl_pct_pos = (entry - cur) / entry * 100
+            pnl_u_pos = round(pos.position_value * pnl_pct_pos / 100, 2)
+            pc        = _pnl_color(pnl_pct_pos)
+            arrow, ds = _dir_style(pos.direction)
+            open_t.add_row(
+                f'[bold]{pos.symbol}[/]',
+                f'[{ds}]{arrow} {pos.direction}[/]',
+                f'[white]{_price_str(entry)}[/]',
+                f'[bold]{_price_str(cur)}[/]',
+                f'[{pc}]{pnl_pct_pos:+.2f}%[/]',
+                f'[{pc}]{pnl_u_pos:+.2f}[/]',
+                f'[dim]{_price_str(pos.stop_loss)}[/]',
+                f'[dim]{pos.position_value:.0f}[/]',
+                f'[cyan]{pos.meta_confidence:.3f}[/]',
+                f'[dim]{pos.entry_time[11:16]} UTC[/]',
+            )
+
+        if not wallet.open_positions:
+            open_t.add_row(*(['[dim]—[/]'] * 10))
+
+        # ── Closed trades table (last 20) ─────────────────────────────────────
+        closed_t = Table(
+            title='✔ CLOSED TRADES  (last 20)',
+            box=box.SIMPLE_HEAVY,
+            border_style='dim',
+            show_header=True,
+            header_style='bold white',
+            expand=True,
+        )
+        closed_t.add_column('Symbol',  justify='left')
+        closed_t.add_column('Dir',     justify='center')
+        closed_t.add_column('Entry',   justify='right')
+        closed_t.add_column('Exit',    justify='right')
+        closed_t.add_column('PnL %',   justify='right')
+        closed_t.add_column('PnL USDT',justify='right')
+        closed_t.add_column('Reason',  justify='left')
+        closed_t.add_column('Outcome', justify='center')
+        closed_t.add_column('Conf',    justify='right')
+
+        recent = sorted(wallet.trade_history, key=lambda t: t.close_time or '', reverse=True)[:20]
+        for rec in recent:
+            pc      = _pnl_color(rec.pnl_pct)
+            arrow, ds = _dir_style(rec.direction)
+            closed_t.add_row(
+                f'[bold]{rec.symbol}[/]',
+                f'[{ds}]{arrow} {rec.direction}[/]',
+                f'[white]{_price_str(rec.entry_price)}[/]',
+                f'[white]{_price_str(rec.exit_price or 0)}[/]',
+                f'[{pc}]{rec.pnl_pct:+.2f}%[/]',
+                f'[{pc}]{rec.pnl_usdt:+.2f}[/]',
+                f'[dim]{(rec.exit_reason or "—").replace("_", " ")}[/]',
+                _outcome_badge(rec.outcome),
+                f'[cyan]{rec.meta_confidence:.3f}[/]',
+            )
+
+        if not wallet.trade_history:
+            closed_t.add_row(*(['[dim]—[/]'] * 9))
+
+        from rich.layout import Layout
+        layout = Layout()
+        layout.split_column(
+            Layout(header,   name='header',  size=3),
+            Layout(open_t,   name='open',    ratio=2),
+            Layout(closed_t, name='closed',  ratio=3),
+        )
+        return layout
+
+    async def _run_with_display() -> None:
+        # Start engine scan loop as a background task
+        scan_task = asyncio.create_task(engine.run())
+
+        with Live(
+            _build_layout(),
+            console=console,
+            refresh_per_second=0.5,   # update every 2 s
+            screen=False,
+        ) as live:
+            try:
+                while not scan_task.done():
+                    live.update(_build_layout())
+                    await asyncio.sleep(2)
+            except asyncio.CancelledError:
+                pass
+            finally:
+                scan_task.cancel()
+                await engine.shutdown()
+
+    asyncio.run(_run_with_display())
+
 
 if __name__ == '__main__':
     import argparse
@@ -556,6 +751,8 @@ if __name__ == '__main__':
     parser.add_argument('--max-position', type=float, default=1_000.0, dest='max_position')
     parser.add_argument('--scan-seconds', type=int,   default=300,     dest='scan_seconds')
     parser.add_argument('--proxy',        type=str,   default=None)
+    parser.add_argument('--no-ui',        action='store_true',
+                        help='Disable rich terminal UI (plain log output)')
     cli_args = parser.parse_args()
 
     _configs, _cap, _maxp, _scan, _proxy = automated_setup(Path('.'), cli_args)
@@ -564,6 +761,11 @@ if __name__ == '__main__':
         capital               = _cap,
         max_position_usdt     = _maxp,
         scan_interval_seconds = _scan,
+        risk_tier             = 'balanced',
         proxy_url             = _proxy,
     )
-    asyncio.run(_engine.run())
+
+    if cli_args.no_ui:
+        asyncio.run(_engine.run())
+    else:
+        _build_terminal_dashboard(_engine)
