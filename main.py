@@ -2067,12 +2067,13 @@ ALL_TOKENS = [
     "SKY/USDT", "TRUMP/USDT", "NIGHT/USDT",
 ]
 
-PRO_TOKENS = ALL_TOKENS  # default; overridden below if live_engine is available
+PRO_TOKENS = ALL_TOKENS  # default; overridden below if retrain_model defines the fleet
 try:
-    from scripts.live_engine import FLEET
-    if isinstance(FLEET, list) and FLEET:
-        PRO_TOKENS = FLEET
-except ImportError:
+    from scripts.retrain_model import FLEET_SYMBOLS as _FLEET_SYMBOLS
+    if isinstance(_FLEET_SYMBOLS, list) and _FLEET_SYMBOLS:
+        # Merge: ensure ALL_TOKENS is a superset so old hardcoded refs still work
+        PRO_TOKENS = list(dict.fromkeys(ALL_TOKENS + _FLEET_SYMBOLS))
+except Exception:
     pass
 
 BASIC_TIMEFRAMES = ["30m", "1h"]
@@ -2954,48 +2955,78 @@ async def websocket_dashboard(websocket: WebSocket):
                                 if response_timeframe is None:
                                     response_timeframe = summary.get("timeframe", "1h")
                         else:
+                            # Flat signal dict from the new live_engine — pass all fields through.
+                            # Add backward-compat aliases so the frontend never sees empty values.
                             sig_data = normalize_signal_data(sig)
                             if not isinstance(sig_data, dict):
                                 sig_data = {}
-                            _conf2 = sig_data.get("confluence_scorecards", {})
-                            _em2 = sig_data.get("expectancy_matrix", {})
-                            _acc3 = sig_data.get("trading_accuracy", 0.65)
-                            _tp_d3 = abs(sig_data.get("suggested_tp_distance") or 0.025)
-                            _sl_d3 = abs(sig_data.get("suggested_sl_distance") or 0.015)
-                            _rr3 = _tp_d3 / _sl_d3 if _sl_d3 > 0 else 1.5
-                            _eh3 = _em2.get("historical_expectancy") or 0
-                            filtered_signals[sym] = {
-                                "ai_prob": sig_data.get("ai_prob", 0),
-                                "signal": sig_data.get("signal", "WAITING"),
-                                "threshold": sig_data.get("threshold", 0),
-                                "signal_strength": sig_data.get("signal_strength", "NONE"),
-                                "atr": sig_data.get("atr", 0),
-                                "risk_pct": sig_data.get("risk_pct", 2),
-                                "direction": sig_data.get("direction", "NEUTRAL"),
-                                "entry_price": sig_data.get("entry_price", 0.0),
-                                "sl": sig_data.get("sl"),
-                                "tp": sig_data.get("tp"),
-                                "timestamp": datetime.now(timezone.utc).isoformat(),
-                                "confidence_score": sig_data.get("ai_prob", 0) * 100,
-                                "signal_id": sig_data.get("signal_id", ""),
-                                "trading_accuracy": _acc3,
-                                "profitability_index": sig_data.get("profitability_index", 1.5),
-                                "sr_telemetry": sig_data.get("sr_telemetry"),
-                                "macro_regime": sig_data.get("macro_regime"),
-                                "timeframe": sig_data.get("timeframe", "1h"),
-                                "confluence": {
-                                    "trend": 80 if _conf2.get("trend") == "Aligned" else 35,
-                                    "momentum": min(100, max(0, int((_conf2.get("efficiency") or 0.5) * 100))),
-                                    "volume": 78 if _conf2.get("volume") == "high" else (58 if _conf2.get("volume") == "normal" else 38),
-                                },
-                                "raw_probabilities": sig_data.get("raw_probabilities", {}),
-                                "shap_contributions": sig_data.get("shap_contributions", []),
-                                "expectancy": round(_eh3 if abs(_eh3) > 0 else (_acc3 * _tp_d3 * 100) - ((1 - _acc3) * _sl_d3 * 100), 2),
-                                "max_dd": round(-abs(_em2.get("max_dd_pct") or _sl_d3 * 100 * 3), 2),
-                                "profit_factor": round((_acc3 * _rr3) / max(0.001, 1 - _acc3), 2),
-                                "win_rate": round(_acc3 * 100, 1),
-                                "total_trades": 0,
-                            }
+
+                            # ai_prob alias: new engine stores meta_confidence, not ai_prob
+                            _meta_conf = float(sig_data.get("meta_confidence") or sig_data.get("ai_prob") or 0)
+
+                            # tp / sl: new engine stores suggested_tp / suggested_sl
+                            _tp = sig_data.get("tp") or sig_data.get("suggested_tp")
+                            _sl = sig_data.get("sl") or sig_data.get("suggested_sl")
+
+                            # confluence: new engine stores a rich dict directly; old path rebuilt from scorecards
+                            _conf_raw = sig_data.get("confluence")
+                            if not isinstance(_conf_raw, dict):
+                                # fall back to legacy scorecard calculation
+                                _csc = sig_data.get("confluence_scorecards", {})
+                                _conf_raw = {
+                                    "trend": 80 if _csc.get("trend") == "Aligned" else 35,
+                                    "momentum": min(100, max(0, int((_csc.get("efficiency") or 0.5) * 100))),
+                                    "volume": 78 if _csc.get("volume") == "high" else (58 if _csc.get("volume") == "normal" else 38),
+                                    "total": sig_data.get("total_confluence", 0),
+                                    "summary": "N/A",
+                                }
+
+                            # expectancy: prefer new holdout_expectancy_pct, fall back to old matrix
+                            _em = sig_data.get("expectancy_matrix", {})
+                            _acc = float(sig_data.get("trading_accuracy") or 0.65)
+                            _tp_d = abs(sig_data.get("suggested_tp_distance") or 0.025)
+                            _sl_d = abs(sig_data.get("suggested_sl_distance") or 0.015)
+                            _rr = _tp_d / _sl_d if _sl_d > 0 else 1.5
+                            _eh = _em.get("historical_expectancy") or 0
+
+                            # Build payload: start with full sig_data so all new context fields
+                            # (market_bias, trend_regime, support/resistance, bull_tp1/2/3, rsi,
+                            # session, fear_greed, scalper_view, day_trader_view, swing_view, etc.)
+                            # are preserved, then override/add the aliased fields.
+                            _out = dict(sig_data)
+                            _out.update({
+                                "symbol":           sym,
+                                "ai_prob":          _meta_conf,
+                                "meta_confidence":  _meta_conf,
+                                "confidence_score": round(_meta_conf * 100, 1),
+                                "signal":           sig_data.get("signal", sig_data.get("fire") and sig_data.get("side") or "HOLD"),
+                                "signal_strength":  sig_data.get("signal_strength", "NEUTRAL"),
+                                "threshold":        float(sig_data.get("threshold") or 0),
+                                "fire":             bool(sig_data.get("fire", False)),
+                                "direction":        sig_data.get("direction", "NEUTRAL"),
+                                "entry_price":      float(sig_data.get("entry_price") or sig_data.get("price") or 0),
+                                "atr":              float(sig_data.get("atr") or 0),
+                                "atr_multiplier":   float(sig_data.get("atr_multiplier") or 1.5),
+                                "sl":               _sl,
+                                "tp":               _tp,
+                                "suggested_sl":     _sl,
+                                "suggested_tp":     _tp,
+                                "timeframe":        sig_data.get("timeframe", "1h"),
+                                "timestamp":        datetime.now(timezone.utc).isoformat(),
+                                "signal_id":        sig_data.get("signal_id", ""),
+                                "confluence":       _conf_raw,
+                                # Expectancy / stats (best-effort from new or old fields)
+                                "expectancy":       round(_eh if abs(_eh) > 0 else (_acc * _tp_d * 100) - ((1 - _acc) * _sl_d * 100), 2),
+                                "max_dd":           round(-abs(_em.get("max_dd_pct") or _sl_d * 100 * 3), 2),
+                                "profit_factor":    round((_acc * _rr) / max(0.001, 1 - _acc), 2),
+                                "win_rate":         round(_acc * 100, 1),
+                                "total_trades":     0,
+                                # p_buy/p_sell/p_hold (direct from new engine)
+                                "p_buy":            float(sig_data.get("p_buy") or 0),
+                                "p_sell":           float(sig_data.get("p_sell") or 0),
+                                "p_hold":           float(sig_data.get("p_hold") or 0),
+                            })
+                            filtered_signals[sym] = _out
 
                     # Fill any ticker gaps with signal entry_price
                     for _sym, _sd in filtered_signals.items():
