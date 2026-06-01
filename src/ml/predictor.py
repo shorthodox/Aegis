@@ -38,6 +38,16 @@ class Predictor:
     _CCXT_LOCK = threading.Lock()
     _NO_PERP_SYMBOLS: set = set()
 
+    # OI updates once per hour, funding rate every 8h — caching for 55 min eliminates
+    # 120+ serial Binance API calls per scan cycle (60 symbols × 2 calls each) that
+    # previously stalled signal generation for the entire 5-minute window.
+    _FUTURES_CACHE: Dict[str, Any] = {}
+    _FUTURES_CACHE_TTL: int = 3300  # 55 minutes
+
+    # Fear & Greed is daily data — one HTTP call shared across all 60 symbols per cycle
+    _FG_CACHE: Dict[str, Any] = {}   # keys: 'df', 'fetched_at'
+    _FG_CACHE_TTL: int = 21600       # 6 hours
+
     def __init__(self, symbol: str):
         self.symbol = symbol
         
@@ -239,6 +249,14 @@ class Predictor:
         """Fetch funding rate and OI from Binance perpetual futures. Returns (funding_df, oi_df)."""
         if self.symbol in Predictor._NO_PERP_SYMBOLS:
             return None, None
+
+        # Return cached data when fresh — OI updates hourly, funding every 8h, so
+        # re-fetching 300 bars from Binance every 5-min scan cycle is pure waste and
+        # serialises 120+ API calls that stall signal generation for the whole fleet.
+        _cached = Predictor._FUTURES_CACHE.get(self.symbol)
+        if _cached and (time.time() - _cached['fetched_at']) < Predictor._FUTURES_CACHE_TTL:
+            return _cached['funding_df'], _cached['oi_df']
+
         try:
             if Predictor._SHARED_FUTURES_EX is None:
                 import ccxt as _ccxt
@@ -319,6 +337,11 @@ class Predictor:
                     oi_df['timestamp'] = pd.to_datetime(oi_df['timestamp'], unit='ms')
                     oi_df = oi_df.drop_duplicates('timestamp').sort_values('timestamp')
 
+            Predictor._FUTURES_CACHE[self.symbol] = {
+                'funding_df': funding_df,
+                'oi_df':      oi_df,
+                'fetched_at': time.time(),
+            }
             return funding_df, oi_df
         except Exception as e:
             logger.error(f"Failed to fetch futures data for {self.symbol}: {e}")
@@ -326,8 +349,11 @@ class Predictor:
 
     @staticmethod
     def _fetch_fear_greed(days: int = 700) -> Optional[pd.DataFrame]:
-        """Fetch Fear & Greed Index from alternative.me (free, no key required)."""
+        """Fetch Fear & Greed Index from alternative.me. Cached for 6 h — data is daily."""
         import urllib.request, json as _json
+        _c = Predictor._FG_CACHE
+        if _c.get('df') is not None and (time.time() - _c.get('fetched_at', 0)) < Predictor._FG_CACHE_TTL:
+            return _c['df']
         try:
             url = f"https://api.alternative.me/fng/?limit={days}&date_format=world"
             with urllib.request.urlopen(url, timeout=10) as resp:
@@ -339,9 +365,11 @@ class Predictor:
             fg.columns = ['fear_greed_value', 'timestamp']
             fg['fear_greed_value'] = pd.to_numeric(fg['fear_greed_value'], errors='coerce')
             fg['timestamp'] = pd.to_datetime(fg['timestamp'], format='%d-%m-%Y')
-            return fg.sort_values('timestamp').reset_index(drop=True)
+            result = fg.sort_values('timestamp').reset_index(drop=True)
+            Predictor._FG_CACHE = {'df': result, 'fetched_at': time.time()}
+            return result
         except Exception:
-            return None
+            return _c.get('df')  # return stale cache on error rather than None
 
     def get_features_with_context(self, hours: int = 5000) -> Optional[pd.DataFrame]:
         df = self.fetch_live_data(timeframe='1h', limit=hours)
@@ -424,10 +452,15 @@ class Predictor:
         ).astype(float)
         return proba, meta_conf
 
-    def predict_signal(self, df_features: pd.DataFrame) -> Dict[str, Any]:
+    def predict_signal(self, df_features: pd.DataFrame,
+                       risk_tier: str = "balanced") -> Dict[str, Any]:
         """Return the gated trading decision for the LAST row of df_features.
-        This is what the bot should emit. Honours the meta gate + threshold so
-        production reproduces the trainer's operating point."""
+
+        risk_tier controls which quality bar to apply:
+          "conservative" — per-side holdout confirmed at or above fee breakeven
+          "balanced"     — combined holdout ≥ breakeven (default)
+          "aggressive"   — dev target met + positive timeout-adjusted expectancy
+        """
         proba = self.predict_proba(df_features)
         last = proba[-1]
         side = 2 if last[2] >= last[0] else 0          # BUY vs SELL proposal
@@ -455,21 +488,52 @@ class Predictor:
         else:
             meta_conf = float(last.max())
 
-        # Per-side thresholds: BUY and SELL are evaluated independently during
-        # training. Use the side-specific gate so a token that only has SELL alpha
-        # doesn't stay silent just because its combined precision is too low.
-        if side == 2:  # BUY proposal
-            thr       = float(self.meta.get("meta_threshold_buy",
-                                             self.meta.get("meta_threshold", 0.6)))
-            tradeable = bool(self.meta.get("tradeable_buy",
-                                           self.meta.get("tradeable", True)))
-        else:          # SELL proposal
-            thr       = float(self.meta.get("meta_threshold_sell",
-                                             self.meta.get("meta_threshold", 0.6)))
-            tradeable = bool(self.meta.get("tradeable_sell",
-                                           self.meta.get("tradeable", True)))
+        # ── Risk tier gate ────────────────────────────────────────────────────
+        # Check whether this token qualifies under the caller's chosen tier.
+        # Falls back to legacy tradeable flags when risk_tier data is absent
+        # (older sidecar files trained before the tier system was added).
+        _tiers = self.meta.get("risk_tier", {})
+        if _tiers:
+            tier_ok = bool(_tiers.get(risk_tier, False))
+        else:
+            # Legacy fallback: map tier names to old tradeable flags
+            if risk_tier == "conservative":
+                tier_ok = bool(self.meta.get("tradeable_buy", False) or
+                               self.meta.get("tradeable_sell", False))
+            elif risk_tier == "aggressive":
+                tier_ok = bool(self.meta.get("tradeable", False))
+            else:  # balanced
+                tier_ok = bool(self.meta.get("tradeable", False))
 
-        fire = tradeable and (meta_conf >= thr)
+        if not tier_ok:
+            return {
+                "symbol": self.symbol, "fire": False, "side": "FLAT",
+                "tradeable": False, "risk_tier": risk_tier,
+                "meta_confidence": meta_conf, "threshold": 0.0,
+                "p_sell": float(last[0]), "p_hold": float(last[1]), "p_buy": float(last[2]),
+            }
+
+        # Per-side thresholds. Aggressive mode uses the per-side best threshold
+        # found during training (even when that side didn't meet the quality bar),
+        # giving more signals at the cost of lower per-signal precision.
+        if side == 2:  # BUY proposal
+            if risk_tier == "aggressive":
+                thr = float(self.meta.get("meta_threshold_buy_aggressive",
+                            self.meta.get("meta_threshold_buy",
+                            self.meta.get("meta_threshold", 0.6))))
+            else:
+                thr = float(self.meta.get("meta_threshold_buy",
+                                          self.meta.get("meta_threshold", 0.6)))
+        else:          # SELL proposal
+            if risk_tier == "aggressive":
+                thr = float(self.meta.get("meta_threshold_sell_aggressive",
+                            self.meta.get("meta_threshold_sell",
+                            self.meta.get("meta_threshold", 0.6))))
+            else:
+                thr = float(self.meta.get("meta_threshold_sell",
+                                          self.meta.get("meta_threshold", 0.6)))
+
+        fire = meta_conf >= thr
 
         # ── Regime-specific directional-probability filter ────────────────────
         # threshold_optimizer.py finds per-regime thresholds on p_buy / p_sell.
@@ -487,10 +551,18 @@ class Predictor:
                     reg = regime_thresholds.get(regime, {})
                     if reg and not reg.get("skipped"):
                         p_sell, p_hold, p_buy = float(last[0]), float(last[1]), float(last[2])
-                        if side == 2 and not reg.get("buy_ok"):
-                            fire = False
-                        elif side == 0 and not reg.get("sell_ok"):
-                            fire = False
+                        if side == 2:
+                            if (not reg.get("buy_ok")
+                                    or p_buy < reg.get("buy_threshold", 0.0)
+                                    or (p_buy - p_sell) < reg.get("buy_margin", 0.0)
+                                    or p_hold > reg.get("buy_max_hold", 1.0)):
+                                fire = False
+                        elif side == 0:
+                            if (not reg.get("sell_ok")
+                                    or p_sell < reg.get("sell_threshold", 0.0)
+                                    or (p_sell - p_buy) < reg.get("sell_margin", 0.0)
+                                    or p_hold > reg.get("sell_max_hold", 1.0)):
+                                fire = False
 
         # ── S&R + trend alignment filters (mirrors training holdout logic) ───
         # These suppress weak signals (below top-25% confidence) that fight a
@@ -529,17 +601,245 @@ class Predictor:
             "threshold":       thr,
             "p_sell": float(last[0]), "p_hold": float(last[1]), "p_buy": float(last[2]),
             "expected_signal_precision": self.meta.get("dev_estimate", {}).get("precision"),
+            "risk_tier":  risk_tier,
+            "risk_tiers": self.meta.get("risk_tier", {}),
         }
 
-    def predict_realtime(self) -> Dict[str, Any]:
+    def predict_realtime(self, risk_tier: str = "balanced") -> Dict[str, Any]:
         df = self.get_features_with_context(hours=350)
         if df is None or df.empty:
             return {"symbol": self.symbol, "fire": False, "side": "FLAT", "meta_confidence": 0.0}
-        result = self.predict_signal(df)
-        # Attach live price and ATR so the engine can set SL without an extra API call
-        result['price'] = float(df['close'].iloc[-1])
-        result['atr']   = (float(df['_atr'].iloc[-1])
-                           if '_atr' in df.columns
-                           else float(df['close'].iloc[-1]) * 0.015)
-        result['atr_multiplier'] = float(self.meta.get('atr_multiplier', 1.5))
+        result = self.predict_signal(df, risk_tier=risk_tier)
+        price = float(df['close'].iloc[-1])
+        atr   = (float(df['_atr'].iloc[-1])
+                 if '_atr' in df.columns
+                 else price * 0.015)
+        atr_mult = float(self.meta.get('atr_multiplier', 1.5))
+        result['price']          = price
+        result['atr']            = atr
+        result['atr_multiplier'] = atr_mult
+        # Rich market context for all trader types
+        result.update(self._extract_market_context(df, price, atr, atr_mult))
         return result
+
+    @staticmethod
+    def _extract_market_context(df: pd.DataFrame, price: float, atr: float, atr_mult: float) -> dict:
+        """Extract rich market context from the last bar for multi-trader view."""
+        from datetime import datetime, timezone as _tz
+        if df is None or df.empty or price <= 0:
+            return {}
+
+        row = df.iloc[-1]
+
+        def _f(col: str, default: float = 0.0) -> float:
+            v = row.get(col, default)
+            try:
+                f = float(v)
+                return default if (f != f) else f  # NaN guard
+            except Exception:
+                return default
+
+        # ── Trend & bias ──────────────────────────────────────────────────────
+        macro_1d   = _f('macro_trend_1d')
+        macro_1w   = _f('macro_trend_1w')
+        adx        = _f('adx_14', 20.0)
+        trend_conf = _f('trend_confluence')
+        mom_conf   = _f('momentum_confluence')
+        smart_conf = _f('smart_money_confluence')
+        vol_conf   = _f('volume_confluence')
+        candle_conf= _f('candle_confluence')
+        total_conf = _f('total_confluence')
+
+        # Weighted composite bias score  (-1 → +1)
+        bias_score = (
+            macro_1d * 0.30
+            + macro_1w * 0.15
+            + (trend_conf / 10.0 - 0.5) * 0.25
+            + (mom_conf  / 10.0 - 0.5) * 0.20
+            + (smart_conf/ 10.0 - 0.5) * 0.10
+        )
+        if   bias_score >  0.15: market_bias = "BULLISH"
+        elif bias_score < -0.15: market_bias = "BEARISH"
+        else:                    market_bias = "NEUTRAL"
+
+        # Trend regime
+        if   adx > 25 and macro_1d >  0.1: trend_regime = "TRENDING_UP"
+        elif adx > 25 and macro_1d < -0.1: trend_regime = "TRENDING_DOWN"
+        elif adx > 25:                      trend_regime = "TRENDING"
+        else:                               trend_regime = "RANGING"
+
+        # Volatility regime
+        atr_pct = atr / price
+        if   atr_pct > 0.025: vol_regime = "HIGH"
+        elif atr_pct > 0.012: vol_regime = "MEDIUM"
+        else:                  vol_regime = "LOW"
+
+        # ── S/R levels ────────────────────────────────────────────────────────
+        support    = _f('rolling_support',    price * 0.97)
+        resistance = _f('rolling_resistance', price * 1.03)
+        pivot      = _f('pivot',  price)
+        r1 = _f('r1', price * 1.010); r2 = _f('r2', price * 1.020)
+        s1 = _f('s1', price * 0.990); s2 = _f('s2', price * 0.980)
+
+        # ── Price targets (ATR-projected) ─────────────────────────────────────
+        step = atr * atr_mult
+        bull_tp1 = round(price + 1.0 * step, 8)
+        bull_tp2 = round(price + 2.0 * step, 8)
+        bull_tp3 = round(price + 3.5 * step, 8)
+        bear_tp1 = round(price - 1.0 * step, 8)
+        bear_tp2 = round(price - 2.0 * step, 8)
+        bear_tp3 = round(price - 3.5 * step, 8)
+
+        # ── Confluence summary label ──────────────────────────────────────────
+        if   total_conf >= 7.0: conf_tier = "Strong"
+        elif total_conf >= 5.0: conf_tier = "Moderate"
+        elif total_conf >= 3.0: conf_tier = "Weak"
+        else:                   conf_tier = "Very Weak"
+        if   market_bias == "BULLISH": conf_summary = f"{conf_tier} Bullish"
+        elif market_bias == "BEARISH": conf_summary = f"{conf_tier} Bearish"
+        else:                          conf_summary = f"{conf_tier} / Neutral"
+
+        # ── Momentum indicators ───────────────────────────────────────────────
+        rsi = _f('rsi_14') or _f('rsi_7', 50.0)
+        macd_hist  = _f('macd_hist')
+        cci        = _f('cci_20')
+        supertrend_dir = int(_f('supertrend_dir', 0))
+        if   supertrend_dir > 0: st_label = "BULLISH"
+        elif supertrend_dir < 0: st_label = "BEARISH"
+        else:                    st_label = "NEUTRAL"
+
+        # ── Volume ────────────────────────────────────────────────────────────
+        vol_zscore = _f('volume_zscore')
+        if   vol_zscore >  1.0: vol_strength = "ABOVE_AVERAGE"
+        elif vol_zscore < -0.5: vol_strength = "BELOW_AVERAGE"
+        else:                   vol_strength = "AVERAGE"
+
+        # ── Derivatives ───────────────────────────────────────────────────────
+        funding_rate  = _f('funding_rate')
+        oi_change_1h  = _f('oi_change_1h')
+        oi_zscore     = _f('oi_zscore')
+
+        if   funding_rate >  0.0001: funding_bias = "LONGS_PAYING"
+        elif funding_rate < -0.0001: funding_bias = "SHORTS_PAYING"
+        else:                        funding_bias = "NEUTRAL"
+
+        if   oi_change_1h >  0.01: oi_trend = "INCREASING"
+        elif oi_change_1h < -0.01: oi_trend = "DECREASING"
+        else:                      oi_trend = "STABLE"
+
+        # ── Fear & Greed ──────────────────────────────────────────────────────
+        fg_val = _f('fear_greed_value', -1.0)
+        if fg_val >= 0:
+            if   fg_val >= 75: fg_label = "Extreme Greed"
+            elif fg_val >= 55: fg_label = "Greed"
+            elif fg_val >= 45: fg_label = "Neutral"
+            elif fg_val >= 25: fg_label = "Fear"
+            else:              fg_label = "Extreme Fear"
+            fear_greed = {"value": round(fg_val, 1), "label": fg_label}
+        else:
+            fear_greed = None
+
+        # ── Trading session ───────────────────────────────────────────────────
+        hour = datetime.now(_tz.utc).hour
+        if   0  <= hour <  8: session, session_note = "ASIA",       "Lower volatility; watch for false breakouts near key levels"
+        elif 8  <= hour < 12: session, session_note = "LONDON",     "High volatility; trend-following setups tend to work well"
+        elif 12 <= hour < 16: session, session_note = "NY_OVERLAP", "Peak liquidity; cleanest breakouts and reversals"
+        elif 16 <= hour < 21: session, session_note = "NEW_YORK",   "Strong directional moves; good for momentum entries"
+        else:                 session, session_note = "LATE_NY",    "Consolidation likely; reduce size, tighter stops"
+
+        # ── Trader-type views ─────────────────────────────────────────────────
+        # Scalper (5m–1h): half-ATR targets, needs volume confirmation
+        scalper_bias = market_bias if vol_strength == "ABOVE_AVERAGE" else "NEUTRAL"
+        scalper = {
+            "bias":        scalper_bias,
+            "entry_zone":  round(price, 8),
+            "bull_target": round(price + 0.5 * atr, 8),
+            "bear_target": round(price - 0.5 * atr, 8),
+            "bull_stop":   round(price - 0.5 * atr, 8),
+            "bear_stop":   round(price + 0.5 * atr, 8),
+            "range_pct":   round(atr * 0.5 / price * 100, 3),
+            "session_ok":  session in ("NY_OVERLAP", "NEW_YORK", "LONDON"),
+        }
+
+        # Day trader (1h–4h): full ATR targets, session-aware
+        day_trader = {
+            "bias":          market_bias,
+            "bull_target":   bull_tp1,
+            "bear_target":   bear_tp1,
+            "key_support":   round(s1, 8),
+            "key_resistance":round(r1, 8),
+            "atr_daily_pct": round(atr_pct * 100, 2),
+            "trend":         trend_regime,
+        }
+
+        # Swing (4h–1w): weekly trend + wide levels
+        swing_bias = ("BULLISH" if macro_1w > 0.10 else ("BEARISH" if macro_1w < -0.10 else "NEUTRAL"))
+        swing = {
+            "bias":           swing_bias,
+            "weekly_trend":   "UP" if macro_1w > 0.10 else ("DOWN" if macro_1w < -0.10 else "FLAT"),
+            "key_support":    round(s2, 8),
+            "key_resistance": round(r2, 8),
+            "bull_target":    bull_tp2,
+            "bear_target":    bear_tp2,
+            "extended_bull":  bull_tp3,
+            "extended_bear":  bear_tp3,
+        }
+
+        return {
+            # Market overview
+            "market_bias":     market_bias,
+            "bias_strength":   round(abs(bias_score), 3),
+            "trend_regime":    trend_regime,
+            "volatility_regime": vol_regime,
+            "atr_pct":         round(atr_pct * 100, 3),
+
+            # S/R levels (for "view logic" button)
+            "support":    round(support, 8),
+            "resistance": round(resistance, 8),
+            "pivot":      round(pivot, 8),
+            "r1": round(r1, 8), "r2": round(r2, 8),
+            "s1": round(s1, 8), "s2": round(s2, 8),
+
+            # Price targets
+            "bull_tp1": bull_tp1, "bull_tp2": bull_tp2, "bull_tp3": bull_tp3,
+            "bear_tp1": bear_tp1, "bear_tp2": bear_tp2, "bear_tp3": bear_tp3,
+
+            # Confluence breakdown (key "view logic" data)
+            "confluence": {
+                "total":       round(total_conf, 1),
+                "momentum":    round(mom_conf, 1),
+                "trend":       round(trend_conf, 1),
+                "volume":      round(vol_conf, 1),
+                "smart_money": round(smart_conf, 1),
+                "candle":      round(candle_conf, 1),
+                "summary":     conf_summary,
+            },
+
+            # Indicators
+            "rsi":            round(rsi, 1),
+            "macd_signal":    "BULLISH" if macd_hist > 0 else ("BEARISH" if macd_hist < 0 else "NEUTRAL"),
+            "cci":            round(cci, 1),
+            "adx":            round(adx, 1),
+            "supertrend":     st_label,
+            "macro_daily":    round(macro_1d, 3),
+            "macro_weekly":   round(macro_1w, 3),
+
+            # Volume & derivatives
+            "volume_strength": vol_strength,
+            "volume_zscore":   round(vol_zscore, 2),
+            "funding_rate":    round(funding_rate * 100, 4),
+            "funding_bias":    funding_bias,
+            "oi_trend":        oi_trend,
+            "oi_change_1h_pct":round(oi_change_1h * 100, 3),
+            "oi_zscore":       round(oi_zscore, 2),
+
+            # Session & fear/greed
+            "session":       session,
+            "session_note":  session_note,
+            "fear_greed":    fear_greed,
+
+            # Trader-type views
+            "scalper_view":   scalper,
+            "day_trader_view":day_trader,
+            "swing_view":     swing,
+        }
