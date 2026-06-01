@@ -649,11 +649,21 @@ async def run_engine_background():
         await asyncio.sleep(1)
         return
 
+    # Risk tier controls signal quality bar: conservative / balanced / aggressive
+    # Set via SIGNAL_RISK_TIER env var; defaults to "balanced".
+    _valid_tiers = {"conservative", "balanced", "aggressive"}
+    _tier = os.getenv("SIGNAL_RISK_TIER", "balanced").lower()
+    if _tier not in _valid_tiers:
+        print(f"[Engine] Unknown SIGNAL_RISK_TIER '{_tier}', defaulting to 'balanced'")
+        _tier = "balanced"
+    print(f"[Engine] Signal risk tier: {_tier.upper()}")
+
     engine = LiveEngine(
         token_configs         = configs,
         capital               = capital,
         max_position_usdt     = max_pos,
         scan_interval_seconds = scan_seconds,
+        risk_tier             = _tier,
         proxy_url             = proxy,
     )
     LIVE_STATE.engine = engine
@@ -1011,6 +1021,161 @@ async def api_public_signals(authorization: Optional[str] = Header(None)):
         'plan': plan,
         'timestamp': datetime.now(timezone.utc).isoformat()
     })
+
+def _build_insight_payload(sig: dict, plan: str) -> dict:
+    """
+    Build the token-insight response dict.
+
+    Tier rules
+    ----------
+    trial / basic  → market bias, S/R, confluence, price targets, session, fear/greed.
+                      AI probability and fire signal hidden.
+    intermediate   → all of the above + AI probability bands (low/med/high label).
+    pro            → full signal including meta_confidence, fire, direction.
+    """
+    if not isinstance(sig, dict):
+        return {}
+
+    # Fields safe for all authenticated users
+    public_fields = (
+        'symbol', 'price', 'timeframe', 'data_timestamp', 'timestamp',
+        'market_bias', 'bias_strength', 'trend_regime', 'volatility_regime', 'atr_pct',
+        'support', 'resistance', 'pivot', 'r1', 'r2', 's1', 's2',
+        'bull_tp1', 'bull_tp2', 'bull_tp3',
+        'bear_tp1', 'bear_tp2', 'bear_tp3',
+        'confluence',
+        'rsi', 'macd_signal', 'cci', 'adx', 'supertrend',
+        'macro_daily', 'macro_weekly',
+        'volume_strength', 'volume_zscore',
+        'funding_rate', 'funding_bias', 'oi_trend', 'oi_change_1h_pct', 'oi_zscore',
+        'session', 'session_note', 'fear_greed',
+        'scalper_view', 'day_trader_view', 'swing_view',
+        'atr', 'atr_multiplier',
+    )
+
+    out = {k: sig[k] for k in public_fields if k in sig}
+
+    # Intermediate: add a coarse AI conviction label (no raw number)
+    if plan in ('intermediate', 'pro', 'premium', 'active'):
+        conf = float(sig.get('meta_confidence', 0))
+        thr  = float(sig.get('threshold', 0.6))
+        if conf == 0:
+            out['ai_conviction'] = 'NO_DATA'
+        elif conf >= thr * 1.15:
+            out['ai_conviction'] = 'HIGH'
+        elif conf >= thr:
+            out['ai_conviction'] = 'MEDIUM'
+        else:
+            out['ai_conviction'] = 'LOW'
+
+    # Pro: full signal
+    if plan in ('pro', 'premium', 'active'):
+        for k in ('fire', 'signal', 'signal_strength', 'direction',
+                  'meta_confidence', 'threshold', 'p_buy', 'p_sell', 'p_hold',
+                  'tradeable', 'suggested_tp', 'suggested_sl', 'signal_id'):
+            if k in sig:
+                out[k] = sig[k]
+
+    return out
+
+
+@app.get("/api/token-insight/{symbol:path}")
+async def token_insight(symbol: str, authorization: Optional[str] = Header(None)):
+    """
+    Per-token market insight available to all authenticated users.
+
+    trial / basic   → S/R levels, confluence, price targets, market bias, trader views.
+    intermediate    → above + AI conviction label (HIGH / MEDIUM / LOW).
+    pro             → above + full fire/direction/meta_confidence signal.
+
+    The symbol path parameter accepts slash notation, e.g. BTC/USDT or BTC%2FUSDT.
+    """
+    symbol = symbol.replace('%2F', '/').replace('%2f', '/').upper()
+
+    plan = "unauthenticated"
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split("Bearer ")[1]
+        try:
+            email = decode_token(token)
+            if email:
+                user_doc = get_user_doc(email)
+                if user_doc and user_doc.get("otp_verified", False):
+                    plan = user_doc.get("plan", "trial")
+                    # Trial users with active trial are treated same as basic for insight
+                    if plan == "trial":
+                        trial_end = user_doc.get("trial_end")
+                        if trial_end:
+                            try:
+                                te = datetime.fromisoformat(str(trial_end).replace("Z", "+00:00"))
+                                if te.tzinfo is None:
+                                    te = te.replace(tzinfo=timezone.utc)
+                                if datetime.now(timezone.utc) > te:
+                                    raise HTTPException(status_code=403, detail="Trial expired. Please subscribe.")
+                            except HTTPException:
+                                raise
+                            except Exception:
+                                raise HTTPException(status_code=403, detail="Trial status unknown.")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+
+    if plan == "unauthenticated":
+        raise HTTPException(status_code=401, detail="Authentication required to view token insights.")
+
+    signals = LIVE_STATE.data.get('signals', {})
+    sig = signals.get(symbol)
+
+    # Handle nested timeframe structure (use 1h summary)
+    if isinstance(sig, dict) and any(tf in sig for tf in ('1h', '4h', '1d')):
+        sig = sig.get('1h') or next((v for v in sig.values() if isinstance(v, dict)), None)
+
+    if not sig:
+        # Engine may still be warming up — return what we know without AI fields
+        warmup = LIVE_STATE.data.get('warmup_progress', '0/0')
+        return JSONResponse(content={
+            'symbol': symbol,
+            'status': 'warming_up' if warmup != '0/0' else 'not_found',
+            'warmup_progress': warmup,
+        }, status_code=202)
+
+    payload = numpy_to_native(_build_insight_payload(sig, plan))
+    payload['plan'] = plan
+    return JSONResponse(content=payload)
+
+
+@app.get("/api/public/token-insight/{symbol:path}")
+async def public_token_insight(symbol: str):
+    """
+    Unauthenticated teaser: returns only market bias, session, and confluence summary.
+    Used for landing-page previews — no S/R or price targets.
+    """
+    symbol = symbol.replace('%2F', '/').replace('%2f', '/').upper()
+    signals = LIVE_STATE.data.get('signals', {})
+    sig = signals.get(symbol)
+
+    if isinstance(sig, dict) and any(tf in sig for tf in ('1h', '4h', '1d')):
+        sig = sig.get('1h') or next((v for v in sig.values() if isinstance(v, dict)), None)
+
+    if not sig:
+        return JSONResponse(content={'symbol': symbol, 'status': 'unavailable'}, status_code=202)
+
+    teaser = numpy_to_native({
+        'symbol':         symbol,
+        'price':          sig.get('price'),
+        'market_bias':    sig.get('market_bias', 'NEUTRAL'),
+        'trend_regime':   sig.get('trend_regime'),
+        'volatility_regime': sig.get('volatility_regime'),
+        'session':        sig.get('session'),
+        'session_note':   sig.get('session_note'),
+        'confluence_summary': (sig.get('confluence') or {}).get('summary'),
+        'confluence_total':   (sig.get('confluence') or {}).get('total'),
+        'rsi':            sig.get('rsi'),
+        'fear_greed':     sig.get('fear_greed'),
+        'data_timestamp': sig.get('data_timestamp'),
+    })
+    return JSONResponse(content=teaser)
+
 
 @app.get("/favicon.ico")
 async def favicon():

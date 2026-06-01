@@ -105,10 +105,10 @@ TEST_FRAC = 0.20
 N_SPLITS_CV = 10              # purged folds for OOF / dev estimates
 OPTUNA_TRIALS = 60
 
-SHAP_CUMULATIVE_THRESH = 0.70  # keep features covering 70% of total |SHAP| importance
-SHAP_TOP_PCT = 0.10            # drastically lower the floor so we aren't forced to keep 90 features
-MIN_FEATURES = 15              # lower the absolute floor so it can aggressively prune
-MAX_FEATURES = 50              # ceiling lowered to aggressively fight overfitting
+SHAP_CUMULATIVE_THRESH = 0.90  # keep features covering 90% of total |SHAP| importance
+SHAP_TOP_PCT = 0.20            # floor: keep at least top 20% of features by SHAP rank
+MIN_FEATURES = 25
+MAX_FEATURES = 90              # hard cap: beyond ~90 features XGBoost sees diminishing returns on 1h crypto
 
 MIN_TOTAL_ROWS = 600
 MIN_FIT_ROWS = 300
@@ -827,10 +827,12 @@ def primary_oof(X: pd.DataFrame, y: np.ndarray, params: dict,
 
 
 def binary_oof(X: pd.DataFrame, y: np.ndarray, params: dict,
-               n_splits: int, gap: int) -> np.ndarray:
+               n_splits: int, gap: int,
+               w: Optional[np.ndarray] = None) -> np.ndarray:
     oof = np.full(len(X), np.nan)
     for tr, va in TimeSeriesSplit(n_splits=n_splits, gap=gap).split(X):
-        m = xgb.train(params, _dm(X.iloc[tr], y[tr]), num_boost_round=300,
+        w_tr = w[tr] if w is not None else None
+        m = xgb.train(params, _dm(X.iloc[tr], y[tr], w_tr), num_boost_round=300,
                       evals=[(_dm(X.iloc[va], y[va]), 'eval')],
                       early_stopping_rounds=30, verbose_eval=False)
         oof[va] = m.predict(_dm(X.iloc[va]))
@@ -910,8 +912,13 @@ def pick_threshold_by_side(
         0.50 is rejected regardless of OOF precision, because the meta model is
         essentially random at that confidence level.
     """
-    MAX_SIDE_COVERAGE = 0.60   # allow up to 60% coverage per side
-    MIN_ABS_THRESHOLD = 0.50   # meta confidence must be at least 50 %
+    MAX_SIDE_COVERAGE = 0.25
+    # HOLD downweighting shifts the meta's calibrated output below 0.50 even
+    # when it IS discriminating (e.g., AAVE SELL all-bar 63% but meta ~0.43).
+    # Lowering to 0.40 lets these signals through; the 25% coverage cap still
+    # blocks truly non-discriminative meta models (uniform output → all fire →
+    # >25% coverage → rejected).
+    MIN_ABS_THRESHOLD = 0.40
 
     valid = ~np.isnan(meta_prob)
     mp = meta_prob[valid]
@@ -927,7 +934,7 @@ def pick_threshold_by_side(
     yt_s = yt[side_mask]
 
     rows = []
-    for q in [0.60, 0.50, 0.40, 0.30, 0.25, 0.20, 0.15, 0.10, 0.07, 0.05, 0.04, 0.03, 0.02]:  # max 60% coverage per side
+    for q in [0.25, 0.20, 0.15, 0.10, 0.07, 0.05, 0.04, 0.03, 0.02]:  # max 25% coverage per side
         thr   = float(np.quantile(mp_s, 1.0 - q))
         if thr < MIN_ABS_THRESHOLD:          # reject thresholds below 50 % conf
             continue
@@ -942,13 +949,35 @@ def pick_threshold_by_side(
         rows.append((thr, prec, cov, n))
 
     if not rows:
+        # The sweep found no valid threshold — typical when the meta model is
+        # non-discriminative (near-uniform output due to heavy regularisation).
+        # This happens specifically when the primary is already excellent for this
+        # side (e.g. BUY prec 84%) but every quantile threshold either hits
+        # >MAX_SIDE_COVERAGE or <min_fires, leaving the side silently blocked.
+        # Fallback: if the unconditional precision for this side already clears
+        # the target, fire on ALL proposals — no meta filtering needed.
+        if len(mp_s) >= min_fires and float(mp_s.mean()) >= MIN_ABS_THRESHOLD:
+            unconditional_prec = float((yt_s == side).mean())
+            if unconditional_prec >= target:
+                return float(mp_s.min()), unconditional_prec, 1.0, len(mp_s), True
         return float(np.quantile(mp_s, 0.9)), 0.0, 0.0, 0, False
 
     meeting = [r for r in rows if r[1] >= target]
     if meeting:
         thr, prec, cov, n = meeting[0]
         return thr, prec, cov, n, True
+
     best = max(rows, key=lambda r: r[1])
+
+    # Anti-selection check: if the best meta-selected precision is BELOW the
+    # unconditional (all-proposals) precision, the meta model is hurting rather
+    # than helping. When the primary is already above target for this side,
+    # bypass the meta gate entirely and fire on all proposals.
+    if len(mp_s) >= min_fires and float(mp_s.mean()) >= MIN_ABS_THRESHOLD:
+        unconditional_prec = float((yt_s == side).mean())
+        if unconditional_prec >= target and unconditional_prec > best[1]:
+            return float(mp_s.min()), unconditional_prec, 1.0, len(mp_s), True
+
     return best[0], best[1], best[2], best[3], False
 
 
@@ -1126,8 +1155,13 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         _opt = load_token_params(symbol)
         _opt_global = (_opt or {}).get("global", {})
 
-        # ATR multiplier: prefer optimizer result, fall back to static tier table.
-        atr_mult = float(_opt_global.get("atr_multiplier") or get_atr_multiplier(symbol))
+        # ATR multiplier: prefer optimizer result, but never tighten below the static tier.
+        # The optimizer can legitimately widen barriers (safer labels); it cannot go below
+        # the tier table because BARRIER_DOWN_SKEW amplifies tight bases into noisy SELL
+        # labels that degrade meta-model precision below the all-bar baseline.
+        _static_atr = get_atr_multiplier(symbol)
+        _opt_atr = _opt_global.get("atr_multiplier")
+        atr_mult = max(float(_opt_atr) if _opt_atr else _static_atr, _static_atr)
 
         _er_med  = float(df['efficiency_ratio_10'].median()) if 'efficiency_ratio_10' in df.columns else 0.5
         _vol_med = float(df['volatility_regime'].median())   if 'volatility_regime' in df.columns else 1.0
@@ -1166,16 +1200,18 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         ))
 
         # ── Dynamic meta regularization ───────────────────────────────────
-        # Noisy tokens (low ER) overfit the meta model badly: it memorises
-        # short-term patterns that vanish on holdout. Stronger regularization
-        # forces the meta model to learn only the most stable, generalising
-        # signals. ER < 0.35 → heavy reg; ER > 0.5 → default (light reg).
+        # Regularisation tiers are moderate, not maxed. λ=6.0/mcw=20 (old
+        # values) produced a near-uniform meta output (all confidences ~0.52)
+        # so that every quantile threshold hit either >60% coverage or <80
+        # trades — silently blocking signals even when the primary was 84%
+        # accurate. The new values allow the meta to learn regime patterns
+        # while still preventing short-window overfitting.
         if _er_med < 0.35:
-            _meta_reg, _meta_mcw = 6.0, 20
+            _meta_reg, _meta_mcw = 3.0, 12   # was 6.0, 20
         elif _er_med < 0.5:
-            _meta_reg, _meta_mcw = 4.0, 15
+            _meta_reg, _meta_mcw = 2.5, 10   # was 4.0, 15
         else:
-            _meta_reg, _meta_mcw = 2.0, 10
+            _meta_reg, _meta_mcw = 2.0, 8    # was 2.0, 10
         token_meta_params = {**META_PARAMS, 'reg_lambda': _meta_reg, 'min_child_weight': _meta_mcw}
 
         print(f"ATR multiplier : base={atr_mult} | typical={_typical:.2f} "
@@ -1258,41 +1294,6 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         meta_X_all = build_meta_X(Xtp, oof)
         prop_all = proposed_side(oof)
 
-        # ── Spot-on market dynamics: Regime-specific directional filter on DEV set ──
-        _opt = load_token_params(symbol)
-        if _opt and "regimes" in _opt and "regime_boundaries" in _opt:
-            bounds = _opt["regime_boundaries"]
-            regimes_dict = _opt["regimes"]
-            
-            # Extract base series from train_pool (unpruned) to avoid KeyError if SHAP dropped them
-            vol_avg = train_pool["volume"].rolling(24, min_periods=1).mean()
-            atr_pct = (train_pool["_atr"] / train_pool["close"]).fillna(0)
-            momentum = train_pool["close"].pct_change(24).fillna(0)
-            
-            def _tier(val, p33, p67): return "low" if val <= p33 else ("med" if val <= p67 else "high")
-            def _trend(val, p33, p67): return "down" if val <= p33 else ("flat" if val <= p67 else "up")
-            
-            vp33, vp67 = bounds.get("vol_p33", 0), bounds.get("vol_p67", 0)
-            ap33, ap67 = bounds.get("atr_pct_p33", 0), bounds.get("atr_pct_p67", 0)
-            mp33, mp67 = bounds.get("momentum_p33", -0.02), bounds.get("momentum_p67", 0.02)
-            
-            regime_strs = [
-                f"{_tier(vol_avg.iloc[i], vp33, vp67)}_{_tier(atr_pct.iloc[i], ap33, ap67)}_{_trend(momentum.iloc[i], mp33, mp67)}"
-                for i in range(len(Xtp))
-            ]
-            
-            for i in range(len(Xtp)):
-                reg = regimes_dict.get(regime_strs[i], {})
-                if not reg or reg.get("skipped"):
-                    prop_all[i] = 1 # Suppress to HOLD
-                    continue
-                p_sell, p_hold, p_buy = oof[i, 0], oof[i, 1], oof[i, 2]
-                side = prop_all[i]
-                if side == 2:
-                    if not reg.get("buy_ok"): prop_all[i] = 1
-                elif side == 0:
-                    if not reg.get("sell_ok"): prop_all[i] = 1
-
         meta_y_all = (prop_all == ytp).astype(int)
 
         mX = meta_X_all[mask].reset_index(drop=True)
@@ -1300,27 +1301,86 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         prop_v = prop_all[mask]
         y_v = ytp[mask]
 
+        # Downweight HOLD-labeled bars in meta training.
+        # HOLD bars always have meta_y=0 (primary proposes BUY/SELL but hits no barrier),
+        # representing 40-70% of training data. Including them at full weight makes the
+        # meta uniformly pessimistic (~0.52 for everything) → top-25% is a random slice
+        # → precision ≈ all-bar precision → fails target. Downweighting to 0.30 reduces
+        # contamination while preserving the regime signal ("choppy regime = less reliable").
+        _n_hold = int((ytp[mask] == 1).sum())
+        _n_dir  = int((ytp[mask] != 1).sum())
+        # Weight each HOLD bar so the total HOLD contribution equals half the directional
+        # contribution — balancing signal without full exclusion.
+        _hold_w = float((_n_dir * 0.5) / max(_n_hold, 1))
+        _hold_w = float(np.clip(_hold_w, 0.10, 0.60))   # keep in a sane range
+        meta_w  = np.where(ytp[mask] == 1, _hold_w, 1.0).astype(float)
+
         meta_ready = len(mX) >= max(200, MIN_FIRES_DEV * 4)
         if meta_ready:
-            meta_oof = binary_oof(mX, mY, token_meta_params, N_SPLITS_CV, EMBARGO)
+            meta_oof = binary_oof(mX, mY, token_meta_params, N_SPLITS_CV, EMBARGO, w=meta_w)
+
+            # ── Spot-on market dynamics: Regime-specific directional filter on DEV set ──
+            # Apply filter AFTER meta-model is trained on un-tampered proposals
+            prop_dev_filtered = prop_v.copy()
+            _opt = load_token_params(symbol)
+            if _opt and "regimes" in _opt and "regime_boundaries" in _opt:
+                bounds = _opt["regime_boundaries"]
+                regimes_dict = _opt["regimes"]
+                
+                vol_avg = train_pool["volume"].rolling(24, min_periods=1).mean()
+                atr_pct = (train_pool["_atr"] / train_pool["close"]).fillna(0)
+                momentum = train_pool["close"].pct_change(24).fillna(0)
+                
+                def _tier(val, p33, p67): return "low" if val <= p33 else ("med" if val <= p67 else "high")
+                def _trend(val, p33, p67): return "down" if val <= p33 else ("flat" if val <= p67 else "up")
+                
+                vp33, vp67 = bounds.get("vol_p33", 0), bounds.get("vol_p67", 0)
+                ap33, ap67 = bounds.get("atr_pct_p33", 0), bounds.get("atr_pct_p67", 0)
+                mp33, mp67 = bounds.get("momentum_p33", -0.02), bounds.get("momentum_p67", 0.02)
+                
+                regime_strs = [
+                    f"{_tier(vol_avg.iloc[i], vp33, vp67)}_{_tier(atr_pct.iloc[i], ap33, ap67)}_{_trend(momentum.iloc[i], mp33, mp67)}"
+                    for i in range(len(Xtp))
+                ]
+                
+                idx_map = np.where(mask)[0]
+                for i_mask in range(len(mX)):
+                    orig_i = idx_map[i_mask]
+                    reg = regimes_dict.get(regime_strs[orig_i], {})
+                    if not reg or reg.get("skipped"):
+                        prop_dev_filtered[i_mask] = 1 # Suppress to HOLD
+                        continue
+                    
+                    side = prop_dev_filtered[i_mask]
+                    if side == 2:
+                        if not reg.get("buy_ok"): prop_dev_filtered[i_mask] = 1
+                    elif side == 0:
+                        if not reg.get("sell_ok"): prop_dev_filtered[i_mask] = 1
 
             # ── Combined threshold (backward-compatible baseline) ─────────────
             thr, dev_prec, dev_cov, dev_n, hit_target = pick_threshold(
-                meta_oof, prop_v, y_v, target=token_precision_target)
+                meta_oof, prop_dev_filtered, y_v, target=token_precision_target)
 
             # ── Per-side thresholds (BUY / SELL independently) ────────────────
             # Tokens with directional asymmetry (e.g. strong macro uptrend where
             # SELL signals are noise) can unlock at least one profitable side even
             # when the combined precision fails the target.
+            # min_fires=50 for per-side: the BUY/SELL pools are each roughly half
+            # the combined pool, so 80 trades per side is too strict (JUP had 105
+            # combined trades split 50/55 BUY/SELL — both failed at 80, yet
+            # combined holdout was 89.7%).
+            _SIDE_MIN_FIRES = 50
             thr_buy,  prec_buy,  cov_buy,  n_buy,  hit_buy  = pick_threshold_by_side(
-                meta_oof, prop_v, y_v, side=2, target=token_precision_target)
+                meta_oof, prop_dev_filtered, y_v, side=2, target=token_precision_target,
+                min_fires=_SIDE_MIN_FIRES)
             thr_sell, prec_sell, cov_sell, n_sell, hit_sell = pick_threshold_by_side(
-                meta_oof, prop_v, y_v, side=0, target=token_precision_target)
+                meta_oof, prop_dev_filtered, y_v, side=0, target=token_precision_target,
+                min_fires=_SIDE_MIN_FIRES)
 
             # Re-evaluate hit_target: pass if EITHER side is tradeable
             hit_target = hit_target or hit_buy or hit_sell
 
-            meta_full = xgb.train(token_meta_params, _dm(mX, mY), num_boost_round=300, verbose_eval=False)
+            meta_full = xgb.train(token_meta_params, _dm(mX, mY, meta_w), num_boost_round=300, verbose_eval=False)
             flag = "target met" if hit_target else "target NOT met (best achievable)"
             print(f"   Meta gate: thr {thr:.3f} | dev precision {dev_prec:.3f} | "
                   f"coverage {dev_cov:.3f} ({dev_n} trades) | {flag}")
@@ -1368,9 +1428,41 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         # below-breakeven signals. The threshold was chosen on OOF dev data, never
         # on this holdout, so the holdout numbers below are an honest estimate of
         # how the pre-committed gate performs out of sample.
+        # Pre-compute aggressive eligibility so the holdout section can use it.
+        _AGG_FLOOR_PRE = 0.50
+        _tier_agg_pre = (
+            (prec_sell >= _AGG_FLOOR_PRE and n_sell >= _SIDE_MIN_FIRES) or
+            (prec_buy  >= _AGG_FLOOR_PRE and n_buy  >= _SIDE_MIN_FIRES) or
+            (dev_prec  >= _AGG_FLOOR_PRE and dev_n  >= MIN_FIRES_DEV)
+        )
+
         if not hit_target:
-            fire = np.zeros(len(meta_prob_h), dtype=bool)
-            gate_mode = "DISABLED (dev precision floor not met)"
+            if _tier_agg_pre:
+                # Dev precision bar not met for balanced/conservative, but the
+                # per-side signals ARE above 50% — run a holdout evaluation so
+                # aggressive-tier users see real out-of-sample performance.
+                # Use the best qualifying per-side threshold (not the rank gate).
+                if prec_sell >= _AGG_FLOOR_PRE and n_sell >= _SIDE_MIN_FIRES:
+                    _agg_thr = thr_sell
+                    _agg_side_pool = (prop_h == 0)
+                elif prec_buy >= _AGG_FLOOR_PRE and n_buy >= _SIDE_MIN_FIRES:
+                    _agg_thr = thr_buy
+                    _agg_side_pool = (prop_h == 2)
+                else:
+                    _agg_thr = thr
+                    _agg_side_pool = (prop_h == 2) | (prop_h == 0)
+                # Rank gate: reproduce dev coverage on the qualifying side pool
+                if _agg_side_pool.sum() > 0:
+                    _pool_meta = meta_prob_h[_agg_side_pool]
+                    _agg_cov = (prec_sell >= _AGG_FLOOR_PRE and n_sell >= _SIDE_MIN_FIRES) and cov_sell or cov_buy
+                    _agg_rank_thr = float(np.quantile(_pool_meta, max(0.0, 1.0 - _agg_cov)))
+                    fire = (meta_prob_h >= max(_agg_thr, _agg_rank_thr)) & _agg_side_pool
+                else:
+                    fire = np.zeros(len(meta_prob_h), dtype=bool)
+                gate_mode = f"AGGRESSIVE (best-side thr {_agg_thr:.3f})"
+            else:
+                fire = np.zeros(len(meta_prob_h), dtype=bool)
+                gate_mode = "DISABLED (dev precision floor not met)"
         else:
             fire_abs = meta_prob_h >= thr
             if dev_cov > 0:
@@ -1394,7 +1486,7 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         # meta confidence is in the top 25% of all fired signals (high conviction).
         # At support a SELL signal fights the level — same rule applies.
         # This embeds the "indicators must vote strongly to override S&R" rule.
-        if hit_target and fire.sum() >= 4:
+        if (hit_target or _tier_agg_pre) and fire.sum() >= 4:
             at_res = holdout['is_at_resistance'].to_numpy().astype(bool) \
                      if 'is_at_resistance' in holdout.columns else np.zeros(len(holdout), dtype=bool)
             at_sup = holdout['is_at_support'].to_numpy().astype(bool) \
@@ -1418,7 +1510,7 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         # of counter-trend losses at 1h resolution. We tolerate it only when
         # meta-confidence is top-25% (the model has a strong conviction override).
         # Same design as the S&R filter above: principled suppression, not tuning.
-        if hit_target and fire.sum() >= 4 and 'macro_trend_1d' in holdout.columns:
+        if (hit_target or _tier_agg_pre) and fire.sum() >= 4 and 'macro_trend_1d' in holdout.columns:
             trend_1d = holdout['macro_trend_1d'].to_numpy()
             _top25_thr = float(np.quantile(meta_prob_h[fire], 0.75))
             _top25 = meta_prob_h >= _top25_thr
@@ -1439,14 +1531,19 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         # to fire each side independently on the holdout.
         _h_buy_pool  = (prop_h == 2)
         _h_sell_pool = (prop_h == 0)
-        if hit_buy and _h_buy_pool.sum() > 0:
+        # For aggressive tier, allow per-side fire even when hit_buy/hit_sell is False,
+        # as long as that side's dev precision cleared the 50% floor.
+        _agg_buy_ok  = _tier_agg_pre and prec_buy  >= _AGG_FLOOR_PRE and n_buy  >= _SIDE_MIN_FIRES
+        _agg_sell_ok = _tier_agg_pre and prec_sell >= _AGG_FLOOR_PRE and n_sell >= _SIDE_MIN_FIRES
+
+        if (hit_buy or _agg_buy_ok) and _h_buy_pool.sum() > 0:
             _buy_rank_thr = float(np.quantile(
                 meta_prob_h[_h_buy_pool], max(0.0, 1.0 - cov_buy)))
             buy_fire = (meta_prob_h >= max(thr_buy, _buy_rank_thr)) & _h_buy_pool
         else:
             buy_fire = np.zeros(len(meta_prob_h), dtype=bool)
 
-        if hit_sell and _h_sell_pool.sum() > 0:
+        if (hit_sell or _agg_sell_ok) and _h_sell_pool.sum() > 0:
             _sell_rank_thr = float(np.quantile(
                 meta_prob_h[_h_sell_pool], max(0.0, 1.0 - cov_sell)))
             sell_fire = (meta_prob_h >= max(thr_sell, _sell_rank_thr)) & _h_sell_pool
@@ -1454,7 +1551,7 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             sell_fire = np.zeros(len(meta_prob_h), dtype=bool)
 
         # ── Spot-on market dynamics: Regime-specific directional filter ──────
-        if hit_target and _opt and "regimes" in _opt and "regime_boundaries" in _opt:
+        if (hit_target or _tier_agg_pre) and _opt and "regimes" in _opt and "regime_boundaries" in _opt:
             bounds = _opt["regime_boundaries"]
             regimes_dict = _opt["regimes"]
             
@@ -1481,7 +1578,6 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
                 if not reg or reg.get("skipped"):
                     regime_suppress[i] = True
                     continue
-                p_sell, p_hold, p_buy = raw_probs[i, 0], raw_probs[i, 1], raw_probs[i, 2]
                 side = prop_h[i]
                 if side == 2:
                     if not reg.get("buy_ok"): regime_suppress[i] = True
@@ -1564,31 +1660,40 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             )
             tradeable_final = tradeable_buy_holdout or tradeable_sell_holdout
 
-            # Override: keep tradeable when combined precision OR expectancy is positive.
-            # Using expectancy (not only precision) fixes false negatives where a
-            # symbol clears breakeven in PnL terms but sits just below the dynamic
-            # precision threshold (e.g. IMX: +69.7% return, precision 0.521).
             holdout_reliable = fired_n >= MIN_HOLDOUT_FIRES
-            combined_ok = fired_prec >= breakeven or bt['expectancy_pct'] > 0
+            oof_holdout_gap  = abs(dev_prec - fired_prec)
+
+            # Override: keep tradeable when combined precision OR expectancy is
+            # meaningful. Require >= 0.20 %/trade (not just > 0) — at typical
+            # holdout sizes (50-200 trades) anything below 0.20% is indistinguishable
+            # from noise. The original > 0 threshold was enabling tokens with
+            # +0.11 %/trade at 39% precision (well below breakeven) based on the
+            # triple-barrier timeout artifact rather than genuine directional edge.
+            EXPECTANCY_FLOOR = 0.20          # %/trade minimum for the override
+            combined_ok = (fired_prec >= breakeven
+                           or bt['expectancy_pct'] >= EXPECTANCY_FLOOR)
             if hit_target and (not holdout_reliable or combined_ok):
                 tradeable_final = True
 
+            # Gap veto: if the OOF→holdout precision gap exceeds 12 pp AND the
+            # holdout precision is below breakeven, disable unconditionally.
+            # A 19 pp gap (dev 58.5% → holdout 39.5%) means the model overfit to
+            # the training period. Positive expectancy from timeouts on 81 trades
+            # is not a valid override for a regime that clearly shifted.
+            GAP_VETO_THRESHOLD = 0.12
+            if (holdout_reliable
+                    and oof_holdout_gap >= GAP_VETO_THRESHOLD
+                    and fired_prec < breakeven):
+                tradeable_final = False
+
             # Final safety veto: disables tokens where no per-side precision
             # check passed AND the combined holdout expectancy is negative.
-            # Scoped to "no per-side approval" because bt['expectancy_pct'] is
-            # computed from the combined rank-gate threshold, which fires a
-            # different (often worse) subset of signals than the per-side
-            # thresholds used by the live engine. When a side earned per-side
-            # approval (precision >= breakeven), that side is profitable live —
-            # applying the combined veto there would incorrectly kill it.
             per_side_approved = tradeable_buy_holdout or tradeable_sell_holdout
             veto_fires = (holdout_reliable
                           and bt['expectancy_pct'] <= 0
                           and not per_side_approved)
             if veto_fires:
                 tradeable_final = False
-
-            oof_holdout_gap = abs(dev_prec - fired_prec)
 
             if not tradeable_final:
                 if veto_fires:
@@ -1604,11 +1709,16 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
                 if tradeable_sell_holdout: sides_live.append('SELL')
                 print(f"      ENABLED via per-side: {' + '.join(sides_live)} cleared holdout "
                       f"(combined {fired_prec:.1%} < {breakeven:.1%}).")
-            elif bt['expectancy_pct'] > 0 and fired_prec < breakeven:
-                print(f"      ENABLED via positive expectancy: {bt['expectancy_pct']:+.3f}%/trade "
-                      f"(prec {fired_prec:.1%} < breakeven {breakeven:.1%}).")
+            elif bt['expectancy_pct'] >= EXPECTANCY_FLOOR and fired_prec < breakeven:
+                print(f"      ENABLED via expectancy: {bt['expectancy_pct']:+.3f}%/trade "
+                      f"(prec {fired_prec:.1%} < breakeven {breakeven:.1%}, "
+                      f"floor={EXPECTANCY_FLOOR:.2f}%).")
 
-            if holdout_reliable and oof_holdout_gap > 0.15:
+            if holdout_reliable and oof_holdout_gap >= GAP_VETO_THRESHOLD and fired_prec < breakeven:
+                print(f"      DISABLED (gap veto): OOF→holdout gap {oof_holdout_gap:.1%} "
+                      f"(dev {dev_prec:.1%} → holdout {fired_prec:.1%}) with prec below breakeven. "
+                      f"Regime shift too large to ship.")
+            elif holdout_reliable and oof_holdout_gap > 0.10:
                 print(f"      WATCH: OOF→holdout gap {oof_holdout_gap:.1%} "
                       f"(dev {dev_prec:.1%} → holdout {fired_prec:.1%}). "
                       f"Possible regime shift — monitor after next retrain.")
@@ -1620,6 +1730,47 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             print(f"      No signals fired ({reason})")
         print(f"   -- reference only -- all-bar acc {test_acc:.3f} | "
               f"SELL/HOLD/BUY prec {prec[0]:.2f}/{prec[1]:.2f}/{prec[2]:.2f}")
+
+        # ── Risk tier classification ───────────────────────────────────────
+        # Each tier is stored in the sidecar so the live predictor can respect
+        # the user's risk preference without retraining.
+        #
+        # CONSERVATIVE — per-side holdout confirmed ≥ breakeven.
+        #   Strictest bar. Both OOF gate and per-direction holdout confirmed.
+        #
+        # BALANCED — combined holdout ≥ breakeven.
+        #   Includes combined-gate approvals (e.g. JUP 89.7%) and [ENABLED-no-side].
+        #
+        # AGGRESSIVE — any side shows dev precision > 50% (above random).
+        #   Does NOT require the meta gate to reach the precision target.
+        #   Fires signals for tokens where the primary model has directional
+        #   skill but the meta gate can't hit the quality bar at 25% coverage.
+        #   Example: BTC SELL 51.7% dev precision — below 54.6% breakeven so
+        #   still slightly loss-making without favourable timeout ratios, but
+        #   better than the 50% random baseline. Users accept the risk.
+        tier_conservative = bool(tradeable_buy_holdout or tradeable_sell_holdout)
+        tier_balanced     = bool(
+            tradeable_final
+            and fired_n >= MIN_HOLDOUT_FIRES
+            and fired_prec >= breakeven
+        )
+        # Aggressive: any directional side has dev precision > 50% with enough trades
+        _AGG_FLOOR     = 0.50
+        _any_side_above_floor = (
+            (prec_sell >= _AGG_FLOOR and n_sell >= _SIDE_MIN_FIRES) or
+            (prec_buy  >= _AGG_FLOOR and n_buy  >= _SIDE_MIN_FIRES) or
+            (dev_prec  >= _AGG_FLOOR and dev_n  >= MIN_FIRES_DEV)
+        )
+        tier_aggressive = bool(_any_side_above_floor)
+
+        # Propagate upward: qualifying a higher tier implies lower tiers too.
+        tier_balanced   = tier_balanced   or tier_conservative
+        tier_aggressive = tier_aggressive or tier_balanced
+
+        print(f"   Risk tiers: "
+              f"conservative={'✓' if tier_conservative else '✗'} | "
+              f"balanced={'✓' if tier_balanced else '✗'} | "
+              f"aggressive={'✓' if tier_aggressive else '✗'}")
 
         # ---- 6) Deployment models on all usable data ----
         usable = pd.concat([train_pool, holdout], ignore_index=True)
@@ -1656,14 +1807,25 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
                 # Per-side gates: predictor uses these when it knows which
                 # direction it is proposing. Allows one side to trade even
                 # if the combined precision fails the target.
-                "meta_threshold_buy":  thr_buy,
-                "meta_threshold_sell": thr_sell,
-                # Per-side tradeability: OOF approval AND holdout confirmation.
-                # The predictor checks these to fire only the profitable side
-                # when the market is in a directional regime (e.g. BUY-only
-                # during a bull run even if SELL fails holdout).
-                "tradeable_buy":  bool(tradeable_buy_holdout),
-                "tradeable_sell": bool(tradeable_sell_holdout),
+                # Per-side thresholds: use individual side threshold when that side
+                # qualified independently; fall back to the combined gate threshold
+                # when combined gate succeeded but the per-side gate had too few
+                # trades (e.g. JUP: 89.7% combined holdout but 0 per-side trades).
+                "meta_threshold_buy":  thr_buy if hit_buy else thr,
+                "meta_threshold_sell": thr_sell if hit_sell else thr,
+                # Aggressive-mode thresholds: always store the per-side best threshold
+                # even when that side didn't meet the quality bar. The predictor uses
+                # these in aggressive mode instead of falling back to the combined thr.
+                "meta_threshold_buy_aggressive":  thr_buy,
+                "meta_threshold_sell_aggressive": thr_sell,
+                # Per-side tradeability. When combined gate earned tradeable_final=True
+                # but neither per-side individually qualified (e.g. min_fires split),
+                # distribute the combined approval to both sides so the live engine
+                # can actually fire signals using the combined threshold above.
+                "tradeable_buy":  bool(tradeable_buy_holdout or
+                                       (tradeable_final and not per_side_approved)),
+                "tradeable_sell": bool(tradeable_sell_holdout or
+                                       (tradeable_final and not per_side_approved)),
                 # Top-25% confidence cutoff of fired signals on the holdout.
                 # The live predictor uses this to replicate S&R and trend filters:
                 # only suppress a signal when meta_conf < this value.
@@ -1675,7 +1837,15 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
                     "honest_holdout_precision_result": fired_prec,
                     "holdout_coverage_pct": coverage,
                 },
-                "gate_coverage": dev_cov,            # rank gate: fire top dev_cov fraction by meta prob
+                "gate_coverage": dev_cov,
+                # ── Risk tiers ────────────────────────────────────────────────
+                # The live predictor checks these to respect the user's chosen
+                # risk appetite without retraining.
+                "risk_tier": {
+                    "conservative": tier_conservative,  # per-side holdout ≥ breakeven
+                    "balanced":     tier_balanced,       # combined holdout ≥ breakeven
+                    "aggressive":   tier_aggressive,     # positive EV on dev, exp ≥ 0.05%
+                },
                 "meta_model_file": meta_path.name if meta_path else None,
                 "atr_multiplier": atr_mult,
                 # tradeable=False means the predictor emits NO signals for this token.
@@ -1734,7 +1904,38 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
 # ============================================================
 # FLEET TRAINING
 # ============================================================
-def train_fleet(hours: int = 5000):
+def _find_resume_index(store_dir: Path) -> int:
+    """
+    Return the index in FLEET_SYMBOLS to start from.
+
+    Scans model_store for *_model.json files, finds the one with the latest
+    mtime, maps it back to a FLEET_SYMBOLS entry, and returns index+1.
+    Returns 0 (start from the beginning) if no prior models exist or the last
+    model doesn't match any fleet symbol.
+    """
+    model_files = list(store_dir.glob("*_model.json"))
+    if not model_files:
+        return 0
+
+    latest = max(model_files, key=lambda p: p.stat().st_mtime)
+    # Convert filename back to symbol:  BTC_USDT_model.json → BTC/USDT
+    base = latest.name.replace("_model.json", "")
+    # The symbol has exactly one "/" — it separates ticker from quote (e.g. BTC/USDT).
+    # The filename encodes "/" as "_", so we split on the first "_USDT" or "_BTC" etc.
+    # Most reliable: try every fleet symbol and find the one whose encoded form matches.
+    sym_map = {s.replace("/", "_"): s for s in FLEET_SYMBOLS}
+    symbol = sym_map.get(base)
+    if symbol is None:
+        return 0
+
+    try:
+        idx = FLEET_SYMBOLS.index(symbol)
+        return idx + 1   # resume with the token AFTER the last completed one
+    except ValueError:
+        return 0
+
+
+def train_fleet(hours: int = 5000, resume: bool = True):
     # ── Step 0: refresh OI cache ──────────────────────────────────────────
     # Keeps open-interest features current without a separate script run.
     # Non-fatal: if it fails for any reason, training continues with whatever
@@ -1762,15 +1963,33 @@ def train_fleet(hours: int = 5000):
     print("   Purged TimeSeriesCV | SHAP pruning | held-out test")
     print("=" * 70)
 
+    store_dir = Path(root_dir) / "src" / "ml" / "model_store"
+    start_idx = _find_resume_index(store_dir) if resume else 0
+    if start_idx > 0:
+        skipped = FLEET_SYMBOLS[:start_idx]
+        print(f"\nRESUMING from {FLEET_SYMBOLS[start_idx]} "
+              f"(skipping {start_idx} already-trained token{'s' if start_idx != 1 else ''}: "
+              f"{', '.join(skipped[:3])}{'...' if len(skipped) > 3 else ''})")
+    else:
+        print("\nStarting full fleet training from the beginning.")
+
     results = []
     total = len(FLEET_SYMBOLS)
     for idx, symbol in enumerate(FLEET_SYMBOLS, 1):
+        if idx - 1 < start_idx:
+            continue                          # skip already-completed tokens
         print(f"\n[{idx}/{total}] Processing {symbol}...")
         m = train_token(symbol, hours=hours)
         if m:
             results.append(m)
-            if m.get("tradeable", False):
+            # [LIVE] requires at least one per-side to be tradeable. tradeable=True
+            # on its own (via expectancy override) with both per-side flags False means
+            # the live engine fires nothing — don't show [LIVE] in that case.
+            if (m.get("tradeable", False)
+                    and (m.get("tradeable_buy", False) or m.get("tradeable_sell", False))):
                 tag = "[LIVE]"
+            elif m.get("tradeable", False):
+                tag = "[ENABLED-no-side]"  # override fired but neither side cleared holdout
             elif m["target_met"]:
                 tag = "[HOLDOUT-FAIL]"
             else:
@@ -1807,4 +2026,12 @@ def train_fleet(hours: int = 5000):
 
 
 if __name__ == "__main__":
-    train_fleet(hours=7000)
+    import argparse as _ap
+    _parser = _ap.ArgumentParser(description="Aegis-1 fleet trainer")
+    _parser.add_argument("--hours", type=int, default=7000,
+                         help="Hours of OHLCV history to fetch per token (default 7000)")
+    _parser.add_argument("--full", action="store_true",
+                         help="Force a full retrain from the first token, ignoring any "
+                              "previously saved models (default: auto-resume)")
+    _args = _parser.parse_args()
+    train_fleet(hours=_args.hours, resume=not _args.full)

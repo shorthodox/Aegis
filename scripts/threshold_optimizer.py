@@ -372,7 +372,10 @@ def optimize_atr(
 
         score = float(np.mean(parts)) if parts else 0.0
         scored.append({"mult": round(float(mult), 2), "score": round(score, 5)})
-        if score > best_score:
+        # Prefer larger multiplier on ties (wider barriers → cleaner labels).
+        is_better  = score > best_score + 1e-6
+        is_tied    = abs(score - best_score) <= 1e-6 and float(mult) > best_mult
+        if is_better or is_tied:
             best_score = score
             best_mult  = float(mult)
 

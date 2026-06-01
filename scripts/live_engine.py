@@ -175,9 +175,11 @@ class LiveEngine:
         capital:               float       = 10_000.0,
         max_position_usdt:     float       = 1_000.0,
         scan_interval_seconds: int          = 300,
-        proxy_url:             Optional[str] = None,  # reserved for future ccxt proxy support
+        risk_tier:             str          = "balanced",
+        proxy_url:             Optional[str] = None,
     ):
         self.scan_interval_seconds = scan_interval_seconds
+        self.risk_tier = risk_tier
         self.wallet    = VirtualWallet(capital, max_position_usdt)
         self._executor = ThreadPoolExecutor(
             max_workers=self.MAX_CONCURRENT, thread_name_prefix='aegis_pred')
@@ -236,7 +238,10 @@ class LiveEngine:
             loop = asyncio.get_event_loop()
             try:
                 result: Dict[str, Any] = await asyncio.wait_for(
-                    loop.run_in_executor(self._executor, predictor.predict_realtime),
+                    loop.run_in_executor(
+                        self._executor,
+                        lambda p=predictor: p.predict_realtime(risk_tier=self.risk_tier),
+                    ),
                     timeout=120,
                 )
             except Exception:
@@ -336,6 +341,8 @@ class LiveEngine:
         conf = float(result.get('meta_confidence', 0))
         thr  = float(result.get('threshold', 0.6))
         fire = bool(result.get('fire', False))
+        atr  = float(result.get('atr', price * 0.015))
+        atr_mult = float(result.get('atr_multiplier', 1.5))
 
         if not fire:
             strength = 'NEUTRAL'
@@ -344,7 +351,7 @@ class LiveEngine:
         else:
             strength = side
 
-        return {
+        entry: Dict[str, Any] = {
             'symbol':          symbol,
             'signal':          side,
             'signal_strength': strength,
@@ -352,6 +359,8 @@ class LiveEngine:
             'direction':       'LONG' if side == 'BUY' else ('SHORT' if side == 'SELL' else 'NEUTRAL'),
             'price':           price,
             'entry_price':     price,
+            'atr':             round(atr, 8),
+            'atr_multiplier':  atr_mult,
             'meta_confidence': round(conf, 4),
             'threshold':       round(thr, 4),
             'tradeable':       result.get('tradeable', True),
@@ -363,6 +372,38 @@ class LiveEngine:
             'timestamp':       datetime.now(timezone.utc).isoformat(),
             'timeframe':       '1h',
         }
+
+        # Convenience TP/SL for the active direction
+        if side == 'BUY':
+            entry['suggested_tp'] = result.get('bull_tp1', round(price + atr_mult * atr, 8))
+            entry['suggested_sl'] = round(price - atr_mult * atr, 8)
+        elif side == 'SELL':
+            entry['suggested_tp'] = result.get('bear_tp1', round(price - atr_mult * atr, 8))
+            entry['suggested_sl'] = round(price + atr_mult * atr, 8)
+        else:
+            entry['suggested_tp'] = None
+            entry['suggested_sl'] = None
+
+        # Forward all market context fields from predictor
+        _CONTEXT_KEYS = (
+            'market_bias', 'bias_strength', 'trend_regime', 'volatility_regime',
+            'atr_pct', 'support', 'resistance', 'pivot',
+            'r1', 'r2', 's1', 's2',
+            'bull_tp1', 'bull_tp2', 'bull_tp3',
+            'bear_tp1', 'bear_tp2', 'bear_tp3',
+            'confluence',
+            'rsi', 'macd_signal', 'cci', 'adx', 'supertrend',
+            'macro_daily', 'macro_weekly',
+            'volume_strength', 'volume_zscore',
+            'funding_rate', 'funding_bias', 'oi_trend', 'oi_change_1h_pct', 'oi_zscore',
+            'session', 'session_note', 'fear_greed',
+            'scalper_view', 'day_trader_view', 'swing_view',
+        )
+        for k in _CONTEXT_KEYS:
+            if k in result:
+                entry[k] = result[k]
+
+        return entry
 
     # ── track record persistence ──────────────────────────────────────────────
 
