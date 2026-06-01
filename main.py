@@ -726,12 +726,15 @@ async def run_engine_background():
 
                 _now = time.time()
                 _signals_now = LIVE_STATE.data.get('signals', {}) if not _warming_up else {}
-                # Cheap fingerprint: hash the set of signal_ids (changes only after a scan)
-                _sig_ids = tuple(
-                    sorted(v.get('signal_id', '') for v in _signals_now.values()
-                           if isinstance(v, dict))
-                )
-                _new_hash = hash(_sig_ids)
+                # Fingerprint: (symbol, signal_side, fire) — stable between scans when
+                # nothing fires.  signal_id uses uuid4() on fire=True, so hashing
+                # signal_id caused a push on every fired symbol within a scan cycle.
+                _sig_fingerprint = tuple(sorted(
+                    (sym, v.get('signal', 'FLAT'), bool(v.get('fire', False)))
+                    for sym, v in _signals_now.items()
+                    if isinstance(v, dict)
+                ))
+                _new_hash = hash(_sig_fingerprint)
                 _signals_changed = (_new_hash != _last_signals_hash)
                 _interval_elapsed = (_now - _last_firestore_push >= _FIRESTORE_MIN_INTERVAL)
 
@@ -3226,8 +3229,12 @@ def _get_or_refresh_dev_token() -> Dict[str, str]:
 
 
 async def dev_token_display_loop():
-    """Background task: generate a new developer token every 60s and emit it to logs."""
-    await asyncio.sleep(5)  # let uvicorn startup messages land first
+    """
+    Startup task: generate ONE dev token and print it.
+    Sleeps until the token expires (5 days), then generates the next one.
+    Never regenerates more frequently than once per token lifetime.
+    """
+    await asyncio.sleep(5)  # let uvicorn startup messages settle
     while True:
         try:
             token_info = await asyncio.to_thread(_provision_dev_token)
@@ -3237,6 +3244,7 @@ async def dev_token_display_loop():
                 exp_dt = datetime.fromisoformat(expires_str)
                 exp_display = exp_dt.strftime("%Y-%m-%d %H:%M UTC")
             except Exception:
+                exp_dt = None
                 exp_display = expires_str
 
             sep = "=" * 58
@@ -3251,11 +3259,21 @@ async def dev_token_display_loop():
             print(banner, flush=True)
             logger.info(banner)
 
+            # Sleep until this token expires, then generate the next one.
+            if exp_dt is not None:
+                if exp_dt.tzinfo is None:
+                    exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+                secs_until_expiry = (exp_dt - datetime.now(timezone.utc)).total_seconds()
+                sleep_for = max(secs_until_expiry, 3600)  # at least 1 h safety floor
+            else:
+                sleep_for = 5 * 24 * 3600  # 5 days default
+
+            await asyncio.sleep(sleep_for)
+
         except Exception as e:
             print(f"[dev_token_display_loop ERROR] {e}", flush=True)
             logger.error(f"[dev_token_display_loop] {e}", exc_info=True)
-
-        await asyncio.sleep(60)
+            await asyncio.sleep(3600)  # retry in 1 h on error
 
 
 async def dev_key_display_loop():
