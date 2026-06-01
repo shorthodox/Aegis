@@ -669,9 +669,12 @@ async def run_engine_background():
     LIVE_STATE.engine = engine
 
     _last_tr_mtime: float = 0.0
+    _last_signals_hash: int = 0       # hash of last signals pushed to Firestore
+    _last_firestore_push: float = 0.0 # epoch of last Firestore write
+    _FIRESTORE_MIN_INTERVAL = 290.0   # push at most once per ~5 min (matches scan cycle)
 
     async def update_state():
-        nonlocal _last_tr_mtime
+        nonlocal _last_tr_mtime, _last_signals_hash, _last_firestore_push
         while True:
             try:
                 LIVE_STATE.data["tickers"]  = engine.live_prices.copy()
@@ -703,18 +706,16 @@ async def run_engine_background():
                     signals_file = signals_dir / 'live_signals.json'
                     temp_file = signals_dir / 'live_signals.json.tmp'
                     with open(temp_file, 'w', encoding='utf-8') as sf:
-                        # use default=str to ensure datetimes/objects are serializable
                         safe_signals = numpy_to_native(LIVE_STATE.data.get('signals', {}))
                         json.dump(safe_signals, sf, default=str)
                     os.replace(temp_file, signals_file)
                 except Exception as _e:
                     print(f"⚠️ Failed to write live_signals.json: {_e}")
-                
+
                 # --- write latest signals to Firebase Firestore ---
-                # Skip during warmup: bootstrap_done < bootstrap_total means the
-                # first full scan hasn't finished yet. Pushing partial results
-                # would write incomplete signal data to Firestore for every symbol
-                # as it completes, flooding the DB with warmup-state entries.
+                # Only push when: warmup is done AND (signals changed OR 5-min interval elapsed).
+                # Signals only change every scan_interval_seconds (~5 min), so pushing every
+                # second was burning ~2M Firestore writes/day for no benefit.
                 _eng = LIVE_STATE.engine
                 _warming_up = (_eng is not None and
                                _eng.bootstrap_done < _eng.bootstrap_total)
@@ -722,10 +723,28 @@ async def run_engine_background():
                     print(f"[PRODUCER] Warmup in progress "
                           f"({_eng.bootstrap_done}/{_eng.bootstrap_total}) "
                           f"— Firestore push deferred.")
+
+                _now = time.time()
+                _signals_now = LIVE_STATE.data.get('signals', {}) if not _warming_up else {}
+                # Cheap fingerprint: hash the set of signal_ids (changes only after a scan)
+                _sig_ids = tuple(
+                    sorted(v.get('signal_id', '') for v in _signals_now.values()
+                           if isinstance(v, dict))
+                )
+                _new_hash = hash(_sig_ids)
+                _signals_changed = (_new_hash != _last_signals_hash)
+                _interval_elapsed = (_now - _last_firestore_push >= _FIRESTORE_MIN_INTERVAL)
+
+                if not _signals_now or (not _signals_changed and not _interval_elapsed):
+                    pass  # skip — nothing new to push
+                else:
+                    _last_signals_hash = _new_hash
+                    _last_firestore_push = _now
+
                 try:
-                    signals_data = {} if _warming_up else LIVE_STATE.data.get('signals', {})
+                    signals_data = _signals_now if (_signals_changed or _interval_elapsed) else {}
                     if signals_data:
-                        print(f"[PRODUCER] Attempting to push {len(signals_data)} signals to Firestore...")
+                        print(f"[PRODUCER] Pushing {len(signals_data)} signals to Firestore (changed={_signals_changed})...")
                     batch = db.batch()
                     count = 0
                     now_str = datetime.now(timezone.utc).isoformat()
