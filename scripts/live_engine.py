@@ -834,8 +834,9 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
 
     async def _run_with_display() -> None:
         scan_task = asyncio.create_task(engine.run())
+        # screen=True: full-screen redraw (like htop) — no duplicate render lines
         with Live(_build_layout(), console=console,
-                  refresh_per_second=0.5, screen=False) as live:
+                  refresh_per_second=0.5, screen=True) as live:
             try:
                 while not scan_task.done():
                     live.update(_build_layout())

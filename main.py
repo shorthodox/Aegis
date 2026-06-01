@@ -745,91 +745,66 @@ async def run_engine_background():
                     _last_firestore_push = _now
 
                 try:
-                    signals_data = _signals_now if (_signals_changed or _interval_elapsed) else {}
-                    if signals_data:
-                        print(f"[PRODUCER] Pushing {len(signals_data)} signals to Firestore (changed={_signals_changed})...")
+                    # Only push FIRED signals (fire=True) — NEUTRAL/FLAT signals are
+                    # market monitoring data, not trade signals. Live prices are never
+                    # written to Firestore; they flow only through the WebSocket ticker
+                    # stream to the dashboard.
+                    should_push = _signals_changed or _interval_elapsed
+                    if not should_push:
+                        raise StopIteration  # skip cleanly without nesting
+
+                    _PRICE_CONTEXT_KEYS = frozenset({
+                        'price', 'entry_price', 'atr', 'atr_pct',
+                        'support', 'resistance', 'pivot', 'r1', 'r2', 's1', 's2',
+                        'bull_tp1', 'bull_tp2', 'bull_tp3',
+                        'bear_tp1', 'bear_tp2', 'bear_tp3',
+                        'scalper_view', 'day_trader_view', 'swing_view',
+                        'volume_zscore', 'volume_strength',
+                        'oi_change_1h_pct', 'oi_zscore',
+                        'macro_daily', 'macro_weekly',
+                        'session', 'session_note',
+                    })
+
+                    fired = {
+                        sym: sig for sym, sig in _signals_now.items()
+                        if isinstance(sig, dict) and sig.get('fire', False)
+                    }
+
+                    all_sigs_for_dashboard = _signals_now  # full payload for client-side Firestore reads
+                    push_target = all_sigs_for_dashboard   # write everything but strip price fields
+
+                    now_str = datetime.now(timezone.utc).isoformat()
                     batch = db.batch()
                     count = 0
-                    now_str = datetime.now(timezone.utc).isoformat()
-                    for sym, sig in signals_data.items():
-                        # signals_data may be nested: { symbol: { timeframe: sigobj, ... } }
-                        is_nested_tf = (
-                            isinstance(sig, dict) and 
-                            any(isinstance(v, dict) or v is None for v in sig.values()) and 
-                            all(k in {'1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w'} for k in sig.keys())
-                        )
-                        if is_nested_tf:
-                            # Flatten: write one doc per timeframe
-                            for tf, tf_sig in sig.items():
-                                doc_id = f"{sym.replace('/', '_')}_{tf}"
-                                sig_ref = db.collection("signals").document(doc_id)
-                                if tf_sig is None:
-                                    sig_data = {'symbol': sym, 'timeframe': tf, 'timestamp': now_str}
-                                else:
-                                    # Normalize into a plain dict safely
-                                    try:
-                                        sig_data = numpy_to_native(tf_sig)
-                                    except Exception:
-                                        sig_data = tf_sig
-                                    if not isinstance(sig_data, dict):
-                                        try:
-                                            sig_data = dict(sig_data)
-                                        except Exception:
-                                            sig_data = {'value': sig_data}
-                                    sig_data['symbol'] = sym
-                                    sig_data['timeframe'] = tf
-                                    sig_data['timestamp'] = now_str
-
-                                if isinstance(sig_data, dict):
-                                    batch.set(sig_ref, sig_data, merge=True)
-                                else:
-                                    batch.set(sig_ref, {'value': sig_data, 'symbol': sym, 'timeframe': tf, 'timestamp': now_str}, merge=True)
-                                count += 1
-                                if count >= 450:
-                                    results = batch.commit()
-                                    print(f"[PRODUCER SUCCESS] Batch committed {count} signals. Last commit timestamp: {results[-1].update_time if results else 'N/A'}")
-                                    batch = db.batch()
-                                    count = 0
-                        else:
-                            doc_id = sym.replace('/', '_')
-                            sig_ref = db.collection("signals").document(doc_id)
-                            # Convert single signal object
-                            if isinstance(sig, dict):
-                                sig_data = sig.copy()
-                            elif hasattr(sig, 'dict') and callable(sig.dict):
-                                sig_data = sig.dict()
-                            elif hasattr(sig, '__dataclass_fields__'):
-                                sig_data = asdict(sig)
-                            elif hasattr(sig, '__dict__'):
-                                sig_data = vars(sig).copy()
-                            else:
-                                try:
-                                    sig_data = dict(sig)
-                                except Exception:
-                                    sig_data = {'value': sig}
-
-                            if not isinstance(sig_data, dict):
-                                sig_data = {'value': sig_data}
-
-                            sig_data['symbol'] = sym
-                            sig_data['timestamp'] = now_str
-                            sig_data = numpy_to_native(sig_data)
-                            if not isinstance(sig_data, dict):
-                                sig_data = {'value': sig_data, 'symbol': sym, 'timestamp': now_str}
-                            batch.set(sig_ref, dict(sig_data), merge=True)
-                            count += 1
-
-                        # commit in chunks handled above for nested case
-                        
+                    for sym, sig in push_target.items():
+                        if not isinstance(sig, dict):
+                            continue
+                        doc_id  = sym.replace('/', '_')
+                        sig_ref = db.collection("signals").document(doc_id)
+                        # Strip live-price and heavy context keys — prices go via WS only
+                        compact = {
+                            k: v for k, v in numpy_to_native(sig).items()
+                            if k not in _PRICE_CONTEXT_KEYS
+                        }
+                        compact['symbol']    = sym
+                        compact['timestamp'] = now_str
+                        compact['fire']      = bool(sig.get('fire', False))
+                        batch.set(sig_ref, compact, merge=True)
+                        count += 1
                         if count >= 450:
-                            results = batch.commit()
-                            print(f"[PRODUCER SUCCESS] Batch committed {count} signals. Last commit timestamp: {results[-1].update_time if results else 'N/A'}")
-                            batch = db.batch()
-                            count = 0
-                    
+                            batch.commit()
+                            batch  = db.batch()
+                            count  = 0
+
                     if count > 0:
                         results = batch.commit()
-                        print(f"[PRODUCER SUCCESS] Batch committed {count} signals. Last commit timestamp: {results[-1].update_time if results else 'N/A'}")
+                        fired_count = len(fired)
+                        ts = results[-1].update_time if results else 'N/A'
+                        label = f'{fired_count} FIRED + {count - fired_count} monitoring'
+                        print(f"[PRODUCER] Firestore: {count} signals ({label}) @ {ts}")
+
+                except StopIteration:
+                    pass  # nothing to push this tick
                 except Exception as _e:
                     print(f"[PRODUCER ERROR] ⚠️ Failed to write signals to Firestore: {_e}")
 
