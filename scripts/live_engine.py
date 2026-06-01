@@ -46,7 +46,7 @@ def _fetch_spot_price(symbol: str) -> float:
         with _spot_ex_lock:
             if _spot_ex is None:
                 _spot_ex = _ccxt.binance({'enableRateLimit': True, 'timeout': 8000})
-        ticker = _spot_ex.fetch_ticker(symbol)
+            ticker = _spot_ex.fetch_ticker(symbol)
         return float(ticker.get('last') or ticker.get('close') or 0)
     except Exception:
         return 0.0
