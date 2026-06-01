@@ -1174,6 +1174,623 @@ async def public_token_insight(symbol: str):
     return JSONResponse(content=teaser)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# PROFESSIONAL TOKEN ANALYSIS ENGINE
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _generate_token_analysis(sig: dict) -> dict:
+    """
+    Generate a professional, beginner-friendly market analysis for one token.
+    Covers: market verdict, top indicators with plain explanations, why the
+    signal fired or didn't fire, key price levels, and macro context.
+    All terminology is explained so a first-time trader understands it.
+    """
+    if not isinstance(sig, dict):
+        return {}
+
+    sym   = sig.get('symbol', '')
+    price = float(sig.get('price') or sig.get('entry_price') or 0)
+    fire  = bool(sig.get('fire', False))
+    side  = sig.get('signal', 'FLAT')
+    conf  = float(sig.get('meta_confidence') or 0)
+    thr   = float(sig.get('threshold') or 0)
+
+    bias          = sig.get('market_bias', 'NEUTRAL')
+    trend_regime  = sig.get('trend_regime', 'RANGING')
+    vol_regime    = sig.get('volatility_regime', 'MEDIUM')
+    rsi           = float(sig.get('rsi') or 50)
+    adx           = float(sig.get('adx') or 20)
+    macd          = sig.get('macd_signal', 'NEUTRAL')
+    supertrend    = sig.get('supertrend', 'NEUTRAL')
+    macro_daily   = float(sig.get('macro_daily') or 0)
+    macro_weekly  = float(sig.get('macro_weekly') or 0)
+
+    conf_d        = sig.get('confluence') or {}
+    total_c       = float(conf_d.get('total') or 0)
+    mom_c         = float(conf_d.get('momentum') or 0)
+    trend_c       = float(conf_d.get('trend') or 0)
+    vol_c         = float(conf_d.get('volume') or 0)
+    sm_c          = float(conf_d.get('smart_money') or 0)
+    candle_c      = float(conf_d.get('candle') or 0)
+
+    funding       = float(sig.get('funding_rate') or 0)
+    funding_bias  = sig.get('funding_bias', 'NEUTRAL')
+    oi_trend      = sig.get('oi_trend', 'STABLE')
+    vol_strength  = sig.get('volume_strength', 'AVERAGE')
+
+    fg            = sig.get('fear_greed') or {}
+    fg_val        = float(fg.get('value') or 50)
+    fg_label      = fg.get('label', 'Neutral')
+
+    support       = float(sig.get('support') or sig.get('s1') or 0)
+    resistance    = float(sig.get('resistance') or sig.get('r1') or 0)
+    pivot         = float(sig.get('pivot') or 0)
+    tradeable     = bool(sig.get('tradeable', False))
+
+    p_buy         = float(sig.get('p_buy') or 0)
+    p_sell        = float(sig.get('p_sell') or 0)
+    p_hold        = float(sig.get('p_hold') or 0)
+
+    def _pct(v: float) -> str:
+        return f'{v * 100:.1f}%'
+
+    def _px(v: float) -> str:
+        if v <= 0:      return '—'
+        if v < 0.001:   return f'${v:.6f}'
+        if v < 1:       return f'${v:.4f}'
+        if v < 100:     return f'${v:.3f}'
+        return f'${v:,.2f}'
+
+    # ── Bull / bear vote tally ────────────────────────────────────────────────
+    bull_votes: List[str] = []
+    bear_votes: List[str] = []
+
+    if bias == 'BULLISH':    bull_votes.append('market_bias')
+    elif bias == 'BEARISH':  bear_votes.append('market_bias')
+
+    if macd == 'BULLISH':    bull_votes.append('macd')
+    elif macd == 'BEARISH':  bear_votes.append('macd')
+
+    if supertrend == 'BULLISH':  bull_votes.append('supertrend')
+    elif supertrend == 'BEARISH': bear_votes.append('supertrend')
+
+    if rsi < 35:    bull_votes.append('rsi_oversold')
+    elif rsi > 70:  bear_votes.append('rsi_overbought')
+
+    if trend_c >= 6:  (bull_votes if bias == 'BULLISH' else bear_votes).append('trend_confluence')
+    if mom_c >= 6:    (bull_votes if p_buy > p_sell else bear_votes).append('momentum')
+
+    if funding_bias == 'SHORTS_PAYING': bull_votes.append('funding')
+    elif funding_bias == 'LONGS_PAYING': bear_votes.append('funding')
+
+    if oi_trend == 'INCREASING' and bias == 'BULLISH':  bull_votes.append('oi')
+    elif oi_trend == 'INCREASING' and bias == 'BEARISH': bear_votes.append('oi')
+
+    if macro_daily > 0.1:    bull_votes.append('macro_daily')
+    elif macro_daily < -0.1: bear_votes.append('macro_daily')
+
+    if macro_weekly > 0.1:    bull_votes.append('macro_weekly')
+    elif macro_weekly < -0.1: bear_votes.append('macro_weekly')
+
+    bull_n = len(bull_votes)
+    bear_n = len(bear_votes)
+    total_v = bull_n + bear_n or 1
+
+    # ── Overall verdict ───────────────────────────────────────────────────────
+    bull_pct = bull_n / total_v
+    if bull_pct >= 0.70:   verdict_label, verdict_icon = 'Strong Bullish', '🟢'
+    elif bull_pct >= 0.55: verdict_label, verdict_icon = 'Bullish',         '🟢'
+    elif bull_pct >= 0.45: verdict_label, verdict_icon = 'Neutral / Mixed', '🟡'
+    elif bull_pct >= 0.30: verdict_label, verdict_icon = 'Bearish',         '🔴'
+    else:                  verdict_label, verdict_icon = 'Strong Bearish',  '🔴'
+
+    # ── Plain-English trend description ──────────────────────────────────────
+    trend_desc = {
+        'TRENDING_UP':   'moving upward in a clear trend',
+        'TRENDING_DOWN': 'moving downward in a clear trend',
+        'TRENDING':      'in an active trend',
+        'RANGING':       'moving sideways without a clear direction',
+    }.get(trend_regime, 'in an uncertain phase')
+
+    vol_desc = {
+        'HIGH':   'high volatility — prices are swinging a lot',
+        'MEDIUM': 'moderate volatility',
+        'LOW':    'low volatility — price is calm and moving slowly',
+    }.get(vol_regime, 'moderate volatility')
+
+    # ── Two-sentence summary ──────────────────────────────────────────────────
+    base = sym.split('/')[0]
+    summary = (
+        f"{base} is currently {trend_desc}, with {vol_desc}. "
+        f"{'Most indicators lean bullish' if bull_pct > 0.55 else 'Most indicators lean bearish' if bull_pct < 0.45 else 'Indicators are mixed'}"
+        f" — {bull_n} bullish signal{'s' if bull_n != 1 else ''} vs {bear_n} bearish."
+    )
+
+    # ── Top indicators (max 6, sorted by impact) ─────────────────────────────
+    indicators = []
+
+    # RSI
+    if rsi <= 30:
+        indicators.append({
+            'name': 'RSI (Momentum)',
+            'value': f'{rsi:.0f} — Oversold',
+            'direction': 'BULLISH',
+            'icon': '🔋',
+            'impact': 'high',
+            'simple': (
+                f"RSI is {rsi:.0f}. Think of RSI like a rubber band — when it stretches too far "
+                f"in one direction it snaps back. Below 30 means the token has been sold too "
+                f"aggressively. A bounce back up is increasingly likely."
+            ),
+        })
+    elif rsi >= 70:
+        indicators.append({
+            'name': 'RSI (Momentum)',
+            'value': f'{rsi:.0f} — Overbought',
+            'direction': 'BEARISH',
+            'icon': '⚠️',
+            'impact': 'high',
+            'simple': (
+                f"RSI is {rsi:.0f}. The token has been bought very aggressively and may be "
+                f"running out of steam. Above 70 is a warning that the rally could slow down "
+                f"or reverse. Buyers should wait for a pullback."
+            ),
+        })
+    else:
+        indicators.append({
+            'name': 'RSI (Momentum)',
+            'value': f'{rsi:.0f} — Neutral',
+            'direction': 'NEUTRAL',
+            'icon': '📊',
+            'impact': 'medium',
+            'simple': (
+                f"RSI is {rsi:.0f}, sitting in the neutral zone (30–70). There's no extreme "
+                f"buying or selling pressure. The token can move in either direction without "
+                f"being 'overheated' or 'oversold'."
+            ),
+        })
+
+    # Trend / Supertrend
+    if supertrend == 'BULLISH':
+        indicators.append({
+            'name': 'Supertrend',
+            'value': 'Bullish',
+            'direction': 'BULLISH',
+            'icon': '📈',
+            'impact': 'high',
+            'simple': (
+                "The Supertrend indicator is green — price is trading above a dynamic "
+                "support line that adapts to market volatility. This tells us sellers "
+                "are not in control right now. Think of it as a moving 'floor' — as "
+                "long as price stays above it, the trend is up."
+            ),
+        })
+    elif supertrend == 'BEARISH':
+        indicators.append({
+            'name': 'Supertrend',
+            'value': 'Bearish',
+            'direction': 'BEARISH',
+            'icon': '📉',
+            'impact': 'high',
+            'simple': (
+                "The Supertrend indicator is red — price is trading below a dynamic "
+                "resistance line. This acts like a 'ceiling' pressing down on the price. "
+                "Until price breaks back above it, sellers remain in control."
+            ),
+        })
+
+    # MACD
+    if macd != 'NEUTRAL':
+        indicators.append({
+            'name': 'MACD (Momentum Shift)',
+            'value': macd.capitalize(),
+            'direction': macd,
+            'icon': '🔄',
+            'impact': 'medium',
+            'simple': (
+                f"MACD is {'crossing upward' if macd == 'BULLISH' else 'crossing downward'}, "
+                f"which signals that {'buying' if macd == 'BULLISH' else 'selling'} momentum "
+                f"is {'picking up' if macd == 'BULLISH' else 'building'}. "
+                f"{'This is often an early sign of a price rise.' if macd == 'BULLISH' else 'This warns that the price could fall further.'}"
+            ),
+        })
+
+    # ADX (trend strength)
+    if adx > 25:
+        indicators.append({
+            'name': 'ADX (Trend Strength)',
+            'value': f'{adx:.0f} — {"Strong" if adx > 40 else "Moderate"} trend',
+            'direction': 'NEUTRAL',
+            'icon': '💪',
+            'impact': 'medium',
+            'simple': (
+                f"ADX is {adx:.0f}. This measures how strong the current trend is — "
+                f"it doesn't tell you the direction, just the conviction. "
+                f"{'Above 40 means the trend is very powerful and unlikely to reverse quickly.' if adx > 40 else 'Between 25–40 means a genuine trend exists and it is worth following.'}"
+            ),
+        })
+
+    # Confluence
+    if total_c >= 6:
+        indicators.append({
+            'name': 'Confluence Score',
+            'value': f'{total_c:.1f}/10',
+            'direction': 'BULLISH' if bias == 'BULLISH' else 'BEARISH',
+            'icon': '🎯',
+            'impact': 'high',
+            'simple': (
+                f"Confluence score is {total_c:.1f}/10. This is our AI's internal vote count — "
+                f"it tallies up momentum, trend, volume, smart money flow, and candlestick "
+                f"patterns into a single score. "
+                f"{'Above 6 means most evidence is pointing in the same direction — higher quality setups.' if total_c >= 6 else ''} "
+                f"Breakdown: Momentum {mom_c:.1f}, Trend {trend_c:.1f}, "
+                f"Volume {vol_c:.1f}, Smart Money {sm_c:.1f}."
+            ),
+        })
+    elif total_c >= 3:
+        indicators.append({
+            'name': 'Confluence Score',
+            'value': f'{total_c:.1f}/10 — Weak',
+            'direction': 'NEUTRAL',
+            'icon': '⚖️',
+            'impact': 'medium',
+            'simple': (
+                f"Confluence score is {total_c:.1f}/10 — indicators are split. "
+                f"Some point bullish, others bearish. This is a 'wait and see' situation; "
+                f"there is no clear majority conviction from the market's internal structure."
+            ),
+        })
+
+    # Funding rate (derivatives market)
+    if abs(funding) > 0.005:
+        funding_desc = 'Longs are paying shorts' if funding_bias == 'LONGS_PAYING' else 'Shorts are paying longs'
+        funding_meaning = (
+            'This means the market is over-leveraged to the upside — too many people are betting on a rise. '
+            'These longs may be forced to close, creating selling pressure.'
+        ) if funding_bias == 'LONGS_PAYING' else (
+            'The market is over-leveraged to the downside. Too many people are shorting — '
+            'if price rises even slightly, forced short-covering can create a sharp rally (short squeeze).'
+        )
+        indicators.append({
+            'name': 'Funding Rate',
+            'value': f'{funding:+.4f}% — {funding_desc}',
+            'direction': 'BEARISH' if funding_bias == 'LONGS_PAYING' else 'BULLISH',
+            'icon': '💸',
+            'impact': 'medium',
+            'simple': funding_meaning,
+        })
+
+    # Fear & Greed
+    if fg_val <= 25 or fg_val >= 75:
+        indicators.append({
+            'name': 'Market Sentiment (Fear & Greed)',
+            'value': f'{fg_val:.0f}/100 — {fg_label}',
+            'direction': 'BULLISH' if fg_val <= 25 else 'BEARISH',
+            'icon': '🧠',
+            'impact': 'low',
+            'simple': (
+                f"The Fear & Greed index is {fg_val:.0f} ({fg_label}). "
+                + (
+                    "Extreme fear means most market participants are panicking and selling. "
+                    "Historically, extreme fear has been one of the best times to buy — "
+                    "'be greedy when others are fearful.'"
+                    if fg_val <= 25 else
+                    "Extreme greed means everyone is euphoric and buying. "
+                    "Historically, this is when markets are most vulnerable to a sharp correction — "
+                    "'be fearful when others are greedy.'"
+                )
+            ),
+        })
+
+    # Macro trend
+    if abs(macro_daily) > 0.05:
+        macro_dir = 'up' if macro_daily > 0 else 'down'
+        indicators.append({
+            'name': 'Daily Macro Trend',
+            'value': f'{"Bullish" if macro_daily > 0 else "Bearish"} ({macro_daily:+.1%})',
+            'direction': 'BULLISH' if macro_daily > 0 else 'BEARISH',
+            'icon': '🌐',
+            'impact': 'medium',
+            'simple': (
+                f"On the daily chart, {base} has been trending {macro_dir} "
+                f"({macro_daily:+.1%} momentum). "
+                f"{'This longer-term upward pressure provides tailwind for bullish trades.' if macro_daily > 0 else 'This longer-term downward pressure creates headwind — even if short-term indicators look bullish, you are fighting the bigger trend.'}"
+            ),
+        })
+
+    # Limit to top 6 by impact
+    impact_order = {'high': 0, 'medium': 1, 'low': 2}
+    indicators.sort(key=lambda x: impact_order.get(x.get('impact', 'low'), 2))
+    indicators = indicators[:6]
+
+    # ── Why the signal fired or didn't ───────────────────────────────────────
+    signal_section: dict = {}
+
+    if side == 'WAITING' or conf == 0 and not tradeable:
+        signal_section = {
+            'status': 'WAITING',
+            'headline': '⏳ Engine is warming up',
+            'plain': (
+                f"The AI for {base} is still loading its data and running its first scan. "
+                f"Full analysis and signal decisions will appear within 2–3 minutes."
+            ),
+            'technical': 'Model scan not yet completed.',
+        }
+    elif not tradeable and conf == 0:
+        signal_section = {
+            'status': 'MONITOR_ONLY',
+            'headline': '👁️ Watch mode — no signals',
+            'plain': (
+                f"{base} is in monitor-only mode. The AI model was trained on its data "
+                f"but the historical edge (win rate, expectancy) was not strong enough to "
+                f"justify trading it. We show the price and market context so you can "
+                f"watch it and make your own decision — but the bot won't trade it automatically."
+            ),
+            'technical': 'Model trained but did not pass backtesting quality gate (tradeable=False).',
+        }
+    elif fire:
+        direction_word = 'BUY' if side in ('BUY', 'STRONG_BUY') else 'SELL'
+        signal_section = {
+            'status': 'SIGNAL_ACTIVE',
+            'headline': f'🚀 Signal ACTIVE — {direction_word}',
+            'plain': (
+                f"The AI fired a {direction_word} signal on {base}. It required "
+                f"at least {_pct(thr)} confidence and reached {_pct(conf)} — "
+                f"clearing the bar with {'strong' if conf > thr * 1.2 else 'sufficient'} conviction. "
+                f"{'This is a Strong signal — confidence is significantly above threshold.' if conf > thr * 1.15 else ''}"
+            ),
+            'technical': f'meta_confidence={conf:.3f} ≥ threshold={thr:.3f}. Fire=True.',
+        }
+    else:
+        # No signal — explain WHY
+        if conf == 0:
+            plain = (
+                f"The AI model hasn't produced a clear directional probability yet "
+                f"for {base}. This usually means the market conditions are too noisy "
+                f"or ambiguous — no clean trade setup is visible."
+            )
+            headline = '🔍 No setup found'
+            tech = f'meta_confidence=0. Model output inconclusive.'
+        elif thr > 0 and conf >= thr * 0.85:
+            pct_away = (thr - conf) / thr * 100
+            plain = (
+                f"Very close — the AI is at {_pct(conf)} confidence, just {pct_away:.1f}% "
+                f"below the {_pct(thr)} trigger threshold. "
+                f"One more bullish/bearish indicator aligning could push it over the line. "
+                f"Watch closely — a signal may fire in the next scan."
+            )
+            headline = '🔔 Almost there — watching for trigger'
+            tech = f'meta_confidence={conf:.3f}, threshold={thr:.3f}. Gap: {thr-conf:.3f}.'
+        elif thr > 0 and conf >= 0.35:
+            plain = (
+                f"The AI sees some directional evidence for {base} but confidence is "
+                f"{_pct(conf)}, below the {_pct(thr)} required. "
+                f"Indicators are not aligned strongly enough. The model is saying 'I see "
+                f"something but it's not convincing yet — wait for clearer confirmation.'"
+            )
+            headline = '⏸️ Building — not enough conviction yet'
+            tech = f'meta_confidence={conf:.3f} < threshold={thr:.3f}.'
+        else:
+            # Check if near S&R
+            near_resistance = (resistance > 0 and price > 0 and
+                               abs(price - resistance) / price < 0.02)
+            near_support    = (support > 0 and price > 0 and
+                               abs(price - support) / price < 0.02)
+            macro_conflicting = (macro_daily < -0.15 and p_buy > p_sell) or \
+                                (macro_daily > 0.15 and p_sell > p_buy)
+
+            if near_resistance and p_buy > p_sell:
+                plain = (
+                    f"The AI sees bullish momentum building in {base}, but price is "
+                    f"pressing against a resistance zone at {_px(resistance)}. "
+                    f"The model suppressed the BUY signal — buying into resistance means "
+                    f"you're buying right at a wall that sellers have historically defended. "
+                    f"The signal is waiting for that wall to break."
+                )
+                headline = '🚧 BUY blocked by resistance'
+                tech = f'Price within 2% of resistance {_px(resistance)}. Signal suppressed by S&R filter.'
+            elif near_support and p_sell > p_buy:
+                plain = (
+                    f"The AI sees bearish pressure in {base}, but price is sitting "
+                    f"right on a support level at {_px(support)}. "
+                    f"The model held back the SELL signal — shorting into support is risky "
+                    f"because buyers historically step in at this level. "
+                    f"Waiting to see if support breaks before confirming the trade."
+                )
+                headline = '🛡️ SELL held at support'
+                tech = f'Price within 2% of support {_px(support)}. Signal suppressed by S&R filter.'
+            elif macro_conflicting:
+                trend_word = 'bearish' if macro_daily < 0 else 'bullish'
+                plain = (
+                    f"There's a conflict: short-term indicators suggest one direction but "
+                    f"the daily trend for {base} is strongly {trend_word} "
+                    f"({macro_daily:+.1%}). "
+                    f"The model won't fight the bigger trend unless confidence is very high. "
+                    f"Trading against the daily trend is like swimming against a strong current — "
+                    f"possible, but requires much more conviction."
+                )
+                headline = '⚔️ Signal conflicting with daily trend'
+                tech = f'macro_daily={macro_daily:+.3f} conflicts with short-term direction.'
+            else:
+                plain = (
+                    f"The AI model is at {_pct(conf)} confidence — well below the {_pct(thr)} "
+                    f"required to trade. Indicators are too mixed or too weak. "
+                    f"The market for {base} is not giving a clean enough signal right now. "
+                    f"Patience: when the evidence aligns, the signal will fire automatically."
+                )
+                headline = '😴 No clear setup'
+                tech = f'meta_confidence={conf:.3f}, threshold={thr:.3f}. No qualifying filter match.'
+
+        signal_section = {
+            'status': 'NO_SIGNAL',
+            'headline': headline,
+            'plain': plain,
+            'technical': tech,
+        }
+
+    # ── Key levels ────────────────────────────────────────────────────────────
+    key_levels = {}
+    if support > 0:
+        dist_s = (price - support) / price * 100 if price > 0 else 0
+        key_levels['support'] = {
+            'price': round(support, 8),
+            'distance_pct': round(dist_s, 2),
+            'meaning': (
+                f"Support at {_px(support)} ({dist_s:.1f}% below current price). "
+                f"This is a price level where buyers have historically stepped in. "
+                f"If price falls here and bounces, it confirms the support is holding. "
+                f"If price breaks below it with volume, expect further downside."
+            ),
+        }
+    if resistance > 0:
+        dist_r = (resistance - price) / price * 100 if price > 0 else 0
+        key_levels['resistance'] = {
+            'price': round(resistance, 8),
+            'distance_pct': round(dist_r, 2),
+            'meaning': (
+                f"Resistance at {_px(resistance)} ({dist_r:.1f}% above current price). "
+                f"A zone where sellers have repeatedly pushed price back down. "
+                f"A clean break above this level on high volume would be a bullish signal."
+            ),
+        }
+    if sig.get('bull_tp1') and fire and side in ('BUY', 'STRONG_BUY'):
+        key_levels['target_1'] = {
+            'price': round(float(sig['bull_tp1']), 8),
+            'meaning': 'First take-profit target (1× ATR above entry).',
+        }
+        if sig.get('bull_tp2'):
+            key_levels['target_2'] = {
+                'price': round(float(sig['bull_tp2']), 8),
+                'meaning': 'Second take-profit target (2× ATR above entry).',
+            }
+    elif sig.get('bear_tp1') and fire and side in ('SELL', 'STRONG_SELL'):
+        key_levels['target_1'] = {
+            'price': round(float(sig['bear_tp1']), 8),
+            'meaning': 'First take-profit target (1× ATR below entry).',
+        }
+
+    # ── Macro / sentiment context ─────────────────────────────────────────────
+    macro_lines = []
+
+    if abs(macro_weekly) > 0.05:
+        macro_lines.append(
+            f"Weekly trend: {'bullish' if macro_weekly > 0 else 'bearish'} "
+            f"({macro_weekly:+.1%}). "
+            f"{'The longer-term picture supports the bulls.' if macro_weekly > 0 else 'The bigger picture still favors sellers — short-term bounces may be selling opportunities.'}"
+        )
+
+    if funding_bias == 'LONGS_PAYING' and abs(funding) > 0.005:
+        macro_lines.append(
+            f"Funding rate is positive (+{funding:.4f}%). Perpetual futures traders are paying "
+            f"a fee to stay long. When funding gets too high, it usually triggers a sharp "
+            f"pullback as longs get liquidated or choose to exit."
+        )
+    elif funding_bias == 'SHORTS_PAYING' and abs(funding) > 0.005:
+        macro_lines.append(
+            f"Funding rate is negative ({funding:.4f}%). Short sellers are paying to hold their "
+            f"positions. This creates upward pressure — if shorts capitulate, it could trigger "
+            f"a fast squeeze rally."
+        )
+
+    if oi_trend == 'INCREASING':
+        macro_lines.append(
+            "Open Interest is rising — new money is entering the derivatives market. "
+            "Combined with the current price direction, this confirms fresh conviction "
+            f"behind the {'up' if bias == 'BULLISH' else 'down'}move."
+        )
+    elif oi_trend == 'DECREASING':
+        macro_lines.append(
+            "Open Interest is falling — traders are closing positions and exiting. "
+            "This usually means the current move is losing steam. "
+            "Price may continue but with less force."
+        )
+
+    if fg_val < 30:
+        macro_lines.append(
+            f"Market sentiment is in Fear ({fg_val:.0f}/100). Historically, extreme fear "
+            f"creates some of the best long-term buying opportunities — but don't catch "
+            f"a falling knife. Wait for a technical confirmation first."
+        )
+    elif fg_val > 70:
+        macro_lines.append(
+            f"Market sentiment is in Greed ({fg_val:.0f}/100). When everyone is euphoric, "
+            f"the market is often near a local top. Be cautious about chasing price here."
+        )
+
+    macro_context = ' '.join(macro_lines) if macro_lines else (
+        "Macro conditions are neutral. No extreme sentiment, funding, or open interest "
+        "signals are distorting the picture right now."
+    )
+
+    # ── Session context ───────────────────────────────────────────────────────
+    session      = sig.get('session', '')
+    session_note = sig.get('session_note', '')
+    session_ctx  = f"Currently in the {session} session. {session_note}" if session else ''
+
+    return {
+        'symbol':        sym,
+        'price':         price,
+        'verdict':       f'{verdict_icon} {verdict_label}',
+        'bull_bear':     {'bull': bull_n, 'bear': bear_n, 'total': bull_n + bear_n},
+        'summary':       summary,
+        'top_indicators': indicators,
+        'signal':         signal_section,
+        'key_levels':     key_levels,
+        'macro_context':  macro_context,
+        'session':        session_ctx,
+        'probabilities':  {
+            'buy':  round(p_buy * 100, 1),
+            'sell': round(p_sell * 100, 1),
+            'hold': round(p_hold * 100, 1),
+        } if (p_buy + p_sell + p_hold) > 0 else None,
+        'generated_at': datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@app.get("/api/token-analysis/{symbol:path}")
+async def token_analysis(symbol: str, authorization: Optional[str] = Header(None)):
+    """
+    Professional market analysis for one token — accessible to all authenticated users.
+    Returns plain-English breakdown of indicators, why the signal fired or didn't,
+    key price levels, and macro/sentiment context.
+    """
+    symbol = symbol.replace('%2F', '/').replace('%2f', '/').upper()
+
+    # Auth: any valid authenticated user (trial included)
+    plan = "unauthenticated"
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split("Bearer ")[1]
+        try:
+            email = decode_token(token)
+            if email:
+                user_doc = get_user_doc(email)
+                if user_doc and user_doc.get("otp_verified", False):
+                    plan = user_doc.get("plan", "trial")
+        except Exception:
+            pass
+    if plan == "unauthenticated":
+        raise HTTPException(status_code=401, detail="Authentication required.")
+
+    signals = LIVE_STATE.data.get('signals', {})
+    sig = signals.get(symbol)
+    if isinstance(sig, dict) and any(tf in sig for tf in ('1h', '4h', '1d')):
+        sig = sig.get('1h') or next((v for v in sig.values() if isinstance(v, dict)), None)
+
+    if not sig:
+        return JSONResponse(content={
+            'symbol': symbol, 'status': 'unavailable',
+            'warmup': LIVE_STATE.data.get('warmup_progress', '0/0'),
+        }, status_code=202)
+
+    analysis = numpy_to_native(_generate_token_analysis(sig))
+
+    # Trial/basic users: hide raw probabilities (AI confidence numbers)
+    if plan in ('trial', 'basic'):
+        analysis.pop('probabilities', None)
+
+    return JSONResponse(content=analysis)
+
+
 @app.get("/favicon.ico")
 async def favicon():
     favicon_path = WEB_ROOT_PATH / "favicon.ico"
