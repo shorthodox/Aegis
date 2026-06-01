@@ -367,7 +367,10 @@ class LiveEngine:
             'p_buy':           round(float(result.get('p_buy',  0)), 4),
             'p_sell':          round(float(result.get('p_sell', 0)), 4),
             'p_hold':          round(float(result.get('p_hold', 0)), 4),
-            'signal_id':       str(uuid.uuid4()),
+            # signal_id is stable while direction unchanged; new UUID only on a real fire.
+            # Stable IDs prevent Firestore churn: pushing 24 new UUIDs every 5-min scan
+            # was the sole driver of ~288 Firestore writes/day for zero signal change.
+            'signal_id':       str(uuid.uuid4()) if fire else f'{symbol.replace("/","_")}_{side}',
             'data_timestamp':  datetime.now(timezone.utc).isoformat(),
             'timestamp':       datetime.now(timezone.utc).isoformat(),
             'timeframe':       '1h',

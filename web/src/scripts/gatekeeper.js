@@ -853,9 +853,18 @@ async function loadUserLimits() {
     if (response.ok) {
       const limits = await response.json();
       // Backend is authoritative for allowed tokens for all plans (including trial)
+      const prevLen = allowedTokens.length;
       if (limits.allowed_tokens && limits.allowed_tokens.length > 0) {
         allowedTokens = limits.allowed_tokens;
         localStorage.setItem('cachedAllowedTokens', JSON.stringify(allowedTokens));
+      }
+      // Re-subscribe Firestore listeners now that allowedTokens is populated.
+      // The initial onSnapshot fires with allowedTokens=[] and drops every doc;
+      // re-subscribing here ensures signals appear without waiting for next push.
+      if (prevLen === 0 && allowedTokens.length > 0) {
+        setTimeout(() => {
+          if (typeof setupFirestoreListeners === 'function') setupFirestoreListeners();
+        }, 200);
       }
       return limits;
     } else {
