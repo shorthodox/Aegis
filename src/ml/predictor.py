@@ -564,26 +564,83 @@ class Predictor:
                                     or p_hold > reg.get("sell_max_hold", 1.0)):
                                 fire = False
 
-        # ── S&R + trend alignment filters (mirrors training holdout logic) ───
-        # These suppress weak signals (below top-25% confidence) that fight a
-        # confirmed structure or macro trend. High-conviction signals pass through.
+        # ── S&R + trend + technical confluence veto gate ──────────────────────
+        # Mirrors the training holdout logic AND adds explicit confluence checks
+        # so the engine never trades against the broader technical picture.
         if fire:
             last_row = df_features.iloc[-1]
             override_thr = float(self.meta.get("meta_override_confidence", 1.0))
             is_high_conviction = meta_conf >= override_thr
 
+            def _fv(col: str, default: float = 0.0) -> float:
+                v = last_row.get(col, default)
+                try:
+                    f = float(v)
+                    return default if (f != f) else f
+                except Exception:
+                    return default
+
+            # ── 1. S&R filter ─────────────────────────────────────────────────
+            # Weak signals at the wrong structural level are noise, not edge.
             if not is_high_conviction:
-                # S&R filter: weak BUY at resistance or weak SELL at support
                 at_res = bool(last_row.get('is_at_resistance', 0))
                 at_sup = bool(last_row.get('is_at_support', 0))
                 if (side == 2 and at_res) or (side == 0 and at_sup):
                     fire = False
 
+            # ── 2. Macro trend filter ─────────────────────────────────────────
+            # A weak signal fighting the daily trend is typically a counter-trend
+            # scalp with poor expectancy — suppressed unless high conviction.
             if fire and not is_high_conviction:
-                # Trend filter: weak BUY against strong downtrend or weak SELL against uptrend
-                trend_1d = float(last_row.get('macro_trend_1d', 0.0))
+                trend_1d = _fv('macro_trend_1d')
                 if (side == 2 and trend_1d < -0.2) or (side == 0 and trend_1d > 0.2):
                     fire = False
+
+            # ── 3. Technical confluence veto gate ─────────────────────────────
+            # total_confluence is the weighted aggregate of ALL indicator families
+            # (momentum, trend, volume, bands, smart money, candles) scaled -1→+1.
+            # Block signals where the aggregate technical picture strongly contradicts
+            # the proposed direction, regardless of meta confidence.
+            #
+            # High-conviction signals (>= override threshold) bypass VETO_HARD but
+            # still respect VETO_EXTREME — an 80% bearish technical consensus should
+            # never be traded long, even if the model is highly confident.
+            VETO_HARD    = 0.25   # strong contradiction → block all signals
+            VETO_EXTREME = 0.55   # extreme contradiction → block even high-conviction
+
+            if fire:
+                total_conf  = _fv('total_confluence')
+                smart_conf  = _fv('smart_money_confluence')
+                candle_conf = _fv('candle_confluence')
+                vol_zscore  = _fv('volume_zscore')
+
+                if side == 2:   # ── BUY proposed ─────────────────────────────
+                    # Veto if overall technicals are strongly bearish
+                    if total_conf < -VETO_EXTREME:
+                        fire = False
+                    elif not is_high_conviction and total_conf < -VETO_HARD:
+                        fire = False
+                    # Veto if smart money (S/R zones, BOS, CHoCH) is strongly bearish
+                    elif not is_high_conviction and smart_conf < -VETO_HARD:
+                        fire = False
+                    # Veto if a meaningful bearish candle just printed
+                    elif candle_conf < -0.4:
+                        fire = False
+                    # Veto if volume is significantly below average — no conviction
+                    elif vol_zscore < -1.2:
+                        fire = False
+
+                elif side == 0:  # ── SELL proposed ────────────────────────────
+                    if total_conf > VETO_EXTREME:
+                        fire = False
+                    elif not is_high_conviction and total_conf > VETO_HARD:
+                        fire = False
+                    elif not is_high_conviction and smart_conf > VETO_HARD:
+                        fire = False
+                    elif candle_conf > 0.4:
+                        fire = False
+                    elif vol_zscore < -1.2:
+                        fire = False
 
         # Overall tradeable = either side is live (for dashboard indicator)
         either_tradeable = bool(
