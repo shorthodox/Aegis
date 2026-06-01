@@ -215,17 +215,20 @@ class LiveEngine:
 
     def _load_predictors(self, symbols: List[str]) -> None:
         from src.ml.predictor import Predictor
-        loaded = 0
+        loaded = tradeable = 0
         for sym in symbols:
             try:
                 p = Predictor(sym)
-                if p.model is not None and p.meta.get('tradeable', False):
+                if p.model is not None:          # load ALL models, not just tradeable
                     self.predictors[sym] = p
                     loaded += 1
+                    if p.meta.get('tradeable', False):
+                        tradeable += 1
             except Exception:
                 pass
         self.bootstrap_total = max(loaded, 1)
-        print(f'[LiveEngine] {loaded} tradeable predictors loaded '
+        print(f'[LiveEngine] {loaded} predictors loaded '
+              f'({tradeable} tradeable + {loaded - tradeable} monitor-only) '
               f'from {len(symbols)} configured symbols.')
 
     # ── main loop ─────────────────────────────────────────────────────────────
@@ -508,38 +511,54 @@ class LiveEngine:
 
 def automated_setup(_: Path, args: Any):
     """
-    Scan MODEL_STORE for tradeable symbols and return engine config.
-    Only sidecar JSONs with tradeable=True are included.
-    Falls back to BTC/USDT if the store is empty or no models are trained yet.
+    Scan MODEL_STORE for up to 60 symbols.
+    Tradeable symbols are loaded first; non-tradeable models fill the remainder
+    up to the 60-token cap so the dashboard always shows a full grid.
+    Tradeable symbols fire real signals; monitor-only ones show price/context only.
     """
-    configs: List[TokenConfig] = []
+    tradeable_configs:     List[TokenConfig] = []
+    non_tradeable_configs: List[TokenConfig] = []
 
     if MODEL_STORE.exists():
-        for meta_file in sorted(MODEL_STORE.glob('*_meta.json')):
+        # Sort by mtime (newest models first) so freshly-trained symbols are preferred
+        meta_files = sorted(MODEL_STORE.glob('*_meta.json'),
+                            key=lambda p: p.stat().st_mtime, reverse=True)
+        seen: set = set()
+        for meta_file in meta_files:
             try:
                 with open(meta_file, 'r', encoding='utf-8') as f:
                     meta = json.load(f)
+                sym = meta.get('symbol', '')
+                if not sym or sym in seen:
+                    continue
+                seen.add(sym)
+                tc = TokenConfig(symbol=sym)
                 if meta.get('tradeable', False):
-                    sym = meta.get('symbol', '')
-                    if sym:
-                        configs.append(TokenConfig(symbol=sym))
+                    tradeable_configs.append(tc)
+                else:
+                    non_tradeable_configs.append(tc)
             except Exception:
                 pass
 
+    # Tradeable first, then fill up to 60 with monitor-only symbols
+    TARGET = 60
+    configs = tradeable_configs[:TARGET]
+    remaining = TARGET - len(configs)
+    if remaining > 0:
+        configs += non_tradeable_configs[:remaining]
+
     if not configs:
-        print('[automated_setup] No tradeable models found — falling back to BTC/USDT.')
+        print('[automated_setup] No models found — falling back to BTC/USDT.')
         configs = [TokenConfig(symbol='BTC/USDT')]
-        
-    if len(configs) > 60:
-        print(f'[automated_setup] Limiting to 60 tokens (from {len(configs)}) to prevent OOM.')
-        configs = configs[:60]
 
     capital      = float(getattr(args, 'capital',      10_000.0))
     max_pos      = float(getattr(args, 'max_position',  1_000.0))
     scan_seconds = int(getattr(args,   'scan_seconds',    300))
     proxy        = getattr(args, 'proxy', None)
 
-    print(f'[automated_setup] {len(configs)} tradeable symbols | '
+    t = len(tradeable_configs[:TARGET])
+    m = len(configs) - t
+    print(f'[automated_setup] {len(configs)} symbols ({t} tradeable + {m} monitor-only) | '
           f'capital={capital} | max_pos={max_pos} | scan={scan_seconds}s')
     return configs, capital, max_pos, scan_seconds, proxy
 
@@ -667,6 +686,11 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
         grid.add_column('Session',    justify='center', width=10)
         grid.add_column('Position',   justify='center', min_width=14)
 
+        tradeable_syms = {
+            sym for sym, pred in engine.predictors.items()
+            if getattr(pred, 'meta', {}).get('tradeable', False)
+        }
+
         for idx, (sym, sig) in enumerate(sorted(signals.items()), 1):
             price    = float(live_px.get(sym, sig.get('price', 0) or 0))
             conf     = float(sig.get('meta_confidence', 0))
@@ -675,6 +699,7 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
             regime   = sig.get('trend_regime', '')
             session  = sig.get('session', '')[:8]
             funding  = sig.get('funding_rate', None)
+            is_tradeable = sym in tradeable_syms
 
             # live P&L for open position on this symbol
             pos = wallet.open_positions.get(sym)
@@ -706,15 +731,21 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
                 col_f = 'red' if ff > 0.01 else ('green' if ff < -0.01 else 'dim white')
                 fund_cell = f'[{col_f}]{ff:+.4f}%[/]'
 
+            # Monitor-only rows are dimmed; tradeable rows show full colour
+            sym_cell  = f'[bold]{sym}[/]' if is_tradeable else f'[dim]{sym}[/]'
+            px_cell   = f'[bold white]{_px(price)}[/]' if is_tradeable else f'[dim]{_px(price)}[/]'
+            conf_cell = (f'[cyan]{conf:.3f}[/]' if conf > 0 else '[dim]—[/]') if is_tradeable \
+                        else f'[dim]{conf:.3f}[/]' if conf > 0 else '[dim]—[/]'
+
             grid.add_row(
-                str(idx),
-                f'[bold]{sym}[/]',
-                f'[bold white]{_px(price)}[/]',
-                _signal_cell(sig),
+                f'[dim]{idx}[/]' if not is_tradeable else str(idx),
+                sym_cell,
+                px_cell,
+                _signal_cell(sig) if is_tradeable else '[dim]watch[/]',
                 _bias_cell(bias),
                 _regime_cell(regime),
                 rsi_cell,
-                f'[cyan]{conf:.3f}[/]' if conf > 0 else '[dim]—[/]',
+                conf_cell,
                 fund_cell,
                 f'[dim]{session}[/]',
                 pos_cell,
