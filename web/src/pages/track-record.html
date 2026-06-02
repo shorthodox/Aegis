@@ -110,10 +110,44 @@
         }
 
         /* ===== TRACK RECORD — .tr- namespaced ===== */
+        /* ── side-by-side layout ─────────────────────────────────────────── */
+        .tr-layout {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 1.5rem 1.5rem 5rem;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            align-items: start;
+        }
+        .tr-panel {
+            background: rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 16px;
+            overflow: hidden;
+        }
+        .tr-panel-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1rem 1.2rem;
+            background: rgba(0,0,0,0.3);
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            position: sticky;
+            top: 80px;
+            z-index: 10;
+            backdrop-filter: blur(12px);
+        }
+        .tr-panel-body {
+            padding: 1.2rem;
+        }
         .tr-page {
             max-width: 1200px;
             margin: 0 auto;
             padding: 3rem 2rem 5rem;
+        }
+        @media (max-width: 1024px) {
+            .tr-layout { grid-template-columns: 1fr; padding: 1rem; }
         }
         .tr-hero {
             text-align: center;
@@ -372,28 +406,35 @@
         </div>
     </div>
 
-    <!-- ===== TRACK RECORD PAGE ===== -->
-    <div class="tr-page">
-
-        <!-- Hero -->
-        <div class="tr-hero">
-            <span class="tr-eyebrow">Public Signal Log</span>
-            <h1 class="tr-title">AEGIS Track Record</h1>
-            <p class="tr-sub">Every signal Aegis-1 fires — wins and losses — logged publicly with timestamp, direction, and recorded outcome. No cherry-picking. No curated screenshots. Just the engine's actual calls.</p>
-        </div>
-
-        <!-- Disclaimer -->
-        <div class="tr-disclaimer">
+    <!-- ===== SHARED HEADER ===== -->
+    <div style="max-width:900px;margin:3rem auto 1.5rem;padding:0 1.5rem;text-align:center;">
+        <span class="tr-eyebrow">Public Signal Logs</span>
+        <h1 class="tr-title">AEGIS Track Records</h1>
+        <p class="tr-sub">Two engines. One transparent log. Every BUY/SELL signal — wins and losses — shown publicly with no filters.</p>
+        <div class="tr-disclaimer" style="text-align:left;margin-top:1.2rem;">
             <i class="fas fa-exclamation-triangle"></i>
-            <span>
-                <strong>Not financial advice.</strong> Aegis-1 generates analytical signals based on probabilistic models. Past performance does not guarantee future results. Crypto markets carry significant risk. Never trade more than you can afford to lose.
-            </span>
+            <span><strong>Not financial advice.</strong> Past performance does not guarantee future results. Crypto markets carry significant risk. Never trade more than you can afford to lose.</span>
         </div>
+    </div>
 
-        <!-- History-gap notice -->
-        <div class="tr-history-note">
-            <strong>How this page works:</strong> Every BUY or SELL signal the engine fires is logged with its entry price, TP, and SL. When price reaches TP the record is marked <strong>WIN</strong>; when it reaches SL it is marked <strong>LOSS</strong>. Only <em>closed</em> signals are shown here — live open signals are visible exclusively on the subscriber dashboard to preserve the value of the product.
-        </div>
+    <!-- ===== SIDE-BY-SIDE LAYOUT ===== -->
+    <div class="tr-layout">
+
+        <!-- ════ LEFT: AEGIS-1 Engine ════ -->
+        <div class="tr-panel">
+            <div class="tr-panel-header">
+                <i class="fas fa-satellite-dish" style="color:#00f2ff;font-size:1.1rem;"></i>
+                <div>
+                    <div style="font-size:0.9rem;font-weight:800;color:#fff;letter-spacing:0.05em;">AEGIS-1 Signal Engine</div>
+                    <div style="font-size:0.65rem;color:#4b6280;letter-spacing:0.1em;text-transform:uppercase;">60 tokens · 1h candles · meta-labeling · 8-layer gate</div>
+                </div>
+                <a href="#" onclick="loadTraderRecord();return false;" style="margin-left:auto;font-size:0.7rem;color:rgba(0,242,255,0.5);text-decoration:none;" title="Refresh">&#8635;</a>
+            </div>
+            <div class="tr-panel-body">
+                <!-- History note -->
+                <div class="tr-history-note" style="margin-bottom:1rem;">
+                    Signals logged with entry price, TP &amp; SL. <strong>WIN</strong> = TP hit. <strong>LOSS</strong> = SL hit. Only <em>closed</em> signals shown here.
+                </div>
 
         <!-- Summary strip -->
         <div class="tr-summary" id="trSummary">
@@ -484,28 +525,22 @@
             <p>No closed signals were found in the database. As the engine fires and closes signals, their outcomes will appear here automatically. Refresh any time to see the latest state.</p>
         </div>
 
-        <!-- Win-rate attribution note -->
-        <p class="tr-winrate-note" id="trWinrateNote" style="display:none;"></p>
+                <!-- Win-rate attribution note -->
+                <p class="tr-winrate-note" id="trWinrateNote" style="display:none;"></p>
+            </div><!-- /.tr-panel-body -->
+        </div><!-- /.tr-panel (left) -->
 
-    </div>
-
-    <!-- ══════════════════════════════════════════════════════════════════
-         AEGIS TRADER COCKPIT — Scalping / Intraday Track Record
-         ══════════════════════════════════════════════════════════════════ -->
-    <div style="max-width:1100px;margin:2rem auto 3rem;padding:0 1rem;">
-
-        <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid rgba(255,255,255,0.07);">
-            <i class="fas fa-robot" style="color:#facc15;font-size:1.4rem;"></i>
-            <div>
-                <h2 style="font-size:1.2rem;font-weight:900;color:#fff;letter-spacing:0.08em;text-transform:uppercase;margin:0;">
-                    AEGIS Trader Performance
-                </h2>
-                <p style="font-size:0.72rem;color:#4b5563;margin:0.25rem 0 0;">
-                    Universal AI model · 25 strategies · Scalping / Intraday / Swing
-                </p>
+        <!-- ════ RIGHT: AEGIS Trader Bot ════ -->
+        <div class="tr-panel">
+            <div class="tr-panel-header">
+                <i class="fas fa-robot" style="color:#facc15;font-size:1.1rem;"></i>
+                <div>
+                    <div style="font-size:0.9rem;font-weight:800;color:#fff;letter-spacing:0.05em;">AEGIS Trader Bot</div>
+                    <div style="font-size:0.65rem;color:#4b6280;letter-spacing:0.1em;text-transform:uppercase;">60 tokens · 25 strategies · scalping / intraday / swing</div>
+                </div>
+                <span style="margin-left:auto;font-size:0.62rem;font-weight:800;padding:0.15rem 0.55rem;border-radius:9999px;background:rgba(250,204,21,0.1);color:#facc15;border:1px solid rgba(250,204,21,0.2);">AI</span>
             </div>
-            <span style="margin-left:auto;font-size:0.65rem;font-weight:800;padding:0.2rem 0.6rem;border-radius:9999px;background:rgba(250,204,21,0.1);color:#facc15;border:1px solid rgba(250,204,21,0.25);">AI POWERED</span>
-        </div>
+            <div class="tr-panel-body">
 
         <!-- Mode tabs -->
         <div style="display:flex;gap:0.5rem;margin-bottom:1.5rem;flex-wrap:wrap;">
@@ -527,32 +562,32 @@
         </div>
 
         <!-- Stats row -->
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1rem;margin-bottom:1.5rem;" id="trader-tr-stats">
-            <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:0.75rem;padding:1rem;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:0.75rem;margin-bottom:1rem;" id="trader-tr-stats">
+            <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:0.6rem;padding:0.65rem 0.75rem;">
                 <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;margin-bottom:0.4rem;">Virtual Balance</div>
                 <div style="font-size:1.1rem;font-family:monospace;font-weight:900;color:#fff;" id="ttr-balance">$10,000.00</div>
             </div>
-            <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:0.75rem;padding:1rem;">
+            <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:0.6rem;padding:0.65rem 0.75rem;">
                 <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;margin-bottom:0.4rem;">Total PnL</div>
                 <div style="font-size:1.1rem;font-family:monospace;font-weight:900;color:#6b7280;" id="ttr-pnl">—</div>
             </div>
-            <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:0.75rem;padding:1rem;">
+            <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:0.6rem;padding:0.65rem 0.75rem;">
                 <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;margin-bottom:0.4rem;">Closed Trades</div>
-                <div style="font-size:1.5rem;font-family:monospace;font-weight:900;color:#facc15;" id="ttr-total">—</div>
+                <div style="font-size:1.2rem;font-family:monospace;font-weight:900;color:#facc15;" id="ttr-total">—</div>
             </div>
-            <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:0.75rem;padding:1rem;">
+            <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:0.6rem;padding:0.65rem 0.75rem;">
                 <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;margin-bottom:0.4rem;">Wins</div>
                 <div style="font-size:1.5rem;font-family:monospace;font-weight:900;color:#22c55e;" id="ttr-wins">—</div>
             </div>
-            <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:0.75rem;padding:1rem;">
+            <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:0.6rem;padding:0.65rem 0.75rem;">
                 <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;margin-bottom:0.4rem;">Losses</div>
                 <div style="font-size:1.5rem;font-family:monospace;font-weight:900;color:#ef4444;" id="ttr-losses">—</div>
             </div>
-            <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:0.75rem;padding:1rem;">
+            <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:0.6rem;padding:0.65rem 0.75rem;">
                 <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;margin-bottom:0.4rem;">Win Rate</div>
                 <div style="font-size:1.5rem;font-family:monospace;font-weight:900;color:#00f2ff;" id="ttr-wr">—</div>
             </div>
-            <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:0.75rem;padding:1rem;">
+            <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:0.6rem;padding:0.65rem 0.75rem;">
                 <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;margin-bottom:0.4rem;">Avg Confidence</div>
                 <div style="font-size:1.5rem;font-family:monospace;font-weight:900;color:#a78bfa;" id="ttr-conf">—</div>
             </div>
@@ -604,7 +639,10 @@
                 </table>
             </div>
         </div>
-    </div>
+            </div><!-- /.tr-panel-body (right) -->
+        </div><!-- /.tr-panel (right) -->
+
+    </div><!-- /.tr-layout -->
 
     <script>
     (function() {
