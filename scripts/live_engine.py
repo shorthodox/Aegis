@@ -386,22 +386,52 @@ class LiveEngine:
                     self.FLIP_COOLDOWN_SECONDS if is_flip else self.COOLDOWN_SECONDS
                 )
                 if cooldown_elapsed >= required_cooldown:
-                    # Confluence quality gate — ensure indicator ensemble agrees
-                    # with the signal direction before committing real money.
-                    # total is [0,10]: 5=neutral, >5=bullish, <5=bearish.
-                    _conf_data  = result.get('confluence') or {}
-                    _conf_total = float(_conf_data.get('total', 5.0))
-                    _conf_ok = (
-                        (new_side == 'BUY'  and _conf_total >= self.CONFLUENCE_BUY_MIN) or
-                        (new_side == 'SELL' and _conf_total <= self.CONFLUENCE_SELL_MAX)
+                    # Confluence quality gate — the total [0,10] (5=neutral) must
+                    # lean in the signal direction. Also allow a high-conviction
+                    # override when BOTH trend AND momentum strongly agree — these
+                    # are the two highest-weight categories (×2.0 and ×1.5) and
+                    # reliable predictors even when bands/volume temporarily diverge.
+                    _conf_data    = result.get('confluence') or {}
+                    _conf_total   = float(_conf_data.get('total',    5.0))
+                    _conf_trend   = float(_conf_data.get('trend',    5.0))
+                    _conf_mom     = float(_conf_data.get('momentum', 5.0))
+
+                    def _c10(v: float) -> float:
+                        # normalise backend [-1,+1] to [0,10] if needed
+                        if abs(v) <= 1.05:
+                            return (v + 1.0) / 2.0 * 10.0
+                        return min(10.0, max(0.0, v))
+
+                    _ct  = _c10(_conf_total)
+                    _ctr = _c10(_conf_trend)
+                    _cm  = _c10(_conf_mom)
+
+                    # Primary pass: total leans in signal direction
+                    _pass_total = (
+                        (new_side == 'BUY'  and _ct >= self.CONFLUENCE_BUY_MIN) or
+                        (new_side == 'SELL' and _ct <= self.CONFLUENCE_SELL_MAX)
                     )
+                    # Override: trend+momentum strongly agree AND total is not
+                    # extremely opposed (not below 3.5 for BUY / above 6.5 for SELL).
+                    # This allows high-quality divergence setups where volume/bands
+                    # lag but the structural trend is clearly confirmed.
+                    _trend_mom_avg = (_ctr * 2.0 + _cm * 1.5) / 3.5
+                    _pass_override = (
+                        (new_side == 'BUY'  and _trend_mom_avg >= 6.5 and _ct >= 3.5) or
+                        (new_side == 'SELL' and _trend_mom_avg <= 3.5 and _ct <= 6.5)
+                    )
+                    _conf_ok = _pass_total or _pass_override
+
                     if _conf_ok:
+                        reason = 'override(trend+mom)' if _pass_override and not _pass_total else 'total'
+                        print(f'[{symbol}] CONF PASS {new_side} '
+                              f'total={_ct:.1f} trend={_ctr:.1f} mom={_cm:.1f} [{reason}]')
                         self._open_position(symbol, result, price)
                     else:
                         print(f'[{symbol}] CONF BLOCKED {new_side} '
-                              f'confluence={_conf_total:.1f}/10 '
-                              f'(need BUY≥{self.CONFLUENCE_BUY_MIN} '
-                              f'or SELL≤{self.CONFLUENCE_SELL_MAX})')
+                              f'total={_ct:.1f}/10 trend={_ctr:.1f} mom={_cm:.1f} '
+                              f'(need total BUY≥{self.CONFLUENCE_BUY_MIN} '
+                              f'or trend+mom override)')
                 elif is_flip:
                     print(f'[{symbol}] FLIP-FLOP BLOCKED {last_side}→{new_side} '
                           f'({int((required_cooldown - cooldown_elapsed)/60)} min remaining)')
