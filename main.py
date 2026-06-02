@@ -5127,13 +5127,19 @@ async def get_trader_record(
     }
 
 
+class TraderScanRequest(BaseModel):
+    modes:        Optional[List[str]] = None
+    risk_profile: str                 = "balanced"
+
+
 @app.post("/api/trader/scan")
 async def trigger_trader_scan(
-    modes:        Optional[List[str]] = None,
-    risk_profile: str                 = "balanced",
-    _user:        str                 = Depends(get_current_user),
+    body:  TraderScanRequest = TraderScanRequest(),
+    _user: str               = Depends(get_current_user),
 ):
     """Trigger an immediate scan and persist the updated JSON."""
+    modes        = body.modes
+    risk_profile = body.risk_profile
     engine = _get_trader_engine_lazy()
     if engine is None:
         raise HTTPException(status_code=503, detail="Trader models not trained yet")
