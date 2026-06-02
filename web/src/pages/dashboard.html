@@ -1295,6 +1295,14 @@
     <!-- ── AEGIS Trader Bot Cockpit JS ──────────────────────────────────── -->
     <script>
     (function() {
+        // Read the auth token the same way AuthManager does (localStorage → sessionStorage)
+        function _tok() {
+            return localStorage.getItem('access_token') ||
+                   localStorage.getItem('authToken') ||
+                   sessionStorage.getItem('access_token') ||
+                   sessionStorage.getItem('authToken') || '';
+        }
+
         var _traderMode        = 'all';
         var _traderRisk        = 'balanced';
         var _traderSignals     = [];
@@ -1458,7 +1466,7 @@
             if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Scanning…'; }
 
             // First load cached status immediately
-            fetch('/api/trader/status', { headers: { 'Authorization': 'Bearer ' + (window._aegisToken || '') } })
+            fetch('/api/trader/status', { headers: { 'Authorization': 'Bearer ' + _tok() } })
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
                     if (data.status && Object.keys(data.status).length) {
@@ -1477,7 +1485,7 @@
             // Then trigger fresh scan in background
             fetch('/api/trader/scan', {
                 method: 'POST',
-                headers: { 'Authorization': 'Bearer ' + (window._aegisToken || ''), 'Content-Type': 'application/json' },
+                headers: { 'Authorization': 'Bearer ' + _tok(), 'Content-Type': 'application/json' },
                 body: JSON.stringify({ risk_profile: _traderRisk }),
             })
             .then(function(r) { return r.json(); })
@@ -1487,7 +1495,7 @@
                 updateTraderStats(data);
                 if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-satellite-dish"></i> Scan Now'; }
                 // Reload full status after scan completes
-                fetch('/api/trader/status', { headers: { 'Authorization': 'Bearer ' + (window._aegisToken || '') } })
+                fetch('/api/trader/status', { headers: { 'Authorization': 'Bearer ' + _tok() } })
                     .then(function(r) { return r.json(); })
                     .then(function(d) { if (d.status) { _traderStatus = d.status; _renderTokenTable(_traderStatus); } })
                     .catch(function() {});
@@ -1496,7 +1504,7 @@
                 console.error('Trader scan error', err);
                 if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-satellite-dish"></i> Scan Now'; }
             });
-            fetch('/api/trader/stats', { headers: { 'Authorization': 'Bearer ' + (window._aegisToken || '') } })
+            fetch('/api/trader/stats', { headers: { 'Authorization': 'Bearer ' + _tok() } })
                 .then(function(r) { return r.json(); })
                 .then(function(d) { updateWinRateStat(d.stats); })
                 .catch(function() {});
