@@ -266,6 +266,24 @@
                     </div>
                 </a>
 
+                <a href="javascript:void(0)" onclick="switchRoom('trader')"
+                    class="nav-room block glass-panel p-4 rounded-xl text-gray-400 hover:text-white hover:border-yellow-400/50 hover:shadow-[0_0_15px_rgba(250,204,21,0.2)] transition-all group min-h-[44px]"
+                    data-room="trader">
+                    <div class="flex items-center gap-3">
+                        <div
+                            class="icon-container w-10 h-10 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-yellow-400/20 transition-colors">
+                            <i class="fas fa-robot"></i>
+                        </div>
+                        <div>
+                            <div class="font-bold uppercase tracking-wider text-sm flex items-center gap-2">
+                                AEGIS Trader
+                                <span class="text-[9px] px-1 py-0.5 rounded bg-yellow-400/20 text-yellow-400 border border-yellow-400/30 font-black">AI</span>
+                            </div>
+                            <div class="text-xs text-gray-500">Scalping · Intraday · Swing</div>
+                        </div>
+                    </div>
+                </a>
+
                 <a href="javascript:void(0)" onclick="switchRoom('settings')"
                     class="nav-room block glass-panel p-4 rounded-xl text-gray-400 hover:text-white hover:border-white/30 transition-all group min-h-[44px]"
                     data-room="settings">
@@ -838,6 +856,262 @@
                     </div>
                 </div>
             </div>
+            <!-- ═══════════════════════════════════════════════════════════
+                 AEGIS TRADER COCKPIT — Scalping / Intraday / Swing
+                 ═══════════════════════════════════════════════════════════ -->
+            <div id="room-trader" class="room-section hidden">
+
+                <!-- ── Header ────────────────────────────────────────────────── -->
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between border-b border-white/10 mb-5 pb-3 gap-3">
+                    <div class="flex items-center gap-3">
+                        <h2 class="text-xl lg:text-2xl font-black uppercase tracking-widest text-white flex items-center gap-3">
+                            <i class="fas fa-robot text-yellow-400"></i> AEGIS Trader Bot
+                        </h2>
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-400/10 text-yellow-400 border border-yellow-400/20">VIRTUAL</span>
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <select id="trader-risk-select" onchange="setTraderRisk(this.value)"
+                            class="bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-300 focus:outline-none appearance-none cursor-pointer">
+                            <option value="conservative">Conservative</option>
+                            <option value="balanced" selected>Balanced</option>
+                            <option value="aggressive">Aggressive</option>
+                        </select>
+                        <button onclick="triggerTraderScan()" id="trader-scan-btn"
+                            class="px-3 py-1.5 rounded-lg text-xs font-black uppercase bg-yellow-400/15 text-yellow-400 border border-yellow-400/30 hover:bg-yellow-400/25 transition-all flex items-center gap-1.5">
+                            <i class="fas fa-satellite-dish"></i> Scan All 60
+                        </button>
+                        <button onclick="loadTraderRecord()" class="px-3 py-1.5 rounded-lg text-xs font-bold text-gray-500 border border-white/10 hover:text-white hover:border-white/20 transition-all">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ── Wallet Stats Bar ───────────────────────────────────────── -->
+                <div class="grid grid-cols-3 lg:grid-cols-6 gap-2 mb-5">
+                    <div class="glass-panel p-3 rounded-xl border border-white/5 text-center">
+                        <div class="text-[9px] text-gray-600 uppercase tracking-wider mb-1">Balance</div>
+                        <div class="text-sm font-mono font-black text-white" id="tw-balance">$10,000</div>
+                    </div>
+                    <div class="glass-panel p-3 rounded-xl border border-white/5 text-center">
+                        <div class="text-[9px] text-gray-600 uppercase tracking-wider mb-1">Total PnL</div>
+                        <div class="text-sm font-mono font-black" id="tw-pnl">—</div>
+                    </div>
+                    <div class="glass-panel p-3 rounded-xl border border-white/5 text-center">
+                        <div class="text-[9px] text-gray-600 uppercase tracking-wider mb-1">Win Rate</div>
+                        <div class="text-sm font-mono font-black text-green-400" id="tw-wr">—</div>
+                    </div>
+                    <div class="glass-panel p-3 rounded-xl border border-white/5 text-center">
+                        <div class="text-[9px] text-gray-600 uppercase tracking-wider mb-1">Trades</div>
+                        <div class="text-sm font-mono font-black text-yellow-400" id="tw-trades">—</div>
+                    </div>
+                    <div class="glass-panel p-3 rounded-xl border border-white/5 text-center">
+                        <div class="text-[9px] text-gray-600 uppercase tracking-wider mb-1">Open</div>
+                        <div class="text-sm font-mono font-black text-cyan" id="tw-open">—</div>
+                    </div>
+                    <div class="glass-panel p-3 rounded-xl border border-white/5 text-center">
+                        <div class="text-[9px] text-gray-600 uppercase tracking-wider mb-1">Active Signals</div>
+                        <div class="text-sm font-mono font-black text-yellow-400" id="trader-stat-count">—</div>
+                    </div>
+                </div>
+
+                <!-- ── Cockpit Tab Navigation ─────────────────────────────────── -->
+                <div class="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10 text-xs font-mono mb-4 w-fit">
+                    <button onclick="switchTraderTab('scanner')" id="tbt-scanner"
+                        class="trader-bot-tab px-4 py-2 rounded-lg font-bold transition-all text-yellow-400 bg-yellow-400/10 border border-yellow-400/30">
+                        <i class="fas fa-satellite-dish mr-1"></i> Live Scanner
+                    </button>
+                    <button onclick="switchTraderTab('positions')" id="tbt-positions"
+                        class="trader-bot-tab px-4 py-2 rounded-lg font-bold transition-all text-gray-400 hover:text-white">
+                        <i class="fas fa-layer-group mr-1"></i> Open Positions
+                        <span id="tbt-open-count" class="ml-1 text-[10px] text-cyan/60"></span>
+                    </button>
+                    <button onclick="switchTraderTab('history')" id="tbt-history"
+                        class="trader-bot-tab px-4 py-2 rounded-lg font-bold transition-all text-gray-400 hover:text-white">
+                        <i class="fas fa-history mr-1"></i> Trade History
+                    </button>
+                </div>
+
+                <!-- ── TAB: Live Scanner (60-token table) ────────────────────── -->
+                <div id="trader-tab-scanner" class="trader-bot-panel">
+                    <!-- Mode filter -->
+                    <div class="flex items-center gap-1 bg-black/30 p-1 rounded-lg border border-white/5 text-[10px] font-mono mb-3 w-fit" id="trader-mode-tabs">
+                        <button onclick="setTraderMode('all')" id="trader-tab-all" class="trader-mode-btn px-3 py-1 rounded font-bold transition-all text-yellow-400 bg-yellow-400/10" data-mode="all">All</button>
+                        <button onclick="setTraderMode('scalping')" id="trader-tab-scalping" class="trader-mode-btn px-3 py-1 rounded font-bold transition-all text-gray-500 hover:text-white" data-mode="scalping"><i class="fas fa-bolt mr-1"></i>Scalp</button>
+                        <button onclick="setTraderMode('intraday')" id="trader-tab-intraday" class="trader-mode-btn px-3 py-1 rounded font-bold transition-all text-gray-500 hover:text-white" data-mode="intraday"><i class="fas fa-chart-line mr-1"></i>Intraday</button>
+                        <button onclick="setTraderMode('swing')" id="trader-tab-swing" class="trader-mode-btn px-3 py-1 rounded font-bold transition-all text-gray-500 hover:text-white" data-mode="swing"><i class="fas fa-wave-square mr-1"></i>Swing</button>
+                    </div>
+
+                    <div class="glass-panel rounded-xl border border-white/5 overflow-hidden">
+                        <div class="flex items-center justify-between px-4 py-2 border-b border-white/5 bg-black/20">
+                            <span class="text-[10px] text-gray-600 flex items-center gap-2">
+                                <span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>BUY</span>
+                                <span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>SELL</span>
+                                <span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-white/15"></span>HOLD</span>
+                            </span>
+                            <span id="trader-scan-status" class="text-[10px] text-gray-700">Waiting for first scan…</span>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-xs font-mono">
+                                <thead>
+                                    <tr class="bg-black/30 text-gray-600 uppercase tracking-wider text-[10px]">
+                                        <th class="px-3 py-2 text-left">Token</th>
+                                        <th class="px-3 py-2 text-left">Signal</th>
+                                        <th class="px-3 py-2 text-left">Mode</th>
+                                        <th class="px-3 py-2 text-left">Confidence</th>
+                                        <th class="px-3 py-2 text-left hidden md:table-cell">Strategy</th>
+                                        <th class="px-3 py-2 text-right hidden lg:table-cell">Price</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="trader-token-table-body">
+                                    <tr><td colspan="6" class="px-4 py-10 text-center text-gray-700 text-xs">
+                                        <i class="fas fa-robot text-3xl opacity-20 block mb-2"></i>
+                                        Scan fires every 5 min after server start · click <strong class="text-gray-500">Scan All 60</strong> to trigger now
+                                    </td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Signals cards (only fired) -->
+                    <div id="trader-signals-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 mt-4 hidden"></div>
+                </div>
+
+                <!-- ── TAB: Open Positions ────────────────────────────────────── -->
+                <div id="trader-tab-positions" class="trader-bot-panel hidden">
+                    <div class="glass-panel rounded-xl border border-white/5 overflow-hidden">
+                        <div class="px-4 py-2.5 border-b border-white/5 bg-black/20 text-[10px] text-gray-600 uppercase tracking-widest font-bold">
+                            <i class="fas fa-layer-group mr-1"></i> Virtual Open Positions
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-xs font-mono">
+                                <thead>
+                                    <tr class="bg-black/30 text-gray-600 uppercase tracking-wider text-[10px]">
+                                        <th class="px-3 py-2 text-left">Token</th>
+                                        <th class="px-3 py-2 text-left">Dir</th>
+                                        <th class="px-3 py-2 text-left">Mode</th>
+                                        <th class="px-3 py-2 text-right">Entry</th>
+                                        <th class="px-3 py-2 text-right">SL</th>
+                                        <th class="px-3 py-2 text-right">TP1</th>
+                                        <th class="px-3 py-2 text-right hidden md:table-cell">Size</th>
+                                        <th class="px-3 py-2 text-left hidden lg:table-cell">Opened</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="trader-positions-body">
+                                    <tr><td colspan="8" class="px-4 py-8 text-center text-gray-700 text-xs">No open positions</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── TAB: Trade History ─────────────────────────────────────── -->
+                <div id="trader-tab-history" class="trader-bot-panel hidden">
+                    <!-- Mini stats -->
+                    <div class="grid grid-cols-3 gap-2 mb-3">
+                        <div class="glass-panel p-2 rounded-lg border border-white/5 text-center">
+                            <div class="text-[9px] text-gray-600 mb-0.5">Wins</div>
+                            <div class="text-base font-mono font-black text-green-400" id="th-wins">—</div>
+                        </div>
+                        <div class="glass-panel p-2 rounded-lg border border-white/5 text-center">
+                            <div class="text-[9px] text-gray-600 mb-0.5">Losses</div>
+                            <div class="text-base font-mono font-black text-red-400" id="th-losses">—</div>
+                        </div>
+                        <div class="glass-panel p-2 rounded-lg border border-white/5 text-center">
+                            <div class="text-[9px] text-gray-600 mb-0.5">Total PnL</div>
+                            <div class="text-base font-mono font-black" id="th-pnl">—</div>
+                        </div>
+                    </div>
+                    <div class="glass-panel rounded-xl border border-white/5 overflow-hidden">
+                        <div class="px-4 py-2.5 border-b border-white/5 bg-black/20 text-[10px] text-gray-600 uppercase tracking-widest font-bold">
+                            <i class="fas fa-history mr-1"></i> Closed Trades
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-xs font-mono">
+                                <thead>
+                                    <tr class="bg-black/30 text-gray-600 uppercase tracking-wider text-[10px]">
+                                        <th class="px-3 py-2 text-left">Token</th>
+                                        <th class="px-3 py-2 text-left">Dir</th>
+                                        <th class="px-3 py-2 text-left">Mode</th>
+                                        <th class="px-3 py-2 text-right">Entry</th>
+                                        <th class="px-3 py-2 text-right">Exit</th>
+                                        <th class="px-3 py-2 text-right">PnL %</th>
+                                        <th class="px-3 py-2 text-left">Result</th>
+                                        <th class="px-3 py-2 text-left hidden md:table-cell">Reason</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="trader-history-body">
+                                    <tr><td colspan="8" class="px-4 py-8 text-center text-gray-700 text-xs">No closed trades yet — virtual trades close when TP1 or SL is hit</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── Beginner Guidance Panel ────────────────────────────────── -->
+                <div id="trader-guidance-panel" class="hidden glass-panel p-5 rounded-xl border border-yellow-400/20 mt-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-sm font-black uppercase tracking-widest text-yellow-400 flex items-center gap-2">
+                            <i class="fas fa-graduation-cap"></i> Trade Setup Guide
+                            <span id="tg-symbol" class="text-white/80 font-mono text-xs normal-case tracking-normal"></span>
+                        </h3>
+                        <button onclick="document.getElementById('trader-guidance-panel').classList.add('hidden')"
+                            class="text-gray-500 hover:text-white text-xs w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                        <div class="space-y-3 font-mono text-sm">
+                            <div class="flex justify-between items-center p-3 bg-black/40 rounded-lg border border-white/5">
+                                <span class="text-xs text-gray-500">Direction</span>
+                                <span id="tg-direction" class="font-black text-sm px-3 py-1 rounded-full"></span>
+                            </div>
+                            <div class="flex justify-between items-center p-3 bg-black/40 rounded-lg border border-white/5">
+                                <span class="text-xs text-gray-500">Entry Zone</span>
+                                <span id="tg-entry" class="text-cyan text-xs"></span>
+                            </div>
+                            <div class="flex justify-between items-center p-3 bg-red-900/20 rounded-lg border border-red-500/20">
+                                <span class="text-xs text-gray-500">Stop Loss</span>
+                                <span id="tg-sl" class="text-red-400 font-bold"></span>
+                            </div>
+                            <div class="grid grid-cols-3 gap-2">
+                                <div class="p-2 bg-green-900/10 rounded-lg border border-green-500/15 text-center">
+                                    <div class="text-[9px] text-gray-500 mb-1">TP1 (50%)</div>
+                                    <div id="tg-tp1" class="text-green-400 text-xs font-bold font-mono"></div>
+                                </div>
+                                <div class="p-2 bg-green-900/10 rounded-lg border border-green-500/15 text-center">
+                                    <div class="text-[9px] text-gray-500 mb-1">TP2</div>
+                                    <div id="tg-tp2" class="text-green-400 text-xs font-bold font-mono"></div>
+                                </div>
+                                <div class="p-2 bg-green-900/10 rounded-lg border border-green-500/15 text-center">
+                                    <div class="text-[9px] text-gray-500 mb-1">TP3</div>
+                                    <div id="tg-tp3" class="text-green-400 text-xs font-bold font-mono"></div>
+                                </div>
+                            </div>
+                            <div class="flex justify-between items-center p-3 bg-black/40 rounded-lg border border-white/5">
+                                <span class="text-xs text-gray-500">Risk / Reward</span>
+                                <span id="tg-rr" class="text-cyan font-bold"></span>
+                            </div>
+                        </div>
+                        <div class="space-y-3">
+                            <div class="p-3 bg-black/40 rounded-lg border border-yellow-400/10">
+                                <div class="text-[10px] text-yellow-400/60 uppercase tracking-wider mb-1">Primary Signal</div>
+                                <div id="tg-signal-name" class="text-xs font-bold text-yellow-400 mb-2"></div>
+                                <div id="tg-rationale" class="text-xs text-gray-300 leading-relaxed"></div>
+                            </div>
+                            <div class="p-3 bg-black/40 rounded-lg border border-white/5">
+                                <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-2">Step-by-step for Beginners</div>
+                                <ol id="tg-steps" class="space-y-1.5 text-xs text-gray-300 list-none"></ol>
+                            </div>
+                            <div class="p-3 bg-black/40 rounded-lg border border-white/5">
+                                <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Position Sizing</div>
+                                <div id="tg-sizing" class="text-xs text-gray-300"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- END AEGIS TRADER COCKPIT -->
+
         </main>
     </div>
 
@@ -999,6 +1273,9 @@
                 } else if (roomName === 'sells') {
                     activeNav.classList.add('border-red-500/50', 'shadow-[0_0_15px_rgba(239,68,68,0.2)]');
                     if (iconContainer) iconContainer.classList.add('bg-red-500/10', 'text-red-400');
+                } else if (roomName === 'trader') {
+                    activeNav.classList.add('border-yellow-400/50', 'shadow-[0_0_15px_rgba(250,204,21,0.2)]');
+                    if (iconContainer) iconContainer.classList.add('bg-yellow-400/10', 'text-yellow-400');
                 }
             }
 
@@ -1013,6 +1290,483 @@
 
         // Add listener to switch to terminal when a signal card is clicked is REMOVED
         // We now use the openSignalDetails popping card modal instead.
+    </script>
+
+    <!-- ── AEGIS Trader Bot Cockpit JS ──────────────────────────────────── -->
+    <script>
+    (function() {
+        var _traderMode        = 'all';
+        var _traderRisk        = 'balanced';
+        var _traderSignals     = [];
+        var _traderStatus      = {};
+        var _traderRecord      = {};     // full track record from /api/trader/track-record
+        var _activeBotTab      = 'scanner';
+
+        // ── Tab switching ─────────────────────────────────────────────────
+        window.switchTraderTab = function(tab) {
+            _activeBotTab = tab;
+            document.querySelectorAll('.trader-bot-panel').forEach(function(el) {
+                el.classList.add('hidden');
+            });
+            var panel = document.getElementById('trader-tab-' + tab);
+            if (panel) panel.classList.remove('hidden');
+            document.querySelectorAll('.trader-bot-tab').forEach(function(btn) {
+                var isActive = btn.id === 'tbt-' + tab;
+                btn.classList.toggle('text-yellow-400', isActive);
+                btn.classList.toggle('bg-yellow-400/10', isActive);
+                btn.classList.toggle('border', isActive);
+                btn.classList.toggle('border-yellow-400/30', isActive);
+                btn.classList.toggle('text-gray-400', !isActive);
+            });
+            if (tab === 'history' || tab === 'positions') loadTraderRecord();
+        };
+
+        // ── WebSocket feed integration ──────────────────────────────────────
+        // The existing dashboard WebSocket sends trader_status + trader_signals
+        // in every full-signal payload. We hook into the global WS message handler.
+        var _origOnWsMessage = window._onTraderWsMessage || null;
+        window._onTraderWsMessage = function(data) {
+            if (_origOnWsMessage) _origOnWsMessage(data);
+            if (data && data.trader_status && Object.keys(data.trader_status).length > 0) {
+                _traderStatus = data.trader_status;
+                _traderSignals = data.trader_signals || [];
+                _renderTokenTable(_traderStatus);
+                updateTraderStats({ signals: _traderSignals, last_scan: data.trader_last_scan });
+                var grid = document.getElementById('trader-signals-grid');
+                if (grid) {
+                    if (_traderSignals.length > 0) {
+                        grid.classList.remove('hidden');
+                        renderTraderSignals(_traderSignals.filter(function(s) { return s.mode === _traderMode; }));
+                    } else {
+                        grid.classList.add('hidden');
+                    }
+                }
+            }
+        };
+
+        // Hook into the global WebSocket message event fired by websocketManager.js
+        document.addEventListener('aegis-ws-message', function(e) {
+            if (e.detail) window._onTraderWsMessage(e.detail);
+        });
+
+        var _modeColors = {
+            scalping: { accent: 'text-cyan', border: 'border-cyan/30', bg: 'bg-cyan/5' },
+            intraday: { accent: 'text-orange', border: 'border-orange/30', bg: 'bg-orange/5' },
+            swing:    { accent: 'text-purple-400', border: 'border-purple-500/30', bg: 'bg-purple-500/5' },
+        };
+
+        window.setTraderMode = function(mode) {
+            _traderMode = mode;
+            // Re-filter the table
+            _renderTokenTable(_traderStatus);
+            document.querySelectorAll('.trader-mode-btn').forEach(function(btn) {
+                btn.classList.remove('text-cyan', 'text-orange', 'text-purple-400',
+                    'bg-cyan/10', 'bg-orange/10', 'bg-purple-500/10',
+                    'border', 'border-cyan/30', 'border-orange/30', 'border-purple-500/30');
+                btn.classList.add('text-gray-400');
+            });
+            var active = document.getElementById('trader-tab-' + mode);
+            if (active) {
+                active.classList.remove('text-gray-400');
+                var c = _modeColors[mode] || _modeColors.scalping;
+                active.classList.add(c.accent, c.border.replace('border-', 'border border-').split(' ')[1] || c.border);
+                if (mode === 'scalping')  active.classList.add('text-cyan',   'bg-cyan/10',      'border', 'border-cyan/30');
+                if (mode === 'intraday') active.classList.add('text-orange',  'bg-orange/10',    'border', 'border-orange/30');
+                if (mode === 'swing')    active.classList.add('text-purple-400', 'bg-purple-500/10', 'border', 'border-purple-500/30');
+            }
+            renderTraderSignals(_traderSignals.filter(function(s) { return s.mode === mode; }));
+        };
+
+        window.setTraderRisk = function(risk) {
+            _traderRisk = risk;
+        };
+
+        function _renderTokenTable(statusMap) {
+            var tbody = document.getElementById('trader-token-table-body');
+            if (!tbody) return;
+            var tokens = Object.values(statusMap);
+            // Apply mode filter
+            if (_traderMode && _traderMode !== 'all') {
+                tokens = tokens.filter(function(t) { return t.mode === _traderMode; });
+            }
+            if (!tokens.length) return;
+
+            // Sort: BUY/SELL first (by confidence), then HOLD
+            tokens.sort(function(a, b) {
+                var aFire = a.direction !== 'HOLD' ? 1 : 0;
+                var bFire = b.direction !== 'HOLD' ? 1 : 0;
+                if (aFire !== bFire) return bFire - aFire;
+                return (b.confidence || 0) - (a.confidence || 0);
+            });
+
+            tbody.innerHTML = tokens.map(function(t) {
+                var isBuy  = t.direction === 'BUY';
+                var isSell = t.direction === 'SELL';
+                var isHold = !isBuy && !isSell;
+                var dirCol = isBuy  ? 'text-green-400' : isSell ? 'text-red-400' : 'text-gray-600';
+                var dotCol = isBuy  ? 'bg-green-500'   : isSell ? 'bg-red-500'   : 'bg-white/15';
+                var conf   = Math.round((t.confidence || 0) * 100);
+                var confCol = conf >= 75 ? 'text-green-400' : conf >= 65 ? 'text-yellow-400' : 'text-gray-500';
+                var modeCol = t.mode === 'scalping' ? '#00f2ff' : t.mode === 'intraday' ? '#ff8c00' : '#c084fc';
+                var strat  = (t.top_strategy || '').replace(/_/g, ' ');
+                var price  = t.price || 0;
+                var priceStr = price >= 1000 ? price.toFixed(2) : price >= 1 ? price.toFixed(4) : price > 0 ? price.toFixed(6) : '—';
+                var coolBadge = t.on_cooldown
+                    ? '<span class="text-[9px] px-1 py-0.5 rounded bg-orange/10 text-orange/70 border border-orange/20">CD</span>'
+                    : '';
+                var clickable = (!isHold && !t.on_cooldown)
+                    ? 'cursor-pointer hover:bg-white/3 transition-colors'
+                    : '';
+                var onclickAttr = (!isHold && !t.on_cooldown)
+                    ? 'onclick="openTraderTokenGuidance(\'' + t.symbol + '\')"'
+                    : '';
+                return '<tr class="border-b border-white/4 ' + clickable + '" ' + onclickAttr + '>'
+                    + '<td class="px-3 py-2 font-bold text-white">'
+                    +   '<span class="inline-block w-2 h-2 rounded-full ' + dotCol + ' mr-1.5"></span>'
+                    +   t.symbol.replace('/USDT', '') + '<span class="text-gray-700 text-[10px]">/USDT</span>'
+                    + '</td>'
+                    + '<td class="px-3 py-2 font-black ' + dirCol + '">' + t.direction + '</td>'
+                    + '<td class="px-3 py-2" style="color:' + modeCol + '">' + (t.mode || '—') + '</td>'
+                    + '<td class="px-3 py-2">'
+                    +   (conf > 0
+                        ? '<span class="' + confCol + '">' + conf + '%</span>'
+                        +   '<div class="w-16 h-0.5 bg-white/10 rounded-full mt-1 inline-block ml-1 align-middle">'
+                        +     '<div class="h-0.5 rounded-full ' + (isBuy ? 'bg-green-500' : isSell ? 'bg-red-500' : 'bg-white/20') + '" style="width:' + Math.min(conf, 100) + '%"></div>'
+                        +   '</div>'
+                        : '<span class="text-gray-700">—</span>')
+                    + '</td>'
+                    + '<td class="px-3 py-2 text-gray-500 hidden md:table-cell truncate max-w-[140px]">' + (strat || '—') + '</td>'
+                    + '<td class="px-3 py-2 text-gray-400 hidden lg:table-cell">$' + priceStr + '</td>'
+                    + '<td class="px-3 py-2 hidden lg:table-cell">' + coolBadge + '</td>'
+                    + '</tr>';
+            }).join('');
+
+            var scanEl = document.getElementById('trader-scan-status');
+            if (scanEl) scanEl.textContent = 'Updated · ' + new Date().toLocaleTimeString();
+        }
+
+        window.openTraderTokenGuidance = function(symbol) {
+            var sig = (_traderSignals || []).find(function(s) { return s.symbol === symbol; });
+            if (sig) { window.showTraderGuidance(sig); return; }
+            // Fallback: use status entry to show partial info
+            var st = _traderStatus[symbol];
+            if (st) window.showTraderGuidance({ symbol: symbol, direction: st.direction, confidence: st.confidence, mode: st.mode, top_strategies: [st.top_strategy], guidance: {} });
+        };
+
+        window.triggerTraderScan = function() {
+            var btn = document.getElementById('trader-scan-btn');
+            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Scanning…'; }
+
+            // First load cached status immediately
+            fetch('/api/trader/status', { headers: { 'Authorization': 'Bearer ' + (window._aegisToken || '') } })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.status && Object.keys(data.status).length) {
+                        _traderStatus  = data.status;
+                        _traderSignals = data.signals || [];
+                        _renderTokenTable(_traderStatus);
+                        updateTraderStats({ signals: _traderSignals, last_scan: data.last_scan });
+                        var grid = document.getElementById('trader-signals-grid');
+                        if (grid && _traderSignals.length) {
+                            grid.classList.remove('hidden');
+                            renderTraderSignals(_traderSignals.filter(function(s) { return s.mode === _traderMode; }));
+                        }
+                    }
+                }).catch(function() {});
+
+            // Then trigger fresh scan in background
+            fetch('/api/trader/scan', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + (window._aegisToken || ''), 'Content-Type': 'application/json' },
+                body: JSON.stringify({ risk_profile: _traderRisk }),
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                _traderSignals = data.signals || [];
+                renderTraderSignals(_traderSignals.filter(function(s) { return s.mode === _traderMode; }));
+                updateTraderStats(data);
+                if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-satellite-dish"></i> Scan Now'; }
+                // Reload full status after scan completes
+                fetch('/api/trader/status', { headers: { 'Authorization': 'Bearer ' + (window._aegisToken || '') } })
+                    .then(function(r) { return r.json(); })
+                    .then(function(d) { if (d.status) { _traderStatus = d.status; _renderTokenTable(_traderStatus); } })
+                    .catch(function() {});
+            })
+            .catch(function(err) {
+                console.error('Trader scan error', err);
+                if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-satellite-dish"></i> Scan Now'; }
+            });
+            fetch('/api/trader/stats', { headers: { 'Authorization': 'Bearer ' + (window._aegisToken || '') } })
+                .then(function(r) { return r.json(); })
+                .then(function(d) { updateWinRateStat(d.stats); })
+                .catch(function() {});
+        };
+
+        function updateTraderStats(data) {
+            var sigs = data.signals || [];
+            var count = sigs.length;
+            var avgConf = count > 0
+                ? Math.round(sigs.reduce(function(a, s) { return a + (s.confidence || 0); }, 0) / count * 100)
+                : 0;
+            setText('trader-stat-count', count || '—');
+            setText('trader-stat-conf',  count > 0 ? avgConf + '%' : '—');
+            if (data.last_scan) {
+                try {
+                    var d = new Date(data.last_scan);
+                    setText('trader-stat-scan', d.toLocaleTimeString());
+                } catch(e) {}
+            }
+        }
+
+        function updateWinRateStat(stats) {
+            if (!stats) return;
+            var wr = (stats[_traderMode] || {}).win_rate;
+            setText('trader-stat-wr', wr != null ? Math.round(wr * 100) + '%' : '—');
+        }
+
+        function setText(id, val) {
+            var el = document.getElementById(id);
+            if (el) el.textContent = val;
+        }
+
+        function renderTraderSignals(signals) {
+            var grid = document.getElementById('trader-signals-grid');
+            if (!grid) return;
+
+            if (!signals || signals.length === 0) {
+                grid.innerHTML = '<div class="col-span-full text-center text-gray-600 py-12">'
+                    + '<i class="fas fa-robot text-4xl mb-3 block opacity-20"></i>'
+                    + '<p class="text-sm">No ' + _traderMode + ' signals at this confidence level.<br>'
+                    + 'Try <strong class="text-gray-400">Scan Now</strong> or switch to a different mode.</p></div>';
+                return;
+            }
+
+            grid.innerHTML = signals.map(function(sig) {
+                var isBuy     = sig.direction === 'BUY';
+                var dirColor  = isBuy ? 'text-green-400' : 'text-red-400';
+                var dirBg     = isBuy ? 'border-green-500/20 bg-green-900/5' : 'border-red-500/20 bg-red-900/5';
+                var conf      = Math.round((sig.confidence || 0) * 100);
+                var confColor = conf >= 80 ? 'text-green-400' : conf >= 70 ? 'text-yellow-400' : 'text-gray-400';
+                var modeColor = _modeColors[sig.mode] || _modeColors.intraday;
+                var strats    = (sig.top_strategies || []).slice(0, 2)
+                    .map(function(s) { return s.replace(/_/g, ' '); }).join(' + ');
+                var price     = sig.current_price || 0;
+                var priceStr  = price >= 1000 ? price.toFixed(2)
+                              : price >= 1    ? price.toFixed(4)
+                              : price.toFixed(6);
+                var ts = '';
+                try { ts = new Date(sig.timestamp).toLocaleTimeString(); } catch(e) {}
+
+                return '<div class="glass-panel p-4 rounded-xl border ' + dirBg + ' cursor-pointer hover:border-white/20 transition-all group" '
+                    + 'onclick="showTraderGuidance(' + JSON.stringify(sig).replace(/"/g, '&quot;') + ')">'
+                    + '<div class="flex items-start justify-between mb-3">'
+                    +   '<div>'
+                    +     '<div class="font-mono font-black text-white text-base">' + sig.symbol.replace('/USDT', '') + '<span class="text-gray-600 text-xs font-normal">/USDT</span></div>'
+                    +     '<div class="text-[10px] text-gray-500 mt-0.5">' + ts + ' · ' + sig.timeframe + '</div>'
+                    +   '</div>'
+                    +   '<span class="font-black text-xs px-3 py-1 rounded-full ' + (isBuy ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30') + '">'
+                    +     sig.direction
+                    +   '</span>'
+                    + '</div>'
+                    + '<div class="flex items-center justify-between mb-2">'
+                    +   '<span class="text-[10px] text-gray-500 uppercase">Confidence</span>'
+                    +   '<span class="font-mono font-black ' + confColor + '">' + conf + '%</span>'
+                    + '</div>'
+                    + '<div class="w-full h-1 bg-white/5 rounded-full mb-3"><div class="h-1 rounded-full bg-gradient-to-r ' + (isBuy ? 'from-green-500 to-emerald-400' : 'from-red-500 to-orange-400') + '" style="width:' + conf + '%"></div></div>'
+                    + '<div class="text-[10px] text-gray-500 truncate mb-2">' + strats + '</div>'
+                    + '<div class="flex items-center justify-between text-[10px]">'
+                    +   '<span class="text-gray-500">Price</span>'
+                    +   '<span class="font-mono text-gray-300">$' + priceStr + '</span>'
+                    + '</div>'
+                    + '<div class="text-[10px] text-gray-600 mt-2 text-right group-hover:text-cyan/60 transition-colors"><i class="fas fa-info-circle mr-1"></i>Click for setup guide</div>'
+                    + '</div>';
+            }).join('');
+        }
+
+        window.showTraderGuidance = function(sig) {
+            var g  = sig.guidance || {};
+            var ez = g.entry_zone || {};
+            var tp = g.take_profit || {};
+            setText('tg-symbol', sig.symbol);
+
+            var dirEl = document.getElementById('tg-direction');
+            if (dirEl) {
+                dirEl.textContent = sig.direction;
+                dirEl.className   = 'font-black text-sm px-3 py-1 rounded-full '
+                    + (sig.direction === 'BUY'
+                        ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                        : 'bg-red-500/20 text-red-400 border border-red-500/30');
+            }
+
+            var fmt = function(v) {
+                if (!v && v !== 0) return '—';
+                var n = parseFloat(v);
+                return n >= 1000 ? n.toFixed(2) : n >= 1 ? n.toFixed(4) : n.toFixed(6);
+            };
+
+            setText('tg-entry', '$' + fmt(ez.low) + ' – $' + fmt(ez.high));
+            setText('tg-sl',    '$' + fmt(g.stop_loss) + ' (' + (g.sl_pct || '—') + '% risk)');
+            setText('tg-tp1',   '$' + fmt(tp.tp1));
+            setText('tg-tp2',   '$' + fmt(tp.tp2));
+            setText('tg-tp3',   '$' + fmt(tp.tp3));
+            setText('tg-rr',    '1 : ' + (g.risk_reward || '—'));
+
+            var sigName = (g.primary_signal || '').replace(/_/g, ' ');
+            setText('tg-signal-name', sigName || '—');
+            setText('tg-rationale',   g.rationale || '—');
+            setText('tg-sizing',      g.sizing_advice || '—');
+
+            var stepsEl = document.getElementById('tg-steps');
+            if (stepsEl) {
+                var steps = g.beginner_steps || [];
+                stepsEl.innerHTML = steps.map(function(s) {
+                    return '<li class="flex items-start gap-2"><i class="fas fa-chevron-right text-cyan/40 mt-0.5 text-[9px] flex-shrink-0"></i><span>' + s + '</span></li>';
+                }).join('');
+            }
+
+            document.getElementById('trader-guidance-panel').classList.remove('hidden');
+            document.getElementById('trader-guidance-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        };
+
+        // ── Load track record (positions + history) ───────────────────────
+        window.loadTraderRecord = function() {
+            fetch('/api/trader/track-record')
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    _traderRecord = data;
+                    _updateWalletStats(data);
+                    _renderPositions(data.signals || []);
+                    _renderHistory(data.signals || []);
+                })
+                .catch(function() {});
+        };
+
+        function _updateWalletStats(data) {
+            var pnl     = data.total_pnl_usdt || 0;
+            var pnlPct  = data.total_pnl_pct  || 0;
+            var pnlCol  = pnl >= 0 ? 'text-green-400' : 'text-red-400';
+            var pnlSign = pnl >= 0 ? '+' : '';
+            _setText('tw-balance', '$' + (data.balance || 10000).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}));
+            var pnlEl = document.getElementById('tw-pnl');
+            if (pnlEl) {
+                pnlEl.textContent = pnlSign + pnlPct.toFixed(2) + '%';
+                pnlEl.className = 'text-sm font-mono font-black ' + pnlCol;
+            }
+            _setText('tw-wr',     data.win_rate  ? Math.round(data.win_rate * 100) + '%'  : '—');
+            _setText('tw-trades', data.total_trades || '—');
+            _setText('tw-open',   data.open_positions || '0');
+            _setText('th-wins',   data.won   || '—');
+            _setText('th-losses', data.lost  || '—');
+            var thPnl = document.getElementById('th-pnl');
+            if (thPnl) {
+                thPnl.textContent = pnlSign + '$' + Math.abs(pnl).toFixed(2);
+                thPnl.className = 'text-base font-mono font-black ' + pnlCol;
+            }
+            var openCount = document.getElementById('tbt-open-count');
+            if (openCount) openCount.textContent = data.open_positions > 0 ? '(' + data.open_positions + ')' : '';
+        }
+
+        function _renderPositions(signals) {
+            var tbody = document.getElementById('trader-positions-body');
+            if (!tbody) return;
+            var open = signals.filter(function(s) { return s.outcome === 'OPEN' || !s.outcome; });
+            if (!open.length) {
+                tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-700 text-xs">No open positions</td></tr>';
+                return;
+            }
+            tbody.innerHTML = open.map(function(p) {
+                var isBuy = p.direction === 'BUY';
+                var dirCol = isBuy ? 'text-green-400' : 'text-red-400';
+                var fmt = function(v) { if (!v && v !== 0) return '—'; var n = parseFloat(v); return n >= 1000 ? n.toFixed(2) : n >= 1 ? n.toFixed(4) : n.toFixed(6); };
+                var ts = ''; try { ts = new Date(p.timestamp || p.entry_time).toLocaleString(); } catch(e){}
+                var mc = p.mode === 'scalping' ? 'text-cyan/70' : p.mode === 'intraday' ? 'text-orange/70' : 'text-purple-400/70';
+                return '<tr class="border-b border-white/4 hover:bg-white/2 transition-colors">'
+                    + '<td class="px-3 py-2 font-bold text-white">' + (p.symbol||'').replace('/USDT','') + '<span class="text-gray-700">/USDT</span></td>'
+                    + '<td class="px-3 py-2 font-black ' + dirCol + '">' + (p.direction||'') + '</td>'
+                    + '<td class="px-3 py-2 ' + mc + '">' + (p.mode||'') + '</td>'
+                    + '<td class="px-3 py-2 text-right text-gray-300">$' + fmt(p.entry_price) + '</td>'
+                    + '<td class="px-3 py-2 text-right text-red-400">$' + fmt(p.stop_loss) + '</td>'
+                    + '<td class="px-3 py-2 text-right text-green-400">$' + fmt(p.tp1) + '</td>'
+                    + '<td class="px-3 py-2 text-right text-gray-500 hidden md:table-cell">$' + (p.position_value ? parseFloat(p.position_value).toFixed(0) : '—') + '</td>'
+                    + '<td class="px-3 py-2 text-gray-600 text-[10px] hidden lg:table-cell">' + ts + '</td>'
+                    + '</tr>';
+            }).join('');
+        }
+
+        function _renderHistory(signals) {
+            var tbody = document.getElementById('trader-history-body');
+            if (!tbody) return;
+            var closed = signals.filter(function(s) { return s.outcome === 'WIN' || s.outcome === 'LOSS'; });
+            if (!closed.length) {
+                tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-700 text-xs">No closed trades yet</td></tr>';
+                return;
+            }
+            var fmt = function(v) { if (!v && v !== 0) return '—'; var n = parseFloat(v); return n >= 1000 ? n.toFixed(2) : n >= 1 ? n.toFixed(4) : n.toFixed(6); };
+            tbody.innerHTML = closed.slice(0, 100).map(function(t) {
+                var isWin   = t.outcome === 'WIN';
+                var dirCol  = t.direction === 'BUY' ? 'text-green-400' : 'text-red-400';
+                var outCol  = isWin ? 'text-green-400' : 'text-red-400';
+                var pnlVal  = parseFloat(t.pnl_pct || 0);
+                var pnlStr  = (pnlVal >= 0 ? '+' : '') + pnlVal.toFixed(2) + '%';
+                var mc = t.mode === 'scalping' ? 'text-cyan/60' : t.mode === 'intraday' ? 'text-orange/60' : 'text-purple-400/60';
+                return '<tr class="border-b border-white/4 hover:bg-white/2 transition-colors">'
+                    + '<td class="px-3 py-2 font-bold text-white">' + (t.symbol||'').replace('/USDT','') + '<span class="text-gray-700">/USDT</span></td>'
+                    + '<td class="px-3 py-2 font-black ' + dirCol + '">' + (t.direction||'') + '</td>'
+                    + '<td class="px-3 py-2 ' + mc + '">' + (t.mode||'') + '</td>'
+                    + '<td class="px-3 py-2 text-right text-gray-400">$' + fmt(t.entry_price) + '</td>'
+                    + '<td class="px-3 py-2 text-right text-gray-400">$' + fmt(t.exit_price) + '</td>'
+                    + '<td class="px-3 py-2 text-right font-black ' + outCol + '">' + pnlStr + '</td>'
+                    + '<td class="px-3 py-2"><span class="px-2 py-0.5 rounded-full text-[10px] font-black ' + (isWin ? 'bg-green-500/15 text-green-400 border border-green-500/30' : 'bg-red-500/15 text-red-400 border border-red-500/30') + '">' + t.outcome + '</span></td>'
+                    + '<td class="px-3 py-2 text-gray-600 text-[10px] hidden md:table-cell">' + (t.exit_reason||'').replace(/_/g,' ') + '</td>'
+                    + '</tr>';
+            }).join('');
+        }
+
+        function _setText(id, val) {
+            var el = document.getElementById(id);
+            if (el) el.textContent = val;
+        }
+
+        // ── WebSocket feed integration ────────────────────────────────────
+        var _origOnWsMessage = window._onTraderWsMessage || null;
+        window._onTraderWsMessage = function(data) {
+            if (_origOnWsMessage) _origOnWsMessage(data);
+            if (data && data.trader_status && Object.keys(data.trader_status).length > 0) {
+                _traderStatus = data.trader_status;
+                _traderSignals = data.trader_signals || [];
+                _renderTokenTable(_traderStatus);
+                updateTraderStats({ signals: _traderSignals, last_scan: data.trader_last_scan });
+                if (data.trader_wallet && Object.keys(data.trader_wallet).length) {
+                    _updateWalletStats({
+                        balance:         data.trader_wallet.balance,
+                        total_pnl_pct:   data.trader_wallet.total_pnl_pct,
+                        total_pnl_usdt:  data.trader_wallet.total_pnl_usdt,
+                        win_rate:        data.trader_wallet.win_rate,
+                        total_trades:    data.trader_wallet.total_trades,
+                        won:             data.trader_wallet.won,
+                        lost:            data.trader_wallet.lost,
+                        open_positions:  data.trader_wallet.open_positions,
+                    });
+                }
+                var grid = document.getElementById('trader-signals-grid');
+                if (grid) {
+                    var filtered = _traderMode === 'all' ? _traderSignals : _traderSignals.filter(function(s) { return s.mode === _traderMode; });
+                    if (filtered.length > 0) { grid.classList.remove('hidden'); renderTraderSignals(filtered); }
+                    else { grid.classList.add('hidden'); }
+                }
+            }
+        };
+
+        document.addEventListener('aegis-ws-message', function(e) {
+            if (e.detail) window._onTraderWsMessage(e.detail);
+        });
+
+        // Load track record on room activation
+        document.addEventListener('DOMContentLoaded', function() {
+            loadTraderRecord();
+        });
+
+    }());
     </script>
 
     <div id="access-expired-card" class="access-expired-card hidden">

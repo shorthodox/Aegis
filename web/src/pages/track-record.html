@@ -489,6 +489,273 @@
 
     </div>
 
+    <!-- ══════════════════════════════════════════════════════════════════
+         AEGIS TRADER COCKPIT — Scalping / Intraday Track Record
+         ══════════════════════════════════════════════════════════════════ -->
+    <div style="max-width:1100px;margin:2rem auto 3rem;padding:0 1rem;">
+
+        <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid rgba(255,255,255,0.07);">
+            <i class="fas fa-robot" style="color:#facc15;font-size:1.4rem;"></i>
+            <div>
+                <h2 style="font-size:1.2rem;font-weight:900;color:#fff;letter-spacing:0.08em;text-transform:uppercase;margin:0;">
+                    AEGIS Trader Performance
+                </h2>
+                <p style="font-size:0.72rem;color:#4b5563;margin:0.25rem 0 0;">
+                    Universal AI model · 25 strategies · Scalping / Intraday / Swing
+                </p>
+            </div>
+            <span style="margin-left:auto;font-size:0.65rem;font-weight:800;padding:0.2rem 0.6rem;border-radius:9999px;background:rgba(250,204,21,0.1);color:#facc15;border:1px solid rgba(250,204,21,0.25);">AI POWERED</span>
+        </div>
+
+        <!-- Mode tabs -->
+        <div style="display:flex;gap:0.5rem;margin-bottom:1.5rem;flex-wrap:wrap;">
+            <button class="trader-tr-tab active" data-tab="scalping"
+                onclick="switchTraderTab('scalping')"
+                style="padding:0.5rem 1.2rem;border-radius:0.75rem;font-size:0.75rem;font-weight:800;cursor:pointer;transition:all 0.2s;text-transform:uppercase;letter-spacing:0.05em;background:rgba(0,242,255,0.1);color:#00f2ff;border:1px solid rgba(0,242,255,0.3);">
+                <i class="fas fa-bolt" style="margin-right:4px;"></i> Scalping
+            </button>
+            <button class="trader-tr-tab" data-tab="intraday"
+                onclick="switchTraderTab('intraday')"
+                style="padding:0.5rem 1.2rem;border-radius:0.75rem;font-size:0.75rem;font-weight:800;cursor:pointer;transition:all 0.2s;text-transform:uppercase;letter-spacing:0.05em;background:rgba(255,255,255,0.03);color:#6b7280;border:1px solid rgba(255,255,255,0.06);">
+                <i class="fas fa-chart-line" style="margin-right:4px;"></i> Intraday
+            </button>
+            <button class="trader-tr-tab" data-tab="swing"
+                onclick="switchTraderTab('swing')"
+                style="padding:0.5rem 1.2rem;border-radius:0.75rem;font-size:0.75rem;font-weight:800;cursor:pointer;transition:all 0.2s;text-transform:uppercase;letter-spacing:0.05em;background:rgba(255,255,255,0.03);color:#6b7280;border:1px solid rgba(255,255,255,0.06);">
+                <i class="fas fa-wave-square" style="margin-right:4px;"></i> Swing
+            </button>
+        </div>
+
+        <!-- Stats row -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1rem;margin-bottom:1.5rem;" id="trader-tr-stats">
+            <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:0.75rem;padding:1rem;">
+                <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;margin-bottom:0.4rem;">Virtual Balance</div>
+                <div style="font-size:1.1rem;font-family:monospace;font-weight:900;color:#fff;" id="ttr-balance">$10,000.00</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:0.75rem;padding:1rem;">
+                <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;margin-bottom:0.4rem;">Total PnL</div>
+                <div style="font-size:1.1rem;font-family:monospace;font-weight:900;color:#6b7280;" id="ttr-pnl">—</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:0.75rem;padding:1rem;">
+                <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;margin-bottom:0.4rem;">Closed Trades</div>
+                <div style="font-size:1.5rem;font-family:monospace;font-weight:900;color:#facc15;" id="ttr-total">—</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:0.75rem;padding:1rem;">
+                <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;margin-bottom:0.4rem;">Wins</div>
+                <div style="font-size:1.5rem;font-family:monospace;font-weight:900;color:#22c55e;" id="ttr-wins">—</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:0.75rem;padding:1rem;">
+                <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;margin-bottom:0.4rem;">Losses</div>
+                <div style="font-size:1.5rem;font-family:monospace;font-weight:900;color:#ef4444;" id="ttr-losses">—</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:0.75rem;padding:1rem;">
+                <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;margin-bottom:0.4rem;">Win Rate</div>
+                <div style="font-size:1.5rem;font-family:monospace;font-weight:900;color:#00f2ff;" id="ttr-wr">—</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:0.75rem;padding:1rem;">
+                <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;margin-bottom:0.4rem;">Avg Confidence</div>
+                <div style="font-size:1.5rem;font-family:monospace;font-weight:900;color:#a78bfa;" id="ttr-conf">—</div>
+            </div>
+        </div>
+
+        <!-- Strategy breakdown table -->
+        <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:0.75rem;padding:1.25rem;margin-bottom:1.5rem;">
+            <h4 style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.1em;color:#4b5563;margin:0 0 1rem;font-weight:700;">
+                <i class="fas fa-layer-group" style="margin-right:6px;"></i> Top Performing Strategies
+            </h4>
+            <div id="ttr-strategy-breakdown" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:0.5rem;">
+                <div style="text-align:center;color:#374151;padding:2rem;font-size:0.8rem;grid-column:1/-1;">
+                    No data yet · Fire signals from the AEGIS Trader cockpit in the dashboard
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent signals table -->
+        <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:0.75rem;overflow:hidden;">
+            <div style="padding:1rem 1.25rem;border-bottom:1px solid rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:space-between;">
+                <h4 style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.1em;color:#4b5563;margin:0;font-weight:700;">
+                    <i class="fas fa-history" style="margin-right:6px;"></i> Recent Trader Signals
+                </h4>
+                <button onclick="loadTraderRecord()" style="font-size:0.7rem;color:rgba(0,242,255,0.6);background:none;border:none;cursor:pointer;padding:0.25rem 0.5rem;border-radius:0.5rem;transition:color 0.2s;" onmouseover="this.style.color='#00f2ff'" onmouseout="this.style.color='rgba(0,242,255,0.6)'">
+                    <i class="fas fa-sync-alt"></i> Refresh
+                </button>
+            </div>
+            <div style="overflow-x:auto;">
+                <table style="width:100%;border-collapse:collapse;font-size:0.78rem;">
+                    <thead>
+                        <tr style="background:rgba(0,0,0,0.3);">
+                            <th style="padding:0.75rem 1rem;text-align:left;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;white-space:nowrap;">Token</th>
+                            <th style="padding:0.75rem 1rem;text-align:left;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;">Mode</th>
+                            <th style="padding:0.75rem 1rem;text-align:left;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;">Direction</th>
+                            <th style="padding:0.75rem 1rem;text-align:left;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;">Confidence</th>
+                            <th style="padding:0.75rem 1rem;text-align:left;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;">Strategy</th>
+                            <th style="padding:0.75rem 1rem;text-align:left;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;">Outcome</th>
+                            <th style="padding:0.75rem 1rem;text-align:left;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;">Time</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ttr-table-body">
+                        <tr>
+                            <td colspan="7" style="padding:2rem;text-align:center;color:#374151;font-size:0.8rem;">
+                                <i class="fas fa-robot" style="font-size:2rem;opacity:0.15;display:block;margin-bottom:0.75rem;"></i>
+                                Trader record will appear here once the model is trained and signals are fired
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        var _activeTab = 'scalping';
+        var _allSignals = [];
+
+        window.switchTraderTab = function(tab) {
+            _activeTab = tab;
+            document.querySelectorAll('.trader-tr-tab').forEach(function(btn) {
+                var isActive = btn.getAttribute('data-tab') === tab;
+                if (isActive) {
+                    btn.style.background = tab === 'scalping' ? 'rgba(0,242,255,0.1)'
+                                        : tab === 'intraday' ? 'rgba(255,140,0,0.1)'
+                                        : 'rgba(147,51,234,0.1)';
+                    btn.style.color = tab === 'scalping' ? '#00f2ff'
+                                    : tab === 'intraday' ? '#ff8c00'
+                                    : '#c084fc';
+                    btn.style.borderColor = tab === 'scalping' ? 'rgba(0,242,255,0.3)'
+                                           : tab === 'intraday' ? 'rgba(255,140,0,0.3)'
+                                           : 'rgba(147,51,234,0.3)';
+                } else {
+                    btn.style.background = 'rgba(255,255,255,0.03)';
+                    btn.style.color = '#6b7280';
+                    btn.style.borderColor = 'rgba(255,255,255,0.06)';
+                }
+            });
+            renderTraderTab(_allSignals.filter(function(s) { return s.mode === tab; }));
+        };
+
+        function renderTraderTab(signals) {
+            var closed = signals.filter(function(s) { return s.outcome === 'WIN' || s.outcome === 'LOSS'; });
+            var stats  = computeStats(closed);
+            setText('ttr-total',  stats.total  || '—');
+            setText('ttr-wins',   stats.wins   || '—');
+            setText('ttr-losses', stats.losses || '—');
+            setText('ttr-wr',     stats.total > 0 ? Math.round(stats.win_rate * 100) + '%' : '—');
+            var allConf = signals.filter(function(s) { return s.confidence > 0; });
+            var avgConf = allConf.length ? allConf.reduce(function(a,s){return a+(s.confidence||0);},0)/allConf.length : 0;
+            setText('ttr-conf',   avgConf > 0 ? Math.round(avgConf * 100) + '%' : '—');
+            renderStrategyBreakdown(closed);
+            renderSignalTable(signals.slice(0, 50));
+        }
+
+        function computeStats(signals) {
+            var closed = signals.filter(function(s) { return s.outcome === 'WIN' || s.outcome === 'LOSS'; });
+            var wins   = closed.filter(function(s) { return s.outcome === 'WIN'; });
+            var totalConf = signals.reduce(function(a, s) { return a + (s.confidence || 0); }, 0);
+            return {
+                total:    signals.length,
+                wins:     wins.length,
+                losses:   closed.length - wins.length,
+                win_rate: closed.length > 0 ? wins.length / closed.length : 0,
+                avg_conf: signals.length > 0 ? totalConf / signals.length : 0,
+            };
+        }
+
+        function renderStrategyBreakdown(signals) {
+            var container = document.getElementById('ttr-strategy-breakdown');
+            if (!container) return;
+            var stratCounts = {};
+            signals.forEach(function(s) {
+                (s.top_strategies || []).forEach(function(st) {
+                    if (!stratCounts[st]) stratCounts[st] = { total: 0, wins: 0 };
+                    stratCounts[st].total++;
+                    if (s.outcome === 'WIN') stratCounts[st].wins++;
+                });
+            });
+            var entries = Object.entries(stratCounts).sort(function(a,b) { return b[1].total - a[1].total; }).slice(0, 10);
+            if (entries.length === 0) {
+                container.innerHTML = '<div style="text-align:center;color:#374151;padding:1.5rem;font-size:0.8rem;grid-column:1/-1;">No data yet</div>';
+                return;
+            }
+            container.innerHTML = entries.map(function(e) {
+                var name = e[0], d = e[1];
+                var wr   = d.total > 0 ? Math.round(d.wins / d.total * 100) : 0;
+                var col  = wr >= 60 ? '#22c55e' : wr >= 40 ? '#facc15' : '#ef4444';
+                return '<div style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.05);border-radius:0.5rem;padding:0.75rem;">'
+                    + '<div style="font-size:0.7rem;color:#9ca3af;margin-bottom:0.4rem;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;">' + name.replace(/_/g, ' ') + '</div>'
+                    + '<div style="display:flex;align-items:center;justify-content:space-between;">'
+                    +   '<span style="font-size:0.65rem;color:#6b7280;">' + d.total + ' signals</span>'
+                    +   '<span style="font-size:0.8rem;font-weight:900;font-family:monospace;color:' + col + ';">' + wr + '%</span>'
+                    + '</div>'
+                    + '</div>';
+            }).join('');
+        }
+
+        function renderSignalTable(signals) {
+            var tbody = document.getElementById('ttr-table-body');
+            if (!tbody) return;
+            if (!signals.length) {
+                tbody.innerHTML = '<tr><td colspan="7" style="padding:2rem;text-align:center;color:#374151;font-size:0.8rem;">No signals for this mode yet</td></tr>';
+                return;
+            }
+            var modeColor = { scalping: '#00f2ff', intraday: '#ff8c00', swing: '#c084fc' };
+            tbody.innerHTML = signals.map(function(s) {
+                var isBuy = s.direction === 'BUY';
+                var outcomeStyle = s.outcome === 'WIN' ? 'color:#22c55e' : s.outcome === 'LOSS' ? 'color:#ef4444' : 'color:#6b7280';
+                var conf = Math.round((s.confidence || 0) * 100);
+                var topStrat = (s.top_strategies || [])[0] || '—';
+                var ts = '';
+                try { ts = new Date(s.timestamp).toLocaleString(); } catch(e) {}
+                var mc = modeColor[s.mode] || '#fff';
+                return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);transition:background 0.15s;" onmouseover="this.style.background=\'rgba(255,255,255,0.02)\'" onmouseout="this.style.background=\'transparent\'">'
+                    + '<td style="padding:0.65rem 1rem;font-family:monospace;font-weight:700;color:#fff;">' + s.symbol.replace('/USDT', '') + '<span style="color:#374151;font-size:0.7rem;">/USDT</span></td>'
+                    + '<td style="padding:0.65rem 1rem;"><span style="font-size:0.65rem;padding:0.1rem 0.5rem;border-radius:999px;color:' + mc + ';background:' + mc + '15;border:1px solid ' + mc + '30;">' + s.mode + '</span></td>'
+                    + '<td style="padding:0.65rem 1rem;font-weight:800;' + (isBuy ? 'color:#22c55e;' : 'color:#ef4444;') + '">' + s.direction + '</td>'
+                    + '<td style="padding:0.65rem 1rem;font-family:monospace;color:' + (conf >= 80 ? '#22c55e' : conf >= 70 ? '#facc15' : '#9ca3af') + ';">' + conf + '%</td>'
+                    + '<td style="padding:0.65rem 1rem;color:#9ca3af;font-size:0.72rem;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + topStrat.replace(/_/g, ' ') + '</td>'
+                    + '<td style="padding:0.65rem 1rem;font-weight:700;' + outcomeStyle + ';">' + (s.outcome || 'OPEN') + '</td>'
+                    + '<td style="padding:0.65rem 1rem;color:#4b5563;font-size:0.7rem;">' + ts + '</td>'
+                    + '</tr>';
+            }).join('');
+        }
+
+        function setText(id, val) {
+            var el = document.getElementById(id);
+            if (el) el.textContent = val;
+        }
+
+        var _walletData = {};
+
+        window.loadTraderRecord = function() {
+            // Public endpoint — no auth required
+            fetch('/api/trader/track-record')
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    _walletData = data;
+                    _allSignals = data.signals || [];
+                    _renderWalletStats(data);
+                    renderTraderTab(_allSignals.filter(function(s) { return s.mode === _activeTab; }));
+                })
+                .catch(function() {});
+        };
+
+        function _renderWalletStats(data) {
+            var pnl    = parseFloat(data.total_pnl_usdt || 0);
+            var pnlPct = parseFloat(data.total_pnl_pct  || 0);
+            var pnlSign = pnl >= 0 ? '+' : '';
+            var pnlCol  = pnl >= 0 ? '#22c55e' : '#ef4444';
+            var balEl = document.getElementById('ttr-balance');
+            if (balEl) balEl.textContent = '$' + (data.balance || 10000).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+            var pnlEl = document.getElementById('ttr-pnl');
+            if (pnlEl) { pnlEl.textContent = pnlSign + pnlPct.toFixed(2) + '%'; pnlEl.style.color = pnlCol; }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadTraderRecord();
+        });
+    }());
+    </script>
+
     <!-- Footer — same as index.html -->
     <footer class="footer">
         <div class="footer-links">

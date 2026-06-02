@@ -309,7 +309,8 @@ _tr_ws_manager = _TrackRecordManager()
 # Logs every actionable BUY/SELL signal, monitors TP/SL hits, and
 # persists outcomes to web/track_record.json for the public page.
 # -------------------------------------------------------------------
-TRACK_RECORD_PATH = WEB_ROOT_PATH / "track_record.json"
+TRACK_RECORD_PATH        = WEB_ROOT_PATH / "track_record.json"
+TRADER_TRACK_RECORD_PATH = WEB_ROOT_PATH / "trader_track_record.json"
 _track_store: list = []       # in-memory list of signal records
 _tr_seen_ids: set = set()     # signal_ids already in store
 _tr_last_save: float = 0.0   # epoch of last disk write
@@ -833,15 +834,82 @@ async def run_engine_background():
 # -------------------------------------------------------------------
 # FastAPI app (lifespan runs engine as background task)
 # -------------------------------------------------------------------
+# ── Trader Engine background scan loop ────────────────────────────────────────
+_TRADER_SCAN_INTERVAL = 300   # 5 minutes
+
+def _save_trader_track_record() -> None:
+    """Copy data/trader_track_record.json → web/trader_track_record.json for static serving."""
+    try:
+        engine = _get_trader_engine_lazy()
+        if engine is None:
+            return
+        wallet  = engine.wallet
+        summary = wallet.summary
+
+        # Read raw signals from the data file (includes open + closed)
+        from scripts.trader_model.trader_config import TRADER_RECORD_PATH as _DATA_TR
+        signals: list = []
+        if _DATA_TR.exists():
+            with open(_DATA_TR, encoding='utf-8') as _f:
+                _d = json.load(_f)
+                signals = _d.get('signals', [])
+
+        payload = {
+            "generated_at":    datetime.now(timezone.utc).isoformat(),
+            "balance":         summary['balance'],
+            "initial_capital": wallet.INITIAL_CAPITAL,
+            "total_pnl_usdt":  summary['total_pnl_usdt'],
+            "total_pnl_pct":   summary['total_pnl_pct'],
+            "total_trades":    summary['total_trades'],
+            "won":             summary['won'],
+            "lost":            summary['lost'],
+            "win_rate":        summary['win_rate'],
+            "open_positions":  summary['open_positions'],
+            "last_scan":       engine.last_scan_time,
+            "signals":         sorted(signals, key=lambda r: r.get('timestamp') or '', reverse=True)[:500],
+        }
+        TRADER_TRACK_RECORD_PATH.parent.mkdir(parents=True, exist_ok=True)
+        tmp = TRADER_TRACK_RECORD_PATH.with_suffix('.tmp')
+        with open(tmp, 'w', encoding='utf-8') as _f:
+            json.dump(payload, _f, default=str)
+        os.replace(tmp, TRADER_TRACK_RECORD_PATH)
+    except Exception as _e:
+        logger.error(f"[TraderRecord] save error: {_e}")
+
+
+async def _trader_scan_loop():
+    """Runs the Universal Trader Engine every 5 minutes and caches token status."""
+    await asyncio.sleep(30)   # let the main engine warm up first
+    while True:
+        try:
+            engine = _get_trader_engine_lazy()
+            if engine is not None:
+                loop = asyncio.get_event_loop()
+                await loop.run_in_executor(
+                    None,
+                    lambda: engine.scan_all_tokens(risk_profile='balanced'),
+                )
+                _save_trader_track_record()
+                logger.info(
+                    f"[TraderEngine] scan complete — "
+                    f"{len(engine.active_signals)} signal(s), "
+                    f"{len(engine.token_status)} token(s) tracked"
+                )
+        except Exception as _te:
+            logger.error(f"[TraderEngine] scan error: {_te}")
+        await asyncio.sleep(_TRADER_SCAN_INTERVAL)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _load_track_record()
-    engine_task = asyncio.create_task(run_engine_background())
-    reminder_task = asyncio.create_task(check_and_send_trial_reminders())
+    engine_task       = asyncio.create_task(run_engine_background())
+    reminder_task     = asyncio.create_task(check_and_send_trial_reminders())
     subscription_task = asyncio.create_task(check_and_send_subscription_reminders())
-    analytics_task = asyncio.create_task(analytics_loop())
-    dev_token_task = asyncio.create_task(dev_token_display_loop())
-    dev_key_task = asyncio.create_task(dev_key_display_loop())
+    analytics_task    = asyncio.create_task(analytics_loop())
+    dev_token_task    = asyncio.create_task(dev_token_display_loop())
+    dev_key_task      = asyncio.create_task(dev_key_display_loop())
+    trader_task       = asyncio.create_task(_trader_scan_loop())
     yield
     engine_task.cancel()
     reminder_task.cancel()
@@ -849,6 +917,7 @@ async def lifespan(app: FastAPI):
     analytics_task.cancel()
     dev_token_task.cancel()
     dev_key_task.cancel()
+    trader_task.cancel()
 
 app = FastAPI(title="Aegis-1 by Gatekeeper", lifespan=lifespan)
 
@@ -3697,6 +3766,18 @@ async def websocket_dashboard(websocket: WebSocket):
                                 "dist_to_resistance_pct": _telem.get("dist_to_resistance_pct"),
                             })
 
+                    # Attach trader token status + wallet if engine is loaded
+                    _trader_eng = _get_trader_engine_lazy()
+                    _trader_status = (
+                        _trader_eng.token_status if _trader_eng is not None else {}
+                    )
+                    _trader_signals = (
+                        _trader_eng.active_signals if _trader_eng is not None else []
+                    )
+                    _trader_wallet = (
+                        _trader_eng.wallet.summary if _trader_eng is not None else {}
+                    )
+
                     response_data = {
                         "tickers": live_tickers,
                         "signals": filtered_signals,
@@ -3712,6 +3793,12 @@ async def websocket_dashboard(websocket: WebSocket):
                         "trial_expired": _trial_expired_cache if current_user_email else True,
                         "plan": _user_plan_cache,
                         "sr_alerts": sr_alerts,
+                        "trader_status":    _trader_status,
+                        "trader_signals":   _trader_signals,
+                        "trader_wallet":    _trader_wallet,
+                        "trader_last_scan": (
+                            _trader_eng.last_scan_time if _trader_eng is not None else None
+                        ),
                     }
                     await websocket.send_json(jsonable_encoder(numpy_to_native(response_data)))
 
@@ -4878,6 +4965,193 @@ async def save_user_settings(
 # -------------------------------------------------------------------
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+#  AEGIS UNIVERSAL TRADER — API Endpoints
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_trader_engine_instance = None
+_trader_engine_lock = __import__('threading').Lock()
+
+def _get_trader_engine_lazy():
+    """Lazily import and return the trader engine (avoids startup cost if unused)."""
+    global _trader_engine_instance
+    if _trader_engine_instance is None:
+        with _trader_engine_lock:
+            if _trader_engine_instance is None:
+                try:
+                    from scripts.trader_model.trader_engine import get_trader_engine
+                    _trader_engine_instance = get_trader_engine()
+                except Exception as _e:
+                    logger.warning(f"Trader engine unavailable (models not trained yet): {_e}")
+                    _trader_engine_instance = None
+    return _trader_engine_instance
+
+
+@app.get("/api/trader/signals")
+async def get_trader_signals(
+    mode:         Optional[str] = None,
+    risk_profile: str           = "balanced",
+    scan:         bool          = False,
+    _user:        str           = Depends(get_current_user),
+):
+    """
+    Return active Universal Trader signals.
+
+    Query params:
+      mode         – filter by 'scalping' | 'intraday' | 'swing' (optional)
+      risk_profile – 'conservative' | 'balanced' | 'aggressive' (default: balanced)
+      scan         – if true, trigger a fresh scan (slow); otherwise return cached
+    """
+    engine = _get_trader_engine_lazy()
+    if engine is None:
+        return {
+            "signals": [],
+            "last_scan": None,
+            "message": "Trader models not trained yet. Run: python -m scripts.trader_model.train_trader",
+        }
+
+    if scan:
+        modes = [mode] if mode else None
+        try:
+            signals = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: engine.scan_all_tokens(
+                    modes        = modes,
+                    risk_profile = risk_profile,
+                )
+            )
+        except Exception as e:
+            logger.error(f"Trader scan error: {e}")
+            signals = engine.active_signals
+    else:
+        signals = engine.active_signals
+        if mode:
+            signals = [s for s in signals if s.get('mode') == mode]
+
+    return {
+        "signals":   signals,
+        "count":     len(signals),
+        "last_scan": engine.last_scan_time,
+        "modes_available": engine.model_store.loaded_modes,
+    }
+
+
+@app.get("/api/trader/track-record")
+async def get_trader_track_record():
+    """Public endpoint — returns trader_track_record.json (wallet + trade history)."""
+    if TRADER_TRACK_RECORD_PATH.exists():
+        try:
+            with open(TRADER_TRACK_RECORD_PATH, encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"signals": [], "balance": 10000, "win_rate": 0, "total_trades": 0}
+
+
+@app.get("/api/trader/status")
+async def get_trader_token_status(_user: str = Depends(get_current_user)):
+    """Return live scan status for all 60 deployment tokens."""
+    engine = _get_trader_engine_lazy()
+    if engine is None:
+        return {"status": {}, "signals": [], "last_scan": None}
+    return {
+        "status":    engine.token_status,
+        "signals":   engine.active_signals,
+        "last_scan": engine.last_scan_time,
+        "count":     len(engine.token_status),
+    }
+
+
+@app.get("/api/trader/wallet")
+async def get_trader_wallet(_user: str = Depends(get_current_user)):
+    """Return virtual wallet summary for the trader cockpit dashboard."""
+    engine = _get_trader_engine_lazy()
+    if engine is None:
+        return {"balance": 10000, "total_pnl_usdt": 0, "total_pnl_pct": 0,
+                "win_rate": 0, "won": 0, "lost": 0, "total_trades": 0,
+                "open_positions": 0, "open_trades": []}
+    w = engine.wallet
+    return {
+        **w.summary,
+        "open_trades": list(w.open_positions.values()),
+        "last_scan":   engine.last_scan_time,
+    }
+
+
+@app.get("/api/trader/stats")
+async def get_trader_stats(_user: str = Depends(get_current_user)):
+    """Return per-mode performance statistics."""
+    engine = _get_trader_engine_lazy()
+    if engine is None:
+        return {"stats": {}, "wallet": {}}
+    w = engine.wallet
+    closed = [t for t in w.trade_history if t.get("outcome") in ("WIN", "LOSS")]
+    stats: dict = {}
+    for mode in ("scalping", "intraday", "swing"):
+        mode_closed = [t for t in closed if t.get("mode") == mode]
+        wins = [t for t in mode_closed if t.get("outcome") == "WIN"]
+        stats[mode] = {
+            "total":    len(mode_closed),
+            "wins":     len(wins),
+            "losses":   len(mode_closed) - len(wins),
+            "win_rate": round(len(wins) / len(mode_closed), 3) if mode_closed else 0.0,
+            "avg_pnl":  round(sum(t.get("pnl_pct", 0) or 0 for t in mode_closed) / max(len(mode_closed), 1), 3),
+        }
+    return {"stats": stats, "wallet": w.summary}
+
+
+@app.get("/api/trader/record")
+async def get_trader_record(
+    mode:  Optional[str] = None,
+    limit: int           = 200,
+    _user: str           = Depends(get_current_user),
+):
+    """Return trader signals + wallet summary for the authenticated dashboard."""
+    engine = _get_trader_engine_lazy()
+    wallet_summary: dict = {}
+    if engine is not None:
+        wallet_summary = engine.wallet.summary
+
+    from scripts.trader_model.trader_config import TRADER_RECORD_PATH
+    if not TRADER_RECORD_PATH.exists():
+        return {"signals": [], "total": 0, "wallet": wallet_summary}
+    with open(TRADER_RECORD_PATH, encoding="utf-8") as f:
+        record = json.load(f)
+    signals = record.get("signals", [])
+    if mode:
+        signals = [s for s in signals if s.get("mode") == mode]
+    return {
+        "signals": list(reversed(signals[-limit:])),
+        "total":   len(signals),
+        "wallet":  wallet_summary,
+    }
+
+
+@app.post("/api/trader/scan")
+async def trigger_trader_scan(
+    modes:        Optional[List[str]] = None,
+    risk_profile: str                 = "balanced",
+    _user:        str                 = Depends(get_current_user),
+):
+    """Trigger an immediate scan and persist the updated JSON."""
+    engine = _get_trader_engine_lazy()
+    if engine is None:
+        raise HTTPException(status_code=503, detail="Trader models not trained yet")
+    try:
+        signals = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: engine.scan_all_tokens(modes=modes, risk_profile=risk_profile)
+        )
+        _save_trader_track_record()
+        return {
+            "signals":   signals,
+            "count":     len(signals),
+            "wallet":    engine.wallet.summary,
+            "status":    "ok",
+        }
+    except Exception as e:
+        logger.error(f"Trader scan error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 

@@ -191,10 +191,11 @@ class LiveEngine:
     5. After every cycle  → write data/track_record.json
     """
 
-    MAX_CONCURRENT   = 8      # parallel predictor goroutines (semaphore)
-    HOURS_CONTEXT    = 300    # bars fed to predictor (300 h ≈ 12.5 days of 1-h data)
-    MIN_HOLD_SECONDS = 7_200  # 2 h minimum hold before a model-reversal exit is allowed
-    COOLDOWN_SECONDS = 1_800  # 30 min post-close cooldown before any re-entry
+    MAX_CONCURRENT        = 8        # parallel predictor goroutines (semaphore)
+    HOURS_CONTEXT         = 300      # bars fed to predictor (300 h ≈ 12.5 days of 1-h data)
+    MIN_HOLD_SECONDS      = 7_200    # 2 h minimum hold before a model-reversal exit is allowed
+    COOLDOWN_SECONDS      = 14_400   # 4 h post-close cooldown before any re-entry on same token
+    FLIP_COOLDOWN_SECONDS = 28_800   # 8 h extra cooldown when new signal is opposite direction
 
     def __init__(
         self,
@@ -215,8 +216,9 @@ class LiveEngine:
         self.last_signals: Dict[str, Any]   = {}
         self.live_prices:  Dict[str, float] = {}
 
-        self._open_time:       Dict[str, float] = {}   # symbol → unix ts when position opened
-        self._last_close_time: Dict[str, float] = {}   # symbol → unix ts when last closed
+        self._open_time:        Dict[str, float] = {}   # symbol → unix ts when position opened
+        self._last_close_time:  Dict[str, float] = {}   # symbol → unix ts when last closed
+        self._last_close_side:  Dict[str, str]   = {}   # symbol → 'BUY'|'SELL' of last closed trade
 
         self.bootstrap_done  = 0
         self.bootstrap_total = len(token_configs)
@@ -367,9 +369,19 @@ class LiveEngine:
             if existing:
                 self._manage_exit(symbol, existing, result, price)
             elif result.get('fire') and result.get('tradeable', True) and price > 0:
-                cooldown_elapsed = time.time() - self._last_close_time.get(symbol, 0)
-                if cooldown_elapsed >= self.COOLDOWN_SECONDS:
+                now              = time.time()
+                cooldown_elapsed = now - self._last_close_time.get(symbol, 0)
+                new_side         = result.get('side', 'FLAT')
+                last_side        = self._last_close_side.get(symbol, '')
+                is_flip          = (last_side != '' and last_side != new_side)
+                required_cooldown = (
+                    self.FLIP_COOLDOWN_SECONDS if is_flip else self.COOLDOWN_SECONDS
+                )
+                if cooldown_elapsed >= required_cooldown:
                     self._open_position(symbol, result, price)
+                elif is_flip:
+                    print(f'[{symbol}] FLIP-FLOP BLOCKED {last_side}→{new_side} '
+                          f'({int((required_cooldown - cooldown_elapsed)/60)} min remaining)')
 
             self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
 
@@ -394,6 +406,7 @@ class LiveEngine:
             rec = self.wallet.close_trade(symbol, price, 'MODEL_REVERSAL_TP')
             if rec:
                 self._last_close_time[symbol] = time.time()
+                self._last_close_side[symbol] = pos.side
                 print(f'[{symbol}] TP {rec.outcome} {rec.pnl_pct:+.2f}% '
                       f'MODEL_REVERSAL_TP @ {price}')
             # Do NOT immediately re-open — let the next scan decide after cooldown
@@ -409,6 +422,7 @@ class LiveEngine:
                 rec = self.wallet.close_trade(symbol, price, 'STOP_HIT')
                 if rec:
                     self._last_close_time[symbol] = time.time()
+                    self._last_close_side[symbol] = pos.side
                     print(f'[{symbol}] SL {rec.outcome} {rec.pnl_pct:+.2f}% '
                           f'STOP_HIT @ {price}')
 
