@@ -887,7 +887,7 @@ async def _trader_scan_loop():
                 loop = asyncio.get_event_loop()
                 await loop.run_in_executor(
                     None,
-                    lambda: engine.scan_all_tokens(risk_profile='balanced'),
+                    lambda: engine.scan_all_tokens(risk_profile='aggressive'),
                 )
                 _save_trader_track_record()
                 logger.info(

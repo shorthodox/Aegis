@@ -544,14 +544,14 @@
 
         <!-- Mode tabs -->
         <div style="display:flex;gap:0.5rem;margin-bottom:1.5rem;flex-wrap:wrap;">
-            <button class="trader-tr-tab active" data-tab="scalping"
+            <button class="trader-tr-tab" data-tab="scalping"
                 onclick="switchTraderTab('scalping')"
-                style="padding:0.5rem 1.2rem;border-radius:0.75rem;font-size:0.75rem;font-weight:800;cursor:pointer;transition:all 0.2s;text-transform:uppercase;letter-spacing:0.05em;background:rgba(0,242,255,0.1);color:#00f2ff;border:1px solid rgba(0,242,255,0.3);">
+                style="padding:0.5rem 1.2rem;border-radius:0.75rem;font-size:0.75rem;font-weight:800;cursor:pointer;transition:all 0.2s;text-transform:uppercase;letter-spacing:0.05em;background:rgba(255,255,255,0.03);color:#6b7280;border:1px solid rgba(255,255,255,0.06);">
                 <i class="fas fa-bolt" style="margin-right:4px;"></i> Scalping
             </button>
-            <button class="trader-tr-tab" data-tab="intraday"
+            <button class="trader-tr-tab active" data-tab="intraday"
                 onclick="switchTraderTab('intraday')"
-                style="padding:0.5rem 1.2rem;border-radius:0.75rem;font-size:0.75rem;font-weight:800;cursor:pointer;transition:all 0.2s;text-transform:uppercase;letter-spacing:0.05em;background:rgba(255,255,255,0.03);color:#6b7280;border:1px solid rgba(255,255,255,0.06);">
+                style="padding:0.5rem 1.2rem;border-radius:0.75rem;font-size:0.75rem;font-weight:800;cursor:pointer;transition:all 0.2s;text-transform:uppercase;letter-spacing:0.05em;background:rgba(255,140,0,0.1);color:#ff8c00;border:1px solid rgba(255,140,0,0.3);">
                 <i class="fas fa-chart-line" style="margin-right:4px;"></i> Intraday
             </button>
             <button class="trader-tr-tab" data-tab="swing"
@@ -607,32 +607,43 @@
 
         <!-- Recent signals table -->
         <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:0.75rem;overflow:hidden;">
-            <div style="padding:1rem 1.25rem;border-bottom:1px solid rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:space-between;">
+            <div style="padding:1rem 1.25rem;border-bottom:1px solid rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;">
                 <h4 style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.1em;color:#4b5563;margin:0;font-weight:700;">
                     <i class="fas fa-history" style="margin-right:6px;"></i> Recent Trader Signals
+                    <span style="margin-left:0.75rem;font-size:0.62rem;color:#374151;text-transform:none;letter-spacing:0;">virtual trades · conf ≥ 65%</span>
                 </h4>
-                <button onclick="loadTraderRecord()" style="font-size:0.7rem;color:rgba(0,242,255,0.6);background:none;border:none;cursor:pointer;padding:0.25rem 0.5rem;border-radius:0.5rem;transition:color 0.2s;" onmouseover="this.style.color='#00f2ff'" onmouseout="this.style.color='rgba(0,242,255,0.6)'">
-                    <i class="fas fa-sync-alt"></i> Refresh
-                </button>
+                <div style="display:flex;gap:0.4rem;align-items:center;">
+                    <button class="ttr-outcome-btn active" data-out="ALL" onclick="filterTraderOutcome('ALL')" style="padding:0.2rem 0.6rem;border-radius:999px;font-size:0.62rem;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.06);color:#9ca3af;">All</button>
+                    <button class="ttr-outcome-btn" data-out="OPEN" onclick="filterTraderOutcome('OPEN')" style="padding:0.2rem 0.6rem;border-radius:999px;font-size:0.62rem;font-weight:700;cursor:pointer;border:1px solid rgba(0,242,255,0.2);background:transparent;color:#4b5563;">Open</button>
+                    <button class="ttr-outcome-btn" data-out="WIN" onclick="filterTraderOutcome('WIN')" style="padding:0.2rem 0.6rem;border-radius:999px;font-size:0.62rem;font-weight:700;cursor:pointer;border:1px solid rgba(34,197,94,0.2);background:transparent;color:#4b5563;">Wins</button>
+                    <button class="ttr-outcome-btn" data-out="LOSS" onclick="filterTraderOutcome('LOSS')" style="padding:0.2rem 0.6rem;border-radius:999px;font-size:0.62rem;font-weight:700;cursor:pointer;border:1px solid rgba(239,68,68,0.2);background:transparent;color:#4b5563;">Losses</button>
+                    <button onclick="loadTraderRecord()" style="font-size:0.7rem;color:rgba(0,242,255,0.6);background:none;border:none;cursor:pointer;padding:0.25rem 0.5rem;border-radius:0.5rem;transition:color 0.2s;" onmouseover="this.style.color='#00f2ff'" onmouseout="this.style.color='rgba(0,242,255,0.6)'">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
             </div>
             <div style="overflow-x:auto;">
                 <table style="width:100%;border-collapse:collapse;font-size:0.78rem;">
                     <thead>
                         <tr style="background:rgba(0,0,0,0.3);">
-                            <th style="padding:0.75rem 1rem;text-align:left;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;white-space:nowrap;">Token</th>
-                            <th style="padding:0.75rem 1rem;text-align:left;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;">Mode</th>
-                            <th style="padding:0.75rem 1rem;text-align:left;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;">Direction</th>
-                            <th style="padding:0.75rem 1rem;text-align:left;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;">Confidence</th>
-                            <th style="padding:0.75rem 1rem;text-align:left;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;">Strategy</th>
-                            <th style="padding:0.75rem 1rem;text-align:left;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;">Outcome</th>
-                            <th style="padding:0.75rem 1rem;text-align:left;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;">Time</th>
+                            <th style="padding:0.75rem 0.8rem;text-align:left;font-size:0.62rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;white-space:nowrap;">Token</th>
+                            <th style="padding:0.75rem 0.8rem;text-align:left;font-size:0.62rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;">Mode</th>
+                            <th style="padding:0.75rem 0.8rem;text-align:left;font-size:0.62rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;">Dir</th>
+                            <th style="padding:0.75rem 0.8rem;text-align:left;font-size:0.62rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;">Conf</th>
+                            <th style="padding:0.75rem 0.8rem;text-align:left;font-size:0.62rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;">Entry</th>
+                            <th style="padding:0.75rem 0.8rem;text-align:left;font-size:0.62rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;">SL</th>
+                            <th style="padding:0.75rem 0.8rem;text-align:left;font-size:0.62rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;">TP1</th>
+                            <th style="padding:0.75rem 0.8rem;text-align:left;font-size:0.62rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;">Exit</th>
+                            <th style="padding:0.75rem 0.8rem;text-align:left;font-size:0.62rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;">PnL%</th>
+                            <th style="padding:0.75rem 0.8rem;text-align:left;font-size:0.62rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;">Outcome</th>
+                            <th style="padding:0.75rem 0.8rem;text-align:left;font-size:0.62rem;text-transform:uppercase;letter-spacing:0.08em;color:#4b5563;white-space:nowrap;">Time (UTC)</th>
                         </tr>
                     </thead>
                     <tbody id="ttr-table-body">
                         <tr>
-                            <td colspan="7" style="padding:2rem;text-align:center;color:#374151;font-size:0.8rem;">
+                            <td colspan="11" style="padding:2rem;text-align:center;color:#374151;font-size:0.8rem;">
                                 <i class="fas fa-robot" style="font-size:2rem;opacity:0.15;display:block;margin-bottom:0.75rem;"></i>
-                                Trader record will appear here once the model is trained and signals are fired
+                                Trader record will appear here once signals are fired at ≥ 65% confidence
                             </td>
                         </tr>
                     </tbody>
@@ -646,11 +657,19 @@
 
     <script>
     (function() {
-        var _activeTab = 'scalping';
-        var _allSignals = [];
+        var _activeTab    = 'intraday';
+        var _activeOutcome = 'ALL';
+        var _allSignals   = [];
 
         window.switchTraderTab = function(tab) {
             _activeTab = tab;
+            _activeOutcome = 'ALL';
+            document.querySelectorAll('.ttr-outcome-btn').forEach(function(b) {
+                var on = b.getAttribute('data-out') === 'ALL';
+                b.classList.toggle('active', on);
+                b.style.background = on ? 'rgba(255,255,255,0.06)' : 'transparent';
+                b.style.color = on ? '#9ca3af' : '#4b5563';
+            });
             document.querySelectorAll('.trader-tr-tab').forEach(function(btn) {
                 var isActive = btn.getAttribute('data-tab') === tab;
                 if (isActive) {
@@ -672,6 +691,20 @@
             renderTraderTab(_allSignals.filter(function(s) { return s.mode === tab; }));
         };
 
+        window.filterTraderOutcome = function(outcome) {
+            _activeOutcome = outcome;
+            document.querySelectorAll('.ttr-outcome-btn').forEach(function(b) {
+                var on = b.getAttribute('data-out') === outcome;
+                b.classList.toggle('active', on);
+                b.style.background = on ? 'rgba(255,255,255,0.06)' : 'transparent';
+                b.style.color = on ? '#9ca3af' : '#4b5563';
+            });
+            var tabSigs = _allSignals.filter(function(s) { return s.mode === _activeTab; });
+            var filtered = outcome === 'ALL' ? tabSigs
+                : tabSigs.filter(function(s) { return (s.outcome || 'OPEN') === outcome; });
+            renderSignalTable(filtered.slice(0, 100));
+        };
+
         function renderTraderTab(signals) {
             var closed = signals.filter(function(s) { return s.outcome === 'WIN' || s.outcome === 'LOSS'; });
             var stats  = computeStats(closed);
@@ -681,9 +714,11 @@
             setText('ttr-wr',     stats.total > 0 ? Math.round(stats.win_rate * 100) + '%' : '—');
             var allConf = signals.filter(function(s) { return s.confidence > 0; });
             var avgConf = allConf.length ? allConf.reduce(function(a,s){return a+(s.confidence||0);},0)/allConf.length : 0;
-            setText('ttr-conf',   avgConf > 0 ? Math.round(avgConf * 100) + '%' : '—');
+            setText('ttr-conf', avgConf > 0 ? Math.round(avgConf * 100) + '%' : '—');
             renderStrategyBreakdown(closed);
-            renderSignalTable(signals.slice(0, 50));
+            var filtered = _activeOutcome === 'ALL' ? signals
+                : signals.filter(function(s) { return (s.outcome || 'OPEN') === _activeOutcome; });
+            renderSignalTable(filtered.slice(0, 100));
         }
 
         function computeStats(signals) {
@@ -729,30 +764,51 @@
             }).join('');
         }
 
+        function _fmtPx(v) {
+            v = parseFloat(v) || 0;
+            if (v <= 0) return '—';
+            if (v < 0.001) return v.toFixed(6);
+            if (v < 1)     return v.toFixed(4);
+            if (v < 100)   return v.toFixed(3);
+            return v.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+        }
+
         function renderSignalTable(signals) {
             var tbody = document.getElementById('ttr-table-body');
             if (!tbody) return;
             if (!signals.length) {
-                tbody.innerHTML = '<tr><td colspan="7" style="padding:2rem;text-align:center;color:#374151;font-size:0.8rem;">No signals for this mode yet</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="11" style="padding:2rem;text-align:center;color:#374151;font-size:0.8rem;">No signals for this filter yet</td></tr>';
                 return;
             }
             var modeColor = { scalping: '#00f2ff', intraday: '#ff8c00', swing: '#c084fc' };
             tbody.innerHTML = signals.map(function(s) {
                 var isBuy = s.direction === 'BUY';
-                var outcomeStyle = s.outcome === 'WIN' ? 'color:#22c55e' : s.outcome === 'LOSS' ? 'color:#ef4444' : 'color:#6b7280';
+                var outcome = s.outcome || 'OPEN';
+                var outcomeStyle = outcome === 'WIN' ? 'color:#22c55e;font-weight:800;'
+                                 : outcome === 'LOSS' ? 'color:#ef4444;font-weight:800;'
+                                 : 'color:#00f2ff;';
                 var conf = Math.round((s.confidence || 0) * 100);
-                var topStrat = (s.top_strategies || [])[0] || '—';
+                var confCol = conf >= 80 ? '#22c55e' : conf >= 70 ? '#facc15' : '#9ca3af';
+                var pnl = parseFloat(s.pnl_pct) || 0;
+                var pnlStr = outcome === 'OPEN' ? '—' : (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + '%';
+                var pnlCol = outcome === 'OPEN' ? '#4b5563' : pnl > 0 ? '#22c55e' : '#ef4444';
+                var exitReason = s.exit_reason || '';
+                var exitLabel = exitReason === 'TP1_HIT' ? 'TP1' : exitReason === 'SL_HIT' ? 'SL' : outcome === 'OPEN' ? 'OPEN' : outcome;
                 var ts = '';
-                try { ts = new Date(s.timestamp).toLocaleString(); } catch(e) {}
+                try { ts = new Date(s.timestamp).toUTCString().replace('GMT','').trim(); } catch(e) {}
                 var mc = modeColor[s.mode] || '#fff';
                 return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);transition:background 0.15s;" onmouseover="this.style.background=\'rgba(255,255,255,0.02)\'" onmouseout="this.style.background=\'transparent\'">'
-                    + '<td style="padding:0.65rem 1rem;font-family:monospace;font-weight:700;color:#fff;">' + s.symbol.replace('/USDT', '') + '<span style="color:#374151;font-size:0.7rem;">/USDT</span></td>'
-                    + '<td style="padding:0.65rem 1rem;"><span style="font-size:0.65rem;padding:0.1rem 0.5rem;border-radius:999px;color:' + mc + ';background:' + mc + '15;border:1px solid ' + mc + '30;">' + s.mode + '</span></td>'
-                    + '<td style="padding:0.65rem 1rem;font-weight:800;' + (isBuy ? 'color:#22c55e;' : 'color:#ef4444;') + '">' + s.direction + '</td>'
-                    + '<td style="padding:0.65rem 1rem;font-family:monospace;color:' + (conf >= 80 ? '#22c55e' : conf >= 70 ? '#facc15' : '#9ca3af') + ';">' + conf + '%</td>'
-                    + '<td style="padding:0.65rem 1rem;color:#9ca3af;font-size:0.72rem;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + topStrat.replace(/_/g, ' ') + '</td>'
-                    + '<td style="padding:0.65rem 1rem;font-weight:700;' + outcomeStyle + ';">' + (s.outcome || 'OPEN') + '</td>'
-                    + '<td style="padding:0.65rem 1rem;color:#4b5563;font-size:0.7rem;">' + ts + '</td>'
+                    + '<td style="padding:0.6rem 0.8rem;font-family:monospace;font-weight:700;color:#fff;white-space:nowrap;">' + s.symbol.replace('/USDT','') + '<span style="color:#374151;font-size:0.68rem;">/USDT</span></td>'
+                    + '<td style="padding:0.6rem 0.8rem;"><span style="font-size:0.62rem;padding:0.1rem 0.45rem;border-radius:999px;color:' + mc + ';background:' + mc + '15;border:1px solid ' + mc + '30;white-space:nowrap;">' + s.mode + '</span></td>'
+                    + '<td style="padding:0.6rem 0.8rem;font-weight:800;white-space:nowrap;' + (isBuy ? 'color:#22c55e;' : 'color:#ef4444;') + '">' + (isBuy ? '▲ BUY' : '▼ SELL') + '</td>'
+                    + '<td style="padding:0.6rem 0.8rem;font-family:monospace;color:' + confCol + ';white-space:nowrap;">' + conf + '%</td>'
+                    + '<td style="padding:0.6rem 0.8rem;font-family:monospace;color:#d1d5db;white-space:nowrap;">' + _fmtPx(s.entry_price || s.current_price) + '</td>'
+                    + '<td style="padding:0.6rem 0.8rem;font-family:monospace;color:#ef444499;white-space:nowrap;">' + _fmtPx(s.stop_loss) + '</td>'
+                    + '<td style="padding:0.6rem 0.8rem;font-family:monospace;color:#22c55e99;white-space:nowrap;">' + _fmtPx(s.tp1) + '</td>'
+                    + '<td style="padding:0.6rem 0.8rem;font-family:monospace;white-space:nowrap;color:' + (outcome === 'OPEN' ? '#374151' : '#d1d5db') + ';">' + (outcome === 'OPEN' ? '—' : _fmtPx(s.exit_price)) + '</td>'
+                    + '<td style="padding:0.6rem 0.8rem;font-family:monospace;font-weight:700;white-space:nowrap;color:' + pnlCol + ';">' + pnlStr + '</td>'
+                    + '<td style="padding:0.6rem 0.8rem;white-space:nowrap;' + outcomeStyle + '">' + exitLabel + '</td>'
+                    + '<td style="padding:0.6rem 0.8rem;color:#4b5563;font-size:0.68rem;white-space:nowrap;">' + ts + '</td>'
                     + '</tr>';
             }).join('');
         }
@@ -765,12 +821,13 @@
         var _walletData = {};
 
         window.loadTraderRecord = function() {
-            // Public endpoint — no auth required
             fetch('/api/trader/track-record')
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
                     _walletData = data;
-                    _allSignals = data.signals || [];
+                    _allSignals = (data.signals || []).sort(function(a,b) {
+                        return new Date(b.timestamp || 0) - new Date(a.timestamp || 0);
+                    });
                     _renderWalletStats(data);
                     renderTraderTab(_allSignals.filter(function(s) { return s.mode === _activeTab; }));
                 })

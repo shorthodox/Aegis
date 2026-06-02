@@ -28,7 +28,7 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from scripts.trader_model.trader_config import (
-    DEPLOYMENT_TOKENS, MODES, RISK_PROFILES, ALL_FEATURE_NAMES,
+    DEPLOYMENT_TOKENS, MODES, RISK_PROFILES, ALL_FEATURE_NAMES, STRATEGY_NAMES,
     TRADER_MODEL_STORE, TRADER_RECORD_PATH, ABSOLUTE_MIN_CONFIDENCE,
 )
 from scripts.trader_model.strategy_features import (
@@ -42,6 +42,11 @@ log = logging.getLogger(__name__)
 
 # Label mapping from calibrated model output (0=SELL, 1=HOLD, 2=BUY)
 _LABEL_MAP = {0: 'SELL', 1: 'HOLD', 2: 'BUY'}
+
+# Minimum fraction of 25 strategy scores that must agree with the ML direction.
+# Blocks signals where the model fires but no underlying strategies support it.
+# 4/25 = 0.16 — intentionally low to only catch "zero-confluence" hallucinations.
+_MIN_CONFLUENCE = 0.16
 
 
 # ── Virtual Wallet ─────────────────────────────────────────────────────────────
@@ -219,18 +224,19 @@ class TraderWallet:
 
 @dataclass
 class TraderSignal:
-    signal_id:      str
-    symbol:         str
-    mode:           str          # scalping / intraday / swing
-    risk_profile:   str          # conservative / balanced / aggressive
-    direction:      str          # BUY / SELL
-    confidence:     float        # 0.0–1.0
-    current_price:  float
-    top_strategies: List[str]
-    strategy_scores: Dict[str, float]
-    guidance:       Dict[str, Any]
-    timestamp:      str
-    timeframe:      str
+    signal_id:        str
+    symbol:           str
+    mode:             str          # scalping / intraday / swing
+    risk_profile:     str          # conservative / balanced / aggressive
+    direction:        str          # BUY / SELL
+    confidence:       float        # 0.0–1.0  (ML model probability)
+    confluence_score: float        # 0.0–1.0  (fraction of 25 strategies agreeing)
+    current_price:    float
+    top_strategies:   List[str]
+    strategy_scores:  Dict[str, float]
+    guidance:         Dict[str, Any]
+    timestamp:        str
+    timeframe:        str
 
 
 # ── Model store ────────────────────────────────────────────────────────────────
@@ -317,21 +323,6 @@ def _fetch_candles(symbol: str, timeframe: str, limit: int) -> Optional[pd.DataF
         return None
 
 
-# ── Feature builder for a single bar ─────────────────────────────────────────
-
-def _build_inference_features(df: pd.DataFrame) -> Optional[np.ndarray]:
-    """Compute normalized strategy features for the last row of df."""
-    try:
-        raw      = compute_all_features(df)
-        ranked   = percentile_rank_features(raw, lookback=100)
-        last_row = np.asarray(ranked[ALL_FEATURE_NAMES].iloc[-1], dtype=np.float32)
-        if np.isnan(last_row).any():
-            last_row = np.nan_to_num(last_row, nan=0.5)
-        return last_row.reshape(1, -1)
-    except Exception as e:
-        log.debug(f"Feature build error: {e}")
-        return None
-
 
 def _top_strategies(scores_row: pd.Series, direction: str, n: int = 3) -> List[str]:
     """Return the top N strategy names that most support the signal direction."""
@@ -369,14 +360,15 @@ class TraderEngine:
 
     def _update_token_status(
         self,
-        symbol:      str,
-        mode:        str,
-        direction:   str,
-        confidence:  float,
-        strategies:  List[str],
-        timeframe:   str,
-        on_cooldown: bool,
-        price:       float = 0.0,
+        symbol:           str,
+        mode:             str,
+        direction:        str,
+        confidence:       float,
+        strategies:       List[str],
+        timeframe:        str,
+        on_cooldown:      bool,
+        price:            float = 0.0,
+        confluence_score: float = 0.0,
     ) -> None:
         """Record the latest scan result for a token so the dashboard can show all 60."""
         ts  = datetime.now(timezone.utc).isoformat()
@@ -393,15 +385,16 @@ class TraderEngine:
             )
             if is_better or existing.get('mode') == mode:
                 self._token_status[key] = {
-                    'symbol':       symbol,
-                    'direction':    direction,
-                    'confidence':   round(confidence, 4),
-                    'mode':         mode,
-                    'timeframe':    timeframe,
-                    'top_strategy': strategies[0] if strategies else '',
-                    'on_cooldown':  on_cooldown,
-                    'price':        round(price, 8),
-                    'last_scan':    ts,
+                    'symbol':           symbol,
+                    'direction':        direction,
+                    'confidence':       round(confidence, 4),
+                    'confluence_score': round(confluence_score, 3),
+                    'mode':             mode,
+                    'timeframe':        timeframe,
+                    'top_strategy':     strategies[0] if strategies else '',
+                    'on_cooldown':      on_cooldown,
+                    'price':            round(price, 8),
+                    'last_scan':        ts,
                 }
 
     @property
@@ -441,9 +434,15 @@ class TraderEngine:
         for mode_name in modes:
             if mode_name not in self.model_store.loaded_modes:
                 continue
-            mode_cfg = MODES[mode_name]
-            tf       = mode_cfg['timeframe']
-            limit    = mode_cfg['candles_fetch']
+            mode_cfg      = MODES[mode_name]
+            tf            = mode_cfg['timeframe']
+            limit         = mode_cfg['candles_fetch']
+            # Per-mode override allows scalping (noisy 5m) to use a lower floor
+            # than the profile default without affecting intraday/swing thresholds.
+            effective_min_conf = max(
+                mode_cfg.get('min_confidence_override', min_conf),
+                ABSOLUTE_MIN_CONFIDENCE,
+            )
 
             for symbol in DEPLOYMENT_TOKENS:
                 on_cooldown = is_on_cooldown(symbol, mode_name)
@@ -459,43 +458,69 @@ class TraderEngine:
                     self._update_token_status(symbol, mode_name, 'HOLD', 0.0, [], tf, on_cooldown)
                     continue
 
-                X = _build_inference_features(df)
-                if X is None:
+                # ── Single-pass feature computation ───────────────────────────────
+                try:
+                    raw_features = compute_all_features(df)
+                    ranked       = percentile_rank_features(raw_features, lookback=100)
+                    last_ranked  = np.asarray(ranked[ALL_FEATURE_NAMES].iloc[-1], dtype=np.float32)
+                    if np.isnan(last_ranked).any():
+                        last_ranked = np.nan_to_num(last_ranked, nan=0.5)
+                    X = last_ranked.reshape(1, -1)
+                except Exception as _fe:
+                    log.debug(f"Feature error {symbol}: {_fe}")
                     self._update_token_status(symbol, mode_name, 'HOLD', 0.0, [], tf, on_cooldown)
                     continue
 
                 label, conf, _ = self.model_store.predict(mode_name, X)
-                direction = _LABEL_MAP.get(label, 'HOLD')
+                direction     = _LABEL_MAP.get(label, 'HOLD')
                 current_price = float(df['close'].iloc[-1])
 
-                # Strategy scores for status tracking (always)
-                raw_scores = compute_all_features(df)
-                ranked     = percentile_rank_features(raw_scores, lookback=100)
-                scores_row = ranked[ALL_FEATURE_NAMES].iloc[-1]
-                top_strats = _top_strategies(scores_row, direction if direction != 'HOLD' else 'BUY')
+                # Top strategies from STRATEGY_NAMES only (ranked scores, 0-1 percentile)
+                ranked_strat_row = ranked[STRATEGY_NAMES].iloc[-1]
+                top_strats = _top_strategies(ranked_strat_row, direction if direction != 'HOLD' else 'BUY')
 
-                # Always update token status (HOLD, BUY, or SELL — before confidence gate)
+                # Confluence: count raw strategy scores that agree with ML direction
+                raw_strat_row = raw_features[STRATEGY_NAMES].iloc[-1]
+                if direction == 'BUY':
+                    n_agree = int((raw_strat_row > 0.1).sum())
+                elif direction == 'SELL':
+                    n_agree = int((raw_strat_row < -0.1).sum())
+                else:
+                    n_agree = 0
+                confluence_score = round(n_agree / len(STRATEGY_NAMES), 3)
+
+                # All-feature ranked scores for the signal dict (45 features)
+                scores_row = ranked[ALL_FEATURE_NAMES].iloc[-1]
+
+                # Always update token status (before any signal gate)
                 self._update_token_status(
                     symbol, mode_name, direction, conf, top_strats, tf, on_cooldown,
-                    price=current_price,
+                    price=current_price, confluence_score=confluence_score,
                 )
 
-                # Skip signal creation if on cooldown or below threshold
+                # ── Signal gates ──────────────────────────────────────────────────
                 if on_cooldown:
                     continue
                 if direction == 'HOLD':
                     continue
-                if conf < max(min_conf, ABSOLUTE_MIN_CONFIDENCE):
+                if conf < effective_min_conf:
+                    continue
+                # Confluence gate: block signals where strategy ensemble disagrees
+                if confluence_score < _MIN_CONFLUENCE:
+                    log.debug(
+                        f"[SKIP] {symbol} {mode_name} {direction} conf={conf:.2%} "
+                        f"— confluence={n_agree}/25 ({confluence_score:.2f}) < {_MIN_CONFLUENCE}"
+                    )
                     continue
 
                 # Beginner guidance (only for gated signals)
                 guidance = generate_beginner_guidance(
-                    symbol        = symbol,
-                    direction     = direction,
-                    mode          = mode_name,
-                    risk_profile  = risk_profile,
-                    confidence    = conf,
-                    current_price = current_price,
+                    symbol         = symbol,
+                    direction      = direction,
+                    mode           = mode_name,
+                    risk_profile   = risk_profile,
+                    confidence     = conf,
+                    current_price  = current_price,
                     top_strategies = top_strats,
                     df             = df,
                 )
@@ -504,18 +529,19 @@ class TraderEngine:
                 ts     = datetime.now(timezone.utc).isoformat()
 
                 signal = TraderSignal(
-                    signal_id       = sig_id,
-                    symbol          = symbol,
-                    mode            = mode_name,
-                    risk_profile    = risk_profile,
-                    direction       = direction,
-                    confidence      = round(conf, 4),
-                    current_price   = current_price,
-                    top_strategies  = top_strats,
-                    strategy_scores = {str(k): round(float(v), 3) for k, v in scores_row.items()},
-                    guidance        = guidance,
-                    timestamp       = ts,
-                    timeframe       = tf,
+                    signal_id        = sig_id,
+                    symbol           = symbol,
+                    mode             = mode_name,
+                    risk_profile     = risk_profile,
+                    direction        = direction,
+                    confidence       = round(conf, 4),
+                    confluence_score = confluence_score,
+                    current_price    = current_price,
+                    top_strategies   = top_strats,
+                    strategy_scores  = {str(k): round(float(v), 3) for k, v in scores_row.items()},
+                    guidance         = guidance,
+                    timestamp        = ts,
+                    timeframe        = tf,
                 )
 
                 sig_dict = asdict(signal)
@@ -529,7 +555,7 @@ class TraderEngine:
 
                 log.info(
                     f"[TRADER] {direction} {symbol} | {mode_name} | "
-                    f"conf={conf:.2%} | {top_strats[0] if top_strats else '?'}"
+                    f"conf={conf:.2%} | confl={n_agree}/25 | {top_strats[0] if top_strats else '?'}"
                 )
 
         # Sort by confidence descending and cap
@@ -595,35 +621,39 @@ if __name__ == '__main__':
         # ── Full 60-token status table ──────────────────────────────────────
         col = {'BUY': '\033[92m', 'SELL': '\033[91m', 'HOLD': '\033[90m', 'RST': '\033[0m'}
         W = col['RST']
-        print(f"\n{'─'*80}")
-        print(f"  {'TOKEN':<14} {'DIR':<6} {'CONF':>6}  {'MODE':<10} {'TOP STRATEGY':<30} {'CD'}")
-        print(f"{'─'*80}")
-        # sort: BUY/SELL by confidence desc, then HOLD
+        thr_pct = {'conservative': 75, 'balanced': 70, 'aggressive': 65}.get(args.risk, 65)
+        print(f"\n{'─'*88}")
+        print(f"  {'TOKEN':<14} {'DIR':<6} {'CONF':>6}  {'CONFL':>7}  {'MODE':<10} {'TOP STRATEGY':<28} {'CD'}")
+        print(f"{'─'*88}")
         rows = sorted(
             status.values(),
             key=lambda x: (0 if x['direction'] != 'HOLD' else 1, -x.get('confidence', 0))
         )
         for t in rows:
-            d   = t['direction']
-            c   = col.get(d, '')
-            pct = f"{t.get('confidence',0)*100:5.1f}%"
-            cd  = ' CD' if t.get('on_cooldown') else ''
-            strat = (t.get('top_strategy') or '').replace('_', ' ')[:28]
-            print(f"  {c}{t['symbol']:<14} {d:<6}{W} {pct}  {t.get('mode','?'):<10} {strat:<30}{cd}")
-        print(f"{'─'*80}")
+            d      = t['direction']
+            c      = col.get(d, '')
+            pct    = f"{t.get('confidence', 0) * 100:5.1f}%"
+            n_ag   = round(t.get('confluence_score', 0) * len(STRATEGY_NAMES))
+            confl  = f"{n_ag:2d}/25"
+            cd     = ' CD' if t.get('on_cooldown') else ''
+            strat  = (t.get('top_strategy') or '').replace('_', ' ')[:26]
+            print(f"  {c}{t['symbol']:<14} {d:<6}{W} {pct}  {confl}  {t.get('mode','?'):<10} {strat:<28}{cd}")
+        print(f"{'─'*88}")
         print(f"\n  Scanned: {len(status)}/60 tokens   "
               f"Fired: {len(fired)} signal(s)  "
-              f"(threshold ≥ {int(args.risk == 'balanced' and 70 or args.risk == 'conservative' and 75 or 65)}%)\n")
+              f"(ML ≥ {thr_pct}% AND confluence ≥ {int(_MIN_CONFLUENCE * len(STRATEGY_NAMES))}/25)\n")
 
         if fired:
-            print(f"  {'─'*50}")
+            print(f"  {'─'*56}")
             print(f"  ACTIVE SIGNALS ({len(fired)}):")
-            print(f"  {'─'*50}")
+            print(f"  {'─'*56}")
             for s in fired:
-                g = s.get('guidance', {})
+                g  = s.get('guidance', {})
                 tp = g.get('take_profit', {})
-                print(f"  [{s['mode'].upper():8}] {col.get(s['direction'],'')+s['direction']+W:4}  "
+                n  = round(s.get('confluence_score', 0) * len(STRATEGY_NAMES))
+                print(f"  [{s['mode'].upper():8}] {col.get(s['direction'],'')+s['direction']+W:<4}  "
                       f"{s['symbol']:<12} conf={s['confidence']:.0%}  "
+                      f"confl={n}/25  "
                       f"{s['top_strategies'][0].replace('_',' ') if s['top_strategies'] else '?'}")
                 print(f"             SL={g.get('stop_loss')}  "
                       f"TP1={tp.get('tp1')}  TP2={tp.get('tp2')}  R:R=1:{g.get('risk_reward','?')}\n")
