@@ -700,20 +700,32 @@ class Predictor:
         macro_1d   = _f('macro_trend_1d')
         macro_1w   = _f('macro_trend_1w')
         adx        = _f('adx_14', 20.0)
-        trend_conf = _f('trend_confluence')
-        mom_conf   = _f('momentum_confluence')
-        smart_conf = _f('smart_money_confluence')
-        vol_conf   = _f('volume_confluence')
-        candle_conf= _f('candle_confluence')
-        total_conf = _f('total_confluence')
+        # Raw confluence values from compute_category_confluence: all in [-1, +1]
+        trend_conf_raw = _f('trend_confluence')
+        mom_conf_raw   = _f('momentum_confluence')
+        smart_conf_raw = _f('smart_money_confluence')
+        vol_conf_raw   = _f('volume_confluence')
+        candle_conf_raw= _f('candle_confluence')
+        total_conf_raw = _f('total_confluence')
 
-        # Weighted composite bias score  (-1 → +1)
+        # Scale to [0, 10] for display: -1 → 0, 0 → 5, +1 → 10
+        def _c10(x: float) -> float:
+            return round((x + 1.0) / 2.0 * 10.0, 1)
+
+        trend_conf  = _c10(trend_conf_raw)
+        mom_conf    = _c10(mom_conf_raw)
+        smart_conf  = _c10(smart_conf_raw)
+        vol_conf    = _c10(vol_conf_raw)
+        candle_conf = _c10(candle_conf_raw)
+        total_conf  = _c10(total_conf_raw)
+
+        # Weighted composite bias score (-1 → +1), using raw centered values directly
         bias_score = (
-            macro_1d * 0.30
-            + macro_1w * 0.15
-            + (trend_conf / 10.0 - 0.5) * 0.25
-            + (mom_conf  / 10.0 - 0.5) * 0.20
-            + (smart_conf/ 10.0 - 0.5) * 0.10
+            macro_1d       * 0.30
+            + macro_1w     * 0.15
+            + trend_conf_raw  * 0.25
+            + mom_conf_raw    * 0.20
+            + smart_conf_raw  * 0.10
         )
         if   bias_score >  0.15: market_bias = "BULLISH"
         elif bias_score < -0.15: market_bias = "BEARISH"
@@ -747,11 +759,13 @@ class Predictor:
         bear_tp2 = round(price - 2.0 * step, 8)
         bear_tp3 = round(price - 3.5 * step, 8)
 
-        # ── Confluence summary label ──────────────────────────────────────────
-        if   total_conf >= 7.0: conf_tier = "Strong"
-        elif total_conf >= 5.0: conf_tier = "Moderate"
-        elif total_conf >= 3.0: conf_tier = "Weak"
-        else:                   conf_tier = "Very Weak"
+        # ── Confluence summary label (total_conf is now [0, 10]) ─────────────
+        # Strength is the distance from neutral (5.0): 0–4 bearish, 6–10 bullish
+        conf_magnitude = abs(total_conf - 5.0)  # 0 = fully neutral, 5 = max signal
+        if   conf_magnitude >= 3.0: conf_tier = "Strong"
+        elif conf_magnitude >= 1.75: conf_tier = "Moderate"
+        elif conf_magnitude >= 0.75: conf_tier = "Weak"
+        else:                        conf_tier = "Very Weak"
         if   market_bias == "BULLISH": conf_summary = f"{conf_tier} Bullish"
         elif market_bias == "BEARISH": conf_summary = f"{conf_tier} Bearish"
         else:                          conf_summary = f"{conf_tier} / Neutral"
