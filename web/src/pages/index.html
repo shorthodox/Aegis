@@ -944,6 +944,7 @@
             <a href="/web/src/pages/review.html" class="nav-link">Reviews</a>
             <a href="/web/src/pages/pricing.html" class="nav-link">Pricing</a>
             <a href="/web/src/pages/track-record.html" class="nav-link">Track Record</a>
+            <a href="/web/src/pages/pitch.html" class="nav-link" style="color:rgba(255,215,0,0.7);">Investor Brief</a>
         </nav>
 
         <div id="authButtonContainer" class="nav-auth-desktop" style="display:flex;align-items:center;gap:0.5rem;">
@@ -974,6 +975,7 @@
         <a href="/web/src/pages/review.html" class="nav-mobile-link"><i class="fas fa-star"></i> Reviews</a>
         <a href="/web/src/pages/pricing.html" class="nav-mobile-link"><i class="fas fa-tag"></i> Pricing</a>
         <a href="/web/src/pages/track-record.html" class="nav-mobile-link"><i class="fas fa-chart-bar"></i> Track Record</a>
+        <a href="/web/src/pages/pitch.html" class="nav-mobile-link" style="color:rgba(255,215,0,0.8);"><i class="fas fa-file-alt"></i> Investor Brief</a>
         <div class="nav-mobile-auth">
             <button class="nav-btn-login" id="mPortalProxy"><i class="fas fa-user-shield"></i> Sign In</button>
             <button class="nav-btn-dashboard" id="mDashProxy" style="display:none;"><i class="fas fa-chart-line"></i> Dashboard</button>
@@ -1130,72 +1132,45 @@
         </div>
     </section>
 
-    <!-- HOW IT WORKS — 8 Layers -->
+    <!-- HOW IT WORKS — condensed -->
     <section id="sentinel" class="feature-section">
         <div class="feature-container">
             <h2 class="section-title">How It Works — Every Signal Passes 8 Layers</h2>
             <p style="color:var(--text-dim); max-width:860px; margin:0 auto 2rem; line-height:1.85; font-size:0.95rem;">
-                Before a BUY or SELL signal ever reaches your screen, the engine runs through a strict checklist. Most signals <em>fail</em> this checklist — and that's exactly the point. Fewer signals, but much higher quality.
+                Before a BUY or SELL signal ever reaches your screen, the engine runs through a strict checklist. Most signals <em>fail</em> this checklist &mdash; and that&rsquo;s exactly the point. Fewer signals, much higher quality.
             </p>
-            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:1.2rem; text-align:left; max-width:1100px; margin:0 auto;">
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:1.2rem; text-align:left; max-width:1000px; margin:0 auto;">
 
                 <div style="background:rgba(0,0,0,0.4); border:1px solid rgba(0,242,255,0.12); border-radius:16px; padding:1.4rem;">
-                    <div style="font-size:1.5rem; margin-bottom:0.5rem;">🧠</div>
-                    <h4 style="color:#00f2ff; margin-bottom:0.4rem;">Layer 1 — AI Probability Engine</h4>
-                    <p style="color:var(--text-dim); font-size:0.86rem; line-height:1.75; margin-bottom:0.6rem;">Each token has its own trained AI brain (XGBoost) that studies years of price history and outputs a score: how likely is this coin to go UP, DOWN, or sideways right now?</p>
-                    <p style="color:#6b7280; font-size:0.76rem; font-style:italic;">Signal only advances if the AI score clears a per-token confidence threshold and the gap between the winning class and "do nothing" exceeds 5%.</p>
+                    <div style="font-size:1.4rem; margin-bottom:0.5rem;">&#129504;</div>
+                    <h4 style="color:#00f2ff; margin-bottom:0.5rem;">AI Per Token</h4>
+                    <p style="color:var(--text-dim); font-size:0.85rem; line-height:1.75;">Each of 60 tokens has its own XGBoost model trained on 7,000+ hours of data. A second &ldquo;meta model&rdquo; gates the first &mdash; a signal only fires if meta-confidence exceeds a per-token precision threshold. This is the technique institutional quant funds use.</p>
                 </div>
 
                 <div style="background:rgba(0,0,0,0.4); border:1px solid rgba(0,242,255,0.12); border-radius:16px; padding:1.4rem;">
-                    <div style="font-size:1.5rem; margin-bottom:0.5rem;">📍</div>
-                    <h4 style="color:#00f2ff; margin-bottom:0.4rem;">Layer 2 — Support &amp; Resistance Gate</h4>
-                    <p style="color:var(--text-dim); font-size:0.86rem; line-height:1.75; margin-bottom:0.6rem;">Think of support and resistance as floors and ceilings. Before any trade is considered, the engine checks if price is within 1% of one of these levels. If it's mid-range with no momentum, the signal is killed here.</p>
-                    <p style="color:#6b7280; font-size:0.76rem; font-style:italic;">This is the primary gate — the majority of scanned tokens are suppressed at this layer, keeping the dashboard clean and noise-free.</p>
+                    <div style="font-size:1.4rem; margin-bottom:0.5rem;">&#128205;</div>
+                    <h4 style="color:#00f2ff; margin-bottom:0.5rem;">S/R + Pattern Gate</h4>
+                    <p style="color:var(--text-dim); font-size:0.85rem; line-height:1.75;">Price must be within 1% of a structural support or resistance level. Then reversal patterns (RSI divergence, hammer candles, engulfing) add to a score. Only signals above the threshold advance. Mid-range noise is killed at this layer.</p>
                 </div>
 
                 <div style="background:rgba(0,0,0,0.4); border:1px solid rgba(0,242,255,0.12); border-radius:16px; padding:1.4rem;">
-                    <div style="font-size:1.5rem; margin-bottom:0.5rem;">🕯️</div>
-                    <h4 style="color:#00f2ff; margin-bottom:0.4rem;">Layer 3 — Reversal Pattern Scoring</h4>
-                    <p style="color:var(--text-dim); font-size:0.86rem; line-height:1.75; margin-bottom:0.6rem;">When price is near a key level, the engine looks for classic reversal clues — oversold RSI, hammer candles, engulfing patterns, bearish divergence. Each clue adds to a score. Only signals above the threshold advance.</p>
-                    <p style="color:#6b7280; font-size:0.76rem; font-style:italic;">The threshold adjusts dynamically based on volume quality and trend alignment — harder to pass in thin, noisy markets.</p>
+                    <div style="font-size:1.4rem; margin-bottom:0.5rem;">&#128200;</div>
+                    <h4 style="color:#00f2ff; margin-bottom:0.5rem;">Positive EV Required</h4>
+                    <p style="color:var(--text-dim); font-size:0.85rem; line-height:1.75;">Before any signal fires, the engine computes: <em>AI_prob &times; TP% &minus; (1&minus;AI_prob) &times; SL% &minus; fees</em>. If the expected value is negative, the signal is killed. No losing-expectancy trades reach your screen.</p>
                 </div>
 
                 <div style="background:rgba(0,0,0,0.4); border:1px solid rgba(0,242,255,0.12); border-radius:16px; padding:1.4rem;">
-                    <div style="font-size:1.5rem; margin-bottom:0.5rem;">3️⃣</div>
-                    <h4 style="color:#00f2ff; margin-bottom:0.4rem;">Layer 4 — 3-Candle Confirmation Rule</h4>
-                    <p style="color:var(--text-dim); font-size:0.86rem; line-height:1.75; margin-bottom:0.6rem;">The engine doesn't jump in on the first sign of a reversal. It waits for 3 consecutive candles moving in the new direction — concrete proof that buyers (or sellers) have actually taken control.</p>
-                    <p style="color:#6b7280; font-size:0.76rem; font-style:italic;">Until all 3 candles close, the signal shows as AWAITING_SR_CONFIRMATION on your dashboard. No premature entries.</p>
-                </div>
-
-                <div style="background:rgba(0,0,0,0.4); border:1px solid rgba(0,242,255,0.12); border-radius:16px; padding:1.4rem;">
-                    <div style="font-size:1.5rem; margin-bottom:0.5rem;">📊</div>
-                    <h4 style="color:#00f2ff; margin-bottom:0.4rem;">Layer 5 — Confluence &amp; SHAP Validation</h4>
-                    <p style="color:var(--text-dim); font-size:0.86rem; line-height:1.75; margin-bottom:0.6rem;">Volume, trend alignment, and the AI's own explanation (SHAP values) all vote. If volume is strong and the model is also highlighting S/R proximity as its top reasoning, the threshold gets easier to pass. Thin volume raises it.</p>
-                    <p style="color:#6b7280; font-size:0.76rem; font-style:italic;">When S/R features top the model's SHAP list, it means the AI and technical analysis independently agree on the same level.</p>
-                </div>
-
-                <div style="background:rgba(0,0,0,0.4); border:1px solid rgba(0,242,255,0.12); border-radius:16px; padding:1.4rem;">
-                    <div style="font-size:1.5rem; margin-bottom:0.5rem;">💰</div>
-                    <h4 style="color:#00f2ff; margin-bottom:0.4rem;">Layer 6 — Expectancy Gate</h4>
-                    <p style="color:var(--text-dim); font-size:0.86rem; line-height:1.75; margin-bottom:0.6rem;">Before the signal fires, the engine does a profit calculation: if this trade played out exactly as expected — including fees and slippage — would it make money? If the math says no, the signal is killed. No negative-EV trades reach the dashboard.</p>
-                    <p style="color:#6b7280; font-size:0.76rem; font-style:italic;">EV = AI_prob × TP% − (1−AI_prob) × SL% − trading costs. Must be positive to pass.</p>
-                </div>
-
-                <div style="background:rgba(0,0,0,0.4); border:1px solid rgba(0,242,255,0.12); border-radius:16px; padding:1.4rem;">
-                    <div style="font-size:1.5rem; margin-bottom:0.5rem;">🌐</div>
-                    <h4 style="color:#00f2ff; margin-bottom:0.4rem;">Layer 7 — Macro Regime Filter</h4>
-                    <p style="color:var(--text-dim); font-size:0.86rem; line-height:1.75; margin-bottom:0.6rem;">The engine checks the big picture using daily and weekly EMA-50. If the macro trend is strongly bearish, BUY signals are blocked. If strongly bullish, SELL signals are blocked. It prevents trading against the tide.</p>
-                    <p style="color:#6b7280; font-size:0.76rem; font-style:italic;">Computed by resampling daily data into weekly bars — no dependency on broker-provided weekly candles.</p>
-                </div>
-
-                <div style="background:rgba(0,0,0,0.4); border:1px solid rgba(0,242,255,0.12); border-radius:16px; padding:1.4rem;">
-                    <div style="font-size:1.5rem; margin-bottom:0.5rem;">₿</div>
-                    <h4 style="color:#00f2ff; margin-bottom:0.4rem;">Layer 8 — BTC Correlation Brake</h4>
-                    <p style="color:var(--text-dim); font-size:0.86rem; line-height:1.75; margin-bottom:0.6rem;">Bitcoin is the heartbeat of crypto. If BTC drops more than 2% below its EMA-200, all BUY signals across every token are shut off. When BTC falls hard, almost everything falls with it — buying alts in that environment is structurally unsound.</p>
-                    <p style="color:#6b7280; font-size:0.76rem; font-style:italic;">Crypto cross-asset correlations during risk-off moves approach 1.0. This brake is non-negotiable.</p>
+                    <div style="font-size:1.4rem; margin-bottom:0.5rem;">&#8383;</div>
+                    <h4 style="color:#00f2ff; margin-bottom:0.5rem;">Macro + BTC Brake</h4>
+                    <p style="color:var(--text-dim); font-size:0.85rem; line-height:1.75;">Two final guards: if the macro trend is strongly bearish, BUY signals are blocked across all tokens. If BTC drops &gt;2% below its EMA-200, all BUY signals are shut off. It respects the bigger picture.</p>
                 </div>
 
             </div>
+            <p style="text-align:center; margin-top:2rem; font-size:0.85rem;">
+                <a href="/web/src/pages/pitch.html" style="color:#00f2ff; text-decoration:none; font-weight:600; border-bottom:1px solid rgba(0,242,255,0.3); padding-bottom:1px;">
+                    See full 8-layer technical breakdown &rarr; Investor Brief
+                </a>
+            </p>
         </div>
     </section>
 
