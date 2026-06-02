@@ -2359,12 +2359,12 @@ DISPOSABLE_EMAIL_DOMAINS = {
 # Email configuration
 # -------------------------------------------------------------------
 conf = ConnectionConfig(
-    MAIL_USERNAME=os.getenv("MAIL_USERNAME", "animeshkukreti@gatekeeper.sbs"),
+    MAIL_USERNAME=os.getenv("MAIL_USERNAME", "animeshkukreti60@gmail.com"),
     MAIL_PASSWORD=SecretStr(os.getenv("MAIL_PASSWORD", "")),
-    MAIL_FROM=os.getenv("MAIL_FROM", "animeshkukreti@gatekeeper.sbs"),
+    MAIL_FROM=os.getenv("MAIL_FROM", "animeshkukreti60@gmail.com"),
     MAIL_FROM_NAME=os.getenv("MAIL_FROM_NAME", "Gatekeeper (Aegis-1)"),
     MAIL_PORT=int(os.getenv("MAIL_PORT", "587")),
-    MAIL_SERVER=os.getenv("MAIL_SERVER", "smtp.neo.space"),
+    MAIL_SERVER=os.getenv("MAIL_SERVER", "smtp.gmail.com"),
     MAIL_STARTTLS=os.getenv("MAIL_STARTTLS", "true").lower() == "true",
     MAIL_SSL_TLS=os.getenv("MAIL_SSL_TLS", "false").lower() == "true",
 )
