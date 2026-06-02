@@ -1384,6 +1384,14 @@ function updateDashboardData(data) {
   // User-initiated real trades are synced via the Firestore users/{uid}/trades
   // listener in setupFirestoreListeners(), which is the authoritative source.
 
+  // Forward trader engine data to the cockpit handlers.
+  // The trader section in dashboard.html listens for 'aegis-ws-message' on
+  // document; gatekeeper.js is the only place that receives the WebSocket
+  // payload, so it must re-dispatch it here for the cockpit to function.
+  if (data.trader_status !== undefined || data.trader_signals !== undefined) {
+    document.dispatchEvent(new CustomEvent('aegis-ws-message', { detail: data }));
+  }
+
   // Update alpha mode status
   if (data.alpha_mode !== undefined) {
     currentAlphaMode = data.alpha_mode;
