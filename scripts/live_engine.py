@@ -191,8 +191,10 @@ class LiveEngine:
     5. After every cycle  → write data/track_record.json
     """
 
-    MAX_CONCURRENT = 8      # parallel predictor goroutines (semaphore)
-    HOURS_CONTEXT  = 300    # bars fed to predictor (300 h ≈ 12.5 days of 1-h data)
+    MAX_CONCURRENT   = 8      # parallel predictor goroutines (semaphore)
+    HOURS_CONTEXT    = 300    # bars fed to predictor (300 h ≈ 12.5 days of 1-h data)
+    MIN_HOLD_SECONDS = 7_200  # 2 h minimum hold before a model-reversal exit is allowed
+    COOLDOWN_SECONDS = 1_800  # 30 min post-close cooldown before any re-entry
 
     def __init__(
         self,
@@ -212,6 +214,9 @@ class LiveEngine:
         self.predictors:   Dict[str, Any]   = {}
         self.last_signals: Dict[str, Any]   = {}
         self.live_prices:  Dict[str, float] = {}
+
+        self._open_time:       Dict[str, float] = {}   # symbol → unix ts when position opened
+        self._last_close_time: Dict[str, float] = {}   # symbol → unix ts when last closed
 
         self.bootstrap_done  = 0
         self.bootstrap_total = len(token_configs)
@@ -362,7 +367,9 @@ class LiveEngine:
             if existing:
                 self._manage_exit(symbol, existing, result, price)
             elif result.get('fire') and result.get('tradeable', True) and price > 0:
-                self._open_position(symbol, result, price)
+                cooldown_elapsed = time.time() - self._last_close_time.get(symbol, 0)
+                if cooldown_elapsed >= self.COOLDOWN_SECONDS:
+                    self._open_position(symbol, result, price)
 
             self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
 
@@ -373,19 +380,23 @@ class LiveEngine:
         side = result.get('side', 'FLAT')
         fire = bool(result.get('fire', False))
 
-        # Dynamic TP: the meta gate fired the opposite direction
+        # Dynamic TP: the meta gate fired the opposite direction.
+        # Guard: only allow reversal after the position has been held for
+        # MIN_HOLD_SECONDS (2 h) so the model can't flip-flop every scan.
         opposite = (
             (pos.direction == 'LONG'  and side == 'SELL' and fire) or
             (pos.direction == 'SHORT' and side == 'BUY'  and fire)
         )
         if opposite:
+            held = time.time() - self._open_time.get(symbol, 0)
+            if held < self.MIN_HOLD_SECONDS:
+                return  # too soon — ignore the reversal signal
             rec = self.wallet.close_trade(symbol, price, 'MODEL_REVERSAL_TP')
             if rec:
+                self._last_close_time[symbol] = time.time()
                 print(f'[{symbol}] TP {rec.outcome} {rec.pnl_pct:+.2f}% '
                       f'MODEL_REVERSAL_TP @ {price}')
-            # Immediately open the new position in the reversed direction
-            if result.get('tradeable', True) and price > 0:
-                self._open_position(symbol, result, price)
+            # Do NOT immediately re-open — let the next scan decide after cooldown
             return
 
         # Safety SL: price crossed the ATR-based hard stop
@@ -397,6 +408,7 @@ class LiveEngine:
             if sl_hit:
                 rec = self.wallet.close_trade(symbol, price, 'STOP_HIT')
                 if rec:
+                    self._last_close_time[symbol] = time.time()
                     print(f'[{symbol}] SL {rec.outcome} {rec.pnl_pct:+.2f}% '
                           f'STOP_HIT @ {price}')
 
@@ -428,6 +440,7 @@ class LiveEngine:
             atr_multiplier  = atr_mult,
         )
         self.wallet.open_trade(pos)
+        self._open_time[symbol] = time.time()
         print(f'[{symbol}] OPEN {direction} @ {price} | '
               f'conf={meta_conf:.3f} SL={stop_loss:.4f} size={pos_value:.0f} USDT')
 
