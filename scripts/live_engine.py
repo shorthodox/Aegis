@@ -81,6 +81,9 @@ class Position:
     entry_time:      str
     meta_confidence: float
     atr_multiplier:  float
+    take_profit_1:   float = 0.0   # TP1: 1× ATR step from entry
+    take_profit_2:   float = 0.0   # TP2: 2× ATR step — hard ceiling if model never reverses
+    take_profit_3:   float = 0.0   # TP3: 3.5× ATR step — extended target
 
 
 @dataclass
@@ -196,6 +199,11 @@ class LiveEngine:
     MIN_HOLD_SECONDS      = 7_200    # 2 h minimum hold before a model-reversal exit is allowed
     COOLDOWN_SECONDS      = 14_400   # 4 h post-close cooldown before any re-entry on same token
     FLIP_COOLDOWN_SECONDS = 28_800   # 8 h extra cooldown when new signal is opposite direction
+    MAX_HOLD_SECONDS      = 172_800  # 48 h absolute ceiling — close zombie positions at market
+    # Confluence quality gate (scale [0, 10] after the recent predictor fix):
+    # 5.0 = neutral. BUY signals need bullish lean; SELL signals need bearish lean.
+    CONFLUENCE_BUY_MIN    = 5.5      # total confluence ≥ 5.5 required to open a LONG
+    CONFLUENCE_SELL_MAX   = 4.5      # total confluence ≤ 4.5 required to open a SHORT
 
     def __init__(
         self,
@@ -368,7 +376,7 @@ class LiveEngine:
             existing = self.wallet.open_positions.get(symbol)
             if existing:
                 self._manage_exit(symbol, existing, result, price)
-            elif result.get('fire') and result.get('tradeable', True) and price > 0:
+            elif result.get('fire') and result.get('tradeable', False) and price > 0:
                 now              = time.time()
                 cooldown_elapsed = now - self._last_close_time.get(symbol, 0)
                 new_side         = result.get('side', 'FLAT')
@@ -378,7 +386,22 @@ class LiveEngine:
                     self.FLIP_COOLDOWN_SECONDS if is_flip else self.COOLDOWN_SECONDS
                 )
                 if cooldown_elapsed >= required_cooldown:
-                    self._open_position(symbol, result, price)
+                    # Confluence quality gate — ensure indicator ensemble agrees
+                    # with the signal direction before committing real money.
+                    # total is [0,10]: 5=neutral, >5=bullish, <5=bearish.
+                    _conf_data  = result.get('confluence') or {}
+                    _conf_total = float(_conf_data.get('total', 5.0))
+                    _conf_ok = (
+                        (new_side == 'BUY'  and _conf_total >= self.CONFLUENCE_BUY_MIN) or
+                        (new_side == 'SELL' and _conf_total <= self.CONFLUENCE_SELL_MAX)
+                    )
+                    if _conf_ok:
+                        self._open_position(symbol, result, price)
+                    else:
+                        print(f'[{symbol}] CONF BLOCKED {new_side} '
+                              f'confluence={_conf_total:.1f}/10 '
+                              f'(need BUY≥{self.CONFLUENCE_BUY_MIN} '
+                              f'or SELL≤{self.CONFLUENCE_SELL_MAX})')
                 elif is_flip:
                     print(f'[{symbol}] FLIP-FLOP BLOCKED {last_side}→{new_side} '
                           f'({int((required_cooldown - cooldown_elapsed)/60)} min remaining)')
@@ -389,42 +412,68 @@ class LiveEngine:
 
     def _manage_exit(self, symbol: str, pos: Position,
                      result: Dict[str, Any], price: float) -> None:
+        # Prefer the real-time WebSocket price — it updates every ~1s so SL/TP
+        # checks are much more accurate than the 5-min-old predictor candle close.
+        live_px = self.live_prices.get(symbol, 0.0)
+        check_price = live_px if live_px > 0 else price
+
+        now  = time.time()
+        held = now - self._open_time.get(symbol, 0)
+
+        def _close(reason: str) -> None:
+            rec = self.wallet.close_trade(symbol, check_price, reason)
+            if rec:
+                self._last_close_time[symbol] = now
+                self._last_close_side[symbol] = pos.side
+                tag = 'WIN' if rec.pnl_pct > 0 else 'LOSS'
+                print(f'[{symbol}] {reason} {tag} {rec.pnl_pct:+.2f}% @ {check_price:.6g}')
+
+        # ── 1. Maximum hold time (zombie guard) ──────────────────────────────
+        if held >= self.MAX_HOLD_SECONDS:
+            _close('MAX_HOLD_EXPIRED')
+            return
+
+        # ── 2. TP1 hit — primary take-profit ─────────────────────────────────
+        if pos.take_profit_1 > 0:
+            tp1_hit = (
+                (pos.direction == 'LONG'  and check_price >= pos.take_profit_1) or
+                (pos.direction == 'SHORT' and check_price <= pos.take_profit_1)
+            )
+            if tp1_hit:
+                _close('TP1_HIT')
+                return
+
+        # ── 3. TP2 hit — hard ceiling (catches gaps where TP1 was skipped) ───
+        if pos.take_profit_2 > 0:
+            tp2_hit = (
+                (pos.direction == 'LONG'  and check_price >= pos.take_profit_2) or
+                (pos.direction == 'SHORT' and check_price <= pos.take_profit_2)
+            )
+            if tp2_hit:
+                _close('TP2_HIT')
+                return
+
+        # ── 4. Model-reversal TP (dynamic exit) ──────────────────────────────
+        # The meta gate fired the opposite direction → treat as exit signal.
+        # Guard: min 2h hold so the model can't flip-flop every scan.
         side = result.get('side', 'FLAT')
         fire = bool(result.get('fire', False))
-
-        # Dynamic TP: the meta gate fired the opposite direction.
-        # Guard: only allow reversal after the position has been held for
-        # MIN_HOLD_SECONDS (2 h) so the model can't flip-flop every scan.
         opposite = (
             (pos.direction == 'LONG'  and side == 'SELL' and fire) or
             (pos.direction == 'SHORT' and side == 'BUY'  and fire)
         )
-        if opposite:
-            held = time.time() - self._open_time.get(symbol, 0)
-            if held < self.MIN_HOLD_SECONDS:
-                return  # too soon — ignore the reversal signal
-            rec = self.wallet.close_trade(symbol, price, 'MODEL_REVERSAL_TP')
-            if rec:
-                self._last_close_time[symbol] = time.time()
-                self._last_close_side[symbol] = pos.side
-                print(f'[{symbol}] TP {rec.outcome} {rec.pnl_pct:+.2f}% '
-                      f'MODEL_REVERSAL_TP @ {price}')
-            # Do NOT immediately re-open — let the next scan decide after cooldown
+        if opposite and held >= self.MIN_HOLD_SECONDS:
+            _close('MODEL_REVERSAL_TP')
             return
 
-        # Safety SL: price crossed the ATR-based hard stop
+        # ── 5. ATR-based stop loss ────────────────────────────────────────────
         if pos.stop_loss > 0:
             sl_hit = (
-                (pos.direction == 'LONG'  and price <= pos.stop_loss) or
-                (pos.direction == 'SHORT' and price >= pos.stop_loss)
+                (pos.direction == 'LONG'  and check_price <= pos.stop_loss) or
+                (pos.direction == 'SHORT' and check_price >= pos.stop_loss)
             )
             if sl_hit:
-                rec = self.wallet.close_trade(symbol, price, 'STOP_HIT')
-                if rec:
-                    self._last_close_time[symbol] = time.time()
-                    self._last_close_side[symbol] = pos.side
-                    print(f'[{symbol}] SL {rec.outcome} {rec.pnl_pct:+.2f}% '
-                          f'STOP_HIT @ {price}')
+                _close('STOP_HIT')
 
     def _open_position(self, symbol: str, result: Dict[str, Any],
                        price: float) -> None:
@@ -441,6 +490,17 @@ class LiveEngine:
                      else (price + atr_mult * atr)
         pos_value  = self.wallet.position_size()
 
+        # TP levels from predictor ATR-projected targets; fall back to ATR multiples
+        step = atr_mult * atr
+        if direction == 'LONG':
+            tp1 = float(result.get('bull_tp1') or round(price + 1.0 * step, 8))
+            tp2 = float(result.get('bull_tp2') or round(price + 2.0 * step, 8))
+            tp3 = float(result.get('bull_tp3') or round(price + 3.5 * step, 8))
+        else:
+            tp1 = float(result.get('bear_tp1') or round(price - 1.0 * step, 8))
+            tp2 = float(result.get('bear_tp2') or round(price - 2.0 * step, 8))
+            tp3 = float(result.get('bear_tp3') or round(price - 3.5 * step, 8))
+
         pos = Position(
             symbol          = symbol,
             direction       = direction,
@@ -452,11 +512,15 @@ class LiveEngine:
             entry_time      = datetime.now(timezone.utc).isoformat(),
             meta_confidence = round(meta_conf, 4),
             atr_multiplier  = atr_mult,
+            take_profit_1   = round(tp1, 8),
+            take_profit_2   = round(tp2, 8),
+            take_profit_3   = round(tp3, 8),
         )
         self.wallet.open_trade(pos)
         self._open_time[symbol] = time.time()
         print(f'[{symbol}] OPEN {direction} @ {price} | '
-              f'conf={meta_conf:.3f} SL={stop_loss:.4f} size={pos_value:.0f} USDT')
+              f'conf={meta_conf:.3f} SL={stop_loss:.6g} '
+              f'TP1={tp1:.6g} TP2={tp2:.6g} size={pos_value:.0f} USDT')
 
     # ── signal entry builder (for dashboard / last_signals) ───────────────────
 
@@ -502,16 +566,34 @@ class LiveEngine:
             'timeframe':       '1h',
         }
 
-        # Convenience TP/SL for the active direction
+        # TP/SL levels for the active direction
+        step = atr_mult * atr
         if side == 'BUY':
-            entry['suggested_tp'] = result.get('bull_tp1', round(price + atr_mult * atr, 8))
-            entry['suggested_sl'] = round(price - atr_mult * atr, 8)
+            entry['suggested_tp'] = result.get('bull_tp1', round(price + step, 8))
+            entry['suggested_sl'] = round(price - step, 8)
         elif side == 'SELL':
-            entry['suggested_tp'] = result.get('bear_tp1', round(price - atr_mult * atr, 8))
-            entry['suggested_sl'] = round(price + atr_mult * atr, 8)
+            entry['suggested_tp'] = result.get('bear_tp1', round(price - step, 8))
+            entry['suggested_sl'] = round(price + step, 8)
         else:
             entry['suggested_tp'] = None
             entry['suggested_sl'] = None
+
+        # Expected move projection: confluence strength × ATR % × 3× factor
+        _conf_data    = result.get('confluence') or {}
+        _conf_total   = float(_conf_data.get('total', 5.0))      # [0, 10]
+        _conf_raw     = abs(_conf_total - 5.0) / 5.0             # 0-1 strength
+        _atr_pct      = float(result.get('atr_pct', 0))
+        entry['expected_move_pct'] = round(_conf_raw * _atr_pct * 3.0, 2)
+
+        # Risk/reward ratio (TP1 vs SL)
+        sl_val = entry.get('suggested_sl', 0)
+        tp_val = entry.get('suggested_tp', 0)
+        if price > 0 and sl_val and tp_val:
+            risk   = abs(price - sl_val)
+            reward = abs(price - tp_val)
+            entry['risk_reward'] = round(reward / risk, 2) if risk > 0 else 0
+        else:
+            entry['risk_reward'] = 0
 
         # Forward all market context fields from predictor
         _CONTEXT_KEYS = (
@@ -557,6 +639,10 @@ class LiveEngine:
                     'meta_confidence': p.meta_confidence,
                     'position_value':  p.position_value,
                     'signal_strength': '',
+                    'stop_loss':       p.stop_loss,
+                    'take_profit_1':   p.take_profit_1,
+                    'take_profit_2':   p.take_profit_2,
+                    'take_profit_3':   p.take_profit_3,
                 }
                 for p in self.wallet.open_positions.values()
             ]

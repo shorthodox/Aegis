@@ -1054,15 +1054,24 @@
                     </p>
                 </div>
 
+                <div style="background:rgba(250,204,21,0.03); border:1px solid rgba(250,204,21,0.15); border-radius:20px; padding:1.8rem;">
+                    <div style="font-size:2rem; margin-bottom:0.8rem;">🤖</div>
+                    <h3 style="color:#fff; font-size:1rem; margin:0 0 0.7rem;">Universal Trader Bot — 3 Timeframes, 25 Strategies</h3>
+                    <p style="color:#8892a4; font-size:0.88rem; line-height:1.75; margin:0;">
+                        The AEGIS Trader Bot is a second AI engine trained on 10 core tokens and deployed across all 60. It runs three modes simultaneously — <strong style="color:#e2e8f0;">scalping (5m), intraday (1h), and swing (4h)</strong> — with 25 named strategies covering VWAP bounce, EMA21 bounce, BB squeeze, liquidation cascade fade, and more. Every virtual trade is logged to the public track record with real entry, SL, TP1, TP2, and P&amp;L.
+                    </p>
+                </div>
+
             </div>
 
             <!-- Quick stats -->
             <div class="feature-stats" style="margin-top:3rem; flex-wrap:wrap; gap:2.5rem;">
                 <div><strong>60</strong><br><small style="color:var(--text-dim)">Tokens Monitored</small></div>
-                <div><strong>24</strong><br><small style="color:var(--text-dim)">Tradeable Signals</small></div>
+                <div><strong>2</strong><br><small style="color:var(--text-dim)">Signal Engines</small></div>
                 <div><strong>8</strong><br><small style="color:var(--text-dim)">Filtering Layers</small></div>
+                <div><strong>25</strong><br><small style="color:var(--text-dim)">Trading Strategies</small></div>
+                <div><strong>3</strong><br><small style="color:var(--text-dim)">Trading Modes</small></div>
                 <div><strong>~1s</strong><br><small style="color:var(--text-dim)">Live Price Updates</small></div>
-                <div><strong>5-min</strong><br><small style="color:var(--text-dim)">Scan Interval</small></div>
             </div>
         </div>
     </section>
@@ -1094,7 +1103,9 @@
                         <li><strong style="color:#d1fae5;">Honest backtested models.</strong> Every model is tested on unseen holdout data before being marked tradeable. If it doesn't pass, it doesn't trade.</li>
                         <li><strong style="color:#d1fae5;">Market context for all 60 tokens.</strong> Even when no signal fires, you get RSI, trend regime, funding rate, bias, and a plain-English explanation. You're never left in the dark.</li>
                         <li><strong style="color:#d1fae5;">Macro protection.</strong> When BTC drops hard, all BUY signals are blocked across every token. It respects the bigger picture.</li>
-                        <li><strong style="color:#d1fae5;">Transparent track record.</strong> Every closed trade — wins and losses — is shown publicly. No cherry-picking.</li>
+                        <li><strong style="color:#d1fae5;">Three trading timeframes.</strong> The Universal Trader Bot covers scalping (5m), intraday (1h), and swing (4h) — giving every trader style a signal engine tuned to their horizon.</li>
+                        <li><strong style="color:#d1fae5;">Confluence scorecard + zone tracker.</strong> Every signal shows how strongly the indicator ensemble agrees, where price sits relative to SL/TP1/TP2/TP3, and how big the projected move is.</li>
+                        <li><strong style="color:#d1fae5;">Transparent track record.</strong> Both engines log every closed trade — wins and losses — to a <a href="/web/src/pages/track-record.html" style="color:#4ade80; text-decoration:underline;">public track record page</a>. No cherry-picking, ever.</li>
                     </ul>
                 </div>
 
@@ -1105,8 +1116,8 @@
                         <h3 style="color:#fb923c; font-size:0.85rem; font-weight:800; letter-spacing:0.1em; text-transform:uppercase; margin:0;">What We're Honest About</h3>
                     </div>
                     <ul class="he-list">
-                        <li><strong style="color:#fed7aa;">Not built for scalping.</strong> The engine scans every 5 minutes on 1-hour candles. If you're looking for 1-minute or 5-minute scalp signals, AEGIS is the wrong tool — it's designed for trades that play out over hours to days.</li>
-                        <li><strong style="color:#fed7aa;">Low signal frequency.</strong> We may fire 2–5 signals across 60 tokens in a day. Some days, zero. If you need constant action to feel like the product is working, this will feel slow — by design.</li>
+                        <li><strong style="color:#fed7aa;">AEGIS-1 is not for scalping.</strong> The main signal engine scans every 5 minutes on 1-hour candles and targets trades that play out over hours to days. The Universal Trader Bot adds 5-minute scalping, but scalp signals carry higher noise than swing setups.</li>
+                        <li><strong style="color:#fed7aa;">Low signal frequency on AEGIS-1.</strong> The main engine may fire 2–5 signals across 60 tokens in a day — sometimes zero. The Trader Bot fires more frequently across all three timeframes. If you need constant action, AEGIS-1 alone will feel slow — by design.</li>
                         <li><strong style="color:#fed7aa;">Models trained on historical data.</strong> All AI models are trained on past price behavior. In genuinely unprecedented market conditions (black swan events), the model's edge may degrade temporarily.</li>
                         <li><strong style="color:#fed7aa;">Paper trading only.</strong> AEGIS doesn't place real trades. It signals. Execution, position sizing, and risk management are still your responsibility.</li>
                         <li><strong style="color:#fed7aa;">Small live track record.</strong> We launched recently. The public track record is growing but not yet statistically deep. Trust the methodology and backtesting — live results will compound over time.</li>
@@ -1120,11 +1131,13 @@
                         <h3 style="color:#c084fc; font-size:0.85rem; font-weight:800; letter-spacing:0.1em; text-transform:uppercase; margin:0;">What's Coming</h3>
                     </div>
                     <ul class="he-list">
-                        <li><strong style="color:#e9d5ff;">Multi-timeframe signals.</strong> 15m and 4h models in development alongside the current 1h engine — covering more trader styles without sacrificing quality.</li>
+                        <li><strong style="color:#c4b5fd;">✅ Shipped: Universal Trader Bot.</strong> 3 modes (scalping/intraday/swing), 25 named strategies, runs across all 60 tokens with virtual wallet and public track record. Live now.</li>
+                        <li><strong style="color:#c4b5fd;">✅ Shipped: Confluence scorecard.</strong> 6 indicator categories (Trend, Momentum, Volume, Smart Money, Bands, Candle) shown on every token card with weighted scores.</li>
+                        <li><strong style="color:#c4b5fd;">✅ Shipped: Multi-level TP zone tracker.</strong> Every signal shows TP1, TP2, TP3 with live price dot and progress toward target. Real ATR-derived levels, not arbitrary percentages.</li>
                         <li><strong style="color:#e9d5ff;">Auto-retrain on drift.</strong> The system will detect when a model's live performance diverges from backtesting and trigger automatic retraining — keeping the edge fresh.</li>
                         <li><strong style="color:#e9d5ff;">Broker integration.</strong> Optional one-click execution via supported crypto exchanges — for users who want to remove manual execution delay entirely.</li>
-                        <li><strong style="color:#e9d5ff;">Portfolio risk view.</strong> If you hold multiple open positions across tokens, a combined portfolio risk dashboard will show your total exposure, correlation risk, and max drawdown estimate in real time.</li>
-                        <li><strong style="color:#e9d5ff;">Sentiment layer upgrade.</strong> On-chain data (wallet flows, exchange inflows), social sentiment, and news impact scoring will be added as live features — not just as backtested inputs.</li>
+                        <li><strong style="color:#e9d5ff;">Portfolio risk view.</strong> Combined dashboard showing total exposure, correlation risk, and max drawdown estimate across all open positions in real time.</li>
+                        <li><strong style="color:#e9d5ff;">On-chain sentiment layer.</strong> Wallet flows, exchange inflows, and social sentiment scoring added as live features — not just backtested inputs.</li>
                     </ul>
                 </div>
 
@@ -1202,7 +1215,7 @@
                         <li>S/R is the primary gate — mid-range noise is suppressed by design before any signal fires</li>
                         <li>Entry, SL, and TP reflect price at the confirmation candle close — no reaction delay</li>
                         <li>Most tokens return HOLD — intentionally fewer, much higher-quality signals</li>
-                        <li>58 individual models — each token trained on its own volatility and momentum profile</li>
+                        <li>60 individual models — each token trained on its own volatility and momentum profile</li>
                         <li>Stop distance is ATR-derived and asset-class-adjusted per trade, not arbitrary</li>
                     </ul>
                 </div>
@@ -1383,20 +1396,21 @@
                     <div class="he-icon">&#8593;</div>
                     <h3 class="he-card-title">Where We Lead</h3>
                     <ul class="he-list">
-                        <li>58 trained models — each token has its own dedicated AI brain, not a one-size-fits-all classifier</li>
+                        <li>60 trained models — each token has its own dedicated AI brain, not a one-size-fits-all classifier</li>
                         <li>8-layer signal filter; the majority of potential triggers are <em>intentionally rejected</em> before you see them</li>
-                        <li>Institutional risk controls (R:R gates, stop-loss discipline) baked into the engine, not bolted on after</li>
-                        <li>SHAP explainability on every signal — you see exactly which features drove the AI's decision</li>
-                        <li>Sub-second live delivery across 42 tokens, 24/7, without manual intervention</li>
+                        <li>Dual-engine: AEGIS-1 (swing / intraday) + Universal Trader Bot (scalping / intraday / swing) — two independent signal systems</li>
+                        <li>200+ indicators across 6 confluence categories with a real-time scorecard on every token card</li>
+                        <li>Sub-second live delivery across all 60 tokens, 24/7, without manual intervention</li>
+                        <li>Public track record — both engines log every virtual trade with entry, SL, TP, and P&amp;L. No cherry-picking.</li>
                     </ul>
                 </div>
                 <div class="he-card he-behind">
                     <div class="he-icon">&#8595;</div>
                     <h3 class="he-card-title">Still Building</h3>
                     <ul class="he-list">
-                        <li>16 of 58 models are trained and validated but not yet live — we deploy cautiously, not quickly</li>
-                        <li>In-terminal backtesting dashboard is in development; historical equity curves are not yet in the UI</li>
-                        <li>Mobile app is on the roadmap, not shipped</li>
+                        <li>Auto-retrain on performance drift is in development — models will re-learn as market regimes shift</li>
+                        <li>In-terminal backtesting dashboard: historical equity curves are not yet in the UI</li>
+                        <li>Mobile app is on the roadmap, not yet shipped</li>
                         <li>We're in beta — pricing reflects that and will increase at General Availability</li>
                     </ul>
                 </div>
