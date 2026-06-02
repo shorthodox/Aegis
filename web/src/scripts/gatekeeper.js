@@ -1207,38 +1207,87 @@ function updateDashboardData(data) {
       // For trial users, create signals for multiple timeframes (15m, 30m, 1h)
       const trialTimeframes = ['15m', '30m', '1h'];
 
+      // Build a complete signal object that includes all fields the panel
+      // renderers need. Real field names from live_engine._build_signal_entry:
+      //   suggested_sl / suggested_tp  (not sl / tp)
+      //   bull_tp1/2/3, bear_tp1/2/3
+      //   p_buy / p_sell / p_hold      (not raw_probabilities)
+      //   meta_confidence, threshold
+      //   rsi, adx, macd_signal, supertrend, funding_bias, oi_trend, etc.
+      function _buildSignalObj(sym, sig, tf) {
+        const isLong = (sig.direction || '').toUpperCase() === 'LONG' || (sig.signal || '').toUpperCase() === 'BUY';
+        return {
+          symbol:             sym,
+          signal:             sig.signal || 'WAITING',
+          fire:               sig.fire || false,
+          ai_prob:            sig.ai_prob || sig.meta_confidence || sig.confidence || 0,
+          meta_confidence:    sig.meta_confidence || 0,
+          threshold:          sig.threshold || 0.6,
+          signal_strength:    sig.signal_strength || 'NORMAL',
+          risk_pct:           sig.risk_pct || 2,
+          atr:                sig.atr || 0,
+          atr_pct:            sig.atr_pct || 0,
+          timeframe:          tf,
+          direction:          sig.direction || 'NEUTRAL',
+          entry_price:        sig.entry_price || sig.price || 0,
+          price:              sig.price || sig.entry_price || 0,
+          // SL/TP: real field names from live_engine
+          suggested_sl:       sig.suggested_sl || sig.sl || 0,
+          suggested_tp:       sig.suggested_tp || sig.tp || 0,
+          sl:                 sig.suggested_sl || sig.sl || 0,
+          tp:                 sig.suggested_tp || (isLong ? sig.bull_tp1 : sig.bear_tp1) || sig.tp || 0,
+          bull_tp1:           sig.bull_tp1 || 0,
+          bull_tp2:           sig.bull_tp2 || 0,
+          bull_tp3:           sig.bull_tp3 || 0,
+          bear_tp1:           sig.bear_tp1 || 0,
+          bear_tp2:           sig.bear_tp2 || 0,
+          bear_tp3:           sig.bear_tp3 || 0,
+          support:            sig.support   || sig.s1 || 0,
+          resistance:         sig.resistance || sig.r1 || 0,
+          // AI probabilities: real field names
+          p_buy:              sig.p_buy  || 0,
+          p_sell:             sig.p_sell || 0,
+          p_hold:             sig.p_hold || 0,
+          // Kept for legacy callers
+          raw_probabilities:  sig.raw_probabilities || { SHORT: (sig.p_sell||0)*100, HOLD: (sig.p_hold||0)*100, LONG: (sig.p_buy||0)*100 },
+          // Expected move / R:R (from live_engine v3)
+          expected_move_pct:  sig.expected_move_pct || 0,
+          risk_reward:        sig.risk_reward || 0,
+          // Confluence (may be [0,10] or legacy [-1,+1])
+          confluence:         sig.confluence || null,
+          // Key indicators
+          rsi:                sig.rsi || 50,
+          adx:                sig.adx || 20,
+          macd_signal:        sig.macd_signal || 'NEUTRAL',
+          supertrend:         sig.supertrend || 'NEUTRAL',
+          market_bias:        sig.market_bias || 'NEUTRAL',
+          trend_regime:       sig.trend_regime || 'RANGING',
+          volatility_regime:  sig.volatility_regime || 'MEDIUM',
+          volume_strength:    sig.volume_strength || 'AVERAGE',
+          volume_zscore:      sig.volume_zscore || 0,
+          funding_bias:       sig.funding_bias || 'NEUTRAL',
+          oi_trend:           sig.oi_trend || 'STABLE',
+          // Misc
+          confidence_score:   sig.confidence_score || 0,
+          signal_id:          sig.signal_id || '',
+          sr_telemetry:       sig.sr_telemetry || null,
+          macro_regime:       sig.macro_regime || null,
+          probabilities:      sig.probabilities || {},
+          shap_values:        sig.shap_values || [],
+          expectancy:         sig.expectancy ?? null,
+          max_dd:             sig.max_dd ?? null,
+          profit_factor:      sig.profit_factor ?? null,
+          win_rate:           sig.win_rate ?? null,
+          total_trades:       sig.total_trades ?? 0,
+        };
+      }
+
       if (!['pro', 'premium', 'intermediate'].includes(userPlan)) {
         // For trial/basic users, create the same signal for all trial timeframes
         trialTimeframes.forEach(tf => {
           const key = `${sym}_${tf}`;
           window.latestSignals = window.latestSignals || {};
-          const signalObj = {
-            symbol: sym,
-            signal: sig.signal || 'WAITING',
-            ai_prob: sig.ai_prob || sig.confidence || 0,
-            signal_strength: sig.signal_strength || 'NORMAL',
-            risk_pct: sig.risk_pct || 2,
-            atr: sig.atr || 0,
-            timeframe: tf,
-            direction: sig.direction || "NEUTRAL",
-            entry_price: sig.entry_price || 0,
-            sl: sig.sl || 0,
-            tp: sig.tp || 0,
-            confidence_score: sig.confidence_score || 0,
-            signal_id: sig.signal_id || "",
-            trading_accuracy: sig.trading_accuracy || 0.5,
-            profitability_index: sig.profitability_index || 0,
-            sr_telemetry: sig.sr_telemetry || null,
-            confluence: sig.confluence || null,
-            probabilities: sig.probabilities || {},
-            shap_values: sig.shap_values || [],
-            expectancy: sig.expectancy ?? null,
-            max_dd: sig.max_dd ?? null,
-            profit_factor: sig.profit_factor ?? null,
-            win_rate: sig.win_rate ?? null,
-            total_trades: sig.total_trades ?? 0,
-          };
-          // Determine and set signal status
+          const signalObj = _buildSignalObj(sym, sig, tf);
           signalObj.status = getSignalStatus(signalObj);
           window.latestSignals[key] = signalObj;
         });
@@ -1247,34 +1296,7 @@ function updateDashboardData(data) {
         const tf = sig.timeframe || '1h';
         const key = `${sym}_${tf}`;
         window.latestSignals = window.latestSignals || {};
-        const signalObj = {
-          symbol: sym,
-          signal: sig.signal || 'WAITING',
-          ai_prob: sig.ai_prob || sig.confidence || 0,
-          signal_strength: sig.signal_strength || 'NORMAL',
-          risk_pct: sig.risk_pct || 2,
-          atr: sig.atr || 0,
-          timeframe: tf,
-          direction: sig.direction || "NEUTRAL",
-          entry_price: sig.entry_price || 0,
-          sl: sig.sl || 0,
-          tp: sig.tp || 0,
-          confidence_score: sig.confidence_score || 0,
-          signal_id: sig.signal_id || "",
-          trading_accuracy: sig.trading_accuracy || 0.5,
-          profitability_index: sig.profitability_index || 0,
-          sr_telemetry: sig.sr_telemetry || null,
-          macro_regime: sig.macro_regime || null,
-          confluence: sig.confluence || null,
-          probabilities: sig.probabilities || {},
-          shap_values: sig.shap_values || [],
-          expectancy: sig.expectancy ?? null,
-          max_dd: sig.max_dd ?? null,
-          profit_factor: sig.profit_factor ?? null,
-          win_rate: sig.win_rate ?? null,
-          total_trades: sig.total_trades ?? 0,
-        };
-        // Determine and set signal status
+        const signalObj = _buildSignalObj(sym, sig, tf);
         signalObj.status = getSignalStatus(signalObj);
         window.latestSignals[key] = signalObj;
       }

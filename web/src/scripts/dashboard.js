@@ -1076,7 +1076,26 @@ window.showSignalDetailsModal = function (signal) {
   window._fpSignal = signal;
 
   // Populate Feature Access Cards
-  const confluence = signal.confluence || { trend: 50, momentum: 50, volume: 50 };
+  // Confluence values are in [0,10] scale (5=neutral); convert to display %
+  // by mapping: 0→0%, 5→50%, 10→100%. Backward-compat: if abs(v)<=1.1 it's
+  // old [-1,+1] scale — convert first.
+  function _c10(v) {
+    const n = parseFloat(v) || 5;
+    if (Math.abs(n) <= 1.05) return parseFloat(((n + 1) / 2 * 10).toFixed(1));
+    return Math.min(10, Math.max(0, n));
+  }
+  function _cPct(v) { return Math.round(_c10(v) * 10); }  // [0,10] → [0,100]%
+
+  const rawConf = signal.confluence || {};
+  const _confDisp = {
+    trend:       _cPct(rawConf.trend       ?? 5),
+    momentum:    _cPct(rawConf.momentum    ?? 5),
+    volume:      _cPct(rawConf.volume      ?? 5),
+    smart_money: _cPct(rawConf.smart_money ?? 5),
+    candle:      _cPct(rawConf.candle      ?? 5),
+    total:       _cPct(rawConf.total       ?? 5),
+    summary:     rawConf.summary || '—',
+  };
   const _currentPrice = window.currentTickers?.[signal.symbol] ? parseFloat(window.currentTickers[signal.symbol]) : (signal.entry_price || 0);
   const _tier = getUserTier();
 
@@ -1091,8 +1110,11 @@ window.showSignalDetailsModal = function (signal) {
     </div>`;
   }
 
-  const _sl = signal.sl || 0;
-  const _tp = signal.tp || 0;
+  // Correct SL/TP field names (suggested_sl/tp come from live_engine;
+  // sl/tp are the normalised copies we now set in gatekeeper.js)
+  const _sl = signal.suggested_sl || signal.sl || 0;
+  const isLongSig = (signal.direction || '').toUpperCase() === 'LONG' || (signal.signal || '').toUpperCase() === 'BUY';
+  const _tp = signal.suggested_tp || (isLongSig ? signal.bull_tp1 : signal.bear_tp1) || signal.tp || 0;
   const _entry = signal.entry_price || 0;
   let _zoneBarHTML = '<div class="text-[9px] text-gray-500 flex items-center justify-center h-full">No levels</div>';
   if (_sl && _tp && _tp > _sl) {
@@ -1104,14 +1126,20 @@ window.showSignalDetailsModal = function (signal) {
   }
 
   let _shapLeadHTML = '';
-  const _rawP = signal.raw_probabilities;
-  const _probs = _rawP
-    ? { SHORT: (_rawP.SHORT||0)/100, HOLD: (_rawP.HOLD||0)/100, LONG: (_rawP.LONG||0)/100 }
-    : { SHORT: 0.18, HOLD: 0.08, LONG: 0.74 };
+  // Use real p_buy/p_sell/p_hold; fall back to legacy raw_probabilities if present
+  const _rp = signal.raw_probabilities;
+  const _probs = (signal.p_buy || signal.p_sell)
+    ? { SHORT: signal.p_sell || 0, HOLD: signal.p_hold || 0, LONG: signal.p_buy || 0 }
+    : _rp
+      ? { SHORT: (_rp.SHORT||0)/100, HOLD: (_rp.HOLD||0)/100, LONG: (_rp.LONG||0)/100 }
+      : { SHORT: 0, HOLD: 0, LONG: 0 };
   const _lead = Object.entries(_probs).sort((a,b) => b[1]-a[1])[0];
   const _leadPct = (_lead[1]*100).toFixed(0);
   const _leadColor = _lead[0]==='LONG' ? 'text-green-400' : _lead[0]==='SHORT' ? 'text-red-400' : 'text-gray-400';
-  _shapLeadHTML = `<div class="text-lg font-black ${_leadColor}">${_leadPct}% ${_lead[0]}</div>`;
+  const _metaConf = Math.round((signal.meta_confidence || 0) * 100);
+  _shapLeadHTML = `
+    <div class="text-lg font-black ${_leadColor}">${_leadPct}% ${_lead[0]}</div>
+    ${_metaConf > 0 ? `<div class="text-[9px] text-gray-500 mt-0.5">Meta: ${_metaConf}% vs ${Math.round((signal.threshold||0.6)*100)}% required</div>` : ''}`;
 
   const cardsHTML = `
     <!-- Card 1: Confluence -->
@@ -1125,24 +1153,25 @@ window.showSignalDetailsModal = function (signal) {
       <div class="space-y-1.5">
         <div class="flex items-center gap-2">
           <div class="flex-1 h-1 bg-black/50 rounded overflow-hidden">
-            <div class="h-full bg-cyan/70" style="width:${confluence.trend}%"></div>
+            <div class="h-full ${_confDisp.trend >= 55 ? 'bg-cyan/70' : 'bg-rose-400/70'}" style="width:${_confDisp.trend}%"></div>
           </div>
-          <span class="text-[10px] font-mono text-cyan w-8 text-right">${confluence.trend}%</span>
+          <span class="text-[10px] font-mono ${_confDisp.trend >= 55 ? 'text-cyan' : 'text-rose-400'} w-8 text-right">${_confDisp.trend}%</span>
         </div>
         <div class="flex items-center gap-2">
           <div class="flex-1 h-1 bg-black/50 rounded overflow-hidden">
-            <div class="h-full bg-blue-400/70" style="width:${confluence.momentum}%"></div>
+            <div class="h-full ${_confDisp.momentum >= 55 ? 'bg-blue-400/70' : 'bg-rose-400/70'}" style="width:${_confDisp.momentum}%"></div>
           </div>
-          <span class="text-[10px] font-mono text-blue-300 w-8 text-right">${confluence.momentum}%</span>
+          <span class="text-[10px] font-mono ${_confDisp.momentum >= 55 ? 'text-blue-300' : 'text-rose-400'} w-8 text-right">${_confDisp.momentum}%</span>
         </div>
         <div class="flex items-center gap-2">
           <div class="flex-1 h-1 bg-black/50 rounded overflow-hidden">
-            <div class="h-full bg-violet-400/70" style="width:${confluence.volume}%"></div>
+            <div class="h-full ${_confDisp.volume >= 55 ? 'bg-violet-400/70' : 'bg-rose-400/70'}" style="width:${_confDisp.volume}%"></div>
           </div>
-          <span class="text-[10px] font-mono text-violet-300 w-8 text-right">${confluence.volume}%</span>
+          <span class="text-[10px] font-mono ${_confDisp.volume >= 55 ? 'text-violet-300' : 'text-rose-400'} w-8 text-right">${_confDisp.volume}%</span>
         </div>
       </div>
-      <div class="mt-2 text-right">
+      <div class="mt-2 flex items-center justify-between">
+        <span class="text-[10px] font-mono text-gray-500">Total: <b class="${_confDisp.total >= 55 ? 'text-cyan' : _confDisp.total <= 45 ? 'text-rose-400' : 'text-gray-400'}">${_confDisp.total}%</b></span>
         <span class="text-[9px] text-gray-500 group-hover:text-cyan transition-colors">Full Analysis <i class="fas fa-arrow-right"></i></span>
       </div>
     </div>
@@ -1474,7 +1503,23 @@ window.closeFP = function() {
 
 function _renderFpConfluence(body, signal, tier) {
   const locked = tier === 'BASIC';
-  const confluence = signal.confluence || { trend: 50, momentum: 50, volume: 50 };
+  // Normalize confluence to display % scale using the same _c10 helper
+  // defined in showSignalDetailsModal scope (available as closure or re-declared)
+  function _c10fp(v) {
+    const n = parseFloat(v);
+    if (isNaN(n)) return 5;
+    if (Math.abs(n) <= 1.05) return parseFloat(((n + 1) / 2 * 10).toFixed(1));
+    return Math.min(10, Math.max(0, n));
+  }
+  const rawConf = signal.confluence || {};
+  const confluence = {
+    trend:       Math.round(_c10fp(rawConf.trend       ?? 5) * 10),
+    momentum:    Math.round(_c10fp(rawConf.momentum    ?? 5) * 10),
+    volume:      Math.round(_c10fp(rawConf.volume      ?? 5) * 10),
+    smart_money: Math.round(_c10fp(rawConf.smart_money ?? 5) * 10),
+    candle:      Math.round(_c10fp(rawConf.candle      ?? 5) * 10),
+    total:       Math.round(_c10fp(rawConf.total       ?? 5) * 10),
+  };
 
   const lockOverlay = locked ? `
     <div class="absolute inset-0 bg-black/80 backdrop-blur-md rounded-xl flex flex-col items-center justify-center z-10">
@@ -1492,35 +1537,47 @@ function _renderFpConfluence(body, signal, tier) {
           <span class="font-black text-2xl text-white">${signal.symbol}</span>
           <span class="text-sm text-gray-400">${signal.timeframe || '1h'}</span>
         </div>
-        <div class="space-y-4">
+        <div class="space-y-3">
           ${[
-            { label: 'Trend Alignment', sublabel: 'EMA 200/50 confluence weight', val: confluence.trend, color: 'bg-cyan', textColor: 'text-cyan' },
-            { label: 'Momentum Regime', sublabel: 'RSI / Stochastic position scaling', val: confluence.momentum, color: 'bg-blue-400', textColor: 'text-blue-300' },
-            { label: 'Volume Delta', sublabel: 'Net buying/selling pressure', val: confluence.volume, color: 'bg-violet-400', textColor: 'text-violet-300' },
-          ].map(item => `
-            <div class="bg-black/40 p-4 rounded-xl border border-white/5">
-              <div class="flex justify-between items-end mb-2">
-                <div>
+            { label: 'Trend',        sublabel: 'EMA stack · macro · market structure', val: confluence.trend,       weight: '×2.0', color: 'bg-cyan',        textColor: 'text-cyan' },
+            { label: 'Momentum',     sublabel: 'RSI · MACD · Stochastic · CCI',         val: confluence.momentum,    weight: '×1.5', color: 'bg-blue-400',    textColor: 'text-blue-300' },
+            { label: 'Volume / Flow',sublabel: 'CMF · MFI · OBV delta',                val: confluence.volume,      weight: '×1.5', color: 'bg-violet-400',  textColor: 'text-violet-300' },
+            { label: 'Smart Money',  sublabel: 'BOS · CHoCH · S/R proximity',           val: confluence.smart_money, weight: '×1.5', color: 'bg-amber-400',   textColor: 'text-amber-300' },
+            { label: 'Candle Patt.', sublabel: 'Hammer · Engulfing · Morning Star',     val: confluence.candle,      weight: '×0.5', color: 'bg-pink-400',    textColor: 'text-pink-300' },
+          ].map(item => {
+            const isBull = item.val >= 55;
+            const isBear = item.val <= 45;
+            const barColor = isBull ? item.color : isBear ? 'bg-rose-500/60' : 'bg-gray-600/60';
+            const valColor = isBull ? item.textColor : isBear ? 'text-rose-400' : 'text-gray-500';
+            return `
+            <div class="bg-black/40 p-3 rounded-xl border border-white/5">
+              <div class="flex justify-between items-center mb-1.5">
+                <div class="flex items-center gap-2">
                   <div class="text-sm font-bold text-white">${item.label}</div>
-                  <div class="text-[10px] text-gray-500 mt-0.5">${item.sublabel}</div>
+                  <span class="text-[9px] text-amber-400/60 font-bold">${item.weight}</span>
                 </div>
-                <div class="font-black font-mono text-2xl ${item.textColor}">${item.val}%</div>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-[9px] font-bold ${isBull ? 'text-emerald-400' : isBear ? 'text-rose-400' : 'text-gray-500'}">${isBull ? '▲' : isBear ? '▼' : '≈'}</span>
+                  <div class="font-black font-mono text-lg ${valColor}">${item.val}%</div>
+                </div>
               </div>
-              <div class="h-2 bg-black/60 rounded-full overflow-hidden">
-                <div class="h-full ${item.color} rounded-full transition-all" style="width:${item.val}%"></div>
+              <div class="h-1.5 bg-black/60 rounded-full overflow-hidden">
+                <div class="h-full ${barColor} rounded-full transition-all" style="width:${item.val}%"></div>
               </div>
-            </div>
-          `).join('')}
+              <div class="text-[9px] text-gray-600 mt-1">${item.sublabel}</div>
+            </div>`;
+          }).join('')}
         </div>
         <div class="mt-4 bg-cyan/5 border border-cyan/20 p-4 rounded-xl">
           <div class="flex items-center justify-between">
-            <span class="text-sm font-bold text-white">Overall Confluence Score</span>
-            <span class="text-2xl font-black font-mono text-cyan">${Math.round((confluence.trend + confluence.momentum + confluence.volume) / 3)}%</span>
+            <span class="text-sm font-bold text-white">Weighted Total Score</span>
+            <span class="text-2xl font-black font-mono ${confluence.total >= 65 ? 'text-emerald-400' : confluence.total <= 40 ? 'text-rose-400' : 'text-cyan'}">${confluence.total}%</span>
           </div>
           <div class="h-1.5 bg-black/50 rounded-full mt-2 overflow-hidden">
-            <div class="h-full bg-gradient-to-r from-cyan to-blue-500 rounded-full"
-                 style="width:${Math.round((confluence.trend + confluence.momentum + confluence.volume) / 3)}%"></div>
+            <div class="h-full ${confluence.total >= 65 ? 'bg-gradient-to-r from-cyan to-emerald-400' : confluence.total <= 40 ? 'bg-gradient-to-r from-rose-500 to-amber-400' : 'bg-gradient-to-r from-gray-500 to-gray-400'} rounded-full"
+                 style="width:${confluence.total}%"></div>
           </div>
+          <div class="text-[10px] text-gray-500 mt-2">${rawConf.summary || (confluence.total >= 65 ? 'Bullish' : confluence.total <= 40 ? 'Bearish' : 'Neutral')} · 50% = neutral</div>
         </div>
         <div class="mt-4 p-3 bg-black/30 rounded-lg border border-white/5">
           <div class="text-[10px] text-gray-500 font-mono">
@@ -1529,26 +1586,28 @@ function _renderFpConfluence(body, signal, tier) {
           </div>
         </div>
         ${(() => {
-          const _sc = Math.round((confluence.trend + confluence.momentum + confluence.volume) / 3);
+          const _sc = confluence.total;
           const _dir = signal.direction || 'LONG';
-          const _vc = _sc >= 75 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-            : _sc >= 55 ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+          const _vc = _sc >= 65 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+            : _sc >= 50 ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
             : 'bg-red-500/20 text-red-400 border-red-500/30';
-          const _vl = _sc >= 75 ? 'STRONG' : _sc >= 55 ? 'MODERATE' : 'WEAK';
-          const _dom = confluence.trend >= confluence.momentum && confluence.trend >= confluence.volume
-            ? 'Trend' : confluence.momentum >= confluence.volume ? 'Momentum' : 'Volume';
-          const _domVal = Math.max(confluence.trend, confluence.momentum, confluence.volume);
+          const _vl = _sc >= 65 ? 'STRONG' : _sc >= 50 ? 'MODERATE' : 'WEAK';
+          const _cats = [['Trend',confluence.trend],['Momentum',confluence.momentum],['Volume',confluence.volume],['Smart Money',confluence.smart_money],['Candle',confluence.candle]];
+          const _dom = _cats.reduce((a,b)=>b[1]>a[1]?b:a, _cats[0]);
           const _bias = _dir === 'LONG' ? 'bullish' : _dir === 'SHORT' ? 'bearish' : 'neutral';
-          const _why = `Score of ${_sc}% reflects ${_bias} alignment across all three vectors — Trend ${confluence.trend}%, Momentum ${confluence.momentum}%, Volume ${confluence.volume}%.`;
-          const _what = `${_dom} is the dominant driver at ${_domVal}%. ${_sc >= 75 ? 'All vectors are aligned — signal has strong structural backing.' : _sc >= 55 ? 'Minor divergence between vectors — signal is valid but not optimal.' : 'Significant divergence detected — signal reliability is reduced.'}`;
-          const _when = _sc >= 75
-            ? 'Optimal entry window. High confluence supports immediate position initiation at current levels.'
-            : _sc >= 55
-            ? 'Entry is viable — reduce position size by 30–50% to account for moderate alignment.'
-            : 'Stand aside. Wait for confluence to exceed 55% before considering a position.';
-          const _ep = (signal.entry_price || 0).toFixed(4);
-          const _sl = (signal.sl || 0).toFixed(4);
-          const _where = `Execute near $${_ep} with SL at $${_sl}. ${_sc >= 75 ? 'Full position size is justified.' : _sc >= 55 ? 'Reduced size recommended — scale in on confirmation.' : 'No trade — observe for vector realignment before acting.'}`;
+          const _agrCount = _cats.filter(c => _dir==='LONG' ? c[1]>=55 : c[1]<=45).length;
+          const _why = `Weighted total is ${_sc}% (50% = neutral). ${_agrCount}/5 indicator groups support the ${_bias} ${_dir} direction. ${rawConf.summary || ''}.`;
+          const _what = `Dominant driver: ${_dom[0]} at ${_dom[1]}%. ${_sc >= 65 ? 'Strong multi-group alignment — signal has high structural backing.' : _sc >= 50 ? 'Moderate alignment — signal is valid but not a textbook setup.' : 'Low alignment — major groups are disagreeing.'}`;
+          const _when = _sc >= 65
+            ? 'Strong setup — full position size is justified at current price.'
+            : _sc >= 50
+            ? 'Entry is viable — reduce position size by 30% to account for incomplete alignment.'
+            : 'Stand aside — wait for confluence to improve before committing capital.';
+          function _fmtPx(v) { v=parseFloat(v)||0; if(!v)return'—'; if(v>=100)return'$'+v.toLocaleString('en-US',{maximumFractionDigits:2}); if(v>=1)return'$'+v.toFixed(4); return'$'+v.toFixed(6); }
+          const _ep = _fmtPx(signal.entry_price || signal.price);
+          const _slVal = signal.suggested_sl || signal.sl || 0;
+          const _slStr = _fmtPx(_slVal);
+          const _where = `Execute near ${_ep} with SL at ${_slStr}. ${_sc >= 65 ? 'Full position size justified by strong confluence.' : _sc >= 50 ? 'Scale in with 50-70% size. Add on confirmation.' : 'Observe only — wait for groups to align before entering.'}`;
           return `<div class="mt-4 p-4 bg-black/40 rounded-xl border border-cyan/20">
             <div class="flex items-center justify-between mb-3">
               <h4 class="text-xs font-bold text-cyan uppercase tracking-wider">Signal Intelligence</h4>
@@ -1569,9 +1628,12 @@ function _renderFpConfluence(body, signal, tier) {
 
 function _renderFpZones(body, signal, tier) {
   const locked = tier === 'BASIC';
-  const sl = signal.sl || 0;
-  const tp = signal.tp || 0;
-  const entry = signal.entry_price || 0;
+  const isLongDir = (signal.direction || 'LONG').toUpperCase() === 'LONG';
+  // Use real field names from live_engine._build_signal_entry
+  const sl  = signal.suggested_sl || signal.sl  || 0;
+  const tp  = signal.suggested_tp || (isLongDir ? signal.bull_tp1 : signal.bear_tp1) || signal.tp  || 0;
+  const tp2 = isLongDir ? (signal.bull_tp2 || 0) : (signal.bear_tp2 || 0);
+  const entry = signal.entry_price || signal.price || 0;
   const currentPrice = window.currentTickers?.[signal.symbol]
     ? parseFloat(window.currentTickers[signal.symbol]) : entry;
 
@@ -1715,12 +1777,14 @@ function _renderFpZones(body, signal, tier) {
     if (el) el.textContent = `$${p.toFixed(4)}`;
     const dot = body.querySelector('#fp-zone-dot');
     if (dot) {
-      if (hasZone) {
-        const isLDiv = (signal.direction || 'LONG') === 'LONG';
-        const absR = Math.abs(tp - sl);
-        const newPct = isLDiv
-          ? Math.max(2, Math.min(98, (p - sl) / absR * 100))
-          : Math.max(2, Math.min(98, (sl - p) / absR * 100));
+      const _sl2 = signal.suggested_sl || signal.sl || 0;
+      const _tp2 = signal.suggested_tp || (isLongDir ? signal.bull_tp1 : signal.bear_tp1) || signal.tp || 0;
+      const _hasZ = _sl2 > 0 && _tp2 > 0 && Math.abs(_tp2 - _sl2) > 1e-10;
+      if (_hasZ) {
+        const absR = Math.abs(_tp2 - _sl2);
+        const newPct = isLongDir
+          ? Math.max(2, Math.min(98, (p - _sl2) / absR * 100))
+          : Math.max(2, Math.min(98, (_sl2 - p) / absR * 100));
         dot.style.left = `${newPct.toFixed(1)}%`;
       } else {
         dot.style.left = '50%';
@@ -1733,11 +1797,20 @@ function _renderFpZones(body, signal, tier) {
 function _renderFpExpectancy(body, signal, tier) {
   const locked = tier !== 'PRO';
 
-  const expectancy = typeof signal.expectancy === 'number' ? signal.expectancy : 1.64;
-  const maxDD = typeof signal.max_dd === 'number' ? signal.max_dd : -5.12;
-  const profitFactor = typeof signal.profit_factor === 'number' ? signal.profit_factor : 1.87;
-  const winRate = typeof signal.win_rate === 'number' ? signal.win_rate : 67;
-  const totalTrades = typeof signal.total_trades === 'number' ? signal.total_trades : 42;
+  // Use real signal fields from live_engine v3 first; fall back to track record
+  const metaConf   = Math.round((signal.meta_confidence || 0) * 100);
+  const threshold  = Math.round((signal.threshold || 0.6) * 100);
+  const expectedMv = parseFloat(signal.expected_move_pct || 0);
+  const rr         = parseFloat(signal.risk_reward || 0);
+  const atrPct     = parseFloat(signal.atr_pct || 0);
+  const volRegime  = (signal.volatility_regime || 'MEDIUM').toUpperCase();
+
+  // Historical stats — use signal values if present, else load from track record
+  let expectancy   = typeof signal.expectancy    === 'number' ? signal.expectancy    : null;
+  let maxDD        = typeof signal.max_dd        === 'number' ? signal.max_dd        : null;
+  let profitFactor = typeof signal.profit_factor === 'number' ? signal.profit_factor : null;
+  let winRate      = typeof signal.win_rate      === 'number' ? signal.win_rate      : null;
+  let totalTrades  = typeof signal.total_trades  === 'number' ? signal.total_trades  : null;
 
   const lockOverlay = locked ? `
     <div class="absolute inset-0 bg-black/80 backdrop-blur-md rounded-xl flex flex-col items-center justify-center z-10">
@@ -1753,107 +1826,129 @@ function _renderFpExpectancy(body, signal, tier) {
       <div class="${locked ? 'blur-md pointer-events-none select-none' : ''}">
         <div class="flex items-center gap-3 mb-4">
           <span class="font-black text-2xl text-white">${signal.symbol}</span>
-          <span class="text-xs text-gray-500 bg-black/40 px-2 py-0.5 rounded">Last 30 Days</span>
+          <span class="text-xs ${metaConf >= threshold ? 'text-emerald-400' : 'text-rose-400'} bg-black/40 px-2 py-0.5 rounded font-bold">
+            ${metaConf}% conf ${metaConf >= threshold ? '✓' : '✗'}
+          </span>
         </div>
-        <div class="grid grid-cols-2 gap-3">
-          <div class="bg-black/40 p-4 rounded-xl border border-emerald-500/20">
-            <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Mathematical Expectancy</div>
-            <div class="text-3xl font-black font-mono ${expectancy >= 0 ? 'text-emerald-400' : 'text-red-400'}">${expectancy >= 0 ? '+' : ''}${expectancy.toFixed(2)}%</div>
-            <div class="text-[10px] text-gray-500 mt-1">average per trade</div>
+
+        <!-- Current signal quality (live data) -->
+        <div class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">This Signal</div>
+        <div class="grid grid-cols-2 gap-2 mb-4">
+          <div class="bg-black/40 p-3 rounded-xl border ${metaConf >= threshold ? 'border-emerald-500/20' : 'border-rose-500/20'}">
+            <div class="text-[9px] text-gray-500 uppercase mb-1">AI Confidence</div>
+            <div class="text-2xl font-black font-mono ${metaConf >= threshold ? 'text-emerald-400' : 'text-rose-400'}">${metaConf}%</div>
+            <div class="text-[9px] text-gray-600 mt-0.5">required: ${threshold}%</div>
           </div>
-          <div class="bg-black/40 p-4 rounded-xl border border-amber-500/20">
-            <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Maximum Drawdown</div>
-            <div class="text-3xl font-black font-mono text-amber-400">${maxDD.toFixed(2)}%</div>
-            <div class="text-[10px] text-gray-500 mt-1">peak-to-trough</div>
+          <div class="bg-black/40 p-3 rounded-xl border border-cyan/20">
+            <div class="text-[9px] text-gray-500 uppercase mb-1">Expected Move</div>
+            <div class="text-2xl font-black font-mono ${expectedMv >= 2 ? 'text-emerald-400' : 'text-cyan'}">
+              ${expectedMv > 0 ? '~' + expectedMv.toFixed(1) + '%' : atrPct > 0 ? '~' + (atrPct * 1.5).toFixed(1) + '%' : '—'}
+            </div>
+            <div class="text-[9px] text-gray-600 mt-0.5">AI projection</div>
           </div>
-          <div class="bg-black/40 p-4 rounded-xl border border-cyan/20">
-            <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Profit Factor</div>
-            <div class="text-3xl font-black font-mono ${profitFactor >= 1.5 ? 'text-cyan' : 'text-white'}">${profitFactor.toFixed(2)}</div>
-            <div class="text-[10px] text-gray-500 mt-1">gross profit / loss</div>
+          <div class="bg-black/40 p-3 rounded-xl border border-white/5">
+            <div class="text-[9px] text-gray-500 uppercase mb-1">Risk / Reward</div>
+            <div class="text-2xl font-black font-mono text-cyan">${rr > 0 ? '1:' + rr.toFixed(2) : '—'}</div>
+            <div class="text-[9px] text-gray-600 mt-0.5">TP1 vs SL</div>
           </div>
-          <div class="bg-black/40 p-4 rounded-xl border border-white/5">
-            <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Win Rate</div>
-            <div class="text-3xl font-black font-mono text-white">${winRate}%</div>
-            <div class="text-[10px] text-gray-500 mt-1">from ${totalTrades} signals</div>
-          </div>
-        </div>
-        <div class="mt-4 bg-black/40 p-4 rounded-xl border border-white/5">
-          <div class="flex justify-between text-[10px] mb-2">
-            <span class="text-gray-400 font-bold">Historical Win Distribution</span>
-            <span class="text-white font-mono">${winRate}% wins</span>
-          </div>
-          <div class="h-3 bg-black/50 rounded-full overflow-hidden flex">
-            <div class="h-full bg-emerald-500/60 rounded-l-full" style="width:${winRate}%"></div>
-            <div class="h-full bg-red-500/40 rounded-r-full flex-1"></div>
-          </div>
-          <div class="flex justify-between text-[10px] mt-1 text-gray-500">
-            <span>${Math.round(totalTrades * winRate / 100)} wins</span>
-            <span>${Math.round(totalTrades * (100 - winRate) / 100)} losses</span>
+          <div class="bg-black/40 p-3 rounded-xl border border-white/5">
+            <div class="text-[9px] text-gray-500 uppercase mb-1">Volatility</div>
+            <div class="text-xl font-black font-mono ${volRegime === 'HIGH' ? 'text-rose-400' : volRegime === 'LOW' ? 'text-blue-400' : 'text-amber-400'}">${volRegime}</div>
+            <div class="text-[9px] text-gray-600 mt-0.5">ATR ${atrPct > 0 ? atrPct.toFixed(2) + '%' : '—'}</div>
           </div>
         </div>
+
+        <!-- Historical performance (loaded async) -->
+        <div class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Track Record (AEGIS-1)</div>
+        <div id="fp-exp-hist" class="bg-black/40 p-4 rounded-xl border border-white/5 text-[10px] text-gray-500 font-mono">
+          Loading…
+        </div>
+
         <div class="mt-3 p-3 bg-black/30 rounded-lg border border-white/5">
           <div class="text-[10px] text-gray-500 font-mono">
             <i class="fas fa-database text-cyan/50 mr-1"></i>
-            Data sourced from cached Firestore performance document. Updated every 24h by background cron. Not indicative of future results.
+            Historical stats from live track record. Signal quality metrics are real-time. Not indicative of future results.
           </div>
         </div>
-        ${(() => {
-          const _vc = expectancy >= 1.5 && profitFactor >= 1.5
-            ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-            : expectancy >= 0 && profitFactor >= 1.0
-            ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
-            : 'bg-red-500/20 text-red-400 border-red-500/30';
-          const _vl = expectancy >= 1.5 && profitFactor >= 1.5 ? 'EDGE+' : expectancy >= 0 ? 'MARGINAL' : 'NEGATIVE EDGE';
-          const _wins = Math.round(totalTrades * winRate / 100);
-          const _losses = totalTrades - _wins;
-          const _ddRatio = profitFactor > 0 ? (Math.abs(maxDD) / profitFactor).toFixed(2) : 'N/A';
-          const _why = `Over ${totalTrades} historical signals, this asset produced a mathematical expectancy of ${expectancy >= 0 ? '+' : ''}${expectancy.toFixed(2)}% per trade — meaning every position statistically ${expectancy >= 0 ? 'returns a positive edge' : 'loses value on average'}.`;
-          const _what = `Profit Factor of ${profitFactor.toFixed(2)} means every $1 lost returns $${profitFactor.toFixed(2)} in gross wins. Win rate is ${winRate}% (${_wins}W / ${_losses}L). Max drawdown reached ${maxDD.toFixed(2)}% peak-to-trough. DD/PF ratio: ${_ddRatio} ${parseFloat(_ddRatio) < 4 ? '(healthy)' : '(elevated — oversized risk).'}.`;
-          const _when = expectancy >= 1.5 && profitFactor >= 1.5
-            ? 'Strong edge confirmed. This is the right time to allocate full or above-average position size.'
-            : expectancy >= 0 && profitFactor >= 1.0
-            ? 'Marginal edge — trade with standard or reduced sizing. Monitor for edge degradation.'
-            : 'Negative expectancy detected. Avoid new positions on this asset until performance improves.';
-          const _where = `Focus on setups where ${winRate >= 60 ? 'win rate consistency' : 'profit factor'} is the primary driver. ${Math.abs(maxDD) > 10 ? 'High max drawdown warrants tighter stop placement.' : 'Max drawdown is within acceptable range for standard stops.'} Compare against your portfolio average to assess relative merit.`;
-          return `<div class="mt-4 p-4 bg-black/40 rounded-xl border border-amber-500/20">
-            <div class="flex items-center justify-between mb-3">
-              <h4 class="text-xs font-bold text-amber-400 uppercase tracking-wider">Edge Intelligence</h4>
-              <span class="text-[10px] font-bold px-2 py-0.5 rounded border ${_vc}">${_vl}</span>
+        <div class="mt-4 p-4 bg-black/40 rounded-xl border border-amber-500/20">
+          <div class="text-[10px] font-bold text-amber-400 uppercase tracking-wider mb-2">Edge Intelligence</div>
+          <div class="text-[11px] text-gray-300 leading-relaxed space-y-2">
+            <div><span class="text-amber-400/60 font-bold text-[9px] uppercase mr-2">THIS SIGNAL</span>
+              AI confidence is ${metaConf}% vs ${threshold}% required.
+              ${metaConf >= threshold
+                ? `Signal is above the bar — model has sufficient evidence.${rr > 0 ? ` R:R of 1:${rr.toFixed(2)}.` : ''}`
+                : 'Signal is below threshold — model is watching but not confirmed.'}
+              ${expectedMv > 0 ? ` Expected move: ~${expectedMv.toFixed(1)}%.` : ''}
             </div>
-            <div class="space-y-2 text-[11px]">
-              <div class="flex gap-2 items-start"><span class="w-[46px] shrink-0 text-amber-400/60 font-bold uppercase text-[9px] pt-0.5">WHY</span><span class="text-gray-300">${_why}</span></div>
-              <div class="flex gap-2 items-start"><span class="w-[46px] shrink-0 text-amber-400/60 font-bold uppercase text-[9px] pt-0.5">WHAT</span><span class="text-gray-300">${_what}</span></div>
-              <div class="flex gap-2 items-start"><span class="w-[46px] shrink-0 text-amber-400/60 font-bold uppercase text-[9px] pt-0.5">WHEN</span><span class="text-gray-300">${_when}</span></div>
-              <div class="flex gap-2 items-start"><span class="w-[46px] shrink-0 text-amber-400/60 font-bold uppercase text-[9px] pt-0.5">WHERE</span><span class="text-gray-300">${_where}</span></div>
+            <div><span class="text-amber-400/60 font-bold text-[9px] uppercase mr-2">VOLATILITY</span>
+              Regime is ${volRegime}${atrPct > 0 ? ` — ATR is ${atrPct.toFixed(2)}% of price` : ''}.
+              ${volRegime === 'HIGH' ? 'High volatility — use smaller position size and wider stops.' : volRegime === 'LOW' ? 'Low volatility — tighter stops viable, but expect smaller moves.' : 'Normal volatility — standard sizing applies.'}
             </div>
-          </div>`;
-        })()}
+          </div>
+        </div>
       </div>
     </div>
   `;
+
+  // Async load historical stats into #fp-exp-hist
+  (async () => {
+    const el = body.querySelector('#fp-exp-hist');
+    if (!el) return;
+    try {
+      const r = await fetch('/web/track_record.json', { cache: 'no-cache' });
+      if (!r.ok) throw new Error();
+      const d = await r.json();
+      const s = d.summary || {};
+      const wr  = s.win_rate_pct != null ? s.win_rate_pct.toFixed(1) + '%' : '—';
+      const tot = s.total_signals ?? '—';
+      const w   = s.wins  ?? '—';
+      const l   = s.losses ?? '—';
+      const avg = s.avg_pnl_pct != null ? (s.avg_pnl_pct >= 0 ? '+' : '') + s.avg_pnl_pct.toFixed(2) + '%' : '—';
+      const ttl = s.total_pnl_pct != null ? (s.total_pnl_pct >= 0 ? '+' : '') + s.total_pnl_pct.toFixed(2) + '%' : '—';
+      const wrNum = s.win_rate_pct || 0;
+      el.innerHTML = `
+        <div class="grid grid-cols-3 gap-x-4 gap-y-2">
+          <div><div class="text-[9px] text-gray-600 uppercase mb-0.5">Total</div><div class="font-bold text-white">${tot}</div></div>
+          <div><div class="text-[9px] text-gray-600 uppercase mb-0.5">Wins</div><div class="font-bold text-emerald-400">${w}</div></div>
+          <div><div class="text-[9px] text-gray-600 uppercase mb-0.5">Losses</div><div class="font-bold text-rose-400">${l}</div></div>
+          <div><div class="text-[9px] text-gray-600 uppercase mb-0.5">Win Rate</div><div class="font-bold ${wrNum >= 50 ? 'text-emerald-400' : 'text-rose-400'}">${wr}</div></div>
+          <div><div class="text-[9px] text-gray-600 uppercase mb-0.5">Avg PnL</div><div class="font-bold ${avg.startsWith('+') ? 'text-emerald-400' : 'text-rose-400'}">${avg}</div></div>
+          <div><div class="text-[9px] text-gray-600 uppercase mb-0.5">Total PnL</div><div class="font-bold ${ttl.startsWith('+') ? 'text-emerald-400' : 'text-rose-400'}">${ttl}</div></div>
+        </div>
+        <div class="h-1.5 bg-black/50 rounded-full mt-3 overflow-hidden flex">
+          <div class="h-full bg-emerald-500/60 rounded-l-full" style="width:${wrNum}%"></div>
+          <div class="h-full bg-rose-500/40 rounded-r-full flex-1"></div>
+        </div>`;
+    } catch {
+      el.innerHTML = '<span class="text-gray-600">Track record unavailable — refresh to retry.</span>';
+    }
+  })();
 }
 
 function _renderFpShap(body, signal, tier) {
   const locked = tier !== 'PRO';
 
-  const _rp = signal.raw_probabilities;
-  const probs = _rp
-    ? { SHORT: (_rp.SHORT||0)/100, HOLD: (_rp.HOLD||0)/100, LONG: (_rp.LONG||0)/100 }
-    : { SHORT: 0.18, HOLD: 0.08, LONG: 0.74 };
+  // Use real p_buy/p_sell/p_hold from signal (populated by gatekeeper.js fix)
+  const probs = (signal.p_buy || signal.p_sell)
+    ? { SHORT: parseFloat(signal.p_sell) || 0, HOLD: parseFloat(signal.p_hold) || 0, LONG: parseFloat(signal.p_buy) || 0 }
+    : { SHORT: 0, HOLD: 0, LONG: 0 };
   const leadEntry = Object.entries(probs).sort((a,b) => b[1]-a[1])[0];
   const leadClass = leadEntry[0] === 'LONG' ? 'text-green-400' : leadEntry[0] === 'SHORT' ? 'text-red-400' : 'text-gray-400';
   const leadPct = (leadEntry[1] * 100).toFixed(1);
+  const metaCf  = Math.round((signal.meta_confidence || 0) * 100);
+  const thrCf   = Math.round((signal.threshold || 0.6) * 100);
 
-  const _shapContribs = signal.shap_contributions;
-  const shapValues = (_shapContribs && _shapContribs.length > 0)
-    ? _shapContribs.map(s => ({ feature: s.feature, value: s.impact }))
-    : [
-      { feature: 'Volume Delta 1h', value: 0.34 },
-      { feature: 'BTC Anchor Distance', value: -0.21 },
-      { feature: 'EMA 200 Confluence', value: 0.18 },
-      { feature: 'RSI Regime 4h', value: 0.15 },
-      { feature: 'Liq. Block Density', value: -0.09 },
-    ];
+  // Key indicator drivers built from real signal fields (no fake SHAP)
+  const shapValues = [
+    { feature: 'Trend Confluence',    value: signal.confluence ? ((parseFloat(signal.confluence.trend || 5) - 5) / 5 * 0.5) : 0 },
+    { feature: 'RSI (' + Math.round(signal.rsi || 50) + ')',  value: signal.rsi ? ((signal.rsi - 50) / 50 * 0.4) : 0 },
+    { feature: 'Volume: ' + (signal.volume_strength || 'AVG'), value: signal.volume_zscore ? Math.max(-0.5, Math.min(0.5, (signal.volume_zscore || 0) / 4)) : 0 },
+    { feature: 'Smart Money',         value: signal.confluence ? ((parseFloat(signal.confluence.smart_money || 5) - 5) / 5 * 0.35) : 0 },
+    { feature: 'Momentum (' + (signal.macd_signal || 'N') + ')', value: signal.macd_signal === 'BULLISH' ? 0.3 : signal.macd_signal === 'BEARISH' ? -0.3 : 0 },
+    { feature: 'Funding: ' + (signal.funding_bias || 'NEUTRAL'), value: signal.funding_bias === 'SHORTS_PAYING' ? 0.2 : signal.funding_bias === 'LONGS_PAYING' ? -0.2 : 0 },
+  ].map(d => ({ ...d, value: parseFloat(d.value.toFixed(3)) }))
+   .sort((a,b) => Math.abs(b.value) - Math.abs(a.value))
+   .slice(0, 5);
 
   const lockOverlay = locked ? `
     <div class="absolute inset-0 bg-black/80 backdrop-blur-md rounded-xl flex flex-col items-center justify-center z-10">
@@ -1875,7 +1970,10 @@ function _renderFpShap(body, signal, tier) {
         <div class="bg-black/40 p-5 rounded-xl border border-white/5 mb-4">
           <div class="flex items-center justify-between mb-3">
             <div class="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Model Conviction</div>
-            <div class="font-black text-xl font-mono ${leadClass}">${leadPct}% ${leadEntry[0]}</div>
+            <div>
+              <div class="font-black text-xl font-mono ${leadClass}">${leadPct}% ${leadEntry[0]}</div>
+              ${metaCf > 0 ? `<div class="text-[9px] text-gray-500 text-right">Meta: ${metaCf}% vs ${thrCf}% req</div>` : ''}
+            </div>
           </div>
           <div class="flex h-6 rounded-lg overflow-hidden gap-0.5">
             <div class="bg-red-500/60 flex items-center justify-center text-[10px] font-bold text-white/80 transition-all"
@@ -1898,7 +1996,7 @@ function _renderFpShap(body, signal, tier) {
           </div>
         </div>
         <div class="bg-black/40 p-5 rounded-xl border border-white/5">
-          <div class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-4">Live SHAP Feature Attribution</div>
+          <div class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-4">Key Indicator Drivers</div>
           <div class="space-y-3">
             ${shapValues.map(sv => {
               const barPct = (Math.abs(sv.value) / maxShap * 80).toFixed(1);
@@ -1921,33 +2019,34 @@ function _renderFpShap(body, signal, tier) {
           <div class="mt-4 p-3 bg-black/30 rounded-lg border border-white/5">
             <div class="text-[10px] text-gray-500 font-mono">
               <i class="fas fa-flask text-orange/50 mr-1"></i>
-              SHAP values via TreeExplainer on current candle row. Positive = pushes model toward LONG. Updated every WebSocket tick.
+              Indicator contribution scores derived from live signal data. Positive = bullish lean, negative = bearish. Updated every scan.
             </div>
           </div>
           ${(() => {
             const _topShap = shapValues.reduce((a, b) => Math.abs(a.value) > Math.abs(b.value) ? a : b, shapValues[0]);
             const _topDir = _topShap ? (_topShap.value > 0 ? 'LONG' : 'SHORT') : leadEntry[0];
             const _aligned = _topShap && _topDir === leadEntry[0];
-            const _convPct = parseFloat(leadPct);
-            const _vc = _convPct >= 70 && _aligned
+            // Use meta_confidence for the quality gate, not just p_buy pct
+            const _convPct = metaCf > 0 ? metaCf : parseFloat(leadPct);
+            const _vc = _convPct >= thrCf && _aligned
               ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-              : _convPct >= 55
+              : _convPct >= thrCf
               ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
               : 'bg-red-500/20 text-red-400 border-red-500/30';
-            const _vl = _convPct >= 70 && _aligned ? 'ALIGNED' : _convPct >= 55 ? 'PARTIAL' : 'DIVERGENT';
+            const _vl = _convPct >= thrCf && _aligned ? 'ALIGNED' : _convPct >= thrCf ? 'ABOVE THR' : 'BELOW THR';
             const _topFeat = _topShap ? _topShap.feature : 'N/A';
             const _topVal = _topShap ? (_topShap.value > 0 ? '+' : '') + _topShap.value.toFixed(3) : '0.000';
             const _shortPct = (probs.SHORT * 100).toFixed(1);
-            const _holdPct = (probs.HOLD * 100).toFixed(1);
-            const _longPct = (probs.LONG * 100).toFixed(1);
-            const _why = `The model assigns ${leadPct}% conviction to ${leadEntry[0]}. Top SHAP driver is "${_topFeat}" (${_topVal}), pushing the model ${_topDir === 'LONG' ? 'toward LONG' : _topDir === 'SHORT' ? 'toward SHORT' : 'toward HOLD'}. ${_aligned ? 'Top feature aligns with model direction — high-confidence signal.' : 'Top feature conflicts with model direction — treat with caution.'}`;
-            const _what = `Full probability vector: SHORT ${_shortPct}% | HOLD ${_holdPct}% | LONG ${_longPct}%. ${_aligned ? 'SHAP and probability agree — XGBoost ensemble has clear directional bias.' : 'SHAP and probability diverge — the model may be uncertain. Weigh other confluences.'}`;
-            const _when = _convPct >= 70 && _aligned
-              ? 'High conviction with aligned SHAP. Act when price reaches the entry zone and Confluence Score exceeds 65%.'
-              : _convPct >= 55
-              ? 'Moderate conviction. Wait for at least two confirming indicators before executing.'
-              : 'Low conviction or divergent signals. Skip this trade or reduce size significantly until the model realigns.';
-            const _where = `Cross-reference "${_topFeat}" on your chart. ${_topShap && _topShap.value > 0.2 ? 'This feature has dominant positive influence — verify it visually before entering.' : _topShap && _topShap.value < -0.2 ? 'Strong bearish SHAP driver — confirm bearish structure on chart.' : 'No single feature dominates — signal is driven by collective weak signals.'} Compare model conviction against Confluence Score for final entry decision.`;
+            const _holdPct  = (probs.HOLD  * 100).toFixed(1);
+            const _longPct  = (probs.LONG  * 100).toFixed(1);
+            const _why = `The primary model gives ${_longPct}% LONG, ${_shortPct}% SHORT, ${_holdPct}% HOLD. Meta gate score: ${metaCf}% (threshold: ${thrCf}%). ${_aligned ? 'Dominant indicator and model direction agree.' : 'Top driver conflicts with model direction — caution.'}`;
+            const _what = `Top driver: "${_topFeat}" (${_topVal}). ${_aligned ? 'Indicators and model are aligned — consistent signal.' : 'Divergence detected — model may be picking up a pattern that indicators do not yet show.'} ${metaCf >= thrCf ? 'Signal is ABOVE the confidence threshold.' : 'Signal is BELOW the threshold — not a valid trade.'}`;
+            const _when = metaCf >= thrCf && _aligned
+              ? `High conviction (${metaCf}% > ${thrCf}% required). Act at the entry zone with standard sizing.`
+              : metaCf >= thrCf
+              ? 'Above threshold but indicators diverge. Reduce size by 50% and wait for confluence to align.'
+              : `Below threshold (${metaCf}% < ${thrCf}%). Do not trade — wait until model confidence rises.`;
+            const _where = `Entry: $${(() => { const v=signal.entry_price||signal.price||0; return v>=100?v.toFixed(2):v>=1?v.toFixed(4):v.toFixed(6); })()}. ${metaCf >= thrCf ? 'Signal is valid — check zone tracker for SL/TP placement.' : 'Not a valid trade — add to watchlist and revisit at next scan.'}`;
             return `<div class="mt-4 p-4 bg-black/40 rounded-xl border border-orange/20">
               <div class="flex items-center justify-between mb-3">
                 <h4 class="text-xs font-bold text-orange uppercase tracking-wider">Model Intelligence</h4>
