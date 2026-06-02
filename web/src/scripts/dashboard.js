@@ -1517,9 +1517,22 @@ function _renderFpConfluence(body, signal, tier) {
     momentum:    Math.round(_c10fp(rawConf.momentum    ?? 5) * 10),
     volume:      Math.round(_c10fp(rawConf.volume      ?? 5) * 10),
     smart_money: Math.round(_c10fp(rawConf.smart_money ?? 5) * 10),
+    bands:       Math.round(_c10fp(rawConf.bands       ?? 5) * 10),
     candle:      Math.round(_c10fp(rawConf.candle      ?? 5) * 10),
     total:       Math.round(_c10fp(rawConf.total       ?? 5) * 10),
   };
+  // Recompute displayed total from all 6 visible categories using the same
+  // weights as compute_category_confluence — this ensures the total shown
+  // always matches the sum of the bars the user can actually see.
+  const _wTotal = (
+    confluence.trend       * 2.0 +
+    confluence.momentum    * 1.5 +
+    confluence.volume      * 1.5 +
+    confluence.smart_money * 1.5 +
+    confluence.bands       * 1.0 +
+    confluence.candle      * 0.5
+  ) / (2.0 + 1.5 + 1.5 + 1.5 + 1.0 + 0.5);
+  confluence.total = Math.round(_wTotal);
 
   const lockOverlay = locked ? `
     <div class="absolute inset-0 bg-black/80 backdrop-blur-md rounded-xl flex flex-col items-center justify-center z-10">
@@ -1539,11 +1552,12 @@ function _renderFpConfluence(body, signal, tier) {
         </div>
         <div class="space-y-3">
           ${[
-            { label: 'Trend',        sublabel: 'EMA stack · macro · market structure', val: confluence.trend,       weight: '×2.0', color: 'bg-cyan',        textColor: 'text-cyan' },
-            { label: 'Momentum',     sublabel: 'RSI · MACD · Stochastic · CCI',         val: confluence.momentum,    weight: '×1.5', color: 'bg-blue-400',    textColor: 'text-blue-300' },
-            { label: 'Volume / Flow',sublabel: 'CMF · MFI · OBV delta',                val: confluence.volume,      weight: '×1.5', color: 'bg-violet-400',  textColor: 'text-violet-300' },
-            { label: 'Smart Money',  sublabel: 'BOS · CHoCH · S/R proximity',           val: confluence.smart_money, weight: '×1.5', color: 'bg-amber-400',   textColor: 'text-amber-300' },
-            { label: 'Candle Patt.', sublabel: 'Hammer · Engulfing · Morning Star',     val: confluence.candle,      weight: '×0.5', color: 'bg-pink-400',    textColor: 'text-pink-300' },
+            { label: 'Trend',          sublabel: 'EMA stack · macro · market structure',         val: confluence.trend,       weight: '×2.0', color: 'bg-cyan',        textColor: 'text-cyan' },
+            { label: 'Momentum',       sublabel: 'RSI · MACD · Stochastic · CCI',               val: confluence.momentum,    weight: '×1.5', color: 'bg-blue-400',    textColor: 'text-blue-300' },
+            { label: 'Volume / Flow',  sublabel: 'CMF · MFI · OBV delta',                       val: confluence.volume,      weight: '×1.5', color: 'bg-violet-400',  textColor: 'text-violet-300' },
+            { label: 'Smart Money',    sublabel: 'BOS · CHoCH · S/R proximity',                 val: confluence.smart_money, weight: '×1.5', color: 'bg-amber-400',   textColor: 'text-amber-300' },
+            { label: 'Price Position', sublabel: 'BB% · ATR band · Donchian · quantile',        val: confluence.bands,       weight: '×1.0', color: 'bg-teal-400',    textColor: 'text-teal-300' },
+            { label: 'Candle Patt.',   sublabel: 'Hammer · Engulfing · Morning Star',            val: confluence.candle,      weight: '×0.5', color: 'bg-pink-400',    textColor: 'text-pink-300' },
           ].map(item => {
             const isBull = item.val >= 55;
             const isBear = item.val <= 45;

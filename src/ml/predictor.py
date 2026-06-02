@@ -701,12 +701,13 @@ class Predictor:
         macro_1w   = _f('macro_trend_1w')
         adx        = _f('adx_14', 20.0)
         # Raw confluence values from compute_category_confluence: all in [-1, +1]
-        trend_conf_raw = _f('trend_confluence')
-        mom_conf_raw   = _f('momentum_confluence')
-        smart_conf_raw = _f('smart_money_confluence')
-        vol_conf_raw   = _f('volume_confluence')
-        candle_conf_raw= _f('candle_confluence')
-        total_conf_raw = _f('total_confluence')
+        trend_conf_raw  = _f('trend_confluence')
+        mom_conf_raw    = _f('momentum_confluence')
+        smart_conf_raw  = _f('smart_money_confluence')
+        vol_conf_raw    = _f('volume_confluence')
+        candle_conf_raw = _f('candle_confluence')
+        bands_conf_raw  = _f('bands_confluence')   # price-position / BB / ATR bands
+        total_conf_raw  = _f('total_confluence')
 
         # Scale to [0, 10] for display: -1 → 0, 0 → 5, +1 → 10
         def _c10(x: float) -> float:
@@ -717,6 +718,7 @@ class Predictor:
         smart_conf  = _c10(smart_conf_raw)
         vol_conf    = _c10(vol_conf_raw)
         candle_conf = _c10(candle_conf_raw)
+        bands_conf  = _c10(bands_conf_raw)
         total_conf  = _c10(total_conf_raw)
 
         # Weighted composite bias score (-1 → +1), using raw centered values directly
@@ -882,6 +884,7 @@ class Predictor:
                 "trend":       round(trend_conf, 1),
                 "volume":      round(vol_conf, 1),
                 "smart_money": round(smart_conf, 1),
+                "bands":       round(bands_conf, 1),   # price position / BB / ATR
                 "candle":      round(candle_conf, 1),
                 "summary":     conf_summary,
             },

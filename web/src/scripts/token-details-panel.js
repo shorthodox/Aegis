@@ -180,13 +180,18 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
 
   // ── Confluence (normalize to [0,10] regardless of engine version) ─
   const rawConf   = tokenData.confluence || {};
-  const cTotal    = _to10(rawConf.total    ?? 5);
-  const cTrend    = _to10(rawConf.trend    ?? 5);
-  const cMom      = _to10(rawConf.momentum ?? 5);
-  const cVol      = _to10(rawConf.volume   ?? 5);
+  const cTrend    = _to10(rawConf.trend       ?? 5);
+  const cMom      = _to10(rawConf.momentum    ?? 5);
+  const cVol      = _to10(rawConf.volume      ?? 5);
   const cSmart    = _to10(rawConf.smart_money ?? 5);
-  const cBands    = _to10(rawConf.bands    ?? rawConf.smart_money ?? 5);  // bands not always in dict
-  const cCandle   = _to10(rawConf.candle   ?? 5);
+  const cBands    = _to10(rawConf.bands       ?? 5);
+  const cCandle   = _to10(rawConf.candle      ?? 5);
+  // Recompute total from all 6 visible categories (matches compute_category_confluence weights)
+  // so the total always equals the sum of the bars the user can see.
+  const cTotal    = parseFloat((
+    (cTrend * 2.0 + cMom * 1.5 + cVol * 1.5 + cSmart * 1.5 + cBands * 1.0 + cCandle * 0.5)
+    / (2.0 + 1.5 + 1.5 + 1.5 + 1.0 + 0.5)
+  ).toFixed(1));
   const confSummary = rawConf.summary || (cTotal >= 7 ? 'Strong Bullish' : cTotal >= 5.5 ? 'Moderate Bullish' : cTotal <= 3 ? 'Strong Bearish' : cTotal <= 4.5 ? 'Moderate Bearish' : 'Neutral');
 
   // How many categories agree with the signal
@@ -288,9 +293,9 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
           ${_confBar('Smart Money / S&R',
             cSmart, 1.5,
             'Break-of-Structure, Change-of-Character events, proximity to key support/resistance zones.')}
-          ${_confBar('Price Position / Bands',
+          ${_confBar('Price Position',
             cBands, 1.0,
-            'Bollinger Band %, ATR band position, Donchian range. Measures where price sits in its recent range.')}
+            'Bollinger Band %, ATR band, Donchian position, quantile rank. Where is price sitting in its recent range? Below 50% = lower half of range (bearish lean), above 50% = upper half (bullish lean).')}
           ${_confBar('Candle Patterns',
             cCandle, 0.5,
             'Hammer, Engulfing, Morning/Evening Star patterns detected on the last bar.')}
