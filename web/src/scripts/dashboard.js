@@ -1636,8 +1636,6 @@ function _renderFpZones(body, signal, tier) {
   const entry = signal.entry_price || signal.price || 0;
   const currentPrice = window.currentTickers?.[signal.symbol]
     ? parseFloat(window.currentTickers[signal.symbol]) : entry;
-
-  const isLongDir = (signal.direction || 'LONG') === 'LONG';
   const hasZone = sl > 0 && tp > 0 && Math.abs(tp - sl) > 1e-10;
   const absRange = hasZone ? Math.abs(tp - sl) : 1;
   const entryPct = hasZone
