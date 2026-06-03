@@ -11,7 +11,7 @@
     <link rel="modulepreload" href="/web/src/scripts/iframeGuard.js">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Track Record | AEGIS v1.0</title>
+    <title>Trader Track Record | AEGIS v1.0</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://cdnjs.cloudflare.com">
@@ -367,8 +367,8 @@
             <a href="/web/src/pages/index.html#security" class="nav-link">Security</a>
             <a href="/web/src/pages/review.html" class="nav-link">Reviews</a>
             <a href="/web/src/pages/pricing.html" class="nav-link">Pricing</a>
-            <a href="/web/src/pages/track-record.html" class="nav-link active">Live Record</a>
-            <a href="/web/src/pages/trader-track-record.html" class="nav-link">Trader Record</a>
+            <a href="/web/src/pages/track-record.html" class="nav-link">Live Record</a>
+            <a href="/web/src/pages/trader-track-record.html" class="nav-link active">Trader Record</a>
         </nav>
 
         <div id="authButtonContainer" class="nav-auth-desktop" style="display:flex;align-items:center;gap:0.5rem;">
@@ -398,8 +398,8 @@
         <a href="/web/src/pages/index.html#security" class="nav-mobile-link" style="padding-left:2.2rem;font-size:0.82rem;opacity:0.85;"><i class="fas fa-shield-alt"></i> Security</a>
         <a href="/web/src/pages/review.html" class="nav-mobile-link"><i class="fas fa-star"></i> Reviews</a>
         <a href="/web/src/pages/pricing.html" class="nav-mobile-link"><i class="fas fa-tag"></i> Pricing</a>
-        <a href="/web/src/pages/track-record.html" class="nav-mobile-link mobile-active"><i class="fas fa-chart-bar"></i> Live Record</a>
-        <a href="/web/src/pages/trader-track-record.html" class="nav-mobile-link"><i class="fas fa-chart-line"></i> Trader Record</a>
+        <a href="/web/src/pages/track-record.html" class="nav-mobile-link"><i class="fas fa-chart-bar"></i> Live Record</a>
+        <a href="/web/src/pages/trader-track-record.html" class="nav-mobile-link mobile-active"><i class="fas fa-chart-line"></i> Trader Record</a>
         <div class="nav-mobile-auth">
             <button class="nav-btn-login" id="mPortalProxy"><i class="fas fa-user-shield"></i> Sign In</button>
             <button class="nav-btn-dashboard" id="mDashProxy" style="display:none;"><i class="fas fa-chart-line"></i> Dashboard</button>
@@ -411,7 +411,7 @@
     <!-- ===== SHARED HEADER ===== -->
     <div style="max-width:900px;margin:3rem auto 1.5rem;padding:0 1.5rem;text-align:center;">
         <span class="tr-eyebrow">Public Signal Logs</span>
-        <h1 class="tr-title">AEGIS Track Records</h1>
+        <h1 class="tr-title">Trader Track Record</h1>
         <p class="tr-sub">Two engines. One transparent log. Every BUY/SELL signal — wins and losses — shown publicly with no filters.</p>
         <div class="tr-disclaimer" style="text-align:left;margin-top:1.2rem;">
             <i class="fas fa-exclamation-triangle"></i>
@@ -958,8 +958,8 @@
         });
     </script>
 
-    <!-- Track Record logic — fetches /api/track-record (no Firestore) -->
-    <script type="module" src="../scripts/track-record.js"></script>
+    <!-- Track Record logic - fetches /api/trader/track-record (no Firestore) -->
+    <script type="module" src="../scripts/trader-track-record.js"></script>
 
 </body>
 </html>

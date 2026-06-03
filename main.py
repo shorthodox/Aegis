@@ -3091,40 +3091,9 @@ async def track_record_endpoint(source: str = None):
             _track_store, key=lambda r: r.get("entry_time") or "", reverse=True
         )[:500]
 
-    # ── 2. AEGIS trader signals — normalised to same field names ──────────────
-    trader_signals: list = []
-    if TRADER_TRACK_RECORD_PATH.exists():
-        try:
-            with open(TRADER_TRACK_RECORD_PATH, "r", encoding="utf-8") as f:
-                _td = json.load(f)
-            for s in _td.get("signals", []):
-                trader_signals.append({
-                    "signal_id":       s.get("signal_id"),
-                    "symbol":          s.get("symbol"),
-                    "timeframe":       s.get("timeframe"),
-                    "direction":       s.get("direction"),
-                    "signal_type":     s.get("direction"),
-                    "signal_status":   "ACTIVE" if s.get("outcome") == "OPEN" else "CLOSED",
-                    "entry_price":     s.get("entry_price"),
-                    "take_profit":     s.get("tp1"),
-                    "stop_loss":       s.get("stop_loss"),
-                    "exit_price":      s.get("exit_price"),
-                    "entry_time":      s.get("timestamp"),
-                    "close_time":      s.get("exit_time"),
-                    "pnl_pct":         s.get("pnl_pct"),
-                    "outcome":         s.get("outcome"),
-                    "exit_reason":     s.get("exit_reason"),
-                    "ai_prob":         s.get("confidence"),
-                    "confluence_rate": s.get("confluence_score"),
-                    "source":          "aegis_trader",
-                    "mode":            s.get("mode"),
-                })
-        except Exception:
-            pass
-
-    # ── 3. Merge, sort by entry time, cap at 500 ──────────────────────────────
+    # ── 2. Sort by entry time, cap at 500 ──────────────────────────────
     all_signals = sorted(
-        live_signals + trader_signals,
+        live_signals,
         key=lambda r: r.get("entry_time") or "",
         reverse=True,
     )[:500]
@@ -5145,14 +5114,68 @@ async def get_trader_signals(
 
 @app.get("/api/trader/track-record")
 async def get_trader_track_record():
-    """Public endpoint — returns trader_track_record.json (wallet + trade history)."""
+    """Public endpoint — returns normalised trader_track_record.json (wallet + trade history)."""
+    trader_signals: list = []
+    wins, losses, open_c, closed = 0, 0, 0, 0
+    pnls = []
     if TRADER_TRACK_RECORD_PATH.exists():
         try:
             with open(TRADER_TRACK_RECORD_PATH, encoding='utf-8') as f:
-                return json.load(f)
+                _td = json.load(f)
+            for s in _td.get("signals", []):
+                outcome = s.get("outcome")
+                trader_signals.append({
+                    "signal_id":       s.get("signal_id"),
+                    "symbol":          s.get("symbol"),
+                    "timeframe":       s.get("timeframe"),
+                    "direction":       s.get("direction"),
+                    "signal_type":     s.get("direction"),
+                    "signal_status":   "ACTIVE" if outcome == "OPEN" else "CLOSED",
+                    "entry_price":     s.get("entry_price"),
+                    "take_profit":     s.get("tp1"),
+                    "stop_loss":       s.get("stop_loss"),
+                    "exit_price":      s.get("exit_price"),
+                    "entry_time":      s.get("timestamp"),
+                    "close_time":      s.get("exit_time"),
+                    "pnl_pct":         s.get("pnl_pct"),
+                    "outcome":         outcome,
+                    "exit_reason":     s.get("exit_reason"),
+                    "ai_prob":         s.get("confidence"),
+                    "confluence_rate": s.get("confluence_score"),
+                    "source":          "aegis_trader",
+                    "mode":            s.get("mode"),
+                })
         except Exception:
             pass
-    return {"signals": [], "balance": 10000, "win_rate": 0, "total_trades": 0}
+
+    all_signals = sorted(
+        trader_signals,
+        key=lambda r: r.get("entry_time") or "",
+        reverse=True,
+    )[:500]
+
+    wins   = sum(1 for r in all_signals if r.get("outcome") == "WIN")
+    losses = sum(1 for r in all_signals if r.get("outcome") == "LOSS")
+    open_c = sum(1 for r in all_signals if r.get("outcome") == "OPEN")
+    closed = wins + losses
+    pnls   = [float(r.get("pnl_pct") or 0) for r in all_signals
+              if r.get("outcome") in ("WIN", "LOSS")]
+    times  = [r.get("entry_time") for r in all_signals if r.get("entry_time")]
+
+    return JSONResponse({
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "summary": {
+            "total_signals":  len(all_signals),
+            "wins":           wins,
+            "losses":         losses,
+            "open":           open_c,
+            "win_rate_pct":   round(wins / closed * 100, 1) if closed else None,
+            "avg_pnl_pct":    round(sum(pnls) / len(pnls), 3) if pnls else None,
+            "total_pnl_pct":  round(sum(pnls), 3) if pnls else 0.0,
+            "tracking_since": min(times) if times else None,
+        },
+        "signals": all_signals,
+    })
 
 
 @app.get("/api/trader/status")
