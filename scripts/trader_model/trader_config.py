@@ -56,7 +56,7 @@ MODES = {
         'description':      'Fast 5-minute entries, quick exits (20-60 min hold)',
         'max_hold_bars':    12,
         'candles_fetch':    500,
-        'min_confidence_override': 0.65,  # 5m is noisier; lower floor vs profile default
+        'min_confidence_override': 0.55,  # 5m is noisier; matches aggressive floor
     },
     'intraday': {
         'timeframe':        '1h',
@@ -101,7 +101,7 @@ RISK_PROFILES = {
         'tp3_atr_mult':   5.0,
     },
     'aggressive': {
-        'min_confidence': 0.65,
+        'min_confidence': 0.55,
         'max_signals':    25,
         'position_pct':   3.0,
         'description':    'More signals, higher potential returns, higher drawdown risk',
@@ -183,4 +183,4 @@ TRAINING_BARS = {
 }
 
 # Minimum confidence for any signal (overridden by risk profile)
-ABSOLUTE_MIN_CONFIDENCE = 0.60
+ABSOLUTE_MIN_CONFIDENCE = 0.50
