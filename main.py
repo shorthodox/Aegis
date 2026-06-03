@@ -3091,9 +3091,40 @@ async def track_record_endpoint(source: str = None):
             _track_store, key=lambda r: r.get("entry_time") or "", reverse=True
         )[:500]
 
-    # ── 2. Sort by entry time, cap at 500 ──────────────────────────────
+    # ── 2. AEGIS trader signals — normalised to same field names ──────────────
+    trader_signals: list = []
+    if TRADER_TRACK_RECORD_PATH.exists():
+        try:
+            with open(TRADER_TRACK_RECORD_PATH, "r", encoding="utf-8") as f:
+                _td = json.load(f)
+            for s in _td.get("signals", []):
+                trader_signals.append({
+                    "signal_id":       s.get("signal_id"),
+                    "symbol":          s.get("symbol"),
+                    "timeframe":       s.get("timeframe"),
+                    "direction":       s.get("direction"),
+                    "signal_type":     s.get("direction"),
+                    "signal_status":   "ACTIVE" if s.get("outcome") == "OPEN" else "CLOSED",
+                    "entry_price":     s.get("entry_price"),
+                    "take_profit":     s.get("tp1"),
+                    "stop_loss":       s.get("stop_loss"),
+                    "exit_price":      s.get("exit_price"),
+                    "entry_time":      s.get("timestamp"),
+                    "close_time":      s.get("exit_time"),
+                    "pnl_pct":         s.get("pnl_pct"),
+                    "outcome":         s.get("outcome"),
+                    "exit_reason":     s.get("exit_reason"),
+                    "ai_prob":         s.get("confidence"),
+                    "confluence_rate": s.get("confluence_score"),
+                    "source":          "aegis_trader",
+                    "mode":            s.get("mode"),
+                })
+        except Exception:
+            pass
+
+    # ── 3. Merge, sort by entry time, cap at 500 ──────────────────────────────
     all_signals = sorted(
-        live_signals,
+        live_signals + trader_signals,
         key=lambda r: r.get("entry_time") or "",
         reverse=True,
     )[:500]
