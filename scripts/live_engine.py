@@ -40,6 +40,8 @@ if str(_ROOT) not in sys.path:
 
 MODEL_STORE       = _ROOT / 'src' / 'ml' / 'model_store'
 TRACK_RECORD_PATH = _ROOT / 'data' / 'track_record.json'
+_PERF_STATE_PATH  = _ROOT / 'data' / 'perf_state.json'
+_DRIFT_STATE_PATH = _ROOT / 'data' / 'drift_state.json'
 
 # Shared exchange for lightweight index-price fetches (reuses the same instance
 # as Predictor once the class is loaded to avoid creating a second connection).
@@ -595,7 +597,7 @@ class PerformanceTracker:
         pnl_pct:       float,
         quality_score: float,
     ) -> None:
-        """Store a completed trade outcome."""
+        """Store a completed trade outcome and immediately persist to disk."""
         rec = _OutcomeRecord(
             symbol        = symbol,
             regime        = regime,
@@ -607,6 +609,7 @@ class PerformanceTracker:
             self._by_symbol[symbol] = deque(maxlen=self.SYMBOL_WINDOW)
         self._by_symbol[symbol].append(rec)
         self._global.append(rec)
+        self.save_state()
 
     def get_symbol_win_rate(self, symbol: str) -> float:
         """Win rate from the most recent SYMBOL_WINDOW closed trades on this symbol."""
@@ -654,6 +657,341 @@ class PerformanceTracker:
                 sym: self.get_symbol_win_rate(sym)
                 for sym in self._by_symbol
             },
+        }
+
+    # ── Disk persistence — survives server restarts ───────────────────────────
+
+    def save_state(self) -> None:
+        """Persist recent outcomes so safe-mode and reduce-exposure survive restarts."""
+        try:
+            import os as _os
+            payload = {
+                'saved_at': datetime.now(timezone.utc).isoformat(),
+                'global': [
+                    {'symbol': r.symbol, 'regime': r.regime, 'outcome': r.outcome,
+                     'pnl_pct': r.pnl_pct, 'quality_score': r.quality_score, 'ts': r.ts}
+                    for r in self._global
+                ],
+                'by_symbol': {
+                    sym: [
+                        {'symbol': r.symbol, 'regime': r.regime, 'outcome': r.outcome,
+                         'pnl_pct': r.pnl_pct, 'quality_score': r.quality_score, 'ts': r.ts}
+                        for r in hist
+                    ]
+                    for sym, hist in self._by_symbol.items()
+                },
+            }
+            _PERF_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            tmp = _PERF_STATE_PATH.with_suffix('.tmp')
+            with open(tmp, 'w', encoding='utf-8') as f:
+                json.dump(payload, f)
+            _os.replace(tmp, _PERF_STATE_PATH)
+        except Exception as e:
+            print(f'[PerformanceTracker] save_state failed: {e}')
+
+    def load_state(self) -> None:
+        """Restore recent outcome history from disk."""
+        if not _PERF_STATE_PATH.exists():
+            return
+        try:
+            with open(_PERF_STATE_PATH, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+
+            now = time.time()
+            max_age = 7 * 24 * 3600  # only restore outcomes from last 7 days
+
+            for raw in data.get('global', []):
+                if now - float(raw.get('ts', 0)) > max_age:
+                    continue
+                self._global.append(_OutcomeRecord(
+                    symbol=raw['symbol'], regime=raw['regime'],
+                    outcome=raw['outcome'], pnl_pct=float(raw['pnl_pct']),
+                    quality_score=float(raw['quality_score']), ts=float(raw['ts']),
+                ))
+
+            for sym, raws in data.get('by_symbol', {}).items():
+                self._by_symbol[sym] = deque(maxlen=self.SYMBOL_WINDOW)
+                for raw in raws:
+                    if now - float(raw.get('ts', 0)) > max_age:
+                        continue
+                    self._by_symbol[sym].append(_OutcomeRecord(
+                        symbol=raw['symbol'], regime=raw['regime'],
+                        outcome=raw['outcome'], pnl_pct=float(raw['pnl_pct']),
+                        quality_score=float(raw['quality_score']), ts=float(raw['ts']),
+                    ))
+
+            n = len(self._global)
+            if n:
+                print(f'[PerformanceTracker] Restored {n} recent outcomes from disk.')
+                if self.safe_mode_active():
+                    print('[PerformanceTracker] WARNING: safe-mode is still active from last session.')
+        except Exception as e:
+            print(f'[PerformanceTracker] load_state failed (starting fresh): {e}')
+
+
+# =============================================================================
+# Drift monitor  — benchmark-aware precision tracking
+# =============================================================================
+
+class DriftMonitor:
+    """
+    Compares live win rate against the training benchmark precision stored in
+    each token's *_meta.json sidecar.  This closes the most important gap in
+    the current system: knowing WHEN a model has degraded, not just THAT it lost
+    N trades in a row.
+
+    Severity levels
+    ---------------
+    OK       — live win rate within 10 pp of benchmark
+    WARNING  — live win rate 10–20 pp below benchmark (add confidence penalty)
+    CRITICAL — live win rate > 20 pp below benchmark (block new entries)
+    UNKNOWN  — not enough live trades yet to judge (< MIN_SAMPLE)
+
+    The benchmark is loaded from meta.json at engine startup.  If the meta file
+    is missing or has no precision figure, the symbol is given a neutral 0.60
+    default — conservative enough not to create false CRITICAL states.
+    """
+
+    MIN_SAMPLE       = 8     # need at least 8 live trades before issuing a verdict
+    WARNING_DROP_PP  = 10    # 10 percentage-point drop triggers WARNING
+    CRITICAL_DROP_PP = 20    # 20 pp drop triggers CRITICAL
+
+    def __init__(self) -> None:
+        self._benchmarks:    Dict[str, float] = {}    # symbol → training precision
+        self._live_window:   Dict[str, Deque[bool]] = {}   # symbol → rolling outcomes
+        self._loaded = False
+
+    # ── Benchmark loading ─────────────────────────────────────────────────────
+
+    def load_benchmarks(self) -> None:
+        """Read per-token training precision from model_store meta.json files."""
+        loaded = 0
+        if not MODEL_STORE.exists():
+            return
+        for meta_file in MODEL_STORE.glob('*_meta.json'):
+            try:
+                with open(meta_file, 'r', encoding='utf-8') as f:
+                    meta = json.load(f)
+                sym = meta.get('symbol', '')
+                if not sym:
+                    continue
+                # Prefer the honest holdout precision; fall back to dev OOF estimate
+                ht = meta.get('holdout_trading', {})
+                prec = (
+                    float(ht.get('signal_precision', 0))
+                    or float(meta.get('dev_estimate', {}).get('precision', 0))
+                    or 0.60
+                )
+                self._benchmarks[sym] = max(prec, 0.50)  # floor at 50% (random baseline)
+                loaded += 1
+            except Exception:
+                pass
+        self._loaded = True
+        print(f'[DriftMonitor] Loaded benchmarks for {loaded} symbols.')
+
+    # ── Live outcome recording ────────────────────────────────────────────────
+
+    def record(self, symbol: str, outcome: str) -> None:
+        """Record a WIN or LOSS outcome for drift tracking."""
+        if symbol not in self._live_window:
+            self._live_window[symbol] = deque(maxlen=30)
+        self._live_window[symbol].append(outcome == 'WIN')
+
+    # ── State persistence (survives restarts) ─────────────────────────────────
+
+    def save_state(self) -> None:
+        try:
+            import os as _os
+            payload = {
+                'saved_at': datetime.now(timezone.utc).isoformat(),
+                'windows': {
+                    sym: [int(b) for b in hist]
+                    for sym, hist in self._live_window.items()
+                },
+            }
+            _DRIFT_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            tmp = _DRIFT_STATE_PATH.with_suffix('.tmp')
+            with open(tmp, 'w', encoding='utf-8') as f:
+                json.dump(payload, f)
+            _os.replace(tmp, _DRIFT_STATE_PATH)
+        except Exception:
+            pass
+
+    def load_state(self) -> None:
+        if not _DRIFT_STATE_PATH.exists():
+            return
+        try:
+            with open(_DRIFT_STATE_PATH, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            for sym, wins in data.get('windows', {}).items():
+                self._live_window[sym] = deque([bool(w) for w in wins], maxlen=30)
+        except Exception:
+            pass
+
+    # ── Drift scoring ─────────────────────────────────────────────────────────
+
+    def _live_win_rate(self, symbol: str) -> Optional[float]:
+        hist = list(self._live_window.get(symbol, []))
+        if len(hist) < self.MIN_SAMPLE:
+            return None
+        return round(sum(hist) / len(hist), 3)
+
+    def severity(self, symbol: str) -> str:
+        """Return 'OK', 'WARNING', 'CRITICAL', or 'UNKNOWN'."""
+        live_wr = self._live_win_rate(symbol)
+        if live_wr is None:
+            return 'UNKNOWN'
+        benchmark = self._benchmarks.get(symbol, 0.60)
+        drop_pp   = (benchmark - live_wr) * 100.0
+        if drop_pp >= self.CRITICAL_DROP_PP:
+            return 'CRITICAL'
+        if drop_pp >= self.WARNING_DROP_PP:
+            return 'WARNING'
+        return 'OK'
+
+    def confidence_penalty(self, symbol: str) -> float:
+        """
+        Extra confidence threshold added when the model is drifting.
+        This raises the bar for new entries proportionally to how far
+        the live win rate has fallen below the training benchmark.
+        """
+        live_wr = self._live_win_rate(symbol)
+        if live_wr is None:
+            return 0.0
+        benchmark = self._benchmarks.get(symbol, 0.60)
+        drop = max(0.0, benchmark - live_wr)
+        # Penalty: 0.03 per 10 pp of drop, capped at 0.10
+        return round(min(drop * 0.3, 0.10), 3)
+
+    def is_blocked(self, symbol: str) -> bool:
+        """True when drift is CRITICAL — new entries are suppressed entirely."""
+        return self.severity(symbol) == 'CRITICAL'
+
+    def get_summary(self) -> Dict[str, Any]:
+        summary = {}
+        for sym in self._live_window:
+            live_wr = self._live_win_rate(sym)
+            benchmark = self._benchmarks.get(sym, 0.60)
+            summary[sym] = {
+                'benchmark': benchmark,
+                'live_wr':   live_wr,
+                'severity':  self.severity(sym),
+                'n_trades':  len(self._live_window[sym]),
+            }
+        return summary
+
+
+# =============================================================================
+# Portfolio guard  — correlation-aware position limits
+# =============================================================================
+
+class PortfolioGuard:
+    """
+    Prevents the engine from opening multiple correlated positions simultaneously.
+
+    Problem it solves:
+    ==================
+    BTC, ETH, SOL, AVAX, BNB almost always move together.  When the market turns,
+    the engine can fire BUY on all five within the same scan cycle.  This creates
+    5× correlated exposure — not 5 independent bets.  A single BTC flush wipes
+    all five positions at once.
+
+    Solution:
+    =========
+    Tokens are grouped into correlation clusters.  Within each cluster, only
+    MAX_PER_CLUSTER positions can be open at the same time.  The highest-quality
+    signal in the cluster wins.
+
+    Portfolio-wide limits:
+    - MAX_OPEN_TOTAL:       hard limit on simultaneous open positions
+    - MAX_CAPITAL_DEPLOYED: max fraction of wallet balance in open positions
+
+    Clusters are defined statically (good enough — crypto correlations are
+    structurally stable within tiers).  Dynamic clustering via PCA on live
+    price returns is a Phase 2 improvement.
+    """
+
+    MAX_PER_CLUSTER    = 2     # max 2 concurrent open positions per correlation cluster
+    MAX_OPEN_TOTAL     = 6     # hard cap: never more than 6 open at once across all tokens
+    MAX_CAPITAL_PCT    = 0.45  # never deploy more than 45 % of balance simultaneously
+
+    # Static correlation clusters (tightest first)
+    _CLUSTERS: Dict[str, List[str]] = {
+        'MAJORS':    ['BTC/USDT', 'ETH/USDT', 'BNB/USDT'],
+        'L1_FAST':   ['SOL/USDT', 'AVAX/USDT', 'APT/USDT', 'SUI/USDT', 'NEAR/USDT'],
+        'L2':        ['ARB/USDT', 'OP/USDT', 'STRK/USDT', 'IMX/USDT', 'ZK/USDT'],
+        'DEFI_BLUE': ['AAVE/USDT', 'UNI/USDT', 'CRV/USDT', 'COMP/USDT', 'LDO/USDT'],
+        'AI_INFRA':  ['FET/USDT', 'TAO/USDT', 'ARKM/USDT', 'GRT/USDT'],
+        'MEME':      ['PEPE/USDT', 'WIF/USDT', 'DOGE/USDT', 'SHIB/USDT', 'BONK/USDT',
+                      'FLOKI/USDT', 'BOME/USDT', 'BRETT/USDT'],
+        'XRP_ALTS':  ['XRP/USDT', 'XLM/USDT', 'ADA/USDT', 'TRX/USDT'],
+        'LAYER1_MID': ['DOT/USDT', 'ATOM/USDT', 'ALGO/USDT', 'EGLD/USDT',
+                       'ICP/USDT', 'FIL/USDT', 'HBAR/USDT'],
+    }
+
+    def __init__(self) -> None:
+        # Build reverse map: symbol → cluster name
+        self._sym_to_cluster: Dict[str, str] = {}
+        for cluster, syms in self._CLUSTERS.items():
+            for s in syms:
+                self._sym_to_cluster[s] = cluster
+        # Runtime state (populated from wallet)
+        self._open_positions: Dict[str, str] = {}   # symbol → direction ('LONG'/'SHORT')
+
+    def sync_from_wallet(self, open_positions: Dict[str, Any]) -> None:
+        """Sync open positions from the VirtualWallet on every scan cycle."""
+        self._open_positions = {
+            sym: pos.direction
+            for sym, pos in open_positions.items()
+        }
+
+    def _cluster_open_count(self, cluster: str) -> int:
+        cluster_syms = set(self._CLUSTERS.get(cluster, []))
+        return sum(1 for sym in self._open_positions if sym in cluster_syms)
+
+    def _total_open(self) -> int:
+        return len(self._open_positions)
+
+    def can_open(self, symbol: str, wallet_balance: float,
+                 position_value: float) -> Tuple[bool, str]:
+        """
+        Returns (allowed, reason).
+        Reason is a human-readable string for the log — critical for debugging.
+        """
+        # Hard cap on total open positions
+        if self._total_open() >= self.MAX_OPEN_TOTAL:
+            return False, f'MAX_OPEN_TOTAL={self.MAX_OPEN_TOTAL} reached'
+
+        # Cluster correlation cap
+        cluster = self._sym_to_cluster.get(symbol)
+        if cluster:
+            n_in_cluster = self._cluster_open_count(cluster)
+            if n_in_cluster >= self.MAX_PER_CLUSTER:
+                open_in_cluster = [s for s in self._open_positions
+                                   if self._sym_to_cluster.get(s) == cluster]
+                return (False,
+                        f'CLUSTER_CAP: {cluster} already has {n_in_cluster} '
+                        f'open ({", ".join(open_in_cluster)})')
+
+        # Capital deployment cap
+        if wallet_balance > 0:
+            deployed_pct = (self._total_open() * position_value) / wallet_balance
+            if deployed_pct >= self.MAX_CAPITAL_PCT:
+                return (False,
+                        f'CAPITAL_CAP: {deployed_pct:.0%} already deployed '
+                        f'(max {self.MAX_CAPITAL_PCT:.0%})')
+
+        return True, 'OK'
+
+    def get_summary(self) -> Dict[str, Any]:
+        cluster_counts: Dict[str, int] = {}
+        for sym in self._open_positions:
+            c = self._sym_to_cluster.get(sym, 'OTHER')
+            cluster_counts[c] = cluster_counts.get(c, 0) + 1
+        return {
+            'open_total':    self._total_open(),
+            'max_allowed':   self.MAX_OPEN_TOTAL,
+            'cluster_counts': cluster_counts,
         }
 
 
@@ -843,6 +1181,13 @@ class LiveEngine:
         self.quality_filter  = SignalQualityFilter()
         self.risk_engine     = DynamicRiskEngine()
         self.perf_tracker    = PerformanceTracker()
+        self.drift_monitor   = DriftMonitor()
+        self.portfolio_guard = PortfolioGuard()
+
+        # Restore persisted state so protection survives server restarts
+        self.perf_tracker.load_state()
+        self.drift_monitor.load_state()
+        self.drift_monitor.load_benchmarks()
 
         self._load_predictors([c.symbol for c in token_configs])
 
@@ -1048,6 +1393,51 @@ class LiveEngine:
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
 
+                    # ── Drift gate: block symbol if model is critically degraded ─
+                    if self.drift_monitor.is_blocked(symbol):
+                        drift_penalty = self.drift_monitor.confidence_penalty(symbol)
+                        live_wr       = self.drift_monitor._live_win_rate(symbol)
+                        benchmark     = self.drift_monitor._benchmarks.get(symbol, 0.60)
+                        print(f'[{symbol}] DRIFT_CRITICAL blocked {new_side} — '
+                              f'live_wr={live_wr:.1%} benchmark={benchmark:.1%} '
+                              f'(>{self.drift_monitor.CRITICAL_DROP_PP}pp below benchmark)')
+                        if symbol in self.last_signals:
+                            self.last_signals[symbol]['fire']          = False
+                            self.last_signals[symbol]['signal']        = 'HOLD'
+                            self.last_signals[symbol]['drift_blocked'] = True
+                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                        return
+
+                    # Apply drift confidence penalty (WARNING level) to quality gate
+                    drift_penalty = self.drift_monitor.confidence_penalty(symbol)
+                    if drift_penalty > 0 and quality_score < (self.quality_filter.MIN_QUALITY_SCORE + drift_penalty * 100):
+                        print(f'[{symbol}] DRIFT_WARNING quality penalty {drift_penalty:.2f} '
+                              f'— adjusted min={self.quality_filter.MIN_QUALITY_SCORE + drift_penalty * 100:.0f} '
+                              f'score={quality_score:.0f}')
+                        if symbol in self.last_signals:
+                            self.last_signals[symbol]['fire']          = False
+                            self.last_signals[symbol]['signal']        = 'HOLD'
+                            self.last_signals[symbol]['drift_blocked'] = True
+                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                        return
+
+                    # ── Portfolio guard: correlation and capital limits ────────────
+                    self.portfolio_guard.sync_from_wallet(self.wallet.open_positions)
+                    # Estimate position value for this signal
+                    _atr_pct_est = float(result.get('atr_pct', 1.5) or 1.5)
+                    _pos_est     = self.risk_engine.calculate_position_size(
+                        self.wallet.balance, quality_score, regime, _atr_pct_est)
+                    _pg_allowed, _pg_reason = self.portfolio_guard.can_open(
+                        symbol, self.wallet.balance, _pos_est)
+                    if not _pg_allowed:
+                        print(f'[{symbol}] PORTFOLIO_GUARD blocked {new_side}: {_pg_reason}')
+                        if symbol in self.last_signals:
+                            self.last_signals[symbol]['fire']              = False
+                            self.last_signals[symbol]['signal']            = 'HOLD'
+                            self.last_signals[symbol]['portfolio_blocked'] = True
+                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                        return
+
                     # ── Legacy confluence gate (keep existing dual-path logic) ─
                     _conf_data  = result.get('confluence') or {}
                     _conf_total = float(_conf_data.get('total', 5.0))
@@ -1134,7 +1524,7 @@ class LiveEngine:
                 self._peak_price.pop(symbol, None)
                 tag = 'WIN' if rec.pnl_pct > 0 else 'LOSS'
                 print(f'[{symbol}] {reason} {tag} {rec.pnl_pct:+.2f}% @ {check_price:.6g}')
-                # Record outcome in performance tracker
+                # Record outcome in performance tracker (persists to disk inside)
                 self.perf_tracker.record_outcome(
                     symbol        = symbol,
                     regime        = self.last_signals.get(symbol, {}).get('regime', 'UNKNOWN'),
@@ -1142,6 +1532,18 @@ class LiveEngine:
                     pnl_pct       = rec.pnl_pct,
                     quality_score = float(self.last_signals.get(symbol, {}).get('quality_score', 0)),
                 )
+                # Feed drift monitor so it can compare against training benchmark
+                self.drift_monitor.record(symbol, rec.outcome)
+                self.drift_monitor.save_state()
+
+                drift_sev = self.drift_monitor.severity(symbol)
+                if drift_sev in ('WARNING', 'CRITICAL'):
+                    live_wr    = self.drift_monitor._live_win_rate(symbol)
+                    benchmark  = self.drift_monitor._benchmarks.get(symbol, 0.60)
+                    print(f'[{symbol}] DRIFT {drift_sev}: '
+                          f'live_wr={live_wr:.1%} vs benchmark={benchmark:.1%} '
+                          f'(drop={((benchmark - (live_wr or 0)) * 100):.1f}pp)')
+
                 # Persist immediately so the outcome survives a crash
                 self._save_track_record()
 
@@ -1442,11 +1844,14 @@ class LiveEngine:
                 reverse=True,
             )[:500]
 
+            self.portfolio_guard.sync_from_wallet(self.wallet.open_positions)
             payload: Dict[str, Any] = {
                 'generated_at':      datetime.now(timezone.utc).isoformat(),
                 'summary':           self.wallet.summary,
                 'signals':           all_records,
                 'performance':       self.perf_tracker.get_performance_summary(),
+                'drift':             self.drift_monitor.get_summary(),
+                'portfolio':         self.portfolio_guard.get_summary(),
             }
 
             import os as _os
