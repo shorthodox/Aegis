@@ -43,6 +43,10 @@ log = logging.getLogger(__name__)
 # Label mapping from calibrated model output (0=SELL, 1=HOLD, 2=BUY)
 _LABEL_MAP = {0: 'SELL', 1: 'HOLD', 2: 'BUY'}
 
+# Minimum fraction of 25 strategies that must agree with the ML direction.
+# 6/25 = 0.24 — low enough to not over-filter, high enough to block pure noise.
+_MIN_CONFLUENCE = 0.24
+
 
 def _compute_confluence(raw_last: "pd.Series", df: "pd.DataFrame") -> Dict[str, float]:
     """

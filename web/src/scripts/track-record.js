@@ -1,10 +1,10 @@
 /**
  * track-record.js
- * Fetches /api/track-record and renders the public signal log page.
+ * Fetches /api/trader/track-record and renders the public signal log page.
  * No Firestore dependency — data comes entirely from the backend JSON.
  */
 
-const API_URL = '/api/track-record';
+const API_URL = '/api/trader/track-record';
 
 // ── Filters state ─────────────────────────────────────────────────────────────
 let _allRows = [];
@@ -15,6 +15,51 @@ async function fetchTrackRecord() {
     const res = await fetch(API_URL);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.json();
+}
+
+// ── Normalize trader API response → format expected by render() ───────────────
+function normalizeTraderData(data) {
+    const rawSignals = data.signals || [];
+    const signals = rawSignals.map(s => ({
+        signal_id:   s.signal_id,
+        symbol:      s.symbol,
+        timeframe:   s.timeframe,
+        direction:   s.direction,       // 'BUY' or 'SELL'
+        signal_type: s.direction,       // reuse direction for chip renderer
+        entry_price: s.entry_price,
+        take_profit: s.tp1,
+        stop_loss:   s.stop_loss,
+        exit_price:  s.exit_price,
+        entry_time:  s.timestamp,
+        close_time:  s.exit_time,
+        pnl_pct:     s.pnl_pct,
+        outcome:     s.outcome,
+        exit_reason: s.exit_reason,
+        ai_prob:     s.confidence,
+        mode:        s.mode,
+        risk_profile: s.risk_profile,
+    }));
+
+    const closed = signals.filter(s => s.outcome === 'WIN' || s.outcome === 'LOSS');
+    const avgPnl = closed.length > 0
+        ? closed.reduce((sum, s) => sum + (parseFloat(s.pnl_pct) || 0), 0) / closed.length
+        : null;
+    const times = signals.map(s => s.entry_time).filter(Boolean);
+
+    return {
+        generated_at: data.generated_at,
+        summary: {
+            total_signals:  signals.length,
+            wins:           data.won           ?? 0,
+            losses:         data.lost          ?? 0,
+            open:           data.open_positions ?? 0,
+            win_rate_pct:   data.win_rate != null ? Math.round(data.win_rate * 1000) / 10 : null,
+            avg_pnl_pct:    avgPnl != null ? Math.round(avgPnl * 1000) / 1000 : null,
+            total_pnl_pct:  data.total_pnl_pct ?? 0,
+            tracking_since: times.length > 0 ? times.reduce((a, b) => a < b ? a : b) : null,
+        },
+        signals,
+    };
 }
 
 // ── Format helpers ────────────────────────────────────────────────────────────
@@ -74,10 +119,8 @@ function outcomeBadge(outcome) {
 
 function signalChip(type) {
     const t = (type || '').toUpperCase();
-    if (t === 'STRONG_BUY')  return '<span style="color:#00ff88;font-weight:700;">STRONG BUY</span>';
-    if (t === 'BUY')         return '<span style="color:#00ff88;">BUY</span>';
-    if (t === 'STRONG_SELL') return '<span style="color:#ff5555;font-weight:700;">STRONG SELL</span>';
-    if (t === 'SELL')        return '<span style="color:#ff5555;">SELL</span>';
+    if (t === 'STRONG_BUY'  || t === 'BUY')  return '<span style="color:#00ff88;font-weight:700;">BUY</span>';
+    if (t === 'STRONG_SELL' || t === 'SELL') return '<span style="color:#ff5555;font-weight:700;">SELL</span>';
     return `<span style="color:#6b7280;">${t}</span>`;
 }
 
@@ -169,7 +212,6 @@ function applyFilters(rows) {
         const dir = _activeFilter.direction;
         const out = _activeFilter.outcome;
         const matchDir = dir === 'ALL' || dirLabel(r.direction) === dir;
-        // "Open" filter button is hidden for closed-only table, but guard anyway
         const matchOut = out === 'ALL' || out === 'OPEN'
             ? true
             : (r.outcome || '').toUpperCase() === out;
@@ -254,7 +296,8 @@ function render(data) {
 function startAutoRefresh() {
     setInterval(async () => {
         try {
-            const data = await fetchTrackRecord();
+            const raw  = await fetchTrackRecord();
+            const data = normalizeTraderData(raw);
             render(data);
         } catch { /* silently ignore refresh errors */ }
     }, 60_000);
@@ -264,7 +307,8 @@ function startAutoRefresh() {
 async function init() {
     initFilters();
     try {
-        const data = await fetchTrackRecord();
+        const raw  = await fetchTrackRecord();
+        const data = normalizeTraderData(raw);
         render(data);
         startAutoRefresh();
     } catch (err) {
@@ -283,7 +327,8 @@ async function init() {
 
 window.refreshAegisTrackRecord = async function() {
     try {
-        const data = await fetchTrackRecord();
+        const raw  = await fetchTrackRecord();
+        const data = normalizeTraderData(raw);
         render(data);
     } catch { /* silently ignore */ }
 };
