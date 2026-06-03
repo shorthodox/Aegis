@@ -1351,17 +1351,27 @@
                             </div>
                         </div>
                         <div class="space-y-3">
-                            <div class="p-3 bg-black/40 rounded-lg border border-yellow-400/10">
-                                <div class="text-[10px] text-yellow-400/60 uppercase tracking-wider mb-1">Primary Signal</div>
-                                <div id="tg-signal-name" class="text-xs font-bold text-yellow-400 mb-2"></div>
-                                <div id="tg-rationale" class="text-xs text-gray-300 leading-relaxed"></div>
+
+                            <!-- ── Strategies Used ─────────────────────────────── -->
+                            <div class="p-3 bg-black/40 rounded-lg border border-yellow-400/15">
+                                <div class="flex items-center gap-2 mb-3">
+                                    <div class="text-[10px] text-yellow-400/70 uppercase tracking-wider font-bold">Strategies Used</div>
+                                    <div class="text-[9px] text-gray-600 font-mono">— why the AI fired this signal</div>
+                                </div>
+                                <div id="tg-strategies-list" class="space-y-2">
+                                    <!-- populated by showTraderGuidance() -->
+                                </div>
                             </div>
+
+                            <!-- ── Step-by-step ────────────────────────────────── -->
                             <div class="p-3 bg-black/40 rounded-lg border border-white/5">
                                 <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-2">Step-by-step for Beginners</div>
                                 <ol id="tg-steps" class="space-y-1.5 text-xs text-gray-300 list-none"></ol>
                             </div>
+
+                            <!-- ── Position Sizing ─────────────────────────────── -->
                             <div class="p-3 bg-black/40 rounded-lg border border-white/5">
-                                <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Position Sizing</div>
+                                <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Position Sizing Advice</div>
                                 <div id="tg-sizing" class="text-xs text-gray-300"></div>
                             </div>
                         </div>
@@ -1849,17 +1859,77 @@
             }).join('');
         }
 
+        // ── Strategy metadata: category label + icon for each of the 25 strategies ──
+        var _STRATEGY_META = {
+            'vwap_bounce':                 { cat: 'Volume · Price',   icon: 'fa-water',           color: '#00f2ff' },
+            'bb_squeeze_breakout':         { cat: 'Volatility',       icon: 'fa-compress-arrows-alt', color: '#a78bfa' },
+            'ema_cross_fast':              { cat: 'Trend',            icon: 'fa-arrows-up-down',  color: '#34d399' },
+            'macd_zero_cross':             { cat: 'Momentum',         icon: 'fa-bolt',             color: '#fbbf24' },
+            'volume_spike_entry':          { cat: 'Volume',           icon: 'fa-fire',             color: '#f97316' },
+            'rsi_momentum_cross':          { cat: 'Momentum',         icon: 'fa-tachometer-alt',   color: '#fb7185' },
+            'order_flow_imbalance':        { cat: 'Order Flow',       icon: 'fa-balance-scale',    color: '#38bdf8' },
+            'support_resistance_retest':   { cat: 'S/R Levels',       icon: 'fa-layer-group',      color: '#e2e8f0' },
+            'opening_range_breakout':      { cat: 'Breakout',         icon: 'fa-arrow-up-right-from-square', color: '#00f2ff' },
+            'momentum_burst_candles':      { cat: 'Momentum',         icon: 'fa-rocket',           color: '#fbbf24' },
+            'trend_continuation_pullback': { cat: 'Trend',            icon: 'fa-chart-line',       color: '#34d399' },
+            'ema21_bounce':                { cat: 'Trend · EMA',      icon: 'fa-angles-right',     color: '#6ee7b7' },
+            'vwap_deviation_reversion':    { cat: 'Mean Reversion',   icon: 'fa-undo',             color: '#00f2ff' },
+            'rsi_divergence':              { cat: 'Divergence',       icon: 'fa-code-fork',        color: '#f472b6' },
+            'macd_histogram_reversal':     { cat: 'Momentum',         icon: 'fa-rotate',           color: '#fbbf24' },
+            'bb_squeeze_expansion':        { cat: 'Volatility',       icon: 'fa-expand-arrows-alt', color: '#a78bfa' },
+            'oi_price_divergence':         { cat: 'Open Interest',    icon: 'fa-scale-unbalanced', color: '#38bdf8' },
+            'news_momentum_catalyst':      { cat: 'Catalyst',         icon: 'fa-newspaper',        color: '#f97316' },
+            'session_high_low_break':      { cat: 'Session Break',    icon: 'fa-clock',            color: '#e2e8f0' },
+            'ema_golden_death_cross':      { cat: 'Trend · Major',    icon: 'fa-star',             color: '#fbbf24' },
+            'supply_demand_zone_retest':   { cat: 'Supply / Demand',  icon: 'fa-cubes',            color: '#fb923c' },
+            'fibonacci_retracement_entry': { cat: 'Fibonacci',        icon: 'fa-percent',          color: '#c084fc' },
+            'higher_timeframe_alignment':  { cat: 'HTF Confluence',   icon: 'fa-sitemap',          color: '#34d399' },
+            'market_structure_break':      { cat: 'Structure',        icon: 'fa-chess-rook',       color: '#e2e8f0' },
+            'liquidation_cascade_fade':    { cat: 'Contrarian',       icon: 'fa-shield-halved',    color: '#f87171' },
+        };
+
+        // ── Fallback explanations (mirrors signal_manager.py) ──────────────────
+        var _STRATEGY_EXPLAIN = {
+            'vwap_bounce':                 'Price is near the VWAP with above-average volume, suggesting a bounce off this dynamic level.',
+            'bb_squeeze_breakout':         'Bollinger Bands are tightly squeezed — a volatility expansion is beginning as price breaks out.',
+            'ema_cross_fast':              'Short-term EMA has crossed the EMA8 in the signal direction, confirmed by momentum.',
+            'macd_zero_cross':             'MACD line has crossed the zero line, signaling a shift in momentum direction.',
+            'volume_spike_entry':          'Volume spiked 2× above average with a strong directional candle body.',
+            'rsi_momentum_cross':          'RSI has crossed the 50-line, indicating a momentum shift from bearish to bullish (or vice versa).',
+            'order_flow_imbalance':        'Buy/sell order flow is imbalanced — suggests institutional accumulation or distribution.',
+            'support_resistance_retest':   'Price is retesting a key support or resistance level with a reversal candle pattern.',
+            'opening_range_breakout':      'Price has broken out of the recent 3-candle opening range with volume confirmation.',
+            'momentum_burst_candles':      '3 consecutive momentum candles with increasing volume signal a strong directional move.',
+            'trend_continuation_pullback': 'Strong trend detected (ADX > 25) — price is pulling back to EMA21, a classic low-risk entry.',
+            'ema21_bounce':                'Price is bouncing off the EMA21 in a trending market, offering a low-risk continuation entry.',
+            'vwap_deviation_reversion':    'Price is more than 1.5 standard deviations from VWAP — mean reversion toward VWAP is likely.',
+            'rsi_divergence':              'RSI divergence detected: price makes a new high/low but RSI does not confirm it — reversal signal.',
+            'macd_histogram_reversal':     'MACD histogram has reversed direction after building momentum, signaling a trend turn.',
+            'bb_squeeze_expansion':        'Bollinger Bands were tightly compressed and are now expanding in the signal direction.',
+            'oi_price_divergence':         'Open interest is diverging from price — suggests a potential short squeeze or long flush.',
+            'news_momentum_catalyst':      'Strong sentiment or news catalyst detected — momentum may continue in this direction.',
+            'session_high_low_break':      'Price has broken out of the previous session (Asian/London) range with volume confirmation.',
+            'ema_golden_death_cross':      'EMA50 has crossed EMA200 (golden or death cross), indicating a major long-term trend change.',
+            'supply_demand_zone_retest':   'Price is revisiting a high-volume supply or demand zone — a strong reaction is expected here.',
+            'fibonacci_retracement_entry': 'Price is at a key Fibonacci level (38.2%, 50%, or 61.8%) of the recent swing — a high-value entry.',
+            'higher_timeframe_alignment':  '4h and daily trends are aligned in the same direction — high-probability multi-timeframe setup.',
+            'market_structure_break':      'Price broke above the previous swing high (or below swing low) with volume — market structure shift.',
+            'liquidation_cascade_fade':    'A sharp liquidation spike occurred with extreme volume — fading the cascade as price likely recovers.',
+        };
+
         window.showTraderGuidance = function(sig) {
-            var g  = sig.guidance || {};
-            var ez = g.entry_zone || {};
-            var tp = g.take_profit || {};
+            var g   = sig.guidance || {};
+            var ez  = g.entry_zone || {};
+            var tp  = g.take_profit || {};
+            var dir = sig.direction || 'BUY';
             setText('tg-symbol', sig.symbol);
 
+            // Direction badge
             var dirEl = document.getElementById('tg-direction');
             if (dirEl) {
-                dirEl.textContent = sig.direction;
+                dirEl.textContent = dir;
                 dirEl.className   = 'font-black text-sm px-3 py-1 rounded-full '
-                    + (sig.direction === 'BUY'
+                    + (dir === 'BUY'
                         ? 'bg-green-500/20 text-green-400 border border-green-500/30'
                         : 'bg-red-500/20 text-red-400 border border-red-500/30');
             }
@@ -1876,16 +1946,52 @@
             setText('tg-tp2',   '$' + fmt(tp.tp2));
             setText('tg-tp3',   '$' + fmt(tp.tp3));
             setText('tg-rr',    '1 : ' + (g.risk_reward || '—'));
+            setText('tg-sizing', g.sizing_advice || '—');
 
-            var sigName = (g.primary_signal || '').replace(/_/g, ' ');
-            setText('tg-signal-name', sigName || '—');
-            setText('tg-rationale',   g.rationale || '—');
-            setText('tg-sizing',      g.sizing_advice || '—');
+            // ── Strategies Used ─────────────────────────────────────────────
+            var strategiesEl = document.getElementById('tg-strategies-list');
+            if (strategiesEl) {
+                // Build list: primary + up to 2 supporting
+                var names    = (sig.top_strategies || []).slice(0, 3);
+                var explains = [g.rationale || ''].concat(g.supporting_signals || []);
+                var accentBg = dir === 'BUY' ? 'rgba(74,222,128,0.06)' : 'rgba(248,113,113,0.06)';
+                var accentBd = dir === 'BUY' ? 'rgba(74,222,128,0.2)'  : 'rgba(248,113,113,0.2)';
 
+                strategiesEl.innerHTML = names.map(function(name, i) {
+                    var meta    = _STRATEGY_META[name] || { cat: 'Technical', icon: 'fa-chart-bar', color: '#6b7280' };
+                    var explain = explains[i] || _STRATEGY_EXPLAIN[name] || 'Technical strategy signal detected.';
+                    var label   = (name || '').replace(/_/g, ' ');
+                    var isPrimary = (i === 0);
+                    var rankLabel = isPrimary ? 'Primary' : ('Supporting ' + i);
+                    var rankColor = isPrimary ? '#fbbf24' : '#6b7280';
+                    return [
+                        '<div style="padding:0.6rem 0.75rem;border-radius:0.6rem;',
+                        isPrimary
+                            ? 'background:' + accentBg + ';border:1px solid ' + accentBd + ';'
+                            : 'background:rgba(0,0,0,0.25);border:1px solid rgba(255,255,255,0.05);',
+                        '">',
+                        // Header row: rank tag + icon + strategy name + category chip
+                        '<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem;flex-wrap:wrap;">',
+                            '<span style="font-size:0.58rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:' + rankColor + ';">' + rankLabel + '</span>',
+                            '<i class="fas ' + meta.icon + '" style="font-size:0.65rem;color:' + meta.color + ';"></i>',
+                            '<span style="font-size:0.72rem;font-weight:700;color:#e2e8f0;text-transform:capitalize;">' + label + '</span>',
+                            '<span style="margin-left:auto;font-size:0.58rem;color:#4b5563;padding:0.15rem 0.4rem;border:1px solid rgba(255,255,255,0.06);border-radius:1rem;">' + meta.cat + '</span>',
+                        '</div>',
+                        // Explanation
+                        '<div style="font-size:0.68rem;color:#9ca3af;line-height:1.55;">' + explain + '</div>',
+                        '</div>',
+                    ].join('');
+                }).join('');
+
+                if (!names.length) {
+                    strategiesEl.innerHTML = '<div style="font-size:0.7rem;color:#4b5563;padding:0.5rem;">No strategy data available for this signal.</div>';
+                }
+            }
+
+            // ── Steps ───────────────────────────────────────────────────────
             var stepsEl = document.getElementById('tg-steps');
             if (stepsEl) {
-                var steps = g.beginner_steps || [];
-                stepsEl.innerHTML = steps.map(function(s) {
+                stepsEl.innerHTML = (g.beginner_steps || []).map(function(s) {
                     return '<li class="flex items-start gap-2"><i class="fas fa-chevron-right text-cyan/40 mt-0.5 text-[9px] flex-shrink-0"></i><span>' + s + '</span></li>';
                 }).join('');
             }
