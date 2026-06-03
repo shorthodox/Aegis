@@ -1601,31 +1601,41 @@ function _renderFpConfluence(body, signal, tier) {
         </div>
         ${(() => {
           const _sc = confluence.total;
-          const _dir = signal.direction || 'LONG';
-          const _vc = _sc >= 65 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-            : _sc >= 50 ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+          const _dir = (signal.direction || 'LONG').toUpperCase();
+          const _alignment = _dir === 'LONG' ? _sc : _dir === 'SHORT' ? (100 - _sc) : 50;
+          
+          const _vc = _alignment >= 65 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+            : _alignment >= 50 ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
             : 'bg-red-500/20 text-red-400 border-red-500/30';
-          const _vl = _sc >= 65 ? 'STRONG' : _sc >= 50 ? 'MODERATE' : 'WEAK';
+          const _vl = _alignment >= 65 ? 'STRONG' : _alignment >= 50 ? 'MODERATE' : 'WEAK';
+          
           const _cats = [['Trend',confluence.trend],['Momentum',confluence.momentum],['Volume',confluence.volume],['Smart Money',confluence.smart_money],['Candle',confluence.candle]];
           const _dom = _cats.reduce((a,b)=>b[1]>a[1]?b:a, _cats[0]);
           const _bias = _dir === 'LONG' ? 'bullish' : _dir === 'SHORT' ? 'bearish' : 'neutral';
           const _agrCount = _cats.filter(c => _dir==='LONG' ? c[1]>=55 : c[1]<=45).length;
+          
           const _why = `Weighted total is ${_sc}% (50% = neutral). ${_agrCount}/5 indicator groups support the ${_bias} ${_dir} direction. ${rawConf.summary || ''}.`;
-          const _what = `Dominant driver: ${_dom[0]} at ${_dom[1]}%. ${_sc >= 65 ? 'Strong multi-group alignment — signal has high structural backing.' : _sc >= 50 ? 'Moderate alignment — signal is valid but not a textbook setup.' : 'Low alignment — major groups are disagreeing.'}`;
-          const _when = _sc >= 65
+          const _what = `Dominant driver: ${_dom[0]} at ${_dom[1]}%. ${_alignment >= 65 ? 'Strong multi-group alignment — signal has high structural backing.' : _alignment >= 50 ? 'Moderate alignment — signal is valid but not a textbook setup.' : 'Low alignment — major groups are disagreeing.'}`;
+          const _when = _alignment >= 65
             ? 'Strong setup — full position size is justified at current price.'
-            : _sc >= 50
+            : _alignment >= 50
             ? 'Entry is viable — reduce position size by 30% to account for incomplete alignment.'
             : 'Stand aside — wait for confluence to improve before committing capital.';
+          
           function _fmtPx(v) { v=parseFloat(v)||0; if(!v)return'—'; if(v>=100)return'$'+v.toLocaleString('en-US',{maximumFractionDigits:2}); if(v>=1)return'$'+v.toFixed(4); return'$'+v.toFixed(6); }
           const _ep = _fmtPx(signal.entry_price || signal.price);
           const _slVal = signal.suggested_sl || signal.sl || 0;
           const _slStr = _fmtPx(_slVal);
-          const _where = `Execute near ${_ep} with SL at ${_slStr}. ${_sc >= 65 ? 'Full position size justified by strong confluence.' : _sc >= 50 ? 'Scale in with 50-70% size. Add on confirmation.' : 'Observe only — wait for groups to align before entering.'}`;
+          
+          const _where = `Execute near ${_ep} with SL at ${_slStr}. ${_alignment >= 65 ? 'Full position size justified by strong confluence.' : _alignment >= 50 ? 'Scale in with 50-70% size. Add on confirmation.' : 'Observe only — wait for groups to align before entering.'}`;
+          
           return `<div class="mt-4 p-4 bg-black/40 rounded-xl border border-cyan/20">
             <div class="flex items-center justify-between mb-3">
               <h4 class="text-xs font-bold text-cyan uppercase tracking-wider">Signal Intelligence</h4>
-              <span class="text-[10px] font-bold px-2 py-0.5 rounded border ${_vc}">${_vl}</span>
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] text-gray-400">Directional Alignment: <strong class="${_alignment >= 65 ? 'text-emerald-400' : _alignment >= 50 ? 'text-amber-400' : 'text-red-400'}">${_alignment}%</strong></span>
+                <span class="text-[10px] font-bold px-2 py-0.5 rounded border ${_vc}">${_vl}</span>
+              </div>
             </div>
             <div class="space-y-2 text-[11px]">
               <div class="flex gap-2 items-start"><span class="w-[46px] shrink-0 text-cyan/60 font-bold uppercase text-[9px] pt-0.5">WHY</span><span class="text-gray-300">${_why}</span></div>
