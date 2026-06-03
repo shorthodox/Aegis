@@ -252,23 +252,128 @@ FEATURE_ADDONS = [
     'dist_pivot', 'dist_r1', 'dist_s1', 'dist_r2', 'dist_s2',
     # ── Statistical / quant ───────────────────────────────────────
     'se_position', 'se_mid', 'quantile_position', 'hurst', 'entropy',
-    # ── Category confluence (pre-aggregated voter groups) ─────────
+    # ── Sign-based confluence (kept for backward compat, XGBoost learns from both) ──
     'momentum_confluence', 'trend_confluence', 'volume_confluence',
     'bands_confluence', 'smart_money_confluence', 'candle_confluence',
     'total_confluence',
+    # ── Soft (percentile-rank) confluence — richer gradient than sign-based ──────
+    # sign() gives RSI-51 == RSI-80 (+1 both). prc_* uses rolling rank so the
+    # model sees the magnitude of the edge, not just its direction.
+    'prc_trend', 'prc_momentum', 'prc_volume', 'prc_bands', 'prc_smart_money',
+    'prc_total',
     # ── Futures (zero-filled when spot-only) ─────────────────────
     'funding_rate', 'funding_rate_ma8', 'funding_rate_zscore',
     'open_interest', 'oi_change_1h', 'oi_change_4h', 'oi_zscore',
     # ── Token-vs-BTC relative performance (critical for non-BTC alts) ──
-    # These features capture how the token performs *relative* to BTC,
-    # which is the single strongest short-term momentum signal for alts.
-    # ETH +3% while BTC +1% = ETH strong-hands rotation → bullish.
-    # ETH -1% while BTC +2% = ETH lagging, institutional de-risking → bearish.
     'rel_perf_1h', 'rel_perf_4h', 'rel_perf_24h',
     'btc_ratio_ma_dist',
     # BTC absolute anchors (already computed, kept explicit for SHAP pruning)
     'btc_1h_return', 'btc_4h_return', 'btc_dist_ema200',
 ]
+
+
+# ============================================================
+# SOFT CONFLUENCE FEATURES  (percentile-rank based)
+# ============================================================
+def compute_soft_confluence_features(df: pd.DataFrame, window: int = 120) -> pd.DataFrame:
+    """
+    Compute soft confluences using rolling percentile rank instead of sign().
+
+    sign() saturates: RSI-51 and RSI-80 both map to +1, so the model cannot
+    distinguish a marginal edge from a strong one.  Rolling pct-rank preserves
+    the gradient — RSI at the 85th pct of recent history gets a score near 0.85
+    whereas RSI at the 52nd pct gets ~0.52.
+
+    All outputs are in [0, 1]:  0.5 = neutral, >0.5 = bullish, <0.5 = bearish.
+    A separate macro_confluence_score column is derived and mapped to [-1, +1]
+    for use in the triple-barrier label cancellation logic.
+
+    Window of 120 bars ≈ 5 days on 1h data — long enough to be meaningful,
+    short enough to track regime changes within the training set.
+    """
+    result = pd.DataFrame(index=df.index)
+
+    def _pr(col: str, higher_bullish: bool = True) -> pd.Series:
+        """Rolling percentile rank of `col`, 0.5 if column missing."""
+        if col not in df.columns:
+            return pd.Series(0.5, index=df.index, dtype=float)
+        s = df[col].fillna(method='ffill').fillna(0.0)
+        rank = s.rolling(window, min_periods=max(20, window // 4)).rank(pct=True)
+        rank = rank.fillna(0.5)
+        return rank if higher_bullish else (1.0 - rank)
+
+    def _cat(*entries) -> pd.Series:
+        """Mean of rolling pct-ranks for indicator group."""
+        parts = [_pr(c, b) for c, b in entries if c in df.columns]
+        if not parts:
+            return pd.Series(0.5, index=df.index, dtype=float)
+        return pd.concat(parts, axis=1).mean(axis=1).clip(0.0, 1.0)
+
+    # ── Trend ─────────────────────────────────────────────────────
+    result['prc_trend'] = _cat(
+        ('dist_ema_50',       True),  ('dist_ema_200',     True),
+        ('dist_ema_100',      True),  ('dist_hma20',       True),
+        ('dist_kama',         True),  ('dist_rolling_vwap',True),
+        ('dist_vwap',         True),  ('supertrend_dist',  True),
+        ('sar_dist',          True),  ('linreg_slope_14',  True),
+        ('structure_bias',    True),  ('macro_trend_1d',   True),
+        ('macro_trend_1w',    True),
+    )
+
+    # ── Momentum ──────────────────────────────────────────────────
+    result['prc_momentum'] = _cat(
+        ('rsi_14',     True),  ('rsi_7',       True),  ('rsi_21',  True),
+        ('stoch_k',    True),  ('williams_r',  False),
+        ('macd_hist',  True),  ('cci_20',      True),
+        ('tsi',        True),  ('cmo_14',      True),
+        ('awesome_osc',True),  ('bop',         True),
+        ('roc_14',     True),  ('ppo',         True),
+        ('fisher',     True),
+    )
+
+    # ── Volume / Flow ─────────────────────────────────────────────
+    result['prc_volume'] = _cat(
+        ('volume_delta',    True),  ('volume_delta_14', True),
+        ('cmf_20',          True),  ('mfi_14',          True),
+        ('eom_14',          True),  ('relative_volume', True),
+        ('vol_velocity',    True),  ('kvo',             True),
+    )
+
+    # ── Price Position / Bands ────────────────────────────────────
+    result['prc_bands'] = _cat(
+        ('bb_pct_b',          True),  ('atr_band_position', True),
+        ('donchian_position', True),  ('close_position',    True),
+        ('quantile_position', True),  ('se_position',       True),
+        ('starc_position',    True),  ('gaussian_position', True),
+    )
+
+    # ── Smart Money ───────────────────────────────────────────────
+    result['prc_smart_money'] = _cat(
+        ('structure_bias',      True),
+        ('range_position_score',True),
+        ('bos_up',              True),  ('bos_down',   False),
+        ('choch_bull',          True),  ('choch_bear', False),
+        ('is_at_support',       True),  ('is_at_resistance', False),
+    )
+
+    # ── Weighted total (matches display weights in predictor.py) ──
+    W = {
+        'prc_trend':        2.0,
+        'prc_momentum':     1.5,
+        'prc_volume':       1.5,
+        'prc_smart_money':  1.5,
+        'prc_bands':        1.0,
+    }
+    Wsum = sum(W.values())   # 7.5
+    total = sum(result[c] * w for c, w in W.items()) / Wsum
+    result['prc_total'] = total.clip(0.0, 1.0)
+
+    # macro_confluence_score in [-1, +1]: used by create_triple_barrier_labels()
+    # to cancel barrier hits that contradict a strong confluence consensus.
+    # 0.5 (neutral) → 0.0; 0.8 (strong bullish) → +0.6; 0.2 (strong bearish) → -0.6
+    result['macro_confluence_score'] = ((result['prc_total'] - 0.5) * 2.0).clip(-1.0, 1.0)
+
+    return result.fillna(0.0)
 
 
 # ============================================================
@@ -632,10 +737,16 @@ def create_triple_barrier_labels(df: pd.DataFrame, atr_multiplier: float,
                 hit = 0
                 break
 
-        if hit == 2 and macro_confluence_score is not None and macro_confluence_score.iloc[i] == -2.0:
-            hit = None
-        if hit == 0 and macro_confluence_score is not None and macro_confluence_score.iloc[i] == 2.0:
-            hit = None
+        # Cancel barrier hits that contradict a strong confluence consensus.
+        # Threshold ±0.5 corresponds to prc_total ≤0.25 (strong bearish) or
+        # prc_total ≥0.75 (strong bullish).  The old code used exact ±2.0
+        # which never matched any real value and silently no-opped for every bar.
+        if macro_confluence_score is not None:
+            cs = float(macro_confluence_score.iloc[i])
+            if hit == 2 and cs <= -0.50:   # BUY barrier but strongly bearish confluence
+                hit = None
+            if hit == 0 and cs >= 0.50:    # SELL barrier but strongly bullish confluence
+                hit = None
 
         if hit is None:
             labels.iloc[i] = 1 if window_avail >= max_lookahead else CENSORED
@@ -983,28 +1094,102 @@ def pick_threshold_by_side(
 
 def backtest(fire_mask: np.ndarray, proposed: np.ndarray, y_true: np.ndarray,
              barrier_frac: np.ndarray, fee: float = FEE_ROUNDTRIP) -> dict:
-    """First-order, fee-aware expectancy on fired trades.
-    win (proposed side hit)  -> +barrier_frac ; opposite hit -> -barrier_frac ;
-    timeout/HOLD outcome      -> ~0. All minus round-trip fee.
-    Approximation: assumes exit at the barrier (a full backtest needs the price
-    path), so read it as directional expectancy, not penny-accurate PnL."""
+    """
+    Fee-aware profitability backtest on fired signals.
+
+    Outcome mapping (triple-barrier approximation):
+      Correct direction (proposed == true label) → +barrier_frac
+      Wrong direction   (proposed != true label and label != HOLD) → -barrier_frac
+      Timeout / HOLD                              → 0.0
+    All trades reduced by round-trip fee.
+
+    Metrics returned:
+      n                  — number of fired signals
+      expectancy_pct     — mean return per trade (%)
+      total_return_pct   — sum of returns (%)
+      win_rate           — fraction of trades with positive net return
+      sharpe             — annualised Sharpe (1h candle cadence, 8760h/yr)
+      max_drawdown_pct   — peak-to-trough equity drawdown (%)
+      profit_factor      — gross_profit / gross_loss  (> 1 = net profitable)
+      buy_n / buy_win_rate   — per-side stats
+      sell_n / sell_win_rate
+      kelly_pct          — Kelly fraction (capped at 25% to prevent blow-up)
+    """
+    EMPTY = {
+        "n": 0, "expectancy_pct": 0.0, "total_return_pct": 0.0,
+        "win_rate": 0.0, "sharpe": 0.0, "max_drawdown_pct": 0.0,
+        "profit_factor": 0.0, "buy_n": 0, "buy_win_rate": 0.0,
+        "sell_n": 0, "sell_win_rate": 0.0, "kelly_pct": 0.0,
+    }
     idx = np.where(fire_mask)[0]
-    rets = []
+    if not len(idx):
+        return EMPTY
+
+    rets:        List[float] = []
+    buy_wins:    List[bool]  = []
+    sell_wins:   List[bool]  = []
+
     for i in idx:
-        b = barrier_frac[i] if np.isfinite(barrier_frac[i]) else 0.0
-        if y_true[i] == 1:
-            g = 0.0
-        elif proposed[i] == y_true[i]:
-            g = b
-        else:
-            g = -b
-        rets.append(g - fee)
-    rets = np.array(rets) if rets else np.array([0.0])
+        b = float(barrier_frac[i]) if np.isfinite(barrier_frac[i]) else 0.0
+        label = int(y_true[i])
+        side  = int(proposed[i])
+        if label == 1:           # timeout → no gain, still pay fee
+            g = -fee
+        elif side == label:      # correct direction → full barrier
+            g = b - fee
+        else:                    # wrong direction → full barrier loss
+            g = -b - fee
+        rets.append(g)
+        if label != 1:
+            if side == 2:
+                buy_wins.append(side == label)
+            else:
+                sell_wins.append(side == label)
+
+    rets_arr = np.array(rets, dtype=float)
+    n        = len(rets_arr)
+    mean_ret = float(rets_arr.mean())
+    total_r  = float(rets_arr.sum())
+    win_rate = float((rets_arr > 0).mean())
+
+    # Sharpe — annualised on 1h cadence assumption
+    std_ret = float(rets_arr.std())
+    if std_ret > 1e-9 and n > 1:
+        # sqrt(min(n, 8760)) gives the annualisation factor for actual trade frequency
+        sharpe = float(mean_ret / std_ret * np.sqrt(min(n * 8, 8760)))
+    else:
+        sharpe = 0.0
+
+    # Max drawdown on the equity curve
+    equity  = np.cumsum(rets_arr)
+    peak    = np.maximum.accumulate(equity)
+    drawdown = peak - equity
+    max_dd  = float(drawdown.max() * 100)
+
+    # Profit factor
+    gross_win  = float(rets_arr[rets_arr > 0].sum()) if (rets_arr > 0).any() else 0.0
+    gross_loss = float(abs(rets_arr[rets_arr < 0].sum())) if (rets_arr < 0).any() else 1e-9
+    pf         = gross_win / gross_loss
+
+    # Kelly fraction (cap at 25%)
+    if win_rate > 0 and win_rate < 1 and std_ret > 1e-9:
+        kelly = float(np.clip(mean_ret / (std_ret ** 2), 0.0, 0.25))
+    else:
+        kelly = 0.0
+
     return {
-        "n": int(len(idx)),
-        "expectancy_pct": float(rets.mean() * 100) if len(idx) else 0.0,
-        "total_return_pct": float(rets.sum() * 100) if len(idx) else 0.0,
-        "win_rate": float((rets > 0).mean()) if len(idx) else 0.0,
+        "n":                 n,
+        "expectancy_pct":    round(mean_ret * 100, 4),
+        "total_return_pct":  round(total_r * 100, 4),
+        "win_rate":          round(win_rate, 4),
+        "sharpe":            round(sharpe, 3),
+        "max_drawdown_pct":  round(max_dd, 3),
+        "profit_factor":     round(pf, 3),
+        "buy_n":             len(buy_wins),
+        "buy_win_rate":      round(float(np.mean(buy_wins)),  4) if buy_wins  else 0.0,
+        "sell_n":            len(sell_wins),
+        "sell_win_rate":     round(float(np.mean(sell_wins)), 4) if sell_wins else 0.0,
+        "kelly_pct":         round(kelly * 100, 2),
     }
 
 
@@ -1142,6 +1327,23 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             return None
 
         df = df.reset_index(drop=True).copy()
+
+        # ── Soft (percentile-rank) confluence features ─────────────────────
+        # Added AFTER prepare_features so all indicator columns are available.
+        # These give XGBoost richer gradient information than the sign-based
+        # xxx_confluence columns (RSI-51 = RSI-80 = +1 in sign; prc_momentum
+        # distinguishes them as 0.52 vs 0.85).
+        # macro_confluence_score is derived here and passed to the labeler.
+        print("   Computing soft (percentile-rank) confluence features...")
+        try:
+            soft_conf = compute_soft_confluence_features(df)
+            for col in soft_conf.columns:
+                df[col] = soft_conf[col].values
+            _conf_sample = float(df['prc_total'].iloc[-1]) if 'prc_total' in df.columns else 0.5
+            print(f"   prc_total sample (last bar): {_conf_sample:.3f}  "
+                  f"macro_conf_score: {float(df['macro_confluence_score'].iloc[-1]):.3f}")
+        except Exception as _sc_err:
+            print(f"   Soft confluence computation failed ({_sc_err}) — using sign-based fallback")
 
         for col in ['volatility_regime', 'efficiency_ratio_10', 'trend_regime']:
             if col not in df.columns:
@@ -1624,9 +1826,16 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
                   f"{'  PASS' if buy_h_n >= 5 and buy_h_prec >= breakeven else '  fail'}")
             print(f"      SELL holdout    : {sell_h_prec:.3f}  ({sell_h_n} trades)"
                   f"{'  PASS' if sell_h_n >= 5 and sell_h_prec >= breakeven else '  fail'}")
-            print(f"      Win rate (PnL)  : {bt['win_rate']:.3f}")
-            print(f"      Expectancy/trade: {bt['expectancy_pct']:+.3f}%")
-            print(f"      Total return    : {bt['total_return_pct']:+.2f}%  (holdout window, {fired_n} trades)")
+            print(f"      Win rate (PnL)  : {bt['win_rate']:.3f}  "
+                  f"| BUY wr {bt['buy_win_rate']:.3f} ({bt['buy_n']} trades)  "
+                  f"| SELL wr {bt['sell_win_rate']:.3f} ({bt['sell_n']} trades)")
+            print(f"      Expectancy/trade: {bt['expectancy_pct']:+.4f}%"
+                  f"  | Kelly: {bt['kelly_pct']:.1f}%")
+            print(f"      Total return    : {bt['total_return_pct']:+.2f}%  "
+                  f"(holdout window, {fired_n} trades)")
+            print(f"      Sharpe (ann.)   : {bt['sharpe']:+.3f}"
+                  f"  | Profit factor: {bt['profit_factor']:.3f}"
+                  f"  | Max drawdown: {bt['max_drawdown_pct']:.2f}%")
 
             # ── Tradeable decision (per-side aware) ────────────────────────
             # A side is live on holdout when it had enough trades AND cleared
@@ -1861,9 +2070,21 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
                 # data. This is the honest out-of-sample number; expect it near the
                 # dev estimate, not above it.
                 "holdout_trading": {
-                    "fired": fired_n, "coverage": coverage, "signal_precision": fired_prec,
-                    "expectancy_pct": bt["expectancy_pct"], "total_return_pct": bt["total_return_pct"],
-                    "target_met": bool(hit_target),
+                    "fired":            fired_n,
+                    "coverage":         coverage,
+                    "signal_precision": fired_prec,
+                    "expectancy_pct":   bt["expectancy_pct"],
+                    "total_return_pct": bt["total_return_pct"],
+                    "win_rate":         bt["win_rate"],
+                    "sharpe":           bt["sharpe"],
+                    "max_drawdown_pct": bt["max_drawdown_pct"],
+                    "profit_factor":    bt["profit_factor"],
+                    "kelly_pct":        bt["kelly_pct"],
+                    "buy_n":            bt["buy_n"],
+                    "buy_win_rate":     bt["buy_win_rate"],
+                    "sell_n":           bt["sell_n"],
+                    "sell_win_rate":    bt["sell_win_rate"],
+                    "target_met":       bool(hit_target),
                 },
                 "trained_at": datetime.now().isoformat(),
                 # ── Optimizer regime data (from threshold_optimizer.py) ────────
