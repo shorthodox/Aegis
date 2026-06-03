@@ -976,7 +976,7 @@ async function _loadHistStats(containerEl) {
   const el = containerEl.querySelector('#tdp-hist-stats');
   if (!el) return;
   try {
-    const r = await fetch('/web/track_record.json', { cache: 'no-cache' });
+    const r = await fetch('/api/track-record', { cache: 'no-cache' });
     if (!r.ok) throw new Error('no data');
     const d = await r.json();
     const s = d.summary || {};

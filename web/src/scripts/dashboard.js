@@ -1907,7 +1907,7 @@ function _renderFpExpectancy(body, signal, tier) {
     const el = body.querySelector('#fp-exp-hist');
     if (!el) return;
     try {
-      const r = await fetch('/web/track_record.json', { cache: 'no-cache' });
+      const r = await fetch('/api/track-record', { cache: 'no-cache' });
       if (!r.ok) throw new Error();
       const d = await r.json();
       const s = d.summary || {};
