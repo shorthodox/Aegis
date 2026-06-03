@@ -673,5 +673,59 @@
     "sentiment": -0.296,
     "importance": 1.0,
     "weighted_sentiment": -0.296
+  },
+  {
+    "timestamp": "2026-06-03T17:54:33",
+    "headline": "Agentic payment activity tops 100M transactions on Base",
+    "link": "https://cointelegraph.com/news/agentic-payment-activity-surpasses-100m-transactions-on-base?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
+    "sentiment": 0.5106,
+    "importance": 1.5,
+    "weighted_sentiment": 0.7659
+  },
+  {
+    "timestamp": "2026-06-03T18:05:09",
+    "headline": "Banks pushed Congress to kill stablecoin yield with CLARITY Act \u2013 Coinbase may have found the loophole",
+    "link": "https://cryptoslate.com/banks-pushed-congress-to-kill-stablecoin-yield-with-clarity-act-coinbase-may-have-found-the-loophole/",
+    "source": "cryptoslate.com",
+    "sentiment": -0.3109,
+    "importance": 1.5,
+    "weighted_sentiment": -0.4664
+  },
+  {
+    "timestamp": "2026-06-03T18:31:54",
+    "headline": "Why Ethereum Could Tank Another 25% Before Finding a Bottom: Analysis",
+    "link": "https://decrypt.co/369926/ethereum-eth-price-25-percent-bottom-technical-analysis",
+    "source": "decrypt.co",
+    "sentiment": 0.0,
+    "importance": 1.5,
+    "weighted_sentiment": 0.0
+  },
+  {
+    "timestamp": "2026-06-03T18:25:14",
+    "headline": "As Oil Moves Higher, Bitcoin Sinks to Lowest Price Since March",
+    "link": "https://decrypt.co/369925/oil-moves-higher-bitcoin-sinks-lowest-price-since-march",
+    "source": "decrypt.co",
+    "sentiment": -0.3818,
+    "importance": 1.0,
+    "weighted_sentiment": -0.3818
+  },
+  {
+    "timestamp": "2026-06-03T17:57:10",
+    "headline": "World Cup Crypto Scams Are Targeting Soccer Fans, Law Enforcement Warns",
+    "link": "https://decrypt.co/369919/world-cup-crypto-scams-targeting-soccer-fans-law-enforcement",
+    "source": "decrypt.co",
+    "sentiment": -0.6369,
+    "importance": 1.0,
+    "weighted_sentiment": -0.6369
+  },
+  {
+    "timestamp": "2026-06-03T17:31:02",
+    "headline": "Walrus Memory Enables AI Agents to \u2018Actually Learn About Us\u2019: Mysten Labs Co-Founder",
+    "link": "https://decrypt.co/369895/walrus-memory-enables-ai-agents-to-actually-learn-about-us-mysten-labs-co-founder",
+    "source": "decrypt.co",
+    "sentiment": 0.0,
+    "importance": 1.5,
+    "weighted_sentiment": 0.0
   }
 ]

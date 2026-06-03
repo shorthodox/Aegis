@@ -247,3 +247,12 @@
 2026-06-03 23:01:24 | INFO | Fetched 50 raw articles, 3 new unique items.
 2026-06-03 23:01:24 | INFO | Saved 75 news items to d:\Content\Animesh\bots\ai_signal_bot\data\news_data.json
 2026-06-03 23:01:24 | INFO | Scraping complete. Total stored: 75 items. Avg sentiment (last 50): -0.0226
+2026-06-04 00:15:50 | INFO | Starting news scraping cycle...
+2026-06-04 00:15:50 | INFO | Fetching RSS: https://cointelegraph.com/rss
+2026-06-04 00:15:51 | INFO | Fetching RSS: https://www.coindesk.com/feed/
+2026-06-04 00:15:51 | WARNING | Feedparser error for https://www.coindesk.com/feed/: text/html; charset=utf-8 is not an XML media type
+2026-06-04 00:15:52 | INFO | Fetching RSS: https://cryptoslate.com/feed/
+2026-06-04 00:15:54 | INFO | Fetching RSS: https://decrypt.co/feed
+2026-06-04 00:15:56 | INFO | Fetched 50 raw articles, 6 new unique items.
+2026-06-04 00:15:56 | INFO | Saved 81 news items to d:\Content\Animesh\bots\ai_signal_bot\data\news_data.json
+2026-06-04 00:15:56 | INFO | Scraping complete. Total stored: 81 items. Avg sentiment (last 50): -0.0002
