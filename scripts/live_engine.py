@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
 """
-live_engine.py — Aegis-1 Live Signal Engine
-============================================
+live_engine.py — Aegis-1 Live Signal Engine  (Institutional-Grade Adaptive)
+============================================================================
 Loads trained XGBoost models from the model store, runs Predictor.predict_realtime()
 for every tradeable symbol on a configurable interval, manages a virtual paper-trading
 wallet ($10 000 default), and writes data/track_record.json which main.py WebSocket
 clients consume in real time.
+
+New in this version
+-------------------
+    MarketRegimeDetector  — classifies market micro-structure from result dict fields
+    SignalQualityFilter   — multi-layer quality scoring before any trade is issued
+    DynamicRiskEngine     — volatility-aware position sizing and ATR-projected stop/TP
+    PerformanceTracker    — meta-labeling, self-healing safe-mode, per-symbol win rates
 
 Exported for main.py
 --------------------
@@ -19,11 +26,12 @@ import json
 import sys
 import time
 import uuid
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Deque, Dict, List, Optional, Tuple
 
 # ── project root on sys.path ──────────────────────────────────────────────────
 _ROOT = Path(__file__).resolve().parent.parent
@@ -44,13 +52,11 @@ def _fetch_spot_price(symbol: str) -> float:
     try:
         import ccxt as _ccxt
         # Double-checked locking: fast path avoids lock when already initialised.
-        # Exchange object is created outside the lock so a slow __init__ doesn't
-        # block unrelated concurrent fetches.
         if _spot_ex is None:
             _new = _ccxt.binance({'enableRateLimit': True, 'timeout': 8000})  # type: ignore[arg-type]
-            (_new.options or {})['defaultType'] = 'spot'  # type: ignore[index]  — never route to futures
+            (_new.options or {})['defaultType'] = 'spot'  # type: ignore[index]
             with _spot_ex_lock:
-                if _spot_ex is None:   # second check inside lock (race guard)
+                if _spot_ex is None:
                     _spot_ex = _new
         with _spot_ex_lock:
             ticker = _spot_ex.fetch_ticker(symbol)
@@ -66,7 +72,7 @@ def _fetch_spot_price(symbol: str) -> float:
 @dataclass
 class TokenConfig:
     symbol: str
-    mode:   str   = 'balanced'
+    mode:   str = 'balanced'
 
 
 @dataclass
@@ -82,7 +88,7 @@ class Position:
     meta_confidence: float
     atr_multiplier:  float
     take_profit_1:   float = 0.0   # TP1: 1× ATR step from entry
-    take_profit_2:   float = 0.0   # TP2: 2× ATR step — hard ceiling if model never reverses
+    take_profit_2:   float = 0.0   # TP2: 2× ATR step — hard ceiling
     take_profit_3:   float = 0.0   # TP3: 3.5× ATR step — extended target
 
 
@@ -106,6 +112,552 @@ class TradeRecord:
 
 
 # =============================================================================
+# Regime detection
+# =============================================================================
+
+@dataclass
+class RegimeState:
+    """Snapshot of the current market micro-structure for one symbol."""
+    regime:              str         # one of the canonical labels below
+    confidence:          float       # 0.0 – 1.0
+    trade_allowed:       bool
+    preferred_strategies: List[str]
+    max_position_pct:    float       # fraction of balance, e.g. 0.10
+
+
+# Canonical regime labels
+_REGIME_TRENDING_BULL      = 'TRENDING_BULL'
+_REGIME_TRENDING_BEAR      = 'TRENDING_BEAR'
+_REGIME_RANGING            = 'RANGING'
+_REGIME_ACCUMULATION       = 'ACCUMULATION'
+_REGIME_DISTRIBUTION       = 'DISTRIBUTION'
+_REGIME_VOLATILE_EXPANSION = 'VOLATILE_EXPANSION'
+_REGIME_VOLATILE_COMPRESS  = 'VOLATILE_COMPRESSION'
+_REGIME_LIQUIDITY_TRAP     = 'LIQUIDITY_TRAP'
+
+
+class MarketRegimeDetector:
+    """
+    Classifies market micro-structure from the fields already present in the
+    result dict produced by Predictor.predict_realtime().  No extra API calls.
+
+    Key inputs consumed (all are present in the standard result dict):
+        adx, trend_regime, volatility_regime, atr_pct, market_bias,
+        funding_rate, funding_bias, oi_trend, volume_zscore, rsi,
+        macd_signal, volume_strength
+    """
+
+    def detect(self, result: Dict[str, Any]) -> RegimeState:
+        """Return a RegimeState from a predict_realtime result dict."""
+        try:
+            return self._detect(result)
+        except Exception:
+            # Fail-safe: return a permissive neutral regime so a bug here never
+            # blocks ALL trades silently.
+            return RegimeState(
+                regime               = _REGIME_RANGING,
+                confidence           = 0.4,
+                trade_allowed        = True,
+                preferred_strategies = ['TREND_FOLLOW', 'RANGE_TRADE'],
+                max_position_pct     = 0.08,
+            )
+
+    def _detect(self, result: Dict[str, Any]) -> RegimeState:
+        adx             = float(result.get('adx', 20.0) or 20.0)
+        trend_regime    = str(result.get('trend_regime', 'RANGING') or 'RANGING')
+        vol_regime      = str(result.get('volatility_regime', 'MEDIUM') or 'MEDIUM').upper()
+        atr_pct         = float(result.get('atr_pct', 1.5) or 1.5)       # already × 100
+        market_bias     = str(result.get('market_bias', 'NEUTRAL') or 'NEUTRAL').upper()
+        funding_bias    = str(result.get('funding_bias', 'NEUTRAL') or 'NEUTRAL').upper()
+        oi_trend        = str(result.get('oi_trend', 'STABLE') or 'STABLE').upper()
+        vol_zscore      = float(result.get('volume_zscore', 0.0) or 0.0)
+        rsi             = float(result.get('rsi', 50.0) or 50.0)
+        macd_signal     = str(result.get('macd_signal', 'NEUTRAL') or 'NEUTRAL').upper()
+        volume_strength = str(result.get('volume_strength', 'AVERAGE') or 'AVERAGE').upper()
+
+        is_trending  = adx > 25
+        is_ranging   = adx < 20
+        is_volatile  = (vol_regime == 'HIGH' or atr_pct > 3.0)
+        is_quiet     = (vol_regime == 'LOW'  and atr_pct < 1.2)
+        is_bullish   = market_bias == 'BULLISH'
+        is_bearish   = market_bias == 'BEARISH'
+        low_volume   = (volume_strength == 'BELOW_AVERAGE' or vol_zscore < -0.5)
+        high_oi      = oi_trend == 'INCREASING'
+        low_oi       = oi_trend == 'DECREASING'
+        longs_paying = funding_bias == 'LONGS_PAYING'
+        shorts_paying= funding_bias == 'SHORTS_PAYING'
+
+        # ── 1. Liquidity trap: low volume, choppy, no trending structure ─────
+        if low_volume and is_ranging and is_quiet:
+            return RegimeState(
+                regime               = _REGIME_LIQUIDITY_TRAP,
+                confidence           = 0.75,
+                trade_allowed        = False,
+                preferred_strategies = [],
+                max_position_pct     = 0.0,
+            )
+
+        # ── 2. Volatile expansion ─────────────────────────────────────────────
+        if is_volatile and atr_pct > 4.0:
+            conf = min(0.9, 0.6 + (atr_pct - 4.0) * 0.05)
+            return RegimeState(
+                regime               = _REGIME_VOLATILE_EXPANSION,
+                confidence           = round(conf, 3),
+                trade_allowed        = True,
+                preferred_strategies = ['BREAKOUT', 'MOMENTUM'],
+                max_position_pct     = 0.06,  # reduced size in expansion
+            )
+
+        # ── 3. Volatile compression: quiet market after expansion ─────────────
+        if is_quiet and not is_trending:
+            return RegimeState(
+                regime               = _REGIME_VOLATILE_COMPRESS,
+                confidence           = 0.65,
+                trade_allowed        = True,
+                preferred_strategies = ['RANGE_TRADE', 'MEAN_REVERT'],
+                max_position_pct     = 0.07,
+            )
+
+        # ── 4. Accumulation: ranging + increasing OI + shorts paying ─────────
+        if is_ranging and high_oi and shorts_paying and not is_bearish:
+            conf = 0.55 + (0.15 if rsi < 55 else 0.0) + (0.10 if vol_zscore > 0.5 else 0.0)
+            return RegimeState(
+                regime               = _REGIME_ACCUMULATION,
+                confidence           = round(min(conf, 0.85), 3),
+                trade_allowed        = True,
+                preferred_strategies = ['RANGE_BUY', 'BREAKOUT_LONG'],
+                max_position_pct     = 0.10,
+            )
+
+        # ── 5. Distribution: ranging + increasing OI + longs paying ──────────
+        if is_ranging and high_oi and longs_paying and not is_bullish:
+            conf = 0.55 + (0.15 if rsi > 45 else 0.0) + (0.10 if vol_zscore > 0.5 else 0.0)
+            return RegimeState(
+                regime               = _REGIME_DISTRIBUTION,
+                confidence           = round(min(conf, 0.85), 3),
+                trade_allowed        = True,
+                preferred_strategies = ['RANGE_SELL', 'BREAKOUT_SHORT'],
+                max_position_pct     = 0.10,
+            )
+
+        # ── 6. Trending bull ──────────────────────────────────────────────────
+        if is_trending and is_bullish:
+            conf = 0.60
+            conf += 0.10 if adx > 35 else 0.0
+            conf += 0.10 if macd_signal == 'BULLISH' else 0.0
+            conf += 0.10 if vol_zscore > 1.0 else 0.0
+            conf += 0.10 if 'UP' in trend_regime else 0.0
+            return RegimeState(
+                regime               = _REGIME_TRENDING_BULL,
+                confidence           = round(min(conf, 0.95), 3),
+                trade_allowed        = True,
+                preferred_strategies = ['TREND_FOLLOW', 'MOMENTUM', 'PULLBACK_LONG'],
+                max_position_pct     = 0.13,
+            )
+
+        # ── 7. Trending bear ──────────────────────────────────────────────────
+        if is_trending and is_bearish:
+            conf = 0.60
+            conf += 0.10 if adx > 35 else 0.0
+            conf += 0.10 if macd_signal == 'BEARISH' else 0.0
+            conf += 0.10 if vol_zscore > 1.0 else 0.0
+            conf += 0.10 if 'DOWN' in trend_regime else 0.0
+            return RegimeState(
+                regime               = _REGIME_TRENDING_BEAR,
+                confidence           = round(min(conf, 0.95), 3),
+                trade_allowed        = True,
+                preferred_strategies = ['TREND_FOLLOW', 'MOMENTUM', 'PULLBACK_SHORT'],
+                max_position_pct     = 0.13,
+            )
+
+        # ── 8. Default: ranging / neutral ─────────────────────────────────────
+        return RegimeState(
+            regime               = _REGIME_RANGING,
+            confidence           = 0.50,
+            trade_allowed        = True,
+            preferred_strategies = ['RANGE_TRADE', 'MEAN_REVERT', 'SUPPORT_BUY'],
+            max_position_pct     = 0.08,
+        )
+
+
+# =============================================================================
+# Signal quality filter
+# =============================================================================
+
+class SignalQualityFilter:
+    """
+    Multi-layer quality scoring.  Uses only fields from the result dict — no
+    extra API calls.
+
+    score_signal() → (float quality 0-100, list[str] reasons)
+    is_fake_breakout() → bool
+    """
+
+    MIN_QUALITY_SCORE = 55.0  # minimum points required to open a position
+
+    def score_signal(
+        self,
+        result: Dict[str, Any],
+        regime: RegimeState,
+        side: str,
+    ) -> Tuple[float, List[str]]:
+        """
+        Score a potential entry signal.  Returns (quality_score, reasons).
+        quality_score range: 0 – 100 (clipped).
+        """
+        score: float = 0.0
+        reasons: List[str] = []
+
+        # ── helper: safe float read ───────────────────────────────────────────
+        def _f(k: str, default: float = 0.0) -> float:
+            v = result.get(k, default)
+            try:
+                return float(v) if v is not None else default
+            except (TypeError, ValueError):
+                return default
+
+        _conf_data  = result.get('confluence') or {}
+        conf_total  = float(_conf_data.get('total', 5.0))
+        adx         = _f('adx', 20.0)
+        vol_zscore  = _f('volume_zscore', 0.0)
+        meta_conf   = _f('meta_confidence', 0.0)
+        rsi         = _f('rsi', 50.0)
+        funding_bias= str(result.get('funding_bias', 'NEUTRAL') or 'NEUTRAL').upper()
+        oi_trend    = str(result.get('oi_trend', 'STABLE') or 'STABLE').upper()
+        market_bias = str(result.get('market_bias', 'NEUTRAL') or 'NEUTRAL').upper()
+
+        # ── Positive contributions ────────────────────────────────────────────
+
+        # +20: strong confluence lean in signal direction
+        if side == 'BUY'  and conf_total > 6.5:
+            score += 20; reasons.append('strong_bull_confluence')
+        elif side == 'SELL' and conf_total < 3.5:
+            score += 20; reasons.append('strong_bear_confluence')
+
+        # +15: trending market (ADX confirms momentum)
+        if adx > 25:
+            score += 15; reasons.append(f'adx_trending({adx:.1f})')
+
+        # +10: strong volume conviction
+        if vol_zscore > 1.5:
+            score += 10; reasons.append(f'strong_volume(z={vol_zscore:.1f})')
+
+        # +10: regime is confident
+        if regime.confidence > 0.7:
+            score += 10; reasons.append(f'regime_confident({regime.regime})')
+
+        # +10: meta model confidence is high
+        if meta_conf > 0.75:
+            score += 10; reasons.append(f'high_meta_conf({meta_conf:.3f})')
+
+        # +10: RSI not in extreme exhaustion zone for the proposed direction
+        rsi_ok = (
+            (side == 'BUY'  and rsi < 75) or
+            (side == 'SELL' and rsi > 25)
+        )
+        if rsi_ok:
+            score += 10; reasons.append(f'rsi_ok({rsi:.1f})')
+        else:
+            reasons.append(f'rsi_extreme({rsi:.1f})')
+
+        # +10: funding bias aligns with direction
+        funding_align = (
+            (side == 'BUY'  and funding_bias == 'SHORTS_PAYING') or
+            (side == 'SELL' and funding_bias == 'LONGS_PAYING')  or
+            funding_bias == 'NEUTRAL'
+        )
+        if funding_align:
+            score += 10; reasons.append('funding_aligned')
+
+        # +5: OI trend supports direction
+        oi_align = (
+            (side == 'BUY'  and oi_trend == 'INCREASING') or
+            (side == 'SELL' and oi_trend == 'DECREASING') or
+            oi_trend == 'STABLE'
+        )
+        if oi_align:
+            score += 5; reasons.append('oi_aligned')
+
+        # +5: market_bias matches direction
+        bias_align = (
+            (side == 'BUY'  and market_bias == 'BULLISH') or
+            (side == 'SELL' and market_bias == 'BEARISH')
+        )
+        if bias_align:
+            score += 5; reasons.append('bias_aligned')
+
+        # ── Penalties ─────────────────────────────────────────────────────────
+
+        # -20: no-trade zone
+        if regime.regime == _REGIME_LIQUIDITY_TRAP:
+            score -= 20; reasons.append('liquidity_trap_penalty')
+
+        # -15: conflicting macro signals (weekly disagrees with daily)
+        macro_daily  = _f('macro_daily', 0.0)
+        macro_weekly = _f('macro_weekly', 0.0)
+        macro_conflict = (
+            (side == 'BUY'  and macro_daily < -0.15 and macro_weekly < -0.10) or
+            (side == 'SELL' and macro_daily >  0.15 and macro_weekly >  0.10)
+        )
+        if macro_conflict:
+            score -= 15; reasons.append('conflicting_macro')
+
+        return round(max(0.0, min(score, 100.0)), 1), reasons
+
+    def is_fake_breakout(self, result: Dict[str, Any], side: str) -> bool:
+        """
+        Detect potential false breakout / exhaustion conditions.
+        Returns True if the breakout looks fake and should be blocked.
+        """
+        try:
+            def _f(k: str, default: float = 0.0) -> float:
+                v = result.get(k, default)
+                try:
+                    return float(v) if v is not None else default
+                except (TypeError, ValueError):
+                    return default
+
+            vol_zscore  = _f('volume_zscore', 0.0)
+            rsi         = _f('rsi', 50.0)
+            _conf_data  = result.get('confluence') or {}
+            conf_mom    = float(_conf_data.get('momentum', 5.0))
+            conf_total  = float(_conf_data.get('total', 5.0))
+
+            # Low-volume breakout: no real conviction behind the move
+            if vol_zscore < 0.5:
+                # Check if momentum diverges from the signal direction
+                # (price breaking out but momentum indicators lagging/opposing)
+                if side == 'BUY'  and conf_mom < 5.0 and conf_total < 6.0:
+                    return True
+                if side == 'SELL' and conf_mom > 5.0 and conf_total > 4.0:
+                    return True
+
+            # RSI divergence: strong signal but momentum is near extreme opposite
+            if side == 'BUY'  and rsi > 82:
+                return True
+            if side == 'SELL' and rsi < 18:
+                return True
+
+            return False
+        except Exception:
+            return False
+
+
+# =============================================================================
+# Dynamic risk engine
+# =============================================================================
+
+class DynamicRiskEngine:
+    """
+    Volatility-aware position sizing and stop/take-profit calculation.
+    All methods are pure functions (no state) — safe to call from async context.
+    """
+
+    BASE_POSITION_PCT = 0.10   # 10 % of balance as the base allocation
+    MIN_POSITION_PCT  = 0.02   # floor: never risk less than 2 %
+    MAX_POSITION_PCT  = 0.15   # ceiling: never risk more than 15 %
+
+    def calculate_position_size(
+        self,
+        balance:       float,
+        quality_score: float,
+        regime:        RegimeState,
+        atr_pct:       float,   # already × 100, e.g. 2.5 means 2.5 %
+    ) -> float:
+        """
+        Returns a USDT position value for this trade.
+
+        Sizing logic
+        ------------
+        1. Base = BASE_POSITION_PCT × balance
+        2. Scale by quality conviction: quality_score / 100
+        3. Cap by regime.max_position_pct
+        4. Halve in high-volatility conditions (atr_pct > 4 %)
+        5. Clamp to [MIN, MAX] × balance
+        """
+        if balance <= 0:
+            return 0.0
+
+        base = balance * self.BASE_POSITION_PCT
+
+        # Quality scaling: 55 points → 55 % of base; 100 points → 100 % of base
+        quality_factor = max(0.0, min(quality_score / 100.0, 1.0))
+        sized = base * quality_factor
+
+        # Regime ceiling
+        regime_cap = balance * max(regime.max_position_pct, self.MIN_POSITION_PCT)
+        sized = min(sized, regime_cap)
+
+        # Volatility discount: halve size when market is unusually wide
+        if atr_pct > 4.0:
+            sized *= 0.5
+
+        # Hard clamp
+        floor   = balance * self.MIN_POSITION_PCT
+        ceiling = balance * self.MAX_POSITION_PCT
+        return round(max(floor, min(sized, ceiling)), 2)
+
+    def calculate_stops(
+        self,
+        price:         float,
+        side:          str,    # 'BUY' | 'SELL'
+        atr:           float,
+        atr_mult:      float,
+        quality_score: float,
+    ) -> Dict[str, float]:
+        """
+        Returns a dict with sl, tp1, tp2, tp3, trailing_trigger.
+
+        ATR multiplier for stop loss
+        ----------------------------
+        - quality > 70  → 1.5× (tighter stop — higher conviction entry)
+        - quality > 50  → 2.0×
+        - quality ≤ 50  → 2.5× (wider stop — lower conviction, more room)
+
+        TP levels use risk_distance (price to SL) as the unit:
+        TP1 = 1.0 × risk   (quick partial)
+        TP2 = 2.0 × risk   (main target)
+        TP3 = 3.5 × risk   (extended runner)
+        """
+        if price <= 0 or atr <= 0:
+            return {'sl': 0.0, 'tp1': 0.0, 'tp2': 0.0, 'tp3': 0.0, 'trailing_trigger': 0.0}
+
+        if quality_score > 70:
+            sl_mult = 1.5
+        elif quality_score > 50:
+            sl_mult = 2.0
+        else:
+            sl_mult = 2.5
+
+        risk_distance = sl_mult * atr
+
+        if side == 'BUY':
+            sl  = price - risk_distance
+            tp1 = price + 1.0 * risk_distance
+            tp2 = price + 2.0 * risk_distance
+            tp3 = price + 3.5 * risk_distance
+        else:  # SELL / SHORT
+            sl  = price + risk_distance
+            tp1 = price - 1.0 * risk_distance
+            tp2 = price - 2.0 * risk_distance
+            tp3 = price - 3.5 * risk_distance
+
+        return {
+            'sl':               round(sl,  8),
+            'tp1':              round(tp1, 8),
+            'tp2':              round(tp2, 8),
+            'tp3':              round(tp3, 8),
+            'trailing_trigger': round(tp1, 8),   # start trailing once TP1 is reached
+        }
+
+
+# =============================================================================
+# Performance tracker  (meta-labeling + self-healing)
+# =============================================================================
+
+@dataclass
+class _OutcomeRecord:
+    symbol:        str
+    regime:        str
+    outcome:       str    # 'WIN' | 'LOSS'
+    pnl_pct:       float
+    quality_score: float
+    ts:            float  = field(default_factory=time.time)
+
+
+class PerformanceTracker:
+    """
+    Lightweight in-memory performance tracking with self-healing safe-mode.
+
+    Tracks:
+        - Per-symbol recent outcomes (last 20 trades per symbol)
+        - Global recent outcomes (last 30 trades) for safe-mode detection
+        - Per-regime win/loss tallies
+
+    No disk persistence — resets on restart intentionally so safe-mode doesn't
+    carry stale data from a different market session.
+    """
+
+    SYMBOL_WINDOW  = 20   # how many recent trades to consider per symbol
+    GLOBAL_WINDOW  = 30   # global window for safe-mode check
+    SAFE_MODE_LOSS = 5    # consecutive global losses to activate safe-mode
+    REDUCE_STREAK  = 3    # consecutive per-symbol losses to halve position
+
+    def __init__(self) -> None:
+        self._by_symbol: Dict[str, Deque[_OutcomeRecord]] = {}
+        self._global:    Deque[_OutcomeRecord]             = deque(maxlen=self.GLOBAL_WINDOW)
+
+    def record_outcome(
+        self,
+        symbol:        str,
+        regime:        str,
+        outcome:       str,
+        pnl_pct:       float,
+        quality_score: float,
+    ) -> None:
+        """Store a completed trade outcome."""
+        rec = _OutcomeRecord(
+            symbol        = symbol,
+            regime        = regime,
+            outcome       = outcome,
+            pnl_pct       = pnl_pct,
+            quality_score = quality_score,
+        )
+        if symbol not in self._by_symbol:
+            self._by_symbol[symbol] = deque(maxlen=self.SYMBOL_WINDOW)
+        self._by_symbol[symbol].append(rec)
+        self._global.append(rec)
+
+    def get_symbol_win_rate(self, symbol: str) -> float:
+        """Win rate from the most recent SYMBOL_WINDOW closed trades on this symbol."""
+        history = list(self._by_symbol.get(symbol, []))
+        if not history:
+            return 0.50   # assume neutral when no data
+        wins = sum(1 for r in history if r.outcome == 'WIN')
+        return round(wins / len(history), 3)
+
+    def should_reduce_exposure(self, symbol: str) -> bool:
+        """
+        Return True if the last REDUCE_STREAK trades on this symbol were all losses.
+        Signals that the model is underperforming on this token — halve position size.
+        """
+        history = list(self._by_symbol.get(symbol, []))
+        if len(history) < self.REDUCE_STREAK:
+            return False
+        return all(r.outcome == 'LOSS' for r in list(history)[-self.REDUCE_STREAK:])
+
+    def safe_mode_active(self) -> bool:
+        """
+        Return True if the last SAFE_MODE_LOSS global trades were all losses.
+        When in safe-mode, low-quality signals (< 70) are blocked to protect capital.
+        """
+        recent = list(self._global)
+        if len(recent) < self.SAFE_MODE_LOSS:
+            return False
+        return all(r.outcome == 'LOSS' for r in recent[-self.SAFE_MODE_LOSS:])
+
+    def get_performance_summary(self) -> Dict[str, Any]:
+        """Return a summary dict suitable for dashboard display."""
+        total   = len(self._global)
+        wins    = sum(1 for r in self._global if r.outcome == 'WIN')
+        losses  = total - wins
+        pnls    = [r.pnl_pct for r in self._global]
+        avg_pnl = round(sum(pnls) / len(pnls), 3) if pnls else 0.0
+        return {
+            'total_recent':    total,
+            'wins':            wins,
+            'losses':          losses,
+            'win_rate':        round(wins / total, 3) if total else 0.0,
+            'avg_pnl_pct':     avg_pnl,
+            'safe_mode':       self.safe_mode_active(),
+            'per_symbol_wr':   {
+                sym: self.get_symbol_win_rate(sym)
+                for sym in self._by_symbol
+            },
+        }
+
+
+# =============================================================================
 # Virtual wallet  (paper trading, $10 000 default)
 # =============================================================================
 
@@ -116,8 +668,54 @@ class VirtualWallet:
         self.initial_capital   = initial_capital
         self.balance           = initial_capital
         self.max_position_usdt = max_position_usdt
-        self.open_positions:   Dict[str, Position]   = {}
-        self.trade_history:    List[TradeRecord]      = []
+        self.open_positions:   Dict[str, Position]  = {}
+        self.trade_history:    List[TradeRecord]     = []
+        self._load_history()
+
+    def _load_history(self) -> None:
+        """Restore closed trade history and balance from disk so restarts don't lose data."""
+        if not TRACK_RECORD_PATH.exists():
+            return
+        try:
+            with open(TRACK_RECORD_PATH, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            closed = [s for s in data.get('signals', [])
+                      if s.get('outcome') in ('WIN', 'LOSS')]
+            restored = 0
+            seen_ids: set = set()
+            for s in closed:
+                sid = s.get('signal_id', '')
+                if not sid or sid in seen_ids:
+                    continue
+                seen_ids.add(sid)
+                try:
+                    rec = TradeRecord(
+                        signal_id       = sid,
+                        symbol          = s['symbol'],
+                        direction       = s.get('direction', 'LONG'),
+                        side            = s.get('side', 'BUY'),
+                        entry_price     = float(s.get('entry_price', 0)),
+                        exit_price      = float(s['exit_price']) if s.get('exit_price') else None,
+                        entry_time      = s.get('entry_time', ''),
+                        close_time      = s.get('close_time'),
+                        pnl_pct         = float(s.get('pnl_pct', 0)),
+                        pnl_usdt        = float(s.get('pnl_usdt', 0)),
+                        outcome         = s['outcome'],
+                        exit_reason     = s.get('exit_reason'),
+                        meta_confidence = float(s.get('meta_confidence', 0)),
+                        position_value  = float(s.get('position_value', 0)),
+                        signal_strength = s.get('signal_strength', ''),
+                    )
+                    self.trade_history.append(rec)
+                    self.balance += float(s.get('pnl_usdt', 0))
+                    restored += 1
+                except Exception:
+                    continue
+            if restored:
+                print(f'[VirtualWallet] Restored {restored} closed trades from disk. '
+                      f'Balance: ${self.balance:,.2f}')
+        except Exception as e:
+            print(f'[VirtualWallet] History load error (starting fresh): {e}')
 
     def position_size(self) -> float:
         return min(self.balance * 0.10, self.max_position_usdt)
@@ -188,30 +786,35 @@ class LiveEngine:
     Signal flow
     -----------
     1. Predictor.predict_realtime() → dict with fire/side/meta_confidence/price/atr
-    2. If fire=True and no open position  → open paper trade (VirtualWallet)
-    3. If fire=True and opposite position → MODEL_REVERSAL_TP exit, then re-enter
-    4. If price hits ATR stop             → STOP_HIT exit
-    5. After every cycle  → write data/track_record.json
+    2. MarketRegimeDetector.detect()  → RegimeState
+    3. SignalQualityFilter.score_signal() → (quality_score, reasons)
+    4. If quality_score < 55 or fake breakout detected → block entry
+    5. If fire=True and no open position → open paper trade (VirtualWallet)
+    6. If fire=True and opposite position → MODEL_REVERSAL_TP exit, then re-enter
+    7. If price hits ATR stop → STOP_HIT exit
+    8. After TP1 hit → activate trailing stop at 0.5× ATR below peak (LONG)
+    9. After every cycle → write data/track_record.json
     """
 
-    MAX_CONCURRENT        = 8        # parallel predictor goroutines (semaphore)
-    HOURS_CONTEXT         = 300      # bars fed to predictor (300 h ≈ 12.5 days of 1-h data)
-    MIN_HOLD_SECONDS      = 7_200    # 2 h minimum hold before a model-reversal exit is allowed
-    COOLDOWN_SECONDS      = 14_400   # 4 h post-close cooldown before any re-entry on same token
-    FLIP_COOLDOWN_SECONDS = 28_800   # 8 h extra cooldown when new signal is opposite direction
-    MAX_HOLD_SECONDS      = 172_800  # 48 h absolute ceiling — close zombie positions at market
-    # Confluence quality gate (scale [0, 10] after the recent predictor fix):
-    # 5.0 = neutral. BUY signals need bullish lean; SELL signals need bearish lean.
-    CONFLUENCE_BUY_MIN    = 5.5      # total confluence ≥ 5.5 required to open a LONG
-    CONFLUENCE_SELL_MAX   = 4.5      # total confluence ≤ 4.5 required to open a SHORT
+    MAX_CONCURRENT        = 8
+    HOURS_CONTEXT         = 300
+    MIN_HOLD_SECONDS      = 7_200    # 2 h minimum hold before model-reversal exit
+    COOLDOWN_SECONDS      = 14_400   # 4 h post-close cooldown
+    FLIP_COOLDOWN_SECONDS = 28_800   # 8 h extra cooldown when new signal flips direction
+    MAX_HOLD_SECONDS      = 172_800  # 48 h zombie guard
+    CONFLUENCE_BUY_MIN    = 5.5
+    CONFLUENCE_SELL_MAX   = 4.5
+
+    # Regimes where entry is unconditionally blocked
+    NO_TRADE_REGIMES: set = {_REGIME_LIQUIDITY_TRAP}
 
     def __init__(
         self,
         token_configs:         List[TokenConfig],
-        capital:               float       = 10_000.0,
-        max_position_usdt:     float       = 1_000.0,
-        scan_interval_seconds: int          = 300,
-        risk_tier:             str          = "balanced",
+        capital:               float        = 10_000.0,
+        max_position_usdt:     float        = 1_000.0,
+        scan_interval_seconds: int           = 300,
+        risk_tier:             str           = "balanced",
         proxy_url:             Optional[str] = None,
     ):
         self.scan_interval_seconds = scan_interval_seconds
@@ -224,12 +827,22 @@ class LiveEngine:
         self.last_signals: Dict[str, Any]   = {}
         self.live_prices:  Dict[str, float] = {}
 
-        self._open_time:        Dict[str, float] = {}   # symbol → unix ts when position opened
-        self._last_close_time:  Dict[str, float] = {}   # symbol → unix ts when last closed
-        self._last_close_side:  Dict[str, str]   = {}   # symbol → 'BUY'|'SELL' of last closed trade
+        self._open_time:        Dict[str, float] = {}
+        self._last_close_time:  Dict[str, float] = {}
+        self._last_close_side:  Dict[str, str]   = {}
+
+        # Trailing stop tracking
+        self._tp1_hit:    Dict[str, bool]  = {}
+        self._peak_price: Dict[str, float] = {}   # highest (LONG) or lowest (SHORT) seen since entry
 
         self.bootstrap_done  = 0
         self.bootstrap_total = len(token_configs)
+
+        # Adaptive intelligence modules
+        self.regime_detector = MarketRegimeDetector()
+        self.quality_filter  = SignalQualityFilter()
+        self.risk_engine     = DynamicRiskEngine()
+        self.perf_tracker    = PerformanceTracker()
 
         self._load_predictors([c.symbol for c in token_configs])
 
@@ -241,7 +854,7 @@ class LiveEngine:
         for sym in symbols:
             try:
                 p = Predictor(sym)
-                if p.model is not None:          # load ALL models, not just tradeable
+                if p.model is not None:
                     self.predictors[sym] = p
                     loaded += 1
                     if p.meta.get('tradeable', False):
@@ -258,7 +871,6 @@ class LiveEngine:
     async def run(self) -> None:
         print(f'[LiveEngine] Starting — interval={self.scan_interval_seconds}s '
               f'symbols={len(self.predictors)}')
-        # Real-time price stream via Binance WebSocket (pushed every ~1s per symbol).
         asyncio.create_task(self._ws_price_ticker())
         while True:
             t0 = time.time()
@@ -270,13 +882,10 @@ class LiveEngine:
     async def _ws_price_ticker(self) -> None:
         """
         Real-time price feed via Binance all-market mini-ticker WebSocket stream.
-        Binance pushes the full mini-ticker array every ~1 second; we filter for
-        our 60 symbols and update live_prices immediately on each message.
         Reconnects automatically on any error.
         """
         import json as _json
 
-        # Build a reverse map: "btcusdt" -> "BTC/USDT"
         all_syms = list(set(list(self.predictors.keys()) + list(self._INDEX_SYMBOLS)))
         sym_map: Dict[str, str] = {
             s.replace('/', '').lower(): s for s in all_syms
@@ -299,7 +908,7 @@ class LiveEngine:
                             if not isinstance(tickers, list):
                                 continue
                             for t in tickers:
-                                key = t.get('s', '').lower()   # e.g. "btcusdt"
+                                key = t.get('s', '').lower()
                                 ccxt_sym = sym_map.get(key)
                                 if ccxt_sym:
                                     price = float(t.get('c') or 0)
@@ -308,9 +917,8 @@ class LiveEngine:
                         except Exception:
                             pass
             except Exception:
-                await asyncio.sleep(3)   # reconnect after brief pause
+                await asyncio.sleep(3)
 
-    # Symbols always shown in market overview even if not in tradeable fleet.
     _INDEX_SYMBOLS = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'XRP/USDT', 'BNB/USDT']
 
     async def _scan_all(self) -> None:
@@ -318,15 +926,11 @@ class LiveEngine:
         tasks = [self._process_symbol(sym, pred, sem)
                  for sym, pred in self.predictors.items()]
         await asyncio.gather(*tasks, return_exceptions=True)
-        # Fetch current prices for index/overview symbols not in the tradeable fleet.
-        # These are always displayed in the market overview cards on the dashboard.
         await self._fetch_index_prices()
-        # Safety net: ensure bootstrap_done reaches total.
         self.bootstrap_done = len(self.predictors)
 
     async def _fetch_index_prices(self) -> None:
         """Fetch spot prices for market overview symbols not covered by the tradeable fleet."""
-        from src.ml.predictor import Predictor
         missing = [s for s in self._INDEX_SYMBOLS if s not in self.live_prices]
         if not missing:
             return
@@ -370,34 +974,87 @@ class LiveEngine:
             else:
                 price = self.live_prices.get(symbol, 0)
 
+            # ── Adaptive intelligence layer ───────────────────────────────────
+            regime        = self.regime_detector.detect(result)
+            new_side      = result.get('side', 'FLAT')
+            quality_score = 0.0
+            quality_reasons: List[str] = []
+            fake_breakout = False
+
+            if result.get('fire') and new_side in ('BUY', 'SELL'):
+                quality_score, quality_reasons = self.quality_filter.score_signal(
+                    result, regime, new_side)
+                fake_breakout = self.quality_filter.is_fake_breakout(result, new_side)
+
+            # Build signal entry with enriched fields
             self.last_signals[symbol] = self._build_signal_entry(
-                symbol, result, price)
+                symbol, result, price, regime=regime,
+                quality_score=quality_score, fake_breakout=fake_breakout)
 
             existing = self.wallet.open_positions.get(symbol)
             if existing:
                 self._manage_exit(symbol, existing, result, price)
             elif result.get('fire') and result.get('tradeable', False) and price > 0:
-                now              = time.time()
-                cooldown_elapsed = now - self._last_close_time.get(symbol, 0)
-                new_side         = result.get('side', 'FLAT')
-                last_side        = self._last_close_side.get(symbol, '')
-                is_flip          = (last_side != '' and last_side != new_side)
+                now               = time.time()
+                cooldown_elapsed  = now - self._last_close_time.get(symbol, 0)
+                last_side         = self._last_close_side.get(symbol, '')
+                is_flip           = (last_side != '' and last_side != new_side)
                 required_cooldown = (
                     self.FLIP_COOLDOWN_SECONDS if is_flip else self.COOLDOWN_SECONDS
                 )
+
                 if cooldown_elapsed >= required_cooldown:
-                    # Confluence quality gate — the total [0,10] (5=neutral) must
-                    # lean in the signal direction. Also allow a high-conviction
-                    # override when BOTH trend AND momentum strongly agree — these
-                    # are the two highest-weight categories (×2.0 and ×1.5) and
-                    # reliable predictors even when bands/volume temporarily diverge.
-                    _conf_data    = result.get('confluence') or {}
-                    _conf_total   = float(_conf_data.get('total',    5.0))
-                    _conf_trend   = float(_conf_data.get('trend',    5.0))
-                    _conf_mom     = float(_conf_data.get('momentum', 5.0))
+                    # ── Quality gate ──────────────────────────────────────────
+                    if regime.regime in self.NO_TRADE_REGIMES:
+                        print(f'[{symbol}] NO_TRADE_REGIME={regime.regime} — blocked')
+                        if symbol in self.last_signals:
+                            self.last_signals[symbol]['fire']            = False
+                            self.last_signals[symbol]['signal']          = 'HOLD'
+                            self.last_signals[symbol]['regime_blocked']  = True
+                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                        return
+
+                    if fake_breakout:
+                        print(f'[{symbol}] FAKE_BREAKOUT blocked {new_side} '
+                              f'quality={quality_score:.0f}')
+                        if symbol in self.last_signals:
+                            self.last_signals[symbol]['fire']                 = False
+                            self.last_signals[symbol]['signal']               = 'HOLD'
+                            self.last_signals[symbol]['fake_breakout_blocked'] = True
+                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                        return
+
+                    if quality_score < self.quality_filter.MIN_QUALITY_SCORE:
+                        print(f'[{symbol}] QUALITY_BLOCKED {new_side} '
+                              f'score={quality_score:.0f}/100 '
+                              f'(min={self.quality_filter.MIN_QUALITY_SCORE}) '
+                              f'reasons={quality_reasons}')
+                        if symbol in self.last_signals:
+                            self.last_signals[symbol]['fire']              = False
+                            self.last_signals[symbol]['signal']            = 'HOLD'
+                            self.last_signals[symbol]['confluence_blocked'] = True
+                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                        return
+
+                    # Self-healing safe-mode: block low-quality signals when on a loss streak
+                    if (self.perf_tracker.safe_mode_active() and
+                            quality_score < 70):
+                        print(f'[{symbol}] SAFE_MODE blocked {new_side} '
+                              f'score={quality_score:.0f} (need ≥70 in safe-mode)')
+                        if symbol in self.last_signals:
+                            self.last_signals[symbol]['fire']          = False
+                            self.last_signals[symbol]['signal']        = 'HOLD'
+                            self.last_signals[symbol]['safe_mode_blocked'] = True
+                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                        return
+
+                    # ── Legacy confluence gate (keep existing dual-path logic) ─
+                    _conf_data  = result.get('confluence') or {}
+                    _conf_total = float(_conf_data.get('total', 5.0))
+                    _conf_trend = float(_conf_data.get('trend', 5.0))
+                    _conf_mom   = float(_conf_data.get('momentum', 5.0))
 
                     def _c10(v: float) -> float:
-                        # normalise backend [-1,+1] to [0,10] if needed
                         if abs(v) <= 1.05:
                             return (v + 1.0) / 2.0 * 10.0
                         return min(10.0, max(0.0, v))
@@ -406,15 +1063,10 @@ class LiveEngine:
                     _ctr = _c10(_conf_trend)
                     _cm  = _c10(_conf_mom)
 
-                    # Primary pass: total leans in signal direction
                     _pass_total = (
                         (new_side == 'BUY'  and _ct >= self.CONFLUENCE_BUY_MIN) or
                         (new_side == 'SELL' and _ct <= self.CONFLUENCE_SELL_MAX)
                     )
-                    # Override: trend+momentum strongly agree AND total is not
-                    # extremely opposed (not below 3.5 for BUY / above 6.5 for SELL).
-                    # This allows high-quality divergence setups where volume/bands
-                    # lag but the structural trend is clearly confirmed.
                     _trend_mom_avg = (_ctr * 2.0 + _cm * 1.5) / 3.5
                     _pass_override = (
                         (new_side == 'BUY'  and _trend_mom_avg >= 6.5 and _ct >= 3.5) or
@@ -425,31 +1077,30 @@ class LiveEngine:
                     if _conf_ok:
                         reason = 'override(trend+mom)' if _pass_override and not _pass_total else 'total'
                         print(f'[{symbol}] CONF PASS {new_side} '
-                              f'total={_ct:.1f} trend={_ctr:.1f} mom={_cm:.1f} [{reason}]')
-                        self._open_position(symbol, result, price)
+                              f'total={_ct:.1f} trend={_ctr:.1f} mom={_cm:.1f} [{reason}] '
+                              f'quality={quality_score:.0f} regime={regime.regime}')
+                        self._open_position(symbol, result, price, regime, quality_score)
                     else:
                         print(f'[{symbol}] CONF BLOCKED {new_side} '
                               f'total={_ct:.1f}/10 trend={_ctr:.1f} mom={_cm:.1f} '
                               f'(need total BUY≥{self.CONFLUENCE_BUY_MIN} '
                               f'or trend+mom override)')
-                        # Retract fire=True from the cockpit signal — the confluence
-                        # gate rejected this trade so it must not appear as a fired signal.
                         if symbol in self.last_signals:
                             self.last_signals[symbol]['fire']              = False
                             self.last_signals[symbol]['signal']            = 'HOLD'
                             self.last_signals[symbol]['confluence_blocked'] = True
+
                 elif is_flip:
                     print(f'[{symbol}] FLIP-FLOP BLOCKED {last_side}→{new_side} '
                           f'({int((required_cooldown - cooldown_elapsed)/60)} min remaining)')
                     if symbol in self.last_signals:
-                        self.last_signals[symbol]['fire']           = False
-                        self.last_signals[symbol]['signal']         = 'HOLD'
+                        self.last_signals[symbol]['fire']            = False
+                        self.last_signals[symbol]['signal']          = 'HOLD'
                         self.last_signals[symbol]['cooldown_blocked'] = True
                 else:
-                    # Within normal cooldown window — suppress fire so cockpit stays clean
                     if symbol in self.last_signals:
-                        self.last_signals[symbol]['fire']           = False
-                        self.last_signals[symbol]['signal']         = 'HOLD'
+                        self.last_signals[symbol]['fire']            = False
+                        self.last_signals[symbol]['signal']          = 'HOLD'
                         self.last_signals[symbol]['cooldown_blocked'] = True
 
             self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
@@ -458,38 +1109,76 @@ class LiveEngine:
 
     def _manage_exit(self, symbol: str, pos: Position,
                      result: Dict[str, Any], price: float) -> None:
-        # Prefer the real-time WebSocket price — it updates every ~1s so SL/TP
-        # checks are much more accurate than the 5-min-old predictor candle close.
-        live_px = self.live_prices.get(symbol, 0.0)
+        live_px     = self.live_prices.get(symbol, 0.0)
         check_price = live_px if live_px > 0 else price
 
         now  = time.time()
         held = now - self._open_time.get(symbol, 0)
+        atr  = float(result.get('atr', pos.entry_price * 0.015) or pos.entry_price * 0.015)
+
+        # ── Update peak price for trailing stop tracking ──────────────────────
+        if pos.direction == 'LONG':
+            current_peak = self._peak_price.get(symbol, pos.entry_price)
+            self._peak_price[symbol] = max(current_peak, check_price)
+        else:   # SHORT: track trough (lowest point since entry)
+            current_trough = self._peak_price.get(symbol, pos.entry_price)
+            self._peak_price[symbol] = min(current_trough, check_price)
 
         def _close(reason: str) -> None:
             rec = self.wallet.close_trade(symbol, check_price, reason)
             if rec:
                 self._last_close_time[symbol] = now
                 self._last_close_side[symbol] = pos.side
+                # Clean up trailing stop state
+                self._tp1_hit.pop(symbol, None)
+                self._peak_price.pop(symbol, None)
                 tag = 'WIN' if rec.pnl_pct > 0 else 'LOSS'
                 print(f'[{symbol}] {reason} {tag} {rec.pnl_pct:+.2f}% @ {check_price:.6g}')
+                # Record outcome in performance tracker
+                self.perf_tracker.record_outcome(
+                    symbol        = symbol,
+                    regime        = self.last_signals.get(symbol, {}).get('regime', 'UNKNOWN'),
+                    outcome       = rec.outcome,
+                    pnl_pct       = rec.pnl_pct,
+                    quality_score = float(self.last_signals.get(symbol, {}).get('quality_score', 0)),
+                )
+                # Persist immediately so the outcome survives a crash
+                self._save_track_record()
 
         # ── 1. Maximum hold time (zombie guard) ──────────────────────────────
         if held >= self.MAX_HOLD_SECONDS:
             _close('MAX_HOLD_EXPIRED')
             return
 
-        # ── 2. TP1 hit — primary take-profit ─────────────────────────────────
-        if pos.take_profit_1 > 0:
+        # ── 2. Trailing stop (active after TP1 is hit) ────────────────────────
+        if self._tp1_hit.get(symbol, False):
+            trail_atr = 0.5 * atr
+            peak      = self._peak_price.get(symbol, pos.entry_price)
+            if pos.direction == 'LONG':
+                trail_stop = peak - trail_atr
+                if check_price <= trail_stop:
+                    _close('TRAILING_STOP')
+                    return
+            else:  # SHORT
+                trail_stop = peak + trail_atr
+                if check_price >= trail_stop:
+                    _close('TRAILING_STOP')
+                    return
+
+        # ── 3. TP1 hit — activate trailing stop from here ─────────────────────
+        if pos.take_profit_1 > 0 and not self._tp1_hit.get(symbol, False):
             tp1_hit = (
                 (pos.direction == 'LONG'  and check_price >= pos.take_profit_1) or
                 (pos.direction == 'SHORT' and check_price <= pos.take_profit_1)
             )
             if tp1_hit:
-                _close('TP1_HIT')
-                return
+                self._tp1_hit[symbol]    = True
+                self._peak_price[symbol] = check_price   # reset peak to TP1 price
+                print(f'[{symbol}] TP1_HIT @ {check_price:.6g} — trailing stop activated')
+                # Do NOT close here — let the trailing stop manage the rest
+                # (matches the design intent: partial exit via trailing)
 
-        # ── 3. TP2 hit — hard ceiling (catches gaps where TP1 was skipped) ───
+        # ── 4. TP2 hit — hard ceiling ─────────────────────────────────────────
         if pos.take_profit_2 > 0:
             tp2_hit = (
                 (pos.direction == 'LONG'  and check_price >= pos.take_profit_2) or
@@ -499,9 +1188,7 @@ class LiveEngine:
                 _close('TP2_HIT')
                 return
 
-        # ── 4. Model-reversal TP (dynamic exit) ──────────────────────────────
-        # The meta gate fired the opposite direction → treat as exit signal.
-        # Guard: min 2h hold so the model can't flip-flop every scan.
+        # ── 5. Model-reversal TP (dynamic exit) ──────────────────────────────
         side = result.get('side', 'FLAT')
         fire = bool(result.get('fire', False))
         opposite = (
@@ -512,7 +1199,7 @@ class LiveEngine:
             _close('MODEL_REVERSAL_TP')
             return
 
-        # ── 5. ATR-based stop loss ────────────────────────────────────────────
+        # ── 6. ATR-based stop loss ────────────────────────────────────────────
         if pos.stop_loss > 0:
             sl_hit = (
                 (pos.direction == 'LONG'  and check_price <= pos.stop_loss) or
@@ -521,31 +1208,69 @@ class LiveEngine:
             if sl_hit:
                 _close('STOP_HIT')
 
-    def _open_position(self, symbol: str, result: Dict[str, Any],
-                       price: float) -> None:
+    def _open_position(
+        self,
+        symbol:        str,
+        result:        Dict[str, Any],
+        price:         float,
+        regime:        Optional[RegimeState] = None,
+        quality_score: float                 = 0.0,
+    ) -> None:
         side = result.get('side', 'FLAT')
         if side not in ('BUY', 'SELL'):
             return
 
-        direction  = 'LONG' if side == 'BUY' else 'SHORT'
-        meta_conf  = float(result.get('meta_confidence', 0))
-        atr_mult   = float(result.get('atr_multiplier', 1.5))
-        atr        = float(result.get('atr', price * 0.015))
+        direction = 'LONG' if side == 'BUY' else 'SHORT'
+        meta_conf = float(result.get('meta_confidence', 0))
+        atr_mult  = float(result.get('atr_multiplier', 1.5))
+        atr       = float(result.get('atr', price * 0.015))
+        atr_pct   = float(result.get('atr_pct', atr / price * 100 if price > 0 else 1.5))
 
-        stop_loss  = (price - atr_mult * atr) if direction == 'LONG' \
-                     else (price + atr_mult * atr)
-        pos_value  = self.wallet.position_size()
+        # ── Dynamic position sizing (replaces fixed wallet.position_size()) ───
+        if regime is not None and quality_score > 0:
+            pos_value = self.risk_engine.calculate_position_size(
+                balance       = self.wallet.balance,
+                quality_score = quality_score,
+                regime        = regime,
+                atr_pct       = atr_pct,
+            )
+            # Cap at wallet max_position_usdt
+            pos_value = min(pos_value, self.wallet.max_position_usdt)
 
-        # TP levels from predictor ATR-projected targets; fall back to ATR multiples
-        step = atr_mult * atr
-        if direction == 'LONG':
-            tp1 = float(result.get('bull_tp1') or round(price + 1.0 * step, 8))
-            tp2 = float(result.get('bull_tp2') or round(price + 2.0 * step, 8))
-            tp3 = float(result.get('bull_tp3') or round(price + 3.5 * step, 8))
+            # Per-symbol exposure reduction if recent loss streak
+            if self.perf_tracker.should_reduce_exposure(symbol):
+                pos_value *= 0.5
+                print(f'[{symbol}] REDUCE_EXPOSURE — recent loss streak, '
+                      f'halved position to {pos_value:.0f} USDT')
         else:
-            tp1 = float(result.get('bear_tp1') or round(price - 1.0 * step, 8))
-            tp2 = float(result.get('bear_tp2') or round(price - 2.0 * step, 8))
-            tp3 = float(result.get('bear_tp3') or round(price - 3.5 * step, 8))
+            pos_value = self.wallet.position_size()
+
+        pos_value = max(pos_value, 1.0)   # safety floor
+
+        # ── Dynamic stop/TP calculation ───────────────────────────────────────
+        if regime is not None and quality_score > 0:
+            stops = self.risk_engine.calculate_stops(
+                price         = price,
+                side          = side,
+                atr           = atr,
+                atr_mult      = atr_mult,
+                quality_score = quality_score,
+            )
+            stop_loss = stops['sl']
+            tp1       = stops['tp1']
+            tp2       = stops['tp2']
+            tp3       = stops['tp3']
+        else:
+            step      = atr_mult * atr
+            stop_loss = (price - step) if direction == 'LONG' else (price + step)
+            if direction == 'LONG':
+                tp1 = float(result.get('bull_tp1') or round(price + 1.0 * step, 8))
+                tp2 = float(result.get('bull_tp2') or round(price + 2.0 * step, 8))
+                tp3 = float(result.get('bull_tp3') or round(price + 3.5 * step, 8))
+            else:
+                tp1 = float(result.get('bear_tp1') or round(price - 1.0 * step, 8))
+                tp2 = float(result.get('bear_tp2') or round(price - 2.0 * step, 8))
+                tp3 = float(result.get('bear_tp3') or round(price - 3.5 * step, 8))
 
         pos = Position(
             symbol          = symbol,
@@ -563,22 +1288,37 @@ class LiveEngine:
             take_profit_3   = round(tp3, 8),
         )
         self.wallet.open_trade(pos)
-        self._open_time[symbol] = time.time()
+        self._open_time[symbol]    = time.time()
+        self._tp1_hit[symbol]      = False
+        self._peak_price[symbol]   = price
+
+        regime_label = regime.regime if regime else 'UNKNOWN'
         print(f'[{symbol}] OPEN {direction} @ {price} | '
-              f'conf={meta_conf:.3f} SL={stop_loss:.6g} '
-              f'TP1={tp1:.6g} TP2={tp2:.6g} size={pos_value:.0f} USDT')
+              f'conf={meta_conf:.3f} quality={quality_score:.0f} '
+              f'regime={regime_label} '
+              f'SL={stop_loss:.6g} TP1={tp1:.6g} TP2={tp2:.6g} '
+              f'size={pos_value:.0f} USDT')
+        # Persist the new open position immediately
+        self._save_track_record()
 
     # ── signal entry builder (for dashboard / last_signals) ───────────────────
 
     @staticmethod
-    def _build_signal_entry(symbol: str, result: Dict[str, Any],
-                            price: float) -> Dict[str, Any]:
-        side = result.get('side', 'FLAT')
-        conf = float(result.get('meta_confidence', 0))
-        thr  = float(result.get('threshold', 0.6))
-        fire = bool(result.get('fire', False))
-        atr  = float(result.get('atr', price * 0.015))
+    def _build_signal_entry(
+        symbol:        str,
+        result:        Dict[str, Any],
+        price:         float,
+        regime:        Optional[RegimeState] = None,
+        quality_score: float                 = 0.0,
+        fake_breakout: bool                  = False,
+    ) -> Dict[str, Any]:
+        side     = result.get('side', 'FLAT')
+        conf     = float(result.get('meta_confidence', 0))
+        thr      = float(result.get('threshold', 0.6))
+        fire     = bool(result.get('fire', False))
+        atr      = float(result.get('atr', price * 0.015))
         atr_mult = float(result.get('atr_multiplier', 1.5))
+        atr_pct  = float(result.get('atr_pct', atr / price * 100 if price > 0 else 1.5))
 
         if not fire:
             strength = 'NEUTRAL'
@@ -603,13 +1343,17 @@ class LiveEngine:
             'p_buy':           round(float(result.get('p_buy',  0)), 4),
             'p_sell':          round(float(result.get('p_sell', 0)), 4),
             'p_hold':          round(float(result.get('p_hold', 0)), 4),
-            # signal_id is stable while direction unchanged; new UUID only on a real fire.
-            # Stable IDs prevent Firestore churn: pushing 24 new UUIDs every 5-min scan
-            # was the sole driver of ~288 Firestore writes/day for zero signal change.
             'signal_id':       str(uuid.uuid4()) if fire else f'{symbol.replace("/","_")}_{side}',
             'data_timestamp':  datetime.now(timezone.utc).isoformat(),
             'timestamp':       datetime.now(timezone.utc).isoformat(),
             'timeframe':       '1h',
+            # Adaptive intelligence fields
+            'regime':              regime.regime        if regime else 'UNKNOWN',
+            'regime_confidence':   regime.confidence    if regime else 0.0,
+            'quality_score':       round(quality_score, 1),
+            'is_fake_breakout':    fake_breakout,
+            'risk_score':          round(max(0.0, 100.0 - quality_score), 1),
+            'volatility_score':    round(min(atr_pct / 5.0 * 100.0, 100.0), 1),
         }
 
         # TP/SL levels for the active direction
@@ -624,12 +1368,11 @@ class LiveEngine:
             entry['suggested_tp'] = None
             entry['suggested_sl'] = None
 
-        # Expected move projection: confluence strength × ATR % × 3× factor
-        _conf_data    = result.get('confluence') or {}
-        _conf_total   = float(_conf_data.get('total', 5.0))      # [0, 10]
-        _conf_raw     = abs(_conf_total - 5.0) / 5.0             # 0-1 strength
-        _atr_pct      = float(result.get('atr_pct', 0))
-        entry['expected_move_pct'] = round(_conf_raw * _atr_pct * 3.0, 2)
+        # Expected move projection
+        _conf_data  = result.get('confluence') or {}
+        _conf_total = float(_conf_data.get('total', 5.0))
+        _conf_raw   = abs(_conf_total - 5.0) / 5.0
+        entry['expected_move_pct'] = round(_conf_raw * atr_pct * 3.0, 2)
 
         # Risk/reward ratio (TP1 vs SL)
         sl_val = entry.get('suggested_sl', 0)
@@ -700,13 +1443,17 @@ class LiveEngine:
             )[:500]
 
             payload: Dict[str, Any] = {
-                'generated_at': datetime.now(timezone.utc).isoformat(),
-                'summary':      self.wallet.summary,
-                'signals':      all_records,
+                'generated_at':      datetime.now(timezone.utc).isoformat(),
+                'summary':           self.wallet.summary,
+                'signals':           all_records,
+                'performance':       self.perf_tracker.get_performance_summary(),
             }
 
-            with open(TRACK_RECORD_PATH, 'w', encoding='utf-8') as f:
+            import os as _os
+            tmp = TRACK_RECORD_PATH.with_suffix('.tmp')
+            with open(tmp, 'w', encoding='utf-8') as f:
                 json.dump(payload, f, indent=2, default=str)
+            _os.replace(tmp, TRACK_RECORD_PATH)
         except Exception as e:
             print(f'[LiveEngine] track_record save failed: {e}')
 
@@ -725,13 +1472,11 @@ def automated_setup(_: Path, args: Any):
     Scan MODEL_STORE for up to 60 symbols.
     Tradeable symbols are loaded first; non-tradeable models fill the remainder
     up to the 60-token cap so the dashboard always shows a full grid.
-    Tradeable symbols fire real signals; monitor-only ones show price/context only.
     """
     tradeable_configs:     List[TokenConfig] = []
     non_tradeable_configs: List[TokenConfig] = []
 
     if MODEL_STORE.exists():
-        # Sort by mtime (newest models first) so freshly-trained symbols are preferred
         meta_files = sorted(MODEL_STORE.glob('*_meta.json'),
                             key=lambda p: p.stat().st_mtime, reverse=True)
         seen: set = set()
@@ -751,9 +1496,8 @@ def automated_setup(_: Path, args: Any):
             except Exception:
                 pass
 
-    # Tradeable first, then fill up to 60 with monitor-only symbols
-    TARGET = 60
-    configs = tradeable_configs[:TARGET]
+    TARGET    = 60
+    configs   = tradeable_configs[:TARGET]
     remaining = TARGET - len(configs)
     if remaining > 0:
         configs += non_tradeable_configs[:remaining]
@@ -785,10 +1529,10 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
     Layout  (updates every 2 s)
     ──────────────────────────────────────────────────────────────────
     [HEADER]   Capital · Balance · Total PnL · Win-rate · Warmup bar
-    [TOKEN GRID]  All 24 symbols — price, signal, bias, RSI, regime,
-                  confidence, open-position P&L indicator
+    [TOKEN GRID]  All symbols — price, signal, bias, RSI, regime,
+                  confidence, quality score, open-position P&L
     [OPEN TRADES] Active virtual positions (entry, live PnL, SL)
-    [CLOSED (20)] Last 20 closed trades with outcome badge
+    [CLOSED (5)]  Last 5 closed trades with outcome badge
     """
     from rich.console import Console
     from rich.table import Table
@@ -800,13 +1544,11 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
 
     console = Console()
 
-    # ── formatting helpers ────────────────────────────────────────────────────
-
     def _px(p: float) -> str:
-        if p <= 0:       return '—'
-        if p < 0.001:    return f'{p:.6f}'
-        if p < 1:        return f'{p:.4f}'
-        if p < 100:      return f'{p:.3f}'
+        if p <= 0:      return '—'
+        if p < 0.001:   return f'{p:.6f}'
+        if p < 1:       return f'{p:.4f}'
+        if p < 100:     return f'{p:.3f}'
         return f'{p:.2f}'
 
     def _pc(v: float) -> str:
@@ -829,41 +1571,55 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
         return '[dim]NEUT[/]'
 
     def _signal_cell(sig: dict) -> str:
-        side      = sig.get('signal', 'FLAT')
-        fire      = sig.get('fire', False)
-        strength  = sig.get('signal_strength', '')
+        side     = sig.get('signal', 'FLAT')
+        fire     = sig.get('fire', False)
+        strength = sig.get('signal_strength', '')
         if not fire or side in ('FLAT', 'HOLD'):
             return '[dim]·[/]'
         if 'STRONG' in strength:
-            return '[bold green]🔥 STRONG BUY[/]'  if side == 'BUY' \
+            return '[bold green]🔥 STRONG BUY[/]' if side == 'BUY' \
               else '[bold red]🔥 STRONG SELL[/]'
         return '[green]BUY[/]' if side == 'BUY' else '[red]SELL[/]'
 
-    def _regime_cell(r: str) -> str:
-        r = r or ''
-        if 'TRENDING_UP'   in r: return '[green]↑TREND[/]'
-        if 'TRENDING_DOWN' in r: return '[red]↓TREND[/]'
-        if 'TRENDING'      in r: return '[cyan]TREND[/]'
-        return '[dim]RANGE[/]'
+    def _regime_short(r: str) -> str:
+        r = r or 'UNKNOWN'
+        _MAP = {
+            _REGIME_TRENDING_BULL:      '[green]↑BULL[/]',
+            _REGIME_TRENDING_BEAR:      '[red]↓BEAR[/]',
+            _REGIME_RANGING:            '[dim]RANGE[/]',
+            _REGIME_ACCUMULATION:       '[cyan]ACCUM[/]',
+            _REGIME_DISTRIBUTION:       '[yellow]DIST[/]',
+            _REGIME_VOLATILE_EXPANSION: '[bold red]EXPND[/]',
+            _REGIME_VOLATILE_COMPRESS:  '[dim]CMPR[/]',
+            _REGIME_LIQUIDITY_TRAP:     '[bold red]TRAP[/]',
+        }
+        return _MAP.get(r, f'[dim]{r[:5]}[/]')
+
+    def _quality_cell(q: float) -> str:
+        if q >= 75:   return f'[bold green]{q:.0f}[/]'
+        if q >= 55:   return f'[yellow]{q:.0f}[/]'
+        if q > 0:     return f'[dim red]{q:.0f}[/]'
+        return '[dim]—[/]'
 
     def _build_layout() -> Layout:
-        wallet   = engine.wallet
-        live_px  = engine.live_prices
-        signals  = engine.last_signals          # {symbol: entry_dict}
+        wallet  = engine.wallet
+        live_px = engine.live_prices
+        signals = engine.last_signals
 
-        # ── Header ────────────────────────────────────────────────────────────
-        pnl_u    = round(wallet.balance - wallet.initial_capital, 2)
-        pnl_pct  = round(pnl_u / wallet.initial_capital * 100, 2)
-        pc       = 'green' if pnl_u >= 0 else 'red'
-        s        = wallet.summary
-        wr       = round(s['win_rate'] * 100, 1) if s['total_trades'] else 0.0
-        warmup   = engine.bootstrap_done >= engine.bootstrap_total
-        status   = '[bold green]● LIVE[/]' if warmup \
-                   else f'[yellow]⏳ WARMUP {engine.bootstrap_done}/{engine.bootstrap_total}[/]'
-        now_utc  = datetime.now(timezone.utc).strftime('%Y-%m-%d  %H:%M:%S UTC')
+        pnl_u   = round(wallet.balance - wallet.initial_capital, 2)
+        pnl_pct = round(pnl_u / wallet.initial_capital * 100, 2)
+        pc      = 'green' if pnl_u >= 0 else 'red'
+        s       = wallet.summary
+        wr      = round(s['win_rate'] * 100, 1) if s['total_trades'] else 0.0
+        warmup  = engine.bootstrap_done >= engine.bootstrap_total
+        status  = '[bold green]● LIVE[/]' if warmup \
+                  else f'[yellow]⏳ WARMUP {engine.bootstrap_done}/{engine.bootstrap_total}[/]'
+        now_utc = datetime.now(timezone.utc).strftime('%Y-%m-%d  %H:%M:%S UTC')
+        perf    = engine.perf_tracker.get_performance_summary()
+        safe_tag = '[bold red] ⚠ SAFE-MODE[/]' if perf['safe_mode'] else ''
 
         header = Panel(
-            f"  {status}   │   "
+            f"  {status}{safe_tag}   │   "
             f"Capital [bold cyan]${wallet.initial_capital:,.0f}[/]   │   "
             f"Balance [bold cyan]${wallet.balance:,.2f}[/]   │   "
             f"PnL [{pc}]{pnl_u:+.2f} USDT  ({pnl_pct:+.2f}%)[/]   │   "
@@ -872,11 +1628,10 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
             f"Win-Rate [bold]{wr:.1f}%[/]   │   "
             f"Open [bold cyan]{len(wallet.open_positions)}[/]   │   "
             f"[dim]{now_utc}[/]",
-            title="[bold]  AEGIS-1   Virtual Trading Wallet  [/]",
+            title="[bold]  AEGIS-1   Institutional-Grade Adaptive Signal Engine  [/]",
             border_style='cyan',
         )
 
-        # ── Token status grid — ALL symbols ──────────────────────────────────
         grid = Table(
             title=f'[bold]TOKEN STATUS  ({len(signals)} symbols)[/]',
             box=box.SIMPLE_HEAVY,
@@ -885,17 +1640,18 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
             header_style='bold white',
             expand=True,
         )
-        grid.add_column('#',          justify='right',  width=3,  style='dim')
-        grid.add_column('Symbol',     justify='left',   min_width=12)
-        grid.add_column('Price',      justify='right',  min_width=10)
-        grid.add_column('Signal',     justify='center', min_width=12)
-        grid.add_column('Bias',       justify='center', width=6)
-        grid.add_column('Regime',     justify='center', width=8)
-        grid.add_column('RSI',        justify='right',  width=6)
-        grid.add_column('Conf',       justify='right',  width=6)
-        grid.add_column('Funding',    justify='right',  width=8)
-        grid.add_column('Session',    justify='center', width=10)
-        grid.add_column('Position',   justify='center', min_width=14)
+        grid.add_column('#',        justify='right',  width=3,   style='dim')
+        grid.add_column('Symbol',   justify='left',   min_width=12)
+        grid.add_column('Price',    justify='right',  min_width=10)
+        grid.add_column('Signal',   justify='center', min_width=12)
+        grid.add_column('Bias',     justify='center', width=6)
+        grid.add_column('Regime',   justify='center', width=7)
+        grid.add_column('Quality',  justify='right',  width=7)
+        grid.add_column('RSI',      justify='right',  width=6)
+        grid.add_column('Conf',     justify='right',  width=6)
+        grid.add_column('Funding',  justify='right',  width=8)
+        grid.add_column('Session',  justify='center', width=10)
+        grid.add_column('Position', justify='center', min_width=14)
 
         tradeable_syms = {
             sym for sym, pred in engine.predictors.items()
@@ -903,16 +1659,16 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
         }
 
         for idx, (sym, sig) in enumerate(sorted(signals.items()), 1):
-            price    = float(live_px.get(sym, sig.get('price', 0) or 0))
-            conf     = float(sig.get('meta_confidence', 0))
-            rsi      = sig.get('rsi', None)
-            bias     = sig.get('market_bias', '')
-            regime   = sig.get('trend_regime', '')
-            session  = sig.get('session', '')[:8]
-            funding  = sig.get('funding_rate', None)
+            price   = float(live_px.get(sym, sig.get('price', 0) or 0))
+            conf    = float(sig.get('meta_confidence', 0))
+            rsi     = sig.get('rsi', None)
+            bias    = sig.get('market_bias', '')
+            session = sig.get('session', '')[:8]
+            funding = sig.get('funding_rate', None)
+            regime  = sig.get('regime', 'UNKNOWN')
+            quality = float(sig.get('quality_score', 0))
             is_tradeable = sym in tradeable_syms
 
-            # live P&L for open position on this symbol
             pos = wallet.open_positions.get(sym)
             if pos:
                 cur = price or pos.entry_price
@@ -921,11 +1677,12 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
                 else:
                     ppct = (pos.entry_price - cur) / pos.entry_price * 100
                 arrow, ds = _dir(pos.direction)
-                pos_cell = f'[{ds}]{arrow}[/] [{_pc(ppct)}]{ppct:+.2f}%[/]'
+                # Show trailing indicator if TP1 has been hit
+                trail_flag = '[bold yellow] T[/]' if engine._tp1_hit.get(sym) else ''
+                pos_cell   = f'[{ds}]{arrow}[/] [{_pc(ppct)}]{ppct:+.2f}%[/]{trail_flag}'
             else:
                 pos_cell = '[dim]—[/]'
 
-            # RSI coloring
             if rsi is None:
                 rsi_cell = '[dim]—[/]'
             else:
@@ -934,19 +1691,17 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
                 elif rsi_f <= 30: rsi_cell = f'[green]{rsi_f:.0f}[/]'
                 else:             rsi_cell = f'[white]{rsi_f:.0f}[/]'
 
-            # Funding coloring
             if funding is None:
                 fund_cell = '[dim]—[/]'
             else:
-                ff = float(funding)
+                ff    = float(funding)
                 col_f = 'red' if ff > 0.01 else ('green' if ff < -0.01 else 'dim white')
                 fund_cell = f'[{col_f}]{ff:+.4f}%[/]'
 
-            # Monitor-only rows are dimmed; tradeable rows show full colour
-            sym_cell  = f'[bold]{sym}[/]' if is_tradeable else f'[dim]{sym}[/]'
+            sym_cell  = f'[bold]{sym}[/]'  if is_tradeable else f'[dim]{sym}[/]'
             px_cell   = f'[bold white]{_px(price)}[/]' if is_tradeable else f'[dim]{_px(price)}[/]'
             conf_cell = (f'[cyan]{conf:.3f}[/]' if conf > 0 else '[dim]—[/]') if is_tradeable \
-                        else f'[dim]{conf:.3f}[/]' if conf > 0 else '[dim]—[/]'
+                        else (f'[dim]{conf:.3f}[/]' if conf > 0 else '[dim]—[/]')
 
             grid.add_row(
                 f'[dim]{idx}[/]' if not is_tradeable else str(idx),
@@ -954,7 +1709,8 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
                 px_cell,
                 _signal_cell(sig) if is_tradeable else '[dim]watch[/]',
                 _bias_cell(bias),
-                _regime_cell(regime),
+                _regime_short(regime),
+                _quality_cell(quality) if is_tradeable else '[dim]—[/]',
                 rsi_cell,
                 conf_cell,
                 fund_cell,
@@ -962,10 +1718,6 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
                 pos_cell,
             )
 
-        # ── Compact open-positions footer ─────────────────────────────────────
-        # Open positions are already shown inline in the Position column above.
-        # The footer is a single condensed line per position so the token grid
-        # gets almost the full screen height.
         open_lines: List[str] = []
         for pos in sorted(wallet.open_positions.values(), key=lambda p: p.entry_time):
             cur  = float(live_px.get(pos.symbol, pos.entry_price) or pos.entry_price)
@@ -974,17 +1726,18 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
             pu   = round(pos.position_value * ppct / 100, 2)
             arr, ds = _dir(pos.direction)
             col  = _pc(ppct)
+            trail_tag = ' [T]' if engine._tp1_hit.get(pos.symbol) else ''
             open_lines.append(
                 f"  [{ds}]{arr} {pos.symbol}[/]  "
                 f"entry [white]{_px(pos.entry_price)}[/] → "
                 f"now [bold white]{_px(cur)}[/]  "
                 f"[{col}]{ppct:+.2f}%  {pu:+.2f} USDT[/]  "
                 f"SL [dim]{_px(pos.stop_loss)}[/]  "
-                f"conf [cyan]{pos.meta_confidence:.3f}[/]  "
+                f"conf [cyan]{pos.meta_confidence:.3f}[/]"
+                f"{trail_tag}  "
                 f"[dim]{pos.entry_time[11:16]} UTC[/]"
             )
 
-        # Closed trade summary (last 5, one line each)
         closed_lines: List[str] = []
         for rec in sorted(wallet.trade_history,
                           key=lambda t: t.close_time or '', reverse=True)[:5]:
@@ -1005,19 +1758,16 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
             border_style='dim',
         )
 
-        # ── Layout: header + full-height grid + compact footer ────────────────
         layout = Layout()
         layout.split_column(
             Layout(header, name='hdr',    size=3),
-            Layout(grid,   name='grid',   ratio=1),   # grid gets all remaining space
-            Layout(footer, name='footer', size=max(4 + len(open_lines) * 1
-                                                   + len(closed_lines) * 1, 6)),
+            Layout(grid,   name='grid',   ratio=1),
+            Layout(footer, name='footer', size=max(4 + len(open_lines) + len(closed_lines), 6)),
         )
         return layout
 
     async def _run_with_display() -> None:
         scan_task = asyncio.create_task(engine.run())
-        # screen=True: full-screen redraw (like htop) — no duplicate render lines
         with Live(_build_layout(), console=console,
                   refresh_per_second=0.5, screen=True) as live:
             try:

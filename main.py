@@ -3044,17 +3044,48 @@ async def _get_fx_rates() -> Dict[str, float]:
 
 @app.get("/api/track-record")
 async def track_record_endpoint():
-    """Unified public track record — merges live_engine signals + AEGIS trader signals."""
+    """Unified public track record — live_engine (authoritative) + AEGIS trader signals."""
 
-    # ── 1. Live-engine signals (from disk or in-memory fallback) ──────────────
+    _ENGINE_RECORD = Path(BASE_DIR) / "data" / "track_record.json"
+
+    # ── 1. Live-engine signals — read from the engine's own authoritative file ──
     live_signals: list = []
-    if TRACK_RECORD_PATH.exists():
+
+    # Primary: live_engine's data/track_record.json (persisted on every open/close)
+    if _ENGINE_RECORD.exists():
         try:
-            with open(TRACK_RECORD_PATH, "r", encoding="utf-8") as f:
+            with open(_ENGINE_RECORD, "r", encoding="utf-8") as f:
                 _d = json.load(f)
-            live_signals = _d.get("signals", [])
+            for s in _d.get("signals", []):
+                direction = s.get("direction", "")
+                side      = s.get("side", "")
+                sig_type  = side if side in ("BUY", "SELL") else (
+                    "BUY" if direction == "LONG" else "SELL" if direction == "SHORT" else "HOLD"
+                )
+                live_signals.append({
+                    "signal_id":       s.get("signal_id"),
+                    "symbol":          s.get("symbol"),
+                    "timeframe":       s.get("timeframe", "1h"),
+                    "direction":       direction,
+                    "signal_type":     sig_type,
+                    "signal_status":   "ACTIVE" if s.get("outcome") == "OPEN" else "CLOSED",
+                    "entry_price":     s.get("entry_price"),
+                    "take_profit":     s.get("take_profit_1") or s.get("take_profit"),
+                    "stop_loss":       s.get("stop_loss"),
+                    "exit_price":      s.get("exit_price"),
+                    "entry_time":      s.get("entry_time"),
+                    "close_time":      s.get("close_time"),
+                    "pnl_pct":         s.get("pnl_pct"),
+                    "outcome":         s.get("outcome"),
+                    "exit_reason":     s.get("exit_reason"),
+                    "ai_prob":         s.get("meta_confidence"),
+                    "confluence_rate": None,
+                    "source":          "live_engine",
+                })
         except Exception:
             pass
+
+    # Fallback: main.py's in-memory store (used before first engine save)
     if not live_signals and _track_store:
         live_signals = sorted(
             _track_store, key=lambda r: r.get("entry_time") or "", reverse=True
@@ -3072,7 +3103,7 @@ async def track_record_endpoint():
                     "symbol":          s.get("symbol"),
                     "timeframe":       s.get("timeframe"),
                     "direction":       s.get("direction"),
-                    "signal_type":     s.get("direction"),   # BUY / SELL
+                    "signal_type":     s.get("direction"),
                     "signal_status":   "ACTIVE" if s.get("outcome") == "OPEN" else "CLOSED",
                     "entry_price":     s.get("entry_price"),
                     "take_profit":     s.get("tp1"),
