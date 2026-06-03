@@ -840,7 +840,7 @@ async def run_engine_background():
 # FastAPI app (lifespan runs engine as background task)
 # -------------------------------------------------------------------
 # ── Trader Engine background scan loop ────────────────────────────────────────
-_TRADER_SCAN_INTERVAL = 300   # 5 minutes
+_TRADER_SCAN_INTERVAL = 60    # 60 seconds
 
 def _save_trader_track_record() -> None:
     """Copy data/trader_track_record.json → web/trader_track_record.json for static serving."""
@@ -883,7 +883,7 @@ def _save_trader_track_record() -> None:
 
 
 async def _trader_scan_loop():
-    """Runs the Universal Trader Engine every 5 minutes and caches token status."""
+    """Runs the Universal Trader Engine every 60 seconds and caches token status."""
     await asyncio.sleep(30)   # let the main engine warm up first
     while True:
         try:
