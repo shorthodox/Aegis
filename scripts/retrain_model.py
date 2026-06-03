@@ -402,7 +402,7 @@ def compute_soft_confluence_features(df: pd.DataFrame, window: int = 120) -> pd.
         """Rolling percentile rank of `col`, 0.5 if column missing."""
         if col not in df.columns:
             return pd.Series(0.5, index=df.index, dtype=float)
-        s = df[col].fillna(method='ffill').fillna(0.0)
+        s = df[col].ffill().fillna(0.0)
         rank = s.rolling(window, min_periods=max(20, window // 4)).rank(pct=True)
         rank = rank.fillna(0.5)
         return rank if higher_bullish else (1.0 - rank)
@@ -2203,6 +2203,20 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             }, f, indent=2)
 
         log_feature_importance(deploy_primary, feature_cols, symbol)
+
+        # ── HMM regime intelligence layer ─────────────────────────────────────
+        # Trained AFTER XGBoost so it uses the same fully-engineered DataFrame.
+        # Non-fatal: if hmmlearn is unavailable or training fails the rest of
+        # retrain_model.py is completely unaffected.
+        try:
+            from src.ml.hmm_regime import train_hmm_for_symbol as _train_hmm
+            _hmm_df = pd.concat([train_pool, holdout], ignore_index=True)
+            _hmm_ok = _train_hmm(symbol, _hmm_df)
+            if not _hmm_ok:
+                print(f"   [HMM] Skipped for {symbol} (training returned False)")
+        except Exception as _hmm_err:
+            print(f"   [HMM] Training failed for {symbol}: "
+                  f"{type(_hmm_err).__name__}: {_hmm_err}")
 
         return {
             "symbol": symbol,

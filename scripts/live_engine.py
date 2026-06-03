@@ -1320,7 +1320,51 @@ class LiveEngine:
                 price = self.live_prices.get(symbol, 0)
 
             # ── Adaptive intelligence layer ───────────────────────────────────
-            regime        = self.regime_detector.detect(result)
+            # Step 1: HMM regime (probabilistic, from predictor's result dict)
+            # The HMM ran inside predict_realtime() and attached hmm_* fields.
+            # We extract them here and let them sharpen the MarketRegimeDetector.
+            _hmm_regime     = result.get('hmm_regime', 'UNKNOWN')
+            _hmm_available  = bool(result.get('hmm_available', False))
+            _hmm_conf_adj   = float(result.get('hmm_conf_adjustment', 0.0))
+            _hmm_atr_mult   = float(result.get('hmm_atr_mult', 1.0))
+            _hmm_pos_scale  = float(result.get('hmm_position_scale', 1.0))
+            _hmm_trade_ok   = bool(result.get('hmm_trade_allowed', True))
+            _hmm_trans_risk = float(result.get('hmm_transition_risk', 0.0))
+
+            # If HMM says no-trade (e.g. COMPRESSION pre-breakout or DISTRIBUTION)
+            # suppress the signal immediately — don't waste the quality scoring pass.
+            if _hmm_available and not _hmm_trade_ok:
+                if symbol in self.last_signals:
+                    self.last_signals[symbol]['fire']         = False
+                    self.last_signals[symbol]['signal']       = 'HOLD'
+                    self.last_signals[symbol]['hmm_blocked']  = True
+                self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                return
+
+            # Step 2: Rule-based regime classifier (existing, now HMM-informed)
+            # If HMM has a confident read, override the heuristic detector's label.
+            regime = self.regime_detector.detect(result)
+            if _hmm_available and float(result.get('hmm_confidence', 0)) > 0.5:
+                # Map HMM label to the existing RegimeState taxonomy
+                _HMM_TO_INTERNAL = {
+                    'TRENDING_BULL':      _REGIME_TRENDING_BULL,
+                    'TRENDING_BEAR':      _REGIME_TRENDING_BEAR,
+                    'CHOPPY':             _REGIME_RANGING,
+                    'VOLATILE_EXPANSION': _REGIME_VOLATILE_EXPANSION,
+                    'COMPRESSION':        _REGIME_VOLATILE_COMPRESS,
+                    'ACCUMULATION':       _REGIME_ACCUMULATION,
+                    'DISTRIBUTION':       _REGIME_DISTRIBUTION,
+                }
+                _internal = _HMM_TO_INTERNAL.get(_hmm_regime)
+                if _internal:
+                    regime = RegimeState(
+                        regime               = _internal,
+                        confidence           = float(result.get('hmm_confidence', 0.5)),
+                        trade_allowed        = _hmm_trade_ok,
+                        preferred_strategies = regime.preferred_strategies,
+                        max_position_pct     = regime.max_position_pct * _hmm_pos_scale,
+                    )
+
             new_side      = result.get('side', 'FLAT')
             quality_score = 0.0
             quality_reasons: List[str] = []
@@ -1330,6 +1374,29 @@ class LiveEngine:
                 quality_score, quality_reasons = self.quality_filter.score_signal(
                     result, regime, new_side)
                 fake_breakout = self.quality_filter.is_fake_breakout(result, new_side)
+
+                # HMM quality bonus/penalty: ±10 points based on regime alignment
+                if _hmm_available:
+                    if _hmm_regime in ('TRENDING_BULL',) and new_side == 'BUY':
+                        quality_score += 10.0
+                        quality_reasons.append('hmm_trend_bull_bonus')
+                    elif _hmm_regime in ('TRENDING_BEAR',) and new_side == 'SELL':
+                        quality_score += 10.0
+                        quality_reasons.append('hmm_trend_bear_bonus')
+                    elif _hmm_regime in ('CHOPPY', 'VOLATILE_EXPANSION'):
+                        quality_score -= 10.0
+                        quality_reasons.append(f'hmm_regime_penalty({_hmm_regime})')
+                    elif _hmm_regime == 'DISTRIBUTION' and new_side == 'BUY':
+                        quality_score -= 8.0
+                        quality_reasons.append('hmm_distribution_buy_penalty')
+                    elif _hmm_regime == 'ACCUMULATION' and new_side == 'SELL':
+                        quality_score -= 8.0
+                        quality_reasons.append('hmm_accumulation_sell_penalty')
+                    # High transition risk: penalise regime instability
+                    if _hmm_trans_risk > 0.35:
+                        quality_score -= 5.0
+                        quality_reasons.append(f'hmm_transition_risk({_hmm_trans_risk:.0%})')
+                    quality_score = round(max(0.0, min(quality_score, 100.0)), 1)
 
             # Build signal entry with enriched fields
             self.last_signals[symbol] = self._build_signal_entry(
@@ -1405,6 +1472,23 @@ class LiveEngine:
                             self.last_signals[symbol]['fire']          = False
                             self.last_signals[symbol]['signal']        = 'HOLD'
                             self.last_signals[symbol]['drift_blocked'] = True
+                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                        return
+
+                    # Apply HMM regime confidence adjustment to quality gate
+                    # _hmm_conf_adj is a signed float (negative = raise threshold)
+                    # We convert it to a quality-score equivalent for the gate check.
+                    _hmm_quality_penalty = round(-_hmm_conf_adj * 100, 1)  # e.g. +0.05 adj → -5 quality
+                    _effective_min_quality = self.quality_filter.MIN_QUALITY_SCORE + _hmm_quality_penalty
+                    if quality_score < _effective_min_quality:
+                        print(f'[{symbol}] HMM_QUALITY_GATE {new_side} '
+                              f'score={quality_score:.0f} < '
+                              f'min={_effective_min_quality:.0f} '
+                              f'(hmm_regime={_hmm_regime})')
+                        if symbol in self.last_signals:
+                            self.last_signals[symbol]['fire']          = False
+                            self.last_signals[symbol]['signal']        = 'HOLD'
+                            self.last_signals[symbol]['hmm_blocked']   = True
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
 
@@ -1628,6 +1712,12 @@ class LiveEngine:
         atr       = float(result.get('atr', price * 0.015))
         atr_pct   = float(result.get('atr_pct', atr / price * 100 if price > 0 else 1.5))
 
+        # Apply HMM ATR multiplier: VOLATILE_EXPANSION widens stops (1.5×),
+        # TRENDING tightens them (0.9×), etc.
+        _hmm_atr  = float(result.get('hmm_atr_mult', 1.0))
+        _hmm_pscl = float(result.get('hmm_position_scale', 1.0))
+        atr_mult  = round(atr_mult * _hmm_atr, 3)
+
         # ── Dynamic position sizing (replaces fixed wallet.position_size()) ───
         if regime is not None and quality_score > 0:
             pos_value = self.risk_engine.calculate_position_size(
@@ -1636,6 +1726,8 @@ class LiveEngine:
                 regime        = regime,
                 atr_pct       = atr_pct,
             )
+            # HMM position scale: reduces size in choppy/volatile/distribution regimes
+            pos_value = round(pos_value * _hmm_pscl, 2)
             # Cap at wallet max_position_usdt
             pos_value = min(pos_value, self.wallet.max_position_usdt)
 
@@ -1800,6 +1892,11 @@ class LiveEngine:
             'funding_rate', 'funding_bias', 'oi_trend', 'oi_change_1h_pct', 'oi_zscore',
             'session', 'session_note', 'fear_greed',
             'scalper_view', 'day_trader_view', 'swing_view',
+            # HMM regime intelligence fields
+            'hmm_regime', 'hmm_confidence', 'hmm_state_id',
+            'hmm_transition_risk', 'hmm_stability', 'hmm_available',
+            'hmm_conf_adjustment', 'hmm_atr_mult', 'hmm_position_scale',
+            'hmm_transition_warning',
         )
         for k in _CONTEXT_KEYS:
             if k in result:

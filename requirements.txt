@@ -111,3 +111,4 @@ dnspython==2.8.0
 email-validator==2.3.0
 
 
+hmmlearn==0.3.3

@@ -677,6 +677,38 @@ class Predictor:
         result['atr_multiplier'] = atr_mult
         # Rich market context for all trader types
         result.update(self._extract_market_context(df, price, atr, atr_mult))
+
+        # ── HMM regime intelligence ───────────────────────────────────────────
+        # Runs AFTER the XGBoost signal so it never blocks direction prediction.
+        # The HMM state is attached as hmm_* fields to the result dict.
+        # live_engine.py reads these fields to modulate thresholds and stops.
+        # If no HMM model exists for this symbol, all hmm_* fields default to
+        # neutral values and existing behavior is completely unchanged.
+        try:
+            from src.ml.hmm_regime import get_pool as _hmm_pool
+            hmm_state = _hmm_pool().infer(self.symbol, df)
+            result['hmm_regime']             = hmm_state.regime
+            result['hmm_confidence']         = hmm_state.confidence
+            result['hmm_state_id']           = hmm_state.state_id
+            result['hmm_state_probs']        = hmm_state.state_probs
+            result['hmm_transition_risk']    = hmm_state.transition_risk
+            result['hmm_stability']          = hmm_state.regime_stability
+            result['hmm_conf_adjustment']    = hmm_state.confidence_adjustment
+            result['hmm_atr_mult']           = hmm_state.atr_multiplier
+            result['hmm_position_scale']     = hmm_state.position_scale
+            result['hmm_trade_allowed']      = hmm_state.trade_allowed
+            result['hmm_available']          = hmm_state.hmm_available
+            # Early warning: imminent regime transition
+            engine   = _hmm_pool().get(self.symbol)
+            result['hmm_transition_warning'] = engine.get_transition_warning()
+        except Exception as _hmm_err:
+            result['hmm_regime']          = 'UNKNOWN'
+            result['hmm_available']       = False
+            result['hmm_conf_adjustment'] = 0.0
+            result['hmm_atr_mult']        = 1.0
+            result['hmm_position_scale']  = 1.0
+            result['hmm_trade_allowed']   = True
+
         return result
 
     @staticmethod
