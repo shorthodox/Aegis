@@ -605,8 +605,8 @@ class Predictor:
             # High-conviction signals (>= override threshold) bypass VETO_HARD but
             # still respect VETO_EXTREME — an 80% bearish technical consensus should
             # never be traded long, even if the model is highly confident.
-            VETO_HARD    = 0.25   # strong contradiction → block all signals
-            VETO_EXTREME = 0.55   # extreme contradiction → block even high-conviction
+            VETO_HARD    = 0.05   # strong contradiction → block all signals
+            VETO_EXTREME = 0.35   # extreme contradiction → block even high-conviction
 
             if fire:
                 total_conf  = _fv('total_confluence')
