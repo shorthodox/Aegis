@@ -204,95 +204,176 @@ FLEET_SYMBOLS = [
 ]
 
 FEATURE_ADDONS = [
-    # ── S&R / structural ──────────────────────────────────────────
-    'pct_dist_to_resistance', 'pct_dist_to_support', 'range_position_score',
-    'is_at_support', 'is_at_resistance', 'rolling_resistance', 'rolling_support',
-    # ── Macro regime ─────────────────────────────────────────────
-    'macro_trend_1d', 'macro_trend_1w', 'macro_confluence_score',
-    # ── Candlestick patterns ──────────────────────────────────────
-    'CDL_DOJI', 'CDL_HAMMER', 'CDL_SHOOTINGSTAR',
-    'CDL_BULL_ENGULFING', 'CDL_BEAR_ENGULFING',
-    'CDL_MORNINGSTAR', 'CDL_EVENINGSTAR',
-    # ── Bar microstructure ────────────────────────────────────────
-    'close_position', 'bar_body_pct', 'upper_wick_pct', 'lower_wick_pct', 'bar_direction',
-    # ── Time / session ────────────────────────────────────────────
-    'hour_sin', 'hour_cos', 'dow_sin', 'dow_cos',
-    # ── Volume delta (CVD) ────────────────────────────────────────
-    'volume_delta', 'volume_delta_14',
-    # ── Rolling VWAP ─────────────────────────────────────────────
+    # ══════════════════════════════════════════════════════════════════════
+    # COMPLETE feature registry — every column prepare_features() outputs.
+    # feature_cols auto-picks up all df columns, so this list acts as both
+    # documentation AND a safety net that guarantees critical features are
+    # included even when a compute path fails silently.
+    # SHAP pruning runs per-token and eliminates any low-value column.
+    # ══════════════════════════════════════════════════════════════════════
+
+    # ── Returns & price deltas ────────────────────────────────────────────
+    'returns_1h', 'returns_4h', 'log_returns',
+    'ret_1h', 'ret_4h', 'ret_12h', 'ret_24h',
+    'close_delta_1', 'close_delta_4', 'close_delta_12',
+    'returns_1h_delta_1', 'returns_1h_delta_4', 'returns_1h_delta_12',
+    'close_decay_mean_24', 'close_decay_std_24',
+    'returns_1h_decay_mean_24', 'returns_1h_decay_std_24',
+
+    # ── EMAs & cross signals ──────────────────────────────────────────────
+    'ema_9', 'ema_21', 'ema_50', 'ema_100', 'ema_200',
+    'dist_ema_9', 'dist_ema_21', 'dist_ema_50', 'dist_ema_100', 'dist_ema_200',
+    'ema_9_21_cross', 'ema_50_200_cross',
+
+    # ── MA variants & distances ───────────────────────────────────────────
+    'hma_20', 'dist_hma20',
+    'kama_10', 'dist_kama',
+    'tema_21', 'dema_21',
+    't3_5', 'vwma_20', 'dist_vwma20',
+
+    # ── VWAP family ───────────────────────────────────────────────────────
+    'vwap', 'dist_vwap',
     'rolling_vwap_24', 'dist_rolling_vwap',
-    # ── Multi-period RSI ─────────────────────────────────────────
-    'rsi_7', 'rsi_21',
-    # ── MA variants & distances ──────────────────────────────────
-    'hma_20', 'dist_hma20', 'kama_10', 'dist_kama',
-    'tema_21', 'dema_21', 't3_5', 'vwma_20', 'dist_vwma20',
-    # ── Trend ────────────────────────────────────────────────────
+    'avwap_50', 'avwap_100', 'avwap_200',
+    'dist_avwap_50', 'dist_avwap_100', 'dist_avwap_200',
+    'vwap_decay_mean_24', 'vwap_decay_std_24',
+    'vwap_delta_1', 'vwap_delta_4', 'vwap_delta_12',
+
+    # ── Trend indicators ──────────────────────────────────────────────────
+    'adx_14',
     'supertrend', 'supertrend_dir', 'supertrend_dist',
     'sar_trend', 'sar_dist',
     'donchian_width', 'donchian_position',
-    # ── Momentum / oscillators ────────────────────────────────────
+    'linreg_slope_14', 'linreg_r2_14',
+    'choppiness', 'efficiency_ratio_10',
+    'ema_alignment', 'ema_alignment_quality',
+    'fvg_distance',                         # fair-value-gap distance
+
+    # ── Momentum / oscillators ────────────────────────────────────────────
+    'rsi_7', 'rsi_14', 'rsi_21',
+    'macd', 'macd_hist', 'macd_signal',
+    'stoch_k', 'stoch_d',
+    'williams_r',
     'cci_20', 'tsi', 'cmo_14', 'dpo_20',
     'ppo', 'ppo_signal', 'trix_15',
     'kst', 'kst_signal', 'schaff_tc',
     'awesome_osc', 'bop', 'eom_14',
     'fisher', 'fisher_sig',
     'rvi_osc', 'rvi_sig', 'roc_14',
-    # ── Volatility / bands ────────────────────────────────────────
-    'bb_pct_b', 'parkinson_vol', 'gk_vol',
-    'atr_band_position', 'starc_position',
-    'rvi_vol', 'gaussian_position',
-    # ── Volume indicators ─────────────────────────────────────────
-    'pvt', 'kvo', 'kvo_signal',
-    # ── Market structure / SMC ────────────────────────────────────
-    'bos_up', 'bos_down', 'bos_state',
-    'choch_bull', 'choch_bear', 'structure_bias',
-    'dist_bull_ob', 'dist_bear_ob',
-    'fib_dist_236', 'fib_dist_382', 'fib_dist_500', 'fib_dist_618', 'fib_range_pct',
-    'pivot', 'r1', 's1', 'r2', 's2',
-    'dist_pivot', 'dist_r1', 'dist_s1', 'dist_r2', 'dist_s2',
-    # ── Statistical / quant ───────────────────────────────────────
-    'se_position', 'se_mid', 'quantile_position', 'hurst', 'entropy',
-    # ── Sign-based confluence (kept for backward compat, XGBoost learns from both) ──
-    'momentum_confluence', 'trend_confluence', 'volume_confluence',
-    'bands_confluence', 'smart_money_confluence', 'candle_confluence',
-    'total_confluence',
-    # ── Soft (percentile-rank) confluence — richer gradient than sign-based ──────
-    'prc_trend', 'prc_momentum', 'prc_volume', 'prc_bands', 'prc_smart_money',
-    'prc_total',
-    # ── Ichimoku Cloud — computed but previously unregistered ────────────────────
+    'ultimate_osc',
+
+    # ── Volatility & bands ────────────────────────────────────────────────
+    'atr_14',
+    'bb_pct_b', 'bb_width_percentile',
+    'keltner_upper', 'keltner_lower', 'keltner_width',
+    'atr_band_position', 'starc_position', 'gaussian_position',
+    'parkinson_vol', 'gk_vol', 'rvi_vol',
+    'historical_volatility', 'rolling_volatility',
+    'volatility_regime', 'volatility_skew', 'volatility_kurt',
+    'price_zscore_200',
+
+    # ── Volume indicators ─────────────────────────────────────────────────
+    'volume_zscore', 'relative_volume', 'vol_velocity',
+    'volume_atr_efficiency',
+    'volume_delta', 'volume_delta_14',
+    'volume_delta_1', 'volume_delta_4', 'volume_delta_12',
+    'volume_decay_mean_24', 'volume_decay_std_24',
+    'cmf_20', 'mfi_14',
+    'obv', 'acc_dist', 'pvt',
+    'kvo', 'kvo_signal',
+    'volume_regime',
+
+    # ── Squeeze Momentum ──────────────────────────────────────────────────
+    'sqz_on', 'sqz_off', 'sqz_momentum',
+    'is_squeeze',
+
+    # ── Elder Ray ─────────────────────────────────────────────────────────
+    'elder_bull', 'elder_bear', 'elder_bull_bear',
+
+    # ── Aroon / Vortex / Force ────────────────────────────────────────────
+    'aroon_up', 'aroon_down', 'aroon_osc',
+    'vi_plus', 'vi_minus',
+    'force_index',
+
+    # ── Ichimoku Cloud ────────────────────────────────────────────────────
     'ichimoku_tenkan', 'ichimoku_kijun', 'ichimoku_senkou_a', 'ichimoku_senkou_b',
     'ichi_above_cloud', 'ichi_cloud_bull', 'ichi_tk_cross',
     'ichi_dist_tenkan', 'ichi_dist_kijun', 'ichi_dist_cloud_top',
-    # ── Aroon / Choppiness / Keltner — computed but unregistered ────────────────
-    'aroon_up', 'aroon_down', 'aroon_osc',
-    'choppiness',
-    'keltner_width',                        # BB/KC width ratio used in squeeze
-    # ── Linear Regression quality ────────────────────────────────────────────────
-    'linreg_r2_14',                         # R² of close vs linreg — trend quality
-    # ── Vortex / Force Index — computed but unregistered ────────────────────────
-    'vi_plus', 'vi_minus',                  # vortex bullish/bearish
-    'force_index',                          # force_index_13
-    # ── Squeeze Momentum (NEW) ───────────────────────────────────────────────────
-    'sqz_on', 'sqz_off', 'sqz_momentum',
-    # ── Elder Ray Index (NEW) ────────────────────────────────────────────────────
-    'elder_bull', 'elder_bear', 'elder_bull_bear',
-    # ── Volume Pressure Composite (NEW) ──────────────────────────────────────────
+
+    # ── Statistical / quant ───────────────────────────────────────────────
+    'se_position', 'se_mid',
+    'quantile_position',
+    'hurst', 'entropy',
+
+    # ── Volume Pressure Composite ─────────────────────────────────────────
     'candle_pressure', 'rolling_buy_ratio',
-    # ── Multi-period EMA Trend Alignment (NEW) ───────────────────────────────────
-    'ema_alignment', 'ema_alignment_quality',
-    # ── Crypto Funding Rate derived (NEW) ────────────────────────────────────────
-    'funding_slope_3', 'funding_slope_8',
-    'funding_extreme_long', 'funding_extreme_short', 'funding_neutral',
-    'funding_cum_8',
-    # ── Futures base (zero-filled when spot-only) ────────────────────────────────
-    'funding_rate', 'funding_rate_ma8', 'funding_rate_zscore',
-    'open_interest', 'oi_change_1h', 'oi_change_4h', 'oi_zscore',
-    # ── OI derived (NEW) ─────────────────────────────────────────────────────────
-    'oi_chg_8h', 'oi_chg_24h', 'oi_px_agreement',
-    # ── Token-vs-BTC relative performance ────────────────────────────────────────
+
+    # ── Bar microstructure ────────────────────────────────────────────────
+    'close_position', 'bar_body_pct', 'upper_wick_pct', 'lower_wick_pct', 'bar_direction',
+
+    # ── Candlestick patterns ──────────────────────────────────────────────
+    'CDL_DOJI', 'CDL_HAMMER', 'CDL_SHOOTINGSTAR',
+    'CDL_BULL_ENGULFING', 'CDL_BEAR_ENGULFING',
+    'CDL_MORNINGSTAR', 'CDL_EVENINGSTAR',
+
+    # ── Market structure / SMC ────────────────────────────────────────────
+    'bos_up', 'bos_down', 'bos_state',
+    'choch_bull', 'choch_bear', 'structure_bias',
+    'dist_bull_ob', 'dist_bear_ob',
+
+    # ── S&R / Fibonacci / Pivots ──────────────────────────────────────────
+    'pct_dist_to_resistance', 'pct_dist_to_support', 'range_position_score',
+    'is_at_support', 'is_at_resistance', 'rolling_resistance', 'rolling_support',
+    'fib_dist_236', 'fib_dist_382', 'fib_dist_500', 'fib_dist_618', 'fib_range_pct',
+    'pivot', 'r1', 's1', 'r2', 's2',
+    'dist_pivot', 'dist_r1', 'dist_s1', 'dist_r2', 'dist_s2',
+
+    # ── Regime classification ─────────────────────────────────────────────
+    'trend_regime', 'volume_regime', 'market_phase',
+
+    # ── Time / session ────────────────────────────────────────────────────
+    'hour_sin', 'hour_cos', 'dow_sin', 'dow_cos',
+
+    # ── Macro & weekly features ───────────────────────────────────────────
+    'macro_trend_1d', 'macro_trend_1w', 'macro_confluence_score',
+    'weekly_rsi', 'weekly_trend',
+    'weekly_macd', 'weekly_macd_hist', 'weekly_macd_signal',
+    'weekly_ema200', 'weekly_sma200',
+    'dist_weekly_ema200', 'dist_weekly_sma200',
+    'weekly_bos_up', 'weekly_bos_down', 'weekly_structure_bias',
+
+    # ── Sentiment ─────────────────────────────────────────────────────────
+    'fear_greed_value', 'fear_greed_signal',
+    'news_score', 'news_velocity',
+
+    # ── Confluence — sign-based (kept alongside soft; SHAP decides winner) ─
+    'momentum_confluence', 'trend_confluence', 'volume_confluence',
+    'bands_confluence', 'smart_money_confluence', 'candle_confluence',
+    'total_confluence',
+
+    # ── Confluence — soft (percentile-rank) ───────────────────────────────
+    # Computed by compute_soft_confluence_features() after prepare_features().
+    # Added to df before feature_cols is built so always included.
+    'prc_trend', 'prc_momentum', 'prc_volume', 'prc_bands', 'prc_smart_money',
+    'prc_total',
+
+    # ── Token-vs-BTC relative performance ────────────────────────────────
     'rel_perf_1h', 'rel_perf_4h', 'rel_perf_24h',
     'btc_ratio_ma_dist',
     'btc_1h_return', 'btc_4h_return', 'btc_dist_ema200',
+    'btc_corr_24h',
+
+    # ── Futures base (zero-filled when spot-only token) ───────────────────
+    'funding_rate', 'funding_rate_ma8', 'funding_rate_zscore',
+    'open_interest', 'oi_change_1h', 'oi_change_4h', 'oi_zscore',
+
+    # ── Funding rate derived signals ──────────────────────────────────────
+    'funding_slope_3', 'funding_slope_8',
+    'funding_extreme_long', 'funding_extreme_short', 'funding_neutral',
+    'funding_cum_8',
+
+    # ── OI vs price regime ────────────────────────────────────────────────
+    'oi_chg_8h', 'oi_chg_24h', 'oi_px_agreement',
 ]
 
 
