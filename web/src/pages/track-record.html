@@ -428,7 +428,7 @@
                     <div style="font-size:0.9rem;font-weight:800;color:#fff;letter-spacing:0.05em;">AEGIS-1 Signal Engine</div>
                     <div style="font-size:0.65rem;color:#4b6280;letter-spacing:0.1em;text-transform:uppercase;">60 tokens · 1h candles · meta-labeling · 8-layer gate</div>
                 </div>
-                <a href="#" onclick="loadTraderRecord();return false;" style="margin-left:auto;font-size:0.7rem;color:rgba(0,242,255,0.5);text-decoration:none;" title="Refresh">&#8635;</a>
+                <a href="#" onclick="window.refreshAegisTrackRecord && window.refreshAegisTrackRecord();return false;" style="margin-left:auto;font-size:0.7rem;color:rgba(0,242,255,0.5);text-decoration:none;" title="Refresh">&#8635;</a>
             </div>
             <div class="tr-panel-body">
                 <!-- History note -->
@@ -708,9 +708,9 @@
         function renderTraderTab(signals) {
             var closed = signals.filter(function(s) { return s.outcome === 'WIN' || s.outcome === 'LOSS'; });
             var stats  = computeStats(closed);
-            setText('ttr-total',  stats.total  || '—');
-            setText('ttr-wins',   stats.wins   || '—');
-            setText('ttr-losses', stats.losses || '—');
+            setText('ttr-total',  closed.length > 0 ? stats.total  : '—');
+            setText('ttr-wins',   closed.length > 0 ? stats.wins   : '—');
+            setText('ttr-losses', closed.length > 0 ? stats.losses : '—');
             setText('ttr-wr',     stats.total > 0 ? Math.round(stats.win_rate * 100) + '%' : '—');
             var allConf = signals.filter(function(s) { return s.confidence > 0; });
             var avgConf = allConf.length ? allConf.reduce(function(a,s){return a+(s.confidence||0);},0)/allConf.length : 0;

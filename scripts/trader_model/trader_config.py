@@ -56,6 +56,7 @@ MODES = {
         'description':      'Fast 5-minute entries, quick exits (20-60 min hold)',
         'max_hold_bars':    12,
         'candles_fetch':    500,
+        'min_confidence_override': 0.65,  # 5m is noisier; lower floor vs profile default
     },
     'intraday': {
         'timeframe':        '1h',

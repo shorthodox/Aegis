@@ -43,10 +43,133 @@ log = logging.getLogger(__name__)
 # Label mapping from calibrated model output (0=SELL, 1=HOLD, 2=BUY)
 _LABEL_MAP = {0: 'SELL', 1: 'HOLD', 2: 'BUY'}
 
-# Minimum fraction of 25 strategy scores that must agree with the ML direction.
-# Blocks signals where the model fires but no underlying strategies support it.
-# 4/25 = 0.16 — intentionally low to only catch "zero-confluence" hallucinations.
-_MIN_CONFLUENCE = 0.16
+
+def _compute_confluence(raw_last: "pd.Series", df: "pd.DataFrame") -> Dict[str, float]:
+    """
+    Compute the same 6-category confluence scorecard used by the live engine,
+    derived entirely from the fe_* columns already in raw_features (no extra
+    API calls or heavy prepare_features() invocation).
+
+    Category → fe_* features used
+    ───────────────────────────────
+    Trend      fe_ema20_slope, fe_ema50_slope, fe_vwap_dev, fe_efficiency_ratio
+    Momentum   fe_rsi_14, fe_rsi_7, fe_stoch_rsi_k, fe_macd_hist, fe_williams_r
+    Volume     fe_cmf_20, fe_mfi_14
+    Bands      fe_bb_pct_b, fe_price_zscore
+    SmartMoney fe_price_zscore × fe_efficiency_ratio  (proxy)
+    Candle     sign(close − open) × 0.5               (bar direction)
+
+    Returns dict with keys: total, trend, momentum, volume, bands,
+    smart_money, candle, summary  — all in [0, 10] ([−1,+1] → _c10).
+    """
+    def _g(col: str, default: float = 0.0) -> float:
+        v = raw_last.get(col, default)
+        try:
+            f = float(v)
+            return default if (f != f) else f   # NaN guard
+        except Exception:
+            return default
+
+    def _c10(x: float) -> float:
+        return round(float(np.clip(x, -1.0, 1.0) + 1.0) / 2.0 * 10.0, 1)
+
+    def _sign(x: float, dead: float = 0.02) -> float:
+        return 1.0 if x > dead else (-1.0 if x < -dead else 0.0)
+
+    # ── Momentum ──────────────────────────────────────────────────────────
+    # fe_rsi_*   : 0–1 (normalised RSI/100), neutral at 0.5
+    # fe_stoch_* : 0–1, neutral at 0.5
+    # fe_williams_r: 0–1 (shifted: 0=oversold/bullish, 1=overbought/bearish)
+    # fe_macd_hist: −1..+1 (price-normalised histogram)
+    mom_parts = [
+        _sign(_g('fe_rsi_14')      - 0.5),
+        _sign(_g('fe_rsi_7')       - 0.5),
+        _sign(_g('fe_stoch_rsi_k') - 0.5),
+        _sign(_g('fe_macd_hist')),
+        _sign(0.5 - _g('fe_williams_r')),   # inverted: low WR = oversold = bullish
+    ]
+    valid_mom = [p for p in mom_parts if p != 0.0]
+    mom_raw = float(np.mean(valid_mom)) if valid_mom else 0.0
+
+    # ── Trend ─────────────────────────────────────────────────────────────
+    # fe_ema*_slope: −1..+1 (normalised 5-bar EMA slope)
+    # fe_vwap_dev:  −1..+1 (normalised distance from VWAP)
+    # fe_efficiency_ratio: 0–1 (trend quality multiplier)
+    er = max(_g('fe_efficiency_ratio', 0.5), 0.25)
+    trend_parts = [_g('fe_ema20_slope'), _g('fe_ema50_slope'), _g('fe_vwap_dev')]
+    trend_raw = float(np.clip(np.mean(trend_parts) * er, -1.0, 1.0))
+
+    # ── Volume / Flow ─────────────────────────────────────────────────────
+    # fe_cmf_20 : −1..+1 (Chaikin Money Flow)
+    # fe_mfi_14 : 0–1 (MFI normalised), neutral at 0.5
+    cmf   = _g('fe_cmf_20')
+    mfi_c = (_g('fe_mfi_14') - 0.5) * 2.0
+    vol_raw = float(np.clip((cmf + mfi_c) / 2.0, -1.0, 1.0))
+
+    # ── Bands / Price Position ────────────────────────────────────────────
+    # fe_bb_pct_b   : 0–1 (0=below lower band bearish, 1=above upper bullish)
+    # fe_price_zscore: −1..+1 (where price sits historically)
+    bb_c     = (_g('fe_bb_pct_b', 0.5) - 0.5) * 2.0
+    p_zscore = _g('fe_price_zscore')
+    bands_raw = float(np.clip((bb_c + p_zscore) / 2.0, -1.0, 1.0))
+
+    # ── Smart Money (proxy) ───────────────────────────────────────────────
+    # No BOS/CHoCH in fe_ features; proxy: directional z-score × trend quality
+    smart_raw = float(np.clip(p_zscore * er, -1.0, 1.0))
+
+    # ── Candle (bar direction) ────────────────────────────────────────────
+    try:
+        bar_dir = float(np.sign(float(df['close'].iloc[-1]) - float(df['open'].iloc[-1])))
+    except Exception:
+        bar_dir = 0.0
+    candle_raw = float(np.clip(bar_dir * 0.5, -1.0, 1.0))
+
+    # ── Weighted total (same weights as compute_category_confluence) ──────
+    w_total = float(np.clip(
+        (trend_raw  * 2.0 + mom_raw   * 1.5 + vol_raw   * 1.5 +
+         smart_raw  * 1.5 + bands_raw * 1.0 + candle_raw * 0.5) / 8.0,
+        -1.0, 1.0,
+    ))
+
+    return {
+        'total':       _c10(w_total),
+        'trend':       _c10(trend_raw),
+        'momentum':    _c10(mom_raw),
+        'volume':      _c10(vol_raw),
+        'smart_money': _c10(smart_raw),
+        'bands':       _c10(bands_raw),
+        'candle':      _c10(candle_raw),
+        'summary':     (
+            'Strong Bullish'   if w_total >=  0.4 else
+            'Moderate Bullish' if w_total >=  0.1 else
+            'Neutral'          if w_total >= -0.1 else
+            'Moderate Bearish' if w_total >= -0.4 else
+            'Strong Bearish'
+        ),
+    }
+
+
+def _passes_confluence_gate(confluence: Dict[str, float], direction: str) -> bool:
+    """
+    Same two-tier gate as live_engine.py:
+    1. Primary  — total leans in signal direction (BUY ≥ 5.5, SELL ≤ 4.5)
+    2. Override — trend + momentum strongly agree AND total not catastrophically opposed
+    """
+    ct  = confluence.get('total',    5.0)
+    ctr = confluence.get('trend',    5.0)
+    cm  = confluence.get('momentum', 5.0)
+    tm_avg = (ctr * 2.0 + cm * 1.5) / 3.5
+
+    if direction == 'BUY':
+        primary  = ct >= 5.5
+        override = tm_avg >= 6.5 and ct >= 3.5
+    elif direction == 'SELL':
+        primary  = ct <= 4.5
+        override = tm_avg <= 3.5 and ct <= 6.5
+    else:
+        return False
+
+    return primary or override
 
 
 # ── Virtual Wallet ─────────────────────────────────────────────────────────────

@@ -1,0 +1,470 @@
+{
+  "symbol": "MINA/USDT",
+  "updated_at": "2026-05-31T09:19:32.529525+00:00",
+  "n_bars": 3722,
+  "n_train_bars": 2605,
+  "n_eval_bars": 1117,
+  "threshold_type": "directional_prob",
+  "global": {
+    "atr_multiplier": 1.25,
+    "lookahead_bars": 30,
+    "buy_threshold": 0.84,
+    "buy_margin": 0.0,
+    "buy_max_hold": 0.4,
+    "sell_threshold": 0.3,
+    "sell_margin": 0.35,
+    "sell_max_hold": 0.4,
+    "precision_buy": 0.6154,
+    "precision_sell": 0.8857,
+    "coverage_buy": 0.0122,
+    "coverage_sell": 0.0655,
+    "buy_ok": true,
+    "sell_ok": true
+  },
+  "regime_boundaries": {
+    "vol_p33": 413368.76958333346,
+    "vol_p67": 706004.1327916669,
+    "atr_pct_p33": 0.009322232471142871,
+    "atr_pct_p67": 0.012786124523488032,
+    "momentum_p33": -0.016100164099974796,
+    "momentum_p67": 0.012177859449827584
+  },
+  "regimes": {
+    "low_low_down": {
+      "n_bars": 53,
+      "skipped": false,
+      "buy_threshold": 0.68,
+      "buy_margin": 0.0,
+      "buy_max_hold": 0.4,
+      "sell_threshold": 0.5,
+      "sell_margin": 0.0,
+      "sell_max_hold": 1.0,
+      "precision_buy": 0.6667,
+      "precision_sell": 0.0,
+      "coverage_buy": 0.2264,
+      "coverage_sell": 0.0,
+      "n_signals_buy": 12,
+      "n_signals_sell": 0,
+      "buy_ok": true,
+      "sell_ok": false
+    },
+    "low_low_flat": {
+      "n_bars": 231,
+      "skipped": false,
+      "buy_threshold": 0.56,
+      "buy_margin": 0.2,
+      "buy_max_hold": 0.4,
+      "sell_threshold": 0.3,
+      "sell_margin": 0.05,
+      "sell_max_hold": 0.4,
+      "precision_buy": 0.6579,
+      "precision_sell": 0.7,
+      "coverage_buy": 0.1645,
+      "coverage_sell": 0.1732,
+      "n_signals_buy": 38,
+      "n_signals_sell": 40,
+      "buy_ok": true,
+      "sell_ok": true
+    },
+    "low_low_up": {
+      "n_bars": 62,
+      "skipped": false,
+      "buy_threshold": 0.62,
+      "buy_margin": 0.0,
+      "buy_max_hold": 0.4,
+      "sell_threshold": 0.3,
+      "sell_margin": 0.05,
+      "sell_max_hold": 0.4,
+      "precision_buy": 0.5,
+      "precision_sell": 0.7778,
+      "coverage_buy": 0.0968,
+      "coverage_sell": 0.2903,
+      "n_signals_buy": 6,
+      "n_signals_sell": 18,
+      "buy_ok": false,
+      "sell_ok": true
+    },
+    "low_med_down": {
+      "n_bars": 63,
+      "skipped": false,
+      "buy_threshold": 0.78,
+      "buy_margin": 0.0,
+      "buy_max_hold": 0.4,
+      "sell_threshold": 0.4,
+      "sell_margin": 0.05,
+      "sell_max_hold": 0.4,
+      "precision_buy": 0.8,
+      "precision_sell": 1.0,
+      "coverage_buy": 0.0794,
+      "coverage_sell": 0.0952,
+      "n_signals_buy": 5,
+      "n_signals_sell": 6,
+      "buy_ok": true,
+      "sell_ok": true
+    },
+    "low_med_flat": {
+      "n_bars": 23,
+      "skipped": false,
+      "buy_threshold": 0.3,
+      "buy_margin": 0.15,
+      "buy_max_hold": 0.4,
+      "sell_threshold": 0.3,
+      "sell_margin": 0.0,
+      "sell_max_hold": 0.4,
+      "precision_buy": 0.625,
+      "precision_sell": 1.0,
+      "coverage_buy": 0.3478,
+      "coverage_sell": 0.2174,
+      "n_signals_buy": 8,
+      "n_signals_sell": 5,
+      "buy_ok": true,
+      "sell_ok": true
+    },
+    "low_med_up": {
+      "n_bars": 35,
+      "skipped": false,
+      "buy_threshold": 0.3,
+      "buy_margin": 0.0,
+      "buy_max_hold": 0.4,
+      "sell_threshold": 0.3,
+      "sell_margin": 0.0,
+      "sell_max_hold": 0.4,
+      "precision_buy": 0.0,
+      "precision_sell": 1.0,
+      "coverage_buy": 0.2,
+      "coverage_sell": 0.2857,
+      "n_signals_buy": 7,
+      "n_signals_sell": 10,
+      "buy_ok": false,
+      "sell_ok": true
+    },
+    "low_high_down": {
+      "n_bars": 12,
+      "skipped": false,
+      "buy_threshold": 0.3,
+      "buy_margin": 0.05,
+      "buy_max_hold": 0.45,
+      "sell_threshold": 0.5,
+      "sell_margin": 0.0,
+      "sell_max_hold": 1.0,
+      "precision_buy": 0.5556,
+      "precision_sell": 0.0,
+      "coverage_buy": 0.75,
+      "coverage_sell": 0.0,
+      "n_signals_buy": 9,
+      "n_signals_sell": 0,
+      "buy_ok": false,
+      "sell_ok": false
+    },
+    "low_high_flat": {
+      "n_bars": 6,
+      "skipped": true,
+      "reason": "too_few_bars (<10)"
+    },
+    "low_high_up": {
+      "n_bars": 0,
+      "skipped": true,
+      "reason": "too_few_bars (<10)"
+    },
+    "med_low_down": {
+      "n_bars": 45,
+      "skipped": false,
+      "buy_threshold": 0.3,
+      "buy_margin": 0.0,
+      "buy_max_hold": 0.4,
+      "sell_threshold": 0.3,
+      "sell_margin": 0.2,
+      "sell_max_hold": 0.4,
+      "precision_buy": 0.5263,
+      "precision_sell": 0.4,
+      "coverage_buy": 0.4222,
+      "coverage_sell": 0.1111,
+      "n_signals_buy": 19,
+      "n_signals_sell": 5,
+      "buy_ok": false,
+      "sell_ok": false
+    },
+    "med_low_flat": {
+      "n_bars": 72,
+      "skipped": false,
+      "buy_threshold": 0.3,
+      "buy_margin": 0.0,
+      "buy_max_hold": 0.4,
+      "sell_threshold": 0.7,
+      "sell_margin": 0.0,
+      "sell_max_hold": 0.4,
+      "precision_buy": 0.5789,
+      "precision_sell": 0.875,
+      "coverage_buy": 0.2639,
+      "coverage_sell": 0.1111,
+      "n_signals_buy": 19,
+      "n_signals_sell": 8,
+      "buy_ok": false,
+      "sell_ok": true
+    },
+    "med_low_up": {
+      "n_bars": 84,
+      "skipped": false,
+      "buy_threshold": 0.3,
+      "buy_margin": 0.0,
+      "buy_max_hold": 0.4,
+      "sell_threshold": 0.3,
+      "sell_margin": 0.35,
+      "sell_max_hold": 0.4,
+      "precision_buy": 0.5625,
+      "precision_sell": 1.0,
+      "coverage_buy": 0.381,
+      "coverage_sell": 0.0714,
+      "n_signals_buy": 32,
+      "n_signals_sell": 6,
+      "buy_ok": false,
+      "sell_ok": true
+    },
+    "med_med_down": {
+      "n_bars": 62,
+      "skipped": false,
+      "buy_threshold": 0.3,
+      "buy_margin": 0.3,
+      "buy_max_hold": 0.4,
+      "sell_threshold": 0.3,
+      "sell_margin": 0.0,
+      "sell_max_hold": 0.4,
+      "precision_buy": 0.6818,
+      "precision_sell": 0.2,
+      "coverage_buy": 0.3548,
+      "coverage_sell": 0.0806,
+      "n_signals_buy": 22,
+      "n_signals_sell": 5,
+      "buy_ok": true,
+      "sell_ok": false
+    },
+    "med_med_flat": {
+      "n_bars": 33,
+      "skipped": false,
+      "buy_threshold": 0.3,
+      "buy_margin": 0.15,
+      "buy_max_hold": 0.4,
+      "sell_threshold": 0.5,
+      "sell_margin": 0.0,
+      "sell_max_hold": 1.0,
+      "precision_buy": 0.2857,
+      "precision_sell": 0.0,
+      "coverage_buy": 0.2121,
+      "coverage_sell": 0.0,
+      "n_signals_buy": 7,
+      "n_signals_sell": 0,
+      "buy_ok": false,
+      "sell_ok": false
+    },
+    "med_med_up": {
+      "n_bars": 65,
+      "skipped": false,
+      "buy_threshold": 0.76,
+      "buy_margin": 0.0,
+      "buy_max_hold": 0.4,
+      "sell_threshold": 0.3,
+      "sell_margin": 0.2,
+      "sell_max_hold": 0.4,
+      "precision_buy": 0.5,
+      "precision_sell": 1.0,
+      "coverage_buy": 0.1846,
+      "coverage_sell": 0.1692,
+      "n_signals_buy": 12,
+      "n_signals_sell": 11,
+      "buy_ok": false,
+      "sell_ok": true
+    },
+    "med_high_down": {
+      "n_bars": 13,
+      "skipped": false,
+      "buy_threshold": 0.6,
+      "buy_margin": 0.0,
+      "buy_max_hold": 0.4,
+      "sell_threshold": 0.5,
+      "sell_margin": 0.0,
+      "sell_max_hold": 1.0,
+      "precision_buy": 0.6,
+      "precision_sell": 0.0,
+      "coverage_buy": 0.3846,
+      "coverage_sell": 0.0,
+      "n_signals_buy": 5,
+      "n_signals_sell": 0,
+      "buy_ok": true,
+      "sell_ok": false
+    },
+    "med_high_flat": {
+      "n_bars": 4,
+      "skipped": true,
+      "reason": "too_few_bars (<10)"
+    },
+    "med_high_up": {
+      "n_bars": 0,
+      "skipped": true,
+      "reason": "too_few_bars (<10)"
+    },
+    "high_low_down": {
+      "n_bars": 9,
+      "skipped": true,
+      "reason": "too_few_bars (<10)"
+    },
+    "high_low_flat": {
+      "n_bars": 4,
+      "skipped": true,
+      "reason": "too_few_bars (<10)"
+    },
+    "high_low_up": {
+      "n_bars": 12,
+      "skipped": false,
+      "buy_threshold": 0.5,
+      "buy_margin": 0.0,
+      "buy_max_hold": 1.0,
+      "sell_threshold": 0.3,
+      "sell_margin": 0.0,
+      "sell_max_hold": 0.4,
+      "precision_buy": 0.0,
+      "precision_sell": 1.0,
+      "coverage_buy": 0.0,
+      "coverage_sell": 0.4167,
+      "n_signals_buy": 0,
+      "n_signals_sell": 5,
+      "buy_ok": false,
+      "sell_ok": true
+    },
+    "high_med_down": {
+      "n_bars": 30,
+      "skipped": false,
+      "buy_threshold": 0.74,
+      "buy_margin": 0.0,
+      "buy_max_hold": 0.4,
+      "sell_threshold": 0.3,
+      "sell_margin": 0.0,
+      "sell_max_hold": 0.4,
+      "precision_buy": 0.7,
+      "precision_sell": 1.0,
+      "coverage_buy": 0.3333,
+      "coverage_sell": 0.1667,
+      "n_signals_buy": 10,
+      "n_signals_sell": 5,
+      "buy_ok": true,
+      "sell_ok": true
+    },
+    "high_med_flat": {
+      "n_bars": 19,
+      "skipped": false,
+      "buy_threshold": 0.3,
+      "buy_margin": 0.35,
+      "buy_max_hold": 0.4,
+      "sell_threshold": 0.5,
+      "sell_margin": 0.0,
+      "sell_max_hold": 1.0,
+      "precision_buy": 1.0,
+      "precision_sell": 0.0,
+      "coverage_buy": 0.3684,
+      "coverage_sell": 0.0,
+      "n_signals_buy": 7,
+      "n_signals_sell": 0,
+      "buy_ok": true,
+      "sell_ok": false
+    },
+    "high_med_up": {
+      "n_bars": 66,
+      "skipped": false,
+      "buy_threshold": 0.3,
+      "buy_margin": 0.05,
+      "buy_max_hold": 0.6,
+      "sell_threshold": 0.3,
+      "sell_margin": 0.2,
+      "sell_max_hold": 0.4,
+      "precision_buy": 0.875,
+      "precision_sell": 1.0,
+      "coverage_buy": 0.1212,
+      "coverage_sell": 0.197,
+      "n_signals_buy": 8,
+      "n_signals_sell": 13,
+      "buy_ok": true,
+      "sell_ok": true
+    },
+    "high_high_down": {
+      "n_bars": 4,
+      "skipped": true,
+      "reason": "too_few_bars (<10)"
+    },
+    "high_high_flat": {
+      "n_bars": 5,
+      "skipped": true,
+      "reason": "too_few_bars (<10)"
+    },
+    "high_high_up": {
+      "n_bars": 57,
+      "skipped": false,
+      "buy_threshold": 0.5,
+      "buy_margin": 0.0,
+      "buy_max_hold": 1.0,
+      "sell_threshold": 0.3,
+      "sell_margin": 0.0,
+      "sell_max_hold": 0.6,
+      "precision_buy": 0.0,
+      "precision_sell": 0.4,
+      "coverage_buy": 0.0,
+      "coverage_sell": 0.0877,
+      "n_signals_buy": 0,
+      "n_signals_sell": 5,
+      "buy_ok": false,
+      "sell_ok": false
+    }
+  },
+  "diagnostics": {
+    "atr_search": {
+      "atr_multiplier": 1.25,
+      "atr_score": 0.1731,
+      "atr_top5": [
+        {
+          "mult": 1.25,
+          "score": 0.1731
+        },
+        {
+          "mult": 1.5,
+          "score": 0.16785
+        },
+        {
+          "mult": 1.75,
+          "score": 0.1626
+        },
+        {
+          "mult": 1.0,
+          "score": 0.16172
+        },
+        {
+          "mult": 2.0,
+          "score": 0.15736
+        }
+      ]
+    },
+    "lookahead_search": {
+      "lookahead_bars": 30,
+      "lookahead_score": 0.17104,
+      "lookahead_top5": [
+        {
+          "lookahead": 30,
+          "score": 0.17104
+        },
+        {
+          "lookahead": 36,
+          "score": 0.17043
+        },
+        {
+          "lookahead": 48,
+          "score": 0.16769
+        },
+        {
+          "lookahead": 60,
+          "score": 0.16755
+        },
+        {
+          "lookahead": 24,
+          "score": 0.16661
+        }
+      ]
+    }
+  }
+}

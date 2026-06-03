@@ -396,6 +396,7 @@ def _update_track_record(signals_data: dict, live_prices: dict) -> None:
 
         signal_type   = sig.get("signal", "HOLD")
         signal_id     = sig.get("signal_id")
+        fire          = bool(sig.get("fire", False))
         if not signal_id:
             continue
 
@@ -419,8 +420,10 @@ def _update_track_record(signals_data: dict, live_prices: dict) -> None:
                 3
             )
 
-            # Primary TP: opposite model signal fires (this is the reversal exit)
-            opposite_fired = signal_id not in _tr_seen_ids and (
+            # Primary TP: opposite model signal fires (this is the reversal exit).
+            # Requires fire=True — a weak opposite prediction must not close the position.
+            # Does NOT depend on _tr_seen_ids: that set guards entries, not exits.
+            opposite_fired = fire and (
                 (direction == "LONG"  and signal_type in _SELL_SIGNALS) or
                 (direction == "SHORT" and signal_type in _BUY_SIGNALS)
             )
@@ -471,6 +474,9 @@ def _update_track_record(signals_data: dict, live_prices: dict) -> None:
                 continue  # Position still open, nothing to do
 
         # ── Open a new position if the signal is actionable and fresh ───────
+        # Only fire=True signals should create track-record entries.
+        if not fire:
+            continue
         if signal_type not in _ACTIONABLE:
             continue
         if signal_id in _tr_seen_ids:
@@ -478,6 +484,7 @@ def _update_track_record(signals_data: dict, live_prices: dict) -> None:
 
         direction   = sig.get("direction", "LONG" if signal_type in _BUY_SIGNALS else "SHORT")
         entry_price = float(sig.get("price") or sig.get("entry_price") or 0)
+        _conf_data  = sig.get("confluence") or {}
         _track_store.append({
             "signal_id":       signal_id,
             "symbol":          sym,
@@ -494,10 +501,8 @@ def _update_track_record(signals_data: dict, live_prices: dict) -> None:
             "pnl_pct":         0.0,
             "outcome":         "OPEN",
             "exit_reason":     None,
-            "ai_prob":         round(float(sig.get("ai_prob") or 0), 3),
-            "confluence_rate": round(float(
-                (sig.get("confluence_scorecards") or {}).get("efficiency", 0) or 0
-            ), 2),
+            "ai_prob":         round(float(sig.get("meta_confidence") or 0), 3),
+            "confluence_rate": round(float(_conf_data.get("total") or 0), 2),
         })
         _tr_seen_ids.add(signal_id)
 

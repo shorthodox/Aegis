@@ -281,6 +281,13 @@ async function init() {
     }
 }
 
+window.refreshAegisTrackRecord = async function() {
+    try {
+        const data = await fetchTrackRecord();
+        render(data);
+    } catch { /* silently ignore */ }
+};
+
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
 } else {
