@@ -257,17 +257,41 @@ FEATURE_ADDONS = [
     'bands_confluence', 'smart_money_confluence', 'candle_confluence',
     'total_confluence',
     # ── Soft (percentile-rank) confluence — richer gradient than sign-based ──────
-    # sign() gives RSI-51 == RSI-80 (+1 both). prc_* uses rolling rank so the
-    # model sees the magnitude of the edge, not just its direction.
     'prc_trend', 'prc_momentum', 'prc_volume', 'prc_bands', 'prc_smart_money',
     'prc_total',
-    # ── Futures (zero-filled when spot-only) ─────────────────────
+    # ── Ichimoku Cloud — computed but previously unregistered ────────────────────
+    'ichimoku_tenkan', 'ichimoku_kijun', 'ichimoku_senkou_a', 'ichimoku_senkou_b',
+    'ichi_above_cloud', 'ichi_cloud_bull', 'ichi_tk_cross',
+    'ichi_dist_tenkan', 'ichi_dist_kijun', 'ichi_dist_cloud_top',
+    # ── Aroon / Choppiness / Keltner — computed but unregistered ────────────────
+    'aroon_up', 'aroon_down', 'aroon_osc',
+    'choppiness',
+    'keltner_width',                        # BB/KC width ratio used in squeeze
+    # ── Linear Regression quality ────────────────────────────────────────────────
+    'linreg_r2_14',                         # R² of close vs linreg — trend quality
+    # ── Vortex / Force Index — computed but unregistered ────────────────────────
+    'vi_plus', 'vi_minus',                  # vortex bullish/bearish
+    'force_index',                          # force_index_13
+    # ── Squeeze Momentum (NEW) ───────────────────────────────────────────────────
+    'sqz_on', 'sqz_off', 'sqz_momentum',
+    # ── Elder Ray Index (NEW) ────────────────────────────────────────────────────
+    'elder_bull', 'elder_bear', 'elder_bull_bear',
+    # ── Volume Pressure Composite (NEW) ──────────────────────────────────────────
+    'candle_pressure', 'rolling_buy_ratio',
+    # ── Multi-period EMA Trend Alignment (NEW) ───────────────────────────────────
+    'ema_alignment', 'ema_alignment_quality',
+    # ── Crypto Funding Rate derived (NEW) ────────────────────────────────────────
+    'funding_slope_3', 'funding_slope_8',
+    'funding_extreme_long', 'funding_extreme_short', 'funding_neutral',
+    'funding_cum_8',
+    # ── Futures base (zero-filled when spot-only) ────────────────────────────────
     'funding_rate', 'funding_rate_ma8', 'funding_rate_zscore',
     'open_interest', 'oi_change_1h', 'oi_change_4h', 'oi_zscore',
-    # ── Token-vs-BTC relative performance (critical for non-BTC alts) ──
+    # ── OI derived (NEW) ─────────────────────────────────────────────────────────
+    'oi_chg_8h', 'oi_chg_24h', 'oi_px_agreement',
+    # ── Token-vs-BTC relative performance ────────────────────────────────────────
     'rel_perf_1h', 'rel_perf_4h', 'rel_perf_24h',
     'btc_ratio_ma_dist',
-    # BTC absolute anchors (already computed, kept explicit for SHAP pruning)
     'btc_1h_return', 'btc_4h_return', 'btc_dist_ema200',
 ]
 

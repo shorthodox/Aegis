@@ -864,6 +864,203 @@ def compute_entropy(series: pd.Series, period: int = 20, bins: int = 10) -> pd.S
     return series.pct_change().fillna(0).rolling(period, min_periods=10).apply(_ent, raw=True)
 
 
+# ── Squeeze Momentum (LazyBear) ───────────────────────────────────
+def compute_squeeze_momentum(
+    df: pd.DataFrame,
+    bb_len: int = 20, bb_mult: float = 2.0,
+    kc_len: int = 20, kc_mult: float = 1.5,
+) -> pd.DataFrame:
+    """
+    Identifies consolidation (BB inside KC) and momentum direction.
+    squeeze_on  = 1 when BB is inside KC (spring loading before move)
+    squeeze_off = 1 when BB just broke wider than KC (expansion starting)
+    sqz_momentum = normalised delta-momentum (positive = bullish thrust)
+    """
+    c, h, l = df['close'], df['high'], df['low']
+    tr = pd.concat([(h - l), (h - c.shift(1)).abs(), (l - c.shift(1)).abs()], axis=1).max(axis=1)
+
+    bb_mid   = c.rolling(bb_len).mean()
+    bb_std   = c.rolling(bb_len).std()
+    bb_upper = bb_mid + bb_mult * bb_std
+    bb_lower = bb_mid - bb_mult * bb_std
+
+    kc_mid   = c.ewm(span=kc_len, adjust=False).mean()
+    kc_atr   = tr.rolling(kc_len).mean()
+    kc_upper = kc_mid + kc_mult * kc_atr
+    kc_lower = kc_mid - kc_mult * kc_atr
+
+    sqz_on  = ((bb_upper < kc_upper) & (bb_lower > kc_lower)).astype(float)
+    sqz_off = ((bb_upper > kc_upper) & (bb_lower < kc_lower)).astype(float)
+
+    # Delta value: close vs midpoint of recent range
+    highest_h = h.rolling(kc_len).max()
+    lowest_l  = l.rolling(kc_len).min()
+    delta = c - ((highest_h + lowest_l) / 2 + kc_mid) / 2
+    momentum_raw = delta.ewm(span=kc_len, adjust=False).mean()
+    momentum_norm = momentum_raw / (kc_atr + 1e-9)   # normalise by KC ATR
+
+    return pd.DataFrame({
+        'sqz_on':       sqz_on,
+        'sqz_off':      sqz_off,
+        'sqz_momentum': momentum_norm.clip(-3, 3),
+    }, index=df.index)
+
+
+# ── Elder Ray Index ────────────────────────────────────────────────
+def compute_elder_ray(df: pd.DataFrame, period: int = 13) -> pd.DataFrame:
+    """
+    Elder Ray: Bull Power = High - EMA(close), Bear Power = Low - EMA(close).
+    Positive bull power + rising EMA → healthy uptrend.
+    Negative bear power + falling EMA → healthy downtrend.
+    Both are normalised by ATR for cross-token comparability.
+    """
+    ema = df['close'].ewm(span=period, adjust=False).mean()
+    atr = compute_atr(df, 14)
+    bull = (df['high'] - ema) / (atr + 1e-9)
+    bear = (df['low']  - ema) / (atr + 1e-9)
+    return pd.DataFrame({
+        'elder_bull': bull.clip(-5, 5),
+        'elder_bear': bear.clip(-5, 5),
+        'elder_bull_bear': (bull + bear).clip(-5, 5),  # net pressure
+    }, index=df.index)
+
+
+# ── Ichimoku Extended signals ──────────────────────────────────────
+def compute_ichimoku_signals(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Additional Ichimoku signal columns derived from the cloud components.
+    Requires ichimoku_tenkan / kijun / senkou_a / senkou_b already in df.
+    All derived in a leakage-safe, backward-only manner.
+    """
+    c = df['close']
+    tenkan = df.get('ichimoku_tenkan', pd.Series(np.nan, index=df.index))
+    kijun  = df.get('ichimoku_kijun',  pd.Series(np.nan, index=df.index))
+    sa     = df.get('ichimoku_senkou_a', pd.Series(np.nan, index=df.index))
+    sb     = df.get('ichimoku_senkou_b', pd.Series(np.nan, index=df.index))
+
+    cloud_top = pd.concat([sa, sb], axis=1).max(axis=1)
+    cloud_bot = pd.concat([sa, sb], axis=1).min(axis=1)
+
+    above_cloud = np.where(c > cloud_top, 1.0, np.where(c < cloud_bot, -1.0, 0.0))
+    cloud_bull  = np.where(sa > sb, 1.0, -1.0)
+    tk_diff     = tenkan - kijun
+    tk_cross    = np.where(
+        (tk_diff > 0) & (tk_diff.shift(1) <= 0), 1.0,
+        np.where((tk_diff < 0) & (tk_diff.shift(1) >= 0), -1.0, 0.0)
+    )
+    dist_tenkan = ((c - tenkan) / (c + 1e-9)).clip(-0.2, 0.2)
+    dist_kijun  = ((c - kijun)  / (c + 1e-9)).clip(-0.2, 0.2)
+    dist_cloud_top = ((c - cloud_top) / (c + 1e-9)).clip(-0.3, 0.3)
+
+    return pd.DataFrame({
+        'ichi_above_cloud':    pd.Series(above_cloud, index=df.index),
+        'ichi_cloud_bull':     pd.Series(cloud_bull,  index=df.index),
+        'ichi_tk_cross':       pd.Series(tk_cross,    index=df.index),
+        'ichi_dist_tenkan':    dist_tenkan,
+        'ichi_dist_kijun':     dist_kijun,
+        'ichi_dist_cloud_top': dist_cloud_top,
+    }, index=df.index)
+
+
+# ── Crypto Funding / OI Micro-structure ───────────────────────────
+def compute_funding_signals(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Derived features from perpetual funding rate.
+    Extreme positive funding = over-leveraged longs → reversal risk.
+    Extreme negative funding = over-leveraged shorts → squeeze risk.
+    """
+    if 'funding_rate' not in df.columns:
+        return pd.DataFrame(index=df.index)
+    fr = df['funding_rate'].fillna(0)
+    return pd.DataFrame({
+        'funding_slope_3':      fr.diff(3).clip(-0.002, 0.002),   # momentum
+        'funding_slope_8':      fr.diff(8).clip(-0.003, 0.003),
+        'funding_extreme_long': (fr >  0.001).astype(float),       # >0.1% → crowded long
+        'funding_extreme_short':(fr < -0.001).astype(float),       # <-0.1% → crowded short
+        'funding_neutral':      (fr.abs() < 0.00005).astype(float),# near-zero
+        'funding_cum_8':        fr.rolling(8).sum().clip(-0.01, 0.01),   # 8-bar cumulative
+    }, index=df.index)
+
+
+def compute_oi_signals(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Open Interest trend vs price direction — crypto-specific regime signal.
+    OI rising + price rising   = healthy trend (smart money supporting move)
+    OI rising + price falling  = bearish (trapped longs, potential cascade)
+    OI falling + price moving  = position unwinding (exhaustion)
+    """
+    if 'open_interest' not in df.columns:
+        return pd.DataFrame(index=df.index)
+    oi = df['open_interest'].fillna(method='ffill').fillna(0)
+    px = df['close']
+
+    oi_chg_8  = oi.pct_change(8).clip(-0.5, 0.5).fillna(0)
+    px_chg_8  = px.pct_change(8).clip(-0.3, 0.3).fillna(0)
+    oi_chg_24 = oi.pct_change(24).clip(-0.8, 0.8).fillna(0)
+
+    # Agreement: +1 both rising, -1 diverging (OI up, price down = bearish), 0 neutral
+    oi_px_agreement = pd.Series(
+        np.where((oi_chg_8 > 0.02) & (px_chg_8 > 0),  1.0,   # bullish confluence
+        np.where((oi_chg_8 > 0.02) & (px_chg_8 < 0), -1.0,   # bearish divergence
+        np.where((oi_chg_8 < -0.02), -0.5 * np.sign(px_chg_8), 0.0))),
+        index=df.index,
+    )
+    return pd.DataFrame({
+        'oi_chg_8h':       oi_chg_8,
+        'oi_chg_24h':      oi_chg_24,
+        'oi_px_agreement': oi_px_agreement,
+    }, index=df.index)
+
+
+# ── Volume Pressure Composite ──────────────────────────────────────
+def compute_volume_pressure(df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
+    """
+    Normalised buying vs selling pressure.
+    - candle_pressure: close position within bar × volume (scaled by avg volume)
+    - rolling_buy_ratio: fraction of bars where close > open in last `period` bars
+    - vol_price_trend: OBV-like but normalised to avoid unit issues
+    """
+    bar_range  = (df['high'] - df['low']).replace(0, np.nan)
+    close_pos  = ((df['close'] - df['low']) / bar_range).fillna(0.5)  # 0=low, 1=high
+    avg_vol    = df['volume'].rolling(period, min_periods=5).mean().replace(0, np.nan)
+    vol_norm   = (df['volume'] / avg_vol).fillna(1.0)
+
+    # Net pressure: positive when closing near high on above-avg volume
+    candle_pressure = (close_pos * 2 - 1) * vol_norm   # [-vol_norm, +vol_norm]
+    cp_smooth = candle_pressure.rolling(period, min_periods=5).mean().clip(-3, 3)
+
+    # Rolling win rate: how often the last N candles closed higher
+    bull_candle = (df['close'] > df['open']).astype(float)
+    rolling_buy_ratio = bull_candle.rolling(period, min_periods=5).mean()
+
+    return pd.DataFrame({
+        'candle_pressure': cp_smooth,
+        'rolling_buy_ratio': rolling_buy_ratio,
+    }, index=df.index)
+
+
+# ── Multi-period Trend Alignment ──────────────────────────────────
+def compute_trend_alignment(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Agreement score across multiple EMA timeframes.
+    When short/medium/long EMAs all agree on direction → stronger trend signal.
+    Returns a [-1, +1] composite where +1 = all EMAs bullishly stacked.
+    """
+    c = df['close']
+    votes = []
+    for period in (9, 21, 50, 100, 200):
+        ema = c.ewm(span=period, adjust=False).mean()
+        votes.append(np.sign(c - ema))
+    stacked = pd.concat(votes, axis=1)
+    alignment = stacked.mean(axis=1)   # in (-1, +1)
+    # Trend quality: how many agree (0=split, 1=all same direction)
+    quality = stacked.abs().mean(axis=1)
+    return pd.DataFrame({
+        'ema_alignment':         alignment.clip(-1, 1),
+        'ema_alignment_quality': quality,
+    }, index=df.index)
+
+
 # ── Anchored VWAP ─────────────────────────────────────────────────
 def compute_anchored_vwap(df: pd.DataFrame, lookback: int = 100) -> pd.DataFrame:
     """Anchored VWAP at three lookback windows (50 / 100 / 200 bars).
@@ -1731,6 +1928,58 @@ def prepare_features(df: pd.DataFrame,
     except Exception:
         pass
 
+    # ═══════════════════════════════════════════════════════════════
+    # CRYPTO-SPECIFIC INDICATOR EXTENSIONS
+    # All wrapped in try/except so one failure never kills the pipeline.
+    # ═══════════════════════════════════════════════════════════════
+
+    # --- Squeeze Momentum (BB inside Keltner = spring-loaded consolidation) ---
+    try:
+        for col, s in compute_squeeze_momentum(df).items():
+            compiled_features[str(col)] = s
+    except Exception:
+        pass
+
+    # --- Elder Ray (buying / selling pressure relative to EMA) ---
+    try:
+        for col, s in compute_elder_ray(df).items():
+            compiled_features[str(col)] = s
+    except Exception:
+        pass
+
+    # --- Ichimoku extended signal columns (cloud position, TK cross, distances) ---
+    # These depend on ichimoku_tenkan / kijun / senkou_a / senkou_b which are
+    # already in compiled_features from the earlier compute_ichimoku() call.
+    # We use a temporary df that has both the original OHLCV AND the ichi cols.
+    try:
+        _ichi_tmp = df.copy()
+        for _ichi_col in ('ichimoku_tenkan', 'ichimoku_kijun', 'ichimoku_senkou_a', 'ichimoku_senkou_b'):
+            if _ichi_col in compiled_features:
+                _ichi_tmp[_ichi_col] = compiled_features[_ichi_col].values
+        for col, s in compute_ichimoku_signals(_ichi_tmp).items():
+            compiled_features[str(col)] = s
+    except Exception:
+        pass
+
+    # --- Volume Pressure Composite ---
+    try:
+        for col, s in compute_volume_pressure(df).items():
+            compiled_features[str(col)] = s
+    except Exception:
+        pass
+
+    # --- Multi-period EMA Trend Alignment ---
+    try:
+        for col, s in compute_trend_alignment(df).items():
+            compiled_features[str(col)] = s
+    except Exception:
+        pass
+
+    # --- Funding rate derived signals (crypto-specific) ---
+    # These rely on funding_rate which is added by add_futures_features() later.
+    # We store a placeholder here and patch after the bulk concat below.
+    # (Actual computation happens after the bulk concat when funding_rate exists.)
+
     # Defensive guard: never let a known lookahead feature into the frame.
     for bad in LOOKAHEAD_BLOCKLIST:
         compiled_features.pop(bad, None)
@@ -1761,6 +2010,19 @@ def prepare_features(df: pd.DataFrame,
             df = add_futures_features(df, funding_df, oi_df)
         except Exception:
             pass
+
+    # ----- Crypto microstructure: funding / OI derived signals -----
+    # Computed AFTER add_futures_features so funding_rate / open_interest exist.
+    try:
+        for col, s in compute_funding_signals(df).items():
+            df[col] = s.values
+    except Exception:
+        pass
+    try:
+        for col, s in compute_oi_signals(df).items():
+            df[col] = s.values
+    except Exception:
+        pass
 
     # ----- Macro Regime Features (map 1d/1w onto base timeframe) -----
     try:
