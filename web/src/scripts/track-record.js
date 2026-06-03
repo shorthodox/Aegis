@@ -82,6 +82,7 @@ function signalChip(type) {
     return `<span style="color:#6b7280;">${t}</span>`;
 }
 
+
 // ── Stats strip ───────────────────────────────────────────────────────────────
 function renderStats(summary) {
     const set = (id, val) => {
@@ -183,7 +184,7 @@ function renderTable(rows) {
     const filtered = applyFilters(rows);
 
     if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:2.5rem;color:#4b5563;">
+        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:2.5rem;color:#4b5563;">
             No closed signals yet. Signals appear here once their TP or SL is hit.
         </td></tr>`;
         return;
@@ -224,6 +225,7 @@ function initFilters() {
             renderTable(_allRows);
         });
     });
+
 }
 
 // ── Main render ───────────────────────────────────────────────────────────────
@@ -234,12 +236,33 @@ function render(data) {
 
     if (loadEl) loadEl.style.display = 'none';
 
-    const summary = data.summary || {};
-    renderStats(summary);
-    renderLiveTeaser(summary.open ?? 0);
+    // Left panel only shows live_engine signals — trader bot has its own right panel
+    const allSignals = data.signals || [];
+    const liveEngineRows = allSignals.filter(r => (r.source || 'live_engine') !== 'aegis_trader');
 
-    _allRows = data.signals || [];
-    const closedRows = _allRows.filter(r => (r.outcome || '').toUpperCase() !== 'OPEN');
+    // Recompute summary from live_engine rows only
+    const wins   = liveEngineRows.filter(r => r.outcome === 'WIN').length;
+    const losses = liveEngineRows.filter(r => r.outcome === 'LOSS').length;
+    const openC  = liveEngineRows.filter(r => r.outcome === 'OPEN').length;
+    const closed = wins + losses;
+    const pnls   = liveEngineRows.filter(r => r.outcome === 'WIN' || r.outcome === 'LOSS').map(r => parseFloat(r.pnl_pct) || 0);
+    const times  = liveEngineRows.filter(r => r.entry_time).map(r => r.entry_time);
+    const liveSummary = {
+        total_signals:  liveEngineRows.length,
+        wins,
+        losses,
+        open:           openC,
+        win_rate_pct:   closed > 0 ? Math.round(wins / closed * 1000) / 10 : null,
+        avg_pnl_pct:    pnls.length > 0 ? Math.round(pnls.reduce((a, b) => a + b, 0) / pnls.length * 1000) / 1000 : null,
+        total_pnl_pct:  pnls.length > 0 ? Math.round(pnls.reduce((a, b) => a + b, 0) * 1000) / 1000 : 0,
+        tracking_since: times.length > 0 ? times.sort()[0] : null,
+    };
+
+    renderStats(liveSummary);
+    renderLiveTeaser(openC);
+
+    _allRows = liveEngineRows;
+    const closedRows = liveEngineRows.filter(r => (r.outcome || '').toUpperCase() !== 'OPEN');
 
     if (closedRows.length === 0) {
         if (emptyEl) emptyEl.style.display = 'block';

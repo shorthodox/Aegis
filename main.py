@@ -510,6 +510,7 @@ def _update_track_record(signals_data: dict, live_prices: dict) -> None:
             "exit_reason":     None,
             "ai_prob":         round(float(sig.get("meta_confidence") or 0), 3),
             "confluence_rate": round(float(_conf_data.get("total") or 0), 2),
+            "source":          "live_engine",
         })
         _tr_seen_ids.add(signal_id)
 

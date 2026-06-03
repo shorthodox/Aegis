@@ -1833,6 +1833,10 @@
             if (_autoScanLoop)  { clearInterval(_autoScanLoop);  _autoScanLoop  = null; }
         }
 
+        // Expose to window so the room navigation code (outside this IIFE) can call them
+        window._startAutoScan = function() { _startAutoScan(); };
+        window._stopAutoScan  = function() { _stopAutoScan(); };
+
         function updateTraderStats(data) {
             var sigs = data.signals || [];
             var count = sigs.length;
