@@ -4,7 +4,7 @@
  * No Firestore dependency — data comes entirely from the backend JSON.
  */
 
-const API_URL = '/api/trader/track-record';
+const API_URL = '/api/track-record';
 
 // ── Filters state ─────────────────────────────────────────────────────────────
 let _allRows = [];
@@ -17,50 +17,8 @@ async function fetchTrackRecord() {
     return res.json();
 }
 
-// ── Normalize trader API response → format expected by render() ───────────────
-function normalizeTraderData(data) {
-    const rawSignals = data.signals || [];
-    const signals = rawSignals.map(s => ({
-        signal_id:   s.signal_id,
-        symbol:      s.symbol,
-        timeframe:   s.timeframe,
-        direction:   s.direction,       // 'BUY' or 'SELL'
-        signal_type: s.direction,       // reuse direction for chip renderer
-        entry_price: s.entry_price,
-        take_profit: s.tp1,
-        stop_loss:   s.stop_loss,
-        exit_price:  s.exit_price,
-        entry_time:  s.timestamp,
-        close_time:  s.exit_time,
-        pnl_pct:     s.pnl_pct,
-        outcome:     s.outcome,
-        exit_reason: s.exit_reason,
-        ai_prob:     s.confidence,
-        mode:        s.mode,
-        risk_profile: s.risk_profile,
-    }));
-
-    const closed = signals.filter(s => s.outcome === 'WIN' || s.outcome === 'LOSS');
-    const avgPnl = closed.length > 0
-        ? closed.reduce((sum, s) => sum + (parseFloat(s.pnl_pct) || 0), 0) / closed.length
-        : null;
-    const times = signals.map(s => s.entry_time).filter(Boolean);
-
-    return {
-        generated_at: data.generated_at,
-        summary: {
-            total_signals:  signals.length,
-            wins:           data.won           ?? 0,
-            losses:         data.lost          ?? 0,
-            open:           data.open_positions ?? 0,
-            win_rate_pct:   data.win_rate != null ? Math.round(data.win_rate * 1000) / 10 : null,
-            avg_pnl_pct:    avgPnl != null ? Math.round(avgPnl * 1000) / 1000 : null,
-            total_pnl_pct:  data.total_pnl_pct ?? 0,
-            tracking_since: times.length > 0 ? times.reduce((a, b) => a < b ? a : b) : null,
-        },
-        signals,
-    };
-}
+// No normalisation needed — /api/track-record already returns a unified format
+// for both live_engine signals and AEGIS trader signals.
 
 // ── Format helpers ────────────────────────────────────────────────────────────
 function fmtTs(ts) {
@@ -296,8 +254,7 @@ function render(data) {
 function startAutoRefresh() {
     setInterval(async () => {
         try {
-            const raw  = await fetchTrackRecord();
-            const data = normalizeTraderData(raw);
+            const data = await fetchTrackRecord();
             render(data);
         } catch { /* silently ignore refresh errors */ }
     }, 60_000);
@@ -307,8 +264,7 @@ function startAutoRefresh() {
 async function init() {
     initFilters();
     try {
-        const raw  = await fetchTrackRecord();
-        const data = normalizeTraderData(raw);
+        const data = await fetchTrackRecord();
         render(data);
         startAutoRefresh();
     } catch (err) {
@@ -327,8 +283,7 @@ async function init() {
 
 window.refreshAegisTrackRecord = async function() {
     try {
-        const raw  = await fetchTrackRecord();
-        const data = normalizeTraderData(raw);
+        const data = await fetchTrackRecord();
         render(data);
     } catch { /* silently ignore */ }
 };

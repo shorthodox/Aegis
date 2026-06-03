@@ -432,9 +432,25 @@ class LiveEngine:
                               f'total={_ct:.1f}/10 trend={_ctr:.1f} mom={_cm:.1f} '
                               f'(need total BUY≥{self.CONFLUENCE_BUY_MIN} '
                               f'or trend+mom override)')
+                        # Retract fire=True from the cockpit signal — the confluence
+                        # gate rejected this trade so it must not appear as a fired signal.
+                        if symbol in self.last_signals:
+                            self.last_signals[symbol]['fire']              = False
+                            self.last_signals[symbol]['signal']            = 'HOLD'
+                            self.last_signals[symbol]['confluence_blocked'] = True
                 elif is_flip:
                     print(f'[{symbol}] FLIP-FLOP BLOCKED {last_side}→{new_side} '
                           f'({int((required_cooldown - cooldown_elapsed)/60)} min remaining)')
+                    if symbol in self.last_signals:
+                        self.last_signals[symbol]['fire']           = False
+                        self.last_signals[symbol]['signal']         = 'HOLD'
+                        self.last_signals[symbol]['cooldown_blocked'] = True
+                else:
+                    # Within normal cooldown window — suppress fire so cockpit stays clean
+                    if symbol in self.last_signals:
+                        self.last_signals[symbol]['fire']           = False
+                        self.last_signals[symbol]['signal']         = 'HOLD'
+                        self.last_signals[symbol]['cooldown_blocked'] = True
 
             self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
 
