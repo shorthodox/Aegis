@@ -700,26 +700,120 @@ class Predictor:
         macro_1d   = _f('macro_trend_1d')
         macro_1w   = _f('macro_trend_1w')
         adx        = _f('adx_14', 20.0)
-        # Raw confluence values from compute_category_confluence: all in [-1, +1]
-        trend_conf_raw  = _f('trend_confluence')
-        mom_conf_raw    = _f('momentum_confluence')
-        smart_conf_raw  = _f('smart_money_confluence')
-        vol_conf_raw    = _f('volume_confluence')
-        candle_conf_raw = _f('candle_confluence')
-        bands_conf_raw  = _f('bands_confluence')   # price-position / BB / ATR bands
-        total_conf_raw  = _f('total_confluence')
 
-        # Scale to [0, 10] for display: -1 → 0, 0 → 5, +1 → 10
-        def _c10(x: float) -> float:
-            return round((x + 1.0) / 2.0 * 10.0, 1)
+        # ── Soft percentile-rank confluence (display-only, ML model unchanged) ─
+        # Binary sign-based scores saturate at 100% in strong trends and default
+        # to 50% when a column is missing.  Percentile ranks against the
+        # historical window (typically 350 bars) give meaningful gradients:
+        # RSI-80 in a token that usually sits at 55 → 92nd pct → 9.2/10, not 10.
+        # Missing columns return 0.5 (neutral) rather than corrupting the average.
 
-        trend_conf  = _c10(trend_conf_raw)
-        mom_conf    = _c10(mom_conf_raw)
-        smart_conf  = _c10(smart_conf_raw)
-        vol_conf    = _c10(vol_conf_raw)
-        candle_conf = _c10(candle_conf_raw)
-        bands_conf  = _c10(bands_conf_raw)
-        total_conf  = _c10(total_conf_raw)
+        def _prank(col: str, higher_bullish: bool = True) -> float:
+            """Rolling percentile rank of last row: 0=most bearish ever, 1=most bullish."""
+            if col not in df.columns:
+                return 0.5
+            vals = df[col].dropna()
+            if len(vals) < 10:
+                return 0.5
+            last = float(vals.iloc[-1])
+            if last != last:  # NaN
+                return 0.5
+            rank = float((vals < last).sum()) / len(vals)
+            return rank if higher_bullish else (1.0 - rank)
+
+        def _cat(*entries) -> float:
+            """Mean pct-rank for a category; entries = (col, higher_bullish)."""
+            ranks = [_prank(c, b) for c, b in entries if c in df.columns]
+            return float(np.mean(ranks)) if ranks else 0.5
+
+        def _s10(v: float) -> float:
+            """Map [0,1] pct rank to [0,10] display scale."""
+            return round(v * 10.0, 1)
+
+        # ── Category scores (0-1, later mapped to 0-10) ───────────────────────
+        _trend_01 = _cat(
+            ('dist_ema_50',       True),  ('dist_ema_200',      True),
+            ('dist_ema_100',      True),  ('dist_hma20',        True),
+            ('dist_kama',         True),  ('dist_rolling_vwap', True),
+            ('dist_vwap',         True),  ('supertrend_dist',   True),
+            ('sar_dist',          True),  ('linreg_slope_14',   True),
+            ('structure_bias',    True),  ('macro_trend_1d',    True),
+            ('macro_trend_1w',    True),
+        )
+
+        _mom_01 = _cat(
+            ('rsi_14',       True),   ('rsi_7',        True),
+            ('rsi_21',       True),   ('stoch_k',      True),
+            ('williams_r',   False),  ('macd_hist',    True),
+            ('cci_20',       True),   ('tsi',          True),
+            ('cmo_14',       True),   ('awesome_osc',  True),
+            ('bop',          True),   ('roc_14',       True),
+            ('ppo',          True),   ('dpo_20',       True),
+            ('fisher',       True),
+        )
+
+        _vol_01 = _cat(
+            ('volume_delta',    True),  ('volume_delta_14', True),
+            ('cmf_20',          True),  ('mfi_14',          True),
+            ('eom_14',          True),  ('relative_volume', True),
+            ('vol_velocity',    True),  ('kvo',             True),
+        )
+
+        _bands_01 = _cat(
+            ('bb_pct_b',          True),  ('atr_band_position', True),
+            ('donchian_position', True),  ('close_position',    True),
+            ('quantile_position', True),  ('se_position',       True),
+            ('starc_position',    True),  ('gaussian_position', True),
+        )
+
+        # Smart money: structure_bias + range position are percentile-ranked;
+        # BOS/CHoCH events are sparse (0/1) so we use recent rolling sums instead.
+        _struct_01 = _cat(('structure_bias', True), ('range_position_score', True))
+        _bos_bull  = float(df['bos_up'].tail(5).sum())   if 'bos_up'   in df.columns else 0.0
+        _bos_bear  = float(df['bos_down'].tail(5).sum()) if 'bos_down' in df.columns else 0.0
+        _cho_bull  = float(df['choch_bull'].tail(5).sum()) if 'choch_bull' in df.columns else 0.0
+        _cho_bear  = float(df['choch_bear'].tail(5).sum()) if 'choch_bear' in df.columns else 0.0
+        _at_sup    = _f('is_at_support',    0.0)
+        _at_res    = _f('is_at_resistance', 0.0)
+        _smc_bull_pts = _bos_bull * 0.8 + _cho_bull * 1.2 + _at_sup * 0.6
+        _smc_bear_pts = _bos_bear * 0.8 + _cho_bear * 1.2 + _at_res * 0.6
+        _smc_event_bias = np.clip((_smc_bull_pts - _smc_bear_pts) / 3.0, -0.35, 0.35)
+        _smart_01  = float(np.clip(_struct_01 + _smc_event_bias, 0.0, 1.0))
+
+        # Candle patterns: binary events (0/1) on the last bar
+        _bull_cdl = sum(_f(p, 0.0) for p in ('CDL_HAMMER', 'CDL_BULL_ENGULFING', 'CDL_MORNINGSTAR'))
+        _bear_cdl = sum(_f(p, 0.0) for p in ('CDL_SHOOTINGSTAR', 'CDL_BEAR_ENGULFING', 'CDL_EVENINGSTAR'))
+        _bar_dir  = float(np.clip(_f('bar_direction', 0.0) * 0.3, -0.3, 0.3))
+        _cdl_raw  = float(np.clip(_bull_cdl - _bear_cdl, -1.0, 1.0)) + _bar_dir
+        _candle_01 = float(np.clip((_cdl_raw + 1.0) / 2.0, 0.0, 1.0))
+
+        # Weighted total (same weights as compute_category_confluence)
+        _W = {'tr': 2.0, 'mo': 1.5, 'vo': 1.5, 'sm': 1.5, 'bd': 1.0, 'cd': 0.5}
+        _Wsum = sum(_W.values())  # 8.0
+        _total_01 = (
+            _trend_01  * _W['tr'] + _mom_01    * _W['mo'] +
+            _vol_01    * _W['vo'] + _smart_01  * _W['sm'] +
+            _bands_01  * _W['bd'] + _candle_01 * _W['cd']
+        ) / _Wsum
+
+        # Map to [0,10] display scale
+        trend_conf  = _s10(_trend_01)
+        mom_conf    = _s10(_mom_01)
+        vol_conf    = _s10(_vol_01)
+        smart_conf  = _s10(_smart_01)
+        bands_conf  = _s10(_bands_01)
+        candle_conf = _s10(_candle_01)
+        total_conf  = _s10(_total_01)
+
+        # Keep raw [-1,+1] values for the bias score calculation
+        # (bias uses macro + pct-rank based trend/mom converted back)
+        trend_conf_raw  = _trend_01  * 2.0 - 1.0
+        mom_conf_raw    = _mom_01    * 2.0 - 1.0
+        smart_conf_raw  = _smart_01  * 2.0 - 1.0
+        vol_conf_raw    = _vol_01    * 2.0 - 1.0
+        candle_conf_raw = _candle_01 * 2.0 - 1.0
+        bands_conf_raw  = _bands_01  * 2.0 - 1.0
+        total_conf_raw  = _total_01  * 2.0 - 1.0
 
         # Weighted composite bias score (-1 → +1), using raw centered values directly
         bias_score = (
