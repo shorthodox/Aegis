@@ -39,8 +39,166 @@
     <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"></noscript>
     <style>
-        .visible {
-            display: block !important;
+        .visible { display: block !important; }
+
+        /* ── Room Headers ─────────────────────────────────────────── */
+        .room-header {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            padding: 1rem 1.25rem;
+            background: rgba(0,0,0,0.25);
+            border-radius: 1rem;
+            border-left: 3px solid var(--room-accent, rgba(0,242,255,0.5));
+            margin-bottom: 1.5rem;
+        }
+        .room-header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+        .room-header h2 {
+            font-size: 1.1rem;
+            font-weight: 900;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            margin: 0;
+        }
+        .room-subtitle {
+            font-size: 0.71rem;
+            color: #6b7280;
+            margin-top: 0.3rem;
+            line-height: 1.4;
+        }
+        .beginner-tip {
+            margin-top: 0.75rem;
+            padding: 0.6rem 0.875rem;
+            background: rgba(0,242,255,0.04);
+            border: 1px solid rgba(0,242,255,0.12);
+            border-radius: 0.6rem;
+            font-size: 0.69rem;
+            color: #9ca3af;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+            line-height: 1.55;
+        }
+        .beginner-tip i { color: rgba(0,242,255,0.5); margin-top: 1px; flex-shrink: 0; }
+        .beginner-tip strong { color: #d1d5db; }
+
+        /* ── Sidebar section labels ───────────────────────────────── */
+        .sidebar-group-label {
+            font-size: 0.58rem;
+            font-weight: 800;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: #374151;
+            padding: 0 0.5rem;
+            margin-top: 1rem;
+            margin-bottom: 0.35rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .sidebar-group-label::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: rgba(255,255,255,0.05);
+        }
+        .sidebar-group-label:first-child { margin-top: 0; }
+
+        /* ── Quick-start flow strip ───────────────────────────────── */
+        .flow-strip {
+            display: flex;
+            gap: 0;
+            margin-bottom: 1.25rem;
+            background: rgba(0,0,0,0.25);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 1rem;
+            overflow: hidden;
+            flex-wrap: wrap;
+        }
+        .flow-step {
+            flex: 1;
+            min-width: 140px;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.6rem;
+            padding: 0.75rem 1rem;
+            border-right: 1px solid rgba(255,255,255,0.05);
+            position: relative;
+        }
+        .flow-step:last-child { border-right: none; }
+        .flow-step-num {
+            width: 1.4rem;
+            height: 1.4rem;
+            border-radius: 50%;
+            background: rgba(0,242,255,0.12);
+            border: 1px solid rgba(0,242,255,0.25);
+            font-size: 0.65rem;
+            font-weight: 900;
+            color: rgba(0,242,255,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+        .flow-step-body { flex: 1; min-width: 0; }
+        .flow-step-title {
+            font-size: 0.7rem;
+            font-weight: 800;
+            color: #e2e8f0;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            white-space: nowrap;
+        }
+        .flow-step-desc {
+            font-size: 0.62rem;
+            color: #6b7280;
+            margin-top: 0.15rem;
+            line-height: 1.4;
+        }
+
+        /* ── Wallet stat cards (Trader) ───────────────────────────── */
+        .tw-stat-card {
+            background: rgba(0,0,0,0.3);
+            border-radius: 0.75rem;
+            padding: 0.75rem;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.06);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.25rem;
+        }
+        .tw-stat-label {
+            font-size: 0.58rem;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: #4b5563;
+        }
+        .tw-stat-icon {
+            font-size: 0.65rem;
+            margin-bottom: 0.1rem;
+        }
+        .tw-stat-value {
+            font-size: 0.9rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 900;
+        }
+        .tw-stat-hint {
+            font-size: 0.58rem;
+            color: #374151;
+            margin-top: 0.1rem;
         }
     </style>
 </head>
@@ -167,155 +325,163 @@
             </div>
 
             <!-- Navigation Rooms -->
-            <div class="p-4 flex-1 overflow-y-auto space-y-4">
-                <h3 class="text-xs uppercase tracking-widest text-gray-500 mb-2 font-bold px-2">Navigation</h3>
+            <div class="p-3 flex-1 overflow-y-auto space-y-1.5">
+
+                <!-- GROUP: INTELLIGENCE -->
+                <div class="sidebar-group-label">Intelligence</div>
 
                 <a href="javascript:void(0)" onclick="switchRoom('signals')"
-                    class="nav-room block glass-panel p-4 rounded-xl text-white border-cyan/50 shadow-[0_0_15px_rgba(0,242,255,0.2)] hover:border-cyan/50 hover:shadow-[0_0_15px_rgba(0,242,255,0.2)] transition-all group min-h-[44px]"
+                    class="nav-room block glass-panel px-3 py-2.5 rounded-xl text-white border-cyan/50 shadow-[0_0_15px_rgba(0,242,255,0.2)] hover:border-cyan/50 hover:shadow-[0_0_15px_rgba(0,242,255,0.2)] transition-all group min-h-[44px]"
                     data-room="signals">
-                    <div class="flex items-center gap-3">
-                        <div
-                            class="icon-container w-10 h-10 rounded-full bg-cyan/10 flex items-center justify-center text-cyan group-hover:bg-cyan/20 transition-colors">
-                            <i class="fas fa-satellite-dish"></i>
+                    <div class="flex items-center gap-2.5">
+                        <div class="icon-container w-8 h-8 rounded-lg bg-cyan/10 flex items-center justify-center text-cyan group-hover:bg-cyan/20 transition-colors flex-shrink-0">
+                            <i class="fas fa-satellite-dish text-xs"></i>
                         </div>
-                        <div>
-                            <div class="font-bold uppercase tracking-wider text-sm">Signals</div>
-                            <div class="text-xs text-gray-400">Live intelligence</div>
-                        </div>
-                    </div>
-                </a>
-
-                <a href="javascript:void(0)" onclick="switchRoom('terminal')"
-                    class="nav-room block glass-panel p-4 rounded-xl text-gray-400 hover:text-white hover:border-orange/50 hover:shadow-[0_0_15px_rgba(255,140,0,0.2)] transition-all group min-h-[44px]"
-                    data-room="terminal">
-                    <div class="flex items-center gap-3">
-                        <div
-                            class="icon-container w-10 h-10 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-orange/20 transition-colors">
-                            <i class="fas fa-terminal"></i>
-                        </div>
-                        <div>
-                            <div class="font-bold uppercase tracking-wider text-sm">Terminal</div>
-                            <div class="text-xs text-gray-500">Execution cockpit</div>
-                        </div>
-                    </div>
-                </a>
-
-                <a href="javascript:void(0)" onclick="switchRoom('analytics')"
-                    class="nav-room block glass-panel p-4 rounded-xl text-gray-400 hover:text-white hover:border-white/30 transition-all group min-h-[44px]"
-                    data-room="analytics">
-                    <div class="flex items-center gap-3">
-                        <div
-                            class="icon-container w-10 h-10 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-white/10 transition-colors">
-                            <i class="fas fa-chart-pie"></i>
-                        </div>
-                        <div>
-                            <div class="font-bold uppercase tracking-wider text-sm">Analytics</div>
-                            <div class="text-xs text-gray-500">Positions & Ledger</div>
-                        </div>
-                    </div>
-                </a>
-
-                <a href="javascript:void(0)" onclick="switchRoom('history')"
-                    class="nav-room block glass-panel p-4 rounded-xl text-gray-400 hover:text-white hover:border-purple-500/50 hover:shadow-[0_0_15px_rgba(147,51,234,0.2)] transition-all group min-h-[44px]"
-                    data-room="history">
-                    <div class="flex items-center gap-3">
-                        <div
-                            class="icon-container w-10 h-10 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-purple-500/20 transition-colors">
-                            <i class="fas fa-history"></i>
-                        </div>
-                        <div>
-                            <div class="font-bold uppercase tracking-wider text-sm">History</div>
-                            <div class="text-xs text-gray-500">Signal Archive</div>
-                        </div>
-                    </div>
-                </a>
-
-                <a href="javascript:void(0)" onclick="switchRoom('buys')"
-                    class="nav-room block glass-panel p-4 rounded-xl text-gray-400 hover:text-white hover:border-green-500/50 hover:shadow-[0_0_15px_rgba(34,197,94,0.2)] transition-all group min-h-[44px]"
-                    data-room="buys">
-                    <div class="flex items-center gap-3">
-                        <div
-                            class="icon-container w-10 h-10 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-green-500/20 transition-colors">
-                            <i class="fas fa-arrow-trend-up"></i>
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <div class="font-bold uppercase tracking-wider text-sm flex items-center gap-2">
-                                BUY Cockpit
-                                <span id="nav-buy-count" class="nav-dir-count buy hidden"></span>
-                            </div>
-                            <div class="text-xs text-gray-500">Active long setups</div>
-                        </div>
-                    </div>
-                </a>
-
-                <a href="javascript:void(0)" onclick="switchRoom('sells')"
-                    class="nav-room block glass-panel p-4 rounded-xl text-gray-400 hover:text-white hover:border-red-500/50 hover:shadow-[0_0_15px_rgba(239,68,68,0.2)] transition-all group min-h-[44px]"
-                    data-room="sells">
-                    <div class="flex items-center gap-3">
-                        <div
-                            class="icon-container w-10 h-10 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-red-500/20 transition-colors">
-                            <i class="fas fa-arrow-trend-down"></i>
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <div class="font-bold uppercase tracking-wider text-sm flex items-center gap-2">
-                                SELL Cockpit
-                                <span id="nav-sell-count" class="nav-dir-count sell hidden"></span>
-                            </div>
-                            <div class="text-xs text-gray-500">Active short setups</div>
-                        </div>
-                    </div>
-                </a>
-
-                <a href="javascript:void(0)" onclick="switchRoom('trader')"
-                    class="nav-room block glass-panel p-4 rounded-xl text-gray-400 hover:text-white hover:border-yellow-400/50 hover:shadow-[0_0_15px_rgba(250,204,21,0.2)] transition-all group min-h-[44px]"
-                    data-room="trader">
-                    <div class="flex items-center gap-3">
-                        <div
-                            class="icon-container w-10 h-10 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-yellow-400/20 transition-colors">
-                            <i class="fas fa-robot"></i>
-                        </div>
-                        <div>
-                            <div class="font-bold uppercase tracking-wider text-sm flex items-center gap-2">
-                                AEGIS Trader
-                                <span class="text-[9px] px-1 py-0.5 rounded bg-yellow-400/20 text-yellow-400 border border-yellow-400/30 font-black">AI</span>
-                            </div>
-                            <div class="text-xs text-gray-500">Scalping · Intraday · Swing</div>
+                        <div class="min-w-0">
+                            <div class="font-bold uppercase tracking-wide text-xs text-white">Live Signals</div>
+                            <div class="text-[10px] text-gray-400 truncate">All tokens · AI scored</div>
                         </div>
                     </div>
                 </a>
 
                 <a href="/web/src/pages/signals.html"
-                    class="nav-room block glass-panel p-4 rounded-xl text-gray-400 hover:text-white hover:border-cyan/30 transition-all group min-h-[44px]">
-                    <div class="flex items-center gap-3">
-                        <div class="icon-container w-10 h-10 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-cyan/10 transition-colors">
-                            <i class="fas fa-bolt" style="color:#00f2ff;"></i>
+                    class="nav-room block glass-panel px-3 py-2.5 rounded-xl text-gray-400 hover:text-white hover:border-cyan/30 transition-all group min-h-[44px]">
+                    <div class="flex items-center gap-2.5">
+                        <div class="icon-container w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center group-hover:bg-cyan/10 transition-colors flex-shrink-0">
+                            <i class="fas fa-bolt text-xs" style="color:#00f2ff;"></i>
                         </div>
-                        <div>
-                            <div class="font-bold uppercase tracking-wider text-sm">Signals Cockpit</div>
-                            <div class="text-xs text-gray-500">All live fired signals</div>
+                        <div class="min-w-0">
+                            <div class="font-bold uppercase tracking-wide text-xs">Signals Cockpit</div>
+                            <div class="text-[10px] text-gray-500 truncate">Fired signals only</div>
+                        </div>
+                        <span class="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-cyan/10 text-cyan/60 border border-cyan/15 flex-shrink-0">↗</span>
+                    </div>
+                </a>
+
+                <!-- GROUP: FILTERED VIEW -->
+                <div class="sidebar-group-label">Filtered View</div>
+
+                <a href="javascript:void(0)" onclick="switchRoom('buys')"
+                    class="nav-room block glass-panel px-3 py-2.5 rounded-xl text-gray-400 hover:text-white hover:border-green-500/50 hover:shadow-[0_0_12px_rgba(34,197,94,0.15)] transition-all group min-h-[44px]"
+                    data-room="buys">
+                    <div class="flex items-center gap-2.5">
+                        <div class="icon-container w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center group-hover:bg-green-500/20 transition-colors flex-shrink-0">
+                            <i class="fas fa-arrow-trend-up text-xs text-green-500/60 group-hover:text-green-400"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="font-bold uppercase tracking-wide text-xs flex items-center gap-1.5">
+                                BUY Setups
+                                <span id="nav-buy-count" class="nav-dir-count buy hidden"></span>
+                            </div>
+                            <div class="text-[10px] text-gray-500 truncate">Active LONG signals</div>
                         </div>
                     </div>
                 </a>
+
+                <a href="javascript:void(0)" onclick="switchRoom('sells')"
+                    class="nav-room block glass-panel px-3 py-2.5 rounded-xl text-gray-400 hover:text-white hover:border-red-500/50 hover:shadow-[0_0_12px_rgba(239,68,68,0.15)] transition-all group min-h-[44px]"
+                    data-room="sells">
+                    <div class="flex items-center gap-2.5">
+                        <div class="icon-container w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center group-hover:bg-red-500/20 transition-colors flex-shrink-0">
+                            <i class="fas fa-arrow-trend-down text-xs text-red-500/60 group-hover:text-red-400"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="font-bold uppercase tracking-wide text-xs flex items-center gap-1.5">
+                                SELL Setups
+                                <span id="nav-sell-count" class="nav-dir-count sell hidden"></span>
+                            </div>
+                            <div class="text-[10px] text-gray-500 truncate">Active SHORT signals</div>
+                        </div>
+                    </div>
+                </a>
+
+                <!-- GROUP: EXECUTE -->
+                <div class="sidebar-group-label">Execute</div>
+
+                <a href="javascript:void(0)" onclick="switchRoom('terminal')"
+                    class="nav-room block glass-panel px-3 py-2.5 rounded-xl text-gray-400 hover:text-white hover:border-orange/50 hover:shadow-[0_0_12px_rgba(255,140,0,0.15)] transition-all group min-h-[44px]"
+                    data-room="terminal">
+                    <div class="flex items-center gap-2.5">
+                        <div class="icon-container w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center group-hover:bg-orange/20 transition-colors flex-shrink-0">
+                            <i class="fas fa-terminal text-xs text-orange/50 group-hover:text-orange"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="font-bold uppercase tracking-wide text-xs">Terminal</div>
+                            <div class="text-[10px] text-gray-500 truncate">Position sizing · Execute</div>
+                        </div>
+                    </div>
+                </a>
+
+                <a href="javascript:void(0)" onclick="switchRoom('trader')"
+                    class="nav-room block glass-panel px-3 py-2.5 rounded-xl text-gray-400 hover:text-white hover:border-yellow-400/50 hover:shadow-[0_0_12px_rgba(250,204,21,0.15)] transition-all group min-h-[44px]"
+                    data-room="trader">
+                    <div class="flex items-center gap-2.5">
+                        <div class="icon-container w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center group-hover:bg-yellow-400/20 transition-colors flex-shrink-0">
+                            <i class="fas fa-robot text-xs text-yellow-500/50 group-hover:text-yellow-400"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="font-bold uppercase tracking-wide text-xs flex items-center gap-1.5">
+                                AEGIS Trader
+                                <span class="text-[8px] px-1 py-px rounded bg-yellow-400/15 text-yellow-400 border border-yellow-400/25 font-black">AI</span>
+                            </div>
+                            <div class="text-[10px] text-gray-500 truncate">Auto · 60 tokens</div>
+                        </div>
+                    </div>
+                </a>
+
+                <!-- GROUP: REVIEW -->
+                <div class="sidebar-group-label">Review</div>
+
+                <a href="javascript:void(0)" onclick="switchRoom('analytics')"
+                    class="nav-room block glass-panel px-3 py-2.5 rounded-xl text-gray-400 hover:text-white hover:border-blue-400/40 transition-all group min-h-[44px]"
+                    data-room="analytics">
+                    <div class="flex items-center gap-2.5">
+                        <div class="icon-container w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center group-hover:bg-blue-500/20 transition-colors flex-shrink-0">
+                            <i class="fas fa-chart-pie text-xs text-blue-500/50 group-hover:text-blue-400"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="font-bold uppercase tracking-wide text-xs">Analytics</div>
+                            <div class="text-[10px] text-gray-500 truncate">P&amp;L · Engine stats</div>
+                        </div>
+                    </div>
+                </a>
+
+                <a href="javascript:void(0)" onclick="switchRoom('history')"
+                    class="nav-room block glass-panel px-3 py-2.5 rounded-xl text-gray-400 hover:text-white hover:border-purple-500/40 hover:shadow-[0_0_12px_rgba(147,51,234,0.12)] transition-all group min-h-[44px]"
+                    data-room="history">
+                    <div class="flex items-center gap-2.5">
+                        <div class="icon-container w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center group-hover:bg-purple-500/20 transition-colors flex-shrink-0">
+                            <i class="fas fa-history text-xs text-purple-500/50 group-hover:text-purple-400"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="font-bold uppercase tracking-wide text-xs">History</div>
+                            <div class="text-[10px] text-gray-500 truncate">Signal archive</div>
+                        </div>
+                    </div>
+                </a>
+
+                <!-- GROUP: SYSTEM -->
+                <div class="sidebar-group-label">System</div>
 
                 <a href="javascript:void(0)" onclick="switchRoom('settings')"
-                    class="nav-room block glass-panel p-4 rounded-xl text-gray-400 hover:text-white hover:border-white/30 transition-all group min-h-[44px]"
+                    class="nav-room block glass-panel px-3 py-2.5 rounded-xl text-gray-400 hover:text-white hover:border-white/20 transition-all group min-h-[44px]"
                     data-room="settings">
-                    <div class="flex items-center gap-3">
-                        <div
-                            class="icon-container w-10 h-10 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-white/10 transition-colors">
-                            <i class="fas fa-cog"></i>
+                    <div class="flex items-center gap-2.5">
+                        <div class="icon-container w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center group-hover:bg-white/10 transition-colors flex-shrink-0">
+                            <i class="fas fa-cog text-xs text-gray-600 group-hover:text-gray-300"></i>
                         </div>
-                        <div>
-                            <div class="font-bold uppercase tracking-wider text-sm">Settings</div>
-                            <div class="text-xs text-gray-500">System config</div>
+                        <div class="min-w-0">
+                            <div class="font-bold uppercase tracking-wide text-xs">Settings</div>
+                            <div class="text-[10px] text-gray-500 truncate">Theme · Alerts · Dev</div>
                         </div>
                     </div>
                 </a>
 
-                <div class="mt-8">
-                    <h3 class="text-xs uppercase tracking-widest text-gray-500 mb-2 font-bold px-2">Listed Signals</h3>
+                <!-- LISTED SIGNALS -->
+                <div class="mt-6">
+                    <div class="sidebar-group-label" style="margin-top:0">Active Signals</div>
                     <div id="sidebar-signals-list"
-                        class="space-y-2 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar">
+                        class="space-y-1.5 max-h-[180px] overflow-y-auto pr-1 custom-scrollbar">
                         <!-- Listed Signals dynamically populated here -->
                     </div>
                 </div>
@@ -356,14 +522,54 @@
 
             <!-- ROOM: SIGNALS -->
             <div id="room-signals" class="room-section active">
-                <div
-                    class="flex flex-col lg:flex-row lg:items-center justify-between border-b border-white/10 mb-6 pb-3 gap-4">
-                    <h2
-                        class="text-xl lg:text-2xl font-black uppercase tracking-widest text-white flex items-center gap-3">
-                        <i class="fas fa-satellite-dish text-cyan"></i> Live Signals
-                    </h2>
 
-                    <div class="flex items-center gap-3">
+                <!-- Quick-start flow -->
+                <div class="flow-strip mb-5">
+                    <div class="flow-step">
+                        <div class="flow-step-num">1</div>
+                        <div class="flow-step-body">
+                            <div class="flow-step-title">Browse Signals</div>
+                            <div class="flow-step-desc">Scan the cards below. Green = BUY opportunity, Red = SELL.</div>
+                        </div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="flow-step-num">2</div>
+                        <div class="flow-step-body">
+                            <div class="flow-step-title">Click a Card</div>
+                            <div class="flow-step-desc">View AI analysis, confluence score, key price levels &amp; rationale.</div>
+                        </div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="flow-step-num">3</div>
+                        <div class="flow-step-body">
+                            <div class="flow-step-title">Go to Terminal</div>
+                            <div class="flow-step-desc">Set your capital &amp; risk % — position size calculates automatically.</div>
+                        </div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="flow-step-num">4</div>
+                        <div class="flow-step-body">
+                            <div class="flow-step-title">Execute Trade</div>
+                            <div class="flow-step-desc">Paper trade to practice, or real trade when confident.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Room header -->
+                <div class="room-header" style="--room-accent:rgba(0,242,255,0.5);">
+                    <div class="room-header-row">
+                        <h2><i class="fas fa-satellite-dish text-cyan"></i> Live Signals</h2>
+                        <div class="flex items-center gap-2.5">
+                            <!-- Strategy Matchmaker -->
+                            <label for="strategy-matchmaker" class="sr-only">Risk Profile</label>
+                            <select id="strategy-matchmaker"
+                                class="bg-black/40 border border-white/10 rounded-lg px-3 py-2 min-h-[36px] text-xs font-bold text-gray-400 focus:outline-none focus:border-cyan appearance-none cursor-pointer hover:text-white transition-colors">
+                                <option value="">Risk Profile</option>
+                                <option value="conservative">🛡 Conservative (1:1)</option>
+                                <option value="balanced">⚖ Balanced (1:1.5)</option>
+                                <option value="aggressive">⚡ Aggressive (1:2)</option>
+                                <option value="sniper">🎯 Sniper (1:3)</option>
+                            </select>
                         <!-- Strategy Matchmaker -->
                         <label for="strategy-matchmaker" class="sr-only">Risk Profile</label>
                         <select id="strategy-matchmaker"
@@ -375,34 +581,24 @@
                             <option value="sniper">Sniper (1:3)</option>
                         </select>
 
-                        <!-- Timeframe Selector -->
-                        <div class="flex items-center gap-1 bg-black/40 p-1 rounded-lg border border-white/10 text-[10px] sm:text-xs font-mono overflow-x-auto"
-                            id="timeframe-selector">
-                            <button
-                                class="tf-btn px-2 sm:px-3 py-1.5 rounded text-gray-500 hover:text-white cursor-pointer"
-                                data-tf="1m" data-pro="true">1m <i class="fas fa-lock text-[8px] ml-0.5"></i></button>
-                            <button
-                                class="tf-btn px-2 sm:px-3 py-1.5 rounded text-gray-500 hover:text-white cursor-pointer"
-                                data-tf="5m" data-pro="true">5m <i class="fas fa-lock text-[8px] ml-0.5"></i></button>
-                            <button
-                                class="tf-btn px-2 sm:px-3 py-1.5 rounded text-gray-400 hover:text-white cursor-pointer"
-                                data-tf="15m">15m</button>
-                            <button
-                                class="tf-btn px-2 sm:px-3 py-1.5 rounded text-gray-400 hover:text-white cursor-pointer"
-                                data-tf="30m">30m</button>
-                            <button
-                                class="tf-btn px-2 sm:px-3 py-1.5 rounded bg-cyan/20 text-cyan font-bold cursor-pointer"
-                                data-tf="1h">1h</button>
-                            <button
-                                class="tf-btn px-2 sm:px-3 py-1.5 rounded text-gray-500 hover:text-white cursor-pointer"
-                                data-tf="4h" data-pro="true">4h <i class="fas fa-lock text-[8px] ml-0.5"></i></button>
-                            <button
-                                class="tf-btn px-2 sm:px-3 py-1.5 rounded text-gray-500 hover:text-white cursor-pointer"
-                                data-tf="1d" data-pro="true">1d <i class="fas fa-lock text-[8px] ml-0.5"></i></button>
-                            <button
-                                class="tf-btn px-2 sm:px-3 py-1.5 rounded text-gray-500 hover:text-white cursor-pointer"
-                                data-tf="1w" data-pro="true">1w <i class="fas fa-lock text-[8px] ml-0.5"></i></button>
+                            <!-- Timeframe Selector -->
+                            <div class="flex items-center gap-0.5 bg-black/40 p-1 rounded-lg border border-white/10 text-[10px] font-mono overflow-x-auto"
+                                id="timeframe-selector">
+                                <button class="tf-btn px-2 py-1.5 rounded text-gray-500 hover:text-white cursor-pointer" data-tf="1m" data-pro="true">1m <i class="fas fa-lock text-[7px]"></i></button>
+                                <button class="tf-btn px-2 py-1.5 rounded text-gray-500 hover:text-white cursor-pointer" data-tf="5m" data-pro="true">5m <i class="fas fa-lock text-[7px]"></i></button>
+                                <button class="tf-btn px-2 py-1.5 rounded text-gray-400 hover:text-white cursor-pointer" data-tf="15m">15m</button>
+                                <button class="tf-btn px-2 py-1.5 rounded text-gray-400 hover:text-white cursor-pointer" data-tf="30m">30m</button>
+                                <button class="tf-btn px-2 py-1.5 rounded bg-cyan/20 text-cyan font-bold cursor-pointer" data-tf="1h">1h</button>
+                                <button class="tf-btn px-2 py-1.5 rounded text-gray-500 hover:text-white cursor-pointer" data-tf="4h" data-pro="true">4h <i class="fas fa-lock text-[7px]"></i></button>
+                                <button class="tf-btn px-2 py-1.5 rounded text-gray-500 hover:text-white cursor-pointer" data-tf="1d" data-pro="true">1d <i class="fas fa-lock text-[7px]"></i></button>
+                                <button class="tf-btn px-2 py-1.5 rounded text-gray-500 hover:text-white cursor-pointer" data-tf="1w" data-pro="true">1w <i class="fas fa-lock text-[7px]"></i></button>
+                            </div>
                         </div>
+                    </div>
+                    <div class="room-subtitle">AI-scored signals across 60+ tokens · updated every 5 minutes · click any card for full analysis</div>
+                    <div class="beginner-tip">
+                        <i class="fas fa-lightbulb"></i>
+                        <span><strong>New here?</strong> Each card = one crypto token. The AI analyses 25 strategies and scores them 0–100. A <strong style="color:#4ade80;">green card</strong> suggests a potential BUY (price may rise). A <strong style="color:#f87171;">red card</strong> suggests a potential SELL (price may fall). Click any card to see the detailed breakdown.</span>
                     </div>
                 </div>
 
@@ -429,9 +625,17 @@
 
             <!-- ROOM: TERMINAL -->
             <div id="room-terminal" class="room-section hidden">
-                <h2 class="text-xl lg:text-2xl font-black uppercase tracking-widest text-white mb-6 border-b border-white/10 pb-3 flex items-center gap-3">
-                    <i class="fas fa-terminal text-orange"></i> Execution Terminal
-                </h2>
+
+                <div class="room-header" style="--room-accent:rgba(255,140,0,0.5);">
+                    <div class="room-header-row">
+                        <h2><i class="fas fa-terminal" style="color:#ff8c00;"></i> Execution Terminal</h2>
+                    </div>
+                    <div class="room-subtitle">Calculate exact position size, stop-loss, take-profit, and R:R ratio before placing a trade</div>
+                    <div class="beginner-tip" style="border-color:rgba(255,140,0,0.15);background:rgba(255,140,0,0.04);">
+                        <i class="fas fa-lightbulb" style="color:rgba(255,140,0,0.5);"></i>
+                        <span><strong>How to use:</strong> Load a signal from Live Signals first (click "Trade" on any card). Then enter your <strong>Account Capital</strong> and set your <strong>Risk %</strong> (start with 1–2%). The terminal calculates exactly how much to buy/sell and where to set your stop-loss automatically.</span>
+                    </div>
+                </div>
 
                 <!-- Selected signal banner (hidden until a signal is loaded) -->
                 <div id="tr-signal-banner" class="hidden mb-5 flex items-center gap-3 bg-cyan/10 border border-cyan/30 rounded-xl px-4 py-3">
@@ -560,9 +764,16 @@
 
             <!-- ROOM: ANALYTICS -->
             <div id="room-analytics" class="room-section hidden space-y-6">
-                <h2 class="text-xl lg:text-2xl font-black uppercase tracking-widest text-white mb-6 border-b border-white/10 pb-3 flex items-center gap-3">
-                    <i class="fas fa-chart-pie text-blue-400"></i> Analytics
-                </h2>
+                <div class="room-header" style="--room-accent:rgba(96,165,250,0.5);">
+                    <div class="room-header-row">
+                        <h2><i class="fas fa-chart-pie text-blue-400"></i> Analytics &amp; Portfolio</h2>
+                    </div>
+                    <div class="room-subtitle">Your portfolio balance, active positions, and engine performance metrics</div>
+                    <div class="beginner-tip" style="border-color:rgba(96,165,250,0.15);background:rgba(96,165,250,0.04);">
+                        <i class="fas fa-lightbulb" style="color:rgba(96,165,250,0.5);"></i>
+                        <span><strong>Reading the metrics:</strong> <strong>Expectancy</strong> = average profit per trade (positive is good). <strong>Max Drawdown</strong> = the worst losing streak (lower is safer). <strong>Profit Factor</strong> = total wins ÷ total losses (above 1.0 means the system is profitable overall).</span>
+                    </div>
+                </div>
 
                 <!-- Account overview -->
                 <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -651,9 +862,16 @@
 
             <!-- ROOM: SIGNAL HISTORY -->
             <div id="room-history" class="room-section hidden">
-                <h2 class="text-xl lg:text-2xl font-black uppercase tracking-widest text-white mb-6 border-b border-white/10 pb-3 flex items-center gap-3">
-                    <i class="fas fa-history text-purple-400"></i> Signal History
-                </h2>
+                <div class="room-header" style="--room-accent:rgba(167,139,250,0.5);">
+                    <div class="room-header-row">
+                        <h2><i class="fas fa-history text-purple-400"></i> Signal History</h2>
+                    </div>
+                    <div class="room-subtitle">Archive of all signals generated this session — click any row to load it into the Terminal</div>
+                    <div class="beginner-tip" style="border-color:rgba(167,139,250,0.15);background:rgba(167,139,250,0.04);">
+                        <i class="fas fa-lightbulb" style="color:rgba(167,139,250,0.5);"></i>
+                        <span><strong>Tip:</strong> Use history to review past setups and learn from them. Click the <strong>arrow icon</strong> on any row to re-load that signal into the Terminal so you can see exactly what the entry, stop-loss and take-profit levels were.</span>
+                    </div>
+                </div>
 
                 <div class="glass-panel p-5 rounded-xl overflow-hidden">
                     <div class="flex items-center justify-between mb-4">
@@ -690,12 +908,15 @@
 
             <!-- ROOM: BUY COCKPIT -->
             <div id="room-buys" class="room-section hidden">
-                <div class="flex flex-col lg:flex-row lg:items-center justify-between border-b border-green-500/20 mb-6 pb-3 gap-4">
-                    <h2 class="text-xl lg:text-2xl font-black uppercase tracking-widest text-white flex items-center gap-3">
-                        <i class="fas fa-arrow-trend-up text-green-400"></i> BUY Cockpit
-                        <span id="buy-cockpit-count" class="text-sm font-mono font-normal normal-case tracking-normal text-green-400/60"></span>
-                    </h2>
-                    <p class="text-xs text-gray-500">Tokens with an active BUY / LONG signal right now — updates live</p>
+                <div class="room-header" style="--room-accent:rgba(74,222,128,0.5);">
+                    <div class="room-header-row">
+                        <h2><i class="fas fa-arrow-trend-up text-green-400"></i> BUY Setups <span id="buy-cockpit-count" class="text-sm font-mono font-normal normal-case tracking-normal text-green-400/60 ml-1"></span></h2>
+                    </div>
+                    <div class="room-subtitle">Only tokens where the AI fired an active LONG / BUY signal — everything else is hidden for clarity</div>
+                    <div class="beginner-tip" style="border-color:rgba(74,222,128,0.15);background:rgba(74,222,128,0.04);">
+                        <i class="fas fa-lightbulb" style="color:rgba(74,222,128,0.5);"></i>
+                        <span><strong>BUY signal means:</strong> the AI believes price is more likely to go UP in the next few hours based on 25 strategy indicators. This is <em>not</em> a guarantee — always check the confidence score and use a stop-loss.</span>
+                    </div>
                 </div>
                 <div id="buySignalsContainer"
                     class="signals-grid grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
@@ -708,12 +929,15 @@
 
             <!-- ROOM: SELL COCKPIT -->
             <div id="room-sells" class="room-section hidden">
-                <div class="flex flex-col lg:flex-row lg:items-center justify-between border-b border-red-500/20 mb-6 pb-3 gap-4">
-                    <h2 class="text-xl lg:text-2xl font-black uppercase tracking-widest text-white flex items-center gap-3">
-                        <i class="fas fa-arrow-trend-down text-red-400"></i> SELL Cockpit
-                        <span id="sell-cockpit-count" class="text-sm font-mono font-normal normal-case tracking-normal text-red-400/60"></span>
-                    </h2>
-                    <p class="text-xs text-gray-500">Tokens with an active SELL / SHORT signal right now — updates live</p>
+                <div class="room-header" style="--room-accent:rgba(248,113,113,0.5);">
+                    <div class="room-header-row">
+                        <h2><i class="fas fa-arrow-trend-down text-red-400"></i> SELL Setups <span id="sell-cockpit-count" class="text-sm font-mono font-normal normal-case tracking-normal text-red-400/60 ml-1"></span></h2>
+                    </div>
+                    <div class="room-subtitle">Only tokens where the AI fired an active SHORT / SELL signal — filtered for clarity</div>
+                    <div class="beginner-tip" style="border-color:rgba(248,113,113,0.15);background:rgba(248,113,113,0.04);">
+                        <i class="fas fa-lightbulb" style="color:rgba(248,113,113,0.5);"></i>
+                        <span><strong>SELL signal means:</strong> the AI believes price is more likely to go DOWN. On spot markets, this means avoiding new buys. On futures/derivatives, you can short. Always check the AI confidence score — signals above 75% are higher quality.</span>
+                    </div>
                 </div>
                 <div id="sellSignalsContainer"
                     class="signals-grid grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
@@ -726,9 +950,13 @@
 
             <!-- ROOM: SETTINGS -->
             <div id="room-settings" class="room-section hidden">
-                <h2
-                    class="text-xl lg:text-2xl font-black uppercase tracking-widest text-white mb-6 border-b border-white/10 pb-3 flex items-center gap-3">
-                    <i class="fas fa-cog text-gray-400"></i> Settings
+                <div class="room-header" style="--room-accent:rgba(107,114,128,0.4);">
+                    <div class="room-header-row">
+                        <h2><i class="fas fa-cog text-gray-400"></i> Settings</h2>
+                    </div>
+                    <div class="room-subtitle">Appearance, notifications, developer tools, and admin panel</div>
+                </div>
+                <h2 class="sr-only">Settings
                 </h2>
                 <div class="glass-panel p-5 rounded-xl max-w-2xl">
                     <p class="text-gray-400 text-sm mb-6">System configuration and preferences.</p>
@@ -875,55 +1103,72 @@
             <div id="room-trader" class="room-section hidden">
 
                 <!-- ── Header ────────────────────────────────────────────────── -->
-                <div class="flex flex-col lg:flex-row lg:items-center justify-between border-b border-white/10 mb-5 pb-3 gap-3">
-                    <div class="flex items-center gap-3">
-                        <h2 class="text-xl lg:text-2xl font-black uppercase tracking-widest text-white flex items-center gap-3">
-                            <i class="fas fa-robot text-yellow-400"></i> AEGIS Trader Bot
-                        </h2>
-                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-400/10 text-yellow-400 border border-yellow-400/20">VIRTUAL</span>
+                <div class="room-header" style="--room-accent:rgba(250,204,21,0.5);">
+                    <div class="room-header-row">
+                        <div class="flex items-center gap-2.5">
+                            <h2><i class="fas fa-robot text-yellow-400"></i> AEGIS Trader Bot</h2>
+                            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-yellow-400/10 text-yellow-400 border border-yellow-400/20">VIRTUAL</span>
+                        </div>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <select id="trader-risk-select" onchange="setTraderRisk(this.value)"
+                                class="bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-300 focus:outline-none appearance-none cursor-pointer">
+                                <option value="conservative">🛡 Conservative</option>
+                                <option value="balanced" selected>⚖ Balanced</option>
+                                <option value="aggressive">⚡ Aggressive</option>
+                            </select>
+                            <button onclick="triggerTraderScan()" id="trader-scan-btn"
+                                class="px-3 py-1.5 rounded-lg text-xs font-black uppercase bg-yellow-400/15 text-yellow-400 border border-yellow-400/30 hover:bg-yellow-400/25 transition-all flex items-center gap-1.5">
+                                <i class="fas fa-satellite-dish"></i> Scan All 60
+                            </button>
+                            <button onclick="loadTraderRecord()" class="px-3 py-1.5 rounded-lg text-xs font-bold text-gray-500 border border-white/10 hover:text-white hover:border-white/20 transition-all" title="Refresh data">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
                     </div>
-                    <div class="flex items-center gap-2 flex-wrap">
-                        <select id="trader-risk-select" onchange="setTraderRisk(this.value)"
-                            class="bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-300 focus:outline-none appearance-none cursor-pointer">
-                            <option value="conservative">Conservative</option>
-                            <option value="balanced" selected>Balanced</option>
-                            <option value="aggressive">Aggressive</option>
-                        </select>
-                        <button onclick="triggerTraderScan()" id="trader-scan-btn"
-                            class="px-3 py-1.5 rounded-lg text-xs font-black uppercase bg-yellow-400/15 text-yellow-400 border border-yellow-400/30 hover:bg-yellow-400/25 transition-all flex items-center gap-1.5">
-                            <i class="fas fa-satellite-dish"></i> Scan All 60
-                        </button>
-                        <button onclick="loadTraderRecord()" class="px-3 py-1.5 rounded-lg text-xs font-bold text-gray-500 border border-white/10 hover:text-white hover:border-white/20 transition-all">
-                            <i class="fas fa-sync-alt"></i>
-                        </button>
+                    <div class="room-subtitle">Autonomous AI bot trading 60 tokens across 3 modes: Scalping (5m), Intraday (1h), Swing (4h) · Paper trading only</div>
+                    <div class="beginner-tip" style="border-color:rgba(250,204,21,0.15);background:rgba(250,204,21,0.04);">
+                        <i class="fas fa-lightbulb" style="color:rgba(250,204,21,0.5);"></i>
+                        <span><strong>How it works:</strong> The AI scans 60 tokens every 5 minutes. When its ML model reaches ≥65% confidence AND 6+ strategies agree, it <strong>paper-trades</strong> automatically — no real money involved. Use the <strong>Scanner tab</strong> to see all 60 tokens, <strong>Open Positions</strong> to see active trades, and <strong>History</strong> to review closed ones.</span>
                     </div>
                 </div>
 
                 <!-- ── Wallet Stats Bar ───────────────────────────────────────── -->
                 <div class="grid grid-cols-3 lg:grid-cols-6 gap-2 mb-5">
-                    <div class="glass-panel p-3 rounded-xl border border-white/5 text-center">
-                        <div class="text-[9px] text-gray-600 uppercase tracking-wider mb-1">Balance</div>
-                        <div class="text-sm font-mono font-black text-white" id="tw-balance">$10,000</div>
+                    <div class="tw-stat-card">
+                        <div class="tw-stat-icon" style="color:#6b7280;"><i class="fas fa-wallet"></i></div>
+                        <div class="tw-stat-label">Balance</div>
+                        <div class="tw-stat-value text-white" id="tw-balance">$10,000</div>
+                        <div class="tw-stat-hint">virtual capital</div>
                     </div>
-                    <div class="glass-panel p-3 rounded-xl border border-white/5 text-center">
-                        <div class="text-[9px] text-gray-600 uppercase tracking-wider mb-1">Total PnL</div>
-                        <div class="text-sm font-mono font-black" id="tw-pnl">—</div>
+                    <div class="tw-stat-card">
+                        <div class="tw-stat-icon" style="color:#6b7280;"><i class="fas fa-chart-line"></i></div>
+                        <div class="tw-stat-label">Total PnL</div>
+                        <div class="tw-stat-value" id="tw-pnl">—</div>
+                        <div class="tw-stat-hint">all time</div>
                     </div>
-                    <div class="glass-panel p-3 rounded-xl border border-white/5 text-center">
-                        <div class="text-[9px] text-gray-600 uppercase tracking-wider mb-1">Win Rate</div>
-                        <div class="text-sm font-mono font-black text-green-400" id="tw-wr">—</div>
+                    <div class="tw-stat-card">
+                        <div class="tw-stat-icon" style="color:#4ade80;"><i class="fas fa-trophy"></i></div>
+                        <div class="tw-stat-label">Win Rate</div>
+                        <div class="tw-stat-value text-green-400" id="tw-wr">—</div>
+                        <div class="tw-stat-hint">closed trades</div>
                     </div>
-                    <div class="glass-panel p-3 rounded-xl border border-white/5 text-center">
-                        <div class="text-[9px] text-gray-600 uppercase tracking-wider mb-1">Trades</div>
-                        <div class="text-sm font-mono font-black text-yellow-400" id="tw-trades">—</div>
+                    <div class="tw-stat-card">
+                        <div class="tw-stat-icon" style="color:#fbbf24;"><i class="fas fa-exchange-alt"></i></div>
+                        <div class="tw-stat-label">Total Trades</div>
+                        <div class="tw-stat-value text-yellow-400" id="tw-trades">—</div>
+                        <div class="tw-stat-hint">completed</div>
                     </div>
-                    <div class="glass-panel p-3 rounded-xl border border-white/5 text-center">
-                        <div class="text-[9px] text-gray-600 uppercase tracking-wider mb-1">Open</div>
-                        <div class="text-sm font-mono font-black text-cyan" id="tw-open">—</div>
+                    <div class="tw-stat-card">
+                        <div class="tw-stat-icon" style="color:#00f2ff;"><i class="fas fa-layer-group"></i></div>
+                        <div class="tw-stat-label">Open Now</div>
+                        <div class="tw-stat-value text-cyan" id="tw-open">—</div>
+                        <div class="tw-stat-hint">positions live</div>
                     </div>
-                    <div class="glass-panel p-3 rounded-xl border border-white/5 text-center">
-                        <div class="text-[9px] text-gray-600 uppercase tracking-wider mb-1">Active Signals</div>
-                        <div class="text-sm font-mono font-black text-yellow-400" id="trader-stat-count">—</div>
+                    <div class="tw-stat-card">
+                        <div class="tw-stat-icon" style="color:#fbbf24;"><i class="fas fa-bolt"></i></div>
+                        <div class="tw-stat-label">Signals Fired</div>
+                        <div class="tw-stat-value text-yellow-400" id="trader-stat-count">—</div>
+                        <div class="tw-stat-hint">this scan</div>
                     </div>
                 </div>
 
