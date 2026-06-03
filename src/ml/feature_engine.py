@@ -991,7 +991,7 @@ def compute_oi_signals(df: pd.DataFrame) -> pd.DataFrame:
     """
     if 'open_interest' not in df.columns:
         return pd.DataFrame(index=df.index)
-    oi = df['open_interest'].fillna(method='ffill').fillna(0)
+    oi = df['open_interest'].ffill().fillna(0)
     px = df['close']
 
     oi_chg_8  = oi.pct_change(8).clip(-0.5, 0.5).fillna(0)

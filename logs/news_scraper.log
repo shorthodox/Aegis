@@ -210,3 +210,40 @@
 2026-05-31 13:54:05 | INFO | Pruned 14 old news items (>48h)
 2026-05-31 13:54:05 | INFO | Saved 41 news items to d:\Content\Animesh\bots\ai_signal_bot\data\news_data.json
 2026-05-31 13:54:05 | INFO | Scraping complete. Total stored: 41 items. Avg sentiment (last 50): -0.0199
+2026-06-03 15:22:25 | INFO | Starting news scraping cycle...
+2026-06-03 15:22:25 | INFO | Fetching RSS: https://cointelegraph.com/rss
+2026-06-03 15:22:27 | INFO | Fetching RSS: https://www.coindesk.com/feed/
+2026-06-03 15:22:27 | WARNING | Feedparser error for https://www.coindesk.com/feed/: text/html; charset=utf-8 is not an XML media type
+2026-06-03 15:22:28 | INFO | Fetching RSS: https://cryptoslate.com/feed/
+2026-06-03 15:22:30 | INFO | Fetching RSS: https://decrypt.co/feed
+2026-06-03 15:22:31 | INFO | Fetched 50 raw articles, 50 new unique items.
+2026-06-03 15:22:31 | INFO | Pruned 33 old news items (>48h)
+2026-06-03 15:22:31 | INFO | Saved 50 news items to d:\Content\Animesh\bots\ai_signal_bot\data\news_data.json
+2026-06-03 15:22:31 | INFO | Scraping complete. Total stored: 50 items. Avg sentiment (last 50): -0.0532
+2026-06-03 16:05:48 | INFO | Starting news scraping cycle...
+2026-06-03 16:05:48 | INFO | Fetching RSS: https://cointelegraph.com/rss
+2026-06-03 16:05:49 | INFO | Fetching RSS: https://www.coindesk.com/feed/
+2026-06-03 16:05:50 | WARNING | Feedparser error for https://www.coindesk.com/feed/: text/html; charset=utf-8 is not an XML media type
+2026-06-03 16:05:51 | INFO | Fetching RSS: https://cryptoslate.com/feed/
+2026-06-03 16:05:53 | INFO | Fetching RSS: https://decrypt.co/feed
+2026-06-03 16:05:54 | INFO | No new unique headlines found.
+2026-06-03 16:05:54 | INFO | Saved 50 news items to d:\Content\Animesh\bots\ai_signal_bot\data\news_data.json
+2026-06-03 22:21:50 | INFO | Starting news scraping cycle...
+2026-06-03 22:21:50 | INFO | Fetching RSS: https://cointelegraph.com/rss
+2026-06-03 22:21:52 | INFO | Fetching RSS: https://www.coindesk.com/feed/
+2026-06-03 22:21:52 | WARNING | Feedparser error for https://www.coindesk.com/feed/: text/html; charset=utf-8 is not an XML media type
+2026-06-03 22:21:53 | INFO | Fetching RSS: https://cryptoslate.com/feed/
+2026-06-03 22:21:55 | INFO | Fetching RSS: https://decrypt.co/feed
+2026-06-03 22:21:56 | INFO | Fetched 50 raw articles, 24 new unique items.
+2026-06-03 22:21:56 | INFO | Pruned 2 old news items (>48h)
+2026-06-03 22:21:56 | INFO | Saved 72 news items to d:\Content\Animesh\bots\ai_signal_bot\data\news_data.json
+2026-06-03 22:21:56 | INFO | Scraping complete. Total stored: 72 items. Avg sentiment (last 50): -0.0465
+2026-06-03 23:01:18 | INFO | Starting news scraping cycle...
+2026-06-03 23:01:18 | INFO | Fetching RSS: https://cointelegraph.com/rss
+2026-06-03 23:01:19 | INFO | Fetching RSS: https://www.coindesk.com/feed/
+2026-06-03 23:01:19 | WARNING | Feedparser error for https://www.coindesk.com/feed/: text/html; charset=utf-8 is not an XML media type
+2026-06-03 23:01:20 | INFO | Fetching RSS: https://cryptoslate.com/feed/
+2026-06-03 23:01:23 | INFO | Fetching RSS: https://decrypt.co/feed
+2026-06-03 23:01:24 | INFO | Fetched 50 raw articles, 3 new unique items.
+2026-06-03 23:01:24 | INFO | Saved 75 news items to d:\Content\Animesh\bots\ai_signal_bot\data\news_data.json
+2026-06-03 23:01:24 | INFO | Scraping complete. Total stored: 75 items. Avg sentiment (last 50): -0.0226

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-03T00:00:00.000000+00:00",
+  "generated_at": "2026-06-03T18:03:30.146249+00:00",
   "summary": {
     "initial_capital": 10000.0,
     "balance": 10000.0,
@@ -11,5 +11,20 @@
     "win_rate": 0.0,
     "open_positions": 0
   },
-  "signals": []
+  "signals": [],
+  "performance": {
+    "total_recent": 0,
+    "wins": 0,
+    "losses": 0,
+    "win_rate": 0.0,
+    "avg_pnl_pct": 0.0,
+    "safe_mode": false,
+    "per_symbol_wr": {}
+  },
+  "drift": {},
+  "portfolio": {
+    "open_total": 0,
+    "max_allowed": 6,
+    "cluster_counts": {}
+  }
 }

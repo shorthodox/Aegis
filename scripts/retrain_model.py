@@ -470,7 +470,7 @@ def compute_soft_confluence_features(df: pd.DataFrame, window: int = 120) -> pd.
         'prc_bands':        1.0,
     }
     Wsum = sum(W.values())   # 7.5
-    total = sum(result[c] * w for c, w in W.items()) / Wsum
+    total = pd.concat([result[c] * w for c, w in W.items()], axis=1).sum(axis=1) / Wsum
     result['prc_total'] = total.clip(0.0, 1.0)
 
     # macro_confluence_score in [-1, +1]: used by create_triple_barrier_labels()
