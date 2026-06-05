@@ -1728,13 +1728,24 @@ def prepare_features(df: pd.DataFrame,
 
     # ----- Volume & Liquidity -----
     compiled_features['vwap'] = compute_vwap(df)
-    compiled_features['dist_vwap'] = (df['close'] / compiled_features['vwap']) - 1
+    # dist_vwap: use 24-bar rolling VWAP for stationarity.
+    # The cumulative VWAP drifts with price history (PSI≈17 across bull/bear cycles).
+    # A 24-bar rolling percentage distance is stationary and meaningful.
+    _tp24 = (df['high'] + df['low'] + df['close']) / 3
+    _vwap24 = ((_tp24 * df['volume']).rolling(24, min_periods=6).sum()
+               / df['volume'].rolling(24, min_periods=6).sum())
+    compiled_features['dist_vwap'] = (
+        (df['close'] - _vwap24) / _vwap24.replace(0, np.nan)
+    ).fillna(0.0)
     compiled_features['cmf_20'] = compute_cmf(df, 20)
     compiled_features['vol_velocity'] = df['volume'].pct_change(3)
     compiled_features['volume_zscore'] = (df['volume'] - df['volume'].rolling(20).mean()) / df['volume'].rolling(20).std()
     compiled_features['relative_volume'] = df['volume'] / (df['volume'].rolling(20, min_periods=1).mean() + 1e-9)
     compiled_features['rolling_volatility'] = compiled_features['log_returns'].rolling(24, min_periods=1).std()
-    compiled_features['obv'] = df['close'].diff().apply(np.sign).mul(df['volume']).fillna(0).cumsum()
+    _obv_raw = df['close'].diff().apply(np.sign).mul(df['volume']).fillna(0).cumsum()
+    _obv_mean = _obv_raw.rolling(100, min_periods=20).mean()
+    _obv_std  = _obv_raw.rolling(100, min_periods=20).std().replace(0, np.nan).ffill().fillna(1.0)
+    compiled_features['obv'] = ((_obv_raw - _obv_mean) / _obv_std).fillna(0.0)
     compiled_features['acc_dist'] = compute_accumulation_distribution(df)
 
     # ----- Volume Delta (CVD proxy) -----
@@ -1766,6 +1777,7 @@ def prepare_features(df: pd.DataFrame,
 
     # ----- Volatility & Statistics -----
     compiled_features['atr_14'] = compute_atr(df, 14)
+    compiled_features['atr_pct'] = (compiled_features['atr_14'] / df['close'].replace(0, np.nan)).fillna(0.0)
     compiled_features['volatility_skew'] = df['close'].rolling(24).skew()
     compiled_features['volatility_kurt'] = df['close'].rolling(24).kurt()
     compiled_features['historical_volatility'] = compute_historical_volatility(df, period=24)
@@ -1885,7 +1897,10 @@ def prepare_features(df: pd.DataFrame,
 
     # --- Volume ---
     try:
-        compiled_features['pvt'] = compute_pvt(df)
+        _pvt_raw = compute_pvt(df)
+        _pvt_mean = _pvt_raw.rolling(100, min_periods=20).mean()
+        _pvt_std  = _pvt_raw.rolling(100, min_periods=20).std().replace(0, np.nan).ffill().fillna(1.0)
+        compiled_features['pvt'] = ((_pvt_raw - _pvt_mean) / _pvt_std).fillna(0.0)
         compiled_features['kvo'], compiled_features['kvo_signal'] = compute_klinger_oscillator(df)
     except Exception:
         pass
@@ -2042,6 +2057,19 @@ def prepare_features(df: pd.DataFrame,
     # ----- Delta & Decay features: short-term deltas and exponentially-weighted aggregates -----
     try:
         df = add_delta_and_decay_features(df, cols=['close', 'volume', 'vwap', 'returns_1h'], half_life=24.0)
+        # Convert absolute-price decay means to price-relative distances.
+        # close_decay_mean_24 is an exponentially-weighted close price — it drifts
+        # proportionally with price level (PSI > 12 at BTC 20k vs 60k).
+        # Replacing with (close - decay_mean) / close gives a stationary signal.
+        _close = df['close'].replace(0, np.nan)
+        if 'close_decay_mean_24' in df.columns:
+            df['close_decay_mean_24'] = ((_close - df['close_decay_mean_24']) / _close).fillna(0.0)
+        if 'close_decay_std_24' in df.columns:
+            df['close_decay_std_24'] = (df['close_decay_std_24'] / _close).fillna(0.0)
+        if 'vwap_decay_mean_24' in df.columns:
+            df['vwap_decay_mean_24'] = ((_close - df['vwap_decay_mean_24']) / _close).fillna(0.0)
+        if 'vwap_decay_std_24' in df.columns:
+            df['vwap_decay_std_24'] = (df['vwap_decay_std_24'] / _close).fillna(0.0)
     except Exception:
         pass
 

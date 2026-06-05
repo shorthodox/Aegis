@@ -1,0 +1,83 @@
+{
+  "symbol": "BTC/USDT",
+  "updated_at": "2026-06-05T00:28:24.919696",
+  "target_precision": 0.5990491770227899,
+  "global_precision": 0.424,
+  "regimes": {
+    "COMPRESSION": {
+      "trades": 7,
+      "coverage": 0.0087,
+      "precision": 0.5714,
+      "buy_precision": 0.25,
+      "sell_precision": 1.0,
+      "win_rate": 0.5714,
+      "expectancy_pct": 0.3037,
+      "profit_factor": 8.086,
+      "global_precision": 0.424,
+      "confidence_modifier": 0.1475,
+      "learned_threshold": 0.4084,
+      "threshold": 0.4083969465648855,
+      "modifier": 0.1474519632414369
+    },
+    "DISTRIBUTION": {
+      "trades": 150,
+      "coverage": 0.0568,
+      "precision": 0.3867,
+      "buy_precision": 0.3659,
+      "sell_precision": 0.4118,
+      "win_rate": 0.3867,
+      "expectancy_pct": 0.0964,
+      "profit_factor": 1.331,
+      "global_precision": 0.424,
+      "confidence_modifier": -0.0373,
+      "learned_threshold": 0.4084,
+      "threshold": 0.4083969465648855,
+      "modifier": -0.03730994152046785
+    },
+    "VOLATILE_EXPANSION": {
+      "trades": 41,
+      "coverage": 0.0587,
+      "precision": 0.6829,
+      "buy_precision": 0.7917,
+      "sell_precision": 0.5294,
+      "win_rate": 0.6829,
+      "expectancy_pct": 0.5829,
+      "profit_factor": 3.328,
+      "global_precision": 0.424,
+      "confidence_modifier": 0.2,
+      "learned_threshold": 0.4,
+      "threshold": 0.4,
+      "modifier": 0.2
+    },
+    "TRENDING_BEAR": {
+      "trades": 120,
+      "coverage": 0.0999,
+      "precision": 0.425,
+      "buy_precision": 0.4182,
+      "sell_precision": 0.4308,
+      "win_rate": 0.425,
+      "expectancy_pct": 0.1193,
+      "profit_factor": 1.289,
+      "global_precision": 0.424,
+      "confidence_modifier": 0.001,
+      "learned_threshold": 0.4084,
+      "threshold": 0.4083969465648855,
+      "modifier": 0.0010233918128654818
+    },
+    "ACCUMULATION": {
+      "trades": 24,
+      "coverage": 0.0436,
+      "precision": 0.1667,
+      "buy_precision": 0.1053,
+      "sell_precision": 0.4,
+      "win_rate": 0.1667,
+      "expectancy_pct": -0.4163,
+      "profit_factor": 0.342,
+      "global_precision": 0.424,
+      "confidence_modifier": -0.2573,
+      "learned_threshold": 0.4084,
+      "threshold": 0.4083969465648855,
+      "modifier": -0.2573099415204678
+    }
+  }
+}

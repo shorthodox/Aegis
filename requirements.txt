@@ -112,3 +112,4 @@ email-validator==2.3.0
 
 
 hmmlearn==0.3.3
+torch>=2.0.0

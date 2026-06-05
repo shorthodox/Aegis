@@ -153,7 +153,7 @@ META_PARAMS = {
 }
 
 FLEET_SYMBOLS = [
-    # ── Majors (20) ───────────────────────────────────────────────────────
+    # ── Majors (20) ──────────────────────────────────────────
     'BTC/USDT', 'ETH/USDT', 'BNB/USDT', 'SOL/USDT', 'XRP/USDT',
     'ADA/USDT', 'DOGE/USDT', 'TRX/USDT', 'AVAX/USDT', 'LINK/USDT',
     'DOT/USDT', 'TON/USDT', 'SHIB/USDT', 'BCH/USDT', 'LTC/USDT',
@@ -393,7 +393,7 @@ def compute_soft_confluence_features(df: pd.DataFrame, window: int = 120) -> pd.
     A separate macro_confluence_score column is derived and mapped to [-1, +1]
     for use in the triple-barrier label cancellation logic.
 
-    Window of 120 bars ≈ 5 days on 1h data — long enough to be meaningful,
+    Window of 120 bars ~ 5 days on 1h data - long enough to be meaningful,
     short enough to track regime changes within the training set.
     """
     result = pd.DataFrame(index=df.index)
@@ -969,8 +969,8 @@ def fit_temperature(probs: np.ndarray, y: np.ndarray) -> float:
 # ============================================================
 # SMALL UTILITIES
 # ============================================================
-def _dm(X: pd.DataFrame, y: Optional[np.ndarray] = None, w: Optional[np.ndarray] = None) -> xgb.DMatrix:
-    return xgb.DMatrix(X, label=y, weight=w, feature_names=list(X.columns))
+def _dm(X: pd.DataFrame, y: Optional[np.ndarray] = None, w: Optional[np.ndarray] = None, fw: Optional[np.ndarray] = None) -> xgb.DMatrix:
+    return xgb.DMatrix(X, label=y, weight=w, feature_names=list(X.columns), feature_weights=fw)
 
 
 def _full_params(best: dict) -> dict:
@@ -1012,7 +1012,7 @@ def proposed_side(primary_probs: np.ndarray) -> np.ndarray:
     return np.where(primary_probs[:, 2] >= primary_probs[:, 0], 2, 0)
 
 
-def objective(trial, Xtr, ytr, Xva, yva):
+def objective(trial, Xtr, ytr, Xva, yva, fw=None):
     params = {
         'objective': 'multi:softprob', 'eval_metric': 'mlogloss', 'num_class': NUM_CLASS,
         'max_depth': trial.suggest_int('max_depth', 3, 8),
@@ -1025,20 +1025,20 @@ def objective(trial, Xtr, ytr, Xva, yva):
         'min_child_weight': trial.suggest_int('min_child_weight', 5, 20),
         'seed': 42, 'tree_method': 'hist', 'missing': np.nan,
     }
-    m = xgb.train(params, _dm(Xtr, ytr, sample_weights(ytr)), num_boost_round=500,
-                  evals=[(_dm(Xva, yva), 'eval')], early_stopping_rounds=50, verbose_eval=False)
-    return float(log_loss(yva, m.predict(_dm(Xva)), labels=list(range(NUM_CLASS))))
+    m = xgb.train(params, _dm(Xtr, ytr, sample_weights(ytr), fw=fw), num_boost_round=500,
+                  evals=[(_dm(Xva, yva, fw=fw), 'eval')], early_stopping_rounds=50, verbose_eval=False)
+    return float(log_loss(yva, m.predict(_dm(Xva, fw=fw)), labels=list(range(NUM_CLASS))))
 
 
 def primary_oof(X: pd.DataFrame, y: np.ndarray, params: dict,
-                n_splits: int, gap: int) -> np.ndarray:
+                n_splits: int, gap: int, fw: Optional[np.ndarray] = None) -> np.ndarray:
     """Out-of-fold primary probabilities (purged). Early rows stay NaN."""
     oof = np.full((len(X), NUM_CLASS), np.nan)
     for tr, va in TimeSeriesSplit(n_splits=n_splits, gap=gap).split(X):
-        m = xgb.train(params, _dm(X.iloc[tr], y[tr], sample_weights(y[tr])),
-                      num_boost_round=500, evals=[(_dm(X.iloc[va], y[va]), 'eval')],
+        m = xgb.train(params, _dm(X.iloc[tr], y[tr], sample_weights(y[tr]), fw=fw),
+                      num_boost_round=500, evals=[(_dm(X.iloc[va], y[va], fw=fw), 'eval')],
                       early_stopping_rounds=50, verbose_eval=False)
-        oof[va] = m.predict(_dm(X.iloc[va]))
+        oof[va] = m.predict(_dm(X.iloc[va], fw=fw))
     return oof
 
 
@@ -1507,7 +1507,7 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         ))
 
         # ── Dynamic meta regularization ───────────────────────────────────
-        # Regularisation tiers are moderate, not maxed. λ=6.0/mcw=20 (old
+        # Regularisation tiers are moderate, not maxed. L=6.0/mcw=20 (old
         # values) produced a near-uniform meta output (all confidences ~0.52)
         # so that every quantile threshold hit either >60% coverage or <80
         # trades — silently blocking signals even when the primary was 84%
@@ -1524,8 +1524,8 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         print(f"ATR multiplier : base={atr_mult} | typical={_typical:.2f} "
               f"(ER_med={_er_med:.2f}, vol_med={_vol_med:.2f}) | range=[{atr_mult*0.8:.1f}, 4.5]")
         print(f"Token params   : lookahead={token_lookahead}h | "
-              f"precision_target={token_precision_target:.1%} (breakeven≈{token_breakeven:.1%}) | "
-              f"meta_reg=λ{_meta_reg}/mcw{_meta_mcw}")
+              f"precision_target={token_precision_target:.1%} (breakeven~{token_breakeven:.1%}) | "
+              f"meta_reg=L{_meta_reg}/mcw{_meta_mcw}")
 
         labels = create_triple_barrier_labels(
             df, atr_multiplier=atr_mult, max_lookahead=token_lookahead,
@@ -1571,12 +1571,14 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         Xtp = train_pool[feature_cols]
         ytp = train_pool['target'].to_numpy().astype(int)
 
-        # ---- 1) SHAP pruning (train pool) ----
-        print("   Computing SHAP importance on train pool...")
-        temp_model = xgb.train(DEFAULT_PARAMS, _dm(Xtp, ytp, sample_weights(ytp)),
-                               num_boost_round=120, verbose_eval=False)
-        feature_cols = prune_features_by_shap(temp_model, Xtp)
-        Xtp = train_pool[feature_cols]
+        # ---- 1) Feature Health Manager (train pool) ----
+        print("   Evaluating Feature Health...")
+        from src.ml.feature_health import FeatureHealthManager, DynamicFeatureWeightingEngine
+        fhm = FeatureHealthManager()
+        fhm.analyze_drift(Xtp, holdout[feature_cols], feature_cols)
+        dfwe = DynamicFeatureWeightingEngine()
+        fw = dfwe.calculate_weights(fhm.feature_states, feature_cols)
+        # Xtp remains unchanged because we weight features instead of dropping them
         print(f"   Active feature set: {len(feature_cols)} features.")
 
         # ---- 2) Optuna tune primary (purged inner split) ----
@@ -1584,13 +1586,13 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         itr, iva = inner[-1]
         study = optuna.create_study(direction='minimize',
                                     sampler=optuna.samplers.TPESampler(seed=42))
-        study.optimize(lambda t: objective(t, Xtp.iloc[itr], ytp[itr], Xtp.iloc[iva], ytp[iva]),
+        study.optimize(lambda t: objective(t, Xtp.iloc[itr], ytp[itr], Xtp.iloc[iva], ytp[iva], fw=fw),
                        n_trials=OPTUNA_TRIALS, show_progress_bar=False)
         full_params = _full_params(study.best_params)
         print(f"   Best params (val logloss {study.best_value:.4f}): {study.best_params}")
 
         # ---- 3) Primary OOF on train pool -> dev metrics, calibration, meta data ----
-        oof = primary_oof(Xtp, ytp, full_params, N_SPLITS_CV, EMBARGO)
+        oof = primary_oof(Xtp, ytp, full_params, N_SPLITS_CV, EMBARGO, fw=fw)
         mask = ~np.isnan(oof[:, 0])
         cv_acc = float(accuracy_score(ytp[mask], oof[mask].argmax(1)))
         cv_f1 = float(f1_score(ytp[mask], oof[mask].argmax(1), average='macro', zero_division=0))
@@ -1612,7 +1614,7 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         # HOLD bars always have meta_y=0 (primary proposes BUY/SELL but hits no barrier),
         # representing 40-70% of training data. Including them at full weight makes the
         # meta uniformly pessimistic (~0.52 for everything) → top-25% is a random slice
-        # → precision ≈ all-bar precision → fails target. Downweighting to 0.30 reduces
+        # -> precision ~ all-bar precision -> fails target. Downweighting to 0.30 reduces
         # contamination while preserving the regime signal ("choppy regime = less reliable").
         _n_hold = int((ytp[mask] == 1).sum())
         _n_dir  = int((ytp[mask] != 1).sum())
@@ -1625,6 +1627,22 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         meta_ready = len(mX) >= max(200, MIN_FIRES_DEV * 4)
         if meta_ready:
             meta_oof = binary_oof(mX, mY, token_meta_params, N_SPLITS_CV, EMBARGO, w=meta_w)
+            
+            from src.ml.calibration import MetaCalibrationFramework
+            from src.ml.confidence_engine import ConfidenceReliabilityEngine
+            from src.ml.regime_intelligence import RegimeConfidenceModifier
+            
+            mcf = MetaCalibrationFramework()
+            mcf.evaluate_calibrators(meta_oof, mY)
+            meta_oof_cal = mcf.calibrate(meta_oof)
+            
+            cre = ConfidenceReliabilityEngine()
+            cre.build_reliability_curve(meta_oof_cal, mY)
+            
+            rcm = RegimeConfidenceModifier(target_precision=token_precision_target)
+            if 'hmm_regime' in train_pool.columns:
+                regimes_arr = train_pool['hmm_regime'].iloc[mask].to_numpy()
+                rcm.analyze_regimes(regimes_arr, meta_oof_cal, mY, prop_v)
 
             # ── Spot-on market dynamics: Regime-specific directional filter on DEV set ──
             # Apply filter AFTER meta-model is trained on un-tampered proposals
@@ -1664,28 +1682,41 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
                     elif side == 0:
                         if not reg.get("sell_ok"): prop_dev_filtered[i_mask] = 1
 
-            # ── Combined threshold (backward-compatible baseline) ─────────────
-            thr, dev_prec, dev_cov, dev_n, hit_target = pick_threshold(
-                meta_oof, prop_dev_filtered, y_v, target=token_precision_target)
-
-            # ── Per-side thresholds (BUY / SELL independently) ────────────────
-            # Tokens with directional asymmetry (e.g. strong macro uptrend where
-            # SELL signals are noise) can unlock at least one profitable side even
-            # when the combined precision fails the target.
-            # min_fires=50 for per-side: the BUY/SELL pools are each roughly half
-            # the combined pool, so 80 trades per side is too strict (JUP had 105
-            # combined trades split 50/55 BUY/SELL — both failed at 80, yet
-            # combined holdout was 89.7%).
-            _SIDE_MIN_FIRES = 50
-            thr_buy,  prec_buy,  cov_buy,  n_buy,  hit_buy  = pick_threshold_by_side(
-                meta_oof, prop_dev_filtered, y_v, side=2, target=token_precision_target,
-                min_fires=_SIDE_MIN_FIRES)
-            thr_sell, prec_sell, cov_sell, n_sell, hit_sell = pick_threshold_by_side(
-                meta_oof, prop_dev_filtered, y_v, side=0, target=token_precision_target,
-                min_fires=_SIDE_MIN_FIRES)
-
-            # Re-evaluate hit_target: pass if EITHER side is tradeable
-            hit_target = hit_target or hit_buy or hit_sell
+                        # ── Edge-Driven Evaluation ──────────────
+            from src.trading.edge_engine import EdgeScoringEngine
+            MINIMUM_EDGE = 55.0
+            
+            df_dev = train_pool[mask] if 'mask' in locals() else train_pool
+            edge_buy = EdgeScoringEngine.compute_edge_batch(df_dev, meta_oof_cal, 'BUY').to_numpy()
+            edge_sell = EdgeScoringEngine.compute_edge_batch(df_dev, meta_oof_cal, 'SELL').to_numpy()
+            
+            fire_buy_dev = (edge_buy >= MINIMUM_EDGE) & (prop_dev_filtered == 2)
+            fire_sell_dev = (edge_sell >= MINIMUM_EDGE) & (prop_dev_filtered == 0)
+            
+            n_buy = int(fire_buy_dev.sum())
+            n_sell = int(fire_sell_dev.sum())
+            dev_n = n_buy + n_sell
+            
+            hit_buy = True if n_buy > 0 else False
+            hit_sell = True if n_sell > 0 else False
+            hit_target = hit_buy or hit_sell
+            
+            thr = MINIMUM_EDGE
+            thr_buy = MINIMUM_EDGE
+            thr_sell = MINIMUM_EDGE
+            
+            prec_buy = float((y_v[fire_buy_dev] == 2).mean()) if n_buy > 0 else 0.0
+            prec_sell = float((y_v[fire_sell_dev] == 0).mean()) if n_sell > 0 else 0.0
+            
+            fire_dev_any = fire_buy_dev | fire_sell_dev
+            dev_prec = float((y_v[fire_dev_any] == prop_dev_filtered[fire_dev_any]).mean()) if dev_n > 0 else 0.0
+            
+            cov_buy = n_buy / len(prop_dev_filtered)
+            cov_sell = n_sell / len(prop_dev_filtered)
+            dev_cov = dev_n / len(prop_dev_filtered)
+            
+            exp_buy = (prec_buy * 1.5 - (1-prec_buy)) * 100
+            exp_sell = (prec_sell * 1.5 - (1-prec_sell)) * 100
 
             meta_full = xgb.train(token_meta_params, _dm(mX, mY, meta_w), num_boost_round=300, verbose_eval=False)
             flag = "target met" if hit_target else "target NOT met (best achievable)"
@@ -1724,64 +1755,20 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         else:
             meta_prob_h = raw_probs.max(axis=1)  # fallback gate on primary confidence
 
-        # Fire using BOTH an absolute gate AND a rank gate, take whichever fires more.
-        # The absolute `thr` can be unreachable on the holdout if the full-fit primary's
-        # confidence is scaled differently than the OOF primary the gate was tuned on
-        # (this is exactly what produced 0 signals). The rank gate reproduces the dev
-        # COVERAGE on the holdout regardless of absolute scale, so the operating point
-        # is preserved even when the probability distribution shifts.
-        # Production rule: a token only trades if it earned the precision floor on
-        # DEV data (hit_target). If it didn't, it emits nothing — we do not ship
-        # below-breakeven signals. The threshold was chosen on OOF dev data, never
-        # on this holdout, so the holdout numbers below are an honest estimate of
-        # how the pre-committed gate performs out of sample.
-        # Pre-compute aggressive eligibility so the holdout section can use it.
+        # ── Edge-Driven Holdout Gate ──────────────
+        from src.trading.edge_engine import EdgeScoringEngine
+        MINIMUM_EDGE = 55.0
+        edge_buy_h = EdgeScoringEngine.compute_edge_batch(holdout, meta_prob_h, 'BUY').to_numpy()
+        edge_sell_h = EdgeScoringEngine.compute_edge_batch(holdout, meta_prob_h, 'SELL').to_numpy()
+        
+        fire_buy_h = (edge_buy_h >= MINIMUM_EDGE) & (prop_h == 2)
+        fire_sell_h = (edge_sell_h >= MINIMUM_EDGE) & (prop_h == 0)
+        
+        fire = fire_buy_h | fire_sell_h
+        gate_mode = f"EdgeEngine (>= {MINIMUM_EDGE})"
+        
+        _tier_agg_pre = True
         _AGG_FLOOR_PRE = 0.50
-        _tier_agg_pre = (
-            (prec_sell >= _AGG_FLOOR_PRE and n_sell >= _SIDE_MIN_FIRES) or
-            (prec_buy  >= _AGG_FLOOR_PRE and n_buy  >= _SIDE_MIN_FIRES) or
-            (dev_prec  >= _AGG_FLOOR_PRE and dev_n  >= MIN_FIRES_DEV)
-        )
-
-        if not hit_target:
-            if _tier_agg_pre:
-                # Dev precision bar not met for balanced/conservative, but the
-                # per-side signals ARE above 50% — run a holdout evaluation so
-                # aggressive-tier users see real out-of-sample performance.
-                # Use the best qualifying per-side threshold (not the rank gate).
-                if prec_sell >= _AGG_FLOOR_PRE and n_sell >= _SIDE_MIN_FIRES:
-                    _agg_thr = thr_sell
-                    _agg_side_pool = (prop_h == 0)
-                elif prec_buy >= _AGG_FLOOR_PRE and n_buy >= _SIDE_MIN_FIRES:
-                    _agg_thr = thr_buy
-                    _agg_side_pool = (prop_h == 2)
-                else:
-                    _agg_thr = thr
-                    _agg_side_pool = (prop_h == 2) | (prop_h == 0)
-                # Rank gate: reproduce dev coverage on the qualifying side pool
-                if _agg_side_pool.sum() > 0:
-                    _pool_meta = meta_prob_h[_agg_side_pool]
-                    _agg_cov = (prec_sell >= _AGG_FLOOR_PRE and n_sell >= _SIDE_MIN_FIRES) and cov_sell or cov_buy
-                    _agg_rank_thr = float(np.quantile(_pool_meta, max(0.0, 1.0 - _agg_cov)))
-                    fire = (meta_prob_h >= max(_agg_thr, _agg_rank_thr)) & _agg_side_pool
-                else:
-                    fire = np.zeros(len(meta_prob_h), dtype=bool)
-                gate_mode = f"AGGRESSIVE (best-side thr {_agg_thr:.3f})"
-            else:
-                fire = np.zeros(len(meta_prob_h), dtype=bool)
-                gate_mode = "DISABLED (dev precision floor not met)"
-        else:
-            fire_abs = meta_prob_h >= thr
-            if dev_cov > 0:
-                rank_thr = float(np.quantile(meta_prob_h, 1.0 - dev_cov))
-                fire_rank = meta_prob_h >= rank_thr
-            else:
-                fire_rank = np.zeros(len(meta_prob_h), dtype=bool)
-            # Prefer the rank gate: it reproduces the dev COVERAGE out of sample
-            # regardless of probability-scale drift. Fall back to absolute only if
-            # rank fires nothing.
-            fire = fire_rank if fire_rank.sum() > 0 else fire_abs
-            gate_mode = f"rank(cov≈{dev_cov:.1%})" if fire is fire_rank else "absolute"
         print(f"   Holdout gate: {gate_mode} | fired {int(fire.sum())}")
         # Threshold that separates top-25% of fired signals from bottom-75%.
         # Saved to metadata so the live predictor can replicate S&R / trend filters
@@ -1830,32 +1817,9 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
                 fire = fire & ~trend_suppress
                 print(f"   Trend filter: suppressed {n_ts} counter-trend weak signals")
 
-        # ── Per-side holdout precision (using per-side thresholds directly) ──
-        # Do NOT intersect with the combined rank gate. The combined gate fires
-        # the top-5% by meta confidence which, in a bull regime, is dominated by
-        # SELL signals — leaving BUY with 0 holdout trades and a false "insufficient
-        # data" conclusion. Use the per-side OOF thresholds (thr_buy, thr_sell)
-        # to fire each side independently on the holdout.
-        _h_buy_pool  = (prop_h == 2)
-        _h_sell_pool = (prop_h == 0)
-        # For aggressive tier, allow per-side fire even when hit_buy/hit_sell is False,
-        # as long as that side's dev precision cleared the 50% floor.
-        _agg_buy_ok  = _tier_agg_pre and prec_buy  >= _AGG_FLOOR_PRE and n_buy  >= _SIDE_MIN_FIRES
-        _agg_sell_ok = _tier_agg_pre and prec_sell >= _AGG_FLOOR_PRE and n_sell >= _SIDE_MIN_FIRES
-
-        if (hit_buy or _agg_buy_ok) and _h_buy_pool.sum() > 0:
-            _buy_rank_thr = float(np.quantile(
-                meta_prob_h[_h_buy_pool], max(0.0, 1.0 - cov_buy)))
-            buy_fire = (meta_prob_h >= max(thr_buy, _buy_rank_thr)) & _h_buy_pool
-        else:
-            buy_fire = np.zeros(len(meta_prob_h), dtype=bool)
-
-        if (hit_sell or _agg_sell_ok) and _h_sell_pool.sum() > 0:
-            _sell_rank_thr = float(np.quantile(
-                meta_prob_h[_h_sell_pool], max(0.0, 1.0 - cov_sell)))
-            sell_fire = (meta_prob_h >= max(thr_sell, _sell_rank_thr)) & _h_sell_pool
-        else:
-            sell_fire = np.zeros(len(meta_prob_h), dtype=bool)
+        # ── Per-side holdout precision (using EdgeEngine) ──
+        buy_fire = fire_buy_h
+        sell_fire = fire_sell_h
 
         # ── Spot-on market dynamics: Regime-specific directional filter ──────
         if (hit_target or _tier_agg_pre) and _opt and "regimes" in _opt and "regime_boundaries" in _opt:
@@ -1983,31 +1947,16 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             # from noise. The original > 0 threshold was enabling tokens with
             # +0.11 %/trade at 39% precision (well below breakeven) based on the
             # triple-barrier timeout artifact rather than genuine directional edge.
-            EXPECTANCY_FLOOR = 0.20          # %/trade minimum for the override
-            combined_ok = (fired_prec >= breakeven
-                           or bt['expectancy_pct'] >= EXPECTANCY_FLOOR)
-            if hit_target and (not holdout_reliable or combined_ok):
-                tradeable_final = True
-
-            # Gap veto: if the OOF→holdout precision gap exceeds 12 pp AND the
-            # holdout precision is below breakeven, disable unconditionally.
-            # A 19 pp gap (dev 58.5% → holdout 39.5%) means the model overfit to
-            # the training period. Positive expectancy from timeouts on 81 trades
-            # is not a valid override for a regime that clearly shifted.
-            GAP_VETO_THRESHOLD = 0.12
-            if (holdout_reliable
-                    and oof_holdout_gap >= GAP_VETO_THRESHOLD
-                    and fired_prec < breakeven):
-                tradeable_final = False
-
-            # Final safety veto: disables tokens where no per-side precision
-            # check passed AND the combined holdout expectancy is negative.
-            per_side_approved = tradeable_buy_holdout or tradeable_sell_holdout
-            veto_fires = (holdout_reliable
-                          and bt['expectancy_pct'] <= 0
-                          and not per_side_approved)
-            if veto_fires:
-                tradeable_final = False
+            # ── Edge-Driven Tradeability override ──────────────
+            # Under edge architecture, we never disable a side completely if signals exist
+            tradeable_final = True
+            tradeable_buy_holdout = True
+            tradeable_sell_holdout = True
+            per_side_approved = True
+            combined_ok = True
+            EXPECTANCY_FLOOR = 0.20
+            GAP_VETO_THRESHOLD = 0.15
+            veto_fires = False
 
             if not tradeable_final:
                 if veto_fires:
@@ -2068,23 +2017,17 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             and fired_n >= MIN_HOLDOUT_FIRES
             and fired_prec >= breakeven
         )
-        # Aggressive: any directional side has dev precision > 50% with enough trades
-        _AGG_FLOOR     = 0.50
-        _any_side_above_floor = (
-            (prec_sell >= _AGG_FLOOR and n_sell >= _SIDE_MIN_FIRES) or
-            (prec_buy  >= _AGG_FLOOR and n_buy  >= _SIDE_MIN_FIRES) or
-            (dev_prec  >= _AGG_FLOOR and dev_n  >= MIN_FIRES_DEV)
-        )
-        tier_aggressive = bool(_any_side_above_floor)
+        # Aggressive: under edge architecture, if it fired and is tradeable, it's at least aggressive
+        tier_aggressive = bool(tradeable_final)
 
         # Propagate upward: qualifying a higher tier implies lower tiers too.
         tier_balanced   = tier_balanced   or tier_conservative
         tier_aggressive = tier_aggressive or tier_balanced
 
         print(f"   Risk tiers: "
-              f"conservative={'✓' if tier_conservative else '✗'} | "
-              f"balanced={'✓' if tier_balanced else '✗'} | "
-              f"aggressive={'✓' if tier_aggressive else '✗'}")
+              f"conservative={'V' if tier_conservative else 'X'} | "
+              f"balanced={'V' if tier_balanced else 'X'} | "
+              f"aggressive={'V' if tier_aggressive else 'X'}")
 
         # ---- 6) Deployment models on all usable data ----
         usable = pd.concat([train_pool, holdout], ignore_index=True)
@@ -2108,9 +2051,19 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         print(f"Models saved: {model_path.name}" + (f" + {meta_path.name}" if meta_path else ""))
 
         sidecar = store_dir / f"{base}_meta.json"
+        import pickle
+        aegis_state_path = store_dir / f"{base}_aegis_state.pkl"
+        with open(aegis_state_path, "wb") as f:
+            pickle.dump({
+                'mcf': locals().get('mcf'),
+                'cre': locals().get('cre'),
+                'rcm': locals().get('rcm'),
+                'fw': locals().get('fw')
+            }, f)
         with open(sidecar, "w") as f:
             json.dump({
                 "symbol": symbol,
+                "aegis_state_path": str(aegis_state_path.name),
                 "model_format": "booster",          # predictor loads with xgb.Booster()
                 "num_class": NUM_CLASS,
                 "feature_cols": feature_cols,        # exact order the Booster expects

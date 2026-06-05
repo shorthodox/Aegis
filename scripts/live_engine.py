@@ -404,6 +404,28 @@ class SignalQualityFilter:
         if macro_conflict:
             score -= 15; reasons.append('conflicting_macro')
 
+        # ── LSTM temporal intelligence bonuses / penalties ─────────────────────
+        # Only applied when LSTM models are available for this symbol.
+        # Neutral defaults (0.5) are returned when models are absent, so
+        # the thresholds below never fire for untrained symbols.
+        lstm_avail = bool(result.get('lstm_available', False))
+        if lstm_avail:
+            lstm_cont = _f('lstm_continuation_prob', 0.5)
+            lstm_vol  = _f('lstm_vol_expansion_prob', 0.5)
+            lstm_exh  = _f('lstm_exhaustion_prob',    0.5)
+
+            # +10: LSTM says momentum will persist (strong continuation signal)
+            if lstm_cont > 0.65:
+                score += 10; reasons.append(f'lstm_continuation({lstm_cont:.2f})')
+
+            # -8: LSTM detects sequence exhaustion (momentum likely decaying)
+            elif lstm_cont < 0.32:
+                score -= 8; reasons.append(f'lstm_exhaustion({lstm_exh:.2f})')
+
+            # +8: Volatility expansion expected — good for breakout trades
+            if lstm_vol > 0.70:
+                score += 8; reasons.append(f'lstm_vol_expansion({lstm_vol:.2f})')
+
         return round(max(0.0, min(score, 100.0)), 1), reasons
 
     def is_fake_breakout(self, result: Dict[str, Any], side: str) -> bool:
@@ -439,6 +461,12 @@ class SignalQualityFilter:
                 return True
             if side == 'SELL' and rsi < 18:
                 return True
+
+            # LSTM exhaustion: sequence analysis suggests momentum is collapsing
+            if bool(result.get('lstm_available', False)):
+                lstm_cont = _f('lstm_continuation_prob', 0.5)
+                if lstm_cont < 0.22:
+                    return True  # very low continuation → likely exhausted move
 
             return False
         except Exception:
@@ -501,11 +529,13 @@ class DynamicRiskEngine:
 
     def calculate_stops(
         self,
-        price:         float,
-        side:          str,    # 'BUY' | 'SELL'
-        atr:           float,
-        atr_mult:      float,
-        quality_score: float,
+        price:              float,
+        side:               str,    # 'BUY' | 'SELL'
+        atr:                float,
+        atr_mult:           float,
+        quality_score:      float,
+        lstm_vol_expansion: float = 0.5,   # P(ATR expansion) from LSTM  [0, 1]
+        lstm_continuation:  float = 0.5,   # P(continuation)  from LSTM  [0, 1]
     ) -> Dict[str, float]:
         """
         Returns a dict with sl, tp1, tp2, tp3, trailing_trigger.
@@ -530,6 +560,14 @@ class DynamicRiskEngine:
             sl_mult = 2.0
         else:
             sl_mult = 2.5
+
+        # LSTM vol-expansion adjustment: widen stop to survive the incoming
+        # volatility spike without getting flushed by noise.
+        if lstm_vol_expansion > 0.70:
+            sl_mult *= 1.20   # +20 % ATR room for imminent expansion
+        # LSTM high-continuation: tighten stop on confirmed momentum conviction.
+        elif lstm_continuation > 0.72:
+            sl_mult *= 0.90   # −10 % — move is clean, let price run tight
 
         risk_distance = sl_mult * atr
 
@@ -1744,11 +1782,13 @@ class LiveEngine:
         # ── Dynamic stop/TP calculation ───────────────────────────────────────
         if regime is not None and quality_score > 0:
             stops = self.risk_engine.calculate_stops(
-                price         = price,
-                side          = side,
-                atr           = atr,
-                atr_mult      = atr_mult,
-                quality_score = quality_score,
+                price              = price,
+                side               = side,
+                atr                = atr,
+                atr_mult           = atr_mult,
+                quality_score      = quality_score,
+                lstm_vol_expansion = float(result.get('lstm_vol_expansion_prob', 0.5)),
+                lstm_continuation  = float(result.get('lstm_continuation_prob',  0.5)),
             )
             stop_loss = stops['sl']
             tp1       = stops['tp1']
@@ -1897,6 +1937,9 @@ class LiveEngine:
             'hmm_transition_risk', 'hmm_stability', 'hmm_available',
             'hmm_conf_adjustment', 'hmm_atr_mult', 'hmm_position_scale',
             'hmm_transition_warning',
+            # LSTM temporal intelligence fields
+            'lstm_continuation_prob', 'lstm_vol_expansion_prob',
+            'lstm_exhaustion_prob', 'lstm_available',
         )
         for k in _CONTEXT_KEYS:
             if k in result:

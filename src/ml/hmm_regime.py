@@ -38,6 +38,7 @@ import pickle
 import warnings
 from collections import deque
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Deque, Dict, List, Optional, Tuple
 
@@ -716,3 +717,212 @@ def train_hmm_for_symbol(symbol: str, df: pd.DataFrame) -> bool:
     and saves it to model_store.  Returns True on success.
     """
     return _pool.train_and_save(symbol, df)
+
+
+# =============================================================================
+# Regime labeling of a dataset
+# =============================================================================
+
+def label_dataframe(symbol: str, df: pd.DataFrame) -> np.ndarray:
+    """
+    Run the trained HMM over every row in df and return an array of regime
+    label strings (shape: len(df),).  Falls back to 'UNKNOWN' when the HMM
+    is not available or inference fails.
+
+    Used during retrain to attach regime labels to the OOF dev set so that
+    RegimeConfidenceModifier.analyze_regimes() can compute per-regime stats.
+    """
+    engine = _pool.get(symbol)
+    if not engine._loaded or engine._hmm is None:
+        return np.array(['UNKNOWN'] * len(df), dtype=object)
+
+    X_raw = HMMFeatureBuilder.extract_sequence(df)
+    if X_raw is None or len(X_raw) < 5:
+        return np.array(['UNKNOWN'] * len(df), dtype=object)
+
+    try:
+        X      = engine._scale(X_raw)
+        states = engine._hmm.predict(X)
+        labels = np.array(
+            [engine._state_labels.get(int(s), 'UNKNOWN') for s in states],
+            dtype=object,
+        )
+        return labels
+    except Exception:
+        return np.array(['UNKNOWN'] * len(df), dtype=object)
+
+
+# =============================================================================
+# Regime performance statistics  (Section 5 & 6)
+# =============================================================================
+
+_REGIME_REPORT_DIR = _ROOT / 'logs' / 'regime'
+
+
+def compute_regime_stats(
+    regime_labels: np.ndarray,      # per-bar regime string array
+    y_prob:        np.ndarray,      # calibrated meta confidence
+    proposed:      np.ndarray,      # 0=SELL or 2=BUY
+    y_true:        np.ndarray,      # 0=SELL / 1=HOLD / 2=BUY triple-barrier labels
+    threshold:     float = 0.50,
+    barrier_frac:  Optional[np.ndarray] = None,
+) -> Dict[str, Any]:
+    """
+    Compute per-regime trading statistics: BUY precision, SELL precision,
+    coverage, expectancy, win rate, profit factor.
+
+    Parameters
+    ----------
+    regime_labels  : HMM state string per bar (length n)
+    y_prob         : calibrated meta probability per bar
+    proposed       : primary's side proposal (0 or 2) per bar
+    y_true         : triple-barrier label (0, 1, 2) per bar
+    threshold      : meta gate threshold for "fired" determination
+    barrier_frac   : barrier size as fraction of price (for PnL)
+
+    Returns
+    -------
+    Dict keyed by regime name, each containing the stat block.
+    """
+    regimes = list(dict.fromkeys(r for r in regime_labels if r != 'UNKNOWN'))
+    stats: Dict[str, Any] = {}
+    global_fired = (y_prob >= threshold) & ((proposed == 2) | (proposed == 0))
+    global_prec  = float((proposed[global_fired] == y_true[global_fired]).mean()) \
+                   if global_fired.any() else 0.0
+
+    for regime in regimes:
+        mask = (regime_labels == regime)
+        if mask.sum() < 20:
+            continue
+
+        mp     = y_prob[mask]
+        pr     = proposed[mask]
+        yt     = y_true[mask]
+        bf     = barrier_frac[mask] if barrier_frac is not None else None
+
+        valid  = ~np.isnan(mp)
+        mp, pr, yt = mp[valid], pr[valid], yt[valid]
+        if bf is not None:
+            bf = bf[valid]
+
+        fired  = (mp >= threshold) & ((pr == 2) | (pr == 0))
+        n_fire = int(fired.sum())
+        n_total = len(mp)
+
+        if n_fire == 0:
+            stats[regime] = {
+                'trades': 0, 'coverage': 0.0,
+                'precision': 0.0, 'recall': 0.0,
+                'buy_precision': 0.0, 'sell_precision': 0.0,
+                'win_rate': 0.0, 'expectancy_pct': 0.0,
+                'profit_factor': 0.0,
+                'global_precision': global_prec,
+                'confidence_modifier': 0.0,
+            }
+            continue
+
+        prec   = float((pr[fired] == yt[fired]).mean())
+        cov    = float(n_fire / max(n_total, 1))
+
+        # Recall: fraction of correct directional bars that the gate fires on
+        correct_dir = ((pr == 2) & (yt == 2)) | ((pr == 0) & (yt == 0))
+        recall = float(fired[correct_dir].mean()) if correct_dir.any() else 0.0
+
+        # Per-side precision
+        buy_f  = fired & (pr == 2)
+        sell_f = fired & (pr == 0)
+        buy_prec  = float((yt[buy_f]  == 2).mean()) if buy_f.any()  else 0.0
+        sell_prec = float((yt[sell_f] == 0).mean()) if sell_f.any() else 0.0
+
+        # PnL stats
+        win_rate  = 0.0
+        exp_pct   = 0.0
+        pf        = 0.0
+        if bf is not None and n_fire >= 3:
+            rets = []
+            for k in np.where(fired)[0]:
+                b    = float(bf[k]) if np.isfinite(bf[k]) else 0.01
+                side = int(pr[k])
+                lbl  = int(yt[k])
+                if lbl == 1:
+                    rets.append(-0.001)
+                elif side == lbl:
+                    rets.append(b - 0.001)
+                else:
+                    rets.append(-b - 0.001)
+            rets_arr  = np.array(rets)
+            win_rate  = float((rets_arr > 0).mean())
+            exp_pct   = float(rets_arr.mean() * 100)
+            gross_win = float(rets_arr[rets_arr > 0].sum()) if (rets_arr > 0).any() else 0.0
+            gross_loss = float(abs(rets_arr[rets_arr < 0].sum())) if (rets_arr < 0).any() else 1e-9
+            pf = gross_win / gross_loss
+
+        # Confidence modifier: how much does regime precision deviate from global
+        conf_modifier = float(np.clip(prec - global_prec, -0.30, 0.20))
+
+        stats[regime] = {
+            'trades':              n_fire,
+            'coverage':            round(cov,       4),
+            'precision':           round(prec,      4),
+            'recall':              round(recall,    4),
+            'buy_precision':       round(buy_prec,  4),
+            'sell_precision':      round(sell_prec, 4),
+            'win_rate':            round(win_rate,  4),
+            'expectancy_pct':      round(exp_pct,   4),
+            'profit_factor':       round(pf,        3),
+            'global_precision':    round(global_prec, 4),
+            'confidence_modifier': round(conf_modifier, 4),
+        }
+
+    return stats
+
+
+def save_regime_report(
+    symbol:        str,
+    regime_stats:  Dict[str, Any],
+    global_prec:   float,
+    global_cov:    float,
+) -> Path:
+    """Generate regime_report.md with per-regime performance table."""
+    _REGIME_REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    path = _REGIME_REPORT_DIR / f"{symbol.replace('/', '_')}_regime_report.md"
+
+    lines: List[str] = [
+        f"# HMM Regime Performance Report — {symbol}",
+        f"\n**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        f"\n**Global precision:** {global_prec:.3f}  |  **Global coverage:** {global_cov:.3f}\n",
+        "\n---\n",
+        "## Per-Regime Statistics\n",
+        "| Regime | Trades | Precision | BUY Prec | SELL Prec | Coverage | Win Rate | Expectancy | P.Factor | Conf. Mod |",
+        "|--------|--------|-----------|----------|-----------|----------|----------|------------|----------|-----------|",
+    ]
+
+    for regime in _STATE_LABELS:
+        s = regime_stats.get(regime)
+        if s is None:
+            lines.append(f"| {regime} | — | — | — | — | — | — | — | — | — |")
+            continue
+        mod_str = f"{s['confidence_modifier']:+.3f}"
+        lines.append(
+            f"| {regime} "
+            f"| {s['trades']} "
+            f"| {s['precision']:.3f} "
+            f"| {s['buy_precision']:.3f} "
+            f"| {s['sell_precision']:.3f} "
+            f"| {s['coverage']:.3f} "
+            f"| {s['win_rate']:.3f} "
+            f"| {s['expectancy_pct']:+.3f}% "
+            f"| {s['profit_factor']:.2f} "
+            f"| {mod_str} |"
+        )
+
+    # Add interpretation notes
+    lines.append("\n## Interpretation\n")
+    lines.append("- **Conf. Mod > 0**: regime performs better than global → confidence bonus")
+    lines.append("- **Conf. Mod < 0**: regime performs worse than global → confidence penalty")
+    lines.append("- **Expectancy**: mean return per trade after fees (positive = profitable)")
+    lines.append("- **P.Factor**: gross profit / gross loss (>1.0 = net profitable)\n")
+
+    path.write_text('\n'.join(lines), encoding='utf-8')
+    print(f"   [HMM] Regime report saved → {path.name}")
+    return path

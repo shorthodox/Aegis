@@ -13,6 +13,8 @@ import threading
 from pathlib import Path
 from typing import Optional, Dict, Any, Tuple, cast
 
+from src.trading.edge_engine import EdgeScoringEngine
+
 logger = logging.getLogger(__name__)
 
 root_dir = Path(__file__).parent.parent.parent
@@ -97,6 +99,20 @@ class Predictor:
                 self.meta_model = xgb.Booster()
                 self.meta_model.load_model(str(meta_path))
                 logger.info(f"Meta model loaded: {meta_path.name}")
+                
+        # Load AEGIS state
+        aegis_state_file = self.meta.get("aegis_state_path")
+        self.aegis_state = None
+        if aegis_state_file:
+            aegis_path = model_store / aegis_state_file
+            if aegis_path.exists():
+                try:
+                    import pickle
+                    with open(aegis_path, "rb") as f:
+                        self.aegis_state = pickle.load(f)
+                    logger.info(f"AEGIS state loaded: {aegis_path.name}")
+                except Exception as e:
+                    logger.warning(f"Could not load AEGIS state: {e}")
 
     def _load_token_params(self) -> Optional[Dict[str, Any]]:
         """Load per-token optimizer output from data/token_params/ if present."""
@@ -450,6 +466,16 @@ class Predictor:
         meta_conf = self.meta_model.predict(
             xgb.DMatrix(base, feature_names=list(base.columns))
         ).astype(float)
+        
+        # AEGIS calibration & confidence adjustment
+        if getattr(self, 'aegis_state', None) is not None:
+            mcf = self.aegis_state.get('mcf')
+            cre = self.aegis_state.get('cre')
+            if mcf:
+                meta_conf = mcf.calibrate(meta_conf)
+            if cre:
+                meta_conf = cre.adjust_confidence_array(meta_conf)
+                
         return proba, meta_conf
 
     def predict_signal(self, df_features: pd.DataFrame,
@@ -461,6 +487,13 @@ class Predictor:
           "balanced"     — combined holdout ≥ breakeven (default)
           "aggressive"   — dev target met + positive timeout-adjusted expectancy
         """
+        if self.model is None:
+            return {
+                "symbol": self.symbol, "fire": False, "side": "FLAT",
+                "tradeable": False, "risk_tier": risk_tier,
+                "meta_confidence": 0.0, "threshold": 0.6,
+                "p_sell": 0.0, "p_hold": 1.0, "p_buy": 0.0,
+            }
         proba = self.predict_proba(df_features)
         last = proba[-1]
         side = 2 if last[2] >= last[0] else 0          # BUY vs SELL proposal
@@ -485,25 +518,30 @@ class Predictor:
                 base = base.reindex(columns=mcols, fill_value=0)
             meta_conf = float(self.meta_model.predict(
                 xgb.DMatrix(base, feature_names=list(base.columns)))[0])
+                
+            # AEGIS calibration & confidence adjustment
+            if getattr(self, 'aegis_state', None) is not None:
+                mcf = self.aegis_state.get('mcf')
+                cre = self.aegis_state.get('cre')
+                rcm = self.aegis_state.get('rcm')
+                if mcf:
+                    import numpy as np
+                    meta_conf = float(mcf.calibrate(np.array([meta_conf]))[0])
+                if cre:
+                    meta_conf = float(cre.adjust_confidence(meta_conf))
+                if rcm and 'hmm_regime' in df_features.columns:
+                    regime = df_features['hmm_regime'].iloc[-1]
+                    meta_conf = float(rcm.apply_modifier(meta_conf, regime))
         else:
             meta_conf = float(last.max())
 
         # ── Risk tier gate ────────────────────────────────────────────────────
         # Check whether this token qualifies under the caller's chosen tier.
-        # Falls back to legacy tradeable flags when risk_tier data is absent
-        # (older sidecar files trained before the tier system was added).
         _tiers = self.meta.get("risk_tier", {})
         if _tiers:
             tier_ok = bool(_tiers.get(risk_tier, False))
         else:
-            # Legacy fallback: map tier names to old tradeable flags
-            if risk_tier == "conservative":
-                tier_ok = bool(self.meta.get("tradeable_buy", False) or
-                               self.meta.get("tradeable_sell", False))
-            elif risk_tier == "aggressive":
-                tier_ok = bool(self.meta.get("tradeable", False))
-            else:  # balanced
-                tier_ok = bool(self.meta.get("tradeable", False))
+            tier_ok = True  # Always true now that we don't zero-trade by default
 
         if not tier_ok:
             return {
@@ -511,29 +549,24 @@ class Predictor:
                 "tradeable": False, "risk_tier": risk_tier,
                 "meta_confidence": meta_conf, "threshold": 0.0,
                 "p_sell": float(last[0]), "p_hold": float(last[1]), "p_buy": float(last[2]),
+                "edge_score": 0.0,
             }
 
-        # Per-side thresholds. Aggressive mode uses the per-side best threshold
-        # found during training (even when that side didn't meet the quality bar),
-        # giving more signals at the cost of lower per-signal precision.
-        if side == 2:  # BUY proposal
-            if risk_tier == "aggressive":
-                thr = float(self.meta.get("meta_threshold_buy_aggressive",
-                            self.meta.get("meta_threshold_buy",
-                            self.meta.get("meta_threshold", 0.6))))
-            else:
-                thr = float(self.meta.get("meta_threshold_buy",
-                                          self.meta.get("meta_threshold", 0.6)))
-        else:          # SELL proposal
-            if risk_tier == "aggressive":
-                thr = float(self.meta.get("meta_threshold_sell_aggressive",
-                            self.meta.get("meta_threshold_sell",
-                            self.meta.get("meta_threshold", 0.6))))
-            else:
-                thr = float(self.meta.get("meta_threshold_sell",
-                                          self.meta.get("meta_threshold", 0.6)))
-
-        fire = meta_conf >= thr
+        # ── Edge-Driven Trade Gate ────────────────────────────────────────────
+        # We no longer rely on a static precision threshold that starves the bot.
+        # Compute the edge score using the new EdgeScoringEngine.
+        
+        edge_scores = EdgeScoringEngine.compute_edge_batch(
+            df_features.iloc[[-1]], 
+            np.array([meta_conf]), 
+            side_name
+        )
+        edge_score = float(edge_scores.iloc[0])
+        
+        MINIMUM_EDGE = 55.0
+        thr = MINIMUM_EDGE
+        
+        fire = edge_score >= thr
 
         # ── Regime-specific directional-probability filter ────────────────────
         # threshold_optimizer.py finds per-regime thresholds on p_buy / p_sell.
@@ -642,19 +675,18 @@ class Predictor:
                     elif vol_zscore < -1.2:
                         fire = False
 
-        # Overall tradeable = either side is live (for dashboard indicator)
-        either_tradeable = bool(
-            self.meta.get("tradeable_buy", self.meta.get("tradeable", True)) or
-            self.meta.get("tradeable_sell", self.meta.get("tradeable", True))
-        )
+        # Overall tradeable = True by default under Edge Architecture. 
+        # Sides are never completely zeroed out unless explicitly disabled.
+        either_tradeable = True
         return {
             "symbol":         self.symbol,
             "fire":           bool(fire),
             "side":           side_name if fire else "FLAT",
             "tradeable":      either_tradeable,
-            "tradeable_buy":  bool(self.meta.get("tradeable_buy",  either_tradeable)),
-            "tradeable_sell": bool(self.meta.get("tradeable_sell", either_tradeable)),
+            "tradeable_buy":  True,
+            "tradeable_sell": True,
             "meta_confidence": meta_conf,
+            "edge_score":      edge_score,
             "threshold":       thr,
             "p_sell": float(last[0]), "p_hold": float(last[1]), "p_buy": float(last[2]),
             "expected_signal_precision": self.meta.get("dev_estimate", {}).get("precision"),
@@ -665,7 +697,12 @@ class Predictor:
     def predict_realtime(self, risk_tier: str = "balanced") -> Dict[str, Any]:
         df = self.get_features_with_context(hours=350)
         if df is None or df.empty:
-            return {"symbol": self.symbol, "fire": False, "side": "FLAT", "meta_confidence": 0.0}
+            return {
+                "symbol": self.symbol, "fire": False, "side": "FLAT",
+                "meta_confidence": 0.0, "threshold": 0.6,
+                "p_sell": 0.0, "p_hold": 1.0, "p_buy": 0.0,
+                "tradeable": False,
+            }
         result = self.predict_signal(df, risk_tier=risk_tier)
         price = float(df['close'].iloc[-1])
         atr   = (float(df['_atr'].iloc[-1])
@@ -708,6 +745,24 @@ class Predictor:
             result['hmm_atr_mult']        = 1.0
             result['hmm_position_scale']  = 1.0
             result['hmm_trade_allowed']   = True
+
+        # ── LSTM temporal intelligence layer ──────────────────────────────────
+        # Provides continuation probability, volatility-expansion probability,
+        # and exhaustion probability as supporting signals.  All fields default
+        # to neutral 0.5 / False when no LSTM models exist for this symbol so
+        # the live engine can optionally use them without any code-path changes.
+        try:
+            from src.ml.lstm_inference import get_lstm_pool as _lstm_pool
+            _lstm_state = _lstm_pool().infer(self.symbol, df)
+            result['lstm_continuation_prob']  = _lstm_state.continuation_prob
+            result['lstm_vol_expansion_prob'] = _lstm_state.vol_expansion_prob
+            result['lstm_exhaustion_prob']    = _lstm_state.exhaustion_prob
+            result['lstm_available']          = _lstm_state.available
+        except Exception:
+            result['lstm_continuation_prob']  = 0.5
+            result['lstm_vol_expansion_prob'] = 0.5
+            result['lstm_exhaustion_prob']    = 0.5
+            result['lstm_available']          = False
 
         return result
 

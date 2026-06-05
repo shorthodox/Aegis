@@ -243,3 +243,112 @@ ModuleNotFoundError: No module named 'feedparser'
 2026-06-04 00:15:56 | INFO | Fetched 50 raw articles, 6 new unique items.
 2026-06-04 00:15:56 | INFO | Saved 81 news items to d:\Content\Animesh\bots\ai_signal_bot\data\news_data.json
 2026-06-04 00:15:56 | INFO | Scraping complete. Total stored: 81 items. Avg sentiment (last 50): -0.0002
+2026-06-04 12:58:37 | INFO | Starting news scraping cycle...
+2026-06-04 12:58:37 | INFO | Fetching RSS: https://cointelegraph.com/rss
+2026-06-04 12:58:39 | INFO | Fetching RSS: https://www.coindesk.com/feed/
+2026-06-04 12:58:39 | WARNING | Feedparser error for https://www.coindesk.com/feed/: text/html; charset=utf-8 is not an XML media type
+2026-06-04 12:58:40 | INFO | Fetching RSS: https://cryptoslate.com/feed/
+2026-06-04 12:58:42 | INFO | Fetching RSS: https://decrypt.co/feed
+2026-06-04 12:58:43 | INFO | Fetched 50 raw articles, 17 new unique items.
+2026-06-04 12:58:43 | INFO | Pruned 6 old news items (>48h)
+2026-06-04 12:58:43 | INFO | Saved 92 news items to d:\Content\Animesh\bots\ai_signal_bot\data\news_data.json
+2026-06-04 12:58:43 | INFO | Scraping complete. Total stored: 92 items. Avg sentiment (last 50): 0.0259
+2026-06-04 13:47:12 | INFO | Starting news scraping cycle...
+2026-06-04 13:47:12 | INFO | Fetching RSS: https://cointelegraph.com/rss
+2026-06-04 13:47:13 | INFO | Fetching RSS: https://www.coindesk.com/feed/
+2026-06-04 13:47:14 | WARNING | Feedparser error for https://www.coindesk.com/feed/: text/html; charset=utf-8 is not an XML media type
+2026-06-04 13:47:15 | INFO | Fetching RSS: https://cryptoslate.com/feed/
+2026-06-04 13:47:17 | INFO | Fetching RSS: https://decrypt.co/feed
+2026-06-04 13:47:18 | INFO | Fetched 50 raw articles, 3 new unique items.
+2026-06-04 13:47:18 | INFO | Pruned 2 old news items (>48h)
+2026-06-04 13:47:18 | INFO | Saved 93 news items to d:\Content\Animesh\bots\ai_signal_bot\data\news_data.json
+2026-06-04 13:47:18 | INFO | Scraping complete. Total stored: 93 items. Avg sentiment (last 50): 0.0246
+2026-06-04 14:24:58 | INFO | Starting news scraping cycle...
+2026-06-04 14:24:58 | INFO | Fetching RSS: https://cointelegraph.com/rss
+2026-06-04 14:24:59 | INFO | Fetching RSS: https://www.coindesk.com/feed/
+2026-06-04 14:24:59 | WARNING | Feedparser error for https://www.coindesk.com/feed/: text/html; charset=utf-8 is not an XML media type
+2026-06-04 14:25:00 | INFO | Fetching RSS: https://cryptoslate.com/feed/
+2026-06-04 14:25:04 | INFO | Fetching RSS: https://decrypt.co/feed
+2026-06-04 14:25:05 | INFO | Fetched 50 raw articles, 1 new unique items.
+2026-06-04 14:25:05 | INFO | Pruned 2 old news items (>48h)
+2026-06-04 14:25:05 | INFO | Saved 92 news items to D:\Content\Animesh\bots\ai_signal_bot\data\news_data.json
+2026-06-04 14:25:05 | INFO | Scraping complete. Total stored: 92 items. Avg sentiment (last 50): 0.0288
+2026-06-04 15:02:27 | INFO | Starting news scraping cycle...
+2026-06-04 15:02:27 | INFO | Fetching RSS: https://cointelegraph.com/rss
+2026-06-04 15:02:28 | INFO | Fetching RSS: https://www.coindesk.com/feed/
+2026-06-04 15:02:29 | WARNING | Feedparser error for https://www.coindesk.com/feed/: text/html; charset=utf-8 is not an XML media type
+2026-06-04 15:02:30 | INFO | Fetching RSS: https://cryptoslate.com/feed/
+2026-06-04 15:02:32 | INFO | Fetching RSS: https://decrypt.co/feed
+2026-06-04 15:02:33 | INFO | Fetched 50 raw articles, 3 new unique items.
+2026-06-04 15:02:33 | INFO | Pruned 3 old news items (>48h)
+2026-06-04 15:02:33 | INFO | Saved 92 news items to d:\Content\Animesh\bots\ai_signal_bot\data\news_data.json
+2026-06-04 15:02:33 | INFO | Scraping complete. Total stored: 92 items. Avg sentiment (last 50): 0.0203
+2026-06-04 18:29:19 | INFO | Starting news scraping cycle...
+2026-06-04 18:29:19 | INFO | Fetching RSS: https://cointelegraph.com/rss
+2026-06-04 18:29:21 | INFO | Fetching RSS: https://www.coindesk.com/feed/
+2026-06-04 18:29:21 | WARNING | Feedparser error for https://www.coindesk.com/feed/: text/html; charset=utf-8 is not an XML media type
+2026-06-04 18:29:22 | INFO | Fetching RSS: https://cryptoslate.com/feed/
+2026-06-04 18:29:25 | INFO | Fetching RSS: https://decrypt.co/feed
+2026-06-04 18:29:26 | INFO | Fetched 50 raw articles, 10 new unique items.
+2026-06-04 18:29:26 | INFO | Pruned 13 old news items (>48h)
+2026-06-04 18:29:26 | INFO | Saved 89 news items to d:\Content\Animesh\bots\ai_signal_bot\data\news_data.json
+2026-06-04 18:29:26 | INFO | Scraping complete. Total stored: 89 items. Avg sentiment (last 50): 0.0210
+2026-06-04 19:21:26 | INFO | Starting news scraping cycle...
+2026-06-04 19:21:26 | INFO | Fetching RSS: https://cointelegraph.com/rss
+2026-06-04 19:21:28 | INFO | Fetching RSS: https://www.coindesk.com/feed/
+2026-06-04 19:21:28 | WARNING | Feedparser error for https://www.coindesk.com/feed/: text/html; charset=utf-8 is not an XML media type
+2026-06-04 19:21:29 | INFO | Fetching RSS: https://cryptoslate.com/feed/
+2026-06-04 19:21:32 | INFO | Fetching RSS: https://decrypt.co/feed
+2026-06-04 19:21:33 | INFO | Fetched 50 raw articles, 3 new unique items.
+2026-06-04 19:21:33 | INFO | Pruned 3 old news items (>48h)
+2026-06-04 19:21:33 | INFO | Saved 89 news items to d:\Content\Animesh\bots\ai_signal_bot\data\news_data.json
+2026-06-04 19:21:33 | INFO | Scraping complete. Total stored: 89 items. Avg sentiment (last 50): 0.0263
+2026-06-04 23:09:02 | INFO | Starting news scraping cycle...
+2026-06-04 23:09:02 | INFO | Fetching RSS: https://cointelegraph.com/rss
+2026-06-04 23:09:04 | INFO | Fetching RSS: https://www.coindesk.com/feed/
+2026-06-04 23:09:04 | WARNING | Feedparser error for https://www.coindesk.com/feed/: text/html; charset=utf-8 is not an XML media type
+2026-06-04 23:09:05 | INFO | Fetching RSS: https://cryptoslate.com/feed/
+2026-06-04 23:09:08 | INFO | Fetching RSS: https://decrypt.co/feed
+2026-06-04 23:09:09 | INFO | Fetched 50 raw articles, 11 new unique items.
+2026-06-04 23:09:09 | INFO | Pruned 12 old news items (>48h)
+2026-06-04 23:09:09 | INFO | Saved 88 news items to d:\Content\Animesh\bots\ai_signal_bot\data\news_data.json
+2026-06-04 23:09:09 | INFO | Scraping complete. Total stored: 88 items. Avg sentiment (last 50): -0.0148
+2026-06-05 00:00:52 | INFO | Starting news scraping cycle...
+2026-06-05 00:00:52 | INFO | Fetching RSS: https://cointelegraph.com/rss
+2026-06-05 00:00:54 | INFO | Fetching RSS: https://www.coindesk.com/feed/
+2026-06-05 00:00:54 | WARNING | Feedparser error for https://www.coindesk.com/feed/: text/html; charset=utf-8 is not an XML media type
+2026-06-05 00:00:55 | INFO | Fetching RSS: https://cryptoslate.com/feed/
+2026-06-05 00:00:57 | INFO | Fetching RSS: https://decrypt.co/feed
+2026-06-05 00:00:58 | INFO | Fetched 50 raw articles, 4 new unique items.
+2026-06-05 00:00:58 | INFO | Saved 92 news items to d:\Content\Animesh\bots\ai_signal_bot\data\news_data.json
+2026-06-05 00:00:58 | INFO | Scraping complete. Total stored: 92 items. Avg sentiment (last 50): 0.0138
+Traceback (most recent call last):
+  File "D:\Content\Animesh\bots\ai_signal_bot\scripts\news_scraper.py", line 12, in <module>
+    import feedparser
+ModuleNotFoundError: No module named 'feedparser'
+Traceback (most recent call last):
+  File "D:\Content\Animesh\bots\ai_signal_bot\scripts\news_scraper.py", line 12, in <module>
+    import feedparser
+ModuleNotFoundError: No module named 'feedparser'
+Traceback (most recent call last):
+  File "D:\Content\Animesh\bots\ai_signal_bot\scripts\news_scraper.py", line 12, in <module>
+    import feedparser
+ModuleNotFoundError: No module named 'feedparser'
+Traceback (most recent call last):
+  File "D:\Content\Animesh\bots\ai_signal_bot\scripts\news_scraper.py", line 12, in <module>
+    import feedparser
+ModuleNotFoundError: No module named 'feedparser'
+2026-06-05 00:52:40 | INFO | Starting news scraping cycle...
+2026-06-05 00:52:40 | INFO | Fetching RSS: https://cointelegraph.com/rss
+2026-06-05 00:52:41 | INFO | Fetching RSS: https://www.coindesk.com/feed/
+2026-06-05 00:52:41 | WARNING | Feedparser error for https://www.coindesk.com/feed/: text/html; charset=utf-8 is not an XML media type
+2026-06-05 00:52:42 | INFO | Fetching RSS: https://cryptoslate.com/feed/
+2026-06-05 00:52:44 | INFO | Fetching RSS: https://decrypt.co/feed
+2026-06-05 00:52:46 | INFO | Fetched 50 raw articles, 2 new unique items.
+2026-06-05 00:52:46 | INFO | Pruned 1 old news items (>48h)
+2026-06-05 00:52:46 | INFO | Saved 93 news items to d:\Content\Animesh\bots\ai_signal_bot\data\news_data.json
+2026-06-05 00:52:46 | INFO | Scraping complete. Total stored: 93 items. Avg sentiment (last 50): 0.0230
+Traceback (most recent call last):
+  File "D:\Content\Animesh\bots\ai_signal_bot\scripts\news_scraper.py", line 12, in <module>
+    import feedparser
+ModuleNotFoundError: No module named 'feedparser'
