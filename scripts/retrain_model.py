@@ -1621,7 +1621,7 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         # Weight each HOLD bar so the total HOLD contribution equals half the directional
         # contribution — balancing signal without full exclusion.
         _hold_w = float((_n_dir * 0.5) / max(_n_hold, 1))
-        _hold_w = float(np.clip(_hold_w, 0.10, 0.60))   # keep in a sane range
+        _hold_w = float(np.clip(_hold_w, 0.05, 0.60))   # keep in a sane range
         meta_w  = np.where(ytp[mask] == 1, _hold_w, 1.0).astype(float)
 
         meta_ready = len(mX) >= max(200, MIN_FIRES_DEV * 4)
