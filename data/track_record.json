@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-07T07:43:05.374214+00:00",
+  "generated_at": "2026-06-07T20:31:54.531228+00:00",
   "summary": {
     "initial_capital": 10000.0,
     "balance": 10000.0,
@@ -9,9 +9,52 @@
     "won": 0,
     "lost": 0,
     "win_rate": 0.0,
-    "open_positions": 0
+    "open_positions": 2
   },
-  "signals": [],
+  "signals": [
+    {
+      "signal_id": "64df37af-e7ed-4e48-98fc-9bfe54099645",
+      "symbol": "DOT/USDT",
+      "direction": "SHORT",
+      "side": "SELL",
+      "entry_price": 0.942,
+      "exit_price": null,
+      "entry_time": "2026-06-07T19:46:43.620815+00:00",
+      "close_time": null,
+      "pnl_pct": 0.0,
+      "pnl_usdt": 0.0,
+      "outcome": "OPEN",
+      "exit_reason": null,
+      "meta_confidence": 0.9256,
+      "position_value": 850.0,
+      "signal_strength": "",
+      "stop_loss": 0.963195,
+      "take_profit_1": 0.920805,
+      "take_profit_2": 0.89961,
+      "take_profit_3": 0.8678175
+    },
+    {
+      "signal_id": "c850b3ed-ebe8-4cf3-bd7f-229cc6692d53",
+      "symbol": "AVAX/USDT",
+      "direction": "SHORT",
+      "side": "SELL",
+      "entry_price": 6.601,
+      "exit_price": null,
+      "entry_time": "2026-06-07T19:11:33.479167+00:00",
+      "close_time": null,
+      "pnl_pct": 0.0,
+      "pnl_usdt": 0.0,
+      "outcome": "OPEN",
+      "exit_reason": null,
+      "meta_confidence": 1.0,
+      "position_value": 600.0,
+      "signal_strength": "",
+      "stop_loss": 6.79903,
+      "take_profit_1": 6.40297,
+      "take_profit_2": 6.20494,
+      "take_profit_3": 5.907895
+    }
+  ],
   "performance": {
     "total_recent": 0,
     "wins": 0,
@@ -23,8 +66,11 @@
   },
   "drift": {},
   "portfolio": {
-    "open_total": 0,
+    "open_total": 2,
     "max_allowed": 6,
-    "cluster_counts": {}
+    "cluster_counts": {
+      "L1_FAST": 1,
+      "LAYER1_MID": 1
+    }
   }
 }

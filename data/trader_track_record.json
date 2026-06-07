@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-06-06T10:32:38.678924+00:00",
+  "last_updated": "2026-06-07T16:54:26.226150+00:00",
   "balance": 10046.43,
   "initial_capital": 10000.0,
   "total_pnl_usdt": 46.43,
@@ -8,7 +8,7 @@
   "won": 14,
   "lost": 5,
   "win_rate": 0.737,
-  "open_positions": 0,
+  "open_positions": 1,
   "signals": [
     {
       "signal_id": "7B51B693",
@@ -521,6 +521,33 @@
       "exit_reason": "TP1_HIT",
       "pnl_pct": 0.975,
       "pnl_usdt": 1.96,
+      "risk_profile": "balanced"
+    },
+    {
+      "signal_id": "58F59512",
+      "symbol": "RENDER/USDT",
+      "mode": "scalping",
+      "direction": "SELL",
+      "confidence": 0.5756,
+      "current_price": 1.667,
+      "top_strategies": [
+        "opening_range_breakout",
+        "ema21_bounce",
+        "bb_squeeze_expansion"
+      ],
+      "timeframe": "5m",
+      "timestamp": "2026-06-07T16:54:26.224780+00:00",
+      "entry_price": 1.667,
+      "stop_loss": 1.68264286,
+      "tp1": 1.64614286,
+      "tp2": 1.63571429,
+      "position_value": 200.93,
+      "outcome": "OPEN",
+      "exit_price": null,
+      "exit_time": null,
+      "exit_reason": null,
+      "pnl_pct": null,
+      "pnl_usdt": null,
       "risk_profile": "balanced"
     }
   ]

@@ -670,6 +670,23 @@ class Predictor:
             }
         proba = self.predict_proba(df_features)
         last = proba[-1]
+        gate_type = str(self.meta.get("meta_gate_profile", {}).get("gate_type", "UNKNOWN")).upper()
+        if gate_type == "DISABLED" and not bool(self.meta.get("tradeable", False)):
+            return {
+                "symbol": self.symbol,
+                "gate_type": gate_type,
+                "fire": False,
+                "side": "FLAT",
+                "tradeable": False,
+                "risk_tier": risk_tier,
+                "meta_confidence": 0.0,
+                "threshold": float(self.meta.get("meta_threshold", 55.0)),
+                "p_sell": float(last[0]),
+                "p_hold": float(last[1]),
+                "p_buy": float(last[2]),
+                "edge_score": 0.0,
+            }
+
         side = 2 if last[2] >= last[0] else 0          # BUY vs SELL proposal
         side_name = "BUY" if side == 2 else "SELL"
         probability_diag = self._probability_diagnostics(proba)
@@ -967,6 +984,7 @@ class Predictor:
 
         return {
             "symbol":         self.symbol,
+            "gate_type":      gate_type,
             "fire":           bool(fire),
             "side":           side_name if fire else "FLAT",
             "tradeable":      either_tradeable,
@@ -986,6 +1004,9 @@ class Predictor:
             "calibration_health": calibration_health,
             "final_score": final_score,
             "threshold":       thr,
+            "meta_threshold":  float(self.meta.get("meta_threshold", thr)),
+            "meta_threshold_buy":  float(self.meta.get("meta_threshold_buy", thr)),
+            "meta_threshold_sell": float(self.meta.get("meta_threshold_sell", thr)),
             "p_sell": float(last[0]), "p_hold": float(last[1]), "p_buy": float(last[2]),
             "expected_signal_precision": self.meta.get("dev_estimate", {}).get("precision"),
             "risk_tier":  risk_tier,
@@ -1010,6 +1031,10 @@ class Predictor:
         result['price']          = price
         result['atr']            = atr
         result['atr_multiplier'] = atr_mult
+        result['gate_type']       = str(self.meta.get("meta_gate_profile", {}).get("gate_type", "UNKNOWN")).upper()
+        result['meta_threshold']  = float(self.meta.get("meta_threshold", 55.0))
+        result['meta_threshold_buy'] = float(self.meta.get("meta_threshold_buy", result['meta_threshold']))
+        result['meta_threshold_sell'] = float(self.meta.get("meta_threshold_sell", result['meta_threshold']))
         # Rich market context for all trader types
         result.update(self._extract_market_context(df, price, atr, atr_mult))
 

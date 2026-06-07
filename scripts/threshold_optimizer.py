@@ -63,6 +63,7 @@ from scripts.retrain_model import (
     fetch_futures_data,
     fetch_fear_greed,
     get_atr_multiplier,
+    sample_weights,
     MAX_LOOKAHEAD,
     CENSORED,
 )
@@ -144,11 +145,7 @@ def _fit_local_model(
     y_tr = y_tr_raw[valid_tr].astype(int)
 
     # Inverse-frequency class weights so HOLD majority doesn't swamp BUY/SELL
-    cnt = np.bincount(y_tr, minlength=3).astype(float)
-    cnt[cnt == 0] = 1.0
-    cw  = (1.0 / cnt)
-    cw  = cw / cw.sum() * 3
-    w_tr = cw[y_tr]
+    w_tr = sample_weights(y_tr)
 
     params: Dict[str, Any] = {
         "objective":        "multi:softprob",

@@ -1,0 +1,194 @@
+================================================================================
+FORENSIC REPORT: THETA/USDT | GRADE: F
+================================================================================
+
+[TOKEN SUMMARY]
+  Symbol        : THETA/USDT
+  Timestamp     : 2026-06-07T16:55:33.371787+00:00
+  Train bars    : 2605
+  Eval bars     : 1117
+  Gate selected : DISABLED
+  Calibration   : beta
+  Score         : 0.0000
+  Grade         : F
+
+[EDGE FAILURE ANALYSIS]
+  Signals       : 1069  (buy=817  sell=252  balance=76.4%)
+  Pred entropy  : mean=0.5745  std=0.3944
+  Dir prob      : mean=0.4394  std=0.3356  skew=-0.9907
+  Edge rank     : mean=0.1943  std=0.1530
+  Diversity     : score=0.9983  HHI=0.0059
+  Top feature   : 3.3%  top3=6.6%
+
+  Feature                              Gain%
+  -------------------------------------------
+  efficiency_ratio_10                   3.34%
+  atr_band_position                     1.90%
+  linreg_r2_14                          1.36%
+  acc_dist                              1.04%
+  starc_position                        1.00%
+  regime_high_vol                       0.88%
+  gaussian_position                     0.84%
+  ema_alignment                         0.84%
+  momentum_confluence                   0.79%
+  cci_20                                0.76%
+
+[CALIBRATION FORENSICS]
+  Evaluated 5 calibration methods; 0 architecture-viable
+  Calibrators are evaluated by architecture search outcome (percentile
+  threshold), NOT by performance at fixed 0.50 threshold.  A calibrator
+  appearing unprofitable at p>=0.50 can still be viable when architecture
+  search selects the top 15-40% of signals.
+
+  Method       |    ECE |  Brier | Cov@0.5 |  PF@0.5 |  Exp@0.5 | TechOK | ArchOK | Reason
+  -----------------------------------------------------------------------------------------------
+  uncalibrated | 0.1857 | 0.2210 |   0.501 |   0.940 |    -2.90 |    YES |     NO | 
+  isotonic     | 0.0000 | 0.1644 |   0.237 |   0.868 |    -6.82 |    YES |     NO | 
+  platt        | 0.1151 | 0.1854 |   0.240 |   0.877 |    -6.33 |    YES |     NO | 
+  temperature  | 0.1795 | 0.2173 |   0.501 |   0.940 |    -2.90 |     NO |     NO | variance_destroyed 0.354
+  beta         | 0.0570 | 0.1713 |   0.329 |   0.935 |    -3.23 |    YES |     NO | 
+
+[ARCHITECTURE FORENSICS]
+  Evaluated 94 architectures: 0 accepted, 49 rejected
+  Rejection reasons:
+    nonpositive_expectancy                     48 candidate(s)
+    pf_below_1.10                               1 candidate(s)
+
+  Gate                     |     Q |     PF |    Exp% | Sharpe |   Cov |  Score | Grade | Reason
+  -----------------------------------------------------------------------------------------------
+  GLOBAL_EDGE_PERCENTILE   |  0.40 |  0.941 |   -2.90 |  -1.74 | 0.400 | 0.0000 |     F | nonpositive_expectan
+  GLOBAL_EDGE_PERCENTILE   |  0.30 |  0.979 |   -1.03 |  -0.53 | 0.300 | 0.0000 |     F | nonpositive_expectan
+  GLOBAL_EDGE_PERCENTILE   |  0.25 |  0.875 |   -6.44 |  -3.04 | 0.251 | 0.0000 |     F | nonpositive_expectan
+  GLOBAL_EDGE_PERCENTILE   |  0.20 |  0.906 |   -4.77 |  -2.02 | 0.200 | 0.0000 |     F | nonpositive_expectan
+  GLOBAL_EDGE_PERCENTILE   |  0.15 |  0.832 |   -8.80 |  -3.24 | 0.151 | 0.0000 |     F | nonpositive_expectan
+  SIDE_EDGE_PERCENTILE     |  0.40 |  0.941 |   -2.90 |  -1.74 | 0.400 | 0.0000 |     F | nonpositive_expectan
+  SIDE_EDGE_PERCENTILE     |  0.30 |  0.979 |   -1.03 |  -0.53 | 0.300 | 0.0000 |     F | nonpositive_expectan
+  SIDE_EDGE_PERCENTILE     |  0.25 |  0.875 |   -6.44 |  -3.04 | 0.251 | 0.0000 |     F | nonpositive_expectan
+  SIDE_EDGE_PERCENTILE     |  0.20 |  0.897 |   -5.22 |  -2.21 | 0.201 | 0.0000 |     F | nonpositive_expectan
+  SIDE_EDGE_PERCENTILE     |  0.15 |  0.832 |   -8.80 |  -3.24 | 0.151 | 0.0000 |     F | nonpositive_expectan
+
+[ARCHITECTURE ACCOUNTING]
+  Total=94 = Accepted(0) + CoverageRej(45) + QualityRej(49) + Duplicate(0) + Other(0)
+  Accounting OK : YES
+  Rejection breakdown:
+    nonpositive_expectancy                          48
+    coverage 0.0608 < required 0.15                  4
+    coverage 0.1010 < required 0.15                  3
+    coverage 0.0814 < required 0.15                  3
+    coverage 0.0412 < required 0.15                  3
+    coverage 0.0215 < required 0.15                  3
+    coverage 0.0617 < required 0.15                  2
+    coverage 0.0430 < required 0.15                  2
+    coverage 0.0299 < required 0.15                  2
+    coverage 0.1001 < required 0.15                  1
+    coverage 0.0804 < required 0.15                  1
+    coverage 0.0402 < required 0.15                  1
+    coverage 0.0206 < required 0.15                  1
+    coverage 0.1225 < required 0.15                  1
+    coverage 0.0795 < required 0.15                  1
+    coverage 0.0271 < required 0.15                  1
+    coverage 0.0150 < required 0.15                  1
+    coverage 0.1272 < required 0.15                  1
+    coverage 0.0973 < required 0.15                  1
+    coverage 0.0739 < required 0.15                  1
+    coverage 0.0533 < required 0.15                  1
+    coverage 0.0365 < required 0.15                  1
+    coverage 0.0243 < required 0.15                  1
+    coverage 0.0187 < required 0.15                  1
+    coverage 0.0075 < required 0.15                  1
+    coverage 0.0917 < required 0.15                  1
+    coverage 0.0711 < required 0.15                  1
+    coverage 0.0505 < required 0.15                  1
+    coverage 0.0384 < required 0.15                  1
+    coverage 0.0355 < required 0.15                  1
+    coverage 0.0318 < required 0.15                  1
+    coverage 0.0262 < required 0.15                  1
+    pf_below_1.10                                    1
+
+[SCORE BREAKDOWN]
+  Final score = 0.0783
+
+  Component             Weight   Contribution
+  -------------------------------------------
+  expectancy              0.35      +0.000000
+  profit_factor           0.30      +0.000000
+  sharpe                  0.20      +0.000000
+  precision               0.10      +0.028251
+  coverage                0.05      +0.050000
+  -------------------------------------------
+  TOTAL                   1.00      +0.078251
+
+[TRUST SCORE FORENSICS]
+  Trust score : 25/100
+  Saved value : -1
+  Consistent  : UNKNOWN (not recorded in profile)
+
+  Component                        Points
+  ----------------------------------------
+  pf_contribution                    0.00
+  expectancy_contribution            0.00
+  sharpe_contribution                0.00
+  coverage_contribution             15.00
+  fires_contribution                10.00
+  ----------------------------------------
+  TOTAL                                25
+
+[MODEL HEALTH SCORE]
+  Total : 71/100 — GOOD
+
+  Component                   Score  Max
+  --------------------------------------
+  feature_diversity            29.9 / 30  #########
+  prediction_entropy           19.1 / 20  #########
+  calibration_quality          16.8 / 25  ######
+  architecture_robustness       0.0 / 15  
+  regime_stability              5.0 / 10  #####
+
+[REGIME FORENSICS]
+  Regime breakdown requires ranking_df — use enrich_with_ranking_df() to populate.
+
+[ALPHA ATTRIBUTION]
+  PF lift from neutral 0.90 to 0.873: raw signal=0%, calibration=0%, gate architecture=0%
+
+  Baseline PF    : 0.873
+  Final PF       : 0.873
+  Total lift     : +0.000 (from neutral 0.90)
+
+  Source                          Lift    Share
+  ---------------------------------------------
+  Signal quality                +0.000     0.0%
+  Calibration                   +0.000     0.0%
+  Gate architecture             +0.000     0.0%
+
+[DISABLED GATE — ROOT CAUSE ANALYSIS]
+  ├─ Calibration validation: No calibrator produced a profitable architecture at any percentile threshold
+  ├─ All 94 candidates rejected:
+  ├─   nonpositive_expectancy: 48 candidate(s)
+  ├─   coverage 0.0608 < required 0.15: 4 candidate(s)
+  ├─   coverage 0.1010 < required 0.15: 3 candidate(s)
+  ├─   coverage 0.0814 < required 0.15: 3 candidate(s)
+  ├─   coverage 0.0412 < required 0.15: 3 candidate(s)
+  ├─ Baseline profit factor too low: 0.873 (threshold 1.05)
+  ├─ Baseline expectancy non-positive: -4.122%
+  ├─ Baseline Sharpe non-positive: -4.907
+  └─ RECOMMENDATION: Baseline profit factor is weak; favor a conservative fallback gate or wider ATR barriers instead of disabling the token. Review data quality, feature engineering, and ensure at least 15% of signals have positive expectancy.  Consider extending the evaluation window.
+
+[ROOT CAUSE CLASSIFICATION]
+  Primary cause : WEAK_ALPHA (confidence=62.5%)
+
+  Cause                           Confidence
+  -------------------------------------------
+  WEAK_ALPHA                          62.5%
+  CALIBRATION_COLLAPSE                37.5%
+
+  Evidence:
+    [WEAK_ALPHA] Best candidate PF=1.007 — marginally below profitability threshold
+    [CALIBRATION_COLLAPSE] No calibrator produced a viable architecture at any percentile threshold
+
+[FINAL VERDICT]
+  Status  : DISABLED — no profitable gate found
+  Verdict : No architecture passed profitability thresholds
+  Grade   : F  (PF=0.873  Exp=-4.12%)
+  Trust   : 25/100 — LOW
+
+================================================================================

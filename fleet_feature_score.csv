@@ -1,0 +1,214 @@
+feature,stability_score,drift_score,predictive_power,cross_token_consistency,token_coverage,score,keep_decision
+sqz_off,0.9509,0.01,0.1515,1.0,1.0,0.6454,KEEP
+sqz_on,0.9419,0.036,0.1168,1.0,1.0,0.6275,KEEP
+hour_cos,0.9843,0.0018,0.0703,1.0,1.0,0.6233,KEEP
+choch_bear,0.9958,0.0348,0.0576,1.0,1.0,0.62,KEEP
+is_at_support,0.9034,0.0382,0.1086,1.0,1.0,0.6126,KEEP
+efficiency_ratio_10,0.9254,0.0903,0.09,1.0,1.0,0.6091,KEEP
+CDL_MORNINGSTAR,0.9932,0.0011,0.0226,1.0,1.0,0.607,KEEP
+bar_body_pct,0.9339,0.0522,0.0611,1.0,1.0,0.602,KEEP
+choppiness,0.8503,0.4967,0.1623,1.0,1.0,0.5952,KEEP
+supertrend_dir,0.8834,0.0552,0.0515,1.0,1.0,0.5829,KEEP
+ultimate_osc,0.8934,0.172,0.0537,1.0,1.0,0.5809,KEEP
+volume_delta_12,0.9343,0.1123,0.0141,1.0,1.0,0.5803,KEEP
+linreg_r2_14,0.8821,0.1824,0.0617,1.0,1.0,0.5802,KEEP
+choch_bull,0.9972,0.0221,0.0498,0.8,1.0,0.578,KEEP
+pct_dist_to_support,0.8553,0.5471,0.1179,1.0,1.0,0.5764,KEEP
+btc_corr_24h,0.8634,0.4564,0.0925,1.0,0.8,0.5732,KEEP
+cmf_20,0.8259,0.3023,0.093,1.0,1.0,0.5699,KEEP
+upper_wick_pct,0.8834,0.135,0.0276,1.0,1.0,0.5693,KEEP
+CDL_BEAR_ENGULFING,0.9929,0.0019,0.0284,0.8,1.0,0.5691,KEEP
+rvi_vol,0.8708,0.1438,0.1293,0.8,1.0,0.5658,KEEP
+ema_9_21_cross,0.8359,0.1124,0.0485,1.0,1.0,0.5646,KEEP
+dist_bull_ob,0.8618,0.3674,0.0608,1.0,1.0,0.5645,KEEP
+hour_sin,0.9764,0.003,0.0259,0.8,1.0,0.5631,KEEP
+fvg_distance,0.9291,0.6463,0.0391,1.0,0.2,0.562,REMOVE (low coverage)
+aroon_up,0.8268,0.2096,0.0575,1.0,1.0,0.5606,KEEP
+is_at_resistance,0.8071,0.1511,0.0604,1.0,1.0,0.5587,KEEP
+stoch_d,0.9353,0.1119,0.0562,0.8,1.0,0.5575,KEEP
+entropy,0.8669,0.6669,0.1655,0.8,1.0,0.5529,KEEP
+ichi_cloud_bull,0.7799,0.2185,0.0683,1.0,1.0,0.5504,KEEP
+bb_width_percentile,0.7762,0.5176,0.1052,1.0,1.0,0.5491,KEEP
+candle_pressure,0.8441,0.7332,0.078,1.0,1.0,0.5478,KEEP
+range_position_score,0.8467,0.3967,0.0318,1.0,1.0,0.5469,KEEP
+lower_wick_pct,0.9352,0.082,0.0233,0.8,1.0,0.5458,KEEP
+rolling_buy_ratio,0.835,0.4937,0.0484,1.0,1.0,0.5452,KEEP
+vol_velocity,0.9406,0.1239,0.0158,0.8,1.0,0.5423,KEEP
+bop,0.9186,0.047,0.0182,0.8,1.0,0.5405,KEEP
+volume_delta_4,0.9246,0.1163,0.0092,0.8,1.0,0.5352,KEEP
+returns_1h_delta_12,0.9132,0.2117,0.0294,0.8,1.0,0.5351,KEEP
+volume_zscore,0.9167,0.0923,0.0113,0.8,1.0,0.5349,KEEP
+CDL_SHOOTINGSTAR,0.9985,0.0003,0.0343,0.6,1.0,0.5333,KEEP
+CDL_HAMMER,0.9987,0.0001,0.0325,0.6,1.0,0.5326,KEEP
+bos_up,0.9723,0.0279,0.0485,0.6,1.0,0.5297,KEEP
+se_position,0.8798,0.1314,0.0287,0.8,1.0,0.5288,KEEP
+CDL_DOJI,0.9949,0.0003,0.0243,0.6,1.0,0.5282,KEEP
+volume_regime,0.9654,0.0207,0.0484,0.6,2.0,0.5279,KEEP
+volume_regime,0.9654,0.0207,0.0484,0.6,2.0,0.5279,KEEP
+ichi_tk_cross,0.9931,0.0019,0.0202,0.6,1.0,0.5259,KEEP
+CDL_EVENINGSTAR,0.9858,0.0036,0.023,0.6,1.0,0.5248,KEEP
+sar_trend,0.942,0.0136,0.055,0.6,1.0,0.5239,KEEP
+CDL_BULL_ENGULFING,0.9959,0.0009,0.0127,0.6,1.0,0.5238,KEEP
+rolling_volatility,0.7186,1.718,0.235,1.0,1.0,0.5237,REMOVE (high drift)
+historical_volatility,0.7186,1.718,0.235,1.0,1.0,0.5237,REMOVE (high drift)
+dow_sin,0.9413,0.0313,0.0539,0.6,1.0,0.5224,KEEP
+fisher_sig,0.8542,0.1225,0.0261,0.8,1.0,0.5206,KEEP
+trend_regime,0.977,0.0045,0.0176,0.6,1.0,0.5199,KEEP
+rsi_21,0.744,0.5738,0.0629,1.0,1.0,0.5197,KEEP
+dow_cos,0.9425,0.0169,0.0384,0.6,1.0,0.5173,KEEP
+bar_direction,0.9476,0.0121,0.0291,0.6,1.0,0.5153,KEEP
+candle_confluence,0.9515,0.0685,0.0328,0.6,1.0,0.5152,KEEP
+market_phase,0.7164,0.513,0.0619,1.0,1.0,0.514,KEEP
+bos_state,0.9412,0.0924,0.0402,0.6,1.0,0.5138,KEEP
+is_squeeze,0.8529,0.1516,0.1125,0.6,1.0,0.5133,KEEP
+volume_atr_efficiency,0.8394,0.2295,0.0527,0.75,0.8,0.5114,KEEP
+pvt,0.8051,1.215,0.0742,1.0,1.0,0.5105,REMOVE (high drift)
+atr_14,0.6248,1.5439,0.2494,1.0,1.0,0.51,REMOVE (high drift)
+stoch_k,0.9339,0.1241,0.038,0.6,1.0,0.5092,KEEP
+donchian_position,0.8459,0.2937,0.0243,0.8,1.0,0.5088,KEEP
+cmo_14,0.8147,0.417,0.0564,0.8,1.0,0.5061,KEEP
+rsi_14,0.8147,0.417,0.0564,0.8,1.0,0.5061,KEEP
+schaff_tc,0.8786,0.0694,0.0636,0.6,1.0,0.5056,KEEP
+close_position,0.9383,0.0497,0.0145,0.6,1.0,0.5048,KEEP
+bos_down,0.9412,0.0684,0.0131,0.6,1.0,0.5042,KEEP
+sqz_momentum,0.7626,1.0405,0.0654,1.0,1.0,0.5029,REMOVE (high drift)
+volume_confluence,0.802,0.2384,0.0319,0.8,1.0,0.5014,KEEP
+volatility_regime,0.6744,1.1299,0.1377,1.0,1.0,0.5009,REMOVE (high drift)
+relative_volume,0.925,0.0873,0.0195,0.6,1.0,0.5009,KEEP
+rel_perf_4h,0.859,0.3408,0.0246,0.75,0.8,0.5005,KEEP
+donchian_width,0.6366,1.6502,0.2286,1.0,1.0,0.4999,REMOVE (high drift)
+vi_plus,0.7852,0.4689,0.0682,0.8,1.0,0.4994,KEEP
+rsi_7,0.8081,0.2093,0.0148,0.8,1.0,0.4979,KEEP
+momentum_confluence,0.8108,0.3746,0.03,0.8,1.0,0.4965,KEEP
+returns_1h_delta_4,0.9019,0.2214,0.0415,0.6,1.0,0.4961,KEEP
+vi_minus,0.7912,0.5647,0.0655,0.8,1.0,0.4953,KEEP
+rvi_sig,0.7974,0.7808,0.0828,0.8,1.0,0.4933,KEEP
+mfi_14,0.7898,0.3243,0.0283,0.8,1.0,0.4921,KEEP
+ichi_dist_tenkan,0.8292,0.4407,0.0099,0.8,1.0,0.4907,KEEP
+force_index,0.799,1.4206,0.0505,1.0,1.0,0.4889,REMOVE (high drift)
+returns_1h_decay_std_24,0.7157,2.3693,0.185,1.0,1.0,0.4887,REMOVE (high drift)
+dist_hma20,0.8824,0.1949,0.0326,0.6,1.0,0.488,KEEP
+volume_delta_1,0.906,0.1281,0.0065,0.6,1.0,0.488,KEEP
+returns_1h_delta_1,0.9129,0.2151,0.0069,0.6,1.0,0.4859,KEEP
+close_delta_1,0.8903,0.1832,0.0199,0.6,1.0,0.4859,KEEP
+keltner_width,0.598,1.5804,0.2129,1.0,1.0,0.4855,REMOVE (high drift)
+volume_delta,0.8771,0.161,0.0259,0.6,1.0,0.4854,KEEP
+rvi_osc,0.7885,0.6969,0.0578,0.8,1.0,0.4848,KEEP
+bands_confluence,0.7883,0.4338,0.0232,0.8,1.0,0.4841,KEEP
+elder_bear,0.7895,0.4952,0.0286,0.8,1.0,0.4835,KEEP
+dist_bear_ob,0.8589,0.4413,0.0644,0.6,1.0,0.4814,KEEP
+total_confluence,0.7826,0.4037,0.0167,0.8,1.0,0.4813,KEEP
+gaussian_position,0.7853,0.4209,0.0169,0.8,1.0,0.4813,KEEP
+fisher,0.8555,0.1205,0.0264,0.6,1.0,0.4812,KEEP
+williams_r,0.8727,0.1794,0.021,0.6,1.0,0.4812,KEEP
+returns_1h,0.8778,0.2315,0.0197,0.6,1.0,0.4797,KEEP
+ret_1h,0.8778,0.2315,0.0197,0.6,1.0,0.4797,KEEP
+log_returns,0.8778,0.2335,0.0197,0.6,1.0,0.4796,KEEP
+dist_kama,0.8012,0.6092,0.0204,0.8,1.0,0.4781,KEEP
+macd_hist,0.8714,0.4475,0.0457,0.6,1.0,0.4773,KEEP
+rel_perf_1h,0.9001,0.2381,0.0473,0.5,0.8,0.477,KEEP
+dist_ema_9,0.7658,0.4939,0.0261,0.8,1.0,0.4755,KEEP
+volatility_kurt,0.8436,0.21,0.0245,0.6,1.0,0.4724,KEEP
+elder_bull_bear,0.7744,0.5362,0.0153,0.8,1.0,0.4716,KEEP
+ichi_dist_kijun,0.7699,1.6085,0.0456,1.0,1.0,0.4688,REMOVE (high drift)
+dist_ema_21,0.7172,1.1617,0.0262,1.0,1.0,0.4676,REMOVE (high drift)
+linreg_slope_14,0.7702,0.7831,0.0385,0.8,1.0,0.4673,KEEP
+aroon_down,0.6986,0.433,0.0472,0.8,1.0,0.4668,KEEP
+close_delta_4,0.8175,0.2721,0.0342,0.6,1.0,0.4653,KEEP
+structure_bias,0.8068,0.1616,0.0252,0.6,1.0,0.4641,KEEP
+tsi,0.7389,1.6342,0.0597,1.0,1.0,0.4639,REMOVE (high drift)
+adx_14,0.8258,0.414,0.0376,0.6,1.0,0.4621,KEEP
+btc_ratio_ma_dist,0.7742,0.8112,0.0502,0.75,0.8,0.4618,KEEP
+sar_dist,0.8395,0.5137,0.0389,0.6,1.0,0.4617,KEEP
+parkinson_vol,0.5909,2.5841,0.2104,1.0,1.0,0.4614,REMOVE (high drift)
+btc_1h_return,0.8718,0.2444,0.029,0.5,0.8,0.4609,KEEP
+close_delta_12,0.7826,0.8756,0.0243,0.8,1.0,0.4607,KEEP
+returns_4h,0.8022,0.2756,0.0341,0.6,1.0,0.4605,KEEP
+ret_4h,0.8022,0.2756,0.0341,0.6,1.0,0.4605,KEEP
+supertrend_dist,0.6826,1.4165,0.0615,1.0,1.0,0.4585,REMOVE (high drift)
+volatility_skew,0.8355,0.5215,0.0334,0.6,1.0,0.4579,KEEP
+trend_confluence,0.802,1.0339,0.0196,0.8,1.0,0.4567,REMOVE (high drift)
+ret_12h,0.7647,0.8737,0.0261,0.8,1.0,0.4562,KEEP
+rel_perf_24h,0.7974,1.241,0.0723,0.75,0.8,0.4561,REMOVE (high drift)
+dist_avwap_50,0.7344,2.1061,0.0805,1.0,1.0,0.4525,REMOVE (high drift)
+bb_pct_b,0.7967,0.3311,0.0223,0.6,1.0,0.4514,KEEP
+dpo_20,0.732,2.2081,0.079,1.0,1.0,0.4512,REMOVE (high drift)
+smart_money_confluence,0.7092,0.5633,0.0135,0.8,1.0,0.45,KEEP
+roc_14,0.7622,1.1725,0.049,0.8,1.0,0.4496,REMOVE (high drift)
+starc_position,0.8122,0.5366,0.0235,0.6,1.0,0.4462,KEEP
+ret_24h,0.6901,1.7907,0.0705,1.0,1.0,0.4457,REMOVE (high drift)
+ema_alignment,0.7511,2.3412,0.0504,1.0,1.0,0.4455,REMOVE (high drift)
+elder_bull,0.7924,0.4414,0.0245,0.6,1.0,0.4454,KEEP
+cci_20,0.7939,0.3893,0.0155,0.6,1.0,0.4449,KEEP
+volume_delta_14,0.8115,1.4392,0.0321,0.8,1.0,0.4443,REMOVE (high drift)
+awesome_osc,0.73,2.2886,0.0622,1.0,1.0,0.4439,REMOVE (high drift)
+ichi_above_cloud,0.7362,0.3585,0.0407,0.6,1.0,0.4392,KEEP
+fib_dist_618,0.6663,4.6619,0.0963,1.0,1.0,0.4384,REMOVE (high drift)
+dist_rolling_vwap,0.752,1.1486,0.0208,0.8,1.0,0.4365,REMOVE (high drift)
+dist_vwap,0.752,1.1486,0.0208,0.8,1.0,0.4365,REMOVE (high drift)
+fib_dist_500,0.6585,3.3683,0.0948,1.0,1.0,0.4355,REMOVE (high drift)
+kst_signal,0.698,4.0275,0.0618,1.0,1.0,0.4341,REMOVE (high drift)
+atr_band_position,0.8009,0.6044,0.0074,0.6,1.0,0.433,KEEP
+hurst,0.6026,2.7273,0.1278,1.0,1.0,0.4319,REMOVE (high drift)
+pct_dist_to_resistance,0.7275,1.9107,0.0229,1.0,1.0,0.4319,REMOVE (high drift)
+ichi_dist_cloud_top,0.6795,3.27,0.0699,1.0,1.0,0.4318,REMOVE (high drift)
+btc_4h_return,0.8022,0.3365,0.0172,0.5,0.8,0.4307,KEEP
+macd,0.6742,3.5653,0.0693,1.0,1.0,0.43,REMOVE (high drift)
+fib_dist_236,0.6096,2.5145,0.1172,1.0,1.0,0.4297,REMOVE (high drift)
+kst,0.6757,3.648,0.0664,1.0,1.0,0.4293,REMOVE (high drift)
+gk_vol,0.5017,2.9268,0.196,1.0,1.0,0.4289,REMOVE (high drift)
+dist_avwap_100,0.653,4.2186,0.0823,1.0,1.0,0.4288,REMOVE (high drift)
+aroon_osc,0.6722,1.0628,0.044,0.8,1.0,0.4261,REMOVE (high drift)
+fib_dist_382,0.6096,4.1111,0.103,1.0,1.0,0.4241,REMOVE (high drift)
+volume_decay_mean_24,0.6029,2.902,0.108,1.0,0.8,0.4241,REMOVE (high drift)
+eom_14,0.7014,1.1724,0.0537,0.75,0.8,0.4233,REMOVE (high drift)
+macd_signal,0.6548,5.0491,0.0637,1.0,1.0,0.4219,REMOVE (high drift)
+acc_dist,0.3774,6.4504,0.2686,1.0,0.6,0.4207,REMOVE (high drift)
+ppo,0.6408,5.6423,0.0708,1.0,1.0,0.4206,REMOVE (high drift)
+quantile_position,0.6567,2.445,0.0581,1.0,1.0,0.4202,REMOVE (high drift)
+dist_ema_100,0.6408,4.5259,0.0684,1.0,1.0,0.4196,REMOVE (high drift)
+dist_ema_50,0.6602,3.135,0.0532,1.0,1.0,0.4193,REMOVE (high drift)
+kvo_signal,0.6639,2.9496,0.0472,1.0,1.0,0.4181,REMOVE (high drift)
+trix_15,0.645,5.7661,0.061,1.0,1.0,0.4179,REMOVE (high drift)
+kvo,0.7343,0.9931,0.0658,0.6,1.0,0.417,KEEP
+returns_1h_decay_mean_24,0.6239,3.6719,0.0626,1.0,1.0,0.4122,REMOVE (high drift)
+close_decay_mean_24,0.6225,3.5467,0.0616,1.0,1.0,0.4114,REMOVE (high drift)
+ppo_signal,0.62,4.8754,0.0623,1.0,1.0,0.4109,REMOVE (high drift)
+dist_avwap_200,0.5369,4.4502,0.0897,1.0,1.0,0.397,REMOVE (high drift)
+price_zscore_200,0.576,4.4088,0.0546,1.0,1.0,0.3946,REMOVE (high drift)
+obv,0.6865,1.0484,0.0387,0.6,1.0,0.389,REMOVE (high drift)
+dist_ema_200,0.5406,5.8385,0.0661,1.0,1.0,0.3886,REMOVE (high drift)
+volume_decay_std_24,0.4894,3.5625,0.0731,1.0,0.8,0.3761,REMOVE (high drift)
+vwap_delta_1,0.5682,2.1708,0.095,0.8,1.0,0.3684,REMOVE (high drift)
+vwap_delta_4,0.555,3.5355,0.1044,0.8,1.0,0.3683,REMOVE (high drift)
+close_decay_std_24,0.6779,3.5685,0.111,0.6,1.0,0.3678,REMOVE (high drift)
+vwap_delta_12,0.4948,5.8196,0.0854,0.8,1.0,0.3426,REMOVE (high drift)
+ema_50_200_cross,0.6565,4.5236,0.0493,0.6,1.0,0.3367,REMOVE (high drift)
+vwap_decay_std_24,0.4469,8.0585,0.0269,0.8,1.0,0.3048,REMOVE (high drift)
+fib_range_pct,0.4174,3.9516,0.1164,0.6,1.0,0.2918,REMOVE (high drift)
+rolling_resistance,0.0612,16.295,0.2055,0.8,1.0,0.2606,REMOVE (high drift)
+btc_dist_ema200,0.2879,12.3217,0.0557,0.75,0.8,0.2587,REMOVE (high drift)
+keltner_upper,0.0433,18.2157,0.1968,0.8,1.0,0.2517,REMOVE (high drift)
+vwap,0.0556,17.9074,0.1755,0.8,1.0,0.2469,REMOVE (high drift)
+rolling_vwap_24,0.0335,17.2174,0.1898,0.8,1.0,0.246,REMOVE (high drift)
+tema_21,0.057,16.9846,0.1709,0.8,1.0,0.2455,REMOVE (high drift)
+dema_21,0.0501,16.9385,0.1737,0.8,1.0,0.2445,REMOVE (high drift)
+se_mid,0.0542,17.0728,0.1678,0.8,1.0,0.2434,REMOVE (high drift)
+ema_200,0.0,20.7747,0.2077,0.8,1.0,0.2431,REMOVE (high drift)
+kama_10,0.0307,16.7588,0.1835,0.8,1.0,0.2426,REMOVE (high drift)
+ichimoku_tenkan,0.032,14.554,0.1782,0.8,1.0,0.2409,REMOVE (high drift)
+hma_20,0.0501,16.5316,0.1647,0.8,1.0,0.2409,REMOVE (high drift)
+ema_21,0.0223,15.9603,0.1838,0.8,1.0,0.2402,REMOVE (high drift)
+ema_9,0.0223,17.1847,0.1784,0.8,1.0,0.238,REMOVE (high drift)
+supertrend,0.0544,17.3905,0.1478,0.8,1.0,0.2354,REMOVE (high drift)
+ema_50,0.007,19.8471,0.1787,0.8,1.0,0.2336,REMOVE (high drift)
+ema_100,0.0,21.3241,0.1716,0.8,1.0,0.2286,REMOVE (high drift)
+avwap_200,0.0,23.4411,0.1561,0.8,1.0,0.2225,REMOVE (high drift)
+ichimoku_senkou_a,0.11,15.634,0.1429,0.6,1.0,0.2102,REMOVE (high drift)
+ichimoku_senkou_b,0.1655,17.7519,0.0989,0.6,1.0,0.2092,REMOVE (high drift)
+rolling_support,0.0904,18.3248,0.15,0.6,1.0,0.2071,REMOVE (high drift)
+avwap_50,0.0445,19.4178,0.1771,0.6,1.0,0.2042,REMOVE (high drift)
+ichimoku_kijun,0.0293,17.2577,0.182,0.6,1.0,0.2016,REMOVE (high drift)
+vwap_decay_mean_24,0.032,15.2471,0.0789,0.8,1.0,0.2011,REMOVE (high drift)
+keltner_lower,0.0209,19.9663,0.166,0.6,1.0,0.1927,REMOVE (high drift)
+avwap_100,0.0112,21.0608,0.0885,0.6,1.0,0.1588,REMOVE (high drift)

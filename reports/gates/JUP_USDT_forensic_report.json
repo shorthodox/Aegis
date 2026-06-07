@@ -1,0 +1,547 @@
+{
+  "symbol": "JUP/USDT",
+  "generated_at": "2026-06-07T17:01:34.329662+00:00",
+  "token_summary": {
+    "symbol": "JUP/USDT",
+    "timestamp": "2026-06-07T17:01:34.310008+00:00",
+    "train_bars": 2605,
+    "eval_bars": 1117,
+    "gate_selected": "EDGE_CONFLUENCE_VETO",
+    "calibration_selected": "platt",
+    "score": 0.77986,
+    "grade": "A+"
+  },
+  "model_quality": {
+    "summary": "94 architecture candidates evaluated, 11 profitable",
+    "feature_importance_top10": [
+      {
+        "feature": "efficiency_ratio_10",
+        "pct": 3.02
+      },
+      {
+        "feature": "starc_position",
+        "pct": 2.08
+      },
+      {
+        "feature": "linreg_r2_14",
+        "pct": 1.56
+      },
+      {
+        "feature": "avwap_50",
+        "pct": 1.41
+      },
+      {
+        "feature": "atr_band_position",
+        "pct": 1.31
+      },
+      {
+        "feature": "regime_confidence",
+        "pct": 1.07
+      },
+      {
+        "feature": "donchian_position",
+        "pct": 0.86
+      },
+      {
+        "feature": "trend_confluence",
+        "pct": 0.85
+      },
+      {
+        "feature": "bands_confluence",
+        "pct": 0.83
+      },
+      {
+        "feature": "s1",
+        "pct": 0.78
+      }
+    ],
+    "feature_concentration_hhi": 0.006,
+    "signal_diversity_score": 0.9983,
+    "top_feature_pct": 3.02,
+    "top3_features_pct": 6.66
+  },
+  "calibration_forensics": {
+    "summary": "Evaluated 5 calibration methods; 5 architecture-viable",
+    "note": "Calibrators are evaluated by architecture search outcome (percentile threshold), NOT by performance at fixed 0.50 threshold.  A calibrator appearing unprofitable at p>=0.50 can still be viable when architecture search selects the top 15-40% of signals.",
+    "viable_count": 5,
+    "methods": [
+      {
+        "method": "uncalibrated",
+        "ece": 0.15035613445552318,
+        "brier": 0.18348489486418595,
+        "coverage_at_0_5": 0.5014031805425632,
+        "precision_at_0_5": 0.542910447761194,
+        "pf_at_0_5": 1.376,
+        "expectancy_at_0_5": 14.8254,
+        "sharpe_at_0_5": 10.153,
+        "variance_retained": 1.0,
+        "prob_extreme_frac": 0.018709073900841908,
+        "tech_eligible": true,
+        "architecture_viable": true,
+        "best_arch_score": 0.7798556633746168,
+        "reason": ""
+      },
+      {
+        "method": "isotonic",
+        "ece": 4.212880843923099e-17,
+        "brier": 0.1526817110012364,
+        "coverage_at_0_5": 0.3507951356407858,
+        "precision_at_0_5": 0.5493333333333333,
+        "pf_at_0_5": 1.398,
+        "expectancy_at_0_5": 15.6333,
+        "sharpe_at_0_5": 8.944,
+        "variance_retained": 0.9338425302268654,
+        "prob_extreme_frac": 0.32273152478952294,
+        "tech_eligible": true,
+        "architecture_viable": true,
+        "best_arch_score": 0.7798556633746168,
+        "reason": ""
+      },
+      {
+        "method": "platt",
+        "ece": 0.08172519671464777,
+        "brier": 0.1671091923726338,
+        "coverage_at_0_5": 0.333021515434986,
+        "precision_at_0_5": 0.550561797752809,
+        "pf_at_0_5": 1.407,
+        "expectancy_at_0_5": 15.9112,
+        "sharpe_at_0_5": 8.875,
+        "variance_retained": 0.8377813287803662,
+        "prob_extreme_frac": 0.0,
+        "tech_eligible": true,
+        "architecture_viable": true,
+        "best_arch_score": 0.7798556633746168,
+        "reason": ""
+      },
+      {
+        "method": "temperature",
+        "ece": 0.1454457190359046,
+        "brier": 0.18339900636915477,
+        "coverage_at_0_5": 0.5014031805425632,
+        "precision_at_0_5": 0.542910447761194,
+        "pf_at_0_5": 1.376,
+        "expectancy_at_0_5": 14.8254,
+        "sharpe_at_0_5": 10.153,
+        "variance_retained": 0.759482662809483,
+        "prob_extreme_frac": 0.005612722170252572,
+        "tech_eligible": true,
+        "architecture_viable": true,
+        "best_arch_score": 0.7798556633746168,
+        "reason": ""
+      },
+      {
+        "method": "beta",
+        "ece": 0.06964424675662446,
+        "brier": 0.16274054356917522,
+        "coverage_at_0_5": 0.3807296538821328,
+        "precision_at_0_5": 0.547911547911548,
+        "pf_at_0_5": 1.382,
+        "expectancy_at_0_5": 15.1334,
+        "sharpe_at_0_5": 9.002,
+        "variance_retained": 0.8691394815620236,
+        "prob_extreme_frac": 0.11318989710009354,
+        "tech_eligible": true,
+        "architecture_viable": true,
+        "best_arch_score": 0.7798556633746168,
+        "reason": ""
+      }
+    ]
+  },
+  "architecture_forensics": {
+    "summary": "Evaluated 94 architectures: 11 accepted, 28 rejected",
+    "total_count": 94,
+    "accepted_count": 11,
+    "rejected_count": 28,
+    "top_candidates": [
+      {
+        "gate_type": "EDGE_CONFLUENCE_VETO",
+        "quantile": 0.4,
+        "calibration": "uncalibrated",
+        "precision": 0.6221198156682027,
+        "profit_factor": 1.924,
+        "expectancy_pct": 29.8539,
+        "sharpe": 13.452,
+        "coverage": 0.2029934518241347,
+        "score": 0.7798556633746168,
+        "score_breakdown": {
+          "expectancy": 0.35,
+          "profit_factor": 0.1386,
+          "sharpe": 0.2,
+          "precision": 0.062212,
+          "coverage": 0.01015,
+          "total": 0.760962
+        },
+        "reason": "accepted",
+        "grade": "A+"
+      },
+      {
+        "gate_type": "GLOBAL_EDGE_PERCENTILE",
+        "quantile": 0.4,
+        "calibration": "uncalibrated",
+        "precision": 0.5467289719626168,
+        "profit_factor": 1.382,
+        "expectancy_pct": 15.0869,
+        "sharpe": 9.211,
+        "coverage": 0.40037418147801684,
+        "score": 0.7046551576720317,
+        "score_breakdown": {
+          "expectancy": 0.35,
+          "profit_factor": 0.0573,
+          "sharpe": 0.2,
+          "precision": 0.054673,
+          "coverage": 0.020019,
+          "total": 0.681992
+        },
+        "reason": "accepted",
+        "grade": "B"
+      },
+      {
+        "gate_type": "EDGE_LOOSE_COVERAGE",
+        "quantile": 0.35,
+        "calibration": "uncalibrated",
+        "precision": 0.5481283422459893,
+        "profit_factor": 1.392,
+        "expectancy_pct": 15.408,
+        "sharpe": 8.801,
+        "coverage": 0.3498596819457437,
+        "score": 0.7036994012095866,
+        "score_breakdown": {
+          "expectancy": 0.35,
+          "profit_factor": 0.0588,
+          "sharpe": 0.2,
+          "precision": 0.054813,
+          "coverage": 0.017493,
+          "total": 0.681106
+        },
+        "reason": "candidate",
+        "grade": "B"
+      },
+      {
+        "gate_type": "GLOBAL_EDGE_PERCENTILE",
+        "quantile": 0.25,
+        "calibration": "uncalibrated",
+        "precision": 0.5522388059701493,
+        "profit_factor": 1.407,
+        "expectancy_pct": 15.9448,
+        "sharpe": 7.704,
+        "coverage": 0.2507015902712816,
+        "score": 0.7011970198120715,
+        "score_breakdown": {
+          "expectancy": 0.35,
+          "profit_factor": 0.06105,
+          "sharpe": 0.2,
+          "precision": 0.055224,
+          "coverage": 0.012535,
+          "total": 0.678809
+        },
+        "reason": "candidate",
+        "grade": "B+"
+      },
+      {
+        "gate_type": "GLOBAL_EDGE_PERCENTILE",
+        "quantile": 0.3,
+        "calibration": "uncalibrated",
+        "precision": 0.5451713395638629,
+        "profit_factor": 1.386,
+        "expectancy_pct": 15.1648,
+        "sharpe": 8.037,
+        "coverage": 0.30028063610851263,
+        "score": 0.7001725987836187,
+        "score_breakdown": {
+          "expectancy": 0.35,
+          "profit_factor": 0.0579,
+          "sharpe": 0.2,
+          "precision": 0.054517,
+          "coverage": 0.015014,
+          "total": 0.677431
+        },
+        "reason": "candidate",
+        "grade": "B"
+      },
+      {
+        "gate_type": "GLOBAL_EDGE_PERCENTILE",
+        "quantile": 0.15,
+        "calibration": "uncalibrated",
+        "precision": 0.546583850931677,
+        "profit_factor": 1.394,
+        "expectancy_pct": 15.428,
+        "sharpe": 5.792,
+        "coverage": 0.15060804490177737,
+        "score": 0.6939595947916727,
+        "score_breakdown": {
+          "expectancy": 0.35,
+          "profit_factor": 0.0591,
+          "sharpe": 0.2,
+          "precision": 0.054658,
+          "coverage": 0.00753,
+          "total": 0.671289
+        },
+        "reason": "candidate",
+        "grade": "B"
+      },
+      {
+        "gate_type": "EDGE_SR_VETO",
+        "quantile": 0.4,
+        "calibration": "uncalibrated",
+        "precision": 0.5245398773006135,
+        "profit_factor": 1.264,
+        "expectancy_pct": 10.9429,
+        "sharpe": 5.806,
+        "coverage": 0.3049579045837231,
+        "score": 0.6810748890942169,
+        "score_breakdown": {
+          "expectancy": 0.35,
+          "profit_factor": 0.0396,
+          "sharpe": 0.2,
+          "precision": 0.052454,
+          "coverage": 0.015248,
+          "total": 0.657302
+        },
+        "reason": "candidate",
+        "grade": "C+"
+      },
+      {
+        "gate_type": "GLOBAL_EDGE_PERCENTILE",
+        "quantile": 0.2,
+        "calibration": "uncalibrated",
+        "precision": 0.5280373831775701,
+        "profit_factor": 1.296,
+        "expectancy_pct": 12.0495,
+        "sharpe": 5.198,
+        "coverage": 0.20018709073900842,
+        "score": 0.680811223695829,
+        "score_breakdown": {
+          "expectancy": 0.35,
+          "profit_factor": 0.0444,
+          "sharpe": 0.2,
+          "precision": 0.052804,
+          "coverage": 0.010009,
+          "total": 0.657213
+        },
+        "reason": "candidate",
+        "grade": "C+"
+      },
+      {
+        "gate_type": "EDGE_SR_VETO",
+        "quantile": 0.25,
+        "calibration": "uncalibrated",
+        "precision": 0.5330188679245284,
+        "profit_factor": 1.267,
+        "expectancy_pct": 11.2208,
+        "sharpe": 4.766,
+        "coverage": 0.19831618334892423,
+        "score": 0.6672567525636726,
+        "score_breakdown": {
+          "expectancy": 0.35,
+          "profit_factor": 0.04005,
+          "sharpe": 0.19064,
+          "precision": 0.053302,
+          "coverage": 0.009916,
+          "total": 0.643908
+        },
+        "reason": "candidate",
+        "grade": "C+"
+      },
+      {
+        "gate_type": "EDGE_SR_VETO",
+        "quantile": 0.3,
+        "calibration": "uncalibrated",
+        "precision": 0.5219123505976095,
+        "profit_factor": 1.245,
+        "expectancy_pct": 10.2586,
+        "sharpe": 4.768,
+        "coverage": 0.23479887745556596,
+        "score": 0.6653055614026587,
+        "score_breakdown": {
+          "expectancy": 0.35,
+          "profit_factor": 0.03675,
+          "sharpe": 0.19072,
+          "precision": 0.052191,
+          "coverage": 0.01174,
+          "total": 0.641401
+        },
+        "reason": "candidate",
+        "grade": "C+"
+      }
+    ],
+    "rejection_reasons": {
+      "duplicate_architecture": 28
+    }
+  },
+  "score_breakdown": {
+    "final_score": 0.760962,
+    "components": {
+      "expectancy": 0.35,
+      "profit_factor": 0.1386,
+      "sharpe": 0.2,
+      "precision": 0.062212,
+      "coverage": 0.01015,
+      "total": 0.760962
+    },
+    "weights": {
+      "expectancy": 0.35,
+      "profit_factor": 0.3,
+      "sharpe": 0.2,
+      "precision": 0.1,
+      "coverage": 0.05
+    }
+  },
+  "trust_score_forensics": {
+    "trust_score": 71,
+    "saved_trust": -1,
+    "consistent": true,
+    "consistency": "UNKNOWN",
+    "components": {
+      "pf_contribution": 13.86,
+      "expectancy_contribution": 25.0,
+      "sharpe_contribution": 20.0,
+      "coverage_contribution": 3.04,
+      "fires_contribution": 10.0,
+      "total": 71
+    }
+  },
+  "regime_forensics": {
+    "summary": "Regime breakdown requires ranking_df \u2014 use enrich_with_ranking_df() to populate.",
+    "regimes": []
+  },
+  "disabled_diagnostics": null,
+  "edge_failure_analysis": {
+    "available": true,
+    "n_signals": 1069,
+    "n_buy": 275,
+    "n_sell": 794,
+    "buy_sell_balance": 0.2572,
+    "prediction_entropy_mean": 0.5703,
+    "prediction_entropy_std": 0.3951,
+    "dir_prob_mean": 0.4344,
+    "dir_prob_std": 0.3361,
+    "dir_prob_skew": -0.8305,
+    "edge_rank_mean": 0.1963,
+    "edge_rank_std": 0.1584,
+    "signal_diversity_score": 0.9983,
+    "feature_concentration_hhi": 0.006,
+    "top_feature_pct": 3.02,
+    "top3_features_pct": 6.66,
+    "feature_importance_top10": [
+      {
+        "feature": "efficiency_ratio_10",
+        "pct": 3.02
+      },
+      {
+        "feature": "starc_position",
+        "pct": 2.08
+      },
+      {
+        "feature": "linreg_r2_14",
+        "pct": 1.56
+      },
+      {
+        "feature": "avwap_50",
+        "pct": 1.41
+      },
+      {
+        "feature": "atr_band_position",
+        "pct": 1.31
+      },
+      {
+        "feature": "regime_confidence",
+        "pct": 1.07
+      },
+      {
+        "feature": "donchian_position",
+        "pct": 0.86
+      },
+      {
+        "feature": "trend_confluence",
+        "pct": 0.85
+      },
+      {
+        "feature": "bands_confluence",
+        "pct": 0.83
+      },
+      {
+        "feature": "s1",
+        "pct": 0.78
+      }
+    ],
+    "warnings": []
+  },
+  "root_cause_classification": null,
+  "architecture_accounting": {
+    "total_evaluated": 94,
+    "accepted": 11,
+    "coverage_rejected": 55,
+    "quality_rejected": 0,
+    "duplicate_skipped": 28,
+    "other_rejected": 0,
+    "unaccounted": 0,
+    "accounting_ok": true,
+    "accounting_check": "Total=94 = Accepted(11) + CoverageRej(55) + QualityRej(0) + Duplicate(28) + Other(0)",
+    "rejection_by_reason": {
+      "duplicate_architecture": 28,
+      "coverage 0.0804 < required 0.15": 6,
+      "coverage 0.0608 < required 0.15": 6,
+      "coverage 0.0402 < required 0.15": 6,
+      "coverage 0.0206 < required 0.15": 6,
+      "coverage 0.1010 < required 0.15": 5,
+      "coverage 0.0561 < required 0.15": 3,
+      "coverage 0.0196 < required 0.15": 2,
+      "coverage 0.0103 < required 0.15": 2,
+      "coverage 0.1001 < required 0.15": 1,
+      "coverage 0.1272 < required 0.15": 1,
+      "coverage 0.0861 < required 0.15": 1,
+      "coverage 0.0674 < required 0.15": 1,
+      "coverage 0.0374 < required 0.15": 1,
+      "coverage 0.1403 < required 0.15": 1,
+      "coverage 0.1085 < required 0.15": 1,
+      "coverage 0.0814 < required 0.15": 1,
+      "coverage 0.0346 < required 0.15": 1,
+      "coverage 0.0262 < required 0.15": 1,
+      "coverage 0.0150 < required 0.15": 1,
+      "coverage 0.0028 < required 0.15": 1,
+      "coverage 0.1076 < required 0.15": 1,
+      "coverage 0.0748 < required 0.15": 1,
+      "coverage 0.0412 < required 0.15": 1,
+      "coverage 0.0327 < required 0.15": 1,
+      "coverage 0.0131 < required 0.15": 1,
+      "coverage 0.0075 < required 0.15": 1,
+      "coverage 0.0019 < required 0.15": 1
+    }
+  },
+  "model_health_score": {
+    "total": 86,
+    "max": 100,
+    "components": {
+      "feature_diversity": 29.9,
+      "prediction_entropy": 19.0,
+      "calibration_quality": 17.4,
+      "architecture_robustness": 15.0,
+      "regime_stability": 5.0
+    },
+    "interpretation": "EXCELLENT"
+  },
+  "alpha_attribution": {
+    "baseline_pf": 1.335,
+    "final_pf": 1.924,
+    "neutral_reference_pf": 0.9,
+    "total_lift": 1.024,
+    "signal_quality_lift": 0.435,
+    "calibration_lift": 0.031,
+    "gate_architecture_lift": 0.558,
+    "signal_quality_pct": 42.5,
+    "calibration_pct": 3.0,
+    "gate_architecture_pct": 54.5,
+    "explanation": "PF lift from neutral 0.90 to 1.924: raw signal=42%, calibration=3%, gate architecture=54%"
+  },
+  "grade": "A+",
+  "final_verdict": {
+    "status": "ENABLED \u2014 EDGE_CONFLUENCE_VETO",
+    "verdict": "HIGH CONFIDENCE \u2014 excellent profitability metrics",
+    "grade": "A+",
+    "profit_factor": 1.924,
+    "expectancy_pct": 29.8539,
+    "trust_score": 71,
+    "trust_label": "HIGH",
+    "trust_consistent": true
+  }
+}

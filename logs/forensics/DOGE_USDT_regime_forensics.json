@@ -1,0 +1,123 @@
+{
+  "hmm_available": true,
+  "n_states": 5,
+  "state_labels": {
+    "3": "TRENDING_BEAR",
+    "2": "TRENDING_BULL",
+    "0": "VOLATILE_EXPANSION",
+    "4": "COMPRESSION",
+    "1": "ACCUMULATION"
+  },
+  "stationary_dist": {
+    "0": 0.023,
+    "1": 0.5065,
+    "2": 0.0971,
+    "3": 0.1446,
+    "4": 0.2288
+  },
+  "max_state_concentration": 0.5065,
+  "regime_collapse_flag": true,
+  "global_precision": 0.66,
+  "regime_performance": {
+    "TRENDING_BULL": {
+      "trades": 0,
+      "precision": 0.0,
+      "buy_prec": 0.0,
+      "sell_prec": 0.0,
+      "win_rate": 0.0,
+      "expectancy": 0.0,
+      "profit_factor": 0.0,
+      "modifier": 0.0,
+      "threshold": 0.5,
+      "coverage": 0.0,
+      "data_source": "insufficient_data"
+    },
+    "TRENDING_BEAR": {
+      "trades": 0,
+      "precision": 0.0,
+      "buy_prec": 0.0,
+      "sell_prec": 0.0,
+      "win_rate": 0.0,
+      "expectancy": 0.0,
+      "profit_factor": 0.0,
+      "modifier": 0.0,
+      "threshold": 0.5,
+      "coverage": 0.0,
+      "data_source": "insufficient_data"
+    },
+    "ACCUMULATION": {
+      "trades": 0,
+      "precision": 0.0,
+      "buy_prec": 0.0,
+      "sell_prec": 0.0,
+      "win_rate": 0.0,
+      "expectancy": 0.0,
+      "profit_factor": 0.0,
+      "modifier": 0.0,
+      "threshold": 0.5,
+      "coverage": 0.0,
+      "data_source": "insufficient_data"
+    },
+    "DISTRIBUTION": {
+      "trades": 0,
+      "precision": 0.0,
+      "buy_prec": 0.0,
+      "sell_prec": 0.0,
+      "win_rate": 0.0,
+      "expectancy": 0.0,
+      "profit_factor": 0.0,
+      "modifier": 0.0,
+      "threshold": 0.5,
+      "coverage": 0.0,
+      "data_source": "insufficient_data"
+    },
+    "COMPRESSION": {
+      "trades": 0,
+      "precision": 0.0,
+      "buy_prec": 0.0,
+      "sell_prec": 0.0,
+      "win_rate": 0.0,
+      "expectancy": 0.0,
+      "profit_factor": 0.0,
+      "modifier": 0.0,
+      "threshold": 0.5,
+      "coverage": 0.0,
+      "data_source": "insufficient_data"
+    },
+    "VOLATILE_EXPANSION": {
+      "trades": 0,
+      "precision": 0.0,
+      "buy_prec": 0.0,
+      "sell_prec": 0.0,
+      "win_rate": 0.0,
+      "expectancy": 0.0,
+      "profit_factor": 0.0,
+      "modifier": 0.0,
+      "threshold": 0.5,
+      "coverage": 0.0,
+      "data_source": "insufficient_data"
+    },
+    "CHOPPY": {
+      "trades": 0,
+      "precision": 0.0,
+      "buy_prec": 0.0,
+      "sell_prec": 0.0,
+      "win_rate": 0.0,
+      "expectancy": 0.0,
+      "profit_factor": 0.0,
+      "modifier": 0.0,
+      "threshold": 0.5,
+      "coverage": 0.0,
+      "data_source": "insufficient_data"
+    }
+  },
+  "recommendations": {
+    "TRENDING_BULL": "NEUTRAL (insufficient data)",
+    "TRENDING_BEAR": "NEUTRAL (insufficient data)",
+    "ACCUMULATION": "NEUTRAL (insufficient data)",
+    "DISTRIBUTION": "NEUTRAL (insufficient data)",
+    "COMPRESSION": "NEUTRAL (insufficient data)",
+    "VOLATILE_EXPANSION": "NEUTRAL (insufficient data)",
+    "CHOPPY": "NEUTRAL (insufficient data)"
+  }
+}

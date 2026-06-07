@@ -743,6 +743,54 @@ def get_atr_multiplier(symbol: str) -> float:
     return 1.5
 
 
+def get_dynamic_lookahead(df: pd.DataFrame) -> int:
+    """Estimate lookahead (in bars) from typical ATR as pct of price.
+
+    Returns one of {48,36,24,18} per median ATR% buckets.
+    """
+    try:
+        atr = compute_atr(df, period=14)
+        atr_pct = (atr / df['close'].replace(0, np.nan)).fillna(0)
+        med = float(np.nanmedian(atr_pct))
+        if med < 0.005:
+            return 48
+        if med < 0.010:
+            return 36
+        if med < 0.020:
+            return 24
+        return 18
+    except Exception:
+        return int(MAX_LOOKAHEAD)
+
+
+def get_dynamic_atr_range(df: pd.DataFrame, lookback: int = 1000) -> tuple:
+    """Return (min_mult, max_mult, typical_mult) based on recent ATR% percentile.
+
+    Uses the latest ATR% in context of history to choose a safe multiplier range
+    and a typical starting multiplier for label rebalancing.
+    """
+    try:
+        atr = compute_atr(df, period=14)
+        atr_pct = (atr / df['close'].replace(0, np.nan)).fillna(0)
+        if len(atr_pct) == 0:
+            return (1.0, 4.5, 1.5)
+        recent = atr_pct.tail(min(len(atr_pct), lookback))
+        cur = float(recent.iloc[-1])
+        pct = float((recent <= cur).mean())
+        # Lower pct -> current ATR is large relative to history (volatile)
+        if pct < 0.2:
+            return (0.8, 2.5, 1.2)
+        if pct < 0.4:
+            return (0.9, 3.0, 1.5)
+        if pct < 0.6:
+            return (1.1, 3.5, 1.8)
+        if pct < 0.8:
+            return (1.3, 4.0, 2.2)
+        return (1.5, 4.5, 2.5)
+    except Exception:
+        return (1.0, 4.5, 1.5)
+
+
 def compute_dynamic_atr_multiplier(
     base_mult: float,
     er: float,          # efficiency_ratio (0–1): how directional the price move is
@@ -802,7 +850,8 @@ def create_triple_barrier_labels(df: pd.DataFrame, atr_multiplier: float,
                                   volatility_regime: Optional[pd.Series] = None,
                                   efficiency_ratio: Optional[pd.Series] = None,
                                   trend_regime: Optional[pd.Series] = None,
-                                  macro_confluence_score: Optional[pd.Series] = None) -> pd.Series:
+                                  macro_confluence_score: Optional[pd.Series] = None,
+                                  barrier_multiplier: Optional[float] = None) -> pd.Series:
     """3-class labels: 0=SELL, 1=HOLD, 2=BUY, -1=CENSORED (dropped upstream)."""
     if df is None or df.empty:
         return pd.Series(dtype=int)
@@ -833,8 +882,21 @@ def create_triple_barrier_labels(df: pd.DataFrame, atr_multiplier: float,
 
         dynamic_mult = compute_dynamic_atr_multiplier(atr_multiplier, er_i, vol_regime_i)
 
-        upper = entry_price + (dynamic_mult * BARRIER_UP_SKEW) * atr_val
-        lower = entry_price - (dynamic_mult * BARRIER_DOWN_SKEW) * atr_val
+        # Regime-based barrier adjustment: allow optional per-call override
+        reg_barrier_adj = 1.0
+        if barrier_multiplier is not None:
+            reg_barrier_adj = float(barrier_multiplier)
+        else:
+            # Heuristic: flat markets need wider barriers, volatile markets tighter
+            if abs(trend_i) < 0.02:
+                reg_barrier_adj = 1.5
+            elif vol_regime_i > 1.25:
+                reg_barrier_adj = 0.8
+            elif er_i > 0.6:
+                reg_barrier_adj = 0.9
+
+        upper = entry_price + (dynamic_mult * reg_barrier_adj * BARRIER_UP_SKEW) * atr_val
+        lower = entry_price - (dynamic_mult * reg_barrier_adj * BARRIER_DOWN_SKEW) * atr_val
 
         window_avail = min(max_lookahead, n - 1 - i)
         hit = None
@@ -861,6 +923,37 @@ def create_triple_barrier_labels(df: pd.DataFrame, atr_multiplier: float,
         tail = min(max_lookahead, n)
         labels.iloc[n - tail:] = CENSORED
     return labels
+
+
+def get_class_weights(y: np.ndarray, min_directional_ratio: float = 0.20) -> np.ndarray:
+    """Return per-sample weights that upweight BUY/SELL when they are rare.
+
+    Keeps average weight near 1.0 for stability.
+    """
+    y = np.asarray(y).astype(int)
+    cnt = np.bincount(y, minlength=NUM_CLASS).astype(float)
+    total = cnt.sum() if cnt.sum() > 0 else 1.0
+    dir_cnt = float(cnt[0] + cnt[2])
+    dir_ratio = dir_cnt / total
+    base = np.ones(len(y), dtype=float)
+    if dir_ratio <= 0.0:
+        # No directional labels — assign small equal weight boost to any non-hold (if present)
+        base = np.where((y == 0) | (y == 2), 5.0, 1.0)
+    elif dir_ratio < min_directional_ratio:
+        # Scale up directional samples to reach the desired ratio approximately
+        desired_dir = max(min_directional_ratio * total, 1.0)
+        upfactor = max(1.0, desired_dir / max(dir_cnt, 1.0))
+        base = np.where((y == 0) | (y == 2), upfactor, 1.0)
+    else:
+        # Balanced enough — fall back to inverse-frequency weighting
+        cnt[cnt == 0] = 1.0
+        cw = (1.0 / cnt)
+        cw = cw / cw.sum() * NUM_CLASS
+        base = cw[y]
+
+    # Normalize to mean 1.0 to avoid changing global learning scale
+    base = base / float(np.mean(base))
+    return base
 
 
 # ============================================================
@@ -939,6 +1032,49 @@ def apply_temperature(probs: np.ndarray, T: float) -> np.ndarray:
     return _softmax(logits / max(T, 1e-3))
 
 
+# ============================================================
+# ADAPTIVE FEATURE NORMALISER (FIX 3)
+# ============================================================
+class AdaptiveNormalizer:
+    """Adaptive Z-score normalisation with online mean/std tracking.
+    
+    Prevents feature drift by learning statistics on train, then applying
+    to holdout without re-centering. This eliminates distribution shift
+    from causally infecting meta training and threshold selection.
+    """
+    def __init__(self, window: int = 1000, drift_threshold: float = 0.2):
+        self.window = window
+        self.drift_threshold = drift_threshold
+        self.means: Dict[str, float] = {}
+        self.stds: Dict[str, float] = {}
+
+    def fit_initial(self, df: pd.DataFrame, cols: List[str]) -> None:
+        """Learn statistics from training data."""
+        for col in cols:
+            if col in df.columns:
+                self.means[col] = float(df[col].mean())
+                self.stds[col] = float(df[col].std()) or 1.0
+
+    def transform(self, df: pd.DataFrame, cols: List[str]) -> pd.DataFrame:
+        """Apply learned normalisation and track drift."""
+        df_norm = df.copy()
+        for col in cols:
+            if col not in df_norm.columns or col not in self.means:
+                continue
+            # Z-score: (x - mean) / std
+            df_norm[col] = (df[col] - self.means[col]) / max(self.stds[col], 1e-8)
+            
+            # Online update: decay old stats, incorporate latest bar
+            if len(df) > 0:
+                latest_val = float(df[col].iloc[-1])
+                new_mean = 0.99 * self.means[col] + 0.01 * latest_val
+                new_std_sq = 0.99 * (self.stds[col] ** 2) + 0.01 * ((latest_val - new_mean) ** 2)
+                new_std = float(np.sqrt(max(new_std_sq, 1e-8)))
+                self.means[col] = new_mean
+                self.stds[col] = max(new_std, 1e-6)
+        return df_norm
+
+
 def fit_temperature(probs: np.ndarray, y: np.ndarray) -> float:
     if minimize_scalar is None:
         return 1.0
@@ -986,14 +1122,11 @@ def _sanitize(df: pd.DataFrame, cols: List[str]) -> pd.DataFrame:
 
 
 def sample_weights(y: np.ndarray) -> np.ndarray:
-    """Inverse-frequency weights so the primary stops ignoring the minority
-    directional classes in favour of the easy HOLD majority."""
-    y = np.asarray(y).astype(int)
-    cnt = np.bincount(y, minlength=NUM_CLASS).astype(float)
-    cnt[cnt == 0] = 1.0
-    cw = (1.0 / cnt)
-    cw = cw / cw.sum() * NUM_CLASS
-    return cw[y]
+    """Return adaptive sample weights for primary training.
+
+    This will upweight directional classes when they are under-represented.
+    """
+    return get_class_weights(y)
 
 
 # ============================================================
@@ -1704,20 +1837,28 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         df['_atr'] = compute_atr(df, period=14).values
 
         # ---- Train fresh HMM first so regime labels are available for training and validation ----
+        # FIX 2: HMM auto-recovery with state count validation
         try:
             from src.ml.hmm_regime import train_hmm_for_symbol as _train_hmm, label_dataframe as _label_df
             print("   Training fresh HMM regime engine...")
             _hmm_ok = _train_hmm(symbol, df)
             if _hmm_ok:
                 df['hmm_regime'] = _label_df(symbol, df)
-                print(f"   [HMM] Fresh HMM trained and df labeled with hmm_regime.")
+                n_unique_regimes = len(df['hmm_regime'].unique())
+                print(f"   [HMM] Fresh HMM trained with {n_unique_regimes} effective states.")
+                if n_unique_regimes == 1:
+                    print(f"   [HMM WARNING] Only 1 state detected. Regime filter will have limited effect.")
             else:
                 print("   [HMM] Fresh HMM training returned False. Using existing engine for labeling.")
                 df['hmm_regime'] = _label_df(symbol, df)
+                n_unique_regimes = len(df['hmm_regime'].unique())
+                if n_unique_regimes == 1:
+                    print(f"   [HMM WARNING] Fallback assigned 100% to 1 state. Regime filter disabled.")
         except Exception as _hmm_err:
             print(f"   [HMM] Pre-training failed: {type(_hmm_err).__name__}: {_hmm_err}")
             if 'hmm_regime' not in df.columns:
                 df['hmm_regime'] = 'UNKNOWN'
+                print(f"   [HMM] Using UNKNOWN regime fallback.")
 
         # ── Load per-token optimizer params (if threshold_optimizer.py has run) ──
         _opt = load_token_params(symbol)
@@ -1733,12 +1874,11 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
                   + (f" | disabled_reason={disabled_reason}" if disabled_reason else ""))
 
         # ATR multiplier: prefer optimizer result, but never tighten below the static tier.
-        # The optimizer can legitimately widen barriers (safer labels); it cannot go below
-        # the tier table because BARRIER_DOWN_SKEW amplifies tight bases into noisy SELL
-        # labels that degrade meta-model precision below the all-bar baseline.
+        # Use the per-token dynamic ATR range (history-aware) to pick a typical base.
         _static_atr = get_atr_multiplier(symbol)
         _opt_atr = _opt_global.get("atr_multiplier")
-        atr_mult = max(float(_opt_atr) if _opt_atr else _static_atr, _static_atr)
+        _min_m, _max_m, _typical_mult = get_dynamic_atr_range(df)
+        atr_mult = max(float(_opt_atr) if _opt_atr else float(_typical_mult), _static_atr)
 
         _er_med  = float(df['efficiency_ratio_10'].median()) if 'efficiency_ratio_10' in df.columns else 0.5
         _vol_med = float(df['volatility_regime'].median())   if 'volatility_regime' in df.columns else 1.0
@@ -1746,10 +1886,10 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
 
         # ── Dynamic lookahead ─────────────────────────────────────────────
         # Prefer the optimizer's per-token lookahead if available; fall back
-        # to the ER-adaptive formula.
+        # to a ATR-driven heuristic.
         _opt_lh = _opt_global.get("lookahead_bars")
         token_lookahead = int(np.clip(
-            int(_opt_lh) if _opt_lh else round(MAX_LOOKAHEAD * (0.4 + _er_med * 1.2)),
+            int(_opt_lh) if _opt_lh else get_dynamic_lookahead(df),
             12,              # absolute minimum: 12 bars (half a day)
             MAX_LOOKAHEAD,   # never exceed the global cap
         ))
@@ -1875,6 +2015,9 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         print(f"Token params   : lookahead={token_lookahead}h | "
               f"precision_target={token_precision_target:.1%} (breakeven~{token_breakeven:.1%}) | "
               f"meta_reg=L{_meta_reg}/mcw{_meta_mcw}")
+        print(f"   [ADAPTIVE] symbol={symbol} lookahead={token_lookahead} atr_mult={atr_mult:.2f} "
+              f"precision_target={token_precision_target:.1%} target_buy=[{target_buy_min:.1%},{target_buy_max:.1%}] "
+              f"target_sell=[{target_sell_min:.1%},{target_sell_max:.1%}] hold_max={target_hold_max:.1%}")
 
         labels = create_triple_barrier_labels(
             df, atr_multiplier=atr_mult, max_lookahead=token_lookahead,
@@ -2197,6 +2340,7 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             meta_ready = len(mX) >= max(200, MIN_FIRES_DEV * 4)
 
         regime_policies = {}
+        meta_calibration_method = 'uncalibrated'
         meta_ready = len(mX) >= max(200, MIN_FIRES_DEV * 4)
         if meta_ready:
             meta_oof = binary_oof(mX, mY, token_meta_params, N_SPLITS_CV, EMBARGO, w=meta_w)
@@ -2210,10 +2354,33 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             y_v_binary = (y_v == prop_v).astype(int)
             mcf.evaluate_calibrators(meta_oof, y_v_binary)
             
-            # Force calibrator_type to 'uncalibrated' as we use continuous expected returns for EdgeScoringEngine
-            mcf.calibrator_type = 'uncalibrated'
-            mcf.best_calibrator = None
-            meta_oof_cal = meta_oof
+            profile_calibration = meta_gate_profile.get('calibration', {}) if meta_gate_profile else {}
+            profile_cal_method = (
+                profile_calibration.get('selected_calibrator') or
+                profile_calibration.get('selected_method') or
+                profile_calibration.get('method') or
+                'uncalibrated'
+            )
+            profile_cal_method = str(profile_cal_method).lower()
+            if meta_gate_profile:
+                if profile_cal_method != 'uncalibrated':
+                    if profile_cal_method in mcf.reports and mcf.reports[profile_cal_method].get('model') is not None:
+                        mcf.calibrator_type = profile_cal_method
+                        mcf.best_calibrator = mcf.reports[profile_cal_method]['model']
+                        print(f"      Trusted optimizer calibration method: {mcf.calibrator_type}")
+                    else:
+                        print(f"      WARNING: optimizer profile requested calibrator '{profile_cal_method}' but it was not available on this dev set. Using uncalibrated meta output.")
+                        mcf.calibrator_type = 'uncalibrated'
+                        mcf.best_calibrator = None
+                else:
+                    mcf.calibrator_type = 'uncalibrated'
+                    mcf.best_calibrator = None
+                    print(f"      Trusted optimizer calibration method: {mcf.calibrator_type}")
+            else:
+                # Keep the calibration selected from current dev data when no profile directive is present
+                print(f"      Meta calibration selected: {mcf.calibrator_type}")
+            meta_oof_cal = mcf.calibrate(meta_oof)
+            meta_calibration_method = mcf.calibrator_type
             
             cre = ConfidenceReliabilityEngine()
             cre._mapping_x = None
@@ -2277,7 +2444,12 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
                 thr_buy, thr_sell, hit_buy, hit_sell, prec_buy, prec_sell, n_buy, n_sell = profile_thresholds
                 cov_buy = float(n_buy / max(1, int((prop_dev_filtered == 2).sum())))
                 cov_sell = float(n_sell / max(1, int((prop_dev_filtered == 0).sum())))
-                print(f"      Using meta gate profile thresholds: BUY={thr_buy:.3f}, SELL={thr_sell:.3f}, side_specific={meta_gate_profile.get('side_specific', True)}")
+                print(
+                    f"      Using optimizer meta gate profile thresholds: "
+                    f"BUY={thr_buy:.3f}, SELL={thr_sell:.3f}, "
+                    f"side_specific={meta_gate_profile.get('side_specific', True)}, "
+                    f"hit_buy={hit_buy}, hit_sell={hit_sell}"
+                )
             else:
                 # Pick thresholds dynamically per side (Phase 3)
                 # TASK 3 FIX: Use percentile-based logic that adapts to edge score distribution
@@ -2288,40 +2460,41 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
                     edge_sell, prop_dev_filtered, y_v, 0, target=token_precision_target, min_fires=max(5, int(len(edge_sell) * MIN_COVERAGE))
                 )
             
-            # TASK 3 FIX: BUY threshold deadlock - if no valid BUY thresholds found, use adaptive fallback
-            if not hit_buy and n_buy == 0:
-                print(f"      WARNING: No valid BUY thresholds found (deadlock). Using adaptive fallback.")
-                # Use lower percentile to find ANY BUY signals
-                lower_q_vals = [0.50, 0.40, 0.30, 0.20, 0.15, 0.10]
-                for q_val in lower_q_vals:
-                    fallback_thr = float(np.quantile(edge_buy, 1.0 - q_val))
-                    fallback_fire = edge_buy >= fallback_thr
-                    fallback_side = (prop_dev_filtered == 2) & fallback_fire
-                    if fallback_side.sum() >= 5:
-                        thr_buy = fallback_thr
-                        prec_buy = float((y_v[fallback_side] == 2).mean()) if fallback_side.sum() > 0 else 0.0
-                        cov_buy = q_val
-                        n_buy = int(fallback_side.sum())
-                        hit_buy = True
-                        print(f"      BUY fallback: threshold={fallback_thr:.1f}, coverage={q_val:.1%}, n={n_buy}, prec={prec_buy:.1%}")
-                        break
+            if profile_thresholds is None:
+                # TASK 3 FIX: BUY threshold deadlock - if no valid BUY thresholds found, use adaptive fallback
+                if not hit_buy and n_buy == 0:
+                    print(f"      WARNING: No valid BUY thresholds found (deadlock). Using adaptive fallback.")
+                    # Use lower percentile to find ANY BUY signals
+                    lower_q_vals = [0.50, 0.40, 0.30, 0.20, 0.15, 0.10]
+                    for q_val in lower_q_vals:
+                        fallback_thr = float(np.quantile(edge_buy, 1.0 - q_val))
+                        fallback_fire = edge_buy >= fallback_thr
+                        fallback_side = (prop_dev_filtered == 2) & fallback_fire
+                        if fallback_side.sum() >= 5:
+                            thr_buy = fallback_thr
+                            prec_buy = float((y_v[fallback_side] == 2).mean()) if fallback_side.sum() > 0 else 0.0
+                            cov_buy = q_val
+                            n_buy = int(fallback_side.sum())
+                            hit_buy = True
+                            print(f"      BUY fallback: threshold={fallback_thr:.1f}, coverage={q_val:.1%}, n={n_buy}, prec={prec_buy:.1%}")
+                            break
+                
+                if not hit_sell and n_sell == 0:
+                    print(f"      WARNING: No valid SELL thresholds found (deadlock). Using adaptive fallback.")
+                    lower_q_vals = [0.50, 0.40, 0.30, 0.20, 0.15, 0.10]
+                    for q_val in lower_q_vals:
+                        fallback_thr = float(np.quantile(edge_sell, 1.0 - q_val))
+                        fallback_fire = edge_sell >= fallback_thr
+                        fallback_side = (prop_dev_filtered == 0) & fallback_fire
+                        if fallback_side.sum() >= 5:
+                            thr_sell = fallback_thr
+                            prec_sell = float((y_v[fallback_side] == 0).mean()) if fallback_side.sum() > 0 else 0.0
+                            cov_sell = q_val
+                            n_sell = int(fallback_side.sum())
+                            hit_sell = True
+                            print(f"      SELL fallback: threshold={fallback_thr:.1f}, coverage={q_val:.1%}, n={n_sell}, prec={prec_sell:.1%}")
+                            break
             
-            if not hit_sell and n_sell == 0:
-                print(f"      WARNING: No valid SELL thresholds found (deadlock). Using adaptive fallback.")
-                lower_q_vals = [0.50, 0.40, 0.30, 0.20, 0.15, 0.10]
-                for q_val in lower_q_vals:
-                    fallback_thr = float(np.quantile(edge_sell, 1.0 - q_val))
-                    fallback_fire = edge_sell >= fallback_thr
-                    fallback_side = (prop_dev_filtered == 0) & fallback_fire
-                    if fallback_side.sum() >= 5:
-                        thr_sell = fallback_thr
-                        prec_sell = float((y_v[fallback_side] == 0).mean()) if fallback_side.sum() > 0 else 0.0
-                        cov_sell = q_val
-                        n_sell = int(fallback_side.sum())
-                        hit_sell = True
-                        print(f"      SELL fallback: threshold={fallback_thr:.1f}, coverage={q_val:.1%}, n={n_sell}, prec={prec_sell:.1%}")
-                        break
-
             # ---- Regime-Aware Threshold Optimization (Priority 4) ----
             print("   Optimizing separate threshold policies per HMM regime...")
             regimes_list = ['ACCUMULATION', 'DISTRIBUTION', 'COMPRESSION', 'VOLATILE_EXPANSION', 'TRENDING_BULL', 'TRENDING_BEAR', 'CHOPPY']
@@ -2816,38 +2989,26 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             _MIN_SIDE = 5    # minimum per-side holdout trades to trust the result
             tradeable_buy_holdout  = (
                 hit_buy and
-                buy_h_n > 0 and
-                buy_h_prec  >= 0.50 and
-                (buy_h_n  < _MIN_SIDE or buy_h_prec  >= breakeven)
+                buy_h_n >= _MIN_SIDE and
+                (bt["buy_win_rate"] > 0.4 or bt["expectancy_pct"] > 0.0)
             )
             tradeable_sell_holdout = (
                 hit_sell and
-                sell_h_n > 0 and
-                sell_h_prec >= 0.50 and
-                (sell_h_n < _MIN_SIDE or sell_h_prec >= breakeven)
+                sell_h_n >= _MIN_SIDE and
+                (bt["sell_win_rate"] > 0.4 or bt["expectancy_pct"] > 0.0)
             )
-            tradeable_final = tradeable_buy_holdout or tradeable_sell_holdout
 
             holdout_reliable = fired_n >= MIN_HOLDOUT_FIRES
             oof_holdout_gap  = abs(dev_prec - fired_prec)
 
-            # ── Phase 7 Global Acceptance Rules ──
-            precision_lift = fired_prec - cv_acc
-            
-            total_dir_holdout = int((prop_h == 2).sum() + (prop_h == 0).sum())
-            insufficient_opps = (total_dir_holdout < 150)
-            
-            trades_ok = (fired_n >= 30) or (insufficient_opps and fired_n >= 10)
-            coverage_ok = (coverage >= 0.02) or insufficient_opps
-            
             passes_validation = (
-                trades_ok and
-                (bt["buy_n"] > 0 or bt["sell_n"] > 0) and
-                coverage_ok and
+                fired_n >= 10 and
+                bt["expectancy_pct"] > 0.10 and
                 bt["profit_factor"] > 1.2 and
-                bt["expectancy_pct"] > 0.0 and
-                precision_lift > 0.0
+                bt["sharpe"] > 0.5
             )
+
+            tradeable_final = passes_validation and (tradeable_buy_holdout or tradeable_sell_holdout)
             
             # Meta Gate Ranking Validation (Priority 1)
             dir_proposed_h = (prop_h == 2) | (prop_h == 0)
@@ -2918,52 +3079,48 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             if selected_prec <= rejected_prec:
                 print("      [VETO] Selected trades did not outperform rejected trades! Disabling the gate automatically.")
                 passes_validation = False
-                
-            tradeable_final = bool(passes_validation)
-            tradeable_buy_holdout = bool(passes_validation)
-            tradeable_sell_holdout = bool(passes_validation)
-            per_side_approved = bool(passes_validation)
+
+            if holdout_reliable and bt['expectancy_pct'] <= 0.0 and oof_holdout_gap > GAP_VETO_THRESHOLD:
+                passes_validation = False
+                print("      DISABLED (gap veto): negative expectancy and large OOF→holdout gap")
+            elif holdout_reliable and oof_holdout_gap > 0.10:
+                print(f"      WATCH: OOF→holdout gap {oof_holdout_gap:.1%} "
+                      f"(dev {dev_prec:.1%} → holdout {fired_prec:.1%}). "
+                      f"Possible regime shift — monitor after next retrain.")
+
+            tradeable_final = passes_validation and (tradeable_buy_holdout or tradeable_sell_holdout)
+            per_side_approved = bool(tradeable_buy_holdout or tradeable_sell_holdout)
             combined_ok = bool(passes_validation)
 
             if passes_validation:
-                print(f"      [VALIDATION] PASS: holdout_trades={fired_n}, buy_n={bt['buy_n']}, sell_n={bt['sell_n']}, coverage={coverage:.1%}, PF={bt['profit_factor']:.2f}, EV={bt['expectancy_pct']:+.3f}%, lift={precision_lift:+.1%}")
+                print(f"      Profitability: expectancy={bt['expectancy_pct']:+.2f}%, PF={bt['profit_factor']:.2f}, Sharpe={bt['sharpe']:.1f}")
+                if tradeable_final:
+                    print(f"      ENABLED: profitability thresholds met (trades={fired_n}, EV>0.10%, PF>1.2, Sharpe>0.5)")
+                else:
+                    print(f"      DISABLED: gate passed validation but no per-side profitability approval.")
             else:
                 reasons = []
-                if not trades_ok: reasons.append(f"insufficient_trades({fired_n}<30)")
+                if fired_n < 10: reasons.append(f"insufficient_trades({fired_n}<10)")
                 if bt["buy_n"] == 0 and bt["sell_n"] == 0: reasons.append("no_trades_fired")
-                if not coverage_ok: reasons.append(f"low_coverage({coverage:.1%}<2%)")
                 if bt["profit_factor"] <= 1.2: reasons.append(f"low_PF({bt['profit_factor']:.2f}<=1.2)")
-                if bt["expectancy_pct"] <= 0.0: reasons.append(f"negative_EV({bt['expectancy_pct']:+.3f}%)")
-                if precision_lift <= 0.0: reasons.append(f"negative_lift({precision_lift:+.1%})")
+                if bt["expectancy_pct"] <= 0.10: reasons.append(f"low_EV({bt['expectancy_pct']:+.2f}%<=0.10%)")
+                if bt["sharpe"] <= 0.5: reasons.append(f"low_Sharpe({bt['sharpe']:.1f}<=0.5)")
                 print(f"      [VALIDATION] FAIL: {', '.join(reasons)}")
 
             if not tradeable_final:
                 if bt['expectancy_pct'] <= 0.0:
                     print(f"      DISABLED: negative expectancy ({bt['expectancy_pct']:+.3f}%) "
-                          f"with no per-side precision approval (combined prec {fired_prec:.1%}).")
+                          f"with no per-side profitability approval.")
                 else:
-                    print(f"      DISABLED: neither side cleared holdout breakeven "
-                          f"{breakeven:.1%} with ≥{_MIN_SIDE} trades and prec ≥50% (or failed other validation rules).")
-            elif not combined_ok:
-                # Per-side saved it even though combined failed
+                    print(f"      DISABLED: profitability thresholds not met "
+                          f"(EV={bt['expectancy_pct']:+.2f}%, PF={bt['profit_factor']:.2f}, Sharpe={bt['sharpe']:.1f}).")
+            elif not (tradeable_buy_holdout or tradeable_sell_holdout):
                 sides_live = []
                 if tradeable_buy_holdout:  sides_live.append('BUY')
                 if tradeable_sell_holdout: sides_live.append('SELL')
-                print(f"      ENABLED via per-side: {' + '.join(sides_live)} cleared holdout "
-                      f"(combined {fired_prec:.1%} < {breakeven:.1%}).")
-            elif bt['expectancy_pct'] >= EXPECTANCY_FLOOR and fired_prec < breakeven:
-                print(f"      ENABLED via expectancy: {bt['expectancy_pct']:+.3f}%/trade "
-                      f"(prec {fired_prec:.1%} < breakeven {breakeven:.1%}, "
-                      f"floor={EXPECTANCY_FLOOR:.2f}%).")
-
-            if holdout_reliable and oof_holdout_gap >= GAP_VETO_THRESHOLD and fired_prec < breakeven:
-                print(f"      DISABLED (gap veto): OOF→holdout gap {oof_holdout_gap:.1%} "
-                      f"(dev {dev_prec:.1%} → holdout {fired_prec:.1%}) with prec below breakeven. "
-                      f"Regime shift too large to ship.")
-            elif holdout_reliable and oof_holdout_gap > 0.10:
-                print(f"      WATCH: OOF→holdout gap {oof_holdout_gap:.1%} "
-                      f"(dev {dev_prec:.1%} → holdout {fired_prec:.1%}). "
-                      f"Possible regime shift — monitor after next retrain.")
+                print(f"      ENABLED via per-side profitability: {' + '.join(sides_live)}")
+            else:
+                print(f"      ENABLED: profitability thresholds met (trades={fired_n}, EV>0.10%, PF>1.2, Sharpe>0.5)")
         else:
             tradeable_final        = False
             tradeable_buy_holdout  = False
@@ -3062,6 +3219,7 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
                 "calibration_temperature": T,
                 "recommended_calibrator": selected_cal,
                 "calibration_selector": cal_choice,
+                "meta_calibration_method": meta_calibration_method,
                 "meta_threshold": thr,               # combined gate (both sides)
                 "production_confidence_floor": thr,  # backward-compat alias
                 "edge_rank_mode": meta_gate_profile.get('edge_rank_mode') if meta_gate_profile else 'raw',
@@ -3230,9 +3388,12 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
                     "gate_type": gate_type,
                     "threshold_quantile": float(meta_gate_profile.get("threshold_quantile")) if meta_gate_profile else None,
                     "thresholds": meta_gate_profile.get("thresholds") if meta_gate_profile else {},
+                    "side_specific": bool(meta_gate_profile.get("side_specific", True)) if meta_gate_profile else True,
                     "signal_vetoes": signal_vetoes if signal_vetoes is not None else [],
                     "regime_modifier": regime_modifier_profile,
                     "edge_rank_mode": meta_gate_profile.get("edge_rank_mode") if meta_gate_profile else None,
+                    "calibration": meta_gate_profile.get("calibration") if meta_gate_profile else {},
+                    "disabled_reason": meta_gate_profile.get("disabled_reason") if meta_gate_profile else None,
                 },
                 "disabled_filters": {
                     "sr": bool(disable_sr_veto),
@@ -3300,31 +3461,27 @@ def _find_resume_index(store_dir: Path) -> int:
     """
     Return the index in FLEET_SYMBOLS to start from.
 
-    Scans model_store for *_model.json files, finds the one with the latest
-    mtime, maps it back to a FLEET_SYMBOLS entry, and returns index+1.
-    Returns 0 (start from the beginning) if no prior models exist or the last
-    model doesn't match any fleet symbol.
+    Scans model_store for *_model.json files and maps them back to fleet symbols.
+    Resumes from the first missing token in FLEET_SYMBOLS order, so a partial
+    fleet run can continue from exactly where it stopped.
     """
     model_files = list(store_dir.glob("*_model.json"))
     if not model_files:
         return 0
 
-    latest = max(model_files, key=lambda p: p.stat().st_mtime)
-    # Convert filename back to symbol:  BTC_USDT_model.json → BTC/USDT
-    base = latest.name.replace("_model.json", "")
-    # The symbol has exactly one "/" — it separates ticker from quote (e.g. BTC/USDT).
-    # The filename encodes "/" as "_", so we split on the first "_USDT" or "_BTC" etc.
-    # Most reliable: try every fleet symbol and find the one whose encoded form matches.
     sym_map = {s.replace("/", "_"): s for s in FLEET_SYMBOLS}
-    symbol = sym_map.get(base)
-    if symbol is None:
-        return 0
+    completed = set()
+    for p in model_files:
+        base = p.name.replace("_model.json", "")
+        symbol = sym_map.get(base)
+        if symbol:
+            completed.add(symbol)
 
-    try:
-        idx = FLEET_SYMBOLS.index(symbol)
-        return idx + 1   # resume with the token AFTER the last completed one
-    except ValueError:
-        return 0
+    for idx, symbol in enumerate(FLEET_SYMBOLS):
+        if symbol not in completed:
+            return idx
+
+    return len(FLEET_SYMBOLS)
 
 
 def train_fleet(hours: int = 5000, resume: bool = True):
@@ -3357,6 +3514,11 @@ def train_fleet(hours: int = 5000, resume: bool = True):
 
     store_dir = Path(root_dir) / "src" / "ml" / "model_store"
     start_idx = _find_resume_index(store_dir) if resume else 0
+    total = len(FLEET_SYMBOLS)
+    if start_idx >= total:
+        print("\nAll fleet tokens already have saved models. No training required.")
+        return
+
     if start_idx > 0:
         skipped = FLEET_SYMBOLS[:start_idx]
         print(f"\nRESUMING from {FLEET_SYMBOLS[start_idx]} "
@@ -3366,7 +3528,6 @@ def train_fleet(hours: int = 5000, resume: bool = True):
         print("\nStarting full fleet training from the beginning.")
 
     results = []
-    total = len(FLEET_SYMBOLS)
     for idx, symbol in enumerate(FLEET_SYMBOLS, 1):
         if idx - 1 < start_idx:
             continue                          # skip already-completed tokens

@@ -1,0 +1,619 @@
+{
+  "symbol": "RAY/USDT",
+  "generated_at": "2026-06-07T17:24:57.925080+00:00",
+  "token_summary": {
+    "symbol": "RAY/USDT",
+    "timestamp": "2026-06-07T17:24:57.888111+00:00",
+    "train_bars": 2605,
+    "eval_bars": 1117,
+    "gate_selected": "DISABLED",
+    "calibration_selected": "beta",
+    "score": 0.0,
+    "grade": "F"
+  },
+  "model_quality": {
+    "summary": "94 architecture candidates evaluated, 0 profitable",
+    "feature_importance_top10": [
+      {
+        "feature": "efficiency_ratio_10",
+        "pct": 2.74
+      },
+      {
+        "feature": "linreg_r2_14",
+        "pct": 1.48
+      },
+      {
+        "feature": "atr_band_position",
+        "pct": 1.27
+      },
+      {
+        "feature": "cci_20",
+        "pct": 1.21
+      },
+      {
+        "feature": "starc_position",
+        "pct": 1.15
+      },
+      {
+        "feature": "is_squeeze",
+        "pct": 1.07
+      },
+      {
+        "feature": "total_confluence",
+        "pct": 1.03
+      },
+      {
+        "feature": "ema_slope_21",
+        "pct": 1.0
+      },
+      {
+        "feature": "dema_21",
+        "pct": 0.9
+      },
+      {
+        "feature": "ichimoku_tenkan",
+        "pct": 0.83
+      }
+    ],
+    "feature_concentration_hhi": 0.0058,
+    "signal_diversity_score": 0.9987,
+    "top_feature_pct": 2.74,
+    "top3_features_pct": 5.49
+  },
+  "calibration_forensics": {
+    "summary": "Evaluated 5 calibration methods; 0 architecture-viable",
+    "note": "Calibrators are evaluated by architecture search outcome (percentile threshold), NOT by performance at fixed 0.50 threshold.  A calibrator appearing unprofitable at p>=0.50 can still be viable when architecture search selects the top 15-40% of signals.",
+    "viable_count": 0,
+    "methods": [
+      {
+        "method": "uncalibrated",
+        "ece": 0.15926216286844552,
+        "brier": 0.19760224357610687,
+        "coverage_at_0_5": 0.5014031805425632,
+        "precision_at_0_5": 0.4123134328358209,
+        "pf_at_0_5": 0.743,
+        "expectancy_at_0_5": -14.2791,
+        "sharpe_at_0_5": -9.612,
+        "variance_retained": 1.0,
+        "prob_extreme_frac": 0.018709073900841908,
+        "tech_eligible": true,
+        "architecture_viable": false,
+        "best_arch_score": -Infinity,
+        "reason": ""
+      },
+      {
+        "method": "isotonic",
+        "ece": 1.338234279202684e-17,
+        "brier": 0.1595862512145443,
+        "coverage_at_0_5": 0.41440598690364827,
+        "precision_at_0_5": 0.41309255079006774,
+        "pf_at_0_5": 0.745,
+        "expectancy_at_0_5": -14.0955,
+        "sharpe_at_0_5": -8.625,
+        "variance_retained": 0.8014089495616945,
+        "prob_extreme_frac": 0.3208606173994387,
+        "tech_eligible": true,
+        "architecture_viable": false,
+        "best_arch_score": -Infinity,
+        "reason": ""
+      },
+      {
+        "method": "platt",
+        "ece": 0.1056545763550425,
+        "brier": 0.1754284839134149,
+        "coverage_at_0_5": 0.3049579045837231,
+        "precision_at_0_5": 0.401840490797546,
+        "pf_at_0_5": 0.718,
+        "expectancy_at_0_5": -15.7442,
+        "sharpe_at_0_5": -8.312,
+        "variance_retained": 0.685572524437895,
+        "prob_extreme_frac": 0.0,
+        "tech_eligible": true,
+        "architecture_viable": false,
+        "best_arch_score": -Infinity,
+        "reason": ""
+      },
+      {
+        "method": "temperature",
+        "ece": 0.15451055418286372,
+        "brier": 0.19840469503742375,
+        "coverage_at_0_5": 0.5014031805425632,
+        "precision_at_0_5": 0.4123134328358209,
+        "pf_at_0_5": 0.743,
+        "expectancy_at_0_5": -14.2791,
+        "sharpe_at_0_5": -9.612,
+        "variance_retained": 0.5622743234942275,
+        "prob_extreme_frac": 0.0018709073900841909,
+        "tech_eligible": true,
+        "architecture_viable": false,
+        "best_arch_score": -Infinity,
+        "reason": ""
+      },
+      {
+        "method": "beta",
+        "ece": 0.051353430500196466,
+        "brier": 0.1669631297373449,
+        "coverage_at_0_5": 0.3807296538821328,
+        "precision_at_0_5": 0.4152334152334152,
+        "pf_at_0_5": 0.753,
+        "expectancy_at_0_5": -13.6135,
+        "sharpe_at_0_5": -7.981,
+        "variance_retained": 0.748762436306962,
+        "prob_extreme_frac": 0.11786716557530402,
+        "tech_eligible": true,
+        "architecture_viable": false,
+        "best_arch_score": -Infinity,
+        "reason": ""
+      }
+    ]
+  },
+  "architecture_forensics": {
+    "summary": "Evaluated 94 architectures: 0 accepted, 41 rejected",
+    "total_count": 94,
+    "accepted_count": 0,
+    "rejected_count": 41,
+    "top_candidates": [
+      {
+        "gate_type": "GLOBAL_EDGE_PERCENTILE",
+        "quantile": 0.4,
+        "calibration": "uncalibrated",
+        "precision": 0.411214953271028,
+        "profit_factor": 0.738,
+        "expectancy_pct": -14.586,
+        "sharpe": -8.774,
+        "coverage": 0.40037418147801684,
+        "score": 0.0,
+        "score_breakdown": {
+          "expectancy": 0.0,
+          "profit_factor": 0.0,
+          "sharpe": 0.0,
+          "precision": 0.041121,
+          "coverage": 0.020019,
+          "total": 0.06114
+        },
+        "reason": "nonpositive_expectancy",
+        "grade": "F"
+      },
+      {
+        "gate_type": "GLOBAL_EDGE_PERCENTILE",
+        "quantile": 0.3,
+        "calibration": "uncalibrated",
+        "precision": 0.3987538940809969,
+        "profit_factor": 0.71,
+        "expectancy_pct": -16.2994,
+        "sharpe": -8.55,
+        "coverage": 0.30028063610851263,
+        "score": 0.0,
+        "score_breakdown": {
+          "expectancy": 0.0,
+          "profit_factor": 0.0,
+          "sharpe": 0.0,
+          "precision": 0.039875,
+          "coverage": 0.015014,
+          "total": 0.054889
+        },
+        "reason": "nonpositive_expectancy",
+        "grade": "F"
+      },
+      {
+        "gate_type": "GLOBAL_EDGE_PERCENTILE",
+        "quantile": 0.25,
+        "calibration": "uncalibrated",
+        "precision": 0.4141791044776119,
+        "profit_factor": 0.759,
+        "expectancy_pct": -13.1597,
+        "sharpe": -6.279,
+        "coverage": 0.2507015902712816,
+        "score": 0.0,
+        "score_breakdown": {
+          "expectancy": 0.0,
+          "profit_factor": 0.0,
+          "sharpe": 0.0,
+          "precision": 0.041418,
+          "coverage": 0.012535,
+          "total": 0.053953
+        },
+        "reason": "nonpositive_expectancy",
+        "grade": "F"
+      },
+      {
+        "gate_type": "GLOBAL_EDGE_PERCENTILE",
+        "quantile": 0.2,
+        "calibration": "uncalibrated",
+        "precision": 0.4532710280373832,
+        "profit_factor": 0.888,
+        "expectancy_pct": -5.7075,
+        "sharpe": -2.411,
+        "coverage": 0.20018709073900842,
+        "score": 0.0,
+        "score_breakdown": {
+          "expectancy": 0.0,
+          "profit_factor": 0.0,
+          "sharpe": 0.0,
+          "precision": 0.045327,
+          "coverage": 0.010009,
+          "total": 0.055336
+        },
+        "reason": "nonpositive_expectancy",
+        "grade": "F"
+      },
+      {
+        "gate_type": "GLOBAL_EDGE_PERCENTILE",
+        "quantile": 0.15,
+        "calibration": "uncalibrated",
+        "precision": 0.4161490683229814,
+        "profit_factor": 0.769,
+        "expectancy_pct": -12.5224,
+        "sharpe": -4.633,
+        "coverage": 0.15060804490177737,
+        "score": 0.0,
+        "score_breakdown": {
+          "expectancy": 0.0,
+          "profit_factor": 0.0,
+          "sharpe": 0.0,
+          "precision": 0.041615,
+          "coverage": 0.00753,
+          "total": 0.049145
+        },
+        "reason": "nonpositive_expectancy",
+        "grade": "F"
+      },
+      {
+        "gate_type": "SIDE_EDGE_PERCENTILE",
+        "quantile": 0.4,
+        "calibration": "uncalibrated",
+        "precision": 0.411214953271028,
+        "profit_factor": 0.738,
+        "expectancy_pct": -14.586,
+        "sharpe": -8.774,
+        "coverage": 0.40037418147801684,
+        "score": 0.0,
+        "score_breakdown": {
+          "expectancy": 0.0,
+          "profit_factor": 0.0,
+          "sharpe": 0.0,
+          "precision": 0.041121,
+          "coverage": 0.020019,
+          "total": 0.06114
+        },
+        "reason": "nonpositive_expectancy",
+        "grade": "F"
+      },
+      {
+        "gate_type": "SIDE_EDGE_PERCENTILE",
+        "quantile": 0.3,
+        "calibration": "uncalibrated",
+        "precision": 0.3987538940809969,
+        "profit_factor": 0.71,
+        "expectancy_pct": -16.2994,
+        "sharpe": -8.55,
+        "coverage": 0.30028063610851263,
+        "score": 0.0,
+        "score_breakdown": {
+          "expectancy": 0.0,
+          "profit_factor": 0.0,
+          "sharpe": 0.0,
+          "precision": 0.039875,
+          "coverage": 0.015014,
+          "total": 0.054889
+        },
+        "reason": "nonpositive_expectancy",
+        "grade": "F"
+      },
+      {
+        "gate_type": "SIDE_EDGE_PERCENTILE",
+        "quantile": 0.25,
+        "calibration": "uncalibrated",
+        "precision": 0.4141791044776119,
+        "profit_factor": 0.759,
+        "expectancy_pct": -13.1597,
+        "sharpe": -6.279,
+        "coverage": 0.2507015902712816,
+        "score": 0.0,
+        "score_breakdown": {
+          "expectancy": 0.0,
+          "profit_factor": 0.0,
+          "sharpe": 0.0,
+          "precision": 0.041418,
+          "coverage": 0.012535,
+          "total": 0.053953
+        },
+        "reason": "nonpositive_expectancy",
+        "grade": "F"
+      },
+      {
+        "gate_type": "SIDE_EDGE_PERCENTILE",
+        "quantile": 0.2,
+        "calibration": "uncalibrated",
+        "precision": 0.4511627906976744,
+        "profit_factor": 0.88,
+        "expectancy_pct": -6.1465,
+        "sharpe": -2.603,
+        "coverage": 0.2011225444340505,
+        "score": 0.0,
+        "score_breakdown": {
+          "expectancy": 0.0,
+          "profit_factor": 0.0,
+          "sharpe": 0.0,
+          "precision": 0.045116,
+          "coverage": 0.010056,
+          "total": 0.055172
+        },
+        "reason": "nonpositive_expectancy",
+        "grade": "F"
+      },
+      {
+        "gate_type": "SIDE_EDGE_PERCENTILE",
+        "quantile": 0.15,
+        "calibration": "uncalibrated",
+        "precision": 0.4161490683229814,
+        "profit_factor": 0.769,
+        "expectancy_pct": -12.5224,
+        "sharpe": -4.633,
+        "coverage": 0.15060804490177737,
+        "score": 0.0,
+        "score_breakdown": {
+          "expectancy": 0.0,
+          "profit_factor": 0.0,
+          "sharpe": 0.0,
+          "precision": 0.041615,
+          "coverage": 0.00753,
+          "total": 0.049145
+        },
+        "reason": "nonpositive_expectancy",
+        "grade": "F"
+      }
+    ],
+    "rejection_reasons": {
+      "nonpositive_expectancy": 41
+    }
+  },
+  "score_breakdown": {
+    "final_score": 0.078064,
+    "components": {
+      "expectancy": 0.0,
+      "profit_factor": 0.0,
+      "sharpe": 0.0,
+      "precision": 0.028064,
+      "coverage": 0.05,
+      "total": 0.078064
+    },
+    "weights": {
+      "expectancy": 0.35,
+      "profit_factor": 0.3,
+      "sharpe": 0.2,
+      "precision": 0.1,
+      "coverage": 0.05
+    }
+  },
+  "trust_score_forensics": {
+    "trust_score": 25,
+    "saved_trust": -1,
+    "consistent": true,
+    "consistency": "UNKNOWN",
+    "components": {
+      "pf_contribution": 0.0,
+      "expectancy_contribution": 0.0,
+      "sharpe_contribution": 0.0,
+      "coverage_contribution": 15.0,
+      "fires_contribution": 10.0,
+      "total": 25
+    }
+  },
+  "regime_forensics": {
+    "summary": "Regime breakdown requires ranking_df \u2014 use enrich_with_ranking_df() to populate.",
+    "regimes": []
+  },
+  "disabled_diagnostics": {
+    "root_causes": [
+      "Calibration validation: No calibrator produced a profitable architecture at any percentile threshold",
+      "All 94 candidates rejected:",
+      "  nonpositive_expectancy: 41 candidate(s)",
+      "  coverage 0.0206 < required 0.15: 6 candidate(s)",
+      "  coverage 0.0608 < required 0.15: 4 candidate(s)",
+      "  coverage 0.0814 < required 0.15: 4 candidate(s)",
+      "  coverage 0.0412 < required 0.15: 4 candidate(s)",
+      "Baseline profit factor too low: 0.775 (threshold 1.05)",
+      "Baseline expectancy non-positive: -8.145%",
+      "Baseline Sharpe non-positive: -9.450"
+    ],
+    "baseline": {
+      "precision": 0.2806361085126286,
+      "profit_factor": 0.775,
+      "expectancy_pct": -8.1449,
+      "sharpe": -9.45,
+      "coverage": 1.0
+    },
+    "recommendation": "Baseline profit factor is weak; favor a conservative fallback gate or wider ATR barriers instead of disabling the token. Review data quality, feature engineering, and ensure at least 15% of signals have positive expectancy.  Consider extending the evaluation window."
+  },
+  "edge_failure_analysis": {
+    "available": true,
+    "n_signals": 1069,
+    "n_buy": 577,
+    "n_sell": 492,
+    "buy_sell_balance": 0.5398,
+    "prediction_entropy_mean": 0.6332,
+    "prediction_entropy_std": 0.3866,
+    "dir_prob_mean": 0.4485,
+    "dir_prob_std": 0.3134,
+    "dir_prob_skew": -1.0395,
+    "edge_rank_mean": 0.2015,
+    "edge_rank_std": 0.1489,
+    "signal_diversity_score": 0.9987,
+    "feature_concentration_hhi": 0.0058,
+    "top_feature_pct": 2.74,
+    "top3_features_pct": 5.49,
+    "feature_importance_top10": [
+      {
+        "feature": "efficiency_ratio_10",
+        "pct": 2.74
+      },
+      {
+        "feature": "linreg_r2_14",
+        "pct": 1.48
+      },
+      {
+        "feature": "atr_band_position",
+        "pct": 1.27
+      },
+      {
+        "feature": "cci_20",
+        "pct": 1.21
+      },
+      {
+        "feature": "starc_position",
+        "pct": 1.15
+      },
+      {
+        "feature": "is_squeeze",
+        "pct": 1.07
+      },
+      {
+        "feature": "total_confluence",
+        "pct": 1.03
+      },
+      {
+        "feature": "ema_slope_21",
+        "pct": 1.0
+      },
+      {
+        "feature": "dema_21",
+        "pct": 0.9
+      },
+      {
+        "feature": "ichimoku_tenkan",
+        "pct": 0.83
+      }
+    ],
+    "warnings": []
+  },
+  "root_cause_classification": {
+    "primary_cause": "NO_ALPHA",
+    "confidence": 0.391,
+    "ranked_causes": [
+      {
+        "cause": "NO_ALPHA",
+        "confidence": 0.391
+      },
+      {
+        "cause": "COVERAGE_COLLAPSE",
+        "confidence": 0.261
+      },
+      {
+        "cause": "OVERFITTING",
+        "confidence": 0.217
+      },
+      {
+        "cause": "CALIBRATION_COLLAPSE",
+        "confidence": 0.13
+      }
+    ],
+    "evidence": {
+      "NO_ALPHA": [
+        "Baseline PF=0.775, Exp=-8.14% \u2014 raw signal quality critically poor",
+        "Every architecture candidate has non-positive expectancy"
+      ],
+      "OVERFITTING": [
+        "Train precision 0.577 >> holdout precision 0.411 \u2014 train/holdout divergence suggests overfitting or data leak"
+      ],
+      "CALIBRATION_COLLAPSE": [
+        "No calibrator produced a viable architecture at any percentile threshold"
+      ],
+      "COVERAGE_COLLAPSE": [
+        "53/94 candidates rejected for insufficient coverage"
+      ]
+    },
+    "all_scores": {
+      "NO_ALPHA": 0.391,
+      "WEAK_ALPHA": 0.0,
+      "OVERFITTING": 0.217,
+      "CALIBRATION_COLLAPSE": 0.13,
+      "COVERAGE_COLLAPSE": 0.261,
+      "REGIME_INSTABILITY": 0.0,
+      "FEATURE_DOMINANCE": 0.0,
+      "DATA_QUALITY_FAILURE": 0.0
+    }
+  },
+  "architecture_accounting": {
+    "total_evaluated": 94,
+    "accepted": 0,
+    "coverage_rejected": 53,
+    "quality_rejected": 41,
+    "duplicate_skipped": 0,
+    "other_rejected": 0,
+    "unaccounted": 0,
+    "accounting_ok": true,
+    "accounting_check": "Total=94 = Accepted(0) + CoverageRej(53) + QualityRej(41) + Duplicate(0) + Other(0)",
+    "rejection_by_reason": {
+      "nonpositive_expectancy": 41,
+      "coverage 0.0206 < required 0.15": 6,
+      "coverage 0.0608 < required 0.15": 4,
+      "coverage 0.0814 < required 0.15": 4,
+      "coverage 0.0412 < required 0.15": 4,
+      "coverage 0.1010 < required 0.15": 3,
+      "coverage 0.0402 < required 0.15": 2,
+      "coverage 0.1384 < required 0.15": 2,
+      "coverage 0.1263 < required 0.15": 2,
+      "coverage 0.1141 < required 0.15": 2,
+      "coverage 0.1038 < required 0.15": 2,
+      "coverage 0.1001 < required 0.15": 1,
+      "coverage 0.0804 < required 0.15": 1,
+      "coverage 0.1338 < required 0.15": 1,
+      "coverage 0.0898 < required 0.15": 1,
+      "coverage 0.0730 < required 0.15": 1,
+      "coverage 0.0571 < required 0.15": 1,
+      "coverage 0.1076 < required 0.15": 1,
+      "coverage 0.0580 < required 0.15": 1,
+      "coverage 0.0384 < required 0.15": 1,
+      "coverage 0.0243 < required 0.15": 1,
+      "coverage 0.0159 < required 0.15": 1,
+      "coverage 0.0084 < required 0.15": 1,
+      "coverage 0.0019 < required 0.15": 1,
+      "coverage 0.0009 < required 0.15": 1,
+      "coverage 0.0982 < required 0.15": 1,
+      "coverage 0.0645 < required 0.15": 1,
+      "coverage 0.0524 < required 0.15": 1,
+      "coverage 0.0337 < required 0.15": 1,
+      "coverage 0.0225 < required 0.15": 1,
+      "coverage 0.0215 < required 0.15": 1,
+      "coverage 0.0168 < required 0.15": 1,
+      "coverage 0.0140 < required 0.15": 1
+    }
+  },
+  "model_health_score": {
+    "total": 72,
+    "max": 100,
+    "components": {
+      "feature_diversity": 30.0,
+      "prediction_entropy": 20.0,
+      "calibration_quality": 17.0,
+      "architecture_robustness": 0.0,
+      "regime_stability": 5.0
+    },
+    "interpretation": "GOOD"
+  },
+  "alpha_attribution": {
+    "baseline_pf": 0.775,
+    "final_pf": 0.775,
+    "neutral_reference_pf": 0.9,
+    "total_lift": 0.0,
+    "signal_quality_lift": 0.0,
+    "calibration_lift": 0.01,
+    "gate_architecture_lift": 0.0,
+    "signal_quality_pct": 0.0,
+    "calibration_pct": 100.0,
+    "gate_architecture_pct": 0.0,
+    "explanation": "PF lift from neutral 0.90 to 0.775: raw signal=0%, calibration=100%, gate architecture=0%"
+  },
+  "grade": "F",
+  "final_verdict": {
+    "status": "DISABLED \u2014 no profitable gate found",
+    "verdict": "No architecture passed profitability thresholds",
+    "grade": "F",
+    "profit_factor": 0.775,
+    "expectancy_pct": -8.1449,
+    "trust_score": 25,
+    "trust_label": "LOW",
+    "trust_consistent": true
+  }
+}

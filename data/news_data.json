@@ -1,239 +1,5 @@
 [
   {
-    "timestamp": "2026-06-05T07:02:59",
-    "headline": "Crypto billionaires bankroll Nigel Farage's pro-crypto party",
-    "link": "https://cointelegraph.com/news/crypto-billionaires-bankroll-reform-uk-more-than-other-parties?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": 0.4019,
-    "importance": 1.0,
-    "weighted_sentiment": 0.4019
-  },
-  {
-    "timestamp": "2026-06-05T07:00:55",
-    "headline": "Strategy\u2019s leveraged Bitcoin model has faced its first stress test: Grayscale",
-    "link": "https://cointelegraph.com/news/strategys-leveraged-bitcoin-model-faces-first-stress-test-grayscale?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": -0.4215,
-    "importance": 1.0,
-    "weighted_sentiment": -0.4215
-  },
-  {
-    "timestamp": "2026-06-05T06:03:52",
-    "headline": "Anthropic says self-improving AI may be closer than expected",
-    "link": "https://cointelegraph.com/news/anthropic-ai-self-improvement-agents-recursive-development?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": 0.0,
-    "importance": 2.0,
-    "weighted_sentiment": 0.0
-  },
-  {
-    "timestamp": "2026-06-05T05:09:56",
-    "headline": "ZEC drops 30% as Shielded Labs reveals more about infinite counterfeit bug",
-    "link": "https://cointelegraph.com/news/zec-tanks-30-after-ai-security-review-discovers-critical-zcash-vulnerability?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": 0.0,
-    "importance": 1.5,
-    "weighted_sentiment": 0.0
-  },
-  {
-    "timestamp": "2026-06-05T04:26:57",
-    "headline": "Senate Republicans push finance watchdogs to clarify crypto capital rules",
-    "link": "https://cointelegraph.com/news/senate-republicans-push-finance-regulators-to-clarify-crypto-capital-rules?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": 0.0,
-    "importance": 2.0,
-    "weighted_sentiment": 0.0
-  },
-  {
-    "timestamp": "2026-06-05T09:16:20",
-    "headline": "Bitcoin crashed and flushed leverage out, but is the bottom here yet?",
-    "link": "https://cryptoslate.com/bitcoin-crashed-and-flushed-leverage-out-but-is-the-bottom-here-yet/",
-    "source": "cryptoslate.com",
-    "sentiment": 0.0,
-    "importance": 1.0,
-    "weighted_sentiment": 0.0
-  },
-  {
-    "timestamp": "2026-06-05T10:43:15",
-    "headline": "Zcash loses over $5 billion after AI finds 4-year bug that could have created fake hidden coins",
-    "link": "https://cryptoslate.com/zcash-loses-over-5-billion-after-ai-finds-4-year-bug-that-could-have-created-fake-hidden-coins/",
-    "source": "cryptoslate.com",
-    "sentiment": -0.5267,
-    "importance": 1.0,
-    "weighted_sentiment": -0.5267
-  },
-  {
-    "timestamp": "2026-06-05T10:41:59",
-    "headline": "ZEC Crashes 38% as Zcash Discloses \u2018Critical Counterfeiting Vulnerability\u2019",
-    "link": "https://decrypt.co/370105/zec-crashes-38-as-zcash-discloses-critical-counterfeiting-vulnerability",
-    "source": "decrypt.co",
-    "sentiment": 0.0,
-    "importance": 1.0,
-    "weighted_sentiment": 0.0
-  },
-  {
-    "timestamp": "2026-06-05T10:59:50",
-    "headline": "Forward Industries moves $32M in SOL amid $1B paper loss",
-    "link": "https://cointelegraph.com/news/forward-industries-moves-319m-in-sol-to-coinbase-prime-amid-113b-paper-loss?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": -0.3182,
-    "importance": 1.5,
-    "weighted_sentiment": -0.4773
-  },
-  {
-    "timestamp": "2026-06-05T10:47:17",
-    "headline": "South Korea police probe Polymarket users over illegal gambling claims: Report",
-    "link": "https://cointelegraph.com/news/south-korean-authorities-first-illegal-gambling-probe-polymarket-users?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": -0.5574,
-    "importance": 1.0,
-    "weighted_sentiment": -0.5574
-  },
-  {
-    "timestamp": "2026-06-05T22:18:29",
-    "headline": "ETH falls to 13-month low on Zcash bug news and Bitcoin drop to sub-$60K: Is $1.4K next?",
-    "link": "https://cointelegraph.com/markets/eth-falls-to-13-month-low-on-zcash-bug-news-and-bitcoin-drop-to-sub-60k-is-14k-next?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": -0.4939,
-    "importance": 2.0,
-    "weighted_sentiment": -0.9878
-  },
-  {
-    "timestamp": "2026-06-05T20:55:27",
-    "headline": "Travala lets AI agents book hotels with USDC on Base",
-    "link": "https://cointelegraph.com/news/travala-ai-agents-book-hotels-usdc-base?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": 0.0,
-    "importance": 1.0,
-    "weighted_sentiment": 0.0
-  },
-  {
-    "timestamp": "2026-06-05T20:41:38",
-    "headline": "Crypto tax proposals weighed ahead of Tuesday House hearing",
-    "link": "https://cointelegraph.com/news/crypto-tax-bills-house-ways-means-hearing?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": 0.0,
-    "importance": 1.5,
-    "weighted_sentiment": 0.0
-  },
-  {
-    "timestamp": "2026-06-05T19:28:53",
-    "headline": "Bitcoin bears face $2.6B trap as BTC funding rate drops: Is a short squeeze brewing?",
-    "link": "https://cointelegraph.com/markets/bitcoin-bears-face-26b-trap-as-btc-funding-rate-drops-is-a-short-squeeze-brewing?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": -0.3182,
-    "importance": 2.0,
-    "weighted_sentiment": -0.6364
-  },
-  {
-    "timestamp": "2026-06-05T18:17:50",
-    "headline": "Kraken offers SpaceX IPO access through xStocks",
-    "link": "https://cointelegraph.com/news/kraken-offers-spacex-ipo-access-through-xstocks?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": 0.0,
-    "importance": 1.0,
-    "weighted_sentiment": 0.0
-  },
-  {
-    "timestamp": "2026-06-05T18:10:59",
-    "headline": "Crypto tax in Illinois FY2027 budget is one step away from becoming law",
-    "link": "https://cointelegraph.com/news/cryptocurrency-tax-illinois-fy2027-budget-law?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": 0.0,
-    "importance": 1.0,
-    "weighted_sentiment": 0.0
-  },
-  {
-    "timestamp": "2026-06-05T17:04:07",
-    "headline": "Crypto Biz: Nobody told Saylor \u2018never sell\u2019",
-    "link": "https://cointelegraph.com/news/strategy-bitcoin-sale-clarity-act-jpmorgan-capital-b-fundraising?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": 0.0,
-    "importance": 1.0,
-    "weighted_sentiment": 0.0
-  },
-  {
-    "timestamp": "2026-06-05T16:44:44",
-    "headline": "Pump.fun bounty platform pays users to tattoo tokens and chase viral stunts",
-    "link": "https://cointelegraph.com/news/pumpfun-bounty-platforms-funds-memecoin-tattoos-world-cup-skydives?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": 0.0,
-    "importance": 1.0,
-    "weighted_sentiment": 0.0
-  },
-  {
-    "timestamp": "2026-06-05T16:09:40",
-    "headline": "Saylor says Bitcoin needs \u2018disciplined expansion\u2019 as analysts weigh demand reset",
-    "link": "https://cointelegraph.com/news/saylor-bitcoin-disciplined-expansion-demand-reset?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": -0.128,
-    "importance": 1.0,
-    "weighted_sentiment": -0.128
-  },
-  {
-    "timestamp": "2026-06-05T15:43:14",
-    "headline": "Bitcoin teases 'seller exhaustion' as BTC price downside reaches $60.3K",
-    "link": "https://cointelegraph.com/markets/bitcoin-approaches-60k?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": -0.6705,
-    "importance": 1.5,
-    "weighted_sentiment": -1.0057
-  },
-  {
-    "timestamp": "2026-06-05T14:45:55",
-    "headline": "Visa tests private stablecoin settlement with Brale, Canton",
-    "link": "https://cointelegraph.com/news/visa-tests-private-stablecoin-settlement-as-institutions-push-blockchain-privacy?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": 0.0,
-    "importance": 1.5,
-    "weighted_sentiment": 0.0
-  },
-  {
-    "timestamp": "2026-06-05T13:18:41",
-    "headline": "Zcash weighs new shielded pool after counterfeiting flaw",
-    "link": "https://cointelegraph.com/news/zcash-new-shielded-pool-orchard-counterfeiting-bug?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": 0.0,
-    "importance": 1.0,
-    "weighted_sentiment": 0.0
-  },
-  {
-    "timestamp": "2026-06-05T13:00:00",
-    "headline": "Bitcoin needs one more thing to happen to spark BTC price 'rally:' Analysis",
-    "link": "https://cointelegraph.com/markets/bitcoin-needs-one-more-thing-to-happen-to-spark-btc-price-rally-analysis?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": 0.2263,
-    "importance": 1.5,
-    "weighted_sentiment": 0.3395
-  },
-  {
-    "timestamp": "2026-06-05T12:46:44",
-    "headline": "House GOP eyes summer vote on prediction market restrictions for lawmakers",
-    "link": "https://cointelegraph.com/news/house-gop-summer-vote-ban-lawmakers-prediction-markets?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": 0.0,
-    "importance": 1.5,
-    "weighted_sentiment": 0.0
-  },
-  {
-    "timestamp": "2026-06-05T12:39:32",
-    "headline": "JPMorgan, Citi-backed Clearing House plans tokenized deposit network in 2027: WSJ",
-    "link": "https://cointelegraph.com/news/jpmorgan-citi-bank-of-america-launch-tokenized-deposit-system-2027?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": 0.0,
-    "importance": 1.0,
-    "weighted_sentiment": 0.0
-  },
-  {
-    "timestamp": "2026-06-05T12:24:23",
-    "headline": "How low can Bitcoin price go if $60K support fails?",
-    "link": "https://cointelegraph.com/markets/how-low-can-bitcoin-price-go-if-60k-support-fails?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": -0.296,
-    "importance": 1.0,
-    "weighted_sentiment": -0.296
-  },
-  {
     "timestamp": "2026-06-06T05:30:20",
     "headline": "A little-known 1,250% rule could lock US banks out of Bitcoin",
     "link": "https://cryptoslate.com/a-little-known-1250-rule-could-lock-us-banks-out-of-bitcoin/",
@@ -243,168 +9,6 @@
     "weighted_sentiment": 0.0
   },
   {
-    "timestamp": "2026-06-05T19:05:31",
-    "headline": "Cardano founder floats splitting his own blockchain after warning more apps will die",
-    "link": "https://cryptoslate.com/cardano-founder-floats-splitting-his-own-blockchain-after-warning-more-apps-will-die/",
-    "source": "cryptoslate.com",
-    "sentiment": -0.7624,
-    "importance": 1.0,
-    "weighted_sentiment": -0.7624
-  },
-  {
-    "timestamp": "2026-06-05T15:55:02",
-    "headline": "Bitcoin traders blamed Saylor\u2019s 32 BTC sale but larger selling pressure built elsewhere",
-    "link": "https://cryptoslate.com/bitcoin-traders-blamed-saylors-32-btc-sale-but-larger-selling-pressure-built-elsewhere/",
-    "source": "cryptoslate.com",
-    "sentiment": -0.5927,
-    "importance": 1.5,
-    "weighted_sentiment": -0.8891
-  },
-  {
-    "timestamp": "2026-06-05T15:45:24",
-    "headline": "Bitcoin price craters to $60,000 as BTC bulls get jobs report they were hoping to avoid",
-    "link": "https://cryptoslate.com/bitcoin-price-craters-below-60000-as-btc-bulls-get-jobs-report-they-were-hoping-to-avoid/",
-    "source": "cryptoslate.com",
-    "sentiment": 0.1531,
-    "importance": 2.0,
-    "weighted_sentiment": 0.3062
-  },
-  {
-    "timestamp": "2026-06-05T13:45:22",
-    "headline": "AI-assisted Zcash flaw exposes the supply integrity gap an emergency fork could not fully close",
-    "link": "https://cryptoslate.com/zcash-orchard-exploit-shows-ai-assisted-security-has-passed-defi-to-reach-cryptos-money-layer/",
-    "source": "cryptoslate.com",
-    "sentiment": -0.128,
-    "importance": 1.0,
-    "weighted_sentiment": -0.128
-  },
-  {
-    "timestamp": "2026-06-05T12:05:04",
-    "headline": "A stablecoin tied to Strategy stock depegs putting a new DeFi dollar risk in focus as Bitcoin sells off",
-    "link": "https://cryptoslate.com/strategy-defi-dollar-peg-risk-bitcoin-selloff/",
-    "source": "cryptoslate.com",
-    "sentiment": -0.2732,
-    "importance": 1.0,
-    "weighted_sentiment": -0.2732
-  },
-  {
-    "timestamp": "2026-06-05T20:26:17",
-    "headline": "Zcash Bug Crisis Shows Privacy Cuts Both Ways, Experts Say",
-    "link": "https://decrypt.co/370223/zcash-bug-crisis-shows-privacy-cuts-both-ways-experts-say",
-    "source": "decrypt.co",
-    "sentiment": -0.743,
-    "importance": 1.0,
-    "weighted_sentiment": -0.743
-  },
-  {
-    "timestamp": "2026-06-05T20:02:53",
-    "headline": "Strategy Shares Fall to 4-Month Low as STRC Dips and Bitcoin Sinks Under $60K",
-    "link": "https://decrypt.co/370229/strategy-shares-fall-4-month-low-strc-dips-bitcoin-sinks-under-60k",
-    "source": "decrypt.co",
-    "sentiment": 0.0258,
-    "importance": 1.0,
-    "weighted_sentiment": 0.0258
-  },
-  {
-    "timestamp": "2026-06-05T19:18:56",
-    "headline": "Anthropic Is Helping the NSA Hack China. It Also Wants Everyone to Pause AI",
-    "link": "https://decrypt.co/370207/anthropic-helping-nsa-hack-china-also-wants-everyone-pause-ai",
-    "source": "decrypt.co",
-    "sentiment": 0.296,
-    "importance": 2.0,
-    "weighted_sentiment": 0.592
-  },
-  {
-    "timestamp": "2026-06-05T18:25:01",
-    "headline": "Zcash Crash Just Wiped Billions From the Privacy Coin's Market Cap\u2014Can ZEC Recover?",
-    "link": "https://decrypt.co/370184/zcash-crash-wiped-billions-market-cap-can-zec-recover",
-    "source": "decrypt.co",
-    "sentiment": -0.4019,
-    "importance": 1.0,
-    "weighted_sentiment": -0.4019
-  },
-  {
-    "timestamp": "2026-06-05T18:13:56",
-    "headline": "Congress Gets 7 New Crypto Tax Bills: Here's What's In Them",
-    "link": "https://decrypt.co/370197/congress-7-crypto-tax-bills",
-    "source": "decrypt.co",
-    "sentiment": 0.0,
-    "importance": 1.0,
-    "weighted_sentiment": 0.0
-  },
-  {
-    "timestamp": "2026-06-05T17:57:29",
-    "headline": "Tom Lee's Ethereum Treasury BitMine Prices Preferred Shares With 9.5% Dividend",
-    "link": "https://decrypt.co/370188/tom-lees-ethereum-treasury-bitmine-prices-preferred-shares",
-    "source": "decrypt.co",
-    "sentiment": 0.4588,
-    "importance": 1.5,
-    "weighted_sentiment": 0.6882
-  },
-  {
-    "timestamp": "2026-06-05T16:15:42",
-    "headline": "Bitcoin Dives Below $60K Following Strong Jobs Data, Zcash Crash Shaking Crypto Confidence",
-    "link": "https://decrypt.co/370120/bitcoin-dives-below-60k-first-time-2024-zcash-crash",
-    "source": "decrypt.co",
-    "sentiment": 0.4939,
-    "importance": 1.0,
-    "weighted_sentiment": 0.4939
-  },
-  {
-    "timestamp": "2026-06-05T16:15:02",
-    "headline": "What Is Strategy (MSTR)? The Bitcoin Treasury Company",
-    "link": "https://decrypt.co/resources/what-is-strategy-microstrategy-mstr-the-bitcoin-treasury-company",
-    "source": "decrypt.co",
-    "sentiment": 0.2023,
-    "importance": 1.0,
-    "weighted_sentiment": 0.2023
-  },
-  {
-    "timestamp": "2026-06-05T15:52:15",
-    "headline": "Government Stablecoin Payments Would Fuel 'Tax Evasion Economy,' Lawmaker Warns",
-    "link": "https://decrypt.co/370121/government-stablecoin-payments-would-fuel-tax-evasion-economy-lawmaker-warns",
-    "source": "decrypt.co",
-    "sentiment": -0.1027,
-    "importance": 1.0,
-    "weighted_sentiment": -0.1027
-  },
-  {
-    "timestamp": "2026-06-05T15:49:08",
-    "headline": "Winklevoss-Backed Zcash Treasury Plunges Nearly 40% on ZEC Privacy Bug Concerns",
-    "link": "https://decrypt.co/370127/winklevoss-backed-zcash-treasury-plunges-nearly-40-zec-privacy-bug",
-    "source": "decrypt.co",
-    "sentiment": 0.2023,
-    "importance": 1.5,
-    "weighted_sentiment": 0.3034
-  },
-  {
-    "timestamp": "2026-06-05T13:10:25",
-    "headline": "Hyperliquid Hit by UK FCA Warning as Crypto Perps Face Scrutiny",
-    "link": "https://decrypt.co/370117/hyperliquid-hit-by-uk-fca-warning-as-crypto-perps-face-scrutiny",
-    "source": "decrypt.co",
-    "sentiment": -0.34,
-    "importance": 1.5,
-    "weighted_sentiment": -0.51
-  },
-  {
-    "timestamp": "2026-06-05T12:49:04",
-    "headline": "Morning Minute: Massive ZCash Exploit Found by Claude, Extent Unknown",
-    "link": "https://decrypt.co/370112/morning-minute-massive-zcash-exploit-found-by-claude-extent-unknown",
-    "source": "decrypt.co",
-    "sentiment": -0.1027,
-    "importance": 1.0,
-    "weighted_sentiment": -0.1027
-  },
-  {
-    "timestamp": "2026-06-05T11:33:50",
-    "headline": "Pump.fun's Latest Experiment Is Already Getting Weird",
-    "link": "https://decrypt.co/370108/pump-funs-latest-experiment-is-already-getting-weird",
-    "source": "decrypt.co",
-    "sentiment": -0.1779,
-    "importance": 1.0,
-    "weighted_sentiment": -0.1779
-  },
-  {
     "timestamp": "2026-06-06T08:00:46",
     "headline": "Crypto exchanges are losing retail traders but are filling the gap with Wall Street-style bets",
     "link": "https://cryptoslate.com/crypto-exchanges-are-losing-retail-traders-but-are-filling-the-gap-with-wall-street-style-bets/",
@@ -412,15 +16,6 @@
     "sentiment": -0.2023,
     "importance": 1.5,
     "weighted_sentiment": -0.3034
-  },
-  {
-    "timestamp": "2026-06-05T16:55:50",
-    "headline": "Here\u2019s what happened in crypto today",
-    "link": "https://cointelegraph.com/news/what-happened-in-crypto-today?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": 0.0,
-    "importance": 1.0,
-    "weighted_sentiment": 0.0
   },
   {
     "timestamp": "2026-06-06T15:39:18",
@@ -475,5 +70,104 @@
     "sentiment": -0.8316,
     "importance": 1.5,
     "weighted_sentiment": -1.2474
+  },
+  {
+    "timestamp": "2026-06-07T11:16:50",
+    "headline": "A needed $900B Treasury cash rebuild could quietly drain the liquidity Bitcoin needs",
+    "link": "https://cryptoslate.com/a-needed-900b-treasury-cash-rebuild-could-quietly-drain-the-liquidity-bitcoin-needs/",
+    "source": "cryptoslate.com",
+    "sentiment": 0.2023,
+    "importance": 1.0,
+    "weighted_sentiment": 0.2023
+  },
+  {
+    "timestamp": "2026-06-06T19:10:34",
+    "headline": "Hyperliquid\u2019s UK warning reveals the regulatory test behind its Wall Street push",
+    "link": "https://cryptoslate.com/hyperliquids-uk-warning-reveals-the-regulatory-test-behind-its-wall-street-push/",
+    "source": "cryptoslate.com",
+    "sentiment": -0.34,
+    "importance": 1.5,
+    "weighted_sentiment": -0.51
+  },
+  {
+    "timestamp": "2026-06-06T20:56:43",
+    "headline": "AI Is Helping Discover Tech Vulnerabilities\u2014And Zcash Is Just the Latest Example",
+    "link": "https://decrypt.co/370237/ai-discover-tech-vulnerabilities-zcash-latest-example",
+    "source": "decrypt.co",
+    "sentiment": 0.296,
+    "importance": 1.5,
+    "weighted_sentiment": 0.444
+  },
+  {
+    "timestamp": "2026-06-07T14:05:52",
+    "headline": "AI\u2019s power race is shifting leverage from chipmakers like NVIDIA to the grid",
+    "link": "https://cryptoslate.com/biggest-ai-winner-is-the-power-company-not-nvidia/",
+    "source": "cryptoslate.com",
+    "sentiment": 0.3612,
+    "importance": 1.0,
+    "weighted_sentiment": 0.3612
+  },
+  {
+    "timestamp": "2026-06-07T13:10:51",
+    "headline": "CLARITY Act chances of passage this year falls to 60%, Galaxy Digital says",
+    "link": "https://cryptoslate.com/clarity-act-chances-of-passage-this-year-falls-to-60-galaxy-digital-says/",
+    "source": "cryptoslate.com",
+    "sentiment": 0.6408,
+    "importance": 1.0,
+    "weighted_sentiment": 0.6408
+  },
+  {
+    "timestamp": "2026-06-07T13:01:06",
+    "headline": "Claude Opus 4.8 Review: Better At What\u2019s It Good At, Worse At What It\u2019s Not",
+    "link": "https://decrypt.co/370128/claude-opus-4-8-review",
+    "source": "decrypt.co",
+    "sentiment": 0.4019,
+    "importance": 1.5,
+    "weighted_sentiment": 0.6028
+  },
+  {
+    "timestamp": "2026-06-07T14:29:19",
+    "headline": "Bitcoin risks new 'purge' with bear-market losses still $35B below 2022 total",
+    "link": "https://cointelegraph.com/markets/bitcoin-risks-new-purge-with-bear-market-losses-still-35b-below-2022-total?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
+    "sentiment": -0.5859,
+    "importance": 1.0,
+    "weighted_sentiment": -0.5859
+  },
+  {
+    "timestamp": "2026-06-07T15:20:55",
+    "headline": "Crypto rails made prediction markets global, gambling laws may make them local again",
+    "link": "https://cryptoslate.com/crypto-rails-made-prediction-markets-global-gambling-laws-may-make-them-local-again/",
+    "source": "cryptoslate.com",
+    "sentiment": 0.0,
+    "importance": 1.0,
+    "weighted_sentiment": 0.0
+  },
+  {
+    "timestamp": "2026-06-07T15:48:14",
+    "headline": "Wall Street Is Coming for Hyperliquid's Perps Crown, Arthur Hayes Says",
+    "link": "https://decrypt.co/370236/wall-street-coming-hyperliquid-perps-crown-arthur-hayes-says",
+    "source": "decrypt.co",
+    "sentiment": 0.0,
+    "importance": 1.5,
+    "weighted_sentiment": 0.0
+  },
+  {
+    "timestamp": "2026-06-07T17:10:56",
+    "headline": "DeFi\u2019s old hack vectors are fading \u2013 But the new risk can hit six chains at once",
+    "link": "https://cryptoslate.com/defis-old-hacks-are-fading-the-new-risk-can-hit-six-chains-at-once/",
+    "source": "cryptoslate.com",
+    "sentiment": -0.3919,
+    "importance": 1.0,
+    "weighted_sentiment": -0.3919
+  },
+  {
+    "timestamp": "2026-06-07T18:01:03",
+    "headline": "Frontier AI Models Can Find Crypto's Biggest Bugs. Experts Warn the Industry Isn't Ready",
+    "link": "https://decrypt.co/370232/frontier-ai-models-find-crypto-bugs-industry-isnt-ready",
+    "source": "decrypt.co",
+    "sentiment": -0.3632,
+    "importance": 1.0,
+    "weighted_sentiment": -0.3632
   }
 ]

@@ -1,0 +1,167 @@
+================================================================================
+FORENSIC REPORT: OM/USDT | GRADE: F
+================================================================================
+
+[TOKEN SUMMARY]
+  Symbol        : OM/USDT
+  Timestamp     : 2026-06-07T17:12:31.589469+00:00
+  Train bars    : 965
+  Eval bars     : 414
+  Gate selected : DISABLED
+  Calibration   : platt
+  Score         : 0.0000
+  Grade         : F
+
+[EDGE FAILURE ANALYSIS]
+  Signals       : 366  (buy=107  sell=259  balance=29.2%)
+  Pred entropy  : mean=0.6032  std=0.3776
+  Dir prob      : mean=0.4379  std=0.3259  skew=-0.8523
+  Edge rank     : mean=0.2104  std=0.1671
+  Diversity     : score=0.9986  HHI=0.0058
+  Top feature   : 2.2%  top3=5.2%
+
+  Feature                              Gain%
+  -------------------------------------------
+  efficiency_ratio_10                   2.16%
+  cmo_14                                1.62%
+  starc_position                        1.44%
+  s2                                    1.13%
+  ema_21                                1.01%
+  ema_100                               1.01%
+  ichimoku_kijun                        1.01%
+  atr_band_position                     0.99%
+  close_delta_12                        0.97%
+  linreg_r2_14                          0.95%
+
+[CALIBRATION FORENSICS]
+  Evaluated 5 calibration methods; 5 architecture-viable
+  Calibrators are evaluated by architecture search outcome (percentile
+  threshold), NOT by performance at fixed 0.50 threshold.  A calibrator
+  appearing unprofitable at p>=0.50 can still be viable when architecture
+  search selects the top 15-40% of signals.
+
+  Method       |    ECE |  Brier | Cov@0.5 |  PF@0.5 |  Exp@0.5 | TechOK | ArchOK | Reason
+  -----------------------------------------------------------------------------------------------
+  uncalibrated | 0.1964 | 0.2020 |   0.503 |   0.879 |    -4.99 |    YES |    YES | 
+  isotonic     | 0.0000 | 0.1476 |   0.437 |   0.950 |    -1.98 |    YES |    YES | 
+  platt        | 0.0964 | 0.1645 |   0.257 |   1.278 |     9.47 |    YES |    YES | 
+  temperature  | 0.1964 | 0.2010 |   0.503 |   0.879 |    -4.99 |    YES |    YES | 
+  beta         | 0.0739 | 0.1590 |   0.295 |   1.176 |     6.38 |    YES |    YES | 
+
+[ARCHITECTURE FORENSICS]
+  Evaluated 94 architectures: 0 accepted, 0 rejected
+
+  Gate                     |     Q |     PF |    Exp% | Sharpe |   Cov |  Score | Grade | Reason
+  -----------------------------------------------------------------------------------------------
+
+[ARCHITECTURE ACCOUNTING]
+  Total=94 = Accepted(0) + CoverageRej(54) + QualityRej(0) + Duplicate(0) + Other(40)
+  Accounting OK : YES
+  Rejection breakdown:
+    insufficient_holdout(366<500)                   40
+    coverage 0.0820 < required 0.15                  8
+    coverage 0.0000 < required 0.15                  8
+    coverage 0.1011 < required 0.15                  7
+    coverage 0.0628 < required 0.15                  6
+    coverage 0.0437 < required 0.15                  6
+    coverage 0.0246 < required 0.15                  6
+    coverage 0.0574 < required 0.15                  2
+    coverage 0.0383 < required 0.15                  2
+    coverage 0.0191 < required 0.15                  2
+    coverage 0.0055 < required 0.15                  2
+    coverage 0.0601 < required 0.15                  1
+    coverage 0.0410 < required 0.15                  1
+    coverage 0.0219 < required 0.15                  1
+    coverage 0.1421 < required 0.15                  1
+    coverage 0.0792 < required 0.15                  1
+
+[SCORE BREAKDOWN]
+  Final score = 0.0754
+
+  Component             Weight   Contribution
+  -------------------------------------------
+  expectancy              0.35      +0.000000
+  profit_factor           0.30      +0.000000
+  sharpe                  0.20      +0.000000
+  precision               0.10      +0.025410
+  coverage                0.05      +0.050000
+  -------------------------------------------
+  TOTAL                   1.00      +0.075410
+
+[TRUST SCORE FORENSICS]
+  Trust score : 25/100
+  Saved value : -1
+  Consistent  : UNKNOWN (not recorded in profile)
+
+  Component                        Points
+  ----------------------------------------
+  pf_contribution                    0.00
+  expectancy_contribution            0.00
+  sharpe_contribution                0.00
+  coverage_contribution             15.00
+  fires_contribution                10.00
+  ----------------------------------------
+  TOTAL                                25
+
+[MODEL HEALTH SCORE]
+  Total : 73/100 — GOOD
+
+  Component                   Score  Max
+  --------------------------------------
+  feature_diversity            30.0 / 30  ##########
+  prediction_entropy           20.0 / 20  ##########
+  calibration_quality          17.6 / 25  #######
+  architecture_robustness       0.0 / 15  
+  regime_stability              5.0 / 10  #####
+
+[REGIME FORENSICS]
+  Regime breakdown requires ranking_df — use enrich_with_ranking_df() to populate.
+
+[ALPHA ATTRIBUTION]
+  PF lift from neutral 0.90 to 0.965: raw signal=14%, calibration=86%, gate architecture=0%
+
+  Baseline PF    : 0.965
+  Final PF       : 0.965
+  Total lift     : +0.065 (from neutral 0.90)
+
+  Source                          Lift    Share
+  ---------------------------------------------
+  Signal quality                +0.065    14.0%
+  Calibration                   +0.399    86.0%
+  Gate architecture             +0.000     0.0%
+
+[DISABLED GATE — ROOT CAUSE ANALYSIS]
+  ├─ All 94 candidates rejected:
+  ├─   insufficient_holdout(366<500): 40 candidate(s)
+  ├─   coverage 0.0820 < required 0.15: 8 candidate(s)
+  ├─   coverage 0.0000 < required 0.15: 8 candidate(s)
+  ├─   coverage 0.1011 < required 0.15: 7 candidate(s)
+  ├─   coverage 0.0628 < required 0.15: 6 candidate(s)
+  ├─ Baseline profit factor too low: 0.965 (threshold 1.05)
+  ├─ Baseline expectancy non-positive: -0.920%
+  ├─ Baseline Sharpe non-positive: -0.693
+  └─ RECOMMENDATION: Baseline profit factor is weak; favor a conservative fallback gate or wider ATR barriers instead of disabling the token. Review data quality, feature engineering, and ensure at least 15% of signals have positive expectancy.  Consider extending the evaluation window.
+
+[ROOT CAUSE CLASSIFICATION]
+  Primary cause : COVERAGE_COLLAPSE (confidence=35.3%)
+
+  Cause                           Confidence
+  -------------------------------------------
+  COVERAGE_COLLAPSE                   35.3%
+  OVERFITTING                         29.4%
+  NO_ALPHA                            23.5%
+  WEAK_ALPHA                          11.8%
+
+  Evidence:
+    [NO_ALPHA] Every architecture candidate has non-positive expectancy
+    [WEAK_ALPHA] Baseline PF=0.965 — near-breakeven; insufficient edge to survive gate filters
+    [OVERFITTING] Train precision 0.534 >> holdout precision 0.393 — train/holdout divergence suggests overfitting or data leak
+    [COVERAGE_COLLAPSE] 54/94 candidates rejected for insufficient coverage
+
+[FINAL VERDICT]
+  Status  : DISABLED — no profitable gate found
+  Verdict : No architecture passed profitability thresholds
+  Grade   : F  (PF=0.965  Exp=-0.92%)
+  Trust   : 25/100 — LOW
+
+================================================================================

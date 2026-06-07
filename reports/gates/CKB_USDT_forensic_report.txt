@@ -1,0 +1,176 @@
+================================================================================
+FORENSIC REPORT: CKB/USDT | GRADE: C
+================================================================================
+
+[TOKEN SUMMARY]
+  Symbol        : CKB/USDT
+  Timestamp     : 2026-06-07T17:22:12.196507+00:00
+  Train bars    : 2605
+  Eval bars     : 1117
+  Gate selected : CALIBRATED_SIDE_EDGE
+  Calibration   : beta
+  Score         : 0.3184
+  Grade         : C
+
+[EDGE FAILURE ANALYSIS]
+  Signals       : 1069  (buy=878  sell=191  balance=82.1%)
+  Pred entropy  : mean=0.5863  std=0.3871
+  Dir prob      : mean=0.4582  std=0.3345  skew=-0.9980
+  Edge rank     : mean=0.1947  std=0.1462
+  Diversity     : score=0.9984  HHI=0.0058
+  Top feature   : 3.0%  top3=6.6%
+
+  Feature                              Gain%
+  -------------------------------------------
+  efficiency_ratio_10                   2.97%
+  atr_band_position                     2.45%
+  starc_position                        1.21%
+  linreg_r2_14                          0.98%
+  cmo_14                                0.88%
+  dist_ema_21                           0.86%
+  donchian_position                     0.80%
+  macd_divergence                       0.79%
+  ichimoku_tenkan                       0.78%
+  bands_confluence                      0.74%
+
+  *** Extreme buy/sell imbalance: 82.1% buy — regime-specific edge only
+
+[CALIBRATION FORENSICS]
+  Evaluated 5 calibration methods; 1 architecture-viable
+  Calibrators are evaluated by architecture search outcome (percentile
+  threshold), NOT by performance at fixed 0.50 threshold.  A calibrator
+  appearing unprofitable at p>=0.50 can still be viable when architecture
+  search selects the top 15-40% of signals.
+
+  Method       |    ECE |  Brier | Cov@0.5 |  PF@0.5 |  Exp@0.5 | TechOK | ArchOK | Reason
+  -----------------------------------------------------------------------------------------------
+  beta         | 0.0598 | 0.1762 |   0.371 |   0.919 |    -4.13 |    YES |    YES | 
+  uncalibrated | 0.1599 | 0.2056 |   0.501 |   0.960 |    -1.97 |    YES |     NO | 
+  isotonic     | 0.0000 | 0.1673 |   0.373 |   0.928 |    -3.61 |    YES |     NO | 
+  platt        | 0.1060 | 0.1832 |   0.298 |   0.942 |    -2.92 |    YES |     NO | 
+  temperature  | 0.1511 | 0.2032 |   0.501 |   0.960 |    -1.97 |    YES |     NO | 
+
+[ARCHITECTURE FORENSICS]
+  Evaluated 94 architectures: 1 accepted, 37 rejected
+  Rejection reasons:
+    nonpositive_expectancy                     28 candidate(s)
+    pf_below_1.10                               8 candidate(s)
+    duplicate_architecture                      1 candidate(s)
+
+  Gate                     |     Q |     PF |    Exp% | Sharpe |   Cov |  Score | Grade | Reason
+  -----------------------------------------------------------------------------------------------
+  CALIBRATED_SIDE_EDGE     |  0.15 |  1.104 |    4.85 |   1.87 | 0.170 | 0.3184 |     C | accepted
+  GLOBAL_EDGE_PERCENTILE   |  0.40 |  0.942 |   -2.90 |  -1.73 | 0.400 | 0.0000 |     F | nonpositive_expectan
+  GLOBAL_EDGE_PERCENTILE   |  0.30 |  0.942 |   -2.90 |  -1.49 | 0.300 | 0.0000 |     F | nonpositive_expectan
+  GLOBAL_EDGE_PERCENTILE   |  0.25 |  0.968 |   -1.59 |  -0.75 | 0.251 | 0.0000 |     F | nonpositive_expectan
+  GLOBAL_EDGE_PERCENTILE   |  0.20 |  1.027 |    1.30 |   0.54 | 0.200 | 0.0000 |     D | pf_below_1.10
+  GLOBAL_EDGE_PERCENTILE   |  0.15 |  1.090 |    4.25 |   1.54 | 0.151 | 0.0000 |     D | pf_below_1.10
+  SIDE_EDGE_PERCENTILE     |  0.40 |  0.942 |   -2.90 |  -1.73 | 0.400 | 0.0000 |     F | nonpositive_expectan
+  SIDE_EDGE_PERCENTILE     |  0.30 |  0.948 |   -2.58 |  -1.33 | 0.301 | 0.0000 |     F | nonpositive_expectan
+  SIDE_EDGE_PERCENTILE     |  0.25 |  0.968 |   -1.59 |  -0.75 | 0.251 | 0.0000 |     F | nonpositive_expectan
+  SIDE_EDGE_PERCENTILE     |  0.20 |  1.036 |    1.76 |   0.73 | 0.201 | 0.0000 |     D | pf_below_1.10
+
+[ARCHITECTURE ACCOUNTING]
+  Total=94 = Accepted(1) + CoverageRej(56) + QualityRej(36) + Duplicate(1) + Other(0)
+  Accounting OK : YES
+  Rejection breakdown:
+    nonpositive_expectancy                          28
+    pf_below_1.10                                    8
+    coverage 0.0814 < required 0.15                  5
+    coverage 0.0608 < required 0.15                  4
+    coverage 0.0206 < required 0.15                  4
+    coverage 0.1010 < required 0.15                  3
+    coverage 0.0412 < required 0.15                  3
+    coverage 0.1001 < required 0.15                  2
+    coverage 0.1319 < required 0.15                  2
+    coverage 0.1179 < required 0.15                  2
+    coverage 0.1057 < required 0.15                  2
+    coverage 0.0926 < required 0.15                  2
+    coverage 0.0196 < required 0.15                  2
+    coverage 0.0112 < required 0.15                  2
+    coverage 0.0047 < required 0.15                  2
+    coverage 0.0804 < required 0.15                  1
+    coverage 0.0402 < required 0.15                  1
+    coverage 0.1487 < required 0.15                  1
+    coverage 0.1207 < required 0.15                  1
+    coverage 0.0861 < required 0.15                  1
+    coverage 0.0720 < required 0.15                  1
+    coverage 0.0571 < required 0.15                  1
+    coverage 0.0393 < required 0.15                  1
+    coverage 0.1300 < required 0.15                  1
+    coverage 0.0730 < required 0.15                  1
+    coverage 0.0430 < required 0.15                  1
+    coverage 0.0028 < required 0.15                  1
+    coverage 0.0009 < required 0.15                  1
+    coverage 0.0552 < required 0.15                  1
+    coverage 0.0346 < required 0.15                  1
+    coverage 0.0290 < required 0.15                  1
+    coverage 0.0234 < required 0.15                  1
+    coverage 0.0168 < required 0.15                  1
+    coverage 0.0084 < required 0.15                  1
+    coverage 0.0065 < required 0.15                  1
+    coverage 0.0019 < required 0.15                  1
+    duplicate_architecture                           1
+
+[SCORE BREAKDOWN]
+  Final score = 0.3200
+
+  Component             Weight   Contribution
+  -------------------------------------------
+  expectancy              0.35      +0.169579
+  profit_factor           0.30      +0.015600
+  sharpe                  0.20      +0.074680
+  precision               0.10      +0.051648
+  coverage                0.05      +0.008513
+  -------------------------------------------
+  TOTAL                   1.00      +0.320019
+
+[TRUST SCORE FORENSICS]
+  Trust score : 33/100
+  Saved value : -1
+  Consistent  : UNKNOWN (not recorded in profile)
+
+  Component                        Points
+  ----------------------------------------
+  pf_contribution                    1.56
+  expectancy_contribution           12.11
+  sharpe_contribution                7.47
+  coverage_contribution              2.55
+  fires_contribution                10.00
+  ----------------------------------------
+  TOTAL                                33
+
+[MODEL HEALTH SCORE]
+  Total : 73/100 — GOOD
+
+  Component                   Score  Max
+  --------------------------------------
+  feature_diversity            30.0 / 30  ##########
+  prediction_entropy           19.5 / 20  #########
+  calibration_quality          16.6 / 25  ######
+  architecture_robustness       1.5 / 15  #
+  regime_stability              5.0 / 10  #####
+
+[REGIME FORENSICS]
+  Regime breakdown requires ranking_df — use enrich_with_ranking_df() to populate.
+
+[ALPHA ATTRIBUTION]
+  PF lift from neutral 0.90 to 1.104: raw signal=0%, calibration=0%, gate architecture=100%
+
+  Baseline PF    : 0.885
+  Final PF       : 1.104
+  Total lift     : +0.204 (from neutral 0.90)
+
+  Source                          Lift    Share
+  ---------------------------------------------
+  Signal quality                +0.000     0.0%
+  Calibration                   +0.000     0.0%
+  Gate architecture             +0.204   100.0%
+
+[FINAL VERDICT]
+  Status  : ENABLED — CALIBRATED_SIDE_EDGE
+  Verdict : MARGINAL — barely profitable, monitor closely
+  Grade   : C  (PF=1.104  Exp=4.85%)
+  Trust   : 33/100 — LOW
+
+================================================================================

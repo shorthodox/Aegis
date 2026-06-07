@@ -1,0 +1,160 @@
+================================================================================
+FORENSIC REPORT: ENJ/USDT | GRADE: A+
+================================================================================
+
+[TOKEN SUMMARY]
+  Symbol        : ENJ/USDT
+  Timestamp     : 2026-06-07T17:07:33.408985+00:00
+  Train bars    : 2605
+  Eval bars     : 1117
+  Gate selected : EDGE_STRICT_VETO
+  Calibration   : isotonic
+  Score         : 0.8369
+  Grade         : A+
+
+[EDGE FAILURE ANALYSIS]
+  Signals       : 1069  (buy=158  sell=911  balance=14.8%)
+  Pred entropy  : mean=0.5631  std=0.3747
+  Dir prob      : mean=0.4344  std=0.3415  skew=-0.9388
+  Edge rank     : mean=0.1833  std=0.1477
+  Diversity     : score=0.9988  HHI=0.0054
+  Top feature   : 2.5%  top3=5.4%
+
+  Feature                              Gain%
+  -------------------------------------------
+  efficiency_ratio_10                   2.47%
+  atr_band_position                     1.78%
+  starc_position                        1.16%
+  bb_pct_b                              0.99%
+  linreg_r2_14                          0.91%
+  ema_9                                 0.89%
+  hma_20                                0.84%
+  se_mid                                0.83%
+  volatility_regime                     0.79%
+  high                                  0.77%
+
+  *** Extreme buy/sell imbalance: 14.8% buy — regime-specific edge only
+
+[CALIBRATION FORENSICS]
+  Evaluated 5 calibration methods; 5 architecture-viable
+  Calibrators are evaluated by architecture search outcome (percentile
+  threshold), NOT by performance at fixed 0.50 threshold.  A calibrator
+  appearing unprofitable at p>=0.50 can still be viable when architecture
+  search selects the top 15-40% of signals.
+
+  Method       |    ECE |  Brier | Cov@0.5 |  PF@0.5 |  Exp@0.5 | TechOK | ArchOK | Reason
+  -----------------------------------------------------------------------------------------------
+  isotonic     | 0.0000 | 0.1546 |   0.285 |   1.602 |    22.52 |    YES |    YES | 
+  uncalibrated | 0.1891 | 0.2056 |   0.501 |   1.720 |    24.34 |    YES |    YES | 
+  platt        | 0.0959 | 0.1702 |   0.256 |   1.624 |    23.26 |    YES |    YES | 
+  temperature  | 0.1891 | 0.2056 |   0.501 |   1.720 |    24.34 |    YES |    YES | 
+  beta         | 0.0532 | 0.1615 |   0.326 |   1.574 |    21.39 |    YES |    YES | 
+
+[ARCHITECTURE FORENSICS]
+  Evaluated 94 architectures: 19 accepted, 33 rejected
+  Rejection reasons:
+    duplicate_architecture                     33 candidate(s)
+
+  Gate                     |     Q |     PF |    Exp% | Sharpe |   Cov |  Score | Grade | Reason
+  -----------------------------------------------------------------------------------------------
+  EDGE_STRICT_VETO         |  0.40 |  2.320 |   34.96 |  15.00 | 0.163 | 0.8369 |    A+ | accepted
+  EDGE_CONFLUENCE_VETO     |  0.40 |  1.995 |   30.64 |  15.27 | 0.240 | 0.7920 |    A+ | accepted
+  EDGE_CONFLUENCE_VETO     |  0.30 |  1.926 |   30.36 |  12.16 | 0.163 | 0.7786 |    A+ | candidate
+  CALIBRATED_SIDE_EDGE     |  0.40 |  1.691 |   23.92 |  16.38 | 0.479 | 0.7569 |     A | accepted
+  CALIBRATED_SIDE_EDGE     |  0.20 |  1.656 |   24.14 |  11.58 | 0.247 | 0.7412 |     A | candidate
+  GLOBAL_EDGE_PERCENTILE   |  0.25 |  1.643 |   23.78 |  11.48 | 0.251 | 0.7394 |     A | accepted
+  CALIBRATED_SIDE_EDGE     |  0.25 |  1.616 |   22.93 |  11.78 | 0.284 | 0.7367 |     A | candidate
+  SIDE_EDGE_PERCENTILE     |  0.20 |  1.634 |   23.62 |  10.19 | 0.201 | 0.7356 |     A | candidate
+  GLOBAL_EDGE_PERCENTILE   |  0.20 |  1.622 |   23.26 |  10.00 | 0.200 | 0.7337 |     A | candidate
+  GLOBAL_EDGE_PERCENTILE   |  0.40 |  1.560 |   20.69 |  12.74 | 0.400 | 0.7329 |    B+ | accepted
+
+[ARCHITECTURE ACCOUNTING]
+  Total=94 = Accepted(19) + CoverageRej(42) + QualityRej(0) + Duplicate(33) + Other(0)
+  Accounting OK : YES
+  Rejection breakdown:
+    duplicate_architecture                          33
+    coverage 0.0767 < required 0.15                  7
+    coverage 0.0608 < required 0.15                  5
+    coverage 0.0804 < required 0.15                  4
+    coverage 0.1010 < required 0.15                  3
+    coverage 0.0412 < required 0.15                  3
+    coverage 0.0215 < required 0.15                  3
+    coverage 0.0178 < required 0.15                  2
+    coverage 0.1001 < required 0.15                  1
+    coverage 0.0402 < required 0.15                  1
+    coverage 0.0206 < required 0.15                  1
+    coverage 0.1263 < required 0.15                  1
+    coverage 0.0833 < required 0.15                  1
+    coverage 0.0674 < required 0.15                  1
+    coverage 0.0514 < required 0.15                  1
+    coverage 0.0346 < required 0.15                  1
+    coverage 0.1282 < required 0.15                  1
+    coverage 0.0917 < required 0.15                  1
+    coverage 0.0355 < required 0.15                  1
+    coverage 0.0225 < required 0.15                  1
+    coverage 0.0084 < required 0.15                  1
+    coverage 0.0037 < required 0.15                  1
+    coverage 0.0954 < required 0.15                  1
+
+[SCORE BREAKDOWN]
+  Final score = 0.8176
+
+  Component             Weight   Contribution
+  -------------------------------------------
+  expectancy              0.35      +0.350000
+  profit_factor           0.30      +0.198000
+  sharpe                  0.20      +0.200000
+  precision               0.10      +0.061494
+  coverage                0.05      +0.008138
+  -------------------------------------------
+  TOTAL                   1.00      +0.817633
+
+[TRUST SCORE FORENSICS]
+  Trust score : 77/100
+  Saved value : -1
+  Consistent  : UNKNOWN (not recorded in profile)
+
+  Component                        Points
+  ----------------------------------------
+  pf_contribution                   19.80
+  expectancy_contribution           25.00
+  sharpe_contribution               20.00
+  coverage_contribution              2.44
+  fires_contribution                10.00
+  ----------------------------------------
+  TOTAL                                77
+
+[MODEL HEALTH SCORE]
+  Total : 86/100 — EXCELLENT
+
+  Component                   Score  Max
+  --------------------------------------
+  feature_diversity            30.0 / 30  ##########
+  prediction_entropy           18.8 / 20  #########
+  calibration_quality          17.3 / 25  ######
+  architecture_robustness      15.0 / 15  ##########
+  regime_stability              5.0 / 10  #####
+
+[REGIME FORENSICS]
+  Regime breakdown requires ranking_df — use enrich_with_ranking_df() to populate.
+
+[ALPHA ATTRIBUTION]
+  PF lift from neutral 0.90 to 2.320: raw signal=51%, calibration=0%, gate architecture=49%
+
+  Baseline PF    : 1.621
+  Final PF       : 2.320
+  Total lift     : +1.420 (from neutral 0.90)
+
+  Source                          Lift    Share
+  ---------------------------------------------
+  Signal quality                +0.721    50.8%
+  Calibration                   +0.000     0.0%
+  Gate architecture             +0.699    49.2%
+
+[FINAL VERDICT]
+  Status  : ENABLED — EDGE_STRICT_VETO
+  Verdict : HIGH CONFIDENCE — excellent profitability metrics
+  Grade   : A+  (PF=2.320  Exp=34.96%)
+  Trust   : 77/100 — HIGH
+
+================================================================================

@@ -1,0 +1,37 @@
+{
+  "ece_before_calibration": 0.0588,
+  "ece_after_calibration": 0.0,
+  "brier_score": 0.3328,
+  "calibration_temperature": 1.1595,
+  "calibration_type": "uncalibrated",
+  "ece_target": 0.1,
+  "ece_target_met": true,
+  "confidence_inflation": false,
+  "dev_precision": 0.7914,
+  "holdout_precision": 0.3165,
+  "confidence_buckets": {
+    "50-60": {
+      "est_win": 0.52,
+      "n": 32
+    },
+    "60-70": {
+      "est_win": 0.6,
+      "n": 40
+    },
+    "70-80": {
+      "est_win": 0.3164983164983165,
+      "n": 40
+    },
+    "80-90": {
+      "est_win": 0.4164983164983165,
+      "n": 32
+    },
+    "90-100": {
+      "est_win": 0.8,
+      "n": 16
+    }
+  },
+  "recommended_calibrator": "isotonic",
+  "dev_sample_size": 163,
+  "holdout_sample_size": 297
+}
