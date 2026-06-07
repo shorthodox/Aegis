@@ -1,0 +1,94 @@
+{
+  "symbol": "ARKM/USDT",
+  "updated_at": "2026-06-07T16:53:41.209632+00:00",
+  "base_atr_multiplier": 1.5,
+  "train_bars": 2605,
+  "eval_bars": 1117,
+  "regime_boundaries": {
+    "vol_p33": 550602.8047499999,
+    "vol_p67": 812725.1907916667,
+    "atr_pct_p33": 0.015937504054387173,
+    "atr_pct_p67": 0.01941747572815531,
+    "momentum_p33": -0.022776433470140724,
+    "momentum_p67": 0.014771214252227062
+  },
+  "selected_profile": {
+    "gate_type": "EDGE_SR_VETO",
+    "threshold_quantile": 0.25,
+    "thresholds": {
+      "global_threshold": 75.11967167100343,
+      "buy_threshold": 75.10980966325037,
+      "sell_threshold": 75.12953367875647,
+      "quantile": 0.25
+    },
+    "side_specific": true,
+    "regime_modifier": false,
+    "signal_vetoes": [
+      "sr"
+    ],
+    "calibration": {
+      "method": "isotonic",
+      "selected_calibrator": "isotonic",
+      "selected_method": "isotonic",
+      "selected_score": 0.7315774599168969,
+      "ece_before": 0.20134357005758155,
+      "ece_after": 2.5017309614394123e-17,
+      "quality_score": 0.20134357005758152
+    },
+    "risk_tier": {
+      "conservative": true,
+      "balanced": true,
+      "aggressive": true
+    },
+    "edge_rank_mode": "percentile",
+    "score": 0.73158,
+    "disabled_reason": null
+  },
+  "holdout": {
+    "selected": {
+      "precision": 0.6046511627906976,
+      "coverage": 0.16089803554724041,
+      "expectancy_pct": 23.1558,
+      "profit_factor": 1.622,
+      "sharpe": 8.942,
+      "gate_lift": 0.324829535142983,
+      "fired_n": 172,
+      "rejected_n": 897,
+      "baseline_precision": 0.33208606173994387,
+      "baseline_profit_factor": 1.05,
+      "baseline_expectancy": 1.5838,
+      "validation_report": {
+        "status": "skipped_single_fold_validation",
+        "reason": "synthetic single-fold validation is disabled for reliability"
+      }
+    },
+    "holdout_metrics": {
+      "n": 172,
+      "expectancy_pct": 23.1558,
+      "total_return_pct": 3982.8,
+      "win_rate": 0.6047,
+      "sharpe": 8.942,
+      "max_drawdown_pct": 2106500000000.0,
+      "profit_factor": 1.622,
+      "buy_n": 88,
+      "buy_win_rate": 0.4545,
+      "sell_n": 80,
+      "sell_win_rate": 0.8,
+      "kelly_pct": 25.0
+    },
+    "rejected_metrics": {
+      "n": 897,
+      "expectancy_pct": -2.5526,
+      "total_return_pct": -2289.7,
+      "win_rate": 0.2798,
+      "sharpe": -2.831,
+      "max_drawdown_pct": 602.503,
+      "profit_factor": 0.916,
+      "buy_n": 348,
+      "buy_win_rate": 0.4425,
+      "sell_n": 176,
+      "sell_win_rate": 0.5511,
+      "kelly_pct": 0.0
+    }
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "symbol": "VET/USDT",
+  "updated_at": "2026-06-07T16:47:05.837219+00:00",
+  "base_atr_multiplier": 1.5,
+  "train_bars": 2605,
+  "eval_bars": 1117,
+  "regime_boundaries": {
+    "vol_p33": 8362342.624708334,
+    "vol_p67": 11615772.375375003,
+    "atr_pct_p33": 0.008622768815281167,
+    "atr_pct_p67": 0.011775480617326457,
+    "momentum_p33": -0.019511673423637643,
+    "momentum_p67": 0.005973419251958098
+  },
+  "selected_profile": {
+    "gate_type": "DISABLED",
+    "threshold_quantile": 0.0,
+    "thresholds": {
+      "global_threshold": 100.0,
+      "buy_threshold": 100.0,
+      "sell_threshold": 100.0,
+      "quantile": 0.0
+    },
+    "side_specific": false,
+    "regime_modifier": false,
+    "signal_vetoes": [],
+    "calibration": {
+      "method": "beta",
+      "selected_calibrator": "beta",
+      "selected_method": "beta",
+      "selected_score": 0.0,
+      "ece_before": 0.1515846955025454,
+      "ece_after": 0.052411634782861816,
+      "quality_score": 0.0,
+      "arch_validation_no_viable": true
+    },
+    "risk_tier": {
+      "conservative": false,
+      "balanced": false,
+      "aggressive": false
+    },
+    "edge_rank_mode": "percentile",
+    "score": 0.0,
+    "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+  },
+  "holdout": {
+    "selected": {
+      "precision": 0.25818521983161835,
+      "coverage": 1.0,
+      "expectancy_pct": -12.3544,
+      "profit_factor": 0.676,
+      "sharpe": -14.464,
+      "gate_lift": 0.0,
+      "fired_n": 1069,
+      "rejected_n": 0
+    },
+    "holdout_metrics": {
+      "n": 1069,
+      "expectancy_pct": -12.3544,
+      "total_return_pct": -13206.9,
+      "win_rate": 0.2582,
+      "sharpe": -14.464,
+      "max_drawdown_pct": 600600000000.0,
+      "profit_factor": 0.676,
+      "buy_n": 378,
+      "buy_win_rate": 0.2698,
+      "sell_n": 305,
+      "sell_win_rate": 0.5705,
+      "kelly_pct": 0.0
+    },
+    "rejected_metrics": {}
+  }
+}

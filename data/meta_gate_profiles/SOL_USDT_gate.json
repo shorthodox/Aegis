@@ -1,0 +1,73 @@
+{
+  "symbol": "SOL/USDT",
+  "updated_at": "2026-06-07T16:33:41.019033+00:00",
+  "base_atr_multiplier": 1.5,
+  "train_bars": 2605,
+  "eval_bars": 1117,
+  "regime_boundaries": {
+    "vol_p33": 96735.07534416669,
+    "vol_p67": 138999.44268250003,
+    "atr_pct_p33": 0.007745798079166218,
+    "atr_pct_p67": 0.01097413103421188,
+    "momentum_p33": -0.016248135470052667,
+    "momentum_p67": 0.009081000290823229
+  },
+  "selected_profile": {
+    "gate_type": "DISABLED",
+    "threshold_quantile": 0.0,
+    "thresholds": {
+      "global_threshold": 100.0,
+      "buy_threshold": 100.0,
+      "sell_threshold": 100.0,
+      "quantile": 0.0
+    },
+    "side_specific": false,
+    "regime_modifier": false,
+    "signal_vetoes": [],
+    "calibration": {
+      "method": "beta",
+      "selected_calibrator": "beta",
+      "selected_method": "beta",
+      "selected_score": 0.0,
+      "ece_before": 0.16612928683640607,
+      "ece_after": 0.05202987289714227,
+      "quality_score": 0.0,
+      "arch_validation_no_viable": true
+    },
+    "risk_tier": {
+      "conservative": false,
+      "balanced": false,
+      "aggressive": false
+    },
+    "edge_rank_mode": "percentile",
+    "score": 0.0,
+    "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+  },
+  "holdout": {
+    "selected": {
+      "precision": 0.304022450888681,
+      "coverage": 1.0,
+      "expectancy_pct": 3.0805,
+      "profit_factor": 1.113,
+      "sharpe": 3.756,
+      "gate_lift": 0.0,
+      "fired_n": 1069,
+      "rejected_n": 0
+    },
+    "holdout_metrics": {
+      "n": 1069,
+      "expectancy_pct": 3.0805,
+      "total_return_pct": 3293.1,
+      "win_rate": 0.304,
+      "sharpe": 3.756,
+      "max_drawdown_pct": 100.914,
+      "profit_factor": 1.113,
+      "buy_n": 259,
+      "buy_win_rate": 0.3745,
+      "sell_n": 357,
+      "sell_win_rate": 0.6387,
+      "kelly_pct": 5.36
+    },
+    "rejected_metrics": {}
+  }
+}

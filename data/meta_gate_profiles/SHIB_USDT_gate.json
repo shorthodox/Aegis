@@ -1,0 +1,73 @@
+{
+  "symbol": "SHIB/USDT",
+  "updated_at": "2026-06-07T16:38:59.153248+00:00",
+  "base_atr_multiplier": 1.5,
+  "train_bars": 2605,
+  "eval_bars": 1117,
+  "regime_boundaries": {
+    "vol_p33": 36440049801.9625,
+    "vol_p67": 54180449820.966675,
+    "atr_pct_p33": 0.008837685030328767,
+    "atr_pct_p67": 0.011647432752112781,
+    "momentum_p33": -0.015209704083319576,
+    "momentum_p67": 0.006635044411883982
+  },
+  "selected_profile": {
+    "gate_type": "DISABLED",
+    "threshold_quantile": 0.0,
+    "thresholds": {
+      "global_threshold": 100.0,
+      "buy_threshold": 100.0,
+      "sell_threshold": 100.0,
+      "quantile": 0.0
+    },
+    "side_specific": false,
+    "regime_modifier": false,
+    "signal_vetoes": [],
+    "calibration": {
+      "method": "beta",
+      "selected_calibrator": "beta",
+      "selected_method": "beta",
+      "selected_score": 0.0,
+      "ece_before": 0.1587332053742802,
+      "ece_after": 0.04833147260624477,
+      "quality_score": 0.0,
+      "arch_validation_no_viable": true
+    },
+    "risk_tier": {
+      "conservative": false,
+      "balanced": false,
+      "aggressive": false
+    },
+    "edge_rank_mode": "percentile",
+    "score": 0.0,
+    "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+  },
+  "holdout": {
+    "selected": {
+      "precision": 0.2675397567820393,
+      "coverage": 1.0,
+      "expectancy_pct": -7.8643,
+      "profit_factor": 0.773,
+      "sharpe": -9.337,
+      "gate_lift": 0.0,
+      "fired_n": 1069,
+      "rejected_n": 0
+    },
+    "holdout_metrics": {
+      "n": 1069,
+      "expectancy_pct": -7.8643,
+      "total_return_pct": -8406.9,
+      "win_rate": 0.2675,
+      "sharpe": -9.337,
+      "max_drawdown_pct": 289.247,
+      "profit_factor": 0.773,
+      "buy_n": 344,
+      "buy_win_rate": 0.3227,
+      "sell_n": 311,
+      "sell_win_rate": 0.5627,
+      "kelly_pct": 0.0
+    },
+    "rejected_metrics": {}
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "symbol": "ONDO/USDT",
+  "updated_at": "2026-06-07T17:01:03.218368+00:00",
+  "base_atr_multiplier": 1.5,
+  "train_bars": 2605,
+  "eval_bars": 1117,
+  "regime_boundaries": {
+    "vol_p33": 625064.2657083335,
+    "vol_p67": 1202763.9107500003,
+    "atr_pct_p33": 0.011043559832309889,
+    "atr_pct_p67": 0.015679360988041482,
+    "momentum_p33": -0.021079331341005716,
+    "momentum_p67": 0.014264861281717356
+  },
+  "selected_profile": {
+    "gate_type": "DISABLED",
+    "threshold_quantile": 0.0,
+    "thresholds": {
+      "global_threshold": 100.0,
+      "buy_threshold": 100.0,
+      "sell_threshold": 100.0,
+      "quantile": 0.0
+    },
+    "side_specific": false,
+    "regime_modifier": false,
+    "signal_vetoes": [],
+    "calibration": {
+      "method": "beta",
+      "selected_calibrator": "beta",
+      "selected_method": "beta",
+      "selected_score": 0.0,
+      "ece_before": 0.11353806781829813,
+      "ece_after": 0.062135196856541064,
+      "quality_score": 0.0,
+      "arch_validation_no_viable": true
+    },
+    "risk_tier": {
+      "conservative": false,
+      "balanced": false,
+      "aggressive": false
+    },
+    "edge_rank_mode": "percentile",
+    "score": 0.0,
+    "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+  },
+  "holdout": {
+    "selected": {
+      "precision": 0.3255378858746492,
+      "coverage": 1.0,
+      "expectancy_pct": -0.7548,
+      "profit_factor": 0.977,
+      "sharpe": -0.861,
+      "gate_lift": 0.0,
+      "fired_n": 1069,
+      "rejected_n": 0
+    },
+    "holdout_metrics": {
+      "n": 1069,
+      "expectancy_pct": -0.7548,
+      "total_return_pct": -806.9,
+      "win_rate": 0.3255,
+      "sharpe": -0.861,
+      "max_drawdown_pct": 436.583,
+      "profit_factor": 0.977,
+      "buy_n": 32,
+      "buy_win_rate": 0.25,
+      "sell_n": 671,
+      "sell_win_rate": 0.5067,
+      "kelly_pct": 0.0
+    },
+    "rejected_metrics": {}
+  }
+}

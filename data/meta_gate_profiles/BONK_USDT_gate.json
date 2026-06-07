@@ -1,0 +1,73 @@
+{
+  "symbol": "BONK/USDT",
+  "updated_at": "2026-06-07T17:09:28.051711+00:00",
+  "base_atr_multiplier": 1.5,
+  "train_bars": 2605,
+  "eval_bars": 1117,
+  "regime_boundaries": {
+    "vol_p33": 29110452425.117085,
+    "vol_p67": 48659020040.14,
+    "atr_pct_p33": 0.010861538066344998,
+    "atr_pct_p67": 0.014627011214041925,
+    "momentum_p33": -0.020833333333333266,
+    "momentum_p67": 0.008091401474289685
+  },
+  "selected_profile": {
+    "gate_type": "DISABLED",
+    "threshold_quantile": 0.0,
+    "thresholds": {
+      "global_threshold": 100.0,
+      "buy_threshold": 100.0,
+      "sell_threshold": 100.0,
+      "quantile": 0.0
+    },
+    "side_specific": false,
+    "regime_modifier": false,
+    "signal_vetoes": [],
+    "calibration": {
+      "method": "beta",
+      "selected_calibrator": "beta",
+      "selected_method": "beta",
+      "selected_score": 0.0,
+      "ece_before": 0.19712092130518236,
+      "ece_after": 0.06591856535366773,
+      "quality_score": 0.0,
+      "arch_validation_no_viable": true
+    },
+    "risk_tier": {
+      "conservative": false,
+      "balanced": false,
+      "aggressive": false
+    },
+    "edge_rank_mode": "percentile",
+    "score": 0.0,
+    "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+  },
+  "holdout": {
+    "selected": {
+      "precision": 0.284377923292797,
+      "coverage": 1.0,
+      "expectancy_pct": -5.245,
+      "profit_factor": 0.844,
+      "sharpe": -6.172,
+      "gate_lift": 0.0,
+      "fired_n": 1069,
+      "rejected_n": 0
+    },
+    "holdout_metrics": {
+      "n": 1069,
+      "expectancy_pct": -5.245,
+      "total_return_pct": -5606.9,
+      "win_rate": 0.2844,
+      "sharpe": -6.172,
+      "max_drawdown_pct": 430.896,
+      "profit_factor": 0.844,
+      "buy_n": 145,
+      "buy_win_rate": 0.2207,
+      "sell_n": 518,
+      "sell_win_rate": 0.5251,
+      "kelly_pct": 0.0
+    },
+    "rejected_metrics": {}
+  }
+}

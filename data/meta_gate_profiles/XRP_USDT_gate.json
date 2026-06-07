@@ -1,0 +1,73 @@
+{
+  "symbol": "XRP/USDT",
+  "updated_at": "2026-06-07T16:34:18.586142+00:00",
+  "base_atr_multiplier": 1.5,
+  "train_bars": 2605,
+  "eval_bars": 1117,
+  "regime_boundaries": {
+    "vol_p33": 3454365.243458334,
+    "vol_p67": 5275735.425833333,
+    "atr_pct_p33": 0.006677350669915314,
+    "atr_pct_p67": 0.010040209533679068,
+    "momentum_p33": -0.014623739339558172,
+    "momentum_p67": 0.0050939390151225495
+  },
+  "selected_profile": {
+    "gate_type": "DISABLED",
+    "threshold_quantile": 0.0,
+    "thresholds": {
+      "global_threshold": 100.0,
+      "buy_threshold": 100.0,
+      "sell_threshold": 100.0,
+      "quantile": 0.0
+    },
+    "side_specific": false,
+    "regime_modifier": false,
+    "signal_vetoes": [],
+    "calibration": {
+      "method": "beta",
+      "selected_calibrator": "beta",
+      "selected_method": "beta",
+      "selected_score": 0.0,
+      "ece_before": 0.16602687140115166,
+      "ece_after": 0.06235502229221871,
+      "quality_score": 0.0,
+      "arch_validation_no_viable": true
+    },
+    "risk_tier": {
+      "conservative": false,
+      "balanced": false,
+      "aggressive": false
+    },
+    "edge_rank_mode": "percentile",
+    "score": 0.0,
+    "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+  },
+  "holdout": {
+    "selected": {
+      "precision": 0.2890551917680075,
+      "coverage": 1.0,
+      "expectancy_pct": -4.8708,
+      "profit_factor": 0.856,
+      "sharpe": -5.704,
+      "gate_lift": 0.0,
+      "fired_n": 1069,
+      "rejected_n": 0
+    },
+    "holdout_metrics": {
+      "n": 1069,
+      "expectancy_pct": -4.8708,
+      "total_return_pct": -5206.9,
+      "win_rate": 0.2891,
+      "sharpe": -5.704,
+      "max_drawdown_pct": 207.578,
+      "profit_factor": 0.856,
+      "buy_n": 463,
+      "buy_win_rate": 0.3866,
+      "sell_n": 206,
+      "sell_win_rate": 0.6311,
+      "kelly_pct": 0.0
+    },
+    "rejected_metrics": {}
+  }
+}

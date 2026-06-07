@@ -1,0 +1,73 @@
+{
+  "symbol": "CHZ/USDT",
+  "updated_at": "2026-06-07T17:17:57.257096+00:00",
+  "base_atr_multiplier": 1.5,
+  "train_bars": 2605,
+  "eval_bars": 1117,
+  "regime_boundaries": {
+    "vol_p33": 4260240.579166667,
+    "vol_p67": 7357902.912083334,
+    "atr_pct_p33": 0.012192712565060007,
+    "atr_pct_p67": 0.0168019686965009,
+    "momentum_p33": -0.020202700732055903,
+    "momentum_p67": 0.013761922983332463
+  },
+  "selected_profile": {
+    "gate_type": "DISABLED",
+    "threshold_quantile": 0.0,
+    "thresholds": {
+      "global_threshold": 100.0,
+      "buy_threshold": 100.0,
+      "sell_threshold": 100.0,
+      "quantile": 0.0
+    },
+    "side_specific": false,
+    "regime_modifier": false,
+    "signal_vetoes": [],
+    "calibration": {
+      "method": "beta",
+      "selected_calibrator": "beta",
+      "selected_method": "beta",
+      "selected_score": 0.0,
+      "ece_before": 0.1656856299499233,
+      "ece_after": 0.052452519693749644,
+      "quality_score": 0.0,
+      "arch_validation_no_viable": true
+    },
+    "risk_tier": {
+      "conservative": false,
+      "balanced": false,
+      "aggressive": false
+    },
+    "edge_rank_mode": "percentile",
+    "score": 0.0,
+    "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+  },
+  "holdout": {
+    "selected": {
+      "precision": 0.2666043030869972,
+      "coverage": 1.0,
+      "expectancy_pct": -4.9644,
+      "profit_factor": 0.843,
+      "sharpe": -6.031,
+      "gate_lift": 0.0,
+      "fired_n": 1069,
+      "rejected_n": 0
+    },
+    "holdout_metrics": {
+      "n": 1069,
+      "expectancy_pct": -4.9644,
+      "total_return_pct": -5306.9,
+      "win_rate": 0.2666,
+      "sharpe": -6.031,
+      "max_drawdown_pct": 100000000.0,
+      "profit_factor": 0.843,
+      "buy_n": 438,
+      "buy_win_rate": 0.3858,
+      "sell_n": 184,
+      "sell_win_rate": 0.6304,
+      "kelly_pct": 0.0
+    },
+    "rejected_metrics": {}
+  }
+}

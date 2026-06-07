@@ -1,0 +1,2798 @@
+{
+  "generated_at": "2026-06-07T17:26:11.644926+00:00",
+  "n_symbols": 89,
+  "symbols": {
+    "BTC/USDT": {
+      "gate_type": "EDGE_CONFLUENCE_VETO",
+      "threshold_quantile": 0.3,
+      "thresholds": {
+        "global_threshold": 70.16225151467854,
+        "buy_threshold": 70.13422818791946,
+        "sell_threshold": 70.19027484143763,
+        "quantile": 0.3
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [
+        "confluence"
+      ],
+      "calibration": {
+        "method": "isotonic",
+        "selected_calibrator": "isotonic",
+        "selected_method": "isotonic",
+        "selected_score": 0.7186213808020094,
+        "ece_before": 0.19328214971209212,
+        "ece_after": 5.863298756729593e-17,
+        "quality_score": 0.19328214971209207
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.71862,
+      "disabled_reason": null
+    },
+    "ETH/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.20978886756238002,
+        "ece_after": 0.05112439074959969,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "BNB/USDT": {
+      "gate_type": "EDGE_CONFLUENCE_VETO",
+      "threshold_quantile": 0.3,
+      "thresholds": {
+        "global_threshold": 70.16248986641288,
+        "buy_threshold": 70.20408163265306,
+        "sell_threshold": 70.12089810017271,
+        "quantile": 0.3
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [
+        "confluence"
+      ],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.7388483245605462,
+        "ece_before": 0.15719769673704415,
+        "ece_after": 0.05730140142236248,
+        "quality_score": 0.09989629531468167
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.73885,
+      "disabled_reason": null
+    },
+    "SOL/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.16612928683640607,
+        "ece_after": 0.05202987289714227,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "XRP/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.16602687140115166,
+        "ece_after": 0.06235502229221871,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "ADA/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.14414587332053744,
+        "ece_after": 0.06584357805079483,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "DOGE/USDT": {
+      "gate_type": "CALIBRATED_SIDE_EDGE",
+      "threshold_quantile": 0.4,
+      "thresholds": {
+        "global_threshold": 45.01901705960331,
+        "buy_threshold": 45.05494505494506,
+        "sell_threshold": 44.983089064261556,
+        "quantile": 0.4
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "isotonic",
+        "selected_calibrator": "isotonic",
+        "selected_method": "isotonic",
+        "selected_score": 0.6948696128173012,
+        "ece_before": 0.13766259362158184,
+        "ece_after": 2.3440409349091596e-18,
+        "quality_score": 0.13766259362158184
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": false,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.69487,
+      "disabled_reason": null
+    },
+    "TRX/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.13349972769999593,
+        "ece_after": 0.06370495934215731,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "AVAX/USDT": {
+      "gate_type": "EDGE_CONFLUENCE_VETO",
+      "threshold_quantile": 0.4,
+      "thresholds": {
+        "global_threshold": 60.27862466124661,
+        "buy_threshold": 60.48780487804878,
+        "sell_threshold": 60.06944444444444,
+        "quantile": 0.4
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [
+        "confluence"
+      ],
+      "calibration": {
+        "method": "isotonic",
+        "selected_calibrator": "isotonic",
+        "selected_method": "isotonic",
+        "selected_score": 0.5152849564154942,
+        "ece_before": 0.1648752399232246,
+        "ece_after": 1.2414260545116556e-17,
+        "quality_score": 0.1648752399232246
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": false,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.51528,
+      "disabled_reason": null
+    },
+    "LINK/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.15950095969289824,
+        "ece_after": 0.07194287514887122,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "DOT/USDT": {
+      "gate_type": "EDGE_SR_VETO",
+      "threshold_quantile": 0.25,
+      "thresholds": {
+        "global_threshold": 75.11297826881449,
+        "buy_threshold": 75.17605633802818,
+        "sell_threshold": 75.0499001996008,
+        "quantile": 0.25
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [
+        "sr"
+      ],
+      "calibration": {
+        "method": "platt",
+        "selected_calibrator": "platt",
+        "selected_method": "platt",
+        "selected_score": 0.6881921799668993,
+        "ece_before": 0.15020265369185207,
+        "ece_after": 0.1417472484189092,
+        "quality_score": 0.008455405272942862
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": false,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.68819,
+      "disabled_reason": null
+    },
+    "TON/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.15527831094049901,
+        "ece_after": 0.05302199979823779,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "SHIB/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.1587332053742802,
+        "ece_after": 0.04833147260624477,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "BCH/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.17485604606525915,
+        "ece_after": 0.05694684218728148,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "LTC/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.15342718896312602,
+        "ece_after": 0.06409348995924723,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "ATOM/USDT": {
+      "gate_type": "EDGE_SR_VETO",
+      "threshold_quantile": 0.25,
+      "thresholds": {
+        "global_threshold": 75.1317359673338,
+        "buy_threshold": 75.0402576489533,
+        "sell_threshold": 75.22321428571429,
+        "quantile": 0.25
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [
+        "sr"
+      ],
+      "calibration": {
+        "method": "platt",
+        "selected_calibrator": "platt",
+        "selected_method": "platt",
+        "selected_score": 0.7133943739872308,
+        "ece_before": 0.1955854126679463,
+        "ece_after": 0.10026308659334998,
+        "quality_score": 0.09532232607459631
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.71339,
+      "disabled_reason": null
+    },
+    "XLM/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.14421409742044197,
+        "ece_after": 0.06037033981254672,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "ETC/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.1393006222359764,
+        "ece_after": 0.05862047897290014,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "UNI/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.1523608445297505,
+        "ece_after": 0.07315477033593132,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "NEAR/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.1803754293771624,
+        "ece_after": 0.06243744007878016,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "APT/USDT": {
+      "gate_type": "EDGE_SR_VETO",
+      "threshold_quantile": 0.4,
+      "thresholds": {
+        "global_threshold": 60.259255217238405,
+        "buy_threshold": 60.42780748663101,
+        "sell_threshold": 60.090702947845806,
+        "quantile": 0.4
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [
+        "sr"
+      ],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.7426848676046658,
+        "ece_before": 0.17297924501673784,
+        "ece_after": 0.06582886247875326,
+        "quality_score": 0.10715038253798458
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.74268,
+      "disabled_reason": null
+    },
+    "SUI/USDT": {
+      "gate_type": "EDGE_CONFLUENCE_VETO",
+      "threshold_quantile": 0.3,
+      "thresholds": {
+        "global_threshold": 70.07012990800006,
+        "buy_threshold": 70.09345794392523,
+        "sell_threshold": 70.04680187207488,
+        "quantile": 0.3
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [
+        "confluence"
+      ],
+      "calibration": {
+        "method": "isotonic",
+        "selected_calibrator": "isotonic",
+        "selected_method": "isotonic",
+        "selected_score": 0.5536789425452183,
+        "ece_before": 0.15918528876286106,
+        "ece_after": 4.1766547567472294e-18,
+        "quality_score": 0.15918528876286106
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": false,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.55368,
+      "disabled_reason": null
+    },
+    "SEI/USDT": {
+      "gate_type": "EDGE_CONFLUENCE_VETO",
+      "threshold_quantile": 0.3,
+      "thresholds": {
+        "global_threshold": 70.3227266655783,
+        "buy_threshold": 70.54794520547945,
+        "sell_threshold": 70.09750812567714,
+        "quantile": 0.3
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [
+        "confluence"
+      ],
+      "calibration": {
+        "method": "platt",
+        "selected_calibrator": "platt",
+        "selected_method": "platt",
+        "selected_score": 0.7978651088413016,
+        "ece_before": 0.18061420345489446,
+        "ece_after": 0.1386120395189009,
+        "quality_score": 0.04200216393599357
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.79787,
+      "disabled_reason": null
+    },
+    "INJ/USDT": {
+      "gate_type": "EDGE_STRICT_VETO",
+      "threshold_quantile": 0.4,
+      "thresholds": {
+        "global_threshold": 54.533400304884466,
+        "buy_threshold": 54.47316103379721,
+        "sell_threshold": 54.59363957597173,
+        "quantile": 0.4
+      },
+      "side_specific": true,
+      "regime_modifier": true,
+      "signal_vetoes": [
+        "sr",
+        "trend",
+        "confluence"
+      ],
+      "calibration": {
+        "method": "isotonic",
+        "selected_calibrator": "isotonic",
+        "selected_method": "isotonic",
+        "selected_score": 0.7080595947916727,
+        "ece_before": 0.1595691857561974,
+        "ece_after": 1.9285064055388995e-17,
+        "quality_score": 0.15956918575619738
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": false,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.70806,
+      "disabled_reason": null
+    },
+    "TIA/USDT": {
+      "gate_type": "EDGE_CONFLUENCE_VETO",
+      "threshold_quantile": 0.4,
+      "thresholds": {
+        "global_threshold": 60.25295077791091,
+        "buy_threshold": 60.45627376425855,
+        "sell_threshold": 60.049627791563275,
+        "quantile": 0.4
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [
+        "confluence"
+      ],
+      "calibration": {
+        "method": "temperature",
+        "selected_calibrator": "temperature",
+        "selected_method": "temperature",
+        "selected_score": 0.7181045434660188,
+        "ece_before": 0.1756238003838772,
+        "ece_after": 0.17562379068065914,
+        "quality_score": 9.703218062373509e-09
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.7181,
+      "disabled_reason": null
+    },
+    "EGLD/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.16878223213825194,
+        "ece_after": 0.07846622257571412,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "HBAR/USDT": {
+      "gate_type": "GLOBAL_EDGE_PERCENTILE",
+      "threshold_quantile": 0.15,
+      "thresholds": {
+        "global_threshold": 85.1039260969977,
+        "buy_threshold": 85.1039260969977,
+        "sell_threshold": 85.1039260969977,
+        "quantile": 0.15
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "isotonic",
+        "selected_calibrator": "isotonic",
+        "selected_method": "isotonic",
+        "selected_score": 0.6223695947916728,
+        "ece_before": 0.1736616951836113,
+        "ece_after": 2.3440409349091594e-17,
+        "quality_score": 0.17366169518361127
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": false,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.62237,
+      "disabled_reason": null
+    },
+    "ALGO/USDT": {
+      "gate_type": "EDGE_CONFLUENCE_VETO",
+      "threshold_quantile": 0.4,
+      "thresholds": {
+        "global_threshold": 60.23394152795561,
+        "buy_threshold": 60.416666666666664,
+        "sell_threshold": 60.05121638924456,
+        "quantile": 0.4
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [
+        "confluence"
+      ],
+      "calibration": {
+        "method": "platt",
+        "selected_calibrator": "platt",
+        "selected_method": "platt",
+        "selected_score": 0.780918700331343,
+        "ece_before": 0.14962257838591167,
+        "ece_after": 0.11724725992160885,
+        "quality_score": 0.03237531846430282
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.78092,
+      "disabled_reason": null
+    },
+    "VET/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.1515846955025454,
+        "ece_after": 0.052411634782861816,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "ICP/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.20752819250009683,
+        "ece_after": 0.05660688473405353,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "FIL/USDT": {
+      "gate_type": "EDGE_STRICT_VETO",
+      "threshold_quantile": 0.4,
+      "thresholds": {
+        "global_threshold": 44.34550705276806,
+        "buy_threshold": 44.354838709677416,
+        "sell_threshold": 44.33617539585871,
+        "quantile": 0.4
+      },
+      "side_specific": true,
+      "regime_modifier": true,
+      "signal_vetoes": [
+        "sr",
+        "trend",
+        "confluence"
+      ],
+      "calibration": {
+        "method": "isotonic",
+        "selected_calibrator": "isotonic",
+        "selected_method": "isotonic",
+        "selected_score": 0.8538970678365213,
+        "ece_before": 0.16218809980806143,
+        "ece_after": 8.385523428331457e-18,
+        "quality_score": 0.16218809980806143
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.8539,
+      "disabled_reason": null
+    },
+    "ARB/USDT": {
+      "gate_type": "EDGE_CONFLUENCE_VETO",
+      "threshold_quantile": 0.4,
+      "thresholds": {
+        "global_threshold": 60.147326690238934,
+        "buy_threshold": 60.130718954248366,
+        "sell_threshold": 60.1639344262295,
+        "quantile": 0.4
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [
+        "confluence"
+      ],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.31262165822404997,
+        "ece_before": 0.15789723816847584,
+        "ece_after": 0.05743032454446294,
+        "quality_score": 0.1004669136240129
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": false,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.31262,
+      "disabled_reason": null
+    },
+    "OP/USDT": {
+      "gate_type": "EDGE_CONFLUENCE_VETO",
+      "threshold_quantile": 0.3,
+      "thresholds": {
+        "global_threshold": 70.16973097739574,
+        "buy_threshold": 70.20057306590259,
+        "sell_threshold": 70.13888888888889,
+        "quantile": 0.3
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [
+        "confluence"
+      ],
+      "calibration": {
+        "method": "platt",
+        "selected_calibrator": "platt",
+        "selected_method": "platt",
+        "selected_score": 0.8914630109407411,
+        "ece_before": 0.16295585412667948,
+        "ece_after": 0.09577257166692592,
+        "quality_score": 0.06718328245975357
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.89146,
+      "disabled_reason": null
+    },
+    "STRK/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.15120081417455603,
+        "ece_after": 0.07015104593466258,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "IMX/USDT": {
+      "gate_type": "EDGE_STRICT_VETO",
+      "threshold_quantile": 0.4,
+      "thresholds": {
+        "global_threshold": 54.79099909130039,
+        "buy_threshold": 60.3448275862069,
+        "sell_threshold": 49.237170596393895,
+        "quantile": 0.4
+      },
+      "side_specific": true,
+      "regime_modifier": true,
+      "signal_vetoes": [
+        "sr",
+        "trend",
+        "confluence"
+      ],
+      "calibration": {
+        "method": "isotonic",
+        "selected_calibrator": "isotonic",
+        "selected_method": "isotonic",
+        "selected_score": 0.7211311331387289,
+        "ece_before": 0.15849441334666442,
+        "ece_after": 1.0064459395978147e-16,
+        "quality_score": 0.1584944133466643
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.72113,
+      "disabled_reason": null
+    },
+    "STX/USDT": {
+      "gate_type": "CALIBRATED_SIDE_EDGE",
+      "threshold_quantile": 0.06,
+      "thresholds": {
+        "global_threshold": 83.56992199936326,
+        "buy_threshold": 83.66762177650429,
+        "sell_threshold": 83.47222222222223,
+        "quantile": 0.06
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.6570727288971107,
+        "ece_before": 0.17754318618042225,
+        "ece_after": 0.055641552918612384,
+        "quality_score": 0.12190163326180986
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": false,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.65707,
+      "disabled_reason": null
+    },
+    "ZK/USDT": {
+      "gate_type": "CALIBRATED_SIDE_EDGE",
+      "threshold_quantile": 0.02,
+      "thresholds": {
+        "global_threshold": 83.16157003163428,
+        "buy_threshold": 83.16062176165802,
+        "sell_threshold": 83.16251830161055,
+        "quantile": 0.02
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.7127329582952128,
+        "ece_before": 0.1994241842610365,
+        "ece_after": 0.04858364570667377,
+        "quality_score": 0.15084053855436275
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.71273,
+      "disabled_reason": null
+    },
+    "FET/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.16833013435700578,
+        "ece_after": 0.053392114438191085,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "TAO/USDT": {
+      "gate_type": "EDGE_CONFLUENCE_VETO",
+      "threshold_quantile": 0.4,
+      "thresholds": {
+        "global_threshold": 60.28452243958573,
+        "buy_threshold": 60.5,
+        "sell_threshold": 60.069044879171464,
+        "quantile": 0.4
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [
+        "confluence"
+      ],
+      "calibration": {
+        "method": "isotonic",
+        "selected_calibrator": "isotonic",
+        "selected_method": "isotonic",
+        "selected_score": 0.8528790554810836,
+        "ece_before": 0.1796077301819798,
+        "ece_after": 4.7072603865584855e-17,
+        "quality_score": 0.17960773018197976
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.85288,
+      "disabled_reason": null
+    },
+    "ARKM/USDT": {
+      "gate_type": "EDGE_SR_VETO",
+      "threshold_quantile": 0.25,
+      "thresholds": {
+        "global_threshold": 75.11967167100343,
+        "buy_threshold": 75.10980966325037,
+        "sell_threshold": 75.12953367875647,
+        "quantile": 0.25
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [
+        "sr"
+      ],
+      "calibration": {
+        "method": "isotonic",
+        "selected_calibrator": "isotonic",
+        "selected_method": "isotonic",
+        "selected_score": 0.7315774599168969,
+        "ece_before": 0.20134357005758155,
+        "ece_after": 2.5017309614394123e-17,
+        "quality_score": 0.20134357005758152
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.73158,
+      "disabled_reason": null
+    },
+    "PYTH/USDT": {
+      "gate_type": "CALIBRATED_SIDE_EDGE",
+      "threshold_quantile": 0.08,
+      "thresholds": {
+        "global_threshold": 81.73957497995188,
+        "buy_threshold": 81.68604651162791,
+        "sell_threshold": 81.79310344827586,
+        "quantile": 0.08
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.7660401072210379,
+        "ece_before": 0.16081468318372982,
+        "ece_after": 0.05379126202468051,
+        "quality_score": 0.10702342115904931
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.76604,
+      "disabled_reason": null
+    },
+    "GRT/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.1484111475999103,
+        "ece_after": 0.05935957632840214,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "THETA/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.185672851567734,
+        "ece_after": 0.05699042883659968,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "TRB/USDT": {
+      "gate_type": "CALIBRATED_SIDE_EDGE",
+      "threshold_quantile": 0.02,
+      "thresholds": {
+        "global_threshold": 84.30453100635721,
+        "buy_threshold": 84.38287153652394,
+        "sell_threshold": 84.22619047619048,
+        "quantile": 0.02
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.7343837093490344,
+        "ece_before": 0.17643419172076588,
+        "ece_after": 0.055068688981062416,
+        "quality_score": 0.12136550273970347
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.73438,
+      "disabled_reason": null
+    },
+    "AAVE/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.17999153819164965,
+        "ece_after": 0.05148806492316356,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "CRV/USDT": {
+      "gate_type": "SIDE_EDGE_PERCENTILE",
+      "threshold_quantile": 0.2,
+      "thresholds": {
+        "global_threshold": 80.08100509975978,
+        "buy_threshold": 80.10335917312662,
+        "sell_threshold": 80.05865102639295,
+        "quantile": 0.2
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "isotonic",
+        "selected_calibrator": "isotonic",
+        "selected_method": "isotonic",
+        "selected_score": 0.758668917919377,
+        "ece_before": 0.1399232245681382,
+        "ece_after": 9.689945582968796e-17,
+        "quality_score": 0.1399232245681381
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.75867,
+      "disabled_reason": null
+    },
+    "LDO/USDT": {
+      "gate_type": "EDGE_SR_VETO",
+      "threshold_quantile": 0.25,
+      "thresholds": {
+        "global_threshold": 75.11575137664614,
+        "buy_threshold": 75.12776831345826,
+        "sell_threshold": 75.10373443983403,
+        "quantile": 0.25
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [
+        "sr"
+      ],
+      "calibration": {
+        "method": "platt",
+        "selected_calibrator": "platt",
+        "selected_method": "platt",
+        "selected_score": 0.6867042099413943,
+        "ece_before": 0.1664789637818597,
+        "ece_after": 0.1086549783542044,
+        "quality_score": 0.057823985427655294
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": false,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.6867,
+      "disabled_reason": null
+    },
+    "DYDX/USDT": {
+      "gate_type": "EDGE_STRICT_VETO",
+      "threshold_quantile": 0.4,
+      "thresholds": {
+        "global_threshold": 42.92681983445502,
+        "buy_threshold": 43.16546762589928,
+        "sell_threshold": 42.68817204301075,
+        "quantile": 0.4
+      },
+      "side_specific": true,
+      "regime_modifier": true,
+      "signal_vetoes": [
+        "sr",
+        "trend",
+        "confluence"
+      ],
+      "calibration": {
+        "method": "isotonic",
+        "selected_calibrator": "isotonic",
+        "selected_method": "isotonic",
+        "selected_score": 0.7690329119272606,
+        "ece_before": 0.16958419177318337,
+        "ece_after": 3.0898721414711653e-18,
+        "quality_score": 0.16958419177318337
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.76903,
+      "disabled_reason": null
+    },
+    "GMX/USDT": {
+      "gate_type": "CALIBRATED_SIDE_EDGE",
+      "threshold_quantile": 0.2,
+      "thresholds": {
+        "global_threshold": 79.83701394759088,
+        "buy_threshold": 79.91071428571429,
+        "sell_threshold": 79.76331360946746,
+        "quantile": 0.2
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.8348001150007295,
+        "ece_before": 0.1675197490166273,
+        "ece_after": 0.05757319230447733,
+        "quality_score": 0.10994655671214998
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.8348,
+      "disabled_reason": null
+    },
+    "PENDLE/USDT": {
+      "gate_type": "CALIBRATED_SIDE_EDGE",
+      "threshold_quantile": 0.4,
+      "thresholds": {
+        "global_threshold": 51.259769642122585,
+        "buy_threshold": 51.470588235294116,
+        "sell_threshold": 51.048951048951054,
+        "quantile": 0.4
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "isotonic",
+        "selected_calibrator": "isotonic",
+        "selected_method": "isotonic",
+        "selected_score": 0.739308040447236,
+        "ece_before": 0.19136276391554702,
+        "ece_after": 1.789994895748813e-17,
+        "quality_score": 0.191362763915547
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.73931,
+      "disabled_reason": null
+    },
+    "ONDO/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.11353806781829813,
+        "ece_after": 0.062135196856541064,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "JUP/USDT": {
+      "gate_type": "EDGE_CONFLUENCE_VETO",
+      "threshold_quantile": 0.4,
+      "thresholds": {
+        "global_threshold": 60.219601557133046,
+        "buy_threshold": 60.36363636363637,
+        "sell_threshold": 60.075566750629726,
+        "quantile": 0.4
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [
+        "confluence"
+      ],
+      "calibration": {
+        "method": "platt",
+        "selected_calibrator": "platt",
+        "selected_method": "platt",
+        "selected_score": 0.7798556633746168,
+        "ece_before": 0.15035613445552318,
+        "ece_after": 0.08172519671464777,
+        "quality_score": 0.0686309377408754
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.77986,
+      "disabled_reason": null
+    },
+    "ENA/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.15342714036535293,
+        "ece_after": 0.06617145706844219,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "COMP/USDT": {
+      "gate_type": "EDGE_CONFLUENCE_VETO",
+      "threshold_quantile": 0.4,
+      "thresholds": {
+        "global_threshold": 60.14783953872657,
+        "buy_threshold": 60.175438596491226,
+        "sell_threshold": 60.120240480961925,
+        "quantile": 0.4
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [
+        "confluence"
+      ],
+      "calibration": {
+        "method": "isotonic",
+        "selected_calibrator": "isotonic",
+        "selected_method": "isotonic",
+        "selected_score": 0.7493485838823319,
+        "ece_before": 0.22667946257197694,
+        "ece_after": 1.3856644824949864e-17,
+        "quality_score": 0.22667946257197694
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.74935,
+      "disabled_reason": null
+    },
+    "SNX/USDT": {
+      "gate_type": "EDGE_CONFLUENCE_VETO",
+      "threshold_quantile": 0.4,
+      "thresholds": {
+        "global_threshold": 60.180825613356404,
+        "buy_threshold": 60.22727272727273,
+        "sell_threshold": 60.13437849944009,
+        "quantile": 0.4
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [
+        "confluence"
+      ],
+      "calibration": {
+        "method": "temperature",
+        "selected_calibrator": "temperature",
+        "selected_method": "temperature",
+        "selected_score": 0.7305974783422133,
+        "ece_before": 0.17336316107022062,
+        "ece_after": 0.17063339583751536,
+        "quality_score": 0.002729765232705267
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.7306,
+      "disabled_reason": null
+    },
+    "AR/USDT": {
+      "gate_type": "EDGE_SR_VETO",
+      "threshold_quantile": 0.4,
+      "thresholds": {
+        "global_threshold": 60.219601557133046,
+        "buy_threshold": 60.36363636363637,
+        "sell_threshold": 60.075566750629726,
+        "quantile": 0.4
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [
+        "sr"
+      ],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.7075579011613315,
+        "ece_before": 0.19381110784762395,
+        "ece_after": 0.06127906153229905,
+        "quality_score": 0.1325320463153249
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.70756,
+      "disabled_reason": null
+    },
+    "STORJ/USDT": {
+      "gate_type": "EDGE_CONFLUENCE_VETO",
+      "threshold_quantile": 0.4,
+      "thresholds": {
+        "global_threshold": 60.190523717440314,
+        "buy_threshold": 60.278745644599304,
+        "sell_threshold": 60.10230179028133,
+        "quantile": 0.4
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [
+        "confluence"
+      ],
+      "calibration": {
+        "method": "isotonic",
+        "selected_calibrator": "isotonic",
+        "selected_method": "isotonic",
+        "selected_score": 0.7328713494800209,
+        "ece_before": 0.16794625719769674,
+        "ece_after": 4.7733197219968344e-18,
+        "quality_score": 0.16794625719769674
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.73287,
+      "disabled_reason": null
+    },
+    "AXS/USDT": {
+      "gate_type": "EDGE_CONFLUENCE_VETO",
+      "threshold_quantile": 0.3,
+      "thresholds": {
+        "global_threshold": 70.22404528881214,
+        "buy_threshold": 70.37037037037037,
+        "sell_threshold": 70.07772020725389,
+        "quantile": 0.3
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [
+        "confluence"
+      ],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.8448212057675558,
+        "ece_before": 0.1748560460652591,
+        "ece_after": 0.05319538290397762,
+        "quality_score": 0.12166066316128146
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.84482,
+      "disabled_reason": null
+    },
+    "SAND/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.16187242330995794,
+        "ece_after": 0.0599492257567559,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "MANA/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.17188746388914666,
+        "ece_after": 0.06388047173178177,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "GALA/USDT": {
+      "gate_type": "EDGE_CONFLUENCE_VETO",
+      "threshold_quantile": 0.4,
+      "thresholds": {
+        "global_threshold": 60.169424369215164,
+        "buy_threshold": 60.22727272727273,
+        "sell_threshold": 60.111576011157595,
+        "quantile": 0.4
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [
+        "confluence"
+      ],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.8441849987826286,
+        "ece_before": 0.18644063894824453,
+        "ece_after": 0.07601766666126977,
+        "quality_score": 0.11042297228697476
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.84418,
+      "disabled_reason": null
+    },
+    "ENJ/USDT": {
+      "gate_type": "EDGE_STRICT_VETO",
+      "threshold_quantile": 0.4,
+      "thresholds": {
+        "global_threshold": 52.39095999666523,
+        "buy_threshold": 52.53164556962025,
+        "sell_threshold": 52.25027442371021,
+        "quantile": 0.4
+      },
+      "side_specific": true,
+      "regime_modifier": true,
+      "signal_vetoes": [
+        "sr",
+        "trend",
+        "confluence"
+      ],
+      "calibration": {
+        "method": "isotonic",
+        "selected_calibrator": "isotonic",
+        "selected_method": "isotonic",
+        "selected_score": 0.8368855735836478,
+        "ece_before": 0.18905950095969284,
+        "ece_after": 1.1021853615330106e-16,
+        "quality_score": 0.18905950095969273
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.83689,
+      "disabled_reason": null
+    },
+    "PEPE/USDT": {
+      "gate_type": "EDGE_SR_VETO",
+      "threshold_quantile": 0.4,
+      "thresholds": {
+        "global_threshold": 60.177316009611104,
+        "buy_threshold": 60.29411764705882,
+        "sell_threshold": 60.06051437216339,
+        "quantile": 0.4
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [
+        "sr"
+      ],
+      "calibration": {
+        "method": "isotonic",
+        "selected_calibrator": "isotonic",
+        "selected_method": "isotonic",
+        "selected_score": 0.6399002859457229,
+        "ece_before": 0.1511238853702006,
+        "ece_after": 4.166000025224916e-18,
+        "quality_score": 0.1511238853702006
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": false,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.6399,
+      "disabled_reason": null
+    },
+    "WIF/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.17754318618042222,
+        "ece_after": 0.05255615052361938,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "BONK/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.19712092130518236,
+        "ece_after": 0.06591856535366773,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "FLOKI/USDT": {
+      "gate_type": "CALIBRATED_SIDE_EDGE",
+      "threshold_quantile": 0.15,
+      "thresholds": {
+        "global_threshold": 81.86954288649204,
+        "buy_threshold": 81.92090395480226,
+        "sell_threshold": 81.81818181818183,
+        "quantile": 0.15
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "isotonic",
+        "selected_calibrator": "isotonic",
+        "selected_method": "isotonic",
+        "selected_score": 0.4545487523338615,
+        "ece_before": 0.14075920468290232,
+        "ece_after": 6.117946840112907e-17,
+        "quality_score": 0.14075920468290226
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": false,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.45455,
+      "disabled_reason": null
+    },
+    "BOME/USDT": {
+      "gate_type": "CALIBRATED_SIDE_EDGE",
+      "threshold_quantile": 0.4,
+      "thresholds": {
+        "global_threshold": 56.32205718772492,
+        "buy_threshold": 56.470588235294116,
+        "sell_threshold": 56.17352614015573,
+        "quantile": 0.4
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "isotonic",
+        "selected_calibrator": "isotonic",
+        "selected_method": "isotonic",
+        "selected_score": 0.7131991192802979,
+        "ece_before": 0.14399232245681381,
+        "ece_after": 1.1786264009984146e-16,
+        "quality_score": 0.1439923224568137
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.7132,
+      "disabled_reason": null
+    },
+    "RUNE/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.1696268420335001,
+        "ece_after": 0.06909804295108898,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "OM/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "platt",
+        "selected_calibrator": "platt",
+        "selected_method": "platt",
+        "selected_score": 0.6598591157476403,
+        "ece_before": 0.19637305699481863,
+        "ece_after": 0.09637282226525934,
+        "quality_score": 0.1000002347295593
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "ORDI/USDT": {
+      "gate_type": "EDGE_CONFLUENCE_VETO",
+      "threshold_quantile": 0.3,
+      "thresholds": {
+        "global_threshold": 70.27766466456276,
+        "buy_threshold": 70.45454545454545,
+        "sell_threshold": 70.10078387458006,
+        "quantile": 0.3
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [
+        "confluence"
+      ],
+      "calibration": {
+        "method": "isotonic",
+        "selected_calibrator": "isotonic",
+        "selected_method": "isotonic",
+        "selected_score": 0.7529979491976685,
+        "ece_before": 0.20364683301343572,
+        "ece_after": 3.53097802649498e-17,
+        "quality_score": 0.2036468330134357
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.753,
+      "disabled_reason": null
+    },
+    "NOT/USDT": {
+      "gate_type": "EDGE_STRICT_VETO",
+      "threshold_quantile": 0.4,
+      "thresholds": {
+        "global_threshold": 49.39349134189581,
+        "buy_threshold": 49.40047961630695,
+        "sell_threshold": 49.38650306748466,
+        "quantile": 0.4
+      },
+      "side_specific": true,
+      "regime_modifier": true,
+      "signal_vetoes": [
+        "sr",
+        "trend",
+        "confluence"
+      ],
+      "calibration": {
+        "method": "isotonic",
+        "selected_calibrator": "isotonic",
+        "selected_method": "isotonic",
+        "selected_score": 0.590413491299247,
+        "ece_before": 0.15550863723608446,
+        "ece_after": 4.006179052390201e-18,
+        "quality_score": 0.15550863723608446
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.59041,
+      "disabled_reason": null
+    },
+    "ENS/USDT": {
+      "gate_type": "EDGE_CONFLUENCE_VETO",
+      "threshold_quantile": 0.4,
+      "thresholds": {
+        "global_threshold": 60.14054551659009,
+        "buy_threshold": 60.11396011396012,
+        "sell_threshold": 60.16713091922006,
+        "quantile": 0.4
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [
+        "confluence"
+      ],
+      "calibration": {
+        "method": "isotonic",
+        "selected_calibrator": "isotonic",
+        "selected_method": "isotonic",
+        "selected_score": 0.7306448338815293,
+        "ece_before": 0.15112387336318128,
+        "ece_after": 3.321079815505386e-17,
+        "quality_score": 0.15112387336318125
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.73064,
+      "disabled_reason": null
+    },
+    "QNT/USDT": {
+      "gate_type": "CALIBRATED_SIDE_EDGE",
+      "threshold_quantile": 0.4,
+      "thresholds": {
+        "global_threshold": 55.47788397421649,
+        "buy_threshold": 55.501222493887525,
+        "sell_threshold": 55.45454545454545,
+        "quantile": 0.4
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "isotonic",
+        "selected_calibrator": "isotonic",
+        "selected_method": "isotonic",
+        "selected_score": 0.7245776361985354,
+        "ece_before": 0.14261036468330132,
+        "ece_after": 1.1072396997989085e-16,
+        "quality_score": 0.1426103646833012
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.72458,
+      "disabled_reason": null
+    },
+    "MASK/USDT": {
+      "gate_type": "EDGE_STRICT_VETO",
+      "threshold_quantile": 0.4,
+      "thresholds": {
+        "global_threshold": 38.065406435502595,
+        "buy_threshold": 38.028169014084504,
+        "sell_threshold": 38.10264385692068,
+        "quantile": 0.4
+      },
+      "side_specific": true,
+      "regime_modifier": true,
+      "signal_vetoes": [
+        "sr",
+        "trend",
+        "confluence"
+      ],
+      "calibration": {
+        "method": "isotonic",
+        "selected_calibrator": "isotonic",
+        "selected_method": "isotonic",
+        "selected_score": 0.7105390878238738,
+        "ece_before": 0.16187245542806905,
+        "ece_after": 3.993393374563423e-17,
+        "quality_score": 0.16187245542806902
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": false,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.71054,
+      "disabled_reason": null
+    },
+    "MINA/USDT": {
+      "gate_type": "EDGE_STRICT_VETO",
+      "threshold_quantile": 0.4,
+      "thresholds": {
+        "global_threshold": 46.19114704561231,
+        "buy_threshold": 46.2962962962963,
+        "sell_threshold": 46.08599779492833,
+        "quantile": 0.4
+      },
+      "side_specific": true,
+      "regime_modifier": true,
+      "signal_vetoes": [
+        "sr",
+        "trend",
+        "confluence"
+      ],
+      "calibration": {
+        "method": "isotonic",
+        "selected_calibrator": "isotonic",
+        "selected_method": "isotonic",
+        "selected_score": 0.6958779177730392,
+        "ece_before": 0.17255278310940503,
+        "ece_after": 2.876777511024878e-17,
+        "quality_score": 0.172552783109405
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": false,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.69588,
+      "disabled_reason": null
+    },
+    "NEO/USDT": {
+      "gate_type": "EDGE_CONFLUENCE_VETO",
+      "threshold_quantile": 0.3,
+      "thresholds": {
+        "global_threshold": 70.15652938481773,
+        "buy_threshold": 70.16742770167428,
+        "sell_threshold": 70.14563106796116,
+        "quantile": 0.3
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [
+        "confluence"
+      ],
+      "calibration": {
+        "method": "platt",
+        "selected_calibrator": "platt",
+        "selected_method": "platt",
+        "selected_score": 0.7427022115288063,
+        "ece_before": 0.16574542934020225,
+        "ece_after": 0.09429283997849074,
+        "quality_score": 0.07145258936171152
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.7427,
+      "disabled_reason": null
+    },
+    "CHZ/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.1656856299499233,
+        "ece_after": 0.052452519693749644,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "CFX/USDT": {
+      "gate_type": "CALIBRATED_SIDE_EDGE",
+      "threshold_quantile": 0.4,
+      "thresholds": {
+        "global_threshold": 49.3835578468873,
+        "buy_threshold": 49.523809523809526,
+        "sell_threshold": 49.243306169965074,
+        "quantile": 0.4
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "isotonic",
+        "selected_calibrator": "isotonic",
+        "selected_method": "isotonic",
+        "selected_score": 0.6875906640345567,
+        "ece_before": 0.1657880858878297,
+        "ece_after": 5.833998245043229e-17,
+        "quality_score": 0.16578808588782964
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": false,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.68759,
+      "disabled_reason": null
+    },
+    "CAKE/USDT": {
+      "gate_type": "EDGE_CONFLUENCE_VETO",
+      "threshold_quantile": 0.4,
+      "thresholds": {
+        "global_threshold": 60.248917244912214,
+        "buy_threshold": 60.09174311926605,
+        "sell_threshold": 60.40609137055838,
+        "quantile": 0.4
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [
+        "confluence"
+      ],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.3759895413476135,
+        "ece_before": 0.17994888025346178,
+        "ece_after": 0.07929539238434408,
+        "quality_score": 0.10065348786911771
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": false,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.37599,
+      "disabled_reason": null
+    },
+    "1INCH/USDT": {
+      "gate_type": "GLOBAL_EDGE_PERCENTILE",
+      "threshold_quantile": 0.15,
+      "thresholds": {
+        "global_threshold": 85.07670850767084,
+        "buy_threshold": 85.07670850767084,
+        "sell_threshold": 85.07670850767084,
+        "quantile": 0.15
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "temperature",
+        "selected_calibrator": "temperature",
+        "selected_method": "temperature",
+        "selected_score": 0.6838301537978839,
+        "ece_before": 0.1416038116949334,
+        "ece_after": 0.14145873305311948,
+        "quality_score": 0.00014507864181392827
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": true,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.68383,
+      "disabled_reason": null
+    },
+    "BAT/USDT": {
+      "gate_type": "CALIBRATED_SIDE_EDGE",
+      "threshold_quantile": 0.4,
+      "thresholds": {
+        "global_threshold": 47.61840195554197,
+        "buy_threshold": 47.63157894736842,
+        "sell_threshold": 47.60522496371553,
+        "quantile": 0.4
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "isotonic",
+        "selected_calibrator": "isotonic",
+        "selected_method": "isotonic",
+        "selected_score": 0.6982383840619996,
+        "ece_before": 0.18948600597201137,
+        "ece_after": 2.3120767403422167e-17,
+        "quality_score": 0.18948600597201135
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": false,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.69824,
+      "disabled_reason": null
+    },
+    "BLUR/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.21017274472168898,
+        "ece_after": 0.05486008240132155,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "CKB/USDT": {
+      "gate_type": "CALIBRATED_SIDE_EDGE",
+      "threshold_quantile": 0.15,
+      "thresholds": {
+        "global_threshold": 83.19479063554724,
+        "buy_threshold": 83.14350797266515,
+        "sell_threshold": 83.24607329842932,
+        "quantile": 0.15
+      },
+      "side_specific": true,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.31842080444905896,
+        "ece_before": 0.1599274721159027,
+        "ece_after": 0.059783807139685535,
+        "quality_score": 0.10014366497621716
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": false,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.31842,
+      "disabled_reason": null
+    },
+    "IOTX/USDT": {
+      "gate_type": "GLOBAL_EDGE_PERCENTILE",
+      "threshold_quantile": 0.15,
+      "thresholds": {
+        "global_threshold": 85.04065040650407,
+        "buy_threshold": 85.04065040650407,
+        "sell_threshold": 85.04065040650407,
+        "quantile": 0.15
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.42322935876682805,
+        "ece_before": 0.15911708253358925,
+        "ece_after": 0.060473519864813564,
+        "quality_score": 0.09864356266877569
+      },
+      "risk_tier": {
+        "conservative": true,
+        "balanced": false,
+        "aggressive": true
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.42323,
+      "disabled_reason": null
+    },
+    "KAVA/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.16103646833013435,
+        "ece_after": 0.04908650099407997,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "YFI/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.16271705926830687,
+        "ece_after": 0.06358441399798759,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "RAY/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.15926216286844552,
+        "ece_after": 0.051353430500196466,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "JTO/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.16041378966522923,
+        "ece_after": 0.066364670272436,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    },
+    "TRUMP/USDT": {
+      "gate_type": "DISABLED",
+      "threshold_quantile": 0.0,
+      "thresholds": {
+        "global_threshold": 100.0,
+        "buy_threshold": 100.0,
+        "sell_threshold": 100.0,
+        "quantile": 0.0
+      },
+      "side_specific": false,
+      "regime_modifier": false,
+      "signal_vetoes": [],
+      "calibration": {
+        "method": "beta",
+        "selected_calibrator": "beta",
+        "selected_method": "beta",
+        "selected_score": 0.0,
+        "ece_before": 0.17869481765834933,
+        "ece_after": 0.06665959176016216,
+        "quality_score": 0.0,
+        "arch_validation_no_viable": true
+      },
+      "risk_tier": {
+        "conservative": false,
+        "balanced": false,
+        "aggressive": false
+      },
+      "edge_rank_mode": "percentile",
+      "score": 0.0,
+      "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    }
+  }
+}
