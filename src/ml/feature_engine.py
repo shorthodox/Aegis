@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from typing import Any, Optional, Tuple, List, Dict
 from src.ml.delltandecay import add_delta_and_decay_features
+from src.ml.regime_tools import encode_regime_series, compute_regime_metrics
 
 # ------------------------------------------------------------------
 # Data Cleaning (fix inf/NaN issues for XGBoost)
@@ -173,6 +174,143 @@ def compute_volatility_regime(df: pd.DataFrame, atr_period: int = 14, lookback: 
     atr = compute_atr(df, atr_period)
     atr_mean = atr.rolling(lookback, min_periods=1).mean()
     return atr / (atr_mean + 1e-9)
+
+# ------------------------------------------------------------------
+# Additional structural feature helpers
+# ------------------------------------------------------------------
+
+def compute_ema_slope(series: pd.Series, period: int = 14) -> pd.Series:
+    ema = series.ewm(span=period, adjust=False).mean()
+    return ((ema - ema.shift(1)) / (ema.shift(1).replace(0, np.nan) + 1e-9)).fillna(0.0)
+
+
+def compute_ema_alignment_score(df: pd.DataFrame, periods: list = [9, 21, 50, 100, 200]) -> pd.Series:
+    emas = [df['close'].ewm(span=p, adjust=False).mean() for p in periods]
+    score = pd.Series(0.0, index=df.index)
+    for i in range(len(periods) - 1):
+        score += (emas[i] > emas[i + 1]).astype(float)
+    return (score / float(len(periods) - 1)).fillna(0.0)
+
+
+def compute_ema_stack_distance(df: pd.DataFrame, periods: list = [9, 21, 50, 100, 200]) -> pd.Series:
+    emas = [df['close'].ewm(span=p, adjust=False).mean() for p in periods]
+    close = df['close'].replace(0, np.nan)
+    distances = [((close / ema) - 1).abs() for ema in emas]
+    return pd.concat(distances, axis=1).mean(axis=1).fillna(0.0)
+
+
+def compute_multi_timeframe_trend_agreement(df: pd.DataFrame,
+                                           df_1d: Optional[pd.DataFrame],
+                                           df_1w: Optional[pd.DataFrame]) -> pd.Series:
+    agreement = pd.Series(0.5, index=df.index)
+    parts = []
+    if df_1d is not None and not df_1d.empty:
+        d1 = df_1d['close'].pct_change(5).iloc[-1] if len(df_1d) >= 6 else 0.0
+        parts.append(1.0 if d1 > 0 else 0.0)
+    if df_1w is not None and not df_1w.empty:
+        d7 = df_1w['close'].pct_change(2).iloc[-1] if len(df_1w) >= 3 else 0.0
+        parts.append(1.0 if d7 > 0 else 0.0)
+    if parts:
+        agreement[:] = float(np.mean(parts))
+    return agreement.fillna(0.5)
+
+
+def compute_atr_percentile(df: pd.DataFrame, atr_period: int = 14, lookback: int = 100) -> pd.Series:
+    atr = compute_atr(df, atr_period)
+    return atr.rolling(lookback, min_periods=1).apply(
+        lambda x: float((x <= x.iloc[-1]).sum()) / len(x) if len(x) else 0.5,
+        raw=False,
+    ).fillna(0.5)
+
+
+def compute_atr_expansion(df: pd.DataFrame, atr_period: int = 14, lookback: int = 20) -> pd.Series:
+    atr = compute_atr(df, atr_period)
+    atr_ma = atr.rolling(lookback, min_periods=1).mean()
+    return ((atr / (atr_ma + 1e-9)) - 1.0).fillna(0.0)
+
+
+def compute_realized_volatility(df: pd.DataFrame, period: int = 24, annualize: bool = True) -> pd.Series:
+    log_ret = np.log(df['close'] / df['close'].shift(1)).replace([np.inf, -np.inf], 0.0).fillna(0.0)
+    hv = log_ret.rolling(period, min_periods=1).std()
+    if annualize:
+        hv = hv * np.sqrt(365 * 24)
+    return hv.fillna(0.0)
+
+
+def compute_volatility_ratio(df: pd.DataFrame, current_period: int = 24, lookback: int = 100) -> pd.Series:
+    current = compute_realized_volatility(df, period=current_period, annualize=False)
+    past = current.rolling(lookback, min_periods=1).mean()
+    return ((current / (past + 1e-9)) - 1.0).fillna(0.0)
+
+
+def compute_structure_counts(df: pd.DataFrame, lookback: int = 20) -> pd.DataFrame:
+    hh = (df['high'] > df['high'].shift(1)).astype(float).rolling(lookback, min_periods=1).sum()
+    ll = (df['low'] < df['low'].shift(1)).astype(float).rolling(lookback, min_periods=1).sum()
+    return pd.DataFrame({'higher_high_count': hh.fillna(0.0), 'lower_low_count': ll.fillna(0.0)})
+
+
+def compute_swing_strength(df: pd.DataFrame, lookback: int = 20) -> pd.Series:
+    momentum = df['close'] - df['close'].shift(lookback)
+    avg_range = (df['high'] - df['low']).rolling(lookback, min_periods=1).mean()
+    return (momentum / (avg_range + 1e-9)).fillna(0.0)
+
+
+def compute_rsi_slope(series: pd.Series, period: int = 14) -> pd.Series:
+    return compute_linear_regression_slope(compute_rsi(series, period), period)
+
+
+def compute_rsi_acceleration(series: pd.Series, period: int = 14) -> pd.Series:
+    return compute_rsi_slope(series, period).diff().fillna(0.0)
+
+
+def compute_macd_hist_velocity(df: pd.DataFrame) -> pd.Series:
+    _, _, macd_hist = compute_macd(df['close'])
+    return macd_hist.diff().fillna(0.0)
+
+
+def compute_macd_divergence(df: pd.DataFrame) -> pd.Series:
+    macd, macd_signal, _ = compute_macd(df['close'])
+    return (macd - macd_signal).fillna(0.0)
+
+
+def compute_stoch_slope(df: pd.DataFrame) -> pd.Series:
+    fast_k, _ = compute_stoch_rsi(df['close'], 14)
+    return compute_linear_regression_slope(fast_k, 7)
+
+
+def compute_vwap_slope(df: pd.DataFrame, period: int = 24) -> pd.Series:
+    vwap = compute_vwap(df)
+    return compute_linear_regression_slope(vwap, period)
+
+
+def compute_obv_slope(df: pd.DataFrame, period: int = 20) -> pd.Series:
+    obv = (df['close'].diff().fillna(0).apply(np.sign) * df['volume']).cumsum()
+    return compute_linear_regression_slope(obv, period)
+
+
+def compute_obv_divergence(df: pd.DataFrame, period: int = 24) -> pd.Series:
+    obv = (df['close'].diff().fillna(0).apply(np.sign) * df['volume']).cumsum()
+    price_ret = df['close'].pct_change(period)
+    obv_change = obv.diff(period)
+    return ((price_ret - (obv_change / (df['close'].replace(0, np.nan) + 1e-9))).fillna(0.0))
+
+
+def compute_market_regime(adx: pd.Series,
+                          vol_regime: pd.Series,
+                          ema_alignment: pd.Series,
+                          macro_trend_1d: Optional[pd.Series] = None) -> pd.Series:
+    regime = pd.Series('RANGE', index=adx.index)
+    macro = macro_trend_1d if macro_trend_1d is not None else pd.Series(0.0, index=adx.index)
+    bull = (adx > 25) & (ema_alignment > 0.6) & (macro > 0.0)
+    bear = (adx > 25) & (ema_alignment < 0.4) & (macro < 0.0)
+    high_vol = (vol_regime > 1.2)
+    low_vol = (vol_regime < 0.8)
+    regime[bull] = 'TRENDING_BULL'
+    regime[bear] = 'TRENDING_BEAR'
+    regime[high_vol & ~bull & ~bear] = 'HIGH_VOL'
+    regime[low_vol & ~bull & ~bear] = 'LOW_VOL'
+    regime[(~bull & ~bear & ~high_vol & ~low_vol)] = 'RANGE'
+    return regime
 
 # ==================== NEW INDICATORS ====================
 
@@ -393,8 +531,14 @@ def add_futures_features(df: pd.DataFrame,
             (df['open_interest'] - df['open_interest'].rolling(lb, min_periods=24).mean()) /
             (df['open_interest'].rolling(lb, min_periods=24).std() + 1e-9)
         )
+        df['oi_acceleration'] = df['oi_change_1h'].diff().fillna(0.0)
+        df['oi_price_divergence'] = (
+            df['close'].pct_change(4).fillna(0.0) - df['oi_change_4h'].fillna(0.0)
+        )
+        df['oi_long_short_pressure'] = (df['open_interest'] * np.sign(df['close'].diff().fillna(0.0))).fillna(0.0)
     else:
-        df[['open_interest', 'oi_change_1h', 'oi_change_4h', 'oi_zscore']] = 0.0
+        df[['open_interest', 'oi_change_1h', 'oi_change_4h', 'oi_zscore',
+             'oi_acceleration', 'oi_price_divergence', 'oi_long_short_pressure']] = 0.0
 
     return df
 
@@ -1712,19 +1856,33 @@ def prepare_features(df: pd.DataFrame,
     compiled_features['log_returns'] = pd.Series(np.log(df['close'] / df['close'].shift(1)), index=df.index)
 
     # ----- Price Momentum & EMA Cluster -----
-    for p in [9, 21, 50, 100, 200]:
+    ema_periods = [9, 21, 50, 100, 200]
+    for p in ema_periods:
         ema = df['close'].ewm(span=p, adjust=False).mean()
         compiled_features[f'ema_{p}'] = ema
         compiled_features[f'dist_ema_{p}'] = (df['close'] / ema) - 1
+        compiled_features[f'ema_slope_{p}'] = compute_ema_slope(df['close'], period=p)
 
     compiled_features['ema_9_21_cross'] = (compiled_features['ema_9'] > compiled_features['ema_21']).astype(int)
     compiled_features['ema_50_200_cross'] = (compiled_features['ema_50'] > compiled_features['ema_200']).astype(int)
+    compiled_features['ema_stack_alignment'] = compute_ema_alignment_score(df, periods=ema_periods)
+    compiled_features['ema_stack_distance'] = compute_ema_stack_distance(df, periods=ema_periods)
+
+    if df_1d is not None or df_1w is not None:
+        compiled_features['multi_tf_trend_agreement'] = compute_multi_timeframe_trend_agreement(df, df_1d, df_1w)
+    else:
+        compiled_features['multi_tf_trend_agreement'] = pd.Series(0.5, index=df.index)
 
     # ----- Oscillators (Momentum) -----
     compiled_features['rsi_14'] = compute_rsi(df['close'], 14)
+    compiled_features['rsi_slope_14'] = compute_rsi_slope(df['close'], 14)
+    compiled_features['rsi_acceleration_14'] = compute_rsi_acceleration(df['close'], 14)
     compiled_features['mfi_14'] = compute_mfi(df, 14)
     compiled_features['stoch_k'], compiled_features['stoch_d'] = compute_stoch_rsi(df['close'], 14)
+    compiled_features['stoch_slope'] = compute_stoch_slope(df)
     compiled_features['macd'], compiled_features['macd_signal'], compiled_features['macd_hist'] = compute_macd(df['close'])
+    compiled_features['macd_hist_velocity'] = compute_macd_hist_velocity(df)
+    compiled_features['macd_divergence'] = compute_macd_divergence(df)
 
     # ----- Volume & Liquidity -----
     compiled_features['vwap'] = compute_vwap(df)
@@ -1741,11 +1899,15 @@ def prepare_features(df: pd.DataFrame,
     compiled_features['vol_velocity'] = df['volume'].pct_change(3)
     compiled_features['volume_zscore'] = (df['volume'] - df['volume'].rolling(20).mean()) / df['volume'].rolling(20).std()
     compiled_features['relative_volume'] = df['volume'] / (df['volume'].rolling(20, min_periods=1).mean() + 1e-9)
+    compiled_features['volume_acceleration'] = compiled_features['relative_volume'].diff().fillna(0.0)
     compiled_features['rolling_volatility'] = compiled_features['log_returns'].rolling(24, min_periods=1).std()
+    compiled_features['vwap_slope_24'] = compute_vwap_slope(df, period=24)
     _obv_raw = df['close'].diff().apply(np.sign).mul(df['volume']).fillna(0).cumsum()
     _obv_mean = _obv_raw.rolling(100, min_periods=20).mean()
     _obv_std  = _obv_raw.rolling(100, min_periods=20).std().replace(0, np.nan).ffill().fillna(1.0)
     compiled_features['obv'] = ((_obv_raw - _obv_mean) / _obv_std).fillna(0.0)
+    compiled_features['obv_slope_20'] = compute_obv_slope(df, period=20)
+    compiled_features['obv_divergence'] = compute_obv_divergence(df, period=24)
     compiled_features['acc_dist'] = compute_accumulation_distribution(df)
 
     # ----- Volume Delta (CVD proxy) -----
@@ -1778,6 +1940,10 @@ def prepare_features(df: pd.DataFrame,
     # ----- Volatility & Statistics -----
     compiled_features['atr_14'] = compute_atr(df, 14)
     compiled_features['atr_pct'] = (compiled_features['atr_14'] / df['close'].replace(0, np.nan)).fillna(0.0)
+    compiled_features['atr_percentile'] = compute_atr_percentile(df, atr_period=14, lookback=100)
+    compiled_features['atr_expansion'] = compute_atr_expansion(df, atr_period=14, lookback=20)
+    compiled_features['realized_volatility'] = compute_realized_volatility(df, period=24)
+    compiled_features['volatility_ratio'] = compute_volatility_ratio(df, current_period=24, lookback=100)
     compiled_features['volatility_skew'] = df['close'].rolling(24).skew()
     compiled_features['volatility_kurt'] = df['close'].rolling(24).kurt()
     compiled_features['historical_volatility'] = compute_historical_volatility(df, period=24)
@@ -1791,6 +1957,10 @@ def prepare_features(df: pd.DataFrame,
     compiled_features['volume_atr_efficiency'] = compute_volume_volatility_efficiency(df)
     compiled_features['price_zscore_200'] = compute_price_zscore(df, 200)
     compiled_features['volatility_regime'] = compute_volatility_regime(df, atr_period=14, lookback=100)
+    compiled_features['higher_high_count_20'] = compute_structure_counts(df, lookback=20)['higher_high_count']
+    compiled_features['lower_low_count_20'] = compute_structure_counts(df, lookback=20)['lower_low_count']
+    compiled_features['swing_strength_20'] = compute_swing_strength(df, lookback=20)
+    compiled_features['structure_bias'] = (compiled_features['higher_high_count_20'] - compiled_features['lower_low_count_20']) / 20.0
 
     # ----- Return Lags -----
     for h in [1, 4, 12, 24]:
@@ -2049,6 +2219,55 @@ def prepare_features(df: pd.DataFrame,
     df['trend_regime'] = classify_trend_regime(df['adx_14'], threshold_trend=25, threshold_weak=20)
     df['volume_regime'] = classify_volume_regime(df['volume_zscore'], high_threshold=2.0, low_threshold=-1.0)
     df['market_phase'] = classify_market_phase(df['trend_regime'], df['volatility_regime'])
+    df['multi_tf_trend_agreement'] = compiled_features.get('multi_tf_trend_agreement', pd.Series(0.5, index=df.index))
+    df['market_regime'] = compute_market_regime(
+        df['adx_14'],
+        df['volatility_regime'],
+        compiled_features['ema_stack_alignment'],
+        df.get('macro_trend_1d') if 'macro_trend_1d' in df.columns else None,
+    )
+    # Safe encoding: one-hot + numeric code + unknown handling
+    try:
+        onehot, vocab = encode_regime_series(df['market_regime'])
+        # merge one-hot columns into df
+        for c in onehot.columns:
+            df[c] = onehot[c].values
+        # derive a numeric regime confidence mapping if not present
+        if 'regime_confidence' not in df.columns:
+            mapping = {
+                'TRENDING_BULL': 0.90,
+                'TRENDING_BEAR': 0.90,
+                'HIGH_VOL': 0.75,
+                'LOW_VOL': 0.75,
+                'RANGE': 0.60,
+            }
+            df['regime_confidence'] = df['market_regime'].map(mapping).fillna(0.50)
+    except Exception:
+        # Fall back to previous conservative behaviour
+        df['regime_confidence'] = df['market_regime'].map({
+            'TRENDING_BULL': 0.90,
+            'TRENDING_BEAR': 0.90,
+            'HIGH_VOL': 0.75,
+            'LOW_VOL': 0.75,
+            'RANGE': 0.60,
+        }).fillna(0.50)
+        for regime in ['TRENDING_BULL', 'TRENDING_BEAR', 'RANGE', 'HIGH_VOL', 'LOW_VOL']:
+            df[f'regime_{regime.lower()}'] = (df['market_regime'] == regime).astype(int)
+
+    # Compute rolling regime performance metrics (historical-only)
+    try:
+        regime_metrics = compute_regime_metrics(df, timestamp_col='timestamp', symbol_col='symbol',
+                                                regime_col='market_regime', outcome_col='returns_1h',
+                                                window_days=90)
+        for col in regime_metrics.columns:
+            df[col] = regime_metrics[col].values
+    except Exception:
+        # If metrics computation fails, fill conservative defaults
+        df['regime_quality_score'] = 0.0
+        df['regime_expectancy'] = 0.0
+        df['regime_win_rate'] = 0.0
+        df['regime_pf'] = 0.0
+        df['regime_sharpe'] = 0.0
 
     # ----- Target (optional) -----
     if add_target_flag:

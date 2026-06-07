@@ -445,11 +445,57 @@ class HMMRegimeEngine:
             return X
         return (X - self._scaler_mean) / self._scaler_std
 
+    def _select_state_count(self, X: np.ndarray) -> Tuple[int, Optional[Any]]:
+        """Choose the HMM state count with the best information criterion."""
+        n = len(X)
+        if n < 300:
+            candidates = [4, 5, 6]
+        elif n < 900:
+            candidates = [5, 6, 7, 8]
+        else:
+            candidates = [5, 6, 7, 8, 9]
+
+        best_bic = np.inf
+        best_model = None
+        best_k = self.N_STATES
+        # minimum fraction of observations required per state (avoid tiny regimes)
+        MIN_STATE_FRAC = 0.01
+
+        for k in candidates:
+            try:
+                candidate = GaussianHMM(
+                    n_components    = k,
+                    covariance_type = 'diag',
+                    n_iter          = self.N_ITER,
+                    tol             = 1e-4,
+                    random_state    = 42,
+                    verbose         = False,
+                )
+                candidate.fit(X)
+                # Reject candidate models that create extremely small states
+                states = candidate.predict(X)
+                counts = np.bincount(states, minlength=k)
+                frac = counts / len(states)
+                if (frac < MIN_STATE_FRAC).any():
+                    # skip models with tiny states to avoid noisy regime cardinality
+                    continue
+                ll = float(candidate.score(X))
+                n_params = k * (k - 1) + (k - 1) + 2 * k * X.shape[1]
+                bic = -2.0 * ll + n_params * np.log(n)
+                if bic < best_bic:
+                    best_bic = bic
+                    best_model = candidate
+                    best_k = k
+            except Exception:
+                continue
+
+        return best_k, best_model
+
     # ── Training ──────────────────────────────────────────────────────────────
 
     def train(self, df: pd.DataFrame) -> bool:
         """
-        Train a 7-state GaussianHMM on the given DataFrame.
+        Train a GaussianHMM on the given DataFrame.
         Returns True if training succeeded, False otherwise.
 
         Caller: retrain_model.py / scripts/train_hmm.py
@@ -472,29 +518,25 @@ class HMMRegimeEngine:
         self._fit_scaler(X_raw)
         X = self._scale(X_raw)
 
+        selected_states, candidate = self._select_state_count(X)
+        if candidate is None:
+            print(f'[HMM:{self.symbol}] Failed to select a stable state count; training aborted')
+            return False
+
+        self.N_STATES = selected_states
         try:
-            hmm = GaussianHMM(
-                n_components    = self.N_STATES,
-                covariance_type = 'diag',    # fewer params → stable on 3k–7k bars
-                n_iter          = self.N_ITER,
-                tol             = 1e-4,
-                random_state    = 42,
-                verbose         = False,
-            )
-            hmm.fit(X)
-            self._hmm = hmm
-            self._state_labels = _map_states_to_labels(hmm)
+            self._hmm = candidate
+            self._state_labels = _map_states_to_labels(self._hmm)
             self._loaded = True
 
-            # State distribution for diagnostics
-            states = hmm.predict(X)
-            dist   = np.bincount(states, minlength=self.N_STATES) / len(states)
+            states = self._hmm.predict(X)
+            dist = np.bincount(states, minlength=self.N_STATES) / len(states)
             dist_str = ' '.join(
                 f"{self._state_labels.get(i, str(i))}:{d:.1%}"
                 for i, d in enumerate(dist)
             )
-            print(f'[HMM:{self.symbol}] Trained on {len(X)} bars. '
-                  f'Log-likelihood: {hmm.score(X):.1f}. States: {dist_str}')
+            print(f'[HMM:{self.symbol}] Trained on {len(X)} bars with {self.N_STATES} states. '
+                  f'Log-likelihood: {self._hmm.score(X):.1f}. States: {dist_str}')
             return True
         except Exception as e:
             print(f'[HMM:{self.symbol}] Training failed: {e}')
@@ -529,6 +571,7 @@ class HMMRegimeEngine:
             self._scaler_mean   = payload['scaler_mean']
             self._scaler_std    = payload['scaler_std']
             self._state_labels  = payload['state_labels']
+            self.N_STATES       = payload.get('n_states', self.N_STATES)
             self._loaded        = True
             return True
         except Exception as e:

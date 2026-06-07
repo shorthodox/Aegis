@@ -498,10 +498,13 @@ class AEGISForensicEngine:
 
         # ── Quality score: prc_total × 100 (0-100) ───────────────────────────
         if "prc_total" in df.columns:
-            quality = df["prc_total"].values * 100.0
+            prc_val = df["prc_total"].values
+            quality = np.where(proposed == 2, prc_val * 100.0, (1.0 - prc_val) * 100.0)
         elif "total_confluence" in df.columns:
             tc = df["total_confluence"].values.astype(float)
-            quality = np.clip((tc + 10.0) / 20.0 * 100.0, 0.0, 100.0)
+            quality = np.where(proposed == 2,
+                               np.clip((tc + 10.0) / 20.0 * 100.0, 0.0, 100.0),
+                               np.clip((10.0 - tc) / 20.0 * 100.0, 0.0, 100.0))
         else:
             quality = np.full(N, 60.0)
 
@@ -524,19 +527,69 @@ class AEGISForensicEngine:
         dir_mask = primary_map != 1   # bars where primary_map is BUY(2) or SELL(0)
 
         # ── Filter cascade ────────────────────────────────────────────────────
+        from src.trading.edge_engine import EdgeScoringEngine
+        edge_buy = EdgeScoringEngine.compute_edge_batch(df, meta_conf, 'BUY').to_numpy()
+        edge_sell = EdgeScoringEngine.compute_edge_batch(df, meta_conf, 'SELL').to_numpy()
+        edge_score = np.where(proposed == 2, edge_buy, edge_sell)
+        
         thr_buy  = float(self.meta.get("meta_threshold_buy",
-                         self.meta.get("meta_threshold", 0.6)))
+                         self.meta.get("meta_threshold", 55.0)))
         thr_sell = float(self.meta.get("meta_threshold_sell",
-                         self.meta.get("meta_threshold", 0.6)))
+                         self.meta.get("meta_threshold", 55.0)))
         thr      = np.where(proposed == 2, thr_buy, thr_sell)
 
-        meta_pass      = meta_conf >= thr
+        meta_pass      = edge_score >= thr
         quality_pass   = quality >= QUALITY_THRESHOLD
+
+        # Apply regime thresholds and skipped check to HMM pass
+        regime_thresholds = self.meta.get("regime_thresholds", {})
+        bounds = self.meta.get("regime_boundaries", {})
+        if regime_thresholds and bounds:
+            vol_avg = df["volume"].rolling(24, min_periods=1).mean()
+            atr_pct = (df["_atr"] / df["close"]).fillna(0)
+            momentum = df["close"].pct_change(24).fillna(0)
+            
+            def _tier(val, p33, p67): return "low" if val <= p33 else ("med" if val <= p67 else "high")
+            def _trend(val, p33, p67): return "down" if val <= p33 else ("flat" if val <= p67 else "up")
+            
+            vp33, vp67 = bounds.get("vol_p33", 0), bounds.get("vol_p67", 0)
+            ap33, ap67 = bounds.get("atr_pct_p33", 0), bounds.get("atr_pct_p67", 0)
+            mp33, mp67 = bounds.get("momentum_p33", -0.02), bounds.get("momentum_p67", 0.02)
+            
+            for i in range(N):
+                r_str = f"{_tier(vol_avg.iloc[i], vp33, vp67)}_{_tier(atr_pct.iloc[i], ap33, ap67)}_{_trend(momentum.iloc[i], mp33, mp67)}"
+                reg = regime_thresholds.get(r_str, {})
+                if not reg:
+                    continue
+                if reg.get("skipped"):
+                    hmm_trade_allowed[i] = False
+                    continue
+                
+                side = proposed[i]
+                p_sell, p_hold, p_buy = float(proba[i, 0]), float(proba[i, 1]), float(proba[i, 2])
+                if side == 2:
+                    if (not reg.get("buy_ok")
+                            or p_buy < reg.get("buy_threshold", 0.0)
+                            or (p_buy - p_sell) < reg.get("buy_margin", 0.0)
+                            or p_hold > reg.get("buy_max_hold", 1.0)):
+                        hmm_trade_allowed[i] = False
+                elif side == 0:
+                    if (not reg.get("sell_ok")
+                            or p_sell < reg.get("sell_threshold", 0.0)
+                            or (p_sell - p_buy) < reg.get("sell_margin", 0.0)
+                            or p_hold > reg.get("sell_max_hold", 1.0)):
+                        hmm_trade_allowed[i] = False
+
         hmm_pass       = hmm_trade_allowed
 
         # Confluence pass: BUY needs bullish scorecard (prc_total > 0.52),
         # SELL needs bearish (prc_total < 0.48)
-        if "prc_total" in df.columns:
+        disabled_filters = self.meta.get("disabled_filters", {})
+        disable_confluence = disabled_filters.get("confluence", False)
+        
+        if disable_confluence:
+            conf_pass = np.ones(N, dtype=bool)
+        elif "prc_total" in df.columns:
             prc = df["prc_total"].values
             conf_pass = np.where(proposed == 2, prc > 0.52, prc < 0.48)
         else:

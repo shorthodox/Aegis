@@ -149,25 +149,32 @@ class RegimeConfidenceModifier:
                     gl = float(abs(ra[ra < 0].sum())) if (ra < 0).any() else 1e-9
                     pf = gw / gl
 
-            # Expectancy-aware: find best threshold for this regime
+            # Expectancy-aware: find the most permissive threshold for this regime
+            # that still achieves the target precision, or the best precision/volume
+            # tradeoff if the target is unreachable.
             opt_thr = base_threshold
-            thresholds = np.concatenate([
-                np.linspace(base_threshold, 0.95, 28),   # fine sweep up
-                [0.40, 0.45],                              # below-base fallbacks
-            ])
-            thresholds = np.sort(np.unique(thresholds))
+            max_thr = min(0.99, float(np.nanmax(mp)) if len(mp) else 0.95)
+            thresholds = np.sort(np.unique(np.concatenate([
+                np.linspace(base_threshold, max_thr, 40),
+                np.quantile(mp, [0.80, 0.85, 0.90, 0.95]) if len(mp) else np.array([])
+            ])))
+            regime_min_fires = max(_MIN_FIRES, int(len(mp) * 0.10))
 
-            best_prec = 0.0
+            best_metric = -np.inf
             for t in thresholds:
                 f = (mp >= t) & ((pr == 2) | (pr == 0))
                 n = f.sum()
-                if n < _MIN_FIRES:
+                if n < regime_min_fires:
                     continue
                 p = float((pr[f] == yt_r[f]).mean())
                 if p >= self.target_precision:
-                    opt_thr   = float(t)
-                    best_prec = p
-                    break   # first (most permissive) threshold that meets target
+                    opt_thr = float(t)
+                    break
+
+                metric = p * np.sqrt(n)
+                if metric > best_metric:
+                    best_metric = metric
+                    opt_thr = float(t)
 
             # Modifier: learned from observed vs global precision gap
             modifier = float(np.clip(prec_base - self._global_precision, -0.30, 0.20))

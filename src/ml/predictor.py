@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any, Tuple, cast
 
 from src.trading.edge_engine import EdgeScoringEngine
+from src.ml.advanced_ranking import compute_composite_edge
 
 logger = logging.getLogger(__name__)
 
@@ -50,8 +51,9 @@ class Predictor:
     _FG_CACHE: Dict[str, Any] = {}   # keys: 'df', 'fetched_at'
     _FG_CACHE_TTL: int = 21600       # 6 hours
 
-    def __init__(self, symbol: str):
+    def __init__(self, symbol: str, use_clean_model: bool = False):
         self.symbol = symbol
+        self.use_clean_model = use_clean_model
         
         if Predictor._SHARED_SPOT_EX is None:
             Predictor._SHARED_SPOT_EX = ccxt.binance({'enableRateLimit': True, 'timeout': 10000})
@@ -73,7 +75,13 @@ class Predictor:
     # -------------------------------------------------------------
     def load_model(self):
         base = self.symbol.replace('/', '_')
-        primary_path = model_store / f"{base}_model.json"
+        if getattr(self, 'use_clean_model', False):
+            primary_path = model_store / f"{base}_model_clean.json"
+            if not primary_path.exists():
+                primary_path = model_store / f"{base}_model.json"
+        else:
+            primary_path = model_store / f"{base}_model.json"
+            
         sidecar_path = model_store / f"{base}_meta.json"
 
         if not primary_path.exists():
@@ -99,6 +107,19 @@ class Predictor:
                 self.meta_model = xgb.Booster()
                 self.meta_model.load_model(str(meta_path))
                 logger.info(f"Meta model loaded: {meta_path.name}")
+        # Lightweight meta model (pickle, e.g. logistic) if present
+        meta_light_file = self.meta.get("meta_model_light_file")
+        self.meta_model_light = None
+        if meta_light_file:
+            meta_light_path = model_store / meta_light_file
+            if meta_light_path.exists():
+                try:
+                    import pickle
+                    with open(meta_light_path, 'rb') as f:
+                        self.meta_model_light = pickle.load(f)
+                    logger.info(f"Lightweight meta model loaded: {meta_light_path.name}")
+                except Exception as e:
+                    logger.warning(f"Could not load lightweight meta model: {e}")
                 
         # Load AEGIS state
         aegis_state_file = self.meta.get("aegis_state_path")
@@ -408,7 +429,23 @@ class Predictor:
     # -------------------------------------------------------------
     def _align(self, df_features: pd.DataFrame, cols) -> pd.DataFrame:
         X = df_features.drop(columns=['timestamp', 'target'], errors='ignore')
-        return X.reindex(columns=list(cols), fill_value=0)
+        X = X.reindex(columns=list(cols), fill_value=0).copy()
+        
+        # Apply feature transforms saved in the sidecar
+        transforms = self.meta.get("feature_transforms", {})
+        if transforms:
+            for col, t in transforms.items():
+                if col in X.columns:
+                    t_type = t.get("type")
+                    if t_type == "zscore":
+                        mean_val = float(t.get("mean", 0.0))
+                        std_val = float(t.get("std", 1.0))
+                        X[col] = (X[col] - mean_val) / (std_val + 1e-8)
+                    elif t_type == "minmax":
+                        min_val = float(t.get("min", 0.0))
+                        max_val = float(t.get("max", 1.0))
+                        X[col] = (X[col] - min_val) / (max_val - min_val + 1e-8)
+        return X
 
     @staticmethod
     def _apply_temperature(probs: np.ndarray, T: float) -> np.ndarray:
@@ -419,6 +456,107 @@ class Predictor:
         e = np.exp(logits)
         return e / e.sum(axis=1, keepdims=True)
 
+    @staticmethod
+    def _probability_diagnostics(proba: np.ndarray) -> Dict[str, Any]:
+        proba = np.clip(proba, 1e-12, 1 - 1e-12)
+        max_prob = np.max(proba, axis=1)
+        entropy = -np.sum(proba * np.log(proba), axis=1)
+        uniq = int(len(np.unique(np.round(proba.flatten(), 8))))
+        compression = uniq / float(proba.size or 1)
+        return {
+            'confidence': float(np.mean(max_prob)),
+            'uncertainty': float(np.mean(1.0 - max_prob)),
+            'average_entropy': float(np.mean(entropy)),
+            'last_confidence': float(max_prob[-1]),
+            'last_entropy': float(entropy[-1]),
+            'unique_probability_count': uniq,
+            'compression_ratio': float(compression),
+            'coverage': float((max_prob >= 0.5).mean()),
+            'p_sell': float(proba[-1, 0]),
+            'p_hold': float(proba[-1, 1]),
+            'p_buy': float(proba[-1, 2]),
+        }
+
+    def _compute_regime_confidence(self, df_features: pd.DataFrame) -> float:
+        if 'regime_confidence' in df_features.columns:
+            try:
+                return float(df_features['regime_confidence'].iloc[-1])
+            except Exception:
+                pass
+        regime = None
+        if 'market_regime' in df_features.columns:
+            regime = df_features['market_regime'].iloc[-1]
+        mapping = {
+            'TRENDING_BULL': 0.90,
+            'TRENDING_BEAR': 0.90,
+            'HIGH_VOL': 0.75,
+            'LOW_VOL': 0.75,
+            'RANGE': 0.60,
+        }
+        return float(mapping.get(regime, 0.60))
+
+    def _compute_edge_score(self, probability: float, base_rate: float, confidence: float, regime_confidence: float, df_features=None) -> float:
+        """Compute a base edge score and augment with regime quality and feature stability when available.
+
+        Backward-compatible: original signature preserved but `df_features` may be passed.
+        """
+        # Base edge: delta probability scaled by confidences
+        base = float((probability - base_rate) * confidence * regime_confidence)
+        # Build components for composite ranking (use available features, fallback conservative)
+        try:
+            sig_strength = 0.5
+            if df_features is not None:
+                for c in ['signal_strength_score', 'total_confluence', 'prc_total']:
+                    if c in df_features.columns:
+                        sig_strength = float(df_features[c].iloc[-1])
+                        break
+            edge_rank = float(self.meta.get('edge_rank', 0.5))
+            regime_quality = 0.0
+            if df_features is not None and 'regime_quality_score' in df_features.columns:
+                regime_quality = float(df_features['regime_quality_score'].iloc[-1])
+            else:
+                regime_quality = float(self.meta.get('regime_quality_score', 0.0)) if self.meta else 0.0
+            stability = float(self.meta.get('feature_stability_avg', 0.0))
+            vol_w = 0.5
+            if df_features is not None and 'historical_volatility' in df_features.columns:
+                # normalize volatility to [0,1] via simple clamp
+                v = float(df_features['historical_volatility'].iloc[-1])
+                vol_w = max(0.0, min(1.0, 1.0 - (v / (v + 1.0))))
+            trend = 0.5
+            if df_features is not None and 'ema_alignment' in df_features.columns:
+                trend = float(df_features['ema_alignment'].iloc[-1])
+
+            composite = compute_composite_edge(probability, sig_strength, edge_rank,
+                                               regime_quality, stability, vol_w, trend)
+            # Blend base * composite to produce final edge score
+            final = float(0.6 * base + 0.4 * (composite - 0.5))
+            return final
+        except Exception:
+            return float(base)
+
+    @staticmethod
+    def _calibration_health_report(proba: np.ndarray) -> Dict[str, Any]:
+        proba = np.clip(proba, 1e-12, 1 - 1e-12)
+        max_prob = np.max(proba, axis=1)
+        entropy = -np.sum(proba * np.log(proba), axis=1)
+        return {
+            'coverage': float((max_prob >= 0.5).mean()),
+            'average_entropy': float(np.mean(entropy)),
+            'last_entropy': float(entropy[-1]),
+            'unique_probability_count': int(len(np.unique(np.round(proba.flatten(), 8)))),
+            'compression_ratio': float(len(np.unique(np.round(proba.flatten(), 8))) / float(proba.size or 1)),
+        }
+
+    @staticmethod
+    def _check_probability_quality(diag: Dict[str, Any]) -> bool:
+        if diag['confidence'] > 0.98 and diag['last_entropy'] < 0.12 and diag['compression_ratio'] < 0.01:
+            return False
+        if diag['coverage'] < 0.15:
+            return False
+        if diag['average_entropy'] > 1.3 and diag['confidence'] < 0.52:
+            return False
+        return True
+
     def predict_proba(self, df_features: pd.DataFrame) -> np.ndarray:
         """3-class primary probabilities (n, 3), temperature-calibrated."""
         if self.model is None:
@@ -428,11 +566,23 @@ class Predictor:
             feat_cols = self.model.feature_names
         X = self._align(df_features, feat_cols)
         dm = xgb.DMatrix(X, feature_names=list(X.columns))
-        proba = self.model.predict(dm)
-        if proba.ndim == 1:  # safety, shouldn't happen for multi:softprob
-            proba = np.column_stack([1 - proba, np.zeros_like(proba), proba])
+        raw_proba = self.model.predict(dm)
+        if raw_proba.ndim == 1:  # safety, shouldn't happen for multi:softprob
+            raw_proba = np.column_stack([1 - raw_proba, np.zeros_like(raw_proba), raw_proba])
         T = float(self.meta.get("calibration_temperature", 1.0))
-        return self._apply_temperature(proba, T)
+        calibrated = self._apply_temperature(raw_proba, T)
+        diag = self._probability_diagnostics(calibrated)
+        if not self._check_probability_quality(diag) and abs(T - 1.0) > 1e-6:
+            logger.warning(
+                f"Calibration quality degraded for {self.symbol}: "
+                f"confidence={diag['confidence']:.3f}, entropy={diag['average_entropy']:.3f}, "
+                f"coverage={diag['coverage']:.3f}, compression={diag['compression_ratio']:.4f}. "
+                "Falling back to T=1.0."
+            )
+            calibrated = self._apply_temperature(raw_proba, 1.0)
+            diag = self._probability_diagnostics(calibrated)
+        self.meta['calibration_health'] = self._calibration_health_report(calibrated)
+        return calibrated
 
     def predict_meta_batch(self, df_features: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
         """Run primary + meta models on the full dataframe (batch, no lookahead).
@@ -443,6 +593,16 @@ class Predictor:
         meta_conf : ndarray (n,)    — meta model confidence per row
                     (falls back to max primary prob when meta model absent)
         """
+        # Ensure hmm_regime is populated
+        if 'hmm_regime' not in df_features.columns:
+            df_features = df_features.copy()
+            try:
+                from src.ml.hmm_regime import get_pool as _hmm_pool
+                hmm_state = _hmm_pool().infer(self.symbol, df_features)
+                df_features['hmm_regime'] = hmm_state.regime
+            except Exception:
+                df_features['hmm_regime'] = 'UNKNOWN'
+
         proba = self.predict_proba(df_features)          # (n, 3)
         if self.meta_model is None:
             return proba, proba.max(axis=1)
@@ -453,12 +613,26 @@ class Predictor:
         )
         base = self._align(df_features, feat_cols).copy()
 
+        # Copy any meta-model specific columns from df_features if they exist
+        if mcols:
+            for col in mcols:
+                if col in df_features.columns and col not in base.columns:
+                    base[col] = df_features[col].values
+
         if mcols and any(c.startswith("_p_") for c in mcols):
             base["_p_sell"]    = proba[:, 0]
             base["_p_hold"]    = proba[:, 1]
             base["_p_buy"]     = proba[:, 2]
             base["_p_max"]     = proba.max(axis=1)
             base["_p_dir_gap"] = np.abs(proba[:, 2] - proba[:, 0])
+
+        if mcols and 'hmm_regime_encoded' in mcols:
+            hmm_map = {
+                'UNKNOWN': 0, 'CHOPPY': 1, 'ACCUMULATION': 2, 'DISTRIBUTION': 3,
+                'COMPRESSION': 4, 'VOLATILE_EXPANSION': 5, 'TRENDING_BULL': 6, 'TRENDING_BEAR': 7
+            }
+            hmm_regime_s = df_features['hmm_regime'] if 'hmm_regime' in df_features.columns else pd.Series('UNKNOWN', index=df_features.index)
+            base['hmm_regime_encoded'] = hmm_regime_s.map(hmm_map).fillna(0).astype(float).values
 
         if mcols:
             base = base.reindex(columns=mcols, fill_value=0)
@@ -498,6 +672,24 @@ class Predictor:
         last = proba[-1]
         side = 2 if last[2] >= last[0] else 0          # BUY vs SELL proposal
         side_name = "BUY" if side == 2 else "SELL"
+        probability_diag = self._probability_diagnostics(proba)
+        regime_confidence = self._compute_regime_confidence(df_features)
+        base_rate = float(self.meta.get('base_rate', 0.5))
+        model_probability = float(last[2] if side == 2 else last[0])
+        computed_edge_score = self._compute_edge_score(model_probability, base_rate,
+                                 probability_diag['confidence'], regime_confidence,
+                                 df_features=df_features)
+        calibration_health = self.meta.get('calibration_health', self._calibration_health_report(proba))
+
+        # Ensure hmm_regime is populated
+        if 'hmm_regime' not in df_features.columns:
+            df_features = df_features.copy()
+            try:
+                from src.ml.hmm_regime import get_pool as _hmm_pool
+                hmm_state = _hmm_pool().infer(self.symbol, df_features)
+                df_features['hmm_regime'] = hmm_state.regime
+            except Exception:
+                df_features['hmm_regime'] = 'UNKNOWN'
 
         # meta confidence for the last bar (score last row only — no need for full history)
         if self.meta_model is not None:
@@ -506,18 +698,47 @@ class Predictor:
                 self.model.feature_names if self.model else []
             )
             base = self._align(df_features.iloc[[-1]], feat_cols)
+            
+            # Copy any meta-model specific columns from df_features if they exist
+            if mcols:
+                base = base.copy()
+                for col in mcols:
+                    if col in df_features.columns and col not in base.columns:
+                        base[col] = df_features[col].iloc[-1]
+
             if mcols and any(c.startswith('_p_') for c in mcols):
-                # backward compat: old models that include primary probs as meta features
                 base = base.copy()
                 base['_p_sell'] = float(last[0])
                 base['_p_hold'] = float(last[1])
                 base['_p_buy'] = float(last[2])
                 base['_p_max'] = float(last.max())
                 base['_p_dir_gap'] = float(abs(last[2] - last[0]))
+
+            if mcols and 'hmm_regime_encoded' in mcols:
+                base = base.copy()
+                hmm_map = {
+                    'UNKNOWN': 0, 'CHOPPY': 1, 'ACCUMULATION': 2, 'DISTRIBUTION': 3,
+                    'COMPRESSION': 4, 'VOLATILE_EXPANSION': 5, 'TRENDING_BULL': 6, 'TRENDING_BEAR': 7
+                }
+                hmm_regime_val = df_features['hmm_regime'].iloc[-1] if 'hmm_regime' in df_features.columns else 'UNKNOWN'
+                base['hmm_regime_encoded'] = float(hmm_map.get(hmm_regime_val, 0))
+
             if mcols:
                 base = base.reindex(columns=mcols, fill_value=0)
-            meta_conf = float(self.meta_model.predict(
-                xgb.DMatrix(base, feature_names=list(base.columns)))[0])
+            # Prefer lightweight meta model when available
+            if getattr(self, 'meta_model_light', None) is not None:
+                try:
+                    import numpy as _np
+                    if hasattr(self.meta_model_light, 'predict_proba'):
+                        meta_conf = float(self.meta_model_light.predict_proba(base)[:, 1][0])
+                    else:
+                        meta_conf = float(self.meta_model_light.predict(base)[0])
+                except Exception:
+                    meta_conf = float(self.meta_model.predict(
+                        xgb.DMatrix(base, feature_names=list(base.columns)))[0]) if getattr(self, 'meta_model', None) is not None else float(last.max())
+            else:
+                meta_conf = float(self.meta_model.predict(
+                    xgb.DMatrix(base, feature_names=list(base.columns)))[0])
                 
             # AEGIS calibration & confidence adjustment
             if getattr(self, 'aegis_state', None) is not None:
@@ -553,20 +774,69 @@ class Predictor:
             }
 
         # ── Edge-Driven Trade Gate ────────────────────────────────────────────
-        # We no longer rely on a static precision threshold that starves the bot.
-        # Compute the edge score using the new EdgeScoringEngine.
-        
-        edge_scores = EdgeScoringEngine.compute_edge_batch(
-            df_features.iloc[[-1]], 
-            np.array([meta_conf]), 
-            side_name
+        # Compute the percentile-ranked edge score when configured, otherwise
+        # preserve the original batch-style edge score.
+        dir_probs = proba[:, 2] if side == 2 else proba[:, 0]
+        edge_rank_df = EdgeScoringEngine.compute_edge_rank_batch(
+            df_features,
+            dir_probs,
+            side_name,
         )
-        edge_score = float(edge_scores.iloc[0])
+        edge_rank = float(edge_rank_df['edge_rank'].iloc[-1])
+        edge_percentile = float(edge_rank_df['edge_percentile'].iloc[-1])
+        if self.meta.get('edge_rank_mode', 'raw') == 'percentile':
+            edge_score = float(edge_rank_df['edge_percentile_100'].iloc[-1])
+        else:
+            edge_scores = EdgeScoringEngine.compute_edge_batch(
+                df_features.iloc[[-1]],
+                np.array([meta_conf]),
+                side_name,
+            )
+            edge_score = float(edge_scores.iloc[0])
+        # Preserve the edge score from the new diagnostics pipeline for reporting.
+        if 'edge_multiplier' in self.meta:
+            edge_score = edge_score * float(self.meta.get('edge_multiplier', 1.0))
         
-        MINIMUM_EDGE = 55.0
-        thr = MINIMUM_EDGE
+        # Select threshold based on side, HMM regime, and risk_tier
+        hmm_regime = df_features['hmm_regime'].iloc[-1] if 'hmm_regime' in df_features.columns else 'UNKNOWN'
         
+        if side == 2:
+            thr = self.meta.get("meta_threshold_buy")
+        else:
+            thr = self.meta.get("meta_threshold_sell")
+            
+        if thr is None:
+            thr = self.meta.get("meta_threshold")
+        if thr is None:
+            thr = 55.0
+            
+        # Get modifier from regime_threshold_modifier (Task 3)
+        regime_modifiers = self.meta.get("regime_threshold_modifier", {
+            "COMPRESSION": -5.0,
+            "VOLATILE_EXPANSION": -3.0,
+            "DISTRIBUTION": 5.0,
+            "ACCUMULATION": "disable"
+        })
+        
+        modifier = regime_modifiers.get(hmm_regime, 0.0)
+        
+        regime_ok = True
+        if modifier == "disable":
+            regime_ok = False
+        elif isinstance(modifier, (int, float)):
+            thr += modifier
+        
+        # Check side-specific tradeability from metadata
+        tradeable_buy = bool(self.meta.get("tradeable_buy", True))
+        tradeable_sell = bool(self.meta.get("tradeable_sell", True))
+        either_tradeable = bool(self.meta.get("tradeable", True))
+
         fire = edge_score >= thr
+
+        if side == 2 and (not tradeable_buy or not regime_ok):
+            fire = False
+        elif side == 0 and (not tradeable_sell or not regime_ok):
+            fire = False
 
         # ── Regime-specific directional-probability filter ────────────────────
         # threshold_optimizer.py finds per-regime thresholds on p_buy / p_sell.
@@ -582,20 +852,23 @@ class Predictor:
                 regime = self._detect_regime(df_features)
                 if regime:
                     reg = regime_thresholds.get(regime, {})
-                    if reg and not reg.get("skipped"):
-                        p_sell, p_hold, p_buy = float(last[0]), float(last[1]), float(last[2])
-                        if side == 2:
-                            if (not reg.get("buy_ok")
-                                    or p_buy < reg.get("buy_threshold", 0.0)
-                                    or (p_buy - p_sell) < reg.get("buy_margin", 0.0)
-                                    or p_hold > reg.get("buy_max_hold", 1.0)):
-                                fire = False
-                        elif side == 0:
-                            if (not reg.get("sell_ok")
-                                    or p_sell < reg.get("sell_threshold", 0.0)
-                                    or (p_sell - p_buy) < reg.get("sell_margin", 0.0)
-                                    or p_hold > reg.get("sell_max_hold", 1.0)):
-                                fire = False
+                    if reg:
+                        if reg.get("skipped"):
+                            fire = False
+                        else:
+                            p_sell, p_hold, p_buy = float(last[0]), float(last[1]), float(last[2])
+                            if side == 2:
+                                if (not reg.get("buy_ok")
+                                        or p_buy < reg.get("buy_threshold", 0.0)
+                                        or (p_buy - p_sell) < reg.get("buy_margin", 0.0)
+                                        or p_hold > reg.get("buy_max_hold", 1.0)):
+                                    fire = False
+                            elif side == 0:
+                                if (not reg.get("sell_ok")
+                                        or p_sell < reg.get("sell_threshold", 0.0)
+                                        or (p_sell - p_buy) < reg.get("sell_margin", 0.0)
+                                        or p_hold > reg.get("sell_max_hold", 1.0)):
+                                    fire = False
 
         # ── S&R + trend + technical confluence veto gate ──────────────────────
         # Mirrors the training holdout logic AND adds explicit confluence checks
@@ -604,6 +877,11 @@ class Predictor:
             last_row = df_features.iloc[-1]
             override_thr = float(self.meta.get("meta_override_confidence", 1.0))
             is_high_conviction = meta_conf >= override_thr
+
+            disabled_filters = self.meta.get("disabled_filters", {})
+            disable_sr = disabled_filters.get("sr", False)
+            disable_trend = disabled_filters.get("trend", False)
+            disable_confluence = disabled_filters.get("confluence", False)
 
             def _fv(col: str, default: float = 0.0) -> float:
                 v = last_row.get(col, default)
@@ -615,7 +893,7 @@ class Predictor:
 
             # ── 1. S&R filter ─────────────────────────────────────────────────
             # Weak signals at the wrong structural level are noise, not edge.
-            if not is_high_conviction:
+            if not is_high_conviction and not disable_sr:
                 at_res = bool(last_row.get('is_at_resistance', 0))
                 at_sup = bool(last_row.get('is_at_support', 0))
                 if (side == 2 and at_res) or (side == 0 and at_sup):
@@ -624,7 +902,7 @@ class Predictor:
             # ── 2. Macro trend filter ─────────────────────────────────────────
             # A weak signal fighting the daily trend is typically a counter-trend
             # scalp with poor expectancy — suppressed unless high conviction.
-            if fire and not is_high_conviction:
+            if fire and not is_high_conviction and not disable_trend:
                 trend_1d = _fv('macro_trend_1d')
                 if (side == 2 and trend_1d < -0.2) or (side == 0 and trend_1d > 0.2):
                     fire = False
@@ -649,44 +927,64 @@ class Predictor:
 
                 if side == 2:   # ── BUY proposed ─────────────────────────────
                     # Veto if overall technicals are strongly bearish
-                    if total_conf < -VETO_EXTREME:
-                        fire = False
-                    elif not is_high_conviction and total_conf < -VETO_HARD:
-                        fire = False
+                    if not disable_confluence:
+                        if total_conf < -VETO_EXTREME:
+                            fire = False
+                        elif not is_high_conviction and total_conf < -VETO_HARD:
+                            fire = False
                     # Veto if smart money (S/R zones, BOS, CHoCH) is strongly bearish
-                    elif not is_high_conviction and smart_conf < -VETO_HARD:
-                        fire = False
+                    if fire and not is_high_conviction and not disable_confluence:
+                        if smart_conf < -VETO_HARD:
+                            fire = False
                     # Veto if a meaningful bearish candle just printed
-                    elif candle_conf < -0.4:
+                    if fire and candle_conf < -0.4:
                         fire = False
                     # Veto if volume is significantly below average — no conviction
-                    elif vol_zscore < -1.2:
+                    if fire and vol_zscore < -1.2:
                         fire = False
 
                 elif side == 0:  # ── SELL proposed ────────────────────────────
-                    if total_conf > VETO_EXTREME:
+                    if not disable_confluence:
+                        if total_conf > VETO_EXTREME:
+                            fire = False
+                        elif not is_high_conviction and total_conf > VETO_HARD:
+                            fire = False
+                    if fire and not is_high_conviction and not disable_confluence:
+                        if smart_conf > VETO_HARD:
+                            fire = False
+                    if fire and candle_conf > 0.4:
                         fire = False
-                    elif not is_high_conviction and total_conf > VETO_HARD:
-                        fire = False
-                    elif not is_high_conviction and smart_conf > VETO_HARD:
-                        fire = False
-                    elif candle_conf > 0.4:
-                        fire = False
-                    elif vol_zscore < -1.2:
+                    if fire and vol_zscore < -1.2:
                         fire = False
 
-        # Overall tradeable = True by default under Edge Architecture. 
-        # Sides are never completely zeroed out unless explicitly disabled.
-        either_tradeable = True
+        final_score = float(
+            0.35 * model_probability +
+            0.30 * np.tanh(edge_score / (abs(base_rate - 0.5) + 1e-9)) +
+            0.20 * regime_confidence +
+            0.15 * (calibration_health.get('coverage', 0.0))
+        )
+        final_score = max(0.0, min(1.0, final_score))
+
         return {
             "symbol":         self.symbol,
             "fire":           bool(fire),
             "side":           side_name if fire else "FLAT",
             "tradeable":      either_tradeable,
-            "tradeable_buy":  True,
-            "tradeable_sell": True,
+            "tradeable_buy":  tradeable_buy,
+            "tradeable_sell": tradeable_sell,
             "meta_confidence": meta_conf,
             "edge_score":      edge_score,
+            "signal_strength_score": float(edge_rank_df['signal_strength_score'].iloc[-1]),
+            "edge_rank":      edge_rank,
+            "edge_percentile": edge_percentile,
+            "computed_edge_score": computed_edge_score,
+            "regime_confidence": regime_confidence,
+            "probability_confidence": probability_diag['confidence'],
+            "probability_uncertainty": probability_diag['uncertainty'],
+            "probability_entropy": probability_diag['average_entropy'],
+            "probability_quality_ok": self._check_probability_quality(probability_diag),
+            "calibration_health": calibration_health,
+            "final_score": final_score,
             "threshold":       thr,
             "p_sell": float(last[0]), "p_hold": float(last[1]), "p_buy": float(last[2]),
             "expected_signal_precision": self.meta.get("dev_estimate", {}).get("precision"),

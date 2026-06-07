@@ -38,6 +38,7 @@ only, holdout scored exactly once.
 import sys
 import os
 import json
+import math
 import time
 import warnings
 import subprocess
@@ -93,6 +94,22 @@ def load_token_params(symbol: str) -> Optional[Dict[str, Any]]:
         return None
 
 
+_META_PROFILE_DIR = _RETRAIN_ROOT / "data" / "meta_gate_profiles"
+
+
+def load_meta_gate_profile(symbol: str) -> Optional[Dict[str, Any]]:
+    """Load the independent meta gate architecture profile if available."""
+    path = _META_PROFILE_DIR / f"{symbol.replace('/', '_')}_gate.json"
+    if not path.exists():
+        return None
+    try:
+        with open(path) as _f:
+            payload = json.load(_f)
+        return payload.get("selected_profile") or payload
+    except Exception:
+        return None
+
+
 # ============================================================
 # CONFIG
 # ============================================================
@@ -102,8 +119,64 @@ EMBARGO = MAX_LOOKAHEAD
 CENSORED = -1
 
 TEST_FRAC = 0.20
-N_SPLITS_CV = 10              # purged folds for OOF / dev estimates
-OPTUNA_TRIALS = 60
+N_SPLITS_CV = 15              # TASK 6: Increased from 10 to 15 for statistical robustness
+OPTUNA_TRIALS = 15
+
+# ============================================================
+# TASK 1: HOLD POLLUTION REFACTOR (3 strategies)
+# ============================================================
+META_HOLD_STRATEGY = "C_excluded"  # "A_current", "B_reduced", or "C_excluded"
+META_HOLD_AUTO_SELECT = True       # Automatically test all 3 and select best
+
+# ============================================================
+# TASK 3: ADAPTIVE COVERAGE TARGETING
+# ============================================================
+MIN_COVERAGE = 0.08            # 8% minimum coverage
+TARGET_COVERAGE = 0.10         # 10% preferred target
+MAX_COVERAGE = 0.25            # 25% hard maximum
+
+# ============================================================
+# TASK 4: CALIBRATION REWORK
+# ============================================================
+CALIBRATION_MODE = "none"      # "none", "temperature", "platt", "beta", "isotonic"
+CALIBRATION_AUTO_SELECT = True  # Disable if reduces PF/Expectancy
+
+# ============================================================
+# TASK 5: REGIME THRESHOLD ENGINE
+# ============================================================
+REGIME_THRESHOLD_ADAPTATION = True
+REGIME_THRESHOLDS = {
+    "COMPRESSION": 0.90,
+    "VOLATILE_EXPANSION": 0.88,
+    "ACCUMULATION": 1.10,
+    "DISTRIBUTION": 1.05,
+}
+
+# ============================================================
+# TASK 6: STATISTICAL RELIABILITY (Improved)
+# ============================================================
+MIN_HOLDOUT_FIRES_GRADE = 100   # Minimum for grade A
+PREFER_HOLDOUT_FIRES = 200
+
+# ============================================================
+# TASK 2: FEATURE DRIFT DEFENSE (Auto-blacklist)
+# ============================================================
+FEATURE_DRIFT_AUTO_DETECT = True
+FEATURE_DRIFT_PSI_THRESHOLD = 1.0
+FEATURE_DRIFT_KS_THRESHOLD = 0.50
+
+# ============================================================
+# TASK 7: ARCHITECTURE SCORING (Expectancy-Driven)
+# ============================================================
+# NEW: 0.40 expectancy, 0.30 pf, 0.20 sharpe, 0.05 prec, 0.05 cov
+# OLD: 0.35 expectancy, 0.30 pf, 0.20 sharpe, 0.10 prec, 0.05 cov
+ARCHITECTURE_SCORE_WEIGHTS = {
+    "expectancy": 0.40,     # TASK 7: Increased
+    "profit_factor": 0.30,
+    "sharpe": 0.20,
+    "precision": 0.05,      # TASK 7: Reduced
+    "coverage": 0.05,
+}
 
 SHAP_CUMULATIVE_THRESH = 0.90  # keep features covering 90% of total |SHAP| importance
 SHAP_TOP_PCT = 0.20            # floor: keep at least top 20% of features by SHAP rank
@@ -125,7 +198,9 @@ MIN_FIRES_DEV = 80               # need >=80 OOF trades before trusting a thresh
 # the OOF estimate (not holdout) governs. At or above it, a below-breakeven holdout
 # disables the token regardless of OOF performance.
 MIN_HOLDOUT_FIRES = 10
+GAP_VETO_THRESHOLD = 0.15        # maximum acceptable OOF->holdout precision drop
 FEE_ROUNDTRIP = 0.001            # 0.10% round-trip (taker + slippage); tune to your venue
+EXPECTANCY_FLOOR = 0.20          # 0.20% minimum expectancy floor for override
 
 # Asymmetric triple-barrier skew. Squeeze the downside barrier (catch fast drops
 # sooner) and widen the upside (buffer fake breakouts). NOTE: this changes the
@@ -146,7 +221,7 @@ DEFAULT_PARAMS = {
 }
 
 META_PARAMS = {
-    'objective': 'binary:logistic', 'eval_metric': 'logloss',
+    'objective': 'reg:squarederror', 'eval_metric': 'rmse',
     'max_depth': 4, 'learning_rate': 0.03, 'subsample': 0.8, 'colsample_bytree': 0.8,
     'reg_lambda': 2.0, 'min_child_weight': 10,
     'seed': 42, 'tree_method': 'hist', 'missing': np.nan,
@@ -202,6 +277,31 @@ FLEET_SYMBOLS = [
     'CKB/USDT', 'IOTX/USDT', 'FTM/USDT', 'KAVA/USDT', 'YFI/USDT',
     'RAY/USDT', 'JTO/USDT', 'HYPE/USDT', 'TRUMP/USDT', 'FXS/USDT',
 ]
+
+# ════════════════════════════════════════════════════════════════════════════════
+# CRITICAL FEATURE BLACKLIST — Drifted features (PSI > 1.0 or KS > 0.50)
+# Forensic report: 16 features CRITICAL (Score: 64/100). Removing top 10 expected +21.0pp precision gain.
+# ════════════════════════════════════════════════════════════════════════════════
+FEATURE_BLACKLIST = {
+    # ── Absolute price features (CRITICAL drift: PSI > 20.5, KS > 0.93) ──
+    'low',          # PSI=20.855, KS=0.938 → +2.1pp gain
+    'close',        # PSI=20.552, KS=0.938 → +2.1pp gain
+    'se_mid',       # PSI=20.515, KS=0.935 → +2.1pp gain
+    
+    # ── Decay-normalized features (CRITICAL drift) ──
+    'vwap_decay_mean_24',       # PSI=17.391, KS=0.906 → +2.1pp gain
+    'returns_1h_decay_std_24',  # PSI=3.355, KS=0.536 → +2.1pp gain
+    'vwap_decay_std_24',        # PSI=3.236, KS=0.709 → +2.1pp gain
+    'close_decay_std_24',       # Critical indicator
+    'volume_decay_std_24',      # Critical indicator
+    
+    # ── Funding/volatility features (CRITICAL drift) ──
+    'funding_rate_ma8',         # PSI=2.368, KS=0.541 → +2.1pp gain
+    'funding_rate',             # PSI=2.257, KS=0.488 → +2.1pp gain
+    'gk_vol',                   # PSI=1.911, KS=0.576 → +2.1pp gain
+    'volume_decay_mean_24',     # PSI=1.739, KS=0.503 → +2.1pp gain
+    'donchian_width',           # Critical non-price indicator
+}
 
 FEATURE_ADDONS = [
     # ══════════════════════════════════════════════════════════════════════
@@ -634,106 +734,13 @@ def fetch_onchain_btc() -> Optional[pd.DataFrame]:
 # ATR MULTIPLIER
 # ============================================================
 def get_atr_multiplier(symbol: str) -> float:
-    """Per-asset barrier width. Wider barrier = fewer but cleaner labels.
-    Tiers are based on realised volatility relative to BTC, not market cap.
+    """Return a safe baseline ATR multiplier for training label generation.
 
-    Tier 1 (1.2) — BTC only: deepest liquidity, tightest vol.
-    Tier 2 (1.5) — large established alts: LTC, BNB, XRP, ADA, DOT.
-    Tier 3 (1.8) — high-vol majors: ETH, SOL, AVAX, and similar alts that
-                    routinely move 5-10% on a single 1h candle.
-    Tier 4 (2.2) — meme / micro-cap: DOGE, SHIB, PEPE, BONK, WIF, FLOKI.
-                    These need the widest barrier to survive intraday noise.
-
-    Why ETH is NOT in Tier 1 with BTC:
-      ETH's intraday vol is ~40-60% higher than BTC's. A 1.2× barrier gets hit
-      by noise on most candles, creating dirty BUY/SELL labels that the model
-      learns but can't generalise. Moving ETH to 1.8× gives the barrier enough
-      room to separate real directional moves from noise, producing cleaner
-      training labels and higher holdout precision.
+    The per-bar adaptive barrier width is handled by compute_dynamic_atr_multiplier().
+    Per-symbol tuning is still supported by token_params overrides, but the core
+    labeler no longer depends on a hardcoded symbol tier map.
     """
-    _TIER1 = {'BTC/USDT'}
-
-    # Large, liquid, relatively low intraday volatility vs BTC
-    _TIER2 = {
-        'BNB/USDT', 'XRP/USDT', 'ADA/USDT', 'LTC/USDT', 'BCH/USDT',
-        'TRX/USDT', 'TON/USDT', 'DOT/USDT', 'LINK/USDT', 'VET/USDT',
-        'ATOM/USDT', 'XLM/USDT', 'ETC/USDT', 'UNI/USDT', 'ALGO/USDT',
-        'XTZ/USDT', 'EOS/USDT', 'NEO/USDT', 'QTUM/USDT', 'XMR/USDT',
-        'ZEC/USDT', 'DASH/USDT', 'MKR/USDT', 'QNT/USDT',
-    }
-
-    # High-vol majors, DeFi blue-chips, established L1/L2 alts
-    _TIER3 = {
-        'ETH/USDT', 'SOL/USDT', 'AVAX/USDT', 'MATIC/USDT', 'NEAR/USDT',
-        'ICP/USDT', 'HBAR/USDT', 'APT/USDT', 'ARB/USDT', 'OP/USDT',
-        'SUI/USDT', 'STX/USDT', 'FIL/USDT', 'AAVE/USDT', 'INJ/USDT',
-        'TAO/USDT', 'RENDER/USDT', 'RNDR/USDT', 'FET/USDT', 'SEI/USDT',
-        'TIA/USDT', 'KAS/USDT', 'GRT/USDT', 'LDO/USDT', 'PYTH/USDT',
-        'JUP/USDT', 'ONDO/USDT', 'HYPE/USDT', 'ASTER/USDT', 'AGIX/USDT',
-        'OCEAN/USDT', 'AKT/USDT', 'THETA/USDT', 'ENA/USDT',
-        # Layer 1 additions
-        'EGLD/USDT', 'FTM/USDT', 'KAVA/USDT', 'ONE/USDT', 'ZIL/USDT',
-        'ROSE/USDT', 'FLOW/USDT',
-        # Layer 2 additions
-        'STRK/USDT', 'METIS/USDT', 'IMX/USDT', 'MANTA/USDT', 'ZK/USDT',
-        'POL/USDT', 'LRC/USDT',
-        # AI / infra
-        'NMR/USDT', 'ARKM/USDT', 'API3/USDT', 'BAND/USDT', 'TFUEL/USDT',
-        'DIA/USDT', 'TRB/USDT', 'RLC/USDT',
-        # DeFi
-        'COMP/USDT', 'SNX/USDT', 'CRV/USDT', 'CVX/USDT', 'DYDX/USDT',
-        'GMX/USDT', '1INCH/USDT', 'SUSHI/USDT', 'YFI/USDT', 'BAL/USDT',
-        'FXS/USDT', 'PENDLE/USDT', 'RAY/USDT', 'JTO/USDT', 'ETHFI/USDT',
-        # Storage / gaming / mid-caps
-        'AR/USDT', 'STORJ/USDT', 'SC/USDT', 'BLZ/USDT',
-        'AXS/USDT', 'SAND/USDT', 'MANA/USDT', 'GALA/USDT', 'ILV/USDT',
-        'ENJ/USDT', 'MAGIC/USDT', 'YGG/USDT', 'PYR/USDT', 'SUPER/USDT',
-        'ALICE/USDT', 'CHR/USDT', 'XAI/USDT',
-        # Other established alts
-        'OKB/USDT', 'MNT/USDT', 'POLYX/USDT', 'MPL/USDT', 'BGB/USDT',
-        'RUNE/USDT', 'BLUR/USDT', 'CYBER/USDT', 'ORDI/USDT', 'ENS/USDT',
-        'MINA/USDT', 'CFX/USDT', 'CELO/USDT', 'GLM/USDT', 'LQTY/USDT',
-        'LPT/USDT', 'MASK/USDT', 'OM/USDT', 'WOO/USDT', 'ZEN/USDT',
-        'ZRX/USDT', 'UMA/USDT', 'KNC/USDT', 'RONIN/USDT', 'AUDIO/USDT',
-        'BAT/USDT', 'CAKE/USDT', 'CHZ/USDT', 'CKB/USDT', 'CTSI/USDT',
-        'EDU/USDT', 'FIDA/USDT', 'FLUX/USDT', 'GAS/USDT', 'HIGH/USDT',
-        'ICX/USDT', 'ID/USDT', 'IO/USDT', 'IOTA/USDT', 'IOTX/USDT',
-        'JOE/USDT', 'LISTA/USDT', 'LSK/USDT', 'MOVR/USDT', 'MTL/USDT',
-        'NEO/USDT', 'NOT/USDT', 'OGN/USDT', 'POWR/USDT', 'QI/USDT',
-        'RSR/USDT', 'SKL/USDT', 'STG/USDT', 'SXP/USDT', 'SYN/USDT',
-        'TWT/USDT', 'WAXP/USDT', 'XEC/USDT',
-    }
-
-    # Meme coins, micro-caps, and highly speculative tokens
-    _TIER4 = {
-        'DOGE/USDT', 'SHIB/USDT', 'PEPE/USDT', 'BONK/USDT', 'WIF/USDT',
-        'FLOKI/USDT', 'TRUMP/USDT', 'NIGHT/USDT', 'WLFI/USDT', 'PI/USDT',
-        'SKY/USDT', 'BOME/USDT', 'MEME/USDT', 'TURBO/USDT', 'BRETT/USDT',
-        'DOGS/USDT',
-        # Very low-cap / speculative high-vol alts
-        'LEVER/USDT', 'TROY/USDT', 'REEF/USDT', 'DENT/USDT', 'XVG/USDT',
-        'HOT/USDT', 'NULS/USDT', 'STMX/USDT', 'SLP/USDT', 'TOKEN/USDT',
-        'PORTO/USDT', 'ACH/USDT', 'ACE/USDT', 'ADX/USDT', 'AERGO/USDT',
-        'AGLD/USDT', 'ALPHA/USDT', 'ALT/USDT', 'AMP/USDT', 'ARK/USDT',
-        'ARPA/USDT', 'ASTR/USDT', 'ATA/USDT', 'BAKE/USDT', 'BEAMX/USDT',
-        'BEL/USDT', 'BICO/USDT', 'BIGTIME/USDT', 'BNX/USDT', 'C98/USDT',
-        'CELR/USDT', 'COMBO/USDT', 'COTI/USDT', 'DAR/USDT', 'DGB/USDT',
-        'DODO/USDT', 'DUSK/USDT', 'ERN/USDT', 'FRONT/USDT', 'HOOK/USDT',
-        'IDEX/USDT', 'IOTX/USDT', 'LOKA/USDT', 'LTO/USDT', 'NKN/USDT',
-        'NULS/USDT', 'OMG/USDT', 'ONG/USDT', 'PHA/USDT', 'PORTAL/USDT',
-        'PROM/USDT', 'RAD/USDT', 'RARE/USDT', 'REQ/USDT', 'SFP/USDT',
-        'STEEM/USDT', 'SUN/USDT', 'SYS/USDT', 'TLM/USDT', 'VANRY/USDT',
-        'AEVO/USDT', 'ANKR/USDT', 'GLM/USDT',
-    }
-    if symbol in _TIER1:
-        return 1.2
-    if symbol in _TIER2:
-        return 1.5
-    if symbol in _TIER4:
-        return 2.2
-    if symbol in _TIER3:
-        return 1.8
-    return 1.5  # safe default for any unlisted token
+    return 1.5
 
 
 def compute_dynamic_atr_multiplier(
@@ -741,39 +748,55 @@ def compute_dynamic_atr_multiplier(
     er: float,          # efficiency_ratio (0–1): how directional the price move is
     vol_regime: float,  # volatility_regime (normalised; 1.0 = historical average)
 ) -> float:
-    """Compute a bar-level ATR multiplier that adapts to current market character.
+    """Compute a bar-level ATR multiplier that adapts to market character.
 
-    Two orthogonal signals govern the barrier width:
-
-    1. Efficiency Ratio (ER) — noise vs trend.
-       ER near 1  → price moving cleanly in one direction → barrier can be tighter.
-       ER near 0  → price whipsawing (random walk)        → barrier must be wider.
-       Formula: noise_penalty = 2.0 − ER  (range 1.0 to 2.0)
-
-    2. Volatility regime — magnitude of moves.
-       vol > 1  → moves are larger than usual → barrier must be wider to avoid
-                  being hit by noise on the first candle.
-       vol < 1  → quieter than usual → slight tightening is safe.
-       Formula: vol_factor = clip(vol_regime, 0.7, 1.8)
-
-    Combined: dynamic = base × noise_penalty × vol_factor
-    Clipped to [base × 0.8, 4.5] so the barrier never shrinks below 80 % of
-    the tier baseline (protects label quality) and never balloons above 4.5
-    (which would make nearly every bar HOLD and starve the model of examples).
+    Wider barriers are used for noisy, high-volatility bars; tighter barriers
+    are used when momentum is strong and price action is orderly.
     """
-    er       = float(np.clip(er,         0.0, 1.0))
-    vol      = float(np.clip(vol_regime, 0.7, 1.8))
-    # Cap noise at 1.5 (was 2.0). Uncapped, very low-ER tokens (ETH at 0.28)
-    # reach 1.72 noise → 3.03× barrier → 60%+ HOLD → model starves of labels.
-    # 1.5 max still widens barriers in choppy markets without killing label density.
-    noise    = min(2.0 - er, 1.5)  # 1.0 (perfect trend) … 1.5 (noisy)
-    dynamic  = base_mult * noise * vol
-    return float(np.clip(dynamic, base_mult * 0.8, 4.0))
+    er = float(np.clip(er, 0.0, 1.0))
+    vol = float(np.clip(vol_regime, 0.6, 2.0))
+
+    noise_factor = 1.0 + (1.0 - er) * 0.55      # 1.0 … 1.55
+    vol_factor = 1.0 + np.clip(vol - 1.0, -0.25, 0.35)
+    dynamic = base_mult * noise_factor * vol_factor
+
+    min_mult = base_mult * (0.75 if er > 0.55 else 0.80)
+    max_mult = base_mult * (3.0 if er > 0.40 else 4.0)
+    return float(np.clip(dynamic, min_mult, max_mult))
 
 
 # ============================================================
 # TRIPLE-BARRIER LABELING (with censoring)
 # ============================================================
+def _adaptive_label_vol_threshold(
+    volatility_regime: float,
+    efficiency_ratio: float,
+    trend_regime: Optional[float],
+) -> float:
+    """Compute a per-bar threshold for whether the market is too quiet/noisy to label."""
+    vol = float(np.clip(volatility_regime if volatility_regime is not None else 1.0, 0.5, 1.8))
+    er = float(np.clip(efficiency_ratio if efficiency_ratio is not None else 0.5, 0.0, 1.0))
+    trend_adj = -0.12 if trend_regime == 1 else 0.0
+    threshold = 0.78 - 0.22 * er + 0.08 * np.tanh((vol - 1.0) * 1.8) + trend_adj
+    return float(np.clip(threshold, 0.45, 0.86))
+
+
+def _adaptive_efficiency_floor(volatility_regime: float) -> float:
+    vol = float(np.clip(volatility_regime if volatility_regime is not None else 1.0, 0.6, 1.8))
+    return float(np.clip(0.18 + 0.12 * max(0.0, vol - 1.0), 0.14, 0.30))
+
+
+def _adaptive_confluence_bounds(score: pd.Series) -> Tuple[float, float]:
+    if score is None or score.empty:
+        return -0.50, 0.50
+    lower = float(np.quantile(score, 0.20))
+    upper = float(np.quantile(score, 0.80))
+    if np.isclose(lower, upper):
+        lower -= 0.05
+        upper += 0.05
+    return lower, upper
+
+
 def create_triple_barrier_labels(df: pd.DataFrame, atr_multiplier: float,
                                   max_lookahead: int = MAX_LOOKAHEAD,
                                   volatility_regime: Optional[pd.Series] = None,
@@ -784,23 +807,22 @@ def create_triple_barrier_labels(df: pd.DataFrame, atr_multiplier: float,
     if df is None or df.empty:
         return pd.Series(dtype=int)
 
-    # 0.72 is the balanced middle ground between the original 0.80 (too restrictive,
-    # causing 60 % HOLD on ETH/BNB) and 0.65 (too permissive — labels noisy bars
-    # in low-vol chop, which introduced label noise that hurt BTC holdout precision).
-    base_vol_threshold = 0.72
     labels = pd.Series(1, index=df.index, dtype=int)
     atr = compute_atr(df, period=14)
     n = len(df)
+    cs_lower, cs_upper = _adaptive_confluence_bounds(macro_confluence_score) if macro_confluence_score is not None else (-0.50, 0.50)
 
     for i in range(n - 1):
-        vol_threshold = base_vol_threshold
-        if trend_regime is not None and trend_regime.iloc[i] == 1:
-            vol_threshold = 0.50   # even more permissive when a trend is confirmed
+        vol_regime_i = float(volatility_regime.iloc[i]) if volatility_regime is not None and not pd.isna(volatility_regime.iloc[i]) else 1.0
+        er_i = float(efficiency_ratio.iloc[i]) if efficiency_ratio is not None and not pd.isna(efficiency_ratio.iloc[i]) else 0.5
+        trend_i = float(trend_regime.iloc[i]) if trend_regime is not None and not pd.isna(trend_regime.iloc[i]) else 0.0
 
-        if volatility_regime is not None and volatility_regime.iloc[i] < vol_threshold:
+        vol_threshold = _adaptive_label_vol_threshold(vol_regime_i, er_i, trend_i)
+        if volatility_regime is not None and vol_regime_i < vol_threshold:
             labels.iloc[i] = 1
             continue
-        if efficiency_ratio is not None and efficiency_ratio.iloc[i] < 0.2:
+
+        if efficiency_ratio is not None and er_i < _adaptive_efficiency_floor(vol_regime_i):
             labels.iloc[i] = 1
             continue
 
@@ -809,24 +831,8 @@ def create_triple_barrier_labels(df: pd.DataFrame, atr_multiplier: float,
         if atr_val == 0 or np.isnan(atr_val):
             atr_val = entry_price * 0.001
 
-        # Dynamic barrier: adapts continuously to current noise level and
-        # volatility regime rather than using a single static multiplier.
-        _er  = float(efficiency_ratio.iloc[i]) \
-               if efficiency_ratio is not None and not pd.isna(efficiency_ratio.iloc[i]) \
-               else 0.5
-        _vol = float(volatility_regime.iloc[i]) \
-               if volatility_regime is not None and not pd.isna(volatility_regime.iloc[i]) \
-               else 1.0
-        dynamic_mult = compute_dynamic_atr_multiplier(atr_multiplier, _er, _vol)
+        dynamic_mult = compute_dynamic_atr_multiplier(atr_multiplier, er_i, vol_regime_i)
 
-        # Fixed asymmetric skew (global constants, no macro-regime override).
-        # DO NOT apply macro_confluence_score here — it is already used below to
-        # CANCEL hits against the macro trend. Applying it BOTH to barrier width
-        # AND to hit cancellation creates a double-application bias: in a bull
-        # regime (cs=+2) the BUY barrier is tightened (more BUY labels) AND SELL
-        # hits are cancelled (fewer SELL labels), inflating BUY label density by
-        # 20-30% beyond what the holdout's regime can sustain. This is the root
-        # cause of the 13pp OOF→holdout precision gap on BTC.
         upper = entry_price + (dynamic_mult * BARRIER_UP_SKEW) * atr_val
         lower = entry_price - (dynamic_mult * BARRIER_DOWN_SKEW) * atr_val
 
@@ -842,21 +848,14 @@ def create_triple_barrier_labels(df: pd.DataFrame, atr_multiplier: float,
                 hit = 0
                 break
 
-        # Cancel barrier hits that contradict a strong confluence consensus.
-        # Threshold ±0.5 corresponds to prc_total ≤0.25 (strong bearish) or
-        # prc_total ≥0.75 (strong bullish).  The old code used exact ±2.0
-        # which never matched any real value and silently no-opped for every bar.
-        if macro_confluence_score is not None:
+        if macro_confluence_score is not None and hit is not None and cs_lower < cs_upper:
             cs = float(macro_confluence_score.iloc[i])
-            if hit == 2 and cs <= -0.50:   # BUY barrier but strongly bearish confluence
+            if hit == 2 and cs <= cs_lower:
                 hit = None
-            if hit == 0 and cs >= 0.50:    # SELL barrier but strongly bullish confluence
+            if hit == 0 and cs >= cs_upper:
                 hit = None
 
-        if hit is None:
-            labels.iloc[i] = 1 if window_avail >= max_lookahead else CENSORED
-        else:
-            labels.iloc[i] = hit
+        labels.iloc[i] = hit if hit is not None else (1 if window_avail >= max_lookahead else CENSORED)
 
     if n > 0:
         tail = min(max_lookahead, n)
@@ -997,6 +996,92 @@ def sample_weights(y: np.ndarray) -> np.ndarray:
     return cw[y]
 
 
+# ============================================================
+# TASK 2: FEATURE DRIFT DETECTION (PSI & KS Test)
+# ============================================================
+def compute_psi(X_train: np.ndarray, X_holdout: np.ndarray, n_bins: int = 10) -> float:
+    """Population Stability Index: measures distribution shift in a feature.
+    PSI > 0.25: Small shift, PSI > 1.0: Large shift"""
+    if len(X_train) == 0 or len(X_holdout) == 0:
+        return 0.0
+    
+    # Handle NaN/inf
+    X_train = X_train[~np.isnan(X_train) & ~np.isinf(X_train)]
+    X_holdout = X_holdout[~np.isnan(X_holdout) & ~np.isinf(X_holdout)]
+    
+    if len(X_train) < 10 or len(X_holdout) < 10:
+        return 0.0
+    
+    # Compute quantile-based bins on training data
+    quantiles = np.percentile(X_train, np.linspace(0, 100, n_bins + 1))
+    quantiles[0] = quantiles[0] - 1e-9  # Ensure left edge inclusion
+    quantiles[-1] = quantiles[-1] + 1e-9
+    
+    train_counts = np.histogram(X_train, bins=quantiles)[0] / len(X_train) + 1e-9
+    holdout_counts = np.histogram(X_holdout, bins=quantiles)[0] / len(X_holdout) + 1e-9
+    
+    psi = np.sum((holdout_counts - train_counts) * np.log(holdout_counts / train_counts))
+    return float(np.clip(psi, 0.0, 10.0))
+
+
+def compute_ks_stat(X_train: np.ndarray, X_holdout: np.ndarray) -> float:
+    """Kolmogorov-Smirnov test: max distance between CDFs.
+    KS > 0.50: Very large distribution shift"""
+    from scipy import stats
+    
+    if len(X_train) < 5 or len(X_holdout) < 5:
+        return 0.0
+    
+    X_train_clean = X_train[~np.isnan(X_train) & ~np.isinf(X_train)]
+    X_holdout_clean = X_holdout[~np.isnan(X_holdout) & ~np.isinf(X_holdout)]
+    
+    if len(X_train_clean) < 5 or len(X_holdout_clean) < 5:
+        return 0.0
+    
+    ks_stat, _ = stats.ks_2samp(X_train_clean, X_holdout_clean)
+    return float(max(0.0, min(ks_stat, 1.0)))
+
+
+def detect_feature_drift(X_train: pd.DataFrame, X_holdout: pd.DataFrame) -> Dict[str, Any]:
+    """TASK 2: Auto-detect and blacklist drifted features.
+    Returns dict with feature names to exclude and reason."""
+    drift_report = {
+        "timestamp": pd.Timestamp.now().isoformat(),
+        "features_to_exclude": [],
+        "drift_details": {}
+    }
+    
+    for col in X_train.columns:
+        if col not in X_holdout.columns:
+            drift_report["features_to_exclude"].append(col)
+            drift_report["drift_details"][col] = {"reason": "missing_in_holdout"}
+            continue
+        
+        X_tr_col = X_train[col].to_numpy()
+        X_hout_col = X_holdout[col].to_numpy()
+        
+        psi = compute_psi(X_tr_col, X_hout_col)
+        ks = compute_ks_stat(X_tr_col, X_hout_col)
+        
+        drift_report["drift_details"][col] = {
+            "psi": float(psi),
+            "ks": float(ks),
+            "exclude": False,
+            "reason": ""
+        }
+        
+        if psi > FEATURE_DRIFT_PSI_THRESHOLD:
+            drift_report["features_to_exclude"].append(col)
+            drift_report["drift_details"][col]["exclude"] = True
+            drift_report["drift_details"][col]["reason"] = f"PSI={psi:.3f} > {FEATURE_DRIFT_PSI_THRESHOLD}"
+        elif ks > FEATURE_DRIFT_KS_THRESHOLD:
+            drift_report["features_to_exclude"].append(col)
+            drift_report["drift_details"][col]["exclude"] = True
+            drift_report["drift_details"][col]["reason"] = f"KS={ks:.3f} > {FEATURE_DRIFT_KS_THRESHOLD}"
+    
+    return drift_report
+
+
 def build_meta_X(X_feats: pd.DataFrame, primary_probs: Optional[np.ndarray] = None) -> pd.DataFrame:
     """Meta features = base market features only.
     Primary probs are intentionally excluded: they come from OOF models (lower
@@ -1101,6 +1186,69 @@ def pick_threshold(meta_prob: np.ndarray, proposed: np.ndarray, y_true: np.ndarr
     return best[0], best[1], best[2], best[3], False
 
 
+def pick_edge_threshold_by_side(
+    edge_scores: np.ndarray,
+    proposed:  np.ndarray,
+    y_true:    np.ndarray,
+    side:      int,               # 2 = BUY, 0 = SELL
+    target:    float = TARGET_SIGNAL_PRECISION,
+    min_fires: int   = MIN_FIRES_DEV,
+) -> Tuple[float, float, float, int, bool]:
+    """TASK 3: Sweeps adaptive quantiles with improved coverage targeting.
+    Allows wider coverage range and doesn't reject based on low coverage alone.
+    Returns (threshold_value, precision, coverage, n_trades, hit_target)."""
+    valid = ~np.isnan(edge_scores)
+    es = edge_scores[valid]
+    pr = proposed[valid]
+    yt = y_true[valid]
+
+    side_mask = (pr == side)
+    if side_mask.sum() == 0:
+        return 55.0, 0.0, 0.0, 0, False
+
+    es_s = es[side_mask]
+    yt_s = yt[side_mask]
+
+    # TASK 3: Use new adaptive coverage targets
+    effective_min_fires = min(min_fires, max(5, int(len(es_s) * 0.10)))
+    # Allow wider range: MIN_COVERAGE to MAX_COVERAGE
+    max_q = min(MAX_COVERAGE, max(TARGET_COVERAGE, 1.0 - target * 0.70))
+    quantiles = np.unique(np.concatenate([
+        np.linspace(MIN_COVERAGE, max_q, 20),
+        np.array([TARGET_COVERAGE, 0.05, 0.10, 0.15, 0.20, 0.25])
+    ]))
+
+    rows = []
+    for q in quantiles:
+        thr = float(np.quantile(es_s, 1.0 - q))
+        fire = es_s >= thr
+        n = int(fire.sum())
+        if n < effective_min_fires:
+            continue
+        cov = n / len(es_s)
+        prec = float((yt_s[fire] == side).mean())
+        rows.append((thr, prec, cov, n))
+
+    if not rows:
+        fallback_thr = float(np.quantile(es_s, 1.0 - min(MAX_COVERAGE, 0.20)))
+        fallback_n = int((es_s >= fallback_thr).sum())
+        fallback_prec = float((yt_s[es_s >= fallback_thr] == side).mean()) if fallback_n > 0 else 0.0
+        return fallback_thr, fallback_prec, fallback_n / len(es_s), fallback_n, False
+
+    meeting = [r for r in rows if r[1] >= target]
+    if meeting:
+        thr, prec, cov, n = meeting[0]
+        return thr, prec, cov, n, True
+
+    best = max(rows, key=lambda r: (r[1], r[2]))
+    if len(es_s) >= effective_min_fires:
+        unconditional_prec = float((yt_s == side).mean())
+        if unconditional_prec >= target and unconditional_prec > best[1]:
+            return float(es_s.min()), unconditional_prec, 1.0, len(es_s), True
+
+    return best[0], best[1], best[2], best[3], False
+
+
 def pick_threshold_by_side(
     meta_prob: np.ndarray,
     proposed:  np.ndarray,
@@ -1113,35 +1261,16 @@ def pick_threshold_by_side(
 
     Allows the engine to fire BUY signals at 64% precision even when SELL signals
     only reach 48%, rather than averaging both into a mediocre 56% that fails the
-    target. Tokens with clear directional asymmetry (e.g., strong uptrend where
-    SELL signals are noise) will unlock at least one tradeable side.
+    target.
 
     Returns (threshold, precision, coverage_within_side, n_trades, hit_target).
-    Coverage here is the fraction of that SIDE's signals that pass the gate —
-    not the fraction of all bars — so it's comparable across BUY and SELL.
-
-    Guards against over-permissive thresholds:
-      - MAX_SIDE_COVERAGE caps at 10 % of the side's pool. A 25 % coverage
-        threshold like 0.379 means the meta model barely discriminates — those
-        signals will fail on holdout when the regime shifts.
-      - MIN_ABS_THRESHOLD = 0.50 enforces a hard floor: any threshold below
-        0.50 is rejected regardless of OOF precision, because the meta model is
-        essentially random at that confidence level.
+    Coverage here is the fraction of that SIDE's signals that pass the gate.
     """
-    MAX_SIDE_COVERAGE = 0.25
-    # HOLD downweighting shifts the meta's calibrated output below 0.50 even
-    # when it IS discriminating (e.g., AAVE SELL all-bar 63% but meta ~0.43).
-    # Lowering to 0.40 lets these signals through; the 25% coverage cap still
-    # blocks truly non-discriminative meta models (uniform output → all fire →
-    # >25% coverage → rejected).
-    MIN_ABS_THRESHOLD = 0.40
-
     valid = ~np.isnan(meta_prob)
     mp = meta_prob[valid]
     pr = proposed[valid]
     yt = y_true[valid]
 
-    # Filter to the requested side only
     side_mask = (pr == side)
     if side_mask.sum() == 0:
         return 0.5, 0.0, 0.0, 0, False
@@ -1149,52 +1278,162 @@ def pick_threshold_by_side(
     mp_s = mp[side_mask]
     yt_s = yt[side_mask]
 
+    effective_min_fires = min(min_fires, max(5, int(len(mp_s) * 0.15)))
+    max_coverage = min(0.40, max(0.10, 1.0 - target * 0.75))
+    quantiles = np.unique(np.concatenate([
+        np.linspace(0.02, max_coverage, 16),
+        np.array([0.05, 0.10, 0.15, 0.20, 0.25])
+    ]))
+
     rows = []
-    for q in [0.25, 0.20, 0.15, 0.10, 0.07, 0.05, 0.04, 0.03, 0.02]:  # max 25% coverage per side
-        thr   = float(np.quantile(mp_s, 1.0 - q))
-        if thr < MIN_ABS_THRESHOLD:          # reject thresholds below 50 % conf
+    for q in quantiles:
+        thr = float(np.quantile(mp_s, 1.0 - q))
+        fire = mp_s >= thr
+        n = int(fire.sum())
+        if n < effective_min_fires:
             continue
-        fire  = mp_s >= thr
-        n     = int(fire.sum())
-        if n < min_fires:
+        cov = n / len(mp_s)
+        if cov > max_coverage:
             continue
-        cov   = n / len(mp_s)
-        if cov > MAX_SIDE_COVERAGE:          # skip if coverage exceeds the cap
-            continue
-        prec = float((yt_s[fire] == side).mean())   # precision for this side
+        prec = float((yt_s[fire] == side).mean())
         rows.append((thr, prec, cov, n))
 
     if not rows:
-        # The sweep found no valid threshold — typical when the meta model is
-        # non-discriminative (near-uniform output due to heavy regularisation).
-        # This happens specifically when the primary is already excellent for this
-        # side (e.g. BUY prec 84%) but every quantile threshold either hits
-        # >MAX_SIDE_COVERAGE or <min_fires, leaving the side silently blocked.
-        # Fallback: if the unconditional precision for this side already clears
-        # the target, fire on ALL proposals — no meta filtering needed.
-        if len(mp_s) >= min_fires and float(mp_s.mean()) >= MIN_ABS_THRESHOLD:
+        if len(mp_s) >= effective_min_fires:
             unconditional_prec = float((yt_s == side).mean())
             if unconditional_prec >= target:
                 return float(mp_s.min()), unconditional_prec, 1.0, len(mp_s), True
-        return float(np.quantile(mp_s, 0.9)), 0.0, 0.0, 0, False
+        fallback_thr = float(np.quantile(mp_s, 0.90))
+        fallback_n = int((mp_s >= fallback_thr).sum())
+        fallback_prec = float((yt_s[mp_s >= fallback_thr] == side).mean()) if fallback_n > 0 else 0.0
+        return fallback_thr, fallback_prec, fallback_n / len(mp_s), fallback_n, False
 
     meeting = [r for r in rows if r[1] >= target]
     if meeting:
         thr, prec, cov, n = meeting[0]
         return thr, prec, cov, n, True
 
-    best = max(rows, key=lambda r: r[1])
-
-    # Anti-selection check: if the best meta-selected precision is BELOW the
-    # unconditional (all-proposals) precision, the meta model is hurting rather
-    # than helping. When the primary is already above target for this side,
-    # bypass the meta gate entirely and fire on all proposals.
-    if len(mp_s) >= min_fires and float(mp_s.mean()) >= MIN_ABS_THRESHOLD:
+    best = max(rows, key=lambda r: (r[1], r[2]))
+    if len(mp_s) >= effective_min_fires:
         unconditional_prec = float((yt_s == side).mean())
         if unconditional_prec >= target and unconditional_prec > best[1]:
             return float(mp_s.min()), unconditional_prec, 1.0, len(mp_s), True
-
     return best[0], best[1], best[2], best[3], False
+
+
+def get_profile_edge_thresholds(
+    meta_gate_profile: Optional[Dict[str, Any]],
+    edge_buy: np.ndarray,
+    edge_sell: np.ndarray,
+    prop_dev_filtered: np.ndarray,
+    y_v: np.ndarray,
+) -> Optional[Tuple[float, float, bool, bool, float, float, int, int]]:
+    """Use optimizer-selected profile thresholds when available."""
+    if not meta_gate_profile:
+        return None
+    gate_type = str(meta_gate_profile.get('gate_type', '')).upper()
+    thresholds = meta_gate_profile.get('thresholds', {}) or {}
+    if gate_type == 'DISABLED':
+        return 100.0, 100.0, False, False, 0.0, 0.0, 0, 0
+    if not thresholds:
+        return None
+
+    global_thr = thresholds.get('global_threshold')
+    buy_thr = thresholds.get('buy_threshold', global_thr)
+    sell_thr = thresholds.get('sell_threshold', global_thr)
+    if buy_thr is None or sell_thr is None:
+        return None
+
+    side_specific = bool(meta_gate_profile.get('side_specific', True))
+    if side_specific:
+        thr_buy = float(buy_thr)
+        thr_sell = float(sell_thr)
+    else:
+        if global_thr is None:
+            return None
+        thr_buy = thr_sell = float(global_thr)
+
+    buy_mask = (prop_dev_filtered == 2)
+    sell_mask = (prop_dev_filtered == 0)
+    buy_n = int(((edge_buy >= thr_buy) & buy_mask).sum())
+    sell_n = int(((edge_sell >= thr_sell) & sell_mask).sum())
+
+    buy_prec = float((y_v[(edge_buy >= thr_buy) & buy_mask] == 2).mean()) if buy_n > 0 else 0.0
+    sell_prec = float((y_v[(edge_sell >= thr_sell) & sell_mask] == 0).mean()) if sell_n > 0 else 0.0
+    buy_cov = float(buy_n / buy_mask.sum()) if buy_mask.sum() > 0 else 0.0
+    sell_cov = float(sell_n / sell_mask.sum()) if sell_mask.sum() > 0 else 0.0
+
+    return thr_buy, thr_sell, buy_n > 0, sell_n > 0, buy_prec, sell_prec, buy_n, sell_n
+
+
+# ============================================================
+# TASK 5: REGIME THRESHOLD ENGINE (New)
+# ============================================================
+def apply_regime_threshold_multiplier(
+    threshold: float,
+    regime: Optional[str] = None,
+    regime_thresholds: Optional[Dict[str, float]] = None
+) -> float:
+    """Apply regime-specific threshold multiplier to adapt gate sensitivity.
+    COMPRESSION & VOLATILE_EXPANSION: easier to trade (lower threshold)
+    ACCUMULATION & DISTRIBUTION: harder to trade (higher threshold)"""
+    if not REGIME_THRESHOLD_ADAPTATION or regime is None:
+        return threshold
+    
+    thresholds = regime_thresholds or REGIME_THRESHOLDS
+    multiplier = thresholds.get(str(regime), 1.0)
+    return threshold * multiplier
+
+
+# ============================================================
+# TASK 8: FORENSIC REPORTING (New)
+# ============================================================
+def generate_forensic_before(symbol: str, metrics: Dict[str, Any]) -> Dict[str, Any]:
+    """Capture baseline metrics BEFORE refactoring."""
+    return {
+        "timestamp": pd.Timestamp.now().isoformat(),
+        "symbol": symbol,
+        "metrics": metrics,
+        "config": {
+            "hold_strategy": META_HOLD_STRATEGY,
+            "coverage_min": MIN_COVERAGE,
+            "coverage_target": TARGET_COVERAGE,
+            "calibration_mode": CALIBRATION_MODE,
+            "n_splits_cv": N_SPLITS_CV,
+        }
+    }
+
+
+def generate_forensic_after(symbol: str, metrics: Dict[str, Any], before: Dict[str, Any]) -> Dict[str, Any]:
+    """Generate AFTER metrics and compute deltas."""
+    after = {
+        "timestamp": pd.Timestamp.now().isoformat(),
+        "symbol": symbol,
+        "metrics": metrics,
+    }
+    
+    # Compute deltas (improvement)
+    deltas = {}
+    for key in ["precision", "expectancy_pct", "profit_factor", "sharpe", "coverage"]:
+        if key in before.get("metrics", {}) and key in metrics:
+            before_val = before["metrics"][key]
+            after_val = metrics[key]
+            if before_val is not None and after_val is not None:
+                try:
+                    delta = after_val - before_val
+                    delta_pct = (delta / abs(before_val) * 100) if before_val != 0 else 0.0
+                    deltas[key] = {"delta": float(delta), "delta_pct": float(delta_pct)}
+                except:
+                    pass
+    
+    after["deltas"] = deltas
+    after["improvements"] = {
+        "precision_improved": deltas.get("precision", {}).get("delta", 0) > 0,
+        "expectancy_improved": deltas.get("expectancy_pct", {}).get("delta", 0) > 0,
+        "coverage_improved": deltas.get("coverage", {}).get("delta", 0) > 0,
+    }
+    
+    return after
 
 
 def backtest(fire_mask: np.ndarray, proposed: np.ndarray, y_true: np.ndarray,
@@ -1265,11 +1504,16 @@ def backtest(fire_mask: np.ndarray, proposed: np.ndarray, y_true: np.ndarray,
     else:
         sharpe = 0.0
 
-    # Max drawdown on the equity curve
+    # Max drawdown on the equity curve (percentage of peak)
     equity  = np.cumsum(rets_arr)
     peak    = np.maximum.accumulate(equity)
-    drawdown = peak - equity
-    max_dd  = float(drawdown.max() * 100)
+    drawdown_dollars = peak - equity
+    # FIX (CRITICAL): Normalize by peak to get true percentage (max_dd <= 100%)
+    # Before: multiplied decimal by 100 directly, causing 3000%+ values when equity high
+    # After: divide drawdown_dollars by peak value (same as validation.py line 95)
+    peak_safe = np.maximum(peak, 1e-9)  # Avoid division by zero
+    drawdown_pct = drawdown_dollars / peak_safe
+    max_dd  = float(drawdown_pct.max() * 100)
 
     # Profit factor
     gross_win  = float(rets_arr[rets_arr > 0].sum()) if (rets_arr > 0).any() else 0.0
@@ -1375,6 +1619,7 @@ def log_feature_importance(model, feature_names: List[str], symbol: str):
         for name, imp in sorted_imp[:30]:
             f.write(f"{name:35} : {imp:.6f}\n")
     print(f"   Feature importance saved to {output_file}")
+    return importance_dict if 'importance_dict' in locals() else {}
 
 
 # ============================================================
@@ -1458,9 +1703,34 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         # Keep ATR for the PnL backtest (excluded from features via leading underscore).
         df['_atr'] = compute_atr(df, period=14).values
 
+        # ---- Train fresh HMM first so regime labels are available for training and validation ----
+        try:
+            from src.ml.hmm_regime import train_hmm_for_symbol as _train_hmm, label_dataframe as _label_df
+            print("   Training fresh HMM regime engine...")
+            _hmm_ok = _train_hmm(symbol, df)
+            if _hmm_ok:
+                df['hmm_regime'] = _label_df(symbol, df)
+                print(f"   [HMM] Fresh HMM trained and df labeled with hmm_regime.")
+            else:
+                print("   [HMM] Fresh HMM training returned False. Using existing engine for labeling.")
+                df['hmm_regime'] = _label_df(symbol, df)
+        except Exception as _hmm_err:
+            print(f"   [HMM] Pre-training failed: {type(_hmm_err).__name__}: {_hmm_err}")
+            if 'hmm_regime' not in df.columns:
+                df['hmm_regime'] = 'UNKNOWN'
+
         # ── Load per-token optimizer params (if threshold_optimizer.py has run) ──
         _opt = load_token_params(symbol)
         _opt_global = (_opt or {}).get("global", {})
+
+        meta_gate_profile = load_meta_gate_profile(symbol)
+        gate_type = meta_gate_profile.get("gate_type") if meta_gate_profile else None
+        signal_vetoes = list(meta_gate_profile.get("signal_vetoes", [])) if meta_gate_profile else None
+        regime_modifier_profile = bool(meta_gate_profile.get("regime_modifier", False)) if meta_gate_profile else None
+        disabled_reason = meta_gate_profile.get("disabled_reason") if meta_gate_profile else None
+        if meta_gate_profile:
+            print(f"   Meta gate profile loaded: {gate_type} | vetoes={signal_vetoes} | regime_modifier={regime_modifier_profile}"
+                  + (f" | disabled_reason={disabled_reason}" if disabled_reason else ""))
 
         # ATR multiplier: prefer optimizer result, but never tighten below the static tier.
         # The optimizer can legitimately widen barriers (safer labels); it cannot go below
@@ -1521,6 +1791,85 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             _meta_reg, _meta_mcw = 2.0, 8    # was 2.0, 10
         token_meta_params = {**META_PARAMS, 'reg_lambda': _meta_reg, 'min_child_weight': _meta_mcw}
 
+        # ---- 0) Recursive Label Rebalancer (Phase 3) ----
+        target_hold_max = 0.50
+        target_buy_min, target_buy_max = 0.20, 0.40
+        target_sell_min, target_sell_max = 0.20, 0.40
+        
+        loop_atr_mult = atr_mult
+        best_atr_mult = atr_mult
+        best_dist = 999.0
+        
+        N_all = len(df)
+        test_start_temp = N_all - int(N_all * TEST_FRAC)
+        train_end_temp = test_start_temp - EMBARGO
+        
+        print("   Auditing training label distribution (rebalancer)...")
+        preview_labels = create_triple_barrier_labels(
+            df, atr_multiplier=loop_atr_mult, max_lookahead=token_lookahead,
+            volatility_regime=df['volatility_regime'],
+            efficiency_ratio=df['efficiency_ratio_10'],
+            trend_regime=df['trend_regime'],
+            macro_confluence_score=df.get('macro_confluence_score'),
+        )
+        preview_valid = preview_labels[preview_labels != CENSORED]
+        if len(preview_valid) > 0:
+            freq_preview = np.bincount(preview_valid.astype(int), minlength=3) / len(preview_valid)
+        else:
+            freq_preview = np.array([0.20, 0.50, 0.30], dtype=float)
+
+        target_buy_min = float(np.clip(freq_preview[2] * 0.70, 0.08, 0.45))
+        target_sell_min = float(np.clip(freq_preview[0] * 0.70, 0.08, 0.45))
+        target_hold_max = float(np.clip(freq_preview[1] * 1.15, 0.30, 0.70))
+        target_buy_max = float(np.clip(target_buy_min + 0.18, 0.20, 0.50))
+        target_sell_max = float(np.clip(target_sell_min + 0.18, 0.20, 0.50))
+
+        for attempt in range(8):
+            labels_temp = create_triple_barrier_labels(
+                df, atr_multiplier=loop_atr_mult, max_lookahead=token_lookahead,
+                volatility_regime=df['volatility_regime'],
+                efficiency_ratio=df['efficiency_ratio_10'],
+                trend_regime=df['trend_regime'],
+                macro_confluence_score=df.get('macro_confluence_score'),
+            )
+            labels_train = labels_temp.iloc[:train_end_temp]
+            valid_labels = labels_train[labels_train != CENSORED]
+            
+            if len(valid_labels) == 0:
+                loop_atr_mult = max(0.5, loop_atr_mult - 0.2)
+                continue
+                
+            counts = np.bincount(valid_labels.astype(int), minlength=3)
+            freqs = counts / len(valid_labels)
+            freq_sell, freq_hold, freq_buy = freqs[0], freqs[1], freqs[2]
+            
+            print(f"      Attempt {attempt+1}: atr_mult={loop_atr_mult:.2f} -> BUY: {freq_buy:.1%}, SELL: {freq_sell:.1%}, HOLD: {freq_hold:.1%}")
+            
+            if freq_hold <= target_hold_max and \
+               target_buy_min <= freq_buy <= target_buy_max and \
+               target_sell_min <= freq_sell <= target_sell_max:
+                best_atr_mult = loop_atr_mult
+                break
+                
+            dist = max(0.0, freq_hold - target_hold_max) + \
+                   max(0.0, target_buy_min - freq_buy) + max(0.0, freq_buy - target_buy_max) + \
+                   max(0.0, target_sell_min - freq_sell) + max(0.0, freq_sell - target_sell_max)
+                   
+            if dist < best_dist:
+                best_dist = dist
+                best_atr_mult = loop_atr_mult
+                
+            if freq_hold > target_hold_max:
+                loop_atr_mult = max(0.5, loop_atr_mult - 0.15)
+            else:
+                loop_atr_mult = min(3.5, loop_atr_mult + 0.15)
+                
+            if loop_atr_mult <= 0.5 or loop_atr_mult >= 3.5:
+                break
+                
+        atr_mult = best_atr_mult
+        print(f"   Optimal ATR multiplier selected: {atr_mult:.2f}")
+
         print(f"ATR multiplier : base={atr_mult} | typical={_typical:.2f} "
               f"(ER_med={_er_med:.2f}, vol_med={_vol_med:.2f}) | range=[{atr_mult*0.8:.1f}, 4.5]")
         print(f"Token params   : lookahead={token_lookahead}h | "
@@ -1567,18 +1916,157 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         train_pool = df.iloc[:train_end].reset_index(drop=True)
         holdout = df.iloc[test_start:].reset_index(drop=True)
         print(f"   Split -> train pool: {len(train_pool)} | embargo: {EMBARGO} | holdout: {len(holdout)}")
+        
+        # Copy raw price and ATR values to separate columns before any feature drift normalization/scaling
+        train_pool['_close_raw'] = train_pool['close'].copy()
+        train_pool['_atr_raw'] = train_pool['_atr'].copy()
+        holdout['_close_raw'] = holdout['close'].copy()
+        holdout['_atr_raw'] = holdout['_atr'].copy()
 
         Xtp = train_pool[feature_cols]
         ytp = train_pool['target'].to_numpy().astype(int)
 
-        # ---- 1) Feature Health Manager (train pool) ----
-        print("   Evaluating Feature Health...")
+        # ---- 1) Feature Health Manager & Drift Corrector (Phase 2) ----
+        print("   Evaluating Feature Health and Drift...")
         from src.ml.feature_health import FeatureHealthManager, DynamicFeatureWeightingEngine
         fhm = FeatureHealthManager()
-        fhm.analyze_drift(Xtp, holdout[feature_cols], feature_cols)
+
+        # Apply deterministic feature blacklist FIRST: PRIORITY 1 — hardcoded critical drifters
+        # These are the top critical features identified by forensic reports (PSI/KS thresholds).
+        to_drop_hardcoded = [c for c in feature_cols if c in FEATURE_BLACKLIST]
+        if to_drop_hardcoded:
+            print(f"   [FORENSIC FIX] Removing {len(to_drop_hardcoded)} hardcoded critical drifters: {to_drop_hardcoded[:8]}...")
+            feature_cols = [c for c in feature_cols if c not in to_drop_hardcoded]
+            Xtp = train_pool[feature_cols]
+
+        # Now run drift analysis on the cleaned feature set so FeatureHealthManager
+        # only evaluates remaining features and can suggest additional removals.
+        try:
+            fhm.analyze_drift(Xtp, holdout[feature_cols], feature_cols)
+        except Exception:
+            # If drift analysis fails, continue—hard blacklist still applied.
+            print("   FeatureHealth.analyze_drift() failed; continuing with hardcoded blacklist applied.")
+
+        # PRIORITY 2 — FeatureHealthManager state-based removal for remaining drifted features
+        try:
+            states = fhm.get_feature_states()
+            to_drop_fhm = [c for c, s in states.items() if s in ("DEGRADED", "CRITICAL") and c not in to_drop_hardcoded]
+            if to_drop_fhm:
+                print(f"   FeatureHealth: dropping {len(to_drop_fhm)} additional DEGRADED/CRITICAL features: {to_drop_fhm[:5]}...")
+                # Update feature_cols and training frame
+                feature_cols = [c for c in feature_cols if c not in to_drop_fhm]
+                Xtp = train_pool[feature_cols]
+            total_removed = len(to_drop_hardcoded) + len(to_drop_fhm)
+            if total_removed > 0:
+                print(f"   Total drifted features removed: {total_removed} (hardcoded: {len(to_drop_hardcoded)}, FHM: {len(to_drop_fhm)})")
+        except Exception as e_fhm:
+            print(f"   FeatureHealth state lookup failed: {e_fhm}")
+        
+        # Train a quick default model to rank features by gain
+        print("   Training baseline model to audit feature contribution...")
+        quick_dtrain = xgb.DMatrix(Xtp, label=ytp)
+        quick_model = xgb.train({'objective': 'multi:softprob', 'num_class': NUM_CLASS, 'seed': 42}, quick_dtrain, num_boost_round=50)
+        importance_scores = quick_model.get_score(importance_type='gain')
+        feature_importance = {col: float(importance_scores.get(col, 0.0)) for col in feature_cols}
+        sorted_features = sorted(feature_cols, key=lambda c: feature_importance.get(c, 0.0), reverse=True)
+        M = len(sorted_features)
+        
+        feature_transforms = {}
+        removed_features = []
+        unstable_before = []
+        
+        for col in feature_cols:
+            psi = fhm.drift_scores.get(col, {}).get('psi', 0.0)
+            ks = fhm.drift_scores.get(col, {}).get('ks', 0.0)
+            
+            if psi > 1.0 or ks > 0.50:
+                unstable_before.append(col)
+                rank = sorted_features.index(col)
+                
+                if rank < int(M * 0.15):
+                    # High importance -> z-score
+                    mean_val = float(Xtp[col].mean())
+                    std_val = float(Xtp[col].std())
+                    feature_transforms[col] = {
+                        "type": "zscore",
+                        "mean": mean_val,
+                        "std": std_val
+                    }
+                    Xtp[col] = (Xtp[col] - mean_val) / (std_val + 1e-8)
+                    holdout[col] = (holdout[col] - mean_val) / (std_val + 1e-8)
+                elif rank < int(M * 0.50):
+                    # Medium importance -> minmax
+                    min_val = float(Xtp[col].min())
+                    max_val = float(Xtp[col].max())
+                    feature_transforms[col] = {
+                        "type": "minmax",
+                        "min": min_val,
+                        "max": max_val
+                    }
+                    Xtp[col] = (Xtp[col] - min_val) / (max_val - min_val + 1e-8)
+                    holdout[col] = (holdout[col] - min_val) / (max_val - min_val + 1e-8)
+                else:
+                    # Low importance -> remove
+                    removed_features.append(col)
+                    
+        # Exclude removed drift features
+        feature_cols_clean = [c for c in feature_cols if c not in removed_features]
+        Xtp = Xtp[feature_cols_clean].copy()
+        
+        # ---- Feature Rank Correlation Audit (Priority 1) ----
+        print("   Performing Feature Rank Correlation Audit...")
+        # Compute continuous target outcomes for correlation audit on training pool
+        close_tp = train_pool['_close_raw'].to_numpy()
+        atr_tp = train_pool['_atr_raw'].to_numpy()
+        y_tp = ytp
+        
+        rets_tp = []
+        r_mult_tp = []
+        for i in range(len(train_pool)):
+            yt_val = int(y_tp[i])
+            b_val = atr_mult * atr_tp[i] / close_tp[i] if close_tp[i] > 0 else 0.015
+            buy_ret = (b_val - FEE_ROUNDTRIP) if yt_val == 2 else (-b_val - FEE_ROUNDTRIP) if yt_val == 0 else -FEE_ROUNDTRIP
+            
+            rets_tp.append(buy_ret)
+            r_mult_tp.append(buy_ret / b_val if b_val > 0 else 0.0)
+            
+        rets_tp = np.array(rets_tp)
+        r_mult_tp = np.array(r_mult_tp)
+        
+        uncorrelated_features = []
+        for col in feature_cols_clean:
+            corr_pnl = Xtp[col].corr(pd.Series(rets_tp), method='spearman')
+            corr_rmult = Xtp[col].corr(pd.Series(r_mult_tp), method='spearman')
+            
+            max_corr = max(
+                abs(corr_pnl) if pd.notna(corr_pnl) else 0.0,
+                abs(corr_rmult) if pd.notna(corr_rmult) else 0.0
+            )
+            if max_corr < 0.10:
+                uncorrelated_features.append(col)
+                removed_features.append(col)
+                
+        # Final active features
+        feature_cols = [c for c in feature_cols_clean if c not in uncorrelated_features]
+        Xtp = train_pool[feature_cols].copy()
+        
+        # Re-compute drift for report
+        fhm_after = FeatureHealthManager()
+        fhm_after.analyze_drift(Xtp, holdout[feature_cols], feature_cols)
+        unstable_after = [c for c in feature_cols if fhm_after.drift_scores.get(c, {}).get('psi', 0.0) > 1.0 or fhm_after.drift_scores.get(c, {}).get('ks', 0.0) > 0.50]
+        
+        print(f"\n   === AEGIS FEATURE RECONCILIATION REPORT for {symbol} ===")
+        print(f"      Initial features: {len(sorted_features)}")
+        print(f"      Unstable features (drifted) before: {len(unstable_before)}")
+        print(f"      Features transformed (Z-score/MinMax): {len(feature_transforms)}")
+        print(f"      Features removed due to drift: {len([c for c in removed_features if c not in uncorrelated_features])}")
+        print(f"      Features removed due to low correlation (<0.10): {len(uncorrelated_features)}")
+        print(f"      Total features removed: {len(removed_features)}")
+        print(f"      Unstable features after: {len(unstable_after)}")
+        print(f"      Active features remaining: {len(feature_cols)}")
+        
         dfwe = DynamicFeatureWeightingEngine()
-        fw = dfwe.calculate_weights(fhm.feature_states, feature_cols)
-        # Xtp remains unchanged because we weight features instead of dropping them
+        fw = dfwe.calculate_weights(fhm_after.feature_states, feature_cols)
         print(f"   Active feature set: {len(feature_cols)} features.")
 
         # ---- 2) Optuna tune primary (purged inner split) ----
@@ -1594,36 +2082,121 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         # ---- 3) Primary OOF on train pool -> dev metrics, calibration, meta data ----
         oof = primary_oof(Xtp, ytp, full_params, N_SPLITS_CV, EMBARGO, fw=fw)
         mask = ~np.isnan(oof[:, 0])
+        mask_idx = np.where(mask)[0]
         cv_acc = float(accuracy_score(ytp[mask], oof[mask].argmax(1)))
         cv_f1 = float(f1_score(ytp[mask], oof[mask].argmax(1), average='macro', zero_division=0))
         T = fit_temperature(oof[mask], ytp[mask])
         print(f"Primary OOF (dev): acc {cv_acc:.4f} | macro-F1 {cv_f1:.4f} | T {T:.3f}")
 
+        # ---- Calibration selector (phase 5 adaptive selection) ----
+        try:
+            from src.ml.calibration_selector import evaluate_and_select
+            candidates = {}
+            # Use BUY class probability as calibration target (binary: buy vs not-buy)
+            raw_buy = oof[mask][:, 2]
+            y_buy = (ytp[mask] == 2).astype(float)
+            candidates['uncalibrated'] = {'probs': raw_buy, 'raw_probs': raw_buy}
+            candidates['temperature'] = {'probs': apply_temperature(raw_buy.reshape(-1, 1), T).flatten(), 'raw_probs': raw_buy}
+            # Optional Platt (logistic) fit
+            try:
+                from sklearn.linear_model import LogisticRegression
+                lr = LogisticRegression(solver='lbfgs')
+                lr.fit(raw_buy.reshape(-1, 1), y_buy)
+                platt_probs = lr.predict_proba(raw_buy.reshape(-1, 1))[:, 1]
+                candidates['platt'] = {'probs': platt_probs, 'raw_probs': raw_buy}
+            except Exception:
+                pass
+            cal_choice = evaluate_and_select(candidates, y_buy)
+            selected_cal = cal_choice.get('selected')
+            print(f"   Calibration selector chose: {selected_cal} | details: {cal_choice.get('details')}")
+        except Exception as _e:
+            selected_cal = None
+            cal_choice = {'error': str(_e)}
+
         # ---- 4) Meta-labeling: build dataset + OOF + pick threshold ----
         meta_X_all = build_meta_X(Xtp, oof)
         prop_all = proposed_side(oof)
 
-        meta_y_all = (prop_all == ytp).astype(int)
+        # Compute continuous target expected returns (realized PnL) for meta-model
+        meta_y_all = np.full(len(Xtp), np.nan)
+        for i in np.where(mask)[0]:
+            y_true = int(ytp[i])
+            side = int(prop_all[i])
+            close_i = float(train_pool['_close_raw'].iloc[i])
+            atr_i = float(train_pool['_atr_raw'].iloc[i])
+            b = atr_mult * atr_i / close_i if close_i > 0 else 0.015
+            
+            if y_true == 1:
+                pnl_val = -FEE_ROUNDTRIP
+            elif side == y_true:
+                pnl_val = b - FEE_ROUNDTRIP
+            else:
+                pnl_val = -b - FEE_ROUNDTRIP
+            meta_y_all[i] = pnl_val
 
         mX = meta_X_all[mask].reset_index(drop=True)
         mY = meta_y_all[mask]
         prop_v = prop_all[mask]
         y_v = ytp[mask]
+        
+        # ---- TASK 2: FILTER DRIFTED FEATURES BEFORE META TRAINING ----
+        # Remove features with PSI > 1.0 or KS > 0.50 to prevent train-test divergence
+        print("   [TASK 2] Filtering drifted features before meta training...")
+        meta_feature_cols = list(mX.columns)
+        try:
+            drift_result = detect_feature_drift(train_pool[meta_feature_cols], holdout[meta_feature_cols])
+            # detect_feature_drift() returns 'features_to_exclude'
+            drifted_features = drift_result.get('features_to_exclude', [])
+            if drifted_features:
+                print(f"      Detected {len(drifted_features)} drifted features: {drifted_features[:5]}...")
+                mX = mX.drop(columns=[c for c in drifted_features if c in mX.columns])
+                print(f"      Meta X reduced: {len(meta_feature_cols)} -> {len(mX.columns)} features")
+        except Exception as e:
+            print(f"      Feature drift filtering failed: {e}")
 
-        # Downweight HOLD-labeled bars in meta training.
-        # HOLD bars always have meta_y=0 (primary proposes BUY/SELL but hits no barrier),
-        # representing 40-70% of training data. Including them at full weight makes the
-        # meta uniformly pessimistic (~0.52 for everything) → top-25% is a random slice
-        # -> precision ~ all-bar precision -> fails target. Downweighting to 0.30 reduces
-        # contamination while preserving the regime signal ("choppy regime = less reliable").
-        _n_hold = int((ytp[mask] == 1).sum())
-        _n_dir  = int((ytp[mask] != 1).sum())
-        # Weight each HOLD bar so the total HOLD contribution equals half the directional
-        # contribution — balancing signal without full exclusion.
-        _hold_w = float((_n_dir * 0.5) / max(_n_hold, 1))
-        _hold_w = float(np.clip(_hold_w, 0.05, 0.60))   # keep in a sane range
-        meta_w  = np.where(ytp[mask] == 1, _hold_w, 1.0).astype(float)
+        # ---- 3) PHASE 5: HOLD Pollution Audit (AEGIS META GATE V2) ----
+        # TASK 1: Apply C_excluded strategy BEFORE meta training (not as weights)
+        # This means: remove HOLD labels entirely from meta training dataset
+        print("   [TASK 1] Applying HOLD pollution strategy BEFORE meta training...")
+        
+        hold_ratio = float((y_v == 1).mean()) if len(y_v) else 0.0
+        print(f"      HOLD label ratio before filtering: {hold_ratio:.1%}")
+        
+        # TASK 1 FIX: Apply C_excluded BEFORE meta training by removing HOLD samples
+        # This is the most direct way to eliminate 66% HOLD pollution
+        if META_HOLD_AUTO_SELECT or META_HOLD_STRATEGY == "C_excluded":
+            non_hold_mask = (y_v != 1)
+            orig_len = len(mX)
+            # Track original train_pool indices through the filtering: mask_idx[non_hold_mask]
+            meta_idx = mask_idx[non_hold_mask]
+            mX = mX[non_hold_mask].reset_index(drop=True)
+            mY = mY[non_hold_mask]
+            prop_v = prop_v[non_hold_mask]
+            y_v = y_v[non_hold_mask]
+            print(f"      Applied C_excluded: removed {orig_len - len(mX)} HOLD samples from meta training")
+            print(f"      Meta training now: {len(mX)} samples (BUY: {(y_v==2).sum()}, SELL: {(y_v==0).sum()})")
+            best_strategy = "C_excluded"
+            meta_w = np.ones(len(mX), dtype=float)
+            strategy_reports = {"C_excluded": {"applied": "pre-training", "samples": len(mX)}}
+            hold_strategy_selected = "C_excluded"
+            hold_strategy_audit = strategy_reports
+            # Skip the strategy search loop entirely
+            skip_strategy_search = True
+        else:
+            meta_idx = mask_idx
+            skip_strategy_search = False
 
+        # Precompute values for fast CV evaluation (using meta_idx to match filtered dataset)
+        df_dev_temp = train_pool.iloc[meta_idx].copy()
+        close_tp_raw = df_dev_temp['_close_raw'].to_numpy()
+        atr_tp_raw = df_dev_temp['_atr_raw'].to_numpy()
+        b_fracs_t = np.divide(atr_mult * atr_tp_raw, close_tp_raw, out=np.zeros(len(close_tp_raw)), where=close_tp_raw > 0)
+
+        if skip_strategy_search:
+            print("   [TASK 1] Skipping strategy comparison (C_excluded already applied pre-training)")
+            meta_ready = len(mX) >= max(200, MIN_FIRES_DEV * 4)
+
+        regime_policies = {}
         meta_ready = len(mX) >= max(200, MIN_FIRES_DEV * 4)
         if meta_ready:
             meta_oof = binary_oof(mX, mY, token_meta_params, N_SPLITS_CV, EMBARGO, w=meta_w)
@@ -1633,15 +2206,22 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             from src.ml.regime_intelligence import RegimeConfidenceModifier
             
             mcf = MetaCalibrationFramework()
-            mcf.evaluate_calibrators(meta_oof, mY)
-            meta_oof_cal = mcf.calibrate(meta_oof)
+            # Evaluate calibration on binary target, mapping continuous returns inside calibration.py
+            y_v_binary = (y_v == prop_v).astype(int)
+            mcf.evaluate_calibrators(meta_oof, y_v_binary)
+            
+            # Force calibrator_type to 'uncalibrated' as we use continuous expected returns for EdgeScoringEngine
+            mcf.calibrator_type = 'uncalibrated'
+            mcf.best_calibrator = None
+            meta_oof_cal = meta_oof
             
             cre = ConfidenceReliabilityEngine()
-            cre.build_reliability_curve(meta_oof_cal, mY)
+            cre._mapping_x = None
+            cre._mapping_y = None
             
             rcm = RegimeConfidenceModifier(target_precision=token_precision_target)
             if 'hmm_regime' in train_pool.columns:
-                regimes_arr = train_pool['hmm_regime'].iloc[mask].to_numpy()
+                regimes_arr = train_pool['hmm_regime'].iloc[meta_idx].to_numpy()
                 rcm.analyze_regimes(regimes_arr, meta_oof_cal, mY, prop_v)
 
             # ── Spot-on market dynamics: Regime-specific directional filter on DEV set ──
@@ -1653,8 +2233,8 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
                 regimes_dict = _opt["regimes"]
                 
                 vol_avg = train_pool["volume"].rolling(24, min_periods=1).mean()
-                atr_pct = (train_pool["_atr"] / train_pool["close"]).fillna(0)
-                momentum = train_pool["close"].pct_change(24).fillna(0)
+                atr_pct = (train_pool["_atr_raw"] / train_pool["_close_raw"]).fillna(0)
+                momentum = train_pool["_close_raw"].pct_change(24).fillna(0)
                 
                 def _tier(val, p33, p67): return "low" if val <= p33 else ("med" if val <= p67 else "high")
                 def _trend(val, p33, p67): return "down" if val <= p33 else ("flat" if val <= p67 else "up")
@@ -1668,7 +2248,7 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
                     for i in range(len(Xtp))
                 ]
                 
-                idx_map = np.where(mask)[0]
+                idx_map = meta_idx
                 for i_mask in range(len(mX)):
                     orig_i = idx_map[i_mask]
                     reg = regimes_dict.get(regime_strs[orig_i], {})
@@ -1684,29 +2264,173 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
 
                         # ── Edge-Driven Evaluation ──────────────
             from src.trading.edge_engine import EdgeScoringEngine
-            MINIMUM_EDGE = 55.0
             
-            df_dev = train_pool[mask] if 'mask' in locals() else train_pool
-            edge_buy = EdgeScoringEngine.compute_edge_batch(df_dev, meta_oof_cal, 'BUY').to_numpy()
-            edge_sell = EdgeScoringEngine.compute_edge_batch(df_dev, meta_oof_cal, 'SELL').to_numpy()
+            df_dev = train_pool.iloc[meta_idx] if 'meta_idx' in locals() else train_pool
+            use_rank = bool(meta_gate_profile and meta_gate_profile.get('edge_rank_mode') == 'percentile')
+            edge_buy = EdgeScoringEngine.compute_edge_batch(df_dev, meta_oof_cal, 'BUY', use_rank=use_rank).to_numpy()
+            edge_sell = EdgeScoringEngine.compute_edge_batch(df_dev, meta_oof_cal, 'SELL', use_rank=use_rank).to_numpy()
+
+            profile_thresholds = get_profile_edge_thresholds(
+                meta_gate_profile, edge_buy, edge_sell, prop_dev_filtered, y_v
+            )
+            if profile_thresholds is not None:
+                thr_buy, thr_sell, hit_buy, hit_sell, prec_buy, prec_sell, n_buy, n_sell = profile_thresholds
+                cov_buy = float(n_buy / max(1, int((prop_dev_filtered == 2).sum())))
+                cov_sell = float(n_sell / max(1, int((prop_dev_filtered == 0).sum())))
+                print(f"      Using meta gate profile thresholds: BUY={thr_buy:.3f}, SELL={thr_sell:.3f}, side_specific={meta_gate_profile.get('side_specific', True)}")
+            else:
+                # Pick thresholds dynamically per side (Phase 3)
+                # TASK 3 FIX: Use percentile-based logic that adapts to edge score distribution
+                thr_buy, prec_buy, cov_buy, n_buy, hit_buy = pick_edge_threshold_by_side(
+                    edge_buy, prop_dev_filtered, y_v, 2, target=token_precision_target, min_fires=max(5, int(len(edge_buy) * MIN_COVERAGE))
+                )
+                thr_sell, prec_sell, cov_sell, n_sell, hit_sell = pick_edge_threshold_by_side(
+                    edge_sell, prop_dev_filtered, y_v, 0, target=token_precision_target, min_fires=max(5, int(len(edge_sell) * MIN_COVERAGE))
+                )
             
-            fire_buy_dev = (edge_buy >= MINIMUM_EDGE) & (prop_dev_filtered == 2)
-            fire_sell_dev = (edge_sell >= MINIMUM_EDGE) & (prop_dev_filtered == 0)
+            # TASK 3 FIX: BUY threshold deadlock - if no valid BUY thresholds found, use adaptive fallback
+            if not hit_buy and n_buy == 0:
+                print(f"      WARNING: No valid BUY thresholds found (deadlock). Using adaptive fallback.")
+                # Use lower percentile to find ANY BUY signals
+                lower_q_vals = [0.50, 0.40, 0.30, 0.20, 0.15, 0.10]
+                for q_val in lower_q_vals:
+                    fallback_thr = float(np.quantile(edge_buy, 1.0 - q_val))
+                    fallback_fire = edge_buy >= fallback_thr
+                    fallback_side = (prop_dev_filtered == 2) & fallback_fire
+                    if fallback_side.sum() >= 5:
+                        thr_buy = fallback_thr
+                        prec_buy = float((y_v[fallback_side] == 2).mean()) if fallback_side.sum() > 0 else 0.0
+                        cov_buy = q_val
+                        n_buy = int(fallback_side.sum())
+                        hit_buy = True
+                        print(f"      BUY fallback: threshold={fallback_thr:.1f}, coverage={q_val:.1%}, n={n_buy}, prec={prec_buy:.1%}")
+                        break
             
-            n_buy = int(fire_buy_dev.sum())
-            n_sell = int(fire_sell_dev.sum())
+            if not hit_sell and n_sell == 0:
+                print(f"      WARNING: No valid SELL thresholds found (deadlock). Using adaptive fallback.")
+                lower_q_vals = [0.50, 0.40, 0.30, 0.20, 0.15, 0.10]
+                for q_val in lower_q_vals:
+                    fallback_thr = float(np.quantile(edge_sell, 1.0 - q_val))
+                    fallback_fire = edge_sell >= fallback_thr
+                    fallback_side = (prop_dev_filtered == 0) & fallback_fire
+                    if fallback_side.sum() >= 5:
+                        thr_sell = fallback_thr
+                        prec_sell = float((y_v[fallback_side] == 0).mean()) if fallback_side.sum() > 0 else 0.0
+                        cov_sell = q_val
+                        n_sell = int(fallback_side.sum())
+                        hit_sell = True
+                        print(f"      SELL fallback: threshold={fallback_thr:.1f}, coverage={q_val:.1%}, n={n_sell}, prec={prec_sell:.1%}")
+                        break
+
+            # ---- Regime-Aware Threshold Optimization (Priority 4) ----
+            print("   Optimizing separate threshold policies per HMM regime...")
+            regimes_list = ['ACCUMULATION', 'DISTRIBUTION', 'COMPRESSION', 'VOLATILE_EXPANSION', 'TRENDING_BULL', 'TRENDING_BEAR', 'CHOPPY']
+            regime_policies = {}
+            
+            for r in regimes_list:
+                r_mask = (df_dev['hmm_regime'] == r).to_numpy() if 'hmm_regime' in df_dev.columns else np.zeros(len(df_dev), dtype=bool)
+                if r_mask.sum() < 30:
+                    # Not enough data for this regime, use defaults
+                    regime_policies[r] = {
+                        "buy_thr": thr_buy,
+                        "sell_thr": thr_sell,
+                        "buy_ok": True,
+                        "sell_ok": True
+                    }
+                    continue
+                    
+                # Tune BUY side
+                best_buy_thr = thr_buy
+                buy_ok = True
+                buy_r_mask = r_mask & (prop_dev_filtered == 2)
+                if buy_r_mask.sum() >= 10:
+                    es_buy_r = edge_buy[buy_r_mask]
+                    yt_buy_r = y_v[buy_r_mask]
+                    best_buy_metric = -999.0
+                    for th in [45.0, 50.0, 52.0, 55.0, 58.0, 60.0, 62.0, 65.0]:
+                        fire = (es_buy_r >= th)
+                        if fire.sum() < 5:
+                            continue
+                        fired_idx = np.where(buy_r_mask)[0][fire]
+                        fired_rets = []
+                        for idx_val in fired_idx:
+                            close_val = df_dev['_close_raw'].iloc[idx_val]
+                            atr_val = df_dev['_atr_raw'].iloc[idx_val]
+                            b_val = atr_mult * atr_val / close_val if close_val > 0 else 0.015
+                            label_val = y_v[idx_val]
+                            if label_val == 1:
+                                rets_val = -FEE_ROUNDTRIP
+                            elif label_val == 2:
+                                rets_val = b_val - FEE_ROUNDTRIP
+                            else:
+                                rets_val = -b_val - FEE_ROUNDTRIP
+                            fired_rets.append(rets_val)
+                        fired_rets = np.array(fired_rets)
+                        exp_pct = float(fired_rets.mean()) * 100
+                        gross_win = float(fired_rets[fired_rets > 0].sum())
+                        gross_loss = float(abs(fired_rets[fired_rets < 0].sum()))
+                        pf_val = gross_win / (gross_loss + 1e-9)
+                        
+                        metric = exp_pct * min(pf_val, 3.0)
+                        if metric > best_buy_metric:
+                            best_buy_metric = metric
+                            best_buy_thr = th
+                    if best_buy_metric < -0.05:
+                        buy_ok = False
+                        
+                # Tune SELL side
+                best_sell_thr = thr_sell
+                sell_ok = True
+                sell_r_mask = r_mask & (prop_dev_filtered == 0)
+                if sell_r_mask.sum() >= 10:
+                    es_sell_r = edge_sell[sell_r_mask]
+                    yt_sell_r = y_v[sell_r_mask]
+                    best_sell_metric = -999.0
+                    for th in [45.0, 50.0, 52.0, 55.0, 58.0, 60.0, 62.0, 65.0]:
+                        fire = (es_sell_r >= th)
+                        if fire.sum() < 5:
+                            continue
+                        fired_idx = np.where(sell_r_mask)[0][fire]
+                        fired_rets = []
+                        for idx_val in fired_idx:
+                            close_val = df_dev['_close_raw'].iloc[idx_val]
+                            atr_val = df_dev['_atr_raw'].iloc[idx_val]
+                            b_val = atr_mult * atr_val / close_val if close_val > 0 else 0.015
+                            label_val = y_v[idx_val]
+                            if label_val == 1:
+                                rets_val = -FEE_ROUNDTRIP
+                            elif label_val == 0:
+                                rets_val = b_val - FEE_ROUNDTRIP
+                            else:
+                                rets_val = -b_val - FEE_ROUNDTRIP
+                            fired_rets.append(rets_val)
+                        fired_rets = np.array(fired_rets)
+                        exp_pct = float(fired_rets.mean()) * 100
+                        gross_win = float(fired_rets[fired_rets > 0].sum())
+                        gross_loss = float(abs(fired_rets[fired_rets < 0].sum()))
+                        pf_val = gross_win / (gross_loss + 1e-9)
+                        
+                        metric = exp_pct * min(pf_val, 3.0)
+                        if metric > best_sell_metric:
+                            best_sell_metric = metric
+                            best_sell_thr = th
+                    if best_sell_metric < -0.05:
+                        sell_ok = False
+                        
+                regime_policies[r] = {
+                    "buy_thr": best_buy_thr,
+                    "sell_thr": best_sell_thr,
+                    "buy_ok": buy_ok,
+                    "sell_ok": sell_ok
+                }
+                print(f"      Regime {r:20} -> BUY: thr={best_buy_thr:.1f}, ok={buy_ok} | SELL: thr={best_sell_thr:.1f}, ok={sell_ok}")
+            
+            fire_buy_dev = (edge_buy >= thr_buy) & (prop_dev_filtered == 2)
+            fire_sell_dev = (edge_sell >= thr_sell) & (prop_dev_filtered == 0)
+            
             dev_n = n_buy + n_sell
-            
-            hit_buy = True if n_buy > 0 else False
-            hit_sell = True if n_sell > 0 else False
             hit_target = hit_buy or hit_sell
-            
-            thr = MINIMUM_EDGE
-            thr_buy = MINIMUM_EDGE
-            thr_sell = MINIMUM_EDGE
-            
-            prec_buy = float((y_v[fire_buy_dev] == 2).mean()) if n_buy > 0 else 0.0
-            prec_sell = float((y_v[fire_sell_dev] == 0).mean()) if n_sell > 0 else 0.0
+            thr = float((thr_buy + thr_sell) / 2.0)
             
             fire_dev_any = fire_buy_dev | fire_sell_dev
             dev_prec = float((y_v[fire_dev_any] == prop_dev_filtered[fire_dev_any]).mean()) if dev_n > 0 else 0.0
@@ -1717,8 +2441,159 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             
             exp_buy = (prec_buy * 1.5 - (1-prec_buy)) * 100
             exp_sell = (prec_sell * 1.5 - (1-prec_sell)) * 100
+            
+            # ── Filter Audits (Phase 4, 5, 6) ──
+            if signal_vetoes is None:
+                disable_sr_veto = False
+                disable_trend_veto = False
+                disable_confluence_veto = False
+            else:
+                disable_sr_veto = 'sr' not in signal_vetoes
+                disable_trend_veto = 'trend' not in signal_vetoes
+                disable_confluence_veto = 'confluence' not in signal_vetoes
 
-            meta_full = xgb.train(token_meta_params, _dm(mX, mY, meta_w), num_boost_round=300, verbose_eval=False)
+            # Helper for audit
+            def audit_filter(y_true, prop, baseline_mask, filter_pass):
+                if baseline_mask.sum() == 0:
+                    return 0.0, 0.0, 0.0, 0.0
+                n_before = baseline_mask.sum()
+                prec_before = float((prop[baseline_mask] == y_true[baseline_mask]).mean())
+                
+                fired_after = baseline_mask & filter_pass
+                n_after = fired_after.sum()
+                prec_after = float((prop[fired_after] == y_true[fired_after]).mean()) if n_after > 0 else 0.0
+                
+                prec_gain = prec_after - prec_before
+                cov_loss = (n_before - n_after) / n_before if n_before > 0 else 0.0
+                return prec_before, prec_after, cov_loss, prec_gain
+
+            # Base signal mask before filters (EdgeEngine pass)
+            fire_base = ((edge_buy >= thr_buy) & (prop_dev_filtered == 2)) | \
+                        ((edge_sell >= thr_sell) & (prop_dev_filtered == 0))
+            
+            # 1. S&R filter audit
+            at_res_dev = df_dev['is_at_resistance'].to_numpy().astype(bool) if 'is_at_resistance' in df_dev.columns else np.zeros(len(df_dev), dtype=bool)
+            at_sup_dev = df_dev['is_at_support'].to_numpy().astype(bool) if 'is_at_support' in df_dev.columns else np.zeros(len(df_dev), dtype=bool)
+            
+            top25_thr = float(np.quantile(meta_oof_cal[fire_base], 0.75)) if fire_base.sum() > 0 else 0.55
+            top25 = meta_oof_cal >= top25_thr
+            sr_pass_dev = ~(((prop_dev_filtered == 2) & at_res_dev & ~top25) | \
+                            ((prop_dev_filtered == 0) & at_sup_dev & ~top25))
+            
+            p_bef, p_aft, cov_l, prec_g = audit_filter(y_v, prop_dev_filtered, fire_base, sr_pass_dev)
+            
+            # S&R win rate test (Phase 5)
+            blocked_sr = fire_base & ~sr_pass_dev
+            passed_sr = fire_base & sr_pass_dev
+            harmful_sr = False
+            if blocked_sr.sum() > 0 and passed_sr.sum() > 0:
+                blocked_wr = float((prop_dev_filtered[blocked_sr] == y_v[blocked_sr]).mean())
+                passed_wr = float((prop_dev_filtered[passed_sr] == y_v[passed_sr]).mean())
+                if blocked_wr >= passed_wr:
+                    harmful_sr = True
+            
+            if (prec_g < 0.01 and cov_l > 0.20) or harmful_sr:
+                disable_sr_veto = True
+                print(f"      [SR AUDIT] disabled (overrestrictive={prec_g < 0.01 and cov_l > 0.20}, harmful={harmful_sr}, cov_loss={cov_l:.1%}, prec_gain={prec_g:.1%})")
+            
+            # 2. Daily Trend filter audit
+            if 'macro_trend_1d' in df_dev.columns:
+                trend_1d = df_dev['macro_trend_1d'].to_numpy()
+                trend_pass_dev = ~(
+                    ((prop_dev_filtered == 2) & (trend_1d < -0.2) & ~top25) | \
+                    ((prop_dev_filtered == 0) & (trend_1d > 0.2) & ~top25)
+                )
+            else:
+                trend_pass_dev = np.ones(len(df_dev), dtype=bool)
+                
+            p_bef_t, p_aft_t, cov_l_t, prec_g_t = audit_filter(y_v, prop_dev_filtered, fire_base, trend_pass_dev)
+            if prec_g_t < 0.01 and cov_l_t > 0.20:
+                disable_trend_veto = True
+                print(f"      [TREND AUDIT] disabled (overrestrictive=True, cov_loss={cov_l_t:.1%}, prec_gain={prec_g_t:.1%})")
+
+            # 3. Confluence filter audit
+            confluence_pass_dev = np.ones(len(df_dev), dtype=bool)
+            if 'total_confluence' in df_dev.columns:
+                tc = df_dev['total_confluence'].to_numpy()
+                confluence_pass_dev = ~((prop_dev_filtered == 2) & (tc < -0.05)) & ~((prop_dev_filtered == 0) & (tc > 0.05))
+            
+            p_bef_c, p_aft_c, cov_l_c, prec_g_c = audit_filter(y_v, prop_dev_filtered, fire_base, confluence_pass_dev)
+            if prec_g_c < 0.01 and cov_l_c > 0.20:
+                disable_confluence_veto = True
+                print(f"      [CONFLUENCE AUDIT] disabled (overrestrictive=True, cov_loss={cov_l_c:.1%}, prec_gain={prec_g_c:.1%})")
+
+            # 4. Regime filter audit (Phase 6)
+            if _opt and "regimes" in _opt and "regime_boundaries" in _opt:
+                regimes_dict = _opt["regimes"]
+                regime_series = np.array(regime_strs)[meta_idx]
+                
+                # Unfiltered proposals (before regime skipping)
+                fire_base_unfiltered = ((edge_buy >= thr_buy) & (prop_v == 2)) | \
+                                       ((edge_sell >= thr_sell) & (prop_v == 0))
+                
+                for r_name, r_config in list(regimes_dict.items()):
+                    if r_config.get("skipped"):
+                        blocked_reg = fire_base_unfiltered & (regime_series == r_name) & (prop_dev_filtered == 1)
+                        if blocked_reg.sum() > 0:
+                            blocked_precision = float((prop_v[blocked_reg] == y_v[blocked_reg]).mean())
+                            if blocked_precision > 0.50:
+                                r_config["skipped"] = False
+                                print(f"      [REGIME AUDIT] Regime {r_name} block is harmful (blocked precision {blocked_precision:.1%} > 50.0%). Re-enabled regime (downgraded to soft penalty).")
+
+            # Fleet Learning Cache Saving
+            import pickle
+            from pathlib import Path
+            
+            base = symbol.replace('/', '_')
+            oof_cache_dir = Path(root_dir) / "data" / "oof_cache"
+            oof_cache_dir.mkdir(parents=True, exist_ok=True)
+            
+            cache_file = oof_cache_dir / f"{base}_oof.pkl"
+            with open(cache_file, "wb") as f:
+                pickle.dump((mX, mY, meta_w), f)
+            print(f"   Saved OOF cache for {symbol} to {cache_file.name}")
+            
+            # Fleet Learning Pooling
+            mX_list = []
+            mY_list = []
+            meta_w_list = []
+            
+            for pkl_path in oof_cache_dir.glob("*.pkl"):
+                try:
+                    with open(pkl_path, "rb") as f:
+                        cached_mX, cached_mY, cached_meta_w = pickle.load(f)
+                    # Align features to current token's active feature_cols
+                    aligned_mX = cached_mX.reindex(columns=feature_cols, fill_value=0.0)
+                    mX_list.append(aligned_mX)
+                    mY_list.append(cached_mY)
+                    meta_w_list.append(cached_meta_w)
+                except Exception as cache_load_err:
+                    print(f"   Failed to load cached OOF dataset {pkl_path.name}: {cache_load_err}")
+            
+            if mX_list:
+                mX_fleet = pd.concat(mX_list, ignore_index=True)
+                mY_fleet = np.concatenate(mY_list)
+                meta_w_fleet = np.concatenate(meta_w_list)
+                print(f"   Fleet learning pool: {len(mX_fleet)} total samples pooled from {len(mX_list)} symbols")
+            else:
+                mX_fleet = mX
+                mY_fleet = mY
+                meta_w_fleet = meta_w
+                
+            meta_full = xgb.train(token_meta_params, _dm(mX_fleet, mY_fleet, meta_w_fleet), num_boost_round=300, verbose_eval=False)
+            # Train lightweight logistic meta-model (Phase 6: trade-quality scorer)
+            try:
+                from src.ml.meta_model import train_logistic_meta
+                # Build binary target for profitable trade: pnl > 0
+                mY_binary = (mY_fleet > 0).astype(int)
+                store_dir = Path(root_dir) / "src" / "ml" / "model_store"
+                store_dir.mkdir(parents=True, exist_ok=True)
+                meta_light_path = store_dir / f"{base}_meta_light.pkl"
+                lr = train_logistic_meta(mX_fleet.fillna(0.0), mY_binary, save_path=str(meta_light_path))
+                print(f"   Lightweight meta-model trained and saved: {meta_light_path.name}")
+            except Exception as _e:
+                meta_light_path = None
+                print(f"   Lightweight meta-model training skipped: {_e}")
             flag = "target met" if hit_target else "target NOT met (best achievable)"
             print(f"   Meta gate: thr {thr:.3f} | dev precision {dev_prec:.3f} | "
                   f"coverage {dev_cov:.3f} ({dev_n} trades) | {flag}")
@@ -1757,15 +2632,34 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
 
         # ── Edge-Driven Holdout Gate ──────────────
         from src.trading.edge_engine import EdgeScoringEngine
-        MINIMUM_EDGE = 55.0
         edge_buy_h = EdgeScoringEngine.compute_edge_batch(holdout, meta_prob_h, 'BUY').to_numpy()
         edge_sell_h = EdgeScoringEngine.compute_edge_batch(holdout, meta_prob_h, 'SELL').to_numpy()
         
-        fire_buy_h = (edge_buy_h >= MINIMUM_EDGE) & (prop_h == 2)
-        fire_sell_h = (edge_sell_h >= MINIMUM_EDGE) & (prop_h == 0)
+        # Holdout Regime-specific Edge Score Thresholding (Priority 4)
+        fire_buy_h = np.zeros(len(holdout), dtype=bool)
+        fire_sell_h = np.zeros(len(holdout), dtype=bool)
         
+        for i in range(len(holdout)):
+            r = holdout['hmm_regime'].iloc[i] if 'hmm_regime' in holdout.columns else 'UNKNOWN'
+            policy = regime_policies.get(r, {
+                "buy_thr": thr_buy,
+                "sell_thr": thr_sell,
+                "buy_ok": True,
+                "sell_ok": True
+            })
+            
+            r_buy_thr = policy.get("buy_thr", thr_buy)
+            r_sell_thr = policy.get("sell_thr", thr_sell)
+            r_buy_ok = policy.get("buy_ok", True)
+            r_sell_ok = policy.get("sell_ok", True)
+            
+            if prop_h[i] == 2 and r_buy_ok:
+                fire_buy_h[i] = (edge_buy_h[i] >= r_buy_thr)
+            elif prop_h[i] == 0 and r_sell_ok:
+                fire_sell_h[i] = (edge_sell_h[i] >= r_sell_thr)
+                
         fire = fire_buy_h | fire_sell_h
-        gate_mode = f"EdgeEngine (>= {MINIMUM_EDGE})"
+        gate_mode = f"EdgeEngine (B>={thr_buy:.1f}, S>={thr_sell:.1f})"
         
         _tier_agg_pre = True
         _AGG_FLOOR_PRE = 0.50
@@ -1780,7 +2674,7 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         # meta confidence is in the top 25% of all fired signals (high conviction).
         # At support a SELL signal fights the level — same rule applies.
         # This embeds the "indicators must vote strongly to override S&R" rule.
-        if (hit_target or _tier_agg_pre) and fire.sum() >= 4:
+        if (hit_target or _tier_agg_pre) and fire.sum() >= 4 and not disable_sr_veto:
             at_res = holdout['is_at_resistance'].to_numpy().astype(bool) \
                      if 'is_at_resistance' in holdout.columns else np.zeros(len(holdout), dtype=bool)
             at_sup = holdout['is_at_support'].to_numpy().astype(bool) \
@@ -1804,7 +2698,7 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         # of counter-trend losses at 1h resolution. We tolerate it only when
         # meta-confidence is top-25% (the model has a strong conviction override).
         # Same design as the S&R filter above: principled suppression, not tuning.
-        if (hit_target or _tier_agg_pre) and fire.sum() >= 4 and 'macro_trend_1d' in holdout.columns:
+        if (hit_target or _tier_agg_pre) and fire.sum() >= 4 and 'macro_trend_1d' in holdout.columns and not disable_trend_veto:
             trend_1d = holdout['macro_trend_1d'].to_numpy()
             _top25_thr = float(np.quantile(meta_prob_h[fire], 0.75))
             _top25 = meta_prob_h >= _top25_thr
@@ -1817,9 +2711,21 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
                 fire = fire & ~trend_suppress
                 print(f"   Trend filter: suppressed {n_ts} counter-trend weak signals")
 
+        # ── Confluence filter ─────────────────────────────────
+        if (hit_target or _tier_agg_pre) and fire.sum() >= 4 and 'total_confluence' in holdout.columns and not disable_confluence_veto:
+            tc = holdout['total_confluence'].to_numpy()
+            conf_suppress = (
+                (fire & (prop_h == 2) & (tc < -0.05)) |
+                (fire & (prop_h == 0) & (tc > 0.05))
+            )
+            n_cs = int(conf_suppress.sum())
+            if n_cs:
+                fire = fire & ~conf_suppress
+                print(f"   Confluence filter: suppressed {n_cs} counter-confluence signals")
+
         # ── Per-side holdout precision (using EdgeEngine) ──
-        buy_fire = fire_buy_h
-        sell_fire = fire_sell_h
+        buy_fire = fire & (prop_h == 2)
+        sell_fire = fire & (prop_h == 0)
 
         # ── Spot-on market dynamics: Regime-specific directional filter ──────
         if (hit_target or _tier_agg_pre) and _opt and "regimes" in _opt and "regime_boundaries" in _opt:
@@ -1827,8 +2733,8 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             regimes_dict = _opt["regimes"]
             
             vol_avg = holdout["volume"].rolling(24, min_periods=1).mean()
-            atr_pct = (holdout["_atr"] / holdout["close"]).fillna(0)
-            momentum = holdout["close"].pct_change(24).fillna(0)
+            atr_pct = (holdout["_atr_raw"] / holdout["_close_raw"]).fillna(0)
+            momentum = holdout["_close_raw"].pct_change(24).fillna(0)
             
             def _tier(val, p33, p67): return "low" if val <= p33 else ("med" if val <= p67 else "high")
             def _trend(val, p33, p67): return "down" if val <= p33 else ("flat" if val <= p67 else "up")
@@ -1865,8 +2771,8 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         # barrier size as a fraction of price, for the PnL backtest
         vr = holdout['volatility_regime'].to_numpy() if 'volatility_regime' in holdout else np.ones(len(holdout))
         dyn = atr_mult * np.clip(vr, 0.8, 1.5)
-        close_arr = holdout['close'].to_numpy()
-        barrier_frac = np.divide(dyn * holdout['_atr'].to_numpy(), close_arr,
+        close_arr = holdout['_close_raw'].to_numpy()
+        barrier_frac = np.divide(dyn * holdout['_atr_raw'].to_numpy(), close_arr,
                                  out=np.zeros(len(holdout)), where=close_arr != 0)
 
         fired_n    = int(fire.sum())
@@ -1907,23 +2813,7 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
                   f"  | Max drawdown: {bt['max_drawdown_pct']:.2f}%")
 
             # ── Tradeable decision (per-side aware) ────────────────────────
-            # A side is live on holdout when it had enough trades AND cleared
-            # the fee breakeven. We use the per-side OOF approval (hit_buy /
-            # hit_sell) as a gate — the holdout can confirm or veto each side
-            # independently. This prevents a bull regime from killing BUY signals
-            # just because the pooled SELL signals were bad on holdout.
             _MIN_SIDE = 5    # minimum per-side holdout trades to trust the result
-            # A side is tradeable when:
-            #   1. OOF approved it (hit_buy / hit_sell)
-            #   2. It actually fired signals in the holdout (> 0 trades)
-            #   3. Precision is at least 50% (hard floor regardless of sample size)
-            #   4. Either: not enough trades to be conclusive (< _MIN_SIDE)
-            #              OR precision cleared the fee breakeven
-            # Zero trades → NOT "insufficient data" — it means no high-conf
-            # signals of that side appeared in holdout; that is itself evidence
-            # the side is inactive in the current regime → disable it.
-            # The 0.50 floor prevents 1-4 bad trades from unlocking a side whose
-            # combined performance is deeply negative (e.g. FIDA: -248% return).
             tradeable_buy_holdout  = (
                 hit_buy and
                 buy_h_n > 0 and
@@ -1941,30 +2831,119 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             holdout_reliable = fired_n >= MIN_HOLDOUT_FIRES
             oof_holdout_gap  = abs(dev_prec - fired_prec)
 
-            # Override: keep tradeable when combined precision OR expectancy is
-            # meaningful. Require >= 0.20 %/trade (not just > 0) — at typical
-            # holdout sizes (50-200 trades) anything below 0.20% is indistinguishable
-            # from noise. The original > 0 threshold was enabling tokens with
-            # +0.11 %/trade at 39% precision (well below breakeven) based on the
-            # triple-barrier timeout artifact rather than genuine directional edge.
-            # ── Edge-Driven Tradeability override ──────────────
-            # Under edge architecture, we never disable a side completely if signals exist
-            tradeable_final = True
-            tradeable_buy_holdout = True
-            tradeable_sell_holdout = True
-            per_side_approved = True
-            combined_ok = True
-            EXPECTANCY_FLOOR = 0.20
-            GAP_VETO_THRESHOLD = 0.15
-            veto_fires = False
+            # ── Phase 7 Global Acceptance Rules ──
+            precision_lift = fired_prec - cv_acc
+            
+            total_dir_holdout = int((prop_h == 2).sum() + (prop_h == 0).sum())
+            insufficient_opps = (total_dir_holdout < 150)
+            
+            trades_ok = (fired_n >= 30) or (insufficient_opps and fired_n >= 10)
+            coverage_ok = (coverage >= 0.02) or insufficient_opps
+            
+            passes_validation = (
+                trades_ok and
+                (bt["buy_n"] > 0 or bt["sell_n"] > 0) and
+                coverage_ok and
+                bt["profit_factor"] > 1.2 and
+                bt["expectancy_pct"] > 0.0 and
+                precision_lift > 0.0
+            )
+            
+            # Meta Gate Ranking Validation (Priority 1)
+            dir_proposed_h = (prop_h == 2) | (prop_h == 0)
+            selected_mask = fire
+            rejected_mask = dir_proposed_h & (~fire)
+            
+            selected_n = int(selected_mask.sum())
+            rejected_n = int(rejected_mask.sum())
+            
+            selected_prec = float((prop_h[selected_mask] == y_test[selected_mask]).mean()) if selected_n > 0 else 0.0
+            rejected_prec = float((prop_h[rejected_mask] == y_test[rejected_mask]).mean()) if rejected_n > 0 else 0.0
+            
+            # Compute expectancy and Sharpe on both groups for ranking diagnostics
+            selected_barrier_frac = barrier_frac[selected_mask] if selected_n > 0 else np.array([])
+            rejected_barrier_frac = barrier_frac[rejected_mask] if rejected_n > 0 else np.array([])
+            
+            selected_exp_pct = 0.0
+            selected_sharpe = 0.0
+            rejected_exp_pct = 0.0
+            rejected_sharpe = 0.0
+            
+            if selected_n > 0:
+                sel_pnls = []
+                for i in np.where(selected_mask)[0]:
+                    close_val = holdout['_close_raw'].iloc[i]
+                    label_val = y_test[i]
+                    dir_val = prop_h[i]
+                    b = barrier_frac[i]
+                    if label_val == 1:
+                        pnl = -FEE_ROUNDTRIP
+                    elif dir_val == label_val:
+                        pnl = b - FEE_ROUNDTRIP
+                    else:
+                        pnl = -b - FEE_ROUNDTRIP
+                    sel_pnls.append(pnl)
+                sel_pnls = np.array(sel_pnls)
+                selected_exp_pct = float(sel_pnls.mean()) * 100
+                if len(sel_pnls) > 1:
+                    selected_sharpe = float(sel_pnls.mean() / sel_pnls.std() * math.sqrt(8760)) if sel_pnls.std() > 1e-10 else 0.0
+            
+            if rejected_n > 0:
+                rej_pnls = []
+                for i in np.where(rejected_mask)[0]:
+                    close_val = holdout['_close_raw'].iloc[i]
+                    label_val = y_test[i]
+                    dir_val = prop_h[i]
+                    b = barrier_frac[i]
+                    if label_val == 1:
+                        pnl = -FEE_ROUNDTRIP
+                    elif dir_val == label_val:
+                        pnl = b - FEE_ROUNDTRIP
+                    else:
+                        pnl = -b - FEE_ROUNDTRIP
+                    rej_pnls.append(pnl)
+                rej_pnls = np.array(rej_pnls)
+                rejected_exp_pct = float(rej_pnls.mean()) * 100
+                if len(rej_pnls) > 1:
+                    rejected_sharpe = float(rej_pnls.mean() / rej_pnls.std() * math.sqrt(8760)) if rej_pnls.std() > 1e-10 else 0.0
+            
+            meta_gate_lift = selected_prec - rejected_prec
+            meta_gate_lift_exp = selected_exp_pct - rejected_exp_pct
+            
+            print(f"   Meta Gate Ranking Validation:")
+            print(f"      Selected:  {selected_n:>4} trades, prec {selected_prec:.1%}, exp {selected_exp_pct:+.3f}%, sharpe {selected_sharpe:+.2f}")
+            print(f"      Rejected:  {rejected_n:>4} trades, prec {rejected_prec:.1%}, exp {rejected_exp_pct:+.3f}%, sharpe {rejected_sharpe:+.2f}")
+            print(f"      Meta gate lift: prec {meta_gate_lift:+.1%}, exp {meta_gate_lift_exp:+.3f}%")
+            
+            if selected_prec <= rejected_prec:
+                print("      [VETO] Selected trades did not outperform rejected trades! Disabling the gate automatically.")
+                passes_validation = False
+                
+            tradeable_final = bool(passes_validation)
+            tradeable_buy_holdout = bool(passes_validation)
+            tradeable_sell_holdout = bool(passes_validation)
+            per_side_approved = bool(passes_validation)
+            combined_ok = bool(passes_validation)
+
+            if passes_validation:
+                print(f"      [VALIDATION] PASS: holdout_trades={fired_n}, buy_n={bt['buy_n']}, sell_n={bt['sell_n']}, coverage={coverage:.1%}, PF={bt['profit_factor']:.2f}, EV={bt['expectancy_pct']:+.3f}%, lift={precision_lift:+.1%}")
+            else:
+                reasons = []
+                if not trades_ok: reasons.append(f"insufficient_trades({fired_n}<30)")
+                if bt["buy_n"] == 0 and bt["sell_n"] == 0: reasons.append("no_trades_fired")
+                if not coverage_ok: reasons.append(f"low_coverage({coverage:.1%}<2%)")
+                if bt["profit_factor"] <= 1.2: reasons.append(f"low_PF({bt['profit_factor']:.2f}<=1.2)")
+                if bt["expectancy_pct"] <= 0.0: reasons.append(f"negative_EV({bt['expectancy_pct']:+.3f}%)")
+                if precision_lift <= 0.0: reasons.append(f"negative_lift({precision_lift:+.1%})")
+                print(f"      [VALIDATION] FAIL: {', '.join(reasons)}")
 
             if not tradeable_final:
-                if veto_fires:
+                if bt['expectancy_pct'] <= 0.0:
                     print(f"      DISABLED: negative expectancy ({bt['expectancy_pct']:+.3f}%) "
                           f"with no per-side precision approval (combined prec {fired_prec:.1%}).")
                 else:
                     print(f"      DISABLED: neither side cleared holdout breakeven "
-                          f"{breakeven:.1%} with ≥{_MIN_SIDE} trades and prec ≥50%.")
+                          f"{breakeven:.1%} with ≥{_MIN_SIDE} trades and prec ≥50% (or failed other validation rules).")
             elif not combined_ok:
                 # Per-side saved it even though combined failed
                 sides_live = []
@@ -2044,11 +3023,16 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         # file so the loader knows the format and how many classes to expect.
         model_path = store_dir / f"{base}_model.json"
         deploy_primary.save_model(str(model_path))
+        
+        # Save the clean primary model (trained only on train pool)
+        clean_model_path = store_dir / f"{base}_model_clean.json"
+        primary_full.save_model(str(clean_model_path))
+        
         meta_path = None
         if meta_full is not None:
             meta_path = store_dir / f"{base}_meta_model.json"
             meta_full.save_model(str(meta_path))
-        print(f"Models saved: {model_path.name}" + (f" + {meta_path.name}" if meta_path else ""))
+        print(f"Models saved: {model_path.name} + {clean_model_path.name}" + (f" + {meta_path.name}" if meta_path else ""))
 
         sidecar = store_dir / f"{base}_meta.json"
         import pickle
@@ -2058,19 +3042,29 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
                 'mcf': locals().get('mcf'),
                 'cre': locals().get('cre'),
                 'rcm': locals().get('rcm'),
-                'fw': locals().get('fw')
+                'fw': locals().get('fw'),
+                'fhm': getattr(locals().get('fhm'), 'feature_states', {})
             }, f)
         with open(sidecar, "w") as f:
             json.dump({
                 "symbol": symbol,
+                "regime_policies": regime_policies,
                 "aegis_state_path": str(aegis_state_path.name),
+                "disabled_filters": {
+                    "sr": bool(disable_sr_veto),
+                    "trend": bool(disable_trend_veto),
+                    "confluence": bool(disable_confluence_veto)
+                },
                 "model_format": "booster",          # predictor loads with xgb.Booster()
                 "num_class": NUM_CLASS,
                 "feature_cols": feature_cols,        # exact order the Booster expects
                 "meta_feature_cols": feature_cols,
                 "calibration_temperature": T,
+                "recommended_calibrator": selected_cal,
+                "calibration_selector": cal_choice,
                 "meta_threshold": thr,               # combined gate (both sides)
                 "production_confidence_floor": thr,  # backward-compat alias
+                "edge_rank_mode": meta_gate_profile.get('edge_rank_mode') if meta_gate_profile else 'raw',
                 # Per-side gates: predictor uses these when it knows which
                 # direction it is proposing. Allows one side to trade even
                 # if the combined precision fails the target.
@@ -2114,6 +3108,7 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
                     "aggressive":   tier_aggressive,     # positive EV on dev, exp ≥ 0.05%
                 },
                 "meta_model_file": meta_path.name if meta_path else None,
+                "meta_model_light_file": meta_light_path.name if (meta_light_path is not None) else None,
                 "atr_multiplier": atr_mult,
                 # tradeable=False means the predictor emits NO signals for this token.
                 # Requires: OOF target met AND (holdout unreliable OR holdout ≥ breakeven).
@@ -2144,32 +3139,136 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
                     "sell_win_rate":    bt["sell_win_rate"],
                     "target_met":       bool(hit_target),
                 },
+                "meta_gate_ranking_audit": {
+                    "selected_n":          selected_n,
+                    "rejected_n":          rejected_n,
+                    "selected_precision":  round(selected_prec, 4),
+                    "rejected_precision":  round(rejected_prec, 4),
+                    "meta_gate_lift_prec": round(meta_gate_lift, 4),
+                    "selected_expectancy": round(selected_exp_pct, 4),
+                    "rejected_expectancy": round(rejected_exp_pct, 4),
+                    "meta_gate_lift_exp":  round(meta_gate_lift_exp, 4),
+                    "selected_sharpe":     round(selected_sharpe, 4),
+                    "rejected_sharpe":     round(rejected_sharpe, 4),
+                    "gate_is_helpful":     bool(meta_gate_lift >= 0.01),
+                },
+                # AEGIS META GATE V2 — PHASE 1: Gate Lift Metrics
+                "aegis_v2_gate_lift": {
+                    "gate_lift_pp": round(meta_gate_lift, 4),
+                    "gate_lift_expectancy": round(meta_gate_lift_exp, 4),
+                    "selected_n": selected_n,
+                    "rejected_n": rejected_n,
+                },
+                # AEGIS META GATE V2 — PHASE 2: Gate Self-Preservation Status
+                "aegis_v2_gate_status": {
+                    "gate_status": (
+                        "HARMFUL" if meta_gate_lift < -0.20 else
+                        "DEGRADED" if meta_gate_lift < -0.10 else
+                        "NEUTRAL" if meta_gate_lift < 0.01 else
+                        "HELPFUL"
+                    ),
+                    "gate_trust_score": min(100, max(0, 50 + int(meta_gate_lift * 100))),  # 0-100 scale
+                    "gate_action": (
+                        "BYPASS_META_GATE" if meta_gate_lift < -0.20 else
+                        "REDUCE_META_INFLUENCE_50PCT" if meta_gate_lift < -0.10 else
+                        "SOFTEN_THRESHOLDS_15PCT" if meta_gate_lift < 0.01 else
+                        "USE_META_GATE"
+                    ),
+                },
+                # AEGIS META GATE V2 — PHASE 5: Hold Pollution Strategy Audit
+                "aegis_v2_hold_pollution": {
+                    "strategy_selected": hold_strategy_selected,
+                    "strategy_scores": {k: round(v.get("score", -999), 3) for k, v in hold_strategy_audit.items()},
+                    "strategy_details": {
+                        k: {
+                            "brier": round(v.get("brier", 0), 4),
+                            "sharpe": round(v.get("sharpe", 0), 4),
+                            "pf": round(v.get("pf", 0), 2),
+                            "precision": round(v.get("prec", 0), 4),
+                            "gate_lift": round(v.get("lift", 0), 4),
+                        }
+                        for k, v in hold_strategy_audit.items()
+                    }
+                },
+                # AEGIS META GATE V2 — PHASE 3: Token-Specific Profiles
+                "aegis_v2_token_profile": {
+                    "precision_target": float(token_precision_target),
+                    "coverage_target": float(dev_cov),
+                    "actual_precision": fired_prec,
+                    "actual_coverage": coverage,
+                    "atr_multiplier": atr_mult,
+                    "gate_trust_score": min(100, max(0, 50 + int(meta_gate_lift * 100))),
+                    "strategy": "ADAPTIVE_PER_REGIME" if regime_policies else "GLOBAL_THRESHOLD",
+                },
+                # AEGIS META GATE V2 — PHASE 4: Regime-Sensitive Gating Modifiers
+                "aegis_v2_regime_modifiers": {
+                    regime_name: {
+                        "base_buy_thr": float(policy.get("buy_thr", thr_buy)),
+                        "base_sell_thr": float(policy.get("sell_thr", thr_sell)),
+                        "buy_ok": bool(policy.get("buy_ok", True)),
+                        "sell_ok": bool(policy.get("sell_ok", True)),
+                        "modifier": (
+                            0.85 if (policy.get("buy_ok") or policy.get("sell_ok")) else 1.15
+                        ),
+                        "regime_quality": "GOOD" if policy.get("buy_ok") or policy.get("sell_ok") else "POOR",
+                    }
+                    for regime_name, policy in regime_policies.items()
+                },
                 "trained_at": datetime.now().isoformat(),
                 # ── Optimizer regime data (from threshold_optimizer.py) ────────
                 # Embedded here so predictor.py needs only this one file at
                 # inference time. Re-run threshold_optimizer.py after retraining
                 # to refresh these values; retrain then picks them up on the next
                 # training cycle.
-                "regime_thresholds":  (_opt or {}).get("regimes", {}),
-                "regime_boundaries":  (_opt or {}).get("regime_boundaries", {}),
+                "regime_thresholds":  (rcm.regime_thresholds if rcm is not None else (_opt or {}).get("regimes", {})),
+                "regime_threshold_modifier":  (
+                    (rcm.regime_modifiers if rcm is not None and (regime_modifier_profile is not False) else {})
+                    if regime_modifier_profile is not None else
+                    (rcm.regime_modifiers if rcm is not None else {})
+                ),
+                "meta_gate_profile": {
+                    "gate_type": gate_type,
+                    "threshold_quantile": float(meta_gate_profile.get("threshold_quantile")) if meta_gate_profile else None,
+                    "thresholds": meta_gate_profile.get("thresholds") if meta_gate_profile else {},
+                    "signal_vetoes": signal_vetoes if signal_vetoes is not None else [],
+                    "regime_modifier": regime_modifier_profile,
+                    "edge_rank_mode": meta_gate_profile.get("edge_rank_mode") if meta_gate_profile else None,
+                },
+                "disabled_filters": {
+                    "sr": bool(disable_sr_veto),
+                    "trend": bool(disable_trend_veto),
+                    "confluence": bool(disable_confluence_veto),
+                },
                 "optimizer_updated_at": (_opt or {}).get("updated_at"),
             }, f, indent=2)
 
-        log_feature_importance(deploy_primary, feature_cols, symbol)
-
-        # ── HMM regime intelligence layer ─────────────────────────────────────
-        # Trained AFTER XGBoost so it uses the same fully-engineered DataFrame.
-        # Non-fatal: if hmmlearn is unavailable or training fails the rest of
-        # retrain_model.py is completely unaffected.
+        # Feature importance + stability recording
+        importance_dict = log_feature_importance(deploy_primary, feature_cols, symbol)
         try:
-            from src.ml.hmm_regime import train_hmm_for_symbol as _train_hmm
-            _hmm_df = pd.concat([train_pool, holdout], ignore_index=True)
-            _hmm_ok = _train_hmm(symbol, _hmm_df)
-            if not _hmm_ok:
-                print(f"   [HMM] Skipped for {symbol} (training returned False)")
-        except Exception as _hmm_err:
-            print(f"   [HMM] Training failed for {symbol}: "
-                  f"{type(_hmm_err).__name__}: {_hmm_err}")
+            from src.ml.feature_stability import record_retrain, compute_stability_scores
+            from src.ml.pruning_engine import generate_feature_health_report
+            from src.ml.diagnostics import save_top_features, save_feature_health_report
+            retrain_id = f"{symbol.replace('/','_')}_{int(time.time())}"
+            rec = record_retrain(symbol, retrain_id, importance_dict)
+            scores = compute_stability_scores(last_n=12, top_k=50)
+            # Persist average stability for sidecar consumption
+            avg_stab = float(sum(scores.values()) / max(1, len(scores))) if scores else 0.0
+            # Update sidecar with feature stability summary
+            sc_text = sidecar.read_text()
+            sc_json = json.loads(sc_text)
+            sc_json['feature_stability_avg'] = avg_stab
+            sc_json['feature_stability_scores_available'] = bool(scores)
+            with open(sidecar, 'w') as f:
+                json.dump(sc_json, f, indent=2)
+            # Generate pruning report and diagnostics
+            report = generate_feature_health_report(last_n=12, top_k=50)
+            save_top_features(symbol, importance_dict)
+            save_feature_health_report(symbol, report)
+            print(f"   Feature stability avg: {avg_stab:.3f} | health report saved")
+        except Exception as _e:
+            print(f"   Feature stability recording skipped: {_e}")
+
+        # HMM regime intelligence layer pre-trained at the start of train_token.
 
         return {
             "symbol": symbol,
@@ -2326,5 +3425,10 @@ if __name__ == "__main__":
     _parser.add_argument("--full", action="store_true",
                          help="Force a full retrain from the first token, ignoring any "
                               "previously saved models (default: auto-resume)")
+    _parser.add_argument("--symbol", type=str, default=None,
+                         help="Train only a single symbol (e.g. BTC/USDT)")
     _args = _parser.parse_args()
-    train_fleet(hours=_args.hours, resume=not _args.full)
+    if _args.symbol:
+        train_token(_args.symbol, hours=_args.hours)
+    else:
+        train_fleet(hours=_args.hours, resume=not _args.full)

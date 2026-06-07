@@ -153,11 +153,19 @@ class MetaCalibrationFramework:
         threshold: float = 0.50,
     ) -> Dict[str, Any]:
         valid        = ~np.isnan(y_prob)
-        y_prob_clean = y_prob[valid]
-        y_true_clean = y_true[valid]
+        y_prob_clean = y_prob[valid].copy()
+        y_true_clean = y_true[valid].copy()
 
         if len(y_prob_clean) < 20:
             return {}
+
+        # If input values are outside [0, 1] (e.g. continuous expected returns),
+        # map them to pseudo-probabilities using a sigmoid function scaled by standard deviation.
+        self._is_mapped = False
+        if y_prob_clean.min() < 0.0 or y_prob_clean.max() > 1.0:
+            self._scale = max(1e-4, np.std(y_prob_clean))
+            y_prob_clean = 1.0 / (1.0 + np.exp(-y_prob_clean / self._scale))
+            self._is_mapped = True
 
         results: Dict[str, Dict] = {}
 
@@ -249,7 +257,11 @@ class MetaCalibrationFramework:
         if not valid.any():
             return cal
 
-        p = y_prob[valid]
+        p = y_prob[valid].copy()
+
+        if self.calibrator_type != 'uncalibrated' and getattr(self, '_is_mapped', False):
+            scale = getattr(self, '_scale', 0.02)
+            p = 1.0 / (1.0 + np.exp(-p / scale))
 
         if self.calibrator_type == 'isotonic' and self.best_calibrator is not None:
             cal[valid] = np.clip(
