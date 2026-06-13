@@ -258,7 +258,6 @@
       </div>
       <div class="hero-right">
         <div class="stat-chip"><div class="pulse"></div><span class="val" id="stat-aegis-count">—</span><span class="lbl">AEGIS-1</span></div>
-        <div class="stat-chip"><i class="fas fa-robot" style="color:var(--amber);font-size:0.7rem;"></i><span class="val" id="stat-trader-count">—</span><span class="lbl">Trader Bot</span></div>
         <div class="stat-chip"><i class="fas fa-clock" style="color:var(--dim);font-size:0.68rem;"></i><span id="lastRefresh" class="lbl">loading…</span></div>
       </div>
     </div>
@@ -299,21 +298,6 @@
         </div>
       </div>
 
-      <!-- Trader Bot -->
-      <div class="engine-col">
-        <div class="engine-header">
-          <i class="fas fa-robot engine-icon" style="color:var(--amber);"></i>
-          <div>
-            <div class="engine-name">AEGIS Trader Bot</div>
-            <div class="engine-meta">60 tokens · scalping / intraday / swing · 25 strategies · conf ≥65%</div>
-          </div>
-          <span class="engine-count" id="trader-count-badge" style="background:rgba(250,204,21,0.1);color:var(--amber);border:1px solid rgba(250,204,21,0.25);">0</span>
-        </div>
-        <div class="engine-body" id="trader-body">
-          <div class="loading-state"><i class="fas fa-circle-notch"></i> Loading Trader Bot signals…</div>
-        </div>
-      </div>
-
     </div><!-- /.engines-grid -->
 
   </main>
@@ -322,7 +306,6 @@
   (function() {
     var _filters = { dir: 'ALL', conf: 0 };
     var _aegisSignals  = [];
-    var _traderSignals = [];
 
     // ── Price formatter ────────────────────────────────────────────────
     function _px(v) {
@@ -411,53 +394,17 @@
       '</div>';
     }
 
-    // ── Trader Bot signal card ─────────────────────────────────────────
-    function _traderCard(sig) {
-      var isBuy = (sig.direction || '').toUpperCase() === 'BUY';
-      var conf  = parseFloat(sig.confidence || 0);
-      var confPct = Math.round(conf * 100);
-      var entry = sig.entry_price || sig.current_price || 0;
-      var sl    = sig.stop_loss || 0;
-      var tp1   = sig.tp1 || 0;
-      var tp2   = sig.tp2 || 0;
-      var rr    = (tp1 && sl && entry) ? Math.abs(tp1 - entry) / Math.abs(entry - sl) : 0;
-      var mode  = sig.mode || 'intraday';
-      var modeColor = mode === 'scalping' ? '#00f2ff' : mode === 'swing' ? '#c084fc' : '#fb923c';
-      var topStrat  = (sig.top_strategies || [])[0] || '—';
-      var ts = sig.timestamp || '';
-
-      return '<div class="sig-card">' +
-        '<div class="sig-top">' +
-          '<span class="sig-symbol">' + (sig.symbol || '').replace('/USDT','') + '</span>' +
-          '<span class="sig-usdt">/USDT</span>' +
-          '<span class="sig-dir ' + (isBuy ? 'buy' : 'sell') + '">' + (isBuy ? '▲ BUY' : '▼ SELL') + '</span>' +
-          '<span class="sig-mode" style="color:' + modeColor + ';background:' + modeColor + '18;border:1px solid ' + modeColor + '30;">' + mode + '</span>' +
-          '<span class="sig-conf" style="color:' + _confColor(confPct) + ';">' + confPct + '%</span>' +
-        '</div>' +
-        '<div class="sig-levels">' +
-          '<div class="sig-level"><div class="lv-label">Entry</div><div class="lv-val" style="color:#e2e8f0;">' + _px(entry) + '</div></div>' +
-          '<div class="sig-level"><div class="lv-label">SL</div><div class="lv-val" style="color:#ef4444;">' + _px(sl) + '</div></div>' +
-          '<div class="sig-level"><div class="lv-label">TP1</div><div class="lv-val" style="color:#22c55e;">' + _px(tp1) + '</div></div>' +
-          '<div class="sig-level"><div class="lv-label">R:R</div><div class="lv-val" style="color:#00f2ff;">' + (rr > 0 ? '1:' + rr.toFixed(2) : '—') + '</div></div>' +
-        '</div>' +
-        '<div class="sig-bottom" style="margin-top:0.5rem;">' +
-          '<span class="sig-tag" style="color:' + modeColor + ';border-color:' + modeColor + '40;background:' + modeColor + '12;">' + mode.toUpperCase() + '</span>' +
-          '<span class="sig-strat">' + topStrat.replace(/_/g, ' ') + '</span>' +
-          '<span class="sig-time">' + _ts(ts) + '</span>' +
-        '</div>' +
-      '</div>';
-    }
 
     // ── Render helpers ─────────────────────────────────────────────────
-    function _applyFilters(sigs, isTrader) {
+    function _applyFilters(sigs) {
       return sigs.filter(function(s) {
         var dir = _filters.dir;
         var conf = _filters.conf;
-        var sDir = isTrader ? (s.direction || '').toUpperCase() : (s.signal || s.direction || '').toUpperCase();
+        var sDir = (s.signal || s.direction || '').toUpperCase();
         var matchDir = dir === 'ALL' ||
           (dir === 'BUY'  && (sDir === 'BUY'  || sDir === 'LONG'  || sDir === 'STRONG_BUY')) ||
           (dir === 'SELL' && (sDir === 'SELL' || sDir === 'SHORT' || sDir === 'STRONG_SELL'));
-        var rawConf = isTrader ? parseFloat(s.confidence || 0) * 100 : parseFloat(s.meta_confidence || s.ai_prob || 0) * 100;
+        var rawConf = parseFloat(s.meta_confidence || s.ai_prob || 0) * 100;
         return matchDir && rawConf >= conf;
       });
     }
@@ -480,14 +427,10 @@
     }
 
     function _render() {
-      var aegisFiltered  = _applyFilters(_aegisSignals,  false);
-      var traderFiltered = _applyFilters(_traderSignals, true);
-      _renderEngine('aegis-body',  'aegis-count-badge',  aegisFiltered,  _aegisCard);
-      _renderEngine('trader-body', 'trader-count-badge', traderFiltered, _traderCard);
+      var aegisFiltered = _applyFilters(_aegisSignals);
+      _renderEngine('aegis-body', 'aegis-count-badge', aegisFiltered, _aegisCard);
       var stat1 = document.getElementById('stat-aegis-count');
-      var stat2 = document.getElementById('stat-trader-count');
       if (stat1) stat1.textContent = aegisFiltered.length;
-      if (stat2) stat2.textContent = traderFiltered.length;
     }
 
     // ── Data loading ───────────────────────────────────────────────────
@@ -517,26 +460,10 @@
         .catch(function() { _aegisSignals = []; });
     }
 
-    function _loadTrader() {
-      return fetch('/api/trader/track-record')
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-          var sigs = (d.signals || []).filter(function(s) {
-            return (s.outcome || 'OPEN').toUpperCase() === 'OPEN';
-          });
-          // Sort by confidence desc
-          sigs.sort(function(a, b) {
-            return parseFloat(b.confidence || 0) - parseFloat(a.confidence || 0);
-          });
-          _traderSignals = sigs;
-        })
-        .catch(function() { _traderSignals = []; });
-    }
-
     window.loadAll = function() {
       var icon = document.getElementById('refresh-icon');
       if (icon) icon.className = 'fas fa-spinner fa-spin';
-      Promise.all([_loadAegis(), _loadTrader()]).then(function() {
+      _loadAegis().then(function() {
         _render();
         var lr = document.getElementById('lastRefresh');
         if (lr) lr.textContent = 'updated ' + new Date().toTimeString().slice(0,5);
