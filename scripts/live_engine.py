@@ -813,10 +813,11 @@ class DriftMonitor:
                 sym = meta.get('symbol', '')
                 if not sym:
                     continue
-                # Prefer the honest holdout precision; fall back to dev OOF estimate
+                # Prefer directional precision (honest gate), then signal precision, then OOF estimate
                 ht = meta.get('holdout_trading', {})
                 prec = (
-                    float(ht.get('signal_precision', 0))
+                    float(ht.get('directional_precision', 0))
+                    or float(ht.get('signal_precision', 0))
                     or float(meta.get('dev_estimate', {}).get('precision', 0))
                     or 0.60
                 )
@@ -2014,9 +2015,8 @@ class LiveEngine:
 
 def automated_setup(_: Path, args: Any):
     """
-    Scan MODEL_STORE for up to 60 symbols.
-    Tradeable symbols are loaded first; non-tradeable models fill the remainder
-    up to the 60-token cap so the dashboard always shows a full grid.
+    Scan MODEL_STORE for all available symbols (up to 32).
+    Tradeable symbols are loaded first; non-tradeable models fill the remainder.
     """
     tradeable_configs:     List[TokenConfig] = []
     non_tradeable_configs: List[TokenConfig] = []
@@ -2041,7 +2041,7 @@ def automated_setup(_: Path, args: Any):
             except Exception:
                 pass
 
-    TARGET    = 60
+    TARGET    = 32
     configs   = tradeable_configs[:TARGET]
     remaining = TARGET - len(configs)
     if remaining > 0:
@@ -2193,7 +2193,7 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
         grid.add_column('Regime',   justify='center', width=7)
         grid.add_column('Quality',  justify='right',  width=7)
         grid.add_column('RSI',      justify='right',  width=6)
-        grid.add_column('Conf',     justify='right',  width=6)
+        grid.add_column('Dir%',     justify='right',  width=6)
         grid.add_column('Funding',  justify='right',  width=8)
         grid.add_column('Session',  justify='center', width=10)
         grid.add_column('Position', justify='center', min_width=14)
@@ -2205,7 +2205,6 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
 
         for idx, (sym, sig) in enumerate(sorted(signals.items()), 1):
             price   = float(live_px.get(sym, sig.get('price', 0) or 0))
-            conf    = float(sig.get('meta_confidence', 0))
             rsi     = sig.get('rsi', None)
             bias    = sig.get('market_bias', '')
             session = sig.get('session', '')[:8]
@@ -2213,6 +2212,8 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
             regime  = sig.get('regime', 'UNKNOWN')
             quality = float(sig.get('quality_score', 0))
             is_tradeable = sym in tradeable_syms
+            _pred_meta = engine.predictors[sym].meta if sym in engine.predictors else {}
+            dir_prec = float(_pred_meta.get('holdout_trading', {}).get('directional_precision', 0))
 
             pos = wallet.open_positions.get(sym)
             if pos:
@@ -2245,8 +2246,12 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
 
             sym_cell  = f'[bold]{sym}[/]'  if is_tradeable else f'[dim]{sym}[/]'
             px_cell   = f'[bold white]{_px(price)}[/]' if is_tradeable else f'[dim]{_px(price)}[/]'
-            conf_cell = (f'[cyan]{conf:.3f}[/]' if conf > 0 else '[dim]—[/]') if is_tradeable \
-                        else (f'[dim]{conf:.3f}[/]' if conf > 0 else '[dim]—[/]')
+            if dir_prec > 0:
+                dp_pct  = dir_prec * 100
+                dp_col  = 'green' if dp_pct >= 70 else ('yellow' if dp_pct >= 60 else 'red')
+                dir_cell = f'[{dp_col}]{dp_pct:.0f}%[/]' if is_tradeable else f'[dim]{dp_pct:.0f}%[/]'
+            else:
+                dir_cell = '[dim]—[/]'
 
             grid.add_row(
                 f'[dim]{idx}[/]' if not is_tradeable else str(idx),
@@ -2257,7 +2262,7 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
                 _regime_short(regime),
                 _quality_cell(quality) if is_tradeable else '[dim]—[/]',
                 rsi_cell,
-                conf_cell,
+                dir_cell,
                 fund_cell,
                 f'[dim]{session}[/]',
                 pos_cell,
