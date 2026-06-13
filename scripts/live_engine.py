@@ -2081,15 +2081,12 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
     [OPEN TRADES] Active virtual positions (entry, live PnL, SL)
     [CLOSED (5)]  Last 5 closed trades with outcome badge
     """
-    from rich.console import Console
+    from rich.console import Group
     from rich.table import Table
-    from rich.live import Live
     from rich.panel import Panel
     from rich.text import Text
-    from rich.layout import Layout
+    from rich.live import Live
     from rich import box
-
-    console = Console()
 
     def _px(p: float) -> str:
         if p <= 0:      return '—'
@@ -2111,11 +2108,6 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
         if outcome == 'LOSS': return Text(' LOSS ', style='bold white on red')
         if outcome == 'OPEN': return Text(' OPEN ', style='bold black on cyan')
         return Text(outcome, style='dim')
-
-    def _bias_cell(bias: str) -> str:
-        if bias == 'BULLISH':  return '[green]BULL[/]'
-        if bias == 'BEARISH':  return '[red]BEAR[/]'
-        return '[dim]NEUT[/]'
 
     def _signal_cell(sig: dict) -> str:
         side     = sig.get('signal', 'FLAT')
@@ -2148,7 +2140,8 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
         if q > 0:     return f'[dim red]{q:.0f}[/]'
         return '[dim]—[/]'
 
-    def _build_layout() -> Layout:
+    def _build_renderable() -> Group:
+        """Build the full dashboard as a Group (header + grid + footer) for Live."""
         wallet  = engine.wallet
         live_px = engine.live_prices
         signals = engine.last_signals
@@ -2163,7 +2156,7 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
                   else f'[yellow]⏳ WARMUP {engine.bootstrap_done}/{engine.bootstrap_total}[/]'
         now_utc = datetime.now(timezone.utc).strftime('%Y-%m-%d  %H:%M:%S UTC')
         perf    = engine.perf_tracker.get_performance_summary()
-        safe_tag = '[bold red] ⚠ SAFE-MODE[/]' if perf['safe_mode'] else ''
+        safe_tag = '[bold red]  ⚠ SAFE-MODE[/]' if perf['safe_mode'] else ''
 
         header = Panel(
             f"  {status}{safe_tag}   │   "
@@ -2172,104 +2165,112 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
             f"PnL [{pc}]{pnl_u:+.2f} USDT  ({pnl_pct:+.2f}%)[/]   │   "
             f"Closed [white]{s['total_trades']}[/] "
             f"([green]{s['won']}W[/]/[red]{s['lost']}L[/])   │   "
-            f"Win-Rate [bold]{wr:.1f}%[/]   │   "
+            f"WR [bold]{wr:.1f}%[/]   │   "
             f"Open [bold cyan]{len(wallet.open_positions)}[/]   │   "
             f"[dim]{now_utc}[/]",
-            title="[bold]  AEGIS-1   Institutional-Grade Adaptive Signal Engine  [/]",
+            title="[bold]  AEGIS-1  Signal Engine  [/]",
             border_style='cyan',
         )
-
-        grid = Table(
-            title=f'[bold]TOKEN STATUS  ({len(signals)} symbols)[/]',
-            box=box.SIMPLE_HEAVY,
-            border_style='bright_black',
-            show_header=True,
-            header_style='bold white',
-            expand=True,
-        )
-        grid.add_column('#',        justify='right',  width=3,   style='dim')
-        grid.add_column('Symbol',   justify='left',   min_width=12)
-        grid.add_column('Price',    justify='right',  min_width=10)
-        grid.add_column('Signal',   justify='center', min_width=12)
-        grid.add_column('Bias',     justify='center', width=6)
-        grid.add_column('Regime',   justify='center', width=7)
-        grid.add_column('Quality',  justify='right',  width=7)
-        grid.add_column('RSI',      justify='right',  width=6)
-        grid.add_column('Dir%',     justify='right',  width=6)
-        grid.add_column('Funding',  justify='right',  width=8)
-        grid.add_column('Session',  justify='center', width=10)
-        grid.add_column('Position', justify='center', min_width=14)
 
         tradeable_syms = {
             sym for sym, pred in engine.predictors.items()
             if getattr(pred, 'meta', {}).get('tradeable', False)
         }
 
-        for idx, (sym, sig) in enumerate(sorted(signals.items()), 1):
-            price   = float(live_px.get(sym, sig.get('price', 0) or 0))
-            rsi     = sig.get('rsi', None)
-            bias    = sig.get('market_bias', '')
-            session = sig.get('session', '')[:8]
-            funding = sig.get('funding_rate', None)
-            regime  = sig.get('regime', 'UNKNOWN')
-            quality = float(sig.get('quality_score', 0))
+        all_syms = sorted(engine.predictors.keys()) if engine.predictors else sorted(signals.keys())
+
+        grid = Table(
+            box=box.SIMPLE_HEAVY,
+            border_style='bright_black',
+            show_header=True,
+            header_style='bold white',
+            expand=True,
+            title=f'[bold dim]TOKEN GRID — {len(all_syms)} symbols · refreshes every 1s[/]',
+        )
+        grid.add_column('#',        justify='right',  width=3,  style='dim')
+        grid.add_column('Symbol',   justify='left',   width=14)
+        grid.add_column('Price',    justify='right',  width=11)
+        grid.add_column('Signal',   justify='center', width=13)
+        grid.add_column('Dir%',     justify='right',  width=6)
+        grid.add_column('Quality',  justify='right',  width=7)
+        grid.add_column('RSI',      justify='right',  width=5)
+        grid.add_column('Regime',   justify='center', width=7)
+        grid.add_column('SL',       justify='right',  width=11)
+        grid.add_column('TP',       justify='right',  width=11)
+        grid.add_column('Position', justify='center', width=16)
+        for idx, sym in enumerate(all_syms, 1):
+            sig          = signals.get(sym, {})
+            price        = float(live_px.get(sym, sig.get('price', 0) or 0))
+            rsi          = sig.get('rsi', None)
+            regime       = sig.get('regime', 'UNKNOWN')
+            quality      = float(sig.get('quality_score', 0))
             is_tradeable = sym in tradeable_syms
-            _pred_meta = engine.predictors[sym].meta if sym in engine.predictors else {}
-            dir_prec = float(_pred_meta.get('holdout_trading', {}).get('directional_precision', 0))
+            _pred_meta   = engine.predictors[sym].meta if sym in engine.predictors else {}
+            dir_prec     = float(_pred_meta.get('holdout_trading', {}).get('directional_precision', 0))
 
             pos = wallet.open_positions.get(sym)
+
+            # ── SL / TP cells ──────────────────────────────────────────────
+            if pos:
+                sl_val = pos.stop_loss
+                tp_val = pos.take_profit_1
+                sl_cell = f'[red]{_px(sl_val)}[/]'
+                tp_cell = f'[green]{_px(tp_val)}[/]'
+            elif sig.get('fire') and sig.get('suggested_sl'):
+                sl_val = float(sig.get('suggested_sl') or 0)
+                tp_val = float(sig.get('suggested_tp') or 0)
+                sl_cell = f'[dim red]{_px(sl_val)}[/]'
+                tp_cell = f'[dim green]{_px(tp_val)}[/]'
+            else:
+                sl_cell = '[dim]—[/]'
+                tp_cell = '[dim]—[/]'
+
+            # ── Position P&L cell ──────────────────────────────────────────
             if pos:
                 cur = price or pos.entry_price
-                if pos.direction == 'LONG':
-                    ppct = (cur - pos.entry_price) / pos.entry_price * 100
-                else:
-                    ppct = (pos.entry_price - cur) / pos.entry_price * 100
+                ppct = ((cur - pos.entry_price) / pos.entry_price * 100) if pos.direction == 'LONG' \
+                       else ((pos.entry_price - cur) / pos.entry_price * 100)
                 arrow, ds = _dir(pos.direction)
-                # Show trailing indicator if TP1 has been hit
-                trail_flag = '[bold yellow] T[/]' if engine._tp1_hit.get(sym) else ''
-                pos_cell   = f'[{ds}]{arrow}[/] [{_pc(ppct)}]{ppct:+.2f}%[/]{trail_flag}'
+                trail_flag = '[bold yellow]T[/] ' if engine._tp1_hit.get(sym) else ''
+                pos_cell   = f'{trail_flag}[{ds}]{arrow}[/] [{_pc(ppct)}]{ppct:+.2f}%[/]'
             else:
                 pos_cell = '[dim]—[/]'
 
+            # ── RSI cell ───────────────────────────────────────────────────
             if rsi is None:
                 rsi_cell = '[dim]—[/]'
             else:
                 rsi_f = float(rsi)
                 if rsi_f >= 70:   rsi_cell = f'[red]{rsi_f:.0f}[/]'
                 elif rsi_f <= 30: rsi_cell = f'[green]{rsi_f:.0f}[/]'
-                else:             rsi_cell = f'[white]{rsi_f:.0f}[/]'
+                else:             rsi_cell = f'{rsi_f:.0f}'
 
-            if funding is None:
-                fund_cell = '[dim]—[/]'
-            else:
-                ff    = float(funding)
-                col_f = 'red' if ff > 0.01 else ('green' if ff < -0.01 else 'dim white')
-                fund_cell = f'[{col_f}]{ff:+.4f}%[/]'
-
-            sym_cell  = f'[bold]{sym}[/]'  if is_tradeable else f'[dim]{sym}[/]'
-            px_cell   = f'[bold white]{_px(price)}[/]' if is_tradeable else f'[dim]{_px(price)}[/]'
+            # ── Dir% cell ──────────────────────────────────────────────────
             if dir_prec > 0:
-                dp_pct  = dir_prec * 100
-                dp_col  = 'green' if dp_pct >= 70 else ('yellow' if dp_pct >= 60 else 'red')
+                dp_pct   = dir_prec * 100
+                dp_col   = 'green' if dp_pct >= 70 else ('yellow' if dp_pct >= 60 else 'red')
                 dir_cell = f'[{dp_col}]{dp_pct:.0f}%[/]' if is_tradeable else f'[dim]{dp_pct:.0f}%[/]'
             else:
                 dir_cell = '[dim]—[/]'
+
+            sym_cell = f'[bold]{sym}[/]' if is_tradeable else f'[dim]{sym}[/]'
+            px_cell  = f'[bold white]{_px(price)}[/]' if is_tradeable else f'[dim]{_px(price)}[/]'
 
             grid.add_row(
                 f'[dim]{idx}[/]' if not is_tradeable else str(idx),
                 sym_cell,
                 px_cell,
                 _signal_cell(sig) if is_tradeable else '[dim]watch[/]',
-                _bias_cell(bias),
-                _regime_short(regime),
+                dir_cell,
                 _quality_cell(quality) if is_tradeable else '[dim]—[/]',
                 rsi_cell,
-                dir_cell,
-                fund_cell,
-                f'[dim]{session}[/]',
+                _regime_short(regime),
+                sl_cell,
+                tp_cell,
                 pos_cell,
             )
 
+        # ── Footer: open positions detail + last 5 closed ─────────────────
         open_lines: List[str] = []
         for pos in sorted(wallet.open_positions.values(), key=lambda p: p.entry_time):
             cur  = float(live_px.get(pos.symbol, pos.entry_price) or pos.entry_price)
@@ -2277,16 +2278,14 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
                    else ((pos.entry_price - cur) / pos.entry_price * 100)
             pu   = round(pos.position_value * ppct / 100, 2)
             arr, ds = _dir(pos.direction)
-            col  = _pc(ppct)
-            trail_tag = ' [T]' if engine._tp1_hit.get(pos.symbol) else ''
+            col      = _pc(ppct)
+            trail_tag = ' [bold yellow][T][/]' if engine._tp1_hit.get(pos.symbol) else ''
             open_lines.append(
                 f"  [{ds}]{arr} {pos.symbol}[/]  "
-                f"entry [white]{_px(pos.entry_price)}[/] → "
-                f"now [bold white]{_px(cur)}[/]  "
+                f"entry [white]{_px(pos.entry_price)}[/] → now [bold white]{_px(cur)}[/]  "
                 f"[{col}]{ppct:+.2f}%  {pu:+.2f} USDT[/]  "
-                f"SL [dim]{_px(pos.stop_loss)}[/]  "
-                f"edge [cyan]{pos.meta_confidence:.3f}[/]"
-                f"{trail_tag}  "
+                f"SL [red]{_px(pos.stop_loss)}[/]  TP [green]{_px(pos.take_profit_1)}[/]  "
+                f"edge [cyan]{pos.meta_confidence:.3f}[/]{trail_tag}  "
                 f"[dim]{pos.entry_time[11:16]} UTC[/]"
             )
 
@@ -2310,22 +2309,18 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
             border_style='dim',
         )
 
-        layout = Layout()
-        layout.split_column(
-            Layout(header, name='hdr',    size=3),
-            Layout(grid,   name='grid',   ratio=1),
-            Layout(footer, name='footer', size=max(4 + len(open_lines) + len(closed_lines), 6)),
-        )
-        return layout
+        return Group(header, grid, footer)
 
     async def _run_with_display() -> None:
         scan_task = asyncio.create_task(engine.run())
-        with Live(_build_layout(), console=console,
-                  refresh_per_second=0.5, screen=True) as live:
+        with Live(_build_renderable(), refresh_per_second=1, screen=False) as live:
             try:
                 while not scan_task.done():
-                    live.update(_build_layout())
-                    await asyncio.sleep(2)
+                    try:
+                        live.update(_build_renderable())
+                    except Exception as _render_err:
+                        pass
+                    await asyncio.sleep(1)
             except asyncio.CancelledError:
                 pass
             finally:
