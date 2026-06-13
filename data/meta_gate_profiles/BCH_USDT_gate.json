@@ -1,73 +1,93 @@
 {
   "symbol": "BCH/USDT",
-  "updated_at": "2026-06-07T16:39:37.551176+00:00",
+  "updated_at": "2026-06-12T19:09:46.539002+00:00",
   "base_atr_multiplier": 1.5,
   "train_bars": 2605,
   "eval_bars": 1117,
   "regime_boundaries": {
     "vol_p33": 791.7720066666668,
-    "vol_p67": 1524.777457916667,
+    "vol_p67": 1523.0190808333332,
     "atr_pct_p33": 0.0064082110737804085,
-    "atr_pct_p67": 0.009925890508568834,
-    "momentum_p33": -0.012695423236886055,
-    "momentum_p67": 0.004851993386152921
+    "atr_pct_p67": 0.010079631802343827,
+    "momentum_p33": -0.0131211643688664,
+    "momentum_p67": 0.00486122001936547
   },
   "selected_profile": {
-    "gate_type": "DISABLED",
-    "threshold_quantile": 0.0,
+    "gate_type": "CALIBRATED_SIDE_EDGE",
+    "threshold_quantile": 0.4,
     "thresholds": {
-      "global_threshold": 100.0,
-      "buy_threshold": 100.0,
-      "sell_threshold": 100.0,
-      "quantile": 0.0
+      "global_threshold": 43.261562998405104,
+      "buy_threshold": 43.22169059011164,
+      "sell_threshold": 43.301435406698566,
+      "quantile": 0.4
     },
-    "side_specific": false,
+    "side_specific": true,
     "regime_modifier": false,
     "signal_vetoes": [],
     "calibration": {
-      "method": "beta",
-      "selected_calibrator": "beta",
-      "selected_method": "beta",
-      "selected_score": 0.0,
-      "ece_before": 0.17485604606525915,
-      "ece_after": 0.05694684218728148,
-      "quality_score": 0.0,
-      "arch_validation_no_viable": true
+      "method": "isotonic",
+      "selected_calibrator": "isotonic",
+      "selected_method": "isotonic",
+      "selected_score": 0.3485691348156487,
+      "ece_before": 0.13305602782295478,
+      "ece_after": 7.521241573673723e-18,
+      "quality_score": 0.13305602782295478
     },
     "risk_tier": {
       "conservative": false,
       "balanced": false,
-      "aggressive": false
+      "aggressive": true
     },
     "edge_rank_mode": "percentile",
-    "score": 0.0,
-    "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    "score": 0.34857,
+    "disabled_reason": null,
+    "profitability_bypass": true
   },
   "holdout": {
     "selected": {
-      "precision": 0.21328344246959777,
-      "coverage": 1.0,
-      "expectancy_pct": -13.7576,
-      "profit_factor": 0.608,
-      "sharpe": -17.242,
-      "gate_lift": 0.0,
-      "fired_n": 1069,
-      "rejected_n": 0
+      "precision": 0.4117647058823529,
+      "coverage": 0.569377990430622,
+      "expectancy_pct": 0.2153,
+      "profit_factor": 1.606,
+      "sharpe": 10.469,
+      "gate_lift": 0.1473202614379085,
+      "fired_n": 595,
+      "rejected_n": 450,
+      "baseline_precision": 0.34832535885167465,
+      "baseline_profit_factor": 2.312,
+      "baseline_expectancy": 0.3148,
+      "validation_report": {
+        "status": "skipped_single_fold_validation",
+        "reason": "synthetic single-fold validation is disabled for reliability"
+      }
     },
     "holdout_metrics": {
-      "n": 1069,
-      "expectancy_pct": -13.7576,
-      "total_return_pct": -14706.9,
-      "win_rate": 0.2133,
-      "sharpe": -17.242,
-      "max_drawdown_pct": 320.934,
-      "profit_factor": 0.608,
-      "buy_n": 388,
-      "buy_win_rate": 0.2165,
-      "sell_n": 214,
-      "sell_win_rate": 0.6729,
-      "kelly_pct": 0.0
+      "n": 595,
+      "expectancy_pct": 0.2153,
+      "total_return_pct": 128.1141,
+      "win_rate": 0.4118,
+      "sharpe": 10.469,
+      "max_drawdown_pct": 18.56,
+      "profit_factor": 1.606,
+      "buy_n": 224,
+      "buy_win_rate": 0.4643,
+      "sell_n": 152,
+      "sell_win_rate": 0.9276,
+      "kelly_pct": 25.0
     },
-    "rejected_metrics": {}
+    "rejected_metrics": {
+      "n": 450,
+      "expectancy_pct": 0.4463,
+      "total_return_pct": 200.8425,
+      "win_rate": 0.2644,
+      "sharpe": 20.657,
+      "max_drawdown_pct": 5.611,
+      "profit_factor": 6.11,
+      "buy_n": 55,
+      "buy_win_rate": 0.8182,
+      "sell_n": 74,
+      "sell_win_rate": 1.0,
+      "kelly_pct": 25.0
+    }
   }
 }

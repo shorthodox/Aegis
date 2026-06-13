@@ -172,17 +172,17 @@
   ],
   "total_estimated_precision_gain_pp": 11.9,
   "absolute_price_features_drifting": [
-    "s2",
-    "s1",
-    "r2",
-    "avwap_100",
-    "rolling_support",
-    "avwap_200",
-    "ema_200",
-    "ema_100",
     "avwap_50",
+    "ema_100",
+    "avwap_100",
+    "ema_200",
     "ema_50",
-    "vwap"
+    "rolling_support",
+    "r2",
+    "s2",
+    "avwap_200",
+    "vwap",
+    "s1"
   ],
   "worst_psi_feature": "vwap_decay_mean_24",
   "worst_psi_value": 20.6233

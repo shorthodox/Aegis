@@ -1,0 +1,111 @@
+{
+  "hmm_available": false,
+  "n_states": 7,
+  "state_labels": {},
+  "stationary_dist": {},
+  "max_state_concentration": 1.0,
+  "regime_collapse_flag": true,
+  "global_precision": 0.4235,
+  "regime_performance": {
+    "TRENDING_BULL": {
+      "trades": 134,
+      "precision": 0.3507,
+      "buy_prec": 0.2373,
+      "sell_prec": 0.44,
+      "win_rate": 0.3507,
+      "expectancy": 0.2198,
+      "profit_factor": 1.29,
+      "modifier": -0.0727,
+      "threshold": 0.4393,
+      "coverage": 0.1784,
+      "data_source": "regime_stats.json"
+    },
+    "TRENDING_BEAR": {
+      "trades": 0,
+      "precision": 0.0,
+      "buy_prec": 0.0,
+      "sell_prec": 0.0,
+      "win_rate": 0.0,
+      "expectancy": 0.0,
+      "profit_factor": 0.0,
+      "modifier": 0.0,
+      "threshold": 0.5,
+      "coverage": 0.0,
+      "data_source": "insufficient_data"
+    },
+    "ACCUMULATION": {
+      "trades": 369,
+      "precision": 0.4038,
+      "buy_prec": 0.3776,
+      "sell_prec": 0.4335,
+      "win_rate": 0.4038,
+      "expectancy": 0.1714,
+      "profit_factor": 1.222,
+      "modifier": -0.0197,
+      "threshold": 0.3505,
+      "coverage": 0.2823,
+      "data_source": "regime_stats.json"
+    },
+    "DISTRIBUTION": {
+      "trades": 52,
+      "precision": 0.3846,
+      "buy_prec": 0.3333,
+      "sell_prec": 0.4118,
+      "win_rate": 0.3846,
+      "expectancy": 0.3391,
+      "profit_factor": 1.77,
+      "modifier": -0.0388,
+      "threshold": 0.4393,
+      "coverage": 0.1543,
+      "data_source": "regime_stats.json"
+    },
+    "COMPRESSION": {
+      "trades": 16,
+      "precision": 0.6875,
+      "buy_prec": 0.0,
+      "sell_prec": 0.7857,
+      "win_rate": 0.6875,
+      "expectancy": 0.6456,
+      "profit_factor": 2.356,
+      "modifier": 0.2,
+      "threshold": 0.3505,
+      "coverage": 0.0796,
+      "data_source": "regime_stats.json"
+    },
+    "VOLATILE_EXPANSION": {
+      "trades": 435,
+      "precision": 0.4575,
+      "buy_prec": 0.2838,
+      "sell_prec": 0.6385,
+      "win_rate": 0.4575,
+      "expectancy": 0.5461,
+      "profit_factor": 1.991,
+      "modifier": 0.034,
+      "threshold": 0.4393,
+      "coverage": 0.227,
+      "data_source": "regime_stats.json"
+    },
+    "CHOPPY": {
+      "trades": 0,
+      "precision": 0.0,
+      "buy_prec": 0.0,
+      "sell_prec": 0.0,
+      "win_rate": 0.0,
+      "expectancy": 0.0,
+      "profit_factor": 0.0,
+      "modifier": 0.0,
+      "threshold": 0.5,
+      "coverage": 0.0,
+      "data_source": "insufficient_data"
+    }
+  },
+  "recommendations": {
+    "TRENDING_BULL": "SUPPRESS (+threshold increase)",
+    "TRENDING_BEAR": "NEUTRAL (insufficient data)",
+    "ACCUMULATION": "NEUTRAL",
+    "DISTRIBUTION": "SUPPRESS (+threshold increase)",
+    "COMPRESSION": "BOOST (+threshold reduction)",
+    "VOLATILE_EXPANSION": "NEUTRAL",
+    "CHOPPY": "NEUTRAL (insufficient data)"
+  }
+}

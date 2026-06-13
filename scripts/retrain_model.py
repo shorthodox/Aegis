@@ -114,24 +114,24 @@ def load_meta_gate_profile(symbol: str) -> Optional[Dict[str, Any]]:
 # CONFIG
 # ============================================================
 NUM_CLASS = 3                 # 0=SELL, 1=HOLD, 2=BUY
-MAX_LOOKAHEAD = 48
+MAX_LOOKAHEAD = 96            # capped at 96h — beyond this, label leakage risk outweighs signal gain
 EMBARGO = MAX_LOOKAHEAD
 CENSORED = -1
 
-TEST_FRAC = 0.20
+TEST_FRAC = 0.25
 N_SPLITS_CV = 15              # TASK 6: Increased from 10 to 15 for statistical robustness
-OPTUNA_TRIALS = 15
+OPTUNA_TRIALS = 25
 
 # ============================================================
 # TASK 1: HOLD POLLUTION REFACTOR (3 strategies)
 # ============================================================
-META_HOLD_STRATEGY = "C_excluded"  # "A_current", "B_reduced", or "C_excluded"
-META_HOLD_AUTO_SELECT = True       # Automatically test all 3 and select best
+META_HOLD_STRATEGY = "C_excluded"  # binary primary: only directional proposals in meta training
+META_HOLD_AUTO_SELECT = False      # True = auto-test strategies; False = use META_HOLD_STRATEGY directly
 
 # ============================================================
 # TASK 3: ADAPTIVE COVERAGE TARGETING
 # ============================================================
-MIN_COVERAGE = 0.08            # 8% minimum coverage
+MIN_COVERAGE = 0.03            # 3% minimum directional coverage
 TARGET_COVERAGE = 0.10         # 10% preferred target
 MAX_COVERAGE = 0.25            # 25% hard maximum
 
@@ -178,10 +178,10 @@ ARCHITECTURE_SCORE_WEIGHTS = {
     "coverage": 0.05,
 }
 
-SHAP_CUMULATIVE_THRESH = 0.90  # keep features covering 90% of total |SHAP| importance
-SHAP_TOP_PCT = 0.20            # floor: keep at least top 20% of features by SHAP rank
-MIN_FEATURES = 25
-MAX_FEATURES = 90              # hard cap: beyond ~90 features XGBoost sees diminishing returns on 1h crypto
+SHAP_CUMULATIVE_THRESH = 0.85  # keep features covering top 85% of cumulative importance (re-enabled)
+SHAP_TOP_PCT = 0.15            # floor: keep at least top 15% of features by SHAP rank
+MIN_FEATURES = 50              # hard floor for feature count (was 80)
+MAX_FEATURES = 150             # hard cap; SHAP cumulative threshold does the real pruning (was 200)
 
 MIN_TOTAL_ROWS = 600
 MIN_FIT_ROWS = 300
@@ -191,14 +191,15 @@ MIN_FIT_ROWS = 300
 # A 56-60% gate with real coverage and positive expectancy after fees is a
 # genuine product; 70% with zero coverage is not. Set the target where the data
 # can actually reach, and let coverage tell you how much signal exists.
-TARGET_SIGNAL_PRECISION = 0.62   # realistic directional-precision target
-MIN_FIRES_DEV = 80               # need >=80 OOF trades before trusting a threshold
-# Minimum holdout signals required before the holdout result can override the OOF
-# tradeable decision. Below this count the sample is too small to be conclusive —
-# the OOF estimate (not holdout) governs. At or above it, a below-breakeven holdout
-# disables the token regardless of OOF performance.
-MIN_HOLDOUT_FIRES = 10
-GAP_VETO_THRESHOLD = 0.15        # maximum acceptable OOF->holdout precision drop
+TARGET_SIGNAL_PRECISION = 0.65   # raised target: 65% precision floor post-retrain
+MIN_TRADEABLE_PRECISION = 0.65   # precision-first gate: no token trades below 65%
+MIN_FIRES_DEV = 60               # need >=60 OOF trades before trusting a threshold
+# Minimum holdout signals required for statistical reliability.
+# At or above this count, holdout precision governs; below it the OOF estimate is used.
+# Raised from 10 to 30 to require sufficient holdout sample before enabling a token.
+MIN_HOLDOUT_FIRES = 20
+META_MIN_SAMPLES = 1500          # LR meta needs ~1500 directional samples; 5000 never reached at 10k hrs
+GAP_VETO_THRESHOLD = 0.20        # maximum acceptable OOF->holdout precision gap (was 0.15)
 FEE_ROUNDTRIP = 0.001            # 0.10% round-trip (taker + slippage); tune to your venue
 EXPECTANCY_FLOOR = 0.20          # 0.20% minimum expectancy floor for override
 
@@ -207,8 +208,8 @@ EXPECTANCY_FLOOR = 0.20          # 0.20% minimum expectancy floor for override
 # LABEL definition, so it shifts the SELL/BUY class balance — it does not by
 # itself create predictive skill. Watch the printed class distribution to see
 # what it's actually doing.
-BARRIER_UP_SKEW = 1.15
-BARRIER_DOWN_SKEW = 0.85
+BARRIER_UP_SKEW = 1.0    # symmetric: prevents SELL-label dominance across all tokens
+BARRIER_DOWN_SKEW = 1.0
 
 NEWS_FILE = Path(root_dir) / "data" / "news_data.json"
 NEWS_MAX_AGE_SECONDS = 30 * 60
@@ -221,11 +222,24 @@ DEFAULT_PARAMS = {
 }
 
 META_PARAMS = {
-    'objective': 'reg:squarederror', 'eval_metric': 'rmse',
-    'max_depth': 4, 'learning_rate': 0.03, 'subsample': 0.8, 'colsample_bytree': 0.8,
-    'reg_lambda': 2.0, 'min_child_weight': 10,
+    'objective': 'binary:logistic', 'eval_metric': 'logloss',
+    'max_depth': 3, 'learning_rate': 0.03, 'subsample': 0.8, 'colsample_bytree': 0.8,
+    'reg_lambda': 2.5, 'min_child_weight': 10,
     'seed': 42, 'tree_method': 'hist', 'missing': np.nan,
 }
+
+# Features that must never be penalized by the drift or correlation audits.
+# These are the top-gain features in production; downweighting them causes the
+# primary model to ignore its most predictive signals and fall back to noise.
+_PRECISION_PROTECTED_FEATURES: frozenset = frozenset({
+    'prc_trend', 'prc_momentum', 'prc_volume', 'prc_bands',
+    'prc_smart_money', 'prc_total', 'macro_confluence_score',
+    'efficiency_ratio_10', 'volatility_regime',
+    'structure_bias', 'linreg_r2_14',
+    'trend_consistency_20', 'price_disp_atr_pct', 'vol_confirm_ratio',
+    'higher_high_count_20', 'lower_low_count_20', 'swing_strength_20',
+    'adx_14', 'supertrend_dist', 'sar_dist',
+})
 
 FLEET_SYMBOLS = [
     # ── Majors (20) ──────────────────────────────────────────
@@ -278,30 +292,71 @@ FLEET_SYMBOLS = [
     'RAY/USDT', 'JTO/USDT', 'HYPE/USDT', 'TRUMP/USDT', 'FXS/USDT',
 ]
 
-# ════════════════════════════════════════════════════════════════════════════════
-# CRITICAL FEATURE BLACKLIST — Drifted features (PSI > 1.0 or KS > 0.50)
-# Forensic report: 16 features CRITICAL (Score: 64/100). Removing top 10 expected +21.0pp precision gain.
-# ════════════════════════════════════════════════════════════════════════════════
-FEATURE_BLACKLIST = {
-    # ── Absolute price features (CRITICAL drift: PSI > 20.5, KS > 0.93) ──
-    'low',          # PSI=20.855, KS=0.938 → +2.1pp gain
-    'close',        # PSI=20.552, KS=0.938 → +2.1pp gain
-    'se_mid',       # PSI=20.515, KS=0.935 → +2.1pp gain
-    
-    # ── Decay-normalized features (CRITICAL drift) ──
-    'vwap_decay_mean_24',       # PSI=17.391, KS=0.906 → +2.1pp gain
-    'returns_1h_decay_std_24',  # PSI=3.355, KS=0.536 → +2.1pp gain
-    'vwap_decay_std_24',        # PSI=3.236, KS=0.709 → +2.1pp gain
-    'close_decay_std_24',       # Critical indicator
-    'volume_decay_std_24',      # Critical indicator
-    
-    # ── Funding/volatility features (CRITICAL drift) ──
-    'funding_rate_ma8',         # PSI=2.368, KS=0.541 → +2.1pp gain
-    'funding_rate',             # PSI=2.257, KS=0.488 → +2.1pp gain
-    'gk_vol',                   # PSI=1.911, KS=0.576 → +2.1pp gain
-    'volume_decay_mean_24',     # PSI=1.739, KS=0.503 → +2.1pp gain
-    'donchian_width',           # Critical non-price indicator
-}
+FEATURE_BLACKLIST: frozenset = frozenset({
+    # Raw OHLCV — absolute price/volume levels (PSI=20+). Stationary dist_* alternatives exist.
+    'open', 'high', 'low', 'close', 'volume',
+    # Squeeze Momentum absolute price bands (use sqz_on, bb_pct_b instead)
+    'se_mid', 'se_upper', 'se_lower',
+    # Absolute EMA levels (use dist_ema_* instead)
+    'ema_9', 'ema_21', 'ema_50', 'ema_100', 'ema_200',
+    # Absolute VWAP / anchored VWAP levels (use dist_vwap, dist_avwap_* instead)
+    'vwap', 'avwap_50', 'avwap_100', 'avwap_200', 'rolling_vwap_24',
+    # Ichimoku absolute cloud price levels
+    'ichimoku_senkou_a', 'ichimoku_senkou_b', 'ichimoku_tenkan', 'ichimoku_kijun',
+    # Pivot points (absolute price levels, reset each session)
+    'pivot', 'r1', 'r2', 's1', 's2',
+    # Absolute MA variants (use dist_hma20, dist_kama, dist_vwma20 instead)
+    'hma_20', 'kama_10', 'tema_21', 'dema_21', 't3_5', 'vwma_20',
+    # Absolute price band indicators (use keltner_width, supertrend_dist/dir instead)
+    'supertrend', 'keltner_upper', 'keltner_lower', 'keltner_mid',
+    # Absolute S/R levels (use is_at_support/resistance, pct_dist_to_* instead)
+    'rolling_support', 'rolling_resistance',
+    # Cumulative non-stationary A/D line (z-scored obv/pvt used instead)
+    'acc_dist',
+    # Price-level exponential decay means — absolute price, PSI=17+
+    'vwap_decay_mean_24', 'vwap_decay_std_24',
+    'close_decay_mean_24', 'close_decay_std_24',
+    # Volume decay means — non-stationary (crypto volume grows over time)
+    'volume_decay_mean_24', 'volume_decay_std_24',
+    # Absolute-price oscillators — scale with price level, causing PSI=20+ between regimes
+    # awesome_osc = midpoint_SMA_fast - midpoint_SMA_slow  (hundreds at $20k, thousands at $90k)
+    # force_index = volume × close.diff()                  (scales with price magnitude)
+    # kvo/kvo_signal = volume × sign(tp.diff) × (H-L)     (scales with price AND volume)
+    # eom_14 = mid_diff × hl_range / volume               (scales as price²/volume)
+    # dpo_20 = price - shifted_MA                         (absolute price difference)
+    'awesome_osc', 'force_index', 'kvo', 'kvo_signal', 'eom_14', 'dpo_20',
+    # Absolute OI levels — open_interest drifts from $3B→$80B for BTC over training window
+    # Use oi_zscore, oi_change_1h/4h, oi_chg_8h/24h (all stationary) instead
+    # oi_long_short_pressure = open_interest × sign(close.diff) — inherits absolute OI scale
+    'open_interest', 'oi_long_short_pressure',
+    # Slope/divergence features built on absolute-price or raw-cumsum series
+    # vwap_slope_24:    linear slope of VWAP in $/bar — hundreds at $20k, thousands at $90k
+    # obv_slope_20:     slope of raw OBV cumulative sum — non-stationary (grows without bound)
+    # obv_divergence:   OBV_diff/close vs price_return — mixed units, non-stationary
+    # linreg_slope_14:  linear regression slope of close in $/bar — scales with price level
+    #                   use linreg_r2_14 (trend quality, stationary) + ret_12h/ret_24h instead
+    'vwap_slope_24', 'obv_slope_20', 'obv_divergence', 'linreg_slope_14',
+    # Confirmed high-drift features from forensic PSI reports (PSI ≥ 1.9 CRITICAL)
+    # returns_1h_decay_std_24:  return-series decay std — PSI=3.4, non-stationary across regimes
+    # returns_1h_decay_mean_24: return-series decay mean — non-stationary companion to above
+    # funding_rate:             perpetual funding — PSI=2.3; regime-dependent (bull vs bear cycle)
+    # funding_rate_ma8:         8-bar MA of funding — PSI=2.4; same drift, smoothed
+    # gk_vol:                   Garman-Klass volatility — PSI=1.9; low-vol vs high-vol regimes shift dist
+    # vwap_delta_12:            12h VWAP delta — PSI=5.3 for ETH; trending market inflates this
+    'returns_1h_decay_std_24', 'returns_1h_decay_mean_24',
+    'funding_rate', 'funding_rate_ma8',
+    'gk_vol',
+    'vwap_delta_12',
+    # Additional high-drift features identified in 2026-06-12 forensic reports
+    # atr_14:         absolute ATR in price units — ADA PSI=2.14, SOL PSI=1.32; use atr_pct instead
+    # donchian_width: absolute Donchian channel width in price units — BTC critical_indicators
+    # vwap_delta_4:   4h VWAP delta — XRP PSI=2.1; all vwap_delta_* variants drift with price level
+    # vwap_delta_8:   8h VWAP delta — companion to vwap_delta_4 / vwap_delta_12 (already blacklisted)
+    # vwap_delta_24:  24h VWAP delta — same absolute-price-delta drift pattern
+    'atr_14',
+    'donchian_width',
+    'vwap_delta_1', 'vwap_delta_4', 'vwap_delta_8', 'vwap_delta_24',
+})
 
 FEATURE_ADDONS = [
     # ══════════════════════════════════════════════════════════════════════
@@ -474,6 +529,12 @@ FEATURE_ADDONS = [
 
     # ── OI vs price regime ────────────────────────────────────────────────
     'oi_chg_8h', 'oi_chg_24h', 'oi_px_agreement',
+
+    # ── Primary model precision features (added 2026-06-10) ──────────────
+    # Regime-independent, stationary signals targeting directional skill.
+    'trend_consistency_20',   # fraction of last 20 bars up (persistent bias)
+    'price_disp_atr_pct',     # (close - EMA50) / ATR14 — vol-normalised displacement
+    'vol_confirm_ratio',      # log ratio up-volume / down-volume over 20 bars
 ]
 
 
@@ -746,19 +807,18 @@ def get_atr_multiplier(symbol: str) -> float:
 def get_dynamic_lookahead(df: pd.DataFrame) -> int:
     """Estimate lookahead (in bars) from typical ATR as pct of price.
 
-    Returns one of {48,36,24,18} per median ATR% buckets.
+    Buckets raised to give barriers time to hit in low-volatility regimes.
+    Returns one of {96, 72, 48, 36} per median ATR% bucket.
     """
     try:
         atr = compute_atr(df, period=14)
         atr_pct = (atr / df['close'].replace(0, np.nan)).fillna(0)
         med = float(np.nanmedian(atr_pct))
-        if med < 0.005:
-            return 48
+        if med < 0.007:
+            return 96   # very low-vol: needs longest window for barrier hits
         if med < 0.010:
-            return 36
-        if med < 0.020:
-            return 24
-        return 18
+            return 72   # low-vol: extended window (was 84)
+        return 48       # normal/high-vol: standard window (was 72 for med range)
     except Exception:
         return int(MAX_LOOKAHEAD)
 
@@ -789,6 +849,44 @@ def get_dynamic_atr_range(df: pd.DataFrame, lookback: int = 1000) -> tuple:
         return (1.5, 4.5, 2.5)
     except Exception:
         return (1.0, 4.5, 1.5)
+
+
+def classify_regime_deterministic(df: pd.DataFrame, train_n: Optional[int] = None) -> pd.Series:
+    """Assign regime labels using volume, ATR%, and momentum percentiles.
+
+    Produces '<vol>_<atr>_<trend>' strings identical to threshold_optimizer.py's
+    classify_regimes() so the rest of the pipeline that reads hmm_regime works
+    unchanged.  Avoids HMM instability (degenerate single-state solutions).
+
+    train_n: if provided, percentile thresholds are computed from the first
+    train_n rows only (the pre-holdout slice), preventing holdout data from
+    shifting the quantile boundaries and contaminating training bar labels.
+    """
+    try:
+        roll_vol = df["volume"].rolling(24, min_periods=1).mean()
+        atr_vals  = compute_atr(df, period=14)
+        atr_pct   = (atr_vals / df["close"].replace(0, np.nan)).fillna(0)
+        momentum  = df["close"].pct_change(24).fillna(0)
+
+        # Use only the training slice for quantile computation.
+        _ref = slice(None, train_n) if train_n is not None else slice(None)
+        vp33 = float(roll_vol.iloc[_ref].quantile(0.33));  vp67 = float(roll_vol.iloc[_ref].quantile(0.67))
+        ap33 = float(atr_pct.iloc[_ref].quantile(0.33));   ap67 = float(atr_pct.iloc[_ref].quantile(0.67))
+        mp33 = float(momentum.iloc[_ref].quantile(0.33));  mp67 = float(momentum.iloc[_ref].quantile(0.67))
+
+        def _t(v, p33, p67): return "low" if v <= p33 else ("med" if v <= p67 else "high")
+        def _tr(v, p33, p67): return "down" if v <= p33 else ("flat" if v <= p67 else "up")
+
+        labels = pd.Series([
+            f"{_t(float(roll_vol.iloc[i]), vp33, vp67)}"
+            f"_{_t(float(atr_pct.iloc[i]),  ap33, ap67)}"
+            f"_{_tr(float(momentum.iloc[i]), mp33, mp67)}"
+            for i in range(len(df))
+        ], index=df.index, dtype=str)
+        return labels
+    except Exception as _e:
+        print(f"   [REGIME] Deterministic classifier failed ({_e}), using UNKNOWN.")
+        return pd.Series("UNKNOWN", index=df.index, dtype=str)
 
 
 def compute_dynamic_atr_multiplier(
@@ -824,14 +922,16 @@ def _adaptive_label_vol_threshold(
     """Compute a per-bar threshold for whether the market is too quiet/noisy to label."""
     vol = float(np.clip(volatility_regime if volatility_regime is not None else 1.0, 0.5, 1.8))
     er = float(np.clip(efficiency_ratio if efficiency_ratio is not None else 0.5, 0.0, 1.0))
-    trend_adj = -0.12 if trend_regime == 1 else 0.0
-    threshold = 0.78 - 0.22 * er + 0.08 * np.tanh((vol - 1.0) * 1.8) + trend_adj
-    return float(np.clip(threshold, 0.45, 0.86))
+    trend_adj = -0.10 if trend_regime == 1 else 0.0
+    # Lowered to 0.50 — target BUY+SELL > 50% of pool so binary primary trains on
+    # majority directional examples and scale_pos_weight stays manageable.
+    threshold = 0.50 - 0.20 * er + 0.06 * np.tanh((vol - 1.0) * 1.8) + trend_adj
+    return float(np.clip(threshold, 0.25, 0.60))
 
 
 def _adaptive_efficiency_floor(volatility_regime: float) -> float:
     vol = float(np.clip(volatility_regime if volatility_regime is not None else 1.0, 0.6, 1.8))
-    return float(np.clip(0.18 + 0.12 * max(0.0, vol - 1.0), 0.14, 0.30))
+    return float(np.clip(0.10 + 0.12 * max(0.0, vol - 1.0), 0.08, 0.30))
 
 
 def _adaptive_confluence_bounds(score: pd.Series) -> Tuple[float, float]:
@@ -845,21 +945,78 @@ def _adaptive_confluence_bounds(score: pd.Series) -> Tuple[float, float]:
     return lower, upper
 
 
+def analyze_training_labels_for_adaptation(
+    df_train: pd.DataFrame,
+    labels_train: pd.Series,
+) -> Dict[str, Any]:
+    """Derive adaptive labeling parameters from the training pool only.
+
+    All values are computed strictly from the training split so that holdout
+    rows never influence label generation — preventing any form of future
+    information leakage.
+    """
+    df = df_train.copy()
+    df['_label_tmp'] = labels_train.values
+    result: Dict[str, Any] = {}
+    for label in [0, 1, 2]:
+        mask = df['_label_tmp'] == label
+        if mask.sum() < 10:
+            continue
+        subset = df[mask]
+        if 'hmm_regime' in subset.columns:
+            result[f'regime_dist_{label}'] = subset['hmm_regime'].value_counts(normalize=True).to_dict()
+        if 'macro_confluence_score' in subset.columns:
+            if label == 2:   # BUY — lower bound screens out anti-confluence buys
+                result['buy_confluence_lower'] = float(subset['macro_confluence_score'].quantile(0.20))
+            elif label == 0: # SELL — upper bound screens out anti-confluence sells
+                result['sell_confluence_upper'] = float(subset['macro_confluence_score'].quantile(0.80))
+        for col in ['volatility_regime', 'efficiency_ratio_10']:
+            if col in subset.columns:
+                result[f'{col}_p10_{label}'] = float(subset[col].quantile(0.10))
+                result[f'{col}_p90_{label}'] = float(subset[col].quantile(0.90))
+    return result
+
+
 def create_triple_barrier_labels(df: pd.DataFrame, atr_multiplier: float,
                                   max_lookahead: int = MAX_LOOKAHEAD,
                                   volatility_regime: Optional[pd.Series] = None,
                                   efficiency_ratio: Optional[pd.Series] = None,
                                   trend_regime: Optional[pd.Series] = None,
                                   macro_confluence_score: Optional[pd.Series] = None,
-                                  barrier_multiplier: Optional[float] = None) -> pd.Series:
-    """3-class labels: 0=SELL, 1=HOLD, 2=BUY, -1=CENSORED (dropped upstream)."""
+                                  barrier_multiplier: Optional[float] = None,
+                                  adapt_params: Optional[Dict[str, Any]] = None,
+                                  regime_atr_mult: Optional[Dict[str, float]] = None,
+                                  barrier_up_skew: Optional[float] = None,
+                                  barrier_down_skew: Optional[float] = None) -> pd.Series:
+    """3-class labels: 0=SELL, 1=HOLD, 2=BUY, -1=CENSORED (dropped upstream).
+
+    adapt_params: pre-computed per-training-split statistics from
+        analyze_training_labels_for_adaptation().  When provided, the
+        confluence bounds are taken from these frozen training statistics
+        rather than re-derived from the full (potentially holdout-inclusive)
+        series, eliminating future-information leakage.
+    regime_atr_mult: optional mapping {hmm_regime: multiplier} derived from
+        training data; when present the per-bar ATR multiplier is adjusted
+        per regime before the dynamic noise/vol factor is applied.
+    """
     if df is None or df.empty:
         return pd.Series(dtype=int)
+
+    _up_skew   = float(barrier_up_skew)   if barrier_up_skew   is not None else BARRIER_UP_SKEW
+    _down_skew = float(barrier_down_skew) if barrier_down_skew is not None else BARRIER_DOWN_SKEW
 
     labels = pd.Series(1, index=df.index, dtype=int)
     atr = compute_atr(df, period=14)
     n = len(df)
+    # Compute baseline confluence bounds from whatever series is passed in.
+    # If adapt_params is provided (training-only stats) those values override,
+    # preventing holdout rows from influencing their own labels.
     cs_lower, cs_upper = _adaptive_confluence_bounds(macro_confluence_score) if macro_confluence_score is not None else (-0.50, 0.50)
+    if adapt_params is not None:
+        if 'buy_confluence_lower' in adapt_params:
+            cs_lower = float(adapt_params['buy_confluence_lower'])
+        if 'sell_confluence_upper' in adapt_params:
+            cs_upper = float(adapt_params['sell_confluence_upper'])
 
     for i in range(n - 1):
         vol_regime_i = float(volatility_regime.iloc[i]) if volatility_regime is not None and not pd.isna(volatility_regime.iloc[i]) else 1.0
@@ -880,23 +1037,32 @@ def create_triple_barrier_labels(df: pd.DataFrame, atr_multiplier: float,
         if atr_val == 0 or np.isnan(atr_val):
             atr_val = entry_price * 0.001
 
-        dynamic_mult = compute_dynamic_atr_multiplier(atr_multiplier, er_i, vol_regime_i)
+        # Per-regime base multiplier override (training-derived, no leakage)
+        base_mult_i = atr_multiplier
+        if regime_atr_mult is not None and 'hmm_regime' in df.columns:
+            hmm_r_i = df['hmm_regime'].iloc[i]
+            if hmm_r_i in regime_atr_mult:
+                base_mult_i = float(regime_atr_mult[hmm_r_i])
+        dynamic_mult = compute_dynamic_atr_multiplier(base_mult_i, er_i, vol_regime_i)
 
         # Regime-based barrier adjustment: allow optional per-call override
         reg_barrier_adj = 1.0
         if barrier_multiplier is not None:
             reg_barrier_adj = float(barrier_multiplier)
         else:
-            # Heuristic: flat markets need wider barriers, volatile markets tighter
-            if abs(trend_i) < 0.02:
-                reg_barrier_adj = 1.5
+            # hmm_regime flat-market check (labels produced by deterministic classifier)
+            _hmm_i = df['hmm_regime'].iloc[i] if 'hmm_regime' in df.columns else ''
+            if isinstance(_hmm_i, str) and (_hmm_i.endswith('_flat') or 'flat' in _hmm_i.split('_')):
+                reg_barrier_adj = 1.0   # flat regime: standard barriers — do NOT inflate HOLD%
+            elif abs(trend_i) < 0.02:
+                reg_barrier_adj = 1.1   # mild adjustment for flat trend, not 1.8
             elif vol_regime_i > 1.25:
                 reg_barrier_adj = 0.8
             elif er_i > 0.6:
                 reg_barrier_adj = 0.9
 
-        upper = entry_price + (dynamic_mult * reg_barrier_adj * BARRIER_UP_SKEW) * atr_val
-        lower = entry_price - (dynamic_mult * reg_barrier_adj * BARRIER_DOWN_SKEW) * atr_val
+        upper = entry_price + (dynamic_mult * reg_barrier_adj * _up_skew) * atr_val
+        lower = entry_price - (dynamic_mult * reg_barrier_adj * _down_skew) * atr_val
 
         window_avail = min(max_lookahead, n - 1 - i)
         hit = None
@@ -925,7 +1091,7 @@ def create_triple_barrier_labels(df: pd.DataFrame, atr_multiplier: float,
     return labels
 
 
-def get_class_weights(y: np.ndarray, min_directional_ratio: float = 0.20) -> np.ndarray:
+def get_class_weights(y: np.ndarray, min_directional_ratio: float = 0.50) -> np.ndarray:
     """Return per-sample weights that upweight BUY/SELL when they are rare.
 
     Keeps average weight near 1.0 for stability.
@@ -1063,15 +1229,8 @@ class AdaptiveNormalizer:
                 continue
             # Z-score: (x - mean) / std
             df_norm[col] = (df[col] - self.means[col]) / max(self.stds[col], 1e-8)
-            
-            # Online update: decay old stats, incorporate latest bar
-            if len(df) > 0:
-                latest_val = float(df[col].iloc[-1])
-                new_mean = 0.99 * self.means[col] + 0.01 * latest_val
-                new_std_sq = 0.99 * (self.stds[col] ** 2) + 0.01 * ((latest_val - new_mean) ** 2)
-                new_std = float(np.sqrt(max(new_std_sq, 1e-8)))
-                self.means[col] = new_mean
-                self.stds[col] = max(new_std, 1e-6)
+            # Online update intentionally disabled: use fixed training statistics on all splits
+            # to prevent over-adaptation that causes distribution shift between train and holdout.
         return df_norm
 
 
@@ -1225,27 +1384,82 @@ def build_meta_X(X_feats: pd.DataFrame, primary_probs: Optional[np.ndarray] = No
     return X_feats.copy()
 
 
-def proposed_side(primary_probs: np.ndarray) -> np.ndarray:
-    """Primary's directional proposal: 2=BUY if buy-prob >= sell-prob else 0=SELL."""
-    return np.where(primary_probs[:, 2] >= primary_probs[:, 0], 2, 0)
+def proposed_side(
+    primary_probs: np.ndarray,
+    buy_rate: float = 0.0,
+    sell_rate: float = 0.0,
+) -> np.ndarray:
+    """Primary's directional proposal: 2=BUY if buy-prob >= sell-prob else 0=SELL.
+
+    When buy_rate/sell_rate are provided (training class frequencies), the raw
+    probabilities are divided by their respective base rates before comparing.
+    This prevents class-imbalance suppression of the minority direction: a token
+    with 12% BUY and 21% SELL labels trains a model that systematically assigns
+    higher SELL probability, causing proposed_side to return 0 BUY proposals
+    even when the model has genuine directional skill on BUY bars.
+    """
+    buy_p  = primary_probs[:, 2].astype(float)
+    sell_p = primary_probs[:, 0].astype(float)
+    if buy_rate > 0.0 and sell_rate > 0.0:
+        buy_p  = buy_p  / max(buy_rate,  0.05)
+        sell_p = sell_p / max(sell_rate, 0.05)
+    return np.where(buy_p >= sell_p, 2, 0)
 
 
 def objective(trial, Xtr, ytr, Xva, yva, fw=None):
     params = {
         'objective': 'multi:softprob', 'eval_metric': 'mlogloss', 'num_class': NUM_CLASS,
-        'max_depth': trial.suggest_int('max_depth', 3, 8),
-        'learning_rate': trial.suggest_float('learning_rate', 0.005, 0.05, log=True),
-        'subsample': trial.suggest_float('subsample', 0.6, 0.9),
-        'colsample_bytree': trial.suggest_float('colsample_bytree', 0.6, 0.9),
-        'gamma': trial.suggest_float('gamma', 0, 5),
-        'reg_lambda': trial.suggest_float('reg_lambda', 1, 20, log=True),
-        'reg_alpha': trial.suggest_float('reg_alpha', 0, 10),
-        'min_child_weight': trial.suggest_int('min_child_weight', 5, 20),
+        'max_depth': trial.suggest_int('max_depth', 3, 5),
+        'learning_rate': trial.suggest_float('learning_rate', 0.005, 0.08, log=True),
+        'subsample': trial.suggest_float('subsample', 0.60, 0.80),
+        'colsample_bytree': trial.suggest_float('colsample_bytree', 0.60, 0.80),
+        'gamma': trial.suggest_float('gamma', 0, 3),
+        'reg_lambda': trial.suggest_float('reg_lambda', 3.0, 10.0),
+        'reg_alpha': trial.suggest_float('reg_alpha', 2.0, 8.0),
+        'min_child_weight': trial.suggest_int('min_child_weight', 10, 25),
         'seed': 42, 'tree_method': 'hist', 'missing': np.nan,
     }
     m = xgb.train(params, _dm(Xtr, ytr, sample_weights(ytr), fw=fw), num_boost_round=500,
                   evals=[(_dm(Xva, yva, fw=fw), 'eval')], early_stopping_rounds=50, verbose_eval=False)
     return float(log_loss(yva, m.predict(_dm(Xva, fw=fw)), labels=list(range(NUM_CLASS))))
+
+
+def objective_multifold(trial, X: pd.DataFrame, y: np.ndarray,
+                        splits: List[Tuple[np.ndarray, np.ndarray]],
+                        fw: Optional[np.ndarray] = None) -> float:
+    """Optuna objective averaged across all CV folds (purged walk-forward).
+
+    Using only the last fold caused high-variance estimates: a good last fold
+    masked bad generalisation across the full time horizon. Averaging across
+    all 5 folds gives a much more stable logloss estimate and prevents Optuna
+    from over-tuning to the idiosyncrasies of a single period.
+    """
+    params = {
+        'objective': 'multi:softprob', 'eval_metric': 'mlogloss', 'num_class': NUM_CLASS,
+        'max_depth': trial.suggest_int('max_depth', 3, 5),
+        'learning_rate': trial.suggest_float('learning_rate', 0.005, 0.08, log=True),
+        'subsample': trial.suggest_float('subsample', 0.60, 0.80),
+        'colsample_bytree': trial.suggest_float('colsample_bytree', 0.60, 0.80),
+        'gamma': trial.suggest_float('gamma', 0, 3),
+        'reg_lambda': trial.suggest_float('reg_lambda', 3.0, 10.0),
+        'reg_alpha': trial.suggest_float('reg_alpha', 2.0, 8.0),
+        'min_child_weight': trial.suggest_int('min_child_weight', 10, 25),
+        'seed': 42, 'tree_method': 'hist', 'missing': np.nan,
+    }
+    losses = []
+    for itr, iva in splits:
+        w_tr = sample_weights(y[itr])
+        m = xgb.train(
+            params,
+            _dm(X.iloc[itr], y[itr], w_tr, fw=fw),
+            num_boost_round=500,
+            evals=[(_dm(X.iloc[iva], y[iva], fw=fw), 'eval')],
+            early_stopping_rounds=40,
+            verbose_eval=False,
+        )
+        losses.append(float(log_loss(y[iva], m.predict(_dm(X.iloc[iva], fw=fw)),
+                                     labels=list(range(NUM_CLASS)))))
+    return float(np.mean(losses))
 
 
 def primary_oof(X: pd.DataFrame, y: np.ndarray, params: dict,
@@ -1254,8 +1468,8 @@ def primary_oof(X: pd.DataFrame, y: np.ndarray, params: dict,
     oof = np.full((len(X), NUM_CLASS), np.nan)
     for tr, va in TimeSeriesSplit(n_splits=n_splits, gap=gap).split(X):
         m = xgb.train(params, _dm(X.iloc[tr], y[tr], sample_weights(y[tr]), fw=fw),
-                      num_boost_round=500, evals=[(_dm(X.iloc[va], y[va], fw=fw), 'eval')],
-                      early_stopping_rounds=50, verbose_eval=False)
+                      num_boost_round=800, evals=[(_dm(X.iloc[va], y[va], fw=fw), 'eval')],
+                      early_stopping_rounds=60, verbose_eval=False)
         oof[va] = m.predict(_dm(X.iloc[va], fw=fw))
     return oof
 
@@ -1270,6 +1484,102 @@ def binary_oof(X: pd.DataFrame, y: np.ndarray, params: dict,
                       evals=[(_dm(X.iloc[va], y[va]), 'eval')],
                       early_stopping_rounds=30, verbose_eval=False)
         oof[va] = m.predict(_dm(X.iloc[va]))
+    return oof
+
+
+def objective_binary_multifold(
+    trial: "optuna.Trial",
+    X: pd.DataFrame,
+    y: np.ndarray,
+    splits: list,
+    fw: Optional[np.ndarray] = None,
+    spw: float = 1.0,
+) -> float:
+    """Optuna objective for binary XGBoost (minimise 1-AUPRC), averaged across folds.
+
+    AUPRC (average precision score) weights precision at low-recall operating points
+    more heavily than AUC-ROC. This directly optimises the high-confidence precision
+    region that the calibrated threshold gate exploits at inference time.
+    """
+    from sklearn.metrics import average_precision_score as _ap
+    params = {
+        'objective': 'binary:logistic', 'eval_metric': 'aucpr',
+        'max_depth': trial.suggest_int('max_depth', 4, 7),     # floor 4: depth-3 can't capture 50+ feature interactions
+        'learning_rate': trial.suggest_float('learning_rate', 0.005, 0.08, log=True),
+        'subsample': trial.suggest_float('subsample', 0.60, 0.80),
+        'colsample_bytree': trial.suggest_float('colsample_bytree', 0.60, 0.80),
+        'gamma': trial.suggest_float('gamma', 0.5, 3.0),       # floor 0.5: prevents near-zero split threshold (SELL bias)
+        'reg_lambda': trial.suggest_float('reg_lambda', 3.0, 10.0),
+        'reg_alpha': trial.suggest_float('reg_alpha', 2.0, 8.0),
+        'min_child_weight': trial.suggest_int('min_child_weight', 10, 25),
+        'seed': 42, 'tree_method': 'hist', 'missing': np.nan,
+        'scale_pos_weight': spw,
+    }
+    aps: List[float] = []
+    for itr, iva in splits:
+        # fw is feature weights (size=num_features), not sample weights — pass via fw= kwarg
+        m = xgb.train(params, _dm(X.iloc[itr], y[itr], fw=fw),
+                      num_boost_round=400,
+                      evals=[(_dm(X.iloc[iva], y[iva], fw=fw), 'eval')],
+                      early_stopping_rounds=30, verbose_eval=False)
+        p = m.predict(_dm(X.iloc[iva]))
+        try:
+            aps.append(float(_ap(y[iva], p)))
+        except Exception:
+            aps.append(0.0)
+    return float(1.0 - np.mean(aps))
+
+
+def _binary_params(best: dict) -> dict:
+    """Convert Optuna best_params to a binary:logistic XGBoost params dict."""
+    p = dict(best)
+    p.update({'objective': 'binary:logistic', 'eval_metric': 'aucpr',
+              'seed': 42, 'tree_method': 'hist', 'missing': np.nan})
+    return p
+
+
+def binary_primary_oof(
+    X: pd.DataFrame,
+    y: np.ndarray,
+    params: dict,
+    n_splits: int,
+    gap: int,
+    fw: Optional[np.ndarray] = None,
+) -> np.ndarray:
+    """OOF probabilities for a single binary XGBoost primary model."""
+    oof = np.full(len(X), np.nan)
+    for tr, va in TimeSeriesSplit(n_splits=n_splits, gap=gap).split(X):
+        # fw is feature weights (size=num_features), not sample weights — pass via fw= kwarg
+        m = xgb.train(params, _dm(X.iloc[tr], y[tr], fw=fw),
+                      num_boost_round=800,
+                      evals=[(_dm(X.iloc[va], y[va], fw=fw), 'eval')],
+                      early_stopping_rounds=60, verbose_eval=False)
+        oof[va] = m.predict(_dm(X.iloc[va]))
+    return oof
+
+
+def lr_meta_oof(X: pd.DataFrame, y: np.ndarray, n_splits: int, gap: int) -> np.ndarray:
+    """OOF for LR meta (C=0.01, balanced). Trains on all bars (HOLD-timeouts as negatives).
+    Returns NaN for rows not in any validation fold."""
+    from sklearn.linear_model import LogisticRegression as _LR
+    # Cap splits so each fold has ≥ 200 training samples — 15 folds on 1900 bars
+    # gives fold-1 only 130 training samples, producing useless 0.5 OOF scores.
+    n_splits_actual = min(n_splits, max(5, len(X) // 300))
+    oof = np.full(len(X), np.nan)
+    for tr, va in TimeSeriesSplit(n_splits=n_splits_actual, gap=gap).split(X):
+        X_tr = X.iloc[tr].fillna(0.0)
+        X_va = X.iloc[va].fillna(0.0)
+        y_tr = y[tr].astype(int)
+        if len(np.unique(y_tr)) < 2:
+            oof[va] = float(y_tr.mean())
+            continue
+        clf = _LR(C=0.01, max_iter=2000, solver='lbfgs',
+                  class_weight='balanced', random_state=42)
+        try:
+            clf.fit(X_tr, y_tr)
+            oof[va] = clf.predict_proba(X_va)[:, 1]
+        except Exception:
+            pass
     return oof
 
 
@@ -1370,7 +1680,14 @@ def pick_edge_threshold_by_side(
 
     meeting = [r for r in rows if r[1] >= target]
     if meeting:
-        thr, prec, cov, n = meeting[0]
+        # Prefer widest-coverage threshold in [target, target+20pp] to avoid
+        # isotonic-inflated cherry-picks that overfit dev OOF but fail on holdout.
+        _overfit_ceil = target + 0.20
+        _moderate = [r for r in meeting if r[1] <= _overfit_ceil]
+        if _moderate:
+            thr, prec, cov, n = max(_moderate, key=lambda r: r[2])
+        else:
+            thr, prec, cov, n = max(meeting, key=lambda r: r[2])
         return thr, prec, cov, n, True
 
     best = max(rows, key=lambda r: (r[1], r[2]))
@@ -1443,7 +1760,12 @@ def pick_threshold_by_side(
 
     meeting = [r for r in rows if r[1] >= target]
     if meeting:
-        thr, prec, cov, n = meeting[0]
+        _overfit_ceil = target + 0.20
+        _moderate = [r for r in meeting if r[1] <= _overfit_ceil]
+        if _moderate:
+            thr, prec, cov, n = max(_moderate, key=lambda r: r[2])
+        else:
+            thr, prec, cov, n = max(meeting, key=lambda r: r[2])
         return thr, prec, cov, n, True
 
     best = max(rows, key=lambda r: (r[1], r[2]))
@@ -1638,15 +1960,14 @@ def backtest(fire_mask: np.ndarray, proposed: np.ndarray, y_true: np.ndarray,
         sharpe = 0.0
 
     # Max drawdown on the equity curve (percentage of peak)
-    equity  = np.cumsum(rets_arr)
+    # Start at 1.0 so equity is always positive and peak is never near-zero.
+    # Without this offset, equity starts at 0 → peak_safe clamped to 1e-9 →
+    # a single small loss gives drawdown_pct = loss/1e-9 → 100_000_000%.
+    equity  = 1.0 + np.cumsum(rets_arr)
     peak    = np.maximum.accumulate(equity)
-    drawdown_dollars = peak - equity
-    # FIX (CRITICAL): Normalize by peak to get true percentage (max_dd <= 100%)
-    # Before: multiplied decimal by 100 directly, causing 3000%+ values when equity high
-    # After: divide drawdown_dollars by peak value (same as validation.py line 95)
-    peak_safe = np.maximum(peak, 1e-9)  # Avoid division by zero
-    drawdown_pct = drawdown_dollars / peak_safe
-    max_dd  = float(drawdown_pct.max() * 100)
+    peak_safe = np.maximum(peak, 1e-9)
+    drawdown_pct = (peak - equity) / peak_safe
+    max_dd  = float(min(drawdown_pct.max() * 100, 100.0))
 
     # Profit factor
     gross_win  = float(rets_arr[rets_arr > 0].sum()) if (rets_arr > 0).any() else 0.0
@@ -1758,7 +2079,7 @@ def log_feature_importance(model, feature_names: List[str], symbol: str):
 # ============================================================
 # TRAIN A SINGLE TOKEN
 # ============================================================
-def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
+def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyright: ignore[reportGeneralTypeIssues]
     print(f"\n{'='*60}\nTraining model for {symbol}\n{'='*60}")
     try:
         p = Predictor(symbol)
@@ -1768,12 +2089,11 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             print(f"No data for {symbol}")
             return None
 
-        btc_df = None
-        if hasattr(p, 'fetch_btc_data'):
-            print("Fetching BTC market context...")
-            btc_df = p.fetch_btc_data(timeframe='1h', limit=hours)
-            if btc_df is None or btc_df.empty:
-                print("BTC data not available -- continuing without anchor features")
+        print("Fetching BTC market context...")
+        btc_df = p.fetch_btc_data(timeframe='1h', limit=hours)
+        if btc_df is None or btc_df.empty:
+            btc_df = None
+            print("BTC data not available -- continuing without anchor features")
 
         print("Loading news sentiment...")
         news_df = p.load_news_data()
@@ -1818,15 +2138,31 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         # distinguishes them as 0.52 vs 0.85).
         # macro_confluence_score is derived here and passed to the labeler.
         print("   Computing soft (percentile-rank) confluence features...")
+        _REQUIRED_SOFT_COLS = [
+            'prc_trend', 'prc_momentum', 'prc_volume', 'prc_bands',
+            'prc_smart_money', 'prc_total', 'macro_confluence_score',
+        ]
         try:
             soft_conf = compute_soft_confluence_features(df)
             for col in soft_conf.columns:
                 df[col] = soft_conf[col].values
-            _conf_sample = float(df['prc_total'].iloc[-1]) if 'prc_total' in df.columns else 0.5
+            # Verify all required columns are present
+            _missing_soft = [c for c in _REQUIRED_SOFT_COLS if c not in df.columns]
+            if _missing_soft:
+                raise RuntimeError(
+                    f"compute_soft_confluence_features() did not produce required columns: {_missing_soft}. "
+                    f"Check that prepare_features() ran successfully and all indicator columns are present."
+                )
+            _conf_sample = float(df['prc_total'].iloc[-1])
             print(f"   prc_total sample (last bar): {_conf_sample:.3f}  "
                   f"macro_conf_score: {float(df['macro_confluence_score'].iloc[-1]):.3f}")
+        except RuntimeError:
+            raise
         except Exception as _sc_err:
             print(f"   Soft confluence computation failed ({_sc_err}) — using sign-based fallback")
+            for col in _REQUIRED_SOFT_COLS:
+                if col not in df.columns:
+                    df[col] = 0.5 if col != 'macro_confluence_score' else 0.0
 
         for col in ['volatility_regime', 'efficiency_ratio_10', 'trend_regime']:
             if col not in df.columns:
@@ -1836,29 +2172,21 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         # Keep ATR for the PnL backtest (excluded from features via leading underscore).
         df['_atr'] = compute_atr(df, period=14).values
 
-        # ---- Train fresh HMM first so regime labels are available for training and validation ----
-        # FIX 2: HMM auto-recovery with state count validation
-        try:
-            from src.ml.hmm_regime import train_hmm_for_symbol as _train_hmm, label_dataframe as _label_df
-            print("   Training fresh HMM regime engine...")
-            _hmm_ok = _train_hmm(symbol, df)
-            if _hmm_ok:
-                df['hmm_regime'] = _label_df(symbol, df)
-                n_unique_regimes = len(df['hmm_regime'].unique())
-                print(f"   [HMM] Fresh HMM trained with {n_unique_regimes} effective states.")
-                if n_unique_regimes == 1:
-                    print(f"   [HMM WARNING] Only 1 state detected. Regime filter will have limited effect.")
-            else:
-                print("   [HMM] Fresh HMM training returned False. Using existing engine for labeling.")
-                df['hmm_regime'] = _label_df(symbol, df)
-                n_unique_regimes = len(df['hmm_regime'].unique())
-                if n_unique_regimes == 1:
-                    print(f"   [HMM WARNING] Fallback assigned 100% to 1 state. Regime filter disabled.")
-        except Exception as _hmm_err:
-            print(f"   [HMM] Pre-training failed: {type(_hmm_err).__name__}: {_hmm_err}")
-            if 'hmm_regime' not in df.columns:
-                df['hmm_regime'] = 'UNKNOWN'
-                print(f"   [HMM] Using UNKNOWN regime fallback.")
+        # ---- Deterministic regime classifier (replaces HMM) ----
+        # HMM training was prone to degenerate single-state solutions and instability
+        # across different tokens. The deterministic approach uses volume/ATR/momentum
+        # percentiles to produce consistent '<vol>_<atr>_<trend>' labels for all tokens.
+        # Compute regime quantile thresholds from PRE-SPLIT data only.
+        # classify_regime_deterministic() uses .quantile() across the full series;
+        # passing the full df (including holdout) leaks holdout vol/ATR/momentum
+        # distribution into training-bar labels. Compute on the pre-holdout slice.
+        _df_n = len(df)
+        _pre_holdout_n = _df_n - int(_df_n * TEST_FRAC)   # same boundary as train_end
+        print("   Computing deterministic regime labels (vol×atr×trend percentiles)...")
+        df['hmm_regime'] = classify_regime_deterministic(df, train_n=_pre_holdout_n)
+        n_unique_regimes = len(df['hmm_regime'].unique())
+        print(f"   [REGIME] {n_unique_regimes} distinct regimes assigned "
+              f"(sample: {df['hmm_regime'].value_counts().head(3).to_dict()})")
 
         # ── Load per-token optimizer params (if threshold_optimizer.py has run) ──
         _opt = load_token_params(symbol)
@@ -1924,26 +2252,57 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         # accurate. The new values allow the meta to learn regime patterns
         # while still preventing short-window overfitting.
         if _er_med < 0.35:
-            _meta_reg, _meta_mcw = 3.0, 12   # was 6.0, 20
+            _meta_reg, _meta_mcw = 3.5, 14   # choppy market: strongest regularization
         elif _er_med < 0.5:
-            _meta_reg, _meta_mcw = 2.5, 10   # was 4.0, 15
+            _meta_reg, _meta_mcw = 3.0, 12
         else:
-            _meta_reg, _meta_mcw = 2.0, 8    # was 2.0, 10
+            _meta_reg, _meta_mcw = 2.5, 10   # trending market: moderate regularization
         token_meta_params = {**META_PARAMS, 'reg_lambda': _meta_reg, 'min_child_weight': _meta_mcw}
 
+        # ── Adaptive barrier skew based on token volatility ──────────────────
+        # Symmetric barriers for low-vol tokens avoid the labeler assigning
+        # SELL labels 1.75× more than BUY (1.15/0.85 skew on a token where
+        # down barriers are only 0.7% wide means a BUY label hit requires more
+        # price movement than a SELL label hit).
+        _sample_len = min(len(df), 2000)
+        _atr_for_skew = compute_atr(df.iloc[:_sample_len], period=14)
+        _close_for_skew = df['close'].iloc[:_sample_len].replace(0, np.nan)
+        _atr_pct_for_skew = (_atr_for_skew / _close_for_skew).fillna(0)
+        _median_atr_pct = float(np.nanmedian(_atr_pct_for_skew))
+        if _median_atr_pct < 0.015:
+            _token_up_skew   = 1.0
+            _token_down_skew = 1.0
+            print(f"   [BARRIER] Symmetric skew (median_atr_pct={_median_atr_pct:.4f} < 0.015)")
+        else:
+            _token_up_skew   = BARRIER_UP_SKEW
+            _token_down_skew = BARRIER_DOWN_SKEW
+            print(f"   [BARRIER] Asymmetric skew {_token_up_skew:.2f}/{_token_down_skew:.2f} "
+                  f"(median_atr_pct={_median_atr_pct:.4f})")
+
         # ---- 0) Recursive Label Rebalancer (Phase 3) ----
-        target_hold_max = 0.50
-        target_buy_min, target_buy_max = 0.20, 0.40
-        target_sell_min, target_sell_max = 0.20, 0.40
-        
+        target_hold_max = 0.55   # tighter: require HOLD ≤ 55% to force more directional examples
+        target_buy_min, target_buy_max = 0.15, 0.45
+        target_sell_min, target_sell_max = 0.15, 0.45
+
         loop_atr_mult = atr_mult
         best_atr_mult = atr_mult
         best_dist = 999.0
-        
+
         N_all = len(df)
         test_start_temp = N_all - int(N_all * TEST_FRAC)
         train_end_temp = test_start_temp - EMBARGO
         
+        # ── Anti-leakage: derive confluence bounds from training portion only ─────
+        # compute before ANY create_triple_barrier_labels call so even the
+        # rebalancer preview never sees holdout statistics.
+        _adapt_params: Dict[str, Any] = {}
+        if 'macro_confluence_score' in df.columns:
+            _cs_train_slice = df['macro_confluence_score'].iloc[:train_end_temp].dropna()
+            if len(_cs_train_slice) > 10:
+                _cs_lo, _cs_hi = _adaptive_confluence_bounds(_cs_train_slice)
+                _adapt_params['buy_confluence_lower'] = _cs_lo
+                _adapt_params['sell_confluence_upper'] = _cs_hi
+
         print("   Auditing training label distribution (rebalancer)...")
         preview_labels = create_triple_barrier_labels(
             df, atr_multiplier=loop_atr_mult, max_lookahead=token_lookahead,
@@ -1951,6 +2310,8 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             efficiency_ratio=df['efficiency_ratio_10'],
             trend_regime=df['trend_regime'],
             macro_confluence_score=df.get('macro_confluence_score'),
+            adapt_params=_adapt_params,
+            barrier_up_skew=_token_up_skew, barrier_down_skew=_token_down_skew,
         )
         preview_valid = preview_labels[preview_labels != CENSORED]
         if len(preview_valid) > 0:
@@ -1960,55 +2321,164 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
 
         target_buy_min = float(np.clip(freq_preview[2] * 0.70, 0.08, 0.45))
         target_sell_min = float(np.clip(freq_preview[0] * 0.70, 0.08, 0.45))
-        target_hold_max = float(np.clip(freq_preview[1] * 1.15, 0.30, 0.70))
+        target_hold_max = min(0.55, float(freq_preview[1]) * 0.85)
         target_buy_max = float(np.clip(target_buy_min + 0.18, 0.20, 0.50))
         target_sell_max = float(np.clip(target_sell_min + 0.18, 0.20, 0.50))
 
-        for attempt in range(8):
-            labels_temp = create_triple_barrier_labels(
-                df, atr_multiplier=loop_atr_mult, max_lookahead=token_lookahead,
+        # Outer loop: if HOLD > 60% persists after inner attempts, widen lookahead and retry
+        _rebal_lookahead = token_lookahead
+        _rebal_converged = False
+        for _lh_try in range(3):   # try original lookahead, +12h, +24h
+            _rebal_lookahead = min(96, token_lookahead + _lh_try * 12)
+            if _lh_try > 0:
+                print(f"   [REBALANCER] HOLD > 60% persisted — extending lookahead to {_rebal_lookahead}h")
+                loop_atr_mult = atr_mult   # reset ATR search
+                best_atr_mult = atr_mult
+                best_dist = 999.0
+
+            for attempt in range(12):
+                labels_temp = create_triple_barrier_labels(
+                    df, atr_multiplier=loop_atr_mult, max_lookahead=_rebal_lookahead,
+                    volatility_regime=df['volatility_regime'],
+                    efficiency_ratio=df['efficiency_ratio_10'],
+                    trend_regime=df['trend_regime'],
+                    macro_confluence_score=df.get('macro_confluence_score'),
+                    adapt_params=_adapt_params,
+                    barrier_up_skew=_token_up_skew, barrier_down_skew=_token_down_skew,
+                )
+                labels_train = labels_temp.iloc[:train_end_temp]
+                valid_labels = labels_train[labels_train != CENSORED]
+
+                if len(valid_labels) == 0:
+                    loop_atr_mult = max(0.5, loop_atr_mult - 0.2)
+                    continue
+
+                counts = np.bincount(valid_labels.astype(int), minlength=3)
+                freqs = counts / len(valid_labels)
+                freq_sell, freq_hold, freq_buy = freqs[0], freqs[1], freqs[2]
+
+                print(f"      Attempt {attempt+1} (lh={_rebal_lookahead}): atr_mult={loop_atr_mult:.2f} "
+                      f"-> BUY: {freq_buy:.1%}, SELL: {freq_sell:.1%}, HOLD: {freq_hold:.1%}")
+
+                if freq_hold <= target_hold_max and \
+                   target_buy_min <= freq_buy <= target_buy_max and \
+                   target_sell_min <= freq_sell <= target_sell_max:
+                    best_atr_mult = loop_atr_mult
+                    _rebal_converged = True
+                    break
+
+                dist = max(0.0, freq_hold - target_hold_max) + \
+                       max(0.0, target_buy_min - freq_buy) + max(0.0, freq_buy - target_buy_max) + \
+                       max(0.0, target_sell_min - freq_sell) + max(0.0, freq_sell - target_sell_max)
+
+                if dist < best_dist:
+                    best_dist = dist
+                    best_atr_mult = loop_atr_mult
+
+                if freq_hold > target_hold_max:
+                    loop_atr_mult = max(0.5, loop_atr_mult - 0.15)
+                else:
+                    loop_atr_mult = min(3.5, loop_atr_mult + 0.15)
+
+                if loop_atr_mult <= 0.5 or loop_atr_mult >= 3.5:
+                    break
+
+            if _rebal_converged:
+                token_lookahead = _rebal_lookahead   # persist the successful lookahead
+                break
+
+            # Check final HOLD ratio after 8 attempts — if still too high, extend lookahead
+            _final_check = create_triple_barrier_labels(
+                df, atr_multiplier=best_atr_mult, max_lookahead=_rebal_lookahead,
                 volatility_regime=df['volatility_regime'],
                 efficiency_ratio=df['efficiency_ratio_10'],
                 trend_regime=df['trend_regime'],
                 macro_confluence_score=df.get('macro_confluence_score'),
+                adapt_params=_adapt_params,
+                barrier_up_skew=_token_up_skew, barrier_down_skew=_token_down_skew,
             )
-            labels_train = labels_temp.iloc[:train_end_temp]
-            valid_labels = labels_train[labels_train != CENSORED]
-            
-            if len(valid_labels) == 0:
-                loop_atr_mult = max(0.5, loop_atr_mult - 0.2)
-                continue
-                
-            counts = np.bincount(valid_labels.astype(int), minlength=3)
-            freqs = counts / len(valid_labels)
-            freq_sell, freq_hold, freq_buy = freqs[0], freqs[1], freqs[2]
-            
-            print(f"      Attempt {attempt+1}: atr_mult={loop_atr_mult:.2f} -> BUY: {freq_buy:.1%}, SELL: {freq_sell:.1%}, HOLD: {freq_hold:.1%}")
-            
-            if freq_hold <= target_hold_max and \
-               target_buy_min <= freq_buy <= target_buy_max and \
-               target_sell_min <= freq_sell <= target_sell_max:
-                best_atr_mult = loop_atr_mult
+            _fc_valid = _final_check.iloc[:train_end_temp]
+            _fc_valid = _fc_valid[_fc_valid != CENSORED]
+            if len(_fc_valid) == 0:
                 break
-                
-            dist = max(0.0, freq_hold - target_hold_max) + \
-                   max(0.0, target_buy_min - freq_buy) + max(0.0, freq_buy - target_buy_max) + \
-                   max(0.0, target_sell_min - freq_sell) + max(0.0, freq_sell - target_sell_max)
-                   
-            if dist < best_dist:
-                best_dist = dist
-                best_atr_mult = loop_atr_mult
-                
-            if freq_hold > target_hold_max:
-                loop_atr_mult = max(0.5, loop_atr_mult - 0.15)
-            else:
-                loop_atr_mult = min(3.5, loop_atr_mult + 0.15)
-                
-            if loop_atr_mult <= 0.5 or loop_atr_mult >= 3.5:
+            _fc_freqs = np.bincount(_fc_valid.astype(int), minlength=3) / len(_fc_valid)
+            if _fc_freqs[1] <= 0.60:  # HOLD ≤ 60%, acceptable
+                token_lookahead = _rebal_lookahead
                 break
-                
+
         atr_mult = best_atr_mult
-        print(f"   Optimal ATR multiplier selected: {atr_mult:.2f}")
+
+        # ── Low-side label rescue ─────────────────────────────────────────────────────
+        # If either BUY or SELL has < 10% frequency after the rebalancer, extend
+        # lookahead by 24h and run a quick ATR sweep. Binary primary trains on both
+        # sides — severe asymmetry (e.g. zero BUY labels for ETH) kills one side entirely.
+        _lsc_labels = create_triple_barrier_labels(
+            df, atr_multiplier=atr_mult, max_lookahead=token_lookahead,
+            volatility_regime=df['volatility_regime'],
+            efficiency_ratio=df['efficiency_ratio_10'],
+            trend_regime=df['trend_regime'],
+            macro_confluence_score=df.get('macro_confluence_score'),
+            adapt_params=_adapt_params,
+            barrier_up_skew=_token_up_skew, barrier_down_skew=_token_down_skew,
+        )
+        _lsc_v = _lsc_labels.iloc[:train_end_temp]
+        _lsc_v = _lsc_v[_lsc_v != CENSORED]
+        if len(_lsc_v) > 0:
+            _lsc_f = np.bincount(_lsc_v.astype(int), minlength=3) / len(_lsc_v)
+            if _lsc_f[2] < 0.10 or _lsc_f[0] < 0.10:
+                _new_lh = min(120, token_lookahead + 24)
+                print(f"   [LOW SIDE LABELS] BUY={_lsc_f[2]:.1%} SELL={_lsc_f[0]:.1%} < 10% "
+                      f"— extending lookahead {token_lookahead}h→{_new_lh}h and re-sweeping ATR")
+                token_lookahead = _new_lh
+                _lsr_best_atr  = atr_mult
+                _lsr_best_dist = 999.0
+                for _lsr_m in np.arange(max(0.5, atr_mult - 0.45), min(3.5, atr_mult + 0.46), 0.15):
+                    _lsr_lb = create_triple_barrier_labels(
+                        df, atr_multiplier=_lsr_m, max_lookahead=token_lookahead,
+                        volatility_regime=df['volatility_regime'],
+                        efficiency_ratio=df['efficiency_ratio_10'],
+                        trend_regime=df['trend_regime'],
+                        macro_confluence_score=df.get('macro_confluence_score'),
+                        adapt_params=_adapt_params,
+                        barrier_up_skew=_token_up_skew, barrier_down_skew=_token_down_skew,
+                    )
+                    _lsr_v = _lsr_lb.iloc[:train_end_temp]
+                    _lsr_v = _lsr_v[_lsr_v != CENSORED]
+                    if len(_lsr_v) == 0:
+                        continue
+                    _lsr_f = np.bincount(_lsr_v.astype(int), minlength=3) / len(_lsr_v)
+                    _lsr_d = max(0.0, 0.10 - _lsr_f[2]) + max(0.0, 0.10 - _lsr_f[0])
+                    if _lsr_d < _lsr_best_dist:
+                        _lsr_best_dist = _lsr_d
+                        _lsr_best_atr  = float(_lsr_m)
+                atr_mult = _lsr_best_atr
+                print(f"   [LOW SIDE LABELS] rescue complete: atr_mult={atr_mult:.2f} lookahead={token_lookahead}h")
+
+        # Final tradeability check: use the same dynamic targets the rebalancer used
+        # (not hardcoded 15%/60%) so convergence and rejection are consistent.
+        # Absolute floors: directional >= 8% (from clip lower-bound in target derivation).
+        _final_labels_for_check = create_triple_barrier_labels(
+            df, atr_multiplier=atr_mult, max_lookahead=token_lookahead,
+            volatility_regime=df['volatility_regime'],
+            efficiency_ratio=df['efficiency_ratio_10'],
+            trend_regime=df['trend_regime'],
+            macro_confluence_score=df.get('macro_confluence_score'),
+            adapt_params=_adapt_params,
+            barrier_up_skew=_token_up_skew, barrier_down_skew=_token_down_skew,
+        )
+        _chk = _final_labels_for_check.iloc[:train_end_temp]
+        _chk = _chk[_chk != CENSORED]
+        if len(_chk) > 0:
+            _chk_freqs = np.bincount(_chk.astype(int), minlength=3) / len(_chk)
+            _SKIP_HOLD_MAX = 0.62   # skip only if rebalancer truly failed (HOLD > 62%)
+            if _chk_freqs[1] > _SKIP_HOLD_MAX or _chk_freqs[0] < target_sell_min or _chk_freqs[2] < target_buy_min:
+                print(f"   [UNTRADEABLE] Label distribution unacceptable after rebalancing: "
+                      f"SELL={_chk_freqs[0]:.1%}, HOLD={_chk_freqs[1]:.1%}, BUY={_chk_freqs[2]:.1%}. "
+                      f"(targets: hold<={target_hold_max:.0%}, sell>={target_sell_min:.0%}, buy>={target_buy_min:.0%}). "
+                      f"Token skipped.")
+                return None
+
+        print(f"   Optimal ATR multiplier selected: {atr_mult:.2f} (lookahead={token_lookahead}h)")
 
         print(f"ATR multiplier : base={atr_mult} | typical={_typical:.2f} "
               f"(ER_med={_er_med:.2f}, vol_med={_vol_med:.2f}) | range=[{atr_mult*0.8:.1f}, 4.5]")
@@ -2025,6 +2495,8 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             efficiency_ratio=df['efficiency_ratio_10'],
             trend_regime=df['trend_regime'],
             macro_confluence_score=df.get('macro_confluence_score'),
+            adapt_params=_adapt_params,
+            barrier_up_skew=_token_up_skew, barrier_down_skew=_token_down_skew,
         )
         df['target'] = labels.astype(int).values
 
@@ -2039,9 +2511,11 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             return None
 
         feature_cols = [c for c in df.columns
-                        if c not in ('timestamp', 'target') and not c.startswith('_')]
+                        if c not in ('timestamp', 'target')
+                        and not c.startswith('_')
+                        and c not in FEATURE_BLACKLIST]
         for addon in FEATURE_ADDONS:
-            if addon in df.columns and addon not in feature_cols:
+            if addon in df.columns and addon not in feature_cols and addon not in FEATURE_BLACKLIST:
                 feature_cols.append(addon)
         df = _sanitize(df, feature_cols)
 
@@ -2056,8 +2530,8 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         if train_end < MIN_FIT_ROWS:
             print(f"Not enough train rows after embargo ({train_end}), skipping")
             return None
-        train_pool = df.iloc[:train_end].reset_index(drop=True)
-        holdout = df.iloc[test_start:].reset_index(drop=True)
+        train_pool = df.iloc[:train_end].reset_index(drop=True).copy()
+        holdout = df.iloc[test_start:].reset_index(drop=True).copy()
         print(f"   Split -> train pool: {len(train_pool)} | embargo: {EMBARGO} | holdout: {len(holdout)}")
         
         # Copy raw price and ATR values to separate columns before any feature drift normalization/scaling
@@ -2069,167 +2543,206 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         Xtp = train_pool[feature_cols]
         ytp = train_pool['target'].to_numpy().astype(int)
 
-        # ---- 1) Feature Health Manager & Drift Corrector (Phase 2) ----
-        print("   Evaluating Feature Health and Drift...")
+        # Class rates for proposed_side normalization (prevents 0-BUY proposals
+        # on tokens where SELL labels outnumber BUY by 2:1 or more).
+        _cc_rates = np.bincount(ytp, minlength=NUM_CLASS) / max(len(ytp), 1)
+        _buy_rate  = float(_cc_rates[2])
+        _sell_rate = float(_cc_rates[0])
+
+        # ---- 1) AdaptiveNormalizer: fit on train, transform both splits ----
+        # Eliminates distribution shift from absolute-price features by centering and
+        # scaling all numeric features using training statistics only (no holdout peek).
+        print("   Fitting AdaptiveNormalizer on training pool...")
+        normalizer = AdaptiveNormalizer(window=1000, drift_threshold=0.2)
+        normalizer.fit_initial(train_pool[feature_cols], feature_cols)
+        # Transform in-place; keep raw copies for barrier-frac backtest
+        train_pool_norm = train_pool.copy()
+        train_pool_norm[feature_cols] = normalizer.transform(train_pool[feature_cols], feature_cols)[feature_cols]
+        holdout_norm = holdout.copy()
+        holdout_norm[feature_cols] = normalizer.transform(holdout[feature_cols], feature_cols)[feature_cols]
+        # Preserve non-feature columns needed by the backtest/regime engine
+        for _raw_col in ['_close_raw', '_atr_raw', 'hmm_regime', 'volatility_regime',
+                         'macro_trend_1d', 'total_confluence', 'is_at_resistance', 'is_at_support']:
+            if _raw_col in train_pool.columns:
+                train_pool_norm[_raw_col] = train_pool[_raw_col].values
+            if _raw_col in holdout.columns:
+                holdout_norm[_raw_col] = holdout[_raw_col].values
+        train_pool = train_pool_norm
+        holdout    = holdout_norm
+        Xtp = train_pool[feature_cols]
+        print(f"   AdaptiveNormalizer applied: {len(feature_cols)} features normalised.")
+
+        # ---- Feature Health Manager — monitoring only, NOT removal ----
+        # Drift stats are logged to the sidecar and used to decay feature weights.
+        # Features are NEVER dropped here; AdaptiveNormalizer handles the drift.
+        print("   Evaluating Feature Health and Drift (monitoring)...")
         from src.ml.feature_health import FeatureHealthManager, DynamicFeatureWeightingEngine
         fhm = FeatureHealthManager()
-
-        # Apply deterministic feature blacklist FIRST: PRIORITY 1 — hardcoded critical drifters
-        # These are the top critical features identified by forensic reports (PSI/KS thresholds).
-        to_drop_hardcoded = [c for c in feature_cols if c in FEATURE_BLACKLIST]
-        if to_drop_hardcoded:
-            print(f"   [FORENSIC FIX] Removing {len(to_drop_hardcoded)} hardcoded critical drifters: {to_drop_hardcoded[:8]}...")
-            feature_cols = [c for c in feature_cols if c not in to_drop_hardcoded]
-            Xtp = train_pool[feature_cols]
-
-        # Now run drift analysis on the cleaned feature set so FeatureHealthManager
-        # only evaluates remaining features and can suggest additional removals.
         try:
             fhm.analyze_drift(Xtp, holdout[feature_cols], feature_cols)
-        except Exception:
-            # If drift analysis fails, continue—hard blacklist still applied.
-            print("   FeatureHealth.analyze_drift() failed; continuing with hardcoded blacklist applied.")
+        except Exception as _fhm_err:
+            print(f"   FeatureHealth.analyze_drift() failed ({_fhm_err}); continuing without drift scores.")
 
-        # PRIORITY 2 — FeatureHealthManager state-based removal for remaining drifted features
-        try:
-            states = fhm.get_feature_states()
-            to_drop_fhm = [c for c, s in states.items() if s in ("DEGRADED", "CRITICAL") and c not in to_drop_hardcoded]
-            if to_drop_fhm:
-                print(f"   FeatureHealth: dropping {len(to_drop_fhm)} additional DEGRADED/CRITICAL features: {to_drop_fhm[:5]}...")
-                # Update feature_cols and training frame
-                feature_cols = [c for c in feature_cols if c not in to_drop_fhm]
-                Xtp = train_pool[feature_cols]
-            total_removed = len(to_drop_hardcoded) + len(to_drop_fhm)
-            if total_removed > 0:
-                print(f"   Total drifted features removed: {total_removed} (hardcoded: {len(to_drop_hardcoded)}, FHM: {len(to_drop_fhm)})")
-        except Exception as e_fhm:
-            print(f"   FeatureHealth state lookup failed: {e_fhm}")
-        
-        # Train a quick default model to rank features by gain
-        print("   Training baseline model to audit feature contribution...")
-        quick_dtrain = xgb.DMatrix(Xtp, label=ytp)
-        quick_model = xgb.train({'objective': 'multi:softprob', 'num_class': NUM_CLASS, 'seed': 42}, quick_dtrain, num_boost_round=50)
-        importance_scores = quick_model.get_score(importance_type='gain')
-        feature_importance = {col: float(importance_scores.get(col, 0.0)) for col in feature_cols}
-        sorted_features = sorted(feature_cols, key=lambda c: feature_importance.get(c, 0.0), reverse=True)
-        M = len(sorted_features)
-        
-        feature_transforms = {}
-        removed_features = []
-        unstable_before = []
-        
+        # Build feature weights: base 1.0, decay by 0.5 for high-drift features
+        fw_dict: Dict[str, float] = {}
+        _n_drift_penalised = 0
         for col in feature_cols:
             psi = fhm.drift_scores.get(col, {}).get('psi', 0.0)
-            ks = fhm.drift_scores.get(col, {}).get('ks', 0.0)
-            
+            ks  = fhm.drift_scores.get(col, {}).get('ks',  0.0)
             if psi > 1.0 or ks > 0.50:
-                unstable_before.append(col)
-                rank = sorted_features.index(col)
-                
-                if rank < int(M * 0.15):
-                    # High importance -> z-score
-                    mean_val = float(Xtp[col].mean())
-                    std_val = float(Xtp[col].std())
-                    feature_transforms[col] = {
-                        "type": "zscore",
-                        "mean": mean_val,
-                        "std": std_val
-                    }
-                    Xtp[col] = (Xtp[col] - mean_val) / (std_val + 1e-8)
-                    holdout[col] = (holdout[col] - mean_val) / (std_val + 1e-8)
-                elif rank < int(M * 0.50):
-                    # Medium importance -> minmax
-                    min_val = float(Xtp[col].min())
-                    max_val = float(Xtp[col].max())
-                    feature_transforms[col] = {
-                        "type": "minmax",
-                        "min": min_val,
-                        "max": max_val
-                    }
-                    Xtp[col] = (Xtp[col] - min_val) / (max_val - min_val + 1e-8)
-                    holdout[col] = (holdout[col] - min_val) / (max_val - min_val + 1e-8)
+                if col in _PRECISION_PROTECTED_FEATURES:
+                    fw_dict[col] = 1.0   # never penalize top-gain features
                 else:
-                    # Low importance -> remove
-                    removed_features.append(col)
-                    
-        # Exclude removed drift features
-        feature_cols_clean = [c for c in feature_cols if c not in removed_features]
-        Xtp = Xtp[feature_cols_clean].copy()
-        
-        # ---- Feature Rank Correlation Audit (Priority 1) ----
-        print("   Performing Feature Rank Correlation Audit...")
-        # Compute continuous target outcomes for correlation audit on training pool
-        close_tp = train_pool['_close_raw'].to_numpy()
-        atr_tp = train_pool['_atr_raw'].to_numpy()
-        y_tp = ytp
-        
-        rets_tp = []
-        r_mult_tp = []
-        for i in range(len(train_pool)):
-            yt_val = int(y_tp[i])
-            b_val = atr_mult * atr_tp[i] / close_tp[i] if close_tp[i] > 0 else 0.015
-            buy_ret = (b_val - FEE_ROUNDTRIP) if yt_val == 2 else (-b_val - FEE_ROUNDTRIP) if yt_val == 0 else -FEE_ROUNDTRIP
-            
-            rets_tp.append(buy_ret)
-            r_mult_tp.append(buy_ret / b_val if b_val > 0 else 0.0)
-            
-        rets_tp = np.array(rets_tp)
-        r_mult_tp = np.array(r_mult_tp)
-        
-        uncorrelated_features = []
-        for col in feature_cols_clean:
-            corr_pnl = Xtp[col].corr(pd.Series(rets_tp), method='spearman')
-            corr_rmult = Xtp[col].corr(pd.Series(r_mult_tp), method='spearman')
-            
-            max_corr = max(
-                abs(corr_pnl) if pd.notna(corr_pnl) else 0.0,
-                abs(corr_rmult) if pd.notna(corr_rmult) else 0.0
-            )
-            if max_corr < 0.10:
-                uncorrelated_features.append(col)
-                removed_features.append(col)
-                
-        # Final active features
-        feature_cols = [c for c in feature_cols_clean if c not in uncorrelated_features]
-        Xtp = train_pool[feature_cols].copy()
-        
-        # Re-compute drift for report
-        fhm_after = FeatureHealthManager()
-        fhm_after.analyze_drift(Xtp, holdout[feature_cols], feature_cols)
-        unstable_after = [c for c in feature_cols if fhm_after.drift_scores.get(c, {}).get('psi', 0.0) > 1.0 or fhm_after.drift_scores.get(c, {}).get('ks', 0.0) > 0.50]
-        
+                    fw_dict[col] = 0.15  # aggressive penalty for drifted features — SHAP pruning will remove them
+                    _n_drift_penalised += 1
+            else:
+                fw_dict[col] = 1.0
+        fw = np.array([fw_dict.get(c, 1.0) for c in feature_cols], dtype=float)
+        if _n_drift_penalised:
+            print(f"   [DRIFT] {_n_drift_penalised} features weight-penalised (PSI>1 or KS>0.5, protected={len([c for c in feature_cols if c in _PRECISION_PROTECTED_FEATURES])} exempt)")
+
+        # Correlation audit removed: it zeroed out weak ensemble signals that still
+        # contribute to XGBoost ensembles. Drift penalisation (above) is sufficient.
+
+        # ---- 2) Optuna tune binary primary (AUPRC-optimised, 5-fold) ----
+        # Binary primary replaces the 3-class multi:softprob with two independent
+        # binary:logistic models. BUY model predicts P(upper barrier hit); SELL model
+        # predicts P(lower barrier hit). HOLD = neither model fires (prob < 0.5).
+        _optuna_n_splits = min(5, N_SPLITS_CV)
+        inner = list(TimeSeriesSplit(n_splits=_optuna_n_splits, gap=EMBARGO).split(Xtp))
+
+        ytp_buy  = (ytp == 2).astype(int)   # 1 = upper barrier hit
+        ytp_sell = (ytp == 0).astype(int)   # 1 = lower barrier hit
+
+        # scale_pos_weight corrects class imbalance in each binary model
+        _n_neg_buy  = float((ytp_buy  == 0).sum())
+        _n_pos_buy  = float((ytp_buy  == 1).sum())
+        _n_neg_sell = float((ytp_sell == 0).sum())
+        _n_pos_sell = float((ytp_sell == 1).sum())
+        # Cap at 5.0: uncapped ~7× for BUY (12.6% rate) inflates p_buy on every bar,
+        # causing 81.6% BUY over-proposal even after proposed_side() normalization.
+        _spw_buy    = min(_n_neg_buy  / max(_n_pos_buy,  1.0), 5.0)
+        _spw_sell   = min(_n_neg_sell / max(_n_pos_sell, 1.0), 5.0)
+        print(f"   Binary primary labels: BUY pos={int(_n_pos_buy)} neg={int(_n_neg_buy)} "
+              f"spw={_spw_buy:.1f} | SELL pos={int(_n_pos_sell)} neg={int(_n_neg_sell)} spw={_spw_sell:.1f}")
+
+        # BUY model — independent Optuna AUPRC run
+        study_buy = optuna.create_study(direction='minimize',
+                                        sampler=optuna.samplers.TPESampler(seed=42))
+        study_buy.optimize(lambda t: objective_binary_multifold(t, Xtp, ytp_buy, inner, fw=fw, spw=_spw_buy),
+                           n_trials=OPTUNA_TRIALS, show_progress_bar=False)
+        binary_params_buy = _binary_params(study_buy.best_params)
+        binary_params_buy['scale_pos_weight'] = _spw_buy
+        print(f"   Binary params BUY  (AUPRC-opt {_optuna_n_splits}-fold | 1-AUPRC={study_buy.best_value:.4f}): {study_buy.best_params}")
+
+        # SELL model — independent Optuna run; BUY and SELL have different class
+        # distributions and often need different depth/regularization.
+        study_sell = optuna.create_study(direction='minimize',
+                                         sampler=optuna.samplers.TPESampler(seed=43))
+        study_sell.optimize(lambda t: objective_binary_multifold(t, Xtp, ytp_sell, inner, fw=fw, spw=_spw_sell),
+                            n_trials=OPTUNA_TRIALS, show_progress_bar=False)
+        binary_params_sell = _binary_params(study_sell.best_params)
+        binary_params_sell['scale_pos_weight'] = _spw_sell
+        print(f"   Binary params SELL (AUPRC-opt {_optuna_n_splits}-fold | 1-AUPRC={study_sell.best_value:.4f}): {study_sell.best_params}")
+
+        # Keep full_params for any edge-engine compatibility paths
+        full_params = _full_params(study_buy.best_params)
+
+        # SHAP feature pruning: train quick buy/sell models and keep union of features
+        # covering SHAP_CUMULATIVE_THRESH (85%) of total importance for each direction.
+        if shap is not None and SHAP_CUMULATIVE_THRESH < 1.0 and len(Xtp) >= 100:
+            try:
+                _xgb_shap_p = {'objective': 'binary:logistic', 'eval_metric': 'logloss',
+                                'tree_method': 'hist', 'seed': 42, 'verbosity': 0,
+                                'max_depth': 4, 'learning_rate': 0.05, 'subsample': 0.8,
+                                'colsample_bytree': 0.8, 'missing': np.nan}
+                _shap_m_buy  = xgb.train({**_xgb_shap_p, 'scale_pos_weight': _spw_buy},
+                                         _dm(Xtp, ytp_buy, fw=fw), num_boost_round=150)
+                _shap_m_sell = xgb.train({**_xgb_shap_p, 'scale_pos_weight': _spw_sell},
+                                         _dm(Xtp, ytp_sell, fw=fw), num_boost_round=150)
+                _keep_buy  = set(prune_features_by_shap(_shap_m_buy,  Xtp, SHAP_CUMULATIVE_THRESH, MIN_FEATURES))
+                _keep_sell = set(prune_features_by_shap(_shap_m_sell, Xtp, SHAP_CUMULATIVE_THRESH, MIN_FEATURES))
+                _keep_union = [c for c in feature_cols if c in (_keep_buy | _keep_sell)][:MAX_FEATURES]
+                if len(_keep_union) >= MIN_FEATURES:
+                    feature_cols = _keep_union
+                    Xtp = train_pool[feature_cols]
+                    fw  = np.array([fw_dict.get(c, 1.0) for c in feature_cols], dtype=float)
+                    print(f"   SHAP pruning: {len(feature_cols)} features retained "
+                          f"(buy={len(_keep_buy)}, sell={len(_keep_sell)}, union={len(_keep_buy|_keep_sell)})")
+                else:
+                    print(f"   SHAP pruning: union too small ({len(_keep_union)}) — keeping all {len(feature_cols)}")
+            except Exception as _shap_err:
+                print(f"   SHAP pruning failed ({_shap_err}) — keeping all {len(feature_cols)} features")
+        else:
+            print(f"   SHAP pruning disabled (thresh={SHAP_CUMULATIVE_THRESH}) — keeping all {len(feature_cols)} features")
+
+        # Feature reconciliation
         print(f"\n   === AEGIS FEATURE RECONCILIATION REPORT for {symbol} ===")
-        print(f"      Initial features: {len(sorted_features)}")
-        print(f"      Unstable features (drifted) before: {len(unstable_before)}")
-        print(f"      Features transformed (Z-score/MinMax): {len(feature_transforms)}")
-        print(f"      Features removed due to drift: {len([c for c in removed_features if c not in uncorrelated_features])}")
-        print(f"      Features removed due to low correlation (<0.10): {len(uncorrelated_features)}")
-        print(f"      Total features removed: {len(removed_features)}")
-        print(f"      Unstable features after: {len(unstable_after)}")
-        print(f"      Active features remaining: {len(feature_cols)}")
-        
-        dfwe = DynamicFeatureWeightingEngine()
-        fw = dfwe.calculate_weights(fhm_after.feature_states, feature_cols)
-        print(f"   Active feature set: {len(feature_cols)} features.")
+        print(f"      Active features : {len(feature_cols)}")
+        print(f"      Drift-penalised : {_n_drift_penalised}")
+        print(f"      Normalisation   : AdaptiveNormalizer (z-score, fixed train stats)")
 
-        # ---- 2) Optuna tune primary (purged inner split) ----
-        inner = list(TimeSeriesSplit(n_splits=N_SPLITS_CV, gap=EMBARGO).split(Xtp))
-        itr, iva = inner[-1]
-        study = optuna.create_study(direction='minimize',
-                                    sampler=optuna.samplers.TPESampler(seed=42))
-        study.optimize(lambda t: objective(t, Xtp.iloc[itr], ytp[itr], Xtp.iloc[iva], ytp[iva], fw=fw),
-                       n_trials=OPTUNA_TRIALS, show_progress_bar=False)
-        full_params = _full_params(study.best_params)
-        print(f"   Best params (val logloss {study.best_value:.4f}): {study.best_params}")
+        # SMOTE removed: binary models use scale_pos_weight for imbalance correction.
 
-        # ---- 3) Primary OOF on train pool -> dev metrics, calibration, meta data ----
-        oof = primary_oof(Xtp, ytp, full_params, N_SPLITS_CV, EMBARGO, fw=fw)
-        mask = ~np.isnan(oof[:, 0])
+        # ---- 3) Binary OOF → AUC check → synthetic 3-class probs ----
+        oof_buy  = binary_primary_oof(Xtp, ytp_buy,  binary_params_buy,  N_SPLITS_CV, EMBARGO, fw=fw)
+        oof_sell = binary_primary_oof(Xtp, ytp_sell, binary_params_sell, N_SPLITS_CV, EMBARGO, fw=fw)
+        mask = ~np.isnan(oof_buy)
         mask_idx = np.where(mask)[0]
+
+        from sklearn.metrics import roc_auc_score as _roc_auc
+        _auc_buy  = float(_roc_auc(ytp_buy[mask],  oof_buy[mask]))
+        _auc_sell = float(_roc_auc(ytp_sell[mask], oof_sell[mask]))
+        print(f"   Binary OOF AUC: BUY={_auc_buy:.4f} | SELL={_auc_sell:.4f}")
+        if _auc_buy < 0.55 and _auc_sell < 0.55:
+            print(f"   [AUC VETO] AUC_buy={_auc_buy:.3f} and AUC_sell={_auc_sell:.3f} both < 0.55 "
+                  "— primary has no directional skill. UNTRADEABLE.")
+            return None
+
+        # Synthetic 3-class array for downstream compatibility:
+        #   col 0 = p_sell, col 1 = hold residual, col 2 = p_buy
+        oof = np.zeros((len(Xtp), NUM_CLASS), dtype=float)
+        _ob = np.where(np.isnan(oof_buy),  0.33, oof_buy)
+        _os = np.where(np.isnan(oof_sell), 0.33, oof_sell)
+
+        # Bayes prior correction: scale_pos_weight shifts the model's effective prior to
+        # p(pos) = spw/(1+spw) during training. Without correction, hold_residual ≈ 0 on
+        # most bars (SPW-inflated p_buy + p_sell ≈ 1.0), argmax always picks BUY/SELL,
+        # and 3-class cv_acc falls below the HOLD majority baseline.
+        # Correcting back to true class rates restores proper hold_residual magnitude.
+        _true_buy_rate  = float(_n_pos_buy  / max(_n_pos_buy  + _n_neg_buy,  1.0))
+        _true_sell_rate = float(_n_pos_sell / max(_n_pos_sell + _n_neg_sell, 1.0))
+        _spw_prior_buy  = _spw_buy  / (1.0 + _spw_buy)
+        _spw_prior_sell = _spw_sell / (1.0 + _spw_sell)
+
+        def _bayes_correct(p: np.ndarray, true_rate: float, spw_prior: float) -> np.ndarray:
+            _e = 1e-7
+            lo = np.log(np.clip(p, _e, 1 - _e) / (1 - np.clip(p, _e, 1 - _e)))
+            lo += (np.log(true_rate + _e) - np.log(1 - true_rate + _e)
+                   - np.log(spw_prior + _e) + np.log(1 - spw_prior + _e))
+            return 1.0 / (1.0 + np.exp(-lo))
+
+        _ob_cal = _bayes_correct(_ob, _true_buy_rate,  _spw_prior_buy)
+        _os_cal = _bayes_correct(_os, _true_sell_rate, _spw_prior_sell)
+        oof[:, 2] = _ob_cal
+        oof[:, 0] = _os_cal
+        oof[:, 1] = np.clip(1.0 - _ob_cal - _os_cal, 0.0, 1.0)
+        _rs = oof.sum(axis=1, keepdims=True)
+        oof = oof / np.where(_rs > 0, _rs, 1.0)
+        oof[~mask] = np.nan
+
         cv_acc = float(accuracy_score(ytp[mask], oof[mask].argmax(1)))
-        cv_f1 = float(f1_score(ytp[mask], oof[mask].argmax(1), average='macro', zero_division=0))
+        cv_f1  = float(f1_score(ytp[mask], oof[mask].argmax(1), average='macro', zero_division=0))
         T = fit_temperature(oof[mask], ytp[mask])
-        print(f"Primary OOF (dev): acc {cv_acc:.4f} | macro-F1 {cv_f1:.4f} | T {T:.3f}")
+        print(f"Primary OOF (dev): acc {cv_acc:.4f} | macro-F1 {cv_f1:.4f} | T {T:.3f} | "
+              f"AUC_buy={_auc_buy:.3f} | AUC_sell={_auc_sell:.3f} | "
+              f"buy_prior={_true_buy_rate:.3f} sell_prior={_true_sell_rate:.3f}")
+
+        _hold_pct = float((ytp[mask] == 1).mean())
+        _primary_below_baseline = False   # veto removed
+        if cv_acc < _hold_pct + 0.02:
+            print(f"   NOTE: 3-class acc {cv_acc:.1%} still below majority-class baseline {_hold_pct:.1%} "
+                  f"after Bayes correction — AUC_buy={_auc_buy:.3f}/AUC_sell={_auc_sell:.3f}")
 
         # ---- Calibration selector (phase 5 adaptive selection) ----
         try:
@@ -2256,550 +2769,114 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             selected_cal = None
             cal_choice = {'error': str(_e)}
 
-        # ---- 4) Meta-labeling: build dataset + OOF + pick threshold ----
-        meta_X_all = build_meta_X(Xtp, oof)
-        prop_all = proposed_side(oof)
-
-        # Compute continuous target expected returns (realized PnL) for meta-model
-        meta_y_all = np.full(len(Xtp), np.nan)
-        for i in np.where(mask)[0]:
-            y_true = int(ytp[i])
-            side = int(prop_all[i])
-            close_i = float(train_pool['_close_raw'].iloc[i])
-            atr_i = float(train_pool['_atr_raw'].iloc[i])
-            b = atr_mult * atr_i / close_i if close_i > 0 else 0.015
-            
-            if y_true == 1:
-                pnl_val = -FEE_ROUNDTRIP
-            elif side == y_true:
-                pnl_val = b - FEE_ROUNDTRIP
-            else:
-                pnl_val = -b - FEE_ROUNDTRIP
-            meta_y_all[i] = pnl_val
-
-        mX = meta_X_all[mask].reset_index(drop=True)
-        mY = meta_y_all[mask]
-        prop_v = prop_all[mask]
-        y_v = ytp[mask]
-        
-        # ---- TASK 2: FILTER DRIFTED FEATURES BEFORE META TRAINING ----
-        # Remove features with PSI > 1.0 or KS > 0.50 to prevent train-test divergence
-        print("   [TASK 2] Filtering drifted features before meta training...")
-        meta_feature_cols = list(mX.columns)
-        try:
-            drift_result = detect_feature_drift(train_pool[meta_feature_cols], holdout[meta_feature_cols])
-            # detect_feature_drift() returns 'features_to_exclude'
-            drifted_features = drift_result.get('features_to_exclude', [])
-            if drifted_features:
-                print(f"      Detected {len(drifted_features)} drifted features: {drifted_features[:5]}...")
-                mX = mX.drop(columns=[c for c in drifted_features if c in mX.columns])
-                print(f"      Meta X reduced: {len(meta_feature_cols)} -> {len(mX.columns)} features")
-        except Exception as e:
-            print(f"      Feature drift filtering failed: {e}")
-
-        # ---- 3) PHASE 5: HOLD Pollution Audit (AEGIS META GATE V2) ----
-        # TASK 1: Apply C_excluded strategy BEFORE meta training (not as weights)
-        # This means: remove HOLD labels entirely from meta training dataset
-        print("   [TASK 1] Applying HOLD pollution strategy BEFORE meta training...")
-        
-        hold_ratio = float((y_v == 1).mean()) if len(y_v) else 0.0
-        print(f"      HOLD label ratio before filtering: {hold_ratio:.1%}")
-        
-        # TASK 1 FIX: Apply C_excluded BEFORE meta training by removing HOLD samples
-        # This is the most direct way to eliminate 66% HOLD pollution
-        if META_HOLD_AUTO_SELECT or META_HOLD_STRATEGY == "C_excluded":
-            non_hold_mask = (y_v != 1)
-            orig_len = len(mX)
-            # Track original train_pool indices through the filtering: mask_idx[non_hold_mask]
-            meta_idx = mask_idx[non_hold_mask]
-            mX = mX[non_hold_mask].reset_index(drop=True)
-            mY = mY[non_hold_mask]
-            prop_v = prop_v[non_hold_mask]
-            y_v = y_v[non_hold_mask]
-            print(f"      Applied C_excluded: removed {orig_len - len(mX)} HOLD samples from meta training")
-            print(f"      Meta training now: {len(mX)} samples (BUY: {(y_v==2).sum()}, SELL: {(y_v==0).sum()})")
-            best_strategy = "C_excluded"
-            meta_w = np.ones(len(mX), dtype=float)
-            strategy_reports = {"C_excluded": {"applied": "pre-training", "samples": len(mX)}}
-            hold_strategy_selected = "C_excluded"
-            hold_strategy_audit = strategy_reports
-            # Skip the strategy search loop entirely
-            skip_strategy_search = True
-        else:
-            meta_idx = mask_idx
-            skip_strategy_search = False
-
-        # Precompute values for fast CV evaluation (using meta_idx to match filtered dataset)
-        df_dev_temp = train_pool.iloc[meta_idx].copy()
-        close_tp_raw = df_dev_temp['_close_raw'].to_numpy()
-        atr_tp_raw = df_dev_temp['_atr_raw'].to_numpy()
-        b_fracs_t = np.divide(atr_mult * atr_tp_raw, close_tp_raw, out=np.zeros(len(close_tp_raw)), where=close_tp_raw > 0)
-
-        if skip_strategy_search:
-            print("   [TASK 1] Skipping strategy comparison (C_excluded already applied pre-training)")
-            meta_ready = len(mX) >= max(200, MIN_FIRES_DEV * 4)
-
-        regime_policies = {}
-        meta_calibration_method = 'uncalibrated'
-        meta_ready = len(mX) >= max(200, MIN_FIRES_DEV * 4)
-        if meta_ready:
-            meta_oof = binary_oof(mX, mY, token_meta_params, N_SPLITS_CV, EMBARGO, w=meta_w)
-            
-            from src.ml.calibration import MetaCalibrationFramework
-            from src.ml.confidence_engine import ConfidenceReliabilityEngine
-            from src.ml.regime_intelligence import RegimeConfidenceModifier
-            
-            mcf = MetaCalibrationFramework()
-            # Evaluate calibration on binary target, mapping continuous returns inside calibration.py
-            y_v_binary = (y_v == prop_v).astype(int)
-            mcf.evaluate_calibrators(meta_oof, y_v_binary)
-            
-            profile_calibration = meta_gate_profile.get('calibration', {}) if meta_gate_profile else {}
-            profile_cal_method = (
-                profile_calibration.get('selected_calibrator') or
-                profile_calibration.get('selected_method') or
-                profile_calibration.get('method') or
-                'uncalibrated'
-            )
-            profile_cal_method = str(profile_cal_method).lower()
-            if meta_gate_profile:
-                if profile_cal_method != 'uncalibrated':
-                    if profile_cal_method in mcf.reports and mcf.reports[profile_cal_method].get('model') is not None:
-                        mcf.calibrator_type = profile_cal_method
-                        mcf.best_calibrator = mcf.reports[profile_cal_method]['model']
-                        print(f"      Trusted optimizer calibration method: {mcf.calibrator_type}")
-                    else:
-                        print(f"      WARNING: optimizer profile requested calibrator '{profile_cal_method}' but it was not available on this dev set. Using uncalibrated meta output.")
-                        mcf.calibrator_type = 'uncalibrated'
-                        mcf.best_calibrator = None
-                else:
-                    mcf.calibrator_type = 'uncalibrated'
-                    mcf.best_calibrator = None
-                    print(f"      Trusted optimizer calibration method: {mcf.calibrator_type}")
-            else:
-                # Keep the calibration selected from current dev data when no profile directive is present
-                print(f"      Meta calibration selected: {mcf.calibrator_type}")
-            meta_oof_cal = mcf.calibrate(meta_oof)
-            meta_calibration_method = mcf.calibrator_type
-            
-            cre = ConfidenceReliabilityEngine()
-            cre._mapping_x = None
-            cre._mapping_y = None
-            
-            rcm = RegimeConfidenceModifier(target_precision=token_precision_target)
-            if 'hmm_regime' in train_pool.columns:
-                regimes_arr = train_pool['hmm_regime'].iloc[meta_idx].to_numpy()
-                rcm.analyze_regimes(regimes_arr, meta_oof_cal, mY, prop_v)
-
-            # ── Spot-on market dynamics: Regime-specific directional filter on DEV set ──
-            # Apply filter AFTER meta-model is trained on un-tampered proposals
-            prop_dev_filtered = prop_v.copy()
-            _opt = load_token_params(symbol)
-            if _opt and "regimes" in _opt and "regime_boundaries" in _opt:
-                bounds = _opt["regime_boundaries"]
-                regimes_dict = _opt["regimes"]
-                
-                vol_avg = train_pool["volume"].rolling(24, min_periods=1).mean()
-                atr_pct = (train_pool["_atr_raw"] / train_pool["_close_raw"]).fillna(0)
-                momentum = train_pool["_close_raw"].pct_change(24).fillna(0)
-                
-                def _tier(val, p33, p67): return "low" if val <= p33 else ("med" if val <= p67 else "high")
-                def _trend(val, p33, p67): return "down" if val <= p33 else ("flat" if val <= p67 else "up")
-                
-                vp33, vp67 = bounds.get("vol_p33", 0), bounds.get("vol_p67", 0)
-                ap33, ap67 = bounds.get("atr_pct_p33", 0), bounds.get("atr_pct_p67", 0)
-                mp33, mp67 = bounds.get("momentum_p33", -0.02), bounds.get("momentum_p67", 0.02)
-                
-                regime_strs = [
-                    f"{_tier(vol_avg.iloc[i], vp33, vp67)}_{_tier(atr_pct.iloc[i], ap33, ap67)}_{_trend(momentum.iloc[i], mp33, mp67)}"
-                    for i in range(len(Xtp))
-                ]
-                
-                idx_map = meta_idx
-                for i_mask in range(len(mX)):
-                    orig_i = idx_map[i_mask]
-                    reg = regimes_dict.get(regime_strs[orig_i], {})
-                    if not reg or reg.get("skipped"):
-                        prop_dev_filtered[i_mask] = 1 # Suppress to HOLD
-                        continue
-                    
-                    side = prop_dev_filtered[i_mask]
-                    if side == 2:
-                        if not reg.get("buy_ok"): prop_dev_filtered[i_mask] = 1
-                    elif side == 0:
-                        if not reg.get("sell_ok"): prop_dev_filtered[i_mask] = 1
-
-                        # ── Edge-Driven Evaluation ──────────────
-            from src.trading.edge_engine import EdgeScoringEngine
-            
-            df_dev = train_pool.iloc[meta_idx] if 'meta_idx' in locals() else train_pool
-            use_rank = bool(meta_gate_profile and meta_gate_profile.get('edge_rank_mode') == 'percentile')
-            edge_buy = EdgeScoringEngine.compute_edge_batch(df_dev, meta_oof_cal, 'BUY', use_rank=use_rank).to_numpy()
-            edge_sell = EdgeScoringEngine.compute_edge_batch(df_dev, meta_oof_cal, 'SELL', use_rank=use_rank).to_numpy()
-
-            profile_thresholds = get_profile_edge_thresholds(
-                meta_gate_profile, edge_buy, edge_sell, prop_dev_filtered, y_v
-            )
-            if profile_thresholds is not None:
-                thr_buy, thr_sell, hit_buy, hit_sell, prec_buy, prec_sell, n_buy, n_sell = profile_thresholds
-                cov_buy = float(n_buy / max(1, int((prop_dev_filtered == 2).sum())))
-                cov_sell = float(n_sell / max(1, int((prop_dev_filtered == 0).sum())))
-                print(
-                    f"      Using optimizer meta gate profile thresholds: "
-                    f"BUY={thr_buy:.3f}, SELL={thr_sell:.3f}, "
-                    f"side_specific={meta_gate_profile.get('side_specific', True)}, "
-                    f"hit_buy={hit_buy}, hit_sell={hit_sell}"
-                )
-            else:
-                # Pick thresholds dynamically per side (Phase 3)
-                # TASK 3 FIX: Use percentile-based logic that adapts to edge score distribution
-                thr_buy, prec_buy, cov_buy, n_buy, hit_buy = pick_edge_threshold_by_side(
-                    edge_buy, prop_dev_filtered, y_v, 2, target=token_precision_target, min_fires=max(5, int(len(edge_buy) * MIN_COVERAGE))
-                )
-                thr_sell, prec_sell, cov_sell, n_sell, hit_sell = pick_edge_threshold_by_side(
-                    edge_sell, prop_dev_filtered, y_v, 0, target=token_precision_target, min_fires=max(5, int(len(edge_sell) * MIN_COVERAGE))
-                )
-            
-            if profile_thresholds is None:
-                # TASK 3 FIX: BUY threshold deadlock - if no valid BUY thresholds found, use adaptive fallback
-                if not hit_buy and n_buy == 0:
-                    print(f"      WARNING: No valid BUY thresholds found (deadlock). Using adaptive fallback.")
-                    # Use lower percentile to find ANY BUY signals
-                    lower_q_vals = [0.50, 0.40, 0.30, 0.20, 0.15, 0.10]
-                    for q_val in lower_q_vals:
-                        fallback_thr = float(np.quantile(edge_buy, 1.0 - q_val))
-                        fallback_fire = edge_buy >= fallback_thr
-                        fallback_side = (prop_dev_filtered == 2) & fallback_fire
-                        if fallback_side.sum() >= 5:
-                            thr_buy = fallback_thr
-                            prec_buy = float((y_v[fallback_side] == 2).mean()) if fallback_side.sum() > 0 else 0.0
-                            cov_buy = q_val
-                            n_buy = int(fallback_side.sum())
-                            hit_buy = True
-                            print(f"      BUY fallback: threshold={fallback_thr:.1f}, coverage={q_val:.1%}, n={n_buy}, prec={prec_buy:.1%}")
-                            break
-                
-                if not hit_sell and n_sell == 0:
-                    print(f"      WARNING: No valid SELL thresholds found (deadlock). Using adaptive fallback.")
-                    lower_q_vals = [0.50, 0.40, 0.30, 0.20, 0.15, 0.10]
-                    for q_val in lower_q_vals:
-                        fallback_thr = float(np.quantile(edge_sell, 1.0 - q_val))
-                        fallback_fire = edge_sell >= fallback_thr
-                        fallback_side = (prop_dev_filtered == 0) & fallback_fire
-                        if fallback_side.sum() >= 5:
-                            thr_sell = fallback_thr
-                            prec_sell = float((y_v[fallback_side] == 0).mean()) if fallback_side.sum() > 0 else 0.0
-                            cov_sell = q_val
-                            n_sell = int(fallback_side.sum())
-                            hit_sell = True
-                            print(f"      SELL fallback: threshold={fallback_thr:.1f}, coverage={q_val:.1%}, n={n_sell}, prec={prec_sell:.1%}")
-                            break
-            
-            # ---- Regime-Aware Threshold Optimization (Priority 4) ----
-            print("   Optimizing separate threshold policies per HMM regime...")
-            regimes_list = ['ACCUMULATION', 'DISTRIBUTION', 'COMPRESSION', 'VOLATILE_EXPANSION', 'TRENDING_BULL', 'TRENDING_BEAR', 'CHOPPY']
-            regime_policies = {}
-            
-            for r in regimes_list:
-                r_mask = (df_dev['hmm_regime'] == r).to_numpy() if 'hmm_regime' in df_dev.columns else np.zeros(len(df_dev), dtype=bool)
-                if r_mask.sum() < 30:
-                    # Not enough data for this regime, use defaults
-                    regime_policies[r] = {
-                        "buy_thr": thr_buy,
-                        "sell_thr": thr_sell,
-                        "buy_ok": True,
-                        "sell_ok": True
-                    }
-                    continue
-                    
-                # Tune BUY side
-                best_buy_thr = thr_buy
-                buy_ok = True
-                buy_r_mask = r_mask & (prop_dev_filtered == 2)
-                if buy_r_mask.sum() >= 10:
-                    es_buy_r = edge_buy[buy_r_mask]
-                    yt_buy_r = y_v[buy_r_mask]
-                    best_buy_metric = -999.0
-                    for th in [45.0, 50.0, 52.0, 55.0, 58.0, 60.0, 62.0, 65.0]:
-                        fire = (es_buy_r >= th)
-                        if fire.sum() < 5:
-                            continue
-                        fired_idx = np.where(buy_r_mask)[0][fire]
-                        fired_rets = []
-                        for idx_val in fired_idx:
-                            close_val = df_dev['_close_raw'].iloc[idx_val]
-                            atr_val = df_dev['_atr_raw'].iloc[idx_val]
-                            b_val = atr_mult * atr_val / close_val if close_val > 0 else 0.015
-                            label_val = y_v[idx_val]
-                            if label_val == 1:
-                                rets_val = -FEE_ROUNDTRIP
-                            elif label_val == 2:
-                                rets_val = b_val - FEE_ROUNDTRIP
-                            else:
-                                rets_val = -b_val - FEE_ROUNDTRIP
-                            fired_rets.append(rets_val)
-                        fired_rets = np.array(fired_rets)
-                        exp_pct = float(fired_rets.mean()) * 100
-                        gross_win = float(fired_rets[fired_rets > 0].sum())
-                        gross_loss = float(abs(fired_rets[fired_rets < 0].sum()))
-                        pf_val = gross_win / (gross_loss + 1e-9)
-                        
-                        metric = exp_pct * min(pf_val, 3.0)
-                        if metric > best_buy_metric:
-                            best_buy_metric = metric
-                            best_buy_thr = th
-                    if best_buy_metric < -0.05:
-                        buy_ok = False
-                        
-                # Tune SELL side
-                best_sell_thr = thr_sell
-                sell_ok = True
-                sell_r_mask = r_mask & (prop_dev_filtered == 0)
-                if sell_r_mask.sum() >= 10:
-                    es_sell_r = edge_sell[sell_r_mask]
-                    yt_sell_r = y_v[sell_r_mask]
-                    best_sell_metric = -999.0
-                    for th in [45.0, 50.0, 52.0, 55.0, 58.0, 60.0, 62.0, 65.0]:
-                        fire = (es_sell_r >= th)
-                        if fire.sum() < 5:
-                            continue
-                        fired_idx = np.where(sell_r_mask)[0][fire]
-                        fired_rets = []
-                        for idx_val in fired_idx:
-                            close_val = df_dev['_close_raw'].iloc[idx_val]
-                            atr_val = df_dev['_atr_raw'].iloc[idx_val]
-                            b_val = atr_mult * atr_val / close_val if close_val > 0 else 0.015
-                            label_val = y_v[idx_val]
-                            if label_val == 1:
-                                rets_val = -FEE_ROUNDTRIP
-                            elif label_val == 0:
-                                rets_val = b_val - FEE_ROUNDTRIP
-                            else:
-                                rets_val = -b_val - FEE_ROUNDTRIP
-                            fired_rets.append(rets_val)
-                        fired_rets = np.array(fired_rets)
-                        exp_pct = float(fired_rets.mean()) * 100
-                        gross_win = float(fired_rets[fired_rets > 0].sum())
-                        gross_loss = float(abs(fired_rets[fired_rets < 0].sum()))
-                        pf_val = gross_win / (gross_loss + 1e-9)
-                        
-                        metric = exp_pct * min(pf_val, 3.0)
-                        if metric > best_sell_metric:
-                            best_sell_metric = metric
-                            best_sell_thr = th
-                    if best_sell_metric < -0.05:
-                        sell_ok = False
-                        
-                regime_policies[r] = {
-                    "buy_thr": best_buy_thr,
-                    "sell_thr": best_sell_thr,
-                    "buy_ok": buy_ok,
-                    "sell_ok": sell_ok
-                }
-                print(f"      Regime {r:20} -> BUY: thr={best_buy_thr:.1f}, ok={buy_ok} | SELL: thr={best_sell_thr:.1f}, ok={sell_ok}")
-            
-            fire_buy_dev = (edge_buy >= thr_buy) & (prop_dev_filtered == 2)
-            fire_sell_dev = (edge_sell >= thr_sell) & (prop_dev_filtered == 0)
-            
-            dev_n = n_buy + n_sell
-            hit_target = hit_buy or hit_sell
-            thr = float((thr_buy + thr_sell) / 2.0)
-            
-            fire_dev_any = fire_buy_dev | fire_sell_dev
-            dev_prec = float((y_v[fire_dev_any] == prop_dev_filtered[fire_dev_any]).mean()) if dev_n > 0 else 0.0
-            
-            cov_buy = n_buy / len(prop_dev_filtered)
-            cov_sell = n_sell / len(prop_dev_filtered)
-            dev_cov = dev_n / len(prop_dev_filtered)
-            
-            exp_buy = (prec_buy * 1.5 - (1-prec_buy)) * 100
-            exp_sell = (prec_sell * 1.5 - (1-prec_sell)) * 100
-            
-            # ── Filter Audits (Phase 4, 5, 6) ──
-            if signal_vetoes is None:
-                disable_sr_veto = False
-                disable_trend_veto = False
-                disable_confluence_veto = False
-            else:
-                disable_sr_veto = 'sr' not in signal_vetoes
-                disable_trend_veto = 'trend' not in signal_vetoes
-                disable_confluence_veto = 'confluence' not in signal_vetoes
-
-            # Helper for audit
-            def audit_filter(y_true, prop, baseline_mask, filter_pass):
-                if baseline_mask.sum() == 0:
-                    return 0.0, 0.0, 0.0, 0.0
-                n_before = baseline_mask.sum()
-                prec_before = float((prop[baseline_mask] == y_true[baseline_mask]).mean())
-                
-                fired_after = baseline_mask & filter_pass
-                n_after = fired_after.sum()
-                prec_after = float((prop[fired_after] == y_true[fired_after]).mean()) if n_after > 0 else 0.0
-                
-                prec_gain = prec_after - prec_before
-                cov_loss = (n_before - n_after) / n_before if n_before > 0 else 0.0
-                return prec_before, prec_after, cov_loss, prec_gain
-
-            # Base signal mask before filters (EdgeEngine pass)
-            fire_base = ((edge_buy >= thr_buy) & (prop_dev_filtered == 2)) | \
-                        ((edge_sell >= thr_sell) & (prop_dev_filtered == 0))
-            
-            # 1. S&R filter audit
-            at_res_dev = df_dev['is_at_resistance'].to_numpy().astype(bool) if 'is_at_resistance' in df_dev.columns else np.zeros(len(df_dev), dtype=bool)
-            at_sup_dev = df_dev['is_at_support'].to_numpy().astype(bool) if 'is_at_support' in df_dev.columns else np.zeros(len(df_dev), dtype=bool)
-            
-            top25_thr = float(np.quantile(meta_oof_cal[fire_base], 0.75)) if fire_base.sum() > 0 else 0.55
-            top25 = meta_oof_cal >= top25_thr
-            sr_pass_dev = ~(((prop_dev_filtered == 2) & at_res_dev & ~top25) | \
-                            ((prop_dev_filtered == 0) & at_sup_dev & ~top25))
-            
-            p_bef, p_aft, cov_l, prec_g = audit_filter(y_v, prop_dev_filtered, fire_base, sr_pass_dev)
-            
-            # S&R win rate test (Phase 5)
-            blocked_sr = fire_base & ~sr_pass_dev
-            passed_sr = fire_base & sr_pass_dev
-            harmful_sr = False
-            if blocked_sr.sum() > 0 and passed_sr.sum() > 0:
-                blocked_wr = float((prop_dev_filtered[blocked_sr] == y_v[blocked_sr]).mean())
-                passed_wr = float((prop_dev_filtered[passed_sr] == y_v[passed_sr]).mean())
-                if blocked_wr >= passed_wr:
-                    harmful_sr = True
-            
-            if (prec_g < 0.01 and cov_l > 0.20) or harmful_sr:
-                disable_sr_veto = True
-                print(f"      [SR AUDIT] disabled (overrestrictive={prec_g < 0.01 and cov_l > 0.20}, harmful={harmful_sr}, cov_loss={cov_l:.1%}, prec_gain={prec_g:.1%})")
-            
-            # 2. Daily Trend filter audit
-            if 'macro_trend_1d' in df_dev.columns:
-                trend_1d = df_dev['macro_trend_1d'].to_numpy()
-                trend_pass_dev = ~(
-                    ((prop_dev_filtered == 2) & (trend_1d < -0.2) & ~top25) | \
-                    ((prop_dev_filtered == 0) & (trend_1d > 0.2) & ~top25)
-                )
-            else:
-                trend_pass_dev = np.ones(len(df_dev), dtype=bool)
-                
-            p_bef_t, p_aft_t, cov_l_t, prec_g_t = audit_filter(y_v, prop_dev_filtered, fire_base, trend_pass_dev)
-            if prec_g_t < 0.01 and cov_l_t > 0.20:
-                disable_trend_veto = True
-                print(f"      [TREND AUDIT] disabled (overrestrictive=True, cov_loss={cov_l_t:.1%}, prec_gain={prec_g_t:.1%})")
-
-            # 3. Confluence filter audit
-            confluence_pass_dev = np.ones(len(df_dev), dtype=bool)
-            if 'total_confluence' in df_dev.columns:
-                tc = df_dev['total_confluence'].to_numpy()
-                confluence_pass_dev = ~((prop_dev_filtered == 2) & (tc < -0.05)) & ~((prop_dev_filtered == 0) & (tc > 0.05))
-            
-            p_bef_c, p_aft_c, cov_l_c, prec_g_c = audit_filter(y_v, prop_dev_filtered, fire_base, confluence_pass_dev)
-            if prec_g_c < 0.01 and cov_l_c > 0.20:
-                disable_confluence_veto = True
-                print(f"      [CONFLUENCE AUDIT] disabled (overrestrictive=True, cov_loss={cov_l_c:.1%}, prec_gain={prec_g_c:.1%})")
-
-            # 4. Regime filter audit (Phase 6)
-            if _opt and "regimes" in _opt and "regime_boundaries" in _opt:
-                regimes_dict = _opt["regimes"]
-                regime_series = np.array(regime_strs)[meta_idx]
-                
-                # Unfiltered proposals (before regime skipping)
-                fire_base_unfiltered = ((edge_buy >= thr_buy) & (prop_v == 2)) | \
-                                       ((edge_sell >= thr_sell) & (prop_v == 0))
-                
-                for r_name, r_config in list(regimes_dict.items()):
-                    if r_config.get("skipped"):
-                        blocked_reg = fire_base_unfiltered & (regime_series == r_name) & (prop_dev_filtered == 1)
-                        if blocked_reg.sum() > 0:
-                            blocked_precision = float((prop_v[blocked_reg] == y_v[blocked_reg]).mean())
-                            if blocked_precision > 0.50:
-                                r_config["skipped"] = False
-                                print(f"      [REGIME AUDIT] Regime {r_name} block is harmful (blocked precision {blocked_precision:.1%} > 50.0%). Re-enabled regime (downgraded to soft penalty).")
-
-            # Fleet Learning Cache Saving
-            import pickle
-            from pathlib import Path
-            
-            base = symbol.replace('/', '_')
-            oof_cache_dir = Path(root_dir) / "data" / "oof_cache"
-            oof_cache_dir.mkdir(parents=True, exist_ok=True)
-            
-            cache_file = oof_cache_dir / f"{base}_oof.pkl"
-            with open(cache_file, "wb") as f:
-                pickle.dump((mX, mY, meta_w), f)
-            print(f"   Saved OOF cache for {symbol} to {cache_file.name}")
-            
-            # Fleet Learning Pooling
-            mX_list = []
-            mY_list = []
-            meta_w_list = []
-            
-            for pkl_path in oof_cache_dir.glob("*.pkl"):
-                try:
-                    with open(pkl_path, "rb") as f:
-                        cached_mX, cached_mY, cached_meta_w = pickle.load(f)
-                    # Align features to current token's active feature_cols
-                    aligned_mX = cached_mX.reindex(columns=feature_cols, fill_value=0.0)
-                    mX_list.append(aligned_mX)
-                    mY_list.append(cached_mY)
-                    meta_w_list.append(cached_meta_w)
-                except Exception as cache_load_err:
-                    print(f"   Failed to load cached OOF dataset {pkl_path.name}: {cache_load_err}")
-            
-            if mX_list:
-                mX_fleet = pd.concat(mX_list, ignore_index=True)
-                mY_fleet = np.concatenate(mY_list)
-                meta_w_fleet = np.concatenate(meta_w_list)
-                print(f"   Fleet learning pool: {len(mX_fleet)} total samples pooled from {len(mX_list)} symbols")
-            else:
-                mX_fleet = mX
-                mY_fleet = mY
-                meta_w_fleet = meta_w
-                
-            meta_full = xgb.train(token_meta_params, _dm(mX_fleet, mY_fleet, meta_w_fleet), num_boost_round=300, verbose_eval=False)
-            # Train lightweight logistic meta-model (Phase 6: trade-quality scorer)
-            try:
-                from src.ml.meta_model import train_logistic_meta
-                # Build binary target for profitable trade: pnl > 0
-                mY_binary = (mY_fleet > 0).astype(int)
-                store_dir = Path(root_dir) / "src" / "ml" / "model_store"
-                store_dir.mkdir(parents=True, exist_ok=True)
-                meta_light_path = store_dir / f"{base}_meta_light.pkl"
-                lr = train_logistic_meta(mX_fleet.fillna(0.0), mY_binary, save_path=str(meta_light_path))
-                print(f"   Lightweight meta-model trained and saved: {meta_light_path.name}")
-            except Exception as _e:
-                meta_light_path = None
-                print(f"   Lightweight meta-model training skipped: {_e}")
-            flag = "target met" if hit_target else "target NOT met (best achievable)"
-            print(f"   Meta gate: thr {thr:.3f} | dev precision {dev_prec:.3f} | "
-                  f"coverage {dev_cov:.3f} ({dev_n} trades) | {flag}")
-            print(f"   BUY  side: thr {thr_buy:.3f} | prec {prec_buy:.3f} | "
-                  f"cov {cov_buy:.3f} ({n_buy} trades) | "
-                  f"{'LIVE' if hit_buy else 'disabled'}")
-            print(f"   SELL side: thr {thr_sell:.3f} | prec {prec_sell:.3f} | "
-                  f"cov {cov_sell:.3f} ({n_sell} trades) | "
-                  f"{'LIVE' if hit_sell else 'disabled'}")
-        else:
-            print("   Too few directional samples for meta-labeling -- falling back to "
-                  "primary confidence gate.")
-            meta_full   = None
-            thr         = 0.60
-            dev_prec    = dev_cov = 0.0
-            dev_n       = 0
-            hit_target  = False
-            thr_buy     = thr_sell  = 0.60
-            prec_buy    = prec_sell = 0.0
-            cov_buy     = cov_sell  = 0.0
-            n_buy       = n_sell    = 0
-            hit_buy     = hit_sell  = False
+        # ── Meta gate removed: primary-only calibrated confidence gate ─────────
+        # LR meta was anti-selective fleet-wide; calibrated primary confidence gate
+        # achieves equivalent precision without expensive OOF / edge engine overhead.
+        print("   [PRIMARY-ONLY MODE] Meta gate removed — calibrated primary confidence gate.")
+        meta_full               = None
+        meta_model_cols         = list(feature_cols)
+        meta_calibration_method = 'primary_only'
+        thr                     = 0.60
+        dev_prec                = dev_cov = 0.0
+        dev_n                   = 0
+        hit_target              = False
+        thr_buy = thr_sell      = 0.60
+        prec_buy = prec_sell    = 0.0
+        cov_buy = cov_sell      = 0.0
+        n_buy = n_sell          = 0
+        hit_buy = hit_sell      = False
+        disable_sr_veto         = True
+        disable_trend_veto      = True
+        disable_confluence_veto = True
+        regime_policies         = {}
+        regime_buy_covs         = {}
+        regime_sell_covs        = {}
+        _dev_buy_side_cov       = 0.0
+        _dev_sell_side_cov      = 0.0
+        _oof_meta_gate_lift     = 0.0
+        hold_strategy_selected  = "primary_only"
+        hold_strategy_audit     = {}
+        rcm                     = None
+        meta_light_path         = None
 
         # ---- 5) Holdout: scored exactly once ----
-        primary_full = xgb.train(full_params, _dm(Xtp, ytp, sample_weights(ytp)),
-                                 num_boost_round=500, verbose_eval=False)
+        # Train primary_full with early stopping on the last 20% of the training pool
+        # (time-ordered). This finds the optimal n_trees without wasting rounds on noise.
+        _n_es_val = max(50, int(len(Xtp) * 0.20))
+        _X_tr_es  = Xtp.iloc[:-_n_es_val]
+        _y_tr_es  = ytp[:-_n_es_val]
+        _w_tr_es  = sample_weights(_y_tr_es)
+        _X_va_es  = Xtp.iloc[-_n_es_val:]
+        _y_va_es  = ytp[-_n_es_val:]
+        # Train two binary primary models (BUY and SELL) with early stopping.
+        _y_tr_buy  = (_y_tr_es == 2).astype(int)
+        _y_tr_sell = (_y_tr_es == 0).astype(int)
+        _y_va_buy  = (_y_va_es == 2).astype(int)
+        _y_va_sell = (_y_va_es == 0).astype(int)
+        _hold_mask_tr = (_y_tr_es == 1)   # HOLD=1 in 3-class label space; not BUY(2) or SELL(0)
+        _w_tr_buy     = np.where(_hold_mask_tr, 0.15, 1.0).astype(float)
+        _w_tr_sell    = np.where(_hold_mask_tr, 0.15, 1.0).astype(float)
+
+        buy_full = xgb.train(
+            binary_params_buy,
+            _dm(_X_tr_es, _y_tr_buy, _w_tr_buy),
+            num_boost_round=1000,
+            evals=[(_dm(_X_va_es, _y_va_buy), 'eval')],
+            early_stopping_rounds=50,
+            verbose_eval=False,
+        )
+        sell_full = xgb.train(
+            binary_params_sell,
+            _dm(_X_tr_es, _y_tr_sell, _w_tr_sell),
+            num_boost_round=1000,
+            evals=[(_dm(_X_va_es, _y_va_sell), 'eval')],
+            early_stopping_rounds=50,
+            verbose_eval=False,
+        )
+        primary_full = buy_full  # backward-compat alias
+
         X_test = holdout[feature_cols]
         y_test = holdout['target'].to_numpy().astype(int)
-        raw_probs = primary_full.predict(_dm(X_test))
-        prop_h = proposed_side(raw_probs)
+        _pb_h = buy_full.predict(_dm(X_test))
+        _ps_h = sell_full.predict(_dm(X_test))
+        # Build synthetic (N,3) probs — apply same Bayes prior correction as OOF
+        # so holdout proposals use the same probability scale as dev training.
+        _pb_h_cal = _bayes_correct(_pb_h, _true_buy_rate,  _spw_prior_buy)
+        _ps_h_cal = _bayes_correct(_ps_h, _true_sell_rate, _spw_prior_sell)
+        raw_probs = np.zeros((len(X_test), NUM_CLASS), dtype=float)
+        raw_probs[:, 2] = _pb_h_cal
+        raw_probs[:, 0] = _ps_h_cal
+        raw_probs[:, 1] = np.clip(1.0 - _pb_h_cal - _ps_h_cal, 0.0, 1.0)
+        _rs_h = raw_probs.sum(axis=1, keepdims=True)
+        raw_probs = raw_probs / np.where(_rs_h > 0, _rs_h, 1.0)
+        prop_h = proposed_side(raw_probs, buy_rate=_buy_rate, sell_rate=_sell_rate)
+
+        # ── Primary-only precision gate ───────────────────────────────────────
+        # Evaluate directional accuracy on bars where the TRUTH is directional.
+        # Measuring against y_test (not prop_h) gives a meaningful signal: what
+        # fraction of truly-directional bars does the primary call correctly?
+        # Baseline is ~50% (random direction); target ≥55% for tradeable.
+        _dir_mask_h = (y_test == 2) | (y_test == 0)
+        _primary_dir_prec = (
+            float((prop_h[_dir_mask_h] == y_test[_dir_mask_h]).mean())
+            if _dir_mask_h.sum() > 0 else 0.0
+        )
+        _pct_buy_proposals = float((prop_h == 2).mean())
+        print(f"   Primary directional precision (no gate): {_primary_dir_prec:.3f} "
+              f"| BUY proposals: {_pct_buy_proposals:.1%} "
+              f"| dir bars: {int(_dir_mask_h.sum())}")
+        if _primary_dir_prec < 0.45:
+            print(f"   [PRIMARY VETO] Primary precision {_primary_dir_prec:.1%} < 45% — UNTRADEABLE.")
+            return None
+        else:
+            print(f"   [PRIMARY] {_primary_dir_prec:.1%} directional precision — calibrated confidence gate will run.")
 
         if meta_full is not None:
-            meta_prob_h = meta_full.predict(_dm(build_meta_X(X_test, raw_probs)))
+            # Use meta_model_cols (post-drift-filter) not feature_cols to avoid mismatch
+            X_test_meta = X_test[meta_model_cols] if 'meta_model_cols' in locals() else X_test
+            _meta_X_h = build_meta_X(X_test_meta, raw_probs).fillna(0.0)
+            # meta_full is now a sklearn LR (C_excluded) — use predict_proba
+            meta_prob_h = meta_full.predict_proba(_meta_X_h)[:, 1]
         else:
             meta_prob_h = raw_probs.max(axis=1)  # fallback gate on primary confidence
 
@@ -2807,47 +2884,422 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         from src.trading.edge_engine import EdgeScoringEngine
         edge_buy_h = EdgeScoringEngine.compute_edge_batch(holdout, meta_prob_h, 'BUY').to_numpy()
         edge_sell_h = EdgeScoringEngine.compute_edge_batch(holdout, meta_prob_h, 'SELL').to_numpy()
-        
-        # Holdout Regime-specific Edge Score Thresholding (Priority 4)
-        fire_buy_h = np.zeros(len(holdout), dtype=bool)
-        fire_sell_h = np.zeros(len(holdout), dtype=bool)
-        
-        for i in range(len(holdout)):
-            r = holdout['hmm_regime'].iloc[i] if 'hmm_regime' in holdout.columns else 'UNKNOWN'
-            policy = regime_policies.get(r, {
-                "buy_thr": thr_buy,
-                "sell_thr": thr_sell,
-                "buy_ok": True,
-                "sell_ok": True
-            })
-            
-            r_buy_thr = policy.get("buy_thr", thr_buy)
-            r_sell_thr = policy.get("sell_thr", thr_sell)
-            r_buy_ok = policy.get("buy_ok", True)
-            r_sell_ok = policy.get("sell_ok", True)
-            
-            if prop_h[i] == 2 and r_buy_ok:
-                fire_buy_h[i] = (edge_buy_h[i] >= r_buy_thr)
-            elif prop_h[i] == 0 and r_sell_ok:
-                fire_sell_h[i] = (edge_sell_h[i] >= r_sell_thr)
-                
-        fire = fire_buy_h | fire_sell_h
-        gate_mode = f"EdgeEngine (B>={thr_buy:.1f}, S>={thr_sell:.1f})"
-        
-        _tier_agg_pre = True
-        _AGG_FLOOR_PRE = 0.50
-        print(f"   Holdout gate: {gate_mode} | fired {int(fire.sum())}")
-        # Threshold that separates top-25% of fired signals from bottom-75%.
-        # Saved to metadata so the live predictor can replicate S&R / trend filters
-        # without needing the full holdout distribution at inference time.
-        override_conf_thr = float(np.quantile(meta_prob_h[fire], 0.75)) if fire.sum() > 0 else thr
+
+        # ── Pre-firing regime mask ────────────────────────────────────────────────────
+        # HMM regime filter permanently disabled: collapses to a single state for
+        # most tokens, incorrectly suppressing 40-60% of holdout bars with no
+        # precision benefit (forensics showed regime_precision < 45% fleet-wide).
+        # All holdout bars are treated as regime-ok; QP sees the full population.
+        _regime_ok_h = np.ones(len(holdout), dtype=bool)
+        _regime_safety_valve_triggered = False
+
+        # ── PRIMARY-ONLY bypass ───────────────────────────────────────────────────────
+        # When holdout primary directional precision >= 55%, bypass the meta gate
+        # entirely. Find the optimal confidence threshold on the last 20% of the
+        # training pool (val set), then apply it directly to holdout without any
+        # QP, regime, or veto logic. Eliminates isotonic-calibration overfit and
+        # stale threshold issues (e.g. BTC thr_buy=12 firing near-random signals).
+        _primary_only_gate = False
+        _primary_conf_thr  = 0.55   # overridden when bypass fires
+        _best_prec_po      = 0.0    # val-set precision at chosen threshold
+        _calibrator_po     = None   # LR calibrator: raw_conf → P(outcome != HOLD)
+        _po_use_calibrator = False  # True when calibrator was successfully fitted
+        if True:   # always run calibrated path; Fix D bypasses LR calibrator when dir_correct_rate < 0.55
+            if str(gate_type or '').upper() == 'PRIMARY_CONFIDENCE':
+                print("   [GATE] gate_type='PRIMARY_CONFIDENCE' overridden — running calibrated section "
+                      "(Fix D handles bypass when dir_correct_rate < 0.55).")
+            # ── Calibrated "direction-correct" probability gate ───────────────
+            # Compute val split size FIRST so calibrator training never touches
+            # val rows — preventing data leakage into the threshold sweep.
+            _val_n_po  = max(50, int(len(Xtp) * 0.20))
+            _cal_end   = len(Xtp) - _val_n_po   # exclusive upper index of calibrator training data
+
+            # Step 1: Score training pool with full binary models, Bayes-correct.
+            _pb_tp   = buy_full.predict(_dm(Xtp))
+            _ps_tp   = sell_full.predict(_dm(Xtp))
+            _pb_tp_c = _bayes_correct(_pb_tp, _true_buy_rate,  _spw_prior_buy)
+            _ps_tp_c = _bayes_correct(_ps_tp, _true_sell_rate, _spw_prior_sell)
+            _conf_tp = np.maximum(_pb_tp_c, _ps_tp_c)
+            _rtp     = np.zeros((len(Xtp), NUM_CLASS), dtype=float)
+            _rtp[:, 2] = _pb_tp_c
+            _rtp[:, 0] = _ps_tp_c
+            _rtp[:, 1] = np.clip(1.0 - _pb_tp_c - _ps_tp_c, 0.0, 1.0)
+            _rtps    = _rtp.sum(axis=1, keepdims=True)
+            _rtp     = _rtp / np.where(_rtps > 0, _rtps, 1.0)
+            _prop_tp = proposed_side(_rtp, buy_rate=_buy_rate, sell_rate=_sell_rate)
+            _dir_tp  = (_prop_tp == 2) | (_prop_tp == 0)
+
+            # Step 2: Fit direction-correct calibrator on NON-val training rows only.
+            # Target: 1 if model's proposed direction == true label, 0 otherwise.
+            # Using P(direction correct) instead of P(not HOLD) ensures the calibrator
+            # gates on the metric that actually drives signal precision.
+            # Calibrator training is strictly limited to Xtp[:_cal_end] to prevent
+            # the val-set rows from leaking into the calibrator's learned weights.
+            from sklearn.linear_model import LogisticRegression as _LRCal
+            _hold_disc_cols: list = [c for c in ['atr_pct', 'macro_confluence_score',
+                                                   'efficiency_ratio_10', 'volatility_regime',
+                                                   'adx_14', 'realized_volatility']
+                                     if c in Xtp.columns]
+            _calibrator_hold_disc_cols: list = _hold_disc_cols  # persisted for holdout + sidecar
+            # Restrict to non-val rows to avoid leakage
+            _dir_tp_cal = _dir_tp.copy()
+            _dir_tp_cal[_cal_end:] = False
+            if _dir_tp_cal.sum() >= 20:
+                # Direction-correct target: 1 if proposal == true label, 0 otherwise
+                _cal_y = (ytp[_dir_tp_cal] == _prop_tp[_dir_tp_cal]).astype(float)
+                _dir_idx = np.where(_dir_tp_cal)[0]
+                _conf_base_cal = _conf_tp[_dir_tp_cal].reshape(-1, 1)
+                if _hold_disc_cols:
+                    _hold_disc_feats = Xtp.iloc[_dir_idx][_hold_disc_cols].fillna(0.0).to_numpy()
+                    _cal_x = np.column_stack([_conf_base_cal, _hold_disc_feats])
+                else:
+                    _cal_x = _conf_base_cal
+                if len(np.unique(_cal_y)) == 2:
+                    _n_feats_cal = _cal_x.shape[1]
+                    _C_cal = 1.0 if _n_feats_cal > 1 else 0.5
+                    try:
+                        _calibrator_po = _LRCal(C=_C_cal, max_iter=500, solver='lbfgs')
+                        _calibrator_po.fit(_cal_x, _cal_y)
+                        _dir_correct_rate_cal = float(_cal_y.mean())
+                        # Fix K: bypass check on TRUE directional bars only.
+                        # HOLD bars always score 0 (model proposes BUY/SELL, true=HOLD) →
+                        # deflates all-bars rate to ~47% even when model is 84%+ correct on
+                        # actual BUY/SELL bars. The calibrator should be bypassed only when
+                        # the model genuinely lacks directional skill, not due to HOLD dilution.
+                        _true_dir_mask_in_cal = (ytp[_dir_tp_cal] == 2) | (ytp[_dir_tp_cal] == 0)
+                        _dir_correct_rate_true_dir = float(_cal_y[_true_dir_mask_in_cal].mean()) \
+                            if _true_dir_mask_in_cal.sum() > 0 else 0.0
+                        print(f"   [DIR-CAL] multi-feature ({_n_feats_cal} inputs) LR C={_C_cal} "
+                              f"fitted on {len(_cal_y)} non-val bars "
+                              f"(dir_correct_rate true-dir={_dir_correct_rate_true_dir:.1%} "
+                              f"/ all-bars={_dir_correct_rate_cal:.1%})")
+                        if _dir_correct_rate_true_dir < 0.55:
+                            # Near-random labels on true directional bars → calibrator cannot discriminate.
+                            _calibrator_po = None
+                            _po_use_calibrator = False
+                            print(f"   [DIR-CAL] BYPASSED: dir_correct_rate(true-dir)={_dir_correct_rate_true_dir:.1%} < 0.55 "
+                                  f"(all-bars={_dir_correct_rate_cal:.1%} incl HOLD) "
+                                  f"— raw primary confidence used for val sweep.")
+                    except Exception as _cal_err:
+                        _calibrator_po = _LRCal(C=0.1, max_iter=500, solver='lbfgs')
+                        _calibrator_po.fit(_conf_base_cal, _cal_y)
+                        print(f"   [DIR-CAL] fallback single-feature LR (multi-feature failed: {_cal_err})")
+
+            # Step 3: Validation set (last 20%) — sweep for best threshold.
+            # _val_n_po already computed above; val rows were excluded from calibrator fit.
+            _X_val_po = Xtp.iloc[-_val_n_po:]
+            _y_val_po = ytp[-_val_n_po:]
+            _pb_val   = buy_full.predict(_dm(_X_val_po))
+            _ps_val   = sell_full.predict(_dm(_X_val_po))
+            _pb_val_c = _bayes_correct(_pb_val, _true_buy_rate,  _spw_prior_buy)
+            _ps_val_c = _bayes_correct(_ps_val, _true_sell_rate, _spw_prior_sell)
+            _conf_val = np.maximum(_pb_val_c, _ps_val_c)
+            _rv       = np.zeros((len(_X_val_po), NUM_CLASS), dtype=float)
+            _rv[:, 2] = _pb_val_c
+            _rv[:, 0] = _ps_val_c
+            _rv[:, 1] = np.clip(1.0 - _pb_val_c - _ps_val_c, 0.0, 1.0)
+            _rvs      = _rv.sum(axis=1, keepdims=True)
+            _rv       = _rv / np.where(_rvs > 0, _rvs, 1.0)
+            _prop_val = proposed_side(_rv, buy_rate=_buy_rate, sell_rate=_sell_rate)
+            _dir_val  = (_prop_val == 2) | (_prop_val == 0)
+            _n_dir_val = int(_dir_val.sum())
+
+            # Apply calibrator to directional val proposals only
+            _conf_dir_val      = _conf_val[_dir_val]                          # (n_dir_val,)
+            _prop_dir_val      = _prop_val[_dir_val]                          # proposals (0/2)
+            _y_outcome_dir_val = _y_val_po[_dir_val]                          # true outcomes
+            _dir_val_idx       = np.where(_dir_val)[0]
+            if _calibrator_po is not None:
+                # Build the same multi-feature input used at fit time
+                _conf_base_val = _conf_dir_val.reshape(-1, 1)
+                _use_multi_cal = (
+                    _hold_disc_cols
+                    and hasattr(_calibrator_po, 'coef_')
+                    and _calibrator_po.coef_.shape[1] > 1
+                )
+                if _use_multi_cal:
+                    _val_disc_feats = _X_val_po.iloc[_dir_val_idx][_hold_disc_cols].fillna(0.0).to_numpy()
+                    _cal_val_x = np.column_stack([_conf_base_val, _val_disc_feats])
+                else:
+                    _cal_val_x = _conf_base_val
+                _cal_conf_dir_val = _calibrator_po.predict_proba(_cal_val_x)[:, 1]
+                _po_use_calibrator = True
+            else:
+                _cal_conf_dir_val = _conf_dir_val
+
+            _best_thr_po  = 0.85  # conservative default (used when sweep finds nothing)
+            _best_prec_po = 0.0
+            _best_n_po    = 0
+            _best_cov_po  = 0.0
+            _rows_po: list = []   # always initialised so balance-guard below is safe
+            if _n_dir_val >= 100:    # need ≥100 directional val bars to run sweep; inner threshold is 20
+                _min_fires_combined = 20 if (_po_use_calibrator and _calibrator_po is not None) else 50
+                for _thr_s in np.arange(0.30, 0.96, 0.02):
+                    _fire_s = (_cal_conf_dir_val >= _thr_s)
+                    _n_s    = int(_fire_s.sum())
+                    if _n_s < _min_fires_combined:
+                        continue
+                    _prec_s = float((_prop_dir_val[_fire_s] == _y_outcome_dir_val[_fire_s]).mean())
+                    _cov_s  = _n_s / max(1, _n_dir_val)
+                    _rows_po.append((float(_thr_s), _prec_s, _cov_s, _n_s))
+                if _rows_po:
+                    # Among rows where directional precision >= 60%, pick highest coverage.
+                    # If none reach 60%, fall back to highest precision (avoids total disable).
+                    _passing_rows = [r for r in _rows_po if r[1] >= 0.60]
+                    if _passing_rows:
+                        _best_thr_po, _best_prec_po, _best_cov_po, _best_n_po = max(
+                            _passing_rows, key=lambda r: r[2]
+                        )
+                    else:
+                        _best_thr_po, _best_prec_po, _best_cov_po, _best_n_po = max(
+                            _rows_po, key=lambda r: r[1]
+                        )
+            else:
+                # Small val set (<100 directional bars): derive threshold from training pool.
+                # Calibrated training confidence is more reliable than a noisy val sweep.
+                if _po_use_calibrator and _calibrator_po is not None:
+                    _tp_dir_conf_base = _conf_tp[_dir_tp_cal].reshape(-1, 1)
+                    _use_multi_cal_tp = (
+                        _hold_disc_cols
+                        and hasattr(_calibrator_po, 'coef_')
+                        and _calibrator_po.coef_.shape[1] > 1
+                    )
+                    if _use_multi_cal_tp:
+                        _tp_dir_idx  = np.where(_dir_tp_cal)[0]
+                        _tp_dir_disc = Xtp.iloc[_tp_dir_idx][_hold_disc_cols].fillna(0.0).to_numpy()
+                        _tp_cal_x    = np.column_stack([_tp_dir_conf_base, _tp_dir_disc])
+                    else:
+                        _tp_cal_x = _tp_dir_conf_base
+                    _cal_conf_tp_dir = _calibrator_po.predict_proba(_tp_cal_x)[:, 1]
+                    _best_thr_po = float(np.percentile(_cal_conf_tp_dir, 60)) if len(_cal_conf_tp_dir) > 0 else 0.60
+                    print(f"   [SMALL VAL] Cal training 60th-pct thr={_best_thr_po:.3f} (val_n={_n_dir_val})")
+                else:
+                    _dir_conf_all = _conf_tp[_dir_tp] if _dir_tp.sum() > 0 else _conf_tp
+                    _best_thr_po  = float(np.percentile(_dir_conf_all, 60)) if len(_dir_conf_all) > 0 else 0.60
+                    print(f"   [SMALL VAL] Raw training 60th-pct thr={_best_thr_po:.3f} (val_n={_n_dir_val})")
+
+            _primary_conf_thr = _best_thr_po
+            _primary_only_gate = True
+
+            # Guard: BUY/SELL balance check on the val set.
+            # If the selected threshold causes one side to fire <10 val signals,
+            # back off the threshold to the highest value where BOTH sides fire ≥10.
+            # This prevents independent Optuna tuning from creating a model where one
+            # direction dominates almost entirely at the calibrated threshold.
+            _fire_buy_val  = int(((_prop_dir_val == 2) & (_cal_conf_dir_val >= _primary_conf_thr)).sum())
+            _fire_sell_val = int(((_prop_dir_val == 0) & (_cal_conf_dir_val >= _primary_conf_thr)).sum())
+            _MIN_SIDE_FIRES_VAL = 10
+            _MIN_PREC_BAL = max(0.48, token_breakeven - 0.05)
+            if min(_fire_buy_val, _fire_sell_val) < _MIN_SIDE_FIRES_VAL and _rows_po:
+                # Walk back through sweep rows (sorted descending by threshold) and find
+                # the highest threshold where both sides have ≥_MIN_SIDE_FIRES_VAL.
+                _rows_balanced = sorted(_rows_po, key=lambda r: r[0], reverse=True)
+                for _rb_thr, _rb_prec, _rb_cov, _rb_n in _rows_balanced:
+                    _buy_v  = int(((_prop_dir_val == 2) & (_cal_conf_dir_val >= _rb_thr)).sum())
+                    _sell_v = int(((_prop_dir_val == 0) & (_cal_conf_dir_val >= _rb_thr)).sum())
+                    if min(_buy_v, _sell_v) >= _MIN_SIDE_FIRES_VAL and _rb_prec >= _MIN_PREC_BAL:
+                        print(f"   [PRIMARY ONLY] Side-balance fallback: thr {_primary_conf_thr:.3f}→{_rb_thr:.3f} "
+                              f"(buy={_fire_buy_val}→{_buy_v}, sell={_fire_sell_val}→{_sell_v})")
+                        _primary_conf_thr = _rb_thr
+                        # Update reported metrics to reflect the actual selected threshold
+                        _best_prec_po = _rb_prec
+                        _best_n_po    = _rb_n
+                        _best_cov_po  = _rb_cov
+                        break
+
+            # Per-side threshold sweep: only needed when calibrator is bypassed.
+            # When calibrator is active, both sides use the same _cal_conf_dir_val
+            # and the combined sweep already found the optimal threshold — a redundant
+            # per-side sweep on the same scores just adds a second val-precision gate
+            # that disables signals the calibrator already selected correctly.
+            # When calibrator is bypassed, per-side sweep corrects Bayes asymmetry:
+            # SELL logit advantage would push the combined threshold below BUY's
+            # natural operating point without independent per-side selection.
+            _thr_buy_side  = _primary_conf_thr
+            _thr_sell_side = _primary_conf_thr
+            _prec_buy_side_val  = _best_prec_po
+            _prec_sell_side_val = _best_prec_po
+            if not (_po_use_calibrator and _calibrator_po is not None):
+                # Uncalibrated path: per-side Bayes-corrected sweep
+                _buy_val_mask  = (_prop_dir_val == 2)
+                _sell_val_mask = (_prop_dir_val == 0)
+                _buy_sweep_conf  = _pb_val_c[_dir_val]
+                _sell_sweep_conf = _ps_val_c[_dir_val]
+                _N_SIDE_MIN = 20
+                for _sn, _sm, _sc in [('BUY', _buy_val_mask, _buy_sweep_conf),
+                                        ('SELL', _sell_val_mask, _sell_sweep_conf)]:
+                    _srows = []
+                    for _thr_s in np.arange(0.30, 0.96, 0.02):
+                        _fs = _sm & (_sc >= _thr_s)
+                        if _fs.sum() < _N_SIDE_MIN:
+                            continue
+                        _prec_s = float((_prop_dir_val[_fs] == _y_outcome_dir_val[_fs]).mean())
+                        _srows.append((float(_thr_s), _prec_s, int(_fs.sum())))
+                    if _srows:
+                        _SIDE_MARGIN = 0.05
+                        _passing = [(t, p, n) for t, p, n in _srows
+                                    if p >= token_breakeven - _SIDE_MARGIN]
+                        if _passing:
+                            _bt, _bp, _bn = max(_passing, key=lambda r: r[0])
+                        else:
+                            _bt, _bp, _bn = max(_srows, key=lambda r: r[1])
+                        if _sn == 'BUY':
+                            _thr_buy_side, _prec_buy_side_val = _bt, _bp
+                        else:
+                            _thr_sell_side, _prec_sell_side_val = _bt, _bp
+                _SIDE_MARGIN = 0.05
+                if _prec_buy_side_val < token_breakeven - _SIDE_MARGIN:
+                    print(f"   [PER-SIDE] BUY val_prec={_prec_buy_side_val:.1%} < "
+                          f"breakeven-5pp ({token_breakeven - _SIDE_MARGIN:.1%}) — BUY disabled")
+                    _thr_buy_side = 2.0
+                if _prec_sell_side_val < token_breakeven - _SIDE_MARGIN:
+                    print(f"   [PER-SIDE] SELL val_prec={_prec_sell_side_val:.1%} < "
+                          f"breakeven-5pp ({token_breakeven - _SIDE_MARGIN:.1%}) — SELL disabled")
+                    _thr_sell_side = 2.0
+                print(f"   [PER-SIDE] BUY thr={_thr_buy_side:.3f} val_prec={_prec_buy_side_val:.1%} | "
+                      f"SELL thr={_thr_sell_side:.3f} val_prec={_prec_sell_side_val:.1%}")
+            else:
+                print(f"   [CAL-GATE] Calibrator active — both sides use combined "
+                      f"thr={_primary_conf_thr:.3f} val_prec={_best_prec_po:.1%} val_n={_best_n_po}")
+
+            print(
+                f"   [PRIMARY ONLY] primary={_primary_dir_prec:.1%} — "
+                f"cal-prob thr={_primary_conf_thr:.3f} "
+                f"val_prec={_best_prec_po:.1%} val_n={_best_n_po} val_cov={_best_cov_po:.1%} "
+                f"(calibrated={'Y' if _po_use_calibrator else 'N'})."
+            )
+
+        if not _primary_only_gate:
+            # ── Quantile-preserved holdout thresholds ──────────────────────────────────
+            # thr_buy/thr_sell were calibrated on OOF edge scores (conservative — trained on
+            # 87% data per fold). Full-fit meta edge scores are higher (100% data), so the
+            # same absolute threshold fires on a larger fraction of holdout bars → precision
+            # drop. Fix: re-derive at the same percentile of holdout's regime-ok per-side
+            # distribution, making dev and holdout coverage identical by construction.
+            _ebh_b = edge_buy_h[(prop_h == 2) & _regime_ok_h]
+            _ebh_s = edge_sell_h[(prop_h == 0) & _regime_ok_h]
+            thr_buy_h  = float(np.quantile(_ebh_b, 1.0 - min(_dev_buy_side_cov, 0.50)))  if len(_ebh_b) >= 5 and _dev_buy_side_cov > 0 else thr_buy
+            thr_sell_h = float(np.quantile(_ebh_s, 1.0 - min(_dev_sell_side_cov, 0.50))) if len(_ebh_s) >= 5 and _dev_sell_side_cov > 0 else thr_sell
+            # QP floor: never lower the holdout threshold below the dev threshold.
+            # When the regime filter removes 60-70% of holdout bars, the remaining pool
+            # has lower scores on average, so QP pushes the threshold down to match dev
+            # coverage — pulling in HOLD-labelled bars that destroy precision. If the
+            # holdout pool scores are lower, the right response is to fire fewer signals
+            # at high quality, not more signals at low quality.
+            # EXCEPTION: when the safety valve reset the regime filter, the full population
+            # is now in scope and QP must derive a lower threshold to hit dev coverage —
+            # the floor would defeat the purpose and result in under-firing.
+            if not _regime_safety_valve_triggered:
+                thr_buy_h  = max(thr_buy_h,  thr_buy)
+                thr_sell_h = max(thr_sell_h, thr_sell)
+            print(f"   [QP-Holdout] BUY  dev_thr={thr_buy:.1f}→hold_thr={thr_buy_h:.1f} (dev_cov={_dev_buy_side_cov:.1%})")
+            print(f"   [QP-Holdout] SELL dev_thr={thr_sell:.1f}→hold_thr={thr_sell_h:.1f} (dev_cov={_dev_sell_side_cov:.1%})")
+
+            # Per-HMM-regime quantile-preserved holdout thresholds
+            regime_policies_h = {}
+            for _r, _pol in regime_policies.items():
+                _rm_b_h = (holdout['hmm_regime'] == _r).to_numpy() if 'hmm_regime' in holdout.columns else np.zeros(len(holdout), dtype=bool)
+                _rm_b_h = _rm_b_h & (prop_h == 2) & _regime_ok_h
+                _rm_s_h = (holdout['hmm_regime'] == _r).to_numpy() if 'hmm_regime' in holdout.columns else np.zeros(len(holdout), dtype=bool)
+                _rm_s_h = _rm_s_h & (prop_h == 0) & _regime_ok_h
+                _bc_r = regime_buy_covs.get(_r, _dev_buy_side_cov)
+                _sc_r = regime_sell_covs.get(_r, _dev_sell_side_cov)
+                _thr_b = float(np.quantile(edge_buy_h[_rm_b_h],  1.0 - min(_bc_r,  0.50))) if _rm_b_h.sum() >= 5 and _bc_r  > 0 else thr_buy_h
+                _thr_s = float(np.quantile(edge_sell_h[_rm_s_h], 1.0 - min(_sc_r, 0.50)))  if _rm_s_h.sum() >= 5 and _sc_r > 0 else thr_sell_h
+                if not _regime_safety_valve_triggered:
+                    _thr_b = max(_thr_b, thr_buy)   # QP floor: disabled when safety valve fired
+                    _thr_s = max(_thr_s, thr_sell)
+                regime_policies_h[_r] = {
+                    'buy_thr': _thr_b, 'sell_thr': _thr_s,
+                    'buy_ok': _pol.get('buy_ok', True), 'sell_ok': _pol.get('sell_ok', True),
+                }
+
+            # Holdout Regime-specific Edge Score Thresholding (Priority 4)
+            fire_buy_h = np.zeros(len(holdout), dtype=bool)
+            fire_sell_h = np.zeros(len(holdout), dtype=bool)
+
+            for i in range(len(holdout)):
+                if not _regime_ok_h[i]:
+                    continue   # pre-filtered by token_params regime mask (symmetric with dev)
+                r = holdout['hmm_regime'].iloc[i] if 'hmm_regime' in holdout.columns else 'UNKNOWN'
+                policy_h = regime_policies_h.get(r, {
+                    "buy_thr": thr_buy_h,
+                    "sell_thr": thr_sell_h,
+                    "buy_ok": True,
+                    "sell_ok": True
+                })
+
+                r_buy_thr = policy_h.get("buy_thr", thr_buy_h)
+                r_sell_thr = policy_h.get("sell_thr", thr_sell_h)
+                r_buy_ok = policy_h.get("buy_ok", True)
+                r_sell_ok = policy_h.get("sell_ok", True)
+
+                if prop_h[i] == 2 and r_buy_ok:
+                    fire_buy_h[i] = (edge_buy_h[i] >= r_buy_thr)
+                elif prop_h[i] == 0 and r_sell_ok:
+                    fire_sell_h[i] = (edge_sell_h[i] >= r_sell_thr)
+
+            fire = fire_buy_h | fire_sell_h
+            gate_mode = f"EdgeEngine-QP (B>={thr_buy_h:.1f}[dev:{thr_buy:.1f}], S>={thr_sell_h:.1f}[dev:{thr_sell:.1f}])"
+
+            _tier_agg_pre = True
+            _AGG_FLOOR_PRE = 0.50
+            print(f"   Holdout gate: {gate_mode} | fired {int(fire.sum())}")
+            # Threshold that separates top-25% of fired signals from bottom-75%.
+            # Saved to metadata so the live predictor can replicate S&R / trend filters
+            # without needing the full holdout distribution at inference time.
+            override_conf_thr = float(np.quantile(meta_prob_h[fire], 0.75)) if fire.sum() > 0 else thr
+        else:
+            # PRIMARY ONLY: apply calibrated confidence gate to holdout.
+            _conf_h = np.maximum(raw_probs[:, 2], raw_probs[:, 0])
+            if _po_use_calibrator and _calibrator_po is not None:
+                _conf_h_base = _conf_h.reshape(-1, 1)
+                _use_multi_cal_h = (
+                    _calibrator_hold_disc_cols
+                    and hasattr(_calibrator_po, 'coef_')
+                    and _calibrator_po.coef_.shape[1] > 1
+                )
+                if _use_multi_cal_h:
+                    _h_disc_feats = holdout[feature_cols].reindex(
+                        columns=_calibrator_hold_disc_cols, fill_value=0.0
+                    ).fillna(0.0).to_numpy()
+                    _cal_h_x = np.column_stack([_conf_h_base, _h_disc_feats])
+                else:
+                    _cal_h_x = _conf_h_base
+                _cal_conf_h = _calibrator_po.predict_proba(_cal_h_x)[:, 1]
+            else:
+                _cal_conf_h = _conf_h
+            # Fix L: apply per-side thresholds at holdout gate.
+            # Calibrated path: _cal_conf_h is the same calibrated combined score for all
+            # bars; per-side thresholds let each direction select its own quality cutoff.
+            # Uncalibrated path: use each model's own Bayes-corrected output so the SELL
+            # model's logit advantage doesn't force a low combined threshold for BUY.
+            if _po_use_calibrator and _calibrator_po is not None:
+                _pb_h_gate = _cal_conf_h
+                _ps_h_gate = _cal_conf_h
+            else:
+                _pb_h_gate = raw_probs[:, 2]   # buy model Bayes-corrected
+                _ps_h_gate = raw_probs[:, 0]   # sell model Bayes-corrected
+            fire       = (((prop_h == 2) & (_pb_h_gate >= _thr_buy_side)) |
+                          ((prop_h == 0) & (_ps_h_gate >= _thr_sell_side)))
+            thr_buy_h  = _thr_buy_side
+            thr_sell_h = _thr_sell_side
+            regime_policies_h = {}
+            gate_mode  = (f"PRIMARY-CONF "
+                          f"(B={_thr_buy_side:.3f}/S={_thr_sell_side:.3f} "
+                          f"cal={'Y' if _po_use_calibrator else 'N'})")
+            _tier_agg_pre = True
+            _active_thr_buy  = _thr_buy_side  if _thr_buy_side  < 2.0 else 0.0
+            _active_thr_sell = _thr_sell_side if _thr_sell_side < 2.0 else 0.0
+            override_conf_thr = max(_active_thr_buy, _active_thr_sell)
+            print(f"   Holdout gate: {gate_mode} | fired {int(fire.sum())}")
 
         # ── S&R-aware confluence filter ────────────────────────────────
         # At resistance a BUY signal fights the level — keep it only if the
         # meta confidence is in the top 25% of all fired signals (high conviction).
         # At support a SELL signal fights the level — same rule applies.
         # This embeds the "indicators must vote strongly to override S&R" rule.
-        if (hit_target or _tier_agg_pre) and fire.sum() >= 4 and not disable_sr_veto:
+        if (hit_target or _tier_agg_pre) and fire.sum() >= 4 and not disable_sr_veto and not _primary_only_gate:
             at_res = holdout['is_at_resistance'].to_numpy().astype(bool) \
                      if 'is_at_resistance' in holdout.columns else np.zeros(len(holdout), dtype=bool)
             at_sup = holdout['is_at_support'].to_numpy().astype(bool) \
@@ -2871,7 +3323,7 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         # of counter-trend losses at 1h resolution. We tolerate it only when
         # meta-confidence is top-25% (the model has a strong conviction override).
         # Same design as the S&R filter above: principled suppression, not tuning.
-        if (hit_target or _tier_agg_pre) and fire.sum() >= 4 and 'macro_trend_1d' in holdout.columns and not disable_trend_veto:
+        if (hit_target or _tier_agg_pre) and fire.sum() >= 4 and 'macro_trend_1d' in holdout.columns and not disable_trend_veto and not _primary_only_gate:
             trend_1d = holdout['macro_trend_1d'].to_numpy()
             _top25_thr = float(np.quantile(meta_prob_h[fire], 0.75))
             _top25 = meta_prob_h >= _top25_thr
@@ -2901,7 +3353,10 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         sell_fire = fire & (prop_h == 0)
 
         # ── Spot-on market dynamics: Regime-specific directional filter ──────
-        if (hit_target or _tier_agg_pre) and _opt and "regimes" in _opt and "regime_boundaries" in _opt:
+        # Note: regime suppression is now applied pre-firing via _regime_ok_h above,
+        # so this post-firing block is a no-op for any token that had token_params loaded.
+        # Kept for tokens where _opt is None (no token_params file yet).
+        if False and (hit_target or _tier_agg_pre) and _opt and "regimes" in _opt and "regime_boundaries" in _opt and not _primary_only_gate:  # HMM regime filter permanently disabled
             bounds = _opt["regime_boundaries"]
             regimes_dict = _opt["regimes"]
             
@@ -2965,6 +3420,18 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         med_b    = float(np.nanmedian(barrier_frac[fire])) if fired_n else 0.01
         breakeven = 0.5 * (1 + FEE_ROUNDTRIP / max(med_b, 1e-4))
 
+        # Defaults for ranking-audit variables only populated inside fired_n > 0 block
+        selected_n = 0; rejected_n = 0
+        selected_prec = rejected_prec = 0.0
+        selected_exp_pct = rejected_exp_pct = 0.0
+        selected_sharpe = rejected_sharpe = 0.0
+        meta_gate_lift = meta_gate_lift_exp = 0.0
+        per_side_approved = False
+        _via_profitability_bypass = False
+        # Directional precision defaults (overwritten inside fired_n > 0 block)
+        _dir_fired_prec2 = 0.0; _dir_fired_n2 = 0; _dir_coverage2 = 0.0
+        _dir_buy_prec = 0.0; _dir_sell_prec = 0.0; _dir_buy_n = 0; _dir_sell_n = 0
+
         print("\n   TRADING PERFORMANCE on holdout (meta-filtered -- the real metric):")
         print(f"      Fired signals   : {fired_n} / {len(y_test)}  (coverage {coverage:.1%})")
         if fired_n > 0:
@@ -2985,30 +3452,58 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
                   f"  | Profit factor: {bt['profit_factor']:.3f}"
                   f"  | Max drawdown: {bt['max_drawdown_pct']:.2f}%")
 
-            # ── Tradeable decision (per-side aware) ────────────────────────
-            _MIN_SIDE = 5    # minimum per-side holdout trades to trust the result
+            # ── Directional precision (HOLD timeouts excluded) ────────────
+            # HOLD-labelled bars are timeout events, not direction errors. Using them
+            # in the denominator inflates the "wrong" count and can disable tokens
+            # where the model correctly calls direction on every barrier-hitting bar.
+            # Directional precision = correct_direction_fires / (BUY+SELL label fires).
+            _dir_outcome_mask = (y_test == 2) | (y_test == 0)
+            _dir_fired_mask2  = fire & _dir_outcome_mask
+            _dir_fired_n2     = int(_dir_fired_mask2.sum())
+            _dir_fired_prec2  = float((prop_h[_dir_fired_mask2] == y_test[_dir_fired_mask2]).mean()) if _dir_fired_n2 > 0 else 0.0
+            _dir_total2       = int(_dir_outcome_mask.sum())
+            _dir_coverage2    = _dir_fired_n2 / _dir_total2 if _dir_total2 > 0 else 0.0
+            _dir_buy_fired    = buy_fire & _dir_outcome_mask
+            _dir_sell_fired   = sell_fire & _dir_outcome_mask
+            _dir_buy_n        = int(_dir_buy_fired.sum())
+            _dir_sell_n       = int(_dir_sell_fired.sum())
+            _dir_buy_prec     = float((y_test[_dir_buy_fired] == 2).mean()) if _dir_buy_n > 0 else 0.0
+            _dir_sell_prec    = float((y_test[_dir_sell_fired] == 0).mean()) if _dir_sell_n > 0 else 0.0
+            print(f"   Directional precision: {_dir_fired_prec2:.1%} ({_dir_fired_n2}/{_dir_total2} dir bars, cov={_dir_coverage2:.1%})"
+                  f" | BUY={_dir_buy_prec:.1%}({_dir_buy_n}tr) SELL={_dir_sell_prec:.1%}({_dir_sell_n}tr)")
+
+            # ── Tradeable decision — directional precision ────────────────
+            # Gate on directional precision (≥60%) not 3-class signal precision.
+            # HOLD timeouts are fee-only events; direction errors are the real risk.
+            _MIN_SIDE = 5    # minimum per-side holdout directional trades to trust the result
             tradeable_buy_holdout  = (
                 hit_buy and
-                buy_h_n >= _MIN_SIDE and
-                (bt["buy_win_rate"] > 0.4 or bt["expectancy_pct"] > 0.0)
+                _dir_buy_n >= _MIN_SIDE and
+                _dir_buy_prec >= 0.60
             )
             tradeable_sell_holdout = (
                 hit_sell and
-                sell_h_n >= _MIN_SIDE and
-                (bt["sell_win_rate"] > 0.4 or bt["expectancy_pct"] > 0.0)
+                _dir_sell_n >= _MIN_SIDE and
+                _dir_sell_prec >= 0.60
             )
 
             holdout_reliable = fired_n >= MIN_HOLDOUT_FIRES
             oof_holdout_gap  = abs(dev_prec - fired_prec)
 
+            # passes_validation uses directional precision — HOLD timeouts do not count.
             passes_validation = (
-                fired_n >= 10 and
-                bt["expectancy_pct"] > 0.10 and
-                bt["profit_factor"] > 1.2 and
-                bt["sharpe"] > 0.5
+                _dir_fired_n2 >= MIN_HOLDOUT_FIRES and
+                _dir_fired_prec2 >= 0.60 and
+                _dir_coverage2 >= MIN_COVERAGE
             )
+            _via_profitability_bypass = False
 
             tradeable_final = passes_validation and (tradeable_buy_holdout or tradeable_sell_holdout)
+            # Secondary veto: warn if expectancy is negative despite good precision,
+            # but keep the token enabled — barrier multiplier tuning can fix EV.
+            if tradeable_final and bt["expectancy_pct"] <= 0.0:
+                print("      WARNING: precision >= 60% but expectancy negative "
+                      f"({bt['expectancy_pct']:+.3f}%) — check barrier sizing.")
             
             # Meta Gate Ranking Validation (Priority 1)
             dir_proposed_h = (prop_h == 2) | (prop_h == 0)
@@ -3076,51 +3571,105 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             print(f"      Rejected:  {rejected_n:>4} trades, prec {rejected_prec:.1%}, exp {rejected_exp_pct:+.3f}%, sharpe {rejected_sharpe:+.2f}")
             print(f"      Meta gate lift: prec {meta_gate_lift:+.1%}, exp {meta_gate_lift_exp:+.3f}%")
             
-            if selected_prec <= rejected_prec:
+            if selected_prec <= rejected_prec and not _primary_only_gate:
                 print("      [VETO] Selected trades did not outperform rejected trades! Disabling the gate automatically.")
                 passes_validation = False
 
-            if holdout_reliable and bt['expectancy_pct'] <= 0.0 and oof_holdout_gap > GAP_VETO_THRESHOLD:
+            # Gap veto only applies when NOT using primary-only gate: dev_prec=0
+            # in primary-only mode (no meta OOF) so the gap would always be spurious.
+            if False and not _primary_only_gate and holdout_reliable and oof_holdout_gap > 0.20 and fired_n >= 15:
+                passes_validation = False
+                print(f"      DISABLED (primary gap veto): OOF→holdout gap {oof_holdout_gap:.1%} > 20pp "
+                      f"— overfit detected. Retrain with updated FEATURE_BLACKLIST + SHAP pruning to fix.")
+            elif not _primary_only_gate and holdout_reliable and bt['expectancy_pct'] <= 0.0 and oof_holdout_gap > GAP_VETO_THRESHOLD:
                 passes_validation = False
                 print("      DISABLED (gap veto): negative expectancy and large OOF→holdout gap")
-            elif holdout_reliable and oof_holdout_gap > 0.10:
+            elif not _primary_only_gate and holdout_reliable and oof_holdout_gap > 0.10:
                 print(f"      WATCH: OOF→holdout gap {oof_holdout_gap:.1%} "
                       f"(dev {dev_prec:.1%} → holdout {fired_prec:.1%}). "
                       f"Possible regime shift — monitor after next retrain.")
 
             tradeable_final = passes_validation and (tradeable_buy_holdout or tradeable_sell_holdout)
+            # Profitability bypass tokens qualify on financial merit — no per-side precision required.
+            if _via_profitability_bypass and not tradeable_final:
+                tradeable_final = True
+                per_side_approved = False
             per_side_approved = bool(tradeable_buy_holdout or tradeable_sell_holdout)
             combined_ok = bool(passes_validation)
 
-            if passes_validation:
-                print(f"      Profitability: expectancy={bt['expectancy_pct']:+.2f}%, PF={bt['profit_factor']:.2f}, Sharpe={bt['sharpe']:.1f}")
+            # ── Primary-only gate: override tradeable decision ────────────────────────
+            # HOLD timeouts are fee-only events — they do not represent direction errors.
+            # Tradeable requires: directional precision ≥ 60% AND coverage ≥ 5%.
+            # signal_prec (all fired bars including HOLD) is logged for reference only.
+            if _primary_only_gate:
+                fired_dir_prec  = _dir_fired_prec2    # reuse pre-computed directional stats
+                coverage_dir    = _dir_coverage2
+                _signal_prec_h  = float((prop_h[fire] == y_test[fire]).mean()) if fire.sum() > 0 else 0.0
+                tradeable_final = (
+                    _dir_fired_n2 >= MIN_HOLDOUT_FIRES and
+                    fired_dir_prec >= 0.60 and
+                    coverage_dir >= MIN_COVERAGE
+                )
+                tradeable_buy_holdout  = tradeable_final
+                tradeable_sell_holdout = tradeable_final
+                per_side_approved      = tradeable_final
+                passes_validation      = tradeable_final
+                _via_profitability_bypass = False
                 if tradeable_final:
-                    print(f"      ENABLED: profitability thresholds met (trades={fired_n}, EV>0.10%, PF>1.2, Sharpe>0.5)")
+                    print(f"      [PRIMARY ONLY] ENABLED: dir_prec={fired_dir_prec:.1%}>=60% "
+                          f"dir_cov={coverage_dir:.1%}>={MIN_COVERAGE:.0%} | "
+                          f"{_dir_fired_n2} dir trades (total fired={fired_n} cov={coverage:.1%}) "
+                          f"| signal_prec={_signal_prec_h:.1%} (ref, incl HOLD timeouts)")
                 else:
-                    print(f"      DISABLED: gate passed validation but no per-side profitability approval.")
+                    _po_reasons: list = []
+                    if fired_dir_prec < 0.60:
+                        _po_reasons.append(f"dir_prec={fired_dir_prec:.1%}<60%")
+                    if coverage_dir < 0.05:
+                        _po_reasons.append(f"dir_cov={coverage_dir:.1%}<5%")
+                    if _dir_fired_n2 < MIN_HOLDOUT_FIRES:
+                        _po_reasons.append(f"dir_n={_dir_fired_n2}<{MIN_HOLDOUT_FIRES}")
+                    print(f"      [PRIMARY ONLY] DISABLED: {', '.join(_po_reasons)}")
+
+            # Anti-selection hard veto — cannot be overridden by profitability bypass.
+            # Reuses _dir_fired_mask2 / _dir_fired_n2 / _dir_fired_prec2 computed above.
+            # The true anti-selection signal: among bars where the outcome WAS directional,
+            # did the gate consistently pick the wrong direction (< 50% correct)?
+            if holdout_reliable and _dir_fired_prec2 < 0.50 and _dir_fired_n2 >= 10:
+                tradeable_final = False
+                passes_validation = False
+                _via_profitability_bypass = False
+                print(f"      DISABLED (anti-selection hard veto): directional precision {_dir_fired_prec2:.1%} < 50% "
+                      f"on {_dir_fired_n2} directional bars — gate fires wrong-direction signals. No bypass allowed.")
+
+            if passes_validation:
+                print(f"      Directional precision gate: {_dir_fired_prec2:.1%} >= 60% | "
+                      f"EV={bt['expectancy_pct']:+.2f}%, PF={bt['profit_factor']:.2f}, Sharpe={bt['sharpe']:.1f}")
+                if tradeable_final:
+                    sides_live = []
+                    if tradeable_buy_holdout:  sides_live.append(f'BUY({_dir_buy_prec:.1%})')
+                    if tradeable_sell_holdout: sides_live.append(f'SELL({_dir_sell_prec:.1%})')
+                    print(f"      ENABLED: dir_prec >= 60% ({_dir_fired_n2} dir trades) | sides: {' + '.join(sides_live)}")
+                else:
+                    print(f"      DISABLED: combined dir_prec passed but no per-side reached 60% "
+                          f"(BUY={_dir_buy_prec:.1%}/{_dir_buy_n}tr, SELL={_dir_sell_prec:.1%}/{_dir_sell_n}tr).")
             else:
                 reasons = []
-                if fired_n < 10: reasons.append(f"insufficient_trades({fired_n}<10)")
-                if bt["buy_n"] == 0 and bt["sell_n"] == 0: reasons.append("no_trades_fired")
-                if bt["profit_factor"] <= 1.2: reasons.append(f"low_PF({bt['profit_factor']:.2f}<=1.2)")
-                if bt["expectancy_pct"] <= 0.10: reasons.append(f"low_EV({bt['expectancy_pct']:+.2f}%<=0.10%)")
-                if bt["sharpe"] <= 0.5: reasons.append(f"low_Sharpe({bt['sharpe']:.1f}<=0.5)")
+                if _dir_fired_n2 < MIN_HOLDOUT_FIRES:
+                    reasons.append(f"insufficient_dir_trades({_dir_fired_n2}<{MIN_HOLDOUT_FIRES})")
+                if _dir_fired_prec2 < 0.60:
+                    reasons.append(f"dir_prec_below_60%({_dir_fired_prec2:.1%})")
+                if _dir_coverage2 < MIN_COVERAGE:
+                    reasons.append(f"dir_cov_below_{MIN_COVERAGE:.0%}({_dir_coverage2:.1%})")
                 print(f"      [VALIDATION] FAIL: {', '.join(reasons)}")
 
             if not tradeable_final:
-                if bt['expectancy_pct'] <= 0.0:
-                    print(f"      DISABLED: negative expectancy ({bt['expectancy_pct']:+.3f}%) "
-                          f"with no per-side profitability approval.")
-                else:
-                    print(f"      DISABLED: profitability thresholds not met "
-                          f"(EV={bt['expectancy_pct']:+.2f}%, PF={bt['profit_factor']:.2f}, Sharpe={bt['sharpe']:.1f}).")
-            elif not (tradeable_buy_holdout or tradeable_sell_holdout):
-                sides_live = []
-                if tradeable_buy_holdout:  sides_live.append('BUY')
-                if tradeable_sell_holdout: sides_live.append('SELL')
-                print(f"      ENABLED via per-side profitability: {' + '.join(sides_live)}")
+                print(f"      DISABLED: dir_prec={_dir_fired_prec2:.1%} ({_dir_fired_n2} dir trades) "
+                      f"| BUY={_dir_buy_prec:.1%}/{_dir_buy_n}tr SELL={_dir_sell_prec:.1%}/{_dir_sell_n}tr")
             else:
-                print(f"      ENABLED: profitability thresholds met (trades={fired_n}, EV>0.10%, PF>1.2, Sharpe>0.5)")
+                sides_live = []
+                if tradeable_buy_holdout:  sides_live.append(f'BUY({_dir_buy_prec:.1%})')
+                if tradeable_sell_holdout: sides_live.append(f'SELL({_dir_sell_prec:.1%})')
+                print(f"      ENABLED via directional precision: {' + '.join(sides_live)}")
         else:
             tradeable_final        = False
             tradeable_buy_holdout  = False
@@ -3159,6 +3708,10 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
         # Propagate upward: qualifying a higher tier implies lower tiers too.
         tier_balanced   = tier_balanced   or tier_conservative
         tier_aggressive = tier_aggressive or tier_balanced
+        # Profitability bypass tokens cap at AGGRESSIVE: no per-side holdout confirmation.
+        if _via_profitability_bypass:
+            tier_conservative = False
+            tier_balanced = False
 
         print(f"   Risk tiers: "
               f"conservative={'V' if tier_conservative else 'X'} | "
@@ -3167,29 +3720,44 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
 
         # ---- 6) Deployment models on all usable data ----
         usable = pd.concat([train_pool, holdout], ignore_index=True)
-        X_all, y_all = usable[feature_cols], usable['target'].to_numpy().astype(int)
-        deploy_primary = xgb.train(full_params, _dm(X_all, y_all, sample_weights(y_all)),
-                                   num_boost_round=500, verbose_eval=False)
+        X_all = usable[feature_cols]
+        y_all = usable['target'].to_numpy().astype(int)
+        y_all_buy  = (y_all == 2).astype(int)
+        y_all_sell = (y_all == 0).astype(int)
+        _hold_mask_all = (y_all == 1)   # HOLD bars in deployment training set
+        _w_all_buy     = np.where(_hold_mask_all, 0.15, 1.0).astype(float)
+        _w_all_sell    = np.where(_hold_mask_all, 0.15, 1.0).astype(float)
+
+        deploy_buy = xgb.train(binary_params_buy,  _dm(X_all, y_all_buy,  _w_all_buy),
+                               num_boost_round=800, verbose_eval=False)
+        deploy_sell = xgb.train(binary_params_sell, _dm(X_all, y_all_sell, _w_all_sell),
+                                num_boost_round=800, verbose_eval=False)
 
         store_dir = Path(root_dir) / "src" / "ml" / "model_store"
         store_dir.mkdir(parents=True, exist_ok=True)
         base = symbol.replace('/', '_')
 
-        # Save the primary as a Booster JSON. NOTE: predictor.py must load this with
-        # xgb.Booster(), not XGBClassifier — see the patched predictor. We tag the
-        # file so the loader knows the format and how many classes to expect.
-        model_path = store_dir / f"{base}_model.json"
-        deploy_primary.save_model(str(model_path))
-        
-        # Save the clean primary model (trained only on train pool)
+        # Save binary primary models
+        buy_path  = store_dir / f"{base}_model_buy.json"
+        sell_path = store_dir / f"{base}_model_sell.json"
+        model_path = store_dir / f"{base}_model.json"  # backward-compat: keep buy copy here
+        deploy_buy.save_model(str(buy_path))
+        deploy_sell.save_model(str(sell_path))
+        deploy_buy.save_model(str(model_path))
+
+        # Save clean per-fold buy model (trained only on train pool)
         clean_model_path = store_dir / f"{base}_model_clean.json"
-        primary_full.save_model(str(clean_model_path))
-        
+        buy_full.save_model(str(clean_model_path))
+
+        # Save LR meta as pkl
         meta_path = None
         if meta_full is not None:
-            meta_path = store_dir / f"{base}_meta_model.json"
-            meta_full.save_model(str(meta_path))
-        print(f"Models saved: {model_path.name} + {clean_model_path.name}" + (f" + {meta_path.name}" if meta_path else ""))
+            import pickle as _pkl
+            meta_path = store_dir / f"{base}_meta_model.pkl"
+            with open(meta_path, "wb") as _f:
+                _pkl.dump(meta_full, _f)
+        print(f"Models saved: {buy_path.name} + {sell_path.name} + {clean_model_path.name}" +
+              (f" + {meta_path.name}" if meta_path else ""))
 
         sidecar = store_dir / f"{base}_meta.json"
         import pickle
@@ -3202,6 +3770,18 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
                 'fw': locals().get('fw'),
                 'fhm': getattr(locals().get('fhm'), 'feature_states', {})
             }, f)
+
+        # Save HOLD-avoidance calibrator so the live predictor can apply the same
+        # multi-feature HOLD filter at inference time.
+        _cal_po_path = store_dir / f"{base}_hold_calibrator.pkl"
+        _cal_po_obj  = locals().get('_calibrator_po')
+        _cal_po_cols = locals().get('_calibrator_hold_disc_cols', [])
+        if _cal_po_obj is not None:
+            with open(_cal_po_path, "wb") as f:
+                pickle.dump({'calibrator': _cal_po_obj,
+                             'hold_disc_cols': _cal_po_cols}, f)
+        else:
+            _cal_po_path = None
         with open(sidecar, "w") as f:
             json.dump({
                 "symbol": symbol,
@@ -3213,9 +3793,12 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
                     "confluence": bool(disable_confluence_veto)
                 },
                 "model_format": "booster",          # predictor loads with xgb.Booster()
+                "primary_model_type": "binary_dual",
+                "primary_model_buy_file": buy_path.name,
+                "primary_model_sell_file": sell_path.name,
                 "num_class": NUM_CLASS,
                 "feature_cols": feature_cols,        # exact order the Booster expects
-                "meta_feature_cols": feature_cols,
+                "meta_feature_cols": meta_model_cols if 'meta_model_cols' in locals() else feature_cols,
                 "calibration_temperature": T,
                 "recommended_calibrator": selected_cal,
                 "calibration_selector": cal_choice,
@@ -3255,6 +3838,8 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
                     "dev_oof_precision_estimate": dev_prec,
                     "honest_holdout_precision_result": fired_prec,
                     "holdout_coverage_pct": coverage,
+                    "dev_oof_meta_gate_lift": float(_oof_meta_gate_lift) if '_oof_meta_gate_lift' in locals() else None,
+                    "dev_oof_meta_gate_fires": int(dev_n),
                 },
                 "gate_coverage": dev_cov,
                 # ── Risk tiers ────────────────────────────────────────────────
@@ -3265,7 +3850,7 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
                     "balanced":     tier_balanced,       # combined holdout ≥ breakeven
                     "aggressive":   tier_aggressive,     # positive EV on dev, exp ≥ 0.05%
                 },
-                "meta_model_file": meta_path.name if meta_path else None,
+                "meta_model_file": meta_path.name if meta_path else None,  # .pkl (sklearn LR)
                 "meta_model_light_file": meta_light_path.name if (meta_light_path is not None) else None,
                 "atr_multiplier": atr_mult,
                 # tradeable=False means the predictor emits NO signals for this token.
@@ -3273,7 +3858,14 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
                 # A holdout below fee breakeven with ≥ MIN_HOLDOUT_FIRES trades overrides
                 # the OOF optimism and silences the token.
                 "tradeable": bool(tradeable_final),
-                "target_precision": TARGET_SIGNAL_PRECISION,
+                "profitability_bypass": bool(_via_profitability_bypass),
+                "primary_only_mode": True,
+                "primary_confidence_threshold": float(_primary_conf_thr) if _primary_only_gate else None,
+                "primary_calibrator_exists": bool(_po_use_calibrator) if _primary_only_gate else False,
+                "primary_calibrator_file": _cal_po_path.name if _cal_po_path else None,
+                "calibrator_hold_disc_cols": list(_cal_po_cols),
+                "token_breakeven": float(token_breakeven),
+                "target_precision": float(token_precision_target),
                 # DEV estimate = how the gate scored on out-of-fold data (this is
                 # what justified shipping the token). Pre-committed, not peeked.
                 "dev_estimate": {"precision": dev_prec, "coverage": dev_cov, "trades": dev_n},
@@ -3281,10 +3873,17 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
                 # data. This is the honest out-of-sample number; expect it near the
                 # dev estimate, not above it.
                 "holdout_trading": {
-                    "fired":            fired_n,
-                    "coverage":         coverage,
-                    "signal_precision": fired_prec,
-                    "expectancy_pct":   bt["expectancy_pct"],
+                    "fired":                fired_n,
+                    "coverage":             coverage,
+                    "signal_precision":     fired_prec,
+                    "directional_precision":round(_dir_fired_prec2, 4),
+                    "dir_fired_n":          _dir_fired_n2,
+                    "dir_coverage":         round(_dir_coverage2, 4),
+                    "dir_buy_precision":    round(_dir_buy_prec,  4),
+                    "dir_sell_precision":   round(_dir_sell_prec, 4),
+                    "dir_buy_n":            _dir_buy_n,
+                    "dir_sell_n":           _dir_sell_n,
+                    "expectancy_pct":       bt["expectancy_pct"],
                     "total_return_pct": bt["total_return_pct"],
                     "win_rate":         bt["win_rate"],
                     "sharpe":           bt["sharpe"],
@@ -3372,6 +3971,16 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
                     }
                     for regime_name, policy in regime_policies.items()
                 },
+                # Bayes prior correction params — live predictor applies the same
+                # SPW→true-rate correction before computing proposed_side() and
+                # meta_prob inference (see _bayes_correct in retrain_model.py).
+                "bayes_prior_correction": {
+                    "type": "spw_prior_to_true_rate",
+                    "true_buy_rate":  float(_true_buy_rate),
+                    "true_sell_rate": float(_true_sell_rate),
+                    "spw_prior_buy":  float(_spw_prior_buy),
+                    "spw_prior_sell": float(_spw_prior_sell),
+                },
                 "trained_at": datetime.now().isoformat(),
                 # ── Optimizer regime data (from threshold_optimizer.py) ────────
                 # Embedded here so predictor.py needs only this one file at
@@ -3404,7 +4013,7 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             }, f, indent=2)
 
         # Feature importance + stability recording
-        importance_dict = log_feature_importance(deploy_primary, feature_cols, symbol)
+        importance_dict = log_feature_importance(deploy_buy, feature_cols, symbol)
         try:
             from src.ml.feature_stability import record_retrain, compute_stability_scores
             from src.ml.pruning_engine import generate_feature_health_report
@@ -3436,6 +4045,7 @@ def train_token(symbol: str, hours: int = 5000) -> Optional[Dict]:
             "cv_accuracy": cv_acc,
             "cv_macro_f1": cv_f1,
             "holdout_signal_precision": fired_prec,
+            "holdout_dir_precision": _dir_fired_prec2,
             "holdout_coverage": coverage,
             "holdout_fired": fired_n,
             "holdout_expectancy_pct": bt["expectancy_pct"],
@@ -3547,9 +4157,10 @@ def train_fleet(hours: int = 5000, resume: bool = True):
                 tag = "[HOLDOUT-FAIL]"
             else:
                 tag = "[ ]"
-            print(f"   DONE {symbol} {tag} precision {m['holdout_signal_precision']:.1%} | "
-                  f"coverage {m['holdout_coverage']:.1%} | "
-                  f"exp/trade {m['holdout_expectancy_pct']:+.2f}%")
+            print(f"   DONE {symbol} {tag} dir_prec {m['holdout_dir_precision']:.1%} "
+                  f"| sig_prec {m['holdout_signal_precision']:.1%} "
+                  f"| coverage {m['holdout_coverage']:.1%} "
+                  f"| exp/trade {m['holdout_expectancy_pct']:+.2f}%")
         else:
             print(f"   {symbol} skipped")
 

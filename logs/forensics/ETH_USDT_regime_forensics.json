@@ -1,22 +1,10 @@
 {
-  "hmm_available": true,
-  "n_states": 5,
-  "state_labels": {
-    "3": "TRENDING_BULL",
-    "2": "TRENDING_BEAR",
-    "4": "VOLATILE_EXPANSION",
-    "1": "COMPRESSION",
-    "0": "ACCUMULATION"
-  },
-  "stationary_dist": {
-    "0": 0.1983,
-    "1": 0.093,
-    "2": 0.145,
-    "3": 0.1213,
-    "4": 0.4423
-  },
-  "max_state_concentration": 0.4423,
-  "regime_collapse_flag": false,
+  "hmm_available": false,
+  "n_states": 7,
+  "state_labels": {},
+  "stationary_dist": {},
+  "max_state_concentration": 1.0,
+  "regime_collapse_flag": true,
   "global_precision": 0.2908,
   "regime_performance": {
     "TRENDING_BULL": {

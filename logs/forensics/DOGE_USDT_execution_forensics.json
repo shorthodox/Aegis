@@ -1,10 +1,10 @@
 {
   "section12": {
-    "n_closed": 19,
-    "n_open": 0,
-    "avg_hold_hours": 0.55,
-    "avg_pnl_pct": 1.2209,
-    "win_avg_confidence": 0.6446,
+    "n_closed": 24,
+    "n_open": 1,
+    "avg_hold_hours": 0.82,
+    "avg_pnl_pct": 1.1542,
+    "win_avg_confidence": 0.6267,
     "loss_avg_confidence": 0.6359,
     "confidence_discriminates": false,
     "best_trades": [
@@ -54,35 +54,35 @@
       }
     ],
     "exit_reasons": {
-      "TP1_HIT": 14,
+      "TP1_HIT": 19,
       "SL_HIT": 5
     },
     "mode_breakdown": {
       "mean": {
         "intraday": 0.23850000000000016,
-        "scalping": 0.7755625,
+        "scalping": 0.8052857142857144,
         "swing": 10.312
       },
       "count": {
         "intraday": 2,
-        "scalping": 16,
+        "scalping": 21,
         "swing": 1
       }
     }
   },
   "section11": {
-    "atr_multiplier": 1.5,
-    "win_rate": 0.7368,
-    "avg_win_pct": 2.0776,
+    "atr_multiplier": 0.75,
+    "win_rate": 0.76,
+    "avg_win_pct": 1.7678,
     "avg_loss_pct": 1.1776,
-    "rr_ratio": 1.764,
-    "kelly_fraction": 0.5877,
+    "rr_ratio": 1.501,
+    "kelly_fraction": 0.6001,
     "avg_r_multiple": 1.333,
     "risk_of_ruin": 0.0,
     "stop_assessment": "TARGETS TOO CLOSE",
-    "n_trades": 19,
-    "sharpe_holdout": 13.514,
-    "max_dd_holdout": 114.675,
+    "n_trades": 25,
+    "sharpe_holdout": 30.139,
+    "max_dd_holdout": 6.184,
     "kelly_from_holdout": 25.0
   }
 }

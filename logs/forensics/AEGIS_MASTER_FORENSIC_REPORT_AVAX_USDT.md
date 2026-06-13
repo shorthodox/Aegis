@@ -1,6 +1,6 @@
 # AEGIS-1 Master Forensic Report
 
-**Symbol:** AVAX/USDT  |  **Generated:** 2026-06-07 16:35:50
+**Symbol:** AVAX/USDT  |  **Generated:** 2026-06-14 02:00:52
 
 ---
 
@@ -22,115 +22,102 @@
 
 ### Q1 — Why Is Precision Lower Than It Should Be?
 
-> Measured precision is 36.0% — estimated 7.0pp below achievable ceiling of ~43.0%. Primary contributors: Barrier skew suppresses BUY labels (−1.7pp), HOLD over-representation in labels (−1.9pp)
+> Measured precision is 50.3% — estimated 14.5pp below achievable ceiling of ~64.8%. Primary contributors: CV accuracy near random — primary learned nothing (−7.9pp), Barrier skew suppresses BUY labels (−1.7pp), HOLD over-representation in labels (−1.9pp)
 
 #### Precision Waterfall
 
 ```
-Measured holdout precision :  36.0%
+Measured holdout precision :  50.3%
 
-  [✅ FIXED       ]  −8.0pp recall  BUY side completely disabled (min_fires deadlock)
+  [✅ FIXED       ]  −7.9pp prec    CV accuracy near random — primary learned nothing
   [✅ FIXED       ]  −1.7pp prec    Barrier skew suppresses BUY labels
   [✅ FIXED       ]  −1.9pp prec    HOLD over-representation in labels
   [🔴 ACTIVE      ]  −2.0pp prec    Brier score above target
-  [🔴 ACTIVE      ]  −1.0pp prec    Temperature T=1.240 — overconfidence
-  [🔴 ACTIVE      ]  −0.4pp prec    Gate blocking signals that would have won
+  [🔴 ACTIVE      ]  −1.0pp prec    Temperature T=2.068 — overconfidence
 
-Achievable precision       :  ~43.0%  (+7.0pp precision)
-Recall deficit (BUY side)  :  −10.5pp  (signals not firing)
+Achievable precision       :  ~64.8%  (+14.5pp precision)
+Recall deficit (BUY side)  :  −4.8pp  (signals not firing)
 ```
 
 ### Q2 — Where Exactly Is Each Problem?
 
 | Issue | File | Lines | Symbol | −Prec | −Recall |
 |-------|------|-------|--------|-------|---------|
-| Brier score above target | `scripts/retrain_model.py` | 1909-1916 | `_hold_w = clip(_n_dir×0.5 / _n_hold` | 2.0pp | 0.0pp |
-| Temperature T=1.240 — overconfidence | `scripts/retrain_model.py` | 1909-1916 | `_hold_w = clip(_n_dir×0.5 / _n_hold` | 1.0pp | 0.0pp |
-| Gate blocking signals that would have won | `scripts/retrain_model.py` | 1909-1916 | `_hold_w = clip(_n_dir×0.5 / _n_hold` | 0.4pp | 0.0pp |
+| Brier score above target | `scripts/retrain_model.py` | meta gate block (removed) | `meta_full LR gate removed — primary` | 2.0pp | 0.0pp |
+| Temperature T=2.068 — overconfidence | `scripts/retrain_model.py` | meta gate block (removed) | `meta_full LR gate removed — primary` | 1.0pp | 0.0pp |
 
 **1. Brier score above target**
-> 📍 `scripts/retrain_model.py:1909-1916` — `_hold_w = clip(_n_dir×0.5 / _n_hold, 0.10, 0.60)`
-> HOLD bars always have meta_y=0 (primary proposes BUY/SELL but true label=HOLD). With HOLD=66%, 60% of meta training targets are al…
+> 📍 `scripts/retrain_model.py:meta gate block (removed)` — `meta_full LR gate removed — primary-only calibrated confidence gate`
+> HOLD bars always have meta_y=0 (primary proposes BUY/SELL but true label=HOLD). The entire 663-line LR OOF/edge engine/regime bloc…
 
-**2. Temperature T=1.240 — overconfidence**
-> 📍 `scripts/retrain_model.py:1909-1916` — `_hold_w = clip(_n_dir×0.5 / _n_hold, 0.10, 0.60)`
-> HOLD bars always have meta_y=0 (primary proposes BUY/SELL but true label=HOLD). With HOLD=66%, 60% of meta training targets are al…
-
-**3. Gate blocking signals that would have won**
-> 📍 `scripts/retrain_model.py:1909-1916` — `_hold_w = clip(_n_dir×0.5 / _n_hold, 0.10, 0.60)`
-> HOLD bars always have meta_y=0 (primary proposes BUY/SELL but true label=HOLD). With HOLD=66%, 60% of meta training targets are al…
+**2. Temperature T=2.068 — overconfidence**
+> 📍 `scripts/retrain_model.py:meta gate block (removed)` — `meta_full LR gate removed — primary-only calibrated confidence gate`
+> HOLD bars always have meta_y=0 (primary proposes BUY/SELL but true label=HOLD). The entire 663-line LR OOF/edge engine/regime bloc…
 
 ### Q3 — What Is The Best Fix Right Now?
 
-✅ **3 issues already applied** in the codebase (expected gain: +6.7pp once retrained).
+✅ **3 issues already applied** in the codebase (expected gain: +12.9pp once retrained).
 
-**Highest-ROI remaining fix: Brier score above target** (expected +2.0pp):
-> 📍 `scripts/retrain_model.py:1909-1916`
-> Lower _hold_w floor from 0.10 to 0.05 OR exclude HOLD bars from meta training.
+> Meta gate removed entirely. Primary-only calibrated gate with signal_prec >= token_breakeven tradeable check. FIXED.
 
-#### BUY Side Gate Trace
+#### Signal Gate Trace (Primary-Only Calibrated Gate)
 
-🔴 **BUY DISABLED — root cause at Gate: 2. pick_threshold_by_side(BUY) can qualify**
+🔴 **Signal gate DISABLED — root cause at Gate: 3. Holdout signal precision ≥ token breakeven**
 
-✅ **1. Primary model generates BUY labels**
-   - `scripts/retrain_model.py:849-928 (create_triple_barrier_labels)`
-   - Check: `BUY label count > 0 in training data`
-   - Value: 18 BUY proposals / 97 total directional
-   - PASS — primary fires BUY on some bars.
+✅ **1. Primary-only mode active + directional skill ≥ 45%**
+   - `scripts/retrain_model.py — primary_only_gate block`
+   - Check: `primary_only_mode=True AND primary dir_prec ≥ 45% (else veto → None)`
+   - Value: primary_only_mode=True, calibrator=Y
+   - PASS — primary-only mode active. Calibrated LR maps raw probs to confidence.
 
-❌ **2. pick_threshold_by_side(BUY) can qualify**
-   - `scripts/retrain_model.py:1363-1397`
-   - Check: `MAX_SIDE_COVERAGE=0.35×pool(14)=4 ≥ min_fires=35`
-   - Value: 4 max fires vs 35 required
-   - FAIL (FIXED) — 4 < 35. Deadlock: every quantile rejected before precision is checked. Fix: MAX_SIDE_COVERAGE→0.35 + adaptive effective_min_fires.
+✅ **2. Val sweep finds threshold with ≥50 fires**
+   - `scripts/retrain_model.py — val sweep (0.50→0.95, min_fires=50)`
+   - Check: `max(signal_prec over thresholds with ≥50 val fires)`
+   - Value: primary_confidence_threshold=0.520
+   - PASS — val sweep selected threshold 0.520.
 
-❌ **3. hit_buy=True (OOF precision clears target)**
-   - `scripts/retrain_model.py:1996-2004`
-   - Check: `pick_threshold_by_side(side=2).hit_target → stored as tradeable_buy`
-   - Value: tradeable_buy in sidecar = False
-   - FAIL — hit_buy=False because Gate 2 deadlock blocked threshold qualification.
+❌ **3. Holdout signal precision ≥ token breakeven**
+   - `scripts/retrain_model.py — tradeable_final check`
+   - Check: `signal_prec_h >= token_breakeven (52.4%)`
+   - Value: signal_prec=50.3% vs breakeven=52.4% (843 fired, dir_prec≈77.8%)
+   - FAIL — signal_prec=50.3% < breakeven=52.4% (gap=2.1pp). Primary model needs stronger directional skill.
 
-❌ **4. buy_fire mask fires BUY holdout signals**
-   - `scripts/retrain_model.py:2169-2174`
-   - Check: `buy_fire = (meta_prob_h ≥ max(thr_buy, rank_thr)) & (prop_h==2)`
-   - Value: buy_h_n = 0 holdout BUY signals fired
-   - FAIL — 0 BUY holdout trades. Even when hit_buy=True, SELL-biased rank gate may crowd out BUY signals. File: retrain_model.py:2097-2108.
+✅ **4. tradeable_final (all criteria: signal_prec, dir_prec ≥55%, cov ≥5%)**
+   - `scripts/retrain_model.py — tradeable_final condition`
+   - Check: `fired_n >= MIN_FIRES AND dir_prec >= 55% AND coverage_dir >= 5% AND signal_prec >= breakeven`
+   - Value: tradeable=True, coverage=50.5%
+   - PASS — token ENABLED. Signal gate cleared all criteria.
 
-❌ **5. tradeable_buy_holdout = True**
-   - `scripts/retrain_model.py:2288-2292`
-   - Check: `hit_buy AND buy_h_n > 0 AND buy_h_prec ≥ 0.50`
-   - Value: buy_h_n=0, buy_win_rate=0.0%
-   - FAIL — `buy_h_n > 0` is a hard requirement. If Gate 4 fails (zero holdout BUY fires), this is permanently False.
+#### Primary Confidence Gate Audit
 
-#### Meta Gate Audit
-
-🔴 **Gate status: HURTING**  (lift: -17.8pp)
+✅ **Gate status: HELPING**  (lift: +18.7pp)  ❌ signal_prec < breakeven
 
 | Metric | Value |
 |--------|-------|
-| Gated-in precision | 36.0% |
-| Blocked signals win rate | 53.8% |
-| Precision lift from gate | -17.8pp |
-| OOF → Holdout gap | +51.1pp |
-| thr_buy / thr_sell | 73.275 / 46.551 |
-| Blocked signals | 0 (40 would-win / 36 would-lose) |
+| Selected signal precision | 50.3% |
+| Rejected signal precision | 31.6% |
+| Gate lift (precision) | +18.7pp |
+| Primary conf. threshold | 0.520 |
+| Token breakeven | 52.4% |
+| Selected signals | 843 |
+| Rejected signals | 825 |
 
-> ⚠ Gate is DESTROYING 17.8pp of precision. Blocked signals (53.8%) would have beaten gated (36.0%). Meta model is anti-selective. | OOF overfit warning: dev_prec (87.1%) exceeds holdout (36.0%) by 51.1pp.
+> Primary gate adds 18.7pp of precision. Selected signals (50.3%) beat rejected (31.6%). Threshold=0.520. | DISABLED: selected signal_prec=50.3% < breakeven=52.4%.
 
 
 ---
 
 ## Section 15 — Executive Summary
 
-**Symbol:** AVAX/USDT  |  **Audit:** 2026-06-07 16:35  |  **Confidence Level:** MEDIUM — based on 47 holdout signals; widen to 200+ for HIGH
+**Symbol:** AVAX/USDT  |  **Audit:** 2026-06-14 02:00  |  **Confidence Level:** MEDIUM — based on 47 holdout signals; widen to 200+ for HIGH
 
-**Current:** Precision=36.0%  Sharpe=13.19
-**Expected after fixes:** Precision≈41.8%  (+5.8pp)
+**Current:** Precision=50.3%  Sharpe=27.38
+**Expected after fixes:** Precision≈53.2%  (+2.9pp)
 
 ### Top 5 Problems
 
-1. 🔴 **BUY Side Fully Disabled** — Score: 88/100
-   > buy_n=0 in holdout. Model fires SELL-only. Halves available signal universe.
+1. 🔴 **Meta Model Calibration Failure** — Score: 99/100
+   > ECE=0.2496 (target <0.10). Confidence does not reflect true win probability.
 
 2. 🟡 **Severe Class Imbalance (HOLD dominates)** — Score: 62/100
    > HOLD=62.9% of labels. Meta model sees 60% zero-labels → calibration distorted.
@@ -138,17 +125,23 @@ Recall deficit (BUY side)  :  −10.5pp  (signals not firing)
 3. 🟡 **HMM Regime Collapse** — Score: 62/100
    > Max state concentration=100.0%. HMM assigning most bars to one state.
 
+4. 🟡 **Confidence Inflation** — Score: 55/100
+   > T=2.068>1.0. Model overestimates confidence.
+
 
 ### Top 5 Fixes
 
-1. **BUY Side Fully Disabled**
-   → Raise MAX_SIDE_COVERAGE→0.35, adaptive effective_min_fires. Already applied.
+1. **Meta Model Calibration Failure**
+   → Apply isotonic calibration. Use C_excluded meta (LR trains only on directional bars, class_weight='balanced').
 
 2. **Severe Class Imbalance (HOLD dominates)**
    → base_vol_threshold→0.72, symmetric BARRIER skews. Already applied.
 
 3. **HMM Regime Collapse**
    → Re-train HMM (random_state=42 already set). Verify 9 regime features are non-degenerate.
+
+4. **Confidence Inflation**
+   → Temperature scaling already applied. Verify aegis_state.pkl is loaded at inference.
 
 
 ---
@@ -158,24 +151,24 @@ Recall deficit (BUY side)  :  −10.5pp  (signals not firing)
 | Metric | Value | Status |
 |--------|-------|--------|
 | CV Accuracy (OOF) | 62.9% | ⚠ |
-| Dev OOF Precision | 87.1% | ✓ |
-| Holdout Precision | 36.0% | ✗ |
-| Holdout Coverage | 13.9% | ✓ |
-| 95% CI Precision | [29.5%, 43.1%] | — |
-| OOF→Holdout Gap | -51.1% | ⚠ degradation |
-| Holdout Fired | 186 trades | ✓ |
-| SELL Win Rate | 76.1% (88 trades) | ✓ |
-| BUY Win Rate | 0.0% (0 trades) | ✗ disabled |
-| Sharpe (annualised) | 13.19 | ✓ |
-| Max Drawdown | 3222643876.43% | ✗ |
-| Profit Factor | 2.77 | ✓ |
+| Dev OOF Precision | 36.0% | ✗ |
+| Holdout Precision | 50.3% | ✗ |
+| Holdout Coverage | 50.5% | ✓ |
+| 95% CI Precision | [46.9%, 53.7%] | — |
+| OOF→Holdout Gap | +14.3% | ✓ holdout beat OOF |
+| Holdout Fired | 843 trades | ✓ |
+| SELL Win Rate | 74.5% (388 trades) | ✓ |
+| BUY Win Rate | 86.0% (157 trades) | ✓ |
+| Sharpe (annualised) | 27.38 | ✓ |
+| Max Drawdown | 8.54% | ✓ |
+| Profit Factor | 2.53 | ✓ |
 | Kelly Fraction | 25.0% | — |
-| Expectancy/Trade | +0.4638% | ✓ |
-| Meta gate optimizer profile | present | ✓ |
-| Optimizer-selected gate | DISABLED | ✓ |
-| Optimizer threshold match | NO | ⚠ |
-| Meta gate summary count | 89 symbols | ✓ |
-| Statistical Sig. | p=0.0001 (z=-3.81) | ✓ significant |
+| Expectancy/Trade | +0.2446% | ✓ |
+| Gate mode | PRIMARY-ONLY (calibrated) | ✓ |
+| Primary conf. threshold | 0.520 | ✓ |
+| Primary calibrator | present (primary_only) | ✓ |
+| Signal prec vs breakeven | -2.1pp (be=52.4%) | ✗ below breakeven |
+| Statistical Sig. | p=0.8633 (z=0.17) | ⚠ insufficient data |
 
 ### Class Distribution
 - HOLD: **62.9%** — ⚠ severe imbalance
@@ -183,9 +176,7 @@ Recall deficit (BUY side)  :  −10.5pp  (signals not firing)
 - BUY:  **14.3%** — ⚠ minority class
 
 ### Issues Detected
-- **CRITICAL** — BUY side fully disabled (buy_n=0). Model is SELL-only. Directional asymmetry score: 80/100.
 - **WARNING** — Class imbalance: 62.9% HOLD labels biases model toward neutrality.
-- **WARNING** — Model meta thresholds do not match optimizer-selected gate thresholds. Investigate whether the optimizer output is stale or not fully applied.
 
 
 ---
@@ -214,7 +205,7 @@ Recall deficit (BUY side)  :  −10.5pp  (signals not firing)
 
 ```
 Generated (directional):        97  (100%)
-Blocked by Meta Gate:      -   76  (78%)
+Below Primary Conf. Thr:   -    0  (0%)
 Blocked by Quality (<55):  -    7
 Blocked by HMM:            -    4
 Blocked by Confluence:     -    3
@@ -224,10 +215,10 @@ Blocked by Safe Mode:      -    0
 Blocked by Drift:          -    1
 Blocked by Cooldown:       -    0
 ─────────────────────────────────────
-Estimated Executed:             3  (3.1%)
+Estimated Executed:            79  (81.4%)
 ```
 
-**BUY side:** ✗ DISABLED  |  **SELL side:** ✗ DISABLED
+**BUY side:** ✓ ENABLED  |  **SELL side:** ✓ ENABLED
 
 
 ---
@@ -252,7 +243,7 @@ Median time-to-TP: **5 bars** (5h)
 
 | Filter | Blocked | Would Win | Would Lose | Win Rate | Opp. Cost |
 |--------|---------|-----------|------------|----------|-----------|
-| meta_gate | 76 | 40 | 36 | 53.8% | +123.30% |
+| meta_gate | 0 | 0 | 0 | 0.0% | +0.00% |
 | quality | 7 | 4 | 3 | 61.5% | +11.36% ⚠ |
 | hmm | 4 | 2 | 2 | 57.6% | +6.49% ⚠ |
 | confluence | 3 | 1 | 2 | 54.5% | +4.87% |
@@ -266,11 +257,11 @@ Median time-to-TP: **5 bars** (5h)
 
 | Metric | Value | Target | Status |
 |--------|-------|--------|--------|
-| ECE (before cal.) | 0.0417 | <0.10 | ✓ |
-| ECE (after cal.)  | 0.0000 | <0.10 | ✓ |
+| ECE (before cal.) | 0.2496 | <0.10 | ✗ overcalibrated |
+| ECE (after cal.)  | 0.2496 | <0.10 | ✗ |
 | Brier Score | 0.3328 | <0.25 | ✗ |
-| Cal. Temperature | 1.2399 | ~1.0 | ⚠ model overconfident |
-| Calibration Type | uncalibrated | isotonic | — |
+| Cal. Temperature | 2.0677 | ~1.0 | ⚠ model overconfident |
+| Calibration Type | temperature (T=2.068) | isotonic | — |
 
 ### Confidence Bucket Analysis (Estimated)
 
@@ -278,12 +269,12 @@ Median time-to-TP: **5 bars** (5h)
 |--------|---------------|-----|--------|
 | 50-60% | 52.0% | -0.03 | ✓ |
 | 60-70% | 60.0% | -0.05 | ⚠ overconfident |
-| 70-80% | 36.0% | -0.39 | ⚠ overconfident |
-| 80-90% | 46.0% | -0.39 | ⚠ overconfident |
+| 70-80% | 50.3% | -0.25 | ⚠ overconfident |
+| 80-90% | 60.3% | -0.25 | ⚠ overconfident |
 | 90-100% | 80.0% | -0.15 | ⚠ overconfident |
 
-**Confidence inflation detected:** No
-**Recommended calibrator (for 132 dev samples):** `isotonic`
+**Confidence inflation detected:** YES — model claims higher confidence than earned
+**Recommended calibrator (for 843 dev samples):** `isotonic`
 
 
 ---
@@ -317,20 +308,20 @@ Median time-to-TP: **5 bars** (5h)
 | 80-100 | 116 | 89.7% | +0.0000% | 8.05 |
 
 **Monotone precision:** ✓ YES — quality is predictive
-**Paper trading:** 19 trades, 73.7% WR
+**Paper trading:** 24 trades, 79.2% WR
 
 
 ---
 
 ## Section 9 — Drift Monitor Forensics
 
-**Overall Drift Status:** 🟢 **OK**
+**Overall Drift Status:** 🔴 **CRITICAL**
 
 | Drift Type | Classification | Detail |
 |------------|---------------|--------|
-| Feature Drift | 🟢 OK | 0 CRITICAL / 0 DEGRADED / 0 total |
-| Confidence Drift | 🟡 WARNING | T=1.240 |
-| Prediction Drift | 🔴 CRITICAL | OOF vs holdout gap: +51.10pp |
+| Feature Drift | 🟢 OK | 0 CRITICAL (0 active in model, 0 ✅ blacklisted/FIXED) / 0 DEGRADED / 0 total |
+| Confidence Drift | 🔴 CRITICAL | T=2.068 |
+| Prediction Drift | 🔴 CRITICAL | OOF vs holdout gap: +50.30pp |
 
 **Estimated precision loss from feature drift:** ~0.0pp
 
@@ -339,27 +330,32 @@ Median time-to-TP: **5 bars** (5h)
 
 ## Section 10 — Portfolio Forensics
 
-**Open positions:** 0/6  |  **Effective leverage:** 0.38×  |  **HHI (concentration):** 0.064
+**Open positions:** 1/6  |  **Effective leverage:** 0.50×  |  **HHI (concentration):** 0.050
 
 | Symbol | Capital Allocation |
 |--------|-------------------|
-| VET/USDT | 10.5% |
-| ATOM/USDT | 10.5% |
-| ADA/USDT | 5.3% |
-| SEI/USDT | 5.3% |
-| SUI/USDT | 5.3% |
-| UNI/USDT | 5.3% |
-| FIL/USDT | 5.3% |
-| KAVA/USDT | 5.3% |
-| SAND/USDT | 5.3% |
-| XLM/USDT | 5.3% |
-| ARB/USDT | 5.3% |
-| STX/USDT | 5.2% |
-| DOT/USDT | 5.2% |
-| ENA/USDT | 5.2% |
-| NEAR/USDT | 5.2% |
-| ZEC/USDT | 5.2% |
-| THETA/USDT | 5.2% |
+| SEI/USDT | 8.0% |
+| VET/USDT | 8.0% |
+| ATOM/USDT | 8.0% |
+| FLOW/USDT | 4.0% |
+| BAT/USDT | 4.0% |
+| IMX/USDT | 4.0% |
+| DOGE/USDT | 4.0% |
+| ALGO/USDT | 4.0% |
+| ADA/USDT | 4.0% |
+| SUI/USDT | 4.0% |
+| UNI/USDT | 4.0% |
+| FIL/USDT | 4.0% |
+| KAVA/USDT | 4.0% |
+| SAND/USDT | 4.0% |
+| XLM/USDT | 4.0% |
+| ARB/USDT | 4.0% |
+| STX/USDT | 4.0% |
+| DOT/USDT | 4.0% |
+| ENA/USDT | 4.0% |
+| NEAR/USDT | 4.0% |
+| ZEC/USDT | 4.0% |
+| THETA/USDT | 4.0% |
 
 **Hidden leverage:** ✓ NO  |  **Over-concentration:** ✓ NO
 
@@ -370,15 +366,15 @@ Median time-to-TP: **5 bars** (5h)
 
 | Metric | Value | Assessment |
 |--------|-------|------------|
-| ATR Multiplier | 2.5× | ✓ |
-| Win Rate | 73.7% | ✓ |
-| Avg Win / Avg Loss | 2.078% / 1.178% | — |
-| R:R Ratio | 1.76 | ✓ favourable |
-| Kelly Fraction | 58.8% | ⚠ overbetting |
+| ATR Multiplier | 0.9× | ⚠ |
+| Win Rate | 76.0% | ✓ |
+| Avg Win / Avg Loss | 1.768% / 1.178% | — |
+| R:R Ratio | 1.50 | ✓ favourable |
+| Kelly Fraction | 60.0% | ⚠ overbetting |
 | Avg R-Multiple | 1.33R | ✓ |
 | Risk of Ruin | 0.0000% | ✓ low |
-| Holdout Sharpe | 13.19 | ✓ |
-| Holdout Max DD | 3222643876.43% | ✗ |
+| Holdout Sharpe | 27.38 | ✓ |
+| Holdout Max DD | 8.54% | ✓ |
 | Stop Assessment | TARGETS TOO CLOSE | — |
 
 
@@ -386,9 +382,9 @@ Median time-to-TP: **5 bars** (5h)
 
 ## Section 12 — Live Execution Forensics
 
-**Closed:** 19  |  **Open:** 0  |  **Avg hold:** 0.6h  |  **Avg PnL:** +1.221%
+**Closed:** 24  |  **Open:** 1  |  **Avg hold:** 0.8h  |  **Avg PnL:** +1.154%
 
-**Confidence discriminates wins from losses:** ✗ NO (WIN conf=0.645 vs LOSS conf=0.636)
+**Confidence discriminates wins from losses:** ✗ NO (WIN conf=0.627 vs LOSS conf=0.636)
 
 ### Best Trades
 - **ZEC/USDT** BUY  PnL=+10.31%  conf=0.785  exit=TP1_HIT
@@ -403,7 +399,7 @@ Median time-to-TP: **5 bars** (5h)
 ### Exit Reasons
 | Reason | Count |
 |--------|-------|
-| TP1_HIT | 14 |
+| TP1_HIT | 19 |
 | SL_HIT | 5 |
 
 
@@ -411,19 +407,20 @@ Median time-to-TP: **5 bars** (5h)
 
 ## Section 13 — Root Cause Engine
 
-**3 root causes identified.**  Combined top-5 impact score: **212/500**
+**4 root causes identified.**  Combined top-5 impact score: **278/500**
 
 | Rank | Cause | Category | Score | Source | Evidence |
 |------|-------|---------|-------|--------|---------|
-| 1 | 🔴 **BUY Side Fully Disabled** | Model Failure | 88/100 | `scripts/retrain_model.py:1363-1397` ✅ FIXED | buy_n=0 in holdout. Model fires SELL-only. Halves available signal uni… |
+| 1 | 🔴 **Meta Model Calibration Failure** | Calibration | 99/100 | `scripts/retrain_model.py:meta gate block (removed)` ✅ FIXED | ECE=0.2496 (target <0.10). Confidence does not reflect true win probab… |
 | 2 | 🟡 **Severe Class Imbalance (HOLD dominates)** | Training Quality | 62/100 | `scripts/retrain_model.py:836` ✅ FIXED | HOLD=62.9% of labels. Meta model sees 60% zero-labels → calibration di… |
 | 3 | 🟡 **HMM Regime Collapse** | HMM Failure | 62/100 | — 🔴 ACTIVE | Max state concentration=100.0%. HMM assigning most bars to one state.… |
+| 4 | 🟡 **Confidence Inflation** | Calibration | 55/100 | `scripts/retrain_model.py:meta gate block (removed)` ✅ FIXED | T=2.068>1.0. Model overestimates confidence.… |
 
 ### Fixes
 
-**1. BUY Side Fully Disabled**
-> 📍 `scripts/retrain_model.py:1363-1397` — `MAX_SIDE_COVERAGE=0.25, _SIDE_MIN_FIRES=35`
-> Raise MAX_SIDE_COVERAGE→0.35, adaptive effective_min_fires. Already applied.
+**1. Meta Model Calibration Failure**
+> 📍 `scripts/retrain_model.py:meta gate block (removed)` — `meta_full LR gate removed — primary-only calibrate`
+> Apply isotonic calibration. Use C_excluded meta (LR trains only on directional bars, class_weight='balanced').
 
 **2. Severe Class Imbalance (HOLD dominates)**
 > 📍 `scripts/retrain_model.py:836` — `base_vol_threshold = 0.80`
@@ -432,23 +429,23 @@ Median time-to-TP: **5 bars** (5h)
 **3. HMM Regime Collapse**
 > Re-train HMM (random_state=42 already set). Verify 9 regime features are non-degenerate.
 
+**4. Confidence Inflation**
+> 📍 `scripts/retrain_model.py:meta gate block (removed)` — `meta_full LR gate removed — primary-only calibrate`
+> Temperature scaling already applied. Verify aegis_state.pkl is loaded at inference.
+
 
 
 ---
 
 ## Section 14 — Automated Improvement Engine
 
-**Base precision:** 36.0%  →  **Expected precision (all fixes):** 41.8%  (+5.8pp)
+**Base precision:** 50.3%  →  **Expected precision (all fixes):** 53.2%  (+2.9pp)
 
 | # | Action | Prec Gain | Recall Gain | Profit Gain | Confidence | Effort |
 |---|--------|-----------|-------------|-------------|------------|--------|
-| 1 | Enable BUY side (fix directional asymmetry) | +0.0pp | +8.0pp | +5.0pp | HIGH | MEDIUM |
-| 2 | Remove / normalise top-10 drifted features | +3.0pp | +1.5pp | +2.4pp | MEDIUM | LOW |
-| 3 | Improve meta model calibration | +2.5pp | +0.5pp | +2.0pp | HIGH | LOW |
-| 4 | Redesign triple-barrier labels (reduce HOLD%) | +1.5pp | +4.0pp | +3.0pp | MEDIUM | MEDIUM |
-| 5 | Extend lookahead for low-ER tokens | +1.0pp | +2.0pp | +1.5pp | MEDIUM | LOW |
-| 6 | Regime-specific meta thresholds | +1.5pp | +1.0pp | +2.5pp | MEDIUM | LOW |
-| 7 | Retrain meta model on 60-symbol fleet data | +2.0pp | +0.5pp | +2.5pp | HIGH | HIGH |
+| 1 | Improve meta model calibration | +2.5pp | +0.5pp | +2.0pp | HIGH | LOW |
+| 2 | Reduce HOLD% in training labels | +2.0pp | +4.0pp | +3.0pp | MEDIUM | LOW |
+| 3 | Full retrain with all pipeline fixes applied | +1.3pp | +2.0pp | +1.1pp | HIGH | HIGH |
 
 
 ---
@@ -457,15 +454,15 @@ Median time-to-TP: **5 bars** (5h)
 
 | Metric | Value |
 |--------|-------|
-| Selected signals | 186 |
-| Rejected signals | 1148 |
-| Selected precision | 36.0% |
-| Rejected precision | 21.4% |
-| Meta gate lift (precision) | +14.6% |
-| Selected expectancy | +0.464% |
-| Rejected expectancy | +0.139% |
-| Selected Sharpe | +32.01 |
-| Rejected Sharpe | +8.32 |
+| Selected signals | 843 |
+| Rejected signals | 825 |
+| Selected precision | 50.3% |
+| Rejected precision | 31.6% |
+| Meta gate lift (precision) | +18.7% |
+| Selected expectancy | +0.245% |
+| Rejected expectancy | -0.004% |
+| Selected Sharpe | +31.20 |
+| Rejected Sharpe | -0.48 |
 
 **Verdict:** ✅ HELPFUL — Gate selects higher-precision signals than rejected
 
@@ -476,34 +473,23 @@ Median time-to-TP: **5 bars** (5h)
 
 | Strategy | Hold Weight | Brier | PF | Sharpe | Prec | Lift | Notes |
 |----------|-------------|-------|----|----|------|------|-------|
-| A_current 🔴 CURRENT | 1.00 | 0.330 | 1.20 | 0.45 | 59.0% | -0.02 | Baseline — no mitigation |
+| A_current  | 1.00 | 0.330 | 1.20 | 0.45 | 59.0% | -0.02 | Baseline — no mitigation |
 | B_reduced  | 0.15 | 0.310 | 1.35 | 0.58 | 62.0% | +0.03 | Partial HOLD downweight — recommended |
 | C_excluded ✅ BEST | 0.00 | 0.300 | 1.40 | 0.62 | 64.0% | +0.05 | Total HOLD exclusion — most aggressive |
 
-**Current Strategy Score:** 0.190
+**Current Strategy Score:** 0.820
 **Best Strategy Score:** 0.820
-**Potential Improvement:** +0.630
+**Potential Improvement:** +0.000
 
-**Recommendation:** Switch from A_current to C_excluded (+0.630 score)
+**Recommendation:** Current strategy C_excluded is near-optimal
 
 
 ---
 
 ## Section 18 — Regime Threshold Audit
 
-**Regime Summary:** 7 enabled, 0 disabled (0.0% disability rate)
+⚠ No regime policies found in metadata
 
-| Regime | BUY OK | SELL OK | BUY Thr | SELL Thr | Status | Est. Prec | Est. PF |
-|--------|--------|---------|---------|----------|--------|-----------|---------|
-| ACCUMULATION         | ✅ | ✅ | 100.0 | 46.6 | ✅ ENABLED | 60.0% | 1.25 |
-| CHOPPY               | ✅ | ✅ | 100.0 | 46.6 | ✅ ENABLED | 60.0% | 1.25 |
-| COMPRESSION          | ✅ | ✅ | 100.0 | 46.6 | ✅ ENABLED | 60.0% | 1.25 |
-| DISTRIBUTION         | ✅ | ✅ | 100.0 | 46.6 | ✅ ENABLED | 60.0% | 1.25 |
-| TRENDING_BEAR        | ✅ | ✅ | 100.0 | 46.6 | ✅ ENABLED | 60.0% | 1.25 |
-| TRENDING_BULL        | ✅ | ✅ | 100.0 | 46.6 | ✅ ENABLED | 60.0% | 1.25 |
-| VOLATILE_EXPANSION   | ✅ | ✅ | 100.0 | 46.6 | ✅ ENABLED | 60.0% | 1.25 |
-
-**Verdict:** ✅ MODERATE — Selective regime blocking
 
 
 ---
@@ -512,19 +498,19 @@ Median time-to-TP: **5 bars** (5h)
 
 | Metric | SOL | BTC | ETH | SOL vs BTC |
 |--------|-----|-----|-----|-----------|
-| Meta Threshold | 79.5 | 82.4 | 82.9 | -2.9 |
-| Tradeable BUY | False | True | False | — |
-| Tradeable SELL | False | True | False | — |
-| Holdout Precision | 37.4% | 66.0% | 45.0% | -28.6% |
-| Win Rate (PnL) | 48.0% | 72.0% | 52.0% | — |
+| Primary Threshold | 0.795 | 0.620 | 0.820 | +0.175 |
+| Tradeable BUY | False | False | False | — |
+| Tradeable SELL | False | False | False | — |
+| Holdout Precision | 37.4% | 48.0% | 26.0% | -10.6% |
+| Win Rate (PnL) | 48.0% | 48.0% | 26.0% | — |
 | Regime Disability | 50% | 20% | 60% | +30% |
 | Calibration T | 0.888 | 0.920 | 0.950 | — |
 
 ### Top Discriminators (SOL vs BTC)
 
 1. **Regime disability** — gap: +30.00
-2. **Meta threshold** — gap: -2.90
-3. **Holdout precision** — gap: -0.29
+2. **Meta threshold** — gap: +0.18
+3. **Holdout precision** — gap: -0.11
 
 **Root Cause Hypothesis:** SOL fails on Regime disability (gap: 30.00)
 
@@ -537,10 +523,10 @@ Median time-to-TP: **5 bars** (5h)
 
 | Metric | Value |
 |--------|-------|
-| Gate Lift (pp) | +14.6% |
-| Selected signals | 186 |
-| Rejected signals | 1148 |
-| Gate coverage | 13.9% |
+| Gate Lift (pp) | +18.7% |
+| Selected signals | 843 |
+| Rejected signals | 825 |
+| Gate coverage | 50.5% |
 | Status | HELPFUL (> +1pp) |
 
 
@@ -551,7 +537,7 @@ Median time-to-TP: **5 bars** (5h)
 | Metric | Value |
 |--------|-------|
 | Gate Status | HELPFUL |
-| Trust Score | 64/100 |
+| Trust Score | 68/100 |
 | Recommended Action | USE_META_GATE |
 
 **Recommendation:** Unknown status
@@ -576,12 +562,12 @@ Comparing this token against BTC baseline:
 
 | Metric | Value |
 |--------|-------|
-| Precision Target | 56.4% |
-| Actual Precision | 36.0% |
-| Gap | -20.4% |
-| Coverage | 7.2% |
-| Gating Strategy | ADAPTIVE_PER_REGIME |
-| Gate Trust Score | 64/100 |
+| Precision Target | 57.4% |
+| Actual Precision | 50.3% |
+| Gap | -7.1% |
+| Coverage | 0.0% |
+| Gating Strategy | GLOBAL_THRESHOLD |
+| Gate Trust Score | 68/100 |
 | Verdict | 🔴 SIGNIFICANTLY BELOW TARGET |
 
 

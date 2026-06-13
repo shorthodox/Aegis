@@ -1,73 +1,93 @@
 {
   "symbol": "NEAR/USDT",
-  "updated_at": "2026-06-07T16:42:40.629128+00:00",
+  "updated_at": "2026-06-12T19:13:19.000708+00:00",
   "base_atr_multiplier": 1.5,
   "train_bars": 2605,
   "eval_bars": 1117,
   "regime_boundaries": {
-    "vol_p33": 477215.68683333334,
-    "vol_p67": 830031.8042916667,
-    "atr_pct_p33": 0.010700891708428813,
-    "atr_pct_p67": 0.015228679985834243,
-    "momentum_p33": -0.017664429601021502,
-    "momentum_p67": 0.011683199431600845
+    "vol_p33": 481705.0962083333,
+    "vol_p67": 862510.6330416668,
+    "atr_pct_p33": 0.010803381159120141,
+    "atr_pct_p67": 0.01568771849942503,
+    "momentum_p33": -0.017694068020534606,
+    "momentum_p67": 0.012698404642457617
   },
   "selected_profile": {
-    "gate_type": "DISABLED",
-    "threshold_quantile": 0.0,
+    "gate_type": "CALIBRATED_SIDE_EDGE",
+    "threshold_quantile": 0.4,
     "thresholds": {
-      "global_threshold": 100.0,
-      "buy_threshold": 100.0,
-      "sell_threshold": 100.0,
-      "quantile": 0.0
+      "global_threshold": 51.35641392264884,
+      "buy_threshold": 51.356589147286826,
+      "sell_threshold": 51.35623869801085,
+      "quantile": 0.4
     },
-    "side_specific": false,
+    "side_specific": true,
     "regime_modifier": false,
     "signal_vetoes": [],
     "calibration": {
-      "method": "beta",
-      "selected_calibrator": "beta",
-      "selected_method": "beta",
-      "selected_score": 0.0,
-      "ece_before": 0.1803754293771624,
-      "ece_after": 0.06243744007878016,
-      "quality_score": 0.0,
-      "arch_validation_no_viable": true
+      "method": "isotonic",
+      "selected_calibrator": "isotonic",
+      "selected_method": "isotonic",
+      "selected_score": 0.5837679238160776,
+      "ece_before": 0.141740231816102,
+      "ece_after": 2.578445028400076e-17,
+      "quality_score": 0.14174023181610199
     },
     "risk_tier": {
       "conservative": false,
       "balanced": false,
-      "aggressive": false
+      "aggressive": true
     },
     "edge_rank_mode": "percentile",
-    "score": 0.0,
-    "disabled_reason": "no_candidate_passed_pf_expectancy_sharpe"
+    "score": 0.58377,
+    "disabled_reason": null,
+    "profitability_bypass": true
   },
   "holdout": {
     "selected": {
-      "precision": 0.27595884003741816,
-      "coverage": 1.0,
-      "expectancy_pct": -0.7548,
-      "profit_factor": 0.973,
-      "sharpe": -0.934,
-      "gate_lift": 0.0,
-      "fired_n": 1069,
-      "rejected_n": 0
+      "precision": 0.42337164750957856,
+      "coverage": 0.4883068288119738,
+      "expectancy_pct": 0.9546,
+      "profit_factor": 3.86,
+      "sharpe": 25.606,
+      "gate_lift": 0.1765709162481526,
+      "fired_n": 522,
+      "rejected_n": 547,
+      "baseline_precision": 0.333021515434986,
+      "baseline_profit_factor": 4.838,
+      "baseline_expectancy": 0.9228,
+      "validation_report": {
+        "status": "skipped_single_fold_validation",
+        "reason": "synthetic single-fold validation is disabled for reliability"
+      }
     },
     "holdout_metrics": {
-      "n": 1069,
-      "expectancy_pct": -0.7548,
-      "total_return_pct": -806.9,
-      "win_rate": 0.276,
-      "sharpe": -0.934,
-      "max_drawdown_pct": 200.4,
-      "profit_factor": 0.973,
-      "buy_n": 109,
-      "buy_win_rate": 0.4037,
-      "sell_n": 488,
-      "sell_win_rate": 0.5143,
-      "kelly_pct": 0.0
+      "n": 522,
+      "expectancy_pct": 0.9546,
+      "total_return_pct": 498.305,
+      "win_rate": 0.4234,
+      "sharpe": 25.606,
+      "max_drawdown_pct": 11.707,
+      "profit_factor": 3.86,
+      "buy_n": 160,
+      "buy_win_rate": 0.8688,
+      "sell_n": 126,
+      "sell_win_rate": 0.6508,
+      "kelly_pct": 25.0
     },
-    "rejected_metrics": {}
+    "rejected_metrics": {
+      "n": 547,
+      "expectancy_pct": 0.8925,
+      "total_return_pct": 488.1801,
+      "win_rate": 0.2468,
+      "sharpe": 25.706,
+      "max_drawdown_pct": 12.47,
+      "profit_factor": 6.896,
+      "buy_n": 72,
+      "buy_win_rate": 1.0,
+      "sell_n": 71,
+      "sell_win_rate": 0.8873,
+      "kelly_pct": 25.0
+    }
   }
 }
