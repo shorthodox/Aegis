@@ -1503,11 +1503,13 @@ function renderSignals(signals) {
     const timeframe = signal.timeframe || '1h'; // Default to 1h if not provided
     const signalStatus = signal.status || getSignalStatus(signal);
     const signalClass = getSignalClass(signalType, signalStatus);
-    const cardTypeClass = getSignalCardType(signal.direction);
+    const cardTypeClass = getSignalCardType(signal.fire ? signal.direction : 'NEUTRAL');
     const sigUp = signalType.toUpperCase();
-    const dirAttr = (sigUp.includes('BUY') || signal.direction === 'LONG') ? 'buy'
-                  : (sigUp.includes('SELL') || signal.direction === 'SHORT') ? 'sell'
-                  : 'hold';
+    const dirAttr = signal.fire
+      ? ((sigUp.includes('BUY') || signal.direction === 'LONG') ? 'buy'
+        : (sigUp.includes('SELL') || signal.direction === 'SHORT') ? 'sell'
+        : 'hold')
+      : 'hold';
     const confidence = (signal.ai_prob || 0) * 100;
 
     // Determine status badge
@@ -1522,9 +1524,9 @@ function renderSignals(signals) {
     }
 
     let directionBadge = '';
-    if (signal.direction === 'LONG') {
+    if (signal.fire && signal.direction === 'LONG') {
       directionBadge = '<span class="bg-green-500/20 text-green-400 border border-green-500/50 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider">LONG</span>';
-    } else if (signal.direction === 'SHORT') {
+    } else if (signal.fire && signal.direction === 'SHORT') {
       directionBadge = '<span class="bg-red-500/20 text-red-400 border border-red-500/50 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider">SHORT</span>';
     }
 
