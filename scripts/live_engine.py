@@ -322,7 +322,7 @@ class SignalQualityFilter:
         conf_total  = float(_conf_data.get('total', 5.0))
         adx         = _f('adx', 20.0)
         vol_zscore  = _f('volume_zscore', 0.0)
-        meta_conf   = _f('meta_confidence', 0.0)
+        meta_conf   = _f('edge_score', 0.0) or _f('meta_confidence', 0.0)
         rsi         = _f('rsi', 50.0)
         funding_bias= str(result.get('funding_bias', 'NEUTRAL') or 'NEUTRAL').upper()
         oi_trend    = str(result.get('oi_trend', 'STABLE') or 'STABLE').upper()
@@ -348,9 +348,9 @@ class SignalQualityFilter:
         if regime.confidence > 0.7:
             score += 10; reasons.append(f'regime_confident({regime.regime})')
 
-        # +10: meta model confidence is high
+        # +10: primary model edge score is high (top-quartile signal)
         if meta_conf > 0.75:
-            score += 10; reasons.append(f'high_meta_conf({meta_conf:.3f})')
+            score += 10; reasons.append(f'high_edge_score({meta_conf:.3f})')
 
         # +10: RSI not in extreme exhaustion zone for the proposed direction
         rsi_ok = (
@@ -1162,7 +1162,7 @@ class LiveEngine:
 
     Signal flow
     -----------
-    1. Predictor.predict_realtime() → dict with fire/side/meta_confidence/price/atr
+    1. Predictor.predict_realtime() → dict with fire/side/edge_score/price/atr
     2. MarketRegimeDetector.detect()  → RegimeState
     3. SignalQualityFilter.score_signal() → (quality_score, reasons)
     4. If quality_score < 55 or fake breakout detected → block entry
@@ -1746,7 +1746,7 @@ class LiveEngine:
             return
 
         direction = 'LONG' if side == 'BUY' else 'SHORT'
-        meta_conf = float(result.get('meta_confidence', 0))
+        meta_conf = float(result.get('edge_score', result.get('meta_confidence', 0)))
         atr_mult  = float(result.get('atr_multiplier', 1.5))
         atr       = float(result.get('atr', price * 0.015))
         atr_pct   = float(result.get('atr_pct', atr / price * 100 if price > 0 else 1.5))
@@ -1848,7 +1848,7 @@ class LiveEngine:
         fake_breakout: bool                  = False,
     ) -> Dict[str, Any]:
         side     = result.get('side', 'FLAT')
-        conf     = float(result.get('meta_confidence', 0))
+        conf     = float(result.get('edge_score', result.get('meta_confidence', 0)))
         thr      = float(result.get('threshold', 0.6))
         fire     = bool(result.get('fire', False))
         atr      = float(result.get('atr', price * 0.015))
@@ -1932,7 +1932,9 @@ class LiveEngine:
             'volume_strength', 'volume_zscore',
             'funding_rate', 'funding_bias', 'oi_trend', 'oi_change_1h_pct', 'oi_zscore',
             'session', 'session_note', 'fear_greed',
-            'scalper_view', 'day_trader_view', 'swing_view',
+            # primary model outputs
+            'edge_score', 'edge_rank', 'signal_strength_score',
+            'p_buy', 'p_sell', 'p_hold',
             # HMM regime intelligence fields
             'hmm_regime', 'hmm_confidence', 'hmm_state_id',
             'hmm_transition_risk', 'hmm_stability', 'hmm_available',
@@ -2283,7 +2285,7 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
                 f"now [bold white]{_px(cur)}[/]  "
                 f"[{col}]{ppct:+.2f}%  {pu:+.2f} USDT[/]  "
                 f"SL [dim]{_px(pos.stop_loss)}[/]  "
-                f"conf [cyan]{pos.meta_confidence:.3f}[/]"
+                f"edge [cyan]{pos.meta_confidence:.3f}[/]"
                 f"{trail_tag}  "
                 f"[dim]{pos.entry_time[11:16]} UTC[/]"
             )
