@@ -2081,10 +2081,11 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
     [OPEN TRADES] Active virtual positions (entry, live PnL, SL)
     [CLOSED (5)]  Last 5 closed trades with outcome badge
     """
-    from rich.console import Console, Group
+    from rich.console import Group
     from rich.table import Table
     from rich.panel import Panel
     from rich.text import Text
+    from rich.live import Live
     from rich import box
 
     def _px(p: float) -> str:
@@ -2311,22 +2312,20 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
         return Group(header, grid, footer)
 
     async def _run_with_display() -> None:
-        import os, sys
-        _console = Console(highlight=False)
         scan_task = asyncio.create_task(engine.run())
-        try:
-            while not scan_task.done():
-                os.system('cls' if sys.platform == 'win32' else 'clear')
-                try:
-                    _console.print(_build_renderable())
-                except Exception:
-                    pass
-                await asyncio.sleep(1)
-        except asyncio.CancelledError:
-            pass
-        finally:
-            scan_task.cancel()
-            await engine.shutdown()
+        with Live(_build_renderable(), screen=True, refresh_per_second=1) as live:
+            try:
+                while not scan_task.done():
+                    try:
+                        live.update(_build_renderable())
+                    except Exception:
+                        pass
+                    await asyncio.sleep(1)
+            except asyncio.CancelledError:
+                pass
+            finally:
+                scan_task.cancel()
+                await engine.shutdown()
 
     asyncio.run(_run_with_display())
 
