@@ -811,7 +811,7 @@ class AEGISForensicEngine:
         buy_wr       = _safe(ht.get("buy_win_rate", 0))
         sell_wr      = _safe(ht.get("sell_win_rate", 0))
         sharpe       = _safe(ht.get("sharpe", 0))
-        max_dd       = _safe(ht.get("max_drawdown_pct", 0))
+        max_dd       = min(_safe(ht.get("max_drawdown_pct", 0)), 100.0)
         pf           = _safe(ht.get("profit_factor", 0))
         kelly        = _safe(ht.get("kelly_pct", 0))
         exp_trade    = _safe(ht.get("expectancy_pct", 0))
@@ -1108,9 +1108,17 @@ class AEGISForensicEngine:
             except Exception:
                 pass
 
-        cal_temp = _safe(self.meta.get("calibration_temperature", 1.0))
-        dev_prec = _safe(self.meta.get("dev_estimate", {}).get("precision", 0))
-        dev_n    = int(self.meta.get("dev_estimate", {}).get("trades", 0))
+        cal_temp    = _safe(self.meta.get("calibration_temperature", 1.0))
+        dev_prec    = _safe(self.meta.get("dev_estimate", {}).get("precision", 0))
+        dev_n       = int(self.meta.get("dev_estimate", {}).get("trades", 0))
+        ht          = self.meta.get("holdout_trading", {})
+        hold_prec   = _safe(ht.get("signal_precision", 0))
+        hold_n      = int(ht.get("fired", 0))
+
+        # Warn when isotonic calibration is applied to a tiny dev set — it will
+        # overfit perfectly (dev_prec~1.0) while holdout collapses.
+        if dev_n < 50 and cal_type == "isotonic":
+            recommended = "platt" if dev_n >= 20 else "temperature"
 
         # Confidence bucket win rates from reliability curve
         buckets: Dict[str, Dict] = {}
@@ -1127,7 +1135,7 @@ class AEGISForensicEngine:
                         "actual_win_rate":    round(actual, 3),
                         "gap":                round(gap, 3),
                         "samples":            n_samp,
-                        "status": "✓" if abs(gap) < 0.05 else ("⚠ overconfident" if gap < 0 else "⚠ underconfident"),
+                        "status": "OK" if abs(gap) < 0.05 else ("overconfident" if gap < 0 else "underconfident"),
                     }
             except Exception:
                 pass
@@ -1140,7 +1148,7 @@ class AEGISForensicEngine:
                     mask = (mc >= lo) & (mc < hi)
                     n    = int(mask.sum())
                     pred = (lo + hi) / 2.0
-                    est  = pred * 0.9  # estimated actual = 90% of predicted (overconfidence)
+                    est  = pred * 0.9
                     label = f"{int(lo*100)}-{int(hi*100)}"
                     buckets[label] = {"predicted_win_rate": pred, "actual_win_rate": round(est, 3),
                                       "gap": round(est - pred, 3), "samples": n, "status": "estimated"}
@@ -1148,18 +1156,23 @@ class AEGISForensicEngine:
         conf_inflation = ece_before > 0.15
 
         out = {
-            "ece_before_calibration": round(ece_before, 4),
-            "ece_after_calibration":  round(ece_after,  4),
-            "brier_score":            round(brier, 4),
+            "ece_before_calibration":  round(ece_before, 4),
+            "ece_after_calibration":   round(ece_after,  4),
+            "brier_score":             round(brier, 4),
             "calibration_temperature": round(cal_temp, 4),
-            "calibration_type":       cal_type,
-            "ece_target":             0.10,
-            "ece_target_met":         ece_after < 0.10,
-            "confidence_inflation":   conf_inflation,
-            "confidence_buckets":     buckets,
-            "recommended_calibrator": recommended,
-            "dev_precision":          round(dev_prec, 4),
-            "dev_sample_size":        dev_n,
+            "calibration_type":        cal_type,
+            "ece_target":              0.10,
+            "ece_target_met":          ece_after < 0.10,
+            "confidence_inflation":    conf_inflation,
+            "confidence_buckets":      buckets,
+            "recommended_calibrator":  recommended,
+            "dev_precision":           round(dev_prec, 4),
+            "dev_sample_size":         dev_n,
+            # Holdout fields — critical for OOF gap detection
+            "holdout_precision":       round(hold_prec, 4),
+            "holdout_sample_size":     hold_n,
+            "calib_oof_gap_pp":        round((dev_prec - hold_prec) * 100, 1),
+            "isotonic_overfit_warning": dev_n < 50 and cal_type == "isotonic",
         }
         self.results["s05"] = out
         return out
@@ -1398,14 +1411,18 @@ class AEGISForensicEngine:
         monotone = all(valid_prec[i] <= valid_prec[i + 1]
                        for i in range(len(valid_prec) - 1)) if len(valid_prec) > 1 else True
 
-        # Paper trade win rate from track record
+        # Paper trade win rate from track record — filtered to this symbol
         paper_trades = 0
         paper_wins   = 0
+        sym_base = self.symbol.replace("/", "").replace("_", "").replace("USDT", "").upper()
         try:
             tr_path = ROOT / "data" / "trader_track_record.json"
             if tr_path.exists():
                 tr = json.loads(tr_path.read_text())
                 for sig in tr.get("signals", []):
+                    sig_sym = sig.get("symbol", "").replace("/", "").replace("_", "").upper()
+                    if sym_base not in sig_sym:
+                        continue
                     if sig.get("outcome") in ("WIN", "LOSS"):
                         paper_trades += 1
                         if sig.get("outcome") == "WIN":
@@ -1568,6 +1585,11 @@ class AEGISForensicEngine:
         except Exception:
             pass
 
+        # Filter to this symbol's trades only
+        sym_base = self.symbol.replace("/", "").replace("_", "").replace("USDT", "").upper()
+        signals = [s for s in signals
+                   if sym_base in s.get("symbol", "").replace("/", "").replace("_", "").upper()]
+
         closed    = [s for s in signals if s.get("outcome") in ("WIN", "LOSS")]
         wins_pct  = [_safe(s.get("pnl_pct", 0)) for s in closed if s.get("outcome") == "WIN"]
         loss_pct  = [abs(_safe(s.get("pnl_pct", 0))) for s in closed if s.get("outcome") == "LOSS"]
@@ -1608,7 +1630,7 @@ class AEGISForensicEngine:
             "stop_assessment":   stop_assess,
             "n_trades":          len(closed),
             "sharpe_holdout":    _safe(ht.get("sharpe", 0)),
-            "max_dd_holdout":    _safe(ht.get("max_drawdown_pct", 0)),
+            "max_dd_holdout":    min(_safe(ht.get("max_drawdown_pct", 0)), 100.0),
             "kelly_from_holdout": _safe(ht.get("kelly_pct", 0)),
         }
         self.results["s11"] = out
@@ -1630,6 +1652,11 @@ class AEGISForensicEngine:
                         break
         except Exception:
             pass
+
+        # Filter to this symbol's trades only
+        sym_base = self.symbol.replace("/", "").replace("_", "").replace("USDT", "").upper()
+        signals = [s for s in signals
+                   if sym_base in s.get("symbol", "").replace("/", "").replace("_", "").upper()]
 
         closed = [s for s in signals if s.get("outcome") in ("WIN", "LOSS")]
         open_s = [s for s in signals

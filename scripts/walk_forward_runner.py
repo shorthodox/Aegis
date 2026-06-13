@@ -56,18 +56,27 @@ def run_walk_forward(symbol: str, n_splits: int = 5) -> Dict[str, Any]:
         df_tr = df_full.iloc[:train_end].reset_index(drop=True)
         df_ev_slice = df_full.iloc[train_end:eval_end].reset_index(drop=True)
 
-        labels_tr = create_triple_barrier_labels(df_tr, p.meta.get('atr_multiplier', 1.0))
-        labels_ev = create_triple_barrier_labels(df_ev_slice, p.meta.get('atr_multiplier', 1.0))
+        labels_tr = np.asarray(create_triple_barrier_labels(df_tr, p.meta.get('atr_multiplier', 1.0)), dtype=np.intp)
+        labels_ev = np.asarray(create_triple_barrier_labels(df_ev_slice, p.meta.get('atr_multiplier', 1.0)), dtype=np.intp)
 
         train_n = len(feat_tr)
         try:
-            proposed_all, dir_conf_all, probs_all = _fit_local_model(pd.concat([feat_tr, feat_ev], axis=0).reset_index(drop=True), np.concatenate([labels_tr, labels_ev]), train_n)
+            proposed_all, dir_conf_all, probs_all, _ = _fit_local_model(
+                pd.concat([feat_tr, feat_ev], axis=0).reset_index(drop=True),
+                np.concatenate([labels_tr, labels_ev]),
+                train_n,
+            )
         except Exception as exc:
             results.append({'fold': k, 'error': str(exc)})
             continue
 
         try:
-            res = _evaluate_architecture(symbol, feat_ev, pd.Series(), proposed_all[train_n:], dir_conf_all[train_n:], probs_all[train_n:], labels_ev, np.full(len(feat_ev), 1.0), train_edge_scores=np.array([]), train_correct=np.array([]))
+            res = _evaluate_architecture(
+                symbol, feat_ev, pd.Series(),
+                proposed_all[train_n:], dir_conf_all[train_n:], probs_all[train_n:],
+                labels_ev, np.full(len(feat_ev), 1.0),
+                train_edge_scores=np.array([]), train_correct=np.array([]),
+            )
             results.append({'fold': k, 'result': res})
         except Exception as exc:
             results.append({'fold': k, 'error': str(exc)})

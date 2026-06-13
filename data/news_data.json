@@ -1,173 +1,551 @@
 [
   {
-    "timestamp": "2026-06-06T05:30:20",
-    "headline": "A little-known 1,250% rule could lock US banks out of Bitcoin",
-    "link": "https://cryptoslate.com/a-little-known-1250-rule-could-lock-us-banks-out-of-bitcoin/",
-    "source": "cryptoslate.com",
+    "timestamp": "2026-06-12T04:32:04",
+    "headline": "LG, Arbitrum launch blockchain-based bid for $679B ad market",
+    "link": "https://cointelegraph.com/news/lg-arbitrum-launch-blockchain-based-bid-for-679b-ad-market?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
+    "sentiment": 0.0,
+    "importance": 1.5,
+    "weighted_sentiment": 0.0
+  },
+  {
+    "timestamp": "2026-06-12T04:19:03",
+    "headline": "Coinbase launches tool letting AI agents make payments and trade crypto",
+    "link": "https://cointelegraph.com/news/coinbase-launches-tool-letting-ai-agents-make-payments-and-trade-crypto?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
     "sentiment": 0.0,
     "importance": 1.0,
     "weighted_sentiment": 0.0
   },
   {
-    "timestamp": "2026-06-06T08:00:46",
-    "headline": "Crypto exchanges are losing retail traders but are filling the gap with Wall Street-style bets",
-    "link": "https://cryptoslate.com/crypto-exchanges-are-losing-retail-traders-but-are-filling-the-gap-with-wall-street-style-bets/",
-    "source": "cryptoslate.com",
-    "sentiment": -0.2023,
-    "importance": 1.5,
-    "weighted_sentiment": -0.3034
-  },
-  {
-    "timestamp": "2026-06-06T15:39:18",
-    "headline": "May jobs report explained: Why 172,000 jobs means higher rates, pricier loans, and a Bitcoin drop",
-    "link": "https://cryptoslate.com/may-jobs-report-explained-why-172000-jobs-means-higher-rates-pricier-loans-and-a-bitcoin-drop/",
-    "source": "cryptoslate.com",
-    "sentiment": -0.2732,
-    "importance": 1.5,
-    "weighted_sentiment": -0.4098
-  },
-  {
-    "timestamp": "2026-06-06T15:59:30",
-    "headline": "Bitcoin Has Dumped All of Its Gains Since Trump Was Reelected\u2014And Then Some",
-    "link": "https://decrypt.co/370235/bitcoin-dumped-gains-since-trump-reelected-then-some",
-    "source": "decrypt.co",
-    "sentiment": -0.0772,
-    "importance": 1.5,
-    "weighted_sentiment": -0.1158
-  },
-  {
-    "timestamp": "2026-06-06T14:26:03",
-    "headline": "Meet the Guys Still Clinging To the Terra Luna That Do Kwon Abandoned",
-    "link": "https://decrypt.co/370189/meet-guys-still-clinging-terra-luna-do-kwon",
-    "source": "decrypt.co",
-    "sentiment": -0.4588,
-    "importance": 1.0,
-    "weighted_sentiment": -0.4588
-  },
-  {
-    "timestamp": "2026-06-06T16:06:54",
-    "headline": "Bitcoin most oversold since 2020 crash: Can BTC rebound to $70K next?",
-    "link": "https://cointelegraph.com/markets/bitcoin-most-oversold-since-2020-crash-can-btc-rebound-to-70k-next?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "timestamp": "2026-06-12T04:16:51",
+    "headline": "Avalanche Treasury Co. falls 16% as it debuts on Nasdaq",
+    "link": "https://cointelegraph.com/news/avalanche-treasury-starts-trading-on-nasdaq-but-shares-fall-16-on-debut?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
     "source": "cointelegraph.com",
-    "sentiment": -0.4019,
-    "importance": 2.0,
-    "weighted_sentiment": -0.8038
-  },
-  {
-    "timestamp": "2026-06-06T17:05:32",
-    "headline": "AI\u2019s $800 billion spending boom is becoming Bitcoin\u2019s Fed problem",
-    "link": "https://cryptoslate.com/the-feds-new-inflation-problem-may-be-the-ai-800-billion-spending-boom/",
-    "source": "cryptoslate.com",
-    "sentiment": -0.4019,
-    "importance": 1.0,
-    "weighted_sentiment": -0.4019
-  },
-  {
-    "timestamp": "2026-06-06T18:08:56",
-    "headline": "Claude Code Vulnerability Could Let Attackers Steal Credentials From GitHub, Says Microsoft",
-    "link": "https://decrypt.co/370238/claude-code-vulnerability-attackers-steal-credentials-github-microsoft",
-    "source": "decrypt.co",
-    "sentiment": -0.8316,
-    "importance": 1.5,
-    "weighted_sentiment": -1.2474
-  },
-  {
-    "timestamp": "2026-06-07T11:16:50",
-    "headline": "A needed $900B Treasury cash rebuild could quietly drain the liquidity Bitcoin needs",
-    "link": "https://cryptoslate.com/a-needed-900b-treasury-cash-rebuild-could-quietly-drain-the-liquidity-bitcoin-needs/",
-    "source": "cryptoslate.com",
     "sentiment": 0.2023,
     "importance": 1.0,
     "weighted_sentiment": 0.2023
   },
   {
-    "timestamp": "2026-06-06T19:10:34",
-    "headline": "Hyperliquid\u2019s UK warning reveals the regulatory test behind its Wall Street push",
-    "link": "https://cryptoslate.com/hyperliquids-uk-warning-reveals-the-regulatory-test-behind-its-wall-street-push/",
-    "source": "cryptoslate.com",
-    "sentiment": -0.34,
-    "importance": 1.5,
-    "weighted_sentiment": -0.51
-  },
-  {
-    "timestamp": "2026-06-06T20:56:43",
-    "headline": "AI Is Helping Discover Tech Vulnerabilities\u2014And Zcash Is Just the Latest Example",
-    "link": "https://decrypt.co/370237/ai-discover-tech-vulnerabilities-zcash-latest-example",
-    "source": "decrypt.co",
-    "sentiment": 0.296,
-    "importance": 1.5,
-    "weighted_sentiment": 0.444
-  },
-  {
-    "timestamp": "2026-06-07T14:05:52",
-    "headline": "AI\u2019s power race is shifting leverage from chipmakers like NVIDIA to the grid",
-    "link": "https://cryptoslate.com/biggest-ai-winner-is-the-power-company-not-nvidia/",
-    "source": "cryptoslate.com",
-    "sentiment": 0.3612,
-    "importance": 1.0,
-    "weighted_sentiment": 0.3612
-  },
-  {
-    "timestamp": "2026-06-07T13:10:51",
-    "headline": "CLARITY Act chances of passage this year falls to 60%, Galaxy Digital says",
-    "link": "https://cryptoslate.com/clarity-act-chances-of-passage-this-year-falls-to-60-galaxy-digital-says/",
-    "source": "cryptoslate.com",
-    "sentiment": 0.6408,
-    "importance": 1.0,
-    "weighted_sentiment": 0.6408
-  },
-  {
-    "timestamp": "2026-06-07T13:01:06",
-    "headline": "Claude Opus 4.8 Review: Better At What\u2019s It Good At, Worse At What It\u2019s Not",
-    "link": "https://decrypt.co/370128/claude-opus-4-8-review",
-    "source": "decrypt.co",
-    "sentiment": 0.4019,
-    "importance": 1.5,
-    "weighted_sentiment": 0.6028
-  },
-  {
-    "timestamp": "2026-06-07T14:29:19",
-    "headline": "Bitcoin risks new 'purge' with bear-market losses still $35B below 2022 total",
-    "link": "https://cointelegraph.com/markets/bitcoin-risks-new-purge-with-bear-market-losses-still-35b-below-2022-total?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "timestamp": "2026-06-12T06:44:20",
+    "headline": "SEC plan to scrap \u2018Rule 611\u2019 a boon for tokenized US stocks: Galaxy",
+    "link": "https://cointelegraph.com/news/sec-plan-to-scrap-rule-611-a-boon-for-tokenized-us-stocks-galaxy?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
     "source": "cointelegraph.com",
+    "sentiment": 0.0,
+    "importance": 1.0,
+    "weighted_sentiment": 0.0
+  },
+  {
+    "timestamp": "2026-06-12T07:12:06",
+    "headline": "International sting shuts down $390M crypto money-laundering ring",
+    "link": "https://cointelegraph.com/news/international-sting-shuts-down-390m-crypto-money-laundering-ring?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
+    "sentiment": 0.0,
+    "importance": 1.0,
+    "weighted_sentiment": 0.0
+  },
+  {
+    "timestamp": "2026-06-12T06:44:20",
+    "headline": "SEC plan to scrap \u2018Rule 611\u2019 positive for tokenized US stocks: Galaxy",
+    "link": "https://cointelegraph.com/news/sec-plan-to-scrap-rule-611-a-boon-for-tokenized-us-stocks-galaxy?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
+    "sentiment": 0.5574,
+    "importance": 1.0,
+    "weighted_sentiment": 0.5574
+  },
+  {
+    "timestamp": "2026-06-12T04:32:04",
+    "headline": "LG, Arbitrum launch blockchain-based bid in $679B ad market",
+    "link": "https://cointelegraph.com/news/lg-arbitrum-launch-blockchain-based-bid-for-679b-ad-market?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
+    "sentiment": 0.0,
+    "importance": 1.5,
+    "weighted_sentiment": 0.0
+  },
+  {
+    "timestamp": "2026-06-12T04:16:51",
+    "headline": "Avalanche Treasury falls 16% as it debuts on Nasdaq",
+    "link": "https://cointelegraph.com/news/avalanche-treasury-starts-trading-on-nasdaq-but-shares-fall-16-on-debut?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
+    "sentiment": 0.2023,
+    "importance": 1.0,
+    "weighted_sentiment": 0.2023
+  },
+  {
+    "timestamp": "2026-06-12T16:39:16",
+    "headline": "Sam Bankman-Fried loses appeal to overturn 25-year prison sentence",
+    "link": "https://cointelegraph.com/news/sam-bankman-fried-loses-appeal-to-overturn-25-year-prison-sentence?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
+    "sentiment": -0.6486,
+    "importance": 1.0,
+    "weighted_sentiment": -0.6486
+  },
+  {
+    "timestamp": "2026-06-12T16:17:33",
+    "headline": "Bitcoin surfs SpaceX IPO at $64K as trader warns key BTC price support may crumble",
+    "link": "https://cointelegraph.com/markets/bitcoin-surfs-spacex-ipo-iran-peace-cues-as-trader-warns-62k-may-crumble?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
+    "sentiment": 0.3182,
+    "importance": 1.5,
+    "weighted_sentiment": 0.4773
+  },
+  {
+    "timestamp": "2026-06-12T16:07:08",
+    "headline": "Crypto Biz: SpaceX fuels tokenization\u2019s next boom",
+    "link": "https://cointelegraph.com/news/tokenized-rwas-kraken-spacex-ipo-prediction-markets-sbf-trump-pardon?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
+    "sentiment": 0.0,
+    "importance": 1.0,
+    "weighted_sentiment": 0.0
+  },
+  {
+    "timestamp": "2026-06-12T13:25:53",
+    "headline": "Polish president vetoes crypto bill for third time ahead of MiCA deadline",
+    "link": "https://cointelegraph.com/news/polish-president-vetoes-crypto-bill-third-time-mica-deadline?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
+    "sentiment": 0.0,
+    "importance": 1.5,
+    "weighted_sentiment": 0.0
+  },
+  {
+    "timestamp": "2026-06-12T13:03:23",
+    "headline": "KuCoin has not paid $2M award tied to delisted token dispute, investor says",
+    "link": "https://cointelegraph.com/news/kucoin-yet-pay-seychelles-court-order-2m-token-case?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
+    "sentiment": -0.6757,
+    "importance": 1.0,
+    "weighted_sentiment": -0.6757
+  },
+  {
+    "timestamp": "2026-06-12T12:05:09",
+    "headline": "Metaplanet to form securities arm through Siiibo acquisition",
+    "link": "https://cointelegraph.com/news/metaplanet-to-form-securities-arm-through-siiibo-acquisition?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
+    "sentiment": 0.296,
+    "importance": 1.0,
+    "weighted_sentiment": 0.296
+  },
+  {
+    "timestamp": "2026-06-12T11:32:44",
+    "headline": "SpaceX tokenized IPO campaign draws $557M on Binance ahead of debut",
+    "link": "https://cointelegraph.com/news/spacex-ipo-550m-binance-crypto-rails-front-run-wall-street-pre-ipo-price-discovery?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
+    "sentiment": 0.0,
+    "importance": 1.0,
+    "weighted_sentiment": 0.0
+  },
+  {
+    "timestamp": "2026-06-12T10:46:54",
+    "headline": "Bitcoin miner 'capitulation' comes as trader sees later 2026 bear-market bottom",
+    "link": "https://cointelegraph.com/markets/bitcoin-miner-capitulation-comes-as-trader-sees-later-2026-bear-market-bottom?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
+    "sentiment": 0.0,
+    "importance": 1.5,
+    "weighted_sentiment": 0.0
+  },
+  {
+    "timestamp": "2026-06-12T10:18:58",
+    "headline": "SpaceX IPO update: Whale opens $22.3M SPCX long as synthetic price hits 30% premium",
+    "link": "https://cointelegraph.com/markets/spacex-ipo-update-whale-opens-223m-spcx-long-as-synthetic-price-hits-30-premium?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
+    "sentiment": 0.0,
+    "importance": 1.5,
+    "weighted_sentiment": 0.0
+  },
+  {
+    "timestamp": "2026-06-12T09:52:36",
+    "headline": "Crypto scammers exploit World Cup ticket demand, TRM warns",
+    "link": "https://cointelegraph.com/news/trm-world-cup-crypto-scams-fake-tickets-betting?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
+    "sentiment": -0.3182,
+    "importance": 1.0,
+    "weighted_sentiment": -0.3182
+  },
+  {
+    "timestamp": "2026-06-12T07:00:00",
+    "headline": "Exodus launches tokenized stock marketplace with Ondo, adds 200-plus onchain equities",
+    "link": "https://cointelegraph.com/news/exodus-launches-tokenized-stock-marketplace-with-ondo-adds-200-onchain-equities?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
+    "sentiment": 0.0,
+    "importance": 1.5,
+    "weighted_sentiment": 0.0
+  },
+  {
+    "timestamp": "2026-06-12T18:10:17",
+    "headline": "Bitcoin price faces new risk as big buyers lose conviction",
+    "link": "https://cryptoslate.com/bitcoin-price-faces-new-risk-as-big-buyers-lose-conviction/",
+    "source": "cryptoslate.com",
     "sentiment": -0.5859,
     "importance": 1.0,
     "weighted_sentiment": -0.5859
   },
   {
-    "timestamp": "2026-06-07T15:20:55",
-    "headline": "Crypto rails made prediction markets global, gambling laws may make them local again",
-    "link": "https://cryptoslate.com/crypto-rails-made-prediction-markets-global-gambling-laws-may-make-them-local-again/",
+    "timestamp": "2026-06-12T16:05:32",
+    "headline": "XRP aims for $0.90 as ETF demand battles selling pressure from whales",
+    "link": "https://cryptoslate.com/xrp-aims-a-0-90-as-etf-demand-battles-selling-pressure-from-whales/",
     "source": "cryptoslate.com",
+    "sentiment": -0.6486,
+    "importance": 1.5,
+    "weighted_sentiment": -0.9729
+  },
+  {
+    "timestamp": "2026-06-12T14:15:31",
+    "headline": "Firms are turning to blockchain to fight an ad fraud problem AI is making worse",
+    "link": "https://cryptoslate.com/firms-are-turning-to-blockchain-to-fight-an-ad-fraud-problem-ai-is-making-worse/",
+    "source": "cryptoslate.com",
+    "sentiment": -0.9042,
+    "importance": 1.0,
+    "weighted_sentiment": -0.9042
+  },
+  {
+    "timestamp": "2026-06-12T13:05:30",
+    "headline": "Crypto exchanges are opening a two-front war for the stock market",
+    "link": "https://cryptoslate.com/crypto-exchanges-are-opening-a-two-front-war-for-the-stock-market/",
+    "source": "cryptoslate.com",
+    "sentiment": -0.5994,
+    "importance": 1.5,
+    "weighted_sentiment": -0.8991
+  },
+  {
+    "timestamp": "2026-06-12T11:25:51",
+    "headline": "Ripple chases AI\u2019s machine economy as XRPL stablecoins near $1 billion",
+    "link": "https://cryptoslate.com/ripple-chases-ais-machine-economy-as-xrpl-stablecoins-near-1-billion/",
+    "source": "cryptoslate.com",
+    "sentiment": 0.0,
+    "importance": 2.0,
+    "weighted_sentiment": 0.0
+  },
+  {
+    "timestamp": "2026-06-12T09:59:07",
+    "headline": "CLARITY Act moves to a fight between cops and coders",
+    "link": "https://cryptoslate.com/clarity-act-moves-to-a-fight-between-cops-and-coders/",
+    "source": "cryptoslate.com",
+    "sentiment": 0.2103,
+    "importance": 1.5,
+    "weighted_sentiment": 0.3155
+  },
+  {
+    "timestamp": "2026-06-12T17:50:06",
+    "headline": "Crypto Firms Scrap Tokenized SpaceX Share Offerings as SPCX Surges After IPO",
+    "link": "https://decrypt.co/370948/crypto-firms-scrap-tokenized-spacex-share-offerings-spcx-surges-ipo",
+    "source": "decrypt.co",
+    "sentiment": 0.296,
+    "importance": 1.0,
+    "weighted_sentiment": 0.296
+  },
+  {
+    "timestamp": "2026-06-12T17:22:37",
+    "headline": "Tennessee Man Indicted for Alleged Crypto Ponzi Scheme That Stole Millions From Investors",
+    "link": "https://decrypt.co/370943/tennessee-man-indicted-crypto-ponzi-scheme-stole-millions-investors",
+    "source": "decrypt.co",
     "sentiment": 0.0,
     "importance": 1.0,
     "weighted_sentiment": 0.0
   },
   {
-    "timestamp": "2026-06-07T15:48:14",
-    "headline": "Wall Street Is Coming for Hyperliquid's Perps Crown, Arthur Hayes Says",
-    "link": "https://decrypt.co/370236/wall-street-coming-hyperliquid-perps-crown-arthur-hayes-says",
+    "timestamp": "2026-06-12T17:12:36",
+    "headline": "Iran-Linked Group That Hacked Kash Patel's Email Threatens World Cup With Hijacked FBI Drones",
+    "link": "https://decrypt.co/370937/iran-group-hacked-kash-patel-email-threatens-world-cup-hijacked-drones",
+    "source": "decrypt.co",
+    "sentiment": -0.6486,
+    "importance": 2.0,
+    "weighted_sentiment": -1.2972
+  },
+  {
+    "timestamp": "2026-06-12T16:44:39",
+    "headline": "Americans Traded Up to $34 Billion on Offshore Prediction Markets: Study",
+    "link": "https://decrypt.co/370908/americans-traded-34-billion-offshore-prediction-markets-study",
+    "source": "decrypt.co",
+    "sentiment": 0.0,
+    "importance": 1.0,
+    "weighted_sentiment": 0.0
+  },
+  {
+    "timestamp": "2026-06-12T15:16:08",
+    "headline": "'Winter Is Over': Standard Chartered Calls Crypto Bottom as Bitcoin Recovers From $60K Fall",
+    "link": "https://decrypt.co/370907/winter-over-standard-chartered-calls-crypto-bottom-bitcoin-recovers-60k-fall",
+    "source": "decrypt.co",
+    "sentiment": 0.0,
+    "importance": 1.0,
+    "weighted_sentiment": 0.0
+  },
+  {
+    "timestamp": "2026-06-12T15:05:24",
+    "headline": "Sam Bankman-Fried Loses Appeal as Federal Court Upholds 'Robust' Fraud Conviction",
+    "link": "https://decrypt.co/370909/sam-bankman-fried-loses-appeal-federal-court-upholds-fraud",
+    "source": "decrypt.co",
+    "sentiment": -0.5719,
+    "importance": 1.0,
+    "weighted_sentiment": -0.5719
+  },
+  {
+    "timestamp": "2026-06-12T15:02:28",
+    "headline": "GameStop Renews Bitcoin Deal That Did Little for Its Record Quarter",
+    "link": "https://decrypt.co/370905/gamestop-renews-bitcoin-deal-that-did-little-for-its-record-quarter",
     "source": "decrypt.co",
     "sentiment": 0.0,
     "importance": 1.5,
     "weighted_sentiment": 0.0
   },
   {
-    "timestamp": "2026-06-07T17:10:56",
-    "headline": "DeFi\u2019s old hack vectors are fading \u2013 But the new risk can hit six chains at once",
-    "link": "https://cryptoslate.com/defis-old-hacks-are-fading-the-new-risk-can-hit-six-chains-at-once/",
-    "source": "cryptoslate.com",
-    "sentiment": -0.3919,
+    "timestamp": "2026-06-12T12:45:39",
+    "headline": "Metaplanet Acquires Japanese Securities Firm for $13M to Launch Bitcoin Yield Products",
+    "link": "https://decrypt.co/370891/metaplanet-acquires-japanese-securities-firm-for-13m-to-launch-bitcoin-yield-products",
+    "source": "decrypt.co",
+    "sentiment": 0.296,
     "importance": 1.0,
-    "weighted_sentiment": -0.3919
+    "weighted_sentiment": 0.296
   },
   {
-    "timestamp": "2026-06-07T18:01:03",
-    "headline": "Frontier AI Models Can Find Crypto's Biggest Bugs. Experts Warn the Industry Isn't Ready",
-    "link": "https://decrypt.co/370232/frontier-ai-models-find-crypto-bugs-industry-isnt-ready",
+    "timestamp": "2026-06-12T12:31:52",
+    "headline": "Morning Minute: SpaceX Prices Largest IPO Ever at $135",
+    "link": "https://decrypt.co/370879/morning-minute-spacex-prices-largest-ipo-ever-at-135",
     "source": "decrypt.co",
-    "sentiment": -0.3632,
+    "sentiment": 0.0,
     "importance": 1.0,
-    "weighted_sentiment": -0.3632
+    "weighted_sentiment": 0.0
+  },
+  {
+    "timestamp": "2026-06-12T12:25:00",
+    "headline": "Elon Musk's SpaceX IPO: The Bull and Bear Case for Bitcoin",
+    "link": "https://decrypt.co/370886/elon-musks-spacex-ipo-the-bull-and-bear-case-for-bitcoin",
+    "source": "decrypt.co",
+    "sentiment": 0.0,
+    "importance": 1.0,
+    "weighted_sentiment": 0.0
+  },
+  {
+    "timestamp": "2026-06-12T11:02:05",
+    "headline": "Gary Gensler Backs States in Fight Over Prediction Market Regulation",
+    "link": "https://decrypt.co/370875/gary-gensler-backs-states-in-fight-over-prediction-market-regulation",
+    "source": "decrypt.co",
+    "sentiment": -0.4215,
+    "importance": 1.0,
+    "weighted_sentiment": -0.4215
+  },
+  {
+    "timestamp": "2026-06-12T10:23:39",
+    "headline": "LG Electronics Teams With Arbitrum for Blockchain-Based Ad Platform",
+    "link": "https://decrypt.co/370866/lg-electronics-teams-with-arbitrum-for-blockchain-based-ad-platform",
+    "source": "decrypt.co",
+    "sentiment": 0.0,
+    "importance": 1.5,
+    "weighted_sentiment": 0.0
+  },
+  {
+    "timestamp": "2026-06-12T18:40:57",
+    "headline": "Moonshot AI's Kimi Work Brings 300 AI Agents to Your Desktop",
+    "link": "https://decrypt.co/370954/moonshot-ai-kimi-work-300-agents-desktop",
+    "source": "decrypt.co",
+    "sentiment": 0.0,
+    "importance": 1.5,
+    "weighted_sentiment": 0.0
+  },
+  {
+    "timestamp": "2026-06-12T18:14:24",
+    "headline": "Americans Fear Job Losses Due to AI But Hope for Cancer, Alzheimer\u2019s Cures: Anthropic Survey",
+    "link": "https://decrypt.co/370951/americans-fear-job-losses-ai-hope-cancer-alzheimers-cures-anthropic",
+    "source": "decrypt.co",
+    "sentiment": -0.7351,
+    "importance": 2.0,
+    "weighted_sentiment": -1.4702
+  },
+  {
+    "timestamp": "2026-06-12T19:22:28",
+    "headline": "AI Agents Still Can't Stop Prompt Injection Attacks, Researchers Warn",
+    "link": "https://decrypt.co/370972/ai-agents-prompt-injection-attacks-research",
+    "source": "decrypt.co",
+    "sentiment": -0.3425,
+    "importance": 2.0,
+    "weighted_sentiment": -0.685
+  },
+  {
+    "timestamp": "2026-06-12T20:05:02",
+    "headline": "SEC targets 20-year-old rule standing between Wall Street and blockchain trading",
+    "link": "https://cryptoslate.com/sec-targets-20-year-old-rule-standing-between-wall-street-and-blockchain-trading/",
+    "source": "cryptoslate.com",
+    "sentiment": 0.0,
+    "importance": 1.0,
+    "weighted_sentiment": 0.0
+  },
+  {
+    "timestamp": "2026-06-12T19:56:26",
+    "headline": "How Crypto Firms Will Own the Octagon at Trump's White House UFC Event",
+    "link": "https://decrypt.co/370974/how-crypto-firms-own-octagon-trump-white-house-ufc-event",
+    "source": "decrypt.co",
+    "sentiment": 0.0,
+    "importance": 1.5,
+    "weighted_sentiment": 0.0
+  },
+  {
+    "timestamp": "2026-06-12T07:00:00",
+    "headline": "Blockworks acquires Messari in crypto data consolidation push",
+    "link": "https://cointelegraph.com/news/blockworks-buys-rival-messari-at-fraction-of-2022-valuation?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
+    "sentiment": 0.0,
+    "importance": 1.5,
+    "weighted_sentiment": 0.0
+  },
+  {
+    "timestamp": "2026-06-13T03:24:05",
+    "headline": "ETH futures flash bearish signal, but stakers\u2019 resilience points to underlying strength",
+    "link": "https://cointelegraph.com/markets/eth-futures-flash-bearish-signal-but-stakers-resilience-points-to-underlying-strength?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
+    "sentiment": 0.6486,
+    "importance": 1.5,
+    "weighted_sentiment": 0.9729
+  },
+  {
+    "timestamp": "2026-06-13T02:37:40",
+    "headline": "Anthropic suspends access to Fable 5, Mythos 5, citing US directive",
+    "link": "https://cointelegraph.com/news/anthropic-suspends-access-to-fable-mythos-citing-us-directive?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
+    "sentiment": 0.0,
+    "importance": 2.0,
+    "weighted_sentiment": 0.0
+  },
+  {
+    "timestamp": "2026-06-13T02:17:55",
+    "headline": "Major crypto exchanges cancel SpaceX IPO allocations, promising refunds",
+    "link": "https://cointelegraph.com/news/major-crypto-exchanges-cancel-spacex-ipo-allocations-promising-refunds?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
+    "sentiment": 0.1119,
+    "importance": 1.0,
+    "weighted_sentiment": 0.1119
+  },
+  {
+    "timestamp": "2026-06-13T00:51:36",
+    "headline": "Bitcoin\u2019s \u2018calm top\u2019 challenges most market bottom estimates: Research",
+    "link": "https://cointelegraph.com/markets/bitcoins-calm-top-challenges-old-bottom-targets-what-traders-need-to-know?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
+    "sentiment": 0.0772,
+    "importance": 1.5,
+    "weighted_sentiment": 0.1158
+  },
+  {
+    "timestamp": "2026-06-12T23:42:12",
+    "headline": "Bitcoin rally to $70K builds as orderbook structure highlights traders\u2019 confidence",
+    "link": "https://cointelegraph.com/markets/bitcoin-data-points-to-a-relief-rally-as-order-book-demand-targets-70k?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
+    "sentiment": 0.5106,
+    "importance": 1.0,
+    "weighted_sentiment": 0.5106
+  },
+  {
+    "timestamp": "2026-06-13T08:25:39",
+    "headline": "Are 24/7 CME Bitcoin futures a volatility cure \u2014 or a new leverage trap?",
+    "link": "https://cryptoslate.com/are-24-7-cme-bitcoin-futures-a-volatility-cure-or-a-new-leverage-trap/",
+    "source": "cryptoslate.com",
+    "sentiment": -0.3182,
+    "importance": 1.0,
+    "weighted_sentiment": -0.3182
+  },
+  {
+    "timestamp": "2026-06-13T05:47:00",
+    "headline": "Here\u2019s what happened in crypto today",
+    "link": "https://cointelegraph.com/news/what-happened-in-crypto-today?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
+    "sentiment": 0.0,
+    "importance": 1.0,
+    "weighted_sentiment": 0.0
+  },
+  {
+    "timestamp": "2026-06-12T13:03:23",
+    "headline": "Exclusive: KuCoin has not paid $2M award tied to delisted token dispute, investor says",
+    "link": "https://cointelegraph.com/news/kucoin-yet-pay-seychelles-court-order-2m-token-case?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
+    "sentiment": -0.6187,
+    "importance": 1.0,
+    "weighted_sentiment": -0.6187
+  },
+  {
+    "timestamp": "2026-06-13T11:52:41",
+    "headline": "Morpho's $175M raise shows where crypto VC money is flowing",
+    "link": "https://cointelegraph.com/news/morphos-175m-raise-shows-where-the-last-of-the-crypto-vc-money-is-going?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
+    "sentiment": 0.0,
+    "importance": 1.0,
+    "weighted_sentiment": 0.0
+  },
+  {
+    "timestamp": "2026-06-13T12:30:11",
+    "headline": "Bitcoin faces one of its biggest mining difficulty drops as miner margins collapse",
+    "link": "https://cryptoslate.com/bitcoin-faces-one-of-its-biggest-mining-difficulty-drops-as-miner-margins-collapse/",
+    "source": "cryptoslate.com",
+    "sentiment": -0.6808,
+    "importance": 1.5,
+    "weighted_sentiment": -1.0212
+  },
+  {
+    "timestamp": "2026-06-13T10:30:08",
+    "headline": "Legacy sportsbooks are chasing prediction markets that already trade billions each month",
+    "link": "https://cryptoslate.com/legacy-sportsbooks-are-chasing-prediction-markets-that-already-trade-billions-each-month/",
+    "source": "cryptoslate.com",
+    "sentiment": 0.0,
+    "importance": 1.0,
+    "weighted_sentiment": 0.0
+  },
+  {
+    "timestamp": "2026-06-13T13:01:06",
+    "headline": "AI Agent Rekts Dev on Bogus Scan, Leaves Them Begging for Crypto Donations",
+    "link": "https://decrypt.co/370988/ai-agent-rekts-dev-bogus-scan-crypto-donations",
+    "source": "decrypt.co",
+    "sentiment": 0.0,
+    "importance": 1.0,
+    "weighted_sentiment": 0.0
+  },
+  {
+    "timestamp": "2026-06-13T14:45:43",
+    "headline": "Anthropic's Mythos AI finds no more 'serious' bugs in Zcash: Wilcox",
+    "link": "https://cointelegraph.com/news/anthropic-mythos-audit-no-serious-bugs-zcash?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
+    "sentiment": -0.1742,
+    "importance": 2.0,
+    "weighted_sentiment": -0.3484
+  },
+  {
+    "timestamp": "2026-06-13T13:58:24",
+    "headline": "Bitcoin sales are necessary for Strategy's digital credit business, Saylor says",
+    "link": "https://cointelegraph.com/news/saylor-strategys-bitcoin-sale-defend-digital-credit-products?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
+    "sentiment": 0.3818,
+    "importance": 1.0,
+    "weighted_sentiment": 0.3818
+  },
+  {
+    "timestamp": "2026-06-13T16:40:02",
+    "headline": "US export order removes Anthropic Mythos model access fueling crypto bets on AI that is beyond government reach",
+    "link": "https://cryptoslate.com/us-anthropic-fable-mythos-crackdown-fuels-crypto-bet-on-ai-that-is-beyond-government-reach/",
+    "source": "cryptoslate.com",
+    "sentiment": 0.0258,
+    "importance": 2.0,
+    "weighted_sentiment": 0.0516
+  },
+  {
+    "timestamp": "2026-06-13T14:15:47",
+    "headline": "Wholesale inflation is back in focus. Here\u2019s what PPI means for your money and Bitcoin",
+    "link": "https://cryptoslate.com/wholesale-inflation-is-back-in-focus-heres-what-ppi-means-for-your-money-and-bitcoin/",
+    "source": "cryptoslate.com",
+    "sentiment": 0.0,
+    "importance": 1.5,
+    "weighted_sentiment": 0.0
+  },
+  {
+    "timestamp": "2026-06-13T16:01:04",
+    "headline": "Google Sues Chinese Crime Group for Allegedly Using Gemini AI for Mass Phishing Scams",
+    "link": "https://decrypt.co/371014/google-sues-chinese-crime-group-gemini-ai-phishing-scams",
+    "source": "decrypt.co",
+    "sentiment": -0.8074,
+    "importance": 1.0,
+    "weighted_sentiment": -0.8074
+  },
+  {
+    "timestamp": "2026-06-13T18:30:38",
+    "headline": "The future of vaults: neobanks and invisible DeFi",
+    "link": "https://cryptoslate.com/the-future-of-vaults-neobanks-and-invisible-defi/",
+    "source": "cryptoslate.com",
+    "sentiment": 0.0,
+    "importance": 1.0,
+    "weighted_sentiment": 0.0
   }
 ]

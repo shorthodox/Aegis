@@ -1966,6 +1966,30 @@ def prepare_features(df: pd.DataFrame,
     for h in [1, 4, 12, 24]:
         compiled_features[f'ret_{h}h'] = df['close'].pct_change(h)
 
+    # ----- Primary Model Precision Features (high-signal, regime-independent) -----
+    # trend_consistency_20: fraction of last 20 bars where close > open.
+    # Captures persistent directional bias without depending on absolute price level.
+    _up_bars = (df['close'] > df['open']).astype(float)
+    compiled_features['trend_consistency_20'] = _up_bars.rolling(20, min_periods=5).mean().fillna(0.5)
+
+    # price_disp_atr_pct: (close - EMA_50) / ATR_14.
+    # Normalises trend displacement by current volatility. Stationary across tokens
+    # and regimes — a +3 ATR displacement means the same thing whether the token is BTC or DOGE.
+    _atr14_tmp = compute_atr(df, 14)
+    _ema50_tmp = df['close'].ewm(span=50, adjust=False).mean()
+    compiled_features['price_disp_atr_pct'] = (
+        (df['close'] - _ema50_tmp) / (_atr14_tmp.replace(0, np.nan) + 1e-9)
+    ).clip(-10, 10).fillna(0.0)
+
+    # vol_confirm_ratio: ratio of total volume on up-closes vs down-closes over 20 bars.
+    # > 1.0 = buyers dominate (bullish), < 1.0 = sellers dominate (bearish).
+    # Complements CMF (which uses intra-bar position) by using net close direction.
+    _vol_up   = (df['volume'] * (df['close'] > df['close'].shift(1)).astype(float)).rolling(20, min_periods=5).sum()
+    _vol_down = (df['volume'] * (df['close'] < df['close'].shift(1)).astype(float)).rolling(20, min_periods=5).sum()
+    compiled_features['vol_confirm_ratio'] = (
+        (_vol_up / (_vol_down + 1e-9)).clip(0.1, 10.0).apply(np.log)  # log-scale for XGBoost symmetry
+    ).fillna(0.0)
+
     # ==================== NEW FEATURES ====================
     compiled_features['aroon_up'], compiled_features['aroon_down'], compiled_features['aroon_osc'] = compute_aroon(df, period=25)
     compiled_features['keltner_upper'], compiled_features['keltner_lower'], compiled_features['keltner_width'] = compute_keltner_channels(df)

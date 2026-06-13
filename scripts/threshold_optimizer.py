@@ -59,6 +59,8 @@ from src.ml.predictor import Predictor
 from scripts.retrain_model import (
     FLEET_SYMBOLS,
     FEE_ROUNDTRIP,
+    AdaptiveNormalizer,
+    compute_soft_confluence_features,
     create_triple_barrier_labels,
     fetch_futures_data,
     fetch_fear_greed,
@@ -146,25 +148,52 @@ def _fit_local_model(
 
     # Inverse-frequency class weights so HOLD majority doesn't swamp BUY/SELL
     w_tr = sample_weights(y_tr)
+    n_valid_total = int(valid_tr.sum())
+
+    # Adaptive hyperparameters: scale regularization to training set size.
+    # Prior ultra-conservative values (max_depth=3, subsample=0.5, min_child_weight=10,
+    # reg_lambda=2.0, gamma=1.0) produced near-uniform probabilities (~0.37 mean)
+    # because the heavy regularization prevented any splits with only ~1400 valid bars.
+    _max_depth   = 5 if n_valid_total > 800 else (4 if n_valid_total > 400 else 3)
+    _min_child_w = max(3, min(8, n_valid_total // 100))
+    _subsample   = 0.85 if n_valid_total > 500 else 0.90
+    _colsample   = 0.75 if n_valid_total > 500 else 0.85
 
     params: Dict[str, Any] = {
         "objective":        "multi:softprob",
         "num_class":        3,
         "eval_metric":      "mlogloss",
-        "max_depth":        3,
+        "max_depth":        _max_depth,
         "learning_rate":    0.05,
-        "subsample":        0.5,
-        "colsample_bytree": 0.5,
-        "min_child_weight": 10,
-        "reg_lambda":       2.0,
-        "gamma":            1.0,  # Prune noisy leaves to improve precision
+        "subsample":        _subsample,
+        "colsample_bytree": _colsample,
+        "min_child_weight": _min_child_w,
+        "reg_lambda":       1.0,
+        "gamma":            0.3,
         "seed":             42,
         "tree_method":      "hist",
         "missing":          np.nan,
         "verbosity":        0,
     }
-    dm_tr = xgb.DMatrix(X_tr, label=y_tr, weight=w_tr, feature_names=cols)
-    model = xgb.train(params, dm_tr, num_boost_round=LOCAL_ROUNDS, verbose_eval=False)
+
+    # Early stopping on last 20% of valid training rows to prevent overfitting.
+    es_cut = max(20, int(len(X_tr) * 0.20))
+    X_tr_es, X_val_es = X_tr[:-es_cut], X_tr[-es_cut:]
+    y_tr_es, y_val_es = y_tr[:-es_cut], y_tr[-es_cut:]
+    w_tr_es = w_tr[:-es_cut]
+
+    dm_tr_es  = xgb.DMatrix(X_tr_es,  label=y_tr_es, weight=w_tr_es, feature_names=cols)
+    dm_val_es = xgb.DMatrix(X_val_es, label=y_val_es, feature_names=cols)
+    try:
+        model = xgb.train(
+            params, dm_tr_es, num_boost_round=LOCAL_ROUNDS,
+            evals=[(dm_val_es, "val")],
+            early_stopping_rounds=30,
+            verbose_eval=False,
+        )
+    except Exception:
+        dm_tr = xgb.DMatrix(X_tr, label=y_tr, weight=w_tr, feature_names=cols)
+        model = xgb.train(params, dm_tr, num_boost_round=LOCAL_ROUNDS, verbose_eval=False)
 
     X_ev  = feat_df.iloc[train_n:].values
     dm_ev = xgb.DMatrix(X_ev, feature_names=cols)
@@ -338,12 +367,12 @@ def optimize_atr(
     scored: List[Dict[str, Any]] = []
 
     for mult in ATR_MULT_GRID:
-        labs  = create_triple_barrier_labels(
+        labs  = np.asarray(create_triple_barrier_labels(
             df, atr_multiplier=mult,
             volatility_regime=vr, efficiency_ratio=er,
             trend_regime=tr, macro_confluence_score=cs,
-        ).values
-        valid = np.asarray(labs != CENSORED)
+        ))
+        valid = labs != CENSORED
         n = int(valid.sum())
         if n < MIN_REGIME_BARS:
             continue
@@ -404,12 +433,12 @@ def optimize_lookahead(
     scored: List[Dict[str, Any]] = []
 
     for lh in LOOKAHEAD_GRID:
-        labs  = create_triple_barrier_labels(
+        labs  = np.asarray(create_triple_barrier_labels(
             df, atr_multiplier=atr_mult, max_lookahead=lh,
             volatility_regime=vr, efficiency_ratio=er,
             trend_regime=tr, macro_confluence_score=cs,
-        ).values
-        valid = np.asarray(labs != CENSORED)
+        ))
+        valid = labs != CENSORED
         n = int(valid.sum())
         if n < MIN_REGIME_BARS:
             continue
@@ -479,8 +508,7 @@ def optimize_symbol(symbol: str) -> Optional[Dict[str, Any]]:
         if df_1h is None or len(df_1h) < MIN_BARS:
             print(f"   [{symbol}] Not enough data — skipping.")
             return None
-        btc_df  = p.fetch_btc_data(timeframe="1h", limit=HISTORY_HOURS) \
-                  if hasattr(p, "fetch_btc_data") else None
+        btc_df  = p.fetch_btc_data(timeframe="1h", limit=HISTORY_HOURS)
         news_df = p.load_news_data()
         df_1d   = p.fetch_live_data(timeframe="1d", limit=300)
         fund_df, oi_df = fetch_futures_data(symbol, df_1h)
@@ -506,6 +534,17 @@ def optimize_symbol(symbol: str) -> Optional[Dict[str, Any]]:
     features = features.reset_index(drop=True)
     n_feat   = len(features)
 
+    # ── soft confluence features (prc_total / macro_confluence_score are top-2 gain
+    # features in production but absent without this call — matching MGO behaviour) ──
+    try:
+        _soft_feats = compute_soft_confluence_features(features)
+        for _sc_col in _soft_feats.columns:
+            features[_sc_col] = _soft_feats[_sc_col].values
+        print(f"   [{symbol}] Soft confluence features added ({len(_soft_feats.columns)}): "
+              f"{', '.join(list(_soft_feats.columns)[:5])}...")
+    except Exception as _sc_err:
+        print(f"   [{symbol}] Soft confluence skip ({_sc_err}) — model will lack prc_total/macro_conf")
+
     # ── align raw OHLCV to feature rows ──────────────────────────────────────
     df_raw = df_1h.iloc[-n_feat:].reset_index(drop=True).copy()
     for col in ("volatility_regime", "efficiency_ratio_10",
@@ -528,11 +567,25 @@ def optimize_symbol(symbol: str) -> Optional[Dict[str, Any]]:
         feat_df = feat_df[[c for c in feat_df.columns if not c.startswith("_")]]
         feature_cols = list(feat_df.columns)
 
+    # Drop non-numeric columns (e.g. volatility_regime='HIGH_VOL') before XGBoost
+    _str_cols = feat_df.select_dtypes(include=["object", "category", "string"]).columns.tolist()
+    if _str_cols:
+        feat_df = feat_df.drop(columns=_str_cols)
+        feature_cols = list(feat_df.columns)
     feat_df = feat_df.replace([np.inf, -np.inf], np.nan).fillna(0)
 
     # ── train / eval split ────────────────────────────────────────────────────
     train_n = int(n_feat * TRAIN_FRAC)
     eval_n  = n_feat - train_n
+
+    # ── AdaptiveNormalizer: fit on train partition, transform all rows ─────────
+    # Eliminates distribution shift between train and eval windows; the local
+    # model sees z-scored features consistent with what the production model uses.
+    _normalizer = AdaptiveNormalizer(window=1000, drift_threshold=0.2)
+    _norm_cols = list(feat_df.select_dtypes(include=[np.number]).columns)
+    _normalizer.fit_initial(feat_df.iloc[:train_n], _norm_cols)
+    feat_df = _normalizer.transform(feat_df, _norm_cols)
+    feat_df = feat_df.replace([np.inf, -np.inf], np.nan).fillna(0)
 
     # ── regime boundaries from ALL data (stable percentile anchors) ───────────
     regimes_all, boundaries = classify_regimes(df_raw)
@@ -543,11 +596,11 @@ def optimize_symbol(symbol: str) -> Optional[Dict[str, Any]]:
     tr_all = df_raw["trend_regime"]        if "trend_regime"        in df_raw.columns else None
     cs_all = df_raw.get("macro_confluence_score")
 
-    labels_all = create_triple_barrier_labels(
+    labels_all = np.asarray(create_triple_barrier_labels(
         df_raw, atr_multiplier=base_atr_mult,
         volatility_regime=vr_all, efficiency_ratio=er_all,
         trend_regime=tr_all, macro_confluence_score=cs_all,
-    ).values
+    ))
 
     # ── fit local model; get OOS directional predictions ─────────────────────
     print(f"   [{symbol}] Fitting local model "
@@ -576,12 +629,12 @@ def optimize_symbol(symbol: str) -> Optional[Dict[str, Any]]:
     tr_ev = df_ev["trend_regime"]        if "trend_regime"        in df_ev.columns else None
     cs_ev = df_ev.get("macro_confluence_score")
 
-    labels_ev = create_triple_barrier_labels(
+    labels_ev = np.asarray(create_triple_barrier_labels(
         df_ev, atr_multiplier=best_atr,
         volatility_regime=vr_ev, efficiency_ratio=er_ev,
         trend_regime=tr_ev, macro_confluence_score=cs_ev,
-    ).values
-    valid_ev = np.asarray(labels_ev != CENSORED)
+    ))
+    valid_ev = labels_ev != CENSORED
 
     # ── global threshold optimisation ─────────────────────────────────────────
     n_g     = int(valid_ev.sum())

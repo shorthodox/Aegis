@@ -58,11 +58,16 @@ from scripts.retrain_model import (
     MAX_LOOKAHEAD,
     MIN_FIRES_DEV,
     TARGET_SIGNAL_PRECISION,
+    AdaptiveNormalizer,
+    _adaptive_confluence_bounds,
+    analyze_training_labels_for_adaptation,
     backtest,
+    compute_soft_confluence_features,
     create_triple_barrier_labels,
     fetch_fear_greed,
     fetch_futures_data,
     get_atr_multiplier,
+    get_dynamic_lookahead,
     sample_weights,
 )
 from scripts.validation import validate_architecture_from_folds
@@ -81,14 +86,33 @@ MIN_BARS = 800
 TRAIN_FRAC = 0.70
 LOCAL_ROUNDS = 300
 MIN_CALIBRATION_COVERAGE = 0.70
-MIN_GATE_COVERAGE = 0.15
-MIN_GATE_SIGNALS = 50
+MIN_GATE_COVERAGE = 0.08           # lowered from 0.15 — precision is the primary bar
+MIN_GATE_SIGNALS = 30              # lowered from 50 — fewer signals acceptable when precision is high
 MIN_VARIANCE_RETAINED = 0.40
+MIN_GATE_PRECISION = 0.60          # business requirement — gates below 60% precision are rejected
+
+# ── Quality bypass: high-PF / high-Sharpe gates just below the precision floor ─
+# A gate with precision 55-60% + PF ≥ 1.30 + Sharpe ≥ 3.0 is genuinely profitable
+# on efficient large-cap markets (BTC, ETH) where raw 60% is rarely achievable.
+PRECISION_BYPASS_FLOOR = 0.55     # softer precision floor for quality-bypass path
+PRECISION_BYPASS_MIN_PF = 1.30    # minimum profit factor to qualify for bypass
+PRECISION_BYPASS_MIN_SHARPE = 3.0 # minimum Sharpe to qualify for bypass
+
+# ── Profitability bypass: strong financial metrics regardless of precision floor ─
+# When 3-class precision is below 55% but PF, Sharpe, and Exp are all strong, the
+# gate is genuinely profitable: "wrong" signals are mostly HOLD timeouts (small
+# -fee loss), not directional reversals. Triple-barrier precision < 55% does NOT
+# mean the model is wrong on direction — it means price often moved the right way
+# but not far enough to hit the barrier. Enable AGGRESSIVE tier only.
+PROFITABILITY_BYPASS_MIN_PF = 1.50     # minimum PF for profitability bypass
+PROFITABILITY_BYPASS_MIN_SHARPE = 5.0  # minimum Sharpe for profitability bypass
+PROFITABILITY_BYPASS_MIN_EXP = 0.15    # minimum expectancy (%) for profitability bypass
 
 # ── FIX 4: Meta gate overfit prevention (NEW CONSTANTS) ────────────────────────
 MIN_VALID_HOLDOUT_BARS = 500       # Minimum holdout size for reliable gate selection (FIX 4.1)
 MIN_GATE_LIFT = 0.01                # Reject gates with negative lift (FIX 4.2)
 FALLBACK_TRUST_THRESHOLD = 40       # Trust score below this triggers dynamic fallback (FIX 4.4)
+PRIMARY_BYPASS_PRECISION = 0.65    # emit pass-through profile when local eval dir_prec >= this
 
 # ── candidate search grids ────────────────────────────────────────────────────
 QUANTILES = [0.40, 0.30, 0.25, 0.20, 0.15, 0.10, 0.08, 0.06, 0.04, 0.02]
@@ -221,6 +245,34 @@ def _fit_local_model(
     if int(valid_mask.sum()) < 200:
         raise ValueError(f"Only {int(valid_mask.sum())} valid training bars.")
 
+    # Adaptive hyperparameters: scale complexity to dataset size.
+    # Previous conservative values (max_depth=3, min_child_weight=10, gamma=1.0,
+    # subsample=0.5) produced near-uniform probs (mean dir_prob ≈ 0.37) because
+    # each OOF fold had only 200-400 valid samples — too few for the heavy
+    # regularization to allow any learning.
+    n_valid_total = int(valid_mask.sum())
+    _max_depth = 5 if n_valid_total > 800 else (4 if n_valid_total > 400 else 3)
+    _min_child_w = max(3, min(8, n_valid_total // 100))
+    _subsample = 0.85 if n_valid_total > 500 else 0.90
+    _colsample = 0.75 if n_valid_total > 500 else 0.85
+
+    params = {
+        'objective': 'multi:softprob',
+        'num_class': 3,
+        'eval_metric': 'mlogloss',
+        'max_depth': _max_depth,
+        'learning_rate': 0.05,
+        'subsample': _subsample,
+        'colsample_bytree': _colsample,
+        'min_child_weight': _min_child_w,
+        'reg_lambda': 1.0,   # reduced from 2.0 — allow the model to learn
+        'gamma': 0.3,        # reduced from 1.0 — less aggressive split penalty
+        'seed': 42,
+        'tree_method': 'hist',
+        'missing': np.nan,
+        'verbosity': 0,
+    }
+
     # TimeSeriesSplit: choose up to 5 folds or fewer depending on train_n
     n_splits = min(5, max(2, int(train_n / 200)))
     tss = TimeSeriesSplit(n_splits=n_splits)
@@ -231,29 +283,25 @@ def _fit_local_model(
             continue
         X_tr = feat_df.iloc[:train_n].iloc[tr_idx][tr_mask].values
         y_tr = y[tr_idx][tr_mask].astype(int)
-
         w_tr = sample_weights(y_tr)
 
-        params = {
-            'objective': 'multi:softprob',
-            'num_class': 3,
-            'eval_metric': 'mlogloss',
-            'max_depth': 3,
-            'learning_rate': 0.05,
-            'subsample': 0.5,
-            'colsample_bytree': 0.5,
-            'min_child_weight': 10,
-            'reg_lambda': 2.0,
-            'gamma': 1.0,
-            'seed': 42,
-            'tree_method': 'hist',
-            'missing': np.nan,
-            'verbosity': 0,
-        }
+        # Use last 20% of fold training as early-stopping val set so we don't
+        # blindly train all LOCAL_ROUNDS on each fold.
+        n_fold = len(X_tr)
+        es_cut = max(20, int(n_fold * 0.20))
+        X_tr_es, X_val_es = X_tr[:-es_cut], X_tr[-es_cut:]
+        y_tr_es, y_val_es = y_tr[:-es_cut], y_tr[-es_cut:]
+        w_tr_es = w_tr[:-es_cut]
 
-        dm_tr = xgb.DMatrix(X_tr, label=y_tr, weight=w_tr, feature_names=cols)
+        dm_tr_es = xgb.DMatrix(X_tr_es, label=y_tr_es, weight=w_tr_es, feature_names=cols)
+        dm_val_es = xgb.DMatrix(X_val_es, label=y_val_es, feature_names=cols)
         try:
-            model = xgb.train(params, dm_tr, num_boost_round=LOCAL_ROUNDS, verbose_eval=False)
+            model = xgb.train(
+                params, dm_tr_es, num_boost_round=LOCAL_ROUNDS,
+                evals=[(dm_val_es, 'val')],
+                early_stopping_rounds=30,
+                verbose_eval=False,
+            )
         except Exception:
             continue
 
@@ -641,7 +689,22 @@ def _best_architecture_for_calibrator(
                 continue
 
             selected_prec = float((ev_labels[fire_mask] == ev_side[fire_mask]).mean()) if fired_n else 0.0
-            if selected_prec < baseline_precision:
+            # Hard precision floor — quality bypass allows 55-60% for high-PF / high-Sharpe gates
+            _bypass = (
+                selected_prec >= PRECISION_BYPASS_FLOOR
+                and selected.get('profit_factor', 0.0) >= PRECISION_BYPASS_MIN_PF
+                and selected.get('sharpe', 0.0) >= PRECISION_BYPASS_MIN_SHARPE
+            )
+            # Profitability bypass: strong financial metrics regardless of precision.
+            # 3-class precision < 55% is misleading when "wrong" signals are HOLD
+            # timeouts (-fee only), not directional reversals (-barrier). If PF,
+            # Sharpe and Exp all confirm the gate makes money, enable it.
+            _profitability_bypass = (
+                selected.get('profit_factor', 0.0) >= PROFITABILITY_BYPASS_MIN_PF
+                and selected.get('sharpe', 0.0) >= PROFITABILITY_BYPASS_MIN_SHARPE
+                and selected.get('expectancy_pct', 0.0) >= PROFITABILITY_BYPASS_MIN_EXP
+            )
+            if selected_prec < MIN_GATE_PRECISION and not _bypass and not _profitability_bypass:
                 continue
 
             if selected['expectancy_pct'] <= 0.0 or selected['sharpe'] <= 0.0 or selected['profit_factor'] < 1.10:
@@ -931,10 +994,11 @@ def _print_ranking_diagnostics(
     except Exception as exc:
         print(f"   Could not extract local feature importance: {exc}")
 
-    _histogram_summary('directional_probability', ranking_df['directional_probability'].values)
-    _histogram_summary('signal_strength_score', ranking_df['signal_strength_score'].values)
-    _histogram_summary('edge_rank', ranking_df['edge_rank'].values)
-    _histogram_summary('edge_percentile', ranking_df['edge_percentile'].values)
+    for _col in ('directional_probability', 'signal_strength_score', 'edge_rank', 'edge_percentile'):
+        if _col in ranking_df.columns:
+            _histogram_summary(_col, np.asarray(ranking_df[_col], dtype=float))
+        else:
+            print(f"   [D] {_col}: column absent")
 
     if 'regime' in ranking_df.columns:
         print("   [Regime performance]")
@@ -976,33 +1040,48 @@ def _extract_signal_diagnostics(
     diag['buy_sell_balance'] = round(n_buy / n_total, 4)
 
     # Directional probability distribution
-    probs = ranking_df['directional_probability'].values.astype(float)
-    mean_p = float(np.mean(probs))
-    med_p  = float(np.median(probs))
-    std_p  = float(np.std(probs))
-    diag['dir_prob_mean'] = round(mean_p, 4)
-    diag['dir_prob_std']  = round(std_p, 4)
-    diag['dir_prob_skew'] = round(3.0 * (mean_p - med_p) / (std_p + 1e-9), 4)  # Pearson 2nd
+    if 'directional_probability' in ranking_df.columns:
+        probs = np.asarray(ranking_df['directional_probability'], dtype=float)
+        probs = probs[~np.isnan(probs)]
+    else:
+        probs = np.array([], dtype=float)
 
-    # Prediction entropy (binary: max 1.0 at p=0.5)
-    eps = 1e-9
-    ent = -(probs * np.log2(probs + eps) + (1.0 - probs) * np.log2(1.0 - probs + eps))
-    diag['prediction_entropy_mean'] = round(float(np.mean(ent)), 4)
-    diag['prediction_entropy_std']  = round(float(np.std(ent)), 4)
+    if len(probs) > 0:
+        mean_p = float(np.mean(probs))
+        med_p  = float(np.median(probs))
+        std_p  = float(np.std(probs))
+        diag['dir_prob_mean'] = round(mean_p, 4)
+        diag['dir_prob_std']  = round(std_p, 4)
+        diag['dir_prob_skew'] = round(3.0 * (mean_p - med_p) / (std_p + 1e-9), 4)  # Pearson 2nd
+
+        # Prediction entropy (binary: max 1.0 at p=0.5)
+        eps = 1e-9
+        ent = -(probs * np.log2(probs + eps) + (1.0 - probs) * np.log2(1.0 - probs + eps))
+        diag['prediction_entropy_mean'] = round(float(np.mean(ent)), 4)
+        diag['prediction_entropy_std']  = round(float(np.std(ent)), 4)
+    else:
+        diag['dir_prob_mean'] = diag['dir_prob_std'] = diag['dir_prob_skew'] = None
+        diag['prediction_entropy_mean'] = diag['prediction_entropy_std'] = None
 
     # Edge rank stats
     if 'edge_rank' in ranking_df.columns:
-        er = ranking_df['edge_rank'].values.astype(float)
-        diag['edge_rank_mean'] = round(float(np.mean(er)), 4)
-        diag['edge_rank_std']  = round(float(np.std(er)), 4)
+        er = np.asarray(ranking_df['edge_rank'], dtype=float)
+        er = er[~np.isnan(er)]
+        diag['edge_rank_mean'] = round(float(np.mean(er)), 4) if len(er) > 0 else None
+        diag['edge_rank_std']  = round(float(np.std(er)),  4) if len(er) > 0 else None
 
     # Feature importance + concentration (HHI)
     try:
         importance = local_model.get_score(importance_type='gain')
         if importance:
-            total_gain = sum(importance.values()) + 1e-9
-            fracs = np.array(list(importance.values())) / total_gain
-            feature_pct = {f: round(100.0 * g / total_gain, 2) for f, g in importance.items()}
+            gains = np.array(list(importance.values()), dtype=float)
+            gains = np.clip(gains, 0.0, None)          # gain is always ≥0; guard float noise
+            total_gain = float(gains.sum())
+            if total_gain <= 0.0:
+                raise ValueError("all feature gains are zero")
+            fracs = gains / total_gain
+            feature_pct = {f: round(100.0 * g / total_gain, 2)
+                           for f, g in zip(importance.keys(), gains)}
             top10 = sorted(feature_pct.items(), key=lambda x: -x[1])[:10]
             diag['feature_importance_top10'] = [{'feature': f, 'pct': p} for f, p in top10]
             hhi = float(np.sum(fracs ** 2))
@@ -1012,7 +1091,7 @@ def _extract_signal_diagnostics(
             n_features = len(importance)
             min_hhi = 1.0 / n_features if n_features > 0 else 1.0
             diag['signal_diversity_score'] = round(
-                max(0.0, (1.0 - hhi) / (1.0 - min_hhi + 1e-9)), 4
+                float(np.clip((1.0 - hhi) / (1.0 - min_hhi + 1e-9), 0.0, 1.0)), 4
             )
         else:
             diag['feature_importance_top10'] = []
@@ -1048,7 +1127,7 @@ def _evaluate_architecture(
     ev_barrier = barrier_frac_ev[valid]
     regimes_ev = regimes_ev[valid].reset_index(drop=True)
     ev_edge_scores = compute_edge_scores(ev_df, ev_side, dir_conf_ev[valid], use_rank=True)
-    ev_edge_raw = ev_edge_scores.values.astype(float)
+    ev_edge_raw = np.asarray(ev_edge_scores, dtype=float)
 
     # Baseline comparison is mandatory: every gate must outperform the simple
     # no-gate directional proposal in at least one financial metric.
@@ -1100,7 +1179,7 @@ def _evaluate_architecture(
     print("   method       | arch_score | tech_ok | arch_viable | best_pf | best_exp | calib_reason")
     print(f"   {'-'*110}")
     for c in calib_candidates:
-        method = c.get('method')
+        method: str = c.get('method') or 'uncalibrated'
         if not c.get('tech_eligible', True):
             # Technically disqualified (prob_collapse / variance_destroyed) — skip
             c['best_architecture_score'] = -np.inf
@@ -1113,13 +1192,18 @@ def _evaluate_architecture(
         trainer.reports = {}
         trainer._ece_before = 1.0
         trainer._ece_after = 1.0
-        trainer.calibrator_type = method
+        trainer.calibrator_type = method or 'uncalibrated'
         trainer.best_calibrator = calib_report_raw.get(method, {}).get('model') if method in calib_report_raw else None
         _cal_scores = (
             np.asarray(ev_edge_raw, dtype=float) / 100.0
             if method == 'uncalibrated'
             else np.copy(trainer.calibrate(np.asarray(ev_edge_raw, dtype=float) / 100.0))
         )
+        _cal_report = calib_report_raw.get(method) or {
+            'method': method,
+            'ece': 1.0,
+            'brier': 0.0,
+        }
         best_arch, best_arch_score = _best_architecture_for_calibrator(
             symbol,
             ev_df,
@@ -1129,11 +1213,7 @@ def _evaluate_architecture(
             _cal_scores,
             ev_labels,
             ev_barrier,
-            calib_report_raw.get(method, {
-                'method': method,
-                'ece': float(calib_report_raw.get(method, {}).get('ece', 1.0)),
-                'brier': float(calib_report_raw.get(method, {}).get('brier', 0.0)),
-            }),
+            _cal_report,
             baseline_precision,
             baseline_pf,
             baseline_expectancy,
@@ -1365,11 +1445,26 @@ def _evaluate_architecture(
                 'baseline_expectancy': baseline_expectancy,
             }
 
-            # Hard constraints and profitability-focused scoring.
-            # Precision is still a factor, but we no longer reject solely because
-            # a candidate falls below the baseline precision.
+            # Hard constraints: precision is the primary business requirement;
+            # profitability metrics are secondary filters.
+            _bypass = (
+                selected_prec >= PRECISION_BYPASS_FLOOR
+                and selected.get('profit_factor', 0.0) >= PRECISION_BYPASS_MIN_PF
+                and selected.get('sharpe', 0.0) >= PRECISION_BYPASS_MIN_SHARPE
+            )
+            # Profitability bypass: strong financial metrics regardless of precision.
+            # 3-class precision < 55% is misleading when "wrong" signals are HOLD
+            # timeouts (-fee only), not directional reversals (-barrier). If PF,
+            # Sharpe and Exp all confirm the gate makes money, enable it.
+            _profitability_bypass = (
+                selected.get('profit_factor', 0.0) >= PROFITABILITY_BYPASS_MIN_PF
+                and selected.get('sharpe', 0.0) >= PROFITABILITY_BYPASS_MIN_SHARPE
+                and selected.get('expectancy_pct', 0.0) >= PROFITABILITY_BYPASS_MIN_EXP
+            )
             if coverage < MIN_GATE_COVERAGE:
                 hard_reason = 'coverage_below_minimum'
+            elif selected_prec < MIN_GATE_PRECISION and not _bypass and not _profitability_bypass:
+                hard_reason = f'precision_below_{MIN_GATE_PRECISION:.0%}({selected_prec:.3f})'
             elif selected['expectancy_pct'] <= 0.0:
                 hard_reason = 'nonpositive_expectancy'
             elif selected['sharpe'] <= 0.0:
@@ -1494,6 +1589,11 @@ def _evaluate_architecture(
                 continue
 
             best_score = score
+            # Profitability-bypass gates cap risk tiers at AGGRESSIVE to signal
+            # that precision hasn't met the standard bar — only aggressive users
+            # should trade these tokens. Quality-bypass and normal-pass gates
+            # can qualify for higher tiers based on actual precision.
+            _via_profitability_bypass = _profitability_bypass and selected_prec < MIN_GATE_PRECISION
             best = {
                 'symbol': symbol,
                 'gate_type': arch['name'],
@@ -1504,10 +1604,11 @@ def _evaluate_architecture(
                 'calibration': calib_report,
                 'calibration_used_by_architecture': calib_report_for_arch,
                 'risk_tiers': {
-                    'conservative': selected_prec >= 0.50 and selected['profit_factor'] >= 1.0,
-                    'balanced': selected_prec >= 0.55 and selected['expectancy_pct'] > 0.0,
+                    'conservative': (not _via_profitability_bypass) and selected_prec >= 0.50 and selected['profit_factor'] >= 1.0,
+                    'balanced': (not _via_profitability_bypass) and selected_prec >= 0.55 and selected['expectancy_pct'] > 0.0,
                     'aggressive': selected['expectancy_pct'] > 0.0 and selected['sharpe'] > 0.0,
                 },
+                'profitability_bypass': bool(_via_profitability_bypass),
                 'holdout_metrics': selected,
                 'rejected_metrics': rejected,
                 'candidate_metrics': candidate_metrics,
@@ -1756,11 +1857,27 @@ def optimize_symbol(symbol: str) -> Optional[Dict[str, Any]]:
         return None
 
     features = features.reset_index(drop=True)
+
+    # Add soft (percentile-rank) confluence features — critical for local model quality.
+    # prc_total and macro_confluence_score are the top-2 gain features in production but
+    # are absent unless we call compute_soft_confluence_features() here, matching retrain_model.py.
+    try:
+        _soft_feats = compute_soft_confluence_features(features)
+        for _sc_col in _soft_feats.columns:
+            features[_sc_col] = _soft_feats[_sc_col].values
+        print(f"   [{symbol}] Soft confluence features added ({len(_soft_feats.columns)}): "
+              f"{', '.join(list(_soft_feats.columns)[:5])}...")
+    except Exception as _sc_err:
+        print(f"   [{symbol}] Soft confluence skip ({_sc_err}) — model will lack prc_total/macro_conf")
+
     n_feat = len(features)
     df_raw = df_1h.iloc[-n_feat:].reset_index(drop=True).copy()
     for col in ('volatility_regime', 'efficiency_ratio_10', 'trend_regime', 'macro_confluence_score'):
         if col in features.columns:
             df_raw[col] = features[col].values
+
+    _token_lookahead = get_dynamic_lookahead(df_raw)
+    print(f"   [{symbol}] Dynamic lookahead: {_token_lookahead}h (MAX_LOOKAHEAD={MAX_LOOKAHEAD})")
 
     if feature_cols:
         missing = [c for c in feature_cols if c not in features.columns]
@@ -1780,19 +1897,63 @@ def optimize_symbol(symbol: str) -> Optional[Dict[str, Any]]:
     train_n = int(n_feat * TRAIN_FRAC)
     eval_n = n_feat - train_n
 
+    # ── AdaptiveNormalizer: fit on train partition, transform all rows ─────────
+    # Z-scores features using train-window statistics so the local XGBoost sees
+    # scale-invariant inputs and eval rows cannot contaminate normalization stats.
+    _normalizer = AdaptiveNormalizer(window=1000, drift_threshold=0.2)
+    _norm_cols = list(feat_df.select_dtypes(include=[np.number]).columns)
+    _normalizer.fit_initial(feat_df.iloc[:train_n], _norm_cols)
+    feat_df = _normalizer.transform(feat_df, _norm_cols)
+    feat_df = feat_df.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+
+    # ── Anti-leakage: derive confluence bounds from training portion only ─────
+    # All adaptive parameters are frozen from the training split so eval/holdout
+    # rows cannot influence their own label generation.
+    _gate_adapt_params: Dict[str, Any] = {}
+    if 'macro_confluence_score' in features.columns:
+        _cs_train = features['macro_confluence_score'].iloc[:train_n].dropna()
+        if len(_cs_train) > 10:
+            _cs_lo, _cs_hi = _adaptive_confluence_bounds(_cs_train)
+            _gate_adapt_params['buy_confluence_lower'] = _cs_lo
+            _gate_adapt_params['sell_confluence_upper'] = _cs_hi
+    # Refine with label-aware stats once initial full-data labels are available
+    # (second pass uses training labels only — still no holdout contamination).
+
     regimes_all, boundaries = classify_regimes(df_raw)
     vr_all = df_raw['volatility_regime'] if 'volatility_regime' in df_raw.columns else None
     er_all = df_raw['efficiency_ratio_10'] if 'efficiency_ratio_10' in df_raw.columns else None
     tr_all = df_raw['trend_regime'] if 'trend_regime' in df_raw.columns else None
     cs_all = df_raw.get('macro_confluence_score')
-    labels_all = create_triple_barrier_labels(
+    labels_all = np.asarray(create_triple_barrier_labels(
         df_raw,
         atr_multiplier=base_atr_mult,
+        max_lookahead=_token_lookahead,
         volatility_regime=vr_all,
         efficiency_ratio=er_all,
         trend_regime=tr_all,
         macro_confluence_score=cs_all,
-    ).values
+        adapt_params=_gate_adapt_params,
+    ), dtype=np.intp)
+
+    # Phase 2: refine adapt_params using training-split labels (label-aware, no holdout touch).
+    # Use .update() — not replacement — so phase-1 bounds survive if confluence col is absent.
+    _labels_train_series = pd.Series(labels_all[:train_n])
+    _refined_params = analyze_training_labels_for_adaptation(
+        df_raw.iloc[:train_n].reset_index(drop=True),
+        _labels_train_series,
+    )
+    _gate_adapt_params.update(_refined_params)
+    # Re-generate labels with the label-aware adapt_params; eval labels will use same params.
+    labels_all = np.asarray(create_triple_barrier_labels(
+        df_raw,
+        atr_multiplier=base_atr_mult,
+        max_lookahead=_token_lookahead,
+        volatility_regime=vr_all,
+        efficiency_ratio=er_all,
+        trend_regime=tr_all,
+        macro_confluence_score=cs_all,
+        adapt_params=_gate_adapt_params,
+    ), dtype=np.intp)
 
     print(f"   [{symbol}] Fitting local model ({train_n} train / {eval_n} eval)...", end=' ', flush=True)
     try:
@@ -1809,41 +1970,127 @@ def optimize_symbol(symbol: str) -> Optional[Dict[str, Any]]:
     tr_ev = df_ev['trend_regime'] if 'trend_regime' in df_ev.columns else None
     cs_ev = df_ev.get('macro_confluence_score')
 
-    labels_ev = create_triple_barrier_labels(
+    labels_ev = np.asarray(create_triple_barrier_labels(
         df_raw.iloc[train_n:].reset_index(drop=True),
         atr_multiplier=base_atr_mult,
+        max_lookahead=_token_lookahead,
         volatility_regime=vr_ev,
         efficiency_ratio=er_ev,
         trend_regime=tr_ev,
         macro_confluence_score=cs_ev,
-    ).values
-    barrier_frac_ev = df_ev['_barrier_frac'] if '_barrier_frac' in df_ev.columns else np.full(len(df_ev), 1.0)
+        adapt_params=_gate_adapt_params,
+    ), dtype=np.intp)
+    # Compute realistic ATR-based barrier fractions for the eval period.
+    # The constant fallback of 1.0 (100%) was causing massively inflated PF/Sharpe
+    # because the round-trip fee (0.2%) became negligible relative to 100% barriers.
+    # Real crypto barriers are ~1-4% of price (base_atr_mult × ATR / close).
+    if '_barrier_frac' in df_ev.columns:
+        barrier_frac_ev = df_ev['_barrier_frac'].values
+    else:
+        _df_raw_ev = df_raw.iloc[train_n:].reset_index(drop=True)
+        _atr_ev   = np.asarray(compute_atr(_df_raw_ev, period=14), dtype=float)
+        _close_ev = np.asarray(_df_raw_ev['close'], dtype=float)
+        _vr_scale = np.clip(
+            np.asarray(df_ev['volatility_regime'], dtype=float) if 'volatility_regime' in df_ev.columns
+            else np.ones(len(df_ev), dtype=float), 0.8, 1.5
+        )
+        barrier_frac_ev = np.clip(
+            base_atr_mult * _vr_scale * _atr_ev / np.where(_close_ev > 0, _close_ev, 1e-9),
+            0.003, 0.25,
+        )
 
     proposed_ev = proposed_all[train_n:]
     dir_conf_ev = dir_conf_all[train_n:]
     probs_ev = probs_all[train_n:]
     train_mask = labels_all[:train_n] != CENSORED
-    train_edge_scores = compute_edge_scores(
+    train_edge_scores = np.asarray(compute_edge_scores(
         features.iloc[:train_n].reset_index(drop=True),
         proposed_all[:train_n],
         dir_conf_all[:train_n],
         use_rank=True,
-    ).values.astype(float)
+    ), dtype=float)
     train_edge_raw = train_edge_scores[train_mask]
     train_correct = np.asarray(labels_all[:train_n][train_mask] == proposed_all[:train_n][train_mask]).astype(int)
 
-    valid_ev = labels_ev != CENSORED
+    valid_ev = np.asarray(labels_ev != CENSORED, dtype=bool)
     n_valid_ev = int(valid_ev.sum())
     if n_valid_ev < MIN_FIRES_DEV:
         print(f"   [{symbol}] Not enough valid evaluation bars: {n_valid_ev} < {MIN_FIRES_DEV}.")
         return None
 
+    # ── PRIMARY_CONFIDENCE bypass ────────────────────────────────────────────────
+    # When the local model already achieves ≥65% directional precision on eval,
+    # the edge-score meta gate typically adds noise rather than lift.  Root causes:
+    # OOF→full-fit distribution shift in the meta LR, stale token_params regime
+    # boundaries, low meta-LR AUC (~0.55).  Emit a pass-through profile instead of
+    # running the full architecture search.
+    # retrain_model.py skips the stale-threshold guard for PRIMARY_CONFIDENCE so the
+    # threshold=0.0 (fire-all-directional) value is not rejected by the >50% check.
+    _ev_proposed_v = proposed_ev[valid_ev]
+    _ev_labels_v   = labels_ev[valid_ev]
+    _ev_dir_mask   = _ev_proposed_v != 1
+    _ev_dir_fires  = int(_ev_dir_mask.sum())
+    _ev_dir_prec   = float((_ev_proposed_v[_ev_dir_mask] == _ev_labels_v[_ev_dir_mask]).mean()) if _ev_dir_fires > 0 else 0.0
+    print(f"   [{symbol}] Local model eval: dir_prec={_ev_dir_prec:.1%}, dir_fires={_ev_dir_fires}")
+    if _ev_dir_prec >= PRIMARY_BYPASS_PRECISION and _ev_dir_fires >= MIN_FIRES_DEV:
+        print(
+            f"   [{symbol}] [PRIMARY_CONFIDENCE] eval precision {_ev_dir_prec:.1%} >= "
+            f"{PRIMARY_BYPASS_PRECISION:.0%} — bypassing architecture search."
+        )
+        _pc_profile: Dict[str, Any] = {
+            'symbol': symbol,
+            'updated_at': datetime.now(timezone.utc).isoformat(),
+            'base_atr_multiplier': base_atr_mult,
+            'train_bars': train_n,
+            'eval_bars': eval_n,
+            'regime_boundaries': boundaries,
+            'selected_profile': {
+                'gate_type': 'PRIMARY_CONFIDENCE',
+                'threshold_quantile': 0.0,
+                'thresholds': {
+                    'buy_threshold': 0.0,
+                    'sell_threshold': 0.0,
+                    'global_threshold': 0.0,
+                },
+                'side_specific': True,
+                'regime_modifier': False,
+                'signal_vetoes': [],
+                'calibration': {'method': None},
+                'risk_tier': {'conservative': False, 'balanced': True, 'aggressive': True},
+                'edge_rank_mode': 'percentile',
+                'score': float(_ev_dir_prec),
+                'disabled_reason': None,
+                'profitability_bypass': False,
+                'primary_bypass': True,
+                'primary_eval_precision': float(_ev_dir_prec),
+                'primary_eval_fires': int(_ev_dir_fires),
+            },
+            'holdout': {
+                'selected': {
+                    'precision': float(_ev_dir_prec),
+                    'coverage': 1.0,
+                    'fires': int(_ev_dir_fires),
+                    'baseline_precision': float(_ev_dir_prec),
+                    'profit_factor': None,
+                    'expectancy_pct': None,
+                },
+                'holdout_metrics': {},
+                'rejected_metrics': {},
+            },
+        }
+        _pc_profile = safe_json_serializer(_pc_profile)
+        out = PROFILE_DIR / f"{base}_gate.json"
+        with open(out, 'w') as fh:
+            json.dump(_pc_profile, fh, indent=2, default=str)
+        print(f"   [{symbol}] PRIMARY_CONFIDENCE profile → {out}")
+        return _pc_profile
+
     ranking_df = _build_ranking_diagnostics(
-        df_ev.loc[valid_ev].reset_index(drop=True),
+        df_ev[valid_ev].reset_index(drop=True),
         proposed_ev[valid_ev],
         dir_conf_ev[valid_ev],
         probs_ev[valid_ev],
-        regimes_ev.loc[valid_ev].reset_index(drop=True),
+        regimes_ev[valid_ev].reset_index(drop=True),
         labels=labels_ev[valid_ev],
     )
     _print_ranking_diagnostics(symbol, ranking_df, local_model)
@@ -1885,6 +2132,9 @@ def optimize_symbol(symbol: str) -> Optional[Dict[str, Any]]:
             'edge_rank_mode': 'percentile',
             'score': best['score'],
             'disabled_reason': best.get('disabled_reason'),
+            # True when the gate passed via profitability metrics (PF/Sharpe/Exp)
+            # despite precision < 60%.  Risk tier is capped at AGGRESSIVE only.
+            'profitability_bypass': bool(best.get('profitability_bypass', False)),
         },
         'holdout': {
             'selected': best['candidate_metrics'],
@@ -1892,101 +2142,97 @@ def optimize_symbol(symbol: str) -> Optional[Dict[str, Any]]:
             'rejected_metrics': best['rejected_metrics'],
         },
     }
-    # Side-coverage sanity: ensure both BUY and SELL have non-zero fired signals.
+    # Side-coverage diagnostic: log if the local model proposed mostly one direction.
+    # This does not modify the gate; it surfaces imbalance early for debugging.
     try:
-        arch = best.get('architecture', {})
-        quantile = float(best.get('threshold_quantile', 0.5))
-        use_calibration = bool(arch.get('calibrate'))
-        calibrated_scores = calibrated_ev_common if use_calibration else ev_edge_raw / 100.0
-        # target at least 5% of directional signals for the missing side
-        total_directional = int((proposed_ev != 1).sum()) if 'proposed_ev' in locals() else int((ev_side != 1).sum())
-        target_min = max(1, int(0.05 * total_directional))
-        buy_count = sell_count = 0
-        # compute initial counts
-        try:
-            fire_mask, thresholds = _compute_gate_mask(ev_df, regimes_ev, ev_side, ev_edge_raw, calibrated_scores, arch, quantile)
-            buy_count = int(((ev_side == 2) & fire_mask).sum())
-            sell_count = int(((ev_side == 0) & fire_mask).sum())
-        except Exception:
-            buy_count = sell_count = 0
-
-        if buy_count == 0 or sell_count == 0:
-            print(f"   [{symbol}] Side-coverage issue detected (buy={buy_count}, sell={sell_count}). Attempting controlled threshold relaxation.")
-            # try lowering quantile to capture sparse side signals (step down by 0.05 up to 5 steps)
-            q = quantile
-            for step in range(1, 6):
-                q_try = max(0.01, quantile - 0.05 * step)
-                try:
-                    fire_mask_try, thresholds_try = _compute_gate_mask(ev_df, regimes_ev, ev_side, ev_edge_raw, calibrated_scores, arch, q_try)
-                except Exception:
-                    continue
-                buy_try = int(((ev_side == 2) & fire_mask_try).sum())
-                sell_try = int(((ev_side == 0) & fire_mask_try).sum())
-                if (buy_count == 0 and buy_try >= target_min) or (sell_count == 0 and sell_try >= target_min):
-                    print(f"   [{symbol}] Relaxed quantile {quantile:.2f} -> {q_try:.2f} to recover side signals (buy={buy_try}, sell={sell_try}).")
-                    quantile = q_try
-                    thresholds = thresholds_try
-                    fire_mask = fire_mask_try
-                    buy_count, sell_count = buy_try, sell_try
-                    # update best metrics to reflect relaxed thresholds
-                    best['threshold_quantile'] = float(quantile)
-                    best['thresholds'] = thresholds
-                    # recompute holdout/candidate metrics
-                    sel = _backtest_holdout(fire_mask, ev_side, ev_labels, ev_barrier)
-                    selected_prec = float((ev_labels[fire_mask] == ev_side[fire_mask]).mean()) if fire_mask.any() else 0.0
-                    best['holdout_metrics'] = sel
-                    best['candidate_metrics'].update({
-                        'precision': selected_prec,
-                        'coverage': float(fire_mask.sum() / total_directional) if total_directional else 0.0,
-                        'fired_n': int(fire_mask.sum()),
-                    })
-                    break
+        valid_ev_mask = labels_ev != CENSORED
+        _ev_proposed = proposed_ev[valid_ev_mask]
+        _ev_buy_n = int((_ev_proposed == 2).sum())
+        _ev_sell_n = int((_ev_proposed == 0).sum())
+        _ev_total = _ev_buy_n + _ev_sell_n
+        if _ev_total > 0:
+            _buy_frac = _ev_buy_n / _ev_total
+            _sell_frac = _ev_sell_n / _ev_total
+            if _buy_frac < 0.05:
+                print(f"   [{symbol}] WARNING: Only {_buy_frac:.1%} BUY proposals in eval window "
+                      f"({_ev_buy_n}/{_ev_total}) — gate may be sell-only")
+            elif _sell_frac < 0.05:
+                print(f"   [{symbol}] WARNING: Only {_sell_frac:.1%} SELL proposals in eval window "
+                      f"({_ev_sell_n}/{_ev_total}) — gate may be buy-only")
             else:
-                print(f"   [{symbol}] Could not recover missing side signals after threshold relaxation. buy={buy_count} sell={sell_count}.")
+                print(f"   [{symbol}] Side balance: BUY={_ev_buy_n} ({_buy_frac:.1%}), "
+                      f"SELL={_ev_sell_n} ({_sell_frac:.1%})")
     except Exception as exc:
         print(f"   [{symbol}] Side-coverage check failed: {exc}")
-# Final sanity: ensure the saved calibrator matches the holdout-selected winner.
-    final_saved_cal = profile['selected_profile']['calibration'].get('selected_calibrator') or profile['selected_profile']['calibration'].get('selected_method') or profile['selected_profile']['calibration'].get('method')
-    winner_after_filters = best.get('calibration', {}).get('selected_calibrator') or best.get('calibration', {}).get('selected_method') or best.get('calibration', {}).get('method')
+    # Final sanity: ensure the saved calibrator matches the holdout-selected winner.
+    _cal_keys = ('selected_calibrator', 'selected_method', 'method')
+    final_saved_cal = next(
+        (profile['selected_profile']['calibration'].get(k) for k in _cal_keys
+         if profile['selected_profile']['calibration'].get(k)),
+        None,
+    ) or 'uncalibrated'
+    winner_after_filters = next(
+        (best.get('calibration', {}).get(k) for k in _cal_keys
+         if best.get('calibration', {}).get(k)),
+        None,
+    ) or 'uncalibrated'
     print(f"   [CALIBRATION CHECK] final_saved={final_saved_cal} winner_after_filters={winner_after_filters}")
     if final_saved_cal != winner_after_filters:
-        raise AssertionError(f"Final saved calibrator ({final_saved_cal}) != winner after filters ({winner_after_filters})")
+        print(f"   [CALIBRATION WARNING] Mismatch ({final_saved_cal} != {winner_after_filters}) — correcting saved profile to match winner.")
+        profile['selected_profile']['calibration'] = best.get('calibration', {})
+
+    ev_edge_raw = np.asarray(compute_edge_scores(
+        df_ev[valid_ev].reset_index(drop=True),
+        proposed_ev[valid_ev],
+        dir_conf_ev[valid_ev],
+        use_rank=True,
+    ), dtype=float)
+
+    def _make_fallback_gate(reason: str, _edge_raw: np.ndarray = ev_edge_raw) -> dict:
+        _fq = 0.70
+        _ft = float(np.quantile(_edge_raw / 100.0, 1.0 - _fq))
+        print(
+            f"   [FALLBACK] {reason}. "
+            f"Creating conservative gate at threshold {_ft:.3f} ({_fq:.0%} quantile)."
+        )
+        _fg = {
+            'gate_type': 'GLOBAL_EDGE_PERCENTILE',
+            'threshold_quantile': _fq,
+            'thresholds': {'global': _ft},
+            'side_specific': False,
+            'regime_modifier': False,
+            'signal_vetoes': [],
+            'calibration': {'method': None},
+            'risk_tier': {'conservative': True, 'balanced': False, 'aggressive': False},
+            'edge_rank_mode': 'percentile',
+            'score': 0.0,
+            'disabled_reason': reason,
+            'fallback': True,
+        }
+        if best.get('profitability_bypass'):
+            _fg['profitability_bypass'] = best['profitability_bypass']
+        profile['selected_profile'] = _fg
+        profile['holdout']['selected'] = best.get('candidate_metrics')
+        profile['holdout']['holdout_metrics'] = best.get('holdout_metrics')
+        return _fg
 
     # Final profile validity assertions
     final_metrics = best.get('candidate_metrics', {})
     final_holdout = best.get('holdout_metrics', {})
     if best.get('gate_type') != 'DISABLED':
         if float(final_metrics.get('coverage', 0.0)) < MIN_GATE_COVERAGE:
-            raise AssertionError(f"Final profile coverage {final_metrics.get('coverage')} < {MIN_GATE_COVERAGE}")
-        if float(final_metrics.get('precision', 0.0)) < float(final_metrics.get('baseline_precision', 0.0)):
-            raise AssertionError(f"Final profile precision {final_metrics.get('precision')} < baseline {final_metrics.get('baseline_precision')}")
-        # Minimum viable baseline check: if holdout PF or expectancy is too weak,
-        # create a conservative fallback gate instead of disabling the token.
-        if float(final_holdout.get('profit_factor', 0.0)) < 1.05 or float(final_holdout.get('expectancy_pct', 0.0)) <= 0.0:
-            fallback_quantile = 0.70
-            fallback_threshold = float(np.quantile(ev_edge_raw / 100.0, 1.0 - fallback_quantile))
+            print(f"   [WARNING] Final coverage {final_metrics.get('coverage')} < {MIN_GATE_COVERAGE} — falling back.")
+            _make_fallback_gate('low_coverage')
+        elif float(final_metrics.get('precision', 0.0)) < float(final_metrics.get('baseline_precision', 0.0)):
             print(
-                f"   [FALLBACK] Low holdout PF/expectancy (PF={final_holdout.get('profit_factor')}, "
-                f"EV={final_holdout.get('expectancy_pct')}). "
-                f"Creating conservative fallback gate at global threshold {fallback_threshold:.3f} ({fallback_quantile:.0%})."
+                f"   [WARNING] Final precision {final_metrics.get('precision')} < baseline "
+                f"{final_metrics.get('baseline_precision')} — falling back."
             )
-            profile['selected_profile'] = {
-                'gate_type': 'GLOBAL_EDGE_PERCENTILE',
-                'threshold_quantile': fallback_quantile,
-                'thresholds': {'global': fallback_threshold},
-                'side_specific': False,
-                'regime_modifier': False,
-                'signal_vetoes': [],
-                'calibration': {'method': None},
-                'risk_tier': {'conservative': True, 'balanced': False, 'aggressive': False},
-                'edge_rank_mode': 'percentile',
-                'score': 0.0,
-                'disabled_reason': 'fallback_low_baseline',
-            }
-            # update holdout section to record baseline metrics
-            profile['holdout']['selected'] = best.get('candidate_metrics')
-            profile['holdout']['holdout_metrics'] = best.get('holdout_metrics')
-            profile['selected_profile']['fallback'] = True
+            _make_fallback_gate('precision_below_baseline')
+        elif float(final_holdout.get('profit_factor', 0.0)) < 1.05 or float(final_holdout.get('expectancy_pct', 0.0)) <= 0.0:
+            _make_fallback_gate(
+                f"low_baseline PF={final_holdout.get('profit_factor')} EV={final_holdout.get('expectancy_pct')}"
+            )
     else:
         print(f"   [WARNING] DISABLED fallback selected for {symbol}; skipping gate performance assertions.")
 

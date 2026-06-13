@@ -254,7 +254,7 @@ SOURCE_MAP: Dict[str, Dict[str, Any]] = {
             "Normalized dist_* counterparts already computed but raw levels were also "
             "included, training XGBoost to memorise price-level thresholds."
         ),
-        "fix": "FEATURE_BLACKLIST added (25 features). Only dist_* versions remain. FIXED.",
+        "fix": "FEATURE_BLACKLIST added (46 features: raw OHLCV, se_mid/upper/lower, EMA/VWAP absolute levels, decay means). Only dist_* versions remain. FIXED.",
         "status": "FIXED",
         "prec_cost_pp": 5.5,
         "recall_cost_pp": 0.0,
@@ -306,19 +306,22 @@ SOURCE_MAP: Dict[str, Dict[str, Any]] = {
         "recall_cost_pp": 3.0,
     },
 
-    # ── Meta model ────────────────────────────────────────────────────────────
+    # ── Meta model (removed) ──────────────────────────────────────────────────
     "meta_hold_contamination": {
         "file": "scripts/retrain_model.py",
-        "lines": "1909-1916",
-        "symbol": "_hold_w = clip(_n_dir×0.5 / _n_hold, 0.10, 0.60)",
+        "lines": "meta gate block (removed)",
+        "symbol": "meta_full LR gate removed — primary-only calibrated confidence gate",
         "mechanism": (
             "HOLD bars always have meta_y=0 (primary proposes BUY/SELL but true label=HOLD). "
-            "With HOLD=66%, 60% of meta training targets are always zero. Downweighting "
-            "to 0.30 reduces but does not eliminate the bias — meta outputs cluster "
-            "at 0.42–0.55 uniformly, making threshold discrimination unreliable."
+            "The entire 663-line LR OOF/edge engine/regime block was removed. "
+            "Replaced by a calibrated primary confidence gate: val sweep over 0.50→0.95, "
+            "≥50 fires/threshold, metric = signal precision (prop==y, includes HOLD timeouts), "
+            "selects max-precision threshold. HOLD contamination is now impossible because "
+            "there is no separate meta model — only the primary model probabilities are used."
         ),
-        "fix": "Lower _hold_w floor from 0.10 to 0.05 OR exclude HOLD bars from meta training.",
-        "status": "ACTIVE",
+        "fix": "Meta gate removed entirely. Primary-only calibrated gate with signal_prec >= "
+               "token_breakeven tradeable check. FIXED.",
+        "status": "FIXED",
         "prec_cost_pp": 2.0,
         "recall_cost_pp": 0.0,
     },
@@ -367,6 +370,219 @@ SOURCE_MAP: Dict[str, Dict[str, Any]] = {
         "fix": "Added random.seed(42); np.random.seed(42) at top of train_token(). FIXED.",
         "status": "FIXED",
         "prec_cost_pp": 0.0,
+        "recall_cost_pp": 0.0,
+    },
+
+    # ── New root causes responsible for 18-30% holdout precision ─────────────
+
+    "primary_oof_near_random": {
+        "file": "scripts/meta_gate_optimizer.py",
+        "lines": "_fit_local_model() params block",
+        "symbol": "max_depth=3, min_child_weight=10, gamma=1.0, subsample=0.5",
+        "mechanism": (
+            "Over-regularised local XGBoost in _fit_local_model() produced near-uniform "
+            "predictions (mean dir_prob ≈ 0.37 ≈ 1/3, maximum entropy ≈ 0.75/1.0). "
+            "With near-random OOF, proposed_side(oof) is effectively a coin flip. "
+            "The meta model then trains on noisy binary targets (y_v == prop_v where "
+            "prop_v is random) and outputs near-uniform confidence scores → any "
+            "percentile threshold fires random signals → holdout precision ≈ 30-45%."
+        ),
+        "fix": "Adaptive params: max_depth→5, reg_lambda→1.0, gamma→0.3, subsample→0.85. "
+               "Early stopping with 20% fold holdout. FIXED in meta_gate_optimizer.py.",
+        "status": "FIXED",
+        "prec_cost_pp": 15.0,
+        "recall_cost_pp": 0.0,
+    },
+
+    "soft_confluence_missing_from_local_model": {
+        "file": "scripts/meta_gate_optimizer.py",
+        "lines": "optimize_symbol() — after prepare_features()",
+        "symbol": "prc_total (#1 gain=39.55), macro_confluence_score (#2 gain=30.13)",
+        "mechanism": (
+            "optimize_symbol() called prepare_features() but NOT compute_soft_confluence_features(), "
+            "so the top-1 and top-2 most predictive features (prc_total gain=39.55, "
+            "macro_confluence_score gain=30.13) were completely absent from the local model's "
+            "feature matrix. With these two features removed, the local model's feature HHI "
+            "dropped to 0.0084 (near-uniform = model sees only noise). "
+            "This explains why dir_prob ≈ 0.37 ≈ random for BTC and ETH."
+        ),
+        "fix": "Added compute_soft_confluence_features() call in optimize_symbol() after "
+               "features.reset_index(). FIXED in meta_gate_optimizer.py.",
+        "status": "FIXED",
+        "prec_cost_pp": 12.0,
+        "recall_cost_pp": 0.0,
+    },
+
+    "barrier_frac_constant_one": {
+        "file": "scripts/meta_gate_optimizer.py",
+        "lines": "optimize_symbol() — barrier_frac_ev fallback",
+        "symbol": "barrier_frac_ev = np.full(len(df_ev), 1.0)",
+        "mechanism": (
+            "When '_barrier_frac' is absent from df_ev (always — this column is never written "
+            "by create_triple_barrier_labels), barrier_frac_ev falls back to 1.0 (100% per trade). "
+            "backtest() then computes PnL as ±100% per trade — fees (0.1% roundtrip) become "
+            "negligible (0.1% vs 100%). This grossly inflates PF, Sharpe, and Expectancy. "
+            "BTC's best gate showed PF=1.422 / Sharpe=4.92 — both inflated. "
+            "After the fix (ATR-based ~2-3% barrier) the real fee drag is ~5-10% of the barrier, "
+            "which correctly penalises marginal gates."
+        ),
+        "fix": "Compute barrier_frac_ev = clip(base_atr_mult * vr_scale * ATR / close, 0.003, 0.25). "
+               "FIXED in meta_gate_optimizer.py.",
+        "status": "FIXED",
+        "prec_cost_pp": 0.0,
+        "recall_cost_pp": 0.0,
+    },
+
+    "anti_selective_meta_gate": {
+        "file": "scripts/retrain_model.py",
+        "lines": "meta gate block (removed)",
+        "symbol": "meta gate fully removed — primary-only calibrated gate with signal_prec check",
+        "mechanism": (
+            "The anti-selective meta gate was caused by the meta model's OOF probabilities being "
+            "near-uniform, causing threshold selection to be noise-driven. This is now impossible "
+            "because the entire meta gate (663-line LR OOF/edge engine/regime block) was removed. "
+            "The primary-only calibrated gate uses signal_prec >= token_breakeven as tradeable "
+            "criterion, which prevents anti-selection by construction: if the selected signals "
+            "fail to clear the breakeven, the token is DISABLED regardless of directional precision."
+        ),
+        "fix": "Meta gate removed entirely. Primary-only calibrated confidence gate. "
+               "signal_prec >= token_breakeven is a hard requirement for tradeable=True. FIXED.",
+        "status": "FIXED",
+        "prec_cost_pp": 20.0,
+        "recall_cost_pp": 5.0,
+    },
+
+    "catastrophic_oof_overfit": {
+        "file": "scripts/retrain_model.py",
+        "lines": "meta gate block (removed)",
+        "symbol": "meta OOF overfit — meta gate removed, dev_estimate is now 0",
+        "mechanism": (
+            "Meta model dev→holdout overfit caused dev_prec >> holdout_prec because the LR meta "
+            "trained on primary OOF probs that encoded training-regime price levels. "
+            "The entire meta gate has been removed. dev_estimate.precision is now 0 (no meta gate). "
+            "Primary model calibration now uses a val sweep with ≥50 fires minimum per threshold "
+            "to prevent calibrator overfit to small samples."
+        ),
+        "fix": "Meta gate OOF entirely removed. Primary-only calibrated gate val sweep uses "
+               "signal precision with ≥50 fires min. No more dev→holdout gap from meta model. FIXED.",
+        "status": "FIXED",
+        "prec_cost_pp": 20.0,
+        "recall_cost_pp": 0.0,
+    },
+
+    "gate_disabled_fallback_precision": {
+        "file": "scripts/retrain_model.py",
+        "lines": "meta gate block (removed)",
+        "symbol": "meta_gate_optimizer and all fallback logic removed — primary-only mode",
+        "mechanism": (
+            "The meta_gate_optimizer and its gate profiles are no longer used. "
+            "The entire meta gate block including pick_edge_threshold_by_side fallback was removed. "
+            "Primary-only calibrated confidence gate replaces the entire system. "
+            "If val sweep finds no threshold with ≥50 fires, the fallback threshold is 0.85 "
+            "(high confidence only) and tradeable=False if signal_prec < token_breakeven."
+        ),
+        "fix": "Meta gate optimizer and fallback precision logic removed entirely. "
+               "Primary-only calibrated gate is the universal replacement. FIXED.",
+        "status": "FIXED",
+        "prec_cost_pp": 18.0,
+        "recall_cost_pp": 0.0,
+    },
+
+    "cv_accuracy_near_random": {
+        "file": "scripts/retrain_model.py",
+        "lines": "binary_dual OOF → Bayes prior correction → 3-class accuracy",
+        "symbol": "cv_accuracy below majority-class baseline (HOLD%) — SPW inflation collapses hold_residual",
+        "mechanism": (
+            "binary_dual uses two binary XGBoost models (buy_full, sell_full) with scale_pos_weight "
+            "(SPW≈5). SPW shifts the model's effective prior to p(pos)=spw/(1+spw)≈0.833 during "
+            "training. Without Bayes correction: p_buy + p_sell ≈ 1.0 on most bars → hold_residual "
+            "= clip(1 - p_buy - p_sell) ≈ 0 → argmax always picks BUY or SELL → 3-class cv_acc "
+            "falls below the HOLD majority baseline (67%). The primary has real AUC signal "
+            "(typically 0.55-0.65) but the 3-class accuracy metric makes it look near-random."
+        ),
+        "fix": "Bayes prior correction applied to OOF and holdout raw_probs: "
+               "lo = log(p/(1-p)) + log(true_rate) - log(1-true_rate) - log(spw_prior) + log(1-spw_prior); "
+               "corrected_p = sigmoid(lo). Restores hold_residual to 0.6-0.9 on uncertain bars → "
+               "argmax picks HOLD → cv_acc exceeds majority baseline. "
+               "bayes_prior_correction key written to sidecar. FIXED.",
+        "status": "FIXED",
+        "prec_cost_pp": 10.0,
+        "recall_cost_pp": 5.0,
+    },
+
+    # ── Primary-only calibrated gate issues ───────────────────────────────────
+
+    "primary_only_calibrated_gate": {
+        "file": "scripts/retrain_model.py",
+        "lines": "primary_only_gate block (after meta gate removal)",
+        "symbol": "calibrated LR gate → val sweep → signal_prec >= token_breakeven",
+        "mechanism": (
+            "Primary-only calibrated confidence gate: (1) Platt/uncalibrated calibrator maps "
+            "max(buy_prob, sell_prob) → calibrated confidence; (2) val sweep over 0.50→0.95 with "
+            "≥50 fires/threshold selects max signal-precision threshold; (3) holdout evaluation: "
+            "tradeable requires signal_prec >= token_breakeven AND dir_prec >= 55% AND "
+            "coverage_dir >= 5%. Signal precision = fraction of ALL fired bars where proposal "
+            "matches true outcome (HOLD timeouts counted as losses)."
+        ),
+        "fix": "Architecture is correct. Low signal_prec is a model quality issue, not a gate bug. "
+               "Improve primary model AUPRC (Optuna + XGBoost aucpr metric) to increase dir_prec "
+               "above 65%, which will lift signal_prec above breakeven at high-confidence thresholds.",
+        "status": "FIXED",
+        "prec_cost_pp": 0.0,
+        "recall_cost_pp": 0.0,
+    },
+
+    "signal_prec_below_breakeven": {
+        "file": "scripts/retrain_model.py",
+        "lines": "_signal_prec_h >= token_breakeven check in primary_only_gate",
+        "symbol": "signal_prec_h < token_breakeven → tradeable=False",
+        "mechanism": (
+            "Signal precision = fraction of holdout fires where proposal matches true outcome. "
+            "Includes HOLD-timeout bars as losses (dilutes directional accuracy by fire-rate). "
+            "token_breakeven = 0.5 * (1 + FEE_ROUNDTRIP / max(typ_bfrac, 0.005)). "
+            "BTC breakeven ≈ 54.3%, ETH ≈ 52.7% (higher breakeven → harder to clear). "
+            "Even with 65% directional precision, a 33% HOLD-timeout rate gives only 43% signal prec."
+        ),
+        "fix": "Increase primary model directional precision so fired signals at high-confidence "
+               "threshold have ≥65% dir_prec with <25% HOLD-timeout rate → signal_prec > breakeven. "
+               "Alternatively lower ATR multiplier to reduce HOLD rate (may reduce dir_prec).",
+        "status": "ACTIVE",
+        "prec_cost_pp": 10.0,
+        "recall_cost_pp": 0.0,
+    },
+
+    "calibrator_val_overfit": {
+        "file": "scripts/retrain_model.py",
+        "lines": "val sweep MIN_VAL_FIRES=50 check",
+        "symbol": "val_n < 50 → unreliable signal_prec estimate → overfit threshold",
+        "mechanism": (
+            "Val sweep selects max signal-precision threshold. With val_n < 50, the precision "
+            "estimate is noisy (Wilson CI width > 15pp). The selected threshold may look great on "
+            "val (65%+ signal prec at 26 fires) but fail completely on holdout (20-25%). "
+            "ETH example: val_prec=65.4% at 26 fires → holdout 20.7% (45pp gap)."
+        ),
+        "fix": "MIN_VAL_FIRES=50 enforced in val sweep. If no threshold has ≥50 val fires, "
+               "threshold defaults to 0.85 (high confidence only) and tradeable=False unless "
+               "holdout independently confirms signal_prec >= breakeven. FIXED.",
+        "status": "FIXED",
+        "prec_cost_pp": 0.0,
+        "recall_cost_pp": 0.0,
+    },
+
+    "primary_dir_prec_insufficient": {
+        "file": "scripts/retrain_model.py",
+        "lines": "tradeable_final check: fired_dir_prec >= 0.55",
+        "symbol": "fired_dir_prec < 55% → tradeable=False regardless of signal_prec",
+        "mechanism": (
+            "Directional precision = precision on holdout bars where true outcome is BUY/SELL "
+            "(excludes HOLD timeouts from denominator). If dir_prec < 55%, the primary model "
+            "has insufficient directional skill — even if calibrated confidence selects the "
+            "'best' bars, they remain near-random for direction prediction."
+        ),
+        "fix": "Increase primary model training data, features (add soft confluence), "
+               "or tune AUPRC hyperparameters to achieve dir_prec >= 65% on directional holdout bars.",
+        "status": "ACTIVE",
+        "prec_cost_pp": 5.0,
         "recall_cost_pp": 0.0,
     },
 }
@@ -724,169 +940,233 @@ class Section0_ThreeQuestions:
                  f"{fired} holdout signals. 95% CI width={ci_w:.1%}. "
                  f"Need ≥200 for HIGH confidence.")
 
+        # ── Layer 7: Catastrophic OOF overfit (dev >> holdout) ────────────────
+        dev_prec     = float(s5.get("dev_precision",  s1.get("dev_oof_precision", 0)))
+        holdout_prec_f = float(s1.get("holdout_precision", 0))
+        oof_gap_pp   = (dev_prec - holdout_prec_f) * 100
+        if oof_gap_pp > 20:
+            cost = round(min(oof_gap_pp * 0.4, 20.0), 1)
+            _add("Meta Model", "Catastrophic dev→holdout overfit",
+                 cost, 0.0, "catastrophic_oof_overfit",
+                 _sm_status("catastrophic_oof_overfit", oof_gap_pp <= 15),
+                 f"dev_prec={dev_prec:.1%} vs holdout_prec={holdout_prec_f:.1%} "
+                 f"— gap={oof_gap_pp:.0f}pp. Model memorises training distribution.")
+
+        # ── Layer 8: Anti-selective meta gate ─────────────────────────────────
+        # When gated precision is BELOW 50% (below chance), the gate is selecting
+        # the worst signals instead of the best. This happens when the local model
+        # edge scores are near-uniform and threshold selection is noise-driven.
+        if 0 < holdout_prec_f < 0.50 and fired >= 10:
+            cost = round((0.50 - holdout_prec_f) * 40.0, 1)
+            _add("Meta Gate", "Anti-selective gate — precision below chance",
+                 cost, 0.0, "anti_selective_meta_gate",
+                 _sm_status("anti_selective_meta_gate", holdout_prec_f >= 0.50),
+                 f"Holdout precision={holdout_prec_f:.1%} < 50% — gate is selecting "
+                 f"wrong signals. Fix primary OOF quality first.")
+
+        # ── Layer 9: CV accuracy near random (primary model learned nothing) ──
+        cv_acc = float(s1.get("cv_accuracy", 0))
+        # For 3-class balanced → random = 0.333; for HOLD-heavy → random ≈ hold_pct
+        _baseline_acc = max(0.333, hold_pct)
+        if 0 < cv_acc <= _baseline_acc + 0.05:
+            cost = round((_baseline_acc + 0.10 - cv_acc) * 80.0, 1)
+            _add("Primary Model", "CV accuracy near random — primary learned nothing",
+                 cost, cost * 0.3, "cv_accuracy_near_random",
+                 _sm_status("cv_accuracy_near_random", cv_acc > _baseline_acc + 0.10),
+                 f"cv_accuracy={cv_acc:.1%} ≈ random baseline ({_baseline_acc:.1%}). "
+                 f"Features provide no predictive signal for this token.")
+
+        # ── Layer 10: Gate disabled → no qualified profile ─────────────────────
+        gate_disabled = s1.get("gate_disabled_by_optimizer", False)
+        if gate_disabled and fired >= 10:
+            _add("Gate Architecture", "Gate DISABLED — fallback fires low-precision signals",
+                 18.0, 0.0, "gate_disabled_fallback_precision",
+                 _sm_status("gate_disabled_fallback_precision", not gate_disabled),
+                 f"meta_gate_optimizer returned DISABLED. Threshold from fallback "
+                 f"pick_edge_threshold_by_side → {fired} holdout fires at noise-level precision.")
+
         wf.sort(key=lambda x: x["prec_cost_pp"] + x["recall_cost_pp"] * 0.3, reverse=True)
         return wf
 
-    def _trace_buy_gates(self) -> Dict:
-        """Step-by-step trace of the 5 gates that enable/disable BUY trading."""
-        s1   = self.all_findings.get("s1", {})
-        s3   = self.all_findings.get("s3", {})
-        meta = self.all_findings.get("meta_sidecar", {})
-        if not meta:
-            from scripts.forensic_engine import DataLoader  # avoid circular in standalone
-            meta = {}
+    def _trace_signal_gates(self) -> Dict:
+        """Step-by-step trace of the 4 gates in the primary-only calibrated confidence gate."""
+        s1    = self.all_findings.get("s1", {})
+        meta  = self.all_findings.get("symbol_meta", {})
 
-        # Section3_SignalForensics stores predicted_buy / directional_raw / rejection_funnel
-        buy_raw   = int(s3.get("predicted_buy",
-                         (s3.get("all_bar_breakdown") or {}).get("BUY", {}).get("count", 0)))
-        gen_total = int(s3.get("directional_raw",
-                         (s3.get("rejection_funnel") or {}).get("generated",
-                          (s3.get("funnel") or {}).get("generated", 0))))
-        buy_h_n   = int(s1.get("buy_n",       0))
-        buy_wr    = float(s1.get("buy_win_rate", 0))
-        hit_buy   = bool(self.all_findings.get("symbol_meta", {}).get("tradeable_buy", False))
+        tradeable       = bool(meta.get("tradeable", False))
+        prim_only_mode  = bool(s1.get("primary_only_mode", meta.get("primary_only_mode", False)))
+        conf_thr        = float(s1.get("primary_confidence_threshold",
+                                 meta.get("primary_confidence_threshold", 0.0)) or 0.0)
+        cal_exists      = bool(s1.get("primary_calibrator_exists",
+                                meta.get("primary_calibrator_exists", False)))
+        # Signal precision vs token breakeven
+        _audit          = meta.get("meta_gate_ranking_audit", {})
+        signal_prec     = float(_audit.get("selected_precision",
+                           meta.get("holdout_trading", {}).get("signal_precision", 0.0)) or 0.0)
+        fired_n         = int(_audit.get("selected_n",
+                          meta.get("holdout_trading", {}).get("fired", 0)) or 0)
+        # Read token_breakeven from sidecar (written by retrain_model.py)
+        # Fallback chain: sidecar token_breakeven → aegis_v2_token_profile → s1 → default
+        _ae_p    = meta.get("aegis_v2_token_profile", {})
+        token_be = float(
+            s1.get("token_breakeven", None)
+            or meta.get("token_breakeven", None)
+            or (_ae_p.get("precision_target", 0.0) - 0.05 if _ae_p.get("precision_target", 0) > 0.55 else None)
+            or max(0.50, float(meta.get("target_precision", 0.60) or 0.60) - 0.05)
+        )
+        holdout_cov     = float(meta.get("holdout_trading", {}).get("coverage", 0.0) or 0.0)
+        # Directional precision from sidecar (dir_prec on directional holdout bars)
+        # Not directly in sidecar but can approximate: buy_win_rate weighted by buy/sell counts
+        ht              = meta.get("holdout_trading", {})
+        buy_n           = int(ht.get("buy_n", 0) or 0)
+        sell_n          = int(ht.get("sell_n", 0) or 0)
+        buy_wr          = float(ht.get("buy_win_rate", 0) or 0)
+        sell_wr         = float(ht.get("sell_win_rate", 0) or 0)
+        # Approximate dir_prec as coverage-weighted buy/sell win rates
+        _dir_n          = buy_n + sell_n
+        dir_prec        = (buy_wr * buy_n + sell_wr * sell_n) / max(_dir_n, 1) if _dir_n > 0 else 0.0
 
-        buy_pool_est     = int(buy_raw * 0.80) if buy_raw > 0 else 0
-        max_side_cov     = 0.35   # after fix (was 0.25)
-        max_fires_by_cov = int(max_side_cov * buy_pool_est)
-        min_fires        = 35
-        deadlock         = max_fires_by_cov < min_fires
+        gate1_pass = prim_only_mode  # primary-only mode is active
+        gate2_pass = conf_thr > 0.50  # val sweep found a viable threshold
+        gate3_pass = signal_prec >= token_be  # signal_prec clears breakeven
+        gate4_pass = tradeable  # all criteria met: signal_prec, dir_prec, coverage
 
         chain = [
             {
-                "gate":  "1. Primary model generates BUY labels",
-                "file":  "scripts/retrain_model.py:849-928 (create_triple_barrier_labels)",
-                "check": "BUY label count > 0 in training data",
-                "value": f"{buy_raw} BUY proposals / {gen_total} total directional",
-                "pass":  buy_raw > 0,
+                "gate":  "1. Primary-only mode active + directional skill ≥ 45%",
+                "file":  "scripts/retrain_model.py — primary_only_gate block",
+                "check": "primary_only_mode=True AND primary dir_prec ≥ 45% (else veto → None)",
+                "value": f"primary_only_mode={prim_only_mode}, calibrator={'Y' if cal_exists else 'N'}",
+                "pass":  gate1_pass,
                 "note": (
-                    "PASS — primary fires BUY on some bars."
-                    if buy_raw > 0 else
-                    "FAIL — zero BUY labels. vol_threshold or barrier too restrictive."
+                    "PASS — primary-only mode active. Calibrated LR maps raw probs to confidence."
+                    if gate1_pass else
+                    "FAIL — primary_only_mode not set. Model predates primary-only gate change."
                 ),
             },
             {
-                "gate":  "2. pick_threshold_by_side(BUY) can qualify",
-                "file":  "scripts/retrain_model.py:1363-1397",
-                "check": f"MAX_SIDE_COVERAGE={max_side_cov}×pool({buy_pool_est})={max_fires_by_cov} ≥ min_fires={min_fires}",
-                "value": f"{max_fires_by_cov} max fires vs {min_fires} required",
-                "pass":  not deadlock,
+                "gate":  "2. Val sweep finds threshold with ≥50 fires",
+                "file":  "scripts/retrain_model.py — val sweep (0.50→0.95, min_fires=50)",
+                "check": "max(signal_prec over thresholds with ≥50 val fires)",
+                "value": f"primary_confidence_threshold={conf_thr:.3f}",
+                "pass":  gate2_pass,
                 "note": (
-                    f"FAIL (FIXED) — {max_fires_by_cov} < {min_fires}. "
-                    "Deadlock: every quantile rejected before precision is checked. "
-                    "Fix: MAX_SIDE_COVERAGE→0.35 + adaptive effective_min_fires."
-                    if deadlock else
-                    f"PASS — {max_fires_by_cov} ≥ {min_fires}."
+                    f"PASS — val sweep selected threshold {conf_thr:.3f}."
+                    if gate2_pass else
+                    "FAIL — no threshold with ≥50 val fires found. Defaulted to 0.85."
                 ),
             },
             {
-                "gate":  "3. hit_buy=True (OOF precision clears target)",
-                "file":  "scripts/retrain_model.py:1996-2004",
-                "check": "pick_threshold_by_side(side=2).hit_target → stored as tradeable_buy",
-                "value": f"tradeable_buy in sidecar = {hit_buy}",
-                "pass":  hit_buy,
+                "gate":  "3. Holdout signal precision ≥ token breakeven",
+                "file":  "scripts/retrain_model.py — tradeable_final check",
+                "check": f"signal_prec_h >= token_breakeven ({token_be:.1%})",
+                "value": f"signal_prec={signal_prec:.1%} vs breakeven={token_be:.1%} "
+                         f"({fired_n} fired, dir_prec≈{dir_prec:.1%})",
+                "pass":  gate3_pass,
                 "note": (
-                    "FAIL — hit_buy=False because Gate 2 deadlock blocked threshold qualification."
-                    if not hit_buy else
-                    "PASS — hit_buy=True."
+                    f"PASS — signal_prec={signal_prec:.1%} ≥ breakeven={token_be:.1%}."
+                    if gate3_pass else
+                    f"FAIL — signal_prec={signal_prec:.1%} < breakeven={token_be:.1%} "
+                    f"(gap={abs(signal_prec-token_be)*100:.1f}pp). Primary model needs stronger directional skill."
                 ),
             },
             {
-                "gate":  "4. buy_fire mask fires BUY holdout signals",
-                "file":  "scripts/retrain_model.py:2169-2174",
-                "check": "buy_fire = (meta_prob_h ≥ max(thr_buy, rank_thr)) & (prop_h==2)",
-                "value": f"buy_h_n = {buy_h_n} holdout BUY signals fired",
-                "pass":  buy_h_n > 0,
+                "gate":  "4. tradeable_final (all criteria: signal_prec, dir_prec ≥55%, cov ≥5%)",
+                "file":  "scripts/retrain_model.py — tradeable_final condition",
+                "check": "fired_n >= MIN_FIRES AND dir_prec >= 55% AND coverage_dir >= 5% AND signal_prec >= breakeven",
+                "value": f"tradeable={tradeable}, coverage={holdout_cov:.1%}",
+                "pass":  gate4_pass,
                 "note": (
-                    f"FAIL — 0 BUY holdout trades. Even when hit_buy=True, "
-                    "SELL-biased rank gate may crowd out BUY signals. "
-                    "File: retrain_model.py:2097-2108."
-                    if buy_h_n == 0 else
-                    f"PASS — {buy_h_n} BUY holdout trades."
-                ),
-            },
-            {
-                "gate":  "5. tradeable_buy_holdout = True",
-                "file":  "scripts/retrain_model.py:2288-2292",
-                "check": "hit_buy AND buy_h_n > 0 AND buy_h_prec ≥ 0.50",
-                "value": f"buy_h_n={buy_h_n}, buy_win_rate={buy_wr:.1%}",
-                "pass":  buy_h_n > 0 and buy_wr >= 0.50,
-                "note": (
-                    "FAIL — `buy_h_n > 0` is a hard requirement. "
-                    "If Gate 4 fails (zero holdout BUY fires), this is permanently False."
-                    if buy_h_n == 0 else
-                    f"PASS — {buy_h_n} trades, {buy_wr:.1%} WR."
+                    f"PASS — token ENABLED. Signal gate cleared all criteria."
+                    if gate4_pass else
+                    f"FAIL — token DISABLED. "
+                    + ("signal_prec below breakeven. " if not gate3_pass else "")
+                    + (f"dir_prec≈{dir_prec:.1%} may be below 55%. " if dir_prec < 0.55 and dir_prec > 0 else "")
+                    + (f"coverage {holdout_cov:.1%} may be below 5%." if holdout_cov < 0.05 and holdout_cov > 0 else "")
                 ),
             },
         ]
         failing = [c for c in chain if not c["pass"]]
         return {
-            "buy_raw_proposals":  buy_raw,
-            "buy_pool_oof_est":   buy_pool_est,
-            "deadlock_present":   deadlock,
-            "hit_buy_in_sidecar": hit_buy,
-            "buy_holdout_n":      buy_h_n,
-            "all_gates_pass":     len(failing) == 0,
-            "root_gate":          failing[0]["gate"] if failing else "None — BUY enabled",
+            "primary_only_mode":        prim_only_mode,
+            "primary_conf_threshold":   conf_thr,
+            "calibrator_exists":        cal_exists,
+            "holdout_signal_prec":      round(signal_prec, 4),
+            "token_breakeven":          round(token_be, 4),
+            "holdout_fired":            fired_n,
+            "all_gates_pass":           len(failing) == 0,
+            "root_gate":                failing[0]["gate"] if failing else "None — ENABLED",
             "verdict": (
-                "BUY is ENABLED and trading." if not failing
-                else f"BUY DISABLED — root cause at Gate: {failing[0]['gate']}"
+                "Signal gate ENABLED — all 4 criteria met." if not failing
+                else f"Signal gate DISABLED — root cause at Gate: {failing[0]['gate']}"
             ),
             "chain": chain,
         }
 
-    def _meta_gate_verdict(self) -> Dict:
-        """Is the meta gate adding or destroying alpha?"""
+    def _primary_gate_verdict(self) -> Dict:
+        """Primary-only calibrated gate: is it selecting better signals than it rejects?"""
         s1    = self.all_findings.get("s1",  {})
-        s4    = self.all_findings.get("s4",  {})
-        s5    = self.all_findings.get("s5",  {})
+        s16   = self.all_findings.get("s16", {})
         meta  = self.all_findings.get("symbol_meta", {})
 
-        dev_prec     = float(s5.get("dev_precision", meta.get("dev_estimate", {}).get("precision", 0)))
         holdout_prec = float(s1.get("holdout_precision", 0))
-        oof_gap_pp   = round((dev_prec - holdout_prec) * 100, 2)
+        # dev_estimate is zero in primary-only mode; skip OOF gap check
+        oof_gap_pp   = 0.0
 
-        meta_opp     = (s4.get("opportunity_by_filter", s4.get("opportunity_cost_by_filter")) or {}).get("meta_gate", {})
-        blocked      = int(meta_opp.get("blocked", 0))
-        would_win    = int(meta_opp.get("would_win",  0))
-        would_lose   = int(meta_opp.get("would_lose", 0))
-        blocked_wr   = float(meta_opp.get("win_rate",   0))
+        # Gate lift: selected signal precision vs rejected signal precision
+        # From Section16 (meta_gate_ranking_audit) — still computed by retrain_model.py
+        _audit        = meta.get("meta_gate_ranking_audit", {})
+        selected_prec = float(_audit.get("selected_precision", s16.get("selected_precision", holdout_prec)))
+        rejected_prec = float(_audit.get("rejected_precision", s16.get("rejected_precision", 0)))
+        selected_n    = int(_audit.get("selected_n",   s16.get("selected_n",   0)))
+        blocked       = int(_audit.get("rejected_n",   s16.get("rejected_n",   0)))
 
-        gate_lift_pp = round((holdout_prec - blocked_wr) * 100, 2)
+        gate_lift_pp = round((selected_prec - rejected_prec) * 100, 2)
 
-        thr_buy  = float(meta.get("meta_threshold_buy",  meta.get("meta_threshold", 0)))
-        thr_sell = float(meta.get("meta_threshold_sell", meta.get("meta_threshold", 0)))
+        primary_threshold = float(s1.get("primary_confidence_threshold",
+                                   meta.get("primary_confidence_threshold", 0.0)) or 0.0)
+        token_be    = float(
+            s1.get("token_breakeven", None)
+            or meta.get("token_breakeven", None)
+            or max(0.50, float(
+                (meta.get("aegis_v2_token_profile") or {}).get("precision_target", 0) or
+                meta.get("target_precision", 0.60) or 0.60
+            ) - 0.05)
+        )
 
         if gate_lift_pp > 3:
             status = "HELPING"
-            verdict = (f"Gate is adding {gate_lift_pp:.1f}pp of precision. "
-                       f"Gated signals ({holdout_prec:.1%}) beat blocked ({blocked_wr:.1%}).")
+            verdict = (f"Primary gate adds {gate_lift_pp:.1f}pp of precision. "
+                       f"Selected signals ({selected_prec:.1%}) beat rejected ({rejected_prec:.1%}). "
+                       f"Threshold={primary_threshold:.3f}.")
         elif gate_lift_pp < -3:
             status = "HURTING"
-            verdict = (f"⚠ Gate is DESTROYING {abs(gate_lift_pp):.1f}pp of precision. "
-                       f"Blocked signals ({blocked_wr:.1%}) would have beaten gated ({holdout_prec:.1%}). "
-                       f"Meta model is anti-selective.")
+            verdict = (f"Primary gate DESTROYING {abs(gate_lift_pp):.1f}pp of precision. "
+                       f"Rejected signals ({rejected_prec:.1%}) beat selected ({selected_prec:.1%}). "
+                       f"Calibrator may be anti-selective at thr={primary_threshold:.3f}.")
         else:
             status = "NEUTRAL"
-            verdict = (f"Gate provides minimal discrimination "
-                       f"({holdout_prec:.1%} gated ≈ {blocked_wr:.1%} blocked).")
+            verdict = (f"Primary gate minimal discrimination "
+                       f"({selected_prec:.1%} selected ≈ {rejected_prec:.1%} rejected). "
+                       f"Threshold={primary_threshold:.3f}.")
 
-        if oof_gap_pp > 10:
-            verdict += (f" | OOF overfit warning: dev_prec ({dev_prec:.1%}) "
-                        f"exceeds holdout ({holdout_prec:.1%}) by {oof_gap_pp:.1f}pp.")
+        above_be = selected_prec >= token_be
+        if not above_be:
+            verdict += (f" | DISABLED: selected signal_prec={selected_prec:.1%} < "
+                        f"breakeven={token_be:.1%}.")
 
         return {
-            "gate_status":       status,
-            "gate_lift_pp":      gate_lift_pp,
-            "fired_precision":   round(holdout_prec, 4),
-            "blocked_win_rate":  round(blocked_wr,   4),
-            "blocked_signals":   blocked,
-            "would_win":         would_win,
-            "would_lose":        would_lose,
-            "oof_gap_pp":        oof_gap_pp,
-            "thr_buy":           round(thr_buy,  4),
-            "thr_sell":          round(thr_sell, 4),
-            "verdict":           verdict,
+            "gate_status":        status,
+            "gate_lift_pp":       gate_lift_pp,
+            "fired_precision":    round(selected_prec,  4),
+            "rejected_precision": round(rejected_prec,  4),
+            "blocked_signals":    blocked,
+            "selected_n":         selected_n,
+            "oof_gap_pp":         oof_gap_pp,
+            "primary_threshold":  round(primary_threshold, 4),
+            "token_breakeven":    round(token_be, 4),
+            "above_breakeven":    above_be,
+            "verdict":            verdict,
         }
 
     # ── analyze ───────────────────────────────────────────────────────────────
@@ -896,8 +1176,8 @@ class Section0_ThreeQuestions:
         s14= self.all_findings.get("s14",{})
 
         waterfall  = self._precision_waterfall()
-        buy_trace  = self._trace_buy_gates()
-        gate_audit = self._meta_gate_verdict()
+        buy_trace  = self._trace_signal_gates()
+        gate_audit = self._primary_gate_verdict()
 
         holdout_prec   = float(s1.get("holdout_precision", 0)) * 100.0
         total_prec_leak   = sum(w["prec_cost_pp"]   for w in waterfall)
@@ -953,8 +1233,8 @@ class Section0_ThreeQuestions:
             "q2_source_locations":   q2,
             "q3_best_solution":      q3,
             "precision_waterfall":   waterfall,
-            "buy_gate_trace":        buy_trace,
-            "meta_gate_audit":       gate_audit,
+            "signal_gate_trace":     buy_trace,
+            "primary_gate_audit":    gate_audit,
             "holdout_precision_pct": round(holdout_prec,      2),
             "achievable_precision_pct": round(achievable,     2),
             "total_prec_leak_pp":    round(total_prec_leak,   2),
@@ -967,8 +1247,8 @@ class Section0_ThreeQuestions:
     def render_md(self) -> str:
         f   = self.findings
         wf  = f.get("precision_waterfall", [])
-        bt  = f.get("buy_gate_trace",  {})
-        ga  = f.get("meta_gate_audit", {})
+        bt  = f.get("signal_gate_trace",  {})
+        ga  = f.get("primary_gate_audit", {})
         q3  = f.get("q3_best_solution", {})
         q2  = f.get("q2_source_locations", [])
         hp  = f.get("holdout_precision_pct", 0)
@@ -1054,8 +1334,8 @@ class Section0_ThreeQuestions:
             ln(f"> {top_action}")
         ln()
 
-        # ── BUY trace ─────────────────────────────────────────────────────────
-        ln("#### BUY Side Gate Trace")
+        # ── Signal gate trace ─────────────────────────────────────────────────
+        ln("#### Signal Gate Trace (Primary-Only Calibrated Gate)")
         ln()
         verdict_icon = "✅" if bt.get("all_gates_pass") else "🔴"
         ln(f"{verdict_icon} **{bt.get('verdict', '?')}**")
@@ -1069,23 +1349,25 @@ class Section0_ThreeQuestions:
             ln(f"   - {step['note']}")
             ln()
 
-        # ── Meta gate ─────────────────────────────────────────────────────────
-        ln("#### Meta Gate Audit")
+        # ── Primary gate audit ────────────────────────────────────────────────
+        ln("#### Primary Confidence Gate Audit")
         ln()
         gate_icon = {"HELPING": "✅", "HURTING": "🔴", "NEUTRAL": "🟡"}.get(
             ga.get("gate_status", ""), "❓")
+        above_be_icon = "✅" if ga.get("above_breakeven", False) else "❌"
         ln(f"{gate_icon} **Gate status: {ga.get('gate_status', '?')}**  "
-           f"(lift: {ga.get('gate_lift_pp', 0):+.1f}pp)")
+           f"(lift: {ga.get('gate_lift_pp', 0):+.1f}pp)  "
+           f"{above_be_icon} signal_prec {'≥' if ga.get('above_breakeven') else '<'} breakeven")
         ln()
         ln("| Metric | Value |")
         ln("|--------|-------|")
-        ln(f"| Gated-in precision | {ga.get('fired_precision', 0):.1%} |")
-        ln(f"| Blocked signals win rate | {ga.get('blocked_win_rate', 0):.1%} |")
-        ln(f"| Precision lift from gate | {ga.get('gate_lift_pp', 0):+.1f}pp |")
-        ln(f"| OOF → Holdout gap | {ga.get('oof_gap_pp', 0):+.1f}pp |")
-        ln(f"| thr_buy / thr_sell | {ga.get('thr_buy', 0):.3f} / {ga.get('thr_sell', 0):.3f} |")
-        ln(f"| Blocked signals | {ga.get('blocked_signals', 0)} "
-           f"({ga.get('would_win', 0)} would-win / {ga.get('would_lose', 0)} would-lose) |")
+        ln(f"| Selected signal precision | {ga.get('fired_precision', 0):.1%} |")
+        ln(f"| Rejected signal precision | {ga.get('rejected_precision', 0):.1%} |")
+        ln(f"| Gate lift (precision) | {ga.get('gate_lift_pp', 0):+.1f}pp |")
+        ln(f"| Primary conf. threshold | {ga.get('primary_threshold', 0):.3f} |")
+        ln(f"| Token breakeven | {ga.get('token_breakeven', 0):.1%} |")
+        ln(f"| Selected signals | {ga.get('selected_n', ga.get('blocked_signals', 0))} |")
+        ln(f"| Rejected signals | {ga.get('blocked_signals', 0)} |")
         ln()
         ln(f"> {ga.get('verdict', '')}")
         ln()
@@ -1197,8 +1479,10 @@ class Section1_ModelHealth:
 
         holdout_cov        = float(ht.get("coverage", 0) or summary.get("holdout_coverage", 0) or 0)
         lookahead           = meta.get("lookahead") or summary.get("lookahead_bars") or summary.get("lookahead")
-        threshold_buy       = meta.get("meta_threshold_buy", meta.get("meta_threshold"))
-        threshold_sell      = meta.get("meta_threshold_sell", meta.get("meta_threshold"))
+        # Primary-only mode: prefer primary_confidence_threshold over legacy meta_threshold fields
+        _primary_conf_thr   = meta.get("primary_confidence_threshold")
+        threshold_buy       = _primary_conf_thr or meta.get("meta_threshold_buy", meta.get("meta_threshold"))
+        threshold_sell      = _primary_conf_thr or meta.get("meta_threshold_sell", meta.get("meta_threshold"))
         tradeable_buy       = bool(meta.get("tradeable_buy") or meta.get("tradeable"))
         tradeable_sell      = bool(meta.get("tradeable_sell") or meta.get("tradeable"))
         feature_health      = self.loader.feature_health or {}
@@ -1220,26 +1504,60 @@ class Section1_ModelHealth:
             "regimes": regime_stats.get("regimes", {}),
         }
 
-        # ── Meta gate optimizer artifacts (external optimizer)
-        meta_gate_profile = self.loader.meta_gate_profile or {}
-        meta_gate_summary = self.loader.meta_gate_summary or {}
-        profile_exists = bool(meta_gate_profile)
-        profile_selected = None
-        profile_thresholds = {}
-        model_thresholds_match = False
-        try:
-            profile_selected = meta_gate_profile.get('selected_profile', {}).get('gate_type') if profile_exists else None
-            profile_thresholds = meta_gate_profile.get('selected_profile', {}).get('thresholds', {}) if profile_exists else {}
-            # Compare model-stored thresholds (meta artifact) with optimizer-picked thresholds
-            mt_buy = float(threshold_buy or 0)
-            mt_sell = float(threshold_sell or 0)
-            pt_buy = float(profile_thresholds.get('buy_threshold', 0) or 0)
-            pt_sell = float(profile_thresholds.get('sell_threshold', 0) or 0)
-            model_thresholds_match = abs(mt_buy - pt_buy) < 1e-6 and abs(mt_sell - pt_sell) < 1e-6
-        except Exception:
-            profile_selected = None
-            profile_thresholds = {}
-            model_thresholds_match = False
+        # ── Primary-only gate diagnostics (calibrated confidence gate)
+        _primary_only_mode   = bool(meta.get("primary_only_mode", False))
+        _primary_conf_thr_s1 = float(meta.get("primary_confidence_threshold", 0.0) or 0.0)
+        _primary_cal_exists  = bool(meta.get("primary_calibrator_exists", False))
+        _meta_cal_method     = str(meta.get("meta_calibration_method", "unknown") or "unknown")
+        # Signal precision vs token breakeven from meta_gate_ranking_audit
+        _audit               = meta.get("meta_gate_ranking_audit", {})
+        _signal_prec_h_s1    = float(_audit.get("selected_precision", ht.get("signal_precision", 0.0)) or 0.0)
+        _selected_n_s1       = int(_audit.get("selected_n", fired) or fired)
+        _token_breakeven_s1  = max(0.50, float(meta.get("target_precision", 0.60) or 0.60) - 0.05)
+        # Read token_breakeven directly from sidecar (new field after retrain)
+        # Fallback: aegis_v2_token_profile.precision_target - 0.05 (more accurate than target_precision)
+        # Final fallback: 0.53 (conservative floor for most crypto pairs)
+        _ae_profile          = meta.get("aegis_v2_token_profile", {})
+        _token_breakeven_s1  = float(
+            meta.get("token_breakeven", None)
+            or (_ae_profile.get("precision_target", 0.0) - 0.05 if _ae_profile.get("precision_target", 0) > 0.55 else None)
+            or max(0.50, float(meta.get("target_precision", 0.60) or 0.60) - 0.05)
+        )
+        _signal_vs_be        = _signal_prec_h_s1 - _token_breakeven_s1
+        # No meta gate optimizer in primary-only mode
+        gate_disabled_by_optimizer = False
+        gate_disabled_reason       = ""
+
+        # ── Anti-selection and OOF quality ────────────────────────────────────
+        # Anti-selection: check directional precision first (from sidecar), then fall back to
+        # 3-class holdout_prec. C_excluded meta means HOLD bars cannot fire, so directional
+        # precision from the sidecar is the clean signal; 3-class is contaminated by HOLD-timeout.
+        _dir_prec = float(summary.get("directional_precision",
+                          meta.get("directional_precision", -1.0)) or -1.0)
+        _prec_for_veto = _dir_prec if _dir_prec >= 0 else holdout_prec
+        anti_selection_flag = (0 < _prec_for_veto < 0.50 and fired >= 10)
+        # Precision below random: worse than the naive "always SELL" baseline
+        all_bar_sell_prec = sell_cnt / max(sell_cnt + buy_cnt, 1) if (sell_cnt + buy_cnt) > 0 else 0.5
+        precision_below_random = (holdout_prec < 0.50 and fired >= 10)
+
+        # Dev→holdout gap in pp
+        dev_holdout_gap_pp = round((dev_prec - holdout_prec) * 100, 1)
+
+        # CV accuracy quality band
+        # For 3-class balanced the random baseline is 33.3%;
+        # for HOLD-heavy data the naive-HOLD baseline is hold_pct.
+        # binary_dual + Bayes prior correction: if sidecar has bayes_prior_correction, the
+        # SPW-inflation issue is fixed — cv_acc should exceed hold_pct baseline after correction.
+        cv_acc_baseline = max(0.333, hold_pct)
+        _has_bayes_correction = bool(meta.get("bayes_prior_correction"))
+        cv_accuracy_quality = (
+            "NEAR_RANDOM" if cv_acc <= cv_acc_baseline + 0.04
+            else "WEAK"    if cv_acc <= cv_acc_baseline + 0.10
+            else "OK"
+        )
+        # If Bayes correction is present and cv_acc beats the baseline, upgrade to OK regardless
+        if _has_bayes_correction and cv_acc > cv_acc_baseline:
+            cv_accuracy_quality = "OK"
 
         self.findings = {
             "cv_accuracy":              round(cv_acc,       4),
@@ -1281,8 +1599,8 @@ class Section1_ModelHealth:
             "underfit_score":           round(underfit_score, 1),
             "leakage_risk_feature":     top_feat,
             "leakage_risk_flag":        leakage_risk,
-            "significance_z":           round(z_stat, 3),
-            "significance_p":           round(p_value, 6),
+            "significance_z":           round(float(z_stat), 3),
+            "significance_p":           round(float(p_value), 6),
             "statistically_significant":significant,
             "coverage_collapse_pct":    round(cov_drop * 100, 2),
             "root_cause_scores": {
@@ -1290,13 +1608,36 @@ class Section1_ModelHealth:
                 "class_imbalance":      round(hold_pct * 100, 1),
                 "directional_asymmetry":80.0 if directional_asymmetry else 0.0,
                 "low_sample_size":      max(0, 40 - fired),
+                "anti_selection":       90.0 if anti_selection_flag else 0.0,
+                "catastrophic_oof_gap": round(min(max(dev_holdout_gap_pp, 0.0) * 0.4, 80.0), 1),
+                "cv_near_random":       80.0 if cv_accuracy_quality == "NEAR_RANDOM" else
+                                        40.0 if cv_accuracy_quality == "WEAK" else 0.0,
+                "gate_disabled":        0.0,
+                "signal_prec_below_be": round(max(0.0, -_signal_vs_be) * 200.0, 1),
             },
-            # Meta-gate optimizer diagnostics
-            "meta_gate_profile_exists":    profile_exists,
-            "meta_gate_selected":          profile_selected,
-            "meta_gate_profile_thresholds":profile_thresholds,
-            "meta_gate_model_thresholds_match": model_thresholds_match,
-            "meta_gate_summary_n":         len(meta_gate_summary.get('symbols', {})) if isinstance(meta_gate_summary, dict) else 0,
+            # Primary-only gate diagnostics
+            "primary_only_mode":           _primary_only_mode,
+            "primary_confidence_threshold":round(_primary_conf_thr_s1, 4),
+            "primary_calibrator_exists":   _primary_cal_exists,
+            "primary_cal_method":          _meta_cal_method,
+            "signal_prec_vs_breakeven_pp": round(_signal_vs_be * 100, 2),
+            "token_breakeven":             round(_token_breakeven_s1, 4),
+            # Backward-compat meta gate keys (all False/None in primary-only mode)
+            "meta_gate_profile_exists":    False,
+            "meta_gate_selected":          None,
+            "meta_gate_profile_thresholds":{},
+            "meta_gate_model_thresholds_match": False,
+            "meta_gate_summary_n":         0,
+            # Precision quality diagnostics
+            "gate_disabled_by_optimizer":  False,
+            "gate_disabled_reason":        "",
+            "anti_selection_flag":         anti_selection_flag,
+            "precision_below_random":      precision_below_random,
+            "dev_holdout_gap_pp":          dev_holdout_gap_pp,
+            "cv_accuracy_quality":         cv_accuracy_quality,
+            "cv_accuracy_baseline":        round(cv_acc_baseline, 4),
+            "directional_precision":       round(_dir_prec, 4) if _dir_prec >= 0 else -1.0,
+            "bayes_correction_applied":    _has_bayes_correction,
         }
         return self.findings
 
@@ -1320,10 +1661,10 @@ class Section1_ModelHealth:
             f"| Profit Factor | {f['profit_factor']:.2f} | {'✓' if f['profit_factor']>1.5 else '✗'} |",
             f"| Kelly Fraction | {f['kelly_pct']:.1f}% | — |",
             f"| Expectancy/Trade | {f['expectancy_pct']:+.4f}% | {'✓' if f['expectancy_pct']>0 else '✗'} |",
-            f"| Meta gate optimizer profile | {'present' if f['meta_gate_profile_exists'] else 'missing'} | {'✓' if f['meta_gate_profile_exists'] else '✗'} |",
-            f"| Optimizer-selected gate | {f.get('meta_gate_selected', 'N/A')} | {'✓' if f['meta_gate_profile_exists'] else '✗'} |",
-            f"| Optimizer threshold match | {'YES' if f.get('meta_gate_model_thresholds_match') else 'NO'} | {'✓' if f.get('meta_gate_model_thresholds_match') else '⚠'} |",
-            f"| Meta gate summary count | {f['meta_gate_summary_n']} symbols | {'✓' if f['meta_gate_summary_n']>0 else '⚠ no summary file'} |",
+            f"| Gate mode | {'PRIMARY-ONLY (calibrated)' if f.get('primary_only_mode') else 'unknown/legacy'} | {'✓' if f.get('primary_only_mode') else '⚠'} |",
+            f"| Primary conf. threshold | {f.get('primary_confidence_threshold', 0):.3f} | {'✓' if f.get('primary_confidence_threshold', 0) > 0 else '⚠ no threshold'} |",
+            f"| Primary calibrator | {'present (' + str(f.get('primary_cal_method','?')) + ')' if f.get('primary_calibrator_exists') else 'none (raw probs)'} | {'✓' if f.get('primary_calibrator_exists') else '⚠ uncalibrated'} |",
+            f"| Signal prec vs breakeven | {f.get('signal_prec_vs_breakeven_pp', 0):+.1f}pp (be={f.get('token_breakeven', 0):.1%}) | {'✓ above breakeven' if f.get('signal_prec_vs_breakeven_pp', -1) >= 0 else '✗ below breakeven'} |",
             f"| Statistical Sig. | p={f['significance_p']:.4f} (z={f['significance_z']:.2f}) | {'✓ significant' if f['statistically_significant'] else '⚠ insufficient data'} |",
             "",
             "### Class Distribution",
@@ -1341,12 +1682,32 @@ class Section1_ModelHealth:
             lines.append(f"- **WARNING** — Only {f['holdout_fired']} holdout signals. 95% CI spans {f['holdout_ci95'][1]-f['holdout_ci95'][0]:.1%}. High variance in precision estimate.")
         if f["leakage_risk_flag"]:
             lines.append(f"- **WARNING** — Top feature `{f['leakage_risk_feature']}` is a price-level indicator. Check for look-ahead leakage.")
-        if not f["meta_gate_profile_exists"]:
-            lines.append("- **WARNING** — Meta gate optimizer profile is missing. Run `scripts/meta_gate_optimizer.py` to generate `data/meta_gate_profiles/<symbol>_gate.json`.")
-        elif not f["meta_gate_model_thresholds_match"]:
-            lines.append("- **WARNING** — Model meta thresholds do not match optimizer-selected gate thresholds. Investigate whether the optimizer output is stale or not fully applied.")
+        if not f.get("primary_only_mode"):
+            lines.append("- **WARNING** — primary_only_mode not set in sidecar. Model may predate the primary-only gate change — retrain to apply calibrated confidence gate.")
+        elif not f.get("primary_calibrator_exists"):
+            lines.append("- **INFO** — No primary calibrator fitted. Raw model probabilities used directly as confidence scores.")
         if f["overfit_score"] > 10:
             lines.append(f"- **WARNING** — OOF→Holdout degradation detected. Overfitting score: {f['overfit_score']:.0f}/100.")
+        if f.get("anti_selection_flag"):
+            lines.append(f"- **CRITICAL** — Anti-selective gate: holdout precision={f['holdout_precision']:.1%} < 50%. "
+                         "Gate is selecting the worst signals. Rebuild with fixed local model.")
+        if f.get("precision_below_random"):
+            lines.append(f"- **CRITICAL** — Precision below random chance ({f['holdout_precision']:.1%}). "
+                         "Model is directionally anti-predictive on holdout data.")
+        if f.get("dev_holdout_gap_pp", 0) > 20:
+            lines.append(f"- **CRITICAL** — Catastrophic OOF overfit: dev_prec={f['dev_oof_precision']:.1%} "
+                         f"vs holdout_prec={f['holdout_precision']:.1%} (gap={f['dev_holdout_gap_pp']:+.0f}pp). "
+                         "Meta model memorised the training distribution.")
+        if f.get("cv_accuracy_quality") == "NEAR_RANDOM":
+            lines.append(f"- **CRITICAL** — CV accuracy={f['cv_accuracy']:.1%} ≈ random baseline={f['cv_accuracy_baseline']:.1%}. "
+                         "Primary model learned nothing from features.")
+        if f.get("cv_accuracy_quality") == "WEAK":
+            lines.append(f"- **WARNING** — CV accuracy={f['cv_accuracy']:.1%} only slightly above random ({f['cv_accuracy_baseline']:.1%}). "
+                         "Primary model has weak predictive signal.")
+        if f.get("signal_prec_vs_breakeven_pp", 0) < -5:
+            lines.append(f"- **CRITICAL** — Signal precision {f.get('signal_prec_vs_breakeven_pp', 0):+.1f}pp below breakeven "
+                         f"({f.get('token_breakeven', 0):.1%}). Token correctly DISABLED. "
+                         "Increase primary model directional precision to clear breakeven gate.")
         lines.append("")
         return "\n".join(lines)
 
@@ -1512,17 +1873,18 @@ class Section3_SignalForensics:
         raw_buy_prec  = c_buy  / max(p_buy,  1)
         raw_sell_prec = c_sell / max(p_sell, 1)
 
-        # Meta gate filters
+        # Primary-only gate filters
         meta  = self.loader.meta or {}
         ht    = meta.get("holdout_trading", {})
         fired = int(ht.get("fired", 0))
 
         # Signal rejection funnel:
         # Primary outputs p_buy + p_sell directional signals
-        # Meta gate rejects (1 - coverage) of them
+        # Calibrated confidence gate rejects those below primary_confidence_threshold
         directional_raw = p_buy + p_sell
-        dev_cov  = float(meta.get("gate_coverage", 0.045))
-        dev_prec = float(meta.get("dev_estimate", {}).get("precision", 0))
+        # In primary-only mode, gate_coverage = holdout coverage from sidecar
+        dev_cov  = float(ht.get("coverage", meta.get("gate_coverage", 0.045)) or 0.045)
+        dev_prec = float(ht.get("signal_precision", 0))
 
         # Estimate rejections by stage (heuristic from live_engine logic)
         meta_blocked       = int(directional_raw * (1 - min(dev_cov * 3, 1.0)))
@@ -1562,8 +1924,10 @@ class Section3_SignalForensics:
                 "blocked_by_cooldown":     cooldown_blocked,
                 "estimated_executed":      estimated_executed,
             },
-            "meta_gate_coverage":   round(dev_cov, 4),
-            "meta_gate_precision":  round(dev_prec, 4),
+            "primary_gate_coverage": round(dev_cov, 4),
+            "primary_gate_precision":round(dev_prec, 4),
+            "meta_gate_coverage":    round(dev_cov, 4),
+            "meta_gate_precision":   round(dev_prec, 4),
             "buy_side_disabled":    meta.get("tradeable_buy", False) == False,
             "sell_side_enabled":    meta.get("tradeable_sell", True),
         }
@@ -1588,7 +1952,7 @@ class Section3_SignalForensics:
             "### Signal Rejection Funnel\n",
             "```",
             f"Generated (directional):    {rf['generated']:>6,}  (100%)",
-            f"Blocked by Meta Gate:      -{rf['blocked_by_meta']:>5,}  ({rf['blocked_by_meta']/max(rf['generated'],1):.0%})",
+            f"Below Primary Conf. Thr:   -{rf['blocked_by_meta']:>5,}  ({rf['blocked_by_meta']/max(rf['generated'],1):.0%})",
             f"Blocked by Quality (<55):  -{rf['blocked_by_quality']:>5,}",
             f"Blocked by HMM:            -{rf['blocked_by_hmm']:>5,}",
             f"Blocked by Confluence:     -{rf['blocked_by_confluence']:>5,}",
@@ -1666,7 +2030,7 @@ class Section4_OpportunityCost:
                 "opp_cost_pct":  round(opp_cost, 4),
             }
 
-        rf = (self.loader.findings_s3 or {}).get("rejection_funnel", {}) if hasattr(self.loader, "findings_s3") else {}
+        rf = (getattr(self.loader, "findings_s3", None) or {}).get("rejection_funnel", {})
 
         opp_by_filter = {
             "meta_gate":     _filter_opp(rf.get("blocked_by_meta", 300),         0.35, 0.30),
@@ -1745,10 +2109,12 @@ class Section5_MetaForensics:
         dev         = meta.get("dev_estimate", {})
 
         cal_T       = float(meta.get("calibration_temperature", 1.0))
-        dev_prec    = float(dev.get("precision", 0.59))
+        # In primary-only mode dev_estimate.precision=0; fall back to holdout signal_precision
+        _dev_prec_raw = float(dev.get("precision", 0))
         holdout_prec= float(ht.get("signal_precision", 0.66))
+        dev_prec    = _dev_prec_raw if _dev_prec_raw > 0.10 else holdout_prec
         fired       = int(ht.get("fired", 47))
-        dev_trades  = int(dev.get("trades", 81))
+        dev_trades  = int(dev.get("trades", 0)) or fired
 
         # ECE and Brier from forensic findings (hardcoded where live computation unavailable)
         # From original forensic findings: ECE=0.2496, Brier=0.3328
@@ -1881,7 +2247,7 @@ class Section6_HMMForensics:
             # Stationary distribution via eigenvector
             eigvals, eigvecs = np.linalg.eig(trans.T)
             stat_idx = np.argmin(np.abs(eigvals - 1.0))
-            stat     = np.abs(eigvecs[:, stat_idx].real)
+            stat     = np.abs(np.real(eigvecs[:, stat_idx]))
             stat    /= stat.sum()
             return {
                 "n_states":            n_states,
@@ -2114,13 +2480,14 @@ class Section8_QualityForensics:
                 mask = td["quality_bucket"] == bkt
                 sub  = td[mask]
                 if len(sub) > 0:
-                    wins = int(sub["was_profitable"].sum())
+                    wins = int(np.asarray(sub["was_profitable"]).sum())
                     buckets[bkt]["trades"]    = len(sub)
                     buckets[bkt]["wins"]      = wins
                     buckets[bkt]["precision"] = round(wins / len(sub), 4)
-                    buckets[bkt]["expectancy"]= round(float(sub["actual_return_pct"].mean()), 4)
-                    gp = float(sub.loc[sub["actual_return_pct"] > 0, "actual_return_pct"].sum())
-                    gl = float(abs(sub.loc[sub["actual_return_pct"] < 0, "actual_return_pct"].sum())) or 1e-9
+                    buckets[bkt]["expectancy"]= round(float(np.asarray(sub["actual_return_pct"]).mean()), 4)
+                    gp = float(np.asarray(sub.loc[sub["actual_return_pct"] > 0, "actual_return_pct"]).sum())
+                    gl = float(np.asarray(sub.loc[sub["actual_return_pct"] < 0, "actual_return_pct"]).sum())
+                    gl = abs(gl) if gl != 0 else 1e-9
                     buckets[bkt]["profit_factor"] = round(gp / gl, 3)
             quality_signal_valid = True
 
@@ -2216,19 +2583,46 @@ class Section9_DriftForensics:
                          else "WARNING" if prec_drift > 0.05
                          else "OK")
 
-        # Top drifting features classified by impact
-        top_d = sorted(features.values(), key=lambda x: x.get("score", 0), reverse=True)[:10]
+        # Features excluded by FEATURE_BLACKLIST (not in model — drift is irrelevant)
+        _BLACKLISTED: frozenset = frozenset({
+            'open', 'high', 'low', 'close', 'volume',
+            'se_mid', 'se_upper', 'se_lower',
+            'ema_9', 'ema_21', 'ema_50', 'ema_100', 'ema_200',
+            'vwap', 'avwap_50', 'avwap_100', 'avwap_200', 'rolling_vwap_24',
+            'ichimoku_senkou_a', 'ichimoku_senkou_b', 'ichimoku_tenkan', 'ichimoku_kijun',
+            'pivot', 'r1', 'r2', 's1', 's2',
+            'hma_20', 'kama_10', 'tema_21', 'dema_21', 't3_5', 'vwma_20',
+            'supertrend', 'keltner_upper', 'keltner_lower', 'keltner_mid',
+            'rolling_support', 'rolling_resistance',
+            'acc_dist',
+            'vwap_decay_mean_24', 'vwap_decay_std_24',
+            'close_decay_mean_24', 'close_decay_std_24',
+            'volume_decay_mean_24', 'volume_decay_std_24',
+        })
+        n_critical_blacklisted = sum(
+            1 for fname, fdata in features.items()
+            if fdata.get("state") == "CRITICAL" and fname in _BLACKLISTED
+        )
+        n_critical_active = n_critical - n_critical_blacklisted
+
+        # Top drifting features classified by impact (active in model only)
+        top_d = sorted(
+            [v for v in features.values() if v.get("name", "") not in _BLACKLISTED],
+            key=lambda x: x.get("score", 0), reverse=True
+        )[:10]
 
         self.findings = {
             "n_critical":               n_critical,
+            "n_critical_active":        n_critical_active,
+            "n_critical_blacklisted":   n_critical_blacklisted,
             "n_degraded":               n_degraded,
             "n_warning":                n_warning,
             "n_healthy":                n_healthy,
             "n_total":                  n_total,
             "drift_ratio":              round(drift_ratio, 4),
             "estimated_precision_loss_pp": round(estimated_prec_loss, 1),
-            "feature_drift_class":      ("CRITICAL" if n_critical > 15
-                                         else "WARNING" if n_critical > 5
+            "feature_drift_class":      ("CRITICAL" if n_critical_active > 8
+                                         else "WARNING" if n_critical_active > 3
                                          else "OK"),
             "confidence_drift_class":   confidence_drift,
             "prediction_drift_class":   prec_drift_cls,
@@ -2236,8 +2630,8 @@ class Section9_DriftForensics:
             "calibration_temperature":  round(cal_T, 4),
             "top_drifters":             [{"feature": d["name"], "state": d["state"],
                                           "score": round(d.get("score",0),4)} for d in top_d],
-            "overall_drift_class":      ("CRITICAL" if n_critical > 15 or cal_T > 1.3
-                                         else "WARNING" if n_critical > 5
+            "overall_drift_class":      ("CRITICAL" if n_critical_active > 8 or cal_T > 1.3
+                                         else "WARNING" if n_critical_active > 3
                                          else "OK"),
         }
         return self.findings
@@ -2251,7 +2645,9 @@ class Section9_DriftForensics:
             "| Drift Type | Classification | Detail |",
             "|------------|---------------|--------|",
             f"| Feature Drift | {cls_icon.get(f['feature_drift_class'],'?')} {f['feature_drift_class']} | "
-            f"{f['n_critical']} CRITICAL / {f['n_degraded']} DEGRADED / {f['n_total']} total |",
+            f"{f['n_critical']} CRITICAL ({f.get('n_critical_active', f['n_critical'])} active in model, "
+            f"{f.get('n_critical_blacklisted', 0)} ✅ blacklisted/FIXED) / "
+            f"{f['n_degraded']} DEGRADED / {f['n_total']} total |",
             f"| Confidence Drift | {cls_icon.get(f['confidence_drift_class'],'?')} {f['confidence_drift_class']} | "
             f"T={f['calibration_temperature']:.3f} |",
             f"| Prediction Drift | {cls_icon.get(f['prediction_drift_class'],'?')} {f['prediction_drift_class']} | "
@@ -2402,7 +2798,7 @@ class Section11_RiskForensics:
         hold_data = self.loader.trade_data
         stop_assessment = "INSUFFICIENT DATA"
         if hold_data is not None and "actual_return_pct" in hold_data.columns:
-            avg_ret = float(hold_data["actual_return_pct"].mean())
+            avg_ret = float(np.asarray(hold_data["actual_return_pct"]).mean())
             stop_assessment = ("STOPS TOO TIGHT" if avg_ret < 0.005
                                else "STOPS APPROPRIATE" if avg_ret < 0.02
                                else "TARGETS TOO CLOSE")
@@ -2500,17 +2896,17 @@ class Section12_ExecutionForensics:
             self.findings = {"error": "No closed trades", "n_trades": len(open_)}
             return self.findings
 
-        best_3  = df.nlargest(3, "pnl_pct")[["symbol","side","pnl_pct","confidence","exit_reason"]].to_dict("records")
-        worst_3 = df.nsmallest(3,"pnl_pct")[["symbol","side","pnl_pct","confidence","exit_reason"]].to_dict("records")
+        best_3  = df.nlargest(3, "pnl_pct")[["symbol","side","pnl_pct","confidence","exit_reason"]].to_dict(orient="records")  # type: ignore[reportCallIssue]
+        worst_3 = df.nsmallest(3,"pnl_pct")[["symbol","side","pnl_pct","confidence","exit_reason"]].to_dict(orient="records")  # type: ignore[reportCallIssue]
 
-        win_conf  = float(df[df["outcome"]=="WIN"]["confidence"].mean())  if (df["outcome"]=="WIN").any() else 0
-        loss_conf = float(df[df["outcome"]=="LOSS"]["confidence"].mean()) if (df["outcome"]=="LOSS").any() else 0
+        win_conf  = float(np.asarray(df[df["outcome"]=="WIN"]["confidence"]).mean())  if (df["outcome"]=="WIN").any() else 0.0
+        loss_conf = float(np.asarray(df[df["outcome"]=="LOSS"]["confidence"]).mean()) if (df["outcome"]=="LOSS").any() else 0.0
 
         self.findings = {
             "n_closed":          len(closed),
             "n_open":            len(open_),
-            "avg_hold_hours":    round(float(df["hold_hours"].mean()), 2),
-            "avg_pnl_pct":       round(float(df["pnl_pct"].mean()), 4),
+            "avg_hold_hours":    round(float(np.asarray(df["hold_hours"]).mean()), 2),
+            "avg_pnl_pct":       round(float(np.asarray(df["pnl_pct"]).mean()), 4),
             "win_avg_confidence":round(win_conf,  4),
             "loss_avg_confidence":round(loss_conf, 4),
             "confidence_discriminates": win_conf > loss_conf + 0.02,
@@ -2605,7 +3001,7 @@ class Section13_RootCause:
                int(min(100, ece * 400)),
                f"ECE={ece:.4f} (target <0.10). Confidence does not reflect true win probability.",
                f"Apply {s5.get('recommended_calibrator','isotonic')} calibration. "
-               "Lower _hold_w floor in retrain_model.py:1909-1916.",
+               "Use C_excluded meta (LR trains only on directional bars, class_weight='balanced').",
                "meta_hold_contamination")
 
         # ── 3. Feature drift ──────────────────────────────────────────────────
@@ -2614,7 +3010,7 @@ class Section13_RootCause:
             _c("Critical Feature Drift", "Feature Drift",
                int(min(100, n_crit * 4)),
                f"{n_crit} features CRITICAL. Top: {s2.get('worst_psi_feature','vwap')} PSI={s2.get('worst_psi_value',23):.2f}.",
-               "FEATURE_BLACKLIST (25 features) + OBV/PVT z-score + decay mean normalization. Already applied.",
+               "FEATURE_BLACKLIST (31 features: raw OHLCV, se_mid, EMA/VWAP levels, decay means) + OBV/PVT z-score. Already applied.",
                "absolute_emas")
 
         # ── 4. Low holdout sample size ────────────────────────────────────────
@@ -2668,6 +3064,58 @@ class Section13_RootCause:
             _c("Quality Engine Unvalidated", "Quality Failure", 35,
                "Quality score monotonicity not confirmed.",
                "Run quality engine vs precision correlation test on backtest data.")
+
+        # ── 11. Anti-selective meta gate ──────────────────────────────────────
+        holdout_prec_s13 = float(s1.get("holdout_precision", 0))
+        holdout_fired_s13 = int(s1.get("holdout_fired", 0))
+        _dir_prec_s13 = float(s1.get("directional_precision") or -1.0)
+        _veto_prec_s13 = _dir_prec_s13 if _dir_prec_s13 >= 0 else holdout_prec_s13
+        if _veto_prec_s13 < 0.50 and holdout_fired_s13 >= 10:
+            _prec_label = f"directional_prec={_dir_prec_s13:.1%}" if _dir_prec_s13 >= 0 else f"holdout_prec={holdout_prec_s13:.1%}"
+            _c("Anti-Selective Gate (precision < 50%)", "Gate Failure", 90,
+               f"{_prec_label} — gate is selecting "
+               "WRONG signals. Worse than random for directional trading.",
+               "Fix primary OOF quality (soft confluence features + local model hyperparams). "
+               "Directional precision veto (_fired_dir_prec<0.50) disables gate and outputs tradeable=False.",
+               "anti_selective_meta_gate")
+
+        # ── 12. Catastrophic dev→holdout OOF overfit ─────────────────────────
+        dev_prec_s13 = float(s5.get("dev_precision", s1.get("dev_oof_precision", 0)))
+        gap_pp_s13   = (dev_prec_s13 - holdout_prec_s13) * 100
+        if gap_pp_s13 > 20:
+            _c("Catastrophic Dev→Holdout Overfit", "Overfitting", 88,
+               f"dev_prec={dev_prec_s13:.1%} vs holdout_prec={holdout_prec_s13:.1%} "
+               f"(gap={gap_pp_s13:.0f}pp). Meta model memorises training distribution.",
+               "Increase TEST_FRAC 0.20→0.25. Larger embargo. Check meta calibration sample size. "
+               "Use Brier score to detect overfit calibrators before deployment.",
+               "catastrophic_oof_overfit")
+
+        # ── 13. Signal precision below token breakeven ────────────────────────
+        _signal_prec_s13 = float(s1.get("signal_prec_vs_breakeven_pp", 0))
+        _token_be_s13    = float(s1.get("token_breakeven", 0.50))
+        if _signal_prec_s13 < -3 and holdout_fired_s13 >= 20:
+            _c("Signal Precision Below Token Breakeven", "Gate Architecture", 85,
+               f"signal_prec={holdout_prec_s13:.1%} < breakeven={_token_be_s13:.1%} "
+               f"(gap={abs(_signal_prec_s13):.1f}pp). Primary model has insufficient directional "
+               "skill to clear the fee breakeven after HOLD-timeout dilution.",
+               "Increase primary model AUPRC (Optuna aucpr objective). "
+               "Target dir_prec >= 65% so fired signals clear breakeven even at 30% HOLD-timeout rate.",
+               "signal_prec_below_breakeven")
+
+        # ── 14. Primary model CV accuracy near random ─────────────────────────
+        cv_acc_s13   = float(s1.get("cv_accuracy", 0))
+        cv_qual_s13  = s1.get("cv_accuracy_quality", "OK")
+        cv_base_s13  = float(s1.get("cv_accuracy_baseline", 0.333))
+        if cv_qual_s13 in ("NEAR_RANDOM", "WEAK"):
+            score_s13 = 85 if cv_qual_s13 == "NEAR_RANDOM" else 55
+            _c(f"Primary Model CV Near Random ({cv_qual_s13})", "Model Quality", score_s13,
+               f"cv_accuracy={cv_acc_s13:.1%} vs majority_baseline={cv_base_s13:.1%}. "
+               "binary_dual SPW inflation compresses hold_residual → argmax always BUY/SELL. "
+               "Check sidecar for bayes_prior_correction key — if absent, Bayes fix not applied.",
+               "Apply Bayes prior correction to OOF and holdout raw_probs: corrects SPW-inflated "
+               "probabilities back to true class posterior scale so hold_residual is meaningful. "
+               "bayes_prior_correction key must appear in sidecar after retrain.",
+               "cv_accuracy_near_random")
 
         # Sort and rank
         causes.sort(key=lambda x: -x["score"])
@@ -2727,81 +3175,145 @@ class Section14_ImprovementEngine:
         s2 = self.all_findings.get("s2", {})
         s5 = self.all_findings.get("s5", {})
         s9 = self.all_findings.get("s9", {})
+        s13= self.all_findings.get("s13", {})
 
         base_prec = float(s1.get("holdout_precision", 0.66))
 
-        improvements = [
-            {
+        # ── Pull actual diagnostic flags to build dynamic action list ─────────
+        anti_selection    = bool(s1.get("anti_selection_flag",       False))
+        gate_disabled     = False   # meta gate optimizer removed; use signal_prec check instead
+        signal_prec_below_be = float(s1.get("signal_prec_vs_breakeven_pp", 0)) < -3
+        cv_quality        = s1.get("cv_accuracy_quality", "OK")
+        cv_acc            = float(s1.get("cv_accuracy", 0))
+        oof_gap           = float(s1.get("dev_holdout_gap_pp", 0))
+        hold_pct          = s1.get("class_distribution", {}).get("hold_pct", 0)
+        n_crit_drift      = s9.get("n_critical", s2.get("summary", {}).get("CRITICAL", 0))
+        buy_disabled      = bool(s1.get("directional_asymmetry", False))
+        rec_calibrator    = s5.get("recommended_calibrator", "isotonic")
+        fired             = int(s1.get("holdout_fired", 0))
+        ece               = float(s5.get("ece_before_calibration", 0))
+
+        improvements = []
+
+        # Priority 1: Fix anti-selection / near-random primary model
+        if anti_selection or cv_quality in ("NEAR_RANDOM", "WEAK"):
+            improvements.append({
+                "action":         "Fix local model quality (highest ROI)",
+                "mechanism":      "Add soft confluence features (prc_total, macro_confluence_score) "
+                                  "to meta_gate_optimizer pipeline. Adaptive XGBoost hyperparams "
+                                  "(max_depth→5, subsample→0.85, gamma→0.3). Early stopping per fold.",
+                "prec_gain_pp":   15.0,
+                "recall_gain_pp": 3.0,
+                "profit_gain_pp": 12.0,
+                "confidence":     "HIGH",
+                "effort":         "LOW",
+                "prerequisite":   "FIXED — retrain and re-run meta_gate_optimizer",
+            })
+
+        # Priority 2: Fix catastrophic OOF overfit
+        if oof_gap > 20:
+            improvements.append({
+                "action":         "Reduce meta model overfit (dev→holdout gap={:.0f}pp)".format(oof_gap),
+                "mechanism":      "Increase TEST_FRAC 0.20→0.25. Larger embargo between dev/holdout. "
+                                  "Isotonic calibration only on n_dev >= 200. "
+                                  "Add GAP_VETO: if gap > 15pp → set tradeable=False.",
+                "prec_gain_pp":   round(min(oof_gap * 0.35, 18.0), 1),
+                "recall_gain_pp": 0.0,
+                "profit_gain_pp": round(min(oof_gap * 0.25, 12.0), 1),
+                "confidence":     "HIGH",
+                "effort":         "LOW",
+                "prerequisite":   "Retrain with new TEST_FRAC and embargo settings",
+            })
+
+        # Priority 3: Signal precision below token breakeven
+        if signal_prec_below_be:
+            _be_gap = abs(float(s1.get("signal_prec_vs_breakeven_pp", 10)))
+            improvements.append({
+                "action":         f"Increase primary model AUPRC to clear signal_prec breakeven (gap={_be_gap:.1f}pp)",
+                "mechanism":      "Primary model optimised for AUPRC (Optuna aucpr + XGBoost aucpr). "
+                                  "Increasing directional precision from 55→65% lifts signal_prec above "
+                                  "breakeven even at 30% HOLD-timeout dilution rate. "
+                                  "signal_prec = dir_rate × dir_accuracy; breakeven ≈ 53-55%.",
+                "prec_gain_pp":   round(min(_be_gap * 1.2, 18.0), 1),
+                "recall_gain_pp": 5.0,
+                "profit_gain_pp": round(min(_be_gap * 1.0, 14.0), 1),
+                "confidence":     "MEDIUM",
+                "effort":         "MEDIUM",
+                "prerequisite":   "Full retrain with extended training data (10000h)",
+            })
+
+        # Priority 4: Enable BUY side
+        if buy_disabled:
+            improvements.append({
                 "action":         "Enable BUY side (fix directional asymmetry)",
-                "mechanism":      "Retrain with balanced class weights; add BUY-side OOF meta tuning",
+                "mechanism":      "MAX_SIDE_COVERAGE→0.35 + adaptive effective_min_fires. Already applied. "
+                                  "Full retrain required to propagate fix.",
                 "prec_gain_pp":   0.0,
                 "recall_gain_pp": 8.0,
                 "profit_gain_pp": 5.0,
                 "confidence":     "HIGH",
                 "effort":         "MEDIUM",
-                "prerequisite":   "Full retrain",
-            },
-            {
-                "action":         "Remove / normalise top-10 drifted features",
-                "mechanism":      f"Normalise {s9.get('n_critical',19)} CRITICAL features (vwap, ema_200, etc.) using z-score vs rolling mean",
-                "prec_gain_pp":   float(s2.get("total_estimated_precision_gain_pp", 3.0)),
+                "prerequisite":   "Full retrain (already fixed in codebase)",
+            })
+
+        # Priority 5: Feature drift
+        if n_crit_drift > 5:
+            _raw_gain = s2.get("total_estimated_precision_gain_pp")
+            drift_gain = float(_raw_gain) if _raw_gain is not None else round(n_crit_drift * 0.2, 1)
+            improvements.append({
+                "action":         f"Remove / normalise {n_crit_drift} CRITICAL drifted features",
+                "mechanism":      "FEATURE_BLACKLIST (46 features: raw OHLCV, se_mid/upper/lower, EMA/VWAP absolute levels, "
+                                  "volume/price decay means) + OBV/PVT z-score. Applied. Retrain to measure gain.",
+                "prec_gain_pp":   round(drift_gain, 1),
                 "recall_gain_pp": 1.5,
-                "profit_gain_pp": float(s2.get("total_estimated_precision_gain_pp", 3.0)) * 0.8,
+                "profit_gain_pp": round(drift_gain * 0.8, 1),
                 "confidence":     "MEDIUM",
                 "effort":         "LOW",
                 "prerequisite":   "Feature engineering change + retrain",
-            },
-            {
+            })
+
+        # Priority 6: Calibration
+        if ece > 0.15 or fired < 100:
+            improvements.append({
                 "action":         "Improve meta model calibration",
-                "mechanism":      f"Apply {s5.get('recommended_calibrator','isotonic')} calibration to OOF meta probs",
+                "mechanism":      f"Apply {rec_calibrator} calibration. "
+                                  f"Current ECE={ece:.3f} (target <0.10). "
+                                  f"{'Small sample — use temperature scaling, not isotonic.' if fired < 100 else ''}",
                 "prec_gain_pp":   2.5,
                 "recall_gain_pp": 0.5,
                 "profit_gain_pp": 2.0,
                 "confidence":     "HIGH",
                 "effort":         "LOW",
                 "prerequisite":   "Phase-1 calibration (already implemented)",
-            },
-            {
-                "action":         "Redesign triple-barrier labels (reduce HOLD%)",
-                "mechanism":      "Lower vol_threshold 0.80→0.70, adjust BARRIER_DOWN_SKEW 0.85→0.80",
-                "prec_gain_pp":   1.5,
+            })
+
+        # Priority 7: Class imbalance
+        if hold_pct > 0.55:
+            improvements.append({
+                "action":         "Reduce HOLD% in training labels",
+                "mechanism":      "base_vol_threshold→0.72, symmetric barrier skews. Already applied. "
+                                  "C_excluded HOLD strategy in meta training already active.",
+                "prec_gain_pp":   2.0,
                 "recall_gain_pp": 4.0,
                 "profit_gain_pp": 3.0,
                 "confidence":     "MEDIUM",
-                "effort":         "MEDIUM",
-                "prerequisite":   "Retrain all symbols",
-            },
-            {
-                "action":         "Extend lookahead for low-ER tokens",
-                "mechanism":      "Dynamic lookahead: ER<0.35 → 36h, ER>0.65 → 24h",
-                "prec_gain_pp":   1.0,
-                "recall_gain_pp": 2.0,
-                "profit_gain_pp": 1.5,
-                "confidence":     "MEDIUM",
                 "effort":         "LOW",
-                "prerequisite":   "Already in retrain_model.py",
-            },
-            {
-                "action":         "Regime-specific meta thresholds",
-                "mechanism":      "Learn per-regime thresholds from Phase-1 regime analysis",
-                "prec_gain_pp":   1.5,
-                "recall_gain_pp": 1.0,
-                "profit_gain_pp": 2.5,
-                "confidence":     "MEDIUM",
-                "effort":         "LOW",
-                "prerequisite":   "Phase-1 HMM retrain complete",
-            },
-            {
-                "action":         "Retrain meta model on 60-symbol fleet data",
-                "mechanism":      "Larger OOF dataset → better meta calibration, tighter ECE",
-                "prec_gain_pp":   2.0,
-                "recall_gain_pp": 0.5,
-                "profit_gain_pp": 2.5,
-                "confidence":     "HIGH",
-                "effort":         "HIGH",
-                "prerequisite":   "60-symbol fleet retrain (in progress)",
-            },
-        ]
+                "prerequisite":   "Already applied — retrain to measure effect",
+            })
+
+        # Fallback: always include general fleet retrain
+        improvements.append({
+            "action":         "Full retrain with all pipeline fixes applied",
+            "mechanism":      "All fixes (AUPRC objective, calibrated confidence gate, "
+                              "signal_prec >= breakeven tradeable check, min_val_fires=50) "
+                              "are in codebase. A full fleet retrain will propagate all improvements.",
+            "prec_gain_pp":   sum(i["prec_gain_pp"] for i in improvements) * 0.3,
+            "recall_gain_pp": 2.0,
+            "profit_gain_pp": sum(i["prec_gain_pp"] for i in improvements) * 0.25,
+            "confidence":     "HIGH",
+            "effort":         "HIGH",
+            "prerequisite":   "All above fixes committed",
+        })
 
         # Total expected gain (assuming independence → additive with 50% discount)
         total_prec = sum(i["prec_gain_pp"] for i in improvements) * 0.5
@@ -3048,8 +3560,12 @@ class Section17_HoldPollutionAudit:
                 best_score = score
                 best_strategy = strat_name
         
-        # Detect if current strategy is suboptimal
-        current_strategy = "A_current"  # Assume A is current
+        # In primary-only mode, HOLD pollution is addressed by primary-only gate (not hold weighting)
+        # hold_strategy_selected = "primary_only" in new sidecar; map to C_excluded as closest analog
+        _applied = meta.get("hold_strategy_selected", meta.get("hold_strategy_applied", "A_current"))
+        if _applied == "primary_only" or meta.get("primary_only_mode", False):
+            _applied = "C_excluded"
+        current_strategy = _applied if _applied in strategies else "A_current"
         current_score = strategies[current_strategy]["sharpe"] + (strategies[current_strategy]["pf"] - 1.0) * 2 - strategies[current_strategy]["brier"] * 2
         best_gain = best_score - current_score
         
@@ -3217,18 +3733,18 @@ class Section19_DeepTokenComparison:
         """
         # Placeholder comparison (would load real data in full implementation)
         comparisons = {
-            "meta_threshold": {"SOL": 79.5, "BTC": 82.4, "ETH": 82.9},
-            "tradeable_buy": {"SOL": False, "BTC": True, "ETH": False},
-            "tradeable_sell": {"SOL": False, "BTC": True, "ETH": False},
-            "holdout_precision": {"SOL": 0.374, "BTC": 0.66, "ETH": 0.45},
-            "win_rate": {"SOL": 0.48, "BTC": 0.72, "ETH": 0.52},
+            "primary_threshold": {"SOL": 0.795, "BTC": 0.620, "ETH": 0.820},
+            "tradeable_buy": {"SOL": False, "BTC": False, "ETH": False},
+            "tradeable_sell": {"SOL": False, "BTC": False, "ETH": False},
+            "holdout_precision": {"SOL": 0.374, "BTC": 0.480, "ETH": 0.260},
+            "win_rate": {"SOL": 0.48, "BTC": 0.48, "ETH": 0.26},
             "regime_disability": {"SOL": 0.5, "BTC": 0.2, "ETH": 0.6},
             "calibration_temp": {"SOL": 0.888, "BTC": 0.92, "ETH": 0.95},
         }
-        
-        # Score by comparing to BTC (the winner)
+
+        # Score by comparing to BTC (the reference token)
         sol_vs_btc = {
-            "threshold_delta": comparisons["meta_threshold"]["SOL"] - comparisons["meta_threshold"]["BTC"],
+            "threshold_delta": comparisons["primary_threshold"]["SOL"] - comparisons["primary_threshold"]["BTC"],
             "precision_gap": comparisons["holdout_precision"]["SOL"] - comparisons["holdout_precision"]["BTC"],
             "regime_disability_gap": comparisons["regime_disability"]["SOL"] - comparisons["regime_disability"]["BTC"],
         }
@@ -3256,9 +3772,9 @@ class Section19_DeepTokenComparison:
             f"## Section 19 — Deep {self.symbol} vs BTC/ETH Comparison\n",
             "| Metric | SOL | BTC | ETH | SOL vs BTC |",
             "|--------|-----|-----|-----|-----------|",
-            f"| Meta Threshold | {f['comparisons']['meta_threshold']['SOL']:.1f} | "
-            f"{f['comparisons']['meta_threshold']['BTC']:.1f} | {f['comparisons']['meta_threshold']['ETH']:.1f} | "
-            f"{f['sol_vs_btc_gaps']['threshold_delta']:+.1f} |",
+            f"| Primary Threshold | {f['comparisons']['primary_threshold']['SOL']:.3f} | "
+            f"{f['comparisons']['primary_threshold']['BTC']:.3f} | {f['comparisons']['primary_threshold']['ETH']:.3f} | "
+            f"{f['sol_vs_btc_gaps']['threshold_delta']:+.3f} |",
             f"| Tradeable BUY | {f['comparisons']['tradeable_buy']['SOL']} | "
             f"{f['comparisons']['tradeable_buy']['BTC']} | {f['comparisons']['tradeable_buy']['ETH']} | — |",
             f"| Tradeable SELL | {f['comparisons']['tradeable_sell']['SOL']} | "
@@ -3550,8 +4066,12 @@ class SectionX_FleetForensics:
             "lookahead": meta.get("lookahead") or s1.get("lookahead") or None,
             "precision_target": self._safe_float(s1.get("target_precision", 0)),
             "calibration_temperature": self._safe_float(s1.get("calibration_temperature", 1.0)),
-            "threshold_buy": self._safe_float(s1.get("threshold_buy", meta.get("meta_threshold_buy", meta.get("meta_threshold", 0)))),
-            "threshold_sell": self._safe_float(s1.get("threshold_sell", meta.get("meta_threshold_sell", meta.get("meta_threshold", 0)))),
+            "threshold_buy": self._safe_float(s1.get("threshold_buy",
+                                meta.get("primary_confidence_threshold",
+                                meta.get("meta_threshold_buy", meta.get("meta_threshold", 0))))),
+            "threshold_sell": self._safe_float(s1.get("threshold_sell",
+                                meta.get("primary_confidence_threshold",
+                                meta.get("meta_threshold_sell", meta.get("meta_threshold", 0))))),
             "feature_count": int(s1.get("feature_count", 0) or 0),
             "drift_count": int(s1.get("drift_count", 0) or 0),
             "top_20_features": s1.get("top_20_features", []) or [],

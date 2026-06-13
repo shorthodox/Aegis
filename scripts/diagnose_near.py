@@ -23,7 +23,7 @@ def main():
     if df_1h is None or len(df_1h) < MIN_BARS:
         print('Not enough data to run diagnostics')
         return
-    btc_df = p.fetch_btc_data(timeframe='1h', limit=4000) if hasattr(p, 'fetch_btc_data') else None
+    btc_df = p.fetch_btc_data(timeframe='1h', limit=4000)
     news_df = p.load_news_data()
     df_1d = p.fetch_live_data(timeframe='1d', limit=300)
     fund_df, oi_df = None, None
@@ -37,7 +37,7 @@ def main():
     base_atr_mult = float(p.meta.get('atr_multiplier', get_atr_multiplier(SYMBOL)))
 
     # labels
-    labels_all = create_triple_barrier_labels(df_1h.iloc[-n_feat:].reset_index(drop=True), atr_multiplier=base_atr_mult).values
+    labels_all = np.asarray(create_triple_barrier_labels(df_1h.iloc[-n_feat:].reset_index(drop=True), atr_multiplier=base_atr_mult), dtype=np.intp)
 
     # Build feature matrix same as optimizer
     feature_cols = p.meta.get('feature_cols')
@@ -58,12 +58,12 @@ def main():
 
     # train mask
     train_mask = labels_all[:train_n] != 1
-    train_edge_scores = compute_edge_scores(
+    train_edge_scores = np.asarray(compute_edge_scores(
         features.iloc[:train_n].reset_index(drop=True),
         proposed_all[:train_n],
         dir_conf_all[:train_n],
         use_rank=True,
-    ).values.astype(float)
+    ), dtype=float)
     train_correct = (labels_all[:train_n][train_mask] == proposed_all[:train_n][train_mask]).astype(int)
 
     # holdout

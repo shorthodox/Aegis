@@ -30,8 +30,10 @@ class EdgeScoringEngine:
         quality += np.where(adx > 25, 15.0, 0.0)
         vol_z = _get_s('volume_zscore')
         quality += np.where(vol_z > 1.5, 10.0, 0.0)
-        quality += np.where(meta_probs > 0.001, 15.0, 0.0)
-        quality += np.where(meta_probs < -0.001, -15.0, 0.0)
+        # Scale quality by meta probability: P=1.0→+15, P=0.5→0, P=0.0→-15.
+        # Proportional scaling preserves the spread between high/low confidence signals
+        # so threshold search has meaningful discrimination.
+        quality += np.clip((np.asarray(meta_probs, dtype=float) - 0.5) * 30.0, -15.0, 15.0)
         if 'rsi_14' in df.columns:
             rsi = df['rsi_14']
             if side == 'BUY':
@@ -235,10 +237,7 @@ class EdgeScoringEngine:
             q += 15.0
         if vol_z > 1.5:
             q += 10.0
-        if meta_prob > 0.001:
-            q += 15.0
-        elif meta_prob < -0.001:
-            q += -15.0
+        q += float(np.clip((meta_prob - 0.5) * 30.0, -15.0, 15.0))
             
         rsi = float(result.get('rsi_14', 50.0) or 50.0)
         if side == 'BUY':

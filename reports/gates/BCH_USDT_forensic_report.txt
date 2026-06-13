@@ -1,40 +1,40 @@
 ================================================================================
-FORENSIC REPORT: BCH/USDT | GRADE: F
+FORENSIC REPORT: BCH/USDT | GRADE: A
 ================================================================================
 
 [TOKEN SUMMARY]
   Symbol        : BCH/USDT
-  Timestamp     : 2026-06-07T16:39:37.551176+00:00
+  Timestamp     : 2026-06-12T19:09:46.539002+00:00
   Train bars    : 2605
   Eval bars     : 1117
-  Gate selected : DISABLED
-  Calibration   : beta
-  Score         : 0.0000
-  Grade         : F
+  Gate selected : CALIBRATED_SIDE_EDGE
+  Calibration   : isotonic
+  Score         : 0.3486
+  Grade         : A
 
 [EDGE FAILURE ANALYSIS]
-  Signals       : 1069  (buy=708  sell=361  balance=66.2%)
-  Pred entropy  : mean=0.5588  std=0.3735
-  Dir prob      : mean=0.4652  std=0.3477  skew=-1.0234
-  Edge rank     : mean=0.2388  std=0.1830
-  Diversity     : score=0.9985  HHI=0.0057
-  Top feature   : 2.8%  top3=6.3%
+  Signals       : 1045  (buy=627  sell=418  balance=60.0%)
+  Pred entropy  : mean=0.5238  std=0.3362
+  Dir prob      : mean=0.3653  std=0.3407  skew=+1.0783
+  Edge rank     : mean=0.1808  std=0.1683
+  Diversity     : score=0.9969  HHI=0.0071
+  Top feature   : 3.2%  top3=8.6%
 
   Feature                              Gain%
   -------------------------------------------
-  efficiency_ratio_10                   2.80%
-  starc_position                        1.88%
-  dist_avwap_100                        1.60%
-  dist_ema_21                           1.24%
-  linreg_r2_14                          1.06%
-  atr_band_position                     0.93%
-  dpo_20                                0.86%
-  s1                                    0.84%
-  ichi_dist_kijun                       0.83%
-  bb_pct_b                              0.82%
+  prc_total                             3.23%
+  macro_confluence_score                3.00%
+  efficiency_ratio_10                   2.41%
+  ichi_dist_kijun                       1.66%
+  ichi_above_cloud                      1.34%
+  fib_dist_618                          1.18%
+  historical_volatility                 1.15%
+  vwap_decay_mean_24                    0.94%
+  high                                  0.89%
+  pct_dist_to_support                   0.89%
 
 [CALIBRATION FORENSICS]
-  Evaluated 5 calibration methods; 0 architecture-viable
+  Evaluated 5 calibration methods; 5 architecture-viable
   Calibrators are evaluated by architecture search outcome (percentile
   threshold), NOT by performance at fixed 0.50 threshold.  A calibrator
   appearing unprofitable at p>=0.50 can still be viable when architecture
@@ -42,151 +42,153 @@ FORENSIC REPORT: BCH/USDT | GRADE: F
 
   Method       |    ECE |  Brier | Cov@0.5 |  PF@0.5 |  Exp@0.5 | TechOK | ArchOK | Reason
   -----------------------------------------------------------------------------------------------
-  uncalibrated | 0.1749 | 0.2000 |   0.501 |   0.560 |   -25.47 |    YES |     NO | 
-  isotonic     | 0.0000 | 0.1543 |   0.467 |   0.570 |   -24.95 |    YES |     NO | 
-  platt        | 0.1070 | 0.1710 |   0.279 |   0.541 |   -27.28 |    YES |     NO | 
-  temperature  | 0.1756 | 0.2019 |   0.501 |   0.560 |   -25.47 |    YES |     NO | 
-  beta         | 0.0569 | 0.1602 |   0.362 |   0.574 |   -24.91 |    YES |     NO | 
+  isotonic     | 0.0000 | 0.1791 |   0.268 |   1.180 |     0.08 |    YES |    YES | 
+  uncalibrated | 0.1331 | 0.2063 |   0.501 |   1.363 |     0.14 |    YES |    YES | 
+  platt        | 0.0649 | 0.1875 |   0.324 |   1.193 |     0.09 |    YES |    YES | 
+  temperature  | 0.1292 | 0.2017 |   0.501 |   1.363 |     0.14 |    YES |    YES | 
+  beta         | 0.0472 | 0.1846 |   0.364 |   1.253 |     0.11 |    YES |    YES | 
 
 [ARCHITECTURE FORENSICS]
-  Evaluated 94 architectures: 0 accepted, 49 rejected
+  Evaluated 94 architectures: 4 accepted, 61 rejected
   Rejection reasons:
-    nonpositive_expectancy                     49 candidate(s)
+    precision_below_60%(0.379)                  9 candidate(s)
+    precision_below_60%(0.375)                  8 candidate(s)
+    precision_below_60%(0.383)                  6 candidate(s)
+    precision_below_60%(0.382)                  5 candidate(s)
+    precision_below_60%(0.369)                  4 candidate(s)
+    precision_below_60%(0.390)                  4 candidate(s)
+    precision_below_60%(0.368)                  3 candidate(s)
+    precision_below_60%(0.367)                  3 candidate(s)
+    precision_below_60%(0.388)                  3 candidate(s)
+    duplicate_architecture                      3 candidate(s)
+    negative_gate_lift(-0.0444)                 2 candidate(s)
+    precision_below_60%(0.371)                  2 candidate(s)
+    precision_below_60%(0.381)                  1 candidate(s)
+    negative_gate_lift(-0.0586)                 1 candidate(s)
+    negative_gate_lift(-0.0175)                 1 candidate(s)
+    negative_gate_lift(0.0058)                  1 candidate(s)
+    negative_gate_lift(-0.0028)                 1 candidate(s)
+    precision_below_60%(0.372)                  1 candidate(s)
+    precision_below_60%(0.391)                  1 candidate(s)
+    precision_below_60%(0.407)                  1 candidate(s)
+    precision_below_60%(0.393)                  1 candidate(s)
 
   Gate                     |     Q |     PF |    Exp% | Sharpe |   Cov |  Score | Grade | Reason
   -----------------------------------------------------------------------------------------------
-  GLOBAL_EDGE_PERCENTILE   |  0.40 |  0.579 |  -24.40 | -15.42 | 0.400 | 0.0000 |     F | nonpositive_expectan
-  GLOBAL_EDGE_PERCENTILE   |  0.30 |  0.554 |  -26.27 | -14.46 | 0.300 | 0.0000 |     F | nonpositive_expectan
-  GLOBAL_EDGE_PERCENTILE   |  0.25 |  0.533 |  -27.71 | -14.05 | 0.251 | 0.0000 |     F | nonpositive_expectan
-  GLOBAL_EDGE_PERCENTILE   |  0.20 |  0.612 |  -21.60 |  -9.69 | 0.200 | 0.0000 |     F | nonpositive_expectan
-  GLOBAL_EDGE_PERCENTILE   |  0.15 |  0.536 |  -27.43 | -10.79 | 0.151 | 0.0000 |     F | nonpositive_expectan
-  SIDE_EDGE_PERCENTILE     |  0.40 |  0.579 |  -24.40 | -15.42 | 0.400 | 0.0000 |     F | nonpositive_expectan
-  SIDE_EDGE_PERCENTILE     |  0.30 |  0.551 |  -26.50 | -14.62 | 0.301 | 0.0000 |     F | nonpositive_expectan
-  SIDE_EDGE_PERCENTILE     |  0.25 |  0.533 |  -27.71 | -14.05 | 0.251 | 0.0000 |     F | nonpositive_expectan
-  SIDE_EDGE_PERCENTILE     |  0.20 |  0.607 |  -21.96 |  -9.88 | 0.201 | 0.0000 |     F | nonpositive_expectan
-  SIDE_EDGE_PERCENTILE     |  0.15 |  0.546 |  -26.64 | -10.48 | 0.152 | 0.0000 |     F | nonpositive_expectan
+  CALIBRATED_SIDE_EDGE     |  0.40 |  1.606 |    0.22 |  10.47 | 0.569 | 0.3486 |     A | accepted
+  EDGE_CONFLUENCE_VETO     |  0.40 |  1.681 |    0.20 |   8.55 | 0.344 | 0.3474 |     A | candidate
+  EDGE_CONFLUENCE_VETO     |  0.30 |  1.603 |    0.19 |   6.59 | 0.254 | 0.3306 |     A | candidate
+  EDGE_CONFLUENCE_VETO     |  0.25 |  1.503 |    0.17 |   5.25 | 0.210 | 0.3125 |    B+ | candidate
+  GLOBAL_EDGE_PERCENTILE   |  0.40 |  1.261 |    0.11 |   4.35 | 0.400 | 0.0000 |    C+ | precision_below_60%(
+  GLOBAL_EDGE_PERCENTILE   |  0.30 |  1.186 |    0.08 |   2.79 | 0.300 | 0.0000 |     C | precision_below_60%(
+  GLOBAL_EDGE_PERCENTILE   |  0.25 |  1.137 |    0.06 |   1.93 | 0.251 | 0.0000 |     C | precision_below_60%(
+  GLOBAL_EDGE_PERCENTILE   |  0.20 |  1.106 |    0.05 |   1.34 | 0.200 | 0.0000 |     C | precision_below_60%(
+  GLOBAL_EDGE_PERCENTILE   |  0.15 |  1.152 |    0.08 |   1.63 | 0.150 | 0.0000 |     C | precision_below_60%(
+  GLOBAL_EDGE_PERCENTILE   |  0.10 |  1.390 |    0.21 |   3.10 | 0.100 | 0.0000 |     B | precision_below_60%(
 
 [ARCHITECTURE ACCOUNTING]
-  Total=94 = Accepted(0) + CoverageRej(45) + QualityRej(49) + Duplicate(0) + Other(0)
+  Total=94 = Accepted(4) + CoverageRej(29) + QualityRej(0) + Duplicate(3) + Other(58)
   Accounting OK : YES
   Rejection breakdown:
-    nonpositive_expectancy                          49
-    coverage 0.0804 < required 0.15                  4
-    coverage 0.0608 < required 0.15                  4
-    coverage 0.1010 < required 0.15                  4
-    coverage 0.0412 < required 0.15                  3
-    coverage 0.0215 < required 0.15                  3
-    coverage 0.0206 < required 0.15                  2
-    coverage 0.0178 < required 0.15                  2
-    coverage 0.0131 < required 0.15                  2
-    coverage 0.0168 < required 0.15                  2
-    coverage 0.1001 < required 0.15                  1
-    coverage 0.0402 < required 0.15                  1
-    coverage 0.1319 < required 0.15                  1
-    coverage 0.0907 < required 0.15                  1
-    coverage 0.0739 < required 0.15                  1
-    coverage 0.0561 < required 0.15                  1
-    coverage 0.0384 < required 0.15                  1
-    coverage 0.0730 < required 0.15                  1
-    coverage 0.0496 < required 0.15                  1
-    coverage 0.0318 < required 0.15                  1
-    coverage 0.0103 < required 0.15                  1
-    coverage 0.0056 < required 0.15                  1
-    coverage 0.0028 < required 0.15                  1
-    coverage 0.0645 < required 0.15                  1
-    coverage 0.0440 < required 0.15                  1
-    coverage 0.0346 < required 0.15                  1
-    coverage 0.0281 < required 0.15                  1
-    coverage 0.0234 < required 0.15                  1
-    coverage 0.0159 < required 0.15                  1
+    precision_below_60%(0.379)                       9
+    precision_below_60%(0.375)                       8
+    precision_below_60%(0.383)                       6
+    precision_below_60%(0.382)                       5
+    coverage 0.0211 < required 0.08                  4
+    coverage 0.0431 < required 0.08                  4
+    precision_below_60%(0.369)                       4
+    precision_below_60%(0.390)                       4
+    coverage 0.0612 < required 0.08                  3
+    coverage 0.0411 < required 0.08                  3
+    duplicate_architecture                           3
+    precision_below_60%(0.368)                       3
+    precision_below_60%(0.367)                       3
+    precision_below_60%(0.388)                       3
+    coverage 0.0287 < required 0.08                  2
+    negative_gate_lift(-0.0444)                      2
+    precision_below_60%(0.371)                       2
+    coverage 0.0603 < required 0.08                  1
+    coverage 0.0402 < required 0.08                  1
+    coverage 0.0565 < required 0.08                  1
+    coverage 0.0450 < required 0.08                  1
+    coverage 0.0335 < required 0.08                  1
+    coverage 0.0220 < required 0.08                  1
+    coverage 0.0134 < required 0.08                  1
+    coverage 0.0651 < required 0.08                  1
+    coverage 0.0488 < required 0.08                  1
+    coverage 0.0316 < required 0.08                  1
+    coverage 0.0153 < required 0.08                  1
+    coverage 0.0660 < required 0.08                  1
+    coverage 0.0096 < required 0.08                  1
+    precision_below_60%(0.381)                       1
+    negative_gate_lift(-0.0586)                      1
+    negative_gate_lift(-0.0175)                      1
+    negative_gate_lift(0.0058)                       1
+    negative_gate_lift(-0.0028)                      1
+    precision_below_60%(0.372)                       1
+    precision_below_60%(0.391)                       1
+    precision_below_60%(0.407)                       1
+    precision_below_60%(0.393)                       1
 
 [SCORE BREAKDOWN]
-  Final score = 0.0713
+  Final score = 0.3681
 
   Component             Weight   Contribution
   -------------------------------------------
-  expectancy              0.35      +0.000000
-  profit_factor           0.30      +0.000000
-  sharpe                  0.20      +0.000000
-  precision               0.10      +0.021328
-  coverage                0.05      +0.050000
+  expectancy              0.35      +0.007535
+  profit_factor           0.30      +0.090900
+  sharpe                  0.20      +0.200000
+  precision               0.10      +0.041176
+  coverage                0.05      +0.028469
   -------------------------------------------
-  TOTAL                   1.00      +0.071328
+  TOTAL                   1.00      +0.368081
 
 [TRUST SCORE FORENSICS]
-  Trust score : 25/100
+  Trust score : 48/100
   Saved value : -1
   Consistent  : UNKNOWN (not recorded in profile)
 
   Component                        Points
   ----------------------------------------
-  pf_contribution                    0.00
-  expectancy_contribution            0.00
-  sharpe_contribution                0.00
-  coverage_contribution             15.00
+  pf_contribution                    9.09
+  expectancy_contribution            0.54
+  sharpe_contribution               20.00
+  coverage_contribution              8.54
   fires_contribution                10.00
   ----------------------------------------
-  TOTAL                                25
+  TOTAL                                48
 
 [MODEL HEALTH SCORE]
-  Total : 71/100 — GOOD
+  Total : 74/100 — GOOD
 
   Component                   Score  Max
   --------------------------------------
-  feature_diversity            30.0 / 30  ##########
-  prediction_entropy           18.6 / 20  #########
-  calibration_quality          17.3 / 25  ######
-  architecture_robustness       0.0 / 15  
+  feature_diversity            29.9 / 30  #########
+  prediction_entropy           17.5 / 20  ########
+  calibration_quality          16.0 / 25  ######
+  architecture_robustness       6.0 / 15  ####
   regime_stability              5.0 / 10  #####
 
 [REGIME FORENSICS]
   Regime breakdown requires ranking_df — use enrich_with_ranking_df() to populate.
 
 [ALPHA ATTRIBUTION]
-  PF lift from neutral 0.90 to 0.608: raw signal=0%, calibration=100%, gate architecture=0%
+  PF lift from neutral 0.90 to 1.606: raw signal=100%, calibration=0%, gate architecture=0%
 
-  Baseline PF    : 0.608
-  Final PF       : 0.608
-  Total lift     : +0.000 (from neutral 0.90)
+  Baseline PF    : 2.312
+  Final PF       : 1.606
+  Total lift     : +0.706 (from neutral 0.90)
 
   Source                          Lift    Share
   ---------------------------------------------
-  Signal quality                +0.000     0.0%
-  Calibration                   +0.014   100.0%
+  Signal quality                +1.412   100.0%
+  Calibration                   +0.000     0.0%
   Gate architecture             +0.000     0.0%
 
-[DISABLED GATE — ROOT CAUSE ANALYSIS]
-  ├─ Calibration validation: No calibrator produced a profitable architecture at any percentile threshold
-  ├─ All 94 candidates rejected:
-  ├─   nonpositive_expectancy: 49 candidate(s)
-  ├─   coverage 0.0804 < required 0.15: 4 candidate(s)
-  ├─   coverage 0.0608 < required 0.15: 4 candidate(s)
-  ├─   coverage 0.1010 < required 0.15: 4 candidate(s)
-  ├─   coverage 0.0412 < required 0.15: 3 candidate(s)
-  ├─ Baseline profit factor too low: 0.608 (threshold 1.05)
-  ├─ Baseline expectancy non-positive: -13.758%
-  ├─ Baseline Sharpe non-positive: -17.242
-  └─ RECOMMENDATION: Baseline profit factor is weak; favor a conservative fallback gate or wider ATR barriers instead of disabling the token. Review data quality, feature engineering, and ensure at least 15% of signals have positive expectancy.  Consider extending the evaluation window.
-
-[ROOT CAUSE CLASSIFICATION]
-  Primary cause : NO_ALPHA (confidence=52.9%)
-
-  Cause                           Confidence
-  -------------------------------------------
-  NO_ALPHA                            52.9%
-  OVERFITTING                         29.4%
-  CALIBRATION_COLLAPSE                17.6%
-
-  Evidence:
-    [NO_ALPHA] Baseline PF=0.608, Exp=-13.76% — raw signal quality critically poor
-    [NO_ALPHA] Every architecture candidate has non-positive expectancy
-    [OVERFITTING] Train precision 0.556 >> holdout precision 0.328 — train/holdout divergence suggests overfitting or data leak
-    [CALIBRATION_COLLAPSE] No calibrator produced a viable architecture at any percentile threshold
-
 [FINAL VERDICT]
-  Status  : DISABLED — no profitable gate found
-  Verdict : No architecture passed profitability thresholds
-  Grade   : F  (PF=0.608  Exp=-13.76%)
-  Trust   : 25/100 — LOW
+  Status  : ENABLED — CALIBRATED_SIDE_EDGE
+  Verdict : HIGH CONFIDENCE — excellent profitability metrics
+  Grade   : A  (PF=1.606  Exp=0.22%)
+  Trust   : 48/100 — MEDIUM
 
 ================================================================================

@@ -1,37 +1,37 @@
 ================================================================================
-FORENSIC REPORT: DOT/USDT | GRADE: B
+FORENSIC REPORT: DOT/USDT | GRADE: A+
 ================================================================================
 
 [TOKEN SUMMARY]
   Symbol        : DOT/USDT
-  Timestamp     : 2026-06-07T16:37:48.056498+00:00
+  Timestamp     : 2026-06-12T19:07:54.241620+00:00
   Train bars    : 2605
   Eval bars     : 1117
-  Gate selected : EDGE_SR_VETO
-  Calibration   : platt
-  Score         : 0.6882
-  Grade         : B
+  Gate selected : EDGE_CONFLUENCE_VETO
+  Calibration   : temperature
+  Score         : 0.3932
+  Grade         : A+
 
 [EDGE FAILURE ANALYSIS]
-  Signals       : 1069  (buy=568  sell=501  balance=53.1%)
-  Pred entropy  : mean=0.5733  std=0.3906
-  Dir prob      : mean=0.4568  std=0.3391  skew=-0.9571
-  Edge rank     : mean=0.1988  std=0.1530
-  Diversity     : score=0.9983  HHI=0.0059
-  Top feature   : 2.9%  top3=6.1%
+  Signals       : 1069  (buy=603  sell=466  balance=56.4%)
+  Pred entropy  : mean=0.5575  std=0.3584
+  Dir prob      : mean=0.3827  std=0.3316  skew=+0.1092
+  Edge rank     : mean=0.1587  std=0.1365
+  Diversity     : score=0.9968  HHI=0.0073
+  Top feature   : 3.1%  top3=8.4%
 
   Feature                              Gain%
   -------------------------------------------
-  efficiency_ratio_10                   2.94%
-  atr_band_position                     1.70%
-  starc_position                        1.45%
-  linreg_r2_14                          1.41%
-  dema_21                               1.21%
-  kama_10                               1.18%
-  trend_confluence                      1.07%
-  range_position_score                  1.00%
-  ichimoku_tenkan                       0.97%
-  s1                                    0.88%
+  macro_confluence_score                3.12%
+  prc_total                             2.81%
+  efficiency_ratio_10                   2.49%
+  tema_21                               1.99%
+  dema_21                               1.65%
+  rolling_resistance                    1.45%
+  atr_band_position                     1.27%
+  vwap                                  1.22%
+  rsi_14                                1.08%
+  ema_stack_alignment                   1.01%
 
 [CALIBRATION FORENSICS]
   Evaluated 5 calibration methods; 5 architecture-viable
@@ -42,132 +42,148 @@ FORENSIC REPORT: DOT/USDT | GRADE: B
 
   Method       |    ECE |  Brier | Cov@0.5 |  PF@0.5 |  Exp@0.5 | TechOK | ArchOK | Reason
   -----------------------------------------------------------------------------------------------
-  uncalibrated | 0.1502 | 0.1916 |   0.501 |   0.982 |    -0.85 |    YES |    YES | 
-  isotonic     | 0.0000 | 0.1543 |   0.555 |   0.994 |    -0.27 |    YES |    YES | 
-  platt        | 0.1417 | 0.1784 |   0.341 |   1.126 |     5.65 |    YES |    YES | 
-  temperature  | 0.1662 | 0.1943 |   0.501 |   0.982 |    -0.85 |    YES |    YES | 
-  beta         | 0.0677 | 0.1634 |   0.432 |   1.016 |     0.77 |    YES |    YES | 
+  uncalibrated | 0.1383 | 0.2142 |   0.501 |   1.420 |     0.19 |    YES |    YES | 
+  isotonic     | 0.0000 | 0.1835 |   0.268 |   1.270 |     0.15 |    YES |    YES | 
+  platt        | 0.0675 | 0.1923 |   0.311 |   1.278 |     0.15 |    YES |    YES | 
+  temperature  | 0.1330 | 0.2063 |   0.501 |   1.420 |     0.19 |    YES |    YES | 
+  beta         | 0.0535 | 0.1889 |   0.330 |   1.289 |     0.15 |    YES |    YES | 
 
 [ARCHITECTURE FORENSICS]
-  Evaluated 94 architectures: 12 accepted, 27 rejected
+  Evaluated 94 architectures: 6 accepted, 54 rejected
   Rejection reasons:
-    duplicate_architecture                     19 candidate(s)
-    pf_below_1.10                               8 candidate(s)
+    precision_below_60%(0.458)                  8 candidate(s)
+    precision_below_60%(0.439)                  7 candidate(s)
+    precision_below_60%(0.459)                  7 candidate(s)
+    precision_below_60%(0.453)                  6 candidate(s)
+    precision_below_60%(0.460)                  5 candidate(s)
+    precision_below_60%(0.491)                  5 candidate(s)
+    precision_below_60%(0.483)                  5 candidate(s)
+    precision_below_60%(0.495)                  1 candidate(s)
+    precision_below_60%(0.488)                  1 candidate(s)
+    precision_below_60%(0.432)                  1 candidate(s)
+    precision_below_60%(0.440)                  1 candidate(s)
+    precision_below_60%(0.455)                  1 candidate(s)
+    precision_below_60%(0.448)                  1 candidate(s)
+    precision_below_60%(0.445)                  1 candidate(s)
+    precision_below_60%(0.423)                  1 candidate(s)
+    precision_below_60%(0.438)                  1 candidate(s)
+    precision_below_60%(0.461)                  1 candidate(s)
+    precision_below_60%(0.441)                  1 candidate(s)
 
   Gate                     |     Q |     PF |    Exp% | Sharpe |   Cov |  Score | Grade | Reason
   -----------------------------------------------------------------------------------------------
-  EDGE_SR_VETO             |  0.25 |  1.342 |   13.84 |   5.86 | 0.195 | 0.6882 |     B | accepted
-  EDGE_SR_VETO             |  0.20 |  1.340 |   13.77 |   5.32 | 0.162 | 0.6863 |     B | candidate
-  EDGE_SR_VETO             |  0.30 |  1.269 |   11.28 |   5.17 | 0.230 | 0.6785 |    C+ | accepted
-  GLOBAL_EDGE_PERCENTILE   |  0.15 |  1.229 |    9.84 |   3.63 | 0.151 | 0.6070 |    C+ | accepted
-  SIDE_EDGE_PERCENTILE     |  0.15 |  1.212 |    9.16 |   3.39 | 0.152 | 0.5674 |    C+ | candidate
-  EDGE_SR_VETO             |  0.40 |  1.189 |    8.10 |   4.22 | 0.297 | 0.5617 |     C | candidate
-  GLOBAL_EDGE_PERCENTILE   |  0.25 |  1.177 |    7.74 |   3.68 | 0.251 | 0.5216 |     C | accepted
-  SIDE_EDGE_PERCENTILE     |  0.20 |  1.178 |    7.81 |   3.33 | 0.201 | 0.5079 |     C | candidate
-  GLOBAL_EDGE_PERCENTILE   |  0.20 |  1.168 |    7.38 |   3.13 | 0.200 | 0.4814 |     C | candidate
-  SIDE_EDGE_PERCENTILE     |  0.30 |  1.144 |    6.42 |   3.35 | 0.301 | 0.4528 |     C | candidate
+  EDGE_CONFLUENCE_VETO     |  0.20 |  1.969 |    0.39 |   9.59 | 0.152 | 0.3932 |    A+ | accepted
+  EDGE_CONFLUENCE_VETO     |  0.30 |  1.890 |    0.34 |  10.86 | 0.239 | 0.3821 |    A+ | accepted
+  EDGE_CONFLUENCE_VETO     |  0.25 |  1.860 |    0.34 |   9.64 | 0.196 | 0.3759 |    A+ | candidate
+  EDGE_CONFLUENCE_VETO     |  0.40 |  1.775 |    0.29 |  11.39 | 0.333 | 0.3664 |     A | accepted
+  EDGE_CONFLUENCE_VETO     |  0.15 |  1.751 |    0.35 |   6.87 | 0.109 | 0.3565 |     A | candidate
+  EDGE_STRICT_VETO         |  0.20 |  1.616 |    0.32 |   5.88 | 0.106 | 0.3342 |     A | candidate
+  GLOBAL_EDGE_PERCENTILE   |  0.40 |  1.318 |    0.16 |   5.92 | 0.400 | 0.0000 |     B | precision_below_60%(
+  GLOBAL_EDGE_PERCENTILE   |  0.30 |  1.266 |    0.15 |   4.44 | 0.300 | 0.0000 |    C+ | precision_below_60%(
+  GLOBAL_EDGE_PERCENTILE   |  0.25 |  1.201 |    0.12 |   3.19 | 0.251 | 0.0000 |    C+ | precision_below_60%(
+  GLOBAL_EDGE_PERCENTILE   |  0.20 |  1.113 |    0.07 |   1.70 | 0.200 | 0.0000 |     C | precision_below_60%(
 
 [ARCHITECTURE ACCOUNTING]
-  Total=94 = Accepted(12) + CoverageRej(55) + QualityRej(8) + Duplicate(19) + Other(0)
+  Total=94 = Accepted(6) + CoverageRej(34) + QualityRej(0) + Duplicate(0) + Other(54)
   Accounting OK : YES
   Rejection breakdown:
-    duplicate_architecture                          19
-    pf_below_1.10                                    8
-    coverage 0.1010 < required 0.15                  5
-    coverage 0.0814 < required 0.15                  5
-    coverage 0.0617 < required 0.15                  5
-    coverage 0.0412 < required 0.15                  5
-    coverage 0.0215 < required 0.15                  5
-    coverage 0.1001 < required 0.15                  1
-    coverage 0.0804 < required 0.15                  1
-    coverage 0.0608 < required 0.15                  1
-    coverage 0.0402 < required 0.15                  1
-    coverage 0.0206 < required 0.15                  1
-    coverage 0.1263 < required 0.15                  1
-    coverage 0.0861 < required 0.15                  1
-    coverage 0.0702 < required 0.15                  1
-    coverage 0.0514 < required 0.15                  1
-    coverage 0.0365 < required 0.15                  1
-    coverage 0.0187 < required 0.15                  1
-    coverage 0.1179 < required 0.15                  1
-    coverage 0.0907 < required 0.15                  1
-    coverage 0.0627 < required 0.15                  1
-    coverage 0.0393 < required 0.15                  1
-    coverage 0.0225 < required 0.15                  1
-    coverage 0.0168 < required 0.15                  1
-    coverage 0.0131 < required 0.15                  1
-    coverage 0.0065 < required 0.15                  1
-    coverage 0.0037 < required 0.15                  1
-    coverage 0.0748 < required 0.15                  1
-    coverage 0.0477 < required 0.15                  1
-    coverage 0.0355 < required 0.15                  1
-    coverage 0.0243 < required 0.15                  1
-    coverage 0.0140 < required 0.15                  1
-    coverage 0.0075 < required 0.15                  1
-    coverage 0.0056 < required 0.15                  1
-    coverage 0.0028 < required 0.15                  1
-    coverage 0.0019 < required 0.15                  1
-    coverage 0.0009 < required 0.15                  1
+    precision_below_60%(0.458)                       8
+    precision_below_60%(0.439)                       7
+    precision_below_60%(0.459)                       7
+    coverage 0.0608 < required 0.08                  6
+    precision_below_60%(0.453)                       6
+    coverage 0.0412 < required 0.08                  5
+    coverage 0.0215 < required 0.08                  5
+    precision_below_60%(0.460)                       5
+    precision_below_60%(0.491)                       5
+    precision_below_60%(0.483)                       5
+    coverage 0.0795 < required 0.08                  2
+    coverage 0.0486 < required 0.08                  2
+    coverage 0.0402 < required 0.08                  1
+    coverage 0.0206 < required 0.08                  1
+    coverage 0.0627 < required 0.08                  1
+    coverage 0.0327 < required 0.08                  1
+    coverage 0.0178 < required 0.08                  1
+    coverage 0.0692 < required 0.08                  1
+    coverage 0.0543 < required 0.08                  1
+    coverage 0.0421 < required 0.08                  1
+    coverage 0.0281 < required 0.08                  1
+    coverage 0.0140 < required 0.08                  1
+    coverage 0.0365 < required 0.08                  1
+    coverage 0.0299 < required 0.08                  1
+    coverage 0.0196 < required 0.08                  1
+    coverage 0.0103 < required 0.08                  1
+    precision_below_60%(0.495)                       1
+    precision_below_60%(0.488)                       1
+    precision_below_60%(0.432)                       1
+    precision_below_60%(0.440)                       1
+    precision_below_60%(0.455)                       1
+    precision_below_60%(0.448)                       1
+    precision_below_60%(0.445)                       1
+    precision_below_60%(0.423)                       1
+    precision_below_60%(0.438)                       1
+    precision_below_60%(0.461)                       1
+    precision_below_60%(0.441)                       1
 
 [SCORE BREAKDOWN]
-  Final score = 0.6654
+  Final score = 0.4158
 
   Component             Weight   Contribution
   -------------------------------------------
-  expectancy              0.35      +0.350000
-  profit_factor           0.30      +0.051300
+  expectancy              0.35      +0.013744
+  profit_factor           0.30      +0.145350
   sharpe                  0.20      +0.200000
-  precision               0.10      +0.054327
-  coverage                0.05      +0.009729
+  precision               0.10      +0.049080
+  coverage                0.05      +0.007624
   -------------------------------------------
-  TOTAL                   1.00      +0.665356
+  TOTAL                   1.00      +0.415798
 
 [TRUST SCORE FORENSICS]
-  Trust score : 63/100
+  Trust score : 47/100
   Saved value : -1
   Consistent  : UNKNOWN (not recorded in profile)
 
   Component                        Points
   ----------------------------------------
-  pf_contribution                    5.13
-  expectancy_contribution           25.00
+  pf_contribution                   14.54
+  expectancy_contribution            0.98
   sharpe_contribution               20.00
-  coverage_contribution              2.92
+  coverage_contribution              2.29
   fires_contribution                10.00
   ----------------------------------------
-  TOTAL                                63
+  TOTAL                                47
 
 [MODEL HEALTH SCORE]
-  Total : 86/100 — EXCELLENT
+  Total : 78/100 — GOOD
 
   Component                   Score  Max
   --------------------------------------
   feature_diversity            29.9 / 30  #########
-  prediction_entropy           19.1 / 20  #########
-  calibration_quality          17.3 / 25  ######
-  architecture_robustness      15.0 / 15  ##########
+  prediction_entropy           18.6 / 20  #########
+  calibration_quality          15.8 / 25  ######
+  architecture_robustness       9.0 / 15  ######
   regime_stability              5.0 / 10  #####
 
 [REGIME FORENSICS]
   Regime breakdown requires ranking_df — use enrich_with_ranking_df() to populate.
 
 [ALPHA ATTRIBUTION]
-  PF lift from neutral 0.90 to 1.342: raw signal=32%, calibration=33%, gate architecture=35%
+  PF lift from neutral 0.90 to 1.969: raw signal=100%, calibration=0%, gate architecture=0%
 
-  Baseline PF    : 1.042
-  Final PF       : 1.342
-  Total lift     : +0.442 (from neutral 0.90)
+  Baseline PF    : 2.245
+  Final PF       : 1.969
+  Total lift     : +1.069 (from neutral 0.90)
 
   Source                          Lift    Share
   ---------------------------------------------
-  Signal quality                +0.142    32.1%
-  Calibration                   +0.144    32.6%
-  Gate architecture             +0.156    35.3%
+  Signal quality                +1.345   100.0%
+  Calibration                   +0.000     0.0%
+  Gate architecture             +0.000     0.0%
 
 [FINAL VERDICT]
-  Status  : ENABLED — EDGE_SR_VETO
-  Verdict : GOOD — solid profitability
-  Grade   : B  (PF=1.342  Exp=13.84%)
-  Trust   : 63/100 — MEDIUM
+  Status  : ENABLED — EDGE_CONFLUENCE_VETO
+  Verdict : HIGH CONFIDENCE — excellent profitability metrics
+  Grade   : A+  (PF=1.969  Exp=0.39%)
+  Trust   : 47/100 — MEDIUM
 
 ================================================================================

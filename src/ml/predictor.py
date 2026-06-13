@@ -89,9 +89,14 @@ class Predictor:
             return
 
         # Load primary as a raw Booster (the trainer saves xgb.train output).
-        self.model = xgb.Booster()
-        self.model.load_model(str(primary_path))
-        logger.info(f"Primary model loaded: {primary_path.name}")
+        try:
+            self.model = xgb.Booster()
+            self.model.load_model(str(primary_path))
+            logger.info(f"Primary model loaded: {primary_path.name}")
+        except Exception as _load_err:
+            logger.warning(f"Could not load primary model {primary_path.name}: {_load_err} — Predictor will run without model")
+            self.model = None
+            return
 
         if sidecar_path.exists():
             try:
@@ -104,9 +109,13 @@ class Predictor:
         if meta_file:
             meta_path = model_store / meta_file
             if meta_path.exists():
-                self.meta_model = xgb.Booster()
-                self.meta_model.load_model(str(meta_path))
-                logger.info(f"Meta model loaded: {meta_path.name}")
+                try:
+                    self.meta_model = xgb.Booster()
+                    self.meta_model.load_model(str(meta_path))
+                    logger.info(f"Meta model loaded: {meta_path.name}")
+                except Exception as _meta_err:
+                    logger.warning(f"Could not load meta model {meta_path.name}: {_meta_err} — skipping (pkl format uses meta_model_light_file)")
+                    self.meta_model = None
         # Lightweight meta model (pickle, e.g. logistic) if present
         meta_light_file = self.meta.get("meta_model_light_file")
         self.meta_model_light = None
@@ -134,6 +143,26 @@ class Predictor:
                     logger.info(f"AEGIS state loaded: {aegis_path.name}")
                 except Exception as e:
                     logger.warning(f"Could not load AEGIS state: {e}")
+
+        # Load HOLD-avoidance calibrator (multi-feature LR that maps
+        # [conf, atr_pct, confluence, ...] → P(not HOLD)).  Applied at
+        # inference when primary_only_mode=True to suppress HOLD timeouts.
+        self.hold_calibrator      = None
+        self.hold_disc_cols: list = []
+        _hold_cal_file = self.meta.get("primary_calibrator_file")
+        if _hold_cal_file:
+            _hold_cal_path = model_store / _hold_cal_file
+            if _hold_cal_path.exists():
+                try:
+                    import pickle
+                    with open(_hold_cal_path, "rb") as f:
+                        _hc = pickle.load(f)
+                    self.hold_calibrator = _hc.get("calibrator")
+                    self.hold_disc_cols  = _hc.get("hold_disc_cols", [])
+                    logger.info(f"HOLD calibrator loaded: {_hold_cal_path.name} "
+                                f"(features={self.hold_disc_cols})")
+                except Exception as e:
+                    logger.warning(f"Could not load HOLD calibrator: {e}")
 
     def _load_token_params(self) -> Optional[Dict[str, Any]]:
         """Load per-token optimizer output from data/token_params/ if present."""
@@ -854,6 +883,34 @@ class Predictor:
             fire = False
         elif side == 0 and (not tradeable_sell or not regime_ok):
             fire = False
+
+        # ── Primary-only HOLD-avoidance calibrator gate ───────────────────────
+        # When primary_only_mode=True, apply the calibrated HOLD-avoidance gate
+        # trained in retrain_model.py.  Suppresses signals where the model fires
+        # direction but the market is unlikely to clear the ATR barrier.
+        if fire and bool(self.meta.get("primary_only_mode", False)):
+            _po_thr = float(self.meta.get("primary_confidence_threshold") or 0.0)
+            if _po_thr > 0.0 and self.hold_calibrator is not None:
+                try:
+                    import numpy as _np
+                    _conf_raw = float(last[2] if side == 2 else last[0])
+                    if self.hold_disc_cols:
+                        _last_row = df_features.iloc[[-1]]
+                        _disc_vals = _last_row.reindex(
+                            columns=self.hold_disc_cols, fill_value=0.0
+                        ).fillna(0.0).to_numpy()
+                        _cal_x_live = _np.column_stack([
+                            _np.array([[_conf_raw]]), _disc_vals
+                        ])
+                    else:
+                        _cal_x_live = _np.array([[_conf_raw]])
+                    _p_not_hold = float(
+                        self.hold_calibrator.predict_proba(_cal_x_live)[0, 1]
+                    )
+                    if _p_not_hold < _po_thr:
+                        fire = False
+                except Exception:
+                    pass  # calibrator errors are non-fatal; fall back to edge gate
 
         # ── Regime-specific directional-probability filter ────────────────────
         # threshold_optimizer.py finds per-regime thresholds on p_buy / p_sell.

@@ -183,8 +183,10 @@ class MetaCalibrationFramework:
         _record('uncalibrated', y_prob_clean, None)
         self._ece_before = results['uncalibrated']['ece']
 
-        # 1. Isotonic Regression
-        if _SKLEARN:
+        # 1. Isotonic Regression — skipped on tiny dev sets.
+        # With < 50 samples isotonic memorises the training distribution perfectly
+        # (ECE≈0 on dev, collapse on holdout). Platt/temperature generalise better.
+        if _SKLEARN and len(y_prob_clean) >= 50:
             try:
                 iso = IsotonicRegression(out_of_bounds='clip')
                 iso.fit(y_prob_clean, y_true_clean)
