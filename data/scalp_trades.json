@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-06-14T10:17:23.353075+00:00",
+  "last_updated": "2026-06-14T10:27:29.153973+00:00",
   "total_trades": 4,
   "won": 2,
   "lost": 2,
@@ -94,19 +94,19 @@
       "exit_reason": "SL"
     },
     {
-      "signal_id": "B0FFF64A",
+      "signal_id": "9EE8D767",
       "symbol": "SHIB/USDT",
       "mode": "scalping_15m",
       "timeframe": "15m",
       "direction": "BUY",
-      "confidence": 0.5652,
-      "p_buy": 0.5652,
+      "confidence": 0.5319,
+      "p_buy": 0.5319,
       "p_sell": 0.1019,
-      "p_hold": 0.3328,
+      "p_hold": 0.3662,
       "entry_price": 4.99e-06,
       "sl": 4.95e-06,
       "tp": 5.05e-06,
-      "entry_time": "2026-06-14T10:17:23.353059+00:00",
+      "entry_time": "2026-06-14T10:27:29.153959+00:00",
       "position_usdt": 100.0,
       "outcome": "OPEN"
     }

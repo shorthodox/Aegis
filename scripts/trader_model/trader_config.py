@@ -190,6 +190,7 @@ ALL_FEATURE_NAMES = STRATEGY_NAMES + FEATURE_ENGINE_NAMES
 # ── Training data fetch sizes ──────────────────────────────────────────────────
 TRAINING_BARS = {
     '5m':  2000,
+    '15m': 1500,
     '1h':  1500,
     '4h':  750,
 }

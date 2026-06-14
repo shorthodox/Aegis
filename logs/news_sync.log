@@ -881,3 +881,14 @@ ModuleNotFoundError: No module named 'feedparser'
 2026-06-14 00:53:36 | INFO | Pruned 2 old news items (>48h)
 2026-06-14 00:53:36 | INFO | Saved 61 news items to d:\Content\Animesh\bots\ai_signal_bot\data\news_data.json
 2026-06-14 00:53:36 | INFO | Scraping complete. Total stored: 61 items. Avg sentiment (last 50): -0.1239
+2026-06-14 13:04:46 | INFO | Starting news scraping cycle...
+2026-06-14 13:04:46 | INFO | Fetching RSS: https://cointelegraph.com/rss
+2026-06-14 13:04:47 | INFO | Fetching RSS: https://www.coindesk.com/feed/
+2026-06-14 13:04:48 | WARNING | Feedparser error for https://2026-06-14 13:04:48 | INFO | Fetching RSS: https://www.coindesk.com/feed/
+2026-06-14 13:04:49 | INFO | Fetching RSS: https://cryptoslate.com/feed/
+2026-06-14 13:04:52 | INFO | Fetching RSS: https://decrypt.co/feed
+2026-06-14 13:04:53 | INFO | Fetched 50 raw articles, 5 new unique items.
+2026-06-14 13:04:53 | INFO | Pruned 25 old news items (>48h)2026-06-14 13:04:54 | INFO | Fetched 50 raw articles, 5 new unique items.
+2026-06-14 13:04:54 | INFO | Pruned 25 old news items (>48h)
+2026-06-14 13:04:54 | INFO | Saved 41 news items to d:\Content\Animesh\bots\ai_signal_bot\data\news_data.json
+2026-06-14 13:04:54 | INFO | Scraping complete. Total stored: 41 items. Avg sentiment (last 50): -0.1294
