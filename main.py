@@ -933,7 +933,7 @@ def _tg_start_poller() -> None:
 # FastAPI app (lifespan runs engine as background task)
 # -------------------------------------------------------------------
 # ── Trader Engine background scan loop ────────────────────────────────────────
-_TRADER_SCAN_INTERVAL = 60    # 60 seconds
+_TRADER_SCAN_INTERVAL = 30    # 30 seconds
 
 def _save_trader_track_record() -> None:
     """Copy data/trader_track_record.json → web/trader_track_record.json for static serving."""

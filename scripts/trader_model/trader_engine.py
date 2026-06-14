@@ -533,13 +533,33 @@ class TraderEngine:
                 current_price = float(df['close'].iloc[-1])
                 p_sell, p_hold, p_buy = float(proba[0]), float(proba[1]), float(proba[2])
 
+                # ── Scalping directional-edge override ────────────────────────────
+                # The binary dual model often gives low absolute probabilities in
+                # ranging markets (p_buy ≈ 0.05–0.15, p_hold ≈ 0.80), so the normal
+                # argmax always picks HOLD. For scalping we fire when one side has a
+                # clear edge over the other, even when HOLD dominates absolutely.
+                _SCALP_EDGE_RATIO = 1.4   # one side must be ≥40 % stronger
+                _SCALP_RAW_MIN    = 0.07  # raw probability floor (7 %)
+                if mode_name in ('scalping', 'scalping_15m') and direction == 'HOLD':
+                    if (p_buy >= _SCALP_RAW_MIN and p_buy >= p_sell * _SCALP_EDGE_RATIO):
+                        direction = 'BUY'
+                        conf      = p_buy
+                        label     = 2
+                    elif (p_sell >= _SCALP_RAW_MIN and p_sell >= p_buy * _SCALP_EDGE_RATIO):
+                        direction = 'SELL'
+                        conf      = p_sell
+                        label     = 0
+
+                # For scalping edge signals, effective_min_conf applies to the raw
+                # directional probability instead of the normalised 3-class score.
+                _scalp_edge = mode_name in ('scalping', 'scalping_15m') and conf in (p_buy, p_sell)
+                _eff_min    = _SCALP_RAW_MIN if _scalp_edge else effective_min_conf
+
                 # Top strategies from STRATEGY_NAMES only (ranked scores, 0-1 percentile)
                 ranked_strat_row = ranked[STRATEGY_NAMES].iloc[-1]
                 top_strats = _top_strategies(ranked_strat_row, direction if direction != 'HOLD' else 'BUY')
 
                 # Confluence: count ranked strategy percentiles that agree with ML direction.
-                # Ranked features are 0–1 percentile rank; >0.55 = above-median bullish,
-                # <0.45 = above-median bearish. This is more stable than raw -1…+1 values.
                 if direction == 'BUY':
                     n_agree = int((ranked_strat_row > 0.55).sum())
                 elif direction == 'SELL':
@@ -563,7 +583,7 @@ class TraderEngine:
                 if not force_fire:
                     if on_cooldown:
                         continue
-                    if conf < effective_min_conf:
+                    if conf < _eff_min:
                         continue
                     if confluence_score < _MIN_CONFLUENCE:
                         log.debug(
