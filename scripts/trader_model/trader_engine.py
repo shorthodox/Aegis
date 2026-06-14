@@ -105,6 +105,11 @@ class TraderWallet:
         }
         with open(TRADER_RECORD_PATH, 'w') as f:
             json.dump(record, f, indent=2, default=str)
+        # Sync to web/ so Firebase hosting serves fresh data
+        import shutil as _shutil
+        _web = _ROOT / 'web' / 'trader_track_record.json'
+        _web.parent.mkdir(parents=True, exist_ok=True)
+        _shutil.copy2(TRADER_RECORD_PATH, _web)
 
     # ── Trade management ──────────────────────────────────────────────────────
 

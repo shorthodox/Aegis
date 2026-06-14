@@ -2059,11 +2059,15 @@ class LiveEngine:
                 'portfolio':         self.portfolio_guard.get_summary(),
             }
 
-            import os as _os
+            import os as _os, shutil as _shutil
             tmp = TRACK_RECORD_PATH.with_suffix('.tmp')
             with open(tmp, 'w', encoding='utf-8') as f:
                 json.dump(payload, f, indent=2, default=str)
             _os.replace(tmp, TRACK_RECORD_PATH)
+            # Sync to web/ so Firebase hosting serves fresh data
+            _web = _ROOT / 'web' / 'track_record.json'
+            _web.parent.mkdir(parents=True, exist_ok=True)
+            _shutil.copy2(TRACK_RECORD_PATH, _web)
         except Exception as e:
             print(f'[LiveEngine] track_record save failed: {e}')
 
