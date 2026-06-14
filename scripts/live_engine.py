@@ -1051,14 +1051,17 @@ class VirtualWallet:
         self._load_history()
 
     def _load_history(self) -> None:
-        """Restore closed trade history and balance from disk so restarts don't lose data."""
+        """Restore closed trade history, balance, and open positions from disk on restart."""
         if not TRACK_RECORD_PATH.exists():
             return
         try:
             with open(TRACK_RECORD_PATH, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-            closed = [s for s in data.get('signals', [])
-                      if s.get('outcome') in ('WIN', 'LOSS')]
+            signals   = data.get('signals', [])
+            closed    = [s for s in signals if s.get('outcome') in ('WIN', 'LOSS')]
+            open_sigs = [s for s in signals if s.get('outcome') == 'OPEN']
+
+            # ── Closed trades → trade_history + adjust balance ─────────────────
             restored = 0
             seen_ids: set = set()
             for s in closed:
@@ -1092,6 +1095,36 @@ class VirtualWallet:
             if restored:
                 print(f'[VirtualWallet] Restored {restored} closed trades from disk. '
                       f'Balance: ${self.balance:,.2f}')
+
+            # ── Open positions → restore into wallet so portfolio guard is correct ─
+            open_restored = 0
+            for s in open_sigs:
+                sym = s.get('symbol', '')
+                if not sym or sym in self.open_positions:
+                    continue
+                try:
+                    side = s.get('side', '') or ('BUY' if s.get('direction') == 'LONG' else 'SELL')
+                    pos  = Position(
+                        symbol          = sym,
+                        direction       = s.get('direction', 'LONG' if side == 'BUY' else 'SHORT'),
+                        side            = side,
+                        entry_price     = float(s.get('entry_price', 0)),
+                        position_value  = float(s.get('position_value', 0)),
+                        stop_loss       = float(s.get('stop_loss', 0)),
+                        signal_id       = s.get('signal_id', ''),
+                        entry_time      = s.get('entry_time', ''),
+                        meta_confidence = float(s.get('meta_confidence', 0)),
+                        atr_multiplier  = 1.5,
+                        take_profit_1   = float(s.get('take_profit_1', 0)),
+                        take_profit_2   = float(s.get('take_profit_2', 0)),
+                        take_profit_3   = float(s.get('take_profit_3', 0)),
+                    )
+                    self.open_positions[sym] = pos
+                    open_restored += 1
+                except Exception:
+                    continue
+            if open_restored:
+                print(f'[VirtualWallet] Restored {open_restored} open positions from disk.')
         except Exception as e:
             print(f'[VirtualWallet] History load error (starting fresh): {e}')
 
@@ -1228,6 +1261,16 @@ class LiveEngine:
         self.perf_tracker.load_state()
         self.drift_monitor.load_state()
         self.drift_monitor.load_benchmarks()
+
+        # Sync engine aux-state from wallet's restored open positions
+        for sym, pos in self.wallet.open_positions.items():
+            try:
+                et = datetime.fromisoformat(pos.entry_time.replace('Z', '+00:00'))
+                self._open_time[sym] = et.timestamp()
+            except Exception:
+                self._open_time[sym] = time.time()
+            self._tp1_hit[sym]    = False
+            self._peak_price[sym] = pos.entry_price
 
         self._load_predictors([c.symbol for c in token_configs])
 
