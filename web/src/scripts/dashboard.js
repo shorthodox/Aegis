@@ -2546,3 +2546,237 @@ window.adminDeleteCode = async function(code) {
   _showToast('Delete endpoint not implemented yet', 'info');
 };
 
+// ── Notification Settings ──────────────────────────────────────────────────────
+
+function _notifToken() {
+  return localStorage.getItem('access_token') || localStorage.getItem('authToken') || '';
+}
+
+window._loadNotifSettings = async function() {
+  try {
+    const r = await fetch('/api/notifications/settings', {
+      headers: { 'Authorization': `Bearer ${_notifToken()}` }
+    });
+    if (!r.ok) return;
+    const cfg = await r.json();
+    const el = k => document.getElementById(k);
+
+    if (el('notif-enabled'))     el('notif-enabled').checked    = cfg.enabled !== false;
+
+    // Telegram status loaded separately
+    _refreshTelegramStatus();
+
+    // Discord
+    if (el('notif-discord-url')) el('notif-discord-url').value = cfg.discord_webhook_url || '';
+
+    // WhatsApp / Twilio
+    if (el('notif-twilio-sid')) {
+      const redacted = cfg.twilio_account_sid === '***configured***';
+      el('notif-twilio-sid').value       = redacted ? '' : (cfg.twilio_account_sid || '');
+      el('notif-twilio-sid').placeholder = redacted ? '✓ configured (leave blank to keep)' : 'Twilio Account SID';
+    }
+    if (el('notif-twilio-token')) {
+      el('notif-twilio-token').value = '';
+      if (cfg.twilio_account_sid === '***configured***')
+        el('notif-twilio-token').placeholder = '✓ configured (leave blank to keep)';
+    }
+    if (el('notif-wa-from')) el('notif-wa-from').value = cfg.whatsapp_from || '';
+    if (el('notif-wa-to'))   el('notif-wa-to').value   = cfg.whatsapp_to   || '';
+
+    // Filters
+    if (el('notif-min-conf')) {
+      const pct = Math.round((cfg.min_confidence || 0.65) * 100);
+      el('notif-min-conf').value = pct;
+      const lbl = el('notif-min-conf-val');
+      if (lbl) lbl.textContent = pct + '%';
+    }
+    if (el('notif-max-hr'))      el('notif-max-hr').value      = cfg.max_alerts_per_hour || 5;
+    const qh = cfg.quiet_hours || {};
+    if (el('notif-quiet-start')) el('notif-quiet-start').value = qh.start || '23:00';
+    if (el('notif-quiet-end'))   el('notif-quiet-end').value   = qh.end   || '06:00';
+  } catch (_) {}
+};
+
+window.saveNotifSettings = async function() {
+  const statusEl = document.getElementById('notif-status');
+  const el = k => document.getElementById(k);
+
+  const body = {
+    enabled:             el('notif-enabled')?.checked !== false,
+    telegram_chat_id:    el('notif-tg-chat')?.value.trim()     || '',
+    discord_webhook_url: el('notif-discord-url')?.value.trim() || '',
+    whatsapp_from:       el('notif-wa-from')?.value.trim()     || '',
+    whatsapp_to:         el('notif-wa-to')?.value.trim()       || '',
+    min_confidence:      parseFloat(el('notif-min-conf')?.value || 65) / 100,
+    max_alerts_per_hour: parseInt(el('notif-max-hr')?.value || 5),
+    quiet_hours: {
+      start: el('notif-quiet-start')?.value || '23:00',
+      end:   el('notif-quiet-end')?.value   || '06:00',
+    },
+  };
+  // Twilio only if typed (under construction — hidden inputs will be empty)
+  const sid = el('notif-twilio-sid')?.value.trim();
+  const tok = el('notif-twilio-token')?.value.trim();
+  if (sid) body.twilio_account_sid = sid;
+  if (tok) body.twilio_auth_token  = tok;
+
+  if (statusEl) { statusEl.className = 'text-[11px] text-center text-cyan-400'; statusEl.textContent = 'Saving…'; }
+  try {
+    const r = await fetch('/api/notifications/settings', {
+      method:  'POST',
+      headers: { 'Authorization': `Bearer ${_notifToken()}`, 'Content-Type': 'application/json' },
+      body:    JSON.stringify(body),
+    });
+    if (statusEl) {
+      if (r.ok) {
+        statusEl.className   = 'text-[11px] text-center text-green-400';
+        statusEl.textContent = '✓ Settings saved';
+      } else {
+        statusEl.className   = 'text-[11px] text-center text-red-400';
+        statusEl.textContent = `Error ${r.status}`;
+      }
+    }
+    setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
+  } catch (e) {
+    if (statusEl) { statusEl.className = 'text-[11px] text-center text-red-400'; statusEl.textContent = 'Network error'; }
+  }
+};
+
+window.testNotifSettings = async function() {
+  const statusEl = document.getElementById('notif-status');
+  if (statusEl) { statusEl.className = 'text-[11px] text-center text-cyan-400'; statusEl.textContent = 'Sending test ping…'; }
+  try {
+    const r = await fetch('/api/notifications/test', {
+      method:  'POST',
+      headers: { 'Authorization': `Bearer ${_notifToken()}` },
+    });
+    const data = await r.json();
+    const results = data.results || {};
+    const parts = [];
+    if ('discord'  in results) parts.push(`Discord: ${results.discord  ? '✓ sent' : '✗ failed'}`);
+    if ('whatsapp' in results) parts.push(`WhatsApp: ${results.whatsapp ? '✓ sent' : '✗ failed'}`);
+    if (statusEl) {
+      const allOk = Object.values(results).some(Boolean);
+      statusEl.className   = `text-[11px] text-center ${allOk ? 'text-green-400' : 'text-red-400'}`;
+      statusEl.textContent = parts.length ? parts.join('  ·  ') : 'No channels configured yet';
+    }
+    setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 8000);
+  } catch (e) {
+    if (statusEl) { statusEl.className = 'text-[11px] text-center text-red-400'; statusEl.textContent = 'Network error'; }
+  }
+};
+
+// ── Telegram one-tap connect ───────────────────────────────────────────────────
+
+let _tgPollTimer = null;
+
+function _tgSetState(state, chatId) {
+  const states = ['disconnected', 'waiting', 'connected'];
+  states.forEach(s => {
+    const el = document.getElementById(`tg-state-${s}`);
+    if (el) el.classList.toggle('hidden', s !== state);
+  });
+  if (state === 'connected' && chatId) {
+    const disp = document.getElementById('tg-chat-id-display');
+    if (disp) disp.textContent = `(${chatId})`;
+  }
+}
+
+async function _refreshTelegramStatus() {
+  try {
+    const r = await fetch('/api/notifications/telegram/status', {
+      headers: { 'Authorization': `Bearer ${_notifToken()}` }
+    });
+    if (!r.ok) return;
+    const data = await r.json();
+    _tgSetState(data.connected ? 'connected' : 'disconnected', data.chat_id);
+  } catch (_) {}
+}
+
+window.connectTelegram = async function() {
+  try {
+    const r = await fetch('/api/notifications/telegram/connect', {
+      headers: { 'Authorization': `Bearer ${_notifToken()}` }
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      const statusEl = document.getElementById('notif-status');
+      if (statusEl) {
+        statusEl.className = 'text-[11px] text-center text-red-400';
+        statusEl.textContent = err.detail || 'Telegram not configured on this server';
+        setTimeout(() => { statusEl.textContent = ''; }, 5000);
+      }
+      return;
+    }
+    const { deeplink } = await r.json();
+
+    // Open Telegram deep link in a new tab
+    window.open(deeplink, '_blank');
+
+    // Switch to waiting state and poll for confirmation
+    _tgSetState('waiting');
+    if (_tgPollTimer) clearInterval(_tgPollTimer);
+    _tgPollTimer = setInterval(async () => {
+      try {
+        const s = await fetch('/api/notifications/telegram/status', {
+          headers: { 'Authorization': `Bearer ${_notifToken()}` }
+        });
+        if (!s.ok) return;
+        const data = await s.json();
+        if (data.connected) {
+          clearInterval(_tgPollTimer);
+          _tgPollTimer = null;
+          _tgSetState('connected', data.chat_id);
+          const statusEl = document.getElementById('notif-status');
+          if (statusEl) {
+            statusEl.className = 'text-[11px] text-center text-green-400';
+            statusEl.textContent = '✓ Telegram connected! You\'ll receive signals as DMs.';
+            setTimeout(() => { statusEl.textContent = ''; }, 5000);
+          }
+        }
+      } catch (_) {}
+    }, 2500);
+
+    // Stop polling after 3 minutes
+    setTimeout(() => {
+      if (_tgPollTimer) { clearInterval(_tgPollTimer); _tgPollTimer = null; }
+      _refreshTelegramStatus();
+    }, 180000);
+  } catch (e) {
+    const statusEl = document.getElementById('notif-status');
+    if (statusEl) { statusEl.className = 'text-[11px] text-center text-red-400'; statusEl.textContent = 'Network error'; }
+  }
+};
+
+window.cancelTelegramConnect = function() {
+  if (_tgPollTimer) { clearInterval(_tgPollTimer); _tgPollTimer = null; }
+  _tgSetState('disconnected');
+};
+
+window.disconnectTelegram = async function() {
+  try {
+    await fetch('/api/notifications/telegram/disconnect', {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${_notifToken()}` }
+    });
+    _tgSetState('disconnected');
+    const statusEl = document.getElementById('notif-status');
+    if (statusEl) {
+      statusEl.className = 'text-[11px] text-center text-gray-400';
+      statusEl.textContent = 'Telegram disconnected';
+      setTimeout(() => { statusEl.textContent = ''; }, 3000);
+    }
+  } catch (_) {}
+};
+
+// Hook into switchRoom so settings auto-load when the room opens
+(function _patchSwitchForNotif() {
+  const _orig = window.switchRoom;
+  window.switchRoom = function(roomName) {
+    if (typeof _orig === 'function') _orig(roomName);
+    if (roomName === 'settings') setTimeout(window._loadNotifSettings, 80);
+  };
+  // Also expose for direct call
+  window.switchRoom._notifPatched = true;
+}());
+

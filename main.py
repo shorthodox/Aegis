@@ -845,6 +845,91 @@ async def run_engine_background():
         print(f"⚠️ LiveEngine crashed: {e}")
 
 # -------------------------------------------------------------------
+# Telegram Bot Connect — one-tap flow
+# -------------------------------------------------------------------
+# Admin sets TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_USERNAME in .env / environment.
+# Users click "Connect Telegram" → get a deep link → tap Start → connected.
+
+import secrets as _secrets
+
+_TG_BOT_TOKEN    = os.getenv("TELEGRAM_BOT_TOKEN", "")
+_TG_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "").lstrip("@")
+
+# code → user_email (pending connections, in-memory)
+_tg_pending: dict = {}
+
+# user_email → chat_id (persisted)
+_tg_connections: dict = {}
+_TG_CONNECTIONS_PATH = Path("data/telegram_connections.json")
+
+
+def _tg_load_connections() -> None:
+    global _tg_connections
+    if _TG_CONNECTIONS_PATH.exists():
+        try:
+            _tg_connections = json.loads(_TG_CONNECTIONS_PATH.read_text())
+        except Exception:
+            pass
+
+
+def _tg_save_connections() -> None:
+    _TG_CONNECTIONS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _TG_CONNECTIONS_PATH.write_text(json.dumps(_tg_connections, indent=2))
+
+
+def _tg_start_poller() -> None:
+    """Background thread: long-polls Telegram getUpdates, matches /start CODE to pending users."""
+    if not _TG_BOT_TOKEN:
+        return
+
+    def _poll() -> None:
+        import requests as _req
+        offset = 0
+        while True:
+            try:
+                r = _req.get(
+                    f"https://api.telegram.org/bot{_TG_BOT_TOKEN}/getUpdates",
+                    params={"offset": offset, "timeout": 30, "allowed_updates": ["message"]},
+                    timeout=36,
+                )
+                data = r.json()
+                if data.get("ok"):
+                    for upd in data.get("result", []):
+                        offset = upd["update_id"] + 1
+                        msg     = upd.get("message", {})
+                        text    = (msg.get("text") or "").strip()
+                        chat_id = str(msg.get("chat", {}).get("id", ""))
+                        if text.startswith("/start") and chat_id:
+                            parts = text.split(maxsplit=1)
+                            code  = parts[1].strip() if len(parts) > 1 else ""
+                            if code and code in _tg_pending:
+                                email = _tg_pending.pop(code)
+                                _tg_connections[email] = chat_id
+                                _tg_save_connections()
+                                logger.info(f"[Telegram] Connected {email} → chat_id {chat_id}")
+                                # Send confirmation to user
+                                try:
+                                    _req.post(
+                                        f"https://api.telegram.org/bot{_TG_BOT_TOKEN}/sendMessage",
+                                        json={
+                                            "chat_id":    chat_id,
+                                            "text":       "✅ *AEGIS Signal Bot connected!*\n\nYou'll now receive BUY/SELL signals directly here. Set a unique notification tone so you never miss one.",
+                                            "parse_mode": "Markdown",
+                                        },
+                                        timeout=5,
+                                    )
+                                except Exception:
+                                    pass
+            except Exception:
+                pass
+            time.sleep(1)
+
+    import threading as _threading
+    t = _threading.Thread(target=_poll, daemon=True, name="tg-poller")
+    t.start()
+
+
+# -------------------------------------------------------------------
 # FastAPI app (lifespan runs engine as background task)
 # -------------------------------------------------------------------
 # ── Trader Engine background scan loop ────────────────────────────────────────
@@ -916,6 +1001,8 @@ async def _trader_scan_loop():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _load_track_record()
+    _tg_load_connections()
+    _tg_start_poller()
     engine_task       = asyncio.create_task(run_engine_background())
     reminder_task     = asyncio.create_task(check_and_send_trial_reminders())
     subscription_task = asyncio.create_task(check_and_send_subscription_reminders())
@@ -5289,6 +5376,93 @@ async def trigger_trader_scan(
         logger.error(f"Trader scan error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+
+# ── Telegram Connect API ───────────────────────────────────────────────────────
+
+@app.get("/api/notifications/telegram/connect")
+async def telegram_connect(_user: str = Depends(get_current_user)):
+    """Generate a one-tap deep link the user opens in Telegram to connect."""
+    if not _TG_BOT_TOKEN or not _TG_BOT_USERNAME:
+        raise HTTPException(
+            status_code=503,
+            detail="Telegram bot not configured. Ask admin to set TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_USERNAME."
+        )
+    code = _secrets.token_hex(4).upper()  # e.g. A3F9C2D1
+    _tg_pending[code] = _user
+    deeplink = f"https://t.me/{_TG_BOT_USERNAME}?start={code}"
+    return {"deeplink": deeplink, "code": code, "bot_username": _TG_BOT_USERNAME}
+
+
+@app.get("/api/notifications/telegram/status")
+async def telegram_status(_user: str = Depends(get_current_user)):
+    """Check whether this user has connected their Telegram."""
+    chat_id = _tg_connections.get(_user, "")
+    return {"connected": bool(chat_id), "chat_id": chat_id}
+
+
+@app.delete("/api/notifications/telegram/disconnect")
+async def telegram_disconnect(_user: str = Depends(get_current_user)):
+    """Unlink Telegram from this account."""
+    _tg_connections.pop(_user, None)
+    _tg_save_connections()
+    return {"status": "disconnected"}
+
+
+# ── Notification Settings API ──────────────────────────────────────────────────
+
+@app.get("/api/notifications/settings")
+async def get_notification_settings(_user: str = Depends(get_current_user)):
+    """Return current notification settings (credentials redacted)."""
+    from scripts.notifications.dispatcher import NotificationDispatcher, _DEFAULT_SETTINGS, _SETTINGS_PATH
+    import json as _json
+    if not _SETTINGS_PATH.exists():
+        cfg = dict(_DEFAULT_SETTINGS)
+    else:
+        try:
+            cfg = {**_DEFAULT_SETTINGS, **_json.loads(_SETTINGS_PATH.read_text())}
+        except Exception:
+            cfg = dict(_DEFAULT_SETTINGS)
+    # Redact secrets before sending to frontend
+    for key in ("twilio_account_sid", "twilio_auth_token", "telegram_bot_token"):
+        if cfg.get(key):
+            cfg[key] = "***configured***"
+    return cfg
+
+
+@app.post("/api/notifications/settings")
+async def save_notification_settings(request: Request, _user: str = Depends(get_current_user)):
+    """Save notification settings. Pass empty string to clear a credential."""
+    from scripts.notifications.dispatcher import NotificationDispatcher, _DEFAULT_SETTINGS, _SETTINGS_PATH
+    import json as _json
+    body = await request.json()
+    # Merge with existing so partial updates don't wipe credentials
+    existing: dict = {}
+    if _SETTINGS_PATH.exists():
+        try:
+            existing = _json.loads(_SETTINGS_PATH.read_text())
+        except Exception:
+            pass
+    # Don't overwrite real secrets with the redaction placeholder
+    for key in ("twilio_account_sid", "twilio_auth_token"):
+        if body.get(key) == "***configured***":
+            body.pop(key, None)
+    merged = {**_DEFAULT_SETTINGS, **existing, **body}
+    NotificationDispatcher.save_settings(merged)
+    return {"status": "saved"}
+
+
+@app.post("/api/notifications/test")
+async def test_notification(_user: str = Depends(get_current_user)):
+    """Send a test ping to all configured notification channels."""
+    from scripts.notifications.dispatcher import get_notifier
+    try:
+        results = await asyncio.get_event_loop().run_in_executor(
+            None, get_notifier().test_send
+        )
+        return {"status": "ok", "results": results}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":

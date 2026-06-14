@@ -615,6 +615,13 @@ class TraderEngine:
 
                 record_signal(symbol, mode_name)
 
+                # Fire entry notification (non-blocking, best-effort)
+                try:
+                    from scripts.notifications.dispatcher import get_notifier
+                    get_notifier().send_entry(sig_dict)
+                except Exception:
+                    pass
+
                 log.info(
                     f"[TRADER] {direction} {symbol} | {mode_name} | "
                     f"conf={conf:.2%} | confl={n_agree}/25 | {top_strats[0] if top_strats else '?'}"
@@ -664,6 +671,33 @@ class TraderEngine:
                                                      datetime.now(timezone.utc).isoformat())
                                         self.expired_signals.insert(0, c)
                                     self.expired_signals = self.expired_signals[:100]
+                                # Fire exit notifications (outside lock, best-effort)
+                                try:
+                                    from scripts.notifications.dispatcher import get_notifier
+                                    _notif = get_notifier()
+                                    for c in closed:
+                                        _entry_ts = c.get('entry_time', '')
+                                        _hold = 0
+                                        if _entry_ts:
+                                            try:
+                                                _t = datetime.fromisoformat(
+                                                    _entry_ts.replace('Z', '+00:00')
+                                                )
+                                                _hold = int(
+                                                    (datetime.now(timezone.utc) - _t).total_seconds()
+                                                )
+                                            except Exception:
+                                                pass
+                                        _notif.send_exit(
+                                            symbol=sym,
+                                            direction=c.get('direction', c.get('side', '')),
+                                            outcome=c.get('outcome', '?'),
+                                            pnl_pct=float(c.get('pnl_pct', 0) or 0),
+                                            hold_seconds=_hold,
+                                            exit_reason=c.get('exit_reason', ''),
+                                        )
+                                except Exception:
+                                    pass
                 except Exception as exc:
                     log.debug(f"[monitor] {exc}")
                 time.sleep(self._monitor_interval)

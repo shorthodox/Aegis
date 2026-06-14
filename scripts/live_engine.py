@@ -1731,6 +1731,20 @@ class LiveEngine:
 
                 # Persist immediately so the outcome survives a crash
                 self._save_track_record()
+                # Fire exit notification (non-blocking, best-effort)
+                try:
+                    from scripts.notifications.dispatcher import get_notifier
+                    _hold = int(time.time() - self._open_time.get(symbol, time.time()))
+                    get_notifier().send_exit(
+                        symbol=symbol,
+                        direction=pos.side,
+                        outcome=tag,
+                        pnl_pct=rec.pnl_pct,
+                        hold_seconds=_hold,
+                        exit_reason=reason,
+                    )
+                except Exception:
+                    pass
 
         # ── 1. Maximum hold time (zombie guard) ──────────────────────────────
         if held >= self.MAX_HOLD_SECONDS:
@@ -1897,6 +1911,27 @@ class LiveEngine:
               f'size={pos_value:.0f} USDT')
         # Persist the new open position immediately
         self._save_track_record()
+        # Fire entry notification (non-blocking, best-effort)
+        try:
+            from scripts.notifications.dispatcher import get_notifier
+            get_notifier().send_entry({
+                'symbol':           symbol,
+                'direction':        side,
+                'confidence':       meta_conf,
+                'confluence_score': 0.0,
+                'current_price':    price,
+                'mode':             'live',
+                'timeframe':        '—',
+                'top_strategies':   [],
+                'stop_loss':        stop_loss,
+                'take_profit_1':    tp1,
+                'take_profit_2':    tp2,
+                'take_profit_3':    tp3,
+                'guidance':         {},
+                'timestamp':        pos.entry_time,
+            })
+        except Exception:
+            pass
 
     # ── signal entry builder (for dashboard / last_signals) ───────────────────
 
