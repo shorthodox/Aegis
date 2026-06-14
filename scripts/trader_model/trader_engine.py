@@ -46,7 +46,7 @@ _LABEL_MAP = {0: 'SELL', 1: 'HOLD', 2: 'BUY'}
 
 # Minimum fraction of 25 strategies that must agree with the ML direction.
 # 12/25 = 0.48 — require at least ~50% confluence to prevent taking counter-trend signals.
-_MIN_CONFLUENCE = 0.32
+_MIN_CONFLUENCE = 0.08   # ≥ 2/25 strategies must agree (ranked percentile)
 
 
 # ── Virtual Wallet ─────────────────────────────────────────────────────────────
@@ -537,12 +537,13 @@ class TraderEngine:
                 ranked_strat_row = ranked[STRATEGY_NAMES].iloc[-1]
                 top_strats = _top_strategies(ranked_strat_row, direction if direction != 'HOLD' else 'BUY')
 
-                # Confluence: count raw strategy scores that agree with ML direction
-                raw_strat_row = raw_features[STRATEGY_NAMES].iloc[-1]
+                # Confluence: count ranked strategy percentiles that agree with ML direction.
+                # Ranked features are 0–1 percentile rank; >0.55 = above-median bullish,
+                # <0.45 = above-median bearish. This is more stable than raw -1…+1 values.
                 if direction == 'BUY':
-                    n_agree = int((raw_strat_row > 0.1).sum())
+                    n_agree = int((ranked_strat_row > 0.55).sum())
                 elif direction == 'SELL':
-                    n_agree = int((raw_strat_row < -0.1).sum())
+                    n_agree = int((ranked_strat_row < 0.45).sum())
                 else:
                     n_agree = 0
                 confluence_score = round(n_agree / len(STRATEGY_NAMES), 3)
