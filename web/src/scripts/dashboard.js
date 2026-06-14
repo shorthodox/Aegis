@@ -2700,7 +2700,7 @@ window.connectTelegram = async function() {
   // Open the window SYNCHRONOUSLY before any await — prevents popup blocker
   const tgWin = window.open('', '_blank');
   if (tgWin) {
-    tgWin.document.write('<html><body style="background:#000;color:#aaa;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><p>Connecting to Telegram…</p></body></html>');
+    tgWin.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Connect Telegram</title></head><body style="background:#0e1621;color:#8b949e;font-family:sans-serif;text-align:center;padding-top:25vh;margin:0"><p style="font-size:16px">Connecting to Telegram…</p></body></html>');
   }
 
   // Show loading state on button
@@ -2723,16 +2723,39 @@ window.connectTelegram = async function() {
       return;
     }
 
-    const { deeplink, bot_username } = await r.json();
+    const { deeplink, code, bot_username } = await r.json();
 
-    // Redirect the already-open window to the Telegram deep link
+    // tg:// opens the Telegram desktop/mobile app directly.
+    // https://t.me/ only opens the web version in the browser.
+    const tgAppLink = `tg://resolve?domain=${bot_username}&start=${code}`;
+
     if (tgWin) {
-      tgWin.location.href = deeplink;
+      // Write a proper landing page with a visible "Open in Telegram" button.
+      // A hidden anchor click triggers the tg:// protocol (opens the app).
+      // The visible button is the fallback if the protocol handler didn't fire.
+      tgWin.document.open();
+      tgWin.document.write(
+        '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Connect Telegram</title></head>' +
+        '<body style="background:#0e1621;color:#c8d1d9;font-family:sans-serif;text-align:center;padding:20vh 24px 0;margin:0">' +
+        '<p style="font-size:20px;margin:0 0 8px;font-weight:600">Opening Telegram…</p>' +
+        '<p style="font-size:13px;color:#8b949e;margin:0 0 28px">Your Telegram app should open automatically.</p>' +
+        '<a id="tg-btn" href="' + deeplink + '" ' +
+        'style="display:inline-block;background:#2ea6ff;color:#fff;padding:13px 28px;border-radius:10px;text-decoration:none;font-size:15px;font-weight:600">' +
+        'Open in Telegram</a>' +
+        '<p style="font-size:11px;color:#656d76;margin-top:20px">Tap <b>START</b> in Telegram, then return here — you\'ll be connected automatically.</p>' +
+        '<p style="font-size:11px;color:#656d76;margin-top:8px">You can close this tab once done.</p>' +
+        '<script>setTimeout(function(){var a=document.createElement("a");a.href="' + tgAppLink + '";document.body.appendChild(a);a.click();},200);<\/script>' +
+        '</body></html>'
+      );
+      tgWin.document.close();
     } else {
-      // Fallback: popup was blocked, show the link directly
+      // Popup was blocked — try opening the app link directly in current tab context,
+      // then show a clickable button in the status area.
+      window.open(tgAppLink, '_blank');
       if (statusEl) {
         statusEl.className   = 'text-[11px] text-center text-yellow-400';
-        statusEl.textContent = `Popup blocked — open this link manually: https://t.me/${bot_username}`;
+        statusEl.innerHTML   = `Popup blocked &mdash; <a href="${deeplink}" target="_blank" style="color:#58a6ff;text-decoration:underline">click here to open Telegram</a>`;
+        setTimeout(() => { if (statusEl) statusEl.innerHTML = ''; }, 15000);
       }
     }
 
