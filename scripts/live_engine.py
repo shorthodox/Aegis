@@ -1239,6 +1239,12 @@ class LiveEngine:
             try:
                 p = Predictor(sym)
                 if p.model is not None:
+                    # Binary dual-model pair → force tradeable=True in meta so the
+                    # dashboard shows it as active and the live engine gates apply.
+                    if p.model_sell is not None and not p.meta.get('tradeable', False):
+                        p.meta['tradeable'] = True
+                        p.meta['tradeable_buy']  = True
+                        p.meta['tradeable_sell'] = True
                     self.predictors[sym] = p
                     loaded += 1
                     if p.meta.get('tradeable', False):
@@ -2217,6 +2223,13 @@ class ScalpBot:
             if key in self._open:
                 continue  # already in a position for this symbol+mode
 
+            # Use directional probability from binary model when available;
+            # fall back to combined confidence from 3-class model.
+            dir_conf = (
+                sig.get('p_buy',  sig.get('confidence', 0)) if direction == 'BUY'
+                else sig.get('p_sell', sig.get('confidence', 0))
+            )
+
             atr_est = price * 0.008  # ~0.8% ATR estimate for scalping
             sl = round(price - atr_est, 8) if direction == 'BUY' else round(price + atr_est, 8)
             tp = round(price + atr_est * 1.5, 8) if direction == 'BUY' else round(price - atr_est * 1.5, 8)
@@ -2227,7 +2240,10 @@ class ScalpBot:
                 'mode':        mode,
                 'timeframe':   sig.get('timeframe', '5m'),
                 'direction':   direction,
-                'confidence':  round(sig.get('confidence', 0), 4),
+                'confidence':  round(float(dir_conf), 4),
+                'p_buy':       round(float(sig.get('p_buy',  0)), 4),
+                'p_sell':      round(float(sig.get('p_sell', 0)), 4),
+                'p_hold':      round(float(sig.get('p_hold', 0)), 4),
                 'entry_price': round(price, 8),
                 'sl':          sl,
                 'tp':          tp,
@@ -2247,16 +2263,31 @@ class ScalpBot:
 
 def automated_setup(_: Path, args: Any):
     """
-    Scan MODEL_STORE for all available symbols (up to 32).
-    Tradeable symbols are loaded first; non-tradeable models fill the remainder.
+    Scan MODEL_STORE for all available symbols (up to 60).
+    Binary dual-model pairs (*_model_buy.json + *_model_sell.json) are auto-tradeable.
+    Legacy single-model symbols use the tradeable flag from *_meta.json.
     """
     tradeable_configs:     List[TokenConfig] = []
     non_tradeable_configs: List[TokenConfig] = []
 
     if MODEL_STORE.exists():
+        # Detect binary dual-model pairs (new training pipeline) — auto-tradeable
+        binary_syms: set = set()
+        for buy_file in MODEL_STORE.glob('*_model_buy.json'):
+            base = buy_file.name.replace('_model_buy.json', '')
+            if (MODEL_STORE / f'{base}_model_sell.json').exists():
+                sym = base.replace('_', '/', 1)
+                binary_syms.add(sym)
+
+        seen: set = set()
+        # Add binary pairs first (highest priority — directly tradeable)
+        for sym in sorted(binary_syms):
+            seen.add(sym)
+            tradeable_configs.append(TokenConfig(symbol=sym))
+
+        # Scan meta.json for any remaining legacy symbols
         meta_files = sorted(MODEL_STORE.glob('*_meta.json'),
                             key=lambda p: p.stat().st_mtime, reverse=True)
-        seen: set = set()
         for meta_file in meta_files:
             try:
                 with open(meta_file, 'r', encoding='utf-8') as f:
@@ -2273,7 +2304,7 @@ def automated_setup(_: Path, args: Any):
             except Exception:
                 pass
 
-    TARGET    = 32
+    TARGET    = 60
     configs   = tradeable_configs[:TARGET]
     remaining = TARGET - len(configs)
     if remaining > 0:

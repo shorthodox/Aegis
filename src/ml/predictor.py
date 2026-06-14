@@ -63,7 +63,8 @@ class Predictor:
             
         self.exchange = Predictor._SHARED_SPOT_EX
 
-        self.model: Optional[xgb.Booster] = None          # primary (Booster)
+        self.model: Optional[xgb.Booster] = None          # primary BUY binary Booster
+        self.model_sell: Optional[xgb.Booster] = None     # primary SELL binary Booster
         self.meta_model: Optional[xgb.Booster] = None      # meta gate (Booster)
         self.meta: Dict[str, Any] = {}                     # sidecar contents
         self._token_params: Optional[Dict[str, Any]] = None  # optimizer output
@@ -80,23 +81,36 @@ class Predictor:
             if not primary_path.exists():
                 primary_path = model_store / f"{base}_model.json"
         else:
-            primary_path = model_store / f"{base}_model.json"
-            
+            # Prefer explicit BUY binary model; fall back to legacy *_model.json
+            buy_path = model_store / f"{base}_model_buy.json"
+            primary_path = buy_path if buy_path.exists() else model_store / f"{base}_model.json"
+
         sidecar_path = model_store / f"{base}_meta.json"
 
         if not primary_path.exists():
             logger.warning(f"Model not found: {primary_path}")
             return
 
-        # Load primary as a raw Booster (the trainer saves xgb.train output).
+        # Load BUY binary Booster (the trainer saves xgb.train output).
         try:
             self.model = xgb.Booster()
             self.model.load_model(str(primary_path))
-            logger.info(f"Primary model loaded: {primary_path.name}")
+            logger.info(f"BUY model loaded: {primary_path.name}")
         except Exception as _load_err:
-            logger.warning(f"Could not load primary model {primary_path.name}: {_load_err} — Predictor will run without model")
+            logger.warning(f"Could not load BUY model {primary_path.name}: {_load_err} — Predictor will run without model")
             self.model = None
             return
+
+        # Load SELL binary model if it exists (binary_dual training pipeline)
+        sell_path = model_store / f"{base}_model_sell.json"
+        if sell_path.exists():
+            try:
+                self.model_sell = xgb.Booster()
+                self.model_sell.load_model(str(sell_path))
+                logger.info(f"SELL model loaded: {sell_path.name}")
+            except Exception as _sell_err:
+                logger.warning(f"Could not load SELL model {sell_path.name}: {_sell_err}")
+                self.model_sell = None
 
         if sidecar_path.exists():
             try:
@@ -587,7 +601,12 @@ class Predictor:
         return True
 
     def predict_proba(self, df_features: pd.DataFrame) -> np.ndarray:
-        """3-class primary probabilities (n, 3), temperature-calibrated."""
+        """3-class primary probabilities (n, 3), temperature-calibrated.
+
+        When SELL binary model is loaded (binary_dual pipeline), runs both BUY
+        and SELL models and combines into [p_sell, p_hold, p_buy] where
+        p_hold = 1 - p_buy - p_sell (floor 0).
+        """
         if self.model is None:
             raise ValueError("Model not loaded. Train first.")
         feat_cols = self.meta.get("feature_cols")
@@ -596,8 +615,23 @@ class Predictor:
         X = self._align(df_features, feat_cols)
         dm = xgb.DMatrix(X, feature_names=list(X.columns))
         raw_proba = self.model.predict(dm)
-        if raw_proba.ndim == 1:  # safety, shouldn't happen for multi:softprob
+
+        if self.model_sell is not None:
+            # binary_dual mode: combine BUY and SELL binary classifiers
+            feat_cols_sell = self.model_sell.feature_names or feat_cols
+            X_sell = self._align(df_features, feat_cols_sell)
+            dm_sell = xgb.DMatrix(X_sell, feature_names=list(X_sell.columns))
+            raw_sell = self.model_sell.predict(dm_sell)
+            p_buy  = raw_proba.flatten() if raw_proba.ndim > 1 else raw_proba
+            p_sell = raw_sell.flatten()  if raw_sell.ndim  > 1 else raw_sell
+            # Normalise so the three probs sum to 1
+            p_hold = np.maximum(0.0, 1.0 - p_buy - p_sell)
+            total  = p_buy + p_sell + p_hold
+            raw_proba = np.column_stack([p_sell / total, p_hold / total, p_buy / total])
+        elif raw_proba.ndim == 1:
+            # Legacy binary BUY-only model: treat 1-p_buy as p_sell, p_hold=0
             raw_proba = np.column_stack([1 - raw_proba, np.zeros_like(raw_proba), raw_proba])
+
         T = float(self.meta.get("calibration_temperature", 1.0))
         calibrated = self._apply_temperature(raw_proba, T)
         diag = self._probability_diagnostics(calibrated)

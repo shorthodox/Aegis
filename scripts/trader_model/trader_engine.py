@@ -356,7 +356,7 @@ class TraderSignal:
     mode:             str          # scalping / intraday / swing
     risk_profile:     str          # conservative / balanced / aggressive
     direction:        str          # BUY / SELL
-    confidence:       float        # 0.0–1.0  (ML model probability)
+    confidence:       float        # 0.0–1.0  (ML model probability for winning direction)
     confluence_score: float        # 0.0–1.0  (fraction of 25 strategies agreeing)
     current_price:    float
     top_strategies:   List[str]
@@ -364,26 +364,55 @@ class TraderSignal:
     guidance:         Dict[str, Any]
     timestamp:        str
     timeframe:        str
+    p_buy:            float = 0.0  # independent BUY probability
+    p_sell:           float = 0.0  # independent SELL probability
+    p_hold:           float = 0.0  # residual HOLD probability
 
 
 # ── Model store ────────────────────────────────────────────────────────────────
 
 class TraderModelStore:
-    """Loads and caches the 3 calibrated trader models."""
+    """Loads and caches the calibrated trader models.
+
+    Supports two formats:
+    - Binary dual: {key}_model_buy.pkl + {key}_model_sell.pkl
+      Run both classifiers; combine into [p_sell, p_hold, p_buy].
+    - Legacy 3-class: {key}_model.pkl  (sklearn predict_proba → 3 classes)
+    """
 
     def __init__(self):
-        self._models: Dict[str, Any] = {}
-        self._meta:   Dict[str, Any] = {}
-        self._lock    = threading.Lock()
+        self._models:      Dict[str, Any] = {}   # mode → buy model (or 3-class)
+        self._models_sell: Dict[str, Any] = {}   # mode → sell model (binary only)
+        self._meta:        Dict[str, Any] = {}
+        self._lock         = threading.Lock()
 
     def load_all(self) -> None:
         for mode_name in MODES:
             self.load(mode_name)
 
     def load(self, mode_name: str) -> bool:
-        model_key  = MODES.get(mode_name, {}).get('model_key', mode_name)
+        model_key = MODES.get(mode_name, {}).get('model_key', mode_name)
+        meta_path = TRADER_MODEL_STORE / f"{model_key}_meta.json"
+
+        # ── Prefer binary dual-model pair ─────────────────────────────────────
+        buy_path  = TRADER_MODEL_STORE / f"{model_key}_model_buy.pkl"
+        sell_path = TRADER_MODEL_STORE / f"{model_key}_model_sell.pkl"
+        if buy_path.exists() and sell_path.exists():
+            try:
+                with self._lock:
+                    self._models[mode_name]      = joblib.load(buy_path)
+                    self._models_sell[mode_name] = joblib.load(sell_path)
+                    if meta_path.exists():
+                        with open(meta_path) as f:
+                            self._meta[mode_name] = json.load(f)
+                log.info(f"Loaded binary dual trader model: {mode_name} (buy+sell, weights: {model_key})")
+                return True
+            except Exception as e:
+                log.error(f"Failed to load binary trader models {mode_name}: {e}")
+                return False
+
+        # ── Fall back to legacy 3-class single model ──────────────────────────
         model_path = TRADER_MODEL_STORE / f"{model_key}_model.pkl"
-        meta_path  = TRADER_MODEL_STORE / f"{model_key}_meta.json"
         if not model_path.exists():
             log.warning(f"Trader model not found: {model_path}")
             log.warning(f"Run: python -m scripts.trader_model.train_trader --mode {model_key}")
@@ -394,7 +423,7 @@ class TraderModelStore:
                 if meta_path.exists():
                     with open(meta_path) as f:
                         self._meta[mode_name] = json.load(f)
-            log.info(f"Loaded trader model: {mode_name} (weights: {model_key})")
+            log.info(f"Loaded legacy 3-class trader model: {mode_name} (weights: {model_key})")
             return True
         except Exception as e:
             log.error(f"Failed to load trader model {mode_name}: {e}")
@@ -402,15 +431,30 @@ class TraderModelStore:
 
     def predict(self, mode_name: str, X: np.ndarray) -> Tuple[int, float, np.ndarray]:
         """
-        Returns (predicted_label, max_confidence, proba_array).
+        Returns (predicted_label, max_confidence, proba_array [p_sell, p_hold, p_buy]).
         predicted_label: 0=SELL, 1=HOLD, 2=BUY
+
+        Binary dual mode: runs BUY and SELL classifiers independently, combines
+        into a 3-class probability vector so the rest of the pipeline is unchanged.
         """
         with self._lock:
-            model = self._models.get(mode_name)
-        if model is None:
+            model_buy  = self._models.get(mode_name)
+            model_sell = self._models_sell.get(mode_name)
+
+        if model_buy is None:
             return 1, 0.0, np.array([0.0, 1.0, 0.0])  # default HOLD
 
-        proba = model.predict_proba(X)[0]
+        if model_sell is not None:
+            # Binary dual mode: independent BUY and SELL probabilities
+            p_buy  = float(model_buy.predict_proba(X)[0, 1])
+            p_sell = float(model_sell.predict_proba(X)[0, 1])
+            p_hold = max(0.0, 1.0 - p_buy - p_sell)
+            total  = p_buy + p_sell + p_hold
+            proba  = np.array([p_sell / total, p_hold / total, p_buy / total])
+        else:
+            # Legacy 3-class model
+            proba = model_buy.predict_proba(X)[0]
+
         label = int(np.argmax(proba))
         conf  = float(proba[label])
         return label, conf, proba
@@ -600,9 +644,10 @@ class TraderEngine:
                     self._update_token_status(symbol, mode_name, 'HOLD', 0.0, [], tf, on_cooldown)
                     continue
 
-                label, conf, _ = self.model_store.predict(mode_name, X)
+                label, conf, proba = self.model_store.predict(mode_name, X)
                 direction     = _LABEL_MAP.get(label, 'HOLD')
                 current_price = float(df['close'].iloc[-1])
+                p_sell, p_hold, p_buy = float(proba[0]), float(proba[1]), float(proba[2])
 
                 # Top strategies from STRATEGY_NAMES only (ranked scores, 0-1 percentile)
                 ranked_strat_row = ranked[STRATEGY_NAMES].iloc[-1]
@@ -671,6 +716,9 @@ class TraderEngine:
                     guidance         = guidance,
                     timestamp        = ts,
                     timeframe        = tf,
+                    p_buy            = round(p_buy,  4),
+                    p_sell           = round(p_sell, 4),
+                    p_hold           = round(p_hold, 4),
                 )
 
                 sig_dict = asdict(signal)
