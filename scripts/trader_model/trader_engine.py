@@ -46,7 +46,7 @@ _LABEL_MAP = {0: 'SELL', 1: 'HOLD', 2: 'BUY'}
 
 # Minimum fraction of 25 strategies that must agree with the ML direction.
 # 12/25 = 0.48 — require at least ~50% confluence to prevent taking counter-trend signals.
-_MIN_CONFLUENCE = 0.48
+_MIN_CONFLUENCE = 0.32
 
 
 # ── Virtual Wallet ─────────────────────────────────────────────────────────────

@@ -52,22 +52,22 @@ MODES = {
         'timeframe':        '5m',
         'label_bars':       4,        # 20-min forward return window
         'label_threshold':  0.003,    # 0.3% → BUY/SELL, else HOLD
-        'cooldown_minutes': 30,
+        'cooldown_minutes': 10,
         'description':      'Fast 5-minute entries, quick exits (20-60 min hold)',
         'max_hold_bars':    12,
         'candles_fetch':    500,
-        'min_confidence_override': 0.55,
+        'min_confidence_override': 0.50,
         'model_key':        'scalping',  # model file prefix in trader_model_store
     },
     'scalping_15m': {
         'timeframe':        '15m',
         'label_bars':       4,        # 1h forward return window
         'label_threshold':  0.004,    # 0.4% → BUY/SELL, else HOLD
-        'cooldown_minutes': 60,
+        'cooldown_minutes': 15,
         'description':      '15-minute scalp entries, 1-2h hold',
         'max_hold_bars':    8,
         'candles_fetch':    500,
-        'min_confidence_override': 0.52,
+        'min_confidence_override': 0.48,
         'model_key':        'scalping',  # reuse 5m scalping model weights
     },
     'intraday': {
@@ -113,7 +113,7 @@ RISK_PROFILES = {
         'tp3_atr_mult':   5.0,
     },
     'aggressive': {
-        'min_confidence': 0.55,
+        'min_confidence': 0.48,
         'max_signals':    25,
         'position_pct':   3.0,
         'description':    'More signals, higher potential returns, higher drawdown risk',
