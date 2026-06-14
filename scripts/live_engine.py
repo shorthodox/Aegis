@@ -2094,6 +2094,7 @@ class LiveEngine:
 
     def _save_track_record(self) -> None:
         try:
+            import os as _os, shutil as _shutil
             TRACK_RECORD_PATH.parent.mkdir(parents=True, exist_ok=True)
 
             open_records = [
@@ -2121,8 +2122,33 @@ class LiveEngine:
                 for p in self.wallet.open_positions.values()
             ]
 
+            wallet_records = [asdict(t) for t in self.wallet.trade_history] + open_records
+            wallet_ids = {r.get('signal_id') for r in wallet_records if r.get('signal_id')}
+
+            # Merge: preserve any on-disk records not currently in the wallet so
+            # records are never lost due to restarts or wallet resets.
+            # Dedup by position key (symbol + entry_minute + direction) to avoid
+            # accumulating duplicates from the two parallel tracking systems.
+            def _pos_key(r: dict) -> tuple:
+                dr = r.get('direction', '') or r.get('side', '')
+                return (r.get('symbol', ''), (r.get('entry_time') or '')[:16], dr)
+
+            wallet_pos_keys = {_pos_key(r) for r in wallet_records}
+            orphan_records: list = []
+            if TRACK_RECORD_PATH.exists():
+                try:
+                    with open(TRACK_RECORD_PATH, 'r', encoding='utf-8') as _f:
+                        _old = json.load(_f)
+                    for r in _old.get('signals', []):
+                        sid = r.get('signal_id')
+                        if (sid and sid not in wallet_ids) and _pos_key(r) not in wallet_pos_keys:
+                            orphan_records.append(r)
+                            wallet_pos_keys.add(_pos_key(r))
+                except Exception:
+                    pass
+
             all_records = sorted(
-                [asdict(t) for t in self.wallet.trade_history] + open_records,
+                wallet_records + orphan_records,
                 key=lambda r: r.get('entry_time') or '',
                 reverse=True,
             )[:500]
@@ -2137,11 +2163,15 @@ class LiveEngine:
                 'portfolio':         self.portfolio_guard.get_summary(),
             }
 
-            import os as _os
             tmp = TRACK_RECORD_PATH.with_suffix('.tmp')
             with open(tmp, 'w', encoding='utf-8') as f:
                 json.dump(payload, f, indent=2, default=str)
             _os.replace(tmp, TRACK_RECORD_PATH)
+
+            # Sync to web/ so the static file server and main.py fallback stay current
+            _web = _ROOT / 'web' / 'track_record.json'
+            _web.parent.mkdir(parents=True, exist_ok=True)
+            _shutil.copy2(TRACK_RECORD_PATH, _web)
         except Exception as e:
             print(f'[LiveEngine] track_record save failed: {e}')
 
