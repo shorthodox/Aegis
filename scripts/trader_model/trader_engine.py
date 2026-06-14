@@ -381,11 +381,12 @@ class TraderModelStore:
             self.load(mode_name)
 
     def load(self, mode_name: str) -> bool:
-        model_path = TRADER_MODEL_STORE / f"{mode_name}_model.pkl"
-        meta_path  = TRADER_MODEL_STORE / f"{mode_name}_meta.json"
+        model_key  = MODES.get(mode_name, {}).get('model_key', mode_name)
+        model_path = TRADER_MODEL_STORE / f"{model_key}_model.pkl"
+        meta_path  = TRADER_MODEL_STORE / f"{model_key}_meta.json"
         if not model_path.exists():
             log.warning(f"Trader model not found: {model_path}")
-            log.warning(f"Run: python -m scripts.trader_model.train_trader --mode {mode_name}")
+            log.warning(f"Run: python -m scripts.trader_model.train_trader --mode {model_key}")
             return False
         try:
             with self._lock:
@@ -393,7 +394,7 @@ class TraderModelStore:
                 if meta_path.exists():
                     with open(meta_path) as f:
                         self._meta[mode_name] = json.load(f)
-            log.info(f"Loaded trader model: {mode_name}")
+            log.info(f"Loaded trader model: {mode_name} (weights: {model_key})")
             return True
         except Exception as e:
             log.error(f"Failed to load trader model {mode_name}: {e}")
@@ -534,6 +535,7 @@ class TraderEngine:
         modes:        Optional[List[str]] = None,
         risk_profile: str = 'balanced',
         max_signals:  Optional[int] = None,
+        force_fire:   bool = False,
     ) -> List[Dict[str, Any]]:
         """
         Scan all deployment tokens for trade opportunities.
@@ -626,19 +628,19 @@ class TraderEngine:
                 )
 
                 # ── Signal gates ──────────────────────────────────────────────────
-                if on_cooldown:
-                    continue
                 if direction == 'HOLD':
                     continue
-                if conf < effective_min_conf:
-                    continue
-                # Confluence gate: block signals where strategy ensemble disagrees
-                if confluence_score < _MIN_CONFLUENCE:
-                    log.debug(
-                        f"[SKIP] {symbol} {mode_name} {direction} conf={conf:.2%} "
-                        f"— confluence={n_agree}/25 ({confluence_score:.2f}) < {_MIN_CONFLUENCE}"
-                    )
-                    continue
+                if not force_fire:
+                    if on_cooldown:
+                        continue
+                    if conf < effective_min_conf:
+                        continue
+                    if confluence_score < _MIN_CONFLUENCE:
+                        log.debug(
+                            f"[SKIP] {symbol} {mode_name} {direction} conf={conf:.2%} "
+                            f"— confluence={n_agree}/25 ({confluence_score:.2f}) < {_MIN_CONFLUENCE}"
+                        )
+                        continue
 
                 # Beginner guidance (only for gated signals)
                 guidance = generate_beginner_guidance(

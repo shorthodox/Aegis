@@ -56,7 +56,19 @@ MODES = {
         'description':      'Fast 5-minute entries, quick exits (20-60 min hold)',
         'max_hold_bars':    12,
         'candles_fetch':    500,
-        'min_confidence_override': 0.55,  # 5m is noisier; matches aggressive floor
+        'min_confidence_override': 0.55,
+        'model_key':        'scalping',  # model file prefix in trader_model_store
+    },
+    'scalping_15m': {
+        'timeframe':        '15m',
+        'label_bars':       4,        # 1h forward return window
+        'label_threshold':  0.004,    # 0.4% → BUY/SELL, else HOLD
+        'cooldown_minutes': 60,
+        'description':      '15-minute scalp entries, 1-2h hold',
+        'max_hold_bars':    8,
+        'candles_fetch':    500,
+        'min_confidence_override': 0.52,
+        'model_key':        'scalping',  # reuse 5m scalping model weights
     },
     'intraday': {
         'timeframe':        '1h',

@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js">
+    <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js">
+    <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js">
+    <link rel="modulepreload" href="/web/src/scripts/gatekeeper.js">
+    <link rel="modulepreload" href="/web/src/scripts/auth.js">
+    <link rel="modulepreload" href="/web/src/auth/authManager.js">
+    <link rel="modulepreload" href="/web/src/scripts/iframeGuard.js">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScalpBot Record | AEGIS v1.0</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap"></noscript>
+    <link rel="stylesheet" href="/web/dist/styles.css?v=1.1">
+    <link rel="stylesheet" href="/web/src/styles/main.css">
+    <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"></noscript>
+
+    <style>
+        body {
+            padding-top: 80px;
+            overflow-y: auto;
+            background: #0a0a0c;
+            color: #e2e8f0;
+            font-family: 'Inter', sans-serif;
+        }
+        .fixed-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.8rem 2rem;
+            background: rgba(10,10,12,0.85);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255,140,0,0.25);
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%;
+            z-index: 1000;
+            box-sizing: border-box;
+        }
+        .logo-text { font-size: 1.1rem; font-weight: 800; letter-spacing: 0.15em; color: #f97316; }
+        .nav-links { display: flex; gap: 1.5rem; font-size: 0.8rem; color: #94a3b8; }
+        .nav-links a { color: #94a3b8; text-decoration: none; transition: color 0.2s; }
+        .nav-links a:hover { color: #f97316; }
+
+        .page-wrap { max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+
+        /* ── Stats Bar ───────────────────────────────────────────────── */
+        .stats-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .stat-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 12px;
+            padding: 1rem 1.25rem;
+            text-align: center;
+        }
+        .stat-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b; margin-bottom: 0.35rem; }
+        .stat-value { font-size: 1.4rem; font-weight: 800; font-family: 'JetBrains Mono', monospace; }
+        .stat-value.green { color: #4ade80; }
+        .stat-value.red   { color: #f87171; }
+        .stat-value.cyan  { color: #22d3ee; }
+        .stat-value.orange{ color: #f97316; }
+
+        /* ── Filter bar ──────────────────────────────────────────────── */
+        .filter-bar {
+            display: flex; gap: 0.75rem; flex-wrap: wrap;
+            margin-bottom: 1.5rem; align-items: center;
+        }
+        .filter-btn {
+            padding: 0.4rem 1rem; border-radius: 20px; font-size: 0.75rem;
+            font-weight: 600; letter-spacing: 0.08em; cursor: pointer;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.04); color: #94a3b8;
+            transition: all 0.15s;
+        }
+        .filter-btn:hover { border-color: #f97316; color: #f97316; }
+        .filter-btn.active { background: rgba(249,115,22,0.15); border-color: #f97316; color: #f97316; }
+
+        /* ── Trade table ─────────────────────────────────────────────── */
+        .trade-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+        .trade-table th {
+            text-align: left; padding: 0.6rem 0.75rem;
+            color: #64748b; font-size: 0.65rem; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.08em;
+            border-bottom: 1px solid rgba(255,255,255,0.07);
+        }
+        .trade-table td {
+            padding: 0.65rem 0.75rem;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .trade-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+        .badge {
+            display: inline-block; padding: 0.2rem 0.55rem;
+            border-radius: 4px; font-size: 0.65rem; font-weight: 700;
+            letter-spacing: 0.06em; text-transform: uppercase;
+        }
+        .badge-buy   { background: rgba(74,222,128,0.12); color: #4ade80; border: 1px solid rgba(74,222,128,0.25); }
+        .badge-sell  { background: rgba(248,113,113,0.12); color: #f87171; border: 1px solid rgba(248,113,113,0.25); }
+        .badge-win   { background: rgba(74,222,128,0.15); color: #4ade80; }
+        .badge-loss  { background: rgba(248,113,113,0.15); color: #f87171; }
+        .badge-open  { background: rgba(250,204,21,0.12); color: #fbbf24; border: 1px solid rgba(250,204,21,0.25); }
+        .badge-5m    { background: rgba(249,115,22,0.12); color: #f97316; border: 1px solid rgba(249,115,22,0.25); }
+        .badge-15m   { background: rgba(139,92,246,0.12); color: #a78bfa; border: 1px solid rgba(139,92,246,0.25); }
+
+        .pnl-pos { color: #4ade80; }
+        .pnl-neg { color: #f87171; }
+
+        .section-title {
+            font-size: 1rem; font-weight: 800; letter-spacing: 0.08em;
+            text-transform: uppercase; color: #f97316;
+            display: flex; align-items: center; gap: 0.6rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .empty-state {
+            text-align: center; padding: 4rem 2rem; color: #475569;
+        }
+        .empty-state i { font-size: 2.5rem; margin-bottom: 1rem; display: block; color: #f97316; opacity: 0.3; }
+
+        .open-positions-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1rem; margin-bottom: 2rem;
+        }
+        .open-pos-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px; padding: 1rem 1.25rem;
+        }
+        .open-pos-card.buy-card  { border-left: 3px solid rgba(74,222,128,0.5); }
+        .open-pos-card.sell-card { border-left: 3px solid rgba(248,113,113,0.5); }
+
+        .loading-spinner { text-align: center; padding: 3rem; color: #475569; font-size: 0.85rem; }
+    </style>
+</head>
+<body>
+
+<!-- ── Fixed Header ──────────────────────────────────────────────────── -->
+<header class="fixed-header">
+    <div class="logo-text">⚡ AEGIS ScalpBot</div>
+    <nav class="nav-links">
+        <a href="/web/src/pages/index.html">Home</a>
+        <a href="/web/src/pages/dashboard.html">Dashboard</a>
+        <a href="/web/src/pages/track-record.html">AEGIS Record</a>
+        <a href="/web/src/pages/bot-record.html" style="color:#f97316">Bot Record</a>
+    </nav>
+</header>
+
+<!-- ── Page Content ──────────────────────────────────────────────────── -->
+<div class="page-wrap">
+
+    <!-- Page title -->
+    <div style="margin-bottom:2rem">
+        <h1 style="font-size:1.6rem;font-weight:900;letter-spacing:0.05em;margin:0 0 0.4rem">
+            <i class="fas fa-robot" style="color:#f97316;margin-right:0.5rem"></i>
+            ScalpBot Trade Record
+        </h1>
+        <p style="color:#64748b;font-size:0.85rem;margin:0">
+            5-minute &amp; 15-minute scalps — raw model predictions, no gates, no filters.
+            All trades logged with entry, exit, and outcome.
+        </p>
+        <div id="last-updated" style="font-size:0.7rem;color:#475569;margin-top:0.5rem"></div>
+    </div>
+
+    <!-- Stats bar -->
+    <div class="stats-bar" id="stats-bar">
+        <div class="stat-card"><div class="stat-label">Total Trades</div><div class="stat-value cyan" id="stat-total">—</div></div>
+        <div class="stat-card"><div class="stat-label">Win Rate</div><div class="stat-value orange" id="stat-wr">—</div></div>
+        <div class="stat-card"><div class="stat-label">Wins</div><div class="stat-value green" id="stat-wins">—</div></div>
+        <div class="stat-card"><div class="stat-label">Losses</div><div class="stat-value red" id="stat-losses">—</div></div>
+        <div class="stat-card"><div class="stat-label">Total PnL</div><div class="stat-value" id="stat-pnl">—</div></div>
+        <div class="stat-card"><div class="stat-label">Open Now</div><div class="stat-value orange" id="stat-open">—</div></div>
+    </div>
+
+    <!-- Open Positions -->
+    <div id="open-section" style="display:none;margin-bottom:2rem">
+        <div class="section-title">
+            <i class="fas fa-bolt"></i> Live Open Positions
+        </div>
+        <div class="open-positions-grid" id="open-grid"></div>
+    </div>
+
+    <!-- Filter bar -->
+    <div class="filter-bar">
+        <span style="font-size:0.7rem;color:#64748b;margin-right:0.25rem">FILTER:</span>
+        <button class="filter-btn active" onclick="setFilter('all')" id="filter-all">All</button>
+        <button class="filter-btn" onclick="setFilter('5m')"   id="filter-5m">5m Scalps</button>
+        <button class="filter-btn" onclick="setFilter('15m')"  id="filter-15m">15m Scalps</button>
+        <button class="filter-btn" onclick="setFilter('WIN')"  id="filter-WIN">Wins</button>
+        <button class="filter-btn" onclick="setFilter('LOSS')" id="filter-LOSS">Losses</button>
+    </div>
+
+    <!-- Trade history table -->
+    <div class="section-title">
+        <i class="fas fa-history"></i> Closed Trades
+    </div>
+
+    <div id="loading" class="loading-spinner">
+        <i class="fas fa-spinner fa-spin" style="margin-right:0.5rem"></i> Loading bot record…
+    </div>
+
+    <div id="table-wrap" style="display:none;overflow-x:auto">
+        <table class="trade-table">
+            <thead>
+                <tr>
+                    <th>Symbol</th>
+                    <th>TF</th>
+                    <th>Dir</th>
+                    <th>Entry</th>
+                    <th>Exit</th>
+                    <th>SL</th>
+                    <th>TP</th>
+                    <th>Conf</th>
+                    <th>PnL %</th>
+                    <th>PnL $</th>
+                    <th>Exit</th>
+                    <th>Outcome</th>
+                    <th>Time</th>
+                </tr>
+            </thead>
+            <tbody id="trade-tbody"></tbody>
+        </table>
+    </div>
+
+    <div id="empty-closed" class="empty-state" style="display:none">
+        <i class="fas fa-robot"></i>
+        <p>No closed trades yet. ScalpBot is running — check back soon.</p>
+    </div>
+
+</div>
+
+<script type="module">
+import { initializeApp }     from 'https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js';
+import { getFirestore, collection, query, orderBy, limit, onSnapshot }
+    from 'https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js';
+
+const firebaseConfig = {
+    apiKey: "AIzaSyDtudUL2sE1_fKbzIro5d2IP0-M2dYI6x4",
+    authDomain: "aegis-d78e1.firebaseapp.com",
+    projectId: "aegis-d78e1",
+    storageBucket: "aegis-d78e1.firebasestorage.app",
+    messagingSenderId: "623998601232",
+    appId: "1:623998601232:web:288a89514d84ac3573a295",
+};
+
+let fbApp;
+try { fbApp = initializeApp(firebaseConfig, 'bot-record'); } catch(e) { fbApp = window._firebaseApp; }
+const db   = getFirestore(fbApp, 'default');
+const auth = getAuth(fbApp);
+
+// ── State ──────────────────────────────────────────────────────────────────
+let allTrades  = [];
+let openTrades = [];
+let activeFilter = 'all';
+
+// ── Filter ─────────────────────────────────────────────────────────────────
+window.setFilter = function(f) {
+    activeFilter = f;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    const btn = document.getElementById('filter-' + f);
+    if (btn) btn.classList.add('active');
+    renderTable();
+};
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function fmt(n, d=4) {
+    if (!n && n !== 0) return '—';
+    const v = parseFloat(n);
+    return isNaN(v) ? '—' : v.toFixed(d);
+}
+function fmtTime(iso) {
+    if (!iso) return '—';
+    try {
+        const d = new Date(iso);
+        return d.toLocaleDateString('en-US', { month:'short', day:'numeric' })
+             + ' ' + d.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', hour12:false });
+    } catch { return '—'; }
+}
+function tfBadge(tf) {
+    const cls = tf === '15m' ? 'badge-15m' : 'badge-5m';
+    return `<span class="badge ${cls}">${tf || '5m'}</span>`;
+}
+function dirBadge(dir) {
+    return `<span class="badge ${dir==='BUY'?'badge-buy':'badge-sell'}">${dir}</span>`;
+}
+function outcomeBadge(o) {
+    if (o === 'WIN')  return '<span class="badge badge-win">WIN</span>';
+    if (o === 'LOSS') return '<span class="badge badge-loss">LOSS</span>';
+    return '<span class="badge badge-open">OPEN</span>';
+}
+
+// ── Render table ───────────────────────────────────────────────────────────
+function renderTable() {
+    const tbody = document.getElementById('trade-tbody');
+    const wrap  = document.getElementById('table-wrap');
+    const empty = document.getElementById('empty-closed');
+
+    let trades = allTrades.filter(t => t.outcome === 'WIN' || t.outcome === 'LOSS');
+
+    if (activeFilter === '5m')   trades = trades.filter(t => (t.timeframe||'5m') === '5m');
+    if (activeFilter === '15m')  trades = trades.filter(t => (t.timeframe||'5m') === '15m');
+    if (activeFilter === 'WIN')  trades = trades.filter(t => t.outcome === 'WIN');
+    if (activeFilter === 'LOSS') trades = trades.filter(t => t.outcome === 'LOSS');
+
+    // Sort newest first
+    trades = [...trades].sort((a,b) => (b.exit_time||'').localeCompare(a.exit_time||''));
+
+    if (trades.length === 0) {
+        wrap.style.display  = 'none';
+        empty.style.display = 'block';
+        return;
+    }
+    empty.style.display = 'none';
+    wrap.style.display  = 'block';
+
+    tbody.innerHTML = trades.map(t => {
+        const pnlPct = parseFloat(t.pnl_pct || 0);
+        const pnlUsd = parseFloat(t.pnl_usdt || 0);
+        const pnlClass = pnlPct >= 0 ? 'pnl-pos' : 'pnl-neg';
+        return `<tr>
+            <td style="font-weight:700;color:#e2e8f0">${t.symbol||'—'}</td>
+            <td>${tfBadge(t.timeframe)}</td>
+            <td>${dirBadge(t.direction)}</td>
+            <td>${fmt(t.entry_price, 6)}</td>
+            <td>${fmt(t.exit_price, 6)}</td>
+            <td style="color:#f87171">${fmt(t.sl, 6)}</td>
+            <td style="color:#4ade80">${fmt(t.tp, 6)}</td>
+            <td style="color:#94a3b8">${t.confidence ? (parseFloat(t.confidence)*100).toFixed(0)+'%' : '—'}</td>
+            <td class="${pnlClass}">${pnlPct>=0?'+':''}${fmt(pnlPct,2)}%</td>
+            <td class="${pnlClass}">${pnlUsd>=0?'+':''}${fmt(pnlUsd,2)}</td>
+            <td style="color:#94a3b8;font-size:0.7rem">${t.exit_reason||'—'}</td>
+            <td>${outcomeBadge(t.outcome)}</td>
+            <td style="color:#475569;font-size:0.7rem">${fmtTime(t.exit_time)}</td>
+        </tr>`;
+    }).join('');
+}
+
+// ── Render open positions ───────────────────────────────────────────────────
+function renderOpen(trades) {
+    const section = document.getElementById('open-section');
+    const grid    = document.getElementById('open-grid');
+    if (!trades || trades.length === 0) {
+        section.style.display = 'none';
+        return;
+    }
+    section.style.display = 'block';
+    grid.innerHTML = trades.map(t => {
+        const isBuy = t.direction === 'BUY';
+        return `
+        <div class="open-pos-card ${isBuy ? 'buy-card' : 'sell-card'}">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem">
+                <span style="font-weight:800;font-size:0.95rem">${t.symbol}</span>
+                <span style="display:flex;gap:0.4rem">${tfBadge(t.timeframe)} ${dirBadge(t.direction)}</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;font-size:0.75rem">
+                <div><span style="color:#64748b">Entry</span><br><span style="font-family:monospace;color:#e2e8f0">${fmt(t.entry_price,6)}</span></div>
+                <div><span style="color:#64748b">Conf</span><br><span style="font-family:monospace;color:#f97316">${t.confidence?(parseFloat(t.confidence)*100).toFixed(0)+'%':'—'}</span></div>
+                <div><span style="color:#f87171">SL</span><br><span style="font-family:monospace">${fmt(t.sl,6)}</span></div>
+                <div><span style="color:#4ade80">TP</span><br><span style="font-family:monospace">${fmt(t.tp,6)}</span></div>
+            </div>
+            <div style="margin-top:0.6rem;font-size:0.65rem;color:#475569">${fmtTime(t.entry_time)}</div>
+        </div>`;
+    }).join('');
+}
+
+// ── Update stats ────────────────────────────────────────────────────────────
+function updateStats() {
+    const closed = allTrades.filter(t => t.outcome === 'WIN' || t.outcome === 'LOSS');
+    const won    = closed.filter(t => t.outcome === 'WIN').length;
+    const lost   = closed.filter(t => t.outcome === 'LOSS').length;
+    const total  = won + lost;
+    const wr     = total ? ((won/total)*100).toFixed(1) : '0.0';
+    const pnl    = closed.reduce((s,t) => s + parseFloat(t.pnl_usdt||0), 0);
+    const pnlClass = pnl >= 0 ? 'green' : 'red';
+
+    document.getElementById('stat-total').textContent   = total;
+    document.getElementById('stat-wr').textContent      = wr + '%';
+    document.getElementById('stat-wins').textContent    = won;
+    document.getElementById('stat-losses').textContent  = lost;
+    document.getElementById('stat-open').textContent    = openTrades.length;
+    const pnlEl = document.getElementById('stat-pnl');
+    pnlEl.textContent  = (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + ' $';
+    pnlEl.className    = 'stat-value ' + pnlClass;
+}
+
+// ── Load from Firestore (scalp_signals collection) ──────────────────────────
+function loadFromFirestore() {
+    const q = query(collection(db, 'scalp_signals'), orderBy('entry_time', 'desc'), limit(200));
+    onSnapshot(q, snap => {
+        const trades = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        openTrades = trades.filter(t => t.outcome === 'OPEN');
+        allTrades  = trades;
+        document.getElementById('loading').style.display = 'none';
+        updateStats();
+        renderOpen(openTrades);
+        renderTable();
+        const lu = document.getElementById('last-updated');
+        lu.textContent = 'Last updated: ' + new Date().toLocaleTimeString();
+    }, err => {
+        console.error('Firestore error:', err);
+        // Fallback to JSON file
+        loadFromJson();
+    });
+}
+
+// ── Fallback: load from JSON file ───────────────────────────────────────────
+async function loadFromJson() {
+    try {
+        const res = await fetch('/data/scalp_trades.json?t=' + Date.now());
+        if (!res.ok) throw new Error('not found');
+        const data = await res.json();
+        const trades = data.trades || [];
+        openTrades = trades.filter(t => t.outcome === 'OPEN');
+        allTrades  = trades;
+        document.getElementById('loading').style.display = 'none';
+        updateStats();
+        renderOpen(openTrades);
+        renderTable();
+    } catch {
+        document.getElementById('loading').innerHTML =
+            '<i class="fas fa-info-circle" style="margin-right:0.4rem"></i>No bot trades yet. ScalpBot will record here once it runs.';
+    }
+}
+
+// ── Auth guard ──────────────────────────────────────────────────────────────
+onAuthStateChanged(auth, user => {
+    if (user) {
+        loadFromFirestore();
+    } else {
+        // Public page — still try to load without auth
+        loadFromJson();
+    }
+});
+
+// Auto-refresh every 30s
+setInterval(() => {
+    if (!document.hidden) loadFromJson();
+}, 30000);
+</script>
+
+</body>
+</html>

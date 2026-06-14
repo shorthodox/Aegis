@@ -1260,8 +1260,46 @@ class LiveEngine:
             t0 = time.time()
             await self._scan_all()
             self._save_track_record()
+            await self._push_signals_to_firestore()
             sleep = max(0.0, self.scan_interval_seconds - (time.time() - t0))
             await asyncio.sleep(sleep)
+
+    async def _push_signals_to_firestore(self) -> None:
+        """Push last_signals to Firestore 'signals' collection after each scan."""
+        if self.bootstrap_done < self.bootstrap_total:
+            return  # skip during warmup
+        try:
+            import firebase_admin
+            from firebase_admin import credentials as _creds, firestore as _fs
+
+            cred_path = _ROOT / 'config' / 'serviceAccountKey.json'
+            if not cred_path.exists():
+                return
+
+            if not firebase_admin._apps:
+                firebase_admin.initialize_app(_creds.Certificate(str(cred_path)))
+
+            db = _fs.client()
+            batch = db.batch()
+            batch_count = 0
+
+            for sym, sig in self.last_signals.items():
+                doc_id = sym.replace('/', '_')
+                doc_ref = db.collection('signals').document(doc_id)
+                # Sanitise: remove None values (Firestore rejects them)
+                payload = {k: v for k, v in sig.items() if v is not None}
+                batch.set(doc_ref, payload)
+                batch_count += 1
+                if batch_count >= 500:  # Firestore batch limit
+                    batch.commit()
+                    batch = db.batch()
+                    batch_count = 0
+
+            if batch_count > 0:
+                batch.commit()
+
+        except Exception as _e:
+            print(f'[FirebasePush] {_e}')
 
     async def _ws_price_ticker(self) -> None:
         """
@@ -2012,6 +2050,198 @@ class LiveEngine:
 
 
 # =============================================================================
+# ScalpBot — 5m + 15m raw-prediction scalping engine (no gates)
+# =============================================================================
+
+_SCALP_RECORD_PATH = _ROOT / 'data' / 'scalp_trades.json'
+
+class ScalpBot:
+    """
+    Lightweight scalping bot that fires on raw model prediction (no gates).
+    Uses the existing TraderEngine models (5m scalping + 15m via same weights).
+    Runs every 60 seconds independently from the main AEGIS scan cycle.
+    """
+
+    SCAN_INTERVAL = 60  # seconds
+    POSITION_USDT = 100.0  # fixed notional per trade
+
+    def __init__(self) -> None:
+        self._open: Dict[str, Dict[str, Any]] = {}   # key = "SYM_mode"
+        self._history: List[Dict[str, Any]] = []
+        self._engine: Optional[Any] = None
+        self._last_scan: float = 0.0
+        self._firestore_db: Optional[Any] = None
+        self._load_record()
+
+    # ── persistence ──────────────────────────────────────────────────────────
+
+    def _load_record(self) -> None:
+        if _SCALP_RECORD_PATH.exists():
+            try:
+                data = json.loads(_SCALP_RECORD_PATH.read_text())
+                self._history = [t for t in data.get('trades', [])
+                                 if t.get('outcome') in ('WIN', 'LOSS')]
+            except Exception:
+                pass
+
+    def _save_record(self) -> None:
+        all_trades = self._history + list(self._open.values())
+        won  = sum(1 for t in self._history if t.get('outcome') == 'WIN')
+        lost = sum(1 for t in self._history if t.get('outcome') == 'LOSS')
+        payload = {
+            'last_updated': datetime.now(timezone.utc).isoformat(),
+            'total_trades': won + lost,
+            'won': won, 'lost': lost,
+            'win_rate': round(won / (won + lost), 3) if (won + lost) else 0.0,
+            'trades': all_trades,
+        }
+        import os as _os
+        tmp = str(_SCALP_RECORD_PATH) + '.tmp'
+        with open(tmp, 'w') as f:
+            json.dump(payload, f, indent=2, default=str)
+        _os.replace(tmp, _SCALP_RECORD_PATH)
+
+    # ── firebase ──────────────────────────────────────────────────────────────
+
+    def _get_db(self) -> Optional[Any]:
+        if self._firestore_db is not None:
+            return self._firestore_db
+        try:
+            import firebase_admin
+            from firebase_admin import credentials as _creds, firestore as _fs
+            cred_path = _ROOT / 'config' / 'serviceAccountKey.json'
+            if not cred_path.exists():
+                return None
+            if not firebase_admin._apps:
+                firebase_admin.initialize_app(_creds.Certificate(str(cred_path)))
+            self._firestore_db = _fs.client()
+            return self._firestore_db
+        except Exception:
+            return None
+
+    def _push_signal(self, sig: Dict[str, Any]) -> None:
+        db = self._get_db()
+        if db is None:
+            return
+        try:
+            doc_id = sig['symbol'].replace('/', '_') + '_' + sig['mode']
+            db.collection('scalp_signals').document(doc_id).set(
+                {k: v for k, v in sig.items() if v is not None}
+            )
+        except Exception:
+            pass
+
+    # ── scan ──────────────────────────────────────────────────────────────────
+
+    def _load_engine(self) -> bool:
+        if self._engine is not None:
+            return True
+        try:
+            from scripts.trader_model.trader_engine import TraderEngine
+            self._engine = TraderEngine()
+            self._engine.load_models()
+            if not self._engine.model_store.loaded_modes:
+                self._engine = None
+                return False
+            print('[ScalpBot] Trader models loaded:', self._engine.model_store.loaded_modes)
+            return True
+        except Exception as e:
+            print(f'[ScalpBot] Failed to load trader engine: {e}')
+            return False
+
+    def _check_exits(self, live_prices: Dict[str, float]) -> None:
+        closed_keys = []
+        for key, pos in self._open.items():
+            sym   = pos['symbol']
+            price = live_prices.get(sym, 0.0)
+            if price <= 0:
+                continue
+            entry = pos['entry_price']
+            sl    = pos['sl']
+            tp    = pos['tp']
+            direction = pos['direction']
+
+            hit_sl = (direction == 'BUY' and price <= sl) or (direction == 'SELL' and price >= sl)
+            hit_tp = (direction == 'BUY' and price >= tp) or (direction == 'SELL' and price <= tp)
+
+            if hit_sl or hit_tp:
+                pnl_pct = ((price - entry) / entry * 100) if direction == 'BUY' \
+                          else ((entry - price) / entry * 100)
+                outcome = 'WIN' if hit_tp else 'LOSS'
+                closed = {**pos,
+                          'exit_price': round(price, 8),
+                          'exit_time':  datetime.now(timezone.utc).isoformat(),
+                          'pnl_pct':    round(pnl_pct, 3),
+                          'pnl_usdt':   round(self.POSITION_USDT * pnl_pct / 100, 2),
+                          'outcome':    outcome,
+                          'exit_reason': 'TP' if hit_tp else 'SL'}
+                self._history.append(closed)
+                closed_keys.append(key)
+                print(f'[ScalpBot] {outcome} {direction} {sym} {pnl_pct:+.2f}% ({closed["exit_reason"]})')
+        for k in closed_keys:
+            del self._open[k]
+        if closed_keys:
+            self._save_record()
+
+    def scan(self, live_prices: Dict[str, float]) -> None:
+        """Run one scalp scan cycle. Call from async loop via run_in_executor."""
+        now = time.time()
+        if now - self._last_scan < self.SCAN_INTERVAL:
+            return
+        self._last_scan = now
+
+        self._check_exits(live_prices)
+
+        if not self._load_engine():
+            return
+
+        try:
+            signals = self._engine.scan_all_tokens(
+                modes=['scalping', 'scalping_15m'],
+                risk_profile='aggressive',
+                force_fire=True,
+            )
+        except Exception as e:
+            print(f'[ScalpBot] scan error: {e}')
+            return
+
+        for sig in signals:
+            sym       = sig['symbol']
+            mode      = sig['mode']
+            direction = sig['direction']
+            price     = float(sig.get('current_price', 0))
+            if price <= 0:
+                continue
+
+            key = f'{sym}_{mode}'
+            if key in self._open:
+                continue  # already in a position for this symbol+mode
+
+            atr_est = price * 0.008  # ~0.8% ATR estimate for scalping
+            sl = round(price - atr_est, 8) if direction == 'BUY' else round(price + atr_est, 8)
+            tp = round(price + atr_est * 1.5, 8) if direction == 'BUY' else round(price - atr_est * 1.5, 8)
+
+            entry = {
+                'signal_id':   sig.get('signal_id', str(uuid.uuid4())[:8]),
+                'symbol':      sym,
+                'mode':        mode,
+                'timeframe':   sig.get('timeframe', '5m'),
+                'direction':   direction,
+                'confidence':  round(sig.get('confidence', 0), 4),
+                'entry_price': round(price, 8),
+                'sl':          sl,
+                'tp':          tp,
+                'entry_time':  datetime.now(timezone.utc).isoformat(),
+                'position_usdt': self.POSITION_USDT,
+                'outcome':     'OPEN',
+            }
+            self._open[key] = entry
+            self._save_record()
+            self._push_signal({**entry, 'fire': True})
+            print(f'[ScalpBot] FIRE {direction} {sym} @ {price:.6g} | {mode} | conf={entry["confidence"]:.2%}')
+
+
+# =============================================================================
 # Setup helpers
 # =============================================================================
 
@@ -2312,7 +2542,21 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
         return Group(header, grid, footer)
 
     async def _run_with_display() -> None:
-        scan_task = asyncio.create_task(engine.run())
+        scalp_bot = ScalpBot()
+        scan_task  = asyncio.create_task(engine.run())
+
+        async def _scalp_loop() -> None:
+            executor = __import__('concurrent.futures', fromlist=['ThreadPoolExecutor']).ThreadPoolExecutor(max_workers=1)
+            loop = asyncio.get_event_loop()
+            while True:
+                try:
+                    await loop.run_in_executor(executor, scalp_bot.scan, engine.live_prices.copy())
+                except Exception:
+                    pass
+                await asyncio.sleep(10)
+
+        scalp_task = asyncio.create_task(_scalp_loop())
+
         with Live(_build_renderable(), screen=True, refresh_per_second=1) as live:
             try:
                 while not scan_task.done():
@@ -2324,6 +2568,7 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
             except asyncio.CancelledError:
                 pass
             finally:
+                scalp_task.cancel()
                 scan_task.cancel()
                 await engine.shutdown()
 
