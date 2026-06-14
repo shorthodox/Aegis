@@ -2694,57 +2694,81 @@ async function _refreshTelegramStatus() {
 }
 
 window.connectTelegram = async function() {
+  const btn     = document.querySelector('#tg-state-disconnected button');
+  const statusEl = document.getElementById('notif-status');
+
+  // Open the window SYNCHRONOUSLY before any await — prevents popup blocker
+  const tgWin = window.open('', '_blank');
+  if (tgWin) {
+    tgWin.document.write('<html><body style="background:#000;color:#aaa;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><p>Connecting to Telegram…</p></body></html>');
+  }
+
+  // Show loading state on button
+  if (btn) { btn.disabled = true; btn.innerHTML = '<svg class="animate-spin h-4 w-4 inline mr-1" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Connecting…'; }
+
   try {
     const r = await fetch('/api/notifications/telegram/connect', {
       headers: { 'Authorization': `Bearer ${_notifToken()}` }
     });
+
     if (!r.ok) {
+      if (tgWin) tgWin.close();
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fab fa-telegram text-base"></i> Connect Telegram'; }
       const err = await r.json().catch(() => ({}));
-      const statusEl = document.getElementById('notif-status');
       if (statusEl) {
-        statusEl.className = 'text-[11px] text-center text-red-400';
-        statusEl.textContent = err.detail || 'Telegram not configured on this server';
-        setTimeout(() => { statusEl.textContent = ''; }, 5000);
+        statusEl.className   = 'text-[11px] text-center text-red-400';
+        statusEl.textContent = err.detail || `Error ${r.status} — Telegram bot may not be configured on this server`;
+        setTimeout(() => { statusEl.textContent = ''; }, 7000);
       }
       return;
     }
-    const { deeplink } = await r.json();
 
-    // Open Telegram deep link in a new tab
-    window.open(deeplink, '_blank');
+    const { deeplink, bot_username } = await r.json();
 
-    // Switch to waiting state and poll for confirmation
+    // Redirect the already-open window to the Telegram deep link
+    if (tgWin) {
+      tgWin.location.href = deeplink;
+    } else {
+      // Fallback: popup was blocked, show the link directly
+      if (statusEl) {
+        statusEl.className   = 'text-[11px] text-center text-yellow-400';
+        statusEl.textContent = `Popup blocked — open this link manually: https://t.me/${bot_username}`;
+      }
+    }
+
+    // Switch to waiting state
     _tgSetState('waiting');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fab fa-telegram text-base"></i> Connect Telegram'; }
+
+    // Poll for confirmation every 2.5s
     if (_tgPollTimer) clearInterval(_tgPollTimer);
     _tgPollTimer = setInterval(async () => {
       try {
-        const s = await fetch('/api/notifications/telegram/status', {
-          headers: { 'Authorization': `Bearer ${_notifToken()}` }
-        });
-        if (!s.ok) return;
+        const s    = await fetch('/api/notifications/telegram/status', { headers: { 'Authorization': `Bearer ${_notifToken()}` } });
         const data = await s.json();
         if (data.connected) {
           clearInterval(_tgPollTimer);
           _tgPollTimer = null;
           _tgSetState('connected', data.chat_id);
-          const statusEl = document.getElementById('notif-status');
           if (statusEl) {
-            statusEl.className = 'text-[11px] text-center text-green-400';
-            statusEl.textContent = '✓ Telegram connected! You\'ll receive signals as DMs.';
+            statusEl.className   = 'text-[11px] text-center text-green-400';
+            statusEl.textContent = '✓ Telegram connected! Signals will arrive as DMs.';
             setTimeout(() => { statusEl.textContent = ''; }, 5000);
           }
         }
       } catch (_) {}
     }, 2500);
 
-    // Stop polling after 3 minutes
+    // Auto-stop polling after 3 minutes
     setTimeout(() => {
       if (_tgPollTimer) { clearInterval(_tgPollTimer); _tgPollTimer = null; }
       _refreshTelegramStatus();
     }, 180000);
+
   } catch (e) {
-    const statusEl = document.getElementById('notif-status');
-    if (statusEl) { statusEl.className = 'text-[11px] text-center text-red-400'; statusEl.textContent = 'Network error'; }
+    if (tgWin) tgWin.close();
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fab fa-telegram text-base"></i> Connect Telegram'; }
+    if (statusEl) { statusEl.className = 'text-[11px] text-center text-red-400'; statusEl.textContent = 'Network error — is the server running?'; }
   }
 };
 

@@ -852,8 +852,8 @@ async def run_engine_background():
 
 import secrets as _secrets
 
-_TG_BOT_TOKEN    = os.getenv("TELEGRAM_BOT_TOKEN", "")
-_TG_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "").lstrip("@")
+def _tg_token()    -> str: return os.getenv("TELEGRAM_BOT_TOKEN", "")
+def _tg_username() -> str: return os.getenv("TELEGRAM_BOT_USERNAME", "").lstrip("@")
 
 # code → user_email (pending connections, in-memory)
 _tg_pending: dict = {}
@@ -879,7 +879,7 @@ def _tg_save_connections() -> None:
 
 def _tg_start_poller() -> None:
     """Background thread: long-polls Telegram getUpdates, matches /start CODE to pending users."""
-    if not _TG_BOT_TOKEN:
+    if not _tg_token():
         return
 
     def _poll() -> None:
@@ -888,7 +888,7 @@ def _tg_start_poller() -> None:
         while True:
             try:
                 r = _req.get(
-                    f"https://api.telegram.org/bot{_TG_BOT_TOKEN}/getUpdates",
+                    f"https://api.telegram.org/bot{_tg_token()}/getUpdates",
                     params={"offset": offset, "timeout": 30, "allowed_updates": ["message"]},
                     timeout=36,
                 )
@@ -910,7 +910,7 @@ def _tg_start_poller() -> None:
                                 # Send confirmation to user
                                 try:
                                     _req.post(
-                                        f"https://api.telegram.org/bot{_TG_BOT_TOKEN}/sendMessage",
+                                        f"https://api.telegram.org/bot{_tg_token()}/sendMessage",
                                         json={
                                             "chat_id":    chat_id,
                                             "text":       "✅ *AEGIS Signal Bot connected!*\n\nYou'll now receive BUY/SELL signals directly here. Set a unique notification tone so you never miss one.",
@@ -5383,15 +5383,15 @@ async def trigger_trader_scan(
 @app.get("/api/notifications/telegram/connect")
 async def telegram_connect(_user: str = Depends(get_current_user)):
     """Generate a one-tap deep link the user opens in Telegram to connect."""
-    if not _TG_BOT_TOKEN or not _TG_BOT_USERNAME:
+    if not _tg_token() or not _tg_username():
         raise HTTPException(
             status_code=503,
             detail="Telegram bot not configured. Ask admin to set TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_USERNAME."
         )
     code = _secrets.token_hex(4).upper()  # e.g. A3F9C2D1
     _tg_pending[code] = _user
-    deeplink = f"https://t.me/{_TG_BOT_USERNAME}?start={code}"
-    return {"deeplink": deeplink, "code": code, "bot_username": _TG_BOT_USERNAME}
+    deeplink = f"https://t.me/{_tg_username()}?start={code}"
+    return {"deeplink": deeplink, "code": code, "bot_username": _tg_username()}
 
 
 @app.get("/api/notifications/telegram/status")
