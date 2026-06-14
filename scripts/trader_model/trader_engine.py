@@ -75,11 +75,17 @@ class TraderWallet:
             try:
                 with open(TRADER_RECORD_PATH) as f:
                     data = json.load(f)
-                closed = [t for t in data.get('signals', []) if t.get('outcome') in ('WIN', 'LOSS')]
+                signals = data.get('signals', [])
+                closed = [t for t in signals if t.get('outcome') in ('WIN', 'LOSS')]
                 self.trade_history = closed
-                # Rebuild balance from history
                 for t in closed:
                     self.balance += float(t.get('pnl_usdt', 0) or 0)
+                # Restore open positions so they survive restarts
+                for t in signals:
+                    if t.get('outcome') == 'OPEN':
+                        key = f"{t.get('symbol', '')}__{t.get('mode', '')}"
+                        if key not in self.open_positions:
+                            self.open_positions[key] = t
             except Exception:
                 pass
 

@@ -5193,7 +5193,7 @@ async def get_trader_token_status(_user: str = Depends(get_current_user)):
 
 
 @app.get("/api/trader/wallet")
-async def get_trader_wallet(_user: str = Depends(get_current_user)):
+async def get_trader_wallet():
     """Return virtual wallet summary for the trader cockpit dashboard."""
     engine = _get_trader_engine_lazy()
     if engine is None:
