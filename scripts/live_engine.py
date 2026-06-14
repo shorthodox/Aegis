@@ -1301,6 +1301,8 @@ class LiveEngine:
             batch_count = 0
 
             for sym, sig in self.last_signals.items():
+                if not sig.get('fire') or sig.get('signal', 'HOLD') in ('HOLD', 'FLAT', ''):
+                    continue
                 doc_id = sym.replace('/', '_')
                 doc_ref = db.collection('signals').document(doc_id)
                 # Sanitise: remove None values (Firestore rejects them)
@@ -2457,7 +2459,13 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
             if getattr(pred, 'meta', {}).get('tradeable', False)
         }
 
-        all_syms = sorted(engine.predictors.keys()) if engine.predictors else sorted(signals.keys())
+        _all_syms = sorted(engine.predictors.keys()) if engine.predictors else sorted(signals.keys())
+        # Only show rows with an active BUY/SELL signal or an open position
+        all_syms = [
+            s for s in _all_syms
+            if (signals.get(s, {}).get('fire') and signals.get(s, {}).get('signal', 'HOLD') not in ('HOLD', 'FLAT', ''))
+            or s in wallet.open_positions
+        ]
 
         grid = Table(
             box=box.SIMPLE_HEAVY,
@@ -2465,7 +2473,7 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
             show_header=True,
             header_style='bold white',
             expand=True,
-            title=f'[bold dim]TOKEN GRID — {len(all_syms)} symbols · refreshes every 1s[/]',
+            title=f'[bold dim]ACTIVE SIGNALS — {len(all_syms)} firing · {len(_all_syms)} monitored · refreshes every 1s[/]',
         )
         grid.add_column('#',        justify='right',  width=3,  style='dim')
         grid.add_column('Symbol',   justify='left',   width=14)
