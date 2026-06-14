@@ -1,77 +1,5 @@
 [
   {
-    "timestamp": "2026-06-12T04:32:04",
-    "headline": "LG, Arbitrum launch blockchain-based bid for $679B ad market",
-    "link": "https://cointelegraph.com/news/lg-arbitrum-launch-blockchain-based-bid-for-679b-ad-market?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": 0.0,
-    "importance": 1.5,
-    "weighted_sentiment": 0.0
-  },
-  {
-    "timestamp": "2026-06-12T04:19:03",
-    "headline": "Coinbase launches tool letting AI agents make payments and trade crypto",
-    "link": "https://cointelegraph.com/news/coinbase-launches-tool-letting-ai-agents-make-payments-and-trade-crypto?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": 0.0,
-    "importance": 1.0,
-    "weighted_sentiment": 0.0
-  },
-  {
-    "timestamp": "2026-06-12T04:16:51",
-    "headline": "Avalanche Treasury Co. falls 16% as it debuts on Nasdaq",
-    "link": "https://cointelegraph.com/news/avalanche-treasury-starts-trading-on-nasdaq-but-shares-fall-16-on-debut?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": 0.2023,
-    "importance": 1.0,
-    "weighted_sentiment": 0.2023
-  },
-  {
-    "timestamp": "2026-06-12T06:44:20",
-    "headline": "SEC plan to scrap \u2018Rule 611\u2019 a boon for tokenized US stocks: Galaxy",
-    "link": "https://cointelegraph.com/news/sec-plan-to-scrap-rule-611-a-boon-for-tokenized-us-stocks-galaxy?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": 0.0,
-    "importance": 1.0,
-    "weighted_sentiment": 0.0
-  },
-  {
-    "timestamp": "2026-06-12T07:12:06",
-    "headline": "International sting shuts down $390M crypto money-laundering ring",
-    "link": "https://cointelegraph.com/news/international-sting-shuts-down-390m-crypto-money-laundering-ring?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": 0.0,
-    "importance": 1.0,
-    "weighted_sentiment": 0.0
-  },
-  {
-    "timestamp": "2026-06-12T06:44:20",
-    "headline": "SEC plan to scrap \u2018Rule 611\u2019 positive for tokenized US stocks: Galaxy",
-    "link": "https://cointelegraph.com/news/sec-plan-to-scrap-rule-611-a-boon-for-tokenized-us-stocks-galaxy?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": 0.5574,
-    "importance": 1.0,
-    "weighted_sentiment": 0.5574
-  },
-  {
-    "timestamp": "2026-06-12T04:32:04",
-    "headline": "LG, Arbitrum launch blockchain-based bid in $679B ad market",
-    "link": "https://cointelegraph.com/news/lg-arbitrum-launch-blockchain-based-bid-for-679b-ad-market?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": 0.0,
-    "importance": 1.5,
-    "weighted_sentiment": 0.0
-  },
-  {
-    "timestamp": "2026-06-12T04:16:51",
-    "headline": "Avalanche Treasury falls 16% as it debuts on Nasdaq",
-    "link": "https://cointelegraph.com/news/avalanche-treasury-starts-trading-on-nasdaq-but-shares-fall-16-on-debut?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": 0.2023,
-    "importance": 1.0,
-    "weighted_sentiment": 0.2023
-  },
-  {
     "timestamp": "2026-06-12T16:39:16",
     "headline": "Sam Bankman-Fried loses appeal to overturn 25-year prison sentence",
     "link": "https://cointelegraph.com/news/sam-bankman-fried-loses-appeal-to-overturn-25-year-prison-sentence?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
@@ -102,69 +30,6 @@
     "timestamp": "2026-06-12T13:25:53",
     "headline": "Polish president vetoes crypto bill for third time ahead of MiCA deadline",
     "link": "https://cointelegraph.com/news/polish-president-vetoes-crypto-bill-third-time-mica-deadline?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": 0.0,
-    "importance": 1.5,
-    "weighted_sentiment": 0.0
-  },
-  {
-    "timestamp": "2026-06-12T13:03:23",
-    "headline": "KuCoin has not paid $2M award tied to delisted token dispute, investor says",
-    "link": "https://cointelegraph.com/news/kucoin-yet-pay-seychelles-court-order-2m-token-case?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": -0.6757,
-    "importance": 1.0,
-    "weighted_sentiment": -0.6757
-  },
-  {
-    "timestamp": "2026-06-12T12:05:09",
-    "headline": "Metaplanet to form securities arm through Siiibo acquisition",
-    "link": "https://cointelegraph.com/news/metaplanet-to-form-securities-arm-through-siiibo-acquisition?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": 0.296,
-    "importance": 1.0,
-    "weighted_sentiment": 0.296
-  },
-  {
-    "timestamp": "2026-06-12T11:32:44",
-    "headline": "SpaceX tokenized IPO campaign draws $557M on Binance ahead of debut",
-    "link": "https://cointelegraph.com/news/spacex-ipo-550m-binance-crypto-rails-front-run-wall-street-pre-ipo-price-discovery?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": 0.0,
-    "importance": 1.0,
-    "weighted_sentiment": 0.0
-  },
-  {
-    "timestamp": "2026-06-12T10:46:54",
-    "headline": "Bitcoin miner 'capitulation' comes as trader sees later 2026 bear-market bottom",
-    "link": "https://cointelegraph.com/markets/bitcoin-miner-capitulation-comes-as-trader-sees-later-2026-bear-market-bottom?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": 0.0,
-    "importance": 1.5,
-    "weighted_sentiment": 0.0
-  },
-  {
-    "timestamp": "2026-06-12T10:18:58",
-    "headline": "SpaceX IPO update: Whale opens $22.3M SPCX long as synthetic price hits 30% premium",
-    "link": "https://cointelegraph.com/markets/spacex-ipo-update-whale-opens-223m-spcx-long-as-synthetic-price-hits-30-premium?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": 0.0,
-    "importance": 1.5,
-    "weighted_sentiment": 0.0
-  },
-  {
-    "timestamp": "2026-06-12T09:52:36",
-    "headline": "Crypto scammers exploit World Cup ticket demand, TRM warns",
-    "link": "https://cointelegraph.com/news/trm-world-cup-crypto-scams-fake-tickets-betting?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": -0.3182,
-    "importance": 1.0,
-    "weighted_sentiment": -0.3182
-  },
-  {
-    "timestamp": "2026-06-12T07:00:00",
-    "headline": "Exodus launches tokenized stock marketplace with Ondo, adds 200-plus onchain equities",
-    "link": "https://cointelegraph.com/news/exodus-launches-tokenized-stock-marketplace-with-ondo-adds-200-onchain-equities?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
     "source": "cointelegraph.com",
     "sentiment": 0.0,
     "importance": 1.5,
@@ -205,24 +70,6 @@
     "sentiment": -0.5994,
     "importance": 1.5,
     "weighted_sentiment": -0.8991
-  },
-  {
-    "timestamp": "2026-06-12T11:25:51",
-    "headline": "Ripple chases AI\u2019s machine economy as XRPL stablecoins near $1 billion",
-    "link": "https://cryptoslate.com/ripple-chases-ais-machine-economy-as-xrpl-stablecoins-near-1-billion/",
-    "source": "cryptoslate.com",
-    "sentiment": 0.0,
-    "importance": 2.0,
-    "weighted_sentiment": 0.0
-  },
-  {
-    "timestamp": "2026-06-12T09:59:07",
-    "headline": "CLARITY Act moves to a fight between cops and coders",
-    "link": "https://cryptoslate.com/clarity-act-moves-to-a-fight-between-cops-and-coders/",
-    "source": "cryptoslate.com",
-    "sentiment": 0.2103,
-    "importance": 1.5,
-    "weighted_sentiment": 0.3155
   },
   {
     "timestamp": "2026-06-12T17:50:06",
@@ -288,51 +135,6 @@
     "weighted_sentiment": 0.0
   },
   {
-    "timestamp": "2026-06-12T12:45:39",
-    "headline": "Metaplanet Acquires Japanese Securities Firm for $13M to Launch Bitcoin Yield Products",
-    "link": "https://decrypt.co/370891/metaplanet-acquires-japanese-securities-firm-for-13m-to-launch-bitcoin-yield-products",
-    "source": "decrypt.co",
-    "sentiment": 0.296,
-    "importance": 1.0,
-    "weighted_sentiment": 0.296
-  },
-  {
-    "timestamp": "2026-06-12T12:31:52",
-    "headline": "Morning Minute: SpaceX Prices Largest IPO Ever at $135",
-    "link": "https://decrypt.co/370879/morning-minute-spacex-prices-largest-ipo-ever-at-135",
-    "source": "decrypt.co",
-    "sentiment": 0.0,
-    "importance": 1.0,
-    "weighted_sentiment": 0.0
-  },
-  {
-    "timestamp": "2026-06-12T12:25:00",
-    "headline": "Elon Musk's SpaceX IPO: The Bull and Bear Case for Bitcoin",
-    "link": "https://decrypt.co/370886/elon-musks-spacex-ipo-the-bull-and-bear-case-for-bitcoin",
-    "source": "decrypt.co",
-    "sentiment": 0.0,
-    "importance": 1.0,
-    "weighted_sentiment": 0.0
-  },
-  {
-    "timestamp": "2026-06-12T11:02:05",
-    "headline": "Gary Gensler Backs States in Fight Over Prediction Market Regulation",
-    "link": "https://decrypt.co/370875/gary-gensler-backs-states-in-fight-over-prediction-market-regulation",
-    "source": "decrypt.co",
-    "sentiment": -0.4215,
-    "importance": 1.0,
-    "weighted_sentiment": -0.4215
-  },
-  {
-    "timestamp": "2026-06-12T10:23:39",
-    "headline": "LG Electronics Teams With Arbitrum for Blockchain-Based Ad Platform",
-    "link": "https://decrypt.co/370866/lg-electronics-teams-with-arbitrum-for-blockchain-based-ad-platform",
-    "source": "decrypt.co",
-    "sentiment": 0.0,
-    "importance": 1.5,
-    "weighted_sentiment": 0.0
-  },
-  {
     "timestamp": "2026-06-12T18:40:57",
     "headline": "Moonshot AI's Kimi Work Brings 300 AI Agents to Your Desktop",
     "link": "https://decrypt.co/370954/moonshot-ai-kimi-work-300-agents-desktop",
@@ -373,15 +175,6 @@
     "headline": "How Crypto Firms Will Own the Octagon at Trump's White House UFC Event",
     "link": "https://decrypt.co/370974/how-crypto-firms-own-octagon-trump-white-house-ufc-event",
     "source": "decrypt.co",
-    "sentiment": 0.0,
-    "importance": 1.5,
-    "weighted_sentiment": 0.0
-  },
-  {
-    "timestamp": "2026-06-12T07:00:00",
-    "headline": "Blockworks acquires Messari in crypto data consolidation push",
-    "link": "https://cointelegraph.com/news/blockworks-buys-rival-messari-at-fraction-of-2022-valuation?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
     "sentiment": 0.0,
     "importance": 1.5,
     "weighted_sentiment": 0.0
@@ -448,15 +241,6 @@
     "sentiment": 0.0,
     "importance": 1.0,
     "weighted_sentiment": 0.0
-  },
-  {
-    "timestamp": "2026-06-12T13:03:23",
-    "headline": "Exclusive: KuCoin has not paid $2M award tied to delisted token dispute, investor says",
-    "link": "https://cointelegraph.com/news/kucoin-yet-pay-seychelles-court-order-2m-token-case?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-    "source": "cointelegraph.com",
-    "sentiment": -0.6187,
-    "importance": 1.0,
-    "weighted_sentiment": -0.6187
   },
   {
     "timestamp": "2026-06-13T11:52:41",
@@ -546,6 +330,42 @@
     "source": "cryptoslate.com",
     "sentiment": 0.0,
     "importance": 1.0,
+    "weighted_sentiment": 0.0
+  },
+  {
+    "timestamp": "2026-06-14T05:07:31",
+    "headline": "Trump says Iran peace deal to be signed Sunday, contradicting Tehran",
+    "link": "https://cointelegraph.com/news/trump-says-iran-peace-deal-to-be-signed-sunday-contradicting-tehran?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
+    "sentiment": 0.296,
+    "importance": 1.5,
+    "weighted_sentiment": 0.444
+  },
+  {
+    "timestamp": "2026-06-14T03:36:49",
+    "headline": "Amazon warning triggered US crackdown on Anthropic AI models: Reports",
+    "link": "https://cointelegraph.com/news/amazon-warning-triggered-us-crackdown-on-anthropic-ai-models-reports?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+    "source": "cointelegraph.com",
+    "sentiment": -0.1779,
+    "importance": 2.0,
+    "weighted_sentiment": -0.3558
+  },
+  {
+    "timestamp": "2026-06-13T20:15:09",
+    "headline": "SpaceX\u2019s IPO exposes the first crack in tokenized stocks \u2013 fragmented ownership and allocation",
+    "link": "https://cryptoslate.com/spacexs-ipo-exposes-the-first-crack-in-tokenized-stocks/",
+    "source": "cryptoslate.com",
+    "sentiment": -0.128,
+    "importance": 1.0,
+    "weighted_sentiment": -0.128
+  },
+  {
+    "timestamp": "2026-06-13T19:23:34",
+    "headline": "US Government Orders Anthropic to Pull Claude Fable, Mythos AI Models",
+    "link": "https://decrypt.co/371027/us-government-orders-anthropic-pull-claude-fable-mythos-ai-models",
+    "source": "decrypt.co",
+    "sentiment": 0.0,
+    "importance": 2.0,
     "weighted_sentiment": 0.0
   }
 ]

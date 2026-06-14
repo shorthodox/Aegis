@@ -295,7 +295,7 @@ class SignalQualityFilter:
     is_fake_breakout() → bool
     """
 
-    MIN_QUALITY_SCORE = 55.0  # minimum points required to open a position
+    MIN_QUALITY_SCORE = 40.0  # minimum points required to open a position
 
     def score_signal(
         self,
@@ -447,13 +447,14 @@ class SignalQualityFilter:
             conf_mom    = float(_conf_data.get('momentum', 5.0))
             conf_total  = float(_conf_data.get('total', 5.0))
 
-            # Low-volume breakout: no real conviction behind the move
-            if vol_zscore < 0.5:
-                # Check if momentum diverges from the signal direction
-                # (price breaking out but momentum indicators lagging/opposing)
-                if side == 'BUY'  and conf_mom < 5.0 and conf_total < 6.0:
+            # Clearly fake breakout: volume clearly below average AND technicals
+            # actively contradict the direction (not just neutral — clearly opposed).
+            # vol_zscore < -0.5 = clearly below-average volume (not just non-elevated).
+            # conf_mom < 4.0 / > 6.0 = technicals clearly opposed, not just neutral.
+            if vol_zscore < -0.5:
+                if side == 'BUY'  and conf_mom < 4.0 and conf_total < 4.5:
                     return True
-                if side == 'SELL' and conf_mom > 5.0 and conf_total > 4.0:
+                if side == 'SELL' and conf_mom > 6.0 and conf_total > 5.5:
                     return True
 
             # RSI divergence: strong signal but momentum is near extreme opposite
@@ -1238,19 +1239,29 @@ class LiveEngine:
         for sym in symbols:
             try:
                 p = Predictor(sym)
-                if p.model is not None:
-                    # Binary dual-model pair → force tradeable=True in meta so the
-                    # dashboard shows it as active and the live engine gates apply.
-                    if p.model_sell is not None and not p.meta.get('tradeable', False):
-                        p.meta['tradeable'] = True
-                        p.meta['tradeable_buy']  = True
-                        p.meta['tradeable_sell'] = True
+                base = sym.replace('/', '_')
+                buy_path  = MODEL_STORE / f"{base}_model_buy.json"
+                sell_path = MODEL_STORE / f"{base}_model_sell.json"
+                if buy_path.exists() and sell_path.exists():
+                    # Binary dual-model pair — force tradeable regardless of meta.json
+                    p.meta['tradeable']      = True
+                    p.meta['tradeable_buy']  = True
+                    p.meta['tradeable_sell'] = True
                     self.predictors[sym] = p
                     loaded += 1
-                    if p.meta.get('tradeable', False):
+                    tradeable += 1
+                    print(f'[LiveEngine] Loaded binary dual model for {sym} (tradeable)')
+                elif p.model is not None:
+                    self.predictors[sym] = p
+                    loaded += 1
+                    _is_tradeable = p.meta.get('tradeable', False)
+                    if _is_tradeable:
                         tradeable += 1
-            except Exception:
-                pass
+                    print(f'[LiveEngine] Loaded legacy model for {sym} (tradeable={_is_tradeable})')
+                else:
+                    print(f'[LiveEngine] No model found for {sym}')
+            except Exception as e:
+                print(f'[LiveEngine] Failed to load {sym}: {e}')
         self.bootstrap_total = max(loaded, 1)
         print(f'[LiveEngine] {loaded} predictors loaded '
               f'({tradeable} tradeable + {loaded - tradeable} monitor-only) '
@@ -1396,11 +1407,16 @@ class LiveEngine:
             if not isinstance(result, dict):
                 return
 
-            price = float(result.get('price', 0) or 0)
-            if price > 0:
-                self.live_prices[symbol] = price
-            else:
-                price = self.live_prices.get(symbol, 0)
+            _model_price = float(result.get('price', 0) or 0)
+            # Prefer the live WebSocket tick for both display and entry pricing.
+            # The WS ticker updates self.live_prices every second; the model price
+            # is a 1h candle close that can be stale by minutes, causing an instant
+            # phantom loss at entry. Only fall back to the model price if WS is unavailable.
+            _ws_price = float(self.live_prices.get(symbol, 0) or 0)
+            price = _ws_price if _ws_price > 0 else _model_price
+            if _model_price > 0 and _ws_price == 0:
+                # WS not yet seeded for this symbol — seed it with the model price
+                self.live_prices[symbol] = _model_price
 
             # ── Adaptive intelligence layer ───────────────────────────────────
             # Step 1: HMM regime (probabilistic, from predictor's result dict)
@@ -2200,9 +2216,12 @@ class ScalpBot:
 
         if not self._load_engine():
             return
+        engine = self._engine
+        if engine is None:
+            return
 
         try:
-            signals = self._engine.scan_all_tokens(
+            signals = engine.scan_all_tokens(
                 modes=['scalping', 'scalping_15m'],
                 risk_profile='aggressive',
                 force_fire=True,

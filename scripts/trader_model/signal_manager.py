@@ -125,6 +125,11 @@ _MODE_CONTEXT = {
         'timeframe':    '5-minute chart',
         'tip':          'Use tight stop losses. Scale out 50% at TP1, let rest run to TP2.',
     },
+    'scalping_15m': {
+        'hold_time':    '30–120 minutes',
+        'timeframe':    '15-minute chart',
+        'tip':          'Use tight stop losses. Scale out 50% at TP1, let rest run to TP2.',
+    },
     'intraday': {
         'hold_time':    '2–8 hours',
         'timeframe':    '1-hour chart',
@@ -266,7 +271,7 @@ def compute_trader_stats() -> Dict[str, Any]:
         return {}
 
     stats: Dict[str, Any] = {}
-    for mode in ['scalping', 'intraday', 'swing']:
+    for mode in ['scalping', 'scalping_15m', 'intraday', 'swing']:
         mode_sigs = [s for s in signals if s.get('mode') == mode]
         closed    = [s for s in mode_sigs if s.get('outcome') in ('WIN', 'LOSS')]
         wins      = [s for s in closed if s.get('outcome') == 'WIN']

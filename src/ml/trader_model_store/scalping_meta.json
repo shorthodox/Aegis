@@ -1,8 +1,10 @@
 {
   "mode": "scalping",
-  "cv_accuracy": 0.6644578313253012,
-  "high_conf_acc": 0.9241706161137441,
-  "high_conf_coverage": 0.10592369477911646,
+  "model_type": "binary_dual",
+  "cv_auc_buy": 0.7207449344473627,
+  "cv_auc_sell": 0.6598410818923156,
+  "high_conf_acc": 0.7593360995850622,
+  "high_conf_coverage": 0.7259036144578314,
   "n_samples": 9960,
   "n_features": 45,
   "feature_names": [
@@ -53,9 +55,8 @@
     "fe_williams_r"
   ],
   "label_map": {
-    "0": "SELL",
-    "1": "HOLD",
-    "2": "BUY"
+    "buy_model": "BUY vs rest",
+    "sell_model": "SELL vs rest"
   },
   "trained_tokens": [
     "BTC/USDT",

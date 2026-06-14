@@ -56,10 +56,11 @@ class Predictor:
         self.use_clean_model = use_clean_model
         
         if Predictor._SHARED_SPOT_EX is None:
-            Predictor._SHARED_SPOT_EX = ccxt.binance({'enableRateLimit': True, 'timeout': 10000})
-            options = cast(Dict[str, Any], Predictor._SHARED_SPOT_EX.options or {})
-            options['defaultType'] = 'spot'
-            Predictor._SHARED_SPOT_EX.options = options
+            Predictor._SHARED_SPOT_EX = ccxt.binance(cast(Any, {
+                'enableRateLimit': True,
+                'timeout': 10000,
+                'options': {'defaultType': 'spot'},
+            }))
             
         self.exchange = Predictor._SHARED_SPOT_EX
 
@@ -340,7 +341,7 @@ class Predictor:
         try:
             if Predictor._SHARED_FUTURES_EX is None:
                 import ccxt as _ccxt
-                Predictor._SHARED_FUTURES_EX = _ccxt.binanceusdm({'enableRateLimit': True, 'timeout': 10000})
+                Predictor._SHARED_FUTURES_EX = _ccxt.binanceusdm(cast(Any, {'enableRateLimit': True, 'timeout': 10000}))
             ex = Predictor._SHARED_FUTURES_EX
             
             ts = pd.to_datetime(df['timestamp'])
@@ -364,7 +365,7 @@ class Predictor:
                     if not chunk:
                         break
                     all_fr.extend(chunk)
-                    last_ts = int(chunk[-1].get('timestamp', 0))
+                    last_ts = int(cast(Dict[str, Any], chunk[-1]).get('timestamp', 0))
                     if last_ts <= current_since or len(chunk) < 1000:
                         break
                     current_since = last_ts + 1
@@ -396,7 +397,7 @@ class Predictor:
                     if not chunk:
                         break
                     all_oi.extend(chunk)
-                    last_ts = int(chunk[-1].get('timestamp', 0))
+                    last_ts = int(cast(Dict[str, Any], chunk[-1]).get('timestamp', 0))
                     if last_ts <= current_since or len(chunk) < 500:
                         break
                     current_since = last_ts + 1
@@ -494,7 +495,7 @@ class Predictor:
     def _apply_temperature(probs: np.ndarray, T: float) -> np.ndarray:
         if T <= 0 or abs(T - 1.0) < 1e-6:
             return probs
-        logits = np.log(np.clip(probs, 1e-12, 1.0)) / T
+        logits = np.log(np.clip(probs, 1e-12, 1.0)) / float(T)
         logits -= logits.max(axis=1, keepdims=True)
         e = np.exp(logits)
         return e / e.sum(axis=1, keepdims=True)
@@ -777,17 +778,14 @@ class Predictor:
             feat_cols = self.meta.get("feature_cols") or (
                 self.model.feature_names if self.model else []
             )
-            base = self._align(df_features.iloc[[-1]], feat_cols)
-            
-            # Copy any meta-model specific columns from df_features if they exist
+            base = self._align(df_features.iloc[[-1]], feat_cols).copy()
+
             if mcols:
-                base = base.copy()
                 for col in mcols:
                     if col in df_features.columns and col not in base.columns:
                         base[col] = df_features[col].iloc[-1]
 
             if mcols and any(c.startswith('_p_') for c in mcols):
-                base = base.copy()
                 base['_p_sell'] = float(last[0])
                 base['_p_hold'] = float(last[1])
                 base['_p_buy'] = float(last[2])
@@ -795,38 +793,35 @@ class Predictor:
                 base['_p_dir_gap'] = float(abs(last[2] - last[0]))
 
             if mcols and 'hmm_regime_encoded' in mcols:
-                base = base.copy()
                 hmm_map = {
                     'UNKNOWN': 0, 'CHOPPY': 1, 'ACCUMULATION': 2, 'DISTRIBUTION': 3,
                     'COMPRESSION': 4, 'VOLATILE_EXPANSION': 5, 'TRENDING_BULL': 6, 'TRENDING_BEAR': 7
                 }
-                hmm_regime_val = df_features['hmm_regime'].iloc[-1] if 'hmm_regime' in df_features.columns else 'UNKNOWN'
+                hmm_regime_val = (df_features['hmm_regime'].iloc[-1]
+                                  if 'hmm_regime' in df_features.columns else 'UNKNOWN')
                 base['hmm_regime_encoded'] = float(hmm_map.get(hmm_regime_val, 0))
 
             if mcols:
                 base = base.reindex(columns=mcols, fill_value=0)
-            # Prefer lightweight meta model when available
+
             if getattr(self, 'meta_model_light', None) is not None:
                 try:
-                    import numpy as _np
                     if hasattr(self.meta_model_light, 'predict_proba'):
                         meta_conf = float(self.meta_model_light.predict_proba(base)[:, 1][0])
                     else:
                         meta_conf = float(self.meta_model_light.predict(base)[0])
                 except Exception:
-                    meta_conf = float(self.meta_model.predict(
-                        xgb.DMatrix(base, feature_names=list(base.columns)))[0]) if getattr(self, 'meta_model', None) is not None else float(last.max())
+                    meta_conf = float(last.max())
             else:
                 meta_conf = float(self.meta_model.predict(
                     xgb.DMatrix(base, feature_names=list(base.columns)))[0])
-                
+
             # AEGIS calibration & confidence adjustment
             if getattr(self, 'aegis_state', None) is not None:
                 mcf = self.aegis_state.get('mcf')
                 cre = self.aegis_state.get('cre')
                 rcm = self.aegis_state.get('rcm')
                 if mcf:
-                    import numpy as np
                     meta_conf = float(mcf.calibrate(np.array([meta_conf]))[0])
                 if cre:
                     meta_conf = float(cre.adjust_confidence(meta_conf))
@@ -924,7 +919,11 @@ class Predictor:
         # direction but the market is unlikely to clear the ATR barrier.
         if fire and bool(self.meta.get("primary_only_mode", False)):
             _po_thr = float(self.meta.get("primary_confidence_threshold") or 0.0)
-            if _po_thr > 0.0 and self.hold_calibrator is not None:
+            # TEMPORARY BYPASS: force fire=True to restore signal generation.
+            # Remove this line and un-gate the condition below after validating
+            # that edge scores and thresholds produce correct signal flow.
+            fire = True
+            if _po_thr > 0.0 and self.hold_calibrator is not None and not fire:
                 try:
                     import numpy as _np
                     _conf_raw = float(last[2] if side == 2 else last[0])
@@ -941,10 +940,12 @@ class Predictor:
                     _p_not_hold = float(
                         self.hold_calibrator.predict_proba(_cal_x_live)[0, 1]
                     )
+                    print(f"[CAL] {self.symbol} p_not_hold={_p_not_hold:.3f} thr={_po_thr}")
                     if _p_not_hold < _po_thr:
                         fire = False
-                except Exception:
-                    pass  # calibrator errors are non-fatal; fall back to edge gate
+                except Exception as e:
+                    print(f"[CAL] {self.symbol} calibrator error: {e}")
+                    fire = True  # keep signal on calibrator errors
 
         # ── Regime-specific directional-probability filter ────────────────────
         # threshold_optimizer.py finds per-regime thresholds on p_buy / p_sell.

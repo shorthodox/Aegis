@@ -372,6 +372,23 @@
                     </div>
                 </a>
 
+                <a href="javascript:void(0)" onclick="switchRoom('scalping')"
+                    class="nav-room block glass-panel px-3 py-2.5 rounded-xl text-gray-400 hover:text-white hover:border-amber-400/40 transition-all group min-h-[44px]"
+                    data-room="scalping">
+                    <div class="flex items-center gap-2.5">
+                        <div class="icon-container w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center group-hover:bg-amber-400/20 transition-colors flex-shrink-0">
+                            <i class="fas fa-bolt-lightning text-xs text-amber-400/60 group-hover:text-amber-400"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="font-bold uppercase tracking-wide text-xs flex items-center gap-1.5">
+                                Scalping Cockpit
+                                <span id="nav-scalp-badge" class="hidden text-[9px] px-1.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30 font-mono">0</span>
+                            </div>
+                            <div class="text-[10px] text-gray-500 truncate">5m · 15m fast signals</div>
+                        </div>
+                    </div>
+                </a>
+
                 <!-- GROUP: FILTERED VIEW -->
                 <div class="sidebar-group-label">Filtered View</div>
 
@@ -914,6 +931,97 @@
                 </div>
             </div>
 
+            <!-- ROOM: SCALPING COCKPIT -->
+            <div id="room-scalping" class="room-section hidden">
+                <div class="room-header" style="--room-accent:rgba(251,191,36,0.5);">
+                    <div class="room-header-row">
+                        <h2><i class="fas fa-bolt-lightning text-amber-400"></i> Scalping Cockpit <span id="scalp-open-count" class="text-sm font-mono font-normal normal-case tracking-normal text-amber-400/60 ml-1"></span></h2>
+                        <button id="scalp-refresh-btn" onclick="scalpingCockpit.refresh()"
+                            class="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg bg-amber-400/10 text-amber-300 border border-amber-400/25 hover:bg-amber-400/20 transition-colors">
+                            <i class="fas fa-sync-alt text-[10px]"></i> Refresh
+                        </button>
+                    </div>
+                    <div class="room-subtitle">Live scalping &amp; 15m signals — updates every 10 s · shows EXPIRED when SL or TP is hit</div>
+                    <div class="beginner-tip" style="border-color:rgba(251,191,36,0.15);background:rgba(251,191,36,0.04);">
+                        <i class="fas fa-lightbulb" style="color:rgba(251,191,36,0.5);"></i>
+                        <span><strong>Scalping signals</strong> are short-duration trades (15–120 min). Each card shows a BUY or SELL setup with a stop-loss and take-profit level. When price hits TP the card turns <strong style="color:#4ade80;">green (TP HIT)</strong>; when price hits SL it turns <strong style="color:#f87171;">red (SL HIT)</strong> and is moved to the Expired panel.</span>
+                    </div>
+                </div>
+
+                <!-- Wallet stats bar -->
+                <div id="scalp-wallet-bar" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 mb-5">
+                    <div class="tw-stat-card">
+                        <div class="tw-stat-label">Balance</div>
+                        <div id="scalp-stat-balance" class="tw-stat-value text-cyan">$—</div>
+                    </div>
+                    <div class="tw-stat-card">
+                        <div class="tw-stat-label">Total PnL</div>
+                        <div id="scalp-stat-pnl" class="tw-stat-value text-gray-300">—</div>
+                    </div>
+                    <div class="tw-stat-card">
+                        <div class="tw-stat-label">Win Rate</div>
+                        <div id="scalp-stat-wr" class="tw-stat-value text-white">—</div>
+                    </div>
+                    <div class="tw-stat-card">
+                        <div class="tw-stat-label">W / L</div>
+                        <div id="scalp-stat-wl" class="tw-stat-value text-gray-300">—</div>
+                    </div>
+                    <div class="tw-stat-card">
+                        <div class="tw-stat-label">Open</div>
+                        <div id="scalp-stat-open" class="tw-stat-value text-amber-300">—</div>
+                    </div>
+                    <div class="tw-stat-card col-span-2 sm:col-span-1">
+                        <div class="tw-stat-label">Last Scan</div>
+                        <div id="scalp-stat-scan" class="tw-stat-value text-gray-400 text-xs font-mono">—</div>
+                    </div>
+                </div>
+
+                <!-- ACTIVE signals -->
+                <div class="glass-panel rounded-xl overflow-hidden border border-amber-400/15 mb-5">
+                    <div class="bg-black/40 px-4 py-3 border-b border-white/5 flex items-center justify-between">
+                        <span class="text-xs font-bold uppercase tracking-widest text-amber-300 flex items-center gap-2">
+                            <span class="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                            Active Positions
+                        </span>
+                        <span id="scalp-active-label" class="text-[11px] text-gray-500 font-mono">0 open</span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left min-w-[640px]">
+                            <thead class="text-[11px] text-gray-500 border-b border-white/5 bg-black/20">
+                                <tr>
+                                    <th class="px-4 py-2.5 font-normal">Token</th>
+                                    <th class="px-4 py-2.5 font-normal">Mode</th>
+                                    <th class="px-4 py-2.5 font-normal">Dir</th>
+                                    <th class="px-4 py-2.5 font-normal">Conf</th>
+                                    <th class="px-4 py-2.5 font-normal">Entry</th>
+                                    <th class="px-4 py-2.5 font-normal">SL</th>
+                                    <th class="px-4 py-2.5 font-normal">TP1</th>
+                                    <th class="px-4 py-2.5 font-normal">Age</th>
+                                    <th class="px-4 py-2.5 font-normal text-center">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="scalp-active-tbody" class="text-sm font-mono divide-y divide-white/5">
+                                <tr><td colspan="9" class="px-4 py-8 text-center text-gray-600 text-xs">No active scalping positions — waiting for next scan</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- EXPIRED signals -->
+                <div class="glass-panel rounded-xl overflow-hidden border border-white/10">
+                    <div class="bg-black/40 px-4 py-3 border-b border-white/5 flex items-center justify-between">
+                        <span class="text-xs font-bold uppercase tracking-widest text-gray-400 flex items-center gap-2">
+                            <i class="fas fa-flag-checkered text-gray-500 text-xs"></i>
+                            Expired Signals
+                        </span>
+                        <span id="scalp-expired-label" class="text-[11px] text-gray-500 font-mono">0 closed</span>
+                    </div>
+                    <div id="scalp-expired-list" class="divide-y divide-white/5">
+                        <div class="px-4 py-8 text-center text-gray-600 text-xs">No expired signals yet</div>
+                    </div>
+                </div>
+            </div>
+
             <!-- ROOM: SETTINGS -->
             <div id="room-settings" class="room-section hidden">
                 <div class="room-header" style="--room-accent:rgba(107,114,128,0.4);">
@@ -1225,6 +1333,9 @@
                 } else if (roomName === 'sells') {
                     activeNav.classList.add('border-red-500/50', 'shadow-[0_0_15px_rgba(239,68,68,0.2)]');
                     if (iconContainer) iconContainer.classList.add('bg-red-500/10', 'text-red-400');
+                } else if (roomName === 'scalping') {
+                    activeNav.classList.add('border-amber-400/50', 'shadow-[0_0_15px_rgba(251,191,36,0.2)]');
+                    if (iconContainer) iconContainer.classList.add('bg-amber-400/10', 'text-amber-400');
                 }
             }
 
@@ -1977,6 +2088,216 @@
       document.addEventListener('keydown', function (e) {
         if ((e.key === 'Escape') && drawer.classList.contains('open')) closeDrawer();
       });
+    }());
+    </script>
+
+    <!-- ═══════════════ SCALPING COCKPIT JS ═══════════════ -->
+    <script>
+    (function () {
+        'use strict';
+
+        // ── Helpers ──────────────────────────────────────────────────────────
+
+        function _px(p) {
+            if (!p || p <= 0) return '—';
+            if (p < 0.001) return p.toFixed(6);
+            if (p < 1)     return p.toFixed(4);
+            if (p < 100)   return p.toFixed(3);
+            return p.toFixed(2);
+        }
+
+        function _age(ts) {
+            if (!ts) return '—';
+            try {
+                var s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
+                if (s < 60)   return s + 's';
+                if (s < 3600) return Math.floor(s / 60) + 'm';
+                return Math.floor(s / 3600) + 'h' + Math.floor((s % 3600) / 60) + 'm';
+            } catch(e) { return '—'; }
+        }
+
+        function _dirBadge(dir) {
+            if (dir === 'BUY')
+                return '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-green-500/15 text-green-400 border border-green-500/30">▲ BUY</span>';
+            if (dir === 'SELL')
+                return '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-red-500/15 text-red-400 border border-red-500/30">▼ SELL</span>';
+            return '<span class="text-gray-500">—</span>';
+        }
+
+        function _statusBadge(outcome, reason) {
+            if (outcome === 'OPEN')
+                return '<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-cyan/15 text-cyan border border-cyan/30 animate-pulse">● OPEN</span>';
+            var isTP = (reason || '').toUpperCase().indexOf('TP') !== -1;
+            if (outcome === 'WIN')
+                return '<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-green-500/20 text-green-400 border border-green-500/40">✓ TP HIT</span>';
+            return '<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-red-500/20 text-red-400 border border-red-500/40">✕ SL HIT</span>';
+        }
+
+        function _pnlClass(v) {
+            if (v > 0) return 'text-green-400';
+            if (v < 0) return 'text-red-400';
+            return 'text-gray-400';
+        }
+
+        // ── Core cockpit object ───────────────────────────────────────────────
+
+        var cockpit = {
+            _timer:   null,
+            _data:    { signals: [], summary: {} },
+            _loading: false,
+
+            init: function () {
+                // Auto-refresh every 10 s when the scalping room is active
+                var self = this;
+                self._timer = setInterval(function () {
+                    var room = document.getElementById('room-scalping');
+                    if (room && room.classList.contains('active')) self.refresh();
+                }, 10000);
+                // Refresh when switching to this room
+                document.addEventListener('scalping-room-active', function () { self.refresh(); });
+            },
+
+            refresh: function () {
+                if (this._loading) return;
+                this._loading = true;
+                var self = this;
+                var btn  = document.getElementById('scalp-refresh-btn');
+                if (btn) { btn.querySelector('i').classList.add('fa-spin'); }
+
+                fetch('/api/trader/track-record')
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        // Filter to scalping + scalping_15m only
+                        var sigs = (d.signals || []).filter(function (s) {
+                            return s.mode === 'scalping' || s.mode === 'scalping_15m';
+                        });
+                        self._data.signals = sigs;
+                        self._data.summary = d.summary || {};
+                        self._render();
+                    })
+                    .catch(function () {})
+                    .finally(function () {
+                        self._loading = false;
+                        if (btn) { btn.querySelector('i').classList.remove('fa-spin'); }
+                    });
+
+                // Wallet stats from dedicated endpoint
+                fetch('/api/trader/wallet')
+                    .then(function (r) { return r.json(); })
+                    .then(function (w) { self._renderWallet(w); })
+                    .catch(function () {});
+            },
+
+            _renderWallet: function (w) {
+                var bal  = w.balance || 10000;
+                var pnlu = w.total_pnl_usdt || 0;
+                var pnlp = w.total_pnl_pct  || 0;
+                var wr   = w.win_rate ? (w.win_rate * 100).toFixed(1) : '—';
+                var won  = w.won  || 0;
+                var lost = w.lost || 0;
+                var open = w.open_positions || 0;
+                var scan = w.last_scan ? _age(w.last_scan) + ' ago' : '—';
+                var pnlCol = pnlu >= 0 ? 'text-green-400' : 'text-red-400';
+
+                function _set(id, html) { var el = document.getElementById(id); if (el) el.innerHTML = html; }
+                _set('scalp-stat-balance', '$' + bal.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}));
+                _set('scalp-stat-pnl',     '<span class="' + pnlCol + '">' + (pnlu >= 0 ? '+' : '') + pnlu.toFixed(2) + ' (' + (pnlp >= 0 ? '+' : '') + pnlp.toFixed(2) + '%)</span>');
+                _set('scalp-stat-wr',      wr !== '—' ? wr + '%' : '—');
+                _set('scalp-stat-wl',      '<span class="text-green-400">' + won + 'W</span> / <span class="text-red-400">' + lost + 'L</span>');
+                _set('scalp-stat-open',    open.toString());
+                _set('scalp-stat-scan',    scan);
+            },
+
+            _render: function () {
+                var sigs    = this._data.signals;
+                var active  = sigs.filter(function (s) { return s.outcome === 'OPEN'; });
+                var expired = sigs.filter(function (s) { return s.outcome === 'WIN' || s.outcome === 'LOSS'; });
+
+                // Update nav badge
+                var badge = document.getElementById('nav-scalp-badge');
+                if (badge) {
+                    badge.textContent = active.length.toString();
+                    badge.classList.toggle('hidden', active.length === 0);
+                }
+                var openCount = document.getElementById('scalp-open-count');
+                if (openCount) openCount.textContent = active.length ? '(' + active.length + ' open)' : '';
+                var al = document.getElementById('scalp-active-label');
+                if (al) al.textContent = active.length + ' open';
+                var el = document.getElementById('scalp-expired-label');
+                if (el) el.textContent = expired.length + ' closed';
+
+                // Active table
+                var tbody = document.getElementById('scalp-active-tbody');
+                if (tbody) {
+                    if (!active.length) {
+                        tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-gray-600 text-xs">No active scalping positions — waiting for next scan</td></tr>';
+                    } else {
+                        tbody.innerHTML = active.map(function (s) {
+                            var conf = s.ai_prob ? (s.ai_prob * 100).toFixed(0) + '%' : '—';
+                            return '<tr class="hover:bg-white/[0.02] transition-colors">' +
+                                '<td class="px-4 py-3 font-bold text-white">' + (s.symbol || '—') + '</td>' +
+                                '<td class="px-4 py-3 text-[11px] text-gray-500">' + (s.mode || '—') + '</td>' +
+                                '<td class="px-4 py-3">' + _dirBadge(s.direction) + '</td>' +
+                                '<td class="px-4 py-3 text-cyan">' + conf + '</td>' +
+                                '<td class="px-4 py-3 text-gray-300">' + _px(s.entry_price) + '</td>' +
+                                '<td class="px-4 py-3 text-red-400">' + _px(s.stop_loss) + '</td>' +
+                                '<td class="px-4 py-3 text-green-400">' + _px(s.take_profit) + '</td>' +
+                                '<td class="px-4 py-3 text-gray-500">' + _age(s.entry_time) + '</td>' +
+                                '<td class="px-4 py-3 text-center">' + _statusBadge('OPEN', '') + '</td>' +
+                                '</tr>';
+                        }).join('');
+                    }
+                }
+
+                // Expired list
+                var expList = document.getElementById('scalp-expired-list');
+                if (expList) {
+                    if (!expired.length) {
+                        expList.innerHTML = '<div class="px-4 py-8 text-center text-gray-600 text-xs">No expired signals yet</div>';
+                    } else {
+                        expList.innerHTML = expired.slice(0, 30).map(function (s) {
+                            var outcome  = s.outcome;
+                            var reason   = s.exit_reason || '';
+                            var pnlp     = parseFloat(s.pnl_pct) || 0;
+                            var isTP     = outcome === 'WIN';
+                            var rowAccent = isTP ? 'border-green-500/10 hover:bg-green-500/[0.03]' : 'border-red-500/10 hover:bg-red-500/[0.03]';
+                            var conf     = s.ai_prob ? (s.ai_prob * 100).toFixed(0) + '%' : '—';
+                            return '<div class="flex flex-wrap items-center gap-3 px-4 py-3 border-b ' + rowAccent + ' transition-colors">' +
+                                _statusBadge(outcome, reason) +
+                                _dirBadge(s.direction) +
+                                '<span class="font-bold text-white font-mono">' + (s.symbol || '—') + '</span>' +
+                                '<span class="text-[11px] text-gray-500">' + (s.mode || '—') + '</span>' +
+                                '<span class="' + _pnlClass(pnlp) + ' font-mono text-sm ml-auto">' + (pnlp >= 0 ? '+' : '') + pnlp.toFixed(2) + '%</span>' +
+                                '<span class="text-[11px] text-gray-600">' + reason.replace('_', ' ') + '</span>' +
+                                '<span class="text-[11px] text-gray-600">entry ' + _px(s.entry_price) + '</span>' +
+                                '<span class="text-[11px] text-gray-600">conf ' + conf + '</span>' +
+                                '<span class="text-[11px] text-gray-700">' + _age(s.close_time) + ' ago</span>' +
+                                '</div>';
+                        }).join('');
+                    }
+                }
+            }
+        };
+
+        // Wire up room activation
+        var _origSwitch = window.switchRoom;
+        window.switchRoom = function (roomName) {
+            if (typeof _origSwitch === 'function') _origSwitch(roomName);
+            if (roomName === 'scalping') {
+                cockpit.refresh();
+            }
+        };
+
+        // Also wire into WebSocket trader data if available
+        window._onTraderDataUpdate = function (traderData) {
+            var room = document.getElementById('room-scalping');
+            if (room && room.classList.contains('active')) {
+                cockpit.refresh();
+            }
+        };
+
+        cockpit.init();
+        window.scalpingCockpit = cockpit;
     }());
     </script>
 </body>

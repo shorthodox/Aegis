@@ -15,16 +15,15 @@ import logging
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import ccxt
 import joblib
 import numpy as np
 import pandas as pd
 from sklearn.calibration import CalibratedClassifierCV
-from sklearn.metrics import classification_report, precision_score
+from sklearn.metrics import classification_report, roc_auc_score
 from sklearn.model_selection import TimeSeriesSplit
-from sklearn.preprocessing import label_binarize
 from xgboost import XGBClassifier
 
 _ROOT = Path(__file__).resolve().parent.parent.parent
@@ -182,19 +181,10 @@ def build_dataset(tokens: List[str], mode_cfg: dict) -> Tuple[np.ndarray, np.nda
 # ── Train one mode ─────────────────────────────────────────────────────────────
 
 def train_mode(mode_name: str, X: np.ndarray, y: np.ndarray) -> Dict:
-    """Train XGBoost + CalibratedClassifierCV for one trading mode."""
-    log.info(f"\nTraining {mode_name} model ({X.shape[0]} samples × {X.shape[1]} features)…")
+    """Train independent BUY and SELL binary classifiers for one trading mode."""
+    log.info(f"\nTraining {mode_name} binary dual models ({X.shape[0]} samples × {X.shape[1]} features)…")
 
-    # Map labels -1/0/1 → 0/1/2 for XGBoost multiclass
-    y_mapped = y + 1   # -1→0 (SELL), 0→1 (HOLD), 1→2 (BUY)
-
-    # Class weights to handle imbalance
-    classes, counts = np.unique(y_mapped, return_counts=True)
-    total = len(y_mapped)
-    weights = {c: total / (len(classes) * cnt) for c, cnt in zip(classes, counts)}
-    sample_weights = np.array([weights[yi] for yi in y_mapped])
-
-    xgb_params = dict(
+    base_params = dict(
         n_estimators=300,
         max_depth=4,
         learning_rate=0.05,
@@ -204,75 +194,100 @@ def train_mode(mode_name: str, X: np.ndarray, y: np.ndarray) -> Dict:
         gamma=0.1,
         reg_alpha=0.1,
         reg_lambda=1.0,
-        objective='multi:softprob',
-        num_class=3,
-        eval_metric='mlogloss',
+        objective='binary:logistic',
+        eval_metric='aucpr',
         random_state=42,
         n_jobs=-1,
     )
 
-    # Time-series cross-val (5 folds, no shuffle) — evaluation only
-    tscv = TimeSeriesSplit(n_splits=5)
-    cv_scores = []
-    for fold, (train_idx, val_idx) in enumerate(tscv.split(X)):
-        fold_clf = XGBClassifier(**xgb_params)
-        fold_clf.fit(
-            X[train_idx], y_mapped[train_idx],
-            sample_weight=sample_weights[train_idx],
-            verbose=False,
+    tscv    = TimeSeriesSplit(n_splits=5)
+    trained: Dict[str, Any] = {}
+    cv_aucs: Dict[str, float] = {}
+
+    for direction, y_bin in [('buy', (y == 1).astype(np.int32)),
+                              ('sell', (y == -1).astype(np.int32))]:
+        pos = int(y_bin.sum())
+        neg = len(y_bin) - pos
+        params = {**base_params, 'scale_pos_weight': neg / pos if pos else 1.0}
+
+        # Time-series CV for AUC reporting
+        fold_aucs: List[float] = []
+        for fold, (tr, va) in enumerate(tscv.split(X)):
+            clf = XGBClassifier(**params)
+            clf.fit(X[tr], y_bin[tr], verbose=False)
+            p = clf.predict_proba(X[va])[:, 1]
+            try:
+                auc = float(roc_auc_score(y_bin[va], p))
+            except ValueError:
+                auc = 0.5
+            fold_aucs.append(auc)
+            log.info(f"  [{direction.upper()}] Fold {fold+1}: AUC={auc:.3f}")
+
+        mean_auc = float(np.mean(fold_aucs))
+        log.info(f"  [{direction.upper()}] CV AUC: {mean_auc:.3f} ± {np.std(fold_aucs):.3f}")
+        cv_aucs[direction] = mean_auc
+
+        # Final calibrated model on full dataset
+        calibrated = CalibratedClassifierCV(
+            XGBClassifier(**params),
+            method='isotonic',
+            cv=5,
+            n_jobs=-1,
         )
-        preds = fold_clf.predict(X[val_idx])
-        acc   = float((preds == y_mapped[val_idx]).mean())
-        cv_scores.append(acc)
-        log.info(f"  Fold {fold+1}: accuracy={acc:.3f}")
+        calibrated.fit(X, y_bin)
+        trained[direction] = calibrated
 
-    cv_mean = float(np.mean(cv_scores))
-    log.info(f"  CV accuracy: {cv_mean:.3f} ± {np.std(cv_scores):.3f}")
+    # Combined evaluation on held-out last 20%
+    split      = int(len(X) * 0.80)
+    X_eval     = X[split:]
+    y_eval     = y[split:]   # original -1/0/1
 
-    # Final model: CalibratedClassifierCV with internal 5-fold CV
-    # (sklearn 1.4+ removed cv='prefit'; internal CV is cleaner anyway)
-    calibrated = CalibratedClassifierCV(
-        XGBClassifier(**xgb_params),
-        method='isotonic',
-        cv=5,
-        n_jobs=-1,
-    )
-    calibrated.fit(X, y_mapped, sample_weight=sample_weights)
+    p_buy  = trained['buy'].predict_proba(X_eval)[:, 1]
+    p_sell = trained['sell'].predict_proba(X_eval)[:, 1]
+    p_hold = np.maximum(0.0, 1.0 - p_buy - p_sell)
+    total  = p_buy + p_sell + p_hold
+    proba  = np.column_stack([p_sell / total, p_hold / total, p_buy / total])
 
-    # Evaluate on held-out last 20%
-    split_idx   = int(len(X) * 0.80)
-    X_calib     = X[split_idx:]
-    y_calib     = y_mapped[split_idx:]
-    preds       = calibrated.predict(X_calib)
-    proba       = calibrated.predict_proba(X_calib)
-    max_conf    = proba.max(axis=1)
-    high_conf   = max_conf >= 0.70
+    preds_mapped = np.argmax(proba, axis=1)          # 0=SELL, 1=HOLD, 2=BUY
+    y_eval_mapped = y_eval + 1
+
+    max_conf  = proba.max(axis=1)
+    high_conf = max_conf >= 0.60
     if high_conf.any():
-        high_conf_acc = float((preds[high_conf] == y_calib[high_conf]).mean())
+        high_conf_acc = float((preds_mapped[high_conf] == y_eval_mapped[high_conf]).mean())
         coverage      = float(high_conf.mean())
     else:
         high_conf_acc = 0.0
         coverage      = 0.0
 
-    log.info(f"  Calibrated — 70%+ conf accuracy: {high_conf_acc:.3f}, coverage: {coverage:.3f}")
-    log.info(f"\n{classification_report(y_calib, preds, target_names=['SELL','HOLD','BUY'])}")
+    log.info(f"  Combined — 60%+ conf accuracy: {high_conf_acc:.3f}, coverage: {coverage:.3f}")
+    log.info(f"\n{classification_report(y_eval_mapped, preds_mapped, target_names=['SELL','HOLD','BUY'], zero_division=0)}")
 
-    # Save model
-    model_path = TRADER_MODEL_STORE / f"{mode_name}_model.pkl"
-    joblib.dump(calibrated, model_path)
-    log.info(f"  Saved → {model_path}")
+    # Save binary pair; remove legacy 3-class file if present
+    buy_path  = TRADER_MODEL_STORE / f"{mode_name}_model_buy.pkl"
+    sell_path = TRADER_MODEL_STORE / f"{mode_name}_model_sell.pkl"
+    joblib.dump(trained['buy'],  buy_path)
+    joblib.dump(trained['sell'], sell_path)
+    log.info(f"  Saved → {buy_path.name}")
+    log.info(f"  Saved → {sell_path.name}")
 
-    # Save metadata sidecar
+    legacy = TRADER_MODEL_STORE / f"{mode_name}_model.pkl"
+    if legacy.exists():
+        legacy.unlink()
+        log.info(f"  Removed legacy 3-class → {legacy.name}")
+
     meta = {
-        'mode':             mode_name,
-        'cv_accuracy':      cv_mean,
-        'high_conf_acc':    high_conf_acc,
+        'mode':               mode_name,
+        'model_type':         'binary_dual',
+        'cv_auc_buy':         cv_aucs.get('buy', 0.0),
+        'cv_auc_sell':        cv_aucs.get('sell', 0.0),
+        'high_conf_acc':      high_conf_acc,
         'high_conf_coverage': coverage,
-        'n_samples':        int(X.shape[0]),
-        'n_features':       int(X.shape[1]),
-        'feature_names':    ALL_FEATURE_NAMES,
-        'label_map':        {'0': 'SELL', '1': 'HOLD', '2': 'BUY'},
-        'trained_tokens':   TRAINING_TOKENS,
+        'n_samples':          int(X.shape[0]),
+        'n_features':         int(X.shape[1]),
+        'feature_names':      ALL_FEATURE_NAMES,
+        'label_map':          {'buy_model': 'BUY vs rest', 'sell_model': 'SELL vs rest'},
+        'trained_tokens':     TRAINING_TOKENS,
     }
     meta_path = TRADER_MODEL_STORE / f"{mode_name}_meta.json"
     with open(meta_path, 'w') as f:
@@ -300,10 +315,15 @@ def main():
 
     results = {}
     for mode_name in modes_to_train:
-        mode_cfg = MODES[mode_name]
+        mode_cfg  = MODES[mode_name]
+        model_key = mode_cfg.get('model_key', mode_name)
         log.info(f"\n{'─'*50}")
         log.info(f"Mode: {mode_name.upper()} | TF: {mode_cfg['timeframe']}")
         log.info(f"{'─'*50}")
+        if model_key != mode_name:
+            log.info(f"  Skipping — reuses '{model_key}' model (model_key alias)")
+            results[mode_name] = {'skipped': f'reuses {model_key}_model.pkl'}
+            continue
         try:
             X, y = build_dataset(tokens, mode_cfg)
             meta  = train_mode(mode_name, X, y)

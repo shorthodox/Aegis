@@ -1,774 +1,684 @@
 {
   "healthy": [
-    "atr_percentile",
-    "rvi_osc",
-    "starc_position",
-    "regime_high_vol",
-    "macro_confluence_score",
-    "volatility_ratio",
-    "volatility_regime",
-    "bb_pct_b",
+    "dist_bull_ob",
+    "macd",
+    "aroon_osc",
+    "parkinson_vol",
+    "hurst",
+    "rolling_volatility",
     "prc_trend",
+    "candle_pressure",
+    "ema_stack_distance",
+    "macro_confluence_score",
+    "prc_total",
+    "fib_range_pct",
+    "fib_dist_236",
+    "dist_s2",
+    "btc_dist_ema200",
+    "volatility_ratio",
+    "price_zscore_200",
     "prc_momentum",
-    "ret_12h",
+    "dist_ema_100",
+    "efficiency_ratio_10",
     "atr_band_position",
-    "prc_total"
+    "obv"
   ],
   "weak": [
-    "kvo",
-    "higher_high_count_20",
-    "btc_dist_ema200",
-    "ichi_dist_tenkan",
-    "cmo_14",
-    "dist_avwap_100",
-    "dist_bear_ob",
-    "kst",
-    "historical_volatility",
-    "dist_pivot",
-    "dist_s2",
-    "market_phase",
-    "is_squeeze",
-    "parkinson_vol",
-    "trix_15",
-    "kvo_signal",
-    "rsi_21",
-    "close_decay_mean_24",
-    "structure_bias",
-    "volatility_skew",
-    "supertrend_dir",
-    "fib_dist_382",
-    "btc_4h_return",
-    "donchian_position",
-    "regime_low_vol",
-    "efficiency_ratio_10",
-    "sqz_momentum",
-    "dist_vwap",
-    "ret_1h",
-    "pct_dist_to_resistance",
-    "bar_direction",
-    "prc_bands",
-    "volume_delta_14",
-    "fib_dist_236",
-    "tsi",
-    "ema_stack_alignment",
-    "obv_slope_20",
-    "rsi_14",
-    "price_zscore_200",
-    "mfi_14",
-    "ema_slope_50",
-    "gaussian_position",
-    "force_index",
-    "dpo_20",
-    "btc_ratio_ma_dist",
-    "se_position",
-    "bos_up",
-    "close_delta_12",
-    "ema_slope_9",
-    "btc_corr_24h",
-    "is_at_support",
-    "sar_dist",
-    "supertrend_dist",
-    "lower_low_count_20",
-    "linreg_slope_14",
-    "ichi_dist_kijun",
-    "ichi_dist_cloud_top",
-    "trend_confluence",
-    "keltner_width",
-    "atr_pct",
-    "dist_bull_ob",
-    "elder_bear",
-    "range_position_score",
-    "dist_ema_100",
-    "market_regime_code",
-    "atr_expansion",
-    "vi_minus",
-    "williams_r",
-    "swing_strength_20",
-    "ema_stack_distance",
-    "returns_1h_decay_mean_24",
-    "ema_slope_21",
-    "is_at_resistance",
-    "bands_confluence",
-    "awesome_osc",
-    "schaff_tc",
-    "ema_50_200_cross",
-    "quantile_position",
-    "linreg_r2_14",
-    "cci_20",
-    "obv_divergence",
-    "momentum_confluence",
-    "smart_money_confluence",
-    "volume_confluence",
-    "realized_volatility",
-    "rsi_7",
-    "ultimate_osc",
-    "prc_smart_money",
-    "ichi_cloud_bull",
-    "sar_trend",
-    "choppiness",
-    "elder_bull",
-    "ret_4h",
-    "fib_dist_618",
-    "dist_r2",
-    "atr_14",
-    "pct_dist_to_support",
     "dist_kama",
-    "total_confluence",
-    "trend_regime",
-    "fib_dist_500",
-    "dist_r1",
-    "adx_14",
-    "aroon_up",
-    "dist_ema_21",
-    "dist_avwap_50",
-    "ema_alignment",
-    "pvt",
-    "volume",
-    "dist_ema_50",
-    "obv",
-    "fib_range_pct",
-    "ppo_signal",
-    "cmf_20",
-    "oi_price_divergence",
-    "vwap_delta_4",
-    "macd_divergence",
-    "fisher",
-    "vwap_delta_12",
-    "rolling_volatility",
-    "aroon_down",
-    "vwap_delta_1",
-    "dist_avwap_200",
-    "dist_ema_9",
-    "stoch_k",
-    "macd_hist",
-    "dow_sin",
-    "candle_pressure",
-    "rolling_buy_ratio",
-    "stoch_d",
+    "sar_dist",
     "rsi_slope_14",
-    "ret_24h",
-    "dist_rolling_vwap",
-    "fisher_sig",
-    "ichi_above_cloud",
-    "ppo",
-    "elder_bull_bear",
+    "ichi_dist_tenkan",
+    "funding_rate_zscore",
+    "market_phase",
+    "linreg_r2_14",
+    "btc_corr_24h",
+    "fisher",
     "bb_width_percentile",
-    "ema_slope_100",
-    "rvi_sig"
+    "entropy",
+    "upper_wick_pct",
+    "williams_r",
+    "rel_perf_4h",
+    "btc_ratio_ma_dist",
+    "quantile_position",
+    "macd_signal",
+    "fib_dist_618",
+    "trend_consistency_20",
+    "range_position_score",
+    "tsi",
+    "elder_bear",
+    "cci_20",
+    "dist_ema_21",
+    "total_confluence",
+    "macd_hist",
+    "trix_15",
+    "kst",
+    "dist_avwap_100",
+    "ppo",
+    "returns_1h_delta_4",
+    "rsi_acceleration_14",
+    "atr_percentile",
+    "dist_avwap_50",
+    "dist_avwap_200",
+    "funding_cum_8",
+    "cmf_20",
+    "stoch_slope",
+    "pct_dist_to_resistance",
+    "smart_money_confluence",
+    "lower_wick_pct",
+    "stoch_d",
+    "rsi_14",
+    "sqz_on",
+    "dist_vwap",
+    "volume_atr_efficiency",
+    "rvi_vol",
+    "vi_minus",
+    "kst_signal",
+    "keltner_width",
+    "dist_ema_200",
+    "funding_slope_8",
+    "lower_low_count_20",
+    "adx_14",
+    "fib_dist_500",
+    "pvt",
+    "ret_24h",
+    "dist_ema_9",
+    "atr_pct",
+    "choppiness",
+    "prc_smart_money",
+    "dist_pivot",
+    "schaff_tc",
+    "atr_expansion",
+    "returns_4h",
+    "ultimate_osc",
+    "elder_bull",
+    "prc_volume",
+    "ppo_signal",
+    "rsi_21",
+    "dist_bear_ob",
+    "sqz_momentum",
+    "ichi_cloud_bull",
+    "rel_perf_24h",
+    "ema_alignment",
+    "volatility_skew",
+    "fib_dist_382",
+    "dist_r2",
+    "vol_confirm_ratio",
+    "elder_bull_bear",
+    "bb_pct_b",
+    "dist_r1",
+    "pct_dist_to_support",
+    "funding_neutral",
+    "trend_confluence",
+    "mfi_14",
+    "supertrend_dist",
+    "macd_hist_velocity",
+    "close_position",
+    "rel_perf_1h",
+    "higher_high_count_20",
+    "stoch_k",
+    "aroon_up",
+    "price_disp_atr_pct",
+    "rvi_sig",
+    "momentum_confluence",
+    "starc_position",
+    "volatility_regime",
+    "ichi_dist_kijun",
+    "dow_cos",
+    "dow_sin",
+    "swing_strength_20",
+    "donchian_position",
+    "dist_s1",
+    "prc_bands",
+    "rvi_osc",
+    "bands_confluence",
+    "rsi_7",
+    "volatility_kurt",
+    "ichi_dist_cloud_top",
+    "gaussian_position",
+    "btc_4h_return",
+    "ichi_above_cloud"
   ],
   "dead": [],
   "details": {
-    "kvo": {
-      "freq": 0.5,
-      "mean_gain": 4.076799909273784
-    },
-    "higher_high_count_20": {
-      "freq": 0.16666666666666666,
-      "mean_gain": 3.0599132776260376
-    },
-    "btc_dist_ema200": {
-      "freq": 0.5,
-      "mean_gain": 5.152837514877319
-    },
-    "ichi_dist_tenkan": {
+    "dist_kama": {
       "freq": 0.25,
-      "mean_gain": 5.396226247151692
-    },
-    "cmo_14": {
-      "freq": 0.16666666666666666,
-      "mean_gain": 5.238260269165039
-    },
-    "dist_avwap_100": {
-      "freq": 0.3333333333333333,
-      "mean_gain": 3.973709762096405
-    },
-    "dist_bear_ob": {
-      "freq": 0.25,
-      "mean_gain": 4.019341468811035
-    },
-    "kst": {
-      "freq": 0.4166666666666667,
-      "mean_gain": 5.12933120727539
-    },
-    "historical_volatility": {
-      "freq": 0.4166666666666667,
-      "mean_gain": 4.172163581848144
-    },
-    "dist_pivot": {
-      "freq": 0.3333333333333333,
-      "mean_gain": 4.117469489574432
-    },
-    "dist_s2": {
-      "freq": 0.08333333333333333,
-      "mean_gain": 3.8910045623779297
-    },
-    "market_phase": {
-      "freq": 0.25,
-      "mean_gain": 4.959481159845988
-    },
-    "is_squeeze": {
-      "freq": 0.25,
-      "mean_gain": 3.7457197507222495
-    },
-    "parkinson_vol": {
-      "freq": 0.5,
-      "mean_gain": 4.024673501650493
-    },
-    "trix_15": {
-      "freq": 0.25,
-      "mean_gain": 4.534680287043254
-    },
-    "kvo_signal": {
-      "freq": 0.3333333333333333,
-      "mean_gain": 4.674972057342529
-    },
-    "rsi_21": {
-      "freq": 0.08333333333333333,
-      "mean_gain": 3.2599740028381348
-    },
-    "close_decay_mean_24": {
-      "freq": 0.5833333333333334,
-      "mean_gain": 3.5222694873809814
-    },
-    "structure_bias": {
-      "freq": 0.08333333333333333,
-      "mean_gain": 6.57600212097168
-    },
-    "volatility_skew": {
-      "freq": 0.08333333333333333,
-      "mean_gain": 3.3546223640441895
-    },
-    "supertrend_dir": {
-      "freq": 0.4166666666666667,
-      "mean_gain": 4.439326333999634
-    },
-    "fib_dist_382": {
-      "freq": 0.25,
-      "mean_gain": 4.2275543212890625
-    },
-    "btc_4h_return": {
-      "freq": 0.08333333333333333,
-      "mean_gain": 2.989576816558838
-    },
-    "donchian_position": {
-      "freq": 0.3333333333333333,
-      "mean_gain": 5.382319986820221
-    },
-    "regime_low_vol": {
-      "freq": 0.4166666666666667,
-      "mean_gain": 5.140605354309082
-    },
-    "efficiency_ratio_10": {
-      "freq": 0.5,
-      "mean_gain": 48.82508659362793
-    },
-    "sqz_momentum": {
-      "freq": 0.5,
-      "mean_gain": 3.8044607639312744
-    },
-    "dist_vwap": {
-      "freq": 0.3333333333333333,
-      "mean_gain": 4.007890701293945
-    },
-    "ret_1h": {
-      "freq": 0.08333333333333333,
-      "mean_gain": 3.9264771938323975
-    },
-    "pct_dist_to_resistance": {
-      "freq": 0.16666666666666666,
-      "mean_gain": 6.9413628578186035
-    },
-    "bar_direction": {
-      "freq": 0.08333333333333333,
-      "mean_gain": 4.120287895202637
-    },
-    "prc_bands": {
-      "freq": 0.3333333333333333,
-      "mean_gain": 8.099899411201477
-    },
-    "volume_delta_14": {
-      "freq": 0.08333333333333333,
-      "mean_gain": 3.3880698680877686
-    },
-    "atr_percentile": {
-      "freq": 0.6666666666666666,
-      "mean_gain": 3.8448801934719086
-    },
-    "fib_dist_236": {
-      "freq": 0.3333333333333333,
-      "mean_gain": 3.581700086593628
-    },
-    "tsi": {
-      "freq": 0.25,
-      "mean_gain": 3.5103437105814614
-    },
-    "rvi_osc": {
-      "freq": 0.9166666666666666,
-      "mean_gain": 7.090107614343816
-    },
-    "starc_position": {
-      "freq": 1.0,
-      "mean_gain": 24.437891165415447
-    },
-    "ema_stack_alignment": {
-      "freq": 0.16666666666666666,
-      "mean_gain": 3.733556866645813
-    },
-    "obv_slope_20": {
-      "freq": 0.25,
-      "mean_gain": 3.842854658762614
-    },
-    "rsi_14": {
-      "freq": 0.5,
-      "mean_gain": 4.179915467898051
-    },
-    "price_zscore_200": {
-      "freq": 0.3333333333333333,
-      "mean_gain": 3.9646421670913696
-    },
-    "mfi_14": {
-      "freq": 0.16666666666666666,
-      "mean_gain": 3.9649248123168945
-    },
-    "ema_slope_50": {
-      "freq": 0.4166666666666667,
-      "mean_gain": 3.7698757648468018
-    },
-    "gaussian_position": {
-      "freq": 0.3333333333333333,
-      "mean_gain": 4.605718016624451
-    },
-    "force_index": {
-      "freq": 0.08333333333333333,
-      "mean_gain": 3.5593693256378174
-    },
-    "regime_high_vol": {
-      "freq": 0.8333333333333334,
-      "mean_gain": 8.053194260597229
-    },
-    "dpo_20": {
-      "freq": 0.08333333333333333,
-      "mean_gain": 4.440616130828857
-    },
-    "btc_ratio_ma_dist": {
-      "freq": 0.3333333333333333,
-      "mean_gain": 3.4208096861839294
-    },
-    "se_position": {
-      "freq": 0.08333333333333333,
-      "mean_gain": 3.109558343887329
-    },
-    "bos_up": {
-      "freq": 0.08333333333333333,
-      "mean_gain": 8.63393497467041
-    },
-    "close_delta_12": {
-      "freq": 0.3333333333333333,
-      "mean_gain": 4.660020887851715
-    },
-    "ema_slope_9": {
-      "freq": 0.5,
-      "mean_gain": 3.6154452562332153
-    },
-    "btc_corr_24h": {
-      "freq": 0.16666666666666666,
-      "mean_gain": 3.93569278717041
-    },
-    "is_at_support": {
-      "freq": 0.3333333333333333,
-      "mean_gain": 6.5945258140563965
+      "mean_gain": 5.745766003926595
     },
     "sar_dist": {
-      "freq": 0.25,
-      "mean_gain": 4.046391487121582
-    },
-    "supertrend_dist": {
-      "freq": 0.3333333333333333,
-      "mean_gain": 4.234813630580902
-    },
-    "lower_low_count_20": {
-      "freq": 0.25,
-      "mean_gain": 3.314631621042887
-    },
-    "linreg_slope_14": {
-      "freq": 0.5,
-      "mean_gain": 4.521927237510681
-    },
-    "ichi_dist_kijun": {
-      "freq": 0.4166666666666667,
-      "mean_gain": 3.9690631866455077
-    },
-    "ichi_dist_cloud_top": {
       "freq": 0.5833333333333334,
-      "mean_gain": 4.403916563306536
-    },
-    "trend_confluence": {
-      "freq": 0.4166666666666667,
-      "mean_gain": 5.726726436614991
-    },
-    "keltner_width": {
-      "freq": 0.4166666666666667,
-      "mean_gain": 4.2645868301391605
-    },
-    "atr_pct": {
-      "freq": 0.5,
-      "mean_gain": 4.265149752298991
-    },
-    "macro_confluence_score": {
-      "freq": 1.0,
-      "mean_gain": 28.185585657755535
-    },
-    "volatility_ratio": {
-      "freq": 1.0,
-      "mean_gain": 4.073129137357076
+      "mean_gain": 6.869928428104946
     },
     "dist_bull_ob": {
-      "freq": 0.3333333333333333,
-      "mean_gain": 3.546738386154175
+      "freq": 0.75,
+      "mean_gain": 7.180699878268772
     },
-    "elder_bear": {
-      "freq": 0.08333333333333333,
-      "mean_gain": 3.9017343521118164
+    "rsi_slope_14": {
+      "freq": 0.5,
+      "mean_gain": 7.94081981976827
     },
-    "range_position_score": {
-      "freq": 0.25,
-      "mean_gain": 4.753237724304199
+    "ichi_dist_tenkan": {
+      "freq": 0.16666666666666666,
+      "mean_gain": 5.549689769744873
     },
-    "dist_ema_100": {
-      "freq": 0.4166666666666667,
-      "mean_gain": 5.381570291519165
-    },
-    "market_regime_code": {
+    "funding_rate_zscore": {
       "freq": 0.5833333333333334,
-      "mean_gain": 4.853091273988996
+      "mean_gain": 8.474020685468401
     },
-    "atr_expansion": {
-      "freq": 0.4166666666666667,
-      "mean_gain": 3.8972460269927978
-    },
-    "vi_minus": {
-      "freq": 0.16666666666666666,
-      "mean_gain": 4.130062460899353
-    },
-    "williams_r": {
-      "freq": 0.25,
-      "mean_gain": 5.332948764165242
-    },
-    "swing_strength_20": {
+    "market_phase": {
       "freq": 0.08333333333333333,
-      "mean_gain": 6.567784786224365
-    },
-    "ema_stack_distance": {
-      "freq": 0.4166666666666667,
-      "mean_gain": 3.4727259635925294
-    },
-    "returns_1h_decay_mean_24": {
-      "freq": 0.4166666666666667,
-      "mean_gain": 4.503177213668823
-    },
-    "ema_slope_21": {
-      "freq": 0.4166666666666667,
-      "mean_gain": 6.383398532867432
-    },
-    "is_at_resistance": {
-      "freq": 0.16666666666666666,
-      "mean_gain": 4.806584596633911
-    },
-    "bands_confluence": {
-      "freq": 0.25,
-      "mean_gain": 3.903376499811808
-    },
-    "awesome_osc": {
-      "freq": 0.25,
-      "mean_gain": 3.4619974295298257
-    },
-    "schaff_tc": {
-      "freq": 0.16666666666666666,
-      "mean_gain": 3.0767111778259277
-    },
-    "ema_50_200_cross": {
-      "freq": 0.08333333333333333,
-      "mean_gain": 3.2959678173065186
-    },
-    "quantile_position": {
-      "freq": 0.25,
-      "mean_gain": 4.803999503453572
+      "mean_gain": 8.662041664123535
     },
     "linreg_r2_14": {
-      "freq": 0.08333333333333333,
-      "mean_gain": 36.604549407958984
+      "freq": 0.25,
+      "mean_gain": 7.454393068949382
     },
-    "cci_20": {
+    "macd": {
+      "freq": 0.75,
+      "mean_gain": 7.068392488691542
+    },
+    "btc_corr_24h": {
+      "freq": 0.5833333333333334,
+      "mean_gain": 7.692628247397287
+    },
+    "fisher": {
+      "freq": 0.08333333333333333,
+      "mean_gain": 7.019428253173828
+    },
+    "aroon_osc": {
+      "freq": 0.6666666666666666,
+      "mean_gain": 7.6919363141059875
+    },
+    "bb_width_percentile": {
+      "freq": 0.4166666666666667,
+      "mean_gain": 6.966654968261719
+    },
+    "parkinson_vol": {
+      "freq": 0.8333333333333334,
+      "mean_gain": 7.81359543800354
+    },
+    "entropy": {
       "freq": 0.5,
-      "mean_gain": 4.160889983177185
+      "mean_gain": 7.790452400843303
     },
-    "obv_divergence": {
+    "upper_wick_pct": {
+      "freq": 0.08333333333333333,
+      "mean_gain": 5.684858322143555
+    },
+    "williams_r": {
+      "freq": 0.16666666666666666,
+      "mean_gain": 9.4812593460083
+    },
+    "rel_perf_4h": {
+      "freq": 0.08333333333333333,
+      "mean_gain": 6.106500625610352
+    },
+    "btc_ratio_ma_dist": {
+      "freq": 0.5833333333333334,
+      "mean_gain": 7.492841448102679
+    },
+    "hurst": {
+      "freq": 0.8333333333333334,
+      "mean_gain": 7.174452066421509
+    },
+    "quantile_position": {
+      "freq": 0.5,
+      "mean_gain": 7.907164573669434
+    },
+    "macd_signal": {
       "freq": 0.3333333333333333,
-      "mean_gain": 4.8234304785728455
-    },
-    "momentum_confluence": {
-      "freq": 0.4166666666666667,
-      "mean_gain": 7.33255181312561
-    },
-    "smart_money_confluence": {
-      "freq": 0.16666666666666666,
-      "mean_gain": 5.094116687774658
-    },
-    "volume_confluence": {
-      "freq": 0.08333333333333333,
-      "mean_gain": 3.1902077198028564
-    },
-    "realized_volatility": {
-      "freq": 0.4166666666666667,
-      "mean_gain": 4.186337184906006
-    },
-    "rsi_7": {
-      "freq": 0.16666666666666666,
-      "mean_gain": 3.4969491958618164
-    },
-    "ultimate_osc": {
-      "freq": 0.08333333333333333,
-      "mean_gain": 6.921379566192627
-    },
-    "prc_smart_money": {
-      "freq": 0.08333333333333333,
-      "mean_gain": 3.236814498901367
-    },
-    "ichi_cloud_bull": {
-      "freq": 0.08333333333333333,
-      "mean_gain": 4.070849895477295
-    },
-    "sar_trend": {
-      "freq": 0.25,
-      "mean_gain": 3.553088426589966
-    },
-    "choppiness": {
-      "freq": 0.25,
-      "mean_gain": 3.709564765294393
-    },
-    "elder_bull": {
-      "freq": 0.16666666666666666,
-      "mean_gain": 5.87664532661438
-    },
-    "ret_4h": {
-      "freq": 0.16666666666666666,
-      "mean_gain": 3.89302659034729
+      "mean_gain": 6.54839026927948
     },
     "fib_dist_618": {
       "freq": 0.4166666666666667,
-      "mean_gain": 3.992606592178345
+      "mean_gain": 8.787077903747559
     },
-    "dist_r2": {
-      "freq": 0.5833333333333334,
-      "mean_gain": 3.4209326335362027
-    },
-    "atr_14": {
-      "freq": 0.08333333333333333,
-      "mean_gain": 3.8781254291534424
-    },
-    "pct_dist_to_support": {
+    "trend_consistency_20": {
       "freq": 0.16666666666666666,
-      "mean_gain": 3.650772213935852
+      "mean_gain": 6.763566732406616
     },
-    "dist_kama": {
-      "freq": 0.08333333333333333,
-      "mean_gain": 2.946890115737915
-    },
-    "total_confluence": {
-      "freq": 0.4166666666666667,
-      "mean_gain": 6.165106868743896
-    },
-    "trend_regime": {
-      "freq": 0.08333333333333333,
-      "mean_gain": 5.791479587554932
-    },
-    "volatility_regime": {
-      "freq": 1.0,
-      "mean_gain": 5.587581197420756
-    },
-    "fib_dist_500": {
-      "freq": 0.3333333333333333,
-      "mean_gain": 4.0234984159469604
-    },
-    "dist_r1": {
-      "freq": 0.3333333333333333,
-      "mean_gain": 3.772533357143402
-    },
-    "adx_14": {
+    "range_position_score": {
       "freq": 0.25,
-      "mean_gain": 3.432025909423828
+      "mean_gain": 8.24558162689209
     },
-    "bb_pct_b": {
-      "freq": 0.9166666666666666,
-      "mean_gain": 7.883303989063609
+    "tsi": {
+      "freq": 0.16666666666666666,
+      "mean_gain": 7.142244338989258
     },
-    "aroon_up": {
-      "freq": 0.3333333333333333,
-      "mean_gain": 4.349476754665375
+    "elder_bear": {
+      "freq": 0.08333333333333333,
+      "mean_gain": 5.596218109130859
+    },
+    "cci_20": {
+      "freq": 0.25,
+      "mean_gain": 8.48778247833252
     },
     "dist_ema_21": {
-      "freq": 0.4166666666666667,
-      "mean_gain": 5.0521608829498295
+      "freq": 0.16666666666666666,
+      "mean_gain": 6.564415216445923
     },
-    "prc_trend": {
-      "freq": 1.0,
-      "mean_gain": 7.7269231875737505
+    "total_confluence": {
+      "freq": 0.25,
+      "mean_gain": 11.911576588948568
+    },
+    "macd_hist": {
+      "freq": 0.4166666666666667,
+      "mean_gain": 7.321401500701905
+    },
+    "trix_15": {
+      "freq": 0.08333333333333333,
+      "mean_gain": 7.866620063781738
+    },
+    "kst": {
+      "freq": 0.16666666666666666,
+      "mean_gain": 6.344483137130737
+    },
+    "dist_avwap_100": {
+      "freq": 0.4166666666666667,
+      "mean_gain": 6.891447639465332
+    },
+    "ppo": {
+      "freq": 0.08333333333333333,
+      "mean_gain": 6.601146221160889
+    },
+    "returns_1h_delta_4": {
+      "freq": 0.16666666666666666,
+      "mean_gain": 7.486297607421875
+    },
+    "rsi_acceleration_14": {
+      "freq": 0.16666666666666666,
+      "mean_gain": 11.057014465332031
+    },
+    "atr_percentile": {
+      "freq": 0.3333333333333333,
+      "mean_gain": 8.359163045883179
+    },
+    "rolling_volatility": {
+      "freq": 0.6666666666666666,
+      "mean_gain": 8.668643236160278
     },
     "dist_avwap_50": {
-      "freq": 0.16666666666666666,
-      "mean_gain": 4.537095069885254
-    },
-    "ema_alignment": {
-      "freq": 0.4166666666666667,
-      "mean_gain": 4.049801969528199
-    },
-    "pvt": {
-      "freq": 0.25,
-      "mean_gain": 5.318019866943359
-    },
-    "volume": {
-      "freq": 0.16666666666666666,
-      "mean_gain": 4.313125848770142
-    },
-    "dist_ema_50": {
-      "freq": 0.5833333333333334,
-      "mean_gain": 3.8261160169328963
-    },
-    "obv": {
       "freq": 0.3333333333333333,
-      "mean_gain": 3.9904515743255615
+      "mean_gain": 9.143595218658447
     },
-    "fib_range_pct": {
-      "freq": 0.16666666666666666,
-      "mean_gain": 4.149773359298706
+    "dist_avwap_200": {
+      "freq": 0.4166666666666667,
+      "mean_gain": 8.617691707611083
     },
-    "ppo_signal": {
-      "freq": 0.16666666666666666,
-      "mean_gain": 4.462992310523987
+    "funding_cum_8": {
+      "freq": 0.5,
+      "mean_gain": 7.366978486378987
     },
     "cmf_20": {
       "freq": 0.4166666666666667,
-      "mean_gain": 4.074033784866333
+      "mean_gain": 8.210252571105958
     },
-    "oi_price_divergence": {
+    "stoch_slope": {
       "freq": 0.08333333333333333,
-      "mean_gain": 5.76500129699707
+      "mean_gain": 7.75098180770874
     },
-    "vwap_delta_4": {
-      "freq": 0.08333333333333333,
-      "mean_gain": 3.1796576976776123
-    },
-    "macd_divergence": {
-      "freq": 0.16666666666666666,
-      "mean_gain": 3.6897318363189697
-    },
-    "fisher": {
-      "freq": 0.25,
-      "mean_gain": 4.849927028020223
-    },
-    "vwap_delta_12": {
-      "freq": 0.16666666666666666,
-      "mean_gain": 3.0036689043045044
-    },
-    "prc_momentum": {
-      "freq": 0.8333333333333334,
-      "mean_gain": 5.848669171333313
-    },
-    "rolling_volatility": {
-      "freq": 0.3333333333333333,
-      "mean_gain": 3.865844964981079
-    },
-    "aroon_down": {
-      "freq": 0.16666666666666666,
-      "mean_gain": 4.324260950088501
-    },
-    "vwap_delta_1": {
-      "freq": 0.08333333333333333,
-      "mean_gain": 3.4055516719818115
-    },
-    "ret_12h": {
-      "freq": 0.6666666666666666,
-      "mean_gain": 4.1488518714904785
-    },
-    "dist_avwap_200": {
-      "freq": 0.25,
-      "mean_gain": 4.361465215682983
-    },
-    "dist_ema_9": {
-      "freq": 0.4166666666666667,
-      "mean_gain": 4.298061800003052
-    },
-    "stoch_k": {
-      "freq": 0.08333333333333333,
-      "mean_gain": 6.81021785736084
-    },
-    "macd_hist": {
-      "freq": 0.16666666666666666,
-      "mean_gain": 3.4342074394226074
-    },
-    "dow_sin": {
-      "freq": 0.08333333333333333,
-      "mean_gain": 5.436082363128662
-    },
-    "atr_band_position": {
+    "prc_trend": {
       "freq": 1.0,
-      "mean_gain": 11.813114563624064
+      "mean_gain": 18.78887712955475
+    },
+    "pct_dist_to_resistance": {
+      "freq": 0.5833333333333334,
+      "mean_gain": 7.380728653499058
+    },
+    "smart_money_confluence": {
+      "freq": 0.08333333333333333,
+      "mean_gain": 6.623062610626221
+    },
+    "lower_wick_pct": {
+      "freq": 0.08333333333333333,
+      "mean_gain": 5.377432346343994
+    },
+    "stoch_d": {
+      "freq": 0.16666666666666666,
+      "mean_gain": 5.415522575378418
+    },
+    "rsi_14": {
+      "freq": 0.3333333333333333,
+      "mean_gain": 14.293573141098022
+    },
+    "sqz_on": {
+      "freq": 0.08333333333333333,
+      "mean_gain": 6.119961261749268
+    },
+    "dist_vwap": {
+      "freq": 0.5,
+      "mean_gain": 7.6177778244018555
+    },
+    "volume_atr_efficiency": {
+      "freq": 0.08333333333333333,
+      "mean_gain": 6.969599723815918
+    },
+    "rvi_vol": {
+      "freq": 0.25,
+      "mean_gain": 6.7290293375651045
+    },
+    "vi_minus": {
+      "freq": 0.08333333333333333,
+      "mean_gain": 5.794436931610107
+    },
+    "kst_signal": {
+      "freq": 0.3333333333333333,
+      "mean_gain": 6.804779648780823
+    },
+    "keltner_width": {
+      "freq": 0.4166666666666667,
+      "mean_gain": 6.479702377319336
+    },
+    "dist_ema_200": {
+      "freq": 0.5,
+      "mean_gain": 6.540144125620524
     },
     "candle_pressure": {
-      "freq": 0.08333333333333333,
-      "mean_gain": 3.318671941757202
+      "freq": 0.75,
+      "mean_gain": 7.344940927293566
     },
-    "rolling_buy_ratio": {
+    "funding_slope_8": {
+      "freq": 0.3333333333333333,
+      "mean_gain": 7.086549639701843
+    },
+    "lower_low_count_20": {
       "freq": 0.16666666666666666,
-      "mean_gain": 3.078343391418457
+      "mean_gain": 5.634984493255615
+    },
+    "adx_14": {
+      "freq": 0.5833333333333334,
+      "mean_gain": 7.776109831673758
+    },
+    "fib_dist_500": {
+      "freq": 0.5,
+      "mean_gain": 7.662482897440593
+    },
+    "pvt": {
+      "freq": 0.5,
+      "mean_gain": 7.314860979715983
+    },
+    "ret_24h": {
+      "freq": 0.5,
+      "mean_gain": 7.2683234214782715
+    },
+    "dist_ema_9": {
+      "freq": 0.16666666666666666,
+      "mean_gain": 7.580620765686035
+    },
+    "atr_pct": {
+      "freq": 0.4166666666666667,
+      "mean_gain": 7.063218879699707
+    },
+    "choppiness": {
+      "freq": 0.25,
+      "mean_gain": 7.975862979888916
+    },
+    "prc_smart_money": {
+      "freq": 0.16666666666666666,
+      "mean_gain": 9.966225624084473
+    },
+    "dist_pivot": {
+      "freq": 0.25,
+      "mean_gain": 7.892012596130371
+    },
+    "schaff_tc": {
+      "freq": 0.16666666666666666,
+      "mean_gain": 9.541877031326294
+    },
+    "atr_expansion": {
+      "freq": 0.16666666666666666,
+      "mean_gain": 6.847074031829834
+    },
+    "returns_4h": {
+      "freq": 0.08333333333333333,
+      "mean_gain": 5.7797112464904785
+    },
+    "ultimate_osc": {
+      "freq": 0.25,
+      "mean_gain": 8.615493774414062
+    },
+    "ema_stack_distance": {
+      "freq": 0.6666666666666666,
+      "mean_gain": 8.034396708011627
+    },
+    "elder_bull": {
+      "freq": 0.08333333333333333,
+      "mean_gain": 10.0283203125
+    },
+    "macro_confluence_score": {
+      "freq": 1.0,
+      "mean_gain": 94.4815486272176
+    },
+    "prc_volume": {
+      "freq": 0.5,
+      "mean_gain": 9.139905293782553
+    },
+    "ppo_signal": {
+      "freq": 0.25,
+      "mean_gain": 7.67434565226237
+    },
+    "rsi_21": {
+      "freq": 0.4166666666666667,
+      "mean_gain": 6.351597595214844
+    },
+    "dist_bear_ob": {
+      "freq": 0.5833333333333334,
+      "mean_gain": 7.5305938720703125
+    },
+    "sqz_momentum": {
+      "freq": 0.3333333333333333,
+      "mean_gain": 6.947715997695923
+    },
+    "ichi_cloud_bull": {
+      "freq": 0.08333333333333333,
+      "mean_gain": 14.336076736450195
+    },
+    "rel_perf_24h": {
+      "freq": 0.4166666666666667,
+      "mean_gain": 8.30832347869873
+    },
+    "ema_alignment": {
+      "freq": 0.08333333333333333,
+      "mean_gain": 11.926253318786621
+    },
+    "volatility_skew": {
+      "freq": 0.25,
+      "mean_gain": 7.660508791605632
+    },
+    "fib_dist_382": {
+      "freq": 0.25,
+      "mean_gain": 9.957324663798014
+    },
+    "dist_r2": {
+      "freq": 0.5833333333333334,
+      "mean_gain": 7.271073545728411
+    },
+    "vol_confirm_ratio": {
+      "freq": 0.5,
+      "mean_gain": 7.800581693649292
+    },
+    "elder_bull_bear": {
+      "freq": 0.08333333333333333,
+      "mean_gain": 6.549188137054443
+    },
+    "bb_pct_b": {
+      "freq": 0.16666666666666666,
+      "mean_gain": 15.758515357971191
+    },
+    "dist_r1": {
+      "freq": 0.5833333333333334,
+      "mean_gain": 8.096518107822963
+    },
+    "pct_dist_to_support": {
+      "freq": 0.16666666666666666,
+      "mean_gain": 7.129931211471558
     },
     "prc_total": {
       "freq": 1.0,
-      "mean_gain": 27.427196661631267
+      "mean_gain": 93.57637977600098
     },
-    "stoch_d": {
+    "funding_neutral": {
       "freq": 0.08333333333333333,
-      "mean_gain": 5.647875785827637
+      "mean_gain": 5.317137718200684
     },
-    "rsi_slope_14": {
-      "freq": 0.25,
-      "mean_gain": 3.688666343688965
-    },
-    "ret_24h": {
-      "freq": 0.25,
-      "mean_gain": 3.1693135102589927
-    },
-    "dist_rolling_vwap": {
-      "freq": 0.5,
-      "mean_gain": 4.361307859420776
-    },
-    "fisher_sig": {
+    "trend_confluence": {
       "freq": 0.08333333333333333,
-      "mean_gain": 7.7030487060546875
+      "mean_gain": 14.291337013244629
     },
-    "ichi_above_cloud": {
-      "freq": 0.4166666666666667,
-      "mean_gain": 6.03031849861145
+    "mfi_14": {
+      "freq": 0.08333333333333333,
+      "mean_gain": 11.02840805053711
     },
-    "ppo": {
+    "supertrend_dist": {
       "freq": 0.5,
-      "mean_gain": 3.9965240955352783
+      "mean_gain": 8.23262365659078
     },
-    "elder_bull_bear": {
+    "macd_hist_velocity": {
+      "freq": 0.16666666666666666,
+      "mean_gain": 5.312427043914795
+    },
+    "fib_range_pct": {
+      "freq": 0.9166666666666666,
+      "mean_gain": 8.41092889959162
+    },
+    "close_position": {
+      "freq": 0.08333333333333333,
+      "mean_gain": 7.933536529541016
+    },
+    "fib_dist_236": {
+      "freq": 0.8333333333333334,
+      "mean_gain": 8.561311435699462
+    },
+    "rel_perf_1h": {
+      "freq": 0.08333333333333333,
+      "mean_gain": 6.460925102233887
+    },
+    "dist_s2": {
+      "freq": 1.0,
+      "mean_gain": 7.370678345362346
+    },
+    "higher_high_count_20": {
       "freq": 0.25,
-      "mean_gain": 6.611677964528401
+      "mean_gain": 10.174748738606771
     },
-    "bb_width_percentile": {
+    "stoch_k": {
+      "freq": 0.08333333333333333,
+      "mean_gain": 7.01779317855835
+    },
+    "btc_dist_ema200": {
+      "freq": 1.0,
+      "mean_gain": 7.702452301979065
+    },
+    "aroon_up": {
       "freq": 0.25,
-      "mean_gain": 3.534809112548828
+      "mean_gain": 6.277950604756673
     },
-    "ema_slope_100": {
-      "freq": 0.5,
-      "mean_gain": 4.627088626225789
+    "price_disp_atr_pct": {
+      "freq": 0.16666666666666666,
+      "mean_gain": 11.515718221664429
+    },
+    "volatility_ratio": {
+      "freq": 0.8333333333333334,
+      "mean_gain": 7.336019372940063
     },
     "rvi_sig": {
       "freq": 0.25,
-      "mean_gain": 3.4654885133107505
+      "mean_gain": 6.347463925679524
+    },
+    "momentum_confluence": {
+      "freq": 0.08333333333333333,
+      "mean_gain": 7.2972235679626465
+    },
+    "starc_position": {
+      "freq": 0.4166666666666667,
+      "mean_gain": 15.77825174331665
+    },
+    "volatility_regime": {
+      "freq": 0.3333333333333333,
+      "mean_gain": 8.364179015159607
+    },
+    "ichi_dist_kijun": {
+      "freq": 0.08333333333333333,
+      "mean_gain": 6.152200222015381
+    },
+    "dow_cos": {
+      "freq": 0.4166666666666667,
+      "mean_gain": 7.39627046585083
+    },
+    "price_zscore_200": {
+      "freq": 1.0,
+      "mean_gain": 7.287526925404866
+    },
+    "prc_momentum": {
+      "freq": 0.9166666666666666,
+      "mean_gain": 22.13250173221935
+    },
+    "dow_sin": {
+      "freq": 0.4166666666666667,
+      "mean_gain": 6.578694534301758
+    },
+    "swing_strength_20": {
+      "freq": 0.3333333333333333,
+      "mean_gain": 7.698694109916687
+    },
+    "donchian_position": {
+      "freq": 0.4166666666666667,
+      "mean_gain": 7.9641729354858395
+    },
+    "dist_s1": {
+      "freq": 0.5833333333333334,
+      "mean_gain": 7.281242711203439
+    },
+    "prc_bands": {
+      "freq": 0.3333333333333333,
+      "mean_gain": 9.33746874332428
+    },
+    "rvi_osc": {
+      "freq": 0.08333333333333333,
+      "mean_gain": 5.315075397491455
+    },
+    "bands_confluence": {
+      "freq": 0.16666666666666666,
+      "mean_gain": 7.175575256347656
+    },
+    "rsi_7": {
+      "freq": 0.16666666666666666,
+      "mean_gain": 7.644634246826172
+    },
+    "volatility_kurt": {
+      "freq": 0.16666666666666666,
+      "mean_gain": 7.191466808319092
+    },
+    "dist_ema_100": {
+      "freq": 0.6666666666666666,
+      "mean_gain": 7.758834421634674
+    },
+    "ichi_dist_cloud_top": {
+      "freq": 0.5833333333333334,
+      "mean_gain": 7.989870888846261
+    },
+    "efficiency_ratio_10": {
+      "freq": 1.0,
+      "mean_gain": 27.586717923482258
+    },
+    "atr_band_position": {
+      "freq": 0.6666666666666666,
+      "mean_gain": 9.49245822429657
+    },
+    "gaussian_position": {
+      "freq": 0.16666666666666666,
+      "mean_gain": 5.904180288314819
+    },
+    "btc_4h_return": {
+      "freq": 0.16666666666666666,
+      "mean_gain": 7.013424873352051
+    },
+    "ichi_above_cloud": {
+      "freq": 0.16666666666666666,
+      "mean_gain": 8.064656257629395
+    },
+    "obv": {
+      "freq": 0.6666666666666666,
+      "mean_gain": 7.58287250995636
     }
   }
 }

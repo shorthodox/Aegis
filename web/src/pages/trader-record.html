@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Preload Firebase & Core Modules to prevent module waterfall blocking -->
+    <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js">
+    <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js">
+    <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js">
+    <link rel="modulepreload" href="/web/src/scripts/gatekeeper.js">
+    <link rel="modulepreload" href="/web/src/scripts/auth.js">
+    <link rel="modulepreload" href="/web/src/auth/authManager.js">
+    <link rel="modulepreload" href="/web/src/scripts/iframeGuard.js">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trader Record | AEGIS v1.0</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap"></noscript>
+    <link rel="stylesheet" href="/web/dist/styles.css?v=1.1">
+    <link rel="stylesheet" href="/web/src/styles/main.css">
+    <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"></noscript>
+    <link rel="canonical" href="https://gatekeeper.sbs/web/src/pages/trader-record.html">
+    <meta name="author" content="Animesh Kukreti &amp; Aman Juiyal">
+    <meta name="description" content="AEGIS Trader Engine public signal record — scalping, intraday &amp; swing signals with TP/SL outcomes logged transparently.">
+
+    <style>
+        /* ===== BASE ===== */
+        :root { --amber: #f59e0b; --amber-dim: rgba(245,158,11,0.6); --amber-glow: rgba(245,158,11,0.12); }
+        body {
+            padding-top: 80px;
+            overflow-y: auto;
+            background: #0a0a0c;
+            color: #e2e8f0;
+            font-family: 'Inter', sans-serif;
+        }
+        .fixed-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.8rem 2rem;
+            background: rgba(10, 10, 12, 0.8);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(0, 242, 255, 0.2);
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%;
+            z-index: 1000;
+            box-sizing: border-box;
+        }
+        .logo {
+            font-size: 1.3rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #fff, var(--primary-cyan, #00f2ff));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            text-decoration: none;
+        }
+        .nav-links-centered {
+            display: flex;
+            gap: 2rem;
+            flex: 1;
+            justify-content: center;
+            overflow: hidden;
+            scrollbar-width: none;
+        }
+        .nav-links-centered::-webkit-scrollbar { display: none; }
+        .nav-link {
+            color: var(--dim, #94a3b8);
+            text-decoration: none;
+            font-weight: 500;
+            transition: 0.2s;
+            font-size: 0.9rem;
+        }
+        .nav-link:hover { color: var(--primary-cyan, #00f2ff); }
+        .nav-link.active { color: var(--amber); }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 2rem;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            margin-top: 3rem;
+        }
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+        .footer-links a { color: #6b7280; text-decoration: none; font-size: 0.8rem; }
+        .footer-links a:hover { color: #00f2ff; }
+        .separator { color: #374151; }
+        .footer-proprietor { font-size: 0.75rem; color: #4b5563; margin-bottom: 0.5rem; }
+        .footer p { font-size: 0.7rem; color: #374151; }
+
+        @media (max-width: 768px) {
+            body { padding-top: 70px; }
+            .fixed-header { padding: 0.6rem 1rem; }
+            .nav-links-centered { display: none; }
+            .footer-links { gap: 0.5rem; }
+            .footer-links a, .footer p { font-size: 0.7rem; }
+            .footer { padding: 1.5rem 1rem; }
+        }
+
+        /* ===== TRADER RECORD — .td- namespaced ===== */
+        .td-page {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 3rem 2rem 5rem;
+        }
+        @media (max-width: 1024px) { .td-page { padding: 1.5rem 1rem 4rem; } }
+
+        .td-hero {
+            text-align: center;
+            margin-bottom: 2.5rem;
+        }
+        .td-eyebrow {
+            display: inline-block;
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--amber-dim);
+            font-family: 'JetBrains Mono', monospace;
+            margin-bottom: 0.6rem;
+        }
+        .td-title {
+            font-size: 2.2rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #fff, var(--amber));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            margin: 0.3rem 0 0.8rem;
+        }
+        .td-sub {
+            color: #8892a4;
+            max-width: 680px;
+            margin: 0 auto;
+            line-height: 1.75;
+            font-size: 0.93rem;
+        }
+
+        /* Disclaimer */
+        .td-disclaimer {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            background: rgba(255,200,0,0.06);
+            border: 1px solid rgba(255,200,0,0.22);
+            border-radius: 12px;
+            padding: 0.9rem 1.2rem;
+            margin-bottom: 2.5rem;
+            font-size: 0.82rem;
+            color: rgba(255,220,100,0.85);
+            line-height: 1.65;
+        }
+        .td-disclaimer i { flex-shrink: 0; margin-top: 0.12rem; color: rgba(255,200,0,0.7); }
+
+        /* Summary strip */
+        .td-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2.5rem;
+        }
+        .td-stat {
+            background: rgba(0,0,0,0.45);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 14px;
+            padding: 1.1rem 1rem;
+            text-align: center;
+        }
+        .td-stat-value {
+            font-size: 1.6rem;
+            font-weight: 800;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--amber);
+            display: block;
+            margin-bottom: 0.3rem;
+        }
+        .td-stat-value.td-win  { color: #00ff88; }
+        .td-stat-value.td-loss { color: #ff5555; }
+        .td-stat-value.td-open { color: #00f2ff; }
+        .td-stat-value.td-na   { color: #6b7280; font-size: 1rem; padding-top: 0.35rem; }
+        .td-stat-label {
+            font-size: 0.68rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: #6b7280;
+            font-weight: 600;
+        }
+        .td-stat-sub {
+            font-size: 0.65rem;
+            color: #4b5563;
+            margin-top: 0.2rem;
+            line-height: 1.45;
+        }
+
+        /* Table */
+        .td-table-wrap {
+            overflow-x: auto;
+            border-radius: 14px;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        .td-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: rgba(0,0,0,0.4);
+            font-size: 0.85rem;
+        }
+        .td-table thead tr {
+            border-bottom: 1px solid rgba(245,158,11,0.18);
+            background: rgba(0,0,0,0.6);
+        }
+        .td-table th {
+            padding: 0.9rem 1rem;
+            text-align: left;
+            font-size: 0.68rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--amber-dim);
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .td-table td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            color: #c0cad8;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem;
+            white-space: nowrap;
+        }
+        .td-table tbody tr:hover { background: rgba(245,158,11,0.03); }
+        .td-table tbody tr:last-child td { border-bottom: none; }
+
+        /* Outcome badges */
+        .td-badge {
+            display: inline-block;
+            padding: 0.15rem 0.55rem;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+        .td-badge-win  { background: rgba(0,255,136,0.12); color: #00ff88; border: 1px solid rgba(0,255,136,0.25); }
+        .td-badge-loss { background: rgba(255,85,85,0.12);  color: #ff5555; border: 1px solid rgba(255,85,85,0.25); }
+        .td-badge-open {
+            background: rgba(0,242,255,0.08);
+            color: #00f2ff;
+            border: 1px solid rgba(0,242,255,0.2);
+            animation: td-pulse 2s ease-in-out infinite;
+        }
+        @keyframes td-pulse { 0%,100% { opacity:1; } 50% { opacity:0.45; } }
+
+        /* Direction chip */
+        .td-dir-buy  { color: #00ff88; font-weight: 700; }
+        .td-dir-sell { color: #ff5555; font-weight: 700; }
+
+        /* Mode chip */
+        .td-mode {
+            display: inline-block;
+            padding: 0.1rem 0.45rem;
+            border-radius: 6px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            background: rgba(245,158,11,0.1);
+            color: var(--amber);
+            border: 1px solid rgba(245,158,11,0.2);
+        }
+        .td-mode.intraday { background: rgba(139,92,246,0.1); color: #a78bfa; border-color: rgba(139,92,246,0.2); }
+        .td-mode.swing    { background: rgba(0,242,255,0.08); color: #00f2ff; border-color: rgba(0,242,255,0.2); }
+
+        /* Loading / empty states */
+        .td-loading, .td-empty {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: #4b5563;
+        }
+        .td-loading i { font-size: 2rem; color: var(--amber-dim); animation: td-spin 1s linear infinite; }
+        .td-empty i   { font-size: 2.5rem; color: rgba(245,158,11,0.2); margin-bottom: 1rem; }
+        .td-empty h3  { color: #374151; font-size: 1rem; margin-bottom: 0.5rem; }
+        .td-empty p   { font-size: 0.82rem; line-height: 1.75; max-width: 500px; margin: 0 auto; }
+        @keyframes td-spin { to { transform: rotate(360deg); } }
+
+        /* Filter bar */
+        .td-filter-btn {
+            padding: 0.3rem 0.75rem;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 20px;
+            color: #6b7280;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+            letter-spacing: 0.04em;
+        }
+        .td-filter-btn:hover  { border-color: rgba(245,158,11,0.3); color: var(--amber); }
+        .td-filter-btn.active { background: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.4); color: var(--amber); }
+
+        /* Panel header */
+        .td-panel {
+            background: rgba(0,0,0,0.2);
+            border: 1px solid rgba(245,158,11,0.1);
+            border-radius: 16px;
+            overflow: hidden;
+        }
+        .td-panel-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1rem 1.2rem;
+            background: rgba(0,0,0,0.3);
+            border-bottom: 1px solid rgba(245,158,11,0.1);
+            position: sticky;
+            top: 80px;
+            z-index: 10;
+            backdrop-filter: blur(12px);
+        }
+        .td-panel-body { padding: 1.2rem; }
+
+        .td-winrate-note {
+            font-size: 0.68rem;
+            color: #4b5563;
+            text-align: center;
+            margin-top: 1.8rem;
+            line-height: 1.7;
+        }
+
+        @media (max-width: 600px) {
+            .td-page { padding: 2rem 1rem 4rem; }
+            .td-title { font-size: 1.7rem; }
+            .td-table th, .td-table td { padding: 0.65rem 0.6rem; font-size: 0.75rem; }
+            .td-summary { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Fixed Glass Header -->
+    <header class="fixed-header" id="main-nav">
+        <a href="/web/src/pages/index.html" class="logo" style="text-decoration:none;">⚡ AEGIS <span>v1.0</span> <span style="font-size:0.52rem;font-weight:800;font-family:monospace;letter-spacing:0.1em;background:rgba(0,242,255,0.1);border:1px solid rgba(0,242,255,0.3);color:#00f2ff;padding:1px 6px;border-radius:4px;text-transform:uppercase;vertical-align:middle;margin-left:5px;position:relative;top:-1px;">BETA</span></a>
+
+        <nav class="nav-links-centered" aria-label="Main navigation">
+            <a href="/web/src/pages/index.html" class="nav-link">Home</a>
+            <a href="/web/src/pages/index.html#sentinel" class="nav-link">Sentinel</a>
+            <a href="/web/src/pages/index.html#cockpit" class="nav-link">Cockpit</a>
+            <a href="/web/src/pages/index.html#security" class="nav-link">Security</a>
+            <a href="/web/src/pages/review.html" class="nav-link">Reviews</a>
+            <a href="/web/src/pages/pricing.html" class="nav-link">Pricing</a>
+            <a href="/web/src/pages/track-record.html" class="nav-link">Live Record</a>
+            <a href="/web/src/pages/trader-record.html" class="nav-link active">Trader Record</a>
+        </nav>
+
+        <div id="authButtonContainer" class="nav-auth-desktop" style="display:flex;align-items:center;gap:0.5rem;">
+            <button id="portalBtn" class="nav-btn-login">
+                <i class="fas fa-user-shield"></i> Sign In
+            </button>
+            <button id="dashboardBtn" class="nav-btn-dashboard" style="display:none;">
+                <i class="fas fa-chart-line"></i> Dashboard
+            </button>
+            <button id="signOutBtn" class="nav-btn-signout" style="display:none;">
+                <i class="fas fa-sign-out-alt"></i> Sign Out
+            </button>
+            <button id="createAccountBtn" class="nav-btn-cta">
+                Get Started
+            </button>
+        </div>
+
+        <button class="nav-hamburger-btn" id="navHamburger" aria-label="Toggle navigation" aria-expanded="false">
+            <i class="fas fa-bars"></i>
+        </button>
+    </header>
+
+    <div class="nav-mobile-drawer" id="navMobileDrawer">
+        <a href="/web/src/pages/index.html" class="nav-mobile-link"><i class="fas fa-home"></i> Home</a>
+        <a href="/web/src/pages/index.html#sentinel" class="nav-mobile-link" style="padding-left:2.2rem;font-size:0.82rem;opacity:0.85;"><i class="fas fa-satellite-dish"></i> Sentinel</a>
+        <a href="/web/src/pages/index.html#cockpit" class="nav-mobile-link" style="padding-left:2.2rem;font-size:0.82rem;opacity:0.85;"><i class="fas fa-desktop"></i> Cockpit</a>
+        <a href="/web/src/pages/index.html#security" class="nav-mobile-link" style="padding-left:2.2rem;font-size:0.82rem;opacity:0.85;"><i class="fas fa-shield-alt"></i> Security</a>
+        <a href="/web/src/pages/review.html" class="nav-mobile-link"><i class="fas fa-star"></i> Reviews</a>
+        <a href="/web/src/pages/pricing.html" class="nav-mobile-link"><i class="fas fa-tag"></i> Pricing</a>
+        <a href="/web/src/pages/track-record.html" class="nav-mobile-link"><i class="fas fa-chart-bar"></i> Live Record</a>
+        <a href="/web/src/pages/trader-record.html" class="nav-mobile-link mobile-active"><i class="fas fa-chart-line"></i> Trader Record</a>
+        <div class="nav-mobile-auth">
+            <button class="nav-btn-login" id="mPortalProxy"><i class="fas fa-user-shield"></i> Sign In</button>
+            <button class="nav-btn-dashboard" id="mDashProxy" style="display:none;"><i class="fas fa-chart-line"></i> Dashboard</button>
+            <button class="nav-btn-signout" id="mSignoutProxy" style="display:none;"><i class="fas fa-sign-out-alt"></i> Sign Out</button>
+            <button class="nav-btn-cta" id="mCtaProxy">Get Started</button>
+        </div>
+    </div>
+
+    <!-- Hero -->
+    <div class="td-page">
+        <div class="td-hero">
+            <span class="td-eyebrow">AEGIS Trader Engine · Public Signal Log</span>
+            <h1 class="td-title">Trader Engine Record</h1>
+            <p class="td-sub">Every scalping, intraday &amp; swing signal fired by the AEGIS Trader Engine — entry, TP, SL, and outcome. Open positions tracked live. No cherry-picking.</p>
+        </div>
+
+        <div class="td-disclaimer">
+            <i class="fas fa-exclamation-triangle"></i>
+            <span><strong>Not financial advice.</strong> Past performance does not guarantee future results. Crypto markets carry significant risk. Never trade more than you can afford to lose.</span>
+        </div>
+
+        <!-- Summary stats -->
+        <div class="td-summary">
+            <div class="td-stat">
+                <span class="td-stat-value" id="tdTotalVal">—</span>
+                <div class="td-stat-label">Total Signals</div>
+                <div class="td-stat-sub" id="tdSinceVal">loading…</div>
+            </div>
+            <div class="td-stat">
+                <span class="td-stat-value td-win" id="tdWinsVal">—</span>
+                <div class="td-stat-label">Wins</div>
+                <div class="td-stat-sub">TP hit</div>
+            </div>
+            <div class="td-stat">
+                <span class="td-stat-value td-loss" id="tdLossVal">—</span>
+                <div class="td-stat-label">Losses</div>
+                <div class="td-stat-sub">SL hit</div>
+            </div>
+            <div class="td-stat">
+                <span class="td-stat-value td-open" id="tdOpenVal">—</span>
+                <div class="td-stat-label">Open</div>
+                <div class="td-stat-sub">Active positions</div>
+            </div>
+            <div class="td-stat">
+                <span class="td-stat-value td-na" id="tdRateVal">—</span>
+                <div class="td-stat-label">Win Rate</div>
+                <div class="td-stat-sub">closed signals only</div>
+            </div>
+            <div class="td-stat">
+                <span class="td-stat-value" id="tdAvgPnlVal">—</span>
+                <div class="td-stat-label">Avg PnL</div>
+                <div class="td-stat-sub">closed signals</div>
+            </div>
+        </div>
+
+        <!-- Signal table panel -->
+        <div class="td-panel">
+            <div class="td-panel-header">
+                <i class="fas fa-chart-line" style="color:var(--amber);font-size:1.1rem;"></i>
+                <div>
+                    <div style="font-size:0.9rem;font-weight:800;color:#fff;letter-spacing:0.05em;">AEGIS Trader Engine</div>
+                    <div style="font-size:0.65rem;color:#6b5a2e;letter-spacing:0.1em;text-transform:uppercase;">60 tokens · scalping / intraday / swing · dual-model ML</div>
+                </div>
+                <a href="#" onclick="window._tdRefresh && window._tdRefresh();return false;" style="margin-left:auto;font-size:0.7rem;color:var(--amber-dim);text-decoration:none;" title="Refresh">&#8635;</a>
+            </div>
+            <div class="td-panel-body">
+
+                <!-- Filter bar -->
+                <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:1.5rem;align-items:center;">
+                    <span style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.1em;color:#4b5563;margin-right:0.25rem;">Direction:</span>
+                    <button class="td-filter-btn active" data-td-dir="ALL">All</button>
+                    <button class="td-filter-btn" data-td-dir="BUY">Buy</button>
+                    <button class="td-filter-btn" data-td-dir="SELL">Sell</button>
+                    <span style="margin:0 0.5rem;color:#374151;">|</span>
+                    <span style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.1em;color:#4b5563;margin-right:0.25rem;">Outcome:</span>
+                    <button class="td-filter-btn active" data-td-out="ALL">All</button>
+                    <button class="td-filter-btn" data-td-out="WIN">Wins</button>
+                    <button class="td-filter-btn" data-td-out="LOSS">Losses</button>
+                    <button class="td-filter-btn" data-td-out="OPEN">Open</button>
+                    <span style="margin:0 0.5rem;color:#374151;">|</span>
+                    <span style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.1em;color:#4b5563;margin-right:0.25rem;">Mode:</span>
+                    <button class="td-filter-btn active" data-td-mode="ALL">All</button>
+                    <button class="td-filter-btn" data-td-mode="scalping">Scalping</button>
+                    <button class="td-filter-btn" data-td-mode="intraday">Intraday</button>
+                    <button class="td-filter-btn" data-td-mode="swing">Swing</button>
+                </div>
+
+                <!-- Loading -->
+                <div id="tdLoading" class="td-loading">
+                    <i class="fas fa-circle-notch"></i>
+                    <p style="margin-top:1rem;font-size:0.85rem;">Loading trader signals…</p>
+                </div>
+
+                <!-- Table -->
+                <div id="tdTableWrap" class="td-table-wrap" style="display:none;">
+                    <table class="td-table" id="tdTable">
+                        <thead>
+                            <tr>
+                                <th>Timestamp (UTC)</th>
+                                <th>Token</th>
+                                <th>Mode</th>
+                                <th>Direction</th>
+                                <th>Entry</th>
+                                <th>TP</th>
+                                <th>SL</th>
+                                <th>Exit</th>
+                                <th>PnL %</th>
+                                <th>Confidence</th>
+                                <th>Outcome</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tdTableBody"></tbody>
+                    </table>
+                </div>
+
+                <!-- Empty -->
+                <div id="tdEmpty" class="td-empty" style="display:none;">
+                    <i class="fas fa-chart-line"></i>
+                    <h3>No signals yet</h3>
+                    <p>The Trader Engine hasn't fired any signals yet. As it scans and fires signals, they will appear here automatically.</p>
+                </div>
+
+                <p class="td-winrate-note" id="tdWinrateNote" style="display:none;"></p>
+
+            </div><!-- /.td-panel-body -->
+        </div><!-- /.td-panel -->
+    </div><!-- /.td-page -->
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-links">
+            <a href="/web/src/pages/terms.html">Terms of Service</a>
+            <span class="separator">•</span>
+            <a href="/web/src/pages/conditions.html">Conditions</a>
+            <span class="separator">•</span>
+            <a href="/web/src/pages/privacy_policy.html">Privacy Policy</a>
+            <span class="separator">•</span>
+            <a href="/web/src/pages/refund_policy.html">Refund Policy</a>
+            <span class="separator">•</span>
+            <a href="/web/src/pages/risk_disclosure.html">Risk Disclosure</a>
+            <span class="separator">•</span>
+            <a href="/web/src/pages/track-record.html" style="color:#00f2ff;">Live Record</a>
+            <span class="separator">•</span>
+            <a href="/web/src/pages/trader-record.html" style="color:var(--amber);">Trader Record</a>
+        </div>
+        <div class="footer-proprietor">
+            Operated by <strong>Animesh Kukreti &amp; Aman Juiyal</strong> &nbsp;|&nbsp; Dehradun, Uttarakhand, India
+        </div>
+        <p>© 2026 Animesh Kukreti &amp; Aman Juiyal &nbsp;·&nbsp; AEGIS v1.0 — Sovereign Intelligence Terminal</p>
+    </footer>
+
+    <!-- Hamburger nav -->
+    <script>
+    (function(){
+        var btn = document.getElementById('navHamburger');
+        var drawer = document.getElementById('navMobileDrawer');
+        if (!btn || !drawer) return;
+        function closeDrawer() {
+            drawer.classList.remove('open');
+            drawer.setAttribute('aria-hidden','true');
+            btn.setAttribute('aria-expanded','false');
+            var ico = btn.querySelector('i');
+            if (ico) ico.className = 'fas fa-bars';
+        }
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var open = drawer.classList.toggle('open');
+            drawer.setAttribute('aria-hidden', !open);
+            btn.setAttribute('aria-expanded', open);
+            var ico = btn.querySelector('i');
+            if (ico) ico.className = open ? 'fas fa-times' : 'fas fa-bars';
+        });
+        document.addEventListener('click', function(e) {
+            if (!btn.contains(e.target) && !drawer.contains(e.target)) closeDrawer();
+        });
+        drawer.querySelectorAll('.nav-mobile-link').forEach(function(a) {
+            a.addEventListener('click', closeDrawer);
+        });
+        function proxyAuth(proxyId, targetId) {
+            var proxy = document.getElementById(proxyId);
+            var target = document.getElementById(targetId);
+            if (!proxy || !target) return;
+            proxy.style.display = target.style.display || '';
+            proxy.addEventListener('click', function() { closeDrawer(); target.click(); });
+            new MutationObserver(function() {
+                proxy.style.display = target.style.display;
+            }).observe(target, { attributes: true, attributeFilter: ['style'] });
+        }
+        proxyAuth('mPortalProxy',  'portalBtn');
+        proxyAuth('mDashProxy',    'dashboardBtn');
+        proxyAuth('mSignoutProxy', 'signOutBtn');
+        proxyAuth('mCtaProxy',     'createAccountBtn');
+    })();
+    </script>
+
+    <!-- Auth nav state -->
+    <script type="module">
+        import { initSignInUI, openSignInModal } from '../scripts/signin-ui.js';
+        import { initSignUpUI, openSignUpModal } from '../scripts/signup-ui.js';
+        import { handleLogout, subscribeToAuthState } from '../scripts/auth.js';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            try { initSignInUI(); } catch(e) {}
+            try { initSignUpUI(); } catch(e) {}
+
+            const portalBtn        = document.getElementById('portalBtn');
+            const dashboardBtn     = document.getElementById('dashboardBtn');
+            const signOutBtn       = document.getElementById('signOutBtn');
+            const createAccountBtn = document.getElementById('createAccountBtn');
+
+            const show = el => { if (el) el.style.display = 'inline-flex'; };
+            const hide = el => { if (el) el.style.display = 'none'; };
+
+            subscribeToAuthState(state => {
+                if (state.authenticated) {
+                    hide(portalBtn); hide(createAccountBtn);
+                    show(dashboardBtn); show(signOutBtn);
+                } else {
+                    show(portalBtn); show(createAccountBtn);
+                    hide(dashboardBtn); hide(signOutBtn);
+                }
+            });
+
+            if (portalBtn)        portalBtn.addEventListener('click', e => { e.preventDefault(); openSignInModal(); });
+            if (createAccountBtn) createAccountBtn.addEventListener('click', e => { e.preventDefault(); openSignUpModal(); });
+            if (dashboardBtn)     dashboardBtn.addEventListener('click', e => { e.preventDefault(); window.location.href = '/web/src/pages/dashboard.html'; });
+            if (signOutBtn)       signOutBtn.addEventListener('click', async e => {
+                e.preventDefault();
+                ['authToken','access_token','authenticated','userSession','refresh_token'].forEach(k => localStorage.removeItem(k));
+                try { await handleLogout(); } catch(_) {}
+                window.location.href = '/web/src/pages/index.html';
+            });
+        });
+    </script>
+
+    <!-- Trader Record data logic -->
+    <script>
+    (function () {
+        var _allSignals = [];
+        var _filterDir  = 'ALL';
+        var _filterOut  = 'ALL';
+        var _filterMode = 'ALL';
+
+        function fmt(n, decimals) {
+            if (n == null || isNaN(n)) return '—';
+            return Number(n).toFixed(decimals !== undefined ? decimals : 2);
+        }
+
+        function fmtPnl(v) {
+            if (v == null || isNaN(v)) return '<span style="color:#4b5563">—</span>';
+            var n = Number(v);
+            var color = n > 0 ? '#00ff88' : n < 0 ? '#ff5555' : '#6b7280';
+            return '<span style="color:' + color + '">' + (n > 0 ? '+' : '') + n.toFixed(2) + '%</span>';
+        }
+
+        function fmtTime(iso) {
+            if (!iso) return '—';
+            var d = new Date(iso);
+            if (isNaN(d)) return iso;
+            return d.toISOString().replace('T', ' ').slice(0, 16);
+        }
+
+        function modeBadge(mode) {
+            if (!mode) return '—';
+            var cls = mode.startsWith('scalping') ? '' : mode === 'swing' ? ' swing' : ' intraday';
+            var label = mode === 'scalping_15m' ? 'Scalp 15m' : mode.charAt(0).toUpperCase() + mode.slice(1);
+            return '<span class="td-mode' + cls + '">' + label + '</span>';
+        }
+
+        function outcomeBadge(outcome, reason) {
+            if (outcome === 'WIN')  return '<span class="td-badge td-badge-win">✓ TP Hit</span>';
+            if (outcome === 'LOSS') return '<span class="td-badge td-badge-loss">✕ SL Hit</span>';
+            return '<span class="td-badge td-badge-open">● Open</span>';
+        }
+
+        function dirChip(dir) {
+            if (!dir) return '—';
+            var cls = dir === 'BUY' ? 'td-dir-buy' : 'td-dir-sell';
+            return '<span class="' + cls + '">' + dir + '</span>';
+        }
+
+        function matchesMode(mode) {
+            if (_filterMode === 'ALL') return true;
+            if (_filterMode === 'scalping') return mode && mode.startsWith('scalping');
+            return mode === _filterMode;
+        }
+
+        function render() {
+            var visible = _allSignals.filter(function (s) {
+                if (_filterDir !== 'ALL' && s.direction !== _filterDir) return false;
+                if (_filterOut !== 'ALL' && s.outcome !== _filterOut) return false;
+                if (!matchesMode(s.mode)) return false;
+                return true;
+            });
+
+            var tbody = document.getElementById('tdTableBody');
+            var wrap  = document.getElementById('tdTableWrap');
+            var empty = document.getElementById('tdEmpty');
+
+            if (!visible.length) {
+                wrap.style.display  = 'none';
+                empty.style.display = 'block';
+                return;
+            }
+
+            var rows = visible.map(function (s) {
+                return '<tr>' +
+                    '<td>' + fmtTime(s.entry_time) + '</td>' +
+                    '<td style="color:#e2e8f0;font-weight:600;">' + (s.symbol || '—') + '</td>' +
+                    '<td>' + modeBadge(s.mode) + '</td>' +
+                    '<td>' + dirChip(s.direction) + '</td>' +
+                    '<td>' + fmt(s.entry_price, 4) + '</td>' +
+                    '<td style="color:#00ff88;">' + fmt(s.take_profit, 4) + '</td>' +
+                    '<td style="color:#ff5555;">' + fmt(s.stop_loss, 4) + '</td>' +
+                    '<td>' + fmt(s.exit_price, 4) + '</td>' +
+                    '<td>' + fmtPnl(s.pnl_pct) + '</td>' +
+                    '<td>' + (s.ai_prob != null ? fmt(s.ai_prob * 100, 1) + '%' : '—') + '</td>' +
+                    '<td>' + outcomeBadge(s.outcome, s.exit_reason) + '</td>' +
+                    '</tr>';
+            }).join('');
+
+            tbody.innerHTML = rows;
+            wrap.style.display  = '';
+            empty.style.display = 'none';
+
+            var note = document.getElementById('tdWinrateNote');
+            if (note) {
+                note.style.display = '';
+                note.textContent = 'Showing ' + visible.length + ' of ' + _allSignals.length + ' signals. Win rate computed from closed signals only.';
+            }
+        }
+
+        function updateStats(summary) {
+            var set = function(id, val) { var el = document.getElementById(id); if (el) el.textContent = val; };
+            set('tdTotalVal', summary.total_signals != null ? summary.total_signals : '—');
+            set('tdWinsVal',  summary.wins  != null ? summary.wins  : '—');
+            set('tdLossVal',  summary.losses != null ? summary.losses : '—');
+            set('tdOpenVal',  summary.open   != null ? summary.open   : '—');
+            set('tdRateVal',  summary.win_rate_pct != null ? summary.win_rate_pct.toFixed(1) + '%' : '—');
+            var avgEl = document.getElementById('tdAvgPnlVal');
+            if (avgEl) {
+                if (summary.avg_pnl_pct != null) {
+                    var v = Number(summary.avg_pnl_pct);
+                    avgEl.textContent = (v > 0 ? '+' : '') + v.toFixed(2) + '%';
+                    avgEl.style.color = v > 0 ? '#00ff88' : v < 0 ? '#ff5555' : '';
+                } else {
+                    avgEl.textContent = '—';
+                }
+            }
+            var sinceEl = document.getElementById('tdSinceVal');
+            if (sinceEl && summary.tracking_since) {
+                sinceEl.textContent = 'since ' + fmtTime(summary.tracking_since);
+            }
+        }
+
+        function load() {
+            fetch('/api/trader/track-record')
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    document.getElementById('tdLoading').style.display = 'none';
+                    _allSignals = data.signals || [];
+                    if (data.summary) updateStats(data.summary);
+                    render();
+                })
+                .catch(function (err) {
+                    document.getElementById('tdLoading').innerHTML =
+                        '<i class="fas fa-exclamation-circle" style="color:#ff5555;"></i>' +
+                        '<p style="margin-top:1rem;font-size:0.85rem;color:#ff5555;">Failed to load signals. Is the server running?</p>';
+                });
+        }
+
+        window._tdRefresh = load;
+
+        document.addEventListener('DOMContentLoaded', function () {
+            // Direction filters
+            document.querySelectorAll('[data-td-dir]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    document.querySelectorAll('[data-td-dir]').forEach(function (b) { b.classList.remove('active'); });
+                    btn.classList.add('active');
+                    _filterDir = btn.getAttribute('data-td-dir');
+                    render();
+                });
+            });
+
+            // Outcome filters
+            document.querySelectorAll('[data-td-out]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    document.querySelectorAll('[data-td-out]').forEach(function (b) { b.classList.remove('active'); });
+                    btn.classList.add('active');
+                    _filterOut = btn.getAttribute('data-td-out');
+                    render();
+                });
+            });
+
+            // Mode filters
+            document.querySelectorAll('[data-td-mode]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    document.querySelectorAll('[data-td-mode]').forEach(function (b) { b.classList.remove('active'); });
+                    btn.classList.add('active');
+                    _filterMode = btn.getAttribute('data-td-mode');
+                    render();
+                });
+            });
+
+            load();
+            setInterval(load, 30000);
+        });
+    })();
+    </script>
+
+</body>
+</html>
