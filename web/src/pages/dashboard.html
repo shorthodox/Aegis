@@ -440,6 +440,23 @@
                     </div>
                 </a>
 
+                <!-- GROUP: LEARN -->
+                <div class="sidebar-group-label">Learn</div>
+
+                <a href="javascript:void(0)" onclick="switchRoom('guide')"
+                    class="nav-room block glass-panel px-3 py-2.5 rounded-xl text-gray-400 hover:text-white hover:border-amber-400/40 hover:shadow-[0_0_12px_rgba(251,191,36,0.1)] transition-all group min-h-[44px]"
+                    data-room="guide">
+                    <div class="flex items-center gap-2.5">
+                        <div class="icon-container w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center group-hover:bg-amber-500/20 transition-colors flex-shrink-0">
+                            <i class="fas fa-graduation-cap text-xs text-amber-500/50 group-hover:text-amber-400"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="font-bold uppercase tracking-wide text-xs">Risk Guide</div>
+                            <div class="text-[10px] text-gray-500 truncate">Capital &amp; Risk Management</div>
+                        </div>
+                    </div>
+                </a>
+
                 <!-- GROUP: SYSTEM -->
                 <div class="sidebar-group-label">System</div>
 
@@ -1202,6 +1219,476 @@
                     </div>
                 </div>
             </div>
+
+            <!-- ROOM: RISK GUIDE -->
+            <div id="room-guide" class="room-section hidden space-y-6">
+                <div class="room-header" style="--room-accent:rgba(251,191,36,0.5);">
+                    <div class="room-header-row">
+                        <h2><i class="fas fa-graduation-cap text-amber-400"></i> Risk &amp; Capital Management</h2>
+                    </div>
+                    <div class="room-subtitle">How to size positions, protect your capital, and use AEGIS signals profitably</div>
+                    <div class="beginner-tip" style="border-color:rgba(251,191,36,0.2);background:rgba(251,191,36,0.04);">
+                        <i class="fas fa-lightbulb" style="color:rgba(251,191,36,0.6);"></i>
+                        <span><strong>Save and re-read this regularly.</strong> These rules are what separate traders who last for years from traders who blow up in weeks. The signals tell you <em>what</em> to trade — this guide tells you <em>how much</em> and <em>how safely</em>.</span>
+                    </div>
+                </div>
+
+                <!-- ── GOLDEN RULES BANNER ─────────────────────────────────── -->
+                <div class="glass-panel p-5 rounded-xl border border-amber-500/20 bg-amber-500/[0.02]">
+                    <h3 class="text-xs uppercase tracking-widest text-amber-400/80 font-bold mb-4 flex items-center gap-2">
+                        <i class="fas fa-star"></i> The Five Golden Rules — Memorise These
+                    </h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                        <div class="bg-black/30 rounded-xl p-3 border border-white/5 text-center">
+                            <div class="text-2xl font-black text-amber-400 mb-1">1–2%</div>
+                            <div class="text-[11px] text-gray-400 leading-tight">Maximum risk per trade, never more</div>
+                        </div>
+                        <div class="bg-black/30 rounded-xl p-3 border border-white/5 text-center">
+                            <div class="text-2xl font-black text-cyan-400 mb-1">1:1.5</div>
+                            <div class="text-[11px] text-gray-400 leading-tight">Minimum reward:risk on every trade</div>
+                        </div>
+                        <div class="bg-black/30 rounded-xl p-3 border border-white/5 text-center">
+                            <div class="text-2xl font-black text-green-400 mb-1">70%+</div>
+                            <div class="text-[11px] text-gray-400 leading-tight">Minimum AI confidence to trade real money</div>
+                        </div>
+                        <div class="bg-black/30 rounded-xl p-3 border border-white/5 text-center">
+                            <div class="text-2xl font-black text-purple-400 mb-1">5%</div>
+                            <div class="text-[11px] text-gray-400 leading-tight">Max total risk across all open positions</div>
+                        </div>
+                        <div class="bg-black/30 rounded-xl p-3 border border-white/5 text-center">
+                            <div class="text-2xl font-black text-red-400 mb-1">10%</div>
+                            <div class="text-[11px] text-gray-400 leading-tight">Daily drawdown limit — stop trading for the day</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── CAPITAL TIERS ───────────────────────────────────────── -->
+                <div class="glass-panel p-5 rounded-xl">
+                    <h3 class="text-xs uppercase tracking-widest text-gray-400 font-bold mb-4 flex items-center gap-2">
+                        <i class="fas fa-layer-group text-cyan-400"></i> Capital Tiers — Where Do You Start?
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                        <!-- Micro -->
+                        <div class="rounded-xl p-4 border border-white/10 bg-black/20">
+                            <div class="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Tier 1</div>
+                            <div class="text-lg font-black text-white mb-0.5">Micro</div>
+                            <div class="text-sm font-bold text-amber-400 mb-3">$50 – $500</div>
+                            <ul class="space-y-1.5 text-[11px] text-gray-400 leading-relaxed">
+                                <li class="flex gap-2"><span class="text-amber-400 flex-shrink-0">→</span>Paper trade 90% of the time</li>
+                                <li class="flex gap-2"><span class="text-amber-400 flex-shrink-0">→</span>Use 1% risk ($0.50 – $5 per trade)</li>
+                                <li class="flex gap-2"><span class="text-amber-400 flex-shrink-0">→</span>Goal: build habits, not profits</li>
+                                <li class="flex gap-2"><span class="text-amber-400 flex-shrink-0">→</span>Only conservative signals (AI conf &gt;75%)</li>
+                            </ul>
+                        </div>
+                        <!-- Starter -->
+                        <div class="rounded-xl p-4 border border-cyan-500/25 bg-cyan-500/[0.03]">
+                            <div class="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70 mb-1">Tier 2</div>
+                            <div class="text-lg font-black text-white mb-0.5">Starter</div>
+                            <div class="text-sm font-bold text-cyan-400 mb-3">$500 – $2,000</div>
+                            <ul class="space-y-1.5 text-[11px] text-gray-400 leading-relaxed">
+                                <li class="flex gap-2"><span class="text-cyan-400 flex-shrink-0">→</span>Use 1% risk per trade, max 1–2 open</li>
+                                <li class="flex gap-2"><span class="text-cyan-400 flex-shrink-0">→</span>Conservative strategy only (Shield)</li>
+                                <li class="flex gap-2"><span class="text-cyan-400 flex-shrink-0">→</span>Goal: build a consistent routine</li>
+                                <li class="flex gap-2"><span class="text-cyan-400 flex-shrink-0">→</span>Paper trade any new signal type first</li>
+                            </ul>
+                        </div>
+                        <!-- Standard -->
+                        <div class="rounded-xl p-4 border border-green-500/25 bg-green-500/[0.03]">
+                            <div class="text-[10px] font-bold uppercase tracking-widest text-green-500/70 mb-1">Tier 3</div>
+                            <div class="text-lg font-black text-white mb-0.5">Standard</div>
+                            <div class="text-sm font-bold text-green-400 mb-3">$2,000 – $10,000</div>
+                            <ul class="space-y-1.5 text-[11px] text-gray-400 leading-relaxed">
+                                <li class="flex gap-2"><span class="text-green-400 flex-shrink-0">→</span>1–1.5% risk, up to 3 open trades</li>
+                                <li class="flex gap-2"><span class="text-green-400 flex-shrink-0">→</span>Conservative or Balanced strategy</li>
+                                <li class="flex gap-2"><span class="text-green-400 flex-shrink-0">→</span>Start compounding gains systematically</li>
+                                <li class="flex gap-2"><span class="text-green-400 flex-shrink-0">→</span>Review your win rate every 20 trades</li>
+                            </ul>
+                        </div>
+                        <!-- Growth -->
+                        <div class="rounded-xl p-4 border border-purple-500/25 bg-purple-500/[0.03]">
+                            <div class="text-[10px] font-bold uppercase tracking-widest text-purple-500/70 mb-1">Tier 4</div>
+                            <div class="text-lg font-black text-white mb-0.5">Growth</div>
+                            <div class="text-sm font-bold text-purple-400 mb-3">$10,000+</div>
+                            <ul class="space-y-1.5 text-[11px] text-gray-400 leading-relaxed">
+                                <li class="flex gap-2"><span class="text-purple-400 flex-shrink-0">→</span>Up to 2% risk, all three strategies</li>
+                                <li class="flex gap-2"><span class="text-purple-400 flex-shrink-0">→</span>Maintain a detailed trade journal</li>
+                                <li class="flex gap-2"><span class="text-purple-400 flex-shrink-0">→</span>Stop-loss draws down &lt;20% total ever</li>
+                                <li class="flex gap-2"><span class="text-purple-400 flex-shrink-0">→</span>Only move up tiers after 3 profitable months</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── POSITION SIZING ─────────────────────────────────────── -->
+                <div class="glass-panel p-5 rounded-xl">
+                    <h3 class="text-xs uppercase tracking-widest text-gray-400 font-bold mb-4 flex items-center gap-2">
+                        <i class="fas fa-calculator text-green-400"></i> Position Sizing Formula — Step by Step
+                    </h3>
+                    <!-- Formula box -->
+                    <div class="bg-black/40 border border-cyan-500/20 rounded-xl p-4 mb-5 text-center">
+                        <div class="text-[11px] text-gray-500 uppercase tracking-widest mb-2">The Formula</div>
+                        <div class="text-base sm:text-lg font-mono font-bold text-white">
+                            Position Size = <span class="text-cyan-400">(Account × Risk%)</span> ÷ <span class="text-amber-400">(Entry Price − SL Price)</span>
+                        </div>
+                        <div class="text-[11px] text-gray-500 mt-2">The result is the number of units / coins to buy or sell</div>
+                    </div>
+                    <!-- Steps -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
+                        <div class="bg-black/20 rounded-xl p-3 border border-white/5">
+                            <div class="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Step 1</div>
+                            <div class="text-sm font-bold text-white mb-1">Calculate Your Risk $</div>
+                            <div class="text-xs text-gray-400">Multiply your account size by your chosen risk %. Use 1% if you're a beginner.</div>
+                            <div class="mt-2 font-mono text-xs text-cyan-400">$1,000 × 1% = <strong class="text-white">$10</strong></div>
+                        </div>
+                        <div class="bg-black/20 rounded-xl p-3 border border-white/5">
+                            <div class="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Step 2</div>
+                            <div class="text-sm font-bold text-white mb-1">Calculate SL Distance</div>
+                            <div class="text-xs text-gray-400">Subtract the SL price from the entry price shown on the signal card.</div>
+                            <div class="mt-2 font-mono text-xs text-amber-400">$50.00 − $47.50 = <strong class="text-white">$2.50</strong></div>
+                        </div>
+                        <div class="bg-black/20 rounded-xl p-3 border border-white/5">
+                            <div class="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Step 3</div>
+                            <div class="text-sm font-bold text-white mb-1">Divide to Get Units</div>
+                            <div class="text-xs text-gray-400">Divide your risk $ by the SL distance. This is how many units to buy.</div>
+                            <div class="mt-2 font-mono text-xs text-green-400">$10 ÷ $2.50 = <strong class="text-white">4 units</strong></div>
+                        </div>
+                    </div>
+                    <!-- Worked examples table -->
+                    <div class="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Worked Examples</div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs text-left">
+                            <thead>
+                                <tr class="border-b border-white/5">
+                                    <th class="p-2 text-gray-500 font-normal">Account</th>
+                                    <th class="p-2 text-gray-500 font-normal">Risk %</th>
+                                    <th class="p-2 text-gray-500 font-normal">Risk $</th>
+                                    <th class="p-2 text-gray-500 font-normal">Entry</th>
+                                    <th class="p-2 text-gray-500 font-normal">SL</th>
+                                    <th class="p-2 text-gray-500 font-normal">SL Gap</th>
+                                    <th class="p-2 text-gray-500 font-normal font-bold text-white">Position Size</th>
+                                </tr>
+                            </thead>
+                            <tbody class="font-mono divide-y divide-white/5">
+                                <tr class="hover:bg-white/5">
+                                    <td class="p-2 text-gray-300">$500</td>
+                                    <td class="p-2 text-cyan-400">1%</td>
+                                    <td class="p-2 text-amber-400">$5</td>
+                                    <td class="p-2">$1.00</td>
+                                    <td class="p-2 text-red-400">$0.92</td>
+                                    <td class="p-2 text-gray-400">$0.08</td>
+                                    <td class="p-2 text-green-400 font-bold">62 units</td>
+                                </tr>
+                                <tr class="hover:bg-white/5">
+                                    <td class="p-2 text-gray-300">$1,000</td>
+                                    <td class="p-2 text-cyan-400">1%</td>
+                                    <td class="p-2 text-amber-400">$10</td>
+                                    <td class="p-2">$50.00</td>
+                                    <td class="p-2 text-red-400">$47.50</td>
+                                    <td class="p-2 text-gray-400">$2.50</td>
+                                    <td class="p-2 text-green-400 font-bold">4 units</td>
+                                </tr>
+                                <tr class="hover:bg-white/5">
+                                    <td class="p-2 text-gray-300">$2,000</td>
+                                    <td class="p-2 text-cyan-400">1.5%</td>
+                                    <td class="p-2 text-amber-400">$30</td>
+                                    <td class="p-2">$0.20</td>
+                                    <td class="p-2 text-red-400">$0.18</td>
+                                    <td class="p-2 text-gray-400">$0.02</td>
+                                    <td class="p-2 text-green-400 font-bold">1,500 units</td>
+                                </tr>
+                                <tr class="hover:bg-white/5">
+                                    <td class="p-2 text-gray-300">$5,000</td>
+                                    <td class="p-2 text-cyan-400">2%</td>
+                                    <td class="p-2 text-amber-400">$100</td>
+                                    <td class="p-2">$28,000</td>
+                                    <td class="p-2 text-red-400">$26,600</td>
+                                    <td class="p-2 text-gray-400">$1,400</td>
+                                    <td class="p-2 text-green-400 font-bold">0.071 BTC</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="text-[11px] text-gray-500 mt-3">The Terminal (sidebar → Trade Terminal) does all of this automatically — just enter your capital and risk %.</p>
+                </div>
+
+                <!-- ── RISK:REWARD MATH ───────────────────────────────────── -->
+                <div class="glass-panel p-5 rounded-xl">
+                    <h3 class="text-xs uppercase tracking-widest text-gray-400 font-bold mb-1 flex items-center gap-2">
+                        <i class="fas fa-scale-balanced text-purple-400"></i> Risk:Reward — Why the Math Matters
+                    </h3>
+                    <p class="text-xs text-gray-500 mb-4">You don't need to win every trade. You need to win <em>enough</em> — and that number depends on your R:R ratio.</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <!-- R:R table -->
+                        <div>
+                            <div class="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Break-Even Win Rate by R:R</div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-xs text-left">
+                                    <thead>
+                                        <tr class="border-b border-white/5">
+                                            <th class="p-2 text-gray-500 font-normal">R:R Ratio</th>
+                                            <th class="p-2 text-gray-500 font-normal">Min Win Rate</th>
+                                            <th class="p-2 text-gray-500 font-normal">Example: 10 trades</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="font-mono divide-y divide-white/5">
+                                        <tr class="hover:bg-white/5">
+                                            <td class="p-2 text-gray-400">1 : 1</td>
+                                            <td class="p-2 text-red-400">51%</td>
+                                            <td class="p-2 text-gray-500 text-[11px]">6 wins, 4 losses → +$20</td>
+                                        </tr>
+                                        <tr class="hover:bg-white/5 bg-cyan-500/5">
+                                            <td class="p-2 text-cyan-400 font-bold">1 : 1.5</td>
+                                            <td class="p-2 text-green-400 font-bold">40%</td>
+                                            <td class="p-2 text-gray-500 text-[11px]">4 wins, 6 losses → +$0 (break even)</td>
+                                        </tr>
+                                        <tr class="hover:bg-white/5">
+                                            <td class="p-2 text-green-400 font-bold">1 : 2</td>
+                                            <td class="p-2 text-green-400">34%</td>
+                                            <td class="p-2 text-gray-500 text-[11px]">4 wins, 6 losses → +$2 profit</td>
+                                        </tr>
+                                        <tr class="hover:bg-white/5">
+                                            <td class="p-2 text-purple-400 font-bold">1 : 3</td>
+                                            <td class="p-2 text-green-400">26%</td>
+                                            <td class="p-2 text-gray-500 text-[11px]">3 wins, 7 losses → +$2 profit</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p class="text-[11px] text-gray-600 mt-2 italic">AEGIS signals target 1:1.5 to 1:2. The cyan row is the minimum you should accept.</p>
+                        </div>
+                        <!-- R:R explainer -->
+                        <div class="bg-black/20 rounded-xl p-4 border border-white/5">
+                            <div class="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">How to read it</div>
+                            <div class="space-y-3 text-xs text-gray-400 leading-relaxed">
+                                <p><strong class="text-white">R:R 1:2</strong> means for every $1 you risk, you aim to make $2. If your SL is $5 away from entry, your TP should be at least $10 away.</p>
+                                <p>With a 1:2 ratio, even if you <strong class="text-white">lose 6 out of 10 trades</strong>, you still come out profitable: 4 wins × $20 = $80 gained, 6 losses × $10 = $60 lost → <strong class="text-green-400">+$20 net</strong>.</p>
+                                <p>This is why <strong class="text-white">cutting losers fast and letting winners run</strong> is the core principle of every successful trader.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── STRATEGY PROFILES ──────────────────────────────────── -->
+                <div class="glass-panel p-5 rounded-xl">
+                    <h3 class="text-xs uppercase tracking-widest text-gray-400 font-bold mb-1 flex items-center gap-2">
+                        <i class="fas fa-chess text-amber-400"></i> Three Strategy Profiles — Choose Yours
+                    </h3>
+                    <p class="text-xs text-gray-500 mb-4">Pick based on your experience level and account size. You can move up a profile after three months of consistent profitability.</p>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+                        <!-- Shield — Conservative -->
+                        <div class="rounded-xl p-4 border border-cyan-500/25 bg-cyan-500/[0.03]">
+                            <div class="flex items-center gap-2 mb-3">
+                                <div class="w-9 h-9 rounded-xl bg-cyan-500/15 flex items-center justify-center flex-shrink-0">
+                                    <i class="fas fa-shield-alt text-cyan-400"></i>
+                                </div>
+                                <div>
+                                    <div class="font-black text-white text-sm">The Shield</div>
+                                    <div class="text-[10px] text-cyan-400 font-bold uppercase tracking-widest">Conservative</div>
+                                </div>
+                            </div>
+                            <div class="space-y-2 text-xs mb-3">
+                                <div class="flex justify-between"><span class="text-gray-500">Risk per trade</span><span class="text-white font-bold">1% of account</span></div>
+                                <div class="flex justify-between"><span class="text-gray-500">Min AI confidence</span><span class="text-white font-bold">75%+</span></div>
+                                <div class="flex justify-between"><span class="text-gray-500">Min R:R</span><span class="text-white font-bold">1 : 1.5</span></div>
+                                <div class="flex justify-between"><span class="text-gray-500">Max open trades</span><span class="text-white font-bold">1</span></div>
+                                <div class="flex justify-between"><span class="text-gray-500">Best for</span><span class="text-cyan-400 font-bold">Beginners · &lt;6 months</span></div>
+                            </div>
+                            <div class="bg-black/30 rounded-lg p-2.5 text-[11px] text-gray-400 leading-relaxed">
+                                Only take the highest-confidence signals. Sit out anything below 75%. One open trade means full focus on each setup — no distractions.
+                            </div>
+                        </div>
+
+                        <!-- Anchor — Balanced -->
+                        <div class="rounded-xl p-4 border border-amber-500/25 bg-amber-500/[0.03]">
+                            <div class="flex items-center gap-2 mb-3">
+                                <div class="w-9 h-9 rounded-xl bg-amber-500/15 flex items-center justify-center flex-shrink-0">
+                                    <i class="fas fa-anchor text-amber-400"></i>
+                                </div>
+                                <div>
+                                    <div class="font-black text-white text-sm">The Anchor</div>
+                                    <div class="text-[10px] text-amber-400 font-bold uppercase tracking-widest">Balanced</div>
+                                </div>
+                            </div>
+                            <div class="space-y-2 text-xs mb-3">
+                                <div class="flex justify-between"><span class="text-gray-500">Risk per trade</span><span class="text-white font-bold">1.5% of account</span></div>
+                                <div class="flex justify-between"><span class="text-gray-500">Min AI confidence</span><span class="text-white font-bold">65%+</span></div>
+                                <div class="flex justify-between"><span class="text-gray-500">Min R:R</span><span class="text-white font-bold">1 : 1.5 to 1 : 2</span></div>
+                                <div class="flex justify-between"><span class="text-gray-500">Max open trades</span><span class="text-white font-bold">2</span></div>
+                                <div class="flex justify-between"><span class="text-gray-500">Best for</span><span class="text-amber-400 font-bold">Intermediate · 3–9 months</span></div>
+                            </div>
+                            <div class="bg-black/30 rounded-lg p-2.5 text-[11px] text-gray-400 leading-relaxed">
+                                You've paper traded 20+ signals and are comfortable with entries/exits. You can hold two simultaneous trades as long as they aren't correlated (e.g., not both altcoins).
+                            </div>
+                        </div>
+
+                        <!-- Edge — Growth -->
+                        <div class="rounded-xl p-4 border border-purple-500/25 bg-purple-500/[0.03]">
+                            <div class="flex items-center gap-2 mb-3">
+                                <div class="w-9 h-9 rounded-xl bg-purple-500/15 flex items-center justify-center flex-shrink-0">
+                                    <i class="fas fa-bolt text-purple-400"></i>
+                                </div>
+                                <div>
+                                    <div class="font-black text-white text-sm">The Edge</div>
+                                    <div class="text-[10px] text-purple-400 font-bold uppercase tracking-widest">Growth</div>
+                                </div>
+                            </div>
+                            <div class="space-y-2 text-xs mb-3">
+                                <div class="flex justify-between"><span class="text-gray-500">Risk per trade</span><span class="text-white font-bold">2% of account</span></div>
+                                <div class="flex justify-between"><span class="text-gray-500">Min AI confidence</span><span class="text-white font-bold">60%+</span></div>
+                                <div class="flex justify-between"><span class="text-gray-500">Min R:R</span><span class="text-white font-bold">1 : 2+</span></div>
+                                <div class="flex justify-between"><span class="text-gray-500">Max open trades</span><span class="text-white font-bold">3</span></div>
+                                <div class="flex justify-between"><span class="text-gray-500">Best for</span><span class="text-purple-400 font-bold">Experienced · 9+ months profitable</span></div>
+                            </div>
+                            <div class="bg-black/30 rounded-lg p-2.5 text-[11px] text-gray-400 leading-relaxed">
+                                You have a consistent track record over 3+ months. You understand confluence, manage emotions well, and journal every trade. Do NOT move here early — stay in Anchor until ready.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── CAPITAL MANAGEMENT RULES ───────────────────────────── -->
+                <div class="glass-panel p-5 rounded-xl">
+                    <h3 class="text-xs uppercase tracking-widest text-gray-400 font-bold mb-4 flex items-center gap-2">
+                        <i class="fas fa-piggy-bank text-green-400"></i> Capital Management Rules — Apply Every Day
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div class="flex gap-3 p-3 rounded-xl bg-black/20 border border-white/5">
+                            <div class="w-7 h-7 rounded-lg bg-green-500/15 flex items-center justify-center flex-shrink-0 mt-0.5"><span class="text-xs font-black text-green-400">1</span></div>
+                            <div>
+                                <div class="text-sm font-bold text-white mb-1">Total open risk ≤ 5% at all times</div>
+                                <div class="text-xs text-gray-400">If you have 3 open trades each risking 2%, that's 6% total — too much. Reduce position size or skip the third trade.</div>
+                            </div>
+                        </div>
+                        <div class="flex gap-3 p-3 rounded-xl bg-black/20 border border-white/5">
+                            <div class="w-7 h-7 rounded-lg bg-green-500/15 flex items-center justify-center flex-shrink-0 mt-0.5"><span class="text-xs font-black text-green-400">2</span></div>
+                            <div>
+                                <div class="text-sm font-bold text-white mb-1">Stop trading after a 10% daily drawdown</div>
+                                <div class="text-xs text-gray-400">If your account is down 10% in a single day, close everything and stop. Emotional trading after big losses makes it worse, not better.</div>
+                            </div>
+                        </div>
+                        <div class="flex gap-3 p-3 rounded-xl bg-black/20 border border-white/5">
+                            <div class="w-7 h-7 rounded-lg bg-green-500/15 flex items-center justify-center flex-shrink-0 mt-0.5"><span class="text-xs font-black text-green-400">3</span></div>
+                            <div>
+                                <div class="text-sm font-bold text-white mb-1">After 3 losses in a row, halve your risk</div>
+                                <div class="text-xs text-gray-400">Drop from 2% to 1%, or from 1% to 0.5%. This limits damage during bad runs and keeps you in the game until conditions improve.</div>
+                            </div>
+                        </div>
+                        <div class="flex gap-3 p-3 rounded-xl bg-black/20 border border-white/5">
+                            <div class="w-7 h-7 rounded-lg bg-green-500/15 flex items-center justify-center flex-shrink-0 mt-0.5"><span class="text-xs font-black text-green-400">4</span></div>
+                            <div>
+                                <div class="text-sm font-bold text-white mb-1">Take partial profit at 50% of TP</div>
+                                <div class="text-xs text-gray-400">When price reaches halfway to your TP, close 50% of the position and move SL to break-even. You lock in some profit while letting the rest run.</div>
+                            </div>
+                        </div>
+                        <div class="flex gap-3 p-3 rounded-xl bg-black/20 border border-white/5">
+                            <div class="w-7 h-7 rounded-lg bg-green-500/15 flex items-center justify-center flex-shrink-0 mt-0.5"><span class="text-xs font-black text-green-400">5</span></div>
+                            <div>
+                                <div class="text-sm font-bold text-white mb-1">Reinvest profits — don't raise risk %</div>
+                                <div class="text-xs text-gray-400">If your account grows from $1,000 to $1,200, keep risking 1% ($12 per trade, not $20). Let compounding do the work gradually, not forced risk.</div>
+                            </div>
+                        </div>
+                        <div class="flex gap-3 p-3 rounded-xl bg-black/20 border border-white/5">
+                            <div class="w-7 h-7 rounded-lg bg-green-500/15 flex items-center justify-center flex-shrink-0 mt-0.5"><span class="text-xs font-black text-green-400">6</span></div>
+                            <div>
+                                <div class="text-sm font-bold text-white mb-1">Review every 20 trades — not every trade</div>
+                                <div class="text-xs text-gray-400">A single trade tells you nothing about your edge. 20 trades gives you a meaningful sample. Review win rate, average R:R, and emotional discipline across the set.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── MISTAKES TO AVOID ──────────────────────────────────── -->
+                <div class="glass-panel p-5 rounded-xl border border-red-500/10">
+                    <h3 class="text-xs uppercase tracking-widest text-red-400/80 font-bold mb-4 flex items-center gap-2">
+                        <i class="fas fa-triangle-exclamation"></i> Common Mistakes That Kill Accounts — and How to Avoid Them
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div class="flex gap-3 p-3 rounded-xl bg-red-500/[0.04] border border-red-500/15">
+                            <i class="fas fa-times-circle text-red-400 mt-0.5 flex-shrink-0 text-sm"></i>
+                            <div>
+                                <div class="text-sm font-bold text-white mb-1">FOMO — Chasing Missed Signals</div>
+                                <div class="text-xs text-gray-400">Entering after the price has already moved significantly from the entry zone. You get the same risk but less reward. <strong class="text-gray-300">Fix: if price is more than 0.5% past entry, skip it. The next signal is minutes away.</strong></div>
+                            </div>
+                        </div>
+                        <div class="flex gap-3 p-3 rounded-xl bg-red-500/[0.04] border border-red-500/15">
+                            <i class="fas fa-times-circle text-red-400 mt-0.5 flex-shrink-0 text-sm"></i>
+                            <div>
+                                <div class="text-sm font-bold text-white mb-1">Revenge Trading</div>
+                                <div class="text-xs text-gray-400">Taking a bigger trade to "win back" a loss. This almost always makes losses larger. <strong class="text-gray-300">Fix: after a loss, take a 10-minute break. Come back only when calm.</strong></div>
+                            </div>
+                        </div>
+                        <div class="flex gap-3 p-3 rounded-xl bg-red-500/[0.04] border border-red-500/15">
+                            <i class="fas fa-times-circle text-red-400 mt-0.5 flex-shrink-0 text-sm"></i>
+                            <div>
+                                <div class="text-sm font-bold text-white mb-1">Moving Your Stop Loss Further Away</div>
+                                <div class="text-xs text-gray-400">Hoping the price comes back by giving it "more room." Planned small losses become catastrophic unplanned ones. <strong class="text-gray-300">Fix: SL is sacred. Set it and do not touch it.</strong></div>
+                            </div>
+                        </div>
+                        <div class="flex gap-3 p-3 rounded-xl bg-red-500/[0.04] border border-red-500/15">
+                            <i class="fas fa-times-circle text-red-400 mt-0.5 flex-shrink-0 text-sm"></i>
+                            <div>
+                                <div class="text-sm font-bold text-white mb-1">Over-Leveraging on Futures</div>
+                                <div class="text-xs text-gray-400">Using 10×, 20× or 50× leverage on signals designed for spot or low leverage. A 2% move against you wipes your position. <strong class="text-gray-300">Fix: beginners use 1–3× max. No more.</strong></div>
+                            </div>
+                        </div>
+                        <div class="flex gap-3 p-3 rounded-xl bg-red-500/[0.04] border border-red-500/15">
+                            <i class="fas fa-times-circle text-red-400 mt-0.5 flex-shrink-0 text-sm"></i>
+                            <div>
+                                <div class="text-sm font-bold text-white mb-1">Trading With Money You Can't Afford to Lose</div>
+                                <div class="text-xs text-gray-400">Rent money, savings, borrowed money. Emotional pressure from needing the money to survive causes poor decisions. <strong class="text-gray-300">Fix: only trade with money you've mentally written off already.</strong></div>
+                            </div>
+                        </div>
+                        <div class="flex gap-3 p-3 rounded-xl bg-red-500/[0.04] border border-red-500/15">
+                            <i class="fas fa-times-circle text-red-400 mt-0.5 flex-shrink-0 text-sm"></i>
+                            <div>
+                                <div class="text-sm font-bold text-white mb-1">Taking Every Signal Without Filtering</div>
+                                <div class="text-xs text-gray-400">Not all signals are equal. Entering on weak confluence or low AI confidence turns a quality system into gambling. <strong class="text-gray-300">Fix: use the pre-trade checklist before every single trade.</strong></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── PAPER TO REAL TRANSITION ───────────────────────────── -->
+                <div class="glass-panel p-5 rounded-xl border border-green-500/15 bg-green-500/[0.02] mb-2">
+                    <h3 class="text-xs uppercase tracking-widest text-green-400/80 font-bold mb-3 flex items-center gap-2">
+                        <i class="fas fa-flag-checkered"></i> Paper → Real Money: The Transition Plan
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div class="bg-black/20 rounded-xl p-3 border border-white/5">
+                            <div class="text-[10px] font-bold text-green-500/70 uppercase tracking-widest mb-2">Phase 1 · Weeks 1–4</div>
+                            <div class="font-bold text-white text-sm mb-2">Paper Trading Only</div>
+                            <ul class="space-y-1 text-[11px] text-gray-400">
+                                <li class="flex gap-1.5"><span class="text-green-400">✓</span> Follow every AEGIS signal on TradingView paper account</li>
+                                <li class="flex gap-1.5"><span class="text-green-400">✓</span> Record each trade: entry, SL, TP, outcome, emotion</li>
+                                <li class="flex gap-1.5"><span class="text-green-400">✓</span> Target 20+ trades before moving on</li>
+                                <li class="flex gap-1.5"><span class="text-green-400">✓</span> Learn the interface — no money stress</li>
+                            </ul>
+                        </div>
+                        <div class="bg-black/20 rounded-xl p-3 border border-white/5">
+                            <div class="text-[10px] font-bold text-cyan-500/70 uppercase tracking-widest mb-2">Phase 2 · Weeks 4–12</div>
+                            <div class="font-bold text-white text-sm mb-2">Micro Real Money</div>
+                            <ul class="space-y-1 text-[11px] text-gray-400">
+                                <li class="flex gap-1.5"><span class="text-cyan-400">✓</span> Start with the smallest amount your broker allows</li>
+                                <li class="flex gap-1.5"><span class="text-cyan-400">✓</span> Risk 0.5% per trade (half the Shield rate)</li>
+                                <li class="flex gap-1.5"><span class="text-cyan-400">✓</span> Only the highest-confidence signals (80%+)</li>
+                                <li class="flex gap-1.5"><span class="text-cyan-400">✓</span> Still paper trade uncertain setups</li>
+                            </ul>
+                        </div>
+                        <div class="bg-black/20 rounded-xl p-3 border border-white/5">
+                            <div class="text-[10px] font-bold text-amber-500/70 uppercase tracking-widest mb-2">Phase 3 · Month 3+</div>
+                            <div class="font-bold text-white text-sm mb-2">Full Shield Strategy</div>
+                            <ul class="space-y-1 text-[11px] text-gray-400">
+                                <li class="flex gap-1.5"><span class="text-amber-400">✓</span> Move to 1% risk if Phase 2 was profitable</li>
+                                <li class="flex gap-1.5"><span class="text-amber-400">✓</span> Use the AEGIS Terminal for exact sizing</li>
+                                <li class="flex gap-1.5"><span class="text-amber-400">✓</span> Review results every 20 trades</li>
+                                <li class="flex gap-1.5"><span class="text-amber-400">✓</span> Graduate to Anchor only after 3 profitable months</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+            </div><!-- /room-guide -->
 
         </main>
     </div>
