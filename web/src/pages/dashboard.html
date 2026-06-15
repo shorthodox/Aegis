@@ -516,21 +516,21 @@
                         <div class="flow-step-num">2</div>
                         <div class="flow-step-body">
                             <div class="flow-step-title">Click a Card</div>
-                            <div class="flow-step-desc">View AI analysis, confluence score, key price levels &amp; rationale.</div>
+                            <div class="flow-step-desc">View the AI analysis, confidence score, entry, TP &amp; SL levels.</div>
                         </div>
                     </div>
                     <div class="flow-step">
                         <div class="flow-step-num">3</div>
                         <div class="flow-step-body">
-                            <div class="flow-step-title">Go to Terminal</div>
-                            <div class="flow-step-desc">Set your capital &amp; risk % — position size calculates automatically.</div>
+                            <div class="flow-step-title">Size in Terminal</div>
+                            <div class="flow-step-desc">Enter your capital &amp; risk % (use 1–2%). Position size is calculated for you.</div>
                         </div>
                     </div>
-                    <div class="flow-step">
-                        <div class="flow-step-num">4</div>
+                    <div class="flow-step" style="border-color:rgba(251,191,36,0.3);">
+                        <div class="flow-step-num" style="background:rgba(251,191,36,0.15);color:#fbbf24;border-color:rgba(251,191,36,0.4);">4</div>
                         <div class="flow-step-body">
-                            <div class="flow-step-title">Execute Trade</div>
-                            <div class="flow-step-desc">Practice on TradingView first, then execute through your broker when ready.</div>
+                            <div class="flow-step-title" style="color:#fbbf24;">Paper Trade First</div>
+                            <div class="flow-step-desc">Open <a href="https://www.tradingview.com/paper-trading/" target="_blank" rel="noopener" style="color:#93c5fd;text-decoration:underline;">TradingView paper trading</a> and place the trade with fake money. After 20+ paper trades you're comfortable with, switch to real money — starting small.</div>
                         </div>
                     </div>
                 </div>
@@ -712,7 +712,7 @@
                             </div>
                             <div class="mt-3 flex items-start gap-2 bg-blue-500/5 border border-blue-500/20 rounded-lg px-3 py-2.5">
                                 <i class="fas fa-chart-candlestick text-blue-400 mt-0.5 flex-shrink-0 text-xs"></i>
-                                <p class="text-[10px] text-gray-400 leading-relaxed"><strong class="text-blue-300">New to trading?</strong> Practice on <a href="https://www.tradingview.com/paper-trading/" target="_blank" rel="noopener" class="text-blue-400 underline hover:text-blue-300">TradingView Paper Trading</a> first — no real money at risk. Switch to your broker once you're comfortable with the setups.</p>
+                                <p class="text-[10px] text-gray-400 leading-relaxed"><strong class="text-yellow-300">New to trading?</strong> Don't use real money yet. Open <a href="https://www.tradingview.com/paper-trading/" target="_blank" rel="noopener" class="text-blue-400 underline hover:text-blue-300">TradingView Paper Trading</a> and place this exact trade with fake money first. Build confidence across 20+ paper trades, then go live with a small, affordable amount. See the <button onclick="document.getElementById('guardian-fab').click()" style="background:none;border:none;color:#fbbf24;cursor:pointer;font-size:inherit;padding:0;text-decoration:underline;">Guardian guide</button> for the full checklist.</p>
                             </div>
                         </div>
                     </div>
@@ -902,7 +902,7 @@
                     <div class="room-subtitle">Only tokens where the AI fired an active SHORT / SELL signal — filtered for clarity</div>
                     <div class="beginner-tip" style="border-color:rgba(248,113,113,0.15);background:rgba(248,113,113,0.04);">
                         <i class="fas fa-lightbulb" style="color:rgba(248,113,113,0.5);"></i>
-                        <span><strong>SELL signal means:</strong> the AI believes price is more likely to go DOWN. On spot markets, this means avoiding new buys. On futures/derivatives, you can short. Always check the AI confidence score — signals above 75% are higher quality.</span>
+                        <span><strong>SELL signal means:</strong> the AI believes price is more likely to go DOWN. On spot markets, this means avoiding new buys or waiting on the sidelines. On derivatives/futures, experienced traders can short. <strong>If you're a beginner, start by paper trading SELL signals on TradingView</strong> before committing real money — shorting carries higher risk.</span>
                     </div>
                 </div>
                 <div id="sellSignalsContainer"
@@ -2003,7 +2003,7 @@
       <div class="gd-header">
         <div class="gd-title">
           <span class="gd-title-dot"></span>
-          <h3>Guardian<span>· Execution Protocols</span></h3>
+          <h3>Guardian<span>· Beginner's Playbook</span></h3>
         </div>
         <button id="guardian-close" aria-label="Close Guardian">
           <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -2014,56 +2014,91 @@
 
       <div class="gd-body">
 
-        <!-- First-visit hint (hidden on repeat visits) -->
+        <!-- First-visit welcome banner (hidden on repeat visits) -->
         <div class="gd-first-banner" id="gd-first-banner">
           <i class="fas fa-shield-alt"></i>
-          <span>These five protocols are your execution guardrails. Apply them <strong style="color:#94a3b8;">before</strong> sizing any position — they work with any S&amp;R signal from the dashboard.</span>
+          <span>Welcome! Read this guide top-to-bottom before placing your first trade. Start with paper trading — it's free, zero risk, and builds real skill before real money is on the line.</span>
         </div>
 
-        <!-- Protocol 1 -->
-        <div class="gd-protocol gd-p1">
-          <div class="gd-rr"><i class="fas fa-equals" style="font-size:0.55rem;"></i> 1 : 1 R:R</div>
-          <p class="gd-name">1 — Passive Maker Protocol</p>
-          <p class="gd-goal"><i class="fas fa-bullseye" style="margin-right:4px;"></i>Eliminate taker fees on high-frequency scalp moves</p>
-          <p class="gd-strategy">Avoid market orders entirely. Place a passive <strong>Limit Order at the Start Anchor</strong> price coordinate to act as a Maker and drop exchange fees to the floor.</p>
-        </div>
-
-        <!-- Protocol 2 -->
-        <div class="gd-protocol gd-p2">
-          <div class="gd-rr"><i class="fas fa-equals" style="font-size:0.55rem;"></i> 1 : 2 R:R</div>
-          <p class="gd-name">2 — Spread-Lock Filter</p>
-          <p class="gd-goal"><i class="fas fa-bullseye" style="margin-right:4px;"></i>Neutralize toxic slippage on mid-cap altcoins</p>
-          <p class="gd-strategy">Check the live <strong>Bid-Ask spread before deploying capital</strong>. If the gap between the highest buyer and lowest seller is wider than <strong>0.05%</strong>, skip the trade entirely.</p>
-        </div>
-
-        <!-- Protocol 3 -->
-        <div class="gd-protocol gd-p3">
-          <div class="gd-rr"><i class="fas fa-equals" style="font-size:0.55rem;"></i> 1 : 3 R:R</div>
-          <p class="gd-name">3 — Layered Bracket Accumulation</p>
-          <p class="gd-goal"><i class="fas fa-bullseye" style="margin-right:4px;"></i>Build an institutional average entry within the structural boundary</p>
-          <p class="gd-strategy">Split your position into a <strong>30 / 40 / 30</strong> laddered profile. Distribute three limit entries inside the <strong>Start Zone buffer</strong> to optimize the entry math.</p>
-        </div>
-
-        <!-- Protocol 4 -->
+        <!-- Step 0 — Paper Trading First -->
         <div class="gd-protocol gd-p4">
-          <div class="gd-rr"><i class="fas fa-equals" style="font-size:0.55rem;"></i> 1 : 5+ R:R</div>
-          <p class="gd-name">4 — Maximum Boundary Drift Rule</p>
-          <p class="gd-goal"><i class="fas fa-bullseye" style="margin-right:4px;"></i>Eliminate the psychological flaw of chasing a runaway breakout</p>
-          <p class="gd-strategy">If the live price has already moved <strong>more than 0.2% away from the Start Anchor</strong>, the trade is dead. Do not pursue it — chasing shrinks your upside runway.</p>
+          <div class="gd-rr"><i class="fas fa-star" style="font-size:0.55rem;"></i> START HERE</div>
+          <p class="gd-name">Practice on TradingView Before Risking Real Money</p>
+          <p class="gd-goal"><i class="fas fa-flask" style="margin-right:4px;"></i>Build confidence and test the signals — with zero financial risk</p>
+          <p class="gd-strategy">TradingView offers <strong>free paper trading</strong> (fake money, real charts). Every time AEGIS sends a signal, open TradingView, place the exact entry, TP, and SL as a paper trade, and track the result. After <strong>20+ paper trades where you feel comfortable and in control</strong>, you're ready to try real money — starting very small.</p>
+          <a href="https://www.tradingview.com/paper-trading/" target="_blank" rel="noopener"
+             style="display:inline-flex;align-items:center;gap:6px;margin-top:0.65rem;padding:0.35rem 0.9rem;
+                    background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.35);border-radius:20px;
+                    color:#fbbf24;font-size:0.72rem;font-weight:700;text-decoration:none;letter-spacing:0.04em;
+                    transition:background 0.2s;"
+             onmouseover="this.style.background='rgba(251,191,36,0.22)'"
+             onmouseout="this.style.background='rgba(251,191,36,0.12)'">
+            <i class="fas fa-external-link-alt" style="font-size:0.6rem;"></i> Open TradingView Paper Trading
+          </a>
         </div>
 
-        <!-- Protocol 5 -->
+        <!-- Rule 1 — Position Sizing -->
+        <div class="gd-protocol gd-p1">
+          <div class="gd-rr"><i class="fas fa-shield-alt" style="font-size:0.55rem;"></i> Rule 1 · Risk</div>
+          <p class="gd-name">Never Risk More Than 1–2% of Your Account Per Trade</p>
+          <p class="gd-goal"><i class="fas fa-bullseye" style="margin-right:4px;"></i>Protect your capital so losing streaks don't wipe you out</p>
+          <p class="gd-strategy">Even the best signals lose sometimes. The key is to <strong>stay in the game</strong>. Risk only 1–2% of your total balance on any single trade.<br><br>
+            <strong>Formula:</strong> Position Size = (Account × 1%) ÷ (Entry Price − SL Price)<br><br>
+            Example: $500 account → risk $5 per trade. If Entry = $1.00 and SL = $0.95, that's a $0.05 gap → buy 100 units ($5 ÷ $0.05). You can only lose $5, no matter what.
+          </p>
+        </div>
+
+        <!-- Rule 2 — Stop Loss -->
         <div class="gd-protocol gd-p5">
-          <div class="gd-rr"><i class="fas fa-infinity" style="font-size:0.6rem;"></i> Universal</div>
-          <p class="gd-name">5 — Institutional Funding Hour Handshake</p>
-          <p class="gd-goal"><i class="fas fa-bullseye" style="margin-right:4px;"></i>Avoid the hidden 3× daily funding fee bleed on high-leverage accounts</p>
-          <p class="gd-strategy">Pause execution if a high-conviction signal lands within <strong>15 minutes of a major funding interval</strong> where the required position direction forces you to pay a premium funding rate.</p>
+          <div class="gd-rr"><i class="fas fa-hand-paper" style="font-size:0.55rem;"></i> Rule 2 · Discipline</div>
+          <p class="gd-name">Set Your Stop Loss the Moment You Enter — and Never Move It</p>
+          <p class="gd-goal"><i class="fas fa-bullseye" style="margin-right:4px;"></i>The stop loss is your only protection — don't switch it off</p>
+          <p class="gd-strategy">Every AEGIS signal includes a pre-calculated <strong>Stop Loss (SL)</strong> price. The moment your entry fills, immediately place a stop-loss order at that SL price.<br><br>
+            If price reaches your SL — <strong>exit, no questions asked</strong>. Never move the SL further away hoping the trade recovers. Doing so turns a small, planned loss into a large, unplanned one. The signal was wrong; cut it and move on.
+          </p>
+        </div>
+
+        <!-- Rule 3 — Don't Chase -->
+        <div class="gd-protocol gd-p3">
+          <div class="gd-rr"><i class="fas fa-hourglass-half" style="font-size:0.55rem;"></i> Rule 3 · Patience</div>
+          <p class="gd-name">Enter Near the Signal Price — or Skip the Trade Entirely</p>
+          <p class="gd-goal"><i class="fas fa-bullseye" style="margin-right:4px;"></i>A late entry shrinks your profit and keeps your full risk on the table</p>
+          <p class="gd-strategy">Each signal has an <strong>Entry Zone</strong>. If the price has already moved significantly past that zone by the time you see it, <strong>skip this trade</strong>. Entering late means you take the same SL distance but less upside — a worse deal.<br><br>
+            <strong>Practical rule:</strong> if the current price is more than 0.5% beyond the entry price shown, wait for the next signal. There is always another one.
+          </p>
+        </div>
+
+        <!-- Rule 4 — Keep It Simple -->
+        <div class="gd-protocol gd-p2">
+          <div class="gd-rr"><i class="fas fa-layer-group" style="font-size:0.55rem;"></i> Rule 4 · Simplicity</div>
+          <p class="gd-name">One or Two Trades at a Time While You're Learning</p>
+          <p class="gd-goal"><i class="fas fa-bullseye" style="margin-right:4px;"></i>Fewer positions means clearer thinking and fewer mistakes</p>
+          <p class="gd-strategy">When you're new, having many open trades feels exciting — but it's hard to manage and easy to make errors under pressure. Stick to <strong>one or two open positions</strong> at a time until every step (entry, SL, TP, sizing) feels automatic.<br><br>
+            Once managing a single trade is easy — sizing, monitoring, and exiting cleanly — you can gradually expand. Slow is smooth; smooth is fast.
+          </p>
+        </div>
+
+        <!-- Milestone — Go Live Checklist -->
+        <div class="gd-protocol" style="background:rgba(0,255,136,0.03);border:1px solid rgba(0,255,136,0.18);border-radius:14px;padding:1rem 1.1rem;margin-bottom:0.75rem;">
+          <div class="gd-rr" style="background:rgba(0,255,136,0.1);color:#00ff88;border:1px solid rgba(0,255,136,0.25);">
+            <i class="fas fa-flag-checkered" style="font-size:0.55rem;"></i> Milestone · Go Live
+          </div>
+          <p class="gd-name">You're Ready for Real Money When You Can Check All of These</p>
+          <p class="gd-goal" style="color:rgba(0,255,136,0.6);"><i class="fas fa-bullseye" style="margin-right:4px;"></i>Enter live trading at the right moment — not before</p>
+          <ul style="margin:0.5rem 0 0;padding:0;list-style:none;font-size:0.79rem;color:#94a3b8;line-height:1.7;">
+            <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#00ff88;flex-shrink:0;margin-top:2px;">✓</span><span>Completed <strong style="color:#cbd5e1;">20+ paper trades</strong> on TradingView following AEGIS signals</span></li>
+            <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#00ff88;flex-shrink:0;margin-top:2px;">✓</span><span>You understand your <strong style="color:#cbd5e1;">position size formula</strong> without looking it up</span></li>
+            <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#00ff88;flex-shrink:0;margin-top:2px;">✓</span><span>You've <strong style="color:#cbd5e1;">honored your SL</strong> every time — no exceptions, no moving it</span></li>
+            <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#00ff88;flex-shrink:0;margin-top:2px;">✓</span><span>You've <strong style="color:#cbd5e1;">skipped at least one signal</strong> because the price moved too far — and felt good about it</span></li>
+            <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#00ff88;flex-shrink:0;margin-top:2px;">✓</span><span>You're starting with <strong style="color:#cbd5e1;">money you can afford to lose completely</strong> — no rent money, no savings</span></li>
+          </ul>
+          <p style="margin:0.75rem 0 0;font-size:0.74rem;color:#4b5563;font-style:italic;">If you can't check all five yet, keep paper trading. There is no rush — the market will always be here.</p>
         </div>
 
       </div>
 
       <div class="gd-footer">
-        AEGIS-1 · Guardian v1 · Apply before every execution
+        AEGIS-1 · Guardian · Paper trade first · Real money when you're ready
       </div>
 
     </div>
