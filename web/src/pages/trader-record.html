@@ -347,7 +347,7 @@
 
     <!-- Fixed Glass Header -->
     <header class="fixed-header" id="main-nav">
-        <a href="/web/src/pages/index.html" class="logo" style="text-decoration:none;">⚡ AEGIS <span>v1.0</span> <span style="font-size:0.52rem;font-weight:800;font-family:monospace;letter-spacing:0.1em;background:rgba(0,242,255,0.1);border:1px solid rgba(0,242,255,0.3);color:#00f2ff;padding:1px 6px;border-radius:4px;text-transform:uppercase;vertical-align:middle;margin-left:5px;position:relative;top:-1px;">BETA</span></a>
+        <a href="/web/src/pages/index.html" class="logo" style="text-decoration:none;">⚡ AEGIS <span>v1.0</span> <span style="font-size:0.52rem;font-weight:800;font-family:monospace;letter-spacing:0.1em;background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.35);color:#00ff88;padding:1px 6px;border-radius:4px;text-transform:uppercase;vertical-align:middle;margin-left:5px;position:relative;top:-1px;">LIVE</span></a>
 
         <nav class="nav-links-centered" aria-label="Main navigation">
             <a href="/web/src/pages/index.html" class="nav-link">Home</a>
@@ -435,12 +435,13 @@
             <div class="td-stat">
                 <span class="td-stat-value td-na" id="tdRateVal">—</span>
                 <div class="td-stat-label">Win Rate</div>
-                <div class="td-stat-sub">closed signals only</div>
+                <div class="td-stat-sub" id="tdRateSub">closed signals only</div>
+                <div id="tdLowSampleNote" style="display:none;font-size:0.6rem;color:#f59e0b;margin-top:0.2rem;">⚠ low sample — not reliable yet</div>
             </div>
             <div class="td-stat">
                 <span class="td-stat-value" id="tdAvgPnlVal">—</span>
                 <div class="td-stat-label">Avg PnL</div>
-                <div class="td-stat-sub">closed signals</div>
+                <div class="td-stat-sub">closed · gross, no fees</div>
             </div>
         </div>
 
@@ -717,7 +718,9 @@
             var note = document.getElementById('tdWinrateNote');
             if (note) {
                 note.style.display = '';
-                note.textContent = 'Showing ' + visible.length + ' of ' + _allSignals.length + ' signals. Win rate computed from closed signals only.';
+                var tdClosed = _allSignals.filter(function(s){ return s.outcome === 'WIN' || s.outcome === 'LOSS'; }).length;
+                var lowTag = tdClosed > 0 && tdClosed < 30 ? ' ⚠ Low sample (n=' + tdClosed + ') — not statistically reliable yet.' : '';
+                note.textContent = 'Showing ' + visible.length + ' of ' + _allSignals.length + ' signals. Win rate computed from closed signals only. PnL is gross — no fees or slippage deducted.' + lowTag;
             }
         }
 
@@ -728,6 +731,17 @@
             set('tdLossVal',  summary.losses != null ? summary.losses : '—');
             set('tdOpenVal',  summary.open   != null ? summary.open   : '—');
             set('tdRateVal',  summary.win_rate_pct != null ? summary.win_rate_pct.toFixed(1) + '%' : '—');
+
+            var closed_td = (summary.wins || 0) + (summary.losses || 0);
+            var rateSub = document.getElementById('tdRateSub');
+            if (rateSub) {
+                rateSub.textContent = summary.win_rate_pct != null
+                    ? 'from ' + closed_td + ' closed signal' + (closed_td !== 1 ? 's' : '')
+                    : 'no closed signals yet';
+            }
+            var lowNote = document.getElementById('tdLowSampleNote');
+            if (lowNote) lowNote.style.display = closed_td > 0 && closed_td < 30 ? 'block' : 'none';
+
             var avgEl = document.getElementById('tdAvgPnlVal');
             if (avgEl) {
                 if (summary.avg_pnl_pct != null) {
@@ -740,7 +754,10 @@
             }
             var sinceEl = document.getElementById('tdSinceVal');
             if (sinceEl && summary.tracking_since) {
-                sinceEl.textContent = 'since ' + fmtTime(summary.tracking_since);
+                var sinceDate = new Date(summary.tracking_since);
+                var daysDiff = Math.floor((Date.now() - sinceDate.getTime()) / 86400000);
+                var dayLabel = daysDiff === 0 ? 'Day 1' : 'Day ' + (daysDiff + 1);
+                sinceEl.textContent = 'since ' + fmtTime(summary.tracking_since) + ' (' + dayLabel + ')';
             }
         }
 

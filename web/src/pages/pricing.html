@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -92,7 +92,7 @@
 
     <!-- Fixed Glass Header (same as index.html) -->
     <header class="fixed-header" id="main-nav">
-        <a href="/web/src/pages/index.html" class="logo" style="text-decoration:none;">⚡ AEGIS <span>v1.0</span> <span style="font-size:0.52rem;font-weight:800;font-family:monospace;letter-spacing:0.1em;background:rgba(0,242,255,0.1);border:1px solid rgba(0,242,255,0.3);color:#00f2ff;padding:1px 6px;border-radius:4px;text-transform:uppercase;vertical-align:middle;margin-left:5px;position:relative;top:-1px;">BETA</span></a>
+        <a href="/web/src/pages/index.html" class="logo" style="text-decoration:none;">⚡ AEGIS <span>v1.0</span> <span style="font-size:0.52rem;font-weight:800;font-family:monospace;letter-spacing:0.1em;background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.35);color:#00ff88;padding:1px 6px;border-radius:4px;text-transform:uppercase;vertical-align:middle;margin-left:5px;position:relative;top:-1px;">LIVE</span></a>
 
         <nav class="nav-links-centered" aria-label="Main navigation">
             <a href="/web/src/pages/index.html" class="nav-link">Home</a>
@@ -102,8 +102,6 @@
             <a href="/web/src/pages/pricing.html" class="nav-link active">Pricing</a>
             <a href="/web/src/pages/review.html" class="nav-link">Reviews</a>
             <a href="/web/src/pages/track-record.html" class="nav-link">Live Record</a>
-            <a href="/web/src/pages/trader-record.html" class="nav-link">Trader Record</a>
-            <a href="/web/src/pages/pitch.html" class="nav-link" style="color:rgba(255,215,0,0.7);">Investor Brief</a>
         </nav>
 
         <div id="authButtonContainer" class="nav-auth-desktop" style="display:flex;align-items:center;gap:0.5rem;">
@@ -131,11 +129,9 @@
         <a href="/web/src/pages/index.html#sentinel" class="nav-mobile-link"><i class="fas fa-satellite-dish"></i> Sentinel</a>
         <a href="/web/src/pages/index.html#cockpit" class="nav-mobile-link"><i class="fas fa-desktop"></i> Cockpit</a>
         <a href="/web/src/pages/index.html#security" class="nav-mobile-link"><i class="fas fa-shield-alt"></i> Security</a>
-        <a href="/web/src/pages/pitch.html" class="nav-mobile-link" style="color:rgba(255,215,0,0.8);"><i class="fas fa-file-alt"></i> Investor Brief</a>
         <a href="/web/src/pages/pricing.html" class="nav-mobile-link mobile-active"><i class="fas fa-tag"></i> Pricing</a>
         <a href="/web/src/pages/review.html" class="nav-mobile-link"><i class="fas fa-star"></i> Reviews</a>
         <a href="/web/src/pages/track-record.html" class="nav-mobile-link"><i class="fas fa-chart-bar"></i> Live Record</a>
-        <a href="/web/src/pages/trader-record.html" class="nav-mobile-link"><i class="fas fa-chart-line"></i> Trader Record</a>
         <div class="nav-mobile-auth">
             <button class="nav-btn-login" id="mPortalProxy"><i class="fas fa-user-shield"></i> Sign In</button>
             <button class="nav-btn-dashboard" id="mDashProxy" style="display:none;"><i class="fas fa-chart-line"></i> Dashboard</button>
@@ -155,31 +151,35 @@
         <div class="pricing-grid floating-cards">
             <!-- Tier 1: Basic -->
             <div class="price-card glow-basic hover-interactive">
+                <div style="font-size:0.65rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(0,242,255,0.5);margin-bottom:0.4rem;">Best for beginners</div>
                 <h3>Basic</h3>
                 <div class="price">$3.60 <span>/mo</span></div>
-                <p class="card-desc">Entry Level Intelligence.</p>
+                <p class="card-desc">Start following signals. No analysis skills needed.</p>
                 <ul class="features-list">
-                    <li><i class="fas fa-check-circle"></i> 42 of 58 Tokens Live</li>
-                    <li><i class="fas fa-chart-line"></i> 1:1 R:R profiles</li>
+                    <li><i class="fas fa-check-circle"></i> Full signals with entry, TP &amp; SL</li>
+                    <li><i class="fas fa-align-left"></i> Plain-English "Why" per signal</li>
+                    <li><i class="fas fa-chart-line"></i> 60 tokens · balanced 1:2 R:R</li>
                     <li><i class="fas fa-flask"></i> 3-Day Free Trial</li>
-                    <li><i class="fas fa-archive"></i> Signal Archive</li>
+                    <li><i class="fas fa-archive"></i> Signal history archive</li>
                 </ul>
-                <a href="#" data-plan="basic" class="btn-outline">Get Basic</a>
+                <a href="#" data-plan="basic" class="btn-outline">Try Free for 3 Days</a>
             </div>
 
             <!-- Tier 2: Intermediate -->
             <div class="price-card glow-intermediate hover-interactive">
+                <div style="font-size:0.65rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(100,255,180,0.6);margin-bottom:0.4rem;">Best for active traders</div>
                 <h3>Intermediate</h3>
                 <div class="price">$24.00 <span>/mo</span></div>
-                <p class="card-desc">Eliminate Bias.</p>
+                <p class="card-desc">Understand every signal. Know which setups are strongest before you act.</p>
                 <ul class="features-list">
-                    <li><i class="fas fa-layer-group"></i> Confluence Scorecard
+                    <li><i class="fas fa-check-circle"></i> Everything in Basic</li>
+                    <li><i class="fas fa-layer-group"></i> Confluence Scorecard — see which indicators agreed
                         <div class="confluence-progress-bar">
                             <div class="confluence-progress-fill" style="width: 75%;"></div>
                         </div>
                     </li>
-                    <li><i class="fas fa-certificate"></i> Token Win-Rate Badges</li>
-                    <li><i class="fas fa-map-signs"></i> Visual Zone Tracking
+                    <li><i class="fas fa-certificate"></i> Per-token win-rate history</li>
+                    <li><i class="fas fa-map-signs"></i> Live support/resistance zone tracking
                         <div class="zone-progression">
                             <div class="zone-node active"></div>
                             <div class="zone-line active"></div>
@@ -195,17 +195,27 @@
             <!-- Tier 3: Professional -->
             <div class="price-card tier-pro featured glow-pro hover-interactive">
                 <div class="best-value" style="background:#ffd700; color:#000;"><i class="fas fa-crown"></i> MOST POPULAR</div>
+                <div style="font-size:0.65rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,215,0,0.6);margin-bottom:0.4rem;margin-top:0.5rem;">Best for power traders &amp; quants</div>
                 <h3>Professional</h3>
                 <div class="price">$40.00 <span>/mo</span></div>
-                <p class="card-desc">The Sovereign Analyst.</p>
+                <p class="card-desc">Full model access. Trade the edge, not just the signal.</p>
                 <ul class="features-list">
-                    <li><i class="fas fa-fighter-jet"></i> 42 of 58 Tokens Live</li>
-                    <li><i class="fas fa-rocket"></i> "Moonshot" 1:5 R:R</li>
-                    <li><i class="fas fa-chart-pie"></i> Expectancy Matrix & Max DD</li>
-                    <li><i class="fas fa-brain"></i> Raw XGBoost Probabilities & SHAP</li>
-                    <li><i class="fas fa-code"></i> Personal API/JSON Endpoints</li>
+                    <li><i class="fas fa-check-circle"></i> Everything in Intermediate</li>
+                    <li><i class="fas fa-rocket"></i> Moonshot mode — 1:5 R:R setups</li>
+                    <li><i class="fas fa-chart-pie"></i> Expectancy matrix &amp; max drawdown stats</li>
+                    <li><i class="fas fa-brain"></i> Raw model probabilities &amp; SHAP feature importance</li>
+                    <li><i class="fas fa-code"></i> Personal API &amp; JSON endpoints for automation</li>
                 </ul>
-                <a href="#" data-plan="pro" class="btn-pro" style="background:linear-gradient(135deg, #ffd700, #ff8c00); color:#000; border:none;"><i class="fas fa-unlock-alt"></i> Go Pro Access</a>
+                <a href="#" data-plan="pro" class="btn-pro" style="background:linear-gradient(135deg, #ffd700, #ff8c00); color:#000; border:none;"><i class="fas fa-unlock-alt"></i> Go Professional</a>
+            </div>
+        </div>
+
+        <!-- Telegram roadmap callout -->
+        <div style="margin:1.5rem auto 0;max-width:720px;background:rgba(36,211,111,0.05);border:1px solid rgba(36,211,111,0.2);border-radius:14px;padding:1rem 1.4rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+            <div style="font-size:1.3rem;">📲</div>
+            <div style="flex:1;min-width:220px;">
+                <div style="font-size:0.8rem;font-weight:800;color:#24d36f;margin-bottom:0.2rem;">Telegram Alerts — Coming Soon (All Plans)</div>
+                <div style="font-size:0.78rem;color:#6b7280;line-height:1.6;">Every signal will push instantly to your Telegram the moment it fires — entry price, TP, SL, and the AI reasoning. No more checking the dashboard manually.</div>
             </div>
         </div>
 
@@ -240,7 +250,7 @@
                         <td style="padding: 1rem; text-align: center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
                     </tr>
                     <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                        <td style="padding: 1rem 1.5rem;">Full 42-Token Fleet</td>
+                        <td style="padding: 1rem 1.5rem;">Full 60-Token Fleet</td>
                         <td style="padding: 1rem; text-align: center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
                         <td style="padding: 1rem; text-align: center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
                         <td style="padding: 1rem; text-align: center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>

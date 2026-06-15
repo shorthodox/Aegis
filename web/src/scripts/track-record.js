@@ -106,6 +106,8 @@ function renderStats(summary) {
         if (rateEl)   { rateEl.textContent = 'N/A'; rateEl.className = 'tr-stat-value tr-na'; }
         if (rateNote) rateNote.textContent = 'no closed signals yet';
     }
+    const lowSampleEl = document.getElementById('trLowSampleNote');
+    if (lowSampleEl) lowSampleEl.style.display = closed > 0 && closed < 30 ? 'block' : 'none';
 
     const since = summary.tracking_since;
     const sinceEl = document.getElementById('trSinceVal');
@@ -135,7 +137,8 @@ function renderStats(summary) {
     if (noteEl) {
         noteEl.style.display = 'block';
         if (summary.win_rate_pct != null) {
-            noteEl.textContent = `Win rate of ${summary.win_rate_pct}% is computed from ${closed} closed signal${closed !== 1 ? 's' : ''} since ${since ? since.slice(0, 10) : 'launch'}. Both wins and losses are included. This is not a marketing claim.`;
+            const lowSampleTag = closed < 30 ? ` ⚠ Low sample (n=${closed}) — not statistically reliable yet.` : '';
+            noteEl.textContent = `Win rate of ${summary.win_rate_pct}% is computed from ${closed} closed signal${closed !== 1 ? 's' : ''} since ${since ? since.slice(0, 10) : 'launch'}. Both wins and losses are included. PnL is gross — no fees or slippage are deducted. This is not a marketing claim.${lowSampleTag}`;
         } else {
             noteEl.textContent = `Win rate will be displayed once signals close. Currently showing ${summary.total_signals ?? 0} tracked signal${(summary.total_signals ?? 0) !== 1 ? 's' : ''}. Check back as signals close.`;
         }
@@ -236,33 +239,18 @@ function render(data) {
 
     if (loadEl) loadEl.style.display = 'none';
 
-    // Left panel only shows live_engine signals — trader bot has its own right panel
     const allSignals = data.signals || [];
-    const liveEngineRows = allSignals.filter(r => (r.source || 'live_engine') !== 'aegis_trader');
 
-    // Recompute summary from live_engine rows only
-    const wins   = liveEngineRows.filter(r => r.outcome === 'WIN').length;
-    const losses = liveEngineRows.filter(r => r.outcome === 'LOSS').length;
-    const openC  = liveEngineRows.filter(r => r.outcome === 'OPEN').length;
-    const closed = wins + losses;
-    const pnls   = liveEngineRows.filter(r => r.outcome === 'WIN' || r.outcome === 'LOSS').map(r => parseFloat(r.pnl_pct) || 0);
-    const times  = liveEngineRows.filter(r => r.entry_time).map(r => r.entry_time);
-    const liveSummary = {
-        total_signals:  liveEngineRows.length,
-        wins,
-        losses,
-        open:           openC,
-        win_rate_pct:   closed > 0 ? Math.round(wins / closed * 1000) / 10 : null,
-        avg_pnl_pct:    pnls.length > 0 ? Math.round(pnls.reduce((a, b) => a + b, 0) / pnls.length * 1000) / 1000 : null,
-        total_pnl_pct:  pnls.length > 0 ? Math.round(pnls.reduce((a, b) => a + b, 0) * 1000) / 1000 : 0,
-        tracking_since: times.length > 0 ? times.sort()[0] : null,
-    };
+    // Use API summary directly (already computed server-side)
+    const summary = data.summary || {};
+    renderStats(summary);
+    renderLiveTeaser(summary.open || 0);
 
-    renderStats(liveSummary);
-    renderLiveTeaser(openC);
+    const tcEl = document.getElementById('trTokenCount');
+    if (tcEl && summary.token_count) tcEl.textContent = summary.token_count;
 
-    _allRows = liveEngineRows;
-    const closedRows = liveEngineRows.filter(r => (r.outcome || '').toUpperCase() !== 'OPEN');
+    _allRows = allSignals;
+    const closedRows = allSignals.filter(r => (r.outcome || '').toUpperCase() !== 'OPEN');
 
     if (closedRows.length === 0) {
         if (emptyEl) emptyEl.style.display = 'block';
@@ -273,12 +261,24 @@ function render(data) {
     renderTable(_allRows);
 }
 
+// ── Scanning label ─────────────────────────────────────────────────────────────
+function updateScanLabel() {
+    const el = document.getElementById('trScanLabel');
+    if (!el) return;
+    const now = new Date();
+    const hh = String(now.getUTCHours()).padStart(2, '0');
+    const mm = String(now.getUTCMinutes()).padStart(2, '0');
+    el.textContent = `live · refreshed ${hh}:${mm} UTC`;
+}
+
 // ── Auto-refresh every 60 s ───────────────────────────────────────────────────
 function startAutoRefresh() {
+    updateScanLabel();
     setInterval(async () => {
         try {
             const data = await fetchTrackRecord();
             render(data);
+            updateScanLabel();
         } catch { /* silently ignore refresh errors */ }
     }, 60_000);
 }

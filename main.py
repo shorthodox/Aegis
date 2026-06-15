@@ -3217,6 +3217,9 @@ async def track_record_endpoint(source: str = None):
               if r.get("outcome") in ("WIN", "LOSS")]
     times  = [r.get("entry_time") for r in all_signals if r.get("entry_time")]
 
+    _MODEL_STORE = Path(BASE_DIR) / "src" / "ml" / "model_store"
+    _token_count = len(list(_MODEL_STORE.glob("*_meta.json"))) if _MODEL_STORE.exists() else 0
+
     return JSONResponse({
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "summary": {
@@ -3228,6 +3231,7 @@ async def track_record_endpoint(source: str = None):
             "avg_pnl_pct":    round(sum(pnls) / len(pnls), 3) if pnls else None,
             "total_pnl_pct":  round(sum(pnls), 3) if pnls else 0.0,
             "tracking_since": min(times) if times else None,
+            "token_count":    _token_count,
         },
         "signals": all_signals,
     })

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <!-- Preload Firebase & Core Modules to prevent module waterfall blocking -->
@@ -354,7 +354,7 @@
 
     <!-- Fixed Glass Header — same structure as index.html -->
     <header class="fixed-header" id="main-nav">
-        <a href="/web/src/pages/index.html" class="logo" style="text-decoration:none;">⚡ AEGIS <span>v1.0</span> <span style="font-size:0.52rem;font-weight:800;font-family:monospace;letter-spacing:0.1em;background:rgba(0,242,255,0.1);border:1px solid rgba(0,242,255,0.3);color:#00f2ff;padding:1px 6px;border-radius:4px;text-transform:uppercase;vertical-align:middle;margin-left:5px;position:relative;top:-1px;">BETA</span></a>
+        <a href="/web/src/pages/index.html" class="logo" style="text-decoration:none;">⚡ AEGIS <span>v1.0</span> <span style="font-size:0.52rem;font-weight:800;font-family:monospace;letter-spacing:0.1em;background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.35);color:#00ff88;padding:1px 6px;border-radius:4px;text-transform:uppercase;vertical-align:middle;margin-left:5px;position:relative;top:-1px;">LIVE</span></a>
 
         <nav class="nav-links-centered" aria-label="Main navigation">
             <a href="/web/src/pages/index.html" class="nav-link">Home</a>
@@ -364,7 +364,6 @@
             <a href="/web/src/pages/review.html" class="nav-link">Reviews</a>
             <a href="/web/src/pages/pricing.html" class="nav-link">Pricing</a>
             <a href="/web/src/pages/track-record.html" class="nav-link active">Live Record</a>
-            <a href="/web/src/pages/trader-record.html" class="nav-link">Trader Record</a>
         </nav>
 
         <div id="authButtonContainer" class="nav-auth-desktop" style="display:flex;align-items:center;gap:0.5rem;">
@@ -395,7 +394,6 @@
         <a href="/web/src/pages/review.html" class="nav-mobile-link"><i class="fas fa-star"></i> Reviews</a>
         <a href="/web/src/pages/pricing.html" class="nav-mobile-link"><i class="fas fa-tag"></i> Pricing</a>
         <a href="/web/src/pages/track-record.html" class="nav-mobile-link mobile-active"><i class="fas fa-chart-bar"></i> Live Record</a>
-        <a href="/web/src/pages/trader-record.html" class="nav-mobile-link"><i class="fas fa-chart-line"></i> Trader Record</a>
         <div class="nav-mobile-auth">
             <button class="nav-btn-login" id="mPortalProxy"><i class="fas fa-user-shield"></i> Sign In</button>
             <button class="nav-btn-dashboard" id="mDashProxy" style="display:none;"><i class="fas fa-chart-line"></i> Dashboard</button>
@@ -424,9 +422,15 @@
                 <i class="fas fa-satellite-dish" style="color:#00f2ff;font-size:1.1rem;"></i>
                 <div>
                     <div style="font-size:0.9rem;font-weight:800;color:#fff;letter-spacing:0.05em;">AEGIS-1 Signal Engine</div>
-                    <div style="font-size:0.65rem;color:#4b6280;letter-spacing:0.1em;text-transform:uppercase;">32 tokens · 1h candles · directional precision gate</div>
+                    <div style="font-size:0.65rem;color:#4b6280;letter-spacing:0.1em;text-transform:uppercase;"><span id="trTokenCount">63</span> tokens · 1h candles · directional precision gate</div>
                 </div>
-                <a href="#" onclick="window.refreshAegisTrackRecord && window.refreshAegisTrackRecord();return false;" style="margin-left:auto;font-size:0.7rem;color:rgba(0,242,255,0.5);text-decoration:none;" title="Refresh">&#8635;</a>
+                <div style="margin-left:auto;display:flex;align-items:center;gap:0.75rem;">
+                    <div id="trScanStatus" style="display:flex;align-items:center;gap:0.35rem;" title="Bot is actively scanning all tokens">
+                        <span style="width:6px;height:6px;border-radius:50%;background:#00f2ff;box-shadow:0 0 6px #00f2ff;animation:tr-pulse 2s ease-in-out infinite;"></span>
+                        <span style="font-size:0.65rem;color:rgba(0,242,255,0.7);font-family:'JetBrains Mono',monospace;" id="trScanLabel">scanning</span>
+                    </div>
+                    <a href="#" onclick="window.refreshAegisTrackRecord && window.refreshAegisTrackRecord();return false;" style="font-size:0.7rem;color:rgba(0,242,255,0.5);text-decoration:none;" title="Refresh">&#8635;</a>
+                </div>
             </div>
             <div class="tr-panel-body">
                 <!-- History note -->
@@ -455,11 +459,12 @@
                 <span class="tr-stat-value tr-na" id="trRateVal">—</span>
                 <div class="tr-stat-label">Win Rate</div>
                 <div class="tr-stat-sub" id="trRateNote">computed from closed signals</div>
+                <div id="trLowSampleNote" style="display:none;font-size:0.6rem;color:#f59e0b;margin-top:0.2rem;">⚠ low sample — not reliable yet</div>
             </div>
             <div class="tr-stat">
                 <span class="tr-stat-value" id="trAvgPnlVal">—</span>
                 <div class="tr-stat-label">Avg PnL</div>
-                <div class="tr-stat-sub">closed signals</div>
+                <div class="tr-stat-sub">closed · gross, no fees</div>
             </div>
             <div class="tr-stat">
                 <span class="tr-stat-value" id="trOpenVal">—</span>
@@ -518,9 +523,13 @@
 
         <!-- Empty state -->
         <div id="trEmpty" class="tr-empty" style="display:none;">
-            <i class="fas fa-database"></i>
-            <h3>Track record logging begins now</h3>
-            <p>No closed signals were found in the database. As the engine fires and closes signals, their outcomes will appear here automatically. Refresh any time to see the latest state.</p>
+            <i class="fas fa-satellite-dish" style="color:#00f2ff;"></i>
+            <h3 style="color:#fff;">The Engine Is Running — Signals Close Soon</h3>
+            <p style="max-width:520px;margin:0.5rem auto 1rem;line-height:1.75;">The bot is actively scanning <strong style="color:#00f2ff;"><span class="trTokenCountRef">60</span> tokens</strong> every 5 minutes. Closed outcomes appear here the moment a Take Profit or Stop Loss is hit. <br><br>Open signals are visible on the dashboard (subscribers only) — they include live entry price, TP, SL, and the AI's plain-English reasoning. <strong style="color:#e2e8f0;">Check back in a few hours.</strong></p>
+            <div style="display:flex;gap:0.8rem;justify-content:center;flex-wrap:wrap;margin-top:0.8rem;">
+                <a href="/web/src/pages/pricing.html" style="background:linear-gradient(95deg,#00f2ff,#00a1b0);padding:0.6rem 1.5rem;border-radius:30px;font-weight:800;font-size:0.85rem;color:#050505;text-decoration:none;">See Live Signals →</a>
+                <a href="#" onclick="window.refreshAegisTrackRecord && window.refreshAegisTrackRecord();return false;" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);padding:0.6rem 1.5rem;border-radius:30px;font-weight:700;font-size:0.85rem;color:#94a3b8;text-decoration:none;">↻ Refresh</a>
+            </div>
         </div>
 
                 <!-- Win-rate attribution note -->

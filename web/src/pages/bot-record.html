@@ -66,6 +66,8 @@
         }
         .stat-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b; margin-bottom: 0.35rem; }
         .stat-value { font-size: 1.4rem; font-weight: 800; font-family: 'JetBrains Mono', monospace; }
+        .stat-sub { font-size: 0.6rem; color: #475569; margin-top: 0.2rem; line-height: 1.4; }
+        .stat-sub.warn { color: #f59e0b; }
         .stat-value.green { color: #4ade80; }
         .stat-value.red   { color: #f87171; }
         .stat-value.cyan  { color: #22d3ee; }
@@ -175,11 +177,11 @@
 
     <!-- Stats bar -->
     <div class="stats-bar" id="stats-bar">
-        <div class="stat-card"><div class="stat-label">Total Trades</div><div class="stat-value cyan" id="stat-total">—</div></div>
-        <div class="stat-card"><div class="stat-label">Win Rate</div><div class="stat-value orange" id="stat-wr">—</div></div>
+        <div class="stat-card"><div class="stat-label">Total Trades</div><div class="stat-value cyan" id="stat-total">—</div><div class="stat-sub" id="stat-since"></div></div>
+        <div class="stat-card"><div class="stat-label">Win Rate</div><div class="stat-value orange" id="stat-wr">—</div><div class="stat-sub" id="stat-wr-sub"></div><div class="stat-sub warn" id="stat-wr-low" style="display:none;">⚠ low sample</div></div>
         <div class="stat-card"><div class="stat-label">Wins</div><div class="stat-value green" id="stat-wins">—</div></div>
         <div class="stat-card"><div class="stat-label">Losses</div><div class="stat-value red" id="stat-losses">—</div></div>
-        <div class="stat-card"><div class="stat-label">Total PnL</div><div class="stat-value" id="stat-pnl">—</div></div>
+        <div class="stat-card"><div class="stat-label">Total PnL</div><div class="stat-value" id="stat-pnl">—</div><div class="stat-sub">gross · no fees</div></div>
         <div class="stat-card"><div class="stat-label">Open Now</div><div class="stat-value orange" id="stat-open">—</div></div>
     </div>
 
@@ -261,9 +263,10 @@ const db   = getFirestore(fbApp, 'default');
 const auth = getAuth(fbApp);
 
 // ── State ──────────────────────────────────────────────────────────────────
-let allTrades  = [];
-let openTrades = [];
-let activeFilter = 'all';
+let allTrades       = [];
+let openTrades      = [];
+let activeFilter    = 'all';
+let _firestoreActive = false;
 
 // ── Filter ─────────────────────────────────────────────────────────────────
 window.setFilter = function(f) {
@@ -381,6 +384,7 @@ function updateStats() {
     const won    = closed.filter(t => t.outcome === 'WIN').length;
     const lost   = closed.filter(t => t.outcome === 'LOSS').length;
     const total  = won + lost;
+
     const wr     = total ? ((won/total)*100).toFixed(1) : '0.0';
     const pnl    = closed.reduce((s,t) => s + parseFloat(t.pnl_usdt||0), 0);
     const pnlClass = pnl >= 0 ? 'green' : 'red';
@@ -393,12 +397,30 @@ function updateStats() {
     const pnlEl = document.getElementById('stat-pnl');
     pnlEl.textContent  = (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + ' $';
     pnlEl.className    = 'stat-value ' + pnlClass;
+
+    const wrSubEl  = document.getElementById('stat-wr-sub');
+    const wrLowEl  = document.getElementById('stat-wr-low');
+    if (wrSubEl) wrSubEl.textContent = total > 0 ? 'from ' + total + ' closed' : 'no closed trades yet';
+    if (wrLowEl) wrLowEl.style.display = total > 0 && total < 30 ? 'block' : 'none';
+
+    const sinceEl = document.getElementById('stat-since');
+    if (sinceEl) {
+        const times = allTrades.map(t => t.entry_time).filter(Boolean).sort();
+        if (times.length > 0) {
+            const d = new Date(times[0]);
+            const daysDiff = Math.floor((Date.now() - d.getTime()) / 86400000);
+            sinceEl.textContent = 'since ' + d.toISOString().slice(0,10) + (daysDiff >= 0 ? ' · Day ' + (daysDiff + 1) : '');
+        } else {
+            sinceEl.textContent = '';
+        }
+    }
 }
 
 // ── Load from Firestore (scalp_signals collection) ──────────────────────────
 function loadFromFirestore() {
     const q = query(collection(db, 'scalp_signals'), orderBy('entry_time', 'desc'), limit(200));
     onSnapshot(q, snap => {
+        _firestoreActive = true;
         const trades = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         openTrades = trades.filter(t => t.outcome === 'OPEN');
         allTrades  = trades;
@@ -444,9 +466,9 @@ onAuthStateChanged(auth, user => {
     }
 });
 
-// Auto-refresh every 30s
+// Auto-refresh every 30s — JSON only when Firestore is not active
 setInterval(() => {
-    if (!document.hidden) loadFromJson();
+    if (!document.hidden && !_firestoreActive) loadFromJson();
 }, 30000);
 </script>
 
