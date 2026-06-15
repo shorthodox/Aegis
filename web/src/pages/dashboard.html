@@ -2132,10 +2132,7 @@
         if (firstBanner) firstBanner.style.display = 'none';
       }
 
-      // Auto-open on first visit (800ms delay, same cadence as onboarding wizard)
-      if (!localStorage.getItem(STORAGE_KEY)) {
-        setTimeout(openDrawer, 900);
-      }
+      // Guardian opens only via FAB — pre-trade checklist handles the every-visit reminder
 
       fab.addEventListener('click', openDrawer);
       closeBtn.addEventListener('click', closeDrawer);
@@ -2143,6 +2140,231 @@
 
       document.addEventListener('keydown', function (e) {
         if ((e.key === 'Escape') && drawer.classList.contains('open')) closeDrawer();
+      });
+    }());
+    </script>
+
+    <!-- ============================================================
+         PRE-TRADE CHECKLIST MODAL — fires on every dashboard load
+         ============================================================ -->
+    <style>
+      #ptc-overlay {
+        position: fixed; inset: 0; z-index: 9800;
+        background: rgba(0,0,0,0.72);
+        backdrop-filter: blur(6px);
+        display: flex; align-items: center; justify-content: center;
+        padding: 1rem;
+        opacity: 0; pointer-events: none;
+        transition: opacity 0.25s;
+      }
+      #ptc-overlay.ptc-open { opacity: 1; pointer-events: auto; }
+
+      #ptc-card {
+        background: rgba(8,8,14,0.98);
+        border: 1px solid rgba(0,242,255,0.18);
+        border-radius: 20px;
+        box-shadow: 0 0 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(0,242,255,0.06);
+        max-width: 500px; width: 100%;
+        max-height: 90dvh; overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(0,242,255,0.12) transparent;
+        transform: translateY(12px);
+        transition: transform 0.28s cubic-bezier(0.34,1.56,0.64,1);
+      }
+      #ptc-overlay.ptc-open #ptc-card { transform: translateY(0); }
+
+      .ptc-header {
+        padding: 1.25rem 1.4rem 0;
+        display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem;
+      }
+      .ptc-header-left { display: flex; align-items: center; gap: 10px; }
+      .ptc-icon {
+        width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+        background: rgba(0,242,255,0.08); border: 1px solid rgba(0,242,255,0.2);
+        display: flex; align-items: center; justify-content: center;
+        color: #00f2ff; font-size: 0.9rem;
+      }
+      .ptc-header h3 {
+        font-size: 0.88rem; font-weight: 800; color: #e2e8f0;
+        margin: 0 0 2px; letter-spacing: 0.01em; line-height: 1.2;
+      }
+      .ptc-header p { margin: 0; font-size: 0.68rem; color: #4b5563; font-family: monospace; letter-spacing: 0.04em; }
+      #ptc-close {
+        background: none; border: none; cursor: pointer;
+        color: #374151; font-size: 1.1rem; line-height: 1;
+        padding: 4px; flex-shrink: 0; margin-top: 2px;
+        transition: color 0.2s;
+      }
+      #ptc-close:hover { color: #9ca3af; }
+
+      .ptc-divider { height: 1px; background: rgba(255,255,255,0.05); margin: 1rem 0 0; }
+
+      .ptc-body { padding: 1.1rem 1.4rem; display: flex; flex-direction: column; gap: 0.7rem; }
+
+      .ptc-step {
+        display: flex; align-items: flex-start; gap: 12px;
+        padding: 0.85rem 1rem; border-radius: 12px;
+        border: 1px solid transparent;
+      }
+      .ptc-step-num {
+        width: 26px; height: 26px; border-radius: 8px; flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 0.7rem; font-weight: 800; font-family: monospace;
+      }
+      .ptc-step-body { flex: 1; min-width: 0; }
+      .ptc-step-title { font-size: 0.82rem; font-weight: 700; color: #e2e8f0; margin: 0 0 0.25rem; line-height: 1.3; }
+      .ptc-step-desc { font-size: 0.76rem; color: #94a3b8; line-height: 1.55; margin: 0; }
+      .ptc-step-desc strong { color: #cbd5e1; }
+
+      /* Step colour variants */
+      .ptc-s1 { background: rgba(0,242,255,0.03); border-color: rgba(0,242,255,0.12); }
+      .ptc-s1 .ptc-step-num { background: rgba(0,242,255,0.1); color: #00f2ff; border: 1px solid rgba(0,242,255,0.25); }
+
+      .ptc-s2 { background: rgba(251,191,36,0.03); border-color: rgba(251,191,36,0.14); }
+      .ptc-s2 .ptc-step-num { background: rgba(251,191,36,0.1); color: #fbbf24; border: 1px solid rgba(251,191,36,0.25); }
+
+      .ptc-s3 { background: rgba(34,197,94,0.03); border-color: rgba(34,197,94,0.13); }
+      .ptc-s3 .ptc-step-num { background: rgba(34,197,94,0.1); color: #4ade80; border: 1px solid rgba(34,197,94,0.25); }
+
+      .ptc-s4 { background: rgba(244,63,94,0.03); border-color: rgba(244,63,94,0.13); }
+      .ptc-s4 .ptc-step-num { background: rgba(244,63,94,0.1); color: #fb7185; border: 1px solid rgba(244,63,94,0.25); }
+
+      .ptc-rules {
+        background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 10px; padding: 0.75rem 1rem;
+        display: flex; flex-direction: column; gap: 0.35rem;
+      }
+      .ptc-rules-title { font-size: 0.62rem; font-weight: 700; font-family: monospace; letter-spacing: 0.08em; text-transform: uppercase; color: #374151; margin-bottom: 0.2rem; }
+      .ptc-rule { font-size: 0.73rem; color: #64748b; line-height: 1.45; display: flex; align-items: flex-start; gap: 7px; }
+      .ptc-rule-dot { width: 5px; height: 5px; border-radius: 50%; background: #374151; flex-shrink: 0; margin-top: 6px; }
+
+      .ptc-footer { padding: 0 1.4rem 1.4rem; display: flex; flex-direction: column; gap: 0.6rem; }
+      #ptc-confirm-btn {
+        width: 100%; padding: 0.75rem 1rem; border-radius: 12px; border: none; cursor: pointer;
+        font-size: 0.82rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
+        background: linear-gradient(135deg, rgba(0,242,255,0.18), rgba(0,180,255,0.12));
+        border: 1px solid rgba(0,242,255,0.35);
+        color: #00f2ff;
+        transition: background 0.2s, box-shadow 0.2s;
+      }
+      #ptc-confirm-btn:hover {
+        background: linear-gradient(135deg, rgba(0,242,255,0.28), rgba(0,180,255,0.2));
+        box-shadow: 0 0 18px rgba(0,242,255,0.2);
+      }
+      .ptc-paper-note {
+        text-align: center; font-size: 0.68rem; color: #374151; line-height: 1.5;
+      }
+      .ptc-paper-note a { color: #60a5fa; text-decoration: underline; }
+      .ptc-paper-note a:hover { color: #93c5fd; }
+    </style>
+
+    <div id="ptc-overlay">
+      <div id="ptc-card">
+
+        <div class="ptc-header">
+          <div class="ptc-header-left">
+            <div class="ptc-icon"><i class="fas fa-shield-check"></i></div>
+            <div>
+              <h3>Pre-Trade Checklist</h3>
+              <p>COMPLETE ALL STEPS BEFORE EXECUTING ANY TRADE</p>
+            </div>
+          </div>
+          <button id="ptc-close" aria-label="Close checklist"><i class="fas fa-times"></i></button>
+        </div>
+
+        <div class="ptc-divider"></div>
+
+        <div class="ptc-body">
+
+          <!-- Step 1 — Confluence -->
+          <div class="ptc-step ptc-s1">
+            <div class="ptc-step-num">1</div>
+            <div class="ptc-step-body">
+              <p class="ptc-step-title">Cross-Check the Confluence Score</p>
+              <p class="ptc-step-desc">Click the signal card and look at the <strong>Confluence bar</strong>. It shows how many indicators agree with the signal direction. A <strong>higher score = stronger signal</strong> — more systems are pointing the same way. If the bar is weak or split, skip this trade and wait for a stronger setup.</p>
+            </div>
+          </div>
+
+          <!-- Step 2 — SL/TP -->
+          <div class="ptc-step ptc-s2">
+            <div class="ptc-step-num">2</div>
+            <div class="ptc-step-body">
+              <p class="ptc-step-title">Verify Your Stop Loss & Take Profit</p>
+              <p class="ptc-step-desc">Check the <strong>SL (Stop Loss)</strong> and <strong>TP (Take Profit)</strong> prices shown on the card. Make sure the TP is meaningfully further from entry than the SL — <strong>aim for at least 1.5× reward vs risk</strong> (e.g., risk $10 to make $15+). If the SL looks very far away, your position size must be smaller to keep risk at 1–2%.</p>
+            </div>
+          </div>
+
+          <!-- Step 3 — Signal Strength -->
+          <div class="ptc-step ptc-s3">
+            <div class="ptc-step-num">3</div>
+            <div class="ptc-step-body">
+              <p class="ptc-step-title">Confirm Signal Strength Before Entering</p>
+              <p class="ptc-step-desc">Check the <strong>AI Confidence %</strong> on the card. Signals <strong>above 70% are higher quality</strong>. Between 55–70% is moderate — consider paper trading. Below 55%, skip entirely or practice only. Never enter a trade just because a signal appeared — it must also be strong.</p>
+            </div>
+          </div>
+
+          <!-- Step 4 — Execute -->
+          <div class="ptc-step ptc-s4">
+            <div class="ptc-step-num">4</div>
+            <div class="ptc-step-body">
+              <p class="ptc-step-title">Only Then — Execute the Trade</p>
+              <p class="ptc-step-desc">Go to the <strong>Terminal</strong>, set your risk at <strong>1–2% of your account</strong>, and place your entry, SL, and TP. If you're still building confidence, <strong>use TradingView paper trading</strong> instead of real money. Once all three checks above are green, execute.</p>
+            </div>
+          </div>
+
+          <!-- Quick rules recap -->
+          <div class="ptc-rules">
+            <div class="ptc-rules-title">Always remember</div>
+            <div class="ptc-rule"><span class="ptc-rule-dot"></span><span>Risk only <strong style="color:#94a3b8;">1–2%</strong> of your account per trade — never more</span></div>
+            <div class="ptc-rule"><span class="ptc-rule-dot"></span><span>Set your stop loss <strong style="color:#94a3b8;">the moment</strong> your entry fills — never move it further away</span></div>
+            <div class="ptc-rule"><span class="ptc-rule-dot"></span><span>If price has already moved past the entry zone, <strong style="color:#94a3b8;">skip this signal</strong> and wait for the next</span></div>
+            <div class="ptc-rule"><span class="ptc-rule-dot"></span><span>Keep only <strong style="color:#94a3b8;">1–2 open trades</strong> at a time while you're learning</span></div>
+          </div>
+
+        </div>
+
+        <div class="ptc-footer">
+          <button id="ptc-confirm-btn">
+            <i class="fas fa-check-circle" style="margin-right:6px;"></i>
+            All Checked — Ready to Trade
+          </button>
+          <p class="ptc-paper-note">
+            New to trading? <a href="https://www.tradingview.com/paper-trading/" target="_blank" rel="noopener">Practice on TradingView Paper Trading</a> first — zero risk, real charts. Open the <button onclick="document.getElementById('ptc-confirm-btn').click();setTimeout(()=>document.getElementById('guardian-fab').click(),200)" style="background:none;border:none;color:#fbbf24;cursor:pointer;font-size:inherit;padding:0;text-decoration:underline;">Guardian guide</button> for the full beginner playbook.
+          </p>
+        </div>
+
+      </div>
+    </div>
+
+    <script>
+    (function () {
+      var overlay    = document.getElementById('ptc-overlay');
+      var confirmBtn = document.getElementById('ptc-confirm-btn');
+      var closeBtn   = document.getElementById('ptc-close');
+
+      function openChecklist() {
+        overlay.classList.add('ptc-open');
+        document.body.style.overflow = 'hidden';
+      }
+
+      function closeChecklist() {
+        overlay.classList.remove('ptc-open');
+        document.body.style.overflow = '';
+      }
+
+      // Fire on every dashboard load — no localStorage skip
+      setTimeout(openChecklist, 400);
+
+      confirmBtn.addEventListener('click', closeChecklist);
+      closeBtn.addEventListener('click', closeChecklist);
+
+      // Click outside the card to dismiss
+      overlay.addEventListener('click', function (e) {
+        if (e.target === overlay) closeChecklist();
+      });
+
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && overlay.classList.contains('ptc-open')) closeChecklist();
       });
     }());
     </script>
