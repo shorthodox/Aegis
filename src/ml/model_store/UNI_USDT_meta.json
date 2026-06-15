@@ -4,7 +4,7 @@
   "aegis_state_path": "UNI_USDT_aegis_state.pkl",
   "disabled_filters": {
     "sr": true,
-    "trend": true,
+    "trend": false,
     "confluence": true
   },
   "model_format": "booster",
@@ -204,7 +204,7 @@
   "meta_threshold_sell_aggressive": 0.6,
   "tradeable_buy": true,
   "tradeable_sell": true,
-  "meta_override_confidence": 0.6000000000000003,
+  "meta_override_confidence": 0.82,
   "metrics_summary": {
     "dev_oof_precision_estimate": 0.0,
     "honest_holdout_precision_result": 0.5815085158150851,

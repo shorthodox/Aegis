@@ -4,7 +4,7 @@
   "aegis_state_path": "DOGE_USDT_aegis_state.pkl",
   "disabled_filters": {
     "sr": true,
-    "trend": true,
+    "trend": false,
     "confluence": true
   },
   "model_format": "booster",
