@@ -386,7 +386,12 @@ async function closeTrade(tradeId) {
 
 // ── Signal history ───────────────────────────────────────────────────────────
 function addToSignalHistory(signal) {
-  if (!signal || signal.signal === 'HOLD') return;
+  if (!signal) return;
+  const _sig = (signal.signal || '').toUpperCase();
+  const _dir = (signal.direction || '').toUpperCase();
+  const _isBuy  = _sig.includes('BUY')  || _dir === 'LONG';
+  const _isSell = _sig.includes('SELL') || _dir === 'SHORT';
+  if (!_isBuy && !_isSell) return;   // drop FLAT, HOLD, NEUTRAL
   if (_signalHistory.some(e => e.signal_id && e.signal_id === signal.signal_id)) return;
 
   _signalHistory.unshift({
@@ -538,10 +543,16 @@ function _wireEvents() {
 
 // ── Public init ───────────────────────────────────────────────────────────────
 function initTradingRooms() {
-  // Load persisted signal history
+  // Load persisted signal history — strip any FLAT/HOLD/NEUTRAL entries saved by older versions
   try {
     const stored = localStorage.getItem('tr_signalHistory');
-    if (stored) _signalHistory = JSON.parse(stored);
+    if (stored) {
+      _signalHistory = JSON.parse(stored).filter(e => {
+        const s = (e.signal || '').toUpperCase();
+        const d = (e.direction || '').toUpperCase();
+        return s.includes('BUY') || s.includes('SELL') || d === 'LONG' || d === 'SHORT';
+      });
+    }
   } catch (_) {}
 
   _renderSignalHistory();
