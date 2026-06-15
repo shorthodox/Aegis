@@ -295,7 +295,7 @@ class SignalQualityFilter:
     is_fake_breakout() → bool
     """
 
-    MIN_QUALITY_SCORE = 40.0  # minimum points required to open a position
+    MIN_QUALITY_SCORE = 55.0  # minimum points required to open a position
 
     def score_signal(
         self,
@@ -394,6 +394,14 @@ class SignalQualityFilter:
         if regime.regime == _REGIME_LIQUIDITY_TRAP:
             score -= 20; reasons.append('liquidity_trap_penalty')
 
+        # -15: ranging market — no directional edge, signals are noise
+        if regime.regime == _REGIME_RANGING:
+            score -= 15; reasons.append('ranging_market_penalty')
+
+        # -10: low volume — no conviction behind the move
+        if vol_zscore < -0.8:
+            score -= 10; reasons.append(f'low_volume(z={vol_zscore:.1f})')
+
         # -15: conflicting macro signals (weekly disagrees with daily)
         macro_daily  = _f('macro_daily', 0.0)
         macro_weekly = _f('macro_weekly', 0.0)
@@ -457,10 +465,10 @@ class SignalQualityFilter:
                 if side == 'SELL' and conf_mom > 6.0 and conf_total > 5.5:
                     return True
 
-            # RSI divergence: strong signal but momentum is near extreme opposite
-            if side == 'BUY'  and rsi > 82:
+            # RSI divergence: signal direction but momentum is near exhaustion
+            if side == 'BUY'  and rsi > 75:
                 return True
-            if side == 'SELL' and rsi < 18:
+            if side == 'SELL' and rsi < 25:
                 return True
 
             # LSTM exhaustion: sequence analysis suggests momentum is collapsing
@@ -1213,8 +1221,8 @@ class LiveEngine:
     COOLDOWN_SECONDS      = 14_400   # 4 h post-close cooldown
     FLIP_COOLDOWN_SECONDS = 28_800   # 8 h extra cooldown when new signal flips direction
     MAX_HOLD_SECONDS      = 172_800  # 48 h zombie guard
-    CONFLUENCE_BUY_MIN    = 5.5
-    CONFLUENCE_SELL_MAX   = 4.5
+    CONFLUENCE_BUY_MIN    = 6.0   # need mildly bullish consensus (≥60th pct)
+    CONFLUENCE_SELL_MAX   = 4.0   # need mildly bearish consensus (≤40th pct)
 
     # Regimes where entry is unconditionally blocked
     NO_TRADE_REGIMES: set = {_REGIME_LIQUIDITY_TRAP}
@@ -1646,6 +1654,61 @@ class LiveEngine:
                             self.last_signals[symbol]['fire']          = False
                             self.last_signals[symbol]['signal']        = 'HOLD'
                             self.last_signals[symbol]['drift_blocked'] = True
+                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                        return
+
+                    # ── Feature-engine parity gate ───────────────────────────────
+                    # Mirror the conditions feature_engine.py expects for a signal
+                    # to carry positive expectancy (same as training assumptions).
+                    _fe_atr_pct   = float(result.get('atr_pct', 0.0))
+                    _fe_trend_rg  = str(result.get('trend_regime', ''))
+                    _fe_conf_data = result.get('confluence') or {}
+                    _fe_total     = float(_fe_conf_data.get('total', 5.0))   # 0–10, neutral=5
+                    _fe_trend_c   = float(_fe_conf_data.get('trend',  5.0))  # 0–10
+
+                    # ATR floor: if ATR < 0.8 % of price the TP/SL range is
+                    # too tight for the 1.5× ATR barrier to clear reliably.
+                    if _fe_atr_pct < 0.8:
+                        print(f'[{symbol}] ATR_TOO_LOW blocked {new_side} '
+                              f'atr_pct={_fe_atr_pct:.2f}%')
+                        if symbol in self.last_signals:
+                            self.last_signals[symbol]['fire']        = False
+                            self.last_signals[symbol]['signal']      = 'HOLD'
+                            self.last_signals[symbol]['atr_blocked'] = True
+                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                        return
+
+                    # Ranging + weak confluence: no directional edge at all.
+                    # Only allow ranging-market signals when confluence is
+                    # strongly directional (breakout-level conviction).
+                    if _fe_trend_rg == 'RANGING':
+                        _ranging_blocked = (
+                            (new_side == 'BUY'  and _fe_total < 7.0) or
+                            (new_side == 'SELL' and _fe_total > 3.0)
+                        )
+                        if _ranging_blocked:
+                            print(f'[{symbol}] RANGING_CONFLUENCE blocked {new_side} '
+                                  f'total={_fe_total:.1f}/10 (need BUY≥7.0 or SELL≤3.0 in RANGING)')
+                            if symbol in self.last_signals:
+                                self.last_signals[symbol]['fire']              = False
+                                self.last_signals[symbol]['signal']            = 'HOLD'
+                                self.last_signals[symbol]['ranging_blocked']   = True
+                            self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                            return
+
+                    # Trend confluence direction check: block counter-trend signals
+                    # where the trend category score strongly disagrees with direction.
+                    _trend_vs_dir = (
+                        (new_side == 'BUY'  and _fe_trend_c < 3.5) or
+                        (new_side == 'SELL' and _fe_trend_c > 6.5)
+                    )
+                    if _trend_vs_dir:
+                        print(f'[{symbol}] TREND_DIRECTION blocked {new_side} '
+                              f'trend_conf={_fe_trend_c:.1f}/10')
+                        if symbol in self.last_signals:
+                            self.last_signals[symbol]['fire']          = False
+                            self.last_signals[symbol]['signal']        = 'HOLD'
+                            self.last_signals[symbol]['trend_blocked'] = True
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
 

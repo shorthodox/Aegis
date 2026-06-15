@@ -919,11 +919,7 @@ class Predictor:
         # direction but the market is unlikely to clear the ATR barrier.
         if fire and bool(self.meta.get("primary_only_mode", False)):
             _po_thr = float(self.meta.get("primary_confidence_threshold") or 0.0)
-            # TEMPORARY BYPASS: force fire=True to restore signal generation.
-            # Remove this line and un-gate the condition below after validating
-            # that edge scores and thresholds produce correct signal flow.
-            fire = True
-            if _po_thr > 0.0 and self.hold_calibrator is not None and not fire:
+            if _po_thr > 0.0 and self.hold_calibrator is not None:
                 try:
                     import numpy as _np
                     _conf_raw = float(last[2] if side == 2 else last[0])
@@ -945,7 +941,7 @@ class Predictor:
                         fire = False
                 except Exception as e:
                     print(f"[CAL] {self.symbol} calibrator error: {e}")
-                    fire = True  # keep signal on calibrator errors
+                    # keep fire unchanged on calibrator errors
 
         # ── Regime-specific directional-probability filter ────────────────────
         # threshold_optimizer.py finds per-regime thresholds on p_buy / p_sell.
