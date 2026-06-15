@@ -1518,37 +1518,11 @@ class LiveEngine:
                     )
 
             new_side      = result.get('side', 'FLAT')
-            quality_score = 0.0
-            quality_reasons: List[str] = []
+            # quality_score is used only for display and position sizing in
+            # _build_signal_entry / perf_tracker. Gating is done by the
+            # predictor's own gates (meta_threshold + hold_calibrator).
+            quality_score = min(float(result.get('edge_score', 60.0)), 100.0)
             fake_breakout = False
-
-            if result.get('fire') and new_side in ('BUY', 'SELL'):
-                quality_score, quality_reasons = self.quality_filter.score_signal(
-                    result, regime, new_side)
-                fake_breakout = self.quality_filter.is_fake_breakout(result, new_side)
-
-                # HMM quality bonus/penalty: ±10 points based on regime alignment
-                if _hmm_available:
-                    if _hmm_regime in ('TRENDING_BULL',) and new_side == 'BUY':
-                        quality_score += 10.0
-                        quality_reasons.append('hmm_trend_bull_bonus')
-                    elif _hmm_regime in ('TRENDING_BEAR',) and new_side == 'SELL':
-                        quality_score += 10.0
-                        quality_reasons.append('hmm_trend_bear_bonus')
-                    elif _hmm_regime in ('CHOPPY', 'VOLATILE_EXPANSION'):
-                        quality_score -= 10.0
-                        quality_reasons.append(f'hmm_regime_penalty({_hmm_regime})')
-                    elif _hmm_regime == 'DISTRIBUTION' and new_side == 'BUY':
-                        quality_score -= 8.0
-                        quality_reasons.append('hmm_distribution_buy_penalty')
-                    elif _hmm_regime == 'ACCUMULATION' and new_side == 'SELL':
-                        quality_score -= 8.0
-                        quality_reasons.append('hmm_accumulation_sell_penalty')
-                    # High transition risk: penalise regime instability
-                    if _hmm_trans_risk > 0.35:
-                        quality_score -= 5.0
-                        quality_reasons.append(f'hmm_transition_risk({_hmm_trans_risk:.0%})')
-                    quality_score = round(max(0.0, min(quality_score, 100.0)), 1)
 
             # Build signal entry with enriched fields
             self.last_signals[symbol] = self._build_signal_entry(
@@ -1568,106 +1542,18 @@ class LiveEngine:
                 )
 
                 if cooldown_elapsed >= required_cooldown:
-                    # ── Quality gate ──────────────────────────────────────────
+                    # ── Gate 1: genuinely untradeable regime ──────────────────
                     if regime.regime in self.NO_TRADE_REGIMES:
                         print(f'[{symbol}] NO_TRADE_REGIME={regime.regime} — blocked')
                         if symbol in self.last_signals:
-                            self.last_signals[symbol]['fire']            = False
-                            self.last_signals[symbol]['signal']          = 'HOLD'
-                            self.last_signals[symbol]['regime_blocked']  = True
+                            self.last_signals[symbol]['fire']           = False
+                            self.last_signals[symbol]['signal']         = 'HOLD'
+                            self.last_signals[symbol]['regime_blocked'] = True
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
 
-                    if fake_breakout:
-                        print(f'[{symbol}] FAKE_BREAKOUT blocked {new_side} '
-                              f'quality={quality_score:.0f}')
-                        if symbol in self.last_signals:
-                            self.last_signals[symbol]['fire']                 = False
-                            self.last_signals[symbol]['signal']               = 'HOLD'
-                            self.last_signals[symbol]['fake_breakout_blocked'] = True
-                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
-                        return
-
-                    if quality_score < self.quality_filter.MIN_QUALITY_SCORE:
-                        print(f'[{symbol}] QUALITY_BLOCKED {new_side} '
-                              f'score={quality_score:.0f}/100 '
-                              f'(min={self.quality_filter.MIN_QUALITY_SCORE}) '
-                              f'reasons={quality_reasons}')
-                        if symbol in self.last_signals:
-                            self.last_signals[symbol]['fire']              = False
-                            self.last_signals[symbol]['signal']            = 'HOLD'
-                            self.last_signals[symbol]['confluence_blocked'] = True
-                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
-                        return
-
-                    # Self-healing safe-mode: block low-quality signals when on a loss streak
-                    if (self.perf_tracker.safe_mode_active() and
-                            quality_score < 70):
-                        print(f'[{symbol}] SAFE_MODE blocked {new_side} '
-                              f'score={quality_score:.0f} (need ≥70 in safe-mode)')
-                        if symbol in self.last_signals:
-                            self.last_signals[symbol]['fire']          = False
-                            self.last_signals[symbol]['signal']        = 'HOLD'
-                            self.last_signals[symbol]['safe_mode_blocked'] = True
-                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
-                        return
-
-                    # ── Drift gate: block symbol if model is critically degraded ─
-                    if self.drift_monitor.is_blocked(symbol):
-                        drift_penalty = self.drift_monitor.confidence_penalty(symbol)
-                        live_wr       = self.drift_monitor._live_win_rate(symbol)
-                        benchmark     = self.drift_monitor._benchmarks.get(symbol, 0.60)
-                        print(f'[{symbol}] DRIFT_CRITICAL blocked {new_side} — '
-                              f'live_wr={live_wr:.1%} benchmark={benchmark:.1%} '
-                              f'(>{self.drift_monitor.CRITICAL_DROP_PP}pp below benchmark)')
-                        if symbol in self.last_signals:
-                            self.last_signals[symbol]['fire']          = False
-                            self.last_signals[symbol]['signal']        = 'HOLD'
-                            self.last_signals[symbol]['drift_blocked'] = True
-                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
-                        return
-
-                    # Apply HMM regime confidence adjustment to quality gate
-                    # _hmm_conf_adj is a signed float (negative = raise threshold)
-                    # We convert it to a quality-score equivalent for the gate check.
-                    _hmm_quality_penalty = round(-_hmm_conf_adj * 100, 1)  # e.g. +0.05 adj → -5 quality
-                    _effective_min_quality = self.quality_filter.MIN_QUALITY_SCORE + _hmm_quality_penalty
-                    if quality_score < _effective_min_quality:
-                        print(f'[{symbol}] HMM_QUALITY_GATE {new_side} '
-                              f'score={quality_score:.0f} < '
-                              f'min={_effective_min_quality:.0f} '
-                              f'(hmm_regime={_hmm_regime})')
-                        if symbol in self.last_signals:
-                            self.last_signals[symbol]['fire']          = False
-                            self.last_signals[symbol]['signal']        = 'HOLD'
-                            self.last_signals[symbol]['hmm_blocked']   = True
-                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
-                        return
-
-                    # Apply drift confidence penalty (WARNING level) to quality gate
-                    drift_penalty = self.drift_monitor.confidence_penalty(symbol)
-                    if drift_penalty > 0 and quality_score < (self.quality_filter.MIN_QUALITY_SCORE + drift_penalty * 100):
-                        print(f'[{symbol}] DRIFT_WARNING quality penalty {drift_penalty:.2f} '
-                              f'— adjusted min={self.quality_filter.MIN_QUALITY_SCORE + drift_penalty * 100:.0f} '
-                              f'score={quality_score:.0f}')
-                        if symbol in self.last_signals:
-                            self.last_signals[symbol]['fire']          = False
-                            self.last_signals[symbol]['signal']        = 'HOLD'
-                            self.last_signals[symbol]['drift_blocked'] = True
-                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
-                        return
-
-                    # ── Feature-engine parity gate ───────────────────────────────
-                    # Mirror the conditions feature_engine.py expects for a signal
-                    # to carry positive expectancy (same as training assumptions).
-                    _fe_atr_pct   = float(result.get('atr_pct', 0.0))
-                    _fe_trend_rg  = str(result.get('trend_regime', ''))
-                    _fe_conf_data = result.get('confluence') or {}
-                    _fe_total     = float(_fe_conf_data.get('total', 5.0))   # 0–10, neutral=5
-                    _fe_trend_c   = float(_fe_conf_data.get('trend',  5.0))  # 0–10
-
-                    # ATR floor: if ATR < 0.8 % of price the TP/SL range is
-                    # too tight for the 1.5× ATR barrier to clear reliably.
+                    # ── Gate 2: ATR floor — stops would be inside tick noise ──
+                    _fe_atr_pct = float(result.get('atr_pct', 0.0))
                     if _fe_atr_pct < 0.8:
                         print(f'[{symbol}] ATR_TOO_LOW blocked {new_side} '
                               f'atr_pct={_fe_atr_pct:.2f}%')
@@ -1678,46 +1564,14 @@ class LiveEngine:
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
 
-                    # Ranging + weak confluence: no directional edge at all.
-                    # Only allow ranging-market signals when confluence is
-                    # strongly directional (breakout-level conviction).
-                    if _fe_trend_rg == 'RANGING':
-                        _ranging_blocked = (
-                            (new_side == 'BUY'  and _fe_total < 7.0) or
-                            (new_side == 'SELL' and _fe_total > 3.0)
-                        )
-                        if _ranging_blocked:
-                            print(f'[{symbol}] RANGING_CONFLUENCE blocked {new_side} '
-                                  f'total={_fe_total:.1f}/10 (need BUY≥7.0 or SELL≤3.0 in RANGING)')
-                            if symbol in self.last_signals:
-                                self.last_signals[symbol]['fire']              = False
-                                self.last_signals[symbol]['signal']            = 'HOLD'
-                                self.last_signals[symbol]['ranging_blocked']   = True
-                            self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
-                            return
-
-                    # Trend confluence direction check: block counter-trend signals
-                    # where the trend category score strongly disagrees with direction.
-                    _trend_vs_dir = (
-                        (new_side == 'BUY'  and _fe_trend_c < 3.5) or
-                        (new_side == 'SELL' and _fe_trend_c > 6.5)
-                    )
-                    if _trend_vs_dir:
-                        print(f'[{symbol}] TREND_DIRECTION blocked {new_side} '
-                              f'trend_conf={_fe_trend_c:.1f}/10')
-                        if symbol in self.last_signals:
-                            self.last_signals[symbol]['fire']          = False
-                            self.last_signals[symbol]['signal']        = 'HOLD'
-                            self.last_signals[symbol]['trend_blocked'] = True
-                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
-                        return
-
-                    # ── Portfolio guard: correlation and capital limits ────────────
+                    # ── Gate 3: portfolio capital limits ──────────────────────
+                    # Use the model's edge_score (0-100) directly for position
+                    # sizing — it's already the predictor's calibrated confidence.
+                    _model_quality = min(float(result.get('edge_score', 60.0)), 100.0)
                     self.portfolio_guard.sync_from_wallet(self.wallet.open_positions)
-                    # Estimate position value for this signal
-                    _atr_pct_est = float(result.get('atr_pct', 1.5) or 1.5)
-                    _pos_est     = self.risk_engine.calculate_position_size(
-                        self.wallet.balance, quality_score, regime, _atr_pct_est)
+                    _pos_est = self.risk_engine.calculate_position_size(
+                        self.wallet.balance, _model_quality, regime,
+                        _fe_atr_pct if _fe_atr_pct > 0 else 1.5)
                     _pg_allowed, _pg_reason = self.portfolio_guard.can_open(
                         symbol, self.wallet.balance, _pos_est)
                     if not _pg_allowed:
@@ -1729,47 +1583,14 @@ class LiveEngine:
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
 
-                    # ── Legacy confluence gate (keep existing dual-path logic) ─
-                    _conf_data  = result.get('confluence') or {}
-                    _conf_total = float(_conf_data.get('total', 5.0))
-                    _conf_trend = float(_conf_data.get('trend', 5.0))
-                    _conf_mom   = float(_conf_data.get('momentum', 5.0))
-
-                    def _c10(v: float) -> float:
-                        if abs(v) <= 1.05:
-                            return (v + 1.0) / 2.0 * 10.0
-                        return min(10.0, max(0.0, v))
-
-                    _ct  = _c10(_conf_total)
-                    _ctr = _c10(_conf_trend)
-                    _cm  = _c10(_conf_mom)
-
-                    _pass_total = (
-                        (new_side == 'BUY'  and _ct >= self.CONFLUENCE_BUY_MIN) or
-                        (new_side == 'SELL' and _ct <= self.CONFLUENCE_SELL_MAX)
-                    )
-                    _trend_mom_avg = (_ctr * 2.0 + _cm * 1.5) / 3.5
-                    _pass_override = (
-                        (new_side == 'BUY'  and _trend_mom_avg >= 6.5 and _ct >= 3.5) or
-                        (new_side == 'SELL' and _trend_mom_avg <= 3.5 and _ct <= 6.5)
-                    )
-                    _conf_ok = _pass_total or _pass_override
-
-                    if _conf_ok:
-                        reason = 'override(trend+mom)' if _pass_override and not _pass_total else 'total'
-                        print(f'[{symbol}] CONF PASS {new_side} '
-                              f'total={_ct:.1f} trend={_ctr:.1f} mom={_cm:.1f} [{reason}] '
-                              f'quality={quality_score:.0f} regime={regime.regime}')
-                        self._open_position(symbol, result, price, regime, quality_score)
-                    else:
-                        print(f'[{symbol}] CONF BLOCKED {new_side} '
-                              f'total={_ct:.1f}/10 trend={_ctr:.1f} mom={_cm:.1f} '
-                              f'(need total BUY≥{self.CONFLUENCE_BUY_MIN} '
-                              f'or trend+mom override)')
-                        if symbol in self.last_signals:
-                            self.last_signals[symbol]['fire']              = False
-                            self.last_signals[symbol]['signal']            = 'HOLD'
-                            self.last_signals[symbol]['confluence_blocked'] = True
+                    # ── Model approved — open the position ────────────────────
+                    # predictor.predict_realtime() already applied:
+                    #   meta_threshold_buy/sell, hold_calibrator, regime_thresholds
+                    # Trusting the model's fire=True directly.
+                    print(f'[{symbol}] MODEL PASS {new_side} '
+                          f'edge={_model_quality:.1f} atr={_fe_atr_pct:.2f}% '
+                          f'regime={regime.regime}')
+                    self._open_position(symbol, result, price, regime, _model_quality)
 
                 elif is_flip:
                     print(f'[{symbol}] FLIP-FLOP BLOCKED {last_side}→{new_side} '
