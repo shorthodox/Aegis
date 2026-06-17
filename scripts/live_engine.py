@@ -1320,10 +1320,33 @@ class LiveEngine:
 
     # ── main loop ─────────────────────────────────────────────────────────────
 
+    def _purge_subquality_positions(self) -> None:
+        """Close any restored open positions whose edge score is below MIN_QUALITY_SCORE.
+
+        These positions pre-date the quality gate and should not occupy wallet slots.
+        Closed at the current live price (or entry price if live price unavailable).
+        """
+        to_purge = [
+            sym for sym, pos in list(self.wallet.open_positions.items())
+            if pos.meta_confidence < SignalQualityFilter.MIN_QUALITY_SCORE
+        ]
+        for sym in to_purge:
+            pos   = self.wallet.open_positions[sym]
+            price = self.live_prices.get(sym, pos.entry_price)
+            self.wallet.close_trade(sym, price, 'QUALITY_GATE_CLEANUP')
+            self._last_close_time[sym] = time.time()
+            self._last_close_side[sym] = pos.side
+            print(f'[LiveEngine] PURGED {sym} — edge={pos.meta_confidence:.1f} < '
+                  f'{SignalQualityFilter.MIN_QUALITY_SCORE:.0f} (pre-gate position)')
+        if to_purge:
+            self._save_track_record()
+
     async def run(self) -> None:
         print(f'[LiveEngine] Starting — interval={self.scan_interval_seconds}s '
               f'symbols={len(self.predictors)}')
         asyncio.create_task(self._ws_price_ticker())
+        await asyncio.sleep(2)   # let WebSocket populate live_prices first
+        self._purge_subquality_positions()
         while True:
             t0 = time.time()
             await self._scan_all()
@@ -1566,9 +1589,9 @@ class LiveEngine:
 
                     # ── Gate 3: signal quality floor (edge_score 0-100) ──────
                     _model_quality = min(float(result.get('edge_score', 0.0)), 100.0)
-                    if _model_quality < self.MIN_QUALITY_SCORE:
+                    if _model_quality < SignalQualityFilter.MIN_QUALITY_SCORE:
                         print(f'[{symbol}] QUALITY_GATE blocked {new_side}: '
-                              f'edge={_model_quality:.1f} < {self.MIN_QUALITY_SCORE:.0f}')
+                              f'edge={_model_quality:.1f} < {SignalQualityFilter.MIN_QUALITY_SCORE:.0f}')
                         if symbol in self.last_signals:
                             self.last_signals[symbol]['fire']            = False
                             self.last_signals[symbol]['signal']          = 'HOLD'
