@@ -1357,14 +1357,16 @@ function updateDashboardData(data) {
     }
   }
 
-  // Fallback: Extract prices from signals for any symbol not in data.tickers.
-  // Always update (not just when missing) so prices refresh as signals recompute.
+  // Fallback: seed currentTickers for symbols not covered by the live ticker
+  // stream (e.g. tokens whose ML model isn't loaded this run). Only initialise —
+  // never overwrite an existing value. Once a real ticker price is recorded for a
+  // symbol, the signal snapshot price must never clobber it.
   if (window.latestSignals) {
     window.currentTickers = window.currentTickers || {};
     Object.values(window.latestSignals).forEach(sig => {
       if (sig && sig.symbol) {
         const p = sig.price || sig.entry_price;
-        if (p && !(data.tickers && data.tickers[sig.symbol])) {
+        if (p && window.currentTickers[sig.symbol] === undefined) {
           window.currentTickers[sig.symbol] = p;
         }
       }

@@ -1402,7 +1402,14 @@ class LiveEngine:
         """
         import json as _json
 
-        all_syms = list(set(list(self.predictors.keys()) + list(self._INDEX_SYMBOLS)))
+        # Include all meta-store tokens in the ticker subscription so every
+        # known symbol gets a live price even if its ML model wasn't loaded.
+        import glob as _g
+        _meta_syms = [
+            Path(f).stem.replace('_meta', '').replace('_USDT', '/USDT')
+            for f in _g.glob(str(MODEL_STORE / '*_USDT_meta.json'))
+        ]
+        all_syms = list(set(list(self.predictors.keys()) + list(self._INDEX_SYMBOLS) + _meta_syms))
         sym_map: Dict[str, str] = {
             s.replace('/', '').lower(): s for s in all_syms
         }
