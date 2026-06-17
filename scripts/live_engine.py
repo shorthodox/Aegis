@@ -2632,11 +2632,28 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
             sym_cell = f'[bold]{sym}[/]' if is_tradeable else f'[dim]{sym}[/]'
             px_cell  = f'[bold white]{_px(price)}[/]' if is_tradeable else f'[dim]{_px(price)}[/]'
 
+            # ── Signal cell: show conflict when model opposes open position ──
+            _raw_side = sig.get('side', 'FLAT')
+            _sig_fire  = bool(sig.get('fire'))
+            if is_tradeable and pos and _sig_fire and (
+                (pos.direction == 'LONG'  and _raw_side == 'SELL') or
+                (pos.direction == 'SHORT' and _raw_side == 'BUY')
+            ):
+                # Model flipped against the open position — warn the user.
+                # The position SL/TP are correct for the ORIGINAL direction;
+                # "BUY" here means the model now wants the opposite.
+                _flip_label = 'BUY↑' if _raw_side == 'BUY' else 'SELL↓'
+                sig_cell = f'[bold yellow]⚡ {_flip_label}[/]'
+            elif is_tradeable:
+                sig_cell = _signal_cell(sig)
+            else:
+                sig_cell = '[dim]watch[/]'
+
             grid.add_row(
                 f'[dim]{idx}[/]' if not is_tradeable else str(idx),
                 sym_cell,
                 px_cell,
-                _signal_cell(sig) if is_tradeable else '[dim]watch[/]',
+                sig_cell,
                 dir_cell,
                 _quality_cell(quality) if is_tradeable else '[dim]—[/]',
                 rsi_cell,
