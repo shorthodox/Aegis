@@ -1599,6 +1599,18 @@ class LiveEngine:
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
 
+                    # ── Gate 3.5: safe-mode quality escalation ───────────────
+                    # When last 5 global trades are all losses, raise the quality
+                    # floor from 55 to 70 to protect capital during drawdowns.
+                    if self.perf_tracker.safe_mode_active() and _model_quality < 70.0:
+                        print(f'[{symbol}] SAFE-MODE blocked {new_side}: '
+                              f'edge={_model_quality:.1f} < 70 (elevated floor)')
+                        if symbol in self.last_signals:
+                            self.last_signals[symbol]['fire']   = False
+                            self.last_signals[symbol]['signal'] = 'HOLD'
+                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                        return
+
                     # ── Gate 4: portfolio capital limits ──────────────────────
                     # Use the model's edge_score (0-100) directly for position sizing.
                     self.portfolio_guard.sync_from_wallet(self.wallet.open_positions)
