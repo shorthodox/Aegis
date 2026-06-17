@@ -492,9 +492,9 @@ class DynamicRiskEngine:
     All methods are pure functions (no state) — safe to call from async context.
     """
 
-    BASE_POSITION_PCT = 0.10   # 10 % of balance as the base allocation
+    BASE_POSITION_PCT = 0.07   # 7 % of balance as the base allocation
     MIN_POSITION_PCT  = 0.02   # floor: never risk less than 2 %
-    MAX_POSITION_PCT  = 0.15   # ceiling: never risk more than 15 %
+    MAX_POSITION_PCT  = 0.10   # ceiling: never risk more than 10 % per trade
 
     def calculate_position_size(
         self,
@@ -959,9 +959,9 @@ class PortfolioGuard:
     price returns is a Phase 2 improvement.
     """
 
-    MAX_PER_CLUSTER    = 2     # max 2 concurrent open positions per correlation cluster
-    MAX_OPEN_TOTAL     = 6     # hard cap: never more than 6 open at once across all tokens
-    MAX_CAPITAL_PCT    = 0.45  # never deploy more than 45 % of balance simultaneously
+    MAX_PER_CLUSTER    = 3     # max 3 concurrent open positions per correlation cluster
+    MAX_OPEN_TOTAL     = 12    # hard cap: never more than 12 open at once across all tokens
+    MAX_CAPITAL_PCT    = 0.60  # never deploy more than 60 % of balance simultaneously
 
     # Static correlation clusters (tightest first)
     _CLUSTERS: Dict[str, List[str]] = {
@@ -1218,9 +1218,9 @@ class LiveEngine:
     MAX_CONCURRENT        = 8
     HOURS_CONTEXT         = 300
     MIN_HOLD_SECONDS      = 7_200    # 2 h minimum hold before model-reversal exit
-    COOLDOWN_SECONDS      = 14_400   # 4 h post-close cooldown
-    FLIP_COOLDOWN_SECONDS = 28_800   # 8 h extra cooldown when new signal flips direction
-    MAX_HOLD_SECONDS      = 172_800  # 48 h zombie guard
+    COOLDOWN_SECONDS      = 7_200    # 2 h post-close cooldown
+    FLIP_COOLDOWN_SECONDS = 14_400   # 4 h extra cooldown when new signal flips direction
+    MAX_HOLD_SECONDS      = 86_400   # 24 h zombie guard
     CONFLUENCE_BUY_MIN    = 6.0   # need mildly bullish consensus (≥60th pct)
     CONFLUENCE_SELL_MAX   = 4.0   # need mildly bearish consensus (≤40th pct)
 
