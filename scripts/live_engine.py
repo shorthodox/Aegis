@@ -1347,6 +1347,7 @@ class LiveEngine:
         asyncio.create_task(self._ws_price_ticker())
         await asyncio.sleep(2)   # let WebSocket populate live_prices first
         self._purge_subquality_positions()
+        self._save_track_record()   # push restored positions to web immediately
         while True:
             t0 = time.time()
             await self._scan_all()
@@ -2026,18 +2027,26 @@ class LiveEngine:
             import os as _os, shutil as _shutil
             TRACK_RECORD_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-            open_records = [
-                {
+            open_records = []
+            for p in self.wallet.open_positions.values():
+                cur = self.live_prices.get(p.symbol, p.entry_price) or p.entry_price
+                if p.direction == 'LONG':
+                    _pnl_pct  = (cur - p.entry_price) / p.entry_price * 100 if p.entry_price else 0.0
+                else:
+                    _pnl_pct  = (p.entry_price - cur) / p.entry_price * 100 if p.entry_price else 0.0
+                _pnl_usdt = _pnl_pct / 100 * p.position_value
+                open_records.append({
                     'signal_id':       p.signal_id,
                     'symbol':          p.symbol,
                     'direction':       p.direction,
                     'side':            p.side,
                     'entry_price':     p.entry_price,
+                    'current_price':   round(cur, 8),
                     'exit_price':      None,
                     'entry_time':      p.entry_time,
                     'close_time':      None,
-                    'pnl_pct':         0.0,
-                    'pnl_usdt':        0.0,
+                    'pnl_pct':         round(_pnl_pct, 4),
+                    'pnl_usdt':        round(_pnl_usdt, 4),
                     'outcome':         'OPEN',
                     'exit_reason':     None,
                     'meta_confidence': p.meta_confidence,
@@ -2047,9 +2056,7 @@ class LiveEngine:
                     'take_profit_1':   p.take_profit_1,
                     'take_profit_2':   p.take_profit_2,
                     'take_profit_3':   p.take_profit_3,
-                }
-                for p in self.wallet.open_positions.values()
-            ]
+                })
 
             wallet_records = [asdict(t) for t in self.wallet.trade_history] + open_records
             wallet_ids = {r.get('signal_id') for r in wallet_records if r.get('signal_id')}
