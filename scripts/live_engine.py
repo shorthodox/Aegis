@@ -2504,12 +2504,20 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
         }
 
         _all_syms = sorted(engine.predictors.keys()) if engine.predictors else sorted(signals.keys())
-        # Only show rows with an active BUY/SELL signal or an open position
-        all_syms = [
-            s for s in _all_syms
-            if (signals.get(s, {}).get('fire') and signals.get(s, {}).get('signal', 'HOLD') not in ('HOLD', 'FLAT', ''))
-            or s in wallet.open_positions
-        ]
+        # Show ALL tokens; sort: open positions first, then active signals, then HOLD by alpha
+        def _row_priority(s: str) -> int:
+            if s in wallet.open_positions:
+                return 0
+            sig_s = signals.get(s, {})
+            if sig_s.get('fire') and sig_s.get('signal', 'HOLD') not in ('HOLD', 'FLAT', ''):
+                return 1
+            return 2
+        all_syms = sorted(_all_syms, key=lambda s: (_row_priority(s), s))
+
+        _n_firing = sum(1 for s in _all_syms
+                        if signals.get(s, {}).get('fire')
+                        and signals.get(s, {}).get('signal', 'HOLD') not in ('HOLD', 'FLAT', ''))
+        _n_open   = len(wallet.open_positions)
 
         grid = Table(
             box=box.SIMPLE_HEAVY,
@@ -2517,7 +2525,7 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
             show_header=True,
             header_style='bold white',
             expand=True,
-            title=f'[bold dim]ACTIVE SIGNALS — {len(all_syms)} firing · {len(_all_syms)} monitored · refreshes every 1s[/]',
+            title=f'[bold dim]ALL TOKENS — {_n_firing} firing · {_n_open} open · {len(_all_syms)} monitored · refreshes every 1s[/]',
         )
         grid.add_column('#',        justify='right',  width=3,  style='dim')
         grid.add_column('Symbol',   justify='left',   width=14)
