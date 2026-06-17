@@ -1521,7 +1521,7 @@ class LiveEngine:
             # quality_score is used only for display and position sizing in
             # _build_signal_entry / perf_tracker. Gating is done by the
             # predictor's own gates (meta_threshold + hold_calibrator).
-            quality_score = min(float(result.get('edge_score', 60.0)), 100.0)
+            quality_score = min(float(result.get('edge_score', 0.0)), 100.0)
             fake_breakout = False
 
             # Build signal entry with enriched fields
@@ -1565,7 +1565,7 @@ class LiveEngine:
                         return
 
                     # ── Gate 3: signal quality floor (edge_score 0-100) ──────
-                    _model_quality = min(float(result.get('edge_score', 60.0)), 100.0)
+                    _model_quality = min(float(result.get('edge_score', 0.0)), 100.0)
                     if _model_quality < self.MIN_QUALITY_SCORE:
                         print(f'[{symbol}] QUALITY_GATE blocked {new_side}: '
                               f'edge={_model_quality:.1f} < {self.MIN_QUALITY_SCORE:.0f}')
