@@ -822,16 +822,8 @@ async def run_engine_background():
                 except Exception as _e:
                     print(f"[PRODUCER ERROR] ⚠️ Failed to write signals to Firestore: {_e}")
 
-                # --- update track record (save to disk every 5 min) ---
-                try:
-                    _update_track_record(
-                        LIVE_STATE.data.get("signals", {}),
-                        LIVE_STATE.data.get("tickers", {}),
-                    )
-                    if time.time() - _tr_last_save >= 300:
-                        _save_track_record()
-                except Exception as _te:
-                    print(f"[TrackRecord] Update error: {_te}")
+                # Legacy track-record update disabled — live_engine.py wallet
+                # is the sole track-record writer to avoid file conflicts.
 
             except Exception as e:
                 print(f"State update error: {e}")
@@ -1009,7 +1001,8 @@ async def lifespan(app: FastAPI):
     analytics_task    = asyncio.create_task(analytics_loop())
     dev_token_task    = asyncio.create_task(dev_token_display_loop())
     dev_key_task      = asyncio.create_task(dev_key_display_loop())
-    trader_task       = asyncio.create_task(_trader_scan_loop())
+    # Trader bot disabled — AEGIS-1 live_engine is the sole signal source.
+    # trader_task = asyncio.create_task(_trader_scan_loop())
     yield
     engine_task.cancel()
     reminder_task.cancel()
@@ -1017,7 +1010,7 @@ async def lifespan(app: FastAPI):
     analytics_task.cancel()
     dev_token_task.cancel()
     dev_key_task.cancel()
-    trader_task.cancel()
+    # trader_task.cancel()
 
 app = FastAPI(title="Aegis-1 by Gatekeeper", lifespan=lifespan)
 

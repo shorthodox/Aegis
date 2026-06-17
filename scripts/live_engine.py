@@ -1564,10 +1564,20 @@ class LiveEngine:
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
 
-                    # ── Gate 3: portfolio capital limits ──────────────────────
-                    # Use the model's edge_score (0-100) directly for position
-                    # sizing — it's already the predictor's calibrated confidence.
+                    # ── Gate 3: signal quality floor (edge_score 0-100) ──────
                     _model_quality = min(float(result.get('edge_score', 60.0)), 100.0)
+                    if _model_quality < self.MIN_QUALITY_SCORE:
+                        print(f'[{symbol}] QUALITY_GATE blocked {new_side}: '
+                              f'edge={_model_quality:.1f} < {self.MIN_QUALITY_SCORE:.0f}')
+                        if symbol in self.last_signals:
+                            self.last_signals[symbol]['fire']            = False
+                            self.last_signals[symbol]['signal']          = 'HOLD'
+                            self.last_signals[symbol]['quality_blocked'] = True
+                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                        return
+
+                    # ── Gate 4: portfolio capital limits ──────────────────────
+                    # Use the model's edge_score (0-100) directly for position sizing.
                     self.portfolio_guard.sync_from_wallet(self.wallet.open_positions)
                     _pos_est = self.risk_engine.calculate_position_size(
                         self.wallet.balance, _model_quality, regime,
