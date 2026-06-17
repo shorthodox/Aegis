@@ -1217,9 +1217,9 @@ class LiveEngine:
 
     MAX_CONCURRENT        = 8
     HOURS_CONTEXT         = 300
-    MIN_HOLD_SECONDS      = 7_200    # 2 h minimum hold before model-reversal exit
-    COOLDOWN_SECONDS      = 7_200    # 2 h post-close cooldown
-    FLIP_COOLDOWN_SECONDS = 14_400   # 4 h extra cooldown when new signal flips direction
+    MIN_HOLD_SECONDS      = 3_600    # 1 h minimum hold before model-reversal exit
+    COOLDOWN_SECONDS      = 3_600    # 1 h post-close cooldown
+    FLIP_COOLDOWN_SECONDS = 7_200    # 2 h extra cooldown when new signal flips direction
     MAX_HOLD_SECONDS      = 86_400   # 24 h zombie guard
     CONFLUENCE_BUY_MIN    = 6.0   # need mildly bullish consensus (≥60th pct)
     CONFLUENCE_SELL_MAX   = 4.0   # need mildly bearish consensus (≤40th pct)
@@ -1583,6 +1583,30 @@ class LiveEngine:
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
 
+                    # ── Gate 1.5: Hard direction-regime veto ─────────────────
+                    # meta_override_confidence bypasses the predictor's daily
+                    # trend-filter feature (trend_1d), but must NEVER override
+                    # the live regime classifier which reflects current price
+                    # action (HMM + rule-based).  Opening a LONG in a confirmed
+                    # BEAR regime — or a SHORT in a confirmed BULL — is the
+                    # single most common way a high-conviction model gets wrecked.
+                    if new_side == 'BUY' and regime.regime == _REGIME_TRENDING_BEAR:
+                        print(f'[{symbol}] REGIME_VETO blocked BUY: ↓BEAR prevents LONG entry')
+                        if symbol in self.last_signals:
+                            self.last_signals[symbol]['fire']           = False
+                            self.last_signals[symbol]['signal']         = 'HOLD'
+                            self.last_signals[symbol]['regime_blocked'] = True
+                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                        return
+                    if new_side == 'SELL' and regime.regime == _REGIME_TRENDING_BULL:
+                        print(f'[{symbol}] REGIME_VETO blocked SELL: ↑BULL prevents SHORT entry')
+                        if symbol in self.last_signals:
+                            self.last_signals[symbol]['fire']           = False
+                            self.last_signals[symbol]['signal']         = 'HOLD'
+                            self.last_signals[symbol]['regime_blocked'] = True
+                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                        return
+
                     # ── Gate 2: ATR floor — stops would be inside tick noise ──
                     _fe_atr_pct = float(result.get('atr_pct', 0.0))
                     if _fe_atr_pct < 0.8:
@@ -1776,9 +1800,14 @@ class LiveEngine:
             (pos.direction == 'LONG'  and side == 'SELL' and fire) or
             (pos.direction == 'SHORT' and side == 'BUY'  and fire)
         )
-        if opposite and held >= self.MIN_HOLD_SECONDS:
-            _close('MODEL_REVERSAL_TP')
-            return
+        if opposite:
+            # If TP1 already hit the trade is in profit — close immediately
+            # to lock gains when the model flips direction.
+            # Without TP1, require minimum hold to prevent churn on noisy flips.
+            _reversal_min = 0 if self._tp1_hit.get(symbol, False) else self.MIN_HOLD_SECONDS
+            if held >= _reversal_min:
+                _close('MODEL_REVERSAL_TP')
+                return
 
         # ── 6. ATR-based stop loss ────────────────────────────────────────────
         if pos.stop_loss > 0:
