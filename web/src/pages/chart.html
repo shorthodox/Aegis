@@ -320,9 +320,14 @@
 
     <!-- CHART CARD -->
     <div class="card" style="padding:14px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div class="card-title" style="margin-bottom:0" id="chart-tf-title">📈 Live Chart — 1H</div>
-        <div id="tf-bar" style="display:flex;gap:4px;flex-wrap:wrap"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px">
+        <div class="card-title" style="margin-bottom:0;flex-shrink:0" id="chart-tf-title">📈 Live Chart — 1H</div>
+        <span id="candle-timer"
+              title="Time remaining until current candle closes"
+              style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#94a3b8;
+                     padding:3px 9px;border:1px solid rgba(255,255,255,0.08);border-radius:6px;
+                     background:rgba(255,255,255,0.03);white-space:nowrap;flex-shrink:0">—</span>
+        <div id="tf-bar" style="display:flex;gap:4px;flex-wrap:wrap;margin-left:auto"></div>
       </div>
       <div id="tv-chart"><div class="loader">Loading chart<span class="dot-pulse"></span></div></div>
       <div class="chart-legend" id="chart-legend" style="display:none">
@@ -665,8 +670,10 @@ let _chartBars     = [];
 let _chartVols     = [];
 let _candlesSeries = null;
 let _volSeriesRef  = null;
-let _liveBar       = null;   // current forming candle — updated per aggTrade tick
-let _restTimer     = null;   // 1-second REST fallback when WS is down
+let _liveBar            = null;   // current forming candle — updated per aggTrade tick
+let _restTimer          = null;   // 1-second REST fallback when WS is down
+let _candleCloseTime    = 0;      // ms timestamp of current candle's close (from kline stream)
+let _candleTimerInterval= null;   // setInterval handle for the candle countdown
 
 function buildTfBar() {
   const bar = $('tf-bar');
@@ -707,6 +714,9 @@ async function renderChart(sig) {
 
     _chartBars = raw.map(k => ({ time: Math.floor(k[0]/1000), open: +k[1], high: +k[2], low: +k[3], close: +k[4] }));
     _chartVols = raw.map(k => ({ time: Math.floor(k[0]/1000), value: +k[5], color: +k[4] >= +k[1] ? 'rgba(0,255,136,0.2)' : 'rgba(255,0,85,0.2)' }));
+    // Seed candle close time from last REST kline (index 6 = close time ms)
+    _candleCloseTime = raw[raw.length - 1][6];
+    _startCandleTimer();
 
     container.innerHTML = '';
     if (chartInstance) { try { chartInstance.remove(); } catch(e) {} }
@@ -780,6 +790,8 @@ async function renderChart(sig) {
 function stopLiveChart() {
   _historyAbort = true;
   _liveBar = null;
+  _candleCloseTime = 0;
+  if (_candleTimerInterval) { clearInterval(_candleTimerInterval); _candleTimerInterval = null; }
   if (_restTimer)    { clearInterval(_restTimer);    _restTimer    = null; }
   if (_wsKeepAlive)  { clearInterval(_wsKeepAlive);  _wsKeepAlive  = null; }
   if (_ws) {
@@ -829,6 +841,9 @@ function startLiveWs(symbol, interval) {
         const k = msg.data.k;
         if (!k || !_candlesSeries) return;
         const bar = { time: Math.floor(k.t / 1000), open: +k.o, high: +k.h, low: +k.l, close: +k.c };
+
+        // Sync close time — k.T is authoritative close timestamp in ms
+        _candleCloseTime = k.T;
 
         // New candle just started — reset liveBar
         if (!_liveBar || _liveBar.time !== bar.time) _liveBar = { ...bar };
@@ -887,6 +902,35 @@ function _startRestFallback(symbol) {
       }
     } catch(_) {}
   }, 1000);
+}
+
+// Candle countdown timer — updates every second using _candleCloseTime
+function _startCandleTimer() {
+  if (_candleTimerInterval) clearInterval(_candleTimerInterval);
+  const el = document.getElementById('candle-timer');
+  if (!el) return;
+
+  function _tick() {
+    if (!_candleCloseTime) { el.textContent = '—'; return; }
+    const remaining = Math.max(0, Math.floor((_candleCloseTime - Date.now()) / 1000));
+    const m = Math.floor(remaining / 60);
+    const s = remaining % 60;
+    el.textContent = remaining === 0 ? 'Closing…' : m > 0 ? `${m}m ${s.toString().padStart(2,'0')}s` : `${s}s`;
+    // Colour shifts to orange at <30s, red at <10s
+    if (remaining < 10) {
+      el.style.color = 'var(--red)';
+      el.style.borderColor = 'rgba(255,0,85,0.35)';
+    } else if (remaining < 30) {
+      el.style.color = 'var(--orange)';
+      el.style.borderColor = 'rgba(255,140,0,0.25)';
+    } else {
+      el.style.color = '#94a3b8';
+      el.style.borderColor = 'rgba(255,255,255,0.08)';
+    }
+  }
+
+  _tick();
+  _candleTimerInterval = setInterval(_tick, 1000);
 }
 
 function _updateLiveTicker(symbol, price) {
