@@ -244,6 +244,33 @@ export async function handleEmailSignup(email, password, displayName, signupToke
     const userData = await ensureUserDocumentV2(user, 'email');
 
     const idToken = await user.getIdToken();
+
+    // Provision the backend user record (users/{email} keyed doc with otp_verified:true).
+    // Without this, /auth/me looks up by email key and returns 404/403, kicking the
+    // user back from dashboard even after a successful trial start.
+    try {
+      const provisionRes = await fetch('/api/users/provision', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
+        body: JSON.stringify({
+          uid: user.uid,
+          email: user.email,
+          display_name: displayName,
+          provider: 'password',
+          signup_token: signupToken,
+          phone_number: mobile || null
+        })
+      });
+      if (provisionRes.ok) {
+        sessionStorage.removeItem('otp_signup_token');
+      }
+    } catch (provisionErr) {
+      console.warn('[signup] Backend provision failed (non-fatal):', provisionErr.message);
+    }
+
     AuthManager.setToken(idToken);
     AuthManager.setUser(userData);
     localStorage.setItem('authenticated', 'true');
