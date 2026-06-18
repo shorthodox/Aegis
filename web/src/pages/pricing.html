@@ -148,25 +148,27 @@
         </div>
 
         <div class="pricing-grid floating-cards">
-            <!-- Free Trial -->
-            <div class="price-card hover-interactive" style="border:1px solid rgba(0,242,255,0.2);background:rgba(0,242,255,0.03);">
-                <div style="font-size:0.65rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(0,242,255,0.5);margin-bottom:0.4rem;">Start for free</div>
-                <h3 style="color:#00f2ff;">Free Trial</h3>
-                <div class="price" style="color:#00f2ff;font-size:1.8rem;">3 Days <span style="font-size:0.9rem;">free</span></div>
-                <p class="card-desc">Full market analysis on 60 tokens — no card required. AI fire signal and exact entry/TP/SL are unlocked when you upgrade.</p>
+            <!-- Tier 1: Basic — 3-Day Free Trial -->
+            <div class="price-card glow-basic hover-interactive">
+                <div style="font-size:0.65rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(0,242,255,0.5);margin-bottom:0.4rem;">Best for beginners</div>
+                <h3>Basic</h3>
+                <div class="price">$3.60 <span>/mo</span></div>
+                <div style="display:inline-flex;align-items:center;gap:0.4rem;background:rgba(0,242,255,0.1);border:1px solid rgba(0,242,255,0.3);border-radius:6px;padding:0.2rem 0.65rem;font-size:0.72rem;font-weight:700;color:#00f2ff;margin-bottom:0.6rem;letter-spacing:0.04em;">
+                    <i class="fas fa-flask"></i> 3-Day Free Trial
+                </div>
+                <p class="card-desc">Start with a free 3-day trial — full Basic access, no card required.</p>
                 <ul class="features-list">
                     <li><i class="fas fa-chart-bar"></i> Market bias, trend regime &amp; volatility context</li>
                     <li><i class="fas fa-map-marker-alt"></i> S/R zones, pivot, R1/R2/S1/S2 levels</li>
-                    <li><i class="fas fa-bullseye"></i> Price targets (bull TP1/TP2/TP3 &amp; bear equivalents)</li>
-                    <li><i class="fas fa-wave-square"></i> 6 indicators: RSI, MACD, ADX, CCI, Supertrend, confluence</li>
+                    <li><i class="fas fa-bullseye"></i> Price targets (bull &amp; bear TP1/TP2/TP3)</li>
+                    <li><i class="fas fa-wave-square"></i> RSI, MACD, ADX, CCI, Supertrend, confluence</li>
                     <li><i class="fas fa-coins"></i> Volume z-score, funding rate, OI trend &amp; z-score</li>
                     <li><i class="fas fa-globe"></i> Session context, fear/greed index, trader views</li>
                     <li><i class="fas fa-chart-line"></i> 60 tokens · 2 chart timeframes (30m &amp; 1h)</li>
                     <li><i class="fas fa-archive"></i> Signal history archive</li>
-                    <li style="color:rgba(255,100,100,0.8);"><i class="fas fa-lock"></i> AI fire signal, entry price, TP &amp; SL — locked</li>
                 </ul>
-                <button id="trialBtn" class="btn-outline" style="width:100%;cursor:pointer;border-color:rgba(0,242,255,0.4);color:#00f2ff;">
-                    <i class="fas fa-bolt" style="margin-right:0.5rem;"></i>Start Free Trial
+                <button id="trialBtn" class="btn-outline" style="width:100%;cursor:pointer;">
+                    <i class="fas fa-flask" style="margin-right:0.5rem;"></i>Try Free for 3 Days
                 </button>
                 <div id="trialStatusMsg" style="margin-top:0.6rem;font-size:0.8rem;text-align:center;min-height:1.2em;"></div>
             </div>
@@ -178,7 +180,7 @@
                 <div class="price">$24.00 <span>/mo</span></div>
                 <p class="card-desc">AI conviction label per signal, all 8 chart timeframes, and a full noise-filtering layer — know exactly which setups to act on.</p>
                 <ul class="features-list">
-                    <li><i class="fas fa-check-circle" style="color:#64ffb4;"></i> Everything in Free Trial</li>
+                    <li><i class="fas fa-check-circle" style="color:#64ffb4;"></i> Everything in Basic</li>
                     <li><i class="fas fa-robot"></i> <strong>AI Conviction Label</strong> per signal — HIGH / MEDIUM / LOW
                         <div style="display:flex;gap:0.4rem;margin-top:0.35rem;">
                             <span style="padding:0.15rem 0.55rem;border-radius:4px;font-size:0.68rem;font-weight:700;background:rgba(0,255,136,0.15);border:1px solid rgba(0,255,136,0.35);color:#00ff88;">HIGH</span>
@@ -265,7 +267,7 @@
                 <thead>
                     <tr style="border-bottom:1px solid rgba(255,255,255,0.1);background:rgba(0,0,0,0.6);">
                         <th style="padding:1rem 1.5rem;color:var(--primary-cyan);">Feature</th>
-                        <th style="padding:1rem;text-align:center;color:#00f2ff;">Trial</th>
+                        <th style="padding:1rem;text-align:center;color:#00f2ff;">Basic<br><span style="font-size:0.7rem;font-weight:400;opacity:0.7;">$3.60/mo</span></th>
                         <th style="padding:1rem;text-align:center;color:#64ffb4;">Sentinel<br><span style="font-size:0.7rem;font-weight:400;opacity:0.7;">$24/mo</span></th>
                         <th style="padding:1rem;text-align:center;color:#ffd700;">AEGIS Pro<br><span style="font-size:0.7rem;font-weight:400;opacity:0.7;">$40/mo</span></th>
                     </tr>
@@ -557,14 +559,16 @@
                         maximumFractionDigits: 0,
                     }).format(Math.round(usdPrice * rate));
 
-                    // Trial card has no USD price — skip index 0, update indices 1 and 2
+                    // All 3 price cards: Basic, Sentinel, AEGIS Pro
                     const priceEls = document.querySelectorAll('.price');
+                    if (priceEls[0]) priceEls[0].innerHTML = fmt(usd.basic) + ' <span>/mo</span>';
                     if (priceEls[1]) priceEls[1].innerHTML = fmt(usd.intermediate) + ' <span>/mo</span>';
                     if (priceEls[2]) priceEls[2].innerHTML = fmt(usd.pro) + ' <span>/mo</span>';
 
                     document.querySelectorAll('th').forEach(th => {
                         const text = th.textContent;
-                        if (text.includes('Sentinel')) th.innerHTML = `Sentinel<br><span style="font-size:0.7rem;font-weight:400;opacity:0.7;">${fmt(usd.intermediate)}/mo</span>`;
+                        if (text.includes('Basic')) th.innerHTML = `Basic<br><span style="font-size:0.7rem;font-weight:400;opacity:0.7;">${fmt(usd.basic)}/mo</span>`;
+                        else if (text.includes('Sentinel')) th.innerHTML = `Sentinel<br><span style="font-size:0.7rem;font-weight:400;opacity:0.7;">${fmt(usd.intermediate)}/mo</span>`;
                         else if (text.includes('AEGIS Pro')) th.innerHTML = `AEGIS Pro<br><span style="font-size:0.7rem;font-weight:400;opacity:0.7;">${fmt(usd.pro)}/mo</span>`;
                     });
                 } catch (_) {
