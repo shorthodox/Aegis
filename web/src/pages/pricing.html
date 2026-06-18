@@ -144,69 +144,84 @@
     <section class="pricing-hero">
         <div class="pricing-header">
             <h1 class="gradient-text">Choose Your Edge</h1>
-            <p class="hero-sub">Every plan includes <strong>Aegis‑1 Executive Guidance</strong>: step‑by‑step execution
-                playbooks and real‑time risk filters. Razorpay Standard Checkout — UPI, cards, and netbanking.</p>
+            <p class="hero-sub">Two intelligence tiers built on top of a free trial. Every plan starts with the full 60-token signal feed — <strong>Sentinel</strong> adds noise filters and risk tools, <strong>AEGIS Pro</strong> unlocks the full ML model stack. Razorpay Standard Checkout — UPI, cards, and netbanking.</p>
         </div>
 
         <div class="pricing-grid floating-cards">
-            <!-- Tier 1: Basic -->
-            <div class="price-card glow-basic hover-interactive">
-                <div style="font-size:0.65rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(0,242,255,0.5);margin-bottom:0.4rem;">Best for beginners</div>
-                <h3>Basic</h3>
-                <div class="price">$3.60 <span>/mo</span></div>
-                <p class="card-desc">Start following signals. No analysis skills needed.</p>
+            <!-- Free Trial -->
+            <div class="price-card hover-interactive" style="border:1px solid rgba(0,242,255,0.2);background:rgba(0,242,255,0.03);">
+                <div style="font-size:0.65rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(0,242,255,0.5);margin-bottom:0.4rem;">Start for free</div>
+                <h3 style="color:#00f2ff;">Free Trial</h3>
+                <div class="price" style="color:#00f2ff;font-size:1.8rem;">3 Days <span style="font-size:0.9rem;">free</span></div>
+                <p class="card-desc">Experience the live signal feed at zero cost. No card required.</p>
                 <ul class="features-list">
-                    <li><i class="fas fa-check-circle"></i> Full signals with entry, TP &amp; SL</li>
-                    <li><i class="fas fa-align-left"></i> Plain-English "Why" per signal</li>
+                    <li><i class="fas fa-check-circle"></i> Full signals — entry, TP &amp; SL</li>
+                    <li><i class="fas fa-align-left"></i> Plain-English AI reasoning per signal</li>
                     <li><i class="fas fa-chart-line"></i> 60 tokens · balanced 1:2 R:R</li>
-                    <li><i class="fas fa-flask"></i> 3-Day Free Trial</li>
                     <li><i class="fas fa-archive"></i> Signal history archive</li>
+                    <li><i class="fas fa-hourglass-end"></i> Auto-expires after 3 days</li>
                 </ul>
-                <a href="#" data-plan="basic" class="btn-outline">Try Free for 3 Days</a>
+                <button id="trialBtn" class="btn-outline" style="width:100%;cursor:pointer;border-color:rgba(0,242,255,0.4);color:#00f2ff;">
+                    <i class="fas fa-bolt" style="margin-right:0.5rem;"></i>Start Free Trial
+                </button>
+                <div id="trialStatusMsg" style="margin-top:0.6rem;font-size:0.8rem;text-align:center;min-height:1.2em;"></div>
             </div>
 
-            <!-- Tier 2: Intermediate -->
+            <!-- Sentinel -->
             <div class="price-card glow-intermediate hover-interactive">
-                <div style="font-size:0.65rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(100,255,180,0.6);margin-bottom:0.4rem;">Best for active traders</div>
-                <h3>Intermediate</h3>
+                <div style="font-size:0.65rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(100,255,180,0.7);margin-bottom:0.4rem;">Best for active traders</div>
+                <h3 style="color:#64ffb4;">Sentinel</h3>
                 <div class="price">$24.00 <span>/mo</span></div>
-                <p class="card-desc">Understand every signal. Know which setups are strongest before you act.</p>
+                <p class="card-desc">Know which signals are real. Cut noise, avoid bad setups, size positions correctly.</p>
                 <ul class="features-list">
-                    <li><i class="fas fa-check-circle"></i> Everything in Basic</li>
-                    <li><i class="fas fa-layer-group"></i> Confluence Scorecard — see which indicators agreed
+                    <li><i class="fas fa-check-circle" style="color:#64ffb4;"></i> Everything in Free Trial</li>
+                    <li><i class="fas fa-medal"></i> Quality Score Badge — instant signal strength read
                         <div class="confluence-progress-bar">
-                            <div class="confluence-progress-fill" style="width: 75%;"></div>
+                            <div class="confluence-progress-fill" style="width:78%;background:linear-gradient(90deg,#64ffb4,#00f2ff);"></div>
+                        </div>
+                    </li>
+                    <li><i class="fas fa-exclamation-triangle"></i> Warning Chips — fake breakout, volume anomaly, regime mismatch, funding rate</li>
+                    <li><i class="fas fa-ban"></i> <strong>DON'T TRADE</strong> composite risk banner</li>
+                    <li><i class="fas fa-clock"></i> Session-Priority Sort — active session signals float first</li>
+                    <li><i class="fas fa-wallet"></i> Capital at Risk Calculator — Risk $X → Reward $Y</li>
+                    <li><i class="fas fa-balance-scale"></i> Portfolio Exposure Bar — live LONG/SHORT skew meter</li>
+                    <li><i class="fas fa-layer-group"></i> Confluence Scorecard
+                        <div class="confluence-progress-bar" style="margin-top:0.3rem;">
+                            <div class="confluence-progress-fill" style="width: 72%;"></div>
                         </div>
                     </li>
                     <li><i class="fas fa-certificate"></i> Per-token win-rate history</li>
-                    <li><i class="fas fa-map-signs"></i> Live support/resistance zone tracking
+                    <li><i class="fas fa-map-signs"></i> Live S/R zone tracking
                         <div class="zone-progression">
                             <div class="zone-node active"></div>
                             <div class="zone-line active"></div>
                             <div class="zone-node active"></div>
-                            <div class="zone-line"></div>
+                            <div class="zone-line active"></div>
                             <div class="zone-node"></div>
                         </div>
                     </li>
                 </ul>
-                <a href="#" data-plan="intermediate" class="btn-outline">Get Intermediate</a>
+                <a href="#" data-plan="intermediate" class="btn-outline" style="border-color:rgba(100,255,180,0.5);color:#64ffb4;">Activate Sentinel</a>
             </div>
 
-            <!-- Tier 3: Professional -->
+            <!-- AEGIS Pro -->
             <div class="price-card tier-pro featured glow-pro hover-interactive">
-                <div class="best-value" style="background:#ffd700; color:#000;"><i class="fas fa-crown"></i> MOST POPULAR</div>
-                <div style="font-size:0.65rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,215,0,0.6);margin-bottom:0.4rem;margin-top:0.5rem;">Best for power traders &amp; quants</div>
-                <h3>Professional</h3>
+                <div class="best-value" style="background:#ffd700;color:#000;"><i class="fas fa-crown"></i> MOST POPULAR</div>
+                <div style="font-size:0.65rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,215,0,0.7);margin-bottom:0.4rem;margin-top:0.5rem;">Best for power traders &amp; quants</div>
+                <h3>AEGIS Pro</h3>
                 <div class="price">$40.00 <span>/mo</span></div>
-                <p class="card-desc">Full model access. Trade the edge, not just the signal.</p>
+                <p class="card-desc">Full model access. LSTM + HMM deep panels, live chart analysis, raw probabilities — trade the model, not just the signal.</p>
                 <ul class="features-list">
-                    <li><i class="fas fa-check-circle"></i> Everything in Intermediate</li>
+                    <li><i class="fas fa-check-circle" style="color:#ffd700;"></i> Everything in Sentinel</li>
+                    <li><i class="fas fa-brain"></i> LSTM Predictions Panel — continuation, exhaustion &amp; volatility probabilities</li>
+                    <li><i class="fas fa-wave-square"></i> HMM Deep Regime Panel — stability, transition risk &amp; state disagreement</li>
+                    <li><i class="fas fa-chart-area"></i> Per-Token Deep Chart with live WebSocket feed &amp; 60k candle history</li>
+                    <li><i class="fas fa-hourglass-half"></i> Candle Close Timer — real-time countdown per timeframe</li>
                     <li><i class="fas fa-rocket"></i> Moonshot mode — 1:5 R:R setups</li>
-                    <li><i class="fas fa-chart-pie"></i> Expectancy matrix &amp; max drawdown stats</li>
-                    <li><i class="fas fa-brain"></i> Raw model probabilities &amp; SHAP feature importance</li>
+                    <li><i class="fas fa-chart-pie"></i> Raw model probabilities &amp; SHAP feature importance</li>
                     <li><i class="fas fa-code"></i> Personal API &amp; JSON endpoints for automation</li>
                 </ul>
-                <a href="#" data-plan="pro" class="btn-pro" style="background:linear-gradient(135deg, #ffd700, #ff8c00); color:#000; border:none;"><i class="fas fa-unlock-alt"></i> Go Professional</a>
+                <a href="#" data-plan="pro" class="btn-pro" style="background:linear-gradient(135deg,#ffd700,#ff8c00);color:#000;border:none;"><i class="fas fa-unlock-alt"></i> Go AEGIS Pro</a>
             </div>
         </div>
 
@@ -225,65 +240,140 @@
             <a href="/web/src/pages/track-record.html" style="color:#00f2ff;text-decoration:underline;">see our live Track Record</a>.
         </p>
 
-        <div class="feature-matrix" style="margin-top: 3rem; overflow-x: auto; padding: 0 1rem;">
-            <h3 style="margin-bottom: 1.5rem; text-align: center; color: #fff;">Feature Matrix Overview</h3>
-            <table style="width: 100%; max-width: 900px; margin: 0 auto; text-align: left; border-collapse: collapse; background: rgba(0,0,0,0.4); border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1);">
+        <div class="feature-matrix" style="margin-top:3rem;overflow-x:auto;padding:0 1rem;">
+            <h3 style="margin-bottom:1.5rem;text-align:center;color:#fff;">Full Feature Matrix</h3>
+            <table style="width:100%;max-width:960px;margin:0 auto;text-align:left;border-collapse:collapse;background:rgba(0,0,0,0.4);border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.1);">
                 <thead>
-                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.6); color: var(--primary-cyan);">
-                        <th style="padding: 1rem 1.5rem;">Feature Layer</th>
-                        <th style="padding: 1rem; text-align: center;">Basic ($3.60)</th>
-                        <th style="padding: 1rem; text-align: center;">Intermediate ($24.00)</th>
-                        <th style="padding: 1rem; text-align: center;">Professional ($40.00)</th>
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.1);background:rgba(0,0,0,0.6);">
+                        <th style="padding:1rem 1.5rem;color:var(--primary-cyan);">Feature</th>
+                        <th style="padding:1rem;text-align:center;color:#00f2ff;">Trial</th>
+                        <th style="padding:1rem;text-align:center;color:#64ffb4;">Sentinel<br><span style="font-size:0.7rem;font-weight:400;opacity:0.7;">$24/mo</span></th>
+                        <th style="padding:1rem;text-align:center;color:#ffd700;">AEGIS Pro<br><span style="font-size:0.7rem;font-weight:400;opacity:0.7;">$40/mo</span></th>
                     </tr>
                 </thead>
-                <tbody style="color: rgba(255,255,255,0.85);">
-                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                        <td style="padding: 1rem 1.5rem;">Real-Time BTC/ETH Signals</td>
-                        <td style="padding: 1rem; text-align: center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding: 1rem; text-align: center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding: 1rem; text-align: center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                <tbody style="color:rgba(255,255,255,0.85);">
+                    <tr style="background:rgba(0,242,255,0.03);border-bottom:1px solid rgba(255,255,255,0.04);">
+                        <td colspan="4" style="padding:0.5rem 1.5rem;font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:rgba(0,242,255,0.5);">Signal Feed — All Plans</td>
                     </tr>
-                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                        <td style="padding: 1rem 1.5rem;">3-Day Access Verification</td>
-                        <td style="padding: 1rem; text-align: center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding: 1rem; text-align: center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding: 1rem; text-align: center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <td style="padding:0.85rem 1.5rem;">Real-Time Signals (60 Tokens)</td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
                     </tr>
-                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                        <td style="padding: 1rem 1.5rem;">Full 60-Token Fleet</td>
-                        <td style="padding: 1rem; text-align: center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding: 1rem; text-align: center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding: 1rem; text-align: center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <td style="padding:0.85rem 1.5rem;">Entry / TP / SL with AI Reasoning</td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
                     </tr>
-                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                        <td style="padding: 1rem 1.5rem;">Confluence Scorecards</td>
-                        <td style="padding: 1rem; text-align: center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding: 1rem; text-align: center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding: 1rem; text-align: center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <td style="padding:0.85rem 1.5rem;">Signal History Archive</td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
                     </tr>
-                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                        <td style="padding: 1rem 1.5rem;">Visual Zone Tracking</td>
-                        <td style="padding: 1rem; text-align: center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding: 1rem; text-align: center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding: 1rem; text-align: center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                    <tr style="background:rgba(100,255,180,0.03);border-bottom:1px solid rgba(255,255,255,0.04);">
+                        <td colspan="4" style="padding:0.5rem 1.5rem;font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:rgba(100,255,180,0.6);">Signal Intelligence — Sentinel+</td>
                     </tr>
-                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                        <td style="padding: 1rem 1.5rem;">Expectancy Matrix & Max DD</td>
-                        <td style="padding: 1rem; text-align: center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding: 1rem; text-align: center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding: 1rem; text-align: center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <td style="padding:0.85rem 1.5rem;">Quality Score Badge</td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
                     </tr>
-                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                        <td style="padding: 1rem 1.5rem;">Raw Probabilities & SHAP</td>
-                        <td style="padding: 1rem; text-align: center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding: 1rem; text-align: center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding: 1rem; text-align: center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <td style="padding:0.85rem 1.5rem;">Warning Chips (Fake Breakout, Volume, Regime, Funding Rate)</td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                    </tr>
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <td style="padding:0.85rem 1.5rem;">DON'T TRADE Composite Risk Banner</td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                    </tr>
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <td style="padding:0.85rem 1.5rem;">Session-Priority Signal Sort</td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                    </tr>
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <td style="padding:0.85rem 1.5rem;">Capital at Risk Calculator</td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                    </tr>
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <td style="padding:0.85rem 1.5rem;">Portfolio Exposure Bar (LONG/SHORT Skew)</td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                    </tr>
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <td style="padding:0.85rem 1.5rem;">Confluence Scorecard</td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                    </tr>
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <td style="padding:0.85rem 1.5rem;">Per-Token Win-Rate History</td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                    </tr>
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <td style="padding:0.85rem 1.5rem;">Live S/R Zone Tracking</td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                    </tr>
+                    <tr style="background:rgba(255,215,0,0.03);border-bottom:1px solid rgba(255,255,255,0.04);">
+                        <td colspan="4" style="padding:0.5rem 1.5rem;font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:rgba(255,215,0,0.6);">ML Model Stack — AEGIS Pro</td>
+                    </tr>
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <td style="padding:0.85rem 1.5rem;">LSTM Predictions Panel (Continuation, Exhaustion, Volatility)</td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                    </tr>
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <td style="padding:0.85rem 1.5rem;">HMM Deep Regime Panel (Stability, Transition Risk)</td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                    </tr>
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <td style="padding:0.85rem 1.5rem;">Per-Token Deep Chart (Live WebSocket + 60k Candle History)</td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                    </tr>
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <td style="padding:0.85rem 1.5rem;">Candle Close Timer (per Timeframe)</td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                    </tr>
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <td style="padding:0.85rem 1.5rem;">Moonshot Mode — 1:5 R:R Setups</td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                    </tr>
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <td style="padding:0.85rem 1.5rem;">Raw Model Probabilities &amp; SHAP Importance</td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
                     </tr>
                     <tr>
-                        <td style="padding: 1rem 1.5rem;">API / JSON Data Export</td>
-                        <td style="padding: 1rem; text-align: center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding: 1rem; text-align: center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding: 1rem; text-align: center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
+                        <td style="padding:0.85rem 1.5rem;">Personal API &amp; JSON Data Export</td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
+                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
                     </tr>
                 </tbody>
             </table>
@@ -293,9 +383,9 @@
             <p>✅ Razorpay Standard Checkout is enabled — UPI AutoPay, cards, netbanking, and wallets.</p>
         </div>
 
-        <div class="guidance-teaser" style="margin-top: 1.5rem;">
+        <div class="guidance-teaser" style="margin-top:1.5rem;">
             <p>🛡️ <strong>The Aegis‑1 Promise:</strong> We don't just give signals. We tell you <u>exactly</u> how to
-                enter, when to sit on your hands, and which common retail traps to avoid.</p>
+                enter, when to sit on your hands, and which common retail traps to avoid — including fake breakouts and bad-regime setups the model flags in real time.</p>
         </div>
         <!-- Developer Access Code -->
         <div id="devCodeSection" style="
@@ -406,17 +496,15 @@
                         maximumFractionDigits: 0,
                     }).format(Math.round(usdPrice * rate));
 
-                    const planKeys = ['basic', 'intermediate', 'pro'];
+                    // Trial card has no USD price — skip index 0, update indices 1 and 2
                     const priceEls = document.querySelectorAll('.price');
-                    planKeys.forEach((key, i) => {
-                        if (priceEls[i]) priceEls[i].innerHTML = fmt(usd[key]) + ' <span>/mo</span>';
-                    });
+                    if (priceEls[1]) priceEls[1].innerHTML = fmt(usd.intermediate) + ' <span>/mo</span>';
+                    if (priceEls[2]) priceEls[2].innerHTML = fmt(usd.pro) + ' <span>/mo</span>';
 
                     document.querySelectorAll('th').forEach(th => {
                         const text = th.textContent;
-                        if (text.includes('Basic')) th.textContent = `Basic (${fmt(usd.basic)})`;
-                        else if (text.includes('Intermediate')) th.textContent = `Intermediate (${fmt(usd.intermediate)})`;
-                        else if (text.includes('Professional')) th.textContent = `Professional (${fmt(usd.pro)})`;
+                        if (text.includes('Sentinel')) th.innerHTML = `Sentinel<br><span style="font-size:0.7rem;font-weight:400;opacity:0.7;">${fmt(usd.intermediate)}/mo</span>`;
+                        else if (text.includes('AEGIS Pro')) th.innerHTML = `AEGIS Pro<br><span style="font-size:0.7rem;font-weight:400;opacity:0.7;">${fmt(usd.pro)}/mo</span>`;
                     });
                 } catch (_) {
                     // silently keep USD prices if rate fetch fails
