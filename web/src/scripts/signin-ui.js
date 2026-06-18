@@ -240,12 +240,16 @@ async function performForgotPassword(e) {
     return;
   }
 
-  showLoading();
+  const btn = e.target.querySelector('button[type="submit"]');
+  const originalText = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  document.getElementById('forgotPasswordError').textContent = '';
+  document.getElementById('forgotPasswordSuccess').textContent = '';
+
   try {
     const result = await handlePasswordReset(email);
     if (result.success) {
       document.getElementById('forgotPasswordSuccess').textContent = result.message;
-      document.getElementById('forgotPasswordError').textContent = '';
       document.getElementById('forgotEmail').value = '';
     } else {
       showError('forgotPasswordError', result.message);
@@ -253,7 +257,7 @@ async function performForgotPassword(e) {
   } catch (error) {
     showError('forgotPasswordError', error.message);
   } finally {
-    hideLoading();
+    if (btn) { btn.disabled = false; btn.textContent = originalText; }
   }
 }
 
