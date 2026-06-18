@@ -18,7 +18,6 @@ import {
   signInWithPhoneNumber,
   RecaptchaVerifier,
   updateProfile,
-  fetchSignInMethodsForEmail,
   onAuthStateChanged,
   GoogleAuthProvider
 } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
@@ -225,13 +224,10 @@ export async function handleEmailSignup(email, password, displayName, signupToke
     sessionStorage.setItem('otp_signup_token', signupToken);
     if (mobile) sessionStorage.setItem('pending_phone', mobile);
 
-    // Check if Firebase account already exists for this email
-    const methods = await fetchSignInMethodsForEmail(auth, email);
-    if (methods.length > 0) {
-      throw new Error('Email already in use. Please sign in instead.');
-    }
-
-    // OTP already proved email is reachable — create account and sign in directly
+    // OTP already proved email is reachable — create account and sign in directly.
+    // fetchSignInMethodsForEmail is deprecated and broken when Firebase's email
+    // enumeration protection is enabled; let createUserWithEmailAndPassword handle
+    // duplicates via auth/email-already-in-use instead.
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
 
@@ -279,7 +275,17 @@ export async function handleEmailSignup(email, password, displayName, signupToke
     return { success: true, user, message: 'Account created successfully!', userData };
   } catch (error) {
     console.error('❌ Email signup error:', error.code, error.message);
-    return { success: false, message: error.message || 'Signup failed' };
+    let message = 'Signup failed. Please try again.';
+    if (error.code === 'auth/email-already-in-use') {
+      message = 'Email already in use. Please sign in instead.';
+    } else if (error.code === 'auth/invalid-email') {
+      message = 'Invalid email address. Please check and try again.';
+    } else if (error.code === 'auth/weak-password') {
+      message = 'Password must be at least 8 characters.';
+    } else if (error.message) {
+      message = error.message;
+    }
+    return { success: false, message };
   }
 }
 
