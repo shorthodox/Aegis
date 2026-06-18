@@ -462,14 +462,48 @@ function _planFromStorage() {
   return '';
 }
 
-// Any logged-in user gets full access — lock is only for guests.
+// ── Access gate: trial/paid only — guests are redirected to login ─────────────
+// Show a full-page overlay while Firebase resolves so guests never see content.
+const _gateOverlay = (() => {
+  const el = document.createElement('div');
+  el.id = 'auth-gate-overlay';
+  el.style.cssText = 'position:fixed;inset:0;background:#050505;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;';
+  el.innerHTML = `
+    <div style="font-size:24px;font-weight:800;color:#00f2ff;letter-spacing:3px;font-family:Inter,sans-serif">⚡ AEGIS</div>
+    <div style="font-size:12px;color:#94a3b8;font-family:Inter,sans-serif;">Checking access…</div>`;
+  document.body.appendChild(el);
+  return el;
+})();
+
+// Fast path: cached token → hide overlay immediately, Firebase confirms shortly
+const _cachedToken = localStorage.getItem('access_token') || localStorage.getItem('authToken');
+if (_cachedToken) _gateOverlay.style.display = 'none';
+
+let _gateResolved = false;
+// Fallback timeout — if Firebase takes >4s, decide based on cached token
+const _gateFallback = setTimeout(() => {
+  if (_gateResolved) return;
+  _gateResolved = true;
+  _gateOverlay.remove();
+  if (!_cachedToken) window.location.href = '/web/src/pages/index.html';
+}, 4000);
+
 onAuthStateChanged(_auth, u => {
+  if (_gateResolved) return;
+  _gateResolved = true;
+  clearTimeout(_gateFallback);
+  _gateOverlay.remove();
   if (u) {
-    applyTierGates('pro');    // signed in = full access
+    // Logged-in (trial or paid) — full access
+    document.getElementById('nav-auth-hint')?.remove();
+    applyTierGates('pro');
+  } else if (_cachedToken) {
+    // Firebase session lapsed but token exists — allow through (rare edge case)
+    document.getElementById('nav-auth-hint')?.remove();
+    applyTierGates('pro');
   } else {
-    // Double-check localStorage in case auth state lags on first load
-    const stored = _planFromStorage();
-    applyTierGates(stored ? 'pro' : 'guest');
+    // No session, no token → definite guest → send to login
+    window.location.href = '/web/src/pages/index.html';
   }
 });
 
