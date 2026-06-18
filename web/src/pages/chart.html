@@ -187,6 +187,23 @@
     .bottom-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 0 20px 24px; max-width: 1600px; margin: 0 auto; }
     @media (max-width: 900px) { .bottom-grid { grid-template-columns: 1fr; } }
 
+    /* ── PRO LOCK OVERLAY ── */
+    .pro-lock-overlay {
+      position: absolute; inset: 0; z-index: 20;
+      background: rgba(5,5,5,0.82); backdrop-filter: blur(10px);
+      border-radius: 12px; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 2px;
+      padding: 20px;
+    }
+
+    /* ── NAV AUTH HINT ── */
+    #nav-auth-hint {
+      display: none; align-items: center; gap: 8px;
+      padding: 5px 12px 5px 10px; border-radius: 20px;
+      background: rgba(0,242,255,0.07); border: 1px solid rgba(0,242,255,0.2);
+      font-size: 11px; color: var(--cyan); font-weight: 600;
+    }
+
     /* ── TIMEFRAME BAR ── */
     .tf-btn {
       padding: 3px 8px; border-radius: 5px; font-size: 11px; font-weight: 700;
@@ -283,6 +300,9 @@
   <span class="nav-sep">›</span>
   <span style="font-size:13px;color:var(--dim)">Chart Analysis</span>
   <div class="token-select-wrap">
+    <div id="nav-auth-hint">
+      🔒 <a href="/web/src/pages/index.html#signin" style="color:var(--cyan);text-decoration:none">Sign in</a> to unlock full analysis
+    </div>
     <select id="token-select"><option>Loading...</option></select>
     <span id="nav-signal-pill" class="signal-pill pill-hold">—</span>
   </div>
@@ -404,9 +424,10 @@
 </div>
 
 <script type="module">
-// ── Firebase auth guard ──────────────────────────────────────────────────────
+// ── Firebase — silent auth (no redirect; used only for tier gating) ──────────
 import { initializeApp }              from 'https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js';
 import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js';
+import { getFirestore, doc, getDoc }  from 'https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js';
 
 const _fbCfg = {
   apiKey: "AIzaSyDtudUL2sE1_fKbzIro5d2IP0-M2dYI6x4",
@@ -419,7 +440,67 @@ const _fbCfg = {
 let _fbApp;
 try { _fbApp = initializeApp(_fbCfg, 'chart'); } catch(e) { _fbApp = window._firebaseApp; }
 const _auth = getAuth(_fbApp);
-onAuthStateChanged(_auth, u => { if (!u) window.location.href = '/web/src/pages/index.html'; });
+const _db   = getFirestore(_fbApp);
+
+// Page is PUBLIC — no redirect. Check tier to unlock premium sections.
+let _userTier = 'guest';
+onAuthStateChanged(_auth, async u => {
+  if (!u) { applyTierGates('guest'); return; }
+  try {
+    const snap = await getDoc(doc(_db, 'users', u.uid));
+    _userTier  = (snap.exists() ? snap.data().tier || snap.data().plan || 'basic' : 'basic').toLowerCase();
+  } catch(_) { _userTier = 'basic'; }
+  applyTierGates(_userTier);
+});
+
+// ── Tier gate ────────────────────────────────────────────────────────────────
+// Premium sections: 'genesis', 'forensic', 'probabilities', 'historical'
+const PREMIUM_IDS = ['signal-genesis', 'forensic-section', 'probabilities', 'historical-section'];
+
+function applyTierGates(tier) {
+  const isUnlocked = tier !== 'guest' && tier !== '';
+  PREMIUM_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    // Remove any existing overlay first (re-entry safety)
+    const existing = el.parentElement.querySelector('.pro-lock-overlay');
+    if (existing) existing.remove();
+    if (isUnlocked) return;
+
+    const card = el.closest('.card') || el.parentElement;
+    card.style.position = 'relative';
+    card.style.overflow  = 'hidden';
+
+    const label = {
+      'signal-genesis':    'Signal Genesis Report',
+      'forensic-section':  'AEGIS Forensic Report',
+      'probabilities':     'Probability Analysis',
+      'historical-section':'Historical Accuracy',
+    }[id] || 'Premium Feature';
+
+    const overlay = document.createElement('div');
+    overlay.className = 'pro-lock-overlay';
+    overlay.innerHTML = `
+      <div style="font-size:22px;margin-bottom:6px">🔒</div>
+      <div style="font-size:13px;font-weight:800;color:#fff;margin-bottom:4px">${label}</div>
+      <div style="font-size:11px;color:#94a3b8;text-align:center;max-width:220px;margin-bottom:14px;line-height:1.5">
+        Sign in to unlock detailed signal intelligence
+      </div>
+      <a href="/web/src/pages/index.html#signin"
+         style="display:inline-block;padding:8px 20px;border-radius:8px;font-size:12px;font-weight:700;
+                background:linear-gradient(135deg,#00f2ff,#0099cc);color:#000;text-decoration:none;
+                letter-spacing:0.5px;transition:opacity .2s"
+         onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+        Sign In Free →
+      </a>
+    `;
+    card.appendChild(overlay);
+  });
+
+  // Update nav auth hint
+  const hint = document.getElementById('nav-auth-hint');
+  if (hint) hint.style.display = isUnlocked ? 'none' : 'flex';
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
