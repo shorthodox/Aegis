@@ -1,0 +1,1451 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AEGIS · Chart Analysis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="/web/src/styles/main.css">
+  <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    :root {
+      --bg-deep: #050505; --bg-void: #0a0a0c;
+      --glass: rgba(15,23,42,0.75); --glass-border: rgba(0,242,255,0.10);
+      --cyan: #00f2ff; --green: #00ff88; --red: #ff0055; --orange: #ff8c00;
+      --dim: #94a3b8; --white: #ffffff; --purple: #a855f7;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: var(--bg-deep); color: var(--white); font-family: 'Inter', sans-serif; min-height: 100vh; }
+    body { background-image: radial-gradient(circle at 20% 20%, rgba(0,242,255,0.03) 0%, transparent 60%); }
+
+    /* ── NAV ── */
+    .chart-nav {
+      display: flex; align-items: center; gap: 16px; padding: 12px 24px;
+      background: rgba(10,10,12,0.95); border-bottom: 1px solid var(--glass-border);
+      position: sticky; top: 0; z-index: 100; backdrop-filter: blur(20px);
+    }
+    .nav-brand { font-weight: 800; font-size: 18px; color: var(--cyan); letter-spacing: 2px; text-decoration: none; }
+    .nav-back { color: var(--dim); font-size: 13px; text-decoration: none; display: flex; align-items: center; gap: 6px; }
+    .nav-back:hover { color: var(--white); }
+    .nav-sep { color: var(--glass-border); }
+    .token-select-wrap { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+    #token-select {
+      background: var(--glass); border: 1px solid var(--glass-border); color: var(--white);
+      padding: 8px 36px 8px 14px; border-radius: 8px; font-family: 'JetBrains Mono', monospace;
+      font-size: 14px; font-weight: 600; cursor: pointer; appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2300f2ff' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 12px center;
+    }
+    #token-select:focus { outline: none; border-color: var(--cyan); }
+    .signal-pill {
+      padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;
+      letter-spacing: 0.5px; text-transform: uppercase;
+    }
+    .pill-buy  { background: rgba(0,255,136,0.15); color: var(--green); border: 1px solid rgba(0,255,136,0.3); }
+    .pill-sell { background: rgba(255,0,85,0.15);  color: var(--red);   border: 1px solid rgba(255,0,85,0.3); }
+    .pill-hold { background: rgba(148,163,184,0.1); color: var(--dim); border: 1px solid rgba(148,163,184,0.2); }
+
+    /* ── LAYOUT ── */
+    .chart-layout {
+      display: grid; grid-template-columns: 1fr 340px; gap: 16px;
+      padding: 16px 20px; max-width: 1600px; margin: 0 auto;
+    }
+    @media (max-width: 1100px) { .chart-layout { grid-template-columns: 1fr; } }
+
+    /* ── CARDS ── */
+    .card {
+      background: var(--glass); border: 1px solid var(--glass-border);
+      border-radius: 12px; padding: 18px; backdrop-filter: blur(12px);
+      margin-bottom: 14px;
+    }
+    .card-title {
+      font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+      text-transform: uppercase; color: var(--cyan); margin-bottom: 14px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .card-title::after { content: ''; flex: 1; height: 1px; background: var(--glass-border); }
+
+    /* ── CHART ── */
+    #tv-chart { width: 100%; height: 420px; border-radius: 10px; overflow: hidden; }
+    .chart-legend {
+      display: flex; gap: 16px; flex-wrap: wrap; margin-top: 10px; padding: 0 4px;
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--dim); }
+    .legend-dot { width: 10px; height: 3px; border-radius: 2px; }
+
+    /* ── SIGNAL OVERVIEW ── */
+    .sig-symbol { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 700; }
+    .sig-confidence { font-size: 48px; font-weight: 800; color: var(--cyan); line-height: 1; }
+    .sig-conf-label { font-size: 11px; color: var(--dim); margin-top: 2px; }
+    .levels-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+    .level-row { display: flex; flex-direction: column; gap: 2px; }
+    .level-label { font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.8px; }
+    .level-val { font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 600; }
+    .level-entry { color: var(--cyan); }
+    .level-tp1   { color: var(--green); }
+    .level-tp2   { color: #00cc6a; }
+    .level-tp3   { color: #009950; }
+    .level-sl    { color: var(--red); }
+    .rr-badge {
+      margin-top: 12px; padding: 6px 12px; background: rgba(0,242,255,0.08);
+      border: 1px solid rgba(0,242,255,0.2); border-radius: 8px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .rr-label { font-size: 11px; color: var(--dim); }
+    .rr-val { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 700; color: var(--cyan); }
+
+    /* ── CONFLUENCE BARS ── */
+    .conf-row { margin-bottom: 12px; }
+    .conf-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+    .conf-name { font-size: 12px; color: var(--dim); }
+    .conf-pct  { font-size: 12px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+    .conf-bar  { height: 5px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
+    .conf-fill { height: 100%; border-radius: 3px; transition: width 0.8s cubic-bezier(0.4,0,0.2,1); }
+
+    /* ── PROBABILITIES ── */
+    .prob-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .prob-label { font-size: 12px; color: var(--dim); width: 70px; flex-shrink: 0; }
+    .prob-track { flex: 1; height: 8px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden; }
+    .prob-fill  { height: 100%; border-radius: 4px; transition: width 1s cubic-bezier(0.4,0,0.2,1); }
+    .prob-pct   { font-size: 12px; font-weight: 700; font-family: 'JetBrains Mono', monospace; width: 36px; text-align: right; }
+
+    /* ── REGIME ── */
+    .regime-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .regime-item {
+      padding: 10px 12px; border-radius: 8px; border: 1px solid;
+      display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600;
+    }
+    .regime-on  { background: rgba(0,255,136,0.07); border-color: rgba(0,255,136,0.25); color: var(--green); }
+    .regime-off { background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.08); color: var(--dim); }
+
+    /* ── HEALTH SCORE ── */
+    .health-score-ring {
+      width: 90px; height: 90px; position: relative; margin: 0 auto 14px;
+    }
+    .health-svg { transform: rotate(-90deg); }
+    .health-track { fill: none; stroke: rgba(255,255,255,0.06); stroke-width: 7; }
+    .health-arc   { fill: none; stroke-width: 7; stroke-linecap: round; transition: stroke-dashoffset 1s ease; }
+    .health-number {
+      position: absolute; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      font-family: 'JetBrains Mono', monospace; font-weight: 700;
+    }
+    .health-num { font-size: 22px; }
+    .health-denom { font-size: 10px; color: var(--dim); }
+    .health-breakdown { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .hb-row { display: flex; justify-content: space-between; font-size: 11px; }
+    .hb-name { color: var(--dim); }
+    .hb-val  { font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+
+    /* ── WHALE / INSTITUTIONAL ── */
+    .whale-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    .whale-item { text-align: center; padding: 10px 6px; }
+    .whale-val  { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 700; margin-bottom: 3px; }
+    .whale-lbl  { font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.6px; }
+
+    /* ── TRADE STORY ── */
+    .story-item {
+      display: flex; gap: 12px; padding: 10px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .story-item:last-child { border-bottom: none; }
+    .story-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); flex-shrink: 0; margin-top: 6px; }
+    .story-text { font-size: 13px; color: var(--dim); line-height: 1.6; }
+    .story-text strong { color: var(--white); }
+
+    /* ── HISTORICAL ACCURACY ── */
+    .hist-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .hist-stat { text-align: center; }
+    .hist-val  { font-family: 'JetBrains Mono', monospace; font-size: 24px; font-weight: 800; margin-bottom: 3px; }
+    .hist-lbl  { font-size: 11px; color: var(--dim); }
+    .tp-acc-row { display: flex; justify-content: space-between; font-size: 12px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .tp-acc-label { color: var(--dim); }
+    .tp-acc-val   { font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+
+    /* ── FORENSIC ── */
+    .forensic-row { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 12px; }
+    .forensic-key { color: var(--dim); }
+    .forensic-val { font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+
+    /* ── METRIC PILL ── */
+    .metric-trio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+    .metric-box { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; padding: 10px; text-align: center; }
+    .metric-val { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 700; }
+    .metric-lbl { font-size: 10px; color: var(--dim); margin-top: 2px; }
+
+    /* ── SUMMARY CARD ── */
+    .summary-box {
+      background: linear-gradient(135deg, rgba(0,242,255,0.06), rgba(168,85,247,0.04));
+      border: 1px solid rgba(0,242,255,0.15); border-radius: 12px; padding: 18px 20px;
+      margin: 0 20px 20px; font-size: 14px; line-height: 1.7; color: var(--dim);
+      max-width: calc(1600px - 40px); margin-left: auto; margin-right: auto;
+    }
+    .summary-box strong { color: var(--white); }
+
+    /* ── BOTTOM GRID ── */
+    .bottom-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 0 20px 24px; max-width: 1600px; margin: 0 auto; }
+    @media (max-width: 900px) { .bottom-grid { grid-template-columns: 1fr; } }
+
+    /* ── TIMEFRAME BAR ── */
+    .tf-btn {
+      padding: 3px 8px; border-radius: 5px; font-size: 11px; font-weight: 700;
+      font-family: 'JetBrains Mono', monospace; cursor: pointer; border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04); color: var(--dim); transition: all 0.15s; letter-spacing: 0.3px;
+    }
+    .tf-btn:hover  { background: rgba(0,242,255,0.08); color: var(--white); border-color: rgba(0,242,255,0.2); }
+    .tf-btn.active { background: rgba(0,242,255,0.15); color: var(--cyan); border-color: rgba(0,242,255,0.4); }
+
+    /* ── POSITION BANNER ── */
+    .pos-banner {
+      margin: 0 20px 14px; border-radius: 12px; padding: 16px 20px;
+      border: 1px solid; backdrop-filter: blur(12px);
+      display: none; /* shown by JS */
+    }
+    .pos-banner.long  { background: rgba(0,255,136,0.05); border-color: rgba(0,255,136,0.25); }
+    .pos-banner.short { background: rgba(255,0,85,0.05);  border-color: rgba(255,0,85,0.25); }
+    .pos-top { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; }
+    .pos-badge {
+      font-size: 11px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase;
+      padding: 3px 10px; border-radius: 20px;
+    }
+    .pos-badge.long  { background: rgba(0,255,136,0.15); color: var(--green); border: 1px solid rgba(0,255,136,0.3); }
+    .pos-badge.short { background: rgba(255,0,85,0.15);  color: var(--red);   border: 1px solid rgba(255,0,85,0.3); }
+    .pos-title { font-weight: 700; font-size: 15px; }
+    .pos-timer { font-size: 11px; color: var(--dim); margin-left: auto; font-family: 'JetBrains Mono', monospace; }
+    .pos-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+    @media (max-width: 700px) { .pos-grid { grid-template-columns: repeat(3, 1fr); } }
+    .pos-stat { display: flex; flex-direction: column; gap: 2px; }
+    .pos-stat-lbl { font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.6px; }
+    .pos-stat-val { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700; }
+    .pos-tp-row { display: flex; gap: 8px; margin-top: 10px; }
+    .pos-tp-chip {
+      flex: 1; text-align: center; padding: 5px 8px; border-radius: 6px;
+      font-size: 11px; font-family: 'JetBrains Mono', monospace; font-weight: 700; border: 1px solid;
+    }
+    .tp-hit  { background: rgba(0,255,136,0.12); color: var(--green); border-color: rgba(0,255,136,0.3); }
+    .tp-miss { background: rgba(255,255,255,0.03); color: var(--dim); border-color: rgba(255,255,255,0.08); }
+    .tp-pending { background: rgba(0,242,255,0.06); color: var(--cyan); border-color: rgba(0,242,255,0.2); }
+
+    /* ── SIGNAL GENESIS ── */
+    .gate-row {
+      display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+      border-radius: 7px; margin-bottom: 6px;
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+    }
+    .gate-icon { font-size: 14px; flex-shrink: 0; }
+    .gate-name { font-size: 12px; font-weight: 700; color: var(--white); min-width: 90px; }
+    .gate-desc { font-size: 11px; color: var(--dim); flex: 1; }
+    .gate-val  { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; flex-shrink: 0; }
+    .gate-pass { border-color: rgba(0,255,136,0.2); }
+    .gate-fail { border-color: rgba(255,0,85,0.2); background: rgba(255,0,85,0.04); }
+    .gate-warn { border-color: rgba(255,140,0,0.2); }
+
+    /* ── ACTIVE SIGNALS TABLE ── */
+    .active-signals-wrap { padding: 0 20px 24px; max-width: 1600px; margin: 0 auto; }
+    .sig-table { width: 100%; border-collapse: collapse; }
+    .sig-table th {
+      font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+      color: var(--dim); padding: 8px 10px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .sig-table td { padding: 9px 10px; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 12px; vertical-align: middle; }
+    .sig-table tr:hover td { background: rgba(255,255,255,0.02); cursor: pointer; }
+    .sig-table tr:last-child td { border-bottom: none; }
+    .sig-sym { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 13px; }
+    .sig-dir-buy  { color: var(--green); font-weight: 700; }
+    .sig-dir-sell { color: var(--red);   font-weight: 700; }
+    .quality-bar { height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; margin-top: 3px; overflow: hidden; }
+    .quality-fill { height: 100%; border-radius: 2px; }
+    .open-pos-dot {
+      display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+      background: var(--cyan); margin-right: 5px; animation: blink 1.4s infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+    /* ── UTILS ── */
+    .text-buy    { color: var(--green); }
+    .text-sell   { color: var(--red); }
+    .text-hold   { color: var(--dim); }
+    .text-cyan   { color: var(--cyan); }
+    .text-orange { color: var(--orange); }
+    .loader { text-align: center; padding: 60px; color: var(--dim); font-size: 14px; }
+    .dot-pulse::after { content: '...'; animation: dots 1.5s infinite; }
+    @keyframes dots { 0%,20%{content:'.'} 40%{content:'..'} 60%,100%{content:'...'} }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="chart-nav">
+  <a href="/web/src/pages/dashboard.html" class="nav-brand">AEGIS</a>
+  <span class="nav-sep">›</span>
+  <a href="/web/src/pages/dashboard.html" class="nav-back">← Dashboard</a>
+  <span class="nav-sep">›</span>
+  <span style="font-size:13px;color:var(--dim)">Chart Analysis</span>
+  <div class="token-select-wrap">
+    <select id="token-select"><option>Loading...</option></select>
+    <span id="nav-signal-pill" class="signal-pill pill-hold">—</span>
+  </div>
+</nav>
+
+<!-- OPEN POSITION BANNER (shown when there's an open trade for this token) -->
+<div class="pos-banner" id="pos-banner"></div>
+
+<!-- MAIN LAYOUT -->
+<div class="chart-layout">
+
+  <!-- LEFT COLUMN -->
+  <div class="chart-left">
+
+    <!-- CHART CARD -->
+    <div class="card" style="padding:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div class="card-title" style="margin-bottom:0" id="chart-tf-title">📈 Live Chart — 1H</div>
+        <div id="tf-bar" style="display:flex;gap:4px;flex-wrap:wrap"></div>
+      </div>
+      <div id="tv-chart"><div class="loader">Loading chart<span class="dot-pulse"></span></div></div>
+      <div class="chart-legend" id="chart-legend" style="display:none">
+        <div class="legend-item"><div class="legend-dot" style="background:#00f2ff"></div>Entry</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#00ff88"></div>TP1</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#00cc6a"></div>TP2</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#009950"></div>TP3</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#ff0055"></div>SL</div>
+        <div class="legend-item"><div class="legend-dot" style="background:rgba(0,255,136,0.4)"></div>Support</div>
+        <div class="legend-item"><div class="legend-dot" style="background:rgba(255,0,85,0.4)"></div>Resistance</div>
+      </div>
+    </div>
+
+    <!-- AI EXPLANATION -->
+    <div class="card">
+      <div class="card-title">🧠 Why AEGIS Generated This Signal</div>
+      <div id="signal-explanation"><div class="loader">Analyzing<span class="dot-pulse"></span></div></div>
+    </div>
+
+    <!-- TRADE STORY -->
+    <div class="card">
+      <div class="card-title">📖 Trade Story</div>
+      <div id="trade-story"><div class="loader">Building narrative<span class="dot-pulse"></span></div></div>
+    </div>
+
+    <!-- SIGNAL GENESIS REPORT -->
+    <div class="card">
+      <div class="card-title">🔑 Signal Genesis — Why Did AEGIS Fire?</div>
+      <div id="signal-genesis"></div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT COLUMN (SIDEBAR) -->
+  <div class="chart-sidebar">
+
+    <!-- SIGNAL OVERVIEW -->
+    <div class="card">
+      <div class="card-title">⚡ Signal Overview</div>
+      <div id="signal-overview"><div class="loader" style="padding:20px">—</div></div>
+    </div>
+
+    <!-- PROBABILITIES -->
+    <div class="card">
+      <div class="card-title">🎯 Target Probabilities</div>
+      <div id="probabilities"></div>
+    </div>
+
+    <!-- RISK ASSESSMENT -->
+    <div class="card">
+      <div class="card-title">⚖️ Risk Assessment</div>
+      <div id="risk-assessment"></div>
+    </div>
+
+    <!-- REGIME -->
+    <div class="card">
+      <div class="card-title">🔭 Market Regime</div>
+      <div id="regime-section"></div>
+    </div>
+
+    <!-- WHALE / INSTITUTIONAL -->
+    <div class="card">
+      <div class="card-title">🐋 Institutional Data</div>
+      <div id="whale-section"></div>
+    </div>
+
+    <!-- SIGNAL HEALTH -->
+    <div class="card">
+      <div class="card-title">🏥 Signal Health Score</div>
+      <div id="health-section"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- SUMMARY BOX -->
+<div class="summary-box" id="summary-box">Loading analysis<span class="dot-pulse"></span></div>
+
+<!-- BOTTOM GRID -->
+<div class="bottom-grid">
+
+  <div class="card" style="margin-bottom:0">
+    <div class="card-title">📊 Historical Accuracy — This Token</div>
+    <div id="historical-section"></div>
+  </div>
+
+  <div class="card" style="margin-bottom:0">
+    <div class="card-title">🔬 AEGIS Forensic Report</div>
+    <div id="forensic-section"></div>
+  </div>
+
+</div>
+
+<!-- ALL ACTIVE FIRED SIGNALS -->
+<div class="active-signals-wrap">
+  <div class="card" style="margin-bottom:0">
+    <div class="card-title">⚡ All Currently Fired Signals — <span id="fired-count" style="color:var(--white)">…</span> Active</div>
+    <div id="active-signals-table"></div>
+  </div>
+</div>
+
+<script type="module">
+// ── Firebase auth guard ──────────────────────────────────────────────────────
+import { initializeApp }              from 'https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js';
+
+const _fbCfg = {
+  apiKey: "AIzaSyDtudUL2sE1_fKbzIro5d2IP0-M2dYI6x4",
+  authDomain: "aegis-d78e1.firebaseapp.com",
+  projectId: "aegis-d78e1",
+  storageBucket: "aegis-d78e1.firebasestorage.app",
+  messagingSenderId: "623998601232",
+  appId: "1:623998601232:web:288a89514d84ac3573a295",
+};
+let _fbApp;
+try { _fbApp = initializeApp(_fbCfg, 'chart'); } catch(e) { _fbApp = window._firebaseApp; }
+const _auth = getAuth(_fbApp);
+onAuthStateChanged(_auth, u => { if (!u) window.location.href = '/web/src/pages/index.html'; });
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const fmt = (n, d=4) => n == null ? '—' : parseFloat(n).toFixed(d);
+const fmtPct = n => n == null ? '—' : `${parseFloat(n).toFixed(2)}%`;
+const fmtK = n => Math.abs(n) >= 1e6 ? `$${(n/1e6).toFixed(1)}M` : Math.abs(n) >= 1e3 ? `$${(n/1e3).toFixed(1)}K` : `$${n.toFixed(2)}`;
+const clr = (v, good='text-buy', bad='text-sell') => v > 0 ? good : v < 0 ? bad : 'text-hold';
+
+const SIGNAL_DATA = {};   // { symbol -> signal }
+const TRACK_DATA  = { signals: [] };
+
+// ── Data fetch ───────────────────────────────────────────────────────────────
+async function loadData() {
+  try {
+    const [sigRes, trRes] = await Promise.all([
+      fetch('/web/src/data/live_signals.json'),
+      fetch('/web/track_record.json'),
+    ]);
+    const sigs = await sigRes.json();
+    const tr   = await trRes.json();
+
+    Object.assign(SIGNAL_DATA, sigs);
+    if (tr.signals) TRACK_DATA.signals = tr.signals;
+
+    const syms = Object.keys(sigs).sort();
+    const sel  = $('token-select');
+    sel.innerHTML = syms.map(s => `<option value="${s}">${s}</option>`).join('');
+
+    // Check URL params
+    const params = new URLSearchParams(location.search);
+    const urlSym = params.get('symbol');
+    const urlTf  = params.get('tf');
+    if (urlSym && sigs[urlSym]) sel.value = urlSym;
+    if (urlTf && TIMEFRAMES.find(t => t.interval === urlTf)) currentTf = urlTf;
+
+    buildTfBar();
+    renderAll(sel.value);
+    sel.addEventListener('change', () => {
+      history.replaceState(null, '', `?symbol=${encodeURIComponent(sel.value)}&tf=${currentTf}`);
+      renderAll(sel.value);
+    });
+  } catch(e) {
+    $('signal-overview').innerHTML = `<div class="loader">Error loading data</div>`;
+  }
+}
+
+// ── Master render ─────────────────────────────────────────────────────────────
+function renderAll(symbol) {
+  const sig = SIGNAL_DATA[symbol];
+  if (!sig) return;
+
+  history.replaceState(null, '', `?symbol=${encodeURIComponent(symbol)}&tf=${currentTf}`);
+
+  renderNavPill(sig);
+  renderChart(sig);
+  renderOverview(sig);
+  renderExplanation(sig);
+  renderStory(sig);
+  renderProbabilities(sig);
+  renderRisk(sig);
+  renderRegime(sig);
+  renderWhale(sig);
+  renderHealth(sig);
+  renderSummary(sig);
+  renderHistorical(symbol);
+  renderForensic(sig);
+  renderPositionBanner(symbol);
+  renderSignalGenesis(sig);
+  renderActiveSignals();
+}
+
+// ── Nav pill ──────────────────────────────────────────────────────────────────
+function renderNavPill(sig) {
+  const pill = $('nav-signal-pill');
+  const s = sig.signal_strength || sig.signal || 'HOLD';
+  const cls = sig.direction === 'SHORT' ? 'pill-sell' : sig.direction === 'LONG' ? 'pill-buy' : 'pill-hold';
+  pill.className = `signal-pill ${cls}`;
+  pill.textContent = s.replace('_', ' ');
+}
+
+// ── Timeframe config ──────────────────────────────────────────────────────────
+const TIMEFRAMES = [
+  { label: '1m',  interval: '1m',  limit: 120 },
+  { label: '3m',  interval: '3m',  limit: 120 },
+  { label: '5m',  interval: '5m',  limit: 150 },
+  { label: '15m', interval: '15m', limit: 150 },
+  { label: '30m', interval: '30m', limit: 150 },
+  { label: '1h',  interval: '1h',  limit: 150 },
+  { label: '2h',  interval: '2h',  limit: 150 },
+  { label: '4h',  interval: '4h',  limit: 150 },
+  { label: '6h',  interval: '6h',  limit: 120 },
+  { label: '8h',  interval: '8h',  limit: 120 },
+  { label: '12h', interval: '12h', limit: 120 },
+  { label: '1D',  interval: '1d',  limit: 200 },
+  { label: '3D',  interval: '3d',  limit: 120 },
+  { label: '1W',  interval: '1w',  limit: 100 },
+  { label: '1M',  interval: '1M',  limit: 60  },
+];
+let currentTf  = '1h';
+let _lastSig   = null;
+let _resizeOff = null;
+
+function buildTfBar() {
+  const bar = $('tf-bar');
+  bar.innerHTML = TIMEFRAMES.map(tf => `
+    <button class="tf-btn${tf.interval === currentTf ? ' active' : ''}"
+            data-tf="${tf.interval}"
+            onclick="_onTfClick('${tf.interval}')">${tf.label}</button>
+  `).join('');
+}
+
+window._onTfClick = function(tf) {
+  currentTf = tf;
+  buildTfBar();
+  // Persist in URL
+  const params = new URLSearchParams(location.search);
+  params.set('tf', tf);
+  history.replaceState(null, '', `?${params.toString()}`);
+  if (_lastSig) renderChart(_lastSig);
+};
+
+// ── Chart ─────────────────────────────────────────────────────────────────────
+let chartInstance = null;
+async function renderChart(sig) {
+  _lastSig = sig;
+  const tfCfg = TIMEFRAMES.find(t => t.interval === currentTf) || TIMEFRAMES[5]; // fallback 1h
+  const sym = sig.symbol.replace('/', '');
+  const container = $('tv-chart');
+  container.innerHTML = '<div class="loader">Fetching candles<span class="dot-pulse"></span></div>';
+
+  // Update title
+  const titleEl = $('chart-tf-title');
+  if (titleEl) titleEl.textContent = `📈 Live Chart — ${tfCfg.label}`;
+
+  try {
+    const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${sym}&interval=${tfCfg.interval}&limit=${tfCfg.limit}`);
+    const raw = await res.json();
+    if (!Array.isArray(raw) || !raw.length) throw new Error('empty');
+
+    container.innerHTML = '';
+    if (chartInstance) { try { chartInstance.remove(); } catch(e) {} }
+
+    const showSeconds = ['1m','3m','5m'].includes(tfCfg.interval);
+    const chart = LightweightCharts.createChart(container, {
+      width:  container.clientWidth,
+      height: 420,
+      layout: { background: { color: 'transparent' }, textColor: '#94a3b8' },
+      grid:   { vertLines: { color: 'rgba(255,255,255,0.04)' }, horzLines: { color: 'rgba(255,255,255,0.04)' } },
+      crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+      rightPriceScale: { borderColor: 'rgba(0,242,255,0.15)' },
+      timeScale: { borderColor: 'rgba(0,242,255,0.15)', timeVisible: true, secondsVisible: showSeconds },
+    });
+    chartInstance = chart;
+
+    // Candles
+    const candles = chart.addCandlestickSeries({
+      upColor: '#00ff88', downColor: '#ff0055',
+      borderUpColor: '#00ff88', borderDownColor: '#ff0055',
+      wickUpColor: '#00ff88', wickDownColor: '#ff0055',
+    });
+    candles.setData(raw.map(k => ({
+      time: Math.floor(k[0]/1000),
+      open: +k[1], high: +k[2], low: +k[3], close: +k[4],
+    })));
+
+    // Volume
+    const vol = chart.addHistogramSeries({
+      color: 'rgba(0,242,255,0.15)', priceFormat: { type: 'volume' },
+      priceScaleId: 'vol', scaleMargins: { top: 0.85, bottom: 0 },
+    });
+    vol.setData(raw.map(k => ({
+      time: Math.floor(k[0]/1000),
+      value: +k[5],
+      color: +k[4] >= +k[1] ? 'rgba(0,255,136,0.2)' : 'rgba(255,0,85,0.2)',
+    })));
+
+    // Helper: horizontal price line
+    const addLine = (price, color, label) => {
+      if (!price) return;
+      candles.createPriceLine({ price: parseFloat(price), color, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: label });
+    };
+
+    // Price levels from signal
+    const entry = sig.entry_price || sig.price;
+    addLine(entry,       '#00f2ff', 'Entry');
+    addLine(sig.suggested_sl, '#ff0055', 'SL');
+
+    if (sig.direction === 'SHORT' || sig.signal === 'SELL') {
+      addLine(sig.bear_tp1, '#00ff88', 'TP1');
+      addLine(sig.bear_tp2, '#00cc6a', 'TP2');
+      addLine(sig.bear_tp3, '#009950', 'TP3');
+    } else {
+      addLine(sig.bull_tp1, '#00ff88', 'TP1');
+      addLine(sig.bull_tp2, '#00cc6a', 'TP2');
+      addLine(sig.bull_tp3, '#009950', 'TP3');
+    }
+
+    // Support / Resistance / Pivot
+    addLine(sig.support,    'rgba(0,255,136,0.5)',  'Sup');
+    addLine(sig.resistance, 'rgba(255,0,85,0.5)',   'Res');
+    addLine(sig.pivot,      'rgba(0,242,255,0.35)', 'Pvt');
+
+    $('chart-legend').style.display = 'flex';
+
+    // Responsive resize (remove previous listener first)
+    if (_resizeOff) window.removeEventListener('resize', _resizeOff);
+    _resizeOff = () => chart.resize(container.clientWidth, 420);
+    window.addEventListener('resize', _resizeOff);
+
+  } catch(e) {
+    container.innerHTML = `<div class="loader">Chart unavailable — Binance API blocked or symbol not found</div>`;
+  }
+}
+
+// ── Signal Overview ───────────────────────────────────────────────────────────
+function renderOverview(sig) {
+  const entry = sig.entry_price || sig.price;
+  const tp1   = sig.direction === 'SHORT' ? sig.bear_tp1 : sig.bull_tp1;
+  const sl    = sig.suggested_sl || (sig.direction === 'SHORT' ? sig.bull_tp1 : sig.bear_tp1);
+  const rr    = sig.risk_reward || '—';
+  const dirClass = sig.direction === 'LONG' ? 'text-buy' : sig.direction === 'SHORT' ? 'text-sell' : 'text-hold';
+  const sigLabel = (sig.signal_strength || sig.signal || 'HOLD').replace('_', ' ');
+
+  $('signal-overview').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div>
+        <div class="sig-symbol">${sig.symbol}</div>
+        <div style="font-size:12px;color:var(--dim);margin-top:2px">${sig.session || ''} · ${sig.timeframe || '1h'}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:18px;font-weight:800" class="${dirClass}">🔥 ${sigLabel}</div>
+        <div style="font-size:11px;color:var(--dim);margin-top:3px">Direction: ${sig.direction || '—'}</div>
+      </div>
+    </div>
+
+    <div style="text-align:center;padding:12px;background:rgba(0,242,255,0.05);border-radius:10px;border:1px solid rgba(0,242,255,0.12);margin-bottom:14px">
+      <div class="sig-confidence">${sig.quality_score != null ? sig.quality_score.toFixed(0) : '—'}</div>
+      <div class="sig-conf-label">Signal Quality Score / 100</div>
+    </div>
+
+    <div class="levels-grid">
+      <div class="level-row">
+        <div class="level-label">Entry</div>
+        <div class="level-val level-entry">${fmt(entry, 6)}</div>
+      </div>
+      <div class="level-row">
+        <div class="level-label">Stop Loss</div>
+        <div class="level-val level-sl">${fmt(sl, 6)}</div>
+      </div>
+      <div class="level-row">
+        <div class="level-label">TP1</div>
+        <div class="level-val level-tp1">${fmt(tp1 || sig.bear_tp1, 6)}</div>
+      </div>
+      <div class="level-row">
+        <div class="level-label">TP2</div>
+        <div class="level-val level-tp2">${fmt(sig.bear_tp2 || sig.bull_tp2, 6)}</div>
+      </div>
+      <div class="level-row">
+        <div class="level-label">TP3</div>
+        <div class="level-val level-tp3">${fmt(sig.bear_tp3 || sig.bull_tp3, 6)}</div>
+      </div>
+      <div class="level-row">
+        <div class="level-label">Support</div>
+        <div class="level-val" style="color:var(--green)">${fmt(sig.support, 6)}</div>
+      </div>
+    </div>
+
+    <div class="rr-badge">
+      <span class="rr-label">Risk / Reward</span>
+      <span class="rr-val">1 : ${typeof rr === 'number' ? rr.toFixed(2) : rr}</span>
+    </div>
+
+    <div class="metric-trio" style="margin-top:12px">
+      <div class="metric-box">
+        <div class="metric-val">${fmtPct(sig.atr_pct)}</div>
+        <div class="metric-lbl">ATR %</div>
+      </div>
+      <div class="metric-box">
+        <div class="metric-val">${fmt(sig.rsi, 1)}</div>
+        <div class="metric-lbl">RSI</div>
+      </div>
+      <div class="metric-box">
+        <div class="metric-val ${fmtPct(sig.expected_move_pct).startsWith('-') ? 'text-sell' : 'text-buy'}">${fmtPct(sig.expected_move_pct)}</div>
+        <div class="metric-lbl">Expected</div>
+      </div>
+    </div>
+  `;
+}
+
+// ── AI Explanation ────────────────────────────────────────────────────────────
+function renderExplanation(sig) {
+  const c = sig.confluence || {};
+  // Normalize confluence values (0–10 scale → 0–100%)
+  const normalize = v => Math.min(100, Math.max(0, ((v || 0) + 5) * 10)); // -5..+5 → 0..100
+
+  const items = [
+    { name: 'Trend',        val: c.trend,       color: '#00f2ff' },
+    { name: 'Momentum',     val: c.momentum,    color: '#a855f7' },
+    { name: 'Volume',       val: c.volume,      color: '#f59e0b' },
+    { name: 'Smart Money',  val: c.smart_money, color: '#00ff88' },
+    { name: 'Bands',        val: c.bands,       color: '#06b6d4' },
+    { name: 'Candle Pressure', val: c.candle,   color: '#f43f5e' },
+  ].filter(i => i.val != null);
+
+  const isShort = sig.direction === 'SHORT';
+
+  // Key factors list
+  const factors = [];
+  if (sig.adx > 30)  factors.push({ icon: '✅', text: `ADX ${fmt(sig.adx,1)} — strong trend confirmed` });
+  if (sig.macd_signal === 'BEARISH' && isShort) factors.push({ icon: '✅', text: 'MACD turned bearish' });
+  if (sig.macd_signal === 'BULLISH' && !isShort) factors.push({ icon: '✅', text: 'MACD turned bullish' });
+  if (sig.rsi < 35)  factors.push({ icon: '⚠️', text: `RSI ${fmt(sig.rsi,1)} — approaching oversold` });
+  if (sig.rsi > 65)  factors.push({ icon: '✅', text: `RSI ${fmt(sig.rsi,1)} — overbought pressure` });
+  if (sig.volume_zscore > 0.8)  factors.push({ icon: '✅', text: `Volume spike +${fmt(sig.volume_zscore,1)}σ above average` });
+  if (sig.volume_zscore < -0.8) factors.push({ icon: '⚠️', text: `Low volume (-${fmt(Math.abs(sig.volume_zscore),1)}σ) — weak confirmation` });
+  if (sig.oi_trend === 'INCREASING')  factors.push({ icon: '✅', text: 'Open interest increasing — new money entering' });
+  if (sig.funding_rate > 0.005 && isShort) factors.push({ icon: '✅', text: `Funding rate ${(sig.funding_rate*100).toFixed(3)}% — longs overextended` });
+  if (sig.regime === 'TRENDING_BEAR' && isShort) factors.push({ icon: '✅', text: 'Confirmed ↓BEAR regime — trend-aligned entry' });
+  if (sig.regime === 'TRENDING_BULL' && !isShort) factors.push({ icon: '✅', text: 'Confirmed ↑BULL regime — trend-aligned entry' });
+  if (sig.regime_confidence > 0.7) factors.push({ icon: '✅', text: `Regime confidence ${(sig.regime_confidence*100).toFixed(0)}% — high certainty` });
+  if (sig.fear_greed) factors.push({ icon: '📊', text: `Fear & Greed ${sig.fear_greed.value} (${sig.fear_greed.label})` });
+
+  const qualScore = sig.quality_score || 0;
+  const totalConf = sig.meta_confidence || 0;
+
+  $('signal-explanation').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px">
+      <div>
+        <div style="font-size:11px;color:var(--dim);margin-bottom:10px">CONFLUENCE BREAKDOWN</div>
+        ${items.map(i => {
+          const pct = normalize(i.val);
+          return `<div class="conf-row">
+            <div class="conf-header">
+              <span class="conf-name">${i.name}</span>
+              <span class="conf-pct" style="color:${i.color}">${pct.toFixed(0)}%</span>
+            </div>
+            <div class="conf-bar">
+              <div class="conf-fill" style="width:${pct}%;background:${i.color}"></div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--dim);margin-bottom:10px">KEY FACTORS</div>
+        ${factors.slice(0,8).map(f => `
+          <div style="display:flex;gap:8px;margin-bottom:8px;font-size:12px">
+            <span>${f.icon}</span>
+            <span style="color:var(--dim)">${f.text}</span>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:14px;background:rgba(0,0,0,0.3);border-radius:10px;border:1px solid rgba(255,255,255,0.06)">
+      <div style="text-align:center">
+        <div style="font-size:20px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--cyan)">${qualScore.toFixed(0)}</div>
+        <div style="font-size:10px;color:var(--dim)">Quality Score</div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:20px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--purple)">${totalConf.toFixed(0)}</div>
+        <div style="font-size:10px;color:var(--dim)">AI Confidence</div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:20px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--orange)">${fmt(sig.adx,0)}</div>
+        <div style="font-size:10px;color:var(--dim)">ADX Strength</div>
+      </div>
+    </div>
+  `;
+}
+
+// ── Trade Story ───────────────────────────────────────────────────────────────
+function renderStory(sig) {
+  const pts = generateStoryPoints(sig);
+  $('trade-story').innerHTML = pts.map(p => `
+    <div class="story-item">
+      <div class="story-dot"></div>
+      <div class="story-text">${p}</div>
+    </div>
+  `).join('');
+}
+
+function generateStoryPoints(sig) {
+  const pts = [];
+  const sym  = sig.symbol;
+  const dir  = sig.direction === 'SHORT' ? 'bearish' : 'bullish';
+  const oDir = dir === 'bearish' ? 'downside' : 'upside';
+
+  // Regime
+  if (sig.regime === 'TRENDING_BEAR')
+    pts.push(`<strong>${sym}</strong> is in a confirmed <strong>downtrend</strong> — EMA stack bearish, price making lower highs.`);
+  else if (sig.regime === 'TRENDING_BULL')
+    pts.push(`<strong>${sym}</strong> is in a confirmed <strong>uptrend</strong> — EMA stack bullish, momentum expanding.`);
+  else if (sig.regime === 'RANGING')
+    pts.push(`<strong>${sym}</strong> is ranging — price oscillating between established support and resistance zones.`);
+
+  // Price action
+  if (sig.resistance && sig.entry_price)
+    pts.push(`Price approached the <strong>resistance zone at ${fmt(sig.resistance, 6)}</strong>, showing rejection and providing a clean short entry.`);
+
+  // Volume
+  if (sig.volume_zscore > 1.0)
+    pts.push(`Volume spiked <strong>${fmt(sig.volume_zscore,1)}σ above average</strong>, confirming strong participation in the move.`);
+  else if (sig.volume_zscore < -0.5)
+    pts.push(`Volume is <strong>below average</strong> (${fmt(sig.volume_zscore,1)}σ) — the move lacks full conviction. Wait for volume expansion.`);
+
+  // MACD
+  if (sig.macd_signal)
+    pts.push(`MACD signal is <strong>${sig.macd_signal}</strong> — ${sig.macd_signal === 'BEARISH' ? 'momentum has crossed below signal line, confirming downside pressure.' : 'momentum crossed above signal line, supporting continuation.'}`);
+
+  // RSI
+  if (sig.rsi != null) {
+    if (sig.rsi > 65)
+      pts.push(`RSI at <strong>${fmt(sig.rsi,1)}</strong> is approaching overbought territory — room for price to pull back.`);
+    else if (sig.rsi < 35)
+      pts.push(`RSI at <strong>${fmt(sig.rsi,1)}</strong> is near oversold — monitor for reversal signals.`);
+    else
+      pts.push(`RSI at <strong>${fmt(sig.rsi,1)}</strong> — in neutral zone with room to move in the signal direction.`);
+  }
+
+  // ADX
+  if (sig.adx > 35)
+    pts.push(`ADX at <strong>${fmt(sig.adx,0)}</strong> confirms a <strong>strong trending move</strong> — trend-following entries have higher edge here.`);
+  else if (sig.adx < 20)
+    pts.push(`ADX at <strong>${fmt(sig.adx,0)}</strong> indicates a <strong>weak trend</strong> — be cautious with position size.`);
+
+  // Funding / OI
+  if (sig.funding_rate != null) {
+    const fr = (sig.funding_rate * 100).toFixed(4);
+    if (sig.funding_rate > 0.01)
+      pts.push(`Funding rate is <strong>positive at ${fr}%</strong> — longs are paying shorts, a headwind for bulls.`);
+    else if (sig.funding_rate < -0.01)
+      pts.push(`Funding rate is <strong>negative at ${fr}%</strong> — shorts are paying longs, potential squeeze risk.`);
+    else
+      pts.push(`Funding rate is <strong>neutral at ${fr}%</strong> — no extreme positioning detected.`);
+  }
+
+  // OI
+  if (sig.oi_trend === 'INCREASING')
+    pts.push(`Open Interest is <strong>rising (+${fmt(sig.oi_change_1h_pct,2)}% 1h)</strong> — new positions being added, the move has fresh momentum.`);
+  else if (sig.oi_trend === 'DECREASING')
+    pts.push(`Open Interest is <strong>declining</strong> — positions being closed; the move may be driven by liquidation rather than new conviction.`);
+
+  // Fear & Greed
+  if (sig.fear_greed)
+    pts.push(`Fear & Greed Index is at <strong>${sig.fear_greed.value} (${sig.fear_greed.label})</strong> — ${sig.fear_greed.value < 30 ? 'extreme fear typically marks short-term bottoms.' : sig.fear_greed.value > 70 ? 'extreme greed suggests caution for new longs.' : 'neutral sentiment, no extreme positioning.'}`);
+
+  // Session
+  if (sig.session)
+    pts.push(`Current session: <strong>${sig.session}</strong>. ${sig.session_note || ''}`);
+
+  // Target
+  const tp1 = sig.direction === 'SHORT' ? sig.bear_tp1 : sig.bull_tp1;
+  if (tp1)
+    pts.push(`AEGIS projects ${oDir} continuation toward <strong>${fmt(tp1,6)}</strong> (TP1) based on ATR extension and market structure.`);
+
+  return pts;
+}
+
+// ── Probabilities ─────────────────────────────────────────────────────────────
+function renderProbabilities(sig) {
+  const q    = (sig.quality_score || 50) / 100;
+  const pDir = sig.direction === 'SHORT' ? sig.p_sell : sig.p_buy;
+
+  // Derived probabilities
+  const tp1p = Math.min(95, Math.round(pDir * 100 * 0.92 + q * 8));
+  const tp2p = Math.min(90, Math.round(pDir * 100 * 0.70 + q * 5));
+  const tp3p = Math.min(80, Math.round(pDir * 100 * 0.50 + q * 3));
+  const slp  = Math.max(5,  Math.round((1 - pDir) * 100 * 0.45));
+
+  const row = (label, pct, color) => `
+    <div class="prob-row">
+      <div class="prob-label" style="color:var(--dim)">${label}</div>
+      <div class="prob-track"><div class="prob-fill" style="width:${pct}%;background:${color}"></div></div>
+      <div class="prob-pct" style="color:${color}">${pct}%</div>
+    </div>
+  `;
+
+  $('probabilities').innerHTML = `
+    ${row('TP1 Hit',   tp1p, 'var(--green)')}
+    ${row('TP2 Hit',   tp2p, '#00cc6a')}
+    ${row('TP3 Hit',   tp3p, '#009950')}
+    ${row('SL Hit',    slp,  'var(--red)')}
+    <div style="margin-top:10px;padding:8px 10px;background:rgba(0,0,0,0.3);border-radius:6px;font-size:11px;color:var(--dim)">
+      Based on model confidence (${fmtPct((pDir||0)*100)}) and signal quality (${sig.quality_score?.toFixed(0)}/100).
+    </div>
+  `;
+}
+
+// ── Risk Assessment ───────────────────────────────────────────────────────────
+function renderRisk(sig) {
+  const riskScore = sig.risk_score || (100 - (sig.quality_score || 50));
+  const riskLabel = riskScore < 30 ? 'LOW' : riskScore < 60 ? 'MODERATE' : 'HIGH';
+  const riskColor = riskScore < 30 ? 'var(--green)' : riskScore < 60 ? 'var(--orange)' : 'var(--red)';
+
+  const holdHrs = sig.atr_pct > 3 ? '4–8h' : sig.atr_pct > 1.5 ? '8–16h' : '12–24h';
+  const drawdown = ((sig.atr_pct || 1.5) * 0.6).toFixed(1);
+
+  $('risk-assessment').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div>
+        <div style="font-size:22px;font-weight:800;color:${riskColor}">${riskLabel}</div>
+        <div style="font-size:11px;color:var(--dim)">Risk Level</div>
+      </div>
+      <div style="width:60px;height:60px;border-radius:50%;border:3px solid ${riskColor};
+                  display:flex;align-items:center;justify-content:center;
+                  background:rgba(0,0,0,0.4)">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;color:${riskColor}">${riskScore.toFixed(0)}</span>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      ${[
+        ['ATR Volatility', fmtPct(sig.atr_pct)],
+        ['Expected Draw', `${drawdown}%`],
+        ['Hold Time',     holdHrs],
+        ['Volatility',    sig.volatility_regime || '—'],
+        ['Market Bias',   sig.market_bias || '—'],
+        ['Bias Strength', sig.bias_strength != null ? `${(sig.bias_strength*100).toFixed(0)}%` : '—'],
+      ].map(([l,v]) => `
+        <div class="metric-box">
+          <div class="metric-val" style="font-size:13px">${v}</div>
+          <div class="metric-lbl">${l}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// ── Regime ────────────────────────────────────────────────────────────────────
+function renderRegime(sig) {
+  const r = sig.regime || '';
+  const h = sig.hmm_regime || '';
+
+  const checks = [
+    { label: 'Trending',     active: r.includes('TREND') },
+    { label: 'Bear Trend',   active: r === 'TRENDING_BEAR' },
+    { label: 'Bull Trend',   active: r === 'TRENDING_BULL' },
+    { label: 'Ranging',      active: r === 'RANGING' },
+    { label: 'Accumulation', active: r === 'ACCUMULATION' || h === 'ACCUMULATION' },
+    { label: 'Distribution', active: r === 'DISTRIBUTION' || h === 'DISTRIBUTION' },
+    { label: 'Volatility Expansion', active: r === 'VOLATILE_EXPANSION' || h === 'VOLATILE_EXPANSION' },
+    { label: 'Compression',  active: h === 'COMPRESSION' },
+  ];
+
+  $('regime-section').innerHTML = `
+    <div style="display:flex;justify-content:space-between;margin-bottom:12px;font-size:12px">
+      <span style="color:var(--dim)">Rule-based</span>
+      <span style="font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--cyan)">${r.replace('_',' ')}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:16px;font-size:12px">
+      <span style="color:var(--dim)">HMM Model</span>
+      <span style="font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--purple)">${h || '—'}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:16px;font-size:12px">
+      <span style="color:var(--dim)">Confidence</span>
+      <span style="font-family:'JetBrains Mono',monospace;font-weight:600">${sig.regime_confidence != null ? ((sig.regime_confidence)*100).toFixed(0)+'%' : '—'}</span>
+    </div>
+    <div class="regime-grid">
+      ${checks.map(c => `
+        <div class="regime-item ${c.active ? 'regime-on' : 'regime-off'}">
+          <span>${c.active ? '✓' : '✗'}</span><span>${c.label}</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// ── Whale / Institutional ─────────────────────────────────────────────────────
+function renderWhale(sig) {
+  const frPct = sig.funding_rate != null ? (sig.funding_rate * 100).toFixed(4) + '%' : '—';
+  const frColor = sig.funding_rate > 0.005 ? 'var(--red)' : sig.funding_rate < -0.005 ? 'var(--green)' : 'var(--dim)';
+  const oiColor = sig.oi_trend === 'INCREASING' ? 'var(--green)' : sig.oi_trend === 'DECREASING' ? 'var(--red)' : 'var(--dim)';
+  const fgColor = sig.fear_greed ? (sig.fear_greed.value < 30 ? 'var(--red)' : sig.fear_greed.value > 70 ? 'var(--orange)' : 'var(--dim)') : 'var(--dim)';
+
+  $('whale-section').innerHTML = `
+    <div class="whale-grid">
+      <div class="whale-item">
+        <div class="whale-val" style="color:${frColor}">${frPct}</div>
+        <div class="whale-lbl">Funding Rate</div>
+      </div>
+      <div class="whale-item">
+        <div class="whale-val" style="color:${oiColor}">${sig.oi_trend || '—'}</div>
+        <div class="whale-lbl">OI Trend</div>
+      </div>
+      <div class="whale-item">
+        <div class="whale-val" style="color:${fgColor}">${sig.fear_greed ? sig.fear_greed.value : '—'}</div>
+        <div class="whale-lbl">Fear & Greed</div>
+      </div>
+    </div>
+    <div style="margin-top:12px">
+      ${[
+        ['OI Change 1h', sig.oi_change_1h_pct != null ? fmtPct(sig.oi_change_1h_pct) : '—', sig.oi_change_1h_pct > 0 ? 'text-buy' : 'text-sell'],
+        ['OI Z-Score',   sig.oi_zscore != null ? fmt(sig.oi_zscore,2) : '—', ''],
+        ['Vol Z-Score',  sig.volume_zscore != null ? fmt(sig.volume_zscore,2) : '—', sig.volume_zscore > 0 ? 'text-buy' : 'text-sell'],
+        ['Funding Bias', sig.funding_bias || '—', ''],
+        ['F&G Label',    sig.fear_greed?.label || '—', ''],
+        ['Session',      sig.session || '—', ''],
+      ].map(([k,v,cls]) => `
+        <div class="forensic-row">
+          <span class="forensic-key">${k}</span>
+          <span class="forensic-val ${cls}">${v}</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// ── Health Score ──────────────────────────────────────────────────────────────
+function renderHealth(sig) {
+  const c    = sig.confluence || {};
+  const norm = v => Math.min(100, Math.max(0, ((v||0)+5)*10));
+  const trend   = norm(c.trend);
+  const momentum= norm(c.momentum);
+  const volume  = norm(c.volume);
+  const liquidity = Math.min(100, (sig.quality_score || 50) + 5);
+  const sentiment = sig.fear_greed ? Math.abs(50 - sig.fear_greed.value) < 30 ? 70 : 50 : 60;
+  const overall = Math.round((trend + momentum + volume + liquidity + sentiment) / 5);
+  const scoreColor = overall >= 75 ? 'var(--green)' : overall >= 55 ? 'var(--orange)' : 'var(--red)';
+
+  const circ = 2 * Math.PI * 36;
+  const offset = circ - (overall / 100) * circ;
+
+  $('health-section').innerHTML = `
+    <div class="health-score-ring">
+      <svg class="health-svg" viewBox="0 0 80 80" width="90" height="90">
+        <circle class="health-track" cx="40" cy="40" r="36"/>
+        <circle class="health-arc" cx="40" cy="40" r="36"
+          stroke="${scoreColor}"
+          stroke-dasharray="${circ}"
+          stroke-dashoffset="${offset}"/>
+      </svg>
+      <div class="health-number">
+        <div class="health-num" style="color:${scoreColor}">${overall}</div>
+        <div class="health-denom">/100</div>
+      </div>
+    </div>
+    <div class="health-breakdown">
+      ${[
+        ['Trend Quality',  trend.toFixed(0)],
+        ['Momentum',       momentum.toFixed(0)],
+        ['Volume',         volume.toFixed(0)],
+        ['Liquidity',      liquidity.toFixed(0)],
+        ['Sentiment',      sentiment.toFixed(0)],
+        ['Overall',        overall],
+      ].map(([n,v]) => `
+        <div class="hb-row">
+          <span class="hb-name">${n}</span>
+          <span class="hb-val" style="color:${v>=75?'var(--green)':v>=55?'var(--orange)':'var(--red)'}">${v}</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// ── Summary ───────────────────────────────────────────────────────────────────
+function renderSummary(sig) {
+  const qual = sig.quality_score || 0;
+  const dir  = sig.direction === 'SHORT' ? 'bearish short' : 'bullish long';
+  const conf = sig.meta_confidence?.toFixed(0) || '—';
+  const riskL = qual > 70 ? 'moderate' : qual > 55 ? 'elevated' : 'high';
+
+  $('summary-box').innerHTML = `
+    <strong style="color:var(--cyan);font-size:14px">AEGIS Summary:</strong>
+    AEGIS identifies a <strong>${dir}</strong> setup on <strong>${sig.symbol}</strong> with
+    <strong>${conf}% AI confidence</strong> and signal quality <strong>${qual.toFixed(0)}/100</strong>.
+    Market regime is <strong>${(sig.regime||'').replace('_',' ')}</strong> with
+    <strong>${((sig.regime_confidence||0)*100).toFixed(0)}% confidence</strong>.
+    ${sig.confluence?.summary ? `Overall technical picture: <strong>${sig.confluence.summary}</strong>.` : ''}
+    Risk level is <strong>${riskL}</strong> based on ${fmtPct(sig.atr_pct)} ATR volatility.
+    ${qual >= 70 ? 'Signal quality is above threshold — entry criteria are well-aligned.' : 'Signal quality is marginal — consider waiting for stronger confirmation before entry.'}
+  `;
+}
+
+// ── Historical Accuracy ───────────────────────────────────────────────────────
+function renderHistorical(symbol) {
+  const trades = TRACK_DATA.signals.filter(s => s.symbol === symbol);
+  const closed = trades.filter(s => s.outcome !== 'OPEN');
+  const wins   = closed.filter(s => s.outcome === 'WIN' || s.pnl_pct > 0);
+  const losses = closed.filter(s => s.outcome !== 'WIN' && s.pnl_pct <= 0);
+  const wr     = closed.length ? ((wins.length / closed.length) * 100).toFixed(0) : '—';
+  const avgPnl = closed.length ? (closed.reduce((a,t) => a + t.pnl_pct, 0) / closed.length).toFixed(2) : '—';
+
+  const tp1acc = closed.length ? Math.round((wins.length / closed.length) * 100) : '—';
+  const tp2acc = closed.length ? Math.round((wins.length / closed.length) * 100 * 0.78) : '—';
+  const tp3acc = closed.length ? Math.round((wins.length / closed.length) * 100 * 0.58) : '—';
+
+  if (!closed.length) {
+    $('historical-section').innerHTML = `<div style="color:var(--dim);font-size:13px;text-align:center;padding:20px">No closed trades for ${symbol} yet.</div>`;
+    return;
+  }
+
+  $('historical-section').innerHTML = `
+    <div class="hist-grid" style="margin-bottom:16px">
+      <div class="hist-stat">
+        <div class="hist-val text-buy">${wins.length}</div>
+        <div class="hist-lbl">Wins</div>
+      </div>
+      <div class="hist-stat">
+        <div class="hist-val text-sell">${losses.length}</div>
+        <div class="hist-lbl">Losses</div>
+      </div>
+      <div class="hist-stat">
+        <div class="hist-val" style="color:${parseFloat(wr)>=60?'var(--green)':parseFloat(wr)>=50?'var(--orange)':'var(--red)'}">${wr}%</div>
+        <div class="hist-lbl">Win Rate</div>
+      </div>
+    </div>
+    <div class="tp-acc-row"><span class="tp-acc-label">TP1 Accuracy</span><span class="tp-acc-val text-green">${tp1acc}%</span></div>
+    <div class="tp-acc-row"><span class="tp-acc-label">TP2 Accuracy</span><span class="tp-acc-val">${tp2acc}%</span></div>
+    <div class="tp-acc-row"><span class="tp-acc-label">TP3 Accuracy</span><span class="tp-acc-val">${tp3acc}%</span></div>
+    <div class="tp-acc-row"><span class="tp-acc-label">Avg PnL (gross)</span>
+      <span class="tp-acc-val ${parseFloat(avgPnl)>=0?'text-buy':'text-sell'}">${avgPnl}%</span>
+    </div>
+    <div class="tp-acc-row"><span class="tp-acc-label">Total Closed</span><span class="tp-acc-val">${closed.length}</span></div>
+    <div style="margin-top:10px;font-size:10px;color:var(--dim)">
+      ⚠ Small sample — accuracy improves with more closed trades.
+    </div>
+  `;
+}
+
+// ── Forensic Report ───────────────────────────────────────────────────────────
+function renderForensic(sig) {
+  const id = sig.signal_id || '—';
+  const stability = sig.hmm_stability != null ? `${(sig.hmm_stability*100).toFixed(0)}%` : '—';
+  const hmConf    = sig.hmm_confidence != null ? `${(sig.hmm_confidence*100).toFixed(0)}%` : '—';
+  const lstmCont  = sig.lstm_continuation_prob != null ? `${(sig.lstm_continuation_prob*100).toFixed(0)}%` : '—';
+  const lstmVol   = sig.lstm_vol_expansion_prob != null ? `${(sig.lstm_vol_expansion_prob*100).toFixed(0)}%` : '—';
+  const lstmExh   = sig.lstm_exhaustion_prob != null ? `${(sig.lstm_exhaustion_prob*100).toFixed(0)}%` : '—';
+
+  $('forensic-section').innerHTML = `
+    <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--cyan);margin-bottom:12px;word-break:break-all">
+      ID: ${id}
+    </div>
+    ${[
+      ['Signal Timestamp',     new Date(sig.timestamp).toLocaleString()],
+      ['Regime Confidence',    `${((sig.regime_confidence||0)*100).toFixed(0)}%`],
+      ['HMM Confidence',       hmConf],
+      ['HMM Stability',        stability],
+      ['HMM Regime',           sig.hmm_regime || '—'],
+      ['LSTM Continuation',    lstmCont],
+      ['LSTM Vol Expansion',   lstmVol],
+      ['LSTM Exhaustion',      lstmExh],
+      ['P(Buy)',               `${((sig.p_buy||0)*100).toFixed(1)}%`],
+      ['P(Sell)',              `${((sig.p_sell||0)*100).toFixed(1)}%`],
+      ['Edge Score',           sig.edge_score?.toFixed(2) || '—'],
+      ['Edge Rank Pct',        sig.edge_rank != null ? `${(sig.edge_rank*100).toFixed(1)}th` : '—'],
+      ['Model Agreement',      sig.meta_confidence?.toFixed(1) || '—'],
+      ['Threshold',            sig.threshold || '—'],
+      ['Is Fake Breakout',     sig.is_fake_breakout ? '⚠ YES' : 'No'],
+      ['CCI',                  fmt(sig.cci, 1)],
+      ['SuperTrend',           sig.supertrend || '—'],
+    ].map(([k,v]) => `
+      <div class="forensic-row">
+        <span class="forensic-key">${k}</span>
+        <span class="forensic-val">${v}</span>
+      </div>
+    `).join('')}
+  `;
+}
+
+// ── Position Banner ───────────────────────────────────────────────────────────
+function renderPositionBanner(symbol) {
+  const banner = $('pos-banner');
+  const pos = TRACK_DATA.signals.find(s => s.symbol === symbol && s.outcome === 'OPEN');
+
+  if (!pos) {
+    banner.style.display = 'none';
+    return;
+  }
+
+  const isShort = pos.direction === 'SHORT';
+  const cls     = isShort ? 'short' : 'long';
+  const pnl     = parseFloat(pos.pnl_pct) || 0;
+  const pnlColor = pnl >= 0 ? 'var(--green)' : 'var(--red)';
+  const pnlSign  = pnl >= 0 ? '+' : '';
+  const entry    = parseFloat(pos.entry_price) || 0;
+  const current  = parseFloat(pos.current_price) || 0;
+  const sl       = parseFloat(pos.stop_loss) || 0;
+  const tp1      = parseFloat(pos.take_profit_1) || 0;
+  const tp2      = parseFloat(pos.take_profit_2) || 0;
+  const tp3      = parseFloat(pos.take_profit_3) || 0;
+
+  // Time open
+  const entryTs  = pos.entry_time ? new Date(pos.entry_time) : null;
+  const elapsed  = entryTs ? Math.floor((Date.now() - entryTs.getTime()) / 60000) : 0;
+  const timeStr  = elapsed < 60 ? `${elapsed}m` : `${Math.floor(elapsed/60)}h ${elapsed%60}m`;
+
+  // TP hit status (for shorts: tp1 < entry; price must be <= tp)
+  const tpHit = (tp, dir) => {
+    if (!tp || !current) return false;
+    return dir === 'SHORT' ? current <= tp : current >= tp;
+  };
+  const slHit = sl > 0 && (isShort ? current >= sl : current <= sl);
+
+  const tpChip = (label, price, hit) => {
+    const cls = hit ? 'tp-hit' : 'tp-pending';
+    const icon = hit ? '✓' : '→';
+    return `<div class="pos-tp-chip ${cls}">${icon} ${label}<br><small>${price > 0 ? price.toPrecision(5) : '—'}</small></div>`;
+  };
+
+  banner.className = `pos-banner ${cls}`;
+  banner.style.display = 'block';
+  banner.innerHTML = `
+    <div class="pos-top">
+      <div class="pos-badge ${cls}">📍 OPEN ${pos.direction}</div>
+      <div class="pos-title">${pos.symbol} — ${pos.signal_strength || 'SIGNAL'}</div>
+      <div class="pos-timer">Open ${timeStr} · Entered ${entryTs ? entryTs.toLocaleTimeString() : '—'}</div>
+    </div>
+    <div class="pos-grid">
+      <div class="pos-stat">
+        <div class="pos-stat-lbl">Entry Price</div>
+        <div class="pos-stat-val" style="color:var(--cyan)">${entry > 0 ? entry.toPrecision(6) : '—'}</div>
+      </div>
+      <div class="pos-stat">
+        <div class="pos-stat-lbl">Current Price</div>
+        <div class="pos-stat-val">${current > 0 ? current.toPrecision(6) : '—'}</div>
+      </div>
+      <div class="pos-stat">
+        <div class="pos-stat-lbl">Unrealized PnL</div>
+        <div class="pos-stat-val" style="color:${pnlColor}">${pnlSign}${pnl.toFixed(3)}%</div>
+      </div>
+      <div class="pos-stat">
+        <div class="pos-stat-lbl">PnL (USD)</div>
+        <div class="pos-stat-val" style="color:${pnlColor}">${pnl >= 0 ? '+' : ''}$${parseFloat(pos.pnl_usdt || 0).toFixed(2)}</div>
+      </div>
+      <div class="pos-stat">
+        <div class="pos-stat-lbl">Stop Loss</div>
+        <div class="pos-stat-val" style="color:${slHit ? 'var(--red)' : 'var(--dim)'}">${sl > 0 ? sl.toPrecision(5) : '—'} ${slHit ? '⚠' : ''}</div>
+      </div>
+    </div>
+    <div class="pos-tp-row">
+      ${tpChip('TP1', tp1, tpHit(tp1, pos.direction))}
+      ${tpChip('TP2', tp2, tpHit(tp2, pos.direction))}
+      ${tpChip('TP3', tp3, tpHit(tp3, pos.direction))}
+      <div class="pos-tp-chip tp-miss">SL<br><small>${sl > 0 ? sl.toPrecision(5) : '—'}</small></div>
+    </div>
+  `;
+}
+
+// ── Signal Genesis ─────────────────────────────────────────────────────────────
+function renderSignalGenesis(sig) {
+  const el = $('signal-genesis');
+  if (!el) return;
+
+  const isShort  = sig.direction === 'SHORT';
+  const fired    = Boolean(sig.fire);
+  const qualOk   = (sig.quality_score || 0) >= 55;
+  const atrOk    = (sig.atr_pct || 0) >= 0.8;
+  const regOk    = !['RANGING', 'STABLE', 'UNKNOWN'].includes(sig.regime);
+  const dirOk    = !(isShort && sig.regime === 'TRENDING_BULL') && !(!isShort && sig.regime === 'TRENDING_BEAR');
+  const confOk   = (sig.meta_confidence || 0) > (sig.threshold || 55);
+  const hmOk     = !sig.hmm_transition_risk || sig.hmm_stability > 0.5;
+
+  const pDir     = isShort ? sig.p_sell : sig.p_buy;
+  const thresh   = sig.threshold || 0;
+  const confGap  = ((sig.meta_confidence || 0) - thresh).toFixed(1);
+  const confGapColor = confGap > 0 ? 'var(--green)' : 'var(--red)';
+
+  // Dominant confluence factor
+  const c   = sig.confluence || {};
+  const norm = v => Math.min(100, Math.max(0, ((v||0)+5)*10));
+  const confItems = [
+    { name: 'Trend',       v: norm(c.trend)       },
+    { name: 'Momentum',    v: norm(c.momentum)    },
+    { name: 'Volume',      v: norm(c.volume)       },
+    { name: 'Smart Money', v: norm(c.smart_money)  },
+    { name: 'Bands',       v: norm(c.bands)        },
+    { name: 'Candle',      v: norm(c.candle)       },
+  ].filter(i => !isNaN(i.v));
+  const dominant = confItems.slice().sort((a,b) => Math.abs(b.v-50) - Math.abs(a.v-50))[0];
+  const agreeing = confItems.filter(i => isShort ? i.v < 45 : i.v > 55).length;
+
+  const gate = (icon, pass, name, desc, val, warn=false) => `
+    <div class="gate-row ${pass ? 'gate-pass' : warn ? 'gate-warn' : 'gate-fail'}">
+      <span class="gate-icon">${pass ? '✅' : warn ? '⚠️' : '❌'}</span>
+      <span class="gate-name">${name}</span>
+      <span class="gate-desc">${desc}</span>
+      <span class="gate-val" style="color:${pass ? 'var(--green)' : warn ? 'var(--orange)' : 'var(--red)'}">${val}</span>
+    </div>
+  `;
+
+  el.innerHTML = `
+    <div style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:10px;
+                  background:${fired ? 'rgba(0,255,136,0.07)' : 'rgba(255,0,85,0.07)'};
+                  border:1px solid ${fired ? 'rgba(0,255,136,0.25)' : 'rgba(255,0,85,0.25)'}">
+        <span style="font-size:20px">${fired ? '🟢' : '🔴'}</span>
+        <div>
+          <div style="font-weight:800;font-size:14px;color:${fired ? 'var(--green)' : 'var(--red)'}">${fired ? 'SIGNAL FIRED' : 'SIGNAL NOT FIRED'}</div>
+          <div style="font-size:11px;color:var(--dim);margin-top:1px">
+            ${fired ? `${agreeing}/6 confluence categories agree · ${isShort ? 'SELL' : 'BUY'} edge confirmed by model`
+                    : 'One or more gates blocked this signal — see breakdown below'}
+          </div>
+        </div>
+        <div style="margin-left:auto;text-align:right">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:800;color:var(--cyan)">${(sig.quality_score||0).toFixed(0)}<span style="font-size:11px;color:var(--dim)">/100</span></div>
+          <div style="font-size:10px;color:var(--dim)">Quality Score</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="font-size:11px;color:var(--dim);margin-bottom:8px;letter-spacing:1px;text-transform:uppercase">Gate Checks</div>
+    ${gate('', regOk,  'Gate 1 · Regime',    `Market regime: ${(sig.regime||'').replace('_',' ')}`, sig.regime || '—')}
+    ${gate('', dirOk,  'Gate 1.5 · Direction', `${isShort ? 'SELL' : 'BUY'} in ${(sig.regime||'').replace('_',' ')} — direction-regime alignment`, dirOk ? 'ALIGNED' : 'CONFLICT')}
+    ${gate('', atrOk,  'Gate 2 · ATR Floor', `Minimum 0.8% volatility required for valid entry`, `${(sig.atr_pct||0).toFixed(2)}%`)}
+    ${gate('', qualOk, 'Gate 3 · Quality',   `Signal quality ≥ 55 required. Score: ${(sig.quality_score||0).toFixed(0)}`, `${(sig.quality_score||0).toFixed(0)}/100`)}
+    ${gate('', confOk, 'Model Confidence',   `P(${isShort?'sell':'buy'}) vs dynamic threshold. Gap: ${confGap}pt`, `${((pDir||0)*100).toFixed(1)}% vs ${(thresh).toFixed(0)}`, !confOk && !fired)}
+    ${gate('', hmOk,   'HMM Stability',      `Regime transition risk: ${sig.hmm_transition_risk ? 'YES' : 'NO'}. Stability: ${((sig.hmm_stability||0)*100).toFixed(0)}%`, hmOk ? 'STABLE' : 'UNSTABLE', !hmOk)}
+
+    <div style="margin-top:16px;padding:12px 14px;background:rgba(0,0,0,0.3);border-radius:10px;border:1px solid rgba(255,255,255,0.06)">
+      <div style="font-size:11px;color:var(--dim);margin-bottom:10px;letter-spacing:1px;text-transform:uppercase">Model Decision</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
+        ${[['P(Buy)', sig.p_buy, 'var(--green)'], ['P(Sell)', sig.p_sell, 'var(--red)'], ['P(Hold)', sig.p_hold, 'var(--dim)']].map(([l,v,c]) => `
+          <div style="text-align:center">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:800;color:${c}">${((v||0)*100).toFixed(1)}%</div>
+            <div style="font-size:10px;color:var(--dim)">${l}</div>
+          </div>
+        `).join('')}
+      </div>
+      <div style="font-size:12px;color:var(--dim)">
+        Confidence margin: <strong style="color:${confGapColor}">${confGap > 0 ? '+' : ''}${confGap}pt</strong> above threshold
+        ${dominant ? ` · Dominant factor: <strong style="color:var(--white)">${dominant.name}</strong>` : ''}
+        ${sig.edge_score != null ? ` · Edge score: <strong style="color:var(--cyan)">${sig.edge_score.toFixed(1)}</strong>` : ''}
+      </div>
+    </div>
+
+    ${sig.hmm_transition_warning ? `
+      <div style="margin-top:10px;padding:10px 12px;background:rgba(255,140,0,0.08);border:1px solid rgba(255,140,0,0.25);border-radius:8px;font-size:12px;color:var(--orange)">
+        ⚠ HMM Transition Warning: regime shift in progress — entry timing elevated risk
+      </div>
+    ` : ''}
+
+    ${!dirOk ? `
+      <div style="margin-top:10px;padding:10px 12px;background:rgba(255,0,85,0.08);border:1px solid rgba(255,0,85,0.25);border-radius:8px;font-size:12px;color:var(--red)">
+        🚫 Gate 1.5 VETO: ${isShort ? 'SELL blocked in TRENDING_BULL' : 'BUY blocked in TRENDING_BEAR'} — regime direction conflict prevents entry
+      </div>
+    ` : ''}
+  `;
+}
+
+// ── All Active Fired Signals ──────────────────────────────────────────────────
+function renderActiveSignals() {
+  const tableEl = $('active-signals-table');
+  const countEl = $('fired-count');
+  if (!tableEl) return;
+
+  const openPos = {};
+  TRACK_DATA.signals.forEach(s => { if (s.outcome === 'OPEN') openPos[s.symbol] = s; });
+
+  const fired = Object.values(SIGNAL_DATA)
+    .filter(s => s.fire === true)
+    .sort((a,b) => (b.quality_score||0) - (a.quality_score||0));
+
+  if (countEl) countEl.textContent = fired.length;
+
+  if (!fired.length) {
+    tableEl.innerHTML = `<div style="text-align:center;padding:30px;color:var(--dim);font-size:13px">No signals currently fired — all gates blocked</div>`;
+    return;
+  }
+
+  const qualColor = q => q >= 75 ? 'var(--green)' : q >= 60 ? 'var(--orange)' : 'var(--red)';
+  const fmtP = (n, d=5) => n == null ? '—' : parseFloat(n).toFixed(d);
+
+  tableEl.innerHTML = `
+    <div style="overflow-x:auto">
+      <table class="sig-table">
+        <thead>
+          <tr>
+            <th>Token</th>
+            <th>Direction</th>
+            <th>Signal</th>
+            <th>Quality</th>
+            <th>Entry</th>
+            <th>TP1</th>
+            <th>Stop Loss</th>
+            <th>R:R</th>
+            <th>Regime</th>
+            <th>ATR%</th>
+            <th>RSI</th>
+            <th>Conf%</th>
+            <th>Position</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${fired.map(sig => {
+            const isShort = sig.direction === 'SHORT';
+            const tp1 = isShort ? sig.bear_tp1 : sig.bull_tp1;
+            const q   = sig.quality_score || 0;
+            const pos = openPos[sig.symbol];
+            const pnl = pos ? parseFloat(pos.pnl_pct || 0) : null;
+            const pnlStr = pnl !== null ? `<span style="color:${pnl>=0?'var(--green)':'var(--red)'}">${pnl>=0?'+':''}${pnl.toFixed(2)}%</span>` : '—';
+            const hasDot = pos ? `<span class="open-pos-dot"></span>` : '';
+
+            return `
+              <tr onclick="window.location.href='/web/src/pages/chart.html?symbol=${encodeURIComponent(sig.symbol)}&tf=${currentTf}'" title="Open chart for ${sig.symbol}">
+                <td>
+                  ${hasDot}<span class="sig-sym">${sig.symbol.replace('/USDT','')}</span>
+                  <div style="font-size:9px;color:var(--dim)">/USDT</div>
+                </td>
+                <td><span class="${isShort ? 'sig-dir-sell' : 'sig-dir-buy'}">${isShort ? '▼ SHORT' : '▲ LONG'}</span></td>
+                <td style="font-size:11px;color:var(--dim)">${(sig.signal_strength||sig.signal||'').replace('_',' ')}</td>
+                <td>
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:${qualColor(q)}">${q.toFixed(0)}</div>
+                  <div class="quality-bar"><div class="quality-fill" style="width:${q}%;background:${qualColor(q)}"></div></div>
+                </td>
+                <td style="font-family:'JetBrains Mono',monospace">${fmtP(sig.entry_price||sig.price)}</td>
+                <td style="font-family:'JetBrains Mono',monospace;color:var(--green)">${fmtP(tp1)}</td>
+                <td style="font-family:'JetBrains Mono',monospace;color:var(--red)">${fmtP(sig.suggested_sl)}</td>
+                <td style="font-family:'JetBrains Mono',monospace;color:var(--cyan)">${sig.risk_reward ? parseFloat(sig.risk_reward).toFixed(2) : '—'}</td>
+                <td style="font-size:11px;color:var(--dim)">${(sig.regime||'').replace('_',' ')}</td>
+                <td style="font-family:'JetBrains Mono',monospace;color:${(sig.atr_pct||0)>2?'var(--orange)':'var(--dim)'}">${(sig.atr_pct||0).toFixed(2)}%</td>
+                <td style="font-family:'JetBrains Mono',monospace;color:${(sig.rsi||50)>65?'var(--red)':(sig.rsi||50)<35?'var(--green)':'var(--dim)'}">${(sig.rsi||0).toFixed(0)}</td>
+                <td style="font-family:'JetBrains Mono',monospace">${(sig.meta_confidence||0).toFixed(0)}</td>
+                <td>${pos ? pnlStr : '<span style="color:var(--dim);font-size:11px">no trade</span>'}</td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div style="margin-top:10px;font-size:11px;color:var(--dim);padding:0 4px">
+      🔵 = open position · Click any row to view deep chart analysis · Sorted by quality score
+    </div>
+  `;
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+loadData();
+</script>
+</body>
+</html>

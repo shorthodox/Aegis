@@ -927,8 +927,20 @@ data <span class="text-slate-300">=</span> resp.<span class="text-cyan-300">json
       </div>
     </div>`;
 
+  const symEncoded = encodeURIComponent(sym);
   return `
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 p-1" data-tdp-symbol="${sym}">
+      <!-- Chart Analysis shortcut -->
+      <div class="lg:col-span-2 flex justify-end mb-1">
+        <a href="/web/src/pages/chart.html?symbol=${symEncoded}"
+           target="_blank"
+           class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-bold
+                  bg-cyan-500/10 text-cyan-300 border border-cyan-500/20
+                  hover:bg-cyan-500/20 hover:text-cyan transition-all">
+          <i class="fas fa-chart-candlestick text-[10px]"></i>
+          Deep Chart Analysis ↗
+        </a>
+      </div>
       ${sec1}
       ${sec2}
       ${sec3}
