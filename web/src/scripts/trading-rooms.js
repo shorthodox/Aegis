@@ -252,7 +252,67 @@ function _renderAllTrades() {
   _updateAnalytics(all);
 }
 
+// ── Feature 9: Portfolio Exposure Bar ────────────────────────────────────────
+// Updates the exposure bar in room-signals whenever trade data changes.
+// Shown for Sentinel+ (intermediate / pro) only.
+function _updatePortfolioExposure(all) {
+  const bar = document.getElementById('portfolio-exposure-bar');
+  if (!bar) return;
+
+  // Tier check — only show for intermediate+
+  const _tier = (typeof getUserTier === 'function') ? getUserTier()
+    : (typeof window.isPremiumUser !== 'undefined' && window.isPremiumUser) ? 3 : 1;
+  const _plan = (typeof userPlan !== 'undefined' ? userPlan : '').toLowerCase();
+  const _isSentinel = _tier >= 2 || _plan === 'intermediate' || _plan === 'pro' || _plan === 'premium';
+  if (!_isSentinel) { bar.style.display = 'none'; return; }
+  bar.style.display = 'block';
+
+  const open  = (all || []).filter(t => !t.exitTime && !t.closedAt);
+  const longs  = open.filter(t => (t.side || t.direction || '').toUpperCase() === 'LONG');
+  const shorts = open.filter(t => (t.side || t.direction || '').toUpperCase() === 'SHORT');
+  const capital = parseFloat(document.getElementById('tr-capital')?.value || '10000');
+  const riskPct = parseFloat(document.getElementById('tr-risk')?.value    || '2');
+  const riskPerTrade = capital * (riskPct / 100);
+  const longRisk  = longs.length  * riskPerTrade;
+  const shortRisk = shorts.length * riskPerTrade;
+  const totalRisk = longRisk + shortRisk;
+  const total = longs.length + shorts.length;
+
+  const longPct  = total > 0 ? (longs.length  / total * 100).toFixed(0) : 0;
+  const shortPct = total > 0 ? (shorts.length / total * 100).toFixed(0) : 0;
+
+  const el = id => document.getElementById(id);
+  if (el('pex-long-count'))  el('pex-long-count').textContent  = longs.length;
+  if (el('pex-short-count')) el('pex-short-count').textContent = shorts.length;
+  if (el('pex-long-risk'))   el('pex-long-risk').textContent   = longRisk  > 0 ? `($${longRisk.toFixed(0)})` : '';
+  if (el('pex-short-risk'))  el('pex-short-risk').textContent  = shortRisk > 0 ? `($${shortRisk.toFixed(0)})` : '';
+  if (el('pex-total-risk'))  el('pex-total-risk').textContent  = `$${totalRisk.toFixed(0)}`;
+  if (el('pex-long-bar'))    el('pex-long-bar').style.width    = `${longPct}%`;
+  if (el('pex-short-bar'))   el('pex-short-bar').style.width   = `${shortPct}%`;
+
+  // Session badge
+  const h = new Date().getUTCHours();
+  const sess = h >= 13 && h < 22 ? 'NEW YORK' : h >= 8 && h < 17 ? 'LONDON' : 'ASIA';
+  if (el('pex-session-badge')) el('pex-session-badge').textContent = sess;
+
+  // Regime alignment alert — warn if >60% positions against dominant regime
+  const alertEl = el('pex-regime-alert');
+  if (alertEl && total >= 3) {
+    const imbalance = Math.abs(longs.length - shorts.length) / total;
+    if (imbalance > 0.6) {
+      const dom = longs.length > shorts.length ? 'LONG-HEAVY' : 'SHORT-HEAVY';
+      alertEl.textContent = `⚠ ${dom} — ${Math.round(imbalance * 100)}% skewed`;
+      alertEl.style.display = 'block';
+    } else {
+      alertEl.style.display = 'none';
+    }
+  } else if (alertEl) {
+    alertEl.style.display = 'none';
+  }
+}
+
 function _updateAnalytics(all) {
+  _updatePortfolioExposure(all);
   const capital = parseFloat(document.getElementById('tr-capital')?.value || 10000);
   const paperOpen = (all || []).filter(t => String(t.id || '').startsWith('paper-'));
   const allocated = paperOpen.reduce((sum, t) => sum + (t.positionUnits || 1) * (t.entryPrice || 0), 0);

@@ -603,6 +603,40 @@
                     </div>
                 </div>
 
+                <!-- Feature 9: Portfolio Exposure Bar (Sentinel+ only) -->
+                <div id="portfolio-exposure-bar" style="display:none;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:10px 14px;margin-bottom:12px;display:none">
+                  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+                    <div style="display:flex;align-items:center;gap:6px">
+                      <span style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#6b7280">Portfolio Exposure</span>
+                      <span id="pex-session-badge" style="font-size:9px;padding:1px 7px;border-radius:10px;background:rgba(0,242,255,0.07);border:1px solid rgba(0,242,255,0.2);color:rgba(0,242,255,0.7);font-weight:700"></span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                      <div style="display:flex;align-items:center;gap:5px">
+                        <div style="width:7px;height:7px;border-radius:50%;background:#4ade80"></div>
+                        <span style="font-size:10px;color:#6b7280">LONG</span>
+                        <span id="pex-long-count" style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:800;color:#4ade80">0</span>
+                        <span id="pex-long-risk" style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#374151"></span>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:5px">
+                        <div style="width:7px;height:7px;border-radius:50%;background:#f87171"></div>
+                        <span style="font-size:10px;color:#6b7280">SHORT</span>
+                        <span id="pex-short-count" style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:800;color:#f87171">0</span>
+                        <span id="pex-short-risk" style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#374151"></span>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:5px">
+                        <span style="font-size:10px;color:#6b7280">Total at risk</span>
+                        <span id="pex-total-risk" style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:800;color:#e2e8f0">$0</span>
+                      </div>
+                      <div id="pex-regime-alert" style="display:none;font-size:9px;font-weight:700;color:#fbbf24;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.25);padding:2px 8px;border-radius:6px"></div>
+                    </div>
+                  </div>
+                  <!-- Direction imbalance bar -->
+                  <div style="margin-top:8px;height:4px;border-radius:2px;background:rgba(255,255,255,0.05);overflow:hidden;position:relative" id="pex-balance-bar">
+                    <div id="pex-long-bar"  style="position:absolute;left:0;top:0;height:100%;background:#4ade80;border-radius:2px;transition:width 0.5s"></div>
+                    <div id="pex-short-bar" style="position:absolute;right:0;top:0;height:100%;background:#f87171;border-radius:2px;transition:width 0.5s"></div>
+                  </div>
+                </div>
+
                 <!-- Token Search Bar -->
                 <div class="token-search-wrap">
                     <div class="token-search-inner">

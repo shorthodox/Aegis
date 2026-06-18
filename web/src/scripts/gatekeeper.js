@@ -1450,8 +1450,34 @@ function renderSignals(signals) {
   }
 
 
-  // All users see all live tokens; Confluence Scorecard is the paid gate (Intermediate+)
-  const filteredEntries = signalEntries;
+  // ── Tier helpers ────────────────────────────────────────────────────────────
+  // _tier: 1=trial/basic  2=sentinel(intermediate)  3=pro
+  // _isSentinel: intermediate OR pro  (quality filters, warnings, capital-at-risk, session sort)
+  // _isPro: pro only                  (LSTM, HMM deep, regime heatmap)
+  const _tier       = getUserTier();
+  const _isSentinel = _tier >= 2;
+  const _isPro      = _tier >= 3;
+
+  function _getCurrentSession() {
+    const h = new Date().getUTCHours();
+    if (h >= 13 && h < 22) return 'NEW_YORK';
+    if (h >= 8  && h < 17) return 'LONDON';
+    return 'ASIA';
+  }
+  const _curSess = _getCurrentSession();
+
+  // Session-aware + quality sort: fired first → session match → quality score
+  const filteredEntries = [...signalEntries].sort(([, a], [, b]) => {
+    const af = a.fire ? 1 : 0, bf = b.fire ? 1 : 0;
+    if (af !== bf) return bf - af;
+    if (_isSentinel) {
+      const as = (a.session || '').toUpperCase().includes(_curSess) ? 1 : 0;
+      const bs = (b.session || '').toUpperCase().includes(_curSess) ? 1 : 0;
+      if (as !== bs) return bs - as;
+      return (b.quality_score || 0) - (a.quality_score || 0);
+    }
+    return 0;
+  });
 
   if (filteredEntries.length === 0) {
     const isExplicitlyExpired = userPlan === 'expired' || userPlan === 'none' || window.trialExpiredTriggered === true;
@@ -1586,23 +1612,94 @@ function renderSignals(signals) {
       </div>`;
     })() : '';
 
+    // ── Feature 1: Quality Score ─────────────────────────────────────────────
+    const qualScore   = Math.round(signal.quality_score || 0);
+    const qColorCls   = qualScore >= 70 ? '#4ade80' : qualScore >= 55 ? '#fbbf24' : '#f87171';
+    const qBgCls      = qualScore >= 70 ? 'rgba(74,222,128,0.12)' : qualScore >= 55 ? 'rgba(251,191,36,0.12)' : 'rgba(248,113,113,0.12)';
+    const qBorderCls  = qualScore >= 70 ? 'rgba(74,222,128,0.3)' : qualScore >= 55 ? 'rgba(251,191,36,0.3)' : 'rgba(248,113,113,0.3)';
+    const qualBadgeHTML = `<span style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:800;color:${qColorCls};background:${qBgCls};border:1px solid ${qBorderCls};padding:2px 7px;border-radius:5px;letter-spacing:0.3px;flex-shrink:0" title="Signal Quality Score (0-100)">Q:${qualScore}</span>`;
+
+    // ── Features 2–5+7: Warning flag detection (Sentinel+) ──────────────────
+    const _isLong  = signal.direction === 'LONG'  || (signal.signal || '').toUpperCase().includes('BUY');
+    const _isShort = signal.direction === 'SHORT' || (signal.signal || '').toUpperCase().includes('SELL');
+    const _regime  = (signal.regime || '').toUpperCase();
+    const wFake    = signal.is_fake_breakout === true;                                   // Feature 2
+    const wVolLow  = (signal.volume_zscore || 0) < -1.0;                                // Feature 3
+    const wVolHigh = (signal.volume_zscore || 0) > 1.5;                                 // Feature 3
+    const wRegime  = (_isLong && _regime === 'TRENDING_BEAR') ||                        // Feature 4
+                     (_isShort && _regime === 'TRENDING_BULL');
+    const wFundL   = _isLong  && (signal.funding_rate || 0) > 0.01;                    // Feature 5
+    const wFundS   = _isShort && (signal.funding_rate || 0) < -0.01;                   // Feature 5
+    const wQual    = qualScore < 55 && signal.fire === true;
+    const wHmmTr   = _isPro && (signal.hmm_transition_risk === true ||                  // Feature 7 (Pro)
+                                 parseFloat(signal.hmm_transition_risk || 0) > 0);
+    const wLstmEx  = _isPro && (signal.lstm_exhaustion_prob || 0) > 0.6;               // Feature 6 (Pro)
+    const wLstmCt  = _isPro && (signal.lstm_continuation_prob || 0) > 0.7;            // Feature 6 (Pro)
+
+    let _warnCount = 0;
+    if (wFake)              _warnCount++;
+    if (wRegime)            _warnCount++;
+    if (wVolLow)            _warnCount++;
+    if (wFundL || wFundS)  _warnCount++;
+    if (wHmmTr)             _warnCount++;
+    if (wQual)              _warnCount++;
+
+    // Warning chips row (Sentinel+ only, on fired signals)
+    let warnChipsHTML = '';
+    if (_isSentinel && signal.fire) {
+      const _chips = [];
+      if (wFake)    _chips.push(`<span style="padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700;background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.35);color:#f87171;white-space:nowrap">⚠ FAKE BREAK</span>`);
+      if (wRegime)  _chips.push(`<span style="padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700;background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.35);color:#f87171;white-space:nowrap">⚠ REGIME CONFLICT</span>`);
+      if (wFundL)   _chips.push(`<span style="padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);color:#fbbf24;white-space:nowrap">▲ LONGS OVR</span>`);
+      if (wFundS)   _chips.push(`<span style="padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);color:#fbbf24;white-space:nowrap">▼ SHORTS OVR</span>`);
+      if (wVolLow)  _chips.push(`<span style="padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700;background:rgba(100,116,139,0.15);border:1px solid rgba(100,116,139,0.3);color:#94a3b8;white-space:nowrap">LOW VOL</span>`);
+      if (wVolHigh) _chips.push(`<span style="padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700;background:rgba(96,165,250,0.12);border:1px solid rgba(96,165,250,0.3);color:#93c5fd;white-space:nowrap">VOL SPIKE ↑</span>`);
+      if (wLstmEx)  _chips.push(`<span style="padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700;background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.35);color:#f87171;white-space:nowrap">TREND ENDING</span>`);
+      if (wLstmCt)  _chips.push(`<span style="padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700;background:rgba(74,222,128,0.12);border:1px solid rgba(74,222,128,0.3);color:#4ade80;white-space:nowrap">STRONG CONT.</span>`);
+      if (wHmmTr)   _chips.push(`<span style="padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);color:#fbbf24;white-space:nowrap">REGIME SHIFT</span>`);
+      if (signal.session) _chips.push(`<span style="padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700;background:rgba(0,242,255,0.07);border:1px solid rgba(0,242,255,0.2);color:rgba(0,242,255,0.7);white-space:nowrap">${signal.session}</span>`);
+      if (_chips.length) warnChipsHTML = `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${_chips.join('')}</div>`;
+    }
+
+    // Feature 8: "Don't Trade This" composite banner (Sentinel+)
+    const dontTradeHTML = (_isSentinel && signal.fire && _warnCount >= 2) ? `
+      <div style="display:flex;align-items:center;gap:6px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:6px 10px;margin-bottom:8px;font-size:10px;font-weight:700;color:#f87171">
+        <i class="fas fa-ban" style="font-size:9px"></i> HIGH RISK — ${_warnCount} warning flags · review before entering
+      </div>` : '';
+
+    // Feature 10: Capital at risk per trade (Sentinel+)
+    let capRiskHTML = '';
+    if (_isSentinel && signal.fire && signal.entry_price) {
+      const _cap  = parseFloat(document.getElementById('tr-capital')?.value || '10000');
+      const _rPct = parseFloat(document.getElementById('tr-risk')?.value    || '2');
+      const _rAmt = _cap * (_rPct / 100);
+      const _rwd  = _rAmt * (parseFloat(signal.risk_reward) || 1);
+      capRiskHTML = `<div style="display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:9px;background:rgba(0,0,0,0.3);padding:4px 8px;border-radius:5px;margin-top:4px;border:1px solid rgba(255,255,255,0.05)">
+        <span style="color:#f87171">Risk $${_rAmt.toFixed(0)}</span>
+        <span style="color:#4b5563">→</span>
+        <span style="color:#4ade80">Reward $${_rwd.toFixed(0)}</span>
+      </div>`;
+    }
+
     return `
       <div class="signal-card ${cardTypeClass}${statusIndicator} cursor-pointer hover:shadow-[0_0_15px_rgba(0,242,255,0.2)] transition-all transform hover:-translate-y-1 overflow-hidden ${matchClasses}" onclick="window.openSignalDetails('${symbol}', '${timeframe}')" data-symbol="${symbol}" data-status="${signalStatus}" data-dir="${dirAttr}">
         <div class="signal-header flex justify-between items-center">
-          <div class="flex items-center">
+          <div class="flex items-center gap-1.5 flex-wrap">
             <span class="signal-symbol font-bold">${symbol}</span>
-            <span class="signal-timeframe text-xs text-gray-500 ml-2">${timeframe}</span>
+            <span class="signal-timeframe text-xs text-gray-500">${timeframe}</span>
             ${directionBadge}
             ${statusBadge}
             ${matchBadge}
           </div>
-          <div class="flex items-center gap-2">
-            <button class="view-logic-btn text-[10px] bg-white/5 border border-white/10 px-2 py-0.5 rounded text-gray-400 hover:text-white transition-colors" onclick="window.toggleScorecard(event, '${symbol}')">View Logic <i class="fas fa-chevron-down"></i></button>
-            <div class="price-container text-sm flex font-mono ml-1"><span class="live-price" data-symbol="${symbol.replace('/', '-')}">${window.currentTickers && window.currentTickers[symbol] ? '$' + parseFloat(window.currentTickers[symbol]).toFixed(4) : '-'}</span></div>
+          <div class="flex items-center gap-1.5">
+            ${qualBadgeHTML}
+            <button class="view-logic-btn text-[10px] bg-white/5 border border-white/10 px-2 py-0.5 rounded text-gray-400 hover:text-white transition-colors" onclick="window.toggleScorecard(event, '${symbol}')">Logic <i class="fas fa-chevron-down"></i></button>
+            <div class="price-container text-sm flex font-mono"><span class="live-price" data-symbol="${symbol.replace('/', '-')}">${window.currentTickers && window.currentTickers[symbol] ? '$' + parseFloat(window.currentTickers[symbol]).toFixed(4) : '-'}</span></div>
             <span class="signal-badge ${signalClass}">${signalType}</span>
           </div>
         </div>
         <div class="signal-details mt-3">
+          ${dontTradeHTML}
           <div class="signal-confidence flex justify-between items-center mb-2">
             <div class="confidence-bar flex-1 h-1.5 bg-black/50 rounded overflow-hidden mr-3">
               <div class="confidence-fill h-full bg-current" style="width: ${confidence}%"></div>
@@ -1622,6 +1719,8 @@ function renderSignals(signals) {
                <span>SL: ${slStr} | TP: ${tpStr}</span>
             </span>
           </div>
+          ${capRiskHTML}
+          ${warnChipsHTML}
           ${(srBadge || macroBadge) ? `<div class="mt-2 pt-1.5 border-t border-white/5 space-y-1">${macroBadge}${srBadge}</div>` : ''}
           <div class="slide-down-container mt-2 ${window.openScorecards && window.openScorecards.has(symbol) ? 'open' : ''}">
             <div class="slide-down-content ${ (userPlan === 'trial' || userPlan === 'basic') ? 'feature-locked relative' : '' }" id="scorecard-${symbol.replace('/', '-')}">
@@ -1629,7 +1728,7 @@ function renderSignals(signals) {
               <div class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/60 backdrop-blur-md rounded border border-white/10">
                 <i class="fas fa-lock text-white/50 text-xl mb-2"></i>
                 <div class="text-[10px] text-gray-400 mb-2">Logic Locked</div>
-                <button class="upgrade-btn text-[10px] bg-cyan/20 text-cyan px-2 py-1 rounded border border-cyan/30 hover:bg-cyan/30 transition-colors" onclick="window.location.href='/web/src/pages/pricing.html'; event.stopPropagation();">Upgrade to Pro</button>
+                <button class="upgrade-btn text-[10px] bg-cyan/20 text-cyan px-2 py-1 rounded border border-cyan/30 hover:bg-cyan/30 transition-colors" onclick="window.location.href='/web/src/pages/pricing.html'; event.stopPropagation();">Upgrade to Sentinel</button>
               </div>
               ` : '' }
               <div class="pt-2 border-t border-white/10 mt-2 ${ (userPlan === 'trial' || userPlan === 'basic') ? 'opacity-30 blur-sm pointer-events-none' : '' }">

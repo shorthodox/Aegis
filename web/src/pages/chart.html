@@ -400,6 +400,42 @@
       <div id="health-section"></div>
     </div>
 
+    <!-- LSTM PREDICTIONS (Pro only) -->
+    <div class="card" style="position:relative;overflow:hidden">
+      <div class="card-title">⚡ LSTM Predictions</div>
+      <div id="lstm-section"></div>
+      <div id="lstm-lock-overlay" class="pro-lock-overlay" style="display:none">
+        <div style="font-size:22px;margin-bottom:6px">🔒</div>
+        <div style="font-size:13px;font-weight:800;color:#fff;margin-bottom:4px">LSTM Predictions</div>
+        <div style="font-size:11px;color:#94a3b8;text-align:center;max-width:220px;margin-bottom:14px;line-height:1.5">
+          Deep learning trend continuation, exhaustion and volatility signals — AEGIS Pro only
+        </div>
+        <a href="/web/src/pages/pricing.html"
+           style="display:inline-block;padding:8px 20px;border-radius:8px;font-size:12px;font-weight:700;
+                  background:linear-gradient(135deg,#00f2ff,#0099cc);color:#000;text-decoration:none;">
+          Upgrade to Pro →
+        </a>
+      </div>
+    </div>
+
+    <!-- HMM DEEP REGIME (Pro only) -->
+    <div class="card" style="position:relative;overflow:hidden">
+      <div class="card-title">🧬 HMM Deep Regime</div>
+      <div id="hmm-deep-section"></div>
+      <div id="hmm-lock-overlay" class="pro-lock-overlay" style="display:none">
+        <div style="font-size:22px;margin-bottom:6px">🔒</div>
+        <div style="font-size:13px;font-weight:800;color:#fff;margin-bottom:4px">HMM Deep Regime</div>
+        <div style="font-size:11px;color:#94a3b8;text-align:center;max-width:220px;margin-bottom:14px;line-height:1.5">
+          Hidden Markov Model regime stability, transition risk and state confidence — AEGIS Pro only
+        </div>
+        <a href="/web/src/pages/pricing.html"
+           style="display:inline-block;padding:8px 20px;border-radius:8px;font-size:12px;font-weight:700;
+                  background:linear-gradient(135deg,#00f2ff,#0099cc);color:#000;text-decoration:none;">
+          Upgrade to Pro →
+        </a>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -514,6 +550,8 @@ onAuthStateChanged(_auth, u => {
 
 // ── Tier gate ────────────────────────────────────────────────────────────────
 // Premium sections: 'genesis', 'forensic', 'probabilities', 'historical'
+// Sentinel+: genesis, forensic, probabilities, historical
+// Pro only:  lstm-section, hmm-deep-section (lock overlays handled inside renderLstm/renderHmmDeep)
 const PREMIUM_IDS = ['signal-genesis', 'forensic-section', 'probabilities', 'historical-section'];
 
 function applyTierGates(tier) {
@@ -629,6 +667,8 @@ function renderAll(symbol) {
   renderPositionBanner(symbol);
   renderSignalGenesis(sig);
   renderActiveSignals();
+  renderLstm(sig);
+  renderHmmDeep(sig);
 }
 
 // ── Nav pill ──────────────────────────────────────────────────────────────────
@@ -1775,6 +1815,135 @@ function renderActiveSignals() {
       🔵 = open position · Click any row to view deep chart analysis · Sorted by quality score
     </div>
   `;
+}
+
+// ── Feature 6: LSTM Predictions Panel (Pro only) ─────────────────────────────
+function renderLstm(sig) {
+  const el  = $('lstm-section');
+  const lck = $('lstm-lock-overlay');
+  if (!el) return;
+
+  // Determine if this user has Pro access (same logic as applyTierGates)
+  const plan = _planFromStorage();
+  const isPro = plan === 'pro' || plan === 'premium' || plan === 'professional';
+
+  if (!isPro) {
+    el.innerHTML = '';
+    if (lck) lck.style.display = 'flex';
+    return;
+  }
+  if (lck) lck.style.display = 'none';
+
+  const available = sig.lstm_available === true;
+  if (!available) {
+    el.innerHTML = `<div style="color:#64748b;font-size:12px;text-align:center;padding:16px">LSTM model not yet trained for this token</div>`;
+    return;
+  }
+
+  const cont = ((sig.lstm_continuation_prob  || 0) * 100).toFixed(0);
+  const exh  = ((sig.lstm_exhaustion_prob    || 0) * 100).toFixed(0);
+  const vol  = ((sig.lstm_vol_expansion_prob || 0) * 100).toFixed(0);
+
+  const bar = (val, color, bg) => `
+    <div style="flex:1;height:8px;border-radius:4px;background:${bg};overflow:hidden">
+      <div style="width:${val}%;height:100%;border-radius:4px;background:${color};transition:width 0.8s ease"></div>
+    </div>`;
+
+  const row = (label, val, color, bg, hint) => `
+    <div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:5px;font-size:11px">
+        <span style="color:#94a3b8">${label}</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${color}">${val}%</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        ${bar(val, color, bg)}
+      </div>
+      <div style="font-size:10px;color:#4b5563;margin-top:3px">${hint}</div>
+    </div>`;
+
+  el.innerHTML = `
+    ${row('Continuation', cont, '#00ff88', 'rgba(0,255,136,0.1)',
+      cont >= 70 ? '✅ Strong continuation — trend likely to persist' :
+      cont >= 45 ? '— Neutral continuation signal' : '⚠ Weak continuation — consider tightening TP')}
+    ${row('Exhaustion', exh, '#ff0055', 'rgba(255,0,85,0.1)',
+      exh >= 60 ? '🔴 Trend may be ending — reduce position or exit earlier' :
+      exh >= 40 ? '— Some exhaustion building' : '✅ Low exhaustion — trend intact')}
+    ${row('Vol Expansion', vol, '#a855f7', 'rgba(168,85,247,0.1)',
+      vol >= 65 ? '⚡ Volatility expansion expected — wider TP possible' :
+      vol >= 40 ? '— Moderate volatility outlook' : 'Tight range expected')}
+    <div style="font-size:10px;color:#374151;padding:8px;background:rgba(0,0,0,0.3);border-radius:6px;line-height:1.5">
+      LSTM trained on continuation patterns. High Exhaustion + Low Continuation = exit signal.
+      High Vol Expansion + High Continuation = size-up opportunity.
+    </div>`;
+}
+
+// ── Feature 7: HMM Deep Regime Panel (Pro only) ───────────────────────────────
+function renderHmmDeep(sig) {
+  const el  = $('hmm-deep-section');
+  const lck = $('hmm-lock-overlay');
+  if (!el) return;
+
+  const plan = _planFromStorage();
+  const isPro = plan === 'pro' || plan === 'premium' || plan === 'professional';
+
+  if (!isPro) {
+    el.innerHTML = '';
+    if (lck) lck.style.display = 'flex';
+    return;
+  }
+  if (lck) lck.style.display = 'none';
+
+  const hmmRegime   = sig.hmm_regime      || '—';
+  const hmmConf     = ((sig.hmm_confidence   || 0) * 100).toFixed(0);
+  const hmmStab     = ((sig.hmm_stability    || 0) * 100).toFixed(0);
+  const hmmTrRisk   = sig.hmm_transition_risk === true || parseFloat(sig.hmm_transition_risk || 0) > 0;
+  const hmmStateId  = sig.hmm_state_id != null ? `State #${sig.hmm_state_id}` : '—';
+  const ruleRegime  = (sig.regime || '').replace(/_/g,' ');
+
+  const stabColor   = hmmStab >= 75 ? '#00ff88' : hmmStab >= 50 ? '#fbbf24' : '#ff0055';
+  const confColor   = hmmConf >= 70 ? '#00f2ff' : hmmConf >= 50 ? '#fbbf24' : '#ff0055';
+
+  const stabBar = pct => `
+    <div style="height:6px;border-radius:3px;background:rgba(255,255,255,0.06);overflow:hidden;margin-top:4px">
+      <div style="width:${pct}%;height:100%;border-radius:3px;background:${stabColor};transition:width 0.8s ease"></div>
+    </div>`;
+
+  el.innerHTML = `
+    ${hmmTrRisk ? `
+    <div style="display:flex;align-items:center;gap:6px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:11px;font-weight:700;color:#fbbf24">
+      <span>⚠</span> Regime Transition Warning — increased uncertainty
+    </div>` : ''}
+
+    <div style="display:flex;justify-content:space-between;margin-bottom:10px;font-size:12px">
+      <span style="color:#64748b">Rule-based</span>
+      <span style="font-family:'JetBrains Mono',monospace;font-weight:600;color:#00f2ff">${ruleRegime || '—'}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:10px;font-size:12px">
+      <span style="color:#64748b">HMM Regime</span>
+      <span style="font-family:'JetBrains Mono',monospace;font-weight:600;color:#a855f7">${hmmRegime}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:12px">
+      <span style="color:#64748b">HMM Confidence</span>
+      <span style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${confColor}">${hmmConf}%</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:12px;margin-top:10px">
+      <span style="color:#64748b">Stability</span>
+      <span style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${stabColor}">${hmmStab}%</span>
+    </div>
+    ${stabBar(hmmStab)}
+    <div style="font-size:10px;color:#4b5563;margin-top:3px">
+      ${hmmStab >= 75 ? '✅ Regime confirmed — low transition risk' :
+        hmmStab >= 50 ? '— Moderate stability — monitor for shift' :
+        '⚠ Unstable — regime may change soon'}
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-top:12px;font-size:11px">
+      <span style="color:#64748b">State ID</span>
+      <span style="font-family:'JetBrains Mono',monospace;color:#94a3b8">${hmmStateId}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11px">
+      <span style="color:#64748b">Transition Risk</span>
+      <span style="font-weight:700;color:${hmmTrRisk ? '#ff0055' : '#00ff88'}">${hmmTrRisk ? '⚠ YES' : 'LOW'}</span>
+    </div>`;
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
