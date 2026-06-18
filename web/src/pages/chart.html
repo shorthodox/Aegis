@@ -665,6 +665,8 @@ let _chartBars     = [];
 let _chartVols     = [];
 let _candlesSeries = null;
 let _volSeriesRef  = null;
+let _liveBar       = null;   // current forming candle — updated per aggTrade tick
+let _restTimer     = null;   // 1-second REST fallback when WS is down
 
 function buildTfBar() {
   const bar = $('tf-bar');
@@ -777,42 +779,114 @@ async function renderChart(sig) {
 // ── WebSocket helpers ─────────────────────────────────────────────────────────
 function stopLiveChart() {
   _historyAbort = true;
-  if (_wsKeepAlive) { clearInterval(_wsKeepAlive); _wsKeepAlive = null; }
+  _liveBar = null;
+  if (_restTimer)    { clearInterval(_restTimer);    _restTimer    = null; }
+  if (_wsKeepAlive)  { clearInterval(_wsKeepAlive);  _wsKeepAlive  = null; }
   if (_ws) {
     const dead = _ws;
-    dead.onclose = null; // prevent auto-reconnect on this stale socket
+    dead.onclose = null;
     try { dead.close(); } catch(_) {}
     _ws = null;
   }
 }
 
 function startLiveWs(symbol, interval) {
-  const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_${interval}`);
+  // Seed _liveBar from the last known candle so aggTrade can update it immediately
+  _liveBar = _chartBars.length > 0 ? { ..._chartBars[_chartBars.length - 1] } : null;
+
+  // Combined stream: kline gives authoritative OHLCV; aggTrade fires on every
+  // trade (~100 ms for BTC) so the candle updates every single tick.
+  // Using port 443 (no port in URL) for better firewall compatibility.
+  const sym = symbol.toLowerCase();
+  const streams = `${sym}@kline_${interval}/${sym}@aggTrade`;
+  const ws = new WebSocket(`wss://stream.binance.com/stream?streams=${streams}`);
   _ws = ws;
 
-  ws.onmessage = (e) => {
-    if (ws !== _ws) return; // stale — ignore
-    try {
-      const { k } = JSON.parse(e.data);
-      if (!k || !_candlesSeries) return;
-      const t = Math.floor(k.t / 1000);
-      _candlesSeries.update({ time: t, open: +k.o, high: +k.h, low: +k.l, close: +k.c });
-      _volSeriesRef.update({ time: t, value: +k.v, color: +k.c >= +k.o ? 'rgba(0,255,136,0.2)' : 'rgba(255,0,85,0.2)' });
-      _updateLiveTicker(symbol, +k.c);
-    } catch(_) {}
+  ws.onopen = () => {
+    // WebSocket connected — cancel the REST fallback
+    if (_restTimer) { clearInterval(_restTimer); _restTimer = null; }
   };
 
-  ws.onerror = () => {};
+  ws.onmessage = (e) => {
+    if (ws !== _ws) return;
+    try {
+      const msg   = JSON.parse(e.data);
+      const stype = msg.stream || '';
+
+      if (stype.includes('@aggTrade')) {
+        // Every aggregate trade — update current candle close/high/low in real time
+        const price = parseFloat(msg.data.p);
+        if (_liveBar && _candlesSeries) {
+          _liveBar.close = price;
+          if (price > _liveBar.high) _liveBar.high = price;
+          if (price < _liveBar.low)  _liveBar.low  = price;
+          _candlesSeries.update({ ..._liveBar });
+          _updateLiveTicker(symbol, price);
+        }
+
+      } else if (stype.includes('@kline')) {
+        // Authoritative OHLCV — sync liveBar and update volume
+        const k = msg.data.k;
+        if (!k || !_candlesSeries) return;
+        const bar = { time: Math.floor(k.t / 1000), open: +k.o, high: +k.h, low: +k.l, close: +k.c };
+
+        // New candle just started — reset liveBar
+        if (!_liveBar || _liveBar.time !== bar.time) _liveBar = { ...bar };
+        else _liveBar = { ...bar }; // always sync with authoritative values
+
+        _candlesSeries.update(bar);
+        _volSeriesRef.update({ time: bar.time, value: +k.v, color: +k.c >= +k.o ? 'rgba(0,255,136,0.2)' : 'rgba(255,0,85,0.2)' });
+        _updateLiveTicker(symbol, +k.c);
+
+        // When candle closes, commit it to our local bars array
+        if (k.x && _chartBars.length > 0) {
+          const last = _chartBars[_chartBars.length - 1];
+          if (last.time === bar.time) _chartBars[_chartBars.length - 1] = bar;
+          else _chartBars.push(bar);
+        }
+      }
+    } catch(err) {
+      console.warn('[chart-ws]', err.message);
+    }
+  };
+
+  ws.onerror = (e) => {
+    console.warn('[chart-ws] error — starting REST fallback');
+    _startRestFallback(symbol);
+  };
   ws.onclose = () => {
-    if (ws !== _ws) return; // stale — don't reconnect
-    // Reconnect after 3s (handles brief network drops)
+    if (ws !== _ws) return;
+    console.log('[chart-ws] closed — reconnecting in 3s');
+    _startRestFallback(symbol);
     setTimeout(() => { if (_ws === ws) startLiveWs(symbol, interval); }, 3000);
   };
 
-  // Binance requires a pong within 24h; ping every 3 min
+  // Binance keepalive ping every 3 min (required or server closes after 24h idle)
   _wsKeepAlive = setInterval(() => {
     if (ws === _ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ method: 'ping' }));
   }, 180000);
+}
+
+// REST fallback: polls price every 1 second when WebSocket is unavailable
+function _startRestFallback(symbol) {
+  if (_restTimer) return; // already running
+  _restTimer = setInterval(async () => {
+    if (_ws && _ws.readyState === WebSocket.OPEN) {
+      clearInterval(_restTimer); _restTimer = null; return;
+    }
+    try {
+      const r    = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`);
+      const data = await r.json();
+      const price = parseFloat(data.price);
+      if (_liveBar && _candlesSeries) {
+        _liveBar.close = price;
+        if (price > _liveBar.high) _liveBar.high = price;
+        if (price < _liveBar.low)  _liveBar.low  = price;
+        _candlesSeries.update({ ..._liveBar });
+        _updateLiveTicker(symbol, price);
+      }
+    } catch(_) {}
+  }, 1000);
 }
 
 function _updateLiveTicker(symbol, price) {

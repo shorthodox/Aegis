@@ -990,7 +990,6 @@
             <a href="/web/src/pages/review.html" class="nav-link">Reviews</a>
             <a href="/web/src/pages/pricing.html" class="nav-link">Pricing</a>
             <a href="/web/src/pages/track-record.html" class="nav-link">Live Record</a>
-            <a href="/web/src/pages/chart.html" class="nav-link" style="color:#00f2ff">📈 Chart</a>
             <a href="/web/src/pages/pitch.html" class="nav-link">Investor Brief</a>
         </nav>
 
@@ -1023,7 +1022,6 @@
         <a href="/web/src/pages/review.html" class="nav-mobile-link"><i class="fas fa-star"></i> Reviews</a>
         <a href="/web/src/pages/pricing.html" class="nav-mobile-link"><i class="fas fa-tag"></i> Pricing</a>
         <a href="/web/src/pages/track-record.html" class="nav-mobile-link"><i class="fas fa-chart-bar"></i> Live Record</a>
-        <a href="/web/src/pages/chart.html" class="nav-mobile-link" style="color:#00f2ff"><i class="fas fa-chart-candlestick"></i> Chart Analysis</a>
         <div class="nav-mobile-auth">
             <button class="nav-btn-login" id="mPortalProxy"><i class="fas fa-user-shield"></i> Sign In</button>
             <button class="nav-btn-dashboard" id="mDashProxy" style="display:none;"><i class="fas fa-chart-line"></i> Dashboard</button>
@@ -1779,6 +1777,93 @@
                 </div>
             </div>
         </div>
+    </section>
+
+    <!-- ── CHART ANALYSIS FEATURE SHOWCASE ── -->
+    <section style="padding:5rem 2rem;background:linear-gradient(180deg,rgba(0,0,0,0) 0%,rgba(0,242,255,0.025) 50%,rgba(0,0,0,0) 100%);border-top:1px solid rgba(0,242,255,0.08);">
+      <div style="max-width:1100px;margin:0 auto;">
+
+        <!-- Header -->
+        <div style="text-align:center;margin-bottom:3.5rem;">
+          <div style="display:inline-flex;align-items:center;gap:8px;padding:6px 16px;border-radius:20px;background:rgba(0,242,255,0.08);border:1px solid rgba(0,242,255,0.2);margin-bottom:1rem;">
+            <span style="font-size:11px;font-weight:700;letter-spacing:1.5px;color:#00f2ff;text-transform:uppercase;">New Feature</span>
+          </div>
+          <h2 style="font-size:clamp(1.6rem,3.5vw,2.4rem);font-weight:800;color:#fff;margin:0 0 1rem;letter-spacing:-0.5px;">
+            Per-Token Deep Chart Analysis
+          </h2>
+          <p style="font-size:1rem;color:#94a3b8;max-width:600px;margin:0 auto;line-height:1.7;">
+            Every signal comes with a full forensic breakdown — live candlestick chart, gate-by-gate explanation, probability analysis, and real-time market data. Available inside your dashboard.
+          </p>
+        </div>
+
+        <!-- Feature grid -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.25rem;margin-bottom:3rem;">
+
+          <div style="background:rgba(10,12,20,0.8);border:1px solid rgba(0,242,255,0.12);border-radius:14px;padding:1.5rem;">
+            <div style="font-size:24px;margin-bottom:0.75rem;">📊</div>
+            <h3 style="color:#fff;font-size:0.95rem;font-weight:700;margin:0 0 0.5rem;">Live Candlestick Chart</h3>
+            <p style="color:#64748b;font-size:0.82rem;line-height:1.65;margin:0;">
+              Real-time OHLCV chart powered by Binance market data. Updates every tick via WebSocket — same feed used by professional demat platforms. All 15 timeframes from 1m to 1M, up to 60,000 historical candles.
+            </p>
+          </div>
+
+          <div style="background:rgba(10,12,20,0.8);border:1px solid rgba(0,242,255,0.12);border-radius:14px;padding:1.5rem;">
+            <div style="font-size:24px;margin-bottom:0.75rem;">🧬</div>
+            <h3 style="color:#fff;font-size:0.95rem;font-weight:700;margin:0 0 0.5rem;">Signal Genesis Report</h3>
+            <p style="color:#64748b;font-size:0.82rem;line-height:1.65;margin:0;">
+              See exactly why AEGIS fired a signal — gate by gate. Regime check ✅, ATR floor ✅, quality score ✅, portfolio gate ✅. Every decision rendered transparent with pass/fail status and the raw values behind them.
+            </p>
+          </div>
+
+          <div style="background:rgba(10,12,20,0.8);border:1px solid rgba(0,242,255,0.12);border-radius:14px;padding:1.5rem;">
+            <div style="font-size:24px;margin-bottom:0.75rem;">🎯</div>
+            <h3 style="color:#fff;font-size:0.95rem;font-weight:700;margin:0 0 0.5rem;">Probability Analysis</h3>
+            <p style="color:#64748b;font-size:0.82rem;line-height:1.65;margin:0;">
+              Raw XGBoost model probabilities, calibrated win rate, directional confidence, and TP1/TP2/TP3 hit probability bars. You see the same numbers the AI sees — no black box.
+            </p>
+          </div>
+
+          <div style="background:rgba(10,12,20,0.8);border:1px solid rgba(0,242,255,0.12);border-radius:14px;padding:1.5rem;">
+            <div style="font-size:24px;margin-bottom:0.75rem;">🔍</div>
+            <h3 style="color:#fff;font-size:0.95rem;font-weight:700;margin:0 0 0.5rem;">AEGIS Forensic Report</h3>
+            <p style="color:#64748b;font-size:0.82rem;line-height:1.65;margin:0;">
+              Full signal audit trail: confluence score breakdown, feature importance from SHAP, anomaly flags, whale footprint detection, and historical performance for the same setup across the last 90 days.
+            </p>
+          </div>
+
+          <div style="background:rgba(10,12,20,0.8);border:1px solid rgba(0,242,255,0.12);border-radius:14px;padding:1.5rem;">
+            <div style="font-size:24px;margin-bottom:0.75rem;">📈</div>
+            <h3 style="color:#fff;font-size:0.95rem;font-weight:700;margin:0 0 0.5rem;">Open Position Tracker</h3>
+            <p style="color:#64748b;font-size:0.82rem;line-height:1.65;margin:0;">
+              If AEGIS has an open position on a token, the chart page shows a live PnL banner — current price vs entry, unrealised return, TP levels hit so far, and time elapsed since signal.
+            </p>
+          </div>
+
+          <div style="background:rgba(10,12,20,0.8);border:1px solid rgba(0,242,255,0.12);border-radius:14px;padding:1.5rem;">
+            <div style="font-size:24px;margin-bottom:0.75rem;">🌊</div>
+            <h3 style="color:#fff;font-size:0.95rem;font-weight:700;margin:0 0 0.5rem;">Market Regime &amp; Whale Data</h3>
+            <p style="color:#64748b;font-size:0.82rem;line-height:1.65;margin:0;">
+              See the detected market regime (trending, ranging, volatile, reversal), institutional order flow indicators, and macro BTC/ETH context — the same inputs that gate or block the signal engine.
+            </p>
+          </div>
+
+        </div>
+
+        <!-- Visual mock / CTA -->
+        <div style="background:rgba(10,12,20,0.9);border:1px solid rgba(0,242,255,0.15);border-radius:18px;padding:2rem;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:1.5rem;">
+          <div style="display:flex;align-items:flex-start;gap:1.25rem;flex:1;min-width:260px;">
+            <div style="width:48px;height:48px;border-radius:12px;background:rgba(0,242,255,0.1);border:1px solid rgba(0,242,255,0.2);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:22px;">⚡</div>
+            <div>
+              <div style="color:#fff;font-weight:700;font-size:1rem;margin-bottom:0.35rem;">Available with any plan — including the free trial</div>
+              <div style="color:#64748b;font-size:0.82rem;line-height:1.6;">Chart Analysis is included in the 3-day free trial. No credit card. Start now and get full access to live charts, signal forensics, and real-time market data for all 63 tokens.</div>
+            </div>
+          </div>
+          <a href="/web/src/pages/pricing.html" style="display:inline-flex;align-items:center;gap:8px;padding:12px 28px;border-radius:10px;background:linear-gradient(135deg,#00f2ff,#0099cc);color:#000;font-weight:700;font-size:0.88rem;text-decoration:none;white-space:nowrap;letter-spacing:0.3px;flex-shrink:0;">
+            Start Free Trial →
+          </a>
+        </div>
+
+      </div>
     </section>
 
     <!-- Authentication modal is provided by auth-modal.js for login/signup flows -->
