@@ -303,6 +303,7 @@
     <div id="nav-auth-hint">
       🔒 <a href="/web/src/pages/index.html#signin" style="color:var(--cyan);text-decoration:none">Sign in</a> to unlock full analysis
     </div>
+    <span id="live-price" style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:#00f2ff;letter-spacing:0.5px;min-width:110px;text-align:right;"></span>
     <select id="token-select"><option>Loading...</option></select>
     <span id="nav-signal-pill" class="signal-pill pill-hold">—</span>
   </div>
@@ -602,25 +603,34 @@ function renderNavPill(sig) {
 
 // ── Timeframe config ──────────────────────────────────────────────────────────
 const TIMEFRAMES = [
-  { label: '1m',  interval: '1m',  limit: 120 },
-  { label: '3m',  interval: '3m',  limit: 120 },
-  { label: '5m',  interval: '5m',  limit: 150 },
-  { label: '15m', interval: '15m', limit: 150 },
-  { label: '30m', interval: '30m', limit: 150 },
-  { label: '1h',  interval: '1h',  limit: 150 },
-  { label: '2h',  interval: '2h',  limit: 150 },
-  { label: '4h',  interval: '4h',  limit: 150 },
-  { label: '6h',  interval: '6h',  limit: 120 },
-  { label: '8h',  interval: '8h',  limit: 120 },
-  { label: '12h', interval: '12h', limit: 120 },
-  { label: '1D',  interval: '1d',  limit: 200 },
-  { label: '3D',  interval: '3d',  limit: 120 },
-  { label: '1W',  interval: '1w',  limit: 100 },
-  { label: '1M',  interval: '1M',  limit: 60  },
+  { label: '1m',  interval: '1m',  limit: 1000 },
+  { label: '3m',  interval: '3m',  limit: 1000 },
+  { label: '5m',  interval: '5m',  limit: 1000 },
+  { label: '15m', interval: '15m', limit: 1000 },
+  { label: '30m', interval: '30m', limit: 1000 },
+  { label: '1h',  interval: '1h',  limit: 1000 },
+  { label: '2h',  interval: '2h',  limit: 1000 },
+  { label: '4h',  interval: '4h',  limit: 1000 },
+  { label: '6h',  interval: '6h',  limit: 1000 },
+  { label: '8h',  interval: '8h',  limit: 1000 },
+  { label: '12h', interval: '12h', limit: 1000 },
+  { label: '1D',  interval: '1d',  limit: 1000 },
+  { label: '3D',  interval: '3d',  limit: 500  },
+  { label: '1W',  interval: '1w',  limit: 200  },
+  { label: '1M',  interval: '1M',  limit: 120  },
 ];
-let currentTf  = '1h';
-let _lastSig   = null;
-let _resizeOff = null;
+const MAX_HIST_CANDLES = 60000;
+let currentTf    = '1h';
+let _lastSig     = null;
+let _resizeOff   = null;
+// Live chart state
+let _ws            = null;
+let _wsKeepAlive   = null;
+let _historyAbort  = false;
+let _chartBars     = [];
+let _chartVols     = [];
+let _candlesSeries = null;
+let _volSeriesRef  = null;
 
 function buildTfBar() {
   const bar = $('tf-bar');
@@ -634,7 +644,7 @@ function buildTfBar() {
 window._onTfClick = function(tf) {
   currentTf = tf;
   buildTfBar();
-  // Persist in URL
+  stopLiveChart();
   const params = new URLSearchParams(location.search);
   params.set('tf', tf);
   history.replaceState(null, '', `?${params.toString()}`);
@@ -645,12 +655,12 @@ window._onTfClick = function(tf) {
 let chartInstance = null;
 async function renderChart(sig) {
   _lastSig = sig;
-  const tfCfg = TIMEFRAMES.find(t => t.interval === currentTf) || TIMEFRAMES[5]; // fallback 1h
+  stopLiveChart();
+  const tfCfg = TIMEFRAMES.find(t => t.interval === currentTf) || TIMEFRAMES[5];
   const sym = sig.symbol.replace('/', '');
   const container = $('tv-chart');
   container.innerHTML = '<div class="loader">Fetching candles<span class="dot-pulse"></span></div>';
 
-  // Update title
   const titleEl = $('chart-tf-title');
   if (titleEl) titleEl.textContent = `📈 Live Chart — ${tfCfg.label}`;
 
@@ -658,6 +668,9 @@ async function renderChart(sig) {
     const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${sym}&interval=${tfCfg.interval}&limit=${tfCfg.limit}`);
     const raw = await res.json();
     if (!Array.isArray(raw) || !raw.length) throw new Error('empty');
+
+    _chartBars = raw.map(k => ({ time: Math.floor(k[0]/1000), open: +k[1], high: +k[2], low: +k[3], close: +k[4] }));
+    _chartVols = raw.map(k => ({ time: Math.floor(k[0]/1000), value: +k[5], color: +k[4] >= +k[1] ? 'rgba(0,255,136,0.2)' : 'rgba(255,0,85,0.2)' }));
 
     container.innerHTML = '';
     if (chartInstance) { try { chartInstance.remove(); } catch(e) {} }
@@ -674,39 +687,28 @@ async function renderChart(sig) {
     });
     chartInstance = chart;
 
-    // Candles
     const candles = chart.addCandlestickSeries({
       upColor: '#00ff88', downColor: '#ff0055',
       borderUpColor: '#00ff88', borderDownColor: '#ff0055',
       wickUpColor: '#00ff88', wickDownColor: '#ff0055',
     });
-    candles.setData(raw.map(k => ({
-      time: Math.floor(k[0]/1000),
-      open: +k[1], high: +k[2], low: +k[3], close: +k[4],
-    })));
+    candles.setData(_chartBars);
+    _candlesSeries = candles;
 
-    // Volume
     const vol = chart.addHistogramSeries({
       color: 'rgba(0,242,255,0.15)', priceFormat: { type: 'volume' },
       priceScaleId: 'vol', scaleMargins: { top: 0.85, bottom: 0 },
     });
-    vol.setData(raw.map(k => ({
-      time: Math.floor(k[0]/1000),
-      value: +k[5],
-      color: +k[4] >= +k[1] ? 'rgba(0,255,136,0.2)' : 'rgba(255,0,85,0.2)',
-    })));
+    vol.setData(_chartVols);
+    _volSeriesRef = vol;
 
-    // Helper: horizontal price line
     const addLine = (price, color, label) => {
       if (!price) return;
       candles.createPriceLine({ price: parseFloat(price), color, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: label });
     };
-
-    // Price levels from signal
     const entry = sig.entry_price || sig.price;
-    addLine(entry,       '#00f2ff', 'Entry');
-    addLine(sig.suggested_sl, '#ff0055', 'SL');
-
+    addLine(entry,            '#00f2ff',              'Entry');
+    addLine(sig.suggested_sl, '#ff0055',              'SL');
     if (sig.direction === 'SHORT' || sig.signal === 'SELL') {
       addLine(sig.bear_tp1, '#00ff88', 'TP1');
       addLine(sig.bear_tp2, '#00cc6a', 'TP2');
@@ -716,21 +718,100 @@ async function renderChart(sig) {
       addLine(sig.bull_tp2, '#00cc6a', 'TP2');
       addLine(sig.bull_tp3, '#009950', 'TP3');
     }
-
-    // Support / Resistance / Pivot
     addLine(sig.support,    'rgba(0,255,136,0.5)',  'Sup');
     addLine(sig.resistance, 'rgba(255,0,85,0.5)',   'Res');
     addLine(sig.pivot,      'rgba(0,242,255,0.35)', 'Pvt');
 
     $('chart-legend').style.display = 'flex';
 
-    // Responsive resize (remove previous listener first)
     if (_resizeOff) window.removeEventListener('resize', _resizeOff);
     _resizeOff = () => chart.resize(container.clientWidth, 420);
     window.addEventListener('resize', _resizeOff);
 
+    // Live WebSocket feed — updates candle + volume every ~1s
+    _historyAbort = false;
+    startLiveWs(sym, tfCfg.interval);
+
+    // Background: load history up to MAX_HIST_CANDLES (60k)
+    loadMoreHistory(sym, tfCfg.interval).catch(() => {});
+
   } catch(e) {
     container.innerHTML = `<div class="loader">Chart unavailable — Binance API blocked or symbol not found</div>`;
+  }
+}
+
+// ── WebSocket helpers ─────────────────────────────────────────────────────────
+function stopLiveChart() {
+  _historyAbort = true;
+  if (_wsKeepAlive) { clearInterval(_wsKeepAlive); _wsKeepAlive = null; }
+  if (_ws) {
+    const dead = _ws;
+    dead.onclose = null; // prevent auto-reconnect on this stale socket
+    try { dead.close(); } catch(_) {}
+    _ws = null;
+  }
+}
+
+function startLiveWs(symbol, interval) {
+  const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_${interval}`);
+  _ws = ws;
+
+  ws.onmessage = (e) => {
+    if (ws !== _ws) return; // stale — ignore
+    try {
+      const { k } = JSON.parse(e.data);
+      if (!k || !_candlesSeries) return;
+      const t = Math.floor(k.t / 1000);
+      _candlesSeries.update({ time: t, open: +k.o, high: +k.h, low: +k.l, close: +k.c });
+      _volSeriesRef.update({ time: t, value: +k.v, color: +k.c >= +k.o ? 'rgba(0,255,136,0.2)' : 'rgba(255,0,85,0.2)' });
+      _updateLiveTicker(symbol, +k.c);
+    } catch(_) {}
+  };
+
+  ws.onerror = () => {};
+  ws.onclose = () => {
+    if (ws !== _ws) return; // stale — don't reconnect
+    // Reconnect after 3s (handles brief network drops)
+    setTimeout(() => { if (_ws === ws) startLiveWs(symbol, interval); }, 3000);
+  };
+
+  // Binance requires a pong within 24h; ping every 3 min
+  _wsKeepAlive = setInterval(() => {
+    if (ws === _ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ method: 'ping' }));
+  }, 180000);
+}
+
+function _updateLiveTicker(symbol, price) {
+  const el = document.getElementById('live-price');
+  if (!el) return;
+  const d = price < 0.1 ? 6 : price < 10 ? 4 : price < 1000 ? 2 : 1;
+  el.textContent = `${symbol.replace('USDT', '')}/USDT $${price.toFixed(d)}`;
+}
+
+// ── Background history loader (up to 60k candles) ─────────────────────────────
+async function loadMoreHistory(symbol, interval) {
+  while (_chartBars.length < MAX_HIST_CANDLES && !_historyAbort) {
+    await new Promise(r => setTimeout(r, 400)); // throttle: ~150 req/min
+    if (_historyAbort || _chartBars.length === 0) return;
+    const endTime = _chartBars[0].time * 1000 - 1;
+    try {
+      const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=1000&endTime=${endTime}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!Array.isArray(data) || data.length < 2) return;
+
+      const newBars = data.map(k => ({ time: Math.floor(k[0]/1000), open: +k[1], high: +k[2], low: +k[3], close: +k[4] }));
+      const newVols = data.map(k => ({ time: Math.floor(k[0]/1000), value: +k[5], color: +k[4] >= +k[1] ? 'rgba(0,255,136,0.2)' : 'rgba(255,0,85,0.2)' }));
+
+      _chartBars = [...newBars, ..._chartBars];
+      _chartVols = [...newVols, ..._chartVols];
+
+      if (!_historyAbort && _candlesSeries) {
+        _candlesSeries.setData(_chartBars);
+        _volSeriesRef.setData(_chartVols);
+      }
+      if (data.length < 1000) return; // reached beginning of exchange history
+    } catch(_) { return; }
   }
 }
 
