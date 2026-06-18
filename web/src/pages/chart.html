@@ -424,10 +424,9 @@
 </div>
 
 <script type="module">
-// ── Firebase — silent auth (no redirect; used only for tier gating) ──────────
-import { initializeApp }              from 'https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js';
+// ── Firebase — silent auth for tier gating (public page, no redirect) ────────
+import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js';
 import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js';
-import { getFirestore, doc, getDoc }  from 'https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js';
 
 const _fbCfg = {
   apiKey: "AIzaSyDtudUL2sE1_fKbzIro5d2IP0-M2dYI6x4",
@@ -437,20 +436,40 @@ const _fbCfg = {
   messagingSenderId: "623998601232",
   appId: "1:623998601232:web:288a89514d84ac3573a295",
 };
-let _fbApp;
-try { _fbApp = initializeApp(_fbCfg, 'chart'); } catch(e) { _fbApp = window._firebaseApp; }
-const _auth = getAuth(_fbApp);
-const _db   = getFirestore(_fbApp);
 
-// Page is PUBLIC — no redirect. Check tier to unlock premium sections.
-let _userTier = 'guest';
-onAuthStateChanged(_auth, async u => {
-  if (!u) { applyTierGates('guest'); return; }
+// Reuse the default app if gatekeeper already initialized it, otherwise init
+// as default (unnamed). NEVER use a named instance — named apps have separate
+// auth state and won't see the already-logged-in user.
+let _fbApp = window._firebaseApp || (getApps().length ? getApps()[0] : null);
+if (!_fbApp) {
+  try { _fbApp = initializeApp(_fbCfg); window._firebaseApp = _fbApp; }
+  catch(e) { _fbApp = getApps()[0]; }
+}
+const _auth = getAuth(_fbApp);
+
+// Read plan from localStorage where authManager stored it at login.
+// Fields used: user_profile.plan_type / user_profile.plan / aegis_user.plan
+function _planFromStorage() {
   try {
-    const snap = await getDoc(doc(_db, 'users', u.uid));
-    _userTier  = (snap.exists() ? snap.data().tier || snap.data().plan || 'basic' : 'basic').toLowerCase();
-  } catch(_) { _userTier = 'basic'; }
-  applyTierGates(_userTier);
+    const p = JSON.parse(localStorage.getItem('user_profile') || 'null');
+    if (p) return (p.plan_type || p.plan || '').toLowerCase();
+  } catch {}
+  try {
+    const u = JSON.parse(localStorage.getItem('aegis_user') || 'null');
+    if (u) return (u.plan_type || u.plan || '').toLowerCase();
+  } catch {}
+  return '';
+}
+
+// Any logged-in user gets full access — lock is only for guests.
+onAuthStateChanged(_auth, u => {
+  if (u) {
+    applyTierGates('pro');    // signed in = full access
+  } else {
+    // Double-check localStorage in case auth state lags on first load
+    const stored = _planFromStorage();
+    applyTierGates(stored ? 'pro' : 'guest');
+  }
 });
 
 // ── Tier gate ────────────────────────────────────────────────────────────────
@@ -458,7 +477,7 @@ onAuthStateChanged(_auth, async u => {
 const PREMIUM_IDS = ['signal-genesis', 'forensic-section', 'probabilities', 'historical-section'];
 
 function applyTierGates(tier) {
-  const isUnlocked = tier !== 'guest' && tier !== '';
+  const isUnlocked = tier !== 'guest';
   PREMIUM_IDS.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
