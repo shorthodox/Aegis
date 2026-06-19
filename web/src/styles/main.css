@@ -1107,6 +1107,54 @@ body.dashboard-body .glass-nav {
     background: radial-gradient(circle at 30% 10%, rgba(0, 242, 255, 0.03), transparent);
 }
 
+@media (max-width: 768px) {
+    .pricing-hero {
+        padding: 30px 4% 60px;
+        min-height: auto;
+    }
+    .pricing-hero .pricing-header {
+        text-align: center;
+    }
+    .price-card.tier-pro.featured {
+        transform: scale(1);
+    }
+    .price-card.tier-pro.featured:hover {
+        transform: scale(1);
+    }
+    .price-card {
+        min-width: 0;
+        width: 100%;
+        max-width: 100%;
+    }
+    .pricing-grid,
+    .pricing-grid.floating-cards {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
+
+/* ── Disclosure/policy two-column layout ── */
+.disclosure-layout {
+    display: flex;
+    gap: 2rem;
+    align-items: flex-start;
+    max-width: 1300px;
+    margin: 120px auto 2rem;
+    padding: 0 2rem;
+}
+
+@media (max-width: 900px) {
+    .disclosure-layout {
+        flex-direction: column;
+        margin: 90px auto 2rem;
+        padding: 0 1rem;
+    }
+    .disclosure-sidebar {
+        position: static;
+        width: 100%;
+    }
+}
+
 /* Pricing grid & cards */
 .pricing-grid,
 .pricing-grid.floating-cards {
@@ -1727,6 +1775,12 @@ body:not(.dashboard-body) {
     color: var(--dim);
     margin: 0 0.5rem;
     font-size: 0.7rem;
+}
+
+.footer-proprietor {
+    font-size: 0.75rem;
+    color: #4b5563;
+    margin-bottom: 0.5rem;
 }
 
 .footer p {

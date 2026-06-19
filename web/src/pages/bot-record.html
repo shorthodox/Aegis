@@ -29,24 +29,7 @@
             color: #e2e8f0;
             font-family: 'Inter', sans-serif;
         }
-        .fixed-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0.8rem 2rem;
-            background: rgba(10,10,12,0.85);
-            backdrop-filter: blur(20px);
-            border-bottom: 1px solid rgba(255,140,0,0.25);
-            position: fixed;
-            top: 0; left: 0;
-            width: 100%;
-            z-index: 1000;
-            box-sizing: border-box;
-        }
-        .logo-text { font-size: 1.1rem; font-weight: 800; letter-spacing: 0.15em; color: #f97316; }
-        .nav-links { display: flex; gap: 1.5rem; font-size: 0.8rem; color: #94a3b8; }
-        .nav-links a { color: #94a3b8; text-decoration: none; transition: color 0.2s; }
-        .nav-links a:hover { color: #f97316; }
+        .fixed-header { border-bottom-color: rgba(255,140,0,0.25); }
 
         .page-wrap { max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
 
@@ -149,15 +132,44 @@
 <body>
 
 <!-- ── Fixed Header ──────────────────────────────────────────────────── -->
-<header class="fixed-header">
-    <div class="logo-text">⚡ AEGIS ScalpBot</div>
-    <nav class="nav-links">
-        <a href="/web/src/pages/index.html">Home</a>
-        <a href="/web/src/pages/dashboard.html">Dashboard</a>
-        <a href="/web/src/pages/track-record.html">AEGIS Record</a>
-        <a href="/web/src/pages/bot-record.html" style="color:#f97316">Bot Record</a>
+<header class="fixed-header" id="main-nav">
+    <a href="/web/src/pages/index.html" class="logo" style="text-decoration:none;">⚡ AEGIS <span>v1.0</span></a>
+
+    <nav class="nav-links-centered" aria-label="Main navigation">
+        <a href="/web/src/pages/index.html" class="nav-link">Home</a>
+        <a href="/web/src/pages/index.html#sentinel" class="nav-link">Sentinel</a>
+        <a href="/web/src/pages/pricing.html" class="nav-link">Pricing</a>
+        <a href="/web/src/pages/review.html" class="nav-link">Reviews</a>
+        <a href="/web/src/pages/track-record.html" class="nav-link">Live Record</a>
+        <a href="/web/src/pages/bot-record.html" class="nav-link active" style="color:#f97316;">Bot Record</a>
     </nav>
+
+    <div class="nav-auth-desktop" style="display:flex;align-items:center;gap:0.5rem;">
+        <a href="/web/src/pages/index.html" class="nav-btn-login">
+            <i class="fas fa-user-shield"></i> Sign In
+        </a>
+        <a href="/web/src/pages/pricing.html" class="nav-btn-cta">
+            Get Started
+        </a>
+    </div>
+
+    <button class="nav-hamburger-btn" id="navHamburger" aria-label="Toggle navigation" aria-expanded="false">
+        <i class="fas fa-bars"></i>
+    </button>
 </header>
+
+<div class="nav-mobile-drawer" id="navMobileDrawer">
+    <a href="/web/src/pages/index.html" class="nav-mobile-link"><i class="fas fa-home"></i> Home</a>
+    <a href="/web/src/pages/index.html#sentinel" class="nav-mobile-link"><i class="fas fa-satellite-dish"></i> Sentinel</a>
+    <a href="/web/src/pages/review.html" class="nav-mobile-link"><i class="fas fa-star"></i> Reviews</a>
+    <a href="/web/src/pages/pricing.html" class="nav-mobile-link"><i class="fas fa-tag"></i> Pricing</a>
+    <a href="/web/src/pages/track-record.html" class="nav-mobile-link"><i class="fas fa-chart-bar"></i> Live Record</a>
+    <a href="/web/src/pages/bot-record.html" class="nav-mobile-link mobile-active" style="color:#f97316;"><i class="fas fa-robot"></i> Bot Record</a>
+    <div class="nav-mobile-auth">
+        <a href="/web/src/pages/index.html" class="nav-btn-login"><i class="fas fa-user-shield"></i> Sign In</a>
+        <a href="/web/src/pages/pricing.html" class="nav-btn-cta">Get Started</a>
+    </div>
+</div>
 
 <!-- ── Page Content ──────────────────────────────────────────────────── -->
 <div class="page-wrap">
@@ -470,6 +482,26 @@ onAuthStateChanged(auth, user => {
 setInterval(() => {
     if (!document.hidden && !_firestoreActive) loadFromJson();
 }, 30000);
+</script>
+
+<script>
+(function() {
+    var btn = document.getElementById('navHamburger');
+    var drawer = document.getElementById('navMobileDrawer');
+    if (!btn || !drawer) return;
+    btn.addEventListener('click', function() {
+        var open = drawer.classList.toggle('open');
+        btn.setAttribute('aria-expanded', open);
+        btn.querySelector('i').className = open ? 'fas fa-times' : 'fas fa-bars';
+    });
+    drawer.querySelectorAll('.nav-mobile-link').forEach(function(a) {
+        a.addEventListener('click', function() {
+            drawer.classList.remove('open');
+            btn.setAttribute('aria-expanded', 'false');
+            btn.querySelector('i').className = 'fas fa-bars';
+        });
+    });
+})();
 </script>
 
 </body>
