@@ -20,7 +20,6 @@ import {
   updateProfile,
   onAuthStateChanged,
   GoogleAuthProvider,
-  sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
 
 import {
@@ -469,27 +468,29 @@ export async function handleLogout() {
 // ============================================================
 // PASSWORD RESET
 // ============================================================
-// Uses Firebase's own sendPasswordResetEmail — avoids the backend SMTP
-// path which was hanging indefinitely when the mail server was slow.
-// The actionUrl brings users back to our custom reset page.
+// Calls the backend /auth/send-password-reset endpoint.
+// The backend uses Firebase Admin SDK to generate the reset link
+// (works for all account types) and delivers it via our trusted
+// SMTP domain — Firebase's own noreply address lands in spam.
 export async function handlePasswordReset(email) {
+  if (!email) return { success: false, message: 'Email required.' };
   try {
-    if (!email) throw new Error('Email required');
-    await sendPasswordResetEmail(auth, email, {
-      url: `${window.location.origin}/web/src/pages/reset-password.html`,
-      handleCodeInApp: false
+    const res = await fetch('/auth/send-password-reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
     });
-    return { success: true, message: 'Password reset link sent! Check your inbox (and spam folder).' };
-  } catch (error) {
-    console.error('❌ Password reset error:', error.code, error.message);
-    if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-email') {
-      // Don't reveal whether the account exists
-      return { success: true, message: 'If an account exists for this email, a reset link has been sent.' };
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      return { success: true, message: data.message || 'Password reset link sent! Check your inbox (and spam folder).' };
     }
-    if (error.code === 'auth/too-many-requests') {
+    if (res.status === 429) {
       return { success: false, message: 'Too many attempts. Please wait a few minutes and try again.' };
     }
-    return { success: false, message: 'Failed to send reset email. Please try again.' };
+    return { success: false, message: data.detail || 'Failed to send reset email. Please try again.' };
+  } catch (error) {
+    console.error('❌ Password reset error:', error);
+    return { success: false, message: 'Network error. Please check your connection and try again.' };
   }
 }
 
