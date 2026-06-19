@@ -1509,7 +1509,7 @@ function updateDashboardData(data) {
     document.dispatchEvent(new CustomEvent('aegis-ws-message', { detail: data }));
   }
 
-  // Update alpha mode status
+  // Update alpha mode status and merge alpha signals into the signal store
   if (data.alpha_mode !== undefined) {
     currentAlphaMode = data.alpha_mode;
     if (alphaStatus) {
@@ -1519,6 +1519,24 @@ function updateDashboardData(data) {
     if (alphaToggleBtn) {
       alphaToggleBtn.classList.toggle('active', currentAlphaMode);
     }
+  }
+
+  // Merge multi-timeframe alpha signals into the live signal store so the
+  // dashboard timeframe selector (15m / 30m / 4h / 1d) shows alpha signals.
+  // Alpha signal keys are "BTC/USDT|15m" — each has .pair and .timeframe set.
+  if (currentAlphaMode && data.alpha_signals && typeof data.alpha_signals === 'object') {
+    const merged = Object.assign({}, window.latestSignals || {});
+    for (const [key, sig] of Object.entries(data.alpha_signals)) {
+      if (sig && sig.pair) merged[key] = sig;
+    }
+    window.latestSignals = merged;
+  } else if (!currentAlphaMode && window.latestSignals) {
+    // Strip alpha keys when alpha mode is off so stale signals don't linger
+    const cleaned = {};
+    for (const [k, v] of Object.entries(window.latestSignals)) {
+      if (!k.includes('|')) cleaned[k] = v;
+    }
+    window.latestSignals = cleaned;
   }
 
   // Update warmup progress

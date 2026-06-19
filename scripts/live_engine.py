@@ -39,7 +39,9 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 MODEL_STORE       = _ROOT / 'src' / 'ml' / 'model_store'
-TRACK_RECORD_PATH = _ROOT / 'data' / 'track_record.json'
+TRACK_RECORD_PATH       = _ROOT / 'data' / 'track_record.json'
+ALPHA_TRACK_RECORD_PATH = _ROOT / 'data' / 'alpha_track_record.json'
+_ALPHA_TIMEFRAMES       = ['15m', '30m', '4h', '1d']
 _PERF_STATE_PATH  = _ROOT / 'data' / 'perf_state.json'
 _DRIFT_STATE_PATH = _ROOT / 'data' / 'drift_state.json'
 
@@ -1055,20 +1057,22 @@ class PortfolioGuard:
 class VirtualWallet:
     """Risk 10 % of balance per trade, capped at max_position_usdt."""
 
-    def __init__(self, initial_capital: float, max_position_usdt: float = 1_000.0):
-        self.initial_capital   = initial_capital
-        self.balance           = initial_capital
-        self.max_position_usdt = max_position_usdt
-        self.open_positions:   Dict[str, Position]  = {}
-        self.trade_history:    List[TradeRecord]     = []
+    def __init__(self, initial_capital: float, max_position_usdt: float = 1_000.0,
+                 track_record_path: Optional[Path] = None):
+        self.initial_capital    = initial_capital
+        self.balance            = initial_capital
+        self.max_position_usdt  = max_position_usdt
+        self._track_record_path = track_record_path or TRACK_RECORD_PATH
+        self.open_positions:    Dict[str, Position]  = {}
+        self.trade_history:     List[TradeRecord]     = []
         self._load_history()
 
     def _load_history(self) -> None:
         """Restore closed trade history, balance, and open positions from disk on restart."""
-        if not TRACK_RECORD_PATH.exists():
+        if not self._track_record_path.exists():
             return
         try:
-            with open(TRACK_RECORD_PATH, 'r', encoding='utf-8') as f:
+            with open(self._track_record_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             signals   = data.get('signals', [])
             closed    = [s for s in signals if s.get('outcome') in ('WIN', 'LOSS')]
@@ -1262,6 +1266,14 @@ class LiveEngine:
         self.bootstrap_done  = 0
         self.bootstrap_total = len(token_configs)
 
+        # Alpha mode — multi-timeframe scanning (Pro only)
+        self.alpha_mode    = False
+        self.alpha_signals: Dict[str, Any] = {}
+        self.alpha_wallet  = VirtualWallet(10_000.0, 1_000.0, ALPHA_TRACK_RECORD_PATH)
+        self._alpha_open_time:       Dict[str, float] = {}
+        self._alpha_last_close_time: Dict[str, float] = {}
+        self._alpha_last_close_side: Dict[str, str]   = {}
+
         # Adaptive intelligence modules
         self.regime_detector = MarketRegimeDetector()
         self.quality_filter  = SignalQualityFilter()
@@ -1357,6 +1369,8 @@ class LiveEngine:
             t0 = time.time()
             await self._scan_all()
             self._save_track_record()
+            if self.alpha_mode:
+                self._save_alpha_track_record()
             await self._push_signals_to_firestore()
             sleep = max(0.0, self.scan_interval_seconds - (time.time() - t0))
             await asyncio.sleep(sleep)
@@ -1454,6 +1468,15 @@ class LiveEngine:
         tasks = [self._process_symbol(sym, pred, sem)
                  for sym, pred in self.predictors.items()]
         await asyncio.gather(*tasks, return_exceptions=True)
+
+        if self.alpha_mode:
+            alpha_tasks = [
+                self._process_alpha_timeframe(sym, tf, sem)
+                for sym in self.predictors
+                for tf in _ALPHA_TIMEFRAMES
+            ]
+            await asyncio.gather(*alpha_tasks, return_exceptions=True)
+
         await self._fetch_index_prices()
         self.bootstrap_done = len(self.predictors)
 
@@ -2085,6 +2108,185 @@ class LiveEngine:
                 entry[k] = result[k]
 
         return entry
+
+    # ── Alpha Mode: multi-timeframe scanning ─────────────────────────────────
+
+    def _alpha_open_position(self, key: str, symbol: str,
+                              result: Dict[str, Any], price: float, tf: str) -> None:
+        side = result.get('side', 'FLAT')
+        if side not in ('BUY', 'SELL'):
+            return
+        atr      = float(result.get('atr', price * 0.015) or price * 0.015)
+        atr_mult = float(result.get('atr_multiplier', 1.5))
+        step     = atr * atr_mult
+        if side == 'BUY':
+            stop_loss = round(price - step, 8)
+            tp1       = round(price + step, 8)
+            tp2       = round(price + step * 2, 8)
+            tp3       = round(price + step * 3.5, 8)
+        else:
+            stop_loss = round(price + step, 8)
+            tp1       = round(price - step, 8)
+            tp2       = round(price - step * 2, 8)
+            tp3       = round(price - step * 3.5, 8)
+        pos = Position(
+            symbol          = key,
+            direction       = 'LONG' if side == 'BUY' else 'SHORT',
+            side            = side,
+            entry_price     = price,
+            position_value  = self.alpha_wallet.position_size(),
+            stop_loss       = stop_loss,
+            signal_id       = str(uuid.uuid4()),
+            entry_time      = datetime.now(timezone.utc).isoformat(),
+            meta_confidence = float(result.get('edge_score', result.get('meta_confidence', 0))),
+            atr_multiplier  = atr_mult,
+            take_profit_1   = tp1,
+            take_profit_2   = tp2,
+            take_profit_3   = tp3,
+        )
+        self.alpha_wallet.open_trade(pos)
+        self._alpha_open_time[key] = time.time()
+        print(f'[Alpha] OPEN {side} {symbol} {tf} @ {price:.4g} SL={stop_loss:.4g}')
+
+    async def _process_alpha_timeframe(
+        self, symbol: str, tf: str, sem: asyncio.Semaphore
+    ) -> None:
+        async with sem:
+            loop = asyncio.get_event_loop()
+            try:
+                pred   = self.predictors[symbol]
+                result: Dict[str, Any] = await asyncio.wait_for(
+                    loop.run_in_executor(
+                        self._executor,
+                        lambda p=pred, t=tf: p.predict_realtime(
+                            risk_tier=self.risk_tier, timeframe=t),
+                    ),
+                    timeout=120,
+                )
+            except Exception:
+                return
+            if not isinstance(result, dict):
+                return
+
+            price = float(self.live_prices.get(symbol, 0) or result.get('price', 0) or 0)
+            if price <= 0:
+                return
+
+            regime = self.regime_detector.detect(result)
+            sig = self._build_signal_entry(
+                symbol, result, price, regime=regime,
+                quality_score=min(float(result.get('edge_score', 0.0)), 100.0),
+            )
+            sig['timeframe'] = tf
+            sig['pair']      = symbol
+
+            key = f'{symbol}|{tf}'
+            self.alpha_signals[key] = sig
+
+            existing = self.alpha_wallet.open_positions.get(key)
+            fire     = bool(result.get('fire', False))
+            side     = result.get('side', 'FLAT')
+
+            if existing:
+                cur = self.live_prices.get(symbol, price)
+                sl_hit = (existing.direction == 'LONG' and cur <= existing.stop_loss) or \
+                         (existing.direction == 'SHORT' and cur >= existing.stop_loss)
+                reversal = fire and ((existing.side == 'BUY' and side == 'SELL') or
+                                     (existing.side == 'SELL' and side == 'BUY'))
+                if sl_hit:
+                    self.alpha_wallet.close_trade(key, cur, 'SL_HIT')
+                    self._alpha_last_close_time[key] = time.time()
+                    self._alpha_last_close_side[key] = existing.side
+                    self._save_alpha_track_record()
+                elif reversal:
+                    self.alpha_wallet.close_trade(key, cur, 'SIGNAL_REVERSAL')
+                    self._alpha_last_close_time[key] = time.time()
+                    self._alpha_last_close_side[key] = existing.side
+                    self._save_alpha_track_record()
+                    self._alpha_open_position(key, symbol, result, price, tf)
+            elif fire and price > 0:
+                cooldown = time.time() - self._alpha_last_close_time.get(key, 0)
+                if cooldown >= 1800:
+                    self._alpha_open_position(key, symbol, result, price, tf)
+
+    def _save_alpha_track_record(self) -> None:
+        try:
+            import os as _os
+            ALPHA_TRACK_RECORD_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+            open_records = []
+            for key, p in self.alpha_wallet.open_positions.items():
+                sym, tf = key.rsplit('|', 1) if '|' in key else (key, '1h')
+                cur     = self.live_prices.get(sym, p.entry_price) or p.entry_price
+                if p.direction == 'LONG':
+                    pnl_pct = (cur - p.entry_price) / p.entry_price * 100 if p.entry_price else 0.0
+                else:
+                    pnl_pct = (p.entry_price - cur) / p.entry_price * 100 if p.entry_price else 0.0
+                open_records.append({
+                    'signal_id':      p.signal_id,
+                    'symbol':         sym,
+                    'timeframe':      tf,
+                    'direction':      p.direction,
+                    'side':           p.side,
+                    'entry_price':    p.entry_price,
+                    'current_price':  round(cur, 8),
+                    'exit_price':     None,
+                    'entry_time':     p.entry_time,
+                    'close_time':     None,
+                    'pnl_pct':        round(pnl_pct, 4),
+                    'pnl_usdt':       round(pnl_pct / 100 * p.position_value, 4),
+                    'outcome':        'OPEN',
+                    'exit_reason':    None,
+                    'meta_confidence': p.meta_confidence,
+                    'position_value': p.position_value,
+                    'stop_loss':      p.stop_loss,
+                    'take_profit_1':  p.take_profit_1,
+                    'take_profit_2':  p.take_profit_2,
+                    'signal_strength': '',
+                })
+
+            history_records = []
+            for rec in self.alpha_wallet.trade_history:
+                d   = asdict(rec)
+                raw = d.get('symbol', '')
+                if '|' in raw:
+                    d['symbol'], d['timeframe'] = raw.rsplit('|', 1)
+                else:
+                    d['timeframe'] = '1h'
+                history_records.append(d)
+
+            all_records = sorted(
+                history_records + open_records,
+                key=lambda r: r.get('entry_time') or '',
+                reverse=True,
+            )[:500]
+
+            wins   = sum(1 for r in history_records if r.get('outcome') == 'WIN')
+            losses = sum(1 for r in history_records if r.get('outcome') == 'LOSS')
+            total  = wins + losses
+
+            payload: Dict[str, Any] = {
+                'generated_at': datetime.now(timezone.utc).isoformat(),
+                'mode':         'alpha',
+                'timeframes':   _ALPHA_TIMEFRAMES,
+                'summary': {
+                    'balance':         round(self.alpha_wallet.balance, 2),
+                    'initial_capital': self.alpha_wallet.initial_capital,
+                    'total_trades':    total,
+                    'wins':            wins,
+                    'losses':          losses,
+                    'win_rate':        round(wins / total, 3) if total else 0.0,
+                    'open_positions':  len(self.alpha_wallet.open_positions),
+                },
+                'signals': all_records,
+            }
+
+            tmp = ALPHA_TRACK_RECORD_PATH.with_suffix('.tmp')
+            with open(tmp, 'w', encoding='utf-8') as f:
+                json.dump(payload, f, indent=2, default=str)
+            _os.replace(tmp, ALPHA_TRACK_RECORD_PATH)
+        except Exception as e:
+            print(f'[AlphaEngine] alpha_track_record save failed: {e}')
 
     # ── track record persistence ──────────────────────────────────────────────
 

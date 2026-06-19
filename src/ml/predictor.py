@@ -452,14 +452,22 @@ class Predictor:
         except Exception:
             return _c.get('df')  # return stale cache on error rather than None
 
-    def get_features_with_context(self, hours: int = 5000) -> Optional[pd.DataFrame]:
-        df = self.fetch_live_data(timeframe='1h', limit=hours)
+    def get_features_with_context(self, hours: int = 350, timeframe: str = '1h') -> Optional[pd.DataFrame]:
+        # Bar counts that give ~350 hours of history for each supported timeframe
+        _TF_BARS: Dict[str, int] = {
+            '15m': 1400, '30m': 700, '1h': hours, '4h': 90, '1d': 15,
+        }
+        limit = _TF_BARS.get(timeframe, hours)
+        df = self.fetch_live_data(timeframe=timeframe, limit=limit)
         if df is None or df.empty:
             return None
-        btc_df = self.fetch_btc_data(timeframe='1h', limit=hours)
+        btc_df = self.fetch_btc_data(timeframe=timeframe, limit=limit)
         news_df = self.load_news_data()
         try:
-            df_1d = self.fetch_live_data(timeframe='1d', limit=max(300, int(hours / 24) + 10))
+            # Always fetch daily context regardless of intraday timeframe
+            daily_limit = max(200, limit // max(1, {'15m': 96, '30m': 48, '1h': 24,
+                                                     '4h': 6, '1d': 1}.get(timeframe, 24)))
+            df_1d = self.fetch_live_data(timeframe='1d', limit=daily_limit)
         except Exception:
             df_1d = None
         funding_df, oi_df = self._fetch_futures_data(df)
@@ -1101,8 +1109,8 @@ class Predictor:
             "risk_tiers": self.meta.get("risk_tier", {}),
         }
 
-    def predict_realtime(self, risk_tier: str = "balanced") -> Dict[str, Any]:
-        df = self.get_features_with_context(hours=350)
+    def predict_realtime(self, risk_tier: str = "balanced", timeframe: str = "1h") -> Dict[str, Any]:
+        df = self.get_features_with_context(hours=350, timeframe=timeframe)
         if df is None or df.empty:
             return {
                 "symbol": self.symbol, "fire": False, "side": "FLAT",

@@ -266,6 +266,7 @@ class LiveState:
         self.data = {
             "tickers": {},
             "signals": {},
+            "alpha_signals": {},
             "open_trades": [],
             "balance": 0.0,
             "alpha_mode": False,
@@ -718,13 +719,14 @@ async def run_engine_background():
         nonlocal _last_tr_mtime, _last_signals_hash, _last_firestore_push
         while True:
             try:
-                LIVE_STATE.data["tickers"]  = engine.live_prices.copy()
-                LIVE_STATE.data["signals"]  = engine.last_signals.copy()
-                LIVE_STATE.data["open_trades"] = [
+                LIVE_STATE.data["tickers"]       = engine.live_prices.copy()
+                LIVE_STATE.data["signals"]       = engine.last_signals.copy()
+                LIVE_STATE.data["alpha_signals"] = engine.alpha_signals.copy() if engine.alpha_mode else {}
+                LIVE_STATE.data["open_trades"]   = [
                     asdict(p) for p in engine.wallet.open_positions.values()
                 ]
-                LIVE_STATE.data["balance"]  = engine.wallet.balance
-                LIVE_STATE.data["alpha_mode"] = False
+                LIVE_STATE.data["balance"]    = engine.wallet.balance
+                LIVE_STATE.data["alpha_mode"] = engine.alpha_mode
                 LIVE_STATE.data["warmup_progress"] = (
                     f"{engine.bootstrap_done}/{engine.bootstrap_total}"
                 )
@@ -3124,6 +3126,22 @@ async def get_trial_status(user_id: str = Depends(get_current_user)):
     }
 
 
+@app.get("/api/v1/alpha/track-record")
+async def alpha_track_record(user_id: str = Depends(get_current_user)):
+    """Return the Alpha Mode paper-trading track record (Pro only)."""
+    plan = get_user_plan(user_id)
+    if plan not in ("pro", "premium", "pro-dev"):
+        raise HTTPException(status_code=403, detail="Alpha Mode track record is Pro-only.")
+    from scripts.live_engine import ALPHA_TRACK_RECORD_PATH as _ATP
+    if not _ATP.exists():
+        return {"mode": "alpha", "summary": {}, "signals": [], "message": "No alpha track record yet."}
+    try:
+        with open(_ATP, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not read alpha track record: {e}")
+
+
 @app.get("/payment/config")
 async def payment_config():
     return {
@@ -4041,17 +4059,22 @@ async def websocket_dashboard(websocket: WebSocket):
                         _trader_eng.wallet.summary if _trader_eng is not None else {}
                     )
 
+                    _alpha_on = (
+                        LIVE_STATE.data.get("alpha_mode", False)
+                        and _user_plan_cache in ("pro", "premium", "pro-dev")
+                    )
                     response_data = {
                         "tickers": live_tickers,
                         "signals": filtered_signals,
+                        "alpha_signals": (
+                            numpy_to_native(LIVE_STATE.data.get("alpha_signals", {}))
+                            if _alpha_on else {}
+                        ),
                         "timeframes": timeframes_map,
                         "timeframe": response_timeframe or "1h",
                         "open_trades": LIVE_STATE.data.get("open_trades", []),
                         "balance": LIVE_STATE.data.get("balance", 0),
-                        "alpha_mode": (
-                            LIVE_STATE.data.get("alpha_mode", False)
-                            and _user_plan_cache in ("pro", "premium")
-                        ),
+                        "alpha_mode": _alpha_on,
                         "warmup": LIVE_STATE.data.get("warmup_progress", "0/0"),
                         "trial_expired": _trial_expired_cache if current_user_email else True,
                         "plan": _user_plan_cache,
