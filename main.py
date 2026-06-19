@@ -2209,7 +2209,8 @@ async def get_me(credentials: HTTPAuthorizationCredentials = Depends(security)):
         "trial_end": user_doc.get("trial_end"),
         "subscription_active": user_doc.get("subscription", {}).get("status") == "active",
         "full_name": user_doc.get("full_name"),
-        "location": user_doc.get("location")
+        "location": user_doc.get("location"),
+        "phone_number": user_doc.get("phone_number"),
     }
 
 @app.post("/api/users/provision")
@@ -2289,10 +2290,15 @@ async def provision_user(request: Request, user_id: str = Depends(get_current_us
                 "trial_end": existing.get("trial_end"),
                 "full_name": existing.get("full_name"),
                 "location": existing.get("location"),
+                "phone_number": existing.get("phone_number") or phone_number,
             }
 
+        # Phone number is required for new account creation
+        if not phone_number:
+            raise HTTPException(status_code=422, detail="A mobile number is required to create an account.")
+
         # Check phone uniqueness before creating new doc
-        if phone_number and not phone_is_unique(phone_number):
+        if not phone_is_unique(phone_number):
             try:
                 firebase_auth.update_user(firebase_uid, disabled=True)
             except Exception:
@@ -2313,6 +2319,7 @@ async def provision_user(request: Request, user_id: str = Depends(get_current_us
             "trial_end": user_doc.get("trial_end"),
             "full_name": user_doc.get("full_name"),
             "location": user_doc.get("location"),
+            "phone_number": phone_number,
         }
     except HTTPException:
         raise

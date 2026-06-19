@@ -386,12 +386,9 @@ async function performGoogleSignup() {
     const result = await handleGoogleAuth();
     setLoading(false);
     if (result.success) {
-      const isNew = result.userData?.isNewUser !== false;
-      if (isNew) {
-        showGooglePhoneStep();
-      } else {
-        finishGoogleSignup();
-      }
+      // Always collect phone via the phone step — backend requires it for new accounts
+      // and returning users lacking phone are blocked at the dashboard overlay.
+      showGooglePhoneStep();
     } else {
       showError('signupFormError', result.message);
     }

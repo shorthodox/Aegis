@@ -706,6 +706,12 @@ function applyUserData(userData, token) {
   const isActive = userData.trial_active ?? true;
   trialActive = typeof AuthManager !== 'undefined' ? AuthManager.isTrialValid() : isActive;
 
+  // Phone number is required — prompt any user who doesn't have one on record
+  if (!userData.phone_number) {
+    showPhoneRequiredOverlay(token);
+    return;
+  }
+
   // Show subscription expired overlay for any user without an active paid plan or trial.
   // This covers plan values like 'none', 'expired', 'trial' (with elapsed date), etc.
   const _PAID = ['pro', 'premium', 'intermediate', 'basic', 'pro-dev'];
@@ -794,6 +800,11 @@ async function provisionUserFromFirebase(firebaseUser, token, attempt = 1) {
       // OTP token rejected by backend — never retry, send to signup
       hideProvisioningState();
       redirectToLogin();
+    } else if (response.status === 422) {
+      // Backend requires a phone number — redirect to login so user can re-signup with phone
+      hideProvisioningState();
+      alert('A mobile number is required to complete sign-up. Please sign up again and provide your phone number.');
+      redirectToLogin();
     } else if (attempt < MAX_ATTEMPTS) {
       await new Promise(r => setTimeout(r, 1000 * attempt));
       return provisionUserFromFirebase(firebaseUser, token, attempt + 1);
@@ -849,6 +860,100 @@ function showProvisionErrorState() {
     </div>
   `;
   document.body.appendChild(overlay);
+}
+
+function _normalizeMobilePhone(raw) {
+  const stripped = raw.replace(/[\s\-\.\(\)]/g, '');
+  if (/^\d{10}$/.test(stripped)) return '+91' + stripped;
+  if (/^\+\d{7,15}$/.test(stripped)) return stripped;
+  return null;
+}
+
+function showPhoneRequiredOverlay(token) {
+  if (document.getElementById('phone-required-overlay')) return;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'phone-required-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.96);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:1.5rem;';
+  overlay.innerHTML = `
+    <div style="background:#1a1a2e;border:1px solid #2d2d4e;border-radius:14px;padding:2.2rem 2rem;max-width:420px;width:100%;text-align:center;">
+      <div style="font-size:2.4rem;margin-bottom:0.6rem;">📱</div>
+      <h2 style="color:#e2e8f0;margin:0 0 0.6rem;font-size:1.3rem;">Mobile Number Required</h2>
+      <p style="color:#94a3b8;font-size:0.88rem;margin:0 0 1.4rem;line-height:1.5;">
+        A mobile number is required to access your account.<br>Each number can only be linked to one account.
+      </p>
+      <input id="phoneRequiredInput" type="tel" placeholder="e.g. 9876543210 or +91 9876543210"
+        style="width:100%;padding:0.78rem 1rem;background:#0f0f1a;border:1px solid #3d3d5e;border-radius:8px;color:#e2e8f0;font-size:0.95rem;box-sizing:border-box;margin-bottom:0.5rem;outline:none;">
+      <p id="phoneRequiredError" style="color:#f87171;font-size:0.82rem;min-height:1.1em;margin:0 0 0.9rem;text-align:left;"></p>
+      <button id="phoneRequiredSubmit"
+        style="width:100%;padding:0.78rem;background:linear-gradient(135deg,#667eea,#764ba2);border:none;border-radius:8px;color:#fff;font-size:0.98rem;font-weight:600;cursor:pointer;letter-spacing:0.02em;">
+        Save &amp; Continue
+      </button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const input = document.getElementById('phoneRequiredInput');
+  const errEl = document.getElementById('phoneRequiredError');
+  const btn   = document.getElementById('phoneRequiredSubmit');
+
+  input.focus();
+
+  async function handleSubmit() {
+    const normalized = _normalizeMobilePhone(input.value.trim());
+    if (!normalized) {
+      errEl.textContent = 'Enter a valid mobile number (e.g. 9876543210 or +91 9876543210)';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Checking…';
+    errEl.textContent = '';
+
+    try {
+      const checkRes = await fetch(`${API_BASE_URL}/auth/check-phone`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: normalized })
+      });
+      const checkData = await checkRes.json().catch(() => ({}));
+      if (checkData.available === false) {
+        errEl.textContent = 'This mobile number is already registered to another account.';
+        btn.disabled = false;
+        btn.textContent = 'Save & Continue';
+        return;
+      }
+    } catch (_) { /* fail open — backend enforces */ }
+
+    btn.textContent = 'Saving…';
+    try {
+      const provRes = await fetch(`${API_BASE_URL}/api/users/provision`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ provider: 'google.com', phone_number: normalized })
+      });
+      if (provRes.ok) {
+        overlay.remove();
+        const newUserData = await provRes.json();
+        applyUserData(newUserData, token);
+        return;
+      }
+      const d = await provRes.json().catch(() => ({}));
+      if (provRes.status === 409) {
+        errEl.textContent = d.detail || 'This mobile number is already registered to another account.';
+      } else {
+        errEl.textContent = d.detail || 'Failed to save. Please try again.';
+      }
+    } catch (_) {
+      errEl.textContent = 'Network error. Please try again.';
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Save & Continue';
+  }
+
+  btn.addEventListener('click', handleSubmit);
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleSubmit(); });
 }
 
 async function loadUserLimits() {
