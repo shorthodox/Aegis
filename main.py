@@ -2248,6 +2248,7 @@ async def get_me(credentials: HTTPAuthorizationCredentials = Depends(security)):
         "plan": user_doc.get("plan", "trial"),
         "trial_end": user_doc.get("trial_end"),
         "subscription_active": user_doc.get("subscription", {}).get("status") == "active",
+        "subscription_end": user_doc.get("subscription_end"),
         "full_name": user_doc.get("full_name"),
         "location": user_doc.get("location"),
         "phone_number": user_doc.get("phone_number"),
@@ -3369,8 +3370,11 @@ async def verify_payment(req: VerifyPaymentRequest, user_id: str = Depends(get_c
     if not _hmac.compare_digest(expected, req.razorpay_signature):
         raise HTTPException(status_code=400, detail="Payment verification failed")
 
-    plan = req.plan if req.plan in ("basic", "intermediate", "pro") else "basic"
+    if req.plan not in ("basic", "intermediate", "pro"):
+        raise HTTPException(status_code=400, detail="Invalid plan")
+    plan = req.plan
     user_ref = db.collection("users").document(user_id)
+    sub_end = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
     try:
         update_result = user_ref.update({
             "plan": plan,
@@ -3381,6 +3385,7 @@ async def verify_payment(req: VerifyPaymentRequest, user_id: str = Depends(get_c
                 "activated_at": datetime.now(timezone.utc).isoformat(),
                 "plan_type": plan,
             },
+            "subscription_end": sub_end,
             "trial_active": False,
         })
         if inspect.isawaitable(update_result):
@@ -3435,6 +3440,7 @@ async def razorpay_webhook(request: Request):
             if plan_tier not in ("basic", "intermediate", "pro"):
                 plan_tier = "pro"
             user_ref = db.collection("users").document(user_id)
+            webhook_sub_end = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
             try:
                 result = user_ref.update({
                     "plan": plan_tier,
@@ -3444,6 +3450,7 @@ async def razorpay_webhook(request: Request):
                         "activated_at": datetime.now(timezone.utc).isoformat(),
                         "plan_type": plan_tier,
                     },
+                    "subscription_end": webhook_sub_end,
                     "trial_active": False,
                 })
                 if inspect.isawaitable(result):
@@ -4112,7 +4119,7 @@ async def websocket_dashboard(websocket: WebSocket):
 @app.post("/alpha/toggle")
 async def toggle_alpha_mode(email: str = Depends(get_current_user)):
     user_plan = get_user_plan(email)
-    if user_plan != "pro":
+    if user_plan not in ("pro", "premium", "pro-dev"):
         raise HTTPException(status_code=403, detail="Alpha Mode is only available for Pro subscribers")
     
     if LIVE_STATE.engine is None:

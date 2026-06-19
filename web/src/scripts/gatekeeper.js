@@ -1602,15 +1602,7 @@ function renderSignals(signals) {
       signalsContainer.innerHTML = `
         <div class="no-signals">
           <i class="fas fa-spinner fa-spin"></i>
-          <p>Preparing your trial token cards...</p>
-          <div style="font-size:10px; margin-top:20px; text-align:left; color:#888; max-height:150px; overflow-y:auto; word-break:break-all;">
-            <p>DEBUG INFO:</p>
-            <p>userPlan: ${userPlan}</p>
-            <p>allowedTokens: ${JSON.stringify(allowedTokens)}</p>
-            <p>currentTimeframe: ${currentTimeframe}</p>
-            <p>latestSignals count: ${Object.keys(window.latestSignals || {}).length}</p>
-            <p>First 5 keys: ${Object.keys(window.latestSignals || {}).slice(0,5).join(', ')}</p>
-          </div>
+          <p>Loading signals&hellip;</p>
         </div>
       `;
       return;

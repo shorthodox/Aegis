@@ -162,14 +162,16 @@ export class AuthManager {
         const user = this.getUser();
         if (user) {
             const plan = (user.plan || '').toLowerCase();
-            if (plan === 'pro' || plan === 'active' || user.subscription_active) return true;
+            const _PAID = ['pro', 'premium', 'intermediate', 'basic', 'active', 'pro-dev'];
+            if (_PAID.includes(plan) || user.subscription_active) return true;
             if (user.trial_expired === false) return true;
             if (user.trial_expired === true) return false;
         }
 
         const tokenData = this.getUserData();
         if (tokenData) {
-            if (tokenData.plan_type === 'pro' || tokenData.plan_type === 'active' || tokenData.status === 'active') return true;
+            const _PAID = ['pro', 'premium', 'intermediate', 'basic', 'active', 'pro-dev'];
+            if (_PAID.includes(tokenData.plan_type) || tokenData.status === 'active') return true;
             if (tokenData.status === 'expired') return false;
         }
 
@@ -233,9 +235,9 @@ export class AuthManager {
         const plan   = data?.plan_type || user?.plan || user?.plan_type;
         const status = data?.status    || user?.status;
 
-        // Grant access for pro, intermediate and active plans
         const lowerPlan = (plan || '').toLowerCase();
-        if (lowerPlan === 'active' || lowerPlan === 'pro' || lowerPlan === 'intermediate' || status === 'active') return true;
+        const _PAID_PLANS = ['pro', 'premium', 'intermediate', 'basic', 'active', 'pro-dev'];
+        if (_PAID_PLANS.includes(lowerPlan) || status === 'active') return true;
         if (lowerPlan === 'free_trial' || lowerPlan === 'trial') return this.isTrialValid();
 
         return false;
@@ -245,7 +247,8 @@ export class AuthManager {
         const user = this.getUser();
         if (user) {
             const lowerPlan = (user.plan || '').toLowerCase();
-            if (lowerPlan === 'pro' || lowerPlan === 'active') return 'active';
+            const _PAID = ['pro', 'premium', 'intermediate', 'basic', 'active', 'pro-dev'];
+            if (_PAID.includes(lowerPlan)) return 'active';
             if (this.isTrialValid()) return 'active';
             if ((lowerPlan === 'trial' || lowerPlan === 'free_trial') && user.trial_expired === false) return 'active';
         }
