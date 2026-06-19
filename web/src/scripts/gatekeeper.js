@@ -640,8 +640,10 @@ async function checkAuthAndLoad() {
 
   await loadUserFromBackend(token);
 
-  // Check for trial expiration after loading user data
-  if (userPlan === 'trial' && !trialActive) {
+  // Check for trial expiration after loading user data.
+  // Catches all non-paid plan states: 'trial' with expired date, 'none', 'expired', etc.
+  const _PAID_PLANS = ['pro', 'premium', 'intermediate', 'basic', 'pro-dev'];
+  if (!_PAID_PLANS.includes(userPlan) && !trialActive) {
     showSubscriptionExpiredOverlay();
   }
 }
@@ -703,6 +705,14 @@ function applyUserData(userData, token) {
 
   const isActive = userData.trial_active ?? true;
   trialActive = typeof AuthManager !== 'undefined' ? AuthManager.isTrialValid() : isActive;
+
+  // Show subscription expired overlay for any user without an active paid plan or trial.
+  // This covers plan values like 'none', 'expired', 'trial' (with elapsed date), etc.
+  const _PAID = ['pro', 'premium', 'intermediate', 'basic', 'pro-dev'];
+  if (!_PAID.includes(userPlan) && !trialActive) {
+    showSubscriptionExpiredOverlay();
+    return;
+  }
 
   // Start WebSocket immediately — don't block on the /user/limits round-trip.
   updateUI();
