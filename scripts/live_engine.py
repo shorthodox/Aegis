@@ -295,7 +295,7 @@ class SignalQualityFilter:
     is_fake_breakout() → bool
     """
 
-    MIN_QUALITY_SCORE = 55.0  # minimum points required to open a position
+    MIN_QUALITY_SCORE = 65.0  # minimum points required to open a position
 
     def score_signal(
         self,
@@ -563,21 +563,26 @@ class DynamicRiskEngine:
         if price <= 0 or atr <= 0:
             return {'sl': 0.0, 'tp1': 0.0, 'tp2': 0.0, 'tp3': 0.0, 'trailing_trigger': 0.0}
 
+        # Quality-based floor for stop multiplier (tighter stops only for highest conviction)
         if quality_score > 70:
-            sl_mult = 1.5
+            sl_floor = 1.5
         elif quality_score > 50:
-            sl_mult = 2.0
+            sl_floor = 2.0
         else:
-            sl_mult = 2.5
+            sl_floor = 2.5
 
         # LSTM vol-expansion adjustment: widen stop to survive the incoming
         # volatility spike without getting flushed by noise.
         if lstm_vol_expansion > 0.70:
-            sl_mult *= 1.20   # +20 % ATR room for imminent expansion
+            sl_floor *= 1.20   # +20 % ATR room for imminent expansion
         # LSTM high-continuation: tighten stop on confirmed momentum conviction.
         elif lstm_continuation > 0.72:
-            sl_mult *= 0.90   # −10 % — move is clean, let price run tight
+            sl_floor *= 0.90   # −10 % — move is clean, let price run tight
 
+        # Use the larger of: quality-floor or the caller's atr_mult (which already
+        # includes HMM regime adjustments, e.g. 1.2× for VOLATILE_EXPANSION).
+        # This ensures HMM widening is never ignored while the quality floor is respected.
+        sl_mult = max(sl_floor, atr_mult)
         risk_distance = sl_mult * atr
 
         if side == 'BUY':
@@ -629,7 +634,7 @@ class PerformanceTracker:
 
     SYMBOL_WINDOW  = 20   # how many recent trades to consider per symbol
     GLOBAL_WINDOW  = 30   # global window for safe-mode check
-    SAFE_MODE_LOSS = 5    # consecutive global losses to activate safe-mode
+    SAFE_MODE_LOSS = 3    # consecutive global losses to activate safe-mode
     REDUCE_STREAK  = 3    # consecutive per-symbol losses to halve position
 
     def __init__(self) -> None:
@@ -959,9 +964,9 @@ class PortfolioGuard:
     price returns is a Phase 2 improvement.
     """
 
-    MAX_PER_CLUSTER    = 3     # max 3 concurrent open positions per correlation cluster
-    MAX_OPEN_TOTAL     = 12    # hard cap: never more than 12 open at once across all tokens
-    MAX_CAPITAL_PCT    = 0.60  # never deploy more than 60 % of balance simultaneously
+    MAX_PER_CLUSTER    = 2     # max 2 concurrent open positions per correlation cluster
+    MAX_OPEN_TOTAL     = 6     # hard cap: never more than 6 open at once across all tokens
+    MAX_CAPITAL_PCT    = 0.40  # never deploy more than 40 % of balance simultaneously
 
     # Static correlation clusters (tightest first)
     _CLUSTERS: Dict[str, List[str]] = {
@@ -1573,6 +1578,19 @@ class LiveEngine:
                 )
 
                 if cooldown_elapsed >= required_cooldown:
+                    # ── Gate 0: drift monitor — block critically degraded models ─
+                    if self.drift_monitor.is_blocked(symbol):
+                        live_wr   = self.drift_monitor._live_win_rate(symbol)
+                        benchmark = self.drift_monitor._benchmarks.get(symbol, 0.60)
+                        print(f'[{symbol}] DRIFT_BLOCKED {new_side}: '
+                              f'live_wr={live_wr:.1%} vs benchmark={benchmark:.1%} (CRITICAL)')
+                        if symbol in self.last_signals:
+                            self.last_signals[symbol]['fire']          = False
+                            self.last_signals[symbol]['signal']        = 'HOLD'
+                            self.last_signals[symbol]['drift_blocked'] = True
+                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                        return
+
                     # ── Gate 1: genuinely untradeable regime ──────────────────
                     if regime.regime in self.NO_TRADE_REGIMES:
                         print(f'[{symbol}] NO_TRADE_REGIME={regime.regime} — blocked')
@@ -1632,9 +1650,9 @@ class LiveEngine:
                         return
 
                     # ── Gate 3.5: safe-mode quality escalation ───────────────
-                    # When last 5 global trades are all losses, raise the quality
-                    # floor from 55 to 70 to protect capital during drawdowns.
-                    if self.perf_tracker.safe_mode_active() and _model_quality < 70.0:
+                    # When last 3 global trades are all losses, raise the quality
+                    # floor to 80 to protect capital during drawdowns.
+                    if self.perf_tracker.safe_mode_active() and _model_quality < 80.0:
                         print(f'[{symbol}] SAFE-MODE blocked {new_side}: '
                               f'edge={_model_quality:.1f} < 70 (elevated floor)')
                         if symbol in self.last_signals:
