@@ -375,30 +375,13 @@ function attachEventListeners() {
   if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
   if (saveSettingsBtn) saveSettingsBtn.addEventListener('click', saveUserSettings);
 
-  // Alpha Modal bindings
+  // Alpha Mode — Coming Soon. Toggle is disabled; clicking shows a toast.
   const alphaToggleContainer = document.getElementById('alphaToggleContainer');
-  const alphaModal = document.getElementById('alpha-modal');
-  const alphaConfirm = document.getElementById('alpha-confirm');
-  const alphaCancel = document.getElementById('alpha-cancel');
-
-  if (alphaToggleContainer && alphaModal) {
+  if (alphaToggleContainer) {
+    alphaToggleContainer.style.cursor = 'not-allowed';
+    alphaToggleContainer.style.opacity = '0.6';
     alphaToggleContainer.addEventListener('click', () => {
-      if (userPlan !== 'pro') {
-        showUpgradeModal();
-        return;
-      }
-      alphaModal.classList.remove('hidden');
-    });
-  }
-  if (alphaCancel && alphaModal) {
-    alphaCancel.addEventListener('click', () => {
-      alphaModal.classList.add('hidden');
-    });
-  }
-  if (alphaConfirm && alphaModal) {
-    alphaConfirm.addEventListener('click', () => {
-      alphaModal.classList.add('hidden');
-      toggleAlphaMode();
+      showComingSoonToast('Alpha Mode is under development and will be available in a future update.');
     });
   }
 
@@ -2488,6 +2471,29 @@ window.AegisDashboard = {
   }
 };
 
+
+function showComingSoonToast(message) {
+  const existing = document.getElementById('_comingSoonToast');
+  if (existing) existing.remove();
+  const toast = document.createElement('div');
+  toast.id = '_comingSoonToast';
+  toast.style.cssText = [
+    'position:fixed', 'bottom:24px', 'left:50%', 'transform:translateX(-50%)',
+    'z-index:9999', 'background:linear-gradient(135deg,#1a1a2e,#16213e)',
+    'border:1px solid rgba(255,140,0,0.4)', 'border-radius:12px',
+    'padding:14px 24px', 'display:flex', 'align-items:center', 'gap:12px',
+    'box-shadow:0 0 30px rgba(255,140,0,0.2)', 'max-width:420px',
+    'animation:fadeInUp 0.3s ease',
+  ].join(';');
+  toast.innerHTML = `
+    <i class="fas fa-rocket" style="color:#ff8c00;font-size:1.2rem;"></i>
+    <div>
+      <div style="color:#fff;font-weight:700;font-size:0.85rem;letter-spacing:0.05em;">COMING SOON</div>
+      <div style="color:rgba(255,255,255,0.6);font-size:0.78rem;margin-top:2px;">${message}</div>
+    </div>`;
+  document.body.appendChild(toast);
+  setTimeout(() => { if (toast.parentNode) toast.remove(); }, 4000);
+}
 
 // Show upgrade modal on dashboard if trial expired
 function showUpgradeModal() {
