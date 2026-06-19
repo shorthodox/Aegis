@@ -1,0 +1,25 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Live Engine",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/live_engine.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+            "args": []
+        },
+        {
+            "name": "Live Engine (no UI)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/live_engine.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+            "args": ["--no-ui"]
+        }
+    ]
+}

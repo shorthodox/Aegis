@@ -1703,8 +1703,8 @@ class LiveEngine:
             current_trough = self._peak_price.get(symbol, pos.entry_price)
             self._peak_price[symbol] = min(current_trough, check_price)
 
-        def _close(reason: str) -> None:
-            rec = self.wallet.close_trade(symbol, check_price, reason)
+        def _close(reason: str, exit_px: Optional[float] = None) -> None:
+            rec = self.wallet.close_trade(symbol, exit_px if exit_px is not None else check_price, reason)
             if rec:
                 self._last_close_time[symbol] = now
                 self._last_close_side[symbol] = pos.side
@@ -1755,7 +1755,30 @@ class LiveEngine:
             _close('MAX_HOLD_EXPIRED')
             return
 
-        # ── 2. Trailing stop (active after TP1 is hit) ────────────────────────
+        # ── 2. TP2 hit — checked BEFORE trailing stop so a candle that touches
+        #    TP2 and reverses before the next scan still books profit at TP2
+        #    price.  Uses peak_price to detect TP2 was reached even when current
+        #    price has since reversed (peak-based detection only applies after
+        #    TP1 is confirmed so we know the move is real, not noise).
+        if pos.take_profit_2 > 0:
+            peak = self._peak_price.get(symbol, pos.entry_price)
+            tp2_current = (
+                (pos.direction == 'LONG'  and check_price >= pos.take_profit_2) or
+                (pos.direction == 'SHORT' and check_price <= pos.take_profit_2)
+            )
+            tp2_via_peak = self._tp1_hit.get(symbol, False) and (
+                (pos.direction == 'LONG'  and peak >= pos.take_profit_2) or
+                (pos.direction == 'SHORT' and peak <= pos.take_profit_2)
+            )
+            if tp2_current:
+                _close('TP2_HIT')
+                return
+            if tp2_via_peak:
+                # Price reached TP2 and reversed before next scan — exit at TP2
+                _close('TP2_HIT', exit_px=pos.take_profit_2)
+                return
+
+        # ── 3. Trailing stop (active after TP1 is hit) ────────────────────────
         if self._tp1_hit.get(symbol, False):
             trail_atr = 0.5 * atr
             peak      = self._peak_price.get(symbol, pos.entry_price)
@@ -1770,7 +1793,7 @@ class LiveEngine:
                     _close('TRAILING_STOP')
                     return
 
-        # ── 3. TP1 hit — activate trailing stop from here ─────────────────────
+        # ── 4. TP1 hit — activate trailing stop from here ─────────────────────
         if pos.take_profit_1 > 0 and not self._tp1_hit.get(symbol, False):
             tp1_hit = (
                 (pos.direction == 'LONG'  and check_price >= pos.take_profit_1) or
@@ -1781,17 +1804,6 @@ class LiveEngine:
                 self._peak_price[symbol] = check_price   # reset peak to TP1 price
                 print(f'[{symbol}] TP1_HIT @ {check_price:.6g} — trailing stop activated')
                 # Do NOT close here — let the trailing stop manage the rest
-                # (matches the design intent: partial exit via trailing)
-
-        # ── 4. TP2 hit — hard ceiling ─────────────────────────────────────────
-        if pos.take_profit_2 > 0:
-            tp2_hit = (
-                (pos.direction == 'LONG'  and check_price >= pos.take_profit_2) or
-                (pos.direction == 'SHORT' and check_price <= pos.take_profit_2)
-            )
-            if tp2_hit:
-                _close('TP2_HIT')
-                return
 
         # ── 5. Model-reversal TP (dynamic exit) ──────────────────────────────
         side = result.get('side', 'FLAT')
