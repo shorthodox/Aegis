@@ -167,11 +167,11 @@ export class RenderEngine {
                 statusBadge = `<span class="text-[10px] font-bold px-2 py-0.5 rounded border bg-cyan/10 text-cyan border-cyan/30 tracking-wider">↩ REVERSAL</span>`;
             }
 
-            const sigJsonStr = JSON.stringify(sig).replace(/'/g, "\\'");
+            const sigDataAttr = encodeURIComponent(JSON.stringify(sig));
             const opacity = isExpired ? 'opacity-50' : '';
 
             html += `
-                <div class="bg-black/60 border ${borderCls} rounded-xl p-4 cursor-pointer hover:border-cyan/50 hover:bg-white/5 transition-all transform hover:-translate-y-1 overflow-hidden flex flex-col gap-3 ${rowAnim} ${opacity}" onclick='document.dispatchEvent(new CustomEvent("signalRowClicked", {detail: ${sigJsonStr}}))'>
+                <div class="bg-black/60 border ${borderCls} rounded-xl p-4 cursor-pointer hover:border-cyan/50 hover:bg-white/5 transition-all transform hover:-translate-y-1 overflow-hidden flex flex-col gap-3 ${rowAnim} ${opacity}" data-signal="${sigDataAttr}">
                     <div class="flex justify-between items-start gap-2">
                         <span class="font-bold text-lg font-mono text-white">${sig.pair}</span>
                         <div class="flex flex-col items-end gap-1">
@@ -215,8 +215,20 @@ export class RenderEngine {
         }
         
         container.innerHTML = html;
+
+        // Event delegation — safer than inline onclick; no JSON injection risk
+        container.querySelectorAll('[data-signal]').forEach(el => {
+            el.addEventListener('click', () => {
+                try {
+                    const sig = JSON.parse(decodeURIComponent(el.dataset.signal));
+                    document.dispatchEvent(new CustomEvent('signalRowClicked', { detail: sig }));
+                } catch (e) {
+                    console.error('renderEngine: failed to parse signal data', e);
+                }
+            });
+        });
     }
-    
+
     timeAgo(dateStr) {
         if (!dateStr) return "Just now";
         try {

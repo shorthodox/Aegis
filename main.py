@@ -527,6 +527,33 @@ otp_store: Dict[str, Dict] = {}
 def generate_otp() -> str:
     return ''.join(random.choices(string.digits, k=6))
 
+# -------------------------------------------------------------------
+# Simple in-memory rate limiter (no external deps)
+# Tracks request timestamps per key (IP or email).
+# -------------------------------------------------------------------
+_rate_store: Dict[str, list] = {}
+
+def _rate_limit(key: str, max_calls: int, window_seconds: int) -> bool:
+    """Return True if the request is allowed; False if rate limit exceeded."""
+    now = time.time()
+    window_start = now - window_seconds
+    hits = _rate_store.get(key, [])
+    # Evict entries outside the window
+    hits = [t for t in hits if t > window_start]
+    if len(hits) >= max_calls:
+        _rate_store[key] = hits
+        return False
+    hits.append(now)
+    _rate_store[key] = hits
+    return True
+
+def get_client_ip(request: Request) -> str:
+    """Return the best-available client IP for rate-limiting keying."""
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
 def is_cooldown_active(email: str) -> bool:
     if email not in otp_store:
         return False
@@ -1040,28 +1067,55 @@ async def websocket_track_record(websocket: WebSocket):
 
 
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
+
+# CORS — read allowed origins from env so production is locked to the real domain.
+# ALLOWED_ORIGINS env var: comma-separated list, e.g. "https://aegis.example.com,http://localhost:8000"
+_raw_origins = os.getenv("ALLOWED_ORIGINS", "")
+_ALLOWED_ORIGINS: list[str] = (
+    [o.strip() for o in _raw_origins.split(",") if o.strip()]
+    if _raw_origins
+    else ["http://localhost:8000", "http://127.0.0.1:8000"]
+)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_ALLOWED_ORIGINS,
+    allow_credentials=False,   # Bearer-token auth — cookies not used cross-origin
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
 )
 
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
-    """
-    Add critical security headers:
-    - Cross-Origin-Opener-Policy: same-origin-allow-popups - fixes 'window.closed' blocking
-    - Cross-Origin-Embedder-Policy: unsafe-none - allows third-party resources for popups
-    """
     response = await call_next(request)
+
+    # Google OAuth popup requires relaxed COOP; COEP must stay unsafe-none for CDN resources
     response.headers["Cross-Origin-Opener-Policy"] = "same-origin-allow-popups"
     response.headers["Cross-Origin-Embedder-Policy"] = "unsafe-none"
-    # Prevent browsers from serving stale JS/HTML from disk cache after deploys
+
+    # Clickjacking protection — dashboard must never be embedded in a foreign frame
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
+
+    # MIME sniffing protection
+    response.headers["X-Content-Type-Options"] = "nosniff"
+
+    # Legacy XSS filter (IE/older Chrome)
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+
+    # HSTS — force HTTPS for 1 year (only meaningful in production behind TLS)
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+
+    # Referrer: send origin only, never full URL, to external hosts
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+    # Permissions: explicitly deny unused browser features
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+
+    # Prevent stale JS/HTML from disk cache after deploys
     path = request.url.path
     if path.endswith((".js", ".html")) and "/web/" in path:
         response.headers["Cache-Control"] = "no-cache, must-revalidate"
+
     return response
 
 # -------------------------------------------------------------------
@@ -1101,26 +1155,6 @@ async def root_redirect():
 async def dashboard_redirect():
     return RedirectResponse(url="/web/src/pages/dashboard.html")
 
-# -------------------------------------------------------------------
-# Diagnostic endpoint
-# -------------------------------------------------------------------
-@app.get("/debug-files")
-async def debug_files():
-    try:
-        top_files = os.listdir(WEB_ROOT_PATH) if WEB_ROOT_PATH.exists() else []
-        pages_path = WEB_ROOT_PATH / "src" / "pages"
-        scripts_path = WEB_ROOT_PATH / "src" / "scripts"
-        styles_path = WEB_ROOT_PATH / "src" / "styles"
-        return JSONResponse(content={
-            "web_root": str(WEB_ROOT_PATH),
-            "top_level": top_files,
-            "pages_files": os.listdir(pages_path) if pages_path.exists() else [],
-            "scripts_files": os.listdir(scripts_path) if scripts_path.exists() else [],
-            "styles_files": os.listdir(styles_path) if styles_path.exists() else [],
-            "exists": WEB_ROOT_PATH.exists(),
-        })
-    except Exception as e:
-        return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
 security = HTTPBearer()
@@ -1250,6 +1284,8 @@ async def token_insight(symbol: str, authorization: Optional[str] = Header(None)
     The symbol path parameter accepts slash notation, e.g. BTC/USDT or BTC%2FUSDT.
     """
     symbol = symbol.replace('%2F', '/').replace('%2f', '/').upper()
+    if not re.match(r'^[A-Z0-9]{2,12}/[A-Z]{2,6}$', symbol):
+        raise HTTPException(status_code=400, detail="Invalid symbol format. Expected e.g. BTC/USDT.")
 
     plan = "unauthenticated"
     if authorization and authorization.startswith("Bearer "):
@@ -1310,6 +1346,8 @@ async def public_token_insight(symbol: str):
     Used for landing-page previews — no S/R or price targets.
     """
     symbol = symbol.replace('%2F', '/').replace('%2f', '/').upper()
+    if not re.match(r'^[A-Z0-9]{2,12}/[A-Z]{2,6}$', symbol):
+        raise HTTPException(status_code=400, detail="Invalid symbol format. Expected e.g. BTC/USDT.")
     signals = LIVE_STATE.data.get('signals', {})
     sig = signals.get(symbol)
 
@@ -1917,6 +1955,8 @@ async def token_analysis(symbol: str, authorization: Optional[str] = Header(None
     key price levels, and macro/sentiment context.
     """
     symbol = symbol.replace('%2F', '/').replace('%2f', '/').upper()
+    if not re.match(r'^[A-Z0-9]{2,12}/[A-Z]{2,6}$', symbol):
+        raise HTTPException(status_code=400, detail="Invalid symbol format. Expected e.g. BTC/USDT.")
 
     # Auth: any valid authenticated user (trial included)
     plan = "unauthenticated"
@@ -2475,8 +2515,15 @@ fastmail = FastMail(conf)
 # 3-Step Onboarding with OTP
 # -------------------------------------------------------------------
 @app.post("/auth/send-otp-for-registration")
-async def send_otp_for_registration(request: OTPSendRequest):
+async def send_otp_for_registration(request: OTPSendRequest, req: Request):
     email = request.email
+
+    # Rate limit: 5 OTP requests per email per 10 minutes
+    if not _rate_limit(f"otp:{email}", max_calls=5, window_seconds=600):
+        raise HTTPException(status_code=429, detail="Too many OTP requests. Please wait 10 minutes before trying again.")
+    # Rate limit: 20 OTP requests per IP per 10 minutes (anti-enumeration)
+    if not _rate_limit(f"otp_ip:{get_client_ip(req)}", max_calls=20, window_seconds=600):
+        raise HTTPException(status_code=429, detail="Too many requests from this IP. Please try again later.")
 
     # Block disposable / temp-mail domains
     domain = email.split('@')[-1].lower()
@@ -2585,9 +2632,14 @@ async def send_otp_for_registration(request: OTPSendRequest):
     return {"success": True, "message": "OTP sent to your email address."}
 
 @app.post("/auth/verify-otp-for-registration")
-async def verify_otp_for_registration(request: OTPVerifyRequest):
+async def verify_otp_for_registration(request: OTPVerifyRequest, req: Request):
     email = request.email
     otp = request.otp
+    # Rate limit: 10 verify attempts per email per 15 minutes (prevents OTP brute-force)
+    if not _rate_limit(f"otp_verify:{email}", max_calls=10, window_seconds=900):
+        raise HTTPException(status_code=429, detail="Too many verification attempts. Please request a new OTP.")
+    if not _rate_limit(f"otp_verify_ip:{get_client_ip(req)}", max_calls=30, window_seconds=900):
+        raise HTTPException(status_code=429, detail="Too many requests from this IP. Please try again later.")
     if email not in otp_store:
         raise HTTPException(status_code=400, detail="No OTP request found. Please request a new OTP.")
     record = otp_store[email]
@@ -2602,8 +2654,11 @@ async def verify_otp_for_registration(request: OTPVerifyRequest):
     return {"success": True, "message": "OTP verified successfully. Please complete your profile.", "signup_token": signup_token}
 
 @app.post("/auth/check-phone")
-async def check_phone_unique(request: PhoneCheckRequest):
+async def check_phone_unique(request: PhoneCheckRequest, req: Request):
     """Pre-signup phone uniqueness check. No auth required."""
+    # Rate limit: 15 checks per IP per 5 minutes (enumeration protection)
+    if not _rate_limit(f"phone_check:{get_client_ip(req)}", max_calls=15, window_seconds=300):
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again shortly.")
     phone = request.phone.strip()
     if not phone or len(phone) < 7:
         raise HTTPException(status_code=422, detail="Invalid phone number")
@@ -2617,8 +2672,13 @@ class PasswordResetRequest(BaseModel):
     email: EmailStr
 
 @app.post("/auth/send-password-reset")
-async def send_password_reset(request: PasswordResetRequest):
+async def send_password_reset(request: PasswordResetRequest, req: Request):
     email = request.email
+    # Rate limit: 3 reset emails per email per 15 minutes
+    if not _rate_limit(f"pw_reset:{email}", max_calls=3, window_seconds=900):
+        raise HTTPException(status_code=429, detail="Too many reset attempts. Please wait 15 minutes before trying again.")
+    if not _rate_limit(f"pw_reset_ip:{get_client_ip(req)}", max_calls=10, window_seconds=900):
+        raise HTTPException(status_code=429, detail="Too many requests from this IP. Please try again later.")
     try:
         firebase_link = firebase_auth.generate_password_reset_link(email)
     except firebase_auth.UserNotFoundError:
@@ -2791,7 +2851,12 @@ async def complete_registration(profile: UserProfileComplete):
 # Authentication endpoints
 # -------------------------------------------------------------------
 @app.post("/auth/login")
-async def login(user: UserLogin):
+async def login(user: UserLogin, req: Request):
+    # Rate limit: 10 login attempts per email per 15 minutes (brute-force protection)
+    if not _rate_limit(f"login:{user.email}", max_calls=10, window_seconds=900):
+        raise HTTPException(status_code=429, detail="Too many login attempts. Please wait 15 minutes.")
+    if not _rate_limit(f"login_ip:{get_client_ip(req)}", max_calls=30, window_seconds=900):
+        raise HTTPException(status_code=429, detail="Too many requests from this IP. Please try again later.")
     user_doc = get_user_doc(user.email)
     if not user_doc or "password_hash" not in user_doc:
         raise HTTPException(status_code=401, detail="Invalid credentials")

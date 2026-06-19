@@ -109,7 +109,7 @@ export async function ensureUserDocumentV2(user, authMethod = 'email') {
     };
     
     await setDoc(userDocRef, userData);
-    console.log('✅ New user document created:', user.uid);
+    console.log('✅ New user document created');
     return { ...userData, isNewUser: true };
   } else {
     // EXISTING USER - UPDATE LOGIN METHOD & LAST LOGIN
@@ -124,7 +124,7 @@ export async function ensureUserDocumentV2(user, authMethod = 'email') {
       lastLogin: serverTimestamp()
     });
     
-    console.log('✅ Existing user login updated:', user.uid);
+    console.log('✅ Existing user login updated');
     return { ...existingData, isNewUser: false };
   }
 }
@@ -151,7 +151,7 @@ export async function handleGoogleAuth() {
     AuthManager.setUser(userData);
     localStorage.setItem('authenticated', 'true');
     
-    console.log('✅ Google Auth successful:', user.email);
+    console.log('✅ Google Auth successful');
     return { success: true, user, message: 'Logged in successfully!', userData };
   } catch (error) {
     console.error('❌ Google Auth error:', error.code, error.message);
@@ -271,7 +271,7 @@ export async function handleEmailSignup(email, password, displayName, signupToke
     AuthManager.setUser(userData);
     localStorage.setItem('authenticated', 'true');
 
-    console.log('✅ Email signup successful:', email);
+    console.log('✅ Email signup successful');
     return { success: true, user, message: 'Account created successfully!', userData };
   } catch (error) {
     console.error('❌ Email signup error:', error.code, error.message);
@@ -323,7 +323,7 @@ export async function handleEmailLogin(email, password) {
     AuthManager.setUser(userData);
     localStorage.setItem('authenticated', 'true');
 
-    console.log('✅ Email login successful:', email);
+    console.log('✅ Email login successful');
     return { success: true, user, message: 'Logged in successfully!', userData };
   } catch (error) {
     console.error('❌ Email login error:', error.code, error.message);
@@ -382,7 +382,7 @@ export async function sendPhoneOTP(phoneNumber, displayName) {
     // Format phone number (ensure +country code)
     const formattedPhone = phoneNumber.startsWith('+') ? phoneNumber : '+91' + phoneNumber;
     
-    console.log('📞 Sending OTP to:', formattedPhone);
+    console.log('📞 Sending OTP...');
     
     const recaptcha = await setupPhoneRecaptcha();
     confirmationResult = await signInWithPhoneNumber(auth, formattedPhone, recaptcha);
