@@ -2608,6 +2608,75 @@ body.modal-open {
     }
 }
 
+/* ── Cockpit / Signal cockpit mobile fixes ── */
+
+/* Signal card: prevent the card itself overflowing its grid cell */
+.signal-card {
+    min-width: 0;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+/* Signal header: allow wrapping on narrow screens so the right badges
+   don't push the card wider than the viewport */
+@media (max-width: 640px) {
+    .signal-header {
+        flex-wrap: wrap;
+        gap: 0.4rem;
+    }
+    /* Left group (symbol + direction badge) stays left, takes available space */
+    .signal-header > div:first-child {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+    /* Right group (Logic btn + price + BUY/SELL badge) shrinks if needed */
+    .signal-header > div:last-child {
+        flex-shrink: 1;
+        flex-wrap: wrap;
+        gap: 0.3rem;
+    }
+    /* Hide the live-price display on very narrow phones to save space */
+    .signal-header .price-container {
+        display: none;
+    }
+    /* Entry / SL / TP row (col-span-2 price row): stack vertically on mobile
+       so long crypto prices like BTC don't overflow the card width */
+    .signal-meta [class*="col-span-2"] {
+        flex-direction: column;
+        gap: 0.2rem;
+        align-items: flex-start;
+    }
+}
+
+/* Room header controls row: wrap strategy-matchmaker + timeframe-selector
+   so they don't push past the viewport edge on phones */
+@media (max-width: 768px) {
+    /* The inner flex container holding the select + timeframe buttons */
+    .room-header-row > div:last-child,
+    .room-header-row > .flex {
+        flex-wrap: wrap;
+        width: 100%;
+        gap: 0.5rem;
+    }
+    /* Strategy matchmaker select: full width on mobile */
+    #strategy-matchmaker {
+        flex: 1 1 100%;
+        width: 100%;
+        min-width: 0;
+    }
+    /* Timeframe selector: scrollable, full width on mobile */
+    #timeframe-selector {
+        flex: 1 1 100%;
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    /* Flow-strip guide steps: 2 per row on mobile (min-width is already 140px so this works) */
+    .flow-step-title {
+        white-space: normal;
+    }
+}
+
 .disclosure-sidebar {
     background: rgba(15, 17, 21, 0.75);
     backdrop-filter: blur(16px);
