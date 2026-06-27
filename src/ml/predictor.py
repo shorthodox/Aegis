@@ -1490,7 +1490,9 @@ class Predictor:
             },
 
             # Indicators
-            "rsi":            round(rsi, 1),
+            "rsi":              round(rsi, 1),
+            "rsi_slope":        round(float(_f('rsi_slope_14', 0.0)), 4),
+            "rsi_acceleration": round(float(_f('rsi_acceleration_14', 0.0)), 4),
             "macd_signal":    "BULLISH" if macd_hist > 0 else ("BEARISH" if macd_hist < 0 else "NEUTRAL"),
             "cci":            round(cci, 1),
             "adx":            round(adx, 1),

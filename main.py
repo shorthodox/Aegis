@@ -2703,6 +2703,7 @@ async def send_password_reset(request: PasswordResetRequest, req: Request):
     )
 
     try:
+        print(f"[password-reset] Sending reset email to {email} via {os.getenv('MAIL_SERVER','smtp.neo.space')}:{os.getenv('MAIL_PORT','587')}")
         message = MessageSchema(
             subject="Reset Your Gatekeeper Password",
             recipients=[NameEmail(name=email, email=email)],
@@ -2829,8 +2830,8 @@ async def send_password_reset(request: PasswordResetRequest, req: Request):
         )
         await fastmail.send_message(message)
     except Exception as e:
-        print(f"[password-reset] SMTP send failed: {e}")
-        raise HTTPException(status_code=500, detail="Failed to send reset email. Please check your email address and try again.")
+        print(f"[password-reset] SMTP send failed ({type(e).__name__}): {e}")
+        raise HTTPException(status_code=500, detail="smtp_failure")
 
     return {"success": True, "message": "Password reset link sent. Check your inbox (and spam folder)."}
 

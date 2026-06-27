@@ -20,6 +20,7 @@ import {
   updateProfile,
   onAuthStateChanged,
   GoogleAuthProvider,
+  sendPasswordResetEmail,
 } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
 
 import {
@@ -468,10 +469,8 @@ export async function handleLogout() {
 // ============================================================
 // PASSWORD RESET
 // ============================================================
-// Calls the backend /auth/send-password-reset endpoint.
-// The backend uses Firebase Admin SDK to generate the reset link
-// (works for all account types) and delivers it via our trusted
-// SMTP domain — Firebase's own noreply address lands in spam.
+// Primary: backend generates a branded reset link sent via our SMTP domain.
+// Fallback: if SMTP is down (500), Firebase sends its own reset email directly.
 export async function handlePasswordReset(email) {
   if (!email) return { success: false, message: 'Email required.' };
   try {
@@ -487,10 +486,29 @@ export async function handlePasswordReset(email) {
     if (res.status === 429) {
       return { success: false, message: 'Too many attempts. Please wait a few minutes and try again.' };
     }
+    // Backend SMTP failure — fall back to Firebase's own reset email
+    if (res.status === 500) {
+      return await _firebasePasswordReset(email);
+    }
     return { success: false, message: data.detail || 'Failed to send reset email. Please try again.' };
   } catch (error) {
     console.error('❌ Password reset error:', error);
-    return { success: false, message: 'Network error. Please check your connection and try again.' };
+    // Network error — still try Firebase fallback
+    return await _firebasePasswordReset(email);
+  }
+}
+
+async function _firebasePasswordReset(email) {
+  try {
+    await sendPasswordResetEmail(auth, email);
+    return { success: true, message: 'Password reset link sent! Check your inbox (and spam folder).' };
+  } catch (err) {
+    if (err.code === 'auth/user-not-found') {
+      // Silently succeed to prevent email enumeration
+      return { success: true, message: 'If an account with this email exists, a reset link has been sent.' };
+    }
+    console.error('❌ Firebase password reset error:', err);
+    return { success: false, message: 'Failed to send reset email. Please try again later.' };
   }
 }
 

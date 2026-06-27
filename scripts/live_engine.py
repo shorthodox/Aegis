@@ -1577,11 +1577,9 @@ class LiveEngine:
                     )
 
             new_side      = result.get('side', 'FLAT')
-            # quality_score is used only for display and position sizing in
-            # _build_signal_entry / perf_tracker. Gating is done by the
-            # predictor's own gates (meta_threshold + hold_calibrator).
-            quality_score = min(float(result.get('edge_score', 0.0)), 100.0)
-            fake_breakout = False
+            quality_score, _quality_reasons = self.quality_filter.score_signal(
+                result, regime, new_side)
+            fake_breakout = self.quality_filter.is_fake_breakout(result, new_side)
 
             # Build signal entry with enriched fields
             self.last_signals[symbol] = self._build_signal_entry(
@@ -1660,11 +1658,37 @@ class LiveEngine:
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
 
-                    # ── Gate 3: signal quality floor (edge_score 0-100) ──────
+                    # ── Gate 3: model edge score floor ───────────────────────
                     _model_quality = min(float(result.get('edge_score', 0.0)), 100.0)
                     if _model_quality < SignalQualityFilter.MIN_QUALITY_SCORE:
                         print(f'[{symbol}] QUALITY_GATE blocked {new_side}: '
                               f'edge={_model_quality:.1f} < {SignalQualityFilter.MIN_QUALITY_SCORE:.0f}')
+                        if symbol in self.last_signals:
+                            self.last_signals[symbol]['fire']            = False
+                            self.last_signals[symbol]['signal']          = 'HOLD'
+                            self.last_signals[symbol]['quality_blocked'] = True
+                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                        return
+
+                    # ── Gate 3b: contextual quality filter ────────────────────
+                    # score_signal() checks: ADX trend, volume conviction, regime
+                    # confidence, RSI zone, funding alignment, OI alignment, market
+                    # bias, RANGING penalty (-15), low-volume penalty (-10), macro
+                    # conflict penalty (-15).  Previously this was dead code
+                    # (quality_score was set to edge_score, fake_breakout = False).
+                    _CONTEXT_FLOOR = 35.0
+                    if quality_score < _CONTEXT_FLOOR:
+                        _qr_str = ', '.join(_quality_reasons[:4]) if _quality_reasons else 'n/a'
+                        print(f'[{symbol}] CONTEXT_GATE blocked {new_side}: '
+                              f'ctx={quality_score:.1f} < {_CONTEXT_FLOOR} [{_qr_str}]')
+                        if symbol in self.last_signals:
+                            self.last_signals[symbol]['fire']            = False
+                            self.last_signals[symbol]['signal']          = 'HOLD'
+                            self.last_signals[symbol]['quality_blocked'] = True
+                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                        return
+                    if fake_breakout:
+                        print(f'[{symbol}] FAKE_BREAKOUT blocked {new_side}')
                         if symbol in self.last_signals:
                             self.last_signals[symbol]['fire']            = False
                             self.last_signals[symbol]['signal']          = 'HOLD'
@@ -1698,6 +1722,36 @@ class LiveEngine:
                             self.last_signals[symbol]['fire']              = False
                             self.last_signals[symbol]['signal']            = 'HOLD'
                             self.last_signals[symbol]['portfolio_blocked'] = True
+                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                        return
+
+                    # ── RSI exhaustion / deceleration gate ───────────────────
+                    # Block entries when RSI momentum has already peaked (late signal).
+                    _rsi_val   = float(result.get('rsi', 50) or 50)
+                    _rsi_slope = float(result.get('rsi_slope', 0) or 0)
+                    _rsi_accel = float(result.get('rsi_acceleration', 0) or 0)
+                    _exhausted = False
+                    _exhaust_reason = ''
+                    if new_side == 'BUY':
+                        if _rsi_val >= 72 and _rsi_slope <= 0:
+                            _exhausted = True
+                            _exhaust_reason = f'RSI top rsi={_rsi_val:.1f} slope={_rsi_slope:.4f}'
+                        elif _rsi_accel < -0.08:
+                            _exhausted = True
+                            _exhaust_reason = f'RSI decel buy accel={_rsi_accel:.4f}'
+                    elif new_side == 'SELL':
+                        if _rsi_val <= 28 and _rsi_slope >= 0:
+                            _exhausted = True
+                            _exhaust_reason = f'RSI bottom rsi={_rsi_val:.1f} slope={_rsi_slope:.4f}'
+                        elif _rsi_accel > 0.08:
+                            _exhausted = True
+                            _exhaust_reason = f'RSI decel sell accel={_rsi_accel:.4f}'
+                    if _exhausted:
+                        print(f'[{symbol}] EXHAUSTION_GATE blocked {new_side}: {_exhaust_reason}')
+                        if symbol in self.last_signals:
+                            self.last_signals[symbol]['fire']               = False
+                            self.last_signals[symbol]['signal']             = 'HOLD'
+                            self.last_signals[symbol]['exhaustion_blocked'] = True
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
 
@@ -2086,7 +2140,7 @@ class LiveEngine:
             'bull_tp1', 'bull_tp2', 'bull_tp3',
             'bear_tp1', 'bear_tp2', 'bear_tp3',
             'confluence',
-            'rsi', 'macd_signal', 'cci', 'adx', 'supertrend',
+            'rsi', 'rsi_slope', 'rsi_acceleration', 'macd_signal', 'cci', 'adx', 'supertrend',
             'macro_daily', 'macro_weekly',
             'volume_strength', 'volume_zscore',
             'funding_rate', 'funding_bias', 'oi_trend', 'oi_change_1h_pct', 'oi_zscore',
