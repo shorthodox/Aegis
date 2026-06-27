@@ -2062,7 +2062,7 @@ class LiveEngine:
     ) -> Dict[str, Any]:
         side     = result.get('side', 'FLAT')
         conf     = float(result.get('edge_score', result.get('meta_confidence', 0)))
-        thr      = float(result.get('threshold', 0.6))
+        thr      = float(result.get('meta_threshold', 65.0))
         fire     = bool(result.get('fire', False))
         atr      = float(result.get('atr', price * 0.015))
         atr_mult = float(result.get('atr_multiplier', 1.5))
