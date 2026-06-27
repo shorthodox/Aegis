@@ -297,7 +297,7 @@ class SignalQualityFilter:
     is_fake_breakout() → bool
     """
 
-    MIN_QUALITY_SCORE = 65.0  # minimum points required to open a position
+    MIN_QUALITY_SCORE = 70.0  # minimum points required to open a position
 
     def score_signal(
         self,
@@ -350,9 +350,9 @@ class SignalQualityFilter:
         if regime.confidence > 0.7:
             score += 10; reasons.append(f'regime_confident({regime.regime})')
 
-        # +10: primary model edge score is high (top-quartile signal)
-        if meta_conf > 0.75:
-            score += 10; reasons.append(f'high_edge_score({meta_conf:.3f})')
+        # +10: primary model edge score is high (top-quartile signal, 0-100 scale)
+        if meta_conf > 75.0:
+            score += 10; reasons.append(f'high_edge_score({meta_conf:.1f})')
 
         # +10: RSI not in extreme exhaustion zone for the proposed direction
         rsi_ok = (
@@ -1234,7 +1234,7 @@ class LiveEngine:
     CONFLUENCE_SELL_MAX   = 4.0   # need mildly bearish consensus (≤40th pct)
 
     # Regimes where entry is unconditionally blocked
-    NO_TRADE_REGIMES: set = {_REGIME_LIQUIDITY_TRAP}
+    NO_TRADE_REGIMES: set = {_REGIME_LIQUIDITY_TRAP, _REGIME_RANGING}
 
     def __init__(
         self,
@@ -1589,6 +1589,11 @@ class LiveEngine:
             existing = self.wallet.open_positions.get(symbol)
             if existing:
                 self._manage_exit(symbol, existing, result, price)
+                # After exit management: overwrite last_signals quality with the
+                # entry confidence so the dashboard shows entry quality, not the
+                # current (potentially degraded) context score.
+                if symbol in self.last_signals:
+                    self.last_signals[symbol]['quality_score'] = round(existing.meta_confidence, 1)
             elif result.get('fire') and result.get('tradeable', False) and price > 0:
                 now               = time.time()
                 cooldown_elapsed  = now - self._last_close_time.get(symbol, 0)
@@ -1676,7 +1681,7 @@ class LiveEngine:
                     # bias, RANGING penalty (-15), low-volume penalty (-10), macro
                     # conflict penalty (-15).  Previously this was dead code
                     # (quality_score was set to edge_score, fake_breakout = False).
-                    _CONTEXT_FLOOR = 35.0
+                    _CONTEXT_FLOOR = 45.0
                     if quality_score < _CONTEXT_FLOOR:
                         _qr_str = ', '.join(_quality_reasons[:4]) if _quality_reasons else 'n/a'
                         print(f'[{symbol}] CONTEXT_GATE blocked {new_side}: '
@@ -1850,7 +1855,26 @@ class LiveEngine:
             _close('MAX_HOLD_EXPIRED')
             return
 
-        # ── 2. TP2 hit — checked BEFORE trailing stop so a candle that touches
+        # ── 2. TP3 hit — full exit at maximum target ──────────────────────────
+        if pos.take_profit_3 > 0:
+            tp3_current = (
+                (pos.direction == 'LONG'  and check_price >= pos.take_profit_3) or
+                (pos.direction == 'SHORT' and check_price <= pos.take_profit_3)
+            )
+            if tp3_current:
+                _close('TP3_HIT')
+                return
+            # Peak-based TP3 detection (catches candles that touched TP3 then reversed)
+            peak_tp3 = self._peak_price.get(symbol, pos.entry_price)
+            tp3_via_peak = self._tp1_hit.get(symbol, False) and (
+                (pos.direction == 'LONG'  and peak_tp3 >= pos.take_profit_3) or
+                (pos.direction == 'SHORT' and peak_tp3 <= pos.take_profit_3)
+            )
+            if tp3_via_peak:
+                _close('TP3_HIT', exit_px=pos.take_profit_3)
+                return
+
+        # ── 3. TP2 hit — checked BEFORE trailing stop so a candle that touches
         #    TP2 and reverses before the next scan still books profit at TP2
         #    price.  Uses peak_price to detect TP2 was reached even when current
         #    price has since reversed (peak-based detection only applies after
@@ -1873,22 +1897,24 @@ class LiveEngine:
                 _close('TP2_HIT', exit_px=pos.take_profit_2)
                 return
 
-        # ── 3. Trailing stop (active after TP1 is hit) ────────────────────────
+        # ── 4. Trailing stop (active after TP1 is hit) ────────────────────────
+        # Trailing stop is always AT or ABOVE TP1 for LONG (AT or BELOW for SHORT),
+        # guaranteeing at least TP1 profit if price reverses after TP1.
         if self._tp1_hit.get(symbol, False):
-            trail_atr = 0.5 * atr
-            peak      = self._peak_price.get(symbol, pos.entry_price)
+            trail_atr  = 0.5 * atr
+            peak       = self._peak_price.get(symbol, pos.entry_price)
             if pos.direction == 'LONG':
-                trail_stop = peak - trail_atr
+                trail_stop = max(pos.take_profit_1, peak - trail_atr)
                 if check_price <= trail_stop:
-                    _close('TRAILING_STOP')
+                    _close('TRAILING_STOP', exit_px=trail_stop)
                     return
             else:  # SHORT
-                trail_stop = peak + trail_atr
+                trail_stop = min(pos.take_profit_1, peak + trail_atr)
                 if check_price >= trail_stop:
-                    _close('TRAILING_STOP')
+                    _close('TRAILING_STOP', exit_px=trail_stop)
                     return
 
-        # ── 4. TP1 hit — activate trailing stop from here ─────────────────────
+        # ── 5. TP1 hit — activate trailing stop from here ─────────────────────
         if pos.take_profit_1 > 0 and not self._tp1_hit.get(symbol, False):
             tp1_hit = (
                 (pos.direction == 'LONG'  and check_price >= pos.take_profit_1) or
@@ -1897,10 +1923,10 @@ class LiveEngine:
             if tp1_hit:
                 self._tp1_hit[symbol]    = True
                 self._peak_price[symbol] = check_price   # reset peak to TP1 price
-                print(f'[{symbol}] TP1_HIT @ {check_price:.6g} — trailing stop activated')
-                # Do NOT close here — let the trailing stop manage the rest
+                print(f'[{symbol}] TP1_HIT @ {check_price:.6g} — trailing to TP2/TP3, locked ≥ TP1')
+                # Do NOT close here — trailing stop now protects TP1 profit
 
-        # ── 5. Model-reversal TP (dynamic exit) ──────────────────────────────
+        # ── 6. Model-reversal TP (dynamic exit) ──────────────────────────────
         side = result.get('side', 'FLAT')
         fire = bool(result.get('fire', False))
         opposite = (
@@ -1916,7 +1942,7 @@ class LiveEngine:
                 _close('MODEL_REVERSAL_TP')
                 return
 
-        # ── 6. ATR-based stop loss ────────────────────────────────────────────
+        # ── 7. ATR-based stop loss ────────────────────────────────────────────
         if pos.stop_loss > 0:
             sl_hit = (
                 (pos.direction == 'LONG'  and check_price <= pos.stop_loss) or
@@ -2070,7 +2096,7 @@ class LiveEngine:
 
         if not fire:
             strength = 'NEUTRAL'
-        elif conf >= thr * 1.15:
+        elif conf >= thr * 1.15 and quality_score >= 70.0:
             strength = f'STRONG_{side}'
         else:
             strength = side
