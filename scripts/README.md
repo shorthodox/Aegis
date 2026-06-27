@@ -1,14 +1,13 @@
 Send branded password reset emails
 ===============================
 
-This script generates a Firebase password reset link and sends a branded HTML email via SendGrid.
+This script generates a Firebase password reset link and sends a branded HTML email via SMTP.
 
 Setup
 ------
 1. Create a Firebase service account JSON with the required permissions and save it somewhere safe (not in the repo).
-2. Verify your sender domain or `FROM_EMAIL` in SendGrid.
-3. Copy `.env.example` to `.env` and fill values for `SENDGRID_API_KEY`, `FIREBASE_SERVICE_ACCOUNT`, `FROM_EMAIL`, and `CONTINUE_URL`.
-4. Install dependencies (preferably in a virtualenv):
+2. Copy `.env.example` to `.env` and fill values for `FIREBASE_SERVICE_ACCOUNT`, `FROM_EMAIL`, `CONTINUE_URL`, and your SMTP settings.
+3. Install dependencies (preferably in a virtualenv):
 
 ```bash
 pip install -r requirements.txt
@@ -30,9 +29,7 @@ Notes
 
 SMTP (Neo Work Mail) usage
 -------------------------
-You can send via your own SMTP server (e.g., Neo Work Mail) by setting the SMTP environment variables in `.env` instead of `SENDGRID_API_KEY`.
+You can send via your own SMTP server (e.g., Neo Work Mail) by setting the SMTP environment variables in `.env`.
 
 Required SMTP vars:
 - `SMTP_HOST`, `SMTP_PORT`, and credentials `SMTP_USER`/`SMTP_PASS` if authentication is required.
-
-If `SENDGRID_API_KEY` is set the script will prefer SendGrid; otherwise it will fall back to SMTP.

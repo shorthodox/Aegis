@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Send a branded password reset email using Firebase Admin and SendGrid.
+"""Send a branded password reset email using Firebase Admin and SMTP.
 
 Requires environment variables or a .env file:
-- SENDGRID_API_KEY: SendGrid API key
 - FIREBASE_SERVICE_ACCOUNT: path to Firebase service account JSON (optional if app default creds available)
-- FROM_EMAIL: sender email (verified in SendGrid)
+- FROM_EMAIL: sender email
 - CONTINUE_URL: (optional) your hosted reset page (e.g. https://example.com/reset-password)
+- SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS for your SMTP provider
 
 Usage:
   python scripts/send_reset_email.py --email user@example.com
@@ -17,8 +17,6 @@ import smtplib
 import ssl
 from email.message import EmailMessage
 
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -57,7 +55,6 @@ def generate_reset_link(email: str) -> str:
 
 
 def send_email(email: str, link: str):
-    sg_key = os.getenv("SENDGRID_API_KEY")
     from_email = os.getenv("FROM_EMAIL", "noreply@example.com")
 
     html = f"""
@@ -78,21 +75,6 @@ def send_email(email: str, link: str):
     </html>
     """
 
-    # If SENDGRID_API_KEY is set prefer SendGrid, otherwise try SMTP
-    if sg_key:
-        message = Mail(
-            from_email=from_email,
-            to_emails=email,
-            subject="Reset your password",
-            html_content=html,
-        )
-
-        sg = SendGridAPIClient(sg_key)
-        resp = sg.send(message)
-        logging.info("Email sent via SendGrid: status_code=%s", resp.status_code)
-        return
-
-    # SMTP fallback (Neo Work Mail)
     smtp_host = os.getenv("SMTP_HOST")
     smtp_port = int(os.getenv("SMTP_PORT", "587"))
     smtp_user = os.getenv("SMTP_USER")
@@ -101,7 +83,16 @@ def send_email(email: str, link: str):
     use_ssl = os.getenv("SMTP_SSL", "false").lower() in ("1", "true", "yes")
 
     if not smtp_host:
-        raise RuntimeError("No SendGrid key and SMTP_HOST not set. Cannot send email")
+        raise RuntimeError("SMTP_HOST not set. Cannot send email")
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_pass = os.getenv("SMTP_PASS")
+    use_tls = os.getenv("SMTP_USE_TLS", "true").lower() in ("1", "true", "yes")
+    use_ssl = os.getenv("SMTP_SSL", "false").lower() in ("1", "true", "yes")
+
+    if not smtp_host:
+        raise RuntimeError("SMTP_HOST not set. Cannot send email")
 
     msg = EmailMessage()
     msg["Subject"] = "Reset your password"
