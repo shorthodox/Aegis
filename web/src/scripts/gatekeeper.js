@@ -652,9 +652,16 @@ async function loadUserFromBackend(token, firebaseUser = null) {
     if (response.ok) {
       const userData = await response.json();
       applyUserData(userData, token);
-    } else if (response.status === 404 && firebaseUser) {
-      // New Firebase user — auto-provision a backend profile then continue
-      await provisionUserFromFirebase(firebaseUser, token);
+    } else if (response.status === 404) {
+      // No email-keyed Firestore doc — provision from Firebase user.
+      // The fast path skips passing firebaseUser so we fall back to auth.currentUser,
+      // which is populated by the time any real user reaches the dashboard.
+      const _fbUser = firebaseUser || auth.currentUser;
+      if (_fbUser) {
+        await provisionUserFromFirebase(_fbUser, token);
+      } else {
+        redirectToLogin();
+      }
     } else if (response.status === 401) {
       localStorage.removeItem('access_token');
       localStorage.removeItem('authToken');

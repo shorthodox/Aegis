@@ -1,903 +1,1012 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <!-- Preload Firebase & Core Modules to prevent module waterfall blocking -->
-    <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js">
-    <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js">
-    <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js">
-    <link rel="modulepreload" href="/web/src/scripts/gatekeeper.js">
-    <link rel="modulepreload" href="/web/src/scripts/auth.js">
-    <link rel="modulepreload" href="/web/src/auth/authManager.js">
-    <link rel="modulepreload" href="/web/src/scripts/iframeGuard.js">
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pricing | AEGIS v1.0</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
-    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap"></noscript>
-    <link rel="stylesheet" href="/web/dist/styles.css?v=1.1">
-    <link rel="stylesheet" href="/web/src/styles/main.css">
-    <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"></noscript>
-    <link rel="canonical" href="https://gatekeeper.sbs/web/src/pages/pricing.html">
-    <meta name="author" content="Animesh Kukreti &amp; Aman Juiyal">
-    <meta name="owner" content="Animesh Kukreti &amp; Aman Juiyal">
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "WebPage",
-      "name": "Pricing — Gatekeeper (Aegis-1)",
-      "url": "https://gatekeeper.sbs/web/src/pages/pricing.html",
-      "publisher": {
-        "@type": "Organization",
-        "name": "Gatekeeper (Aegis-1)",
-        "founders": [
-          {"@type": "Person", "name": "Animesh Kukreti"},
-          {"@type": "Person", "name": "Aman Juiyal"}
-        ],
-        "address": {
-          "@type": "PostalAddress",
-          "addressLocality": "Dehradun",
-          "addressRegion": "Uttarakhand",
-          "addressCountry": "IN"
-        }
+  <!-- Preload Firebase & Core Modules -->
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js">
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js">
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js">
+  <link rel="modulepreload" href="/web/src/scripts/gatekeeper.js">
+  <link rel="modulepreload" href="/web/src/scripts/auth.js">
+  <link rel="modulepreload" href="/web/src/auth/authManager.js">
+  <link rel="modulepreload" href="/web/src/scripts/iframeGuard.js">
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pricing — AEGIS v1.0</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"></noscript>
+
+  <link rel="stylesheet" href="/web/dist/styles.css?v=1.1">
+  <link rel="stylesheet" href="/web/src/styles/main.css">
+  <link rel="stylesheet" href="/web/src/styles/aegis-redesign.css">
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"></noscript>
+
+  <link rel="canonical" href="https://gatekeeper.sbs/web/src/pages/pricing.html">
+  <meta name="author" content="Animesh Kukreti &amp; Aman Juiyal">
+  <meta name="owner" content="Animesh Kukreti &amp; Aman Juiyal">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "Pricing — Gatekeeper (Aegis-1)",
+    "url": "https://gatekeeper.sbs/web/src/pages/pricing.html",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Gatekeeper (Aegis-1)",
+      "founders": [
+        {"@type": "Person", "name": "Animesh Kukreti"},
+        {"@type": "Person", "name": "Aman Juiyal"}
+      ],
+      "address": {
+        "@type": "PostalAddress",
+        "addressLocality": "Dehradun",
+        "addressRegion": "Uttarakhand",
+        "addressCountry": "IN"
       }
     }
-    </script>
-    <style>
-        .footer {
-            text-align: center;
-            padding: 2rem;
-            border-top: 1px solid rgba(255,255,255,0.05);
-            margin-top: 3rem;
-        }
-        .footer-links {
-            display: flex;
-            justify-content: center;
-            gap: 1rem;
-            flex-wrap: wrap;
-            margin-bottom: 1rem;
-        }
-        .footer-links a {
-            color: #6b7280;
-            text-decoration: none;
-            font-size: 0.8rem;
-        }
-        .footer-links a:hover {
-            color: #00f2ff;
-        }
-        .separator {
-            color: #374151;
-        }
-        .footer-proprietor {
-            font-size: 0.75rem;
-            color: #4b5563;
-            margin-bottom: 0.5rem;
-        }
-        .footer p {
-            font-size: 0.7rem;
-            color: #374151;
-        }
-        @media (max-width: 768px) {
-            .footer-links {
-                gap: 0.5rem;
-            }
-            .footer-links a {
-                font-size: 0.7rem;
-            }
-            .footer {
-                padding: 1.5rem 1rem;
-            }
-        }
-    </style>
-</head>
+  }
+  </script>
 
+  <style>
+    /* ── Page resets ────────────────────────────────────────── */
+    body {
+      background-color: var(--ae-base, #0C0F13);
+      color: var(--ae-text-1, #EAE6DF);
+      font-family: var(--ae-font-sans, 'Inter', system-ui, sans-serif);
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+      padding-top: 60px;
+    }
+    body::before, body::after { display: none !important; }
+
+    /* ── Mobile drawer ─────────────────────────────────────── */
+    .ae-mobile-drawer {
+      position: fixed;
+      top: 60px; left: 0; right: 0;
+      z-index: 800;
+      background: var(--ae-base);
+      border-bottom: 1px solid var(--ae-border);
+      display: none;
+      flex-direction: column;
+      padding: var(--s-4);
+      gap: var(--s-1);
+      max-height: calc(100vh - 60px);
+      overflow-y: auto;
+    }
+    .ae-mobile-drawer.open { display: flex; }
+    .ae-mobile-link {
+      font-size: 0.88rem;
+      color: var(--ae-text-2);
+      text-decoration: none;
+      padding: 10px var(--s-4);
+      border-radius: var(--ae-radius);
+      display: block;
+      transition: background 120ms, color 120ms;
+    }
+    .ae-mobile-link:hover, .ae-mobile-link.mobile-active {
+      background: var(--ae-raised);
+      color: var(--ae-text-1);
+    }
+
+    /* ── Hamburger ─────────────────────────────────────────── */
+    #navHamburger {
+      display: none;
+      align-items: center; justify-content: center;
+      width: 36px; height: 36px;
+      background: transparent;
+      border: 1px solid var(--ae-border);
+      border-radius: var(--ae-radius);
+      cursor: pointer;
+      color: var(--ae-text-2);
+      font-size: 0.85rem;
+      flex-shrink: 0;
+      transition: border-color 120ms, color 120ms;
+    }
+    #navHamburger:hover { border-color: var(--ae-border-bright); color: var(--ae-text-1); }
+
+    @media (max-width: 900px) {
+      .ae-nav-links { display: none !important; }
+      #navHamburger { display: flex !important; }
+    }
+    @media (min-width: 901px) {
+      #navMobileDrawer { display: none !important; }
+    }
+
+    /* ── Pricing card grid ─────────────────────────────────── */
+    .pricing-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--s-5);
+      align-items: start;
+    }
+    @media (max-width: 960px) { .pricing-cards-grid { grid-template-columns: 1fr; max-width: 480px; margin: 0 auto; } }
+
+    /* ── Feature matrix ────────────────────────────────────── */
+    .ae-matrix-row-group {
+      padding: var(--s-3) var(--s-5);
+      font-family: var(--ae-font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ae-text-3);
+      background: var(--ae-raised);
+      border-bottom: 1px solid var(--ae-border-dim);
+    }
+
+    /* ── Trial status message ──────────────────────────────── */
+    #trialStatusMsg {
+      margin-top: 8px;
+      font-size: 0.8rem;
+      text-align: center;
+      min-height: 1.2em;
+      font-family: var(--ae-font-sans);
+    }
+
+    /* ── Dev code section ──────────────────────────────────── */
+    #devCodeSection {
+      max-width: 480px;
+      margin: var(--s-7) auto 0;
+      padding: var(--s-5);
+      background: var(--ae-surface);
+      border: 1px solid var(--ae-border);
+      border-radius: var(--ae-radius-md);
+    }
+    #devCodeToggle {
+      background: none; border: none; cursor: pointer;
+      display: flex; align-items: center; gap: 8px;
+      color: var(--ae-text-3);
+      font-size: 0.78rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-family: var(--ae-font-mono);
+      padding: 0; width: 100%;
+      transition: color 120ms;
+    }
+    #devCodeToggle:hover { color: var(--ae-text-2); }
+    #devCodeInput {
+      flex: 1;
+      background: var(--ae-raised);
+      border: 1px solid var(--ae-border);
+      border-radius: var(--ae-radius);
+      padding: 9px 12px;
+      color: var(--ae-text-1);
+      font-size: 0.88rem;
+      font-family: var(--ae-font-mono);
+      letter-spacing: 0.06em;
+      outline: none;
+      transition: border-color 120ms;
+    }
+    #devCodeInput::placeholder { color: var(--ae-text-4); }
+    #devCodeInput:focus { border-color: var(--ae-border-bright); }
+    #devCodeSubmit {
+      padding: 9px 16px;
+      background: var(--ae-gold-dim);
+      border: 1px solid var(--ae-gold-mid);
+      border-radius: var(--ae-radius);
+      color: var(--ae-gold);
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      font-family: var(--ae-font-sans);
+      transition: background 120ms;
+    }
+    #devCodeSubmit:hover { background: rgba(184,150,106,0.14); }
+    #devCodeMsg { margin-top: 8px; font-size: 0.78rem; min-height: 1em; }
+
+    /* ── Anchor scroll offset ──────────────────────────────── */
+    section[id] { scroll-margin-top: 72px; }
+  </style>
+</head>
 <body>
 
-    <!-- Fixed Glass Header (same as index.html) -->
-    <header class="fixed-header" id="main-nav">
-        <a href="/web/src/pages/index.html" class="logo" style="text-decoration:none;">⚡ AEGIS <span>v1.0</span> <span style="font-size:0.52rem;font-weight:800;font-family:monospace;letter-spacing:0.1em;background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.35);color:#00ff88;padding:1px 6px;border-radius:4px;text-transform:uppercase;vertical-align:middle;margin-left:5px;position:relative;top:-1px;">LIVE</span></a>
+<!-- ═══════════════════════════════════════
+     NAVIGATION
+     ═══════════════════════════════════════ -->
+<header class="ae-nav" id="main-nav">
+  <div class="ae-nav-inner">
 
-        <nav class="nav-links-centered" aria-label="Main navigation">
-            <a href="/web/src/pages/index.html" class="nav-link">Home</a>
-            <a href="/web/src/pages/index.html#sentinel" class="nav-link">Sentinel</a>
-            <a href="/web/src/pages/index.html#cockpit" class="nav-link">Cockpit</a>
-            <a href="/web/src/pages/index.html#security" class="nav-link">Security</a>
-            <a href="/web/src/pages/pricing.html" class="nav-link active">Pricing</a>
-            <a href="/web/src/pages/review.html" class="nav-link">Reviews</a>
-            <a href="/web/src/pages/track-record.html" class="nav-link">Live Record</a>
-        </nav>
+    <a href="/web/src/pages/index.html" class="ae-brand" style="text-decoration:none;">
+      AEGIS<span>&nbsp;·&nbsp;</span>v1.0
+    </a>
 
-        <div id="authButtonContainer" class="nav-auth-desktop" style="display:flex;align-items:center;gap:0.5rem;">
-            <button id="portalBtn" class="nav-btn-login">
-                <i class="fas fa-user-shield"></i> Sign In
-            </button>
-            <button id="dashboardBtn" class="nav-btn-dashboard" style="display:none;">
-                <i class="fas fa-chart-line"></i> Dashboard
-            </button>
-            <button id="signOutBtn" class="nav-btn-signout" style="display:none;">
-                <i class="fas fa-sign-out-alt"></i> Sign Out
-            </button>
-            <button id="createAccountBtn" class="nav-btn-cta">
-                Get Started
-            </button>
-        </div>
+    <nav class="ae-nav-links" aria-label="Main navigation">
+      <a href="/web/src/pages/index.html" class="ae-nav-link">Home</a>
+      <a href="/web/src/pages/index.html#how-it-works" class="ae-nav-link">Signal Demo</a>
+      <a href="/web/src/pages/review.html" class="ae-nav-link">Reviews</a>
+      <a href="/web/src/pages/pricing.html" class="ae-nav-link active">Pricing</a>
+      <a href="/web/src/pages/track-record.html" class="ae-nav-link">Track Record</a>
+    </nav>
 
-        <button class="nav-hamburger-btn" id="navHamburger" aria-label="Toggle navigation" aria-expanded="false">
-            <i class="fas fa-bars"></i>
-        </button>
-    </header>
-
-    <div class="nav-mobile-drawer" id="navMobileDrawer">
-        <a href="/web/src/pages/index.html" class="nav-mobile-link"><i class="fas fa-home"></i> Home</a>
-        <a href="/web/src/pages/index.html#sentinel" class="nav-mobile-link"><i class="fas fa-satellite-dish"></i> Sentinel</a>
-        <a href="/web/src/pages/index.html#cockpit" class="nav-mobile-link"><i class="fas fa-desktop"></i> Cockpit</a>
-        <a href="/web/src/pages/index.html#security" class="nav-mobile-link"><i class="fas fa-shield-alt"></i> Security</a>
-        <a href="/web/src/pages/pricing.html" class="nav-mobile-link mobile-active"><i class="fas fa-tag"></i> Pricing</a>
-        <a href="/web/src/pages/review.html" class="nav-mobile-link"><i class="fas fa-star"></i> Reviews</a>
-        <a href="/web/src/pages/track-record.html" class="nav-mobile-link"><i class="fas fa-chart-bar"></i> Live Record</a>
-        <div class="nav-mobile-auth">
-            <button class="nav-btn-login" id="mPortalProxy"><i class="fas fa-user-shield"></i> Sign In</button>
-            <button class="nav-btn-dashboard" id="mDashProxy" style="display:none;"><i class="fas fa-chart-line"></i> Dashboard</button>
-            <button class="nav-btn-signout" id="mSignoutProxy" style="display:none;"><i class="fas fa-sign-out-alt"></i> Sign Out</button>
-            <button class="nav-btn-cta" id="mCtaProxy">Get Started</button>
-        </div>
+    <div id="authButtonContainer" class="ae-nav-actions">
+      <button id="portalBtn" class="ae-btn ae-btn-ghost ae-btn-sm">Sign In</button>
+      <button id="dashboardBtn" class="ae-btn ae-btn-outline ae-btn-sm" style="display:none;">Dashboard</button>
+      <button id="signOutBtn" class="ae-btn ae-btn-ghost ae-btn-sm" style="display:none;">Sign Out</button>
+      <button id="createAccountBtn" class="ae-btn ae-btn-primary ae-btn-sm">Start Free Trial</button>
     </div>
 
-    <!-- Pricing Section -->
-    <section class="pricing-hero">
-        <div class="pricing-header">
-            <h1 class="gradient-text">Choose Your Edge</h1>
-            <p class="hero-sub">Two intelligence tiers built on top of a free trial. Every plan starts with the full 60-token signal feed — <strong>Sentinel</strong> adds noise filters and risk tools, <strong>AEGIS Pro</strong> unlocks the full ML model stack. Razorpay Standard Checkout — UPI, cards, and netbanking.</p>
+    <button id="navHamburger" aria-label="Toggle navigation" aria-expanded="false">
+      <i class="fas fa-bars"></i>
+    </button>
+  </div>
+</header>
+
+<!-- Mobile drawer -->
+<div class="ae-mobile-drawer" id="navMobileDrawer" aria-hidden="true">
+  <a href="/web/src/pages/index.html" class="ae-mobile-link">Home</a>
+  <a href="/web/src/pages/pricing.html" class="ae-mobile-link mobile-active">Pricing</a>
+  <a href="/web/src/pages/review.html" class="ae-mobile-link">Reviews</a>
+  <a href="/web/src/pages/track-record.html" class="ae-mobile-link">Track Record</a>
+  <hr class="ae-divider" style="margin: var(--s-3) 0;">
+  <div style="display:flex; flex-direction:column; gap:var(--s-2); padding: 0 var(--s-2);">
+    <button class="ae-btn ae-btn-ghost ae-btn-md" id="mPortalProxy" style="justify-content:flex-start;">Sign In</button>
+    <button class="ae-btn ae-btn-outline ae-btn-md" id="mDashProxy" style="display:none; justify-content:flex-start;">Dashboard</button>
+    <button class="ae-btn ae-btn-ghost ae-btn-md" id="mSignoutProxy" style="display:none; justify-content:flex-start;">Sign Out</button>
+    <button class="ae-btn ae-btn-primary ae-btn-md" id="mCtaProxy">Start Free Trial</button>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════
+     PAGE HEADER
+     ═══════════════════════════════════════ -->
+<section style="padding: var(--s-9) 0 var(--s-7); border-bottom: 1px solid var(--ae-border);">
+  <div class="ae-container">
+    <div style="max-width: 640px;">
+      <div class="ae-eyebrow">Access Tiers</div>
+      <h1 class="ae-display" style="margin-bottom: var(--s-5); font-size: clamp(2.4rem, 5vw, 3.8rem);">
+        Transparent pricing.<br>No dark patterns.
+      </h1>
+      <p style="font-size: 1rem; line-height: 1.8; color: var(--ae-text-2); max-width: 52ch;">
+        Three tiers built on top of a free trial. Every plan starts with the full 63-token signal feed. Razorpay Standard Checkout — UPI, cards, and netbanking.
+      </p>
+    </div>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════
+     PRICING CARDS
+     ═══════════════════════════════════════ -->
+<section class="ae-section">
+  <div class="ae-container">
+    <div class="pricing-cards-grid">
+
+      <!-- ── Basic / Trial ── -->
+      <div class="ae-price-card">
+        <div>
+          <div class="ae-price-tier">Basic</div>
+          <div style="font-size: 0.75rem; color: var(--ae-text-3); margin-top: 4px; font-family: var(--ae-font-mono);">Best for beginners</div>
+          <div class="price ae-price-value" style="margin-top: var(--s-4);">$3.60 <span>/mo</span></div>
+          <div class="ae-badge ae-badge-live" style="margin-top: var(--s-3);">3-Day Free Trial</div>
         </div>
-
-        <div class="pricing-grid floating-cards">
-            <!-- Tier 1: Basic — 3-Day Free Trial -->
-            <div class="price-card glow-basic hover-interactive">
-                <div style="font-size:0.65rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(0,242,255,0.5);margin-bottom:0.4rem;">Best for beginners</div>
-                <h3>Basic</h3>
-                <div class="price">$3.60 <span>/mo</span></div>
-                <div style="display:inline-flex;align-items:center;gap:0.4rem;background:rgba(0,242,255,0.1);border:1px solid rgba(0,242,255,0.3);border-radius:6px;padding:0.2rem 0.65rem;font-size:0.72rem;font-weight:700;color:#00f2ff;margin-bottom:0.6rem;letter-spacing:0.04em;">
-                    <i class="fas fa-flask"></i> 3-Day Free Trial
-                </div>
-                <p class="card-desc">Start with a free 3-day trial — full Basic access, no card required.</p>
-                <ul class="features-list">
-                    <li><i class="fas fa-chart-bar"></i> Market bias, trend regime &amp; volatility context</li>
-                    <li><i class="fas fa-map-marker-alt"></i> S/R zones, pivot, R1/R2/S1/S2 levels</li>
-                    <li><i class="fas fa-bullseye"></i> Price targets (bull &amp; bear TP1/TP2/TP3)</li>
-                    <li><i class="fas fa-wave-square"></i> RSI, MACD, ADX, CCI, Supertrend, confluence</li>
-                    <li><i class="fas fa-coins"></i> Volume z-score, funding rate, OI trend &amp; z-score</li>
-                    <li><i class="fas fa-globe"></i> Session context, fear/greed index, trader views</li>
-                    <li><i class="fas fa-chart-line"></i> 60 tokens · 2 chart timeframes (30m &amp; 1h)</li>
-                    <li><i class="fas fa-archive"></i> Signal history archive</li>
-                </ul>
-                <button id="trialBtn" class="btn-outline" style="width:100%;cursor:pointer;">
-                    <i class="fas fa-flask" style="margin-right:0.5rem;"></i>Try Free for 3 Days
-                </button>
-                <div id="trialStatusMsg" style="margin-top:0.6rem;font-size:0.8rem;text-align:center;min-height:1.2em;"></div>
-            </div>
-
-            <!-- Sentinel -->
-            <div class="price-card glow-intermediate hover-interactive">
-                <div style="font-size:0.65rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(100,255,180,0.7);margin-bottom:0.4rem;">Best for active traders</div>
-                <h3 style="color:#64ffb4;">Sentinel</h3>
-                <div class="price">$24.00 <span>/mo</span></div>
-                <p class="card-desc">AI conviction label per signal, all 8 chart timeframes, and a full noise-filtering layer — know exactly which setups to act on.</p>
-                <ul class="features-list">
-                    <li><i class="fas fa-check-circle" style="color:#64ffb4;"></i> Everything in Basic</li>
-                    <li><i class="fas fa-robot"></i> <strong>AI Conviction Label</strong> per signal — HIGH / MEDIUM / LOW
-                        <div style="display:flex;gap:0.4rem;margin-top:0.35rem;">
-                            <span style="padding:0.15rem 0.55rem;border-radius:4px;font-size:0.68rem;font-weight:700;background:rgba(0,255,136,0.15);border:1px solid rgba(0,255,136,0.35);color:#00ff88;">HIGH</span>
-                            <span style="padding:0.15rem 0.55rem;border-radius:4px;font-size:0.68rem;font-weight:700;background:rgba(255,200,0,0.15);border:1px solid rgba(255,200,0,0.35);color:#ffc800;">MEDIUM</span>
-                            <span style="padding:0.15rem 0.55rem;border-radius:4px;font-size:0.68rem;font-weight:700;background:rgba(255,100,100,0.15);border:1px solid rgba(255,100,100,0.35);color:#ff6464;">LOW</span>
-                        </div>
-                    </li>
-                    <li><i class="fas fa-expand-arrows-alt"></i> All 8 chart timeframes: 1m, 5m, 15m, 30m, 1h, 4h, 1d, 1w</li>
-                    <li><i class="fas fa-medal"></i> Quality Score Badge — instant signal strength read
-                        <div class="confluence-progress-bar">
-                            <div class="confluence-progress-fill" style="width:78%;background:linear-gradient(90deg,#64ffb4,#00f2ff);"></div>
-                        </div>
-                    </li>
-                    <li><i class="fas fa-exclamation-triangle"></i> Warning Chips — fake breakout, volume anomaly, regime mismatch, funding rate</li>
-                    <li><i class="fas fa-ban"></i> <strong>DON'T TRADE</strong> composite risk banner</li>
-                    <li><i class="fas fa-clock"></i> Session-Priority Sort — active session signals float first</li>
-                    <li><i class="fas fa-wallet"></i> Capital at Risk Calculator — Risk $X → Reward $Y</li>
-                    <li><i class="fas fa-balance-scale"></i> Portfolio Exposure Bar — live LONG/SHORT skew meter</li>
-                    <li><i class="fas fa-layer-group"></i> Confluence Scorecard
-                        <div class="confluence-progress-bar" style="margin-top:0.3rem;">
-                            <div class="confluence-progress-fill" style="width: 72%;"></div>
-                        </div>
-                    </li>
-                    <li><i class="fas fa-certificate"></i> Per-token win-rate history</li>
-                    <li><i class="fas fa-map-signs"></i> Live S/R zone tracking
-                        <div class="zone-progression">
-                            <div class="zone-node active"></div>
-                            <div class="zone-line active"></div>
-                            <div class="zone-node active"></div>
-                            <div class="zone-line active"></div>
-                            <div class="zone-node"></div>
-                        </div>
-                    </li>
-                </ul>
-                <a href="#" data-plan="intermediate" class="btn-outline" style="border-color:rgba(100,255,180,0.5);color:#64ffb4;">Activate Sentinel</a>
-            </div>
-
-            <!-- AEGIS Pro -->
-            <div class="price-card tier-pro featured glow-pro hover-interactive">
-                <div class="best-value" style="background:#ffd700;color:#000;"><i class="fas fa-crown"></i> MOST POPULAR</div>
-                <div style="font-size:0.65rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,215,0,0.7);margin-bottom:0.4rem;margin-top:0.5rem;">Best for power traders &amp; quants</div>
-                <h3>AEGIS Pro</h3>
-                <div class="price">$40.00 <span>/mo</span></div>
-                <p class="card-desc">The full model signal with exact entry, TP &amp; SL — plus LSTM + HMM deep panels and raw probabilities. Trade the model, not just the signal.</p>
-                <ul class="features-list">
-                    <li><i class="fas fa-check-circle" style="color:#ffd700;"></i> Everything in Sentinel</li>
-                    <li><i class="fas fa-bolt" style="color:#ffd700;"></i> <strong>Full AI fire signal</strong> — exact Entry, Take-Profit &amp; Stop-Loss
-                        <div style="display:flex;gap:0.4rem;margin-top:0.35rem;flex-wrap:wrap;">
-                            <span style="padding:0.15rem 0.55rem;border-radius:4px;font-size:0.68rem;font-weight:700;background:rgba(0,255,136,0.15);border:1px solid rgba(0,255,136,0.35);color:#00ff88;">LONG</span>
-                            <span style="padding:0.15rem 0.55rem;border-radius:4px;font-size:0.68rem;font-weight:700;background:rgba(255,100,100,0.15);border:1px solid rgba(255,100,100,0.35);color:#ff6464;">SHORT</span>
-                            <span style="padding:0.15rem 0.55rem;border-radius:4px;font-size:0.68rem;font-weight:700;background:rgba(0,242,255,0.1);border:1px solid rgba(0,242,255,0.3);color:#00f2ff;">meta_confidence</span>
-                        </div>
-                    </li>
-                    <li><i class="fas fa-brain"></i> LSTM Predictions Panel — continuation, exhaustion &amp; volatility probabilities</li>
-                    <li><i class="fas fa-project-diagram"></i> HMM Deep Regime Panel — stability score, transition risk &amp; state disagreement</li>
-                    <li><i class="fas fa-chart-area"></i> Per-Token Deep Chart — live WebSocket feed &amp; 60k candle history</li>
-                    <li><i class="fas fa-hourglass-half"></i> Candle Close Timer — real-time countdown per timeframe</li>
-                    <li><i class="fas fa-rocket"></i> Moonshot mode — 1:5 R:R setups</li>
-                    <li><i class="fas fa-chart-pie"></i> Raw model probabilities &amp; SHAP feature importance</li>
-                    <li><i class="fas fa-code"></i> Personal API &amp; JSON endpoints for automation</li>
-                </ul>
-                <a href="#" data-plan="pro" class="btn-pro" style="background:linear-gradient(135deg,#ffd700,#ff8c00);color:#000;border:none;"><i class="fas fa-unlock-alt"></i> Go AEGIS Pro</a>
-            </div>
-        </div>
-
-        <!-- Telegram roadmap callout -->
-        <div style="margin:1.5rem auto 0;max-width:720px;background:rgba(36,211,111,0.05);border:1px solid rgba(36,211,111,0.2);border-radius:14px;padding:1rem 1.4rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
-            <div style="font-size:1.3rem;">📲</div>
-            <div style="flex:1;min-width:220px;">
-                <div style="font-size:0.8rem;font-weight:800;color:#24d36f;margin-bottom:0.2rem;">Telegram Alerts — Coming Soon (All Plans)</div>
-                <div style="font-size:0.78rem;color:#6b7280;line-height:1.6;">Every signal will push instantly to your Telegram the moment it fires — entry price, TP, SL, and the AI reasoning. No more checking the dashboard manually.</div>
-            </div>
-        </div>
-
-        <p style="text-align:center;font-size:0.82rem;color:rgba(255,255,255,0.45);margin:1.2rem 0 0;line-height:1.7;">
-            <i class="fas fa-chart-bar" style="color:rgba(0,242,255,0.5);margin-right:0.4rem;"></i>
-            Every signal is logged publicly —
-            <a href="/web/src/pages/track-record.html" style="color:#00f2ff;text-decoration:underline;">see our live Track Record</a>.
+        <p class="ae-price-desc">
+          Start with a free 3-day trial — full Basic access, no card required. Evaluate the signal quality before spending anything.
         </p>
-
-        <div class="feature-matrix" style="margin-top:3rem;overflow-x:auto;padding:0 1rem;">
-            <h3 style="margin-bottom:1.5rem;text-align:center;color:#fff;">Full Feature Matrix</h3>
-            <table style="width:100%;max-width:960px;margin:0 auto;text-align:left;border-collapse:collapse;background:rgba(0,0,0,0.4);border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.1);">
-                <thead>
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.1);background:rgba(0,0,0,0.6);">
-                        <th style="padding:1rem 1.5rem;color:var(--primary-cyan);">Feature</th>
-                        <th style="padding:1rem;text-align:center;color:#00f2ff;">Basic<br><span style="font-size:0.7rem;font-weight:400;opacity:0.7;">$3.60/mo</span></th>
-                        <th style="padding:1rem;text-align:center;color:#64ffb4;">Sentinel<br><span style="font-size:0.7rem;font-weight:400;opacity:0.7;">$24/mo</span></th>
-                        <th style="padding:1rem;text-align:center;color:#ffd700;">AEGIS Pro<br><span style="font-size:0.7rem;font-weight:400;opacity:0.7;">$40/mo</span></th>
-                    </tr>
-                </thead>
-                <tbody style="color:rgba(255,255,255,0.85);">
-                    <tr style="background:rgba(0,242,255,0.03);border-bottom:1px solid rgba(255,255,255,0.04);">
-                        <td colspan="4" style="padding:0.5rem 1.5rem;font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:rgba(0,242,255,0.5);">Market Analysis — All Plans</td>
-                    </tr>
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <td style="padding:0.85rem 1.5rem;">Real-Time Signal Feed (60 Tokens)</td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                    </tr>
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <td style="padding:0.85rem 1.5rem;">Market Bias, Trend Regime &amp; Volatility Context</td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                    </tr>
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <td style="padding:0.85rem 1.5rem;">S/R Zones, Pivot, Price Targets</td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                    </tr>
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <td style="padding:0.85rem 1.5rem;">6 Indicators (RSI, MACD, ADX, CCI, Supertrend, Confluence)</td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                    </tr>
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <td style="padding:0.85rem 1.5rem;">Volume, Funding Rate &amp; OI Metrics</td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                    </tr>
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <td style="padding:0.85rem 1.5rem;">Session Context, Fear/Greed &amp; Trader Views</td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                    </tr>
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <td style="padding:0.85rem 1.5rem;">Signal History Archive</td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                    </tr>
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <td style="padding:0.85rem 1.5rem;">Chart Timeframes</td>
-                        <td style="padding:0.85rem;text-align:center;font-size:0.8rem;color:rgba(255,255,255,0.6);">30m &amp; 1h only</td>
-                        <td style="padding:0.85rem;text-align:center;font-size:0.8rem;color:#64ffb4;">All 8 (1m → 1w)</td>
-                        <td style="padding:0.85rem;text-align:center;font-size:0.8rem;color:#ffd700;">All 8 (1m → 1w)</td>
-                    </tr>
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <td style="padding:0.85rem 1.5rem;">
-                            AI Fire Signal — Exact Entry, TP &amp; SL
-                            <span style="margin-left:8px;font-size:0.65rem;font-weight:700;letter-spacing:0.08em;color:#ff8c00;background:rgba(255,140,0,0.12);border:1px solid rgba(255,140,0,0.35);padding:2px 7px;border-radius:99px;">COMING SOON</span>
-                        </td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-rocket" style="color:#ff8c00;"></i></td>
-                    </tr>
-                    <tr style="background:rgba(100,255,180,0.03);border-bottom:1px solid rgba(255,255,255,0.04);">
-                        <td colspan="4" style="padding:0.5rem 1.5rem;font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:rgba(100,255,180,0.6);">Signal Intelligence — Sentinel+</td>
-                    </tr>
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <td style="padding:0.85rem 1.5rem;">AI Conviction Label (HIGH / MEDIUM / LOW)</td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                    </tr>
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <td style="padding:0.85rem 1.5rem;">Quality Score Badge</td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                    </tr>
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <td style="padding:0.85rem 1.5rem;">Warning Chips (Fake Breakout, Volume, Regime, Funding Rate)</td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                    </tr>
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <td style="padding:0.85rem 1.5rem;">DON'T TRADE Composite Risk Banner</td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                    </tr>
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <td style="padding:0.85rem 1.5rem;">Session-Priority Signal Sort</td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                    </tr>
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <td style="padding:0.85rem 1.5rem;">Capital at Risk Calculator</td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                    </tr>
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <td style="padding:0.85rem 1.5rem;">Portfolio Exposure Bar (LONG/SHORT Skew)</td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                    </tr>
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <td style="padding:0.85rem 1.5rem;">Confluence Scorecard</td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                    </tr>
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <td style="padding:0.85rem 1.5rem;">Per-Token Win-Rate History</td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                    </tr>
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <td style="padding:0.85rem 1.5rem;">Live S/R Zone Tracking</td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                    </tr>
-                    <tr style="background:rgba(255,215,0,0.03);border-bottom:1px solid rgba(255,255,255,0.04);">
-                        <td colspan="4" style="padding:0.5rem 1.5rem;font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:rgba(255,215,0,0.6);">ML Model Stack — AEGIS Pro</td>
-                    </tr>
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <td style="padding:0.85rem 1.5rem;">LSTM Predictions Panel (Continuation, Exhaustion, Volatility)</td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                    </tr>
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <td style="padding:0.85rem 1.5rem;">HMM Deep Regime Panel (Stability, Transition Risk)</td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                    </tr>
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <td style="padding:0.85rem 1.5rem;">Per-Token Deep Chart (Live WebSocket + 60k Candle History)</td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                    </tr>
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <td style="padding:0.85rem 1.5rem;">Candle Close Timer (per Timeframe)</td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                    </tr>
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <td style="padding:0.85rem 1.5rem;">Moonshot Mode — 1:5 R:R Setups</td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                    </tr>
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <td style="padding:0.85rem 1.5rem;">Raw Model Probabilities &amp; SHAP Importance</td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                    </tr>
-                    <tr>
-                        <td style="padding:0.85rem 1.5rem;">Personal API &amp; JSON Data Export</td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-times" style="color:#ff0055;"></i></td>
-                        <td style="padding:0.85rem;text-align:center;"><i class="fas fa-check-square" style="color:#00ff88;"></i></td>
-                    </tr>
-                </tbody>
-            </table>
+        <ul class="ae-feature-list">
+          <li>All 63 live tokens</li>
+          <li>Market bias, trend regime &amp; volatility context</li>
+          <li>S/R zones, pivot &amp; price targets (TP1/TP2/TP3)</li>
+          <li>RSI, MACD, ADX, CCI, Supertrend, confluence</li>
+          <li>Volume Z-score, funding rate &amp; OI metrics</li>
+          <li>Session context, fear/greed &amp; trader views</li>
+          <li>Signal history archive</li>
+          <li>2 chart timeframes (30m &amp; 1h)</li>
+        </ul>
+        <div style="margin-top: auto;">
+          <button id="trialBtn" class="ae-btn ae-btn-primary ae-btn-md" style="width:100%; justify-content:center;">
+            Try Free for 3 Days
+          </button>
+          <div id="trialStatusMsg"></div>
         </div>
+      </div>
 
-        <div class="pricing-note" style="margin-top:2.5rem; text-align:center; color:rgba(255,255,255,0.75);">
-            <p>✅ Razorpay Standard Checkout is enabled — UPI AutoPay, cards, netbanking, and wallets.</p>
+      <!-- ── Sentinel ── -->
+      <div class="ae-price-card featured">
+        <div>
+          <div class="ae-price-tier" style="color:var(--ae-buy);">Sentinel</div>
+          <div style="font-size: 0.75rem; color: var(--ae-text-3); margin-top: 4px; font-family: var(--ae-font-mono);">Best for active traders</div>
+          <div class="price ae-price-value" style="margin-top: var(--s-4);">$24.00 <span>/mo</span></div>
         </div>
+        <p class="ae-price-desc">
+          AI conviction label per signal, all 8 chart timeframes, and a full noise-filtering layer — know exactly which setups to act on.
+        </p>
+        <ul class="ae-feature-list">
+          <li>Everything in Basic</li>
+          <li>AI Conviction Label per signal — HIGH / MEDIUM / LOW</li>
+          <li>Quality Score Badge — instant signal strength read</li>
+          <li>Warning Chips — fake breakout, volume anomaly, regime mismatch</li>
+          <li>DON'T TRADE composite risk banner</li>
+          <li>Session-priority signal sort</li>
+          <li>Capital at Risk Calculator</li>
+          <li>Portfolio Exposure Bar — live LONG/SHORT skew</li>
+          <li>Confluence Scorecard</li>
+          <li>Per-token win-rate history</li>
+          <li>All 8 chart timeframes (1m → 1w)</li>
+        </ul>
+        <a href="#" data-plan="intermediate" class="ae-btn ae-btn-primary ae-btn-md" style="width:100%; justify-content:center; text-decoration:none; margin-top:auto;">
+          Activate Sentinel
+        </a>
+      </div>
 
-        <div class="guidance-teaser" style="margin-top:1.5rem;">
-            <p>🛡️ <strong>The Aegis‑1 Promise:</strong> We don't just give signals. We tell you <u>exactly</u> how to
-                enter, when to sit on your hands, and which common retail traps to avoid — including fake breakouts and bad-regime setups the model flags in real time.</p>
+      <!-- ── AEGIS Pro ── -->
+      <div class="ae-price-card">
+        <div>
+          <div class="ae-price-tier" style="color:var(--ae-gold);">AEGIS Pro</div>
+          <div style="font-size: 0.75rem; color: var(--ae-text-3); margin-top: 4px; font-family: var(--ae-font-mono);">Best for power traders &amp; quants</div>
+          <div class="price ae-price-value" style="margin-top: var(--s-4);">$40.00 <span>/mo</span></div>
         </div>
-        <!-- Developer Access Code -->
-        <div id="devCodeSection" style="
-            margin: 2.5rem auto 0;
-            max-width: 480px;
-            padding: 1.5rem 1.75rem;
-            background: rgba(0,0,0,0.35);
-            border: 1px solid rgba(255,255,255,0.07);
-            border-radius: 14px;
-        ">
-            <button id="devCodeToggle" style="
-                background: none; border: none; cursor: pointer;
-                display: flex; align-items: center; gap: 0.6rem;
-                color: rgba(255,255,255,0.4); font-size: 0.8rem;
-                letter-spacing: 0.08em; text-transform: uppercase; padding: 0;
-                width: 100%;
-            ">
-                <i class="fas fa-key" style="font-size:0.75rem;"></i>
-                <span>Have a developer access code?</span>
-                <i id="devCodeChevron" class="fas fa-chevron-down" style="margin-left:auto;font-size:0.65rem;transition:transform 0.2s;"></i>
-            </button>
+        <p class="ae-price-desc">
+          The full model signal with exact entry, TP &amp; SL — plus LSTM and HMM deep panels with raw probabilities. Trade the model, not just the signal.
+        </p>
+        <ul class="ae-feature-list">
+          <li>Everything in Sentinel</li>
+          <li>Full AI fire signal — exact Entry, TP &amp; Stop-Loss</li>
+          <li>LSTM Predictions Panel — continuation, exhaustion &amp; volatility</li>
+          <li>HMM Deep Regime Panel — stability score &amp; transition risk</li>
+          <li>Per-token deep chart with 60k candle history</li>
+          <li>Candle close timer per timeframe</li>
+          <li>Moonshot mode — 1:5 R:R setups</li>
+          <li>Raw model probabilities &amp; SHAP importance</li>
+          <li>Personal API &amp; JSON data export</li>
+        </ul>
+        <a href="#" data-plan="pro" class="ae-btn ae-btn-outline ae-btn-md" style="width:100%; justify-content:center; text-decoration:none; margin-top:auto; border-color:var(--ae-gold-mid); color:var(--ae-gold);">
+          Go AEGIS Pro
+        </a>
+      </div>
 
-            <div id="devCodeBody" style="display:none; margin-top: 1.1rem;">
-                <div style="display:flex; gap:0.5rem;">
-                    <input id="devCodeInput" type="text" placeholder="AEGIS-XXXX-XXXX-XXXX"
-                        autocomplete="off" spellcheck="false" maxlength="22"
-                        style="
-                            flex:1; background:rgba(255,255,255,0.05);
-                            border:1px solid rgba(255,255,255,0.12);
-                            border-radius:8px; padding:0.55rem 0.85rem;
-                            color:#fff; font-size:0.9rem; font-family:monospace;
-                            letter-spacing:0.06em; outline:none;
-                        "
-                        oninput="this.value=this.value.toUpperCase()"
-                    >
-                    <button id="devCodeSubmit" style="
-                        padding: 0.55rem 1.1rem;
-                        background: rgba(0,242,255,0.12);
-                        border: 1px solid rgba(0,242,255,0.3);
-                        border-radius: 8px; color: #00f2ff;
-                        font-size: 0.85rem; font-weight: 700;
-                        cursor: pointer; white-space: nowrap;
-                        transition: background 0.2s;
-                    ">Redeem</button>
-                </div>
-                <div id="devCodeMsg" style="margin-top:0.6rem; font-size:0.8rem; min-height:1.1em;"></div>
-            </div>
+    </div>
+
+    <!-- Notes row -->
+    <div style="margin-top: var(--s-6); display:flex; flex-wrap:wrap; gap: var(--s-5); align-items:flex-start;">
+
+      <!-- Telegram callout -->
+      <div class="ae-card ae-card-sm" style="flex:1; min-width:280px; display:flex; gap: var(--s-4); align-items:flex-start;">
+        <div class="ae-badge ae-badge-live" style="flex-shrink:0; margin-top:2px;">SOON</div>
+        <div>
+          <div style="font-size:0.88rem; font-weight:600; color:var(--ae-text-1); margin-bottom:4px;">Telegram Alerts — Coming to All Plans</div>
+          <p style="font-size:0.82rem; color:var(--ae-text-2); line-height:1.6; margin:0;">Every signal will push to your Telegram the moment it fires — entry, TP, SL, and the AI reasoning. No more polling the dashboard.</p>
         </div>
-    </section>
+      </div>
 
-    <!-- Footer -->
-    <footer class="footer">
-        <div class="footer-links">
-            <a href="/web/src/pages/terms.html">Terms of Service</a>
-            <span class="separator">•</span>
-            <a href="/web/src/pages/conditions.html">Conditions</a>
-            <span class="separator">•</span>
-            <a href="/web/src/pages/privacy_policy.html">Privacy Policy</a>
-            <span class="separator">•</span>
-            <a href="/web/src/pages/refund_policy.html">Refund Policy</a>
-            <span class="separator">•</span>
-            <a href="/web/src/pages/risk_disclosure.html">Risk Disclosure</a>
+      <!-- Track record -->
+      <div class="ae-card ae-card-sm" style="flex:1; min-width:280px; display:flex; gap: var(--s-4); align-items:flex-start;">
+        <div class="ae-badge ae-badge-buy" style="flex-shrink:0; margin-top:2px;">LIVE</div>
+        <div>
+          <div style="font-size:0.88rem; font-weight:600; color:var(--ae-text-1); margin-bottom:4px;">Every signal is logged publicly</div>
+          <p style="font-size:0.82rem; color:var(--ae-text-2); line-height:1.6; margin:0;">
+            <a href="/web/src/pages/track-record.html" style="color:var(--ae-data); text-decoration:none;">See the live Track Record →</a>
+          </p>
         </div>
-        <div class="footer-proprietor">
-            Operated by <strong>Animesh Kukreti &amp; Aman Juiyal</strong> &nbsp;|&nbsp; Dehradun, Uttarakhand, India
+      </div>
+
+    </div>
+
+    <p style="text-align:center; margin-top: var(--s-5); font-size:0.75rem; color:var(--ae-text-3);">
+      All prices shown in USD &nbsp;·&nbsp; INR pricing applied automatically for Indian users &nbsp;·&nbsp; Billed monthly &nbsp;·&nbsp; Cancel anytime &nbsp;·&nbsp; Razorpay secured
+    </p>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════
+     FEATURE MATRIX
+     ═══════════════════════════════════════ -->
+<section class="ae-section" style="background: var(--ae-surface); border-top: 1px solid var(--ae-border);">
+  <div class="ae-container">
+
+    <div style="text-align:center; margin-bottom: var(--s-7);">
+      <div class="ae-eyebrow">Full Breakdown</div>
+      <h2 class="ae-h2">Feature Matrix</h2>
+    </div>
+
+    <div class="ae-table-wrap">
+      <table class="ae-table">
+        <thead>
+          <tr>
+            <th style="width:50%; text-align:left;">Feature</th>
+            <th style="text-align:center; color:var(--ae-data);">Basic<br><span style="font-size:0.62rem; font-weight:400; color:var(--ae-text-3);" class="price-th-basic">$3.60/mo</span></th>
+            <th style="text-align:center; color:var(--ae-buy);">Sentinel<br><span style="font-size:0.62rem; font-weight:400; color:var(--ae-text-3);" class="price-th-sentinel">$24/mo</span></th>
+            <th style="text-align:center; color:var(--ae-gold);">AEGIS Pro<br><span style="font-size:0.62rem; font-weight:400; color:var(--ae-text-3);" class="price-th-pro">$40/mo</span></th>
+          </tr>
+        </thead>
+        <tbody>
+
+          <tr><td colspan="4" class="ae-matrix-row-group">Market Analysis — All Plans</td></tr>
+
+          <tr>
+            <td>Real-Time Signal Feed (63 Tokens)</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+          </tr>
+          <tr>
+            <td>Market Bias, Trend Regime &amp; Volatility Context</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+          </tr>
+          <tr>
+            <td>S/R Zones, Pivot, Price Targets (TP1/TP2/TP3)</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+          </tr>
+          <tr>
+            <td>6 Indicators (RSI, MACD, ADX, CCI, Supertrend, Confluence)</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+          </tr>
+          <tr>
+            <td>Volume, Funding Rate &amp; OI Metrics</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+          </tr>
+          <tr>
+            <td>Session Context, Fear/Greed &amp; Trader Views</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+          </tr>
+          <tr>
+            <td>Signal History Archive</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+          </tr>
+          <tr>
+            <td>Chart Timeframes</td>
+            <td style="text-align:center; font-size:0.78rem; color:var(--ae-text-3); font-family:var(--ae-font-mono);">30m &amp; 1h</td>
+            <td style="text-align:center; font-size:0.78rem; color:var(--ae-buy); font-family:var(--ae-font-mono);">All 8 (1m→1w)</td>
+            <td style="text-align:center; font-size:0.78rem; color:var(--ae-gold); font-family:var(--ae-font-mono);">All 8 (1m→1w)</td>
+          </tr>
+
+          <tr><td colspan="4" class="ae-matrix-row-group">Signal Intelligence — Sentinel+</td></tr>
+
+          <tr>
+            <td>AI Conviction Label (HIGH / MEDIUM / LOW)</td>
+            <td class="mono" style="text-align:center; color:var(--ae-text-3);">–</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+          </tr>
+          <tr>
+            <td>Quality Score Badge</td>
+            <td class="mono" style="text-align:center; color:var(--ae-text-3);">–</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+          </tr>
+          <tr>
+            <td>Warning Chips (Fake Breakout, Volume, Regime, Funding)</td>
+            <td class="mono" style="text-align:center; color:var(--ae-text-3);">–</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+          </tr>
+          <tr>
+            <td>DON'T TRADE Composite Risk Banner</td>
+            <td class="mono" style="text-align:center; color:var(--ae-text-3);">–</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+          </tr>
+          <tr>
+            <td>Session-Priority Signal Sort</td>
+            <td class="mono" style="text-align:center; color:var(--ae-text-3);">–</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+          </tr>
+          <tr>
+            <td>Capital at Risk Calculator</td>
+            <td class="mono" style="text-align:center; color:var(--ae-text-3);">–</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+          </tr>
+          <tr>
+            <td>Portfolio Exposure Bar (LONG/SHORT Skew)</td>
+            <td class="mono" style="text-align:center; color:var(--ae-text-3);">–</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+          </tr>
+          <tr>
+            <td>Confluence Scorecard</td>
+            <td class="mono" style="text-align:center; color:var(--ae-text-3);">–</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+          </tr>
+          <tr>
+            <td>Per-Token Win-Rate History</td>
+            <td class="mono" style="text-align:center; color:var(--ae-text-3);">–</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+          </tr>
+          <tr>
+            <td>Live S/R Zone Tracking</td>
+            <td class="mono" style="text-align:center; color:var(--ae-text-3);">–</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+          </tr>
+
+          <tr><td colspan="4" class="ae-matrix-row-group">ML Model Stack — AEGIS Pro</td></tr>
+
+          <tr>
+            <td>
+              AI Fire Signal — Exact Entry, TP &amp; SL
+              <span class="ae-badge ae-badge-gold" style="margin-left:8px; font-size:0.6rem;">LIVE</span>
+            </td>
+            <td class="mono" style="text-align:center; color:var(--ae-text-3);">–</td>
+            <td class="mono" style="text-align:center; color:var(--ae-text-3);">–</td>
+            <td class="mono" style="text-align:center; color:var(--ae-gold);">✓</td>
+          </tr>
+          <tr>
+            <td>LSTM Predictions Panel (Continuation, Exhaustion, Volatility)</td>
+            <td class="mono" style="text-align:center; color:var(--ae-text-3);">–</td>
+            <td class="mono" style="text-align:center; color:var(--ae-text-3);">–</td>
+            <td class="mono" style="text-align:center; color:var(--ae-gold);">✓</td>
+          </tr>
+          <tr>
+            <td>HMM Deep Regime Panel (Stability, Transition Risk)</td>
+            <td class="mono" style="text-align:center; color:var(--ae-text-3);">–</td>
+            <td class="mono" style="text-align:center; color:var(--ae-text-3);">–</td>
+            <td class="mono" style="text-align:center; color:var(--ae-gold);">✓</td>
+          </tr>
+          <tr>
+            <td>Per-Token Deep Chart (WebSocket + 60k Candle History)</td>
+            <td class="mono" style="text-align:center; color:var(--ae-text-3);">–</td>
+            <td class="mono" style="text-align:center; color:var(--ae-text-3);">–</td>
+            <td class="mono" style="text-align:center; color:var(--ae-gold);">✓</td>
+          </tr>
+          <tr>
+            <td>Candle Close Timer per Timeframe</td>
+            <td class="mono" style="text-align:center; color:var(--ae-text-3);">–</td>
+            <td class="mono" style="text-align:center; color:var(--ae-text-3);">–</td>
+            <td class="mono" style="text-align:center; color:var(--ae-gold);">✓</td>
+          </tr>
+          <tr>
+            <td>Moonshot Mode — 1:5 R:R Setups</td>
+            <td class="mono" style="text-align:center; color:var(--ae-text-3);">–</td>
+            <td class="mono" style="text-align:center; color:var(--ae-text-3);">–</td>
+            <td class="mono" style="text-align:center; color:var(--ae-gold);">✓</td>
+          </tr>
+          <tr>
+            <td>Raw Model Probabilities &amp; SHAP Importance</td>
+            <td class="mono" style="text-align:center; color:var(--ae-text-3);">–</td>
+            <td class="mono" style="text-align:center; color:var(--ae-text-3);">–</td>
+            <td class="mono" style="text-align:center; color:var(--ae-gold);">✓</td>
+          </tr>
+          <tr>
+            <td>Personal API &amp; JSON Data Export</td>
+            <td class="mono" style="text-align:center; color:var(--ae-text-3);">–</td>
+            <td class="mono" style="text-align:center; color:var(--ae-text-3);">–</td>
+            <td class="mono" style="text-align:center; color:var(--ae-gold);">✓</td>
+          </tr>
+
+        </tbody>
+      </table>
+    </div>
+
+    <!-- AEGIS Promise -->
+    <div class="ae-card" style="margin-top: var(--s-6); max-width: 680px; margin-left:auto; margin-right:auto;">
+      <div class="ae-h3" style="margin-bottom: var(--s-3);">The AEGIS Promise</div>
+      <p style="font-size:0.88rem; color:var(--ae-text-2); line-height:1.7; margin:0;">
+        We don't just give signals. Every signal surfaces exactly how to enter, when to stay out, and which common retail traps to avoid — including fake breakouts and bad-regime setups the model flags in real time. No black box. No vague recommendations.
+      </p>
+    </div>
+
+    <!-- Developer code -->
+    <div id="devCodeSection">
+      <button id="devCodeToggle">
+        <i class="fas fa-key" style="font-size:0.72rem;"></i>
+        <span>Have a developer access code?</span>
+        <i id="devCodeChevron" class="fas fa-chevron-down" style="margin-left:auto; font-size:0.62rem; transition:transform 0.2s;"></i>
+      </button>
+      <div id="devCodeBody" style="display:none; margin-top: var(--s-4);">
+        <div style="display:flex; gap: var(--s-2);">
+          <input id="devCodeInput" type="text" placeholder="AEGIS-XXXX-XXXX-XXXX"
+            autocomplete="off" spellcheck="false" maxlength="22"
+            oninput="this.value=this.value.toUpperCase()">
+          <button id="devCodeSubmit">Redeem</button>
         </div>
-        <p>© 2026 AEGIS v1.0 — Sovereign Intelligence Terminal</p>
-    </footer>
+        <div id="devCodeMsg"></div>
+      </div>
+    </div>
 
-    <!-- Trial Countdown Display -->
-    <div class="trial-countdown" id="trialCountdown" data-trial-countdown style="display: none;"></div>
+  </div>
+</section>
 
-    <!-- SCRIPTS -->
-    <script type="module">
-        import { initSignInUI, openSignInModal } from '../scripts/signin-ui.js';
-        import { initSignUpUI, openSignUpModal } from '../scripts/signup-ui.js';
-        import { isUserAuthenticated, handleLogout, subscribeToAuthState } from '../scripts/auth.js';
-        import { subscribeToPlan } from '../scripts/simple-auth-client.js';
 
-        document.addEventListener('DOMContentLoaded', () => {
-            // Initialize auth UIs
-            initSignInUI();
-            initSignUpUI();
+<!-- ═══════════════════════════════════════
+     FOOTER
+     ═══════════════════════════════════════ -->
+<footer class="ae-footer">
+  <div class="ae-footer-grid">
+    <div>
+      <div class="ae-footer-brand">AEGIS v1.0</div>
+      <p class="ae-footer-desc">Operated by Animesh Kukreti &amp; Aman Juiyal, Dehradun, Uttarakhand, India.</p>
+    </div>
+    <div>
+      <div class="ae-footer-col-title">Platform</div>
+      <div class="ae-footer-links">
+        <a href="/web/src/pages/index.html" class="ae-footer-link">Home</a>
+        <a href="/web/src/pages/track-record.html" class="ae-footer-link">Track Record</a>
+        <a href="/web/src/pages/review.html" class="ae-footer-link">Reviews</a>
+      </div>
+    </div>
+    <div>
+      <div class="ae-footer-col-title">Legal</div>
+      <div class="ae-footer-links">
+        <a href="/web/src/pages/terms.html" class="ae-footer-link">Terms of Service</a>
+        <a href="/web/src/pages/conditions.html" class="ae-footer-link">Conditions</a>
+        <a href="/web/src/pages/privacy_policy.html" class="ae-footer-link">Privacy Policy</a>
+        <a href="/web/src/pages/refund_policy.html" class="ae-footer-link">Refund Policy</a>
+        <a href="/web/src/pages/risk_disclosure.html" class="ae-footer-link">Risk Disclosure</a>
+      </div>
+    </div>
+    <div>
+      <div class="ae-footer-col-title">Contact</div>
+      <div class="ae-footer-links">
+        <a href="mailto:animeshkukreti@gatekeeper.sbs" class="ae-footer-link">animeshkukreti@gatekeeper.sbs</a>
+      </div>
+    </div>
+  </div>
+  <div class="ae-footer-bottom">
+    <p class="ae-footer-legal">
+      AEGIS v1.0 is a signal-generation tool and does not constitute financial advice. Cryptocurrency trading involves substantial risk of loss. Past signal performance is not indicative of future results. By using this platform you confirm you have read and understood the Risk Disclosure.
+    </p>
+    <p style="font-size:0.72rem; color:var(--ae-text-4); white-space:nowrap;">© 2026 Animesh Kukreti &amp; Aman Juiyal</p>
+  </div>
+</footer>
 
-            // Localize Pricing — fetches live USD exchange rate from the backend
-            (async () => {
-                const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-                const isIndia = timeZone === 'Asia/Calcutta' || timeZone === 'Asia/Kolkata';
+<!-- Trial countdown anchor (populated by trial-countdown.js) -->
+<div id="trialCountdown" data-trial-countdown style="display:none;"></div>
 
-                // Determine display currency and symbol from timezone
-                const locale = navigator.language || 'en-US';
-                let displayCurrency = 'USD';
-                if (isIndia) displayCurrency = 'INR';
 
-                if (displayCurrency === 'USD') return; // USD prices already shown in HTML
+<!-- ═══════════════════════════════════════
+     SCRIPTS — preserved exactly from original
+     ═══════════════════════════════════════ -->
+<script type="module">
+    import { initSignInUI, openSignInModal } from '../scripts/signin-ui.js';
+    import { initSignUpUI, openSignUpModal } from '../scripts/signup-ui.js';
+    import { isUserAuthenticated, handleLogout, subscribeToAuthState } from '../scripts/auth.js';
+    import { subscribeToPlan } from '../scripts/simple-auth-client.js';
 
-                try {
-                    const resp = await fetch('/api/exchange-rates');
-                    if (!resp.ok) return;
-                    const data = await resp.json();
-                    const rate = data.rates?.[displayCurrency];
-                    const usd = data.plan_prices_usd;
-                    if (!rate || !usd) return;
+    document.addEventListener('DOMContentLoaded', () => {
+        initSignInUI();
+        initSignUpUI();
 
-                    const fmt = (usdPrice) => new Intl.NumberFormat(locale, {
-                        style: 'currency',
-                        currency: displayCurrency,
-                        maximumFractionDigits: 0,
-                    }).format(Math.round(usdPrice * rate));
+        // Localize Pricing — fetches live USD exchange rate from the backend
+        (async () => {
+            const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            const isIndia = timeZone === 'Asia/Calcutta' || timeZone === 'Asia/Kolkata';
+            const locale = navigator.language || 'en-US';
+            let displayCurrency = 'USD';
+            if (isIndia) displayCurrency = 'INR';
+            if (displayCurrency === 'USD') return;
 
-                    // All 3 price cards: Basic, Sentinel, AEGIS Pro
-                    const priceEls = document.querySelectorAll('.price');
-                    if (priceEls[0]) priceEls[0].innerHTML = fmt(usd.basic) + ' <span>/mo</span>';
-                    if (priceEls[1]) priceEls[1].innerHTML = fmt(usd.intermediate) + ' <span>/mo</span>';
-                    if (priceEls[2]) priceEls[2].innerHTML = fmt(usd.pro) + ' <span>/mo</span>';
+            try {
+                const resp = await fetch('/api/exchange-rates');
+                if (!resp.ok) return;
+                const data = await resp.json();
+                const rate = data.rates?.[displayCurrency];
+                const usd = data.plan_prices_usd;
+                if (!rate || !usd) return;
 
-                    document.querySelectorAll('th').forEach(th => {
-                        const text = th.textContent;
-                        if (text.includes('Basic')) th.innerHTML = `Basic<br><span style="font-size:0.7rem;font-weight:400;opacity:0.7;">${fmt(usd.basic)}/mo</span>`;
-                        else if (text.includes('Sentinel')) th.innerHTML = `Sentinel<br><span style="font-size:0.7rem;font-weight:400;opacity:0.7;">${fmt(usd.intermediate)}/mo</span>`;
-                        else if (text.includes('AEGIS Pro')) th.innerHTML = `AEGIS Pro<br><span style="font-size:0.7rem;font-weight:400;opacity:0.7;">${fmt(usd.pro)}/mo</span>`;
-                    });
-                } catch (_) {
-                    // silently keep USD prices if rate fetch fails
-                }
-            })();
+                const fmt = (usdPrice) => new Intl.NumberFormat(locale, {
+                    style: 'currency',
+                    currency: displayCurrency,
+                    maximumFractionDigits: 0,
+                }).format(Math.round(usdPrice * rate));
 
-            const portalBtn = document.getElementById('portalBtn');
-            const dashboardBtn = document.getElementById('dashboardBtn');
-            const signOutBtn = document.getElementById('signOutBtn');
-            const createAccountBtn = document.getElementById('createAccountBtn');
+                const priceEls = document.querySelectorAll('.price');
+                if (priceEls[0]) priceEls[0].innerHTML = fmt(usd.basic) + ' <span>/mo</span>';
+                if (priceEls[1]) priceEls[1].innerHTML = fmt(usd.intermediate) + ' <span>/mo</span>';
+                if (priceEls[2]) priceEls[2].innerHTML = fmt(usd.pro) + ' <span>/mo</span>';
 
-            const showElement = (el) => { if (el) el.style.display = 'inline-flex'; };
-            const hideElement = (el) => { if (el) el.style.display = 'none'; };
+                // Update matrix header prices
+                const basicTh = document.querySelector('.price-th-basic');
+                const sentinelTh = document.querySelector('.price-th-sentinel');
+                const proTh = document.querySelector('.price-th-pro');
+                if (basicTh) basicTh.textContent = fmt(usd.basic) + '/mo';
+                if (sentinelTh) sentinelTh.textContent = fmt(usd.intermediate) + '/mo';
+                if (proTh) proTh.textContent = fmt(usd.pro) + '/mo';
+            } catch (_) {
+                // silently keep USD prices if rate fetch fails
+            }
+        })();
 
-            let globalAuthState = false;
+        const portalBtn       = document.getElementById('portalBtn');
+        const dashboardBtn    = document.getElementById('dashboardBtn');
+        const signOutBtn      = document.getElementById('signOutBtn');
+        const createAccountBtn = document.getElementById('createAccountBtn');
 
-            // 1. Verify Auth State and 3. Header Sync
-            subscribeToAuthState((state) => {
-                globalAuthState = state.authenticated;
-                if (globalAuthState) {
-                    hideElement(portalBtn);
-                    hideElement(createAccountBtn);
-                    showElement(dashboardBtn);
-                    showElement(signOutBtn);
+        const showElement = (el) => { if (el) el.style.display = 'inline-flex'; };
+        const hideElement = (el) => { if (el) el.style.display = 'none'; };
+
+        let globalAuthState = false;
+
+        subscribeToAuthState((state) => {
+            globalAuthState = state.authenticated;
+            if (globalAuthState) {
+                hideElement(portalBtn); hideElement(createAccountBtn);
+                showElement(dashboardBtn); showElement(signOutBtn);
+            } else {
+                showElement(portalBtn); showElement(createAccountBtn);
+                hideElement(dashboardBtn); hideElement(signOutBtn);
+            }
+        });
+
+        if (portalBtn)       portalBtn.addEventListener('click', (e) => { e.preventDefault(); openSignInModal(); });
+        if (dashboardBtn)    dashboardBtn.addEventListener('click', (e) => { e.preventDefault(); window.location.href = '/web/src/pages/dashboard.html'; });
+        if (createAccountBtn) createAccountBtn.addEventListener('click', (e) => { e.preventDefault(); openSignUpModal(); });
+
+        if (signOutBtn) {
+            signOutBtn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                ['authToken','access_token','authenticated','userSession','refresh_token'].forEach(k => localStorage.removeItem(k));
+                try { await handleLogout(); } catch (err) { console.warn('Logout failed during sign out:', err); }
+                window.location.href = '/web/src/pages/index.html';
+            });
+        }
+
+        // Trial button
+        const trialBtn = document.getElementById('trialBtn');
+        const trialStatusMsg = document.getElementById('trialStatusMsg');
+
+        async function startTrialWithBackend() {
+            const token = localStorage.getItem('access_token') || localStorage.getItem('authToken');
+            if (!token) { openSignUpModal(); return; }
+
+            if (trialBtn) { trialBtn.disabled = true; trialBtn.textContent = 'Starting…'; }
+            if (trialStatusMsg) trialStatusMsg.textContent = '';
+
+            try {
+                const res = await fetch('/api/v1/trial/start', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+                });
+                const data = await res.json();
+
+                if (res.ok) {
+                    if (data.trial_end) {
+                        localStorage.setItem('trial_end_timestamp', data.trial_end);
+                    }
+                    if (trialStatusMsg) {
+                        trialStatusMsg.style.color = 'var(--ae-buy)';
+                        trialStatusMsg.textContent = '✓ ' + data.message;
+                    }
+                    setTimeout(() => { window.location.href = '/web/src/pages/dashboard.html'; }, 1200);
                 } else {
-                    showElement(portalBtn);
-                    showElement(createAccountBtn);
-                    hideElement(dashboardBtn);
-                    hideElement(signOutBtn);
+                    if (trialStatusMsg) { trialStatusMsg.style.color = 'var(--ae-sell)'; trialStatusMsg.textContent = data.detail || 'Could not start trial. Please try again.'; }
+                    if (trialBtn) { trialBtn.disabled = false; trialBtn.textContent = 'Try Free for 3 Days'; }
+                }
+            } catch (err) {
+                if (trialStatusMsg) { trialStatusMsg.style.color = 'var(--ae-sell)'; trialStatusMsg.textContent = 'Network error. Please try again.'; }
+                if (trialBtn) { trialBtn.disabled = false; trialBtn.textContent = 'Try Free for 3 Days'; }
+            }
+        }
+
+        if (trialBtn) {
+            trialBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (globalAuthState || isUserAuthenticated()) {
+                    startTrialWithBackend();
+                } else {
+                    window.pendingAction = 'startTrial';
+                    openSignUpModal();
                 }
             });
+        }
 
-            if (portalBtn) {
-                portalBtn.addEventListener('click', (e) => {
-                    e.preventDefault();
+        window.addEventListener('authStateChange', (ev) => {
+            if (!ev.detail?.authenticated) return;
+            if (window.pendingAction === 'startTrial') {
+                window.pendingAction = null;
+                startTrialWithBackend();
+            } else if (window.pendingPlan) {
+                const plan = window.pendingPlan;
+                window.pendingPlan = null;
+                subscribeToPlan(plan);
+            }
+        });
+
+        // Auto-start trial when redirected here after signup (?newUser=1)
+        (function autoStartTrialForNewUser() {
+            const _p = new URLSearchParams(window.location.search);
+            if (_p.get('newUser') !== '1') return;
+            if (globalAuthState || isUserAuthenticated()) {
+                startTrialWithBackend();
+            } else {
+                window.pendingAction = 'startTrial';
+            }
+        })();
+
+        // Plan buttons
+        document.querySelectorAll('[data-plan]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const plan = e.currentTarget.dataset.plan;
+                if (!isUserAuthenticated()) {
+                    window.pendingPlan = plan;
                     openSignInModal();
-                });
-            }
-
-            if (dashboardBtn) {
-                dashboardBtn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    window.location.href = '/web/src/pages/dashboard.html';
-                });
-            }
-
-            if (signOutBtn) {
-                signOutBtn.addEventListener('click', async (e) => {
-                    e.preventDefault();
-                    localStorage.removeItem('authToken');
-                    localStorage.removeItem('access_token');
-                    localStorage.removeItem('authenticated');
-                    localStorage.removeItem('userSession');
-                    localStorage.removeItem('refresh_token');
-                    try {
-                        await handleLogout();
-                    } catch (err) {
-                        console.warn('Logout failed during sign out:', err);
-                    }
-                    window.location.href = '/web/src/pages/index.html';
-                });
-            }
-
-            if (createAccountBtn) {
-                createAccountBtn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    openSignUpModal();
-                });
-            }
-
-            // Trial button — calls backend to register trial start
-            const trialBtn = document.getElementById('trialBtn');
-            const trialStatusMsg = document.getElementById('trialStatusMsg');
-
-            async function startTrialWithBackend() {
-                const token = localStorage.getItem('access_token') || localStorage.getItem('authToken');
-                if (!token) { openSignUpModal(); return; }
-
-                if (trialBtn) { trialBtn.disabled = true; trialBtn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:0.5rem;"></i>Starting…'; }
-                if (trialStatusMsg) trialStatusMsg.textContent = '';
-
-                try {
-                    const res = await fetch('/api/v1/trial/start', {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-                    });
-                    const data = await res.json();
-
-                    if (res.ok) {
-                        if (data.status === 'paid') {
-                            if (trialStatusMsg) trialStatusMsg.style.color = '#00ff88';
-                            if (trialStatusMsg) trialStatusMsg.textContent = '✅ ' + data.message;
-                        } else if (data.status === 'trial') {
-                            if (trialStatusMsg) trialStatusMsg.style.color = '#00f2ff';
-                            if (trialStatusMsg) trialStatusMsg.textContent = '✅ ' + data.message;
-                        }
-                        setTimeout(() => { window.location.href = '/web/src/pages/dashboard.html'; }, 1200);
-                    } else {
-                        if (trialStatusMsg) { trialStatusMsg.style.color = '#ff6464'; trialStatusMsg.textContent = data.detail || 'Could not start trial. Please try again.'; }
-                        if (trialBtn) { trialBtn.disabled = false; trialBtn.innerHTML = '<i class="fas fa-bolt" style="margin-right:0.5rem;"></i>Start Free Trial'; }
-                    }
-                } catch (err) {
-                    if (trialStatusMsg) { trialStatusMsg.style.color = '#ff6464'; trialStatusMsg.textContent = 'Network error. Please try again.'; }
-                    if (trialBtn) { trialBtn.disabled = false; trialBtn.innerHTML = '<i class="fas fa-bolt" style="margin-right:0.5rem;"></i>Start Free Trial'; }
-                }
-            }
-
-            if (trialBtn) {
-                trialBtn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    if (globalAuthState || isUserAuthenticated()) {
-                        startTrialWithBackend();
-                    } else {
-                        window.pendingAction = 'startTrial';
-                        openSignUpModal();
-                    }
-                });
-            }
-
-            // After sign-in/sign-up, resume pending action or plan purchase
-            window.addEventListener('authStateChange', (ev) => {
-                if (!ev.detail?.authenticated) return;
-                if (window.pendingAction === 'startTrial') {
-                    window.pendingAction = null;
-                    startTrialWithBackend();
-                } else if (window.pendingPlan) {
-                    const plan = window.pendingPlan;
-                    window.pendingPlan = null;
+                } else {
                     subscribeToPlan(plan);
                 }
             });
+        });
 
-            // Plan buttons
-            document.querySelectorAll('[data-plan]').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    const plan = e.currentTarget.dataset.plan;
-                    if (!isUserAuthenticated()) {
-                        window.pendingPlan = plan;
-                        openSignInModal();
-                    } else {
-                        subscribeToPlan(plan);
-                    }
-                });
+        window.addEventListener('openSignin', openSignInModal);
+        window.addEventListener('openSignup', openSignUpModal);
+
+        // Dev code widget
+        const devCodeToggle  = document.getElementById('devCodeToggle');
+        const devCodeBody    = document.getElementById('devCodeBody');
+        const devCodeChevron = document.getElementById('devCodeChevron');
+        const devCodeInput   = document.getElementById('devCodeInput');
+        const devCodeSubmit  = document.getElementById('devCodeSubmit');
+        const devCodeMsg     = document.getElementById('devCodeMsg');
+
+        if (devCodeToggle && devCodeBody) {
+            devCodeToggle.addEventListener('click', () => {
+                const open = devCodeBody.style.display === 'none';
+                devCodeBody.style.display = open ? 'block' : 'none';
+                if (devCodeChevron) devCodeChevron.style.transform = open ? 'rotate(180deg)' : '';
+                if (open && devCodeInput) devCodeInput.focus();
             });
+        }
 
-            // Listen for navigation events
-            window.addEventListener('openSignin', openSignInModal);
-            window.addEventListener('openSignup', openSignUpModal);
+        const SESSION_CODE_KEY = 'aegis_pending_devcode';
 
-            // Dev code widget
-            const devCodeToggle = document.getElementById('devCodeToggle');
-            const devCodeBody   = document.getElementById('devCodeBody');
-            const devCodeChevron = document.getElementById('devCodeChevron');
-            const devCodeInput  = document.getElementById('devCodeInput');
-            const devCodeSubmit = document.getElementById('devCodeSubmit');
-            const devCodeMsg    = document.getElementById('devCodeMsg');
+        function _redirectToDashboard() {
+            sessionStorage.removeItem(SESSION_CODE_KEY);
+            window.location.replace('/web/src/pages/dashboard.html');
+        }
 
-            if (devCodeToggle && devCodeBody) {
-                devCodeToggle.addEventListener('click', () => {
-                    const open = devCodeBody.style.display === 'none';
-                    devCodeBody.style.display = open ? 'block' : 'none';
-                    if (devCodeChevron) devCodeChevron.style.transform = open ? 'rotate(180deg)' : '';
-                    if (open && devCodeInput) devCodeInput.focus();
-                });
-            }
+        async function redeemDevCode() {
+            const code = (devCodeInput?.value || '').trim().toUpperCase();
+            if (!code) return;
 
-            const SESSION_CODE_KEY = 'aegis_pending_devcode';
+            sessionStorage.setItem(SESSION_CODE_KEY, code);
 
-            function _redirectToDashboard() {
-                // sessionStorage.clear so the code isn't re-submitted on back-navigation
-                sessionStorage.removeItem(SESSION_CODE_KEY);
-                // location.replace() is more reliable than href on iOS Safari
-                window.location.replace('/web/src/pages/dashboard.html');
-            }
-
-            async function redeemDevCode() {
-                const code = (devCodeInput?.value || '').trim().toUpperCase();
-                if (!code) return;
-
-                // Persist the code across page reloads (OAuth on mobile does a full reload)
-                sessionStorage.setItem(SESSION_CODE_KEY, code);
-
-                const token = localStorage.getItem('access_token') || localStorage.getItem('authToken');
-                if (!token) {
-                    window.pendingAction = 'redeemDevCode';
-                    if (devCodeMsg) {
-                        devCodeMsg.style.color = 'rgba(0,242,255,0.8)';
-                        devCodeMsg.textContent = 'Please sign in first — your code is saved and will be applied automatically.';
-                    }
-                    setTimeout(() => openSignInModal(), 400);
-                    return;
-                }
-
-                if (devCodeSubmit) { devCodeSubmit.disabled = true; devCodeSubmit.textContent = '…'; }
-                if (devCodeMsg) { devCodeMsg.style.color = 'rgba(255,255,255,0.5)'; devCodeMsg.textContent = 'Validating…'; }
-
-                try {
-                    const res = await fetch('/api/redeem-dev-code', {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ code })
-                    });
-                    const data = await res.json();
-
-                    if (res.ok) {
-                        const exp = data.expires_at ? new Date(data.expires_at).toLocaleDateString() : '';
-                        devCodeMsg.style.color = '#00ff88';
-                        // Show a tap-able fallback link for mobile browsers that block auto-redirects
-                        devCodeMsg.innerHTML = `✅ ${data.plan.toUpperCase()} access activated${exp ? ' until ' + exp : ''}.
-                            <a href="/web/src/pages/dashboard.html"
-                               style="color:#00f2ff;display:block;margin-top:0.5rem;font-weight:700;font-size:1rem;text-decoration:underline;">
-                               → Go to Dashboard
-                            </a>`;
-                        setTimeout(_redirectToDashboard, 1200);
-                    } else if (res.status === 401) {
-                        ['authToken','access_token','authenticated','userSession','refresh_token'].forEach(k => localStorage.removeItem(k));
-                        devCodeMsg.style.color = '#ff6464';
-                        devCodeMsg.textContent = 'Session expired. Please sign in again — your code is saved.';
-                        if (devCodeSubmit) { devCodeSubmit.disabled = false; devCodeSubmit.textContent = 'Redeem'; }
-                        window.pendingAction = 'redeemDevCode';
-                        setTimeout(() => openSignInModal(), 1000);
-                    } else {
-                        devCodeMsg.style.color = '#ff6464';
-                        devCodeMsg.textContent = '✗ ' + (data.detail || 'Could not redeem code. Please try again.');
-                        if (devCodeSubmit) { devCodeSubmit.disabled = false; devCodeSubmit.textContent = 'Redeem'; }
-                        sessionStorage.removeItem(SESSION_CODE_KEY);
-                    }
-                } catch (err) {
-                    devCodeMsg.style.color = '#ff6464';
-                    devCodeMsg.textContent = 'Network error. Please try again.';
-                    if (devCodeSubmit) { devCodeSubmit.disabled = false; devCodeSubmit.textContent = 'Redeem'; }
-                }
-            }
-
-            if (devCodeSubmit) devCodeSubmit.addEventListener('click', redeemDevCode);
-            if (devCodeInput) devCodeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') redeemDevCode(); });
-
-            // After OAuth page-reload on mobile: pick up the saved code and re-submit
-            window.addEventListener('authStateChange', (ev) => {
-                if (ev.detail?.authenticated) {
-                    const savedCode = sessionStorage.getItem(SESSION_CODE_KEY);
-                    if (savedCode && devCodeInput) {
-                        devCodeInput.value = savedCode;
-                        window.pendingAction = null;
-                        redeemDevCode();
-                    } else if (window.pendingAction === 'redeemDevCode') {
-                        window.pendingAction = null;
-                        redeemDevCode();
-                    }
-                }
-            });
-
-            // On page load: if a code was saved before a reload, auto-fill and show it
-            const _savedOnLoad = sessionStorage.getItem(SESSION_CODE_KEY);
-            if (_savedOnLoad && devCodeInput) {
-                devCodeInput.value = _savedOnLoad;
-                // Open the devcode section so the user sees the pre-filled field
-                if (devCodeBody && devCodeBody.style.display === 'none') {
-                    devCodeBody.style.display = 'block';
-                    if (devCodeChevron) devCodeChevron.style.transform = 'rotate(180deg)';
-                }
+            const token = localStorage.getItem('access_token') || localStorage.getItem('authToken');
+            if (!token) {
+                window.pendingAction = 'redeemDevCode';
                 if (devCodeMsg) {
-                    devCodeMsg.style.color = 'rgba(0,242,255,0.8)';
-                    devCodeMsg.textContent = 'Your code is ready — sign in to activate it.';
+                    devCodeMsg.style.color = 'var(--ae-data)';
+                    devCodeMsg.textContent = 'Please sign in first — your code is saved and will be applied automatically.';
+                }
+                setTimeout(() => openSignInModal(), 400);
+                return;
+            }
+
+            if (devCodeSubmit) { devCodeSubmit.disabled = true; devCodeSubmit.textContent = '…'; }
+            if (devCodeMsg) { devCodeMsg.style.color = 'var(--ae-text-3)'; devCodeMsg.textContent = 'Validating…'; }
+
+            try {
+                const res = await fetch('/api/redeem-dev-code', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code })
+                });
+                const data = await res.json();
+
+                if (res.ok) {
+                    const exp = data.expires_at ? new Date(data.expires_at).toLocaleDateString() : '';
+                    devCodeMsg.style.color = 'var(--ae-buy)';
+                    devCodeMsg.innerHTML = `✓ ${data.plan.toUpperCase()} access activated${exp ? ' until ' + exp : ''}.
+                        <a href="/web/src/pages/dashboard.html"
+                           style="color:var(--ae-data);display:block;margin-top:6px;font-weight:600;font-size:0.9rem;text-decoration:underline;">
+                           → Go to Dashboard
+                        </a>`;
+                    setTimeout(_redirectToDashboard, 1200);
+                } else if (res.status === 401) {
+                    ['authToken','access_token','authenticated','userSession','refresh_token'].forEach(k => localStorage.removeItem(k));
+                    devCodeMsg.style.color = 'var(--ae-sell)';
+                    devCodeMsg.textContent = 'Session expired. Please sign in again — your code is saved.';
+                    if (devCodeSubmit) { devCodeSubmit.disabled = false; devCodeSubmit.textContent = 'Redeem'; }
+                    window.pendingAction = 'redeemDevCode';
+                    setTimeout(() => openSignInModal(), 1000);
+                } else {
+                    devCodeMsg.style.color = 'var(--ae-sell)';
+                    devCodeMsg.textContent = '✗ ' + (data.detail || 'Could not redeem code. Please try again.');
+                    if (devCodeSubmit) { devCodeSubmit.disabled = false; devCodeSubmit.textContent = 'Redeem'; }
+                    sessionStorage.removeItem(SESSION_CODE_KEY);
+                }
+            } catch (err) {
+                devCodeMsg.style.color = 'var(--ae-sell)';
+                devCodeMsg.textContent = 'Network error. Please try again.';
+                if (devCodeSubmit) { devCodeSubmit.disabled = false; devCodeSubmit.textContent = 'Redeem'; }
+            }
+        }
+
+        if (devCodeSubmit) devCodeSubmit.addEventListener('click', redeemDevCode);
+        if (devCodeInput) devCodeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') redeemDevCode(); });
+
+        window.addEventListener('authStateChange', (ev) => {
+            if (ev.detail?.authenticated) {
+                const savedCode = sessionStorage.getItem(SESSION_CODE_KEY);
+                if (savedCode && devCodeInput) {
+                    devCodeInput.value = savedCode;
+                    window.pendingAction = null;
+                    redeemDevCode();
+                } else if (window.pendingAction === 'redeemDevCode') {
+                    window.pendingAction = null;
+                    redeemDevCode();
                 }
             }
         });
-    </script>
-    <!-- Lightweight server-backed login modal is injected by simple-auth-client.js -->
-    <script>
-    (function(){
-        var btn = document.getElementById('navHamburger');
-        var drawer = document.getElementById('navMobileDrawer');
-        if (!btn || !drawer) return;
 
-        function closeDrawer() {
-            drawer.classList.remove('open');
-            drawer.setAttribute('aria-hidden','true');
-            btn.setAttribute('aria-expanded','false');
-            var ico = btn.querySelector('i');
-            if (ico) ico.className = 'fas fa-bars';
+        const _savedOnLoad = sessionStorage.getItem(SESSION_CODE_KEY);
+        if (_savedOnLoad && devCodeInput) {
+            devCodeInput.value = _savedOnLoad;
+            if (devCodeBody && devCodeBody.style.display === 'none') {
+                devCodeBody.style.display = 'block';
+                if (devCodeChevron) devCodeChevron.style.transform = 'rotate(180deg)';
+            }
+            if (devCodeMsg) {
+                devCodeMsg.style.color = 'var(--ae-data)';
+                devCodeMsg.textContent = 'Your code is ready — sign in to activate it.';
+            }
         }
+    });
+</script>
 
-        btn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            var open = drawer.classList.toggle('open');
-            drawer.setAttribute('aria-hidden', !open);
-            btn.setAttribute('aria-expanded', open);
-            var ico = btn.querySelector('i');
-            if (ico) ico.className = open ? 'fas fa-times' : 'fas fa-bars';
-        });
+<!-- Hamburger + mobile drawer -->
+<script>
+(function(){
+    var btn    = document.getElementById('navHamburger');
+    var drawer = document.getElementById('navMobileDrawer');
+    if (!btn || !drawer) return;
 
-        document.addEventListener('click', function(e) {
-            if (!btn.contains(e.target) && !drawer.contains(e.target)) closeDrawer();
-        });
+    function closeDrawer() {
+        drawer.classList.remove('open');
+        drawer.setAttribute('aria-hidden','true');
+        btn.setAttribute('aria-expanded','false');
+        var ico = btn.querySelector('i');
+        if (ico) ico.className = 'fas fa-bars';
+    }
 
-        drawer.querySelectorAll('.nav-mobile-link').forEach(function(a) {
-            a.addEventListener('click', closeDrawer);
-        });
+    btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var open = drawer.classList.toggle('open');
+        drawer.setAttribute('aria-hidden', !open);
+        btn.setAttribute('aria-expanded', open);
+        var ico = btn.querySelector('i');
+        if (ico) ico.className = open ? 'fas fa-times' : 'fas fa-bars';
+    });
 
-        function proxyAuth(proxyId, targetId) {
-            var proxy = document.getElementById(proxyId);
-            var target = document.getElementById(targetId);
-            if (!proxy || !target) return;
-            proxy.style.display = target.style.display || '';
-            proxy.addEventListener('click', function() { closeDrawer(); target.click(); });
-            new MutationObserver(function() {
-                proxy.style.display = target.style.display;
-            }).observe(target, { attributes: true, attributeFilter: ['style'] });
-        }
+    document.addEventListener('click', function(e) {
+        if (!btn.contains(e.target) && !drawer.contains(e.target)) closeDrawer();
+    });
 
-        proxyAuth('mPortalProxy',  'portalBtn');
-        proxyAuth('mDashProxy',    'dashboardBtn');
-        proxyAuth('mSignoutProxy', 'signOutBtn');
-        proxyAuth('mCtaProxy',     'createAccountBtn');
-    })();
-    </script>
+    drawer.querySelectorAll('.ae-mobile-link').forEach(function(a) {
+        a.addEventListener('click', closeDrawer);
+    });
+
+    function proxyAuth(proxyId, targetId) {
+        var proxy  = document.getElementById(proxyId);
+        var target = document.getElementById(targetId);
+        if (!proxy || !target) return;
+        proxy.style.display = target.style.display || '';
+        proxy.addEventListener('click', function() { closeDrawer(); target.click(); });
+        new MutationObserver(function() {
+            proxy.style.display = target.style.display;
+        }).observe(target, { attributes: true, attributeFilter: ['style'] });
+    }
+
+    proxyAuth('mPortalProxy',  'portalBtn');
+    proxyAuth('mDashProxy',    'dashboardBtn');
+    proxyAuth('mSignoutProxy', 'signOutBtn');
+    proxyAuth('mCtaProxy',     'createAccountBtn');
+}());
+</script>
+
 </body>
-
 </html>

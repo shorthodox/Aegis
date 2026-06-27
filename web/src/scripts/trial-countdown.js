@@ -499,7 +499,11 @@ const TrialManager = (() => {
       } else if (trialInfo?.expired) {
         element.innerHTML = `
           <i class="fas fa-exclamation-triangle"></i>
-          Trial Expired - Upgrade to continue
+          Trial Expired &mdash;
+          <a href="/web/src/pages/pricing.html"
+             style="color:#00f2ff;font-weight:700;margin-left:6px;text-decoration:none;white-space:nowrap;">
+            Get a Plan &rarr;
+          </a>
         `;
         element.style.display = 'block';
         element.style.background = 'rgba(255, 0, 85, 0.2)';

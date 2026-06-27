@@ -1,0 +1,1060 @@
+/* ==========================================================================
+   AEGIS — Institutional Design System
+   Restrained. Precise. Data-credible.
+   ==========================================================================
+   F-pattern reading flow: strong left anchor, horizontal scan, downward trail.
+   Compositional hierarchy: size → weight → color → position → whitespace.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   0. Fonts
+   -------------------------------------------------------------------------- */
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* --------------------------------------------------------------------------
+   1. Design Tokens
+   -------------------------------------------------------------------------- */
+:root {
+  /* Base surfaces — layered depth without glow */
+  --ae-void:      #090B0E;
+  --ae-base:      #0C0F13;
+  --ae-surface:   #101419;
+  --ae-raised:    #151A20;
+  --ae-overlay:   #1A2028;
+
+  /* Borders — hairline hierarchy */
+  --ae-border-dim:    rgba(255,255,255,0.04);
+  --ae-border:        rgba(255,255,255,0.07);
+  --ae-border-mid:    rgba(255,255,255,0.11);
+  --ae-border-bright: rgba(255,255,255,0.18);
+
+  /* Typography — warm, not cold white */
+  --ae-text-1:  #EAE6DF;   /* primary — warm off-white */
+  --ae-text-2:  #7C8290;   /* secondary */
+  --ae-text-3:  #454B57;   /* tertiary / placeholder */
+  --ae-text-4:  #2A2F38;   /* disabled */
+
+  /* Accent — single warm gold, used sparingly */
+  --ae-gold:      #B8966A;
+  --ae-gold-dim:  rgba(184,150,106,0.08);
+  --ae-gold-mid:  rgba(184,150,106,0.18);
+
+  /* Signal colors — institutional muted tones, not neon */
+  --ae-buy:       #4A7C68;
+  --ae-buy-bg:    rgba(74,124,104,0.10);
+  --ae-buy-border:rgba(74,124,104,0.22);
+  --ae-sell:      #7A4040;
+  --ae-sell-bg:   rgba(122,64,64,0.10);
+  --ae-sell-border:rgba(122,64,64,0.22);
+  --ae-hold:      #4A5060;
+  --ae-hold-bg:   rgba(74,80,96,0.10);
+
+  /* Data blue — for live indicators, restrained */
+  --ae-data:      #4A8FAB;
+  --ae-data-bg:   rgba(74,143,171,0.08);
+
+  /* Typography scale */
+  --ae-font-serif: 'DM Serif Display', Georgia, serif;
+  --ae-font-sans:  'Inter', system-ui, sans-serif;
+  --ae-font-mono:  'JetBrains Mono', 'IBM Plex Mono', monospace;
+
+  /* Spacing scale (4px base) */
+  --s-1:  4px;
+  --s-2:  8px;
+  --s-3:  12px;
+  --s-4:  16px;
+  --s-5:  24px;
+  --s-6:  32px;
+  --s-7:  48px;
+  --s-8:  64px;
+  --s-9:  96px;
+  --s-10: 128px;
+
+  /* Layout */
+  --ae-max:    1160px;
+  --ae-radius: 4px;
+  --ae-radius-md: 8px;
+
+  /* Transitions */
+  --ae-ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --ae-fast: 120ms;
+  --ae-mid:  220ms;
+}
+
+/* --------------------------------------------------------------------------
+   2. Reset & Base
+   -------------------------------------------------------------------------- */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  scroll-behavior: smooth;
+}
+
+body.ae-body {
+  background-color: var(--ae-base);
+  color: var(--ae-text-1);
+  font-family: var(--ae-font-sans);
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.65;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* --------------------------------------------------------------------------
+   3. Typography — Strict 3-size rule per section
+   -------------------------------------------------------------------------- */
+
+/* Display — hero headlines */
+.ae-display {
+  font-family: var(--ae-font-serif);
+  font-size: clamp(2.8rem, 6vw, 5.2rem);
+  font-weight: 400;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: var(--ae-text-1);
+}
+
+/* Section headline */
+.ae-h2 {
+  font-family: var(--ae-font-serif);
+  font-size: clamp(1.6rem, 3vw, 2.4rem);
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  color: var(--ae-text-1);
+}
+
+/* Sub-headline / card title */
+.ae-h3 {
+  font-family: var(--ae-font-sans);
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ae-text-1);
+}
+
+/* Eyebrow label */
+.ae-eyebrow {
+  display: inline-block;
+  font-family: var(--ae-font-mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ae-gold);
+  margin-bottom: var(--s-5);
+}
+
+/* Body */
+.ae-body-text {
+  font-size: 1rem;
+  line-height: 1.75;
+  color: var(--ae-text-2);
+  max-width: 56ch;
+}
+
+/* Mono — for numbers, tickers, data */
+.ae-mono {
+  font-family: var(--ae-font-mono);
+  font-size: 0.9em;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.ae-mono-sm {
+  font-family: var(--ae-font-mono);
+  font-size: 0.78rem;
+  font-weight: 400;
+}
+
+/* Caption */
+.ae-caption {
+  font-size: 0.75rem;
+  color: var(--ae-text-3);
+  line-height: 1.5;
+}
+
+/* --------------------------------------------------------------------------
+   4. Navigation
+   -------------------------------------------------------------------------- */
+.ae-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 900;
+  background: rgba(12, 15, 19, 0.92);
+  backdrop-filter: blur(20px) saturate(120%);
+  -webkit-backdrop-filter: blur(20px) saturate(120%);
+  border-bottom: 1px solid var(--ae-border);
+  height: 60px;
+}
+
+.ae-nav-inner {
+  max-width: var(--ae-max);
+  margin: 0 auto;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--s-5);
+  gap: var(--s-6);
+}
+
+.ae-brand {
+  font-family: var(--ae-font-mono);
+  font-size: 0.85rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ae-text-1);
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.ae-brand span {
+  color: var(--ae-gold);
+}
+
+.ae-nav-links {
+  display: flex;
+  align-items: center;
+  gap: var(--s-6);
+}
+
+.ae-nav-link {
+  font-size: 0.82rem;
+  font-weight: 400;
+  color: var(--ae-text-2);
+  text-decoration: none;
+  letter-spacing: 0.01em;
+  transition: color var(--ae-fast) var(--ae-ease);
+  white-space: nowrap;
+}
+
+.ae-nav-link:hover {
+  color: var(--ae-text-1);
+}
+
+.ae-nav-link.active {
+  color: var(--ae-text-1);
+}
+
+.ae-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  flex-shrink: 0;
+}
+
+/* --------------------------------------------------------------------------
+   5. Buttons — restrained, precise
+   -------------------------------------------------------------------------- */
+
+/* Primary — gold accent, never glowing */
+.ae-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-family: var(--ae-font-sans);
+  font-size: 0.82rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  border: none;
+  border-radius: var(--ae-radius);
+  cursor: pointer;
+  transition: background-color var(--ae-fast) var(--ae-ease),
+              color var(--ae-fast) var(--ae-ease),
+              border-color var(--ae-fast) var(--ae-ease),
+              opacity var(--ae-fast) var(--ae-ease);
+  white-space: nowrap;
+}
+
+.ae-btn-sm  { padding: 6px 14px; }
+.ae-btn-md  { padding: 10px 20px; }
+.ae-btn-lg  { padding: 13px 28px; font-size: 0.88rem; }
+
+.ae-btn-primary {
+  background: var(--ae-gold);
+  color: #0B0D10;
+  border: 1px solid var(--ae-gold);
+}
+.ae-btn-primary:hover {
+  background: #C9A87A;
+  border-color: #C9A87A;
+}
+
+.ae-btn-outline {
+  background: transparent;
+  color: var(--ae-text-1);
+  border: 1px solid var(--ae-border-mid);
+}
+.ae-btn-outline:hover {
+  border-color: var(--ae-border-bright);
+  background: var(--ae-raised);
+}
+
+.ae-btn-ghost {
+  background: transparent;
+  color: var(--ae-text-2);
+  border: 1px solid transparent;
+  padding-left: 0;
+  padding-right: 0;
+}
+.ae-btn-ghost:hover {
+  color: var(--ae-text-1);
+}
+
+.ae-btn-ghost-arrow::after {
+  content: ' →';
+  font-family: var(--ae-font-sans);
+}
+
+.ae-btn[disabled],
+.ae-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* --------------------------------------------------------------------------
+   6. Layout Utilities
+   -------------------------------------------------------------------------- */
+.ae-container {
+  max-width: var(--ae-max);
+  margin: 0 auto;
+  padding: 0 var(--s-5);
+}
+
+.ae-section {
+  padding: var(--s-9) 0;
+}
+
+.ae-section-sm {
+  padding: var(--s-7) 0;
+}
+
+.ae-divider {
+  border: none;
+  border-top: 1px solid var(--ae-border);
+  margin: 0;
+}
+
+.ae-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-5);
+}
+
+.ae-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s-5);
+}
+
+.ae-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--s-4);
+}
+
+/* --------------------------------------------------------------------------
+   7. Cards
+   -------------------------------------------------------------------------- */
+.ae-card {
+  background: var(--ae-surface);
+  border: 1px solid var(--ae-border);
+  border-radius: var(--ae-radius-md);
+  padding: var(--s-6);
+  transition: border-color var(--ae-mid) var(--ae-ease),
+              background-color var(--ae-mid) var(--ae-ease);
+}
+
+.ae-card:hover {
+  border-color: var(--ae-border-mid);
+  background: var(--ae-raised);
+}
+
+.ae-card-sm {
+  padding: var(--s-5);
+}
+
+/* --------------------------------------------------------------------------
+   8. Signal Cards — data hierarchy component
+   -------------------------------------------------------------------------- */
+.ae-signal-card {
+  background: var(--ae-surface);
+  border: 1px solid var(--ae-border);
+  border-radius: var(--ae-radius-md);
+  overflow: hidden;
+  transition: border-color var(--ae-mid) var(--ae-ease);
+}
+
+.ae-signal-card:hover {
+  border-color: var(--ae-border-mid);
+}
+
+.ae-signal-card.buy {
+  border-top: 2px solid var(--ae-buy);
+}
+
+.ae-signal-card.sell {
+  border-top: 2px solid var(--ae-sell);
+}
+
+.ae-signal-card.hold {
+  border-top: 2px solid var(--ae-hold);
+}
+
+.ae-signal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--s-4) var(--s-5);
+  border-bottom: 1px solid var(--ae-border-dim);
+}
+
+.ae-signal-pair {
+  font-family: var(--ae-font-mono);
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--ae-text-1);
+  letter-spacing: 0.02em;
+}
+
+.ae-signal-pair span {
+  color: var(--ae-text-3);
+  font-weight: 400;
+}
+
+.ae-signal-body {
+  padding: var(--s-4) var(--s-5);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-3);
+}
+
+.ae-signal-datum {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ae-signal-datum-label {
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ae-text-3);
+}
+
+.ae-signal-datum-value {
+  font-family: var(--ae-font-mono);
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: var(--ae-text-1);
+}
+
+.ae-signal-footer {
+  padding: var(--s-3) var(--s-5);
+  border-top: 1px solid var(--ae-border-dim);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(0,0,0,0.12);
+}
+
+.ae-signal-regime {
+  font-family: var(--ae-font-mono);
+  font-size: 0.68rem;
+  color: var(--ae-text-3);
+  letter-spacing: 0.04em;
+}
+
+.ae-signal-time {
+  font-size: 0.72rem;
+  color: var(--ae-text-3);
+}
+
+/* --------------------------------------------------------------------------
+   9. Badges
+   -------------------------------------------------------------------------- */
+.ae-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  font-family: var(--ae-font-mono);
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 2px;
+  border: 1px solid;
+}
+
+.ae-badge-buy {
+  color: var(--ae-buy);
+  background: var(--ae-buy-bg);
+  border-color: var(--ae-buy-border);
+}
+
+.ae-badge-sell {
+  color: var(--ae-sell);
+  background: var(--ae-sell-bg);
+  border-color: var(--ae-sell-border);
+}
+
+.ae-badge-hold {
+  color: var(--ae-hold);
+  background: var(--ae-hold-bg);
+  border-color: rgba(74,80,96,0.22);
+}
+
+.ae-badge-live {
+  color: var(--ae-data);
+  background: var(--ae-data-bg);
+  border-color: rgba(74,143,171,0.22);
+}
+
+.ae-badge-gold {
+  color: var(--ae-gold);
+  background: var(--ae-gold-dim);
+  border-color: var(--ae-gold-mid);
+}
+
+/* Live pulse indicator */
+.ae-live-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ae-buy);
+  flex-shrink: 0;
+  animation: ae-pulse 2.4s ease infinite;
+}
+
+@keyframes ae-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* --------------------------------------------------------------------------
+   10. Data Tables
+   -------------------------------------------------------------------------- */
+.ae-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--ae-border);
+  border-radius: var(--ae-radius-md);
+}
+
+.ae-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.ae-table thead {
+  border-bottom: 1px solid var(--ae-border);
+}
+
+.ae-table thead th {
+  padding: var(--s-3) var(--s-4);
+  text-align: left;
+  font-family: var(--ae-font-mono);
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ae-text-3);
+  white-space: nowrap;
+  background: var(--ae-surface);
+}
+
+.ae-table tbody tr {
+  border-bottom: 1px solid var(--ae-border-dim);
+  transition: background var(--ae-fast) var(--ae-ease);
+}
+
+.ae-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.ae-table tbody tr:hover {
+  background: var(--ae-raised);
+}
+
+.ae-table td {
+  padding: var(--s-3) var(--s-4);
+  color: var(--ae-text-2);
+  vertical-align: middle;
+}
+
+.ae-table td.mono {
+  font-family: var(--ae-font-mono);
+  font-size: 0.82rem;
+  color: var(--ae-text-1);
+}
+
+/* --------------------------------------------------------------------------
+   11. Stats / KPI Block
+   -------------------------------------------------------------------------- */
+.ae-stat-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+
+.ae-stat-number {
+  font-family: var(--ae-font-mono);
+  font-size: clamp(1.8rem, 3.5vw, 2.6rem);
+  font-weight: 500;
+  color: var(--ae-text-1);
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.ae-stat-label {
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ae-text-3);
+}
+
+.ae-stat-note {
+  font-size: 0.72rem;
+  color: var(--ae-text-3);
+  font-family: var(--ae-font-mono);
+}
+
+/* --------------------------------------------------------------------------
+   12. Inputs / Forms
+   -------------------------------------------------------------------------- */
+.ae-input {
+  width: 100%;
+  background: var(--ae-surface);
+  border: 1px solid var(--ae-border);
+  border-radius: var(--ae-radius);
+  color: var(--ae-text-1);
+  font-family: var(--ae-font-sans);
+  font-size: 0.9rem;
+  padding: 10px 14px;
+  outline: none;
+  transition: border-color var(--ae-fast) var(--ae-ease);
+}
+
+.ae-input::placeholder {
+  color: var(--ae-text-4);
+}
+
+.ae-input:focus {
+  border-color: var(--ae-border-bright);
+  background: var(--ae-raised);
+}
+
+.ae-label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--ae-text-2);
+  margin-bottom: var(--s-2);
+}
+
+.ae-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin-bottom: var(--s-5);
+}
+
+/* --------------------------------------------------------------------------
+   13. Pricing Cards
+   -------------------------------------------------------------------------- */
+.ae-price-card {
+  background: var(--ae-surface);
+  border: 1px solid var(--ae-border);
+  border-radius: var(--ae-radius-md);
+  padding: var(--s-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+  transition: border-color var(--ae-mid) var(--ae-ease);
+  position: relative;
+}
+
+.ae-price-card:hover {
+  border-color: var(--ae-border-mid);
+}
+
+.ae-price-card.featured {
+  border-color: var(--ae-gold-mid);
+  background: var(--ae-raised);
+}
+
+.ae-price-card.featured::before {
+  content: 'RECOMMENDED';
+  position: absolute;
+  top: -1px;
+  left: var(--s-6);
+  font-family: var(--ae-font-mono);
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  padding: 3px 10px;
+  background: var(--ae-gold);
+  color: #0B0D10;
+  border-radius: 0 0 4px 4px;
+}
+
+.ae-price-tier {
+  font-family: var(--ae-font-mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ae-text-3);
+}
+
+.ae-price-value {
+  font-family: var(--ae-font-mono);
+  font-size: 2.4rem;
+  font-weight: 500;
+  color: var(--ae-text-1);
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.ae-price-value span {
+  font-size: 0.9rem;
+  font-weight: 400;
+  color: var(--ae-text-3);
+}
+
+.ae-price-desc {
+  font-size: 0.85rem;
+  color: var(--ae-text-2);
+  line-height: 1.6;
+}
+
+.ae-feature-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  flex: 1;
+}
+
+.ae-feature-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+  font-size: 0.85rem;
+  color: var(--ae-text-2);
+  line-height: 1.5;
+}
+
+.ae-feature-list li::before {
+  content: '';
+  display: block;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  margin-top: 2px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M2.5 8.5l4 4 7-8' stroke='%23B8966A' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+
+.ae-feature-list li.locked {
+  opacity: 0.38;
+}
+
+.ae-feature-list li.locked::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'%3E%3Crect x='3' y='7' width='10' height='8' rx='1' stroke='%23454B57' stroke-width='1.2'/%3E%3Cpath d='M5 7V5a3 3 0 1 1 6 0v2' stroke='%23454B57' stroke-width='1.2'/%3E%3C/svg%3E");
+}
+
+/* --------------------------------------------------------------------------
+   14. Section Dividers / Annotation Lines
+   -------------------------------------------------------------------------- */
+.ae-rule {
+  display: flex;
+  align-items: center;
+  gap: var(--s-5);
+  margin-bottom: var(--s-7);
+}
+
+.ae-rule-line {
+  flex: 1;
+  height: 1px;
+  background: var(--ae-border);
+}
+
+.ae-rule-label {
+  font-family: var(--ae-font-mono);
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ae-text-3);
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------------------
+   15. Footer
+   -------------------------------------------------------------------------- */
+.ae-footer {
+  border-top: 1px solid var(--ae-border);
+  padding: var(--s-8) 0 var(--s-6);
+  margin-top: 0;
+}
+
+.ae-footer-grid {
+  max-width: var(--ae-max);
+  margin: 0 auto;
+  padding: 0 var(--s-5);
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: var(--s-7);
+}
+
+.ae-footer-brand {
+  font-family: var(--ae-font-mono);
+  font-size: 0.85rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ae-text-1);
+  margin-bottom: var(--s-4);
+}
+
+.ae-footer-desc {
+  font-size: 0.82rem;
+  color: var(--ae-text-3);
+  line-height: 1.7;
+  max-width: 28ch;
+}
+
+.ae-footer-col-title {
+  font-family: var(--ae-font-mono);
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ae-text-3);
+  margin-bottom: var(--s-4);
+}
+
+.ae-footer-links {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.ae-footer-link {
+  font-size: 0.82rem;
+  color: var(--ae-text-2);
+  text-decoration: none;
+  transition: color var(--ae-fast) var(--ae-ease);
+}
+
+.ae-footer-link:hover {
+  color: var(--ae-text-1);
+}
+
+.ae-footer-bottom {
+  max-width: var(--ae-max);
+  margin: var(--s-6) auto 0;
+  padding: var(--s-5) var(--s-5) 0;
+  border-top: 1px solid var(--ae-border-dim);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-5);
+}
+
+.ae-footer-legal {
+  font-size: 0.72rem;
+  color: var(--ae-text-3);
+  line-height: 1.7;
+  max-width: 72ch;
+}
+
+/* --------------------------------------------------------------------------
+   16. Methodology Steps
+   -------------------------------------------------------------------------- */
+.ae-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  padding-top: var(--s-5);
+  border-top: 1px solid var(--ae-border);
+  position: relative;
+}
+
+.ae-step-index {
+  font-family: var(--ae-font-mono);
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  color: var(--ae-text-3);
+}
+
+.ae-step-title {
+  font-family: var(--ae-font-sans);
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--ae-text-1);
+  letter-spacing: 0.01em;
+}
+
+.ae-step-body {
+  font-size: 0.82rem;
+  color: var(--ae-text-2);
+  line-height: 1.7;
+}
+
+/* --------------------------------------------------------------------------
+   17. Toast / Notification
+   -------------------------------------------------------------------------- */
+.ae-toast {
+  position: fixed;
+  bottom: var(--s-6);
+  right: var(--s-6);
+  z-index: 9999;
+  background: var(--ae-raised);
+  border: 1px solid var(--ae-border-mid);
+  border-radius: var(--ae-radius-md);
+  padding: var(--s-4) var(--s-5);
+  max-width: 340px;
+  font-size: 0.85rem;
+  color: var(--ae-text-1);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+  animation: ae-toast-in 220ms var(--ae-ease) both;
+}
+
+@keyframes ae-toast-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* --------------------------------------------------------------------------
+   18. Dashboard variable overrides — non-breaking layer
+   -------------------------------------------------------------------------- */
+body.dashboard-body {
+  --bg-deep:      var(--ae-void);
+  --bg-void:      var(--ae-base);
+  --glass-bg:     var(--ae-surface);
+  --glass-border: var(--ae-border);
+  --primary-cyan: var(--ae-data);
+  --neon-blue:    var(--ae-data);
+  --text-white:   var(--ae-text-1);
+  --text-dim:     var(--ae-text-2);
+  --success-green:var(--ae-buy);
+  --danger-red:   var(--ae-sell);
+  --warning-orange:var(--ae-gold);
+  background-color: var(--ae-void);
+}
+
+/* Tighten the dashboard's glowing elements without breaking functionality */
+body.dashboard-body .hud-glow {
+  text-shadow: none;
+}
+
+body.dashboard-body .glass-panel {
+  background: var(--ae-surface);
+  border-color: var(--ae-border);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+/* --------------------------------------------------------------------------
+   19. Responsive
+   -------------------------------------------------------------------------- */
+@media (max-width: 1024px) {
+  .ae-footer-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: var(--s-6);
+  }
+  .ae-grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .ae-nav-links { display: none; }
+  .ae-grid-2,
+  .ae-grid-3,
+  .ae-grid-4 {
+    grid-template-columns: 1fr;
+  }
+  .ae-display {
+    font-size: 2.6rem;
+  }
+  .ae-section { padding: var(--s-8) 0; }
+  .ae-footer-grid {
+    grid-template-columns: 1fr;
+    gap: var(--s-5);
+  }
+  .ae-footer-bottom {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 480px) {
+  .ae-container { padding: 0 var(--s-4); }
+  .ae-nav-inner { padding: 0 var(--s-4); }
+  .ae-display { font-size: 2.2rem; }
+  .ae-price-card.featured::before { font-size: 0.58rem; }
+}
+
+/* --------------------------------------------------------------------------
+   20. Utility Classes
+   -------------------------------------------------------------------------- */
+.ae-text-gold  { color: var(--ae-gold); }
+.ae-text-buy   { color: var(--ae-buy); }
+.ae-text-sell  { color: var(--ae-sell); }
+.ae-text-data  { color: var(--ae-data); }
+.ae-text-muted { color: var(--ae-text-2); }
+.ae-text-dim   { color: var(--ae-text-3); }
+
+.ae-bg-surface { background: var(--ae-surface); }
+.ae-bg-raised  { background: var(--ae-raised); }
+
+.ae-border-box { border: 1px solid var(--ae-border); border-radius: var(--ae-radius-md); }
+
+.ae-mt-auto { margin-top: auto; }
+.ae-flex     { display: flex; }
+.ae-flex-col { display: flex; flex-direction: column; }
+.ae-items-center { align-items: center; }
+.ae-justify-between { justify-content: space-between; }
+.ae-gap-1 { gap: var(--s-1); }
+.ae-gap-2 { gap: var(--s-2); }
+.ae-gap-3 { gap: var(--s-3); }
+.ae-gap-4 { gap: var(--s-4); }
+.ae-gap-5 { gap: var(--s-5); }
+.ae-gap-6 { gap: var(--s-6); }
+
+.ae-pt-nav { padding-top: 60px; }  /* Offset for fixed nav */
+
+/* Hairline separator */
+.ae-hairline {
+  width: 100%;
+  height: 1px;
+  background: var(--ae-border);
+}
