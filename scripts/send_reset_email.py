@@ -56,21 +56,45 @@ def generate_reset_link(email: str) -> str:
 
 def send_email(email: str, link: str):
     from_email = os.getenv("FROM_EMAIL", "noreply@example.com")
+    company_name = os.getenv("BRAND_NAME", "Your Company")
+    logo_url = os.getenv("LOGO_URL", "https://example.com/logo.png")
+    support_email = os.getenv("SUPPORT_EMAIL", from_email)
 
     html = f"""
     <html>
-      <body style="font-family:Arial,Helvetica,sans-serif;color:#111;margin:0;padding:0;">
-        <div style="max-width:600px;margin:0 auto;padding:24px;">
-          <img src="https://example.com/logo.png" alt="Logo" style="height:48px;margin-bottom:12px;">
-          <h2 style="color:#0b5cff;margin:8px 0;">Reset your password</h2>
-          <p style="color:#333;">We received a request to reset the password for this account.</p>
-          <p style="text-align:center;margin:28px 0;">
-            <a href="{link}" style="background:#0b5cff;color:#fff;padding:12px 20px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:600;">Reset password</a>
-          </p>
-          <p style="font-size:13px;color:#666;">If you didn't request this, you can safely ignore this email.</p>
-          <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
-          <p style="font-size:12px;color:#999;">Sent by Your Company</p>
-        </div>
+      <body style="margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;background:#f4f7fb;color:#33475b;">
+        <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+          <tr>
+            <td align="center" style="padding:24px 0;">
+              <table width="600" cellpadding="0" cellspacing="0" role="presentation" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 20px 60px rgba(22, 48, 86, 0.09);">
+                <tr>
+                  <td style="padding:32px 40px 24px;text-align:center;background:#0b5cff;">
+                    <img src="{logo_url}" alt="{company_name}" width="120" style="display:block;margin:0 auto 16px;" />
+                    <h1 style="margin:0;font-size:24px;line-height:1.2;color:#ffffff;">Reset Your Password</h1>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:32px 40px 24px;">
+                    <p style="margin:0 0 18px;font-size:16px;line-height:1.7;color:#33475b;">Hi,</p>
+                    <p style="margin:0 0 24px;font-size:16px;line-height:1.7;color:#33475b;">We received a request to reset the password for your {company_name} account associated with <strong>{email}</strong>. Click the button below to choose a new password.</p>
+                    <p style="text-align:center;margin:0 0 30px;">
+                      <a href="{link}" style="background:#0b5cff;color:#ffffff;text-decoration:none;padding:14px 24px;border-radius:10px;display:inline-block;font-size:16px;font-weight:600;">Reset your password</a>
+                    </p>
+                    <p style="margin:0 0 20px;font-size:14px;line-height:1.7;color:#667085;">If the button does not work, copy and paste the link below into your browser:</p>
+                    <p style="word-break:break-all;font-size:14px;color:#0b5cff;"><a href="{link}" style="color:#0b5cff;text-decoration:none;">{link}</a></p>
+                    <p style="margin:24px 0 0;font-size:14px;line-height:1.7;color:#667085;">If you did not request a password reset, you can safely ignore this email. The link will expire shortly for your security.</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:0 40px 32px;border-top:1px solid #e9edf5;">
+                    <p style="margin:0;font-size:13px;line-height:1.6;color:#8492a6;">Need help? Contact us at <a href="mailto:{support_email}" style="color:#0b5cff;text-decoration:none;">{support_email}</a>.</p>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:20px 0 0;font-size:13px;color:#8492a6;">{company_name} • Secure account notifications</p>
+            </td>
+          </tr>
+        </table>
       </body>
     </html>
     """
@@ -84,21 +108,18 @@ def send_email(email: str, link: str):
 
     if not smtp_host:
         raise RuntimeError("SMTP_HOST not set. Cannot send email")
-    smtp_host = os.getenv("SMTP_HOST")
-    smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    smtp_user = os.getenv("SMTP_USER")
-    smtp_pass = os.getenv("SMTP_PASS")
-    use_tls = os.getenv("SMTP_USE_TLS", "true").lower() in ("1", "true", "yes")
-    use_ssl = os.getenv("SMTP_SSL", "false").lower() in ("1", "true", "yes")
-
-    if not smtp_host:
-        raise RuntimeError("SMTP_HOST not set. Cannot send email")
 
     msg = EmailMessage()
-    msg["Subject"] = "Reset your password"
+    msg["Subject"] = f"{company_name} password reset request"
     msg["From"] = from_email
     msg["To"] = email
-    msg.set_content("Reset your password: " + link)
+    msg.set_content(
+        f"Hi,\n\nWe received a request to reset the password for your {company_name} account. "
+        f"Use the link below to choose a new password:\n\n{link}\n\n"
+        "If you did not request this, you can ignore this email.\n\n"
+        f"Need help? Contact {support_email}.\n"
+        f"{company_name}"
+    )
     msg.add_alternative(html, subtype="html")
 
     if use_ssl:
