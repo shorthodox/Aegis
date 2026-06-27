@@ -174,12 +174,12 @@ export async function handleGoogleAuth() {
 // ============================================================
 // OTP helpers — call backend before creating Firebase account
 // ============================================================
-export async function sendOTPForSignup(email) {
+export async function sendOTPForSignup(email, phone = null) {
   try {
     const res = await fetch('/auth/send-otp-for-registration', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email })
+      body: JSON.stringify({ email, phone })
     });
     const data = await res.json();
     if (!res.ok) return { success: false, message: data.detail || 'Failed to send OTP' };
@@ -189,12 +189,109 @@ export async function sendOTPForSignup(email) {
   }
 }
 
-export async function verifyOTPForSignup(email, otp) {
+// Helper: obtain MSG91 widget token from server
+export async function fetchMsg91WidgetToken() {
+  try {
+    const res = await fetch('/auth/msg91-token');
+    if (!res.ok) return null;
+    const j = await res.json();
+    return j.token || null;
+  } catch (err) {
+    console.warn('Could not fetch MSG91 token', err);
+    return null;
+  }
+}
+
+// Server-side verify proxy for MSG91 access token
+export async function verifyMsg91AccessToken(accessToken) {
+  try {
+    const res = await fetch('/auth/msg91-verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 'access_token': accessToken })
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(err || 'Verification failed');
+    }
+    return await res.json();
+  } catch (err) {
+    console.warn('MSG91 verify proxy error', err);
+    throw err;
+  }
+}
+
+// ============================================================
+// MSG91 OTPWidget Integration Helpers
+// These wrappers try to use a globally-loaded `OTPWidget` (from provider
+// script) or dynamically import the `@msg91comm/sendotp-sdk` package when
+// available (bundler environment). They expose simple send/retry/verify
+// methods used by the signup UI.
+// ============================================================
+export async function initMsg91Widget(widgetId, authToken) {
+  try {
+    if (window.OTPWidget && typeof window.OTPWidget.initializeWidget === 'function') {
+      window.OTPWidget.initializeWidget(widgetId, authToken);
+      return true;
+    }
+
+    // Try dynamic import when running in a bundler (npm-installed package)
+    try {
+      const mod = await import('@msg91comm/sendotp-sdk');
+      const { OTPWidget } = mod;
+      if (OTPWidget && typeof OTPWidget.initializeWidget === 'function') {
+        OTPWidget.initializeWidget(widgetId, authToken);
+        // keep a reference for other helper functions
+        window.OTPWidget = OTPWidget;
+        return true;
+      }
+    } catch (e) {
+      // dynamic import may fail in plain browser environment; ignore
+    }
+
+    console.warn('MSG91 OTPWidget not available to initialize');
+    return false;
+  } catch (err) {
+    console.error('initMsg91Widget error', err);
+    return false;
+  }
+}
+
+export async function sendOTPWithWidget(identifier) {
+  if (!identifier) throw new Error('identifier required (phone or email)');
+  const widget = window.OTPWidget;
+  if (!widget || typeof widget.sendOTP !== 'function') {
+    throw new Error('OTPWidget not initialized or sendOTP not available');
+  }
+  return await widget.sendOTP({ identifier });
+}
+
+export async function retryOTPWithWidget(reqId, retryChannel = undefined) {
+  const widget = window.OTPWidget;
+  if (!widget || typeof widget.retryOTP !== 'function') {
+    throw new Error('OTPWidget not initialized or retryOTP not available');
+  }
+  const body = { reqId };
+  if (typeof retryChannel !== 'undefined') body.retryChannel = retryChannel;
+  return await widget.retryOTP(body);
+}
+
+export async function verifyOTPWithWidget(reqId, otp) {
+  if (!reqId || !otp) throw new Error('reqId and otp required');
+  const widget = window.OTPWidget;
+  if (!widget || typeof widget.verifyOTP !== 'function') {
+    throw new Error('OTPWidget not initialized or verifyOTP not available');
+  }
+  const body = { reqId, otp };
+  return await widget.verifyOTP(body);
+}
+
+export async function verifyOTPForSignup(email, otp, phone = null) {
   try {
     const res = await fetch('/auth/verify-otp-for-registration', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, otp })
+      body: JSON.stringify({ email, otp, phone })
     });
     const data = await res.json();
     if (!res.ok) return { success: false, message: data.detail || 'Invalid OTP' };

@@ -8,7 +8,10 @@ import {
   handleGoogleAuth,
   handleEmailSignup,
   sendOTPForSignup,
-  verifyOTPForSignup
+  verifyOTPForSignup,
+  initMsg91Widget,
+  sendOTPWithWidget,
+  verifyOTPWithWidget
 } from './auth.js';
 
 // Pending form data stored between step 1 and step 2
@@ -20,6 +23,49 @@ function normalizeMobile(raw) {
   if (/^\d{10}$/.test(stripped)) return '+91' + stripped;
   if (/^\+\d{7,15}$/.test(stripped)) return stripped;
   return null;
+}
+
+// Inject and initialize external OTP provider widget (MSG91 / Phone91)
+export function initExternalOtpWidget({ tokenAuth, identifier, exposeMethods = true, success = () => {}, failure = () => {} }) {
+  return new Promise((resolve, reject) => {
+    if (!tokenAuth || !identifier) return reject(new Error('tokenAuth and identifier required'));
+    const configuration = {
+      widgetId: (window.MSG91_WIDGET_ID || '3666416a7042373730323037'),
+      tokenAuth: tokenAuth,
+      identifier: identifier,
+      exposeMethods: exposeMethods,
+      success: (data) => { success(data); resolve(data); },
+      failure: (err) => { failure(err); reject(err); }
+    };
+
+    (function loadOtpScript(urls) {
+      let i = 0;
+      function attempt() {
+        const s = document.createElement('script');
+        s.src = urls[i];
+        s.async = true;
+        s.onload = () => {
+          if (typeof window.initSendOTP === 'function') {
+            try {
+              window.initSendOTP(configuration);
+            } catch (err) {
+              console.warn('initSendOTP failed', err);
+            }
+          }
+        };
+        s.onerror = () => {
+          i++;
+          if (i < urls.length) attempt();
+          else reject(new Error('Could not load external OTP scripts'));
+        };
+        document.head.appendChild(s);
+      }
+      attempt();
+    })([
+      'https://verify.msg91.com/otp-provider.js',
+      'https://verify.phone91.com/otp-provider.js'
+    ]);
+  });
 }
 
 async function checkPhoneUnique(phone) {
@@ -135,7 +181,7 @@ export function createSignUpModal() {
         <div id="signupStep2" style="display:none;">
           <div class="auth-header">
             <div class="auth-logo">⚡ AEGIS</div>
-            <h2>Verify Your Email</h2>
+            <h2>Verify Your Mobile</h2>
             <p>Enter the 6-digit code sent to<br>
                <strong id="otpEmailDisplay" style="color:#00f2ff;"></strong>
             </p>
@@ -174,7 +220,7 @@ export function createSignUpModal() {
 
           <div style="text-align:center;margin-top:1rem;">
             <a href="#" id="backToStep1Link" class="auth-link" style="font-size:0.82rem;">
-              ← Change email
+              ← Change details
             </a>
           </div>
         </div>
@@ -273,7 +319,43 @@ async function handleStep1Submit(e) {
   }
 
   setLoading(true, 'Sending verification code…');
-  const result = await sendOTPForSignup(email);
+  // Try MSG91 widget flow if available; fallback to backend email/SMS OTP
+  let result = { success: false };
+  try {
+    const token = await fetchMsg91WidgetToken();
+    if (token) {
+      const sdkReady = await initMsg91Widget(window.MSG91_WIDGET_ID || '3666416a7042373730323037', token);
+      if (sdkReady) {
+        try {
+          const widgetResponse = await sendOTPWithWidget(mobile.replace(/^\+/, ''));
+          window.msg91ReqId = widgetResponse?.reqId || widgetResponse?.requestId || widgetResponse?.data?.reqId || null;
+          result = { success: true, message: 'OTP sent via MSG91 widget' };
+        } catch (widgetErr) {
+          console.warn('MSG91 widget send failed, falling back', widgetErr);
+          result = await sendOTPForSignup(email, mobile);
+        }
+      } else {
+        // Fallback to the existing provider-script integration
+        await initExternalOtpWidget({
+          tokenAuth: token,
+          identifier: mobile,
+          exposeMethods: true,
+          success: (data) => {
+            console.log('external widget success', data);
+          },
+          failure: (err) => {
+            console.error('external widget failure', err);
+          }
+        });
+        result = { success: true, message: 'OTP sent via external provider' };
+      }
+    } else {
+      result = await sendOTPForSignup(email, mobile);
+    }
+  } catch (e) {
+    console.warn('OTP provider attempt failed, falling back', e);
+    result = await sendOTPForSignup(email, mobile);
+  }
   setLoading(false);
 
   if (!result.success) {
@@ -325,7 +407,7 @@ function attachStep2Listeners() {
     e.preventDefault();
     clearError('otpError');
     setLoading(true, 'Resending code…');
-    const result = await sendOTPForSignup(_pending.email);
+    const result = await sendOTPForSignup(_pending.email, _pending.mobile);
     setLoading(false);
     if (result.success) {
       clearOtpBoxes();
@@ -354,7 +436,18 @@ async function handleStep2Verify() {
   }
 
   setLoading(true, 'Verifying code…');
-  const verifyResult = await verifyOTPForSignup(_pending.email, otp);
+  let verifyResult = await verifyOTPForSignup(_pending.email, otp, _pending.mobile);
+
+  if (!verifyResult.success && window.msg91ReqId) {
+    try {
+      const widgetVerify = await verifyOTPWithWidget(window.msg91ReqId, otp);
+      if (widgetVerify?.success !== false) {
+        verifyResult = { success: true, signup_token: widgetVerify?.signup_token || null };
+      }
+    } catch (widgetErr) {
+      console.warn('MSG91 widget verify failed, using backend fallback', widgetErr);
+    }
+  }
 
   if (!verifyResult.success) {
     setLoading(false);

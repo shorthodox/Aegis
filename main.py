@@ -528,6 +528,24 @@ otp_store: Dict[str, Dict] = {}
 def generate_otp() -> str:
     return ''.join(random.choices(string.digits, k=6))
 
+
+def normalize_phone_number(phone: Optional[str]) -> Optional[str]:
+    """Normalize phone numbers to E.164 format for signup and backend enforcement."""
+    if not phone:
+        return None
+    cleaned = re.sub(r'[\s\-\.\(\)]', '', str(phone).strip())
+    if not cleaned:
+        return None
+    if cleaned.startswith('+'):
+        digits = re.sub(r'\D', '', cleaned)
+        return f'+{digits}' if digits else None
+    digits = re.sub(r'\D', '', cleaned)
+    if len(digits) == 10:
+        return f'+91{digits}'
+    if len(digits) >= 7:
+        return f'+{digits}'
+    return None
+
 # -------------------------------------------------------------------
 # Simple in-memory rate limiter (no external deps)
 # Tracks request timestamps per key (IP or email).
@@ -2124,8 +2142,11 @@ def get_user_doc(email: str) -> Optional[Dict]:
 
 def phone_is_unique(phone: str, exclude_email: Optional[str] = None) -> bool:
     """Return True if phone number is not already stored in any user document."""
+    normalized = normalize_phone_number(phone)
+    if not normalized:
+        return False
     try:
-        docs = db.collection("users").where("phone_number", "==", phone).limit(2).stream()
+        docs = db.collection("users").where("phone_number", "==", normalized).limit(2).stream()
         for d in docs:
             if exclude_email and d.id == exclude_email:
                 continue
@@ -2301,13 +2322,7 @@ async def provision_user(request: Request, user_id: str = Depends(get_current_us
 
         # Normalize and validate phone number if provided
         phone_raw = data.get("phone_number") or ""
-        phone_number: Optional[str] = None
-        if phone_raw:
-            cleaned = re.sub(r'[\s\-\.\(\)]', '', phone_raw.strip())
-            if re.match(r'^\d{10}$', cleaned):
-                cleaned = '+91' + cleaned
-            if re.match(r'^\+\d{7,15}$', cleaned):
-                phone_number = cleaned
+        phone_number = normalize_phone_number(phone_raw)
 
         existing = get_user_doc(doc_key)
         if existing:
@@ -2433,10 +2448,12 @@ class Feedback(BaseModel):
 
 class OTPSendRequest(BaseModel):
     email: EmailStr
+    phone: Optional[str] = None
 
 class OTPVerifyRequest(BaseModel):
     email: EmailStr
     otp: str
+    phone: Optional[str] = None
 
 class PhoneCheckRequest(BaseModel):
     phone: str
@@ -2517,9 +2534,40 @@ fastmail = FastMail(conf)
 # -------------------------------------------------------------------
 # 3-Step Onboarding with OTP
 # -------------------------------------------------------------------
+async def _send_sms_otp(phone_number: str, otp: str) -> bool:
+    """Send a signup OTP via Twilio when configured; otherwise log it for development."""
+    try:
+        from twilio.rest import Client
+    except Exception:
+        print(f"[SMS OTP] Twilio package unavailable. OTP for {phone_number}: {otp}")
+        return True
+
+    account_sid = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
+    auth_token = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
+    from_number = os.getenv("TWILIO_PHONE_NUMBER", "").strip()
+    if not account_sid or not auth_token or not from_number:
+        print(f"[SMS OTP] Twilio not configured. OTP for {phone_number}: {otp}")
+        return True
+
+    try:
+        client = Client(account_sid, auth_token)
+        client.messages.create(
+            body=f"Your AEGIS verification code is {otp}. It expires in 5 minutes.",
+            from_=from_number,
+            to=phone_number,
+        )
+        return True
+    except Exception as exc:
+        print(f"[SMS OTP] Failed to send SMS for {phone_number}: {exc}")
+        return False
+
+
 @app.post("/auth/send-otp-for-registration")
 async def send_otp_for_registration(request: OTPSendRequest, req: Request):
     email = request.email
+    phone_number = normalize_phone_number(request.phone)
+    if not phone_number:
+        raise HTTPException(status_code=422, detail="A valid mobile number is required for signup verification.")
 
     # Rate limit: 5 OTP requests per email per 10 minutes
     if not _rate_limit(f"otp:{email}", max_calls=5, window_seconds=600):
@@ -2534,8 +2582,6 @@ async def send_otp_for_registration(request: OTPSendRequest, req: Request):
         raise HTTPException(status_code=422, detail="Disposable or temporary email addresses are not allowed.")
 
     # Validate email syntax only — no DNS/MX lookup.
-    # Deliverability is proven naturally: if the email is fake or unreachable,
-    # the OTP never arrives and signup cannot complete.
     try:
         validated = validate_email(email, check_deliverability=False)
         email = validated.normalized
@@ -2553,91 +2599,27 @@ async def send_otp_for_registration(request: OTPSendRequest, req: Request):
     otp_store[email] = {
         "otp": otp,
         "expires_at": expires_at,
-        "cooldown_until": cooldown_until
+        "cooldown_until": cooldown_until,
+        "phone_number": phone_number,
     }
     try:
-        message = MessageSchema(
-            subject="Your AEGIS Verification Code",
-            recipients=[NameEmail(name=email, email=email)],
-            body=f"""
-            <!DOCTYPE html>
-            <html>
-            <head><meta charset="UTF-8"></head>
-            <body style="margin:0;padding:0;background:#0a0a0c;font-family:'Segoe UI',Arial,sans-serif;">
-              <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0c;padding:40px 0;">
-                <tr><td align="center">
-                  <table width="480" cellpadding="0" cellspacing="0"
-                         style="background:#0f111a;border:1px solid rgba(0,242,255,0.15);border-radius:16px;overflow:hidden;max-width:480px;">
-
-                    <!-- Header -->
-                    <tr>
-                      <td style="background:linear-gradient(135deg,#00f2ff22,#7b2fff22);padding:32px 40px 24px;text-align:center;border-bottom:1px solid rgba(0,242,255,0.1);">
-                        <div style="font-size:28px;font-weight:800;letter-spacing:3px;
-                                    background:linear-gradient(90deg,#00f2ff,#7b2fff);
-                                    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-                                    display:inline-block;">
-                          ⚡ AEGIS
-                        </div>
-                        <p style="color:#6b7280;margin:8px 0 0;font-size:13px;letter-spacing:1px;">SOVEREIGN TERMINAL</p>
-                      </td>
-                    </tr>
-
-                    <!-- Body -->
-                    <tr>
-                      <td style="padding:36px 40px;">
-                        <p style="color:#9ca3af;font-size:15px;margin:0 0 8px;">Email Verification</p>
-                        <h2 style="color:#f9fafb;font-size:20px;font-weight:600;margin:0 0 24px;">Your one-time verification code</h2>
-
-                        <!-- OTP display -->
-                        <div style="background:#0a0a0c;border:1px solid rgba(0,242,255,0.25);border-radius:12px;
-                                    padding:24px;text-align:center;margin:0 0 24px;">
-                          <span style="font-family:'Courier New',Courier,monospace;font-size:38px;font-weight:700;
-                                       letter-spacing:12px;color:#00f2ff;">{otp}</span>
-                        </div>
-
-                        <p style="color:#9ca3af;font-size:14px;margin:0 0 8px;">
-                          This code expires in <strong style="color:#f9fafb;">5 minutes</strong>.
-                          Do not share it with anyone.
-                        </p>
-                        <p style="color:#6b7280;font-size:13px;margin:0;">
-                          If you didn't request this, you can safely ignore this email.
-                        </p>
-                      </td>
-                    </tr>
-
-                    <!-- Footer -->
-                    <tr>
-                      <td style="padding:20px 40px 28px;border-top:1px solid rgba(255,255,255,0.05);text-align:center;">
-                        <p style="color:#4b5563;font-size:12px;margin:0;">
-                          Sent by
-                          <a href="mailto:animeshkukreti@gatekeeper.sbs"
-                             style="color:#00f2ff;text-decoration:none;">animeshkukreti@gatekeeper.sbs</a>
-                          &nbsp;·&nbsp;
-                          <a href="https://gatekeeper.sbs"
-                             style="color:#00f2ff;text-decoration:none;">gatekeeper.sbs</a>
-                        </p>
-                      </td>
-                    </tr>
-
-                  </table>
-                </td></tr>
-              </table>
-            </body>
-            </html>
-            """,
-            subtype=MessageType.html,
-        )
-        await fastmail.send_message(message)
+        sms_sent = await _send_sms_otp(phone_number, otp)
+        if not sms_sent:
+            raise HTTPException(status_code=500, detail="Failed to send OTP SMS. Please try again.")
+    except HTTPException:
+        otp_store.pop(email, None)
+        raise
     except Exception as e:
         otp_store.pop(email, None)
-        print(f"Email sending failed: {e}")
-        raise HTTPException(status_code=500, detail="Failed to send OTP email. Check email configuration.")
-    return {"success": True, "message": "OTP sent to your email address."}
+        print(f"SMS sending failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send OTP SMS. Please try again.")
+    return {"success": True, "message": f"OTP sent to {phone_number}."}
 
 @app.post("/auth/verify-otp-for-registration")
 async def verify_otp_for_registration(request: OTPVerifyRequest, req: Request):
     email = request.email
     otp = request.otp
+    phone_number = normalize_phone_number(request.phone)
     # Rate limit: 10 verify attempts per email per 15 minutes (prevents OTP brute-force)
     if not _rate_limit(f"otp_verify:{email}", max_calls=10, window_seconds=900):
         raise HTTPException(status_code=429, detail="Too many verification attempts. Please request a new OTP.")
@@ -2646,6 +2628,8 @@ async def verify_otp_for_registration(request: OTPVerifyRequest, req: Request):
     if email not in otp_store:
         raise HTTPException(status_code=400, detail="No OTP request found. Please request a new OTP.")
     record = otp_store[email]
+    if phone_number and record.get("phone_number") and record.get("phone_number") != phone_number:
+        raise HTTPException(status_code=400, detail="Phone number mismatch. Please request a new OTP.")
     if datetime.now(timezone.utc) > record["expires_at"]:
         otp_store.pop(email, None)
         raise HTTPException(status_code=400, detail="OTP has expired. Please request a new one.")
@@ -2662,8 +2646,8 @@ async def check_phone_unique(request: PhoneCheckRequest, req: Request):
     # Rate limit: 15 checks per IP per 5 minutes (enumeration protection)
     if not _rate_limit(f"phone_check:{get_client_ip(req)}", max_calls=15, window_seconds=300):
         raise HTTPException(status_code=429, detail="Too many requests. Please try again shortly.")
-    phone = request.phone.strip()
-    if not phone or len(phone) < 7:
+    phone = normalize_phone_number(request.phone)
+    if not phone:
         raise HTTPException(status_code=422, detail="Invalid phone number")
     return {"available": phone_is_unique(phone)}
 
@@ -2689,6 +2673,141 @@ async def send_password_reset(request: PasswordResetRequest, req: Request):
     except Exception as e:
         print(f"[password-reset] generate_password_reset_link failed: {e}")
         raise HTTPException(status_code=500, detail="Could not generate reset link. Please try again.")
+
+
+@app.get("/auth/msg91-token")
+async def get_msg91_widget_token(req: Request):
+    """Return a widget token for the MSG91/Phone91 client widget.
+
+    This implementation reads a pre-generated token from env var `MSG91_WIDGET_TOKEN`.
+    For production, replace this with a server-side minting call to MSG91 using
+    your server API key so that tokens are short-lived and secure.
+    """
+    token = os.getenv("MSG91_WIDGET_TOKEN")
+    if not token:
+        raise HTTPException(status_code=501, detail="MSG91 widget token not configured on server")
+    return {"token": token}
+
+
+@app.post("/auth/msg91-token")
+async def mint_msg91_widget_token(req: Request):
+    """Mint a short-lived widget access token from MSG91 for a given phone number.
+
+    Request JSON: { "phone": "+919876543210" }
+    Returns: { "token": "..." }
+    NOTE: MSG91's control API may vary; set `MSG91_GENERATE_TOKEN_URL` and
+    `MSG91_AUTH_KEY` in env for production. If `MSG91_WIDGET_TOKEN` is present
+    the server will return that instead (development fallback).
+    """
+    data = {}
+    try:
+        data = await req.json()
+    except Exception:
+        pass
+    phone = data.get("phone") or None
+
+    # If a static token is provided in env, return it (dev fallback)
+    static = os.getenv("MSG91_WIDGET_TOKEN")
+    if static:
+        return {"token": static}
+
+    auth_key = os.getenv("MSG91_AUTH_KEY")
+    generate_url = os.getenv("MSG91_GENERATE_TOKEN_URL", "https://control.msg91.com/api/v5/widget/generateAccessToken")
+    if not auth_key:
+        raise HTTPException(status_code=501, detail="MSG91 server-side minting not configured (MSG91_AUTH_KEY missing)")
+
+    payload = {"authkey": auth_key}
+    if phone:
+        payload["mobile"] = phone
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(generate_url, json=payload)
+            resp.raise_for_status()
+            j = resp.json()
+            # Expect token in response under common keys
+            token = j.get("access-token") or j.get("token") or j.get("data")
+            return {"token": token, "raw": j}
+    except httpx.HTTPStatusError as he:
+        raise HTTPException(status_code=502, detail=f"MSG91 token mint failed: {he.response.text}")
+    except Exception as e:
+        print(f"[msg91-mint] error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to mint MSG91 widget token")
+
+
+@app.post("/auth/msg91-verify")
+async def verify_msg91_access_token(request: Request):
+    """Server-side proxy to verify an access token with MSG91 control API.
+
+    Expects JSON: { "access_token": "..." }
+    Returns the MSG91 verification response.
+    """
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+    access_token = data.get("access_token")
+    if not access_token:
+        raise HTTPException(status_code=422, detail="access_token is required")
+
+    auth_key = os.getenv("MSG91_AUTH_KEY")
+    verify_url = os.getenv("MSG91_VERIFY_URL", "https://control.msg91.com/api/v5/widget/verifyAccessToken")
+    if not auth_key:
+        raise HTTPException(status_code=501, detail="MSG91 verification not configured (MSG91_AUTH_KEY missing)")
+
+    payload = {"authkey": auth_key, "access-token": access_token}
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(verify_url, json=payload)
+            resp.raise_for_status()
+            return resp.json()
+    except httpx.HTTPStatusError as he:
+        raise HTTPException(status_code=502, detail=f"MSG91 verify failed: {he.response.text}")
+    except Exception as e:
+        print(f"[msg91-verify] error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to verify MSG91 access token")
+
+
+@app.post("/auth/msg91-webhook")
+async def msg91_webhook(req: Request):
+    """Webhook receiver for MSG91 events.
+
+    Validates the `Authorization` header against `MSG91_WEBHOOK_SECRET` (Bearer).
+    Logs the payload and, on successful verification events, marks matching
+    entries in `otp_store` as verified so signup can proceed.
+    """
+    secret = os.getenv("MSG91_WEBHOOK_SECRET") or os.getenv("MSG91_WEBHOOK_TOKEN")
+    header = req.headers.get("authorization") or req.headers.get("Authorization")
+    if secret:
+        if not header or not header.lower().startswith("bearer ") or header.split()[1] != secret:
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
+    try:
+        payload = await req.json()
+    except Exception:
+        payload = await req.body()
+        try:
+            payload = json.loads(payload)
+        except Exception:
+            payload = {"raw": str(payload)}
+
+    print("[msg91-webhook] received:", payload)
+
+    # Example handling: if payload indicates verification success with mobile
+    event = payload.get("event") or payload.get("type") or payload.get("event_type")
+    status = payload.get("status") or payload.get("verification_status")
+    mobile = payload.get("mobile") or payload.get("phone") or payload.get("recipient")
+    if event and mobile and str(status).lower() in ("success", "verified", "completed"):
+        norm = normalize_phone_number(mobile)
+        # Find matching otp_store entry by phone_number
+        for email_key, rec in list(otp_store.items()):
+            if rec.get("phone_number") and rec.get("phone_number") == norm:
+                otp_store[email_key]["verified"] = True
+                otp_store[email_key]["signup_token"] = str(uuid.uuid4())
+                print(f"[msg91-webhook] marked {email_key} verified via webhook for {norm}")
+                break
+
+    return {"received": True}
 
     # Extract oobCode and apiKey from Firebase's link so our custom reset page
     # can call confirmPasswordReset() directly without going through Firebase's UI.
