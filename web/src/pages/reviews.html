@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -16,165 +16,276 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://cdnjs.cloudflare.com">
-    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap"></noscript>
-    <link rel="stylesheet" href="/web/dist/styles.css?v=1.1">
-    <link rel="stylesheet" href="/web/src/styles/main.css">
-    <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"></noscript>
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"></noscript>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="/web/src/styles/aegis-redesign.css">
+    <style>
+        body {
+            background: var(--ae-base);
+            color: var(--ae-text-1);
+            font-family: var(--ae-font-sans);
+            padding-top: 60px;
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
+        }
+
+        /* ── Mobile drawer ─────────────────────────────────────── */
+        .ae-mobile-drawer {
+            position: fixed;
+            top: 60px; left: 0; right: 0;
+            z-index: 800;
+            background: var(--ae-base);
+            border-bottom: 1px solid var(--ae-border);
+            display: none;
+            flex-direction: column;
+            padding: var(--s-4);
+            gap: var(--s-1);
+            max-height: calc(100vh - 60px);
+            overflow-y: auto;
+        }
+        .ae-mobile-drawer.open { display: flex; }
+        .ae-mobile-link {
+            font-size: 0.88rem;
+            color: var(--ae-text-2);
+            text-decoration: none;
+            padding: 10px var(--s-4);
+            border-radius: var(--ae-radius);
+            display: block;
+            transition: background 120ms, color 120ms;
+        }
+        .ae-mobile-link:hover, .ae-mobile-link.mobile-active {
+            background: var(--ae-raised);
+            color: var(--ae-text-1);
+        }
+
+        /* ── Hamburger ─────────────────────────────────────────── */
+        #navHamburger {
+            display: none;
+            align-items: center; justify-content: center;
+            width: 36px; height: 36px;
+            background: transparent;
+            border: 1px solid var(--ae-border);
+            border-radius: var(--ae-radius);
+            cursor: pointer;
+            color: var(--ae-text-2);
+            font-size: 0.85rem;
+            flex-shrink: 0;
+            transition: border-color 120ms, color 120ms;
+        }
+        #navHamburger:hover { border-color: var(--ae-border-bright); color: var(--ae-text-1); }
+
+        @media (max-width: 900px) {
+            .ae-nav-links { display: none !important; }
+            .ae-nav-actions { display: none !important; }
+            #navHamburger { display: flex !important; }
+        }
+        @media (min-width: 901px) {
+            #navMobileDrawer { display: none !important; }
+        }
+
+        /* ── Review form card ───────────────────────────────────── */
+        .rv-form-card {
+            background: var(--ae-surface);
+            border: 1px solid var(--ae-border);
+            border-radius: var(--ae-radius-md);
+            padding: var(--s-6);
+            max-width: 720px;
+            margin: 0 auto;
+        }
+
+        .labeled-input {
+            display: flex;
+            flex-direction: column;
+            gap: var(--s-2);
+            margin-bottom: var(--s-5);
+        }
+
+        .labeled-input label {
+            display: block;
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--ae-gold);
+        }
+
+        .auth-input {
+            width: 100%;
+            box-sizing: border-box;
+            background: var(--ae-raised);
+            border: 1px solid var(--ae-border-mid);
+            border-radius: var(--ae-radius);
+            color: var(--ae-text-1);
+            font-size: 0.88rem;
+            padding: var(--s-3) var(--s-4);
+            font-family: var(--ae-font-sans);
+            outline: none;
+            transition: border-color 120ms;
+            -webkit-appearance: none;
+        }
+        .auth-input::placeholder { color: var(--ae-text-3); }
+        .auth-input:focus {
+            border-color: var(--ae-border-bright);
+            background: var(--ae-overlay, #1A2028);
+        }
+        textarea.auth-input { resize: vertical; }
+
+        /* ── Star container ─────────────────────────────────────── */
+        #starContainer {
+            font-size: 1.5rem;
+            color: var(--ae-text-3);
+            display: flex;
+            gap: 4px;
+            cursor: pointer;
+            user-select: none;
+        }
+        #starContainer .star {
+            transition: color 120ms, transform 120ms;
+            line-height: 1;
+        }
+        #starContainer .star:hover,
+        #starContainer .star.selected { color: var(--ae-gold); }
+        #starContainer .star:hover { transform: scale(1.12); }
+
+        /* ── Submit button ──────────────────────────────────────── */
+        .auth-submit-btn {
+            padding: var(--s-3) var(--s-5);
+            border-radius: var(--ae-radius);
+            background: var(--ae-gold);
+            color: #0B0D10;
+            font-weight: 600;
+            font-size: 0.88rem;
+            border: 1px solid var(--ae-gold);
+            cursor: pointer;
+            transition: background 120ms, border-color 120ms;
+            font-family: var(--ae-font-sans);
+            letter-spacing: 0.04em;
+        }
+        .auth-submit-btn:hover { background: #C9A87A; border-color: #C9A87A; }
+
+        /* ── Review result message ──────────────────────────────── */
+        #reviewResult {
+            margin-top: var(--s-4);
+            font-size: 0.85rem;
+            color: var(--ae-text-2);
+            line-height: 1.6;
+        }
+    </style>
 </head>
 
 <body>
-    <header class="fixed-header" id="main-nav">
-        <a href="/web/src/pages/index.html" class="logo" style="text-decoration:none;">⚡ AEGIS <span>v1.0</span></a>
-
-        <nav class="nav-links-centered" aria-label="Main navigation">
-            <a href="/web/src/pages/index.html" class="nav-link">Home</a>
-            <a href="/web/src/pages/index.html#sentinel" class="nav-link">Sentinel</a>
-            <a href="/web/src/pages/index.html#cockpit" class="nav-link">Cockpit</a>
-            <a href="/web/src/pages/index.html#security" class="nav-link">Security</a>
-            <a href="/web/src/pages/pricing.html" class="nav-link">Pricing</a>
-            <a href="/web/src/pages/track-record.html" class="nav-link">Live Record</a>
+    <header class="ae-nav" id="main-nav">
+      <div class="ae-nav-inner">
+        <a href="/web/src/pages/index.html" class="ae-brand" style="text-decoration:none;">
+          AEGIS<span>&nbsp;·&nbsp;</span>v1.0
+        </a>
+        <nav class="ae-nav-links" aria-label="Main navigation">
+          <a href="/web/src/pages/index.html" class="ae-nav-link">Home</a>
+          <a href="/web/src/pages/pricing.html" class="ae-nav-link">Pricing</a>
+          <a href="/web/src/pages/track-record.html" class="ae-nav-link">Track Record</a>
+          <a href="/web/src/pages/review.html" class="ae-nav-link active">Reviews</a>
         </nav>
-
-        <div class="nav-auth-desktop" style="display:flex;align-items:center;gap:0.5rem;">
-            <a href="/web/src/pages/index.html" class="nav-btn-login">
-                <i class="fas fa-user-shield"></i> Sign In
-            </a>
-            <a href="/web/src/pages/pricing.html" class="nav-btn-cta">
-                Get Started
-            </a>
+        <div class="ae-nav-actions">
+          <a href="/web/src/pages/index.html" class="ae-btn ae-btn-ghost ae-btn-sm">Sign In</a>
+          <a href="/web/src/pages/pricing.html" class="ae-btn ae-btn-primary ae-btn-sm">Get Access</a>
         </div>
-
-        <button class="nav-hamburger-btn" id="navHamburger" aria-label="Toggle navigation" aria-expanded="false">
-            <i class="fas fa-bars"></i>
+        <button id="navHamburger" aria-label="Toggle navigation" aria-expanded="false">
+          <i class="fas fa-bars"></i>
         </button>
+      </div>
     </header>
-
-    <div class="nav-mobile-drawer" id="navMobileDrawer">
-        <a href="/web/src/pages/index.html" class="nav-mobile-link"><i class="fas fa-home"></i> Home</a>
-        <a href="/web/src/pages/index.html#sentinel" class="nav-mobile-link"><i class="fas fa-satellite-dish"></i> Sentinel</a>
-        <a href="/web/src/pages/index.html#cockpit" class="nav-mobile-link"><i class="fas fa-desktop"></i> Cockpit</a>
-        <a href="/web/src/pages/index.html#security" class="nav-mobile-link"><i class="fas fa-shield-alt"></i> Security</a>
-        <a href="/web/src/pages/pricing.html" class="nav-mobile-link"><i class="fas fa-tag"></i> Pricing</a>
-        <a href="/web/src/pages/track-record.html" class="nav-mobile-link"><i class="fas fa-chart-bar"></i> Live Record</a>
-        <div class="nav-mobile-auth">
-            <a href="/web/src/pages/index.html" class="nav-btn-login"><i class="fas fa-user-shield"></i> Sign In</a>
-            <a href="/web/src/pages/pricing.html" class="nav-btn-cta">Get Started</a>
-        </div>
+    <div class="ae-mobile-drawer" id="navMobileDrawer" aria-hidden="true">
+      <a href="/web/src/pages/index.html" class="ae-mobile-link">Home</a>
+      <a href="/web/src/pages/pricing.html" class="ae-mobile-link">Pricing</a>
+      <a href="/web/src/pages/track-record.html" class="ae-mobile-link">Track Record</a>
+      <a href="/web/src/pages/review.html" class="ae-mobile-link mobile-active">Reviews</a>
+      <hr class="ae-divider" style="margin:var(--s-3) 0;">
+      <div style="display:flex;flex-direction:column;gap:var(--s-2);padding:0 var(--s-2);">
+        <a href="/web/src/pages/pricing.html" class="ae-btn ae-btn-primary ae-btn-md">Get Access</a>
+      </div>
     </div>
 
-    <section class="feature-section" style="padding-top:120px;">
-        <div class="feature-container">
-            <h1 class="section-title">Share your experience</h1>
-            <p style="color:var(--text-dim); max-width:760px; margin:0 auto 1.5rem;">We value honest feedback. Your
-                ratings help us improve Aegis‑1 and prioritise features.</p>
+    <main style="max-width: var(--ae-max); margin: 0 auto; padding: var(--s-8) var(--s-5);">
 
-            <div style="max-width:720px; margin: 0 auto;">
-                <form id="reviewForm" class="modal-card"
-                    style="background:transparent; border:none; padding:1.5rem; max-width:720px;">
-                    <div class="labeled-input">
-                        <label>Name</label>
-                        <input type="text" id="reviewName" class="auth-input" placeholder="Your name" required>
-                    </div>
-                    <div class="labeled-input">
-                        <label>Email</label>
-                        <input type="email" id="reviewEmail" class="auth-input" placeholder="you@example.com" required>
-                    </div>
-                    <div class="labeled-input">
-                        <label>Rating</label>
-                        <div id="starContainer" style="font-size:1.4rem; color:var(--primary-cyan);">
-                            <span class="star" data-value="1">☆</span>
-                            <span class="star" data-value="2">☆</span>
-                            <span class="star" data-value="3">☆</span>
-                            <span class="star" data-value="4">☆</span>
-                            <span class="star" data-value="5">☆</span>
-                        </div>
-                    </div>
-                    <div class="labeled-input">
-                        <label>Message</label>
-                        <textarea id="reviewMessage" class="auth-input" rows="6"
-                            placeholder="Tell us what you liked or what we can improve"></textarea>
-                    </div>
-                    <div style="text-align:right;">
-                        <button id="submitReview" class="auth-submit-btn" type="submit">Submit Review</button>
-                    </div>
-                    <div id="reviewResult" style="margin-top:0.8rem; color:var(--text-dim);"></div>
-                </form>
-            </div>
+        <div style="text-align:center; margin-bottom:var(--s-8);">
+            <p class="ae-eyebrow">Share Your Experience</p>
+            <h1 style="font-family:var(--ae-font-serif);font-size:clamp(2rem,5vw,3rem);color:var(--ae-text-1);font-weight:400;line-height:1.15;margin-bottom:var(--s-4);">Your ratings help us improve</h1>
+            <p style="color:var(--ae-text-2);max-width:600px;margin:0 auto;line-height:1.8;font-size:0.95rem;">We value honest feedback. Every review goes directly to the development team and helps us prioritise what matters most.</p>
         </div>
-    </section>
 
-    <footer class="footer">
-        <p>© 2026 AEGIS v1.0 — Sovereign Intelligence Terminal</p>
+        <div class="rv-form-card">
+            <form id="reviewForm">
+                <div class="labeled-input">
+                    <label>Name</label>
+                    <input type="text" id="reviewName" class="auth-input" placeholder="Your name" required>
+                </div>
+                <div class="labeled-input">
+                    <label>Email</label>
+                    <input type="email" id="reviewEmail" class="auth-input" placeholder="you@example.com" required>
+                </div>
+                <div class="labeled-input">
+                    <label>Rating</label>
+                    <div id="starContainer">
+                        <span class="star" data-value="1">&#9734;</span>
+                        <span class="star" data-value="2">&#9734;</span>
+                        <span class="star" data-value="3">&#9734;</span>
+                        <span class="star" data-value="4">&#9734;</span>
+                        <span class="star" data-value="5">&#9734;</span>
+                    </div>
+                </div>
+                <div class="labeled-input">
+                    <label>Message</label>
+                    <textarea id="reviewMessage" class="auth-input" rows="6" placeholder="Tell us what you liked or what we can improve"></textarea>
+                </div>
+                <div style="text-align:right;">
+                    <button id="submitReview" class="auth-submit-btn" type="submit">Submit Review</button>
+                </div>
+                <div id="reviewResult"></div>
+            </form>
+        </div>
+
+    </main>
+
+    <footer class="ae-footer">
+      <div class="ae-footer-grid">
+        <div>
+          <div class="ae-footer-brand">AEGIS v1.0</div>
+          <p class="ae-footer-desc">Institutional-grade crypto signal engine. Operated by Animesh Kukreti &amp; Aman Juiyal, Dehradun, Uttarakhand, India.</p>
+        </div>
+        <div>
+          <div class="ae-footer-col-title">Platform</div>
+          <div class="ae-footer-links">
+            <a href="/web/src/pages/pricing.html" class="ae-footer-link">Pricing</a>
+            <a href="/web/src/pages/track-record.html" class="ae-footer-link">Track Record</a>
+            <a href="/web/src/pages/review.html" class="ae-footer-link">Reviews</a>
+            <a href="/web/src/pages/pitch.html" class="ae-footer-link">Investor Brief</a>
+          </div>
+        </div>
+        <div>
+          <div class="ae-footer-col-title">Legal</div>
+          <div class="ae-footer-links">
+            <a href="/web/src/pages/terms.html" class="ae-footer-link">Terms of Service</a>
+            <a href="/web/src/pages/privacy_policy.html" class="ae-footer-link">Privacy Policy</a>
+            <a href="/web/src/pages/refund_policy.html" class="ae-footer-link">Refund Policy</a>
+            <a href="/web/src/pages/risk_disclosure.html" class="ae-footer-link">Risk Disclosure</a>
+          </div>
+        </div>
+        <div>
+          <div class="ae-footer-col-title">Contact</div>
+          <div class="ae-footer-links">
+            <a href="mailto:animeshkukreti@gatekeeper.sbs" class="ae-footer-link">animeshkukreti@gatekeeper.sbs</a>
+            <a href="/web/src/pages/conditions.html" class="ae-footer-link">Terms &amp; Conditions</a>
+          </div>
+        </div>
+      </div>
+      <div class="ae-footer-bottom">
+        <p class="ae-footer-legal">AEGIS v1.0 is a signal-generation tool and does not constitute financial advice. Cryptocurrency trading involves substantial risk of loss. Not regulated by SEBI or any financial authority.</p>
+        <p style="font-size:0.72rem;color:var(--ae-text-4);white-space:nowrap;">&copy; 2026 Animesh Kukreti &amp; Aman Juiyal</p>
+      </div>
     </footer>
 
     <script type="module" src="/web/src/scripts/reviews.js"></script>
-    </div>
-    </div>
-
-
-
-    </div>
-
-
-    <!-- ========== 3‑STEP ONBOARDING MODAL (with password fields) ========== -->
-    <div id="loginModal" class="modal">
-        <div class="modal-card">
-            <!-- Close button with inline styles to guarantee clickability -->
-            <span class="close-modal"
-                style="position: absolute; top: 1rem; right: 1.5rem; font-size: 1.8rem; cursor: pointer; color: var(--dim, #94a3b8); z-index: 1001; pointer-events: auto;">&times;</span>
-
-            <!-- Step 1: Email / Google -->
-            <div id="step1" class="step active">
-                <div class="modal-logo">⚡ AEGIS</div>
-                <button id="googleStepBtn" class="provider-btn"><i class="fab fa-google"></i> Continue with
-                    Google</button>
-                <div class="divider">or</div>
-                <input type="text" id="emailInput" class="auth-input" placeholder="Email or mobile number">
-                <p class="info-note">Use your email to sign in or register. Start with a phone number for mobile OTP.
-                </p>
-                <button id="continueToOtpBtn" class="auth-submit-btn">Continue</button>
-            </div>
-
-            <!-- Step 2: OTP Verification -->
-            <div id="step2" class="step">
-                <h3 style="text-align:center; margin-bottom:1rem;">Enter verification code</h3>
-                <p style="text-align:center; color:var(--dim); font-size:0.8rem;">We sent a 6‑digit code to <span
-                        id="otpEmailDisplay"></span></p>
-                <div class="otp-container" id="otpContainer">
-                    <input type="text" maxlength="1" class="otp-digit" data-idx="0">
-                    <input type="text" maxlength="1" class="otp-digit" data-idx="1">
-                    <input type="text" maxlength="1" class="otp-digit" data-idx="2">
-                    <input type="text" maxlength="1" class="otp-digit" data-idx="3">
-                    <input type="text" maxlength="1" class="otp-digit" data-idx="4">
-                    <input type="text" maxlength="1" class="otp-digit" data-idx="5">
-                </div>
-                <button id="backToEmailBtn" class="auth-secondary-btn" style="margin-top:0.5rem;">← Back</button>
-            </div>
-
-            <!-- Step 3: Onboarding (Profile + Password) -->
-            <div id="step3" class="step">
-                <h3 id="onboardingTitle" style="text-align:center; margin-bottom:1rem;">Complete your account</h3>
-                <div class="profile-upload" id="avatarUploadSection">
-                    <div id="avatarUpload" class="avatar-upload">
-                        <i class="fas fa-cloud-upload-alt"></i>
-                        <span>Upload Photo</span>
-                    </div>
-                    <div class="upload-hint">300x300px min. JPG, GIF, PNG. Max 4MB.</div>
-                    <input type="file" id="avatarFile" accept="image/jpeg,image/png,image/gif" style="display:none;">
-                </div>
-                <div id="profileFields">
-                    <div class="labeled-input">
-                        <label>Full name</label>
-                        <input type="text" id="fullName" class="auth-input" placeholder="e.g., Satoshi Nakamoto">
-                    </div>
-                    <div class="labeled-input">
-                        <label>Your location</label>
-                        <input type="text" id="location" class="auth-input" placeholder="City, Country">
-                    </div>
-                </div>
-            </div>
 
     <script>
     (function(){

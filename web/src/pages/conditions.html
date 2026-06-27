@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <!-- Preload Firebase & Core Modules to prevent module waterfall blocking -->
@@ -12,162 +12,209 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AEGIS v1.0 | Risk Disclosure & Terms</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
-    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap"></noscript>
-    <link rel="stylesheet" href="/web/dist/styles.css?v=1.1">
-    <link rel="stylesheet" href="/web/src/styles/main.css">
-    <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"></noscript>
     <link rel="canonical" href="https://gatekeeper.sbs/web/src/pages/conditions.html">
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"></noscript>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="/web/src/styles/aegis-redesign.css">
     <style>
-        .footer { text-align: center; padding: 2rem; border-top: 1px solid rgba(255,255,255,0.05); margin-top: 3rem; }
-        .footer-links { display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
-        .footer-links a { color: #6b7280; text-decoration: none; font-size: 0.8rem; }
-        .footer-links a:hover { color: #00f2ff; }
-        .separator { color: #374151; }
-        .footer-proprietor { font-size: 0.75rem; color: #4b5563; margin-bottom: 0.5rem; }
-        .footer p { font-size: 0.7rem; color: #374151; }
+        .conditions-layout {
+            display: flex;
+            gap: var(--s-6);
+            align-items: flex-start;
+            max-width: var(--ae-max);
+            margin: 0 auto;
+            padding: var(--s-8) var(--s-5);
+        }
+        .conditions-sidebar {
+            position: sticky;
+            top: calc(64px + var(--s-5));
+            flex: 0 0 220px;
+            background: var(--ae-surface);
+            border: 1px solid var(--ae-border);
+            border-radius: var(--ae-radius-md);
+            padding: var(--s-5);
+        }
+        .conditions-sidebar h3 {
+            font-family: var(--ae-font-sans);
+            font-size: 0.78rem;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--ae-text-3);
+            margin-bottom: var(--s-3);
+        }
+        .conditions-sidebar ul {
+            list-style: none;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            gap: var(--s-2);
+        }
+        .conditions-sidebar ul li a {
+            color: var(--ae-text-2);
+            text-decoration: none;
+            font-size: 0.88rem;
+            line-height: 1.5;
+            transition: color var(--ae-fast) var(--ae-ease);
+        }
+        .conditions-sidebar ul li a:hover {
+            color: var(--ae-gold);
+        }
+        .conditions-content {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: var(--s-5);
+        }
         @media (max-width: 768px) {
-            .footer-links { gap: 0.5rem; }
-            .footer-links a { font-size: 0.7rem; }
-            .footer { padding: 1.5rem 1rem; }
+            .conditions-layout {
+                flex-direction: column;
+                padding: var(--s-7) var(--s-4);
+            }
+            .conditions-sidebar {
+                position: static;
+                flex: none;
+                width: 100%;
+            }
         }
     </style>
 </head>
-<body>
+<body class="ae-body">
 
-    <header class="fixed-header" id="main-nav">
-        <a href="/web/src/pages/index.html" class="logo" style="text-decoration:none;">⚡ AEGIS <span>v1.0</span> <span style="font-size:0.52rem;font-weight:800;font-family:monospace;letter-spacing:0.1em;background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.35);color:#00ff88;padding:1px 6px;border-radius:4px;text-transform:uppercase;vertical-align:middle;margin-left:5px;position:relative;top:-1px;">LIVE</span></a>
-
-        <nav class="nav-links-centered" aria-label="Main navigation">
-            <a href="/web/src/pages/index.html" class="nav-link">Home</a>
-            <a href="/web/src/pages/index.html#sentinel" class="nav-link">Sentinel</a>
-            <a href="/web/src/pages/index.html#cockpit" class="nav-link">Cockpit</a>
-            <a href="/web/src/pages/index.html#security" class="nav-link">Security</a>
-            <a href="/web/src/pages/pricing.html" class="nav-link">Pricing</a>
-            <a href="/web/src/pages/review.html" class="nav-link">Reviews</a>
+    <header class="ae-nav" id="main-nav">
+      <div class="ae-nav-inner">
+        <a href="/web/src/pages/index.html" class="ae-brand" style="text-decoration:none;">
+          AEGIS<span>&nbsp;·&nbsp;</span>v1.0
+        </a>
+        <nav class="ae-nav-links" aria-label="Main navigation">
+          <a href="/web/src/pages/index.html" class="ae-nav-link">Home</a>
+          <a href="/web/src/pages/pricing.html" class="ae-nav-link">Pricing</a>
+          <a href="/web/src/pages/track-record.html" class="ae-nav-link">Track Record</a>
+          <a href="/web/src/pages/review.html" class="ae-nav-link">Reviews</a>
         </nav>
-
-        <div class="nav-auth-desktop" style="display:flex;align-items:center;gap:0.5rem;">
-            <a href="/web/src/pages/index.html" class="nav-btn-login">
-                <i class="fas fa-user-shield"></i> Sign In
-            </a>
-            <a href="/web/src/pages/pricing.html" class="nav-btn-cta">
-                Get Started
-            </a>
+        <div class="ae-nav-actions">
+          <a href="/web/src/pages/index.html" class="ae-btn ae-btn-ghost ae-btn-sm">Sign In</a>
+          <a href="/web/src/pages/pricing.html" class="ae-btn ae-btn-primary ae-btn-sm">Get Access</a>
         </div>
-
-        <button class="nav-hamburger-btn" id="navHamburger" aria-label="Toggle navigation" aria-expanded="false">
-            <i class="fas fa-bars"></i>
+        <button id="navHamburger" aria-label="Toggle navigation" aria-expanded="false">
+          <i class="fas fa-bars"></i>
         </button>
+      </div>
     </header>
-
-    <div class="nav-mobile-drawer" id="navMobileDrawer">
-        <a href="/web/src/pages/index.html" class="nav-mobile-link"><i class="fas fa-home"></i> Home</a>
-        <a href="/web/src/pages/index.html#sentinel" class="nav-mobile-link"><i class="fas fa-satellite-dish"></i> Sentinel</a>
-        <a href="/web/src/pages/index.html#cockpit" class="nav-mobile-link"><i class="fas fa-desktop"></i> Cockpit</a>
-        <a href="/web/src/pages/index.html#security" class="nav-mobile-link"><i class="fas fa-shield-alt"></i> Security</a>
-        <a href="/web/src/pages/pricing.html" class="nav-mobile-link"><i class="fas fa-tag"></i> Pricing</a>
-        <a href="/web/src/pages/review.html" class="nav-mobile-link"><i class="fas fa-star"></i> Reviews</a>
-        <div class="nav-mobile-auth">
-            <a href="/web/src/pages/index.html" class="nav-btn-login"><i class="fas fa-user-shield"></i> Sign In</a>
-            <a href="/web/src/pages/pricing.html" class="nav-btn-cta">Get Started</a>
-        </div>
+    <div class="ae-mobile-drawer" id="navMobileDrawer" aria-hidden="true">
+      <a href="/web/src/pages/index.html" class="ae-mobile-link">Home</a>
+      <a href="/web/src/pages/pricing.html" class="ae-mobile-link">Pricing</a>
+      <a href="/web/src/pages/track-record.html" class="ae-mobile-link">Track Record</a>
+      <a href="/web/src/pages/review.html" class="ae-mobile-link">Reviews</a>
+      <hr class="ae-divider" style="margin:var(--s-3) 0;">
+      <div style="display:flex;flex-direction:column;gap:var(--s-2);padding:0 var(--s-2);">
+        <a href="/web/src/pages/pricing.html" class="ae-btn ae-btn-primary ae-btn-md">Get Access</a>
+      </div>
     </div>
 
-    <!-- Main content with sticky sidebar + disclosure content -->
-    <div class="disclosure-layout">
-        
+    <div class="conditions-layout">
+
         <!-- Sticky Quick Jump Sidebar -->
-        <aside class="disclosure-sidebar">
-            <h3><i class="fas fa-exclamation-triangle"></i> Quick Jump</h3>
+        <aside class="conditions-sidebar">
+            <h3>Quick Jump</h3>
             <ul>
-                <li><a href="#alpha">⚡ Alpha Mode Risk</a></li>
-                <li><a href="#no-advice">📢 No Financial Advice</a></li>
-                <li><a href="#uptime">🌐 System Uptime</a></li>
+                <li><a href="#alpha">Alpha Mode Risk</a></li>
+                <li><a href="#no-advice">No Financial Advice</a></li>
+                <li><a href="#uptime">System Uptime</a></li>
             </ul>
         </aside>
 
         <!-- Risk Disclosure Content -->
-        <div class="math-article" style="flex: 1;">
-            <div class="math-block">
-                <h1>Risk Disclosure & Conditions</h1>
-                <p><strong>Last Updated:</strong> <span id="conditions-last-updated">April 15, 2025</span> | <strong>Version:</strong> <span id="conditions-version">1.2.0</span></p>
-                <p><strong>IMPORTANT:</strong> Trading cryptocurrencies involves substantial risk of loss. You alone assume all risks.</p>
+        <div class="conditions-content">
+
+            <div style="background: var(--ae-surface); border: 1px solid var(--ae-border); border-radius: var(--ae-radius-md); padding: var(--s-6);">
+                <h1 style="font-family: var(--ae-font-serif); color: var(--ae-text-1); font-size: clamp(1.8rem,4vw,2.8rem); margin-bottom: var(--s-3);">Risk Disclosure &amp; Conditions</h1>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-2);"><strong style="color: var(--ae-text-1);">Last Updated:</strong> <span id="conditions-last-updated">April 15, 2025</span> &nbsp;|&nbsp; <strong style="color: var(--ae-text-1);">Version:</strong> <span id="conditions-version">1.2.0</span></p>
+                <p style="color: var(--ae-text-2); line-height: 1.8;"><strong style="color: var(--ae-text-1);">IMPORTANT:</strong> Trading cryptocurrencies involves substantial risk of loss. You alone assume all risks.</p>
             </div>
 
-            <div id="alpha" class="math-block">
-                <h2><i class="fas fa-bolt"></i> 1. The "Alpha Mode" Clause</h2>
-                <p>Alpha Mode is an advanced feature that <strong>bypasses the BTC-correlation safety filter</strong> and lowers the AI conviction floor to 55%. While this may capture decoupled altcoin moves, it <strong>increases exposure to fakeouts and market‑wide crashes</strong>.</p>
-                <div class="avoid-list" style="background: rgba(255,0,85,0.1); border-left: 4px solid var(--danger);">
-                    <i class="fas fa-skull-crosswalk"></i> <strong>By enabling Alpha Mode, you assume 100% of the risk of capital loss.</strong> The Platform is not responsible for any losses incurred while Alpha Mode is active.
+            <div id="alpha" style="background: var(--ae-surface); border: 1px solid var(--ae-border); border-radius: var(--ae-radius-md); padding: var(--s-6);">
+                <h2 style="color: var(--ae-text-1); font-family: var(--ae-font-sans); font-weight: 600; margin-bottom: var(--s-3);">1. The Alpha Mode Clause</h2>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">Alpha Mode is an advanced feature that <strong style="color: var(--ae-text-1);">bypasses the BTC-correlation safety filter</strong> and lowers the AI conviction floor to 55%. While this may capture decoupled altcoin moves, it <strong style="color: var(--ae-text-1);">increases exposure to fakeouts and market-wide crashes</strong>.</p>
+                <div style="background: var(--ae-sell-bg); border: 1px solid var(--ae-sell-border); border-radius: var(--ae-radius); padding: var(--s-4); color: var(--ae-text-2); line-height: 1.7;">
+                    <strong style="color: var(--ae-text-1);">By enabling Alpha Mode, you assume 100% of the risk of capital loss.</strong> The Platform is not responsible for any losses incurred while Alpha Mode is active.
                 </div>
             </div>
 
-            <div id="no-advice" class="math-block">
-                <h2><i class="fas fa-chart-line"></i> 2. No Financial Advice</h2>
-                <p>AEGIS v1.0 is a <strong>mathematical tool</strong> that generates signals based on historical data and machine learning. It is <strong>not a licensed financial advisor</strong>. All signals are for informational purposes only and do not constitute investment advice. You should consult a qualified financial professional before making trading decisions.</p>
+            <div id="no-advice" style="background: var(--ae-surface); border: 1px solid var(--ae-border); border-radius: var(--ae-radius-md); padding: var(--s-6);">
+                <h2 style="color: var(--ae-text-1); font-family: var(--ae-font-sans); font-weight: 600; margin-bottom: var(--s-3);">2. No Financial Advice</h2>
+                <p style="color: var(--ae-text-2); line-height: 1.8;">AEGIS v1.0 is a <strong style="color: var(--ae-text-1);">mathematical tool</strong> that generates signals based on historical data and machine learning. It is <strong style="color: var(--ae-text-1);">not a licensed financial advisor</strong>. All signals are for informational purposes only and do not constitute investment advice. You should consult a qualified financial professional before making trading decisions.</p>
             </div>
 
-            <div id="uptime" class="math-block">
-                <h2><i class="fas fa-server"></i> 3. System Uptime & Connectivity</h2>
-                <p>The quality of signals depends on real‑time data from exchange APIs and stable internet connectivity. The Platform is hosted in Dehradun, India, and international users may experience latency or outages due to ISP routing, regional censorship, or cloud provider failures. We do not guarantee 100% uptime; you acknowledge that missed signals or delayed executions are not our liability.</p>
+            <div id="uptime" style="background: var(--ae-surface); border: 1px solid var(--ae-border); border-radius: var(--ae-radius-md); padding: var(--s-6);">
+                <h2 style="color: var(--ae-text-1); font-family: var(--ae-font-sans); font-weight: 600; margin-bottom: var(--s-3);">3. System Uptime &amp; Connectivity</h2>
+                <p style="color: var(--ae-text-2); line-height: 1.8;">The quality of signals depends on real-time data from exchange APIs and stable internet connectivity. The Platform is hosted in Dehradun, India, and international users may experience latency or outages due to ISP routing, regional censorship, or cloud provider failures. We do not guarantee 100% uptime; you acknowledge that missed signals or delayed executions are not our liability.</p>
             </div>
 
-            <div class="math-block">
-                <p><i class="fas fa-handshake"></i> By using the Platform, you confirm that you have read, understood, and accepted these risks.</p>
+            <div style="background: var(--ae-surface); border: 1px solid var(--ae-border); border-radius: var(--ae-radius-md); padding: var(--s-6);">
+                <p style="color: var(--ae-text-2); line-height: 1.8;">By using the Platform, you confirm that you have read, understood, and accepted these risks.</p>
             </div>
+
         </div>
     </div>
 
-    <footer class="footer">
-        <div class="footer-links">
-            <a href="/web/src/pages/terms.html">Terms of Service</a>
-            <span class="separator">•</span>
-            <a href="/web/src/pages/conditions.html">Conditions</a>
-            <span class="separator">•</span>
-            <a href="/web/src/pages/privacy_policy.html">Privacy Policy</a>
-            <span class="separator">•</span>
-            <a href="/web/src/pages/refund_policy.html">Refund Policy</a>
-            <span class="separator">•</span>
-            <a href="/web/src/pages/risk_disclosure.html">Risk Disclosure</a>
+    <footer class="ae-footer">
+      <div class="ae-footer-grid">
+        <div>
+          <div class="ae-footer-brand">AEGIS v1.0</div>
+          <p class="ae-footer-desc">Institutional-grade crypto signal engine. Operated by Animesh Kukreti &amp; Aman Juiyal, Dehradun, Uttarakhand, India.</p>
         </div>
-        <div class="footer-proprietor">
-            Operated by <strong>Animesh Kukreti &amp; Aman Juiyal</strong> &nbsp;|&nbsp; Dehradun, Uttarakhand, India
+        <div>
+          <div class="ae-footer-col-title">Platform</div>
+          <div class="ae-footer-links">
+            <a href="/web/src/pages/pricing.html" class="ae-footer-link">Pricing</a>
+            <a href="/web/src/pages/track-record.html" class="ae-footer-link">Track Record</a>
+            <a href="/web/src/pages/review.html" class="ae-footer-link">Reviews</a>
+            <a href="/web/src/pages/pitch.html" class="ae-footer-link">Investor Brief</a>
+          </div>
         </div>
-        <p>© 2026 AEGIS v1.0 — Sovereign Intelligence Terminal</p>
+        <div>
+          <div class="ae-footer-col-title">Legal</div>
+          <div class="ae-footer-links">
+            <a href="/web/src/pages/terms.html" class="ae-footer-link">Terms of Service</a>
+            <a href="/web/src/pages/privacy_policy.html" class="ae-footer-link">Privacy Policy</a>
+            <a href="/web/src/pages/refund_policy.html" class="ae-footer-link">Refund Policy</a>
+            <a href="/web/src/pages/risk_disclosure.html" class="ae-footer-link">Risk Disclosure</a>
+          </div>
+        </div>
+        <div>
+          <div class="ae-footer-col-title">Contact</div>
+          <div class="ae-footer-links">
+            <a href="mailto:animeshkukreti@gatekeeper.sbs" class="ae-footer-link">animeshkukreti@gatekeeper.sbs</a>
+            <a href="/web/src/pages/conditions.html" class="ae-footer-link">Terms &amp; Conditions</a>
+          </div>
+        </div>
+      </div>
+      <div class="ae-footer-bottom">
+        <p class="ae-footer-legal">AEGIS v1.0 is a signal-generation tool and does not constitute financial advice. Cryptocurrency trading involves substantial risk of loss. Past signal performance is not indicative of future results. Not regulated by SEBI or any financial authority.</p>
+        <p style="font-size:0.72rem;color:var(--ae-text-4);white-space:nowrap;">© 2026 Animesh Kukreti &amp; Aman Juiyal</p>
+      </div>
     </footer>
 
     <script>
-    (function () {
-        var btn = document.getElementById('navHamburger');
-        var drawer = document.getElementById('navMobileDrawer');
-        if (!btn || !drawer) return;
-        function closeDrawer() {
-            drawer.classList.remove('open');
-            drawer.setAttribute('aria-hidden', 'true');
-            btn.setAttribute('aria-expanded', 'false');
-            var ico = btn.querySelector('i');
-            if (ico) ico.className = 'fas fa-bars';
-        }
-        btn.addEventListener('click', function (e) {
-            e.stopPropagation();
-            var open = drawer.classList.toggle('open');
-            drawer.setAttribute('aria-hidden', !open);
-            btn.setAttribute('aria-expanded', open);
-            var ico = btn.querySelector('i');
-            if (ico) ico.className = open ? 'fas fa-times' : 'fas fa-bars';
-        });
-        document.addEventListener('click', function (e) {
-            if (!btn.contains(e.target) && !drawer.contains(e.target)) closeDrawer();
-        });
-        drawer.querySelectorAll('.nav-mobile-link, .nav-btn-login, .nav-btn-cta').forEach(function (a) {
-            a.addEventListener('click', closeDrawer);
-        });
-    })();
-    </script>
+  const _ham = document.getElementById('navHamburger');
+  const _drw = document.getElementById('navMobileDrawer');
+  if (_ham && _drw) {
+    _ham.addEventListener('click', () => {
+      const open = _drw.classList.toggle('open');
+      _ham.setAttribute('aria-expanded', String(open));
+      _drw.setAttribute('aria-hidden', String(!open));
+    });
+    document.addEventListener('click', e => {
+      if (!_ham.contains(e.target) && !_drw.contains(e.target)) {
+        _drw.classList.remove('open');
+        _ham.setAttribute('aria-expanded', 'false');
+        _drw.setAttribute('aria-hidden', 'true');
+      }
+    });
+  }
+</script>
 </body>
 </html>

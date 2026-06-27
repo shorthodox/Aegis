@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <!-- Preload Firebase & Core Modules to prevent module waterfall blocking -->
@@ -12,194 +12,129 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Contact AEGIS v1.0</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
-    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap"></noscript>
-    <link rel="stylesheet" href="/web/dist/styles.css?v=1.1">
-    <link rel="stylesheet" href="/web/src/styles/main.css">
-    <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"></noscript>
     <link rel="canonical" href="https://gatekeeper.sbs/web/src/pages/contact.html">
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"></noscript>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="/web/src/styles/aegis-redesign.css">
 </head>
-<body>
+<body class="ae-body">
 
-    <header class="fixed-header" id="main-nav">
-        <a href="/web/src/pages/index.html" class="logo" style="text-decoration:none;">⚡ AEGIS <span>v1.0</span></a>
-
-        <nav class="nav-links-centered" aria-label="Main navigation">
-            <a href="/web/src/pages/index.html" class="nav-link">Home</a>
-            <a href="/web/src/pages/index.html#sentinel" class="nav-link">Sentinel</a>
-            <a href="/web/src/pages/index.html#cockpit" class="nav-link">Cockpit</a>
-            <a href="/web/src/pages/index.html#security" class="nav-link">Security</a>
-            <a href="/web/src/pages/review.html" class="nav-link">Reviews</a>
-            <a href="/web/src/pages/pricing.html" class="nav-link">Pricing</a>
+    <header class="ae-nav" id="main-nav">
+      <div class="ae-nav-inner">
+        <a href="/web/src/pages/index.html" class="ae-brand" style="text-decoration:none;">
+          AEGIS<span>&nbsp;·&nbsp;</span>v1.0
+        </a>
+        <nav class="ae-nav-links" aria-label="Main navigation">
+          <a href="/web/src/pages/index.html" class="ae-nav-link">Home</a>
+          <a href="/web/src/pages/pricing.html" class="ae-nav-link">Pricing</a>
+          <a href="/web/src/pages/track-record.html" class="ae-nav-link">Track Record</a>
+          <a href="/web/src/pages/review.html" class="ae-nav-link">Reviews</a>
         </nav>
-
-        <div class="nav-auth-desktop" style="display:flex;align-items:center;gap:0.5rem;">
-            <a href="/web/src/pages/index.html" class="nav-btn-login">
-                <i class="fas fa-user-shield"></i> Sign In
-            </a>
-            <a href="/web/src/pages/pricing.html" class="nav-btn-cta">
-                Get Started
-            </a>
+        <div class="ae-nav-actions">
+          <a href="/web/src/pages/index.html" class="ae-btn ae-btn-ghost ae-btn-sm">Sign In</a>
+          <a href="/web/src/pages/pricing.html" class="ae-btn ae-btn-primary ae-btn-sm">Get Access</a>
         </div>
-
-        <button class="nav-hamburger-btn" id="navHamburger" aria-label="Toggle navigation" aria-expanded="false">
-            <i class="fas fa-bars"></i>
+        <button id="navHamburger" aria-label="Toggle navigation" aria-expanded="false">
+          <i class="fas fa-bars"></i>
         </button>
+      </div>
     </header>
-
-    <div class="nav-mobile-drawer" id="navMobileDrawer">
-        <a href="/web/src/pages/index.html" class="nav-mobile-link"><i class="fas fa-home"></i> Home</a>
-        <a href="/web/src/pages/index.html#sentinel" class="nav-mobile-link"><i class="fas fa-satellite-dish"></i> Sentinel</a>
-        <a href="/web/src/pages/index.html#cockpit" class="nav-mobile-link"><i class="fas fa-desktop"></i> Cockpit</a>
-        <a href="/web/src/pages/index.html#security" class="nav-mobile-link"><i class="fas fa-shield-alt"></i> Security</a>
-        <a href="/web/src/pages/review.html" class="nav-mobile-link"><i class="fas fa-star"></i> Reviews</a>
-        <a href="/web/src/pages/pricing.html" class="nav-mobile-link"><i class="fas fa-tag"></i> Pricing</a>
-        <div class="nav-mobile-auth">
-            <a href="/web/src/pages/index.html" class="nav-btn-login"><i class="fas fa-user-shield"></i> Sign In</a>
-            <a href="/web/src/pages/pricing.html" class="nav-btn-cta">Get Started</a>
-        </div>
+    <div class="ae-mobile-drawer" id="navMobileDrawer" aria-hidden="true">
+      <a href="/web/src/pages/index.html" class="ae-mobile-link">Home</a>
+      <a href="/web/src/pages/pricing.html" class="ae-mobile-link">Pricing</a>
+      <a href="/web/src/pages/track-record.html" class="ae-mobile-link">Track Record</a>
+      <a href="/web/src/pages/review.html" class="ae-mobile-link">Reviews</a>
+      <hr class="ae-divider" style="margin:var(--s-3) 0;">
+      <div style="display:flex;flex-direction:column;gap:var(--s-2);padding:0 var(--s-2);">
+        <a href="/web/src/pages/pricing.html" class="ae-btn ae-btn-primary ae-btn-md">Get Access</a>
+      </div>
     </div>
 
-    <main class="page-content" style="max-width: 900px; margin: 140px auto 3rem; padding: 0 2rem;">
-        <section class="math-block">
-            <h1><i class="fas fa-envelope"></i> Contact Information</h1>
-            <p>For support, billing, refunds, legal inquiries, or questions about AEGIS v1.0, contact the operator below.</p>
+    <main class="ae-container" style="padding: var(--s-8) var(--s-5); max-width: var(--ae-max); margin: 0 auto;">
+
+        <section style="background: var(--ae-surface); border: 1px solid var(--ae-border); border-radius: var(--ae-radius-md); padding: var(--s-6); margin-bottom: var(--s-5);">
+            <h1 style="font-family: var(--ae-font-serif); color: var(--ae-text-1); font-size: clamp(1.8rem,4vw,2.8rem); margin-bottom: var(--s-3);">Contact Information</h1>
+            <p style="color: var(--ae-text-2); line-height: 1.8;">For support, billing, refunds, legal inquiries, or questions about AEGIS v1.0, contact the operator below.</p>
         </section>
 
-        <section class="math-block">
-            <h2>Contact Details</h2>
-            <ul style="list-style: none; padding: 0;">
-                <li><strong>Business Partners:</strong> Animesh Kukreti &amp; Aman Juiyal</li>
-                <li><strong>Location:</strong> Dehradun, Uttarakhand, India</li>
-                <li><strong>Email:</strong> <a href="mailto:animeshkukreti@gatekeeper.sbs">animeshkukreti@gatekeeper.sbs</a></li>
-                <li><strong>Business Hours:</strong> Monday–Friday, 10:00 AM to 6:00 PM IST</li>
+        <section style="background: var(--ae-surface); border: 1px solid var(--ae-border); border-radius: var(--ae-radius-md); padding: var(--s-6); margin-bottom: var(--s-5);">
+            <h2 style="color: var(--ae-text-1); font-family: var(--ae-font-sans); font-weight: 600; margin-bottom: var(--s-4);">Contact Details</h2>
+            <ul style="list-style: none; padding: 0; display: flex; flex-direction: column; gap: var(--s-3);">
+                <li style="color: var(--ae-text-2); line-height: 1.8;"><strong style="color: var(--ae-text-1);">Business Partners:</strong> Animesh Kukreti &amp; Aman Juiyal</li>
+                <li style="color: var(--ae-text-2); line-height: 1.8;"><strong style="color: var(--ae-text-1);">Location:</strong> Dehradun, Uttarakhand, India</li>
+                <li style="color: var(--ae-text-2); line-height: 1.8;"><strong style="color: var(--ae-text-1);">Email:</strong> <a href="mailto:animeshkukreti@gatekeeper.sbs" style="color: var(--ae-gold); text-decoration: none;">animeshkukreti@gatekeeper.sbs</a></li>
+                <li style="color: var(--ae-text-2); line-height: 1.8;"><strong style="color: var(--ae-text-1);">Business Hours:</strong> Monday–Friday, 10:00 AM to 6:00 PM IST</li>
             </ul>
         </section>
 
-        <section class="math-block">
-            <h2>How to Reach Us</h2>
-            <p>If you need help with your account, subscription, or refund request, please send an email with your registered account details and a short description of the issue.</p>
-            <p>For urgent billing or refund matters, include your order ID and the date of purchase in the subject line.</p>
+        <section style="background: var(--ae-surface); border: 1px solid var(--ae-border); border-radius: var(--ae-radius-md); padding: var(--s-6); margin-bottom: var(--s-5);">
+            <h2 style="color: var(--ae-text-1); font-family: var(--ae-font-sans); font-weight: 600; margin-bottom: var(--s-4);">How to Reach Us</h2>
+            <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-3);">If you need help with your account, subscription, or refund request, please send an email with your registered account details and a short description of the issue.</p>
+            <p style="color: var(--ae-text-2); line-height: 1.8;">For urgent billing or refund matters, include your order ID and the date of purchase in the subject line.</p>
         </section>
 
-        <section class="math-block">
-            <p><strong>Legal Notice:</strong> By contacting us, you agree that the information you provide may be used to address your support request and may be stored in accordance with our privacy practices.</p>
+        <section style="background: var(--ae-surface); border: 1px solid var(--ae-border); border-radius: var(--ae-radius-md); padding: var(--s-6);">
+            <p style="color: var(--ae-text-2); line-height: 1.8;"><strong style="color: var(--ae-text-1);">Legal Notice:</strong> By contacting us, you agree that the information you provide may be used to address your support request and may be stored in accordance with our privacy practices.</p>
         </section>
+
     </main>
 
-    <footer class="footer">
-        <div class="footer-links">
-            <a href="/web/src/pages/terms.html">Terms of Service</a>
-            <span class="separator">•</span>
-            <a href="/web/src/pages/conditions.html">Conditions</a>
-            <span class="separator">•</span>
-            <a href="/web/src/pages/privacy_policy.html">Privacy Policy</a>
-            <span class="separator">•</span>
-            <a href="/web/src/pages/refund_policy.html">Refund Policy</a>
-            <span class="separator">•</span>
-            <a href="/web/src/pages/risk_disclosure.html">Risk Disclosure</a>
+    <footer class="ae-footer">
+      <div class="ae-footer-grid">
+        <div>
+          <div class="ae-footer-brand">AEGIS v1.0</div>
+          <p class="ae-footer-desc">Institutional-grade crypto signal engine. Operated by Animesh Kukreti &amp; Aman Juiyal, Dehradun, Uttarakhand, India.</p>
         </div>
-        <div class="footer-proprietor">
-            Operated by <strong>Animesh Kukreti &amp; Aman Juiyal</strong> &nbsp;|&nbsp; Dehradun, Uttarakhand, India
+        <div>
+          <div class="ae-footer-col-title">Platform</div>
+          <div class="ae-footer-links">
+            <a href="/web/src/pages/pricing.html" class="ae-footer-link">Pricing</a>
+            <a href="/web/src/pages/track-record.html" class="ae-footer-link">Track Record</a>
+            <a href="/web/src/pages/review.html" class="ae-footer-link">Reviews</a>
+            <a href="/web/src/pages/pitch.html" class="ae-footer-link">Investor Brief</a>
+          </div>
         </div>
-        <p>© 2026 AEGIS v1.0 — Sovereign Intelligence Terminal</p>
+        <div>
+          <div class="ae-footer-col-title">Legal</div>
+          <div class="ae-footer-links">
+            <a href="/web/src/pages/terms.html" class="ae-footer-link">Terms of Service</a>
+            <a href="/web/src/pages/privacy_policy.html" class="ae-footer-link">Privacy Policy</a>
+            <a href="/web/src/pages/refund_policy.html" class="ae-footer-link">Refund Policy</a>
+            <a href="/web/src/pages/risk_disclosure.html" class="ae-footer-link">Risk Disclosure</a>
+          </div>
+        </div>
+        <div>
+          <div class="ae-footer-col-title">Contact</div>
+          <div class="ae-footer-links">
+            <a href="mailto:animeshkukreti@gatekeeper.sbs" class="ae-footer-link">animeshkukreti@gatekeeper.sbs</a>
+            <a href="/web/src/pages/conditions.html" class="ae-footer-link">Terms &amp; Conditions</a>
+          </div>
+        </div>
+      </div>
+      <div class="ae-footer-bottom">
+        <p class="ae-footer-legal">AEGIS v1.0 is a signal-generation tool and does not constitute financial advice. Cryptocurrency trading involves substantial risk of loss. Past signal performance is not indicative of future results. Not regulated by SEBI or any financial authority.</p>
+        <p style="font-size:0.72rem;color:var(--ae-text-4);white-space:nowrap;">© 2026 Animesh Kukreti &amp; Aman Juiyal</p>
+      </div>
     </footer>
-    </div>
-    </div>
 
-    
-    
-    </div>
-
-    
-    <!-- ========== 3‑STEP ONBOARDING MODAL (with password fields) ========== -->
-    <div id="loginModal" class="modal">
-        <div class="modal-card">
-            <!-- Close button with inline styles to guarantee clickability -->
-            <span class="close-modal" style="position: absolute; top: 1rem; right: 1.5rem; font-size: 1.8rem; cursor: pointer; color: var(--dim, #94a3b8); z-index: 1001; pointer-events: auto;">&times;</span>
-
-            <!-- Step 1: Email / Google -->
-            <div id="step1" class="step active">
-                <div class="modal-logo">⚡ AEGIS</div>
-                <button id="googleStepBtn" class="provider-btn"><i class="fab fa-google"></i> Continue with Google</button>
-                <div class="divider">or</div>
-                <input type="text" id="emailInput" class="auth-input" placeholder="Email or mobile number">
-                <p class="info-note">Use your email to sign in or register. Start with a phone number for mobile OTP.</p>
-                <button id="continueToOtpBtn" class="auth-submit-btn">Continue</button>
-            </div>
-
-            <!-- Step 2: OTP Verification -->
-            <div id="step2" class="step">
-                <h3 style="text-align:center; margin-bottom:1rem;">Enter verification code</h3>
-                <p style="text-align:center; color:var(--dim); font-size:0.8rem;">We sent a 6‑digit code to <span id="otpEmailDisplay"></span></p>
-                <div class="otp-container" id="otpContainer">
-                    <input type="text" maxlength="1" class="otp-digit" data-idx="0">
-                    <input type="text" maxlength="1" class="otp-digit" data-idx="1">
-                    <input type="text" maxlength="1" class="otp-digit" data-idx="2">
-                    <input type="text" maxlength="1" class="otp-digit" data-idx="3">
-                    <input type="text" maxlength="1" class="otp-digit" data-idx="4">
-                    <input type="text" maxlength="1" class="otp-digit" data-idx="5">
-                </div>
-                <button id="backToEmailBtn" class="auth-secondary-btn" style="margin-top:0.5rem;">← Back</button>
-            </div>
-
-            <!-- Step 3: Onboarding (Profile + Password) -->
-            <div id="step3" class="step">
-                <h3 id="onboardingTitle" style="text-align:center; margin-bottom:1rem;">Complete your account</h3>
-                <div class="profile-upload" id="avatarUploadSection">
-                    <div id="avatarUpload" class="avatar-upload">
-                        <i class="fas fa-cloud-upload-alt"></i>
-                        <span>Upload Photo</span>
-                    </div>
-                    <div class="upload-hint">300x300px min. JPG, GIF, PNG. Max 4MB.</div>
-                    <input type="file" id="avatarFile" accept="image/jpeg,image/png,image/gif" style="display:none;">
-                </div>
-                <div id="profileFields">
-                    <div class="labeled-input">
-                        <label>Full name</label>
-                        <input type="text" id="fullName" class="auth-input" placeholder="e.g., Satoshi Nakamoto">
-                    </div>
-                    <div class="labeled-input">
-                        <label>Your location</label>
-                        <input type="text" id="location" class="auth-input" placeholder="City, Country">
-                    </div>
-                </div>
-    </div>
-
-    <script type="module" src="/web/src/scripts/landing.js"></script>
     <script>
-    (function(){
-        var btn = document.getElementById('navHamburger');
-        var drawer = document.getElementById('navMobileDrawer');
-        if (!btn || !drawer) return;
-        btn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            var open = drawer.classList.toggle('open');
-            btn.setAttribute('aria-expanded', open);
-            var ico = btn.querySelector('i');
-            if (ico) ico.className = open ? 'fas fa-times' : 'fas fa-bars';
-        });
-        document.addEventListener('click', function(e) {
-            if (!btn.contains(e.target) && !drawer.contains(e.target)) {
-                drawer.classList.remove('open');
-                btn.setAttribute('aria-expanded','false');
-                var ico = btn.querySelector('i');
-                if (ico) ico.className = 'fas fa-bars';
-            }
-        });
-        drawer.querySelectorAll('.nav-mobile-link, .nav-btn-login, .nav-btn-cta').forEach(function(a) {
-            a.addEventListener('click', function() {
-                drawer.classList.remove('open');
-                btn.setAttribute('aria-expanded','false');
-                var ico = btn.querySelector('i');
-                if (ico) ico.className = 'fas fa-bars';
-            });
-        });
-    })();
-    </script>
+  const _ham = document.getElementById('navHamburger');
+  const _drw = document.getElementById('navMobileDrawer');
+  if (_ham && _drw) {
+    _ham.addEventListener('click', () => {
+      const open = _drw.classList.toggle('open');
+      _ham.setAttribute('aria-expanded', String(open));
+      _drw.setAttribute('aria-hidden', String(!open));
+    });
+    document.addEventListener('click', e => {
+      if (!_ham.contains(e.target) && !_drw.contains(e.target)) {
+        _drw.classList.remove('open');
+        _ham.setAttribute('aria-expanded', 'false');
+        _drw.setAttribute('aria-hidden', 'true');
+      }
+    });
+  }
+</script>
 </body>
 </html>

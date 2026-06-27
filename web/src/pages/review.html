@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <!-- Preload Firebase & Core Modules to prevent module waterfall blocking -->
@@ -15,262 +15,345 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://cdnjs.cloudflare.com">
-    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap"></noscript>
-    <link rel="stylesheet" href="/web/dist/styles.css?v=1.1">
-    <link rel="stylesheet" href="/web/src/styles/main.css">
-    <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"></noscript>
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"></noscript>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="/web/src/styles/aegis-redesign.css">
     <link rel="canonical" href="https://gatekeeper.sbs/web/src/pages/review.html">
     <style>
-        body { padding-top: 80px; background: #0a0a0c; color: #e2e8f0; overflow-y: auto; }
+        body {
+            background: var(--ae-base);
+            color: var(--ae-text-1);
+            font-family: var(--ae-font-sans);
+            padding-top: 60px;
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
+        }
 
-        .footer { text-align:center; padding:2rem; border-top:1px solid rgba(255,255,255,0.05); margin-top:3rem; }
-        .footer-links { display:flex; justify-content:center; gap:1rem; flex-wrap:wrap; margin-bottom:1rem; }
-        .footer-links a { color:#6b7280; text-decoration:none; font-size:0.8rem; }
-        .footer-links a:hover { color:#00f2ff; }
-        .separator { color:#374151; }
-        .footer-proprietor { font-size:0.75rem; color:#4b5563; margin-bottom:0.5rem; }
-        .footer p { font-size:0.7rem; color:#374151; }
+        /* ── Mobile drawer ─────────────────────────────────────── */
+        .ae-mobile-drawer {
+            position: fixed;
+            top: 60px; left: 0; right: 0;
+            z-index: 800;
+            background: var(--ae-base);
+            border-bottom: 1px solid var(--ae-border);
+            display: none;
+            flex-direction: column;
+            padding: var(--s-4);
+            gap: var(--s-1);
+            max-height: calc(100vh - 60px);
+            overflow-y: auto;
+        }
+        .ae-mobile-drawer.open { display: flex; }
+        .ae-mobile-link {
+            font-size: 0.88rem;
+            color: var(--ae-text-2);
+            text-decoration: none;
+            padding: 10px var(--s-4);
+            border-radius: var(--ae-radius);
+            display: block;
+            transition: background 120ms, color 120ms;
+        }
+        .ae-mobile-link:hover, .ae-mobile-link.mobile-active {
+            background: var(--ae-raised);
+            color: var(--ae-text-1);
+        }
 
-        /* Page hero */
+        /* ── Hamburger ─────────────────────────────────────────── */
+        #navHamburger {
+            display: none;
+            align-items: center; justify-content: center;
+            width: 36px; height: 36px;
+            background: transparent;
+            border: 1px solid var(--ae-border);
+            border-radius: var(--ae-radius);
+            cursor: pointer;
+            color: var(--ae-text-2);
+            font-size: 0.85rem;
+            flex-shrink: 0;
+            transition: border-color 120ms, color 120ms;
+        }
+        #navHamburger:hover { border-color: var(--ae-border-bright); color: var(--ae-text-1); }
+
+        @media (max-width: 900px) {
+            .ae-nav-links { display: none !important; }
+            .ae-nav-actions { display: none !important; }
+            #navHamburger { display: flex !important; }
+        }
+        @media (min-width: 901px) {
+            #navMobileDrawer { display: none !important; }
+        }
+
+        /* ── Page hero ──────────────────────────────────────────── */
         .rv-hero {
             text-align: center;
-            padding: 3.5rem 2rem 2rem;
-            max-width: 700px;
+            padding: var(--s-9) var(--s-5) var(--s-7);
+            max-width: 680px;
             margin: 0 auto;
         }
         .rv-hero h1 {
-            font-size: 2rem;
-            font-weight: 800;
-            background: linear-gradient(135deg, #fff, #00f2ff);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-            margin-bottom: 0.6rem;
+            font-family: var(--ae-font-serif);
+            font-size: clamp(2rem, 5vw, 3rem);
+            font-weight: 400;
+            color: var(--ae-text-1);
+            margin-bottom: var(--s-4);
+            line-height: 1.15;
         }
-        .rv-hero p { color: #94a3b8; font-size: 0.92rem; line-height: 1.6; }
+        .rv-hero p {
+            color: var(--ae-text-2);
+            font-size: 0.92rem;
+            line-height: 1.8;
+        }
 
-        /* Category pill selector */
+        /* ── Category pill selector ─────────────────────────────── */
         .rv-categories {
             display: flex;
             flex-wrap: wrap;
-            gap: 0.5rem;
-            margin-bottom: 1.5rem;
+            gap: var(--s-2);
+            margin-bottom: var(--s-6);
         }
         .rv-cat-btn {
-            padding: 0.4rem 1rem;
-            border-radius: 40px;
+            padding: var(--s-2) var(--s-4);
+            border-radius: 100px;
             font-size: 0.78rem;
-            font-weight: 600;
+            font-weight: 500;
             cursor: pointer;
-            background: rgba(255,255,255,0.04);
-            border: 1px solid rgba(255,255,255,0.1);
-            color: #94a3b8;
-            transition: all 0.2s;
+            background: var(--ae-surface);
+            border: 1px solid var(--ae-border-mid);
+            color: var(--ae-text-2);
+            transition: border-color 120ms, color 120ms;
+            font-family: var(--ae-font-sans);
         }
-        .rv-cat-btn:hover, .rv-cat-btn.active {
-            background: rgba(0,242,255,0.1);
-            border-color: rgba(0,242,255,0.4);
-            color: #00f2ff;
+        .rv-cat-btn:hover {
+            border-color: var(--ae-border-bright);
+            color: var(--ae-text-1);
+        }
+        .rv-cat-btn.active {
+            border-color: var(--ae-gold);
+            color: var(--ae-gold);
         }
 
-        /* Form card */
+        /* ── Form card ──────────────────────────────────────────── */
         .rv-card {
-            background: rgba(0,0,0,0.35);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255,255,255,0.07);
-            border-radius: 24px;
-            padding: 2rem;
+            background: var(--ae-surface);
+            border: 1px solid var(--ae-border);
+            border-radius: var(--ae-radius-md);
+            padding: var(--s-6);
             max-width: 680px;
             margin: 0 auto;
         }
 
-        /* Field labels */
+        /* ── Field labels ───────────────────────────────────────── */
         .rv-label {
             display: block;
-            font-size: 0.68rem;
-            font-weight: 700;
+            font-size: 0.72rem;
+            font-weight: 600;
             letter-spacing: 0.1em;
             text-transform: uppercase;
-            color: #64748b;
-            margin-bottom: 0.4rem;
+            color: var(--ae-gold);
+            margin-bottom: var(--s-2);
         }
-        .rv-field { margin-bottom: 1.2rem; }
+        .rv-field { margin-bottom: var(--s-5); }
 
-        /* Inputs & textarea */
+        /* ── Inputs & textarea ──────────────────────────────────── */
         .rv-input, .rv-textarea, .rv-select {
             width: 100%;
             box-sizing: border-box;
-            background: rgba(0,0,0,0.4);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 10px;
-            color: #e2e8f0;
+            background: var(--ae-raised);
+            border: 1px solid var(--ae-border-mid);
+            border-radius: var(--ae-radius);
+            color: var(--ae-text-1);
             font-size: 0.88rem;
-            padding: 0.7rem 0.9rem;
-            transition: border-color 0.2s, box-shadow 0.2s;
-            font-family: inherit;
+            padding: var(--s-3) var(--s-4);
+            transition: border-color 120ms;
+            font-family: var(--ae-font-sans);
             -webkit-appearance: none;
-        }
-        .rv-input:focus, .rv-textarea:focus, .rv-select:focus {
             outline: none;
-            border-color: rgba(0,242,255,0.5);
-            box-shadow: 0 0 0 2px rgba(0,242,255,0.12);
+        }
+        .rv-input::placeholder, .rv-textarea::placeholder { color: var(--ae-text-3); }
+        .rv-input:focus, .rv-textarea:focus, .rv-select:focus {
+            border-color: var(--ae-border-bright);
+            background: var(--ae-overlay, #1A2028);
         }
         .rv-textarea { resize: vertical; min-height: 110px; }
-        .rv-select option { background: #111827; }
+        .rv-select option { background: var(--ae-surface); color: var(--ae-text-1); }
 
-        /* Two-col grid */
-        .rv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        /* ── Two-col grid ───────────────────────────────────────── */
+        .rv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-4); }
         @media (max-width: 560px) { .rv-grid { grid-template-columns: 1fr; } }
 
-        /* Star rating */
+        /* ── Star rating ────────────────────────────────────────── */
         .rv-stars { display: flex; gap: 6px; }
         .rv-star {
             font-size: 1.6rem;
             cursor: pointer;
-            color: rgba(255,255,255,0.15);
-            transition: color 0.15s, transform 0.15s;
+            color: var(--ae-text-3);
+            transition: color 120ms, transform 120ms;
             user-select: none;
             line-height: 1;
         }
-        .rv-star:hover, .rv-star.lit { color: #fbbf24; }
-        .rv-star:hover { transform: scale(1.15); }
+        .rv-star:hover, .rv-star.lit { color: var(--ae-gold); }
+        .rv-star:hover { transform: scale(1.12); }
 
-        /* Severity selector (bug only) */
-        .rv-severity-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        /* ── Severity selector (bug only) ───────────────────────── */
+        .rv-severity-row { display: flex; gap: var(--s-2); flex-wrap: wrap; }
         .rv-sev-btn {
-            padding: 0.3rem 0.8rem;
-            border-radius: 8px;
+            padding: var(--s-2) var(--s-3);
+            border-radius: var(--ae-radius);
             font-size: 0.75rem;
             font-weight: 600;
             cursor: pointer;
-            border: 1px solid transparent;
-            background: rgba(255,255,255,0.04);
-            color: #94a3b8;
-            transition: all 0.18s;
+            border: 1px solid var(--ae-border-mid);
+            background: var(--ae-raised);
+            color: var(--ae-text-2);
+            transition: all 120ms;
+            font-family: var(--ae-font-sans);
         }
-        .rv-sev-btn[data-sev="low"].active    { background:rgba(34,197,94,0.12);  border-color:rgba(34,197,94,0.4);  color:#4ade80; }
-        .rv-sev-btn[data-sev="medium"].active { background:rgba(251,191,36,0.12); border-color:rgba(251,191,36,0.4); color:#fbbf24; }
-        .rv-sev-btn[data-sev="high"].active   { background:rgba(239,68,68,0.12);  border-color:rgba(239,68,68,0.4);  color:#f87171; }
-        .rv-sev-btn[data-sev="critical"].active { background:rgba(220,38,38,0.2);border-color:rgba(220,38,38,0.6);  color:#ef4444; }
+        .rv-sev-btn[data-sev="low"].active    { background: var(--ae-buy-bg);   border-color: var(--ae-buy-border);  color: var(--ae-buy); }
+        .rv-sev-btn[data-sev="medium"].active { background: var(--ae-gold-dim); border-color: var(--ae-gold-mid);    color: var(--ae-gold); }
+        .rv-sev-btn[data-sev="high"].active   { background: var(--ae-sell-bg);  border-color: var(--ae-sell-border); color: var(--ae-sell); }
+        .rv-sev-btn[data-sev="critical"].active { background: rgba(122,64,64,0.2); border-color: rgba(122,64,64,0.5); color: #c06060; }
 
-        /* Submit button */
+        /* ── Submit button ──────────────────────────────────────── */
         .rv-submit {
             width: 100%;
-            padding: 0.8rem;
-            border-radius: 48px;
-            background: linear-gradient(95deg, #00f2ff, #00a1b0);
-            color: #050505;
-            font-weight: 800;
-            font-size: 0.95rem;
-            border: none;
+            padding: var(--s-3) var(--s-5);
+            border-radius: var(--ae-radius);
+            background: var(--ae-gold);
+            color: #0B0D10;
+            font-weight: 600;
+            font-size: 0.88rem;
+            border: 1px solid var(--ae-gold);
             cursor: pointer;
-            transition: all 0.2s;
-            margin-top: 0.5rem;
+            transition: background 120ms, border-color 120ms;
+            margin-top: var(--s-2);
+            font-family: var(--ae-font-sans);
+            letter-spacing: 0.04em;
         }
-        .rv-submit:hover { filter: brightness(1.06); box-shadow: 0 0 20px rgba(0,242,255,0.35); }
-        .rv-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+        .rv-submit:hover { background: #C9A87A; border-color: #C9A87A; }
+        .rv-submit:disabled { opacity: 0.4; cursor: not-allowed; }
 
-        /* Success/error states */
+        /* ── Success state ──────────────────────────────────────── */
         .rv-success {
             display: none;
             text-align: center;
-            padding: 2.5rem 1rem;
+            padding: var(--s-9) var(--s-5);
         }
         .rv-success-icon {
-            width: 56px; height: 56px;
+            width: 52px; height: 52px;
             border-radius: 50%;
-            background: rgba(0,242,255,0.1);
-            border: 1px solid rgba(0,242,255,0.3);
+            background: var(--ae-buy-bg);
+            border: 1px solid var(--ae-buy-border);
             display: flex; align-items: center; justify-content: center;
-            margin: 0 auto 1rem;
-            font-size: 1.5rem;
-            color: #00f2ff;
+            margin: 0 auto var(--s-5);
+            font-size: 1.2rem;
+            color: var(--ae-buy);
         }
+        .rv-success h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--ae-text-1);
+            margin-bottom: var(--s-3);
+        }
+        .rv-success p {
+            font-size: 0.85rem;
+            color: var(--ae-text-2);
+            max-width: 380px;
+            margin: 0 auto var(--s-6);
+            line-height: 1.7;
+        }
+        .rv-success-reset {
+            padding: var(--s-2) var(--s-5);
+            border-radius: var(--ae-radius);
+            background: transparent;
+            border: 1px solid var(--ae-border-mid);
+            color: var(--ae-text-2);
+            font-weight: 500;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: border-color 120ms, color 120ms;
+            font-family: var(--ae-font-sans);
+        }
+        .rv-success-reset:hover { border-color: var(--ae-border-bright); color: var(--ae-text-1); }
 
-        /* Char counter */
-        .rv-charcount { font-size: 0.7rem; color: #475569; text-align: right; margin-top: 3px; }
+        /* ── Char counter ───────────────────────────────────────── */
+        .rv-charcount { font-size: 0.7rem; color: var(--ae-text-3); text-align: right; margin-top: var(--s-1); }
 
-        /* Section divider */
+        /* ── Section divider ────────────────────────────────────── */
         .rv-divider {
             border: none;
-            border-top: 1px solid rgba(255,255,255,0.07);
-            margin: 1.5rem 0;
+            border-top: 1px solid var(--ae-border);
+            margin: var(--s-5) 0;
         }
 
-        /* Info blurb */
+        /* ── Info blurb ─────────────────────────────────────────── */
         .rv-info-row {
             display: flex;
             align-items: flex-start;
-            gap: 10px;
-            padding: 0.75rem 1rem;
-            border-radius: 10px;
-            background: rgba(0,242,255,0.03);
-            border: 1px solid rgba(0,242,255,0.1);
+            gap: var(--s-3);
+            padding: var(--s-3) var(--s-4);
+            border-radius: var(--ae-radius);
+            background: var(--ae-raised);
+            border: 1px solid var(--ae-border);
             font-size: 0.78rem;
-            color: #64748b;
-            line-height: 1.5;
-            margin-bottom: 1.5rem;
+            color: var(--ae-text-2);
+            line-height: 1.6;
+            margin-bottom: var(--s-5);
         }
-        .rv-info-row i { color: rgba(0,242,255,0.5); margin-top: 2px; flex-shrink: 0; }
+        .rv-info-row i { color: var(--ae-gold); margin-top: 2px; flex-shrink: 0; }
     </style>
 </head>
 <body>
 
-    <!-- Fixed Glass Header -->
-    <header class="fixed-header" id="main-nav">
-        <a href="/web/src/pages/index.html" class="logo" style="text-decoration:none;">⚡ AEGIS <span>v1.0</span> <span style="font-size:0.52rem;font-weight:800;font-family:monospace;letter-spacing:0.1em;background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.35);color:#00ff88;padding:1px 6px;border-radius:4px;text-transform:uppercase;vertical-align:middle;margin-left:5px;position:relative;top:-1px;">LIVE</span></a>
-
-        <nav class="nav-links-centered" aria-label="Main navigation">
-            <a href="/web/src/pages/index.html" class="nav-link">Home</a>
-            <a href="/web/src/pages/index.html#sentinel" class="nav-link">Sentinel</a>
-            <a href="/web/src/pages/index.html#cockpit" class="nav-link">Cockpit</a>
-            <a href="/web/src/pages/index.html#security" class="nav-link">Security</a>
-            <a href="/web/src/pages/pricing.html" class="nav-link">Pricing</a>
-            <a href="/web/src/pages/review.html" class="nav-link active">Reviews</a>
+    <header class="ae-nav" id="main-nav">
+      <div class="ae-nav-inner">
+        <a href="/web/src/pages/index.html" class="ae-brand" style="text-decoration:none;">
+          AEGIS<span>&nbsp;·&nbsp;</span>v1.0
+        </a>
+        <nav class="ae-nav-links" aria-label="Main navigation">
+          <a href="/web/src/pages/index.html" class="ae-nav-link">Home</a>
+          <a href="/web/src/pages/pricing.html" class="ae-nav-link">Pricing</a>
+          <a href="/web/src/pages/track-record.html" class="ae-nav-link">Track Record</a>
+          <a href="/web/src/pages/review.html" class="ae-nav-link active">Reviews</a>
         </nav>
-
-        <div class="nav-auth-desktop" style="display:flex;align-items:center;gap:0.5rem;">
-            <a href="/web/src/pages/index.html" class="nav-btn-login"><i class="fas fa-user-shield"></i> Sign In</a>
-            <a href="/web/src/pages/pricing.html" class="nav-btn-cta">Get Started</a>
+        <div class="ae-nav-actions">
+          <a href="/web/src/pages/index.html" class="ae-btn ae-btn-ghost ae-btn-sm">Sign In</a>
+          <a href="/web/src/pages/pricing.html" class="ae-btn ae-btn-primary ae-btn-sm">Get Access</a>
         </div>
-
-        <button class="nav-hamburger-btn" id="navHamburger" aria-label="Toggle navigation" aria-expanded="false">
-            <i class="fas fa-bars"></i>
+        <button id="navHamburger" aria-label="Toggle navigation" aria-expanded="false">
+          <i class="fas fa-bars"></i>
         </button>
+      </div>
     </header>
-
-    <div class="nav-mobile-drawer" id="navMobileDrawer">
-        <a href="/web/src/pages/index.html" class="nav-mobile-link"><i class="fas fa-home"></i> Home</a>
-        <a href="/web/src/pages/index.html#sentinel" class="nav-mobile-link"><i class="fas fa-satellite-dish"></i> Sentinel</a>
-        <a href="/web/src/pages/index.html#cockpit" class="nav-mobile-link"><i class="fas fa-desktop"></i> Cockpit</a>
-        <a href="/web/src/pages/index.html#security" class="nav-mobile-link"><i class="fas fa-shield-alt"></i> Security</a>
-        <a href="/web/src/pages/pricing.html" class="nav-mobile-link"><i class="fas fa-tag"></i> Pricing</a>
-        <a href="/web/src/pages/review.html" class="nav-mobile-link mobile-active"><i class="fas fa-star"></i> Reviews</a>
-        <div class="nav-mobile-auth">
-            <a href="/web/src/pages/index.html" class="nav-btn-login"><i class="fas fa-user-shield"></i> Sign In</a>
-            <a href="/web/src/pages/pricing.html" class="nav-btn-cta">Get Started</a>
-        </div>
+    <div class="ae-mobile-drawer" id="navMobileDrawer" aria-hidden="true">
+      <a href="/web/src/pages/index.html" class="ae-mobile-link">Home</a>
+      <a href="/web/src/pages/pricing.html" class="ae-mobile-link">Pricing</a>
+      <a href="/web/src/pages/track-record.html" class="ae-mobile-link">Track Record</a>
+      <a href="/web/src/pages/review.html" class="ae-mobile-link mobile-active">Reviews</a>
+      <hr class="ae-divider" style="margin:var(--s-3) 0;">
+      <div style="display:flex;flex-direction:column;gap:var(--s-2);padding:0 var(--s-2);">
+        <a href="/web/src/pages/pricing.html" class="ae-btn ae-btn-primary ae-btn-md">Get Access</a>
+      </div>
     </div>
 
     <!-- Page Hero -->
     <div class="rv-hero">
-        <h1><i class="fas fa-comment-alt" style="font-size:1.6rem;margin-right:10px;"></i>Reviews &amp; Feedback</h1>
-        <p>Help us build a better Aegis‑1. Report bugs, request features, or tell us what's working well — every submission goes directly to the development team.</p>
+        <p class="ae-eyebrow" style="margin-bottom:var(--s-4);">Reviews &amp; Feedback</p>
+        <h1>Tell us what you think</h1>
+        <p>Help us build a better Aegis&#8209;1. Report bugs, request features, or tell us what&rsquo;s working well &mdash; every submission goes directly to the development team.</p>
     </div>
 
     <!-- Main feedback form -->
-    <div style="max-width:680px;margin:0 auto;padding:0 1rem 4rem;">
+    <div style="max-width:680px;margin:0 auto;padding:0 var(--s-5) var(--s-9);">
 
         <!-- Feedback type pills -->
-        <div style="text-align:center;margin-bottom:1.5rem;">
-            <p style="font-size:0.72rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#64748b;margin-bottom:0.75rem;">What are you sharing today?</p>
+        <div style="text-align:center;margin-bottom:var(--s-6);">
+            <p style="font-size:0.72rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--ae-text-2);margin-bottom:var(--s-4);">What are you sharing today?</p>
             <div class="rv-categories" style="justify-content:center;">
-                <button class="rv-cat-btn active" data-type="general" type="button"><i class="fas fa-comment" style="margin-right:5px;"></i>General Feedback</button>
-                <button class="rv-cat-btn" data-type="bug" type="button"><i class="fas fa-bug" style="margin-right:5px;"></i>Bug Report</button>
-                <button class="rv-cat-btn" data-type="feature" type="button"><i class="fas fa-lightbulb" style="margin-right:5px;"></i>Feature Request</button>
-                <button class="rv-cat-btn" data-type="convenience" type="button"><i class="fas fa-sliders-h" style="margin-right:5px;"></i>Convenience / UX</button>
+                <button class="rv-cat-btn active" data-type="general" type="button"><i class="fas fa-comment" style="margin-right:6px;"></i>General Feedback</button>
+                <button class="rv-cat-btn" data-type="bug" type="button"><i class="fas fa-bug" style="margin-right:6px;"></i>Bug Report</button>
+                <button class="rv-cat-btn" data-type="feature" type="button"><i class="fas fa-lightbulb" style="margin-right:6px;"></i>Feature Request</button>
+                <button class="rv-cat-btn" data-type="convenience" type="button"><i class="fas fa-sliders-h" style="margin-right:6px;"></i>Convenience / UX</button>
             </div>
         </div>
 
@@ -279,9 +362,9 @@
             <!-- Success state (hidden by default) -->
             <div class="rv-success" id="rv-success">
                 <div class="rv-success-icon"><i class="fas fa-check"></i></div>
-                <h3 style="font-size:1.15rem;font-weight:800;color:#e2e8f0;margin:0 0 0.5rem;">Feedback received — thank you!</h3>
-                <p style="font-size:0.85rem;color:#64748b;max-width:380px;margin:0 auto 1.5rem;">Your submission has been sent to <strong style="color:#00f2ff;">animeshkukreti@gatekeeper.sbs</strong>. We review every submission personally.</p>
-                <button onclick="document.getElementById('rv-success').style.display='none';document.getElementById('rv-form-wrap').style.display='block';" style="padding:0.5rem 1.5rem;border-radius:40px;background:rgba(0,242,255,0.1);border:1px solid rgba(0,242,255,0.3);color:#00f2ff;font-weight:600;cursor:pointer;font-size:0.85rem;">Submit another</button>
+                <h3>Feedback received &mdash; thank you!</h3>
+                <p>Your submission has been sent to <strong style="color:var(--ae-gold);">animeshkukreti@gatekeeper.sbs</strong>. We review every submission personally.</p>
+                <button class="rv-success-reset" onclick="document.getElementById('rv-success').style.display='none';document.getElementById('rv-form-wrap').style.display='block';">Submit another</button>
             </div>
 
             <!-- The form -->
@@ -289,7 +372,7 @@
 
                 <div class="rv-info-row">
                     <i class="fas fa-envelope"></i>
-                    <span>All feedback is sent to <strong style="color:#00f2ff;">animeshkukreti@gatekeeper.sbs</strong> — the official AEGIS development address. Your name and email are optional but help us follow up if needed.</span>
+                    <span>All feedback is sent to <strong style="color:var(--ae-text-1);">animeshkukreti@gatekeeper.sbs</strong> &mdash; the official AEGIS development address. Your name and email are optional but help us follow up if needed.</span>
                 </div>
 
                 <!-- FormSubmit backend — sends email to the work address -->
@@ -309,11 +392,11 @@
                     <!-- Name + Email row -->
                     <div class="rv-grid">
                         <div class="rv-field">
-                            <label class="rv-label">Your Name <span style="color:#475569;font-weight:400;text-transform:none;letter-spacing:0;">(optional)</span></label>
+                            <label class="rv-label">Your Name <span style="color:var(--ae-text-3);font-weight:400;text-transform:none;letter-spacing:0;">(optional)</span></label>
                             <input type="text" name="name" class="rv-input" placeholder="e.g. Satoshi N.">
                         </div>
                         <div class="rv-field">
-                            <label class="rv-label">Email <span style="color:#475569;font-weight:400;text-transform:none;letter-spacing:0;">(optional)</span></label>
+                            <label class="rv-label">Email <span style="color:var(--ae-text-3);font-weight:400;text-transform:none;letter-spacing:0;">(optional)</span></label>
                             <input type="email" name="email" class="rv-input" placeholder="you@example.com">
                         </div>
                     </div>
@@ -369,9 +452,9 @@
                     <hr class="rv-divider">
 
                     <!-- Device & plan context -->
-                    <div class="rv-grid" style="margin-bottom:1.2rem;">
+                    <div class="rv-grid" style="margin-bottom:var(--s-5);">
                         <div class="rv-field" style="margin-bottom:0;">
-                            <label class="rv-label">Your Plan <span style="color:#475569;font-weight:400;text-transform:none;letter-spacing:0;">(optional)</span></label>
+                            <label class="rv-label">Your Plan <span style="color:var(--ae-text-3);font-weight:400;text-transform:none;letter-spacing:0;">(optional)</span></label>
                             <select name="user_plan" class="rv-select">
                                 <option value="">— Select —</option>
                                 <option>Trial</option>
@@ -382,7 +465,7 @@
                             </select>
                         </div>
                         <div class="rv-field" style="margin-bottom:0;">
-                            <label class="rv-label">Device / Browser <span style="color:#475569;font-weight:400;text-transform:none;letter-spacing:0;">(optional)</span></label>
+                            <label class="rv-label">Device / Browser <span style="color:var(--ae-text-3);font-weight:400;text-transform:none;letter-spacing:0;">(optional)</span></label>
                             <input type="text" name="device_info" class="rv-input" placeholder="e.g. Chrome on Windows 11">
                         </div>
                     </div>
@@ -397,56 +480,65 @@
 
     </div>
 
-    <!-- Standard footer -->
-    <footer class="footer">
-        <div class="footer-links">
-            <a href="/web/src/pages/terms.html">Terms of Service</a>
-            <span class="separator">•</span>
-            <a href="/web/src/pages/conditions.html">Conditions</a>
-            <span class="separator">•</span>
-            <a href="/web/src/pages/privacy_policy.html">Privacy Policy</a>
-            <span class="separator">•</span>
-            <a href="/web/src/pages/refund_policy.html">Refund Policy</a>
-            <span class="separator">•</span>
-            <a href="/web/src/pages/risk_disclosure.html">Risk Disclosure</a>
+    <footer class="ae-footer">
+      <div class="ae-footer-grid">
+        <div>
+          <div class="ae-footer-brand">AEGIS v1.0</div>
+          <p class="ae-footer-desc">Institutional-grade crypto signal engine. Operated by Animesh Kukreti &amp; Aman Juiyal, Dehradun, Uttarakhand, India.</p>
         </div>
-        <div class="footer-proprietor">
-            Operated by <strong>Animesh Kukreti &amp; Aman Juiyal</strong> &nbsp;|&nbsp; Dehradun, Uttarakhand, India
+        <div>
+          <div class="ae-footer-col-title">Platform</div>
+          <div class="ae-footer-links">
+            <a href="/web/src/pages/pricing.html" class="ae-footer-link">Pricing</a>
+            <a href="/web/src/pages/track-record.html" class="ae-footer-link">Track Record</a>
+            <a href="/web/src/pages/review.html" class="ae-footer-link">Reviews</a>
+            <a href="/web/src/pages/pitch.html" class="ae-footer-link">Investor Brief</a>
+          </div>
         </div>
-        <p>© 2026 AEGIS v1.0 — Sovereign Intelligence Terminal</p>
+        <div>
+          <div class="ae-footer-col-title">Legal</div>
+          <div class="ae-footer-links">
+            <a href="/web/src/pages/terms.html" class="ae-footer-link">Terms of Service</a>
+            <a href="/web/src/pages/privacy_policy.html" class="ae-footer-link">Privacy Policy</a>
+            <a href="/web/src/pages/refund_policy.html" class="ae-footer-link">Refund Policy</a>
+            <a href="/web/src/pages/risk_disclosure.html" class="ae-footer-link">Risk Disclosure</a>
+          </div>
+        </div>
+        <div>
+          <div class="ae-footer-col-title">Contact</div>
+          <div class="ae-footer-links">
+            <a href="mailto:animeshkukreti@gatekeeper.sbs" class="ae-footer-link">animeshkukreti@gatekeeper.sbs</a>
+            <a href="/web/src/pages/conditions.html" class="ae-footer-link">Terms &amp; Conditions</a>
+          </div>
+        </div>
+      </div>
+      <div class="ae-footer-bottom">
+        <p class="ae-footer-legal">AEGIS v1.0 is a signal-generation tool and does not constitute financial advice. Cryptocurrency trading involves substantial risk of loss. Not regulated by SEBI or any financial authority.</p>
+        <p style="font-size:0.72rem;color:var(--ae-text-4);white-space:nowrap;">&copy; 2026 Animesh Kukreti &amp; Aman Juiyal</p>
+      </div>
     </footer>
 
     <script>
-    (function () {
-        // ── Hamburger ──────────────────────────────────────────────
-        var btn    = document.getElementById('navHamburger');
-        var drawer = document.getElementById('navMobileDrawer');
-        if (btn && drawer) {
-            btn.addEventListener('click', function (e) {
-                e.stopPropagation();
-                var open = drawer.classList.toggle('open');
-                btn.setAttribute('aria-expanded', open);
-                var ico = btn.querySelector('i');
-                if (ico) ico.className = open ? 'fas fa-times' : 'fas fa-bars';
-            });
-            document.addEventListener('click', function (e) {
-                if (!btn.contains(e.target) && !drawer.contains(e.target)) {
-                    drawer.classList.remove('open');
-                    btn.setAttribute('aria-expanded', 'false');
-                    var ico = btn.querySelector('i');
-                    if (ico) ico.className = 'fas fa-bars';
-                }
-            });
-            drawer.querySelectorAll('.nav-mobile-link, .nav-btn-login, .nav-btn-cta').forEach(function (a) {
-                a.addEventListener('click', function () {
-                    drawer.classList.remove('open');
-                    btn.setAttribute('aria-expanded', 'false');
-                    var ico = btn.querySelector('i');
-                    if (ico) ico.className = 'fas fa-bars';
-                });
-            });
-        }
+      const _ham = document.getElementById('navHamburger');
+      const _drw = document.getElementById('navMobileDrawer');
+      if (_ham && _drw) {
+        _ham.addEventListener('click', () => {
+          const open = _drw.classList.toggle('open');
+          _ham.setAttribute('aria-expanded', String(open));
+          _drw.setAttribute('aria-hidden', String(!open));
+        });
+        document.addEventListener('click', e => {
+          if (!_ham.contains(e.target) && !_drw.contains(e.target)) {
+            _drw.classList.remove('open');
+            _ham.setAttribute('aria-expanded', 'false');
+            _drw.setAttribute('aria-hidden', 'true');
+          }
+        });
+      }
+    </script>
 
+    <script>
+    (function () {
         // ── Feedback type pills ────────────────────────────────────
         var currentType  = 'general';
         var catBtns      = document.querySelectorAll('.rv-cat-btn');

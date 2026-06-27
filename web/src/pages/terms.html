@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -16,484 +16,164 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://cdnjs.cloudflare.com">
-    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap"></noscript>
-    <link rel="stylesheet" href="/web/dist/styles.css?v=1.1">
-    <link rel="stylesheet" href="/web/src/styles/main.css">
-    <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"></noscript>
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"></noscript>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="/web/src/styles/aegis-redesign.css">
     <link rel="canonical" href="https://gatekeeper.sbs/web/src/pages/terms.html">
     <meta name="author" content="Animesh Kukreti &amp; Aman Juiyal">
     <style>
-        /* ── Page-level overrides ── */
-        .policy-hero {
-            padding: 8rem 2rem 3.5rem;
-            text-align: center;
-            background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(0,242,255,0.06) 0%, transparent 70%);
-            border-bottom: 1px solid rgba(255,255,255,0.05);
+        @media (max-width: 700px) {
+            .legal-grid { grid-template-columns: 1fr !important; }
+            .legal-sidebar { position: static !important; }
         }
-        .policy-hero-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.45rem;
-            background: rgba(0,242,255,0.08);
-            border: 1px solid rgba(0,242,255,0.2);
-            border-radius: 50px;
-            padding: 0.3rem 0.9rem;
-            font-size: 0.72rem;
-            font-weight: 700;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            color: #00f2ff;
-            margin-bottom: 1.25rem;
-        }
-        .policy-hero h1 {
-            font-size: clamp(2rem, 5vw, 3.2rem);
-            font-weight: 800;
-            background: linear-gradient(135deg, #fff 30%, #00f2ff 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin: 0 0 0.75rem;
-            line-height: 1.15;
-        }
-        .policy-hero-meta {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-wrap: wrap;
-            gap: 0.5rem 1.5rem;
-            color: rgba(255,255,255,0.45);
-            font-size: 0.82rem;
-            margin-bottom: 1.25rem;
-        }
-        .policy-hero-meta span {
-            display: flex;
-            align-items: center;
-            gap: 0.35rem;
-        }
-        .policy-hero-founders {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.6rem;
-            background: rgba(255,215,0,0.06);
-            border: 1px solid rgba(255,215,0,0.2);
-            border-radius: 8px;
-            padding: 0.55rem 1.2rem;
-            font-size: 0.82rem;
-            color: rgba(255,255,255,0.7);
-            margin-top: 0.25rem;
-        }
-        .policy-hero-founders strong {
-            color: #ffd700;
-        }
-
-        /* ── Layout ── */
-        .policy-layout {
-            display: flex;
-            gap: 2.5rem;
-            align-items: flex-start;
-            max-width: 1260px;
-            margin: 3rem auto 4rem;
-            padding: 0 2rem;
-        }
-        @media (max-width: 900px) {
-            .policy-layout { flex-direction: column; gap: 1.5rem; }
-        }
-
-        /* ── Sidebar ── */
-        .policy-sidebar {
-            position: sticky;
-            top: 90px;
-            width: 230px;
-            flex-shrink: 0;
-            background: rgba(255,255,255,0.03);
-            border: 1px solid rgba(255,255,255,0.07);
-            border-radius: 14px;
-            padding: 1.25rem 1.1rem;
-        }
-        @media (max-width: 900px) {
-            .policy-sidebar { position: static; width: 100%; }
-        }
-        .policy-sidebar h3 {
-            font-size: 0.72rem;
-            font-weight: 700;
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
-            color: #00f2ff;
-            margin: 0 0 1rem;
-            display: flex;
-            align-items: center;
-            gap: 0.45rem;
-        }
-        .policy-sidebar ul {
-            list-style: none;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 0.15rem;
-        }
-        .policy-sidebar ul li a {
+        .sidebar-link {
             display: block;
-            padding: 0.45rem 0.6rem;
-            border-radius: 7px;
-            font-size: 0.8rem;
-            color: rgba(255,255,255,0.5);
+            padding: var(--s-2) 0;
+            font-size: 0.82rem;
+            color: var(--ae-text-2);
             text-decoration: none;
-            transition: background 0.15s, color 0.15s;
-            line-height: 1.4;
-        }
-        .policy-sidebar ul li a:hover {
-            background: rgba(0,242,255,0.07);
-            color: #00f2ff;
-        }
-
-        /* ── Article body ── */
-        .policy-body {
-            flex: 1;
-            min-width: 0;
-        }
-        .policy-section {
-            background: rgba(255,255,255,0.02);
-            border: 1px solid rgba(255,255,255,0.06);
-            border-radius: 14px;
-            padding: 1.75rem 2rem;
-            margin-bottom: 1.25rem;
-            transition: border-color 0.2s;
-        }
-        .policy-section:hover {
-            border-color: rgba(0,242,255,0.12);
-        }
-        .policy-section:target {
-            border-color: rgba(0,242,255,0.25);
-            box-shadow: 0 0 0 1px rgba(0,242,255,0.1);
-        }
-        .policy-section h2 {
-            display: flex;
-            align-items: center;
-            gap: 0.6rem;
-            font-size: 1.15rem;
-            font-weight: 700;
-            color: #fff;
-            margin: 0 0 1rem;
-        }
-        .policy-section h2 .section-num {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 1.7rem;
-            height: 1.7rem;
-            background: rgba(0,242,255,0.1);
-            border: 1px solid rgba(0,242,255,0.2);
-            border-radius: 6px;
-            font-size: 0.7rem;
-            font-weight: 800;
-            color: #00f2ff;
-            flex-shrink: 0;
-        }
-        .policy-section h2 i {
-            color: #00f2ff;
-            font-size: 0.95rem;
-        }
-        .policy-section p {
-            color: rgba(255,255,255,0.7);
-            font-size: 0.9rem;
-            line-height: 1.75;
-            margin: 0 0 0.85rem;
-        }
-        .policy-section p:last-child { margin-bottom: 0; }
-        .policy-section ul, .policy-section ol {
-            color: rgba(255,255,255,0.7);
-            font-size: 0.9rem;
-            line-height: 1.75;
-            padding-left: 1.4rem;
-            margin: 0.5rem 0 0.85rem;
-        }
-        .policy-section ul li, .policy-section ol li { margin-bottom: 0.3rem; }
-        .policy-section a {
-            color: #00f2ff;
-            text-decoration: none;
-            border-bottom: 1px solid rgba(0,242,255,0.3);
-        }
-        .policy-section a:hover { border-bottom-color: #00f2ff; }
-        .policy-section strong { color: #fff; }
-
-        .policy-warning {
-            background: rgba(255,0,85,0.06);
-            border: 1px solid rgba(255,0,85,0.2);
-            border-left: 3px solid #ff0055;
-            border-radius: 8px;
-            padding: 0.85rem 1.1rem;
-            margin: 0.85rem 0;
-            font-size: 0.87rem;
-            color: rgba(255,255,255,0.75);
-            line-height: 1.6;
-        }
-
-        /* ── Footer ── */
-        .footer {
-            text-align: center;
-            padding: 2.5rem 2rem;
-            border-top: 1px solid rgba(255,255,255,0.06);
-            margin-top: 1rem;
-        }
-        .footer-links {
-            display: flex;
-            justify-content: center;
-            flex-wrap: wrap;
-            gap: 0.5rem 0.75rem;
-            margin-bottom: 1rem;
-        }
-        .footer-links a {
-            color: #6b7280;
-            text-decoration: none;
-            font-size: 0.8rem;
+            border-bottom: none;
             transition: color 0.15s;
         }
-        .footer-links a:hover { color: #00f2ff; }
-        .footer-links a.active { color: rgba(0,242,255,0.8); }
-        .separator { color: #374151; }
-        .footer-founders {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-            margin-bottom: 0.5rem;
-        }
-        .footer-founder-chip {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.35rem;
-            background: rgba(255,215,0,0.06);
-            border: 1px solid rgba(255,215,0,0.15);
-            border-radius: 50px;
-            padding: 0.25rem 0.7rem;
-            font-size: 0.72rem;
-            font-weight: 600;
-            color: rgba(255,215,0,0.8);
-            white-space: nowrap;
-        }
-        .footer-location {
-            font-size: 0.72rem;
-            color: #4b5563;
-            margin-bottom: 0.5rem;
-        }
-        .footer p {
-            font-size: 0.7rem;
-            color: #374151;
-            margin: 0;
-        }
-        @media (max-width: 600px) {
-            .policy-section { padding: 1.25rem 1.1rem; }
-            .footer-founders { flex-direction: column; gap: 0.4rem; }
-        }
+        .sidebar-link:hover { color: var(--ae-gold); }
     </style>
 </head>
 
-<body>
+<body style="background: var(--ae-base); color: var(--ae-text-1); font-family: var(--ae-font-sans);">
 
-    <!-- Fixed Glass Header -->
-    <header class="fixed-header" id="main-nav">
-        <a href="/web/src/pages/index.html" class="logo" style="text-decoration:none;">⚡ AEGIS <span>v1.0</span> <span style="font-size:0.52rem;font-weight:800;font-family:monospace;letter-spacing:0.1em;background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.35);color:#00ff88;padding:1px 6px;border-radius:4px;text-transform:uppercase;vertical-align:middle;margin-left:5px;position:relative;top:-1px;">LIVE</span></a>
-
-        <nav class="nav-links-centered" aria-label="Main navigation">
-            <a href="/web/src/pages/index.html" class="nav-link">Home</a>
-            <a href="/web/src/pages/index.html#sentinel" class="nav-link">Sentinel</a>
-            <a href="/web/src/pages/index.html#cockpit" class="nav-link">Cockpit</a>
-            <a href="/web/src/pages/index.html#security" class="nav-link">Security</a>
-            <a href="/web/src/pages/pricing.html" class="nav-link">Pricing</a>
-            <a href="/web/src/pages/review.html" class="nav-link">Reviews</a>
+    <header class="ae-nav" id="main-nav">
+      <div class="ae-nav-inner">
+        <a href="/web/src/pages/index.html" class="ae-brand" style="text-decoration:none;">
+          AEGIS<span>&nbsp;·&nbsp;</span>v1.0
+        </a>
+        <nav class="ae-nav-links" aria-label="Main navigation">
+          <a href="/web/src/pages/index.html" class="ae-nav-link">Home</a>
+          <a href="/web/src/pages/pricing.html" class="ae-nav-link">Pricing</a>
+          <a href="/web/src/pages/track-record.html" class="ae-nav-link">Track Record</a>
+          <a href="/web/src/pages/review.html" class="ae-nav-link">Reviews</a>
         </nav>
-
-        <div class="nav-auth-desktop" style="display:flex;align-items:center;gap:0.5rem;">
-            <a href="/web/src/pages/index.html" class="nav-btn-login">
-                <i class="fas fa-user-shield"></i> Sign In
-            </a>
-            <a href="/web/src/pages/pricing.html" class="nav-btn-cta">Get Started</a>
+        <div class="ae-nav-actions">
+          <a href="/web/src/pages/index.html" class="ae-btn ae-btn-ghost ae-btn-sm">Sign In</a>
+          <a href="/web/src/pages/pricing.html" class="ae-btn ae-btn-primary ae-btn-sm">Get Access</a>
         </div>
-
-        <button class="nav-hamburger-btn" id="navHamburger" aria-label="Toggle navigation" aria-expanded="false">
-            <i class="fas fa-bars"></i>
+        <button id="navHamburger" aria-label="Toggle navigation" aria-expanded="false">
+          <i class="fas fa-bars"></i>
         </button>
+      </div>
     </header>
-
-    <div class="nav-mobile-drawer" id="navMobileDrawer">
-        <a href="/web/src/pages/index.html" class="nav-mobile-link"><i class="fas fa-home"></i> Home</a>
-        <a href="/web/src/pages/index.html#sentinel" class="nav-mobile-link"><i class="fas fa-satellite-dish"></i> Sentinel</a>
-        <a href="/web/src/pages/index.html#cockpit" class="nav-mobile-link"><i class="fas fa-desktop"></i> Cockpit</a>
-        <a href="/web/src/pages/index.html#security" class="nav-mobile-link"><i class="fas fa-shield-alt"></i> Security</a>
-        <a href="/web/src/pages/pricing.html" class="nav-mobile-link"><i class="fas fa-tag"></i> Pricing</a>
-        <a href="/web/src/pages/review.html" class="nav-mobile-link"><i class="fas fa-star"></i> Reviews</a>
-        <div class="nav-mobile-auth">
-            <a href="/web/src/pages/index.html" class="nav-btn-login"><i class="fas fa-user-shield"></i> Sign In</a>
-            <a href="/web/src/pages/pricing.html" class="nav-btn-cta">Get Started</a>
-        </div>
+    <div class="ae-mobile-drawer" id="navMobileDrawer" aria-hidden="true">
+      <a href="/web/src/pages/index.html" class="ae-mobile-link">Home</a>
+      <a href="/web/src/pages/pricing.html" class="ae-mobile-link">Pricing</a>
+      <a href="/web/src/pages/track-record.html" class="ae-mobile-link">Track Record</a>
+      <a href="/web/src/pages/review.html" class="ae-mobile-link">Reviews</a>
+      <hr class="ae-divider" style="margin:var(--s-3) 0;">
+      <div style="display:flex;flex-direction:column;gap:var(--s-2);padding:0 var(--s-2);">
+        <a href="/web/src/pages/pricing.html" class="ae-btn ae-btn-primary ae-btn-md">Get Access</a>
+      </div>
     </div>
 
     <!-- Page Hero -->
-    <div class="policy-hero">
-        <div style="display:flex;align-items:center;justify-content:center;gap:0.6rem;flex-wrap:wrap;margin-bottom:1.25rem;">
-            <div class="policy-hero-badge"><i class="fas fa-gavel"></i> Legal Document</div>
-            <div class="policy-hero-badge" style="background:rgba(255,140,0,0.1);border-color:rgba(255,140,0,0.3);color:#ff8c00;"><i class="fas fa-flask"></i> Beta v1.0</div>
-        </div>
-        <h1>Terms of Service</h1>
-        <div class="policy-hero-meta">
-            <span><i class="fas fa-calendar-alt"></i> Last Updated: May 27, 2026</span>
-            <span><i class="fas fa-code-branch"></i> Version 1.0-Beta</span>
-            <span><i class="fas fa-map-marker-alt"></i> Dehradun, Uttarakhand, India</span>
-        </div>
-        <div class="policy-hero-founders">
-            <i class="fas fa-crown" style="color:#ffd700;font-size:0.8rem;"></i>
-            Owned &amp; Operated by&nbsp;
-            <strong>Animesh Kukreti</strong>
-            &nbsp;&amp;&nbsp;
-            <strong>Aman Juiyal</strong>
-            &nbsp;— Co-Founders of AEGIS v1.0
-        </div>
+    <div style="padding: 7rem 2rem 3rem; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.05);">
+        <p style="font-size: 0.72rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ae-gold); margin-bottom: var(--s-3);">Legal Document</p>
+        <h1 style="font-family: var(--ae-font-serif); font-size: clamp(2rem, 5vw, 3rem); color: var(--ae-text-1); margin: 0 0 var(--s-3);">Terms of Service</h1>
+        <p style="color: var(--ae-text-2); font-size: 0.87rem;">Last Updated: May 27, 2026 &nbsp;&middot;&nbsp; Version 1.0-Beta &nbsp;&middot;&nbsp; Dehradun, Uttarakhand, India</p>
+        <p style="color: var(--ae-text-2); font-size: 0.82rem; margin-top: var(--s-2);">Owned &amp; Operated by <strong style="color: var(--ae-text-1);">Animesh Kukreti</strong> &amp; <strong style="color: var(--ae-text-1);">Aman Juiyal</strong> — Co-Founders of AEGIS v1.0</p>
     </div>
 
-    <!-- Layout: Sidebar + Content -->
-    <div class="policy-layout">
+    <!-- Two-column layout -->
+    <div class="legal-grid" style="display:grid; grid-template-columns: 200px 1fr; gap: var(--s-7); max-width: var(--ae-max); margin: 0 auto; padding: var(--s-8) var(--s-5); align-items: start;">
 
-        <!-- Quick Jump Sidebar -->
-        <aside class="policy-sidebar">
-            <h3><i class="fas fa-list"></i> Contents</h3>
-            <ul>
-                <li><a href="#introduction"><i class="fas fa-circle" style="font-size:0.4rem;vertical-align:middle;margin-right:0.3rem;"></i>Introduction</a></li>
-                <li><a href="#beta"><i class="fas fa-circle" style="font-size:0.4rem;vertical-align:middle;color:#ff8c00;margin-right:0.3rem;"></i>Beta Program Terms</a></li>
-                <li><a href="#eligibility"><i class="fas fa-circle" style="font-size:0.4rem;vertical-align:middle;margin-right:0.3rem;"></i>User Eligibility</a></li>
-                <li><a href="#subscription"><i class="fas fa-circle" style="font-size:0.4rem;vertical-align:middle;margin-right:0.3rem;"></i>Subscription &amp; Trial</a></li>
-                <li><a href="#refunds"><i class="fas fa-circle" style="font-size:0.4rem;vertical-align:middle;margin-right:0.3rem;"></i>Refund Policy</a></li>
-                <li><a href="#security"><i class="fas fa-circle" style="font-size:0.4rem;vertical-align:middle;margin-right:0.3rem;"></i>Account Security</a></li>
-                <li><a href="#termination"><i class="fas fa-circle" style="font-size:0.4rem;vertical-align:middle;margin-right:0.3rem;"></i>Termination</a></li>
-                <li><a href="#disclaimer"><i class="fas fa-circle" style="font-size:0.4rem;vertical-align:middle;margin-right:0.3rem;"></i>Risk Disclaimer</a></li>
-                <li><a href="#governing"><i class="fas fa-circle" style="font-size:0.4rem;vertical-align:middle;margin-right:0.3rem;"></i>Governing Law</a></li>
-            </ul>
+        <!-- Sidebar -->
+        <aside class="legal-sidebar" style="position:sticky; top: 80px;">
+            <div style="font-size:0.72rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:var(--ae-text-3); margin-bottom:var(--s-3);">On this page</div>
+            <a href="#introduction" class="sidebar-link">Introduction</a>
+            <a href="#beta" class="sidebar-link">Beta Program Terms</a>
+            <a href="#eligibility" class="sidebar-link">User Eligibility</a>
+            <a href="#subscription" class="sidebar-link">Subscription &amp; Trial</a>
+            <a href="#refunds" class="sidebar-link">Refund Policy</a>
+            <a href="#security" class="sidebar-link">Account Security</a>
+            <a href="#termination" class="sidebar-link">Termination</a>
+            <a href="#disclaimer" class="sidebar-link">Risk Disclaimer</a>
+            <a href="#governing" class="sidebar-link">Governing Law</a>
         </aside>
 
-        <!-- Policy Sections -->
-        <div class="policy-body">
+        <!-- Main content -->
+        <article style="min-width:0;">
 
-            <div id="introduction" class="policy-section">
-                <h2><span class="section-num">1</span><i class="fas fa-info-circle"></i> Introduction</h2>
-                <p>AEGIS v1.0 is a sovereign intelligence terminal providing AI-powered trading signals, risk management
-                    through <strong>Sentinel</strong>, a signal terminal called <strong>Cockpit</strong>, and
-                    unfiltered AI conviction through <strong>Alpha Mode</strong>. The Platform is currently distributed
-                    as <strong>Version 1 — Beta</strong>, meaning it is in active development and made available to
-                    early users for testing, feedback, and evaluation purposes.</p>
-                <p>The Platform is owned and operated by <strong>Animesh Kukreti &amp; Aman Juiyal</strong> — co-founders
-                    based in Dehradun, Uttarakhand, India. These Terms constitute a legally binding agreement between
-                    you ("User", "You") and the Operators ("We", "Us", "Our") regarding your use of the Platform and
-                    any related services.</p>
-                <p>By accessing or using AEGIS v1.0 Beta, you agree to be bound by these Terms in their entirety,
-                    including all beta-specific provisions in Section 2. If you do not agree, please do not use the
-                    Platform.</p>
+            <div id="introduction">
+                <h2 style="font-family: var(--ae-font-serif); color: var(--ae-text-1); font-size: 1.6rem; margin-bottom: var(--s-4); padding-top: var(--s-7);">1. Introduction</h2>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">AEGIS v1.0 is a sovereign intelligence terminal providing AI-powered trading signals, risk management through <strong style="color:var(--ae-text-1);">Sentinel</strong>, a signal terminal called <strong style="color:var(--ae-text-1);">Cockpit</strong>, and unfiltered AI conviction through <strong style="color:var(--ae-text-1);">Alpha Mode</strong>. The Platform is currently distributed as <strong style="color:var(--ae-text-1);">Version 1 — Beta</strong>, meaning it is in active development and made available to early users for testing, feedback, and evaluation purposes.</p>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">The Platform is owned and operated by <strong style="color:var(--ae-text-1);">Animesh Kukreti &amp; Aman Juiyal</strong> — co-founders based in Dehradun, Uttarakhand, India. These Terms constitute a legally binding agreement between you ("User", "You") and the Operators ("We", "Us", "Our") regarding your use of the Platform and any related services.</p>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">By accessing or using AEGIS v1.0 Beta, you agree to be bound by these Terms in their entirety, including all beta-specific provisions in Section 2. If you do not agree, please do not use the Platform.</p>
             </div>
 
-            <div id="beta" class="policy-section" style="border-color:rgba(255,140,0,0.15);">
-                <h2><span class="section-num" style="background:rgba(255,140,0,0.1);border-color:rgba(255,140,0,0.25);color:#ff8c00;">2</span><i class="fas fa-flask" style="color:#ff8c00;"></i> Beta Program Terms</h2>
-                <div class="policy-warning" style="background:rgba(255,140,0,0.06);border-color:rgba(255,140,0,0.2);border-left-color:#ff8c00;">
-                    <strong>BETA SOFTWARE NOTICE:</strong> AEGIS v1.0 is pre-release software. By participating in the
-                    Beta Program, you acknowledge that the Platform may contain bugs, incomplete features, and
-                    unexpected behaviour. Do not make financial decisions based solely on signals during the Beta period.
+            <div id="beta">
+                <h2 style="font-family: var(--ae-font-serif); color: var(--ae-text-1); font-size: 1.6rem; margin-bottom: var(--s-4); padding-top: var(--s-7);">2. Beta Program Terms</h2>
+                <div style="background: rgba(122,64,64,0.10); border-left: 2px solid var(--ae-sell); border-radius: var(--ae-radius); padding: var(--s-4) var(--s-5); margin: var(--s-5) 0;">
+                    <strong style="color:var(--ae-text-1);">BETA SOFTWARE NOTICE:</strong> <span style="color:var(--ae-text-2);">AEGIS v1.0 is pre-release software. By participating in the Beta Program, you acknowledge that the Platform may contain bugs, incomplete features, and unexpected behaviour. Do not make financial decisions based solely on signals during the Beta period.</span>
                 </div>
-                <p><strong>Beta Status:</strong> The Platform is currently at Version 1.0-Beta. This is the first
-                    public release of AEGIS, distributed to a limited audience for testing and feedback. The Beta period
-                    will transition to a General Availability (GA) release at the sole discretion of the Operators.</p>
-                <p><strong>What Beta Means for You:</strong></p>
-                <ul>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);"><strong style="color:var(--ae-text-1);">Beta Status:</strong> The Platform is currently at Version 1.0-Beta. This is the first public release of AEGIS, distributed to a limited audience for testing and feedback. The Beta period will transition to a General Availability (GA) release at the sole discretion of the Operators.</p>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);"><strong style="color:var(--ae-text-1);">What Beta Means for You:</strong></p>
+                <ul style="color: var(--ae-text-2); line-height: 1.8; padding-left: var(--s-5); margin-bottom: var(--s-4);">
                     <li>Features, interfaces, and signal logic may change, be added, or be removed without prior notice</li>
                     <li>The Platform may experience downtime, data gaps, or signal interruptions during the Beta period</li>
                     <li>Beta access obtained via developer codes grants Pro-tier access for the code's validity period</li>
                     <li>Beta pricing is introductory — plan prices may be revised at General Availability</li>
                     <li>No uptime or accuracy SLA is provided during the Beta period</li>
                 </ul>
-                <p><strong>Feedback Expectation:</strong> Beta users are encouraged to report bugs, inaccuracies, and
-                    suggestions to <a href="mailto:animeshkukreti@gatekeeper.sbs">animeshkukreti@gatekeeper.sbs</a>.
-                    Feedback submitted becomes the property of the Operators and may be used to improve the Platform
-                    without compensation.</p>
-                <p><strong>No Warranty During Beta:</strong> The Platform is provided "as-is" during the Beta period.
-                    The Operators make no warranties, express or implied, regarding signal accuracy, uptime, data
-                    completeness, or fitness for any particular purpose.</p>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);"><strong style="color:var(--ae-text-1);">Feedback Expectation:</strong> Beta users are encouraged to report bugs, inaccuracies, and suggestions to <a href="mailto:animeshkukreti@gatekeeper.sbs" style="color:var(--ae-gold);">animeshkukreti@gatekeeper.sbs</a>. Feedback submitted becomes the property of the Operators and may be used to improve the Platform without compensation.</p>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);"><strong style="color:var(--ae-text-1);">No Warranty During Beta:</strong> The Platform is provided "as-is" during the Beta period. The Operators make no warranties, express or implied, regarding signal accuracy, uptime, data completeness, or fitness for any particular purpose.</p>
             </div>
 
-            <div id="eligibility" class="policy-section">
-                <h2><span class="section-num">3</span><i class="fas fa-user-check"></i> User Eligibility</h2>
-                <p>You must be at least <strong>18 years old</strong> to use the Platform. By registering, you confirm
-                    that you are of legal age and have the capacity to enter into binding financial agreements.</p>
-                <p>The Platform is intended for users in jurisdictions where cryptocurrency trading is legal. You are
-                    solely responsible for complying with your local laws and regulations before accessing or using the
-                    service.</p>
+            <div id="eligibility">
+                <h2 style="font-family: var(--ae-font-serif); color: var(--ae-text-1); font-size: 1.6rem; margin-bottom: var(--s-4); padding-top: var(--s-7);">3. User Eligibility</h2>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">You must be at least <strong style="color:var(--ae-text-1);">18 years old</strong> to use the Platform. By registering, you confirm that you are of legal age and have the capacity to enter into binding financial agreements.</p>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">The Platform is intended for users in jurisdictions where cryptocurrency trading is legal. You are solely responsible for complying with your local laws and regulations before accessing or using the service.</p>
             </div>
 
-            <div id="subscription" class="policy-section">
-                <h2><span class="section-num">4</span><i class="fas fa-credit-card"></i> Subscription &amp; Trial Policy</h2>
-                <p>The Platform offers tiered access plans. All prices listed are <strong>Beta introductory rates</strong>
-                    and may be revised at General Availability:</p>
-                <ul>
-                    <li><strong>Trial (72 hours)</strong> — full access to all 42 live tokens and View Logic on every signal; Confluence Scorecard and premium analytics require a paid plan. No payment required.</li>
-                    <li><strong>Basic ($3.60/month)</strong> — 42 of 58 tokens live, 1:1 R:R profiles, signal archive.</li>
-                    <li><strong>Intermediate ($24.00/month)</strong> — Confluence Scorecards, token win-rate badges, Visual Zone Tracking.</li>
-                    <li><strong>Professional ($40.00/month)</strong> — all features including Alpha Mode, Expectancy Matrix, Raw XGBoost Probabilities, SHAP, and API/JSON endpoints.</li>
-                    <li><strong>Developer / Beta Access Code</strong> — Pro-tier access granted for the code's validity period, issued at Operators' discretion to beta testers.</li>
+            <div id="subscription">
+                <h2 style="font-family: var(--ae-font-serif); color: var(--ae-text-1); font-size: 1.6rem; margin-bottom: var(--s-4); padding-top: var(--s-7);">4. Subscription &amp; Trial Policy</h2>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">The Platform offers tiered access plans. All prices listed are <strong style="color:var(--ae-text-1);">Beta introductory rates</strong> and may be revised at General Availability:</p>
+                <ul style="color: var(--ae-text-2); line-height: 1.8; padding-left: var(--s-5); margin-bottom: var(--s-4);">
+                    <li><strong style="color:var(--ae-text-1);">Trial (72 hours)</strong> — full access to all 42 live tokens and View Logic on every signal; Confluence Scorecard and premium analytics require a paid plan. No payment required.</li>
+                    <li><strong style="color:var(--ae-text-1);">Basic ($3.60/month)</strong> — 42 of 58 tokens live, 1:1 R:R profiles, signal archive.</li>
+                    <li><strong style="color:var(--ae-text-1);">Intermediate ($24.00/month)</strong> — Confluence Scorecards, token win-rate badges, Visual Zone Tracking.</li>
+                    <li><strong style="color:var(--ae-text-1);">Professional ($40.00/month)</strong> — all features including Alpha Mode, Expectancy Matrix, Raw XGBoost Probabilities, SHAP, and API/JSON endpoints.</li>
+                    <li><strong style="color:var(--ae-text-1);">Developer / Beta Access Code</strong> — Pro-tier access granted for the code's validity period, issued at Operators' discretion to beta testers.</li>
                 </ul>
-                <p><strong>72-Hour Free Trial:</strong> New users receive a 3-day trial. Upon sign-up, a
-                    <code>trial_end</code> timestamp is set. After 72 hours, a paid subscription is required to continue access. During the trial, all 42 live token signals and View Logic are available; Confluence Scorecard and premium analytics require Intermediate plan or above.</p>
-                <p><strong>Trial Extension:</strong> No trial extensions are granted unless provided at the sole
-                    discretion of the Operators.</p>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);"><strong style="color:var(--ae-text-1);">72-Hour Free Trial:</strong> New users receive a 3-day trial. Upon sign-up, a <code style="font-family: var(--ae-font-mono); background: var(--ae-surface); padding: 0.1em 0.4em; border-radius: 4px; font-size: 0.88em;">trial_end</code> timestamp is set. After 72 hours, a paid subscription is required to continue access. During the trial, all 42 live token signals and View Logic are available; Confluence Scorecard and premium analytics require Intermediate plan or above.</p>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);"><strong style="color:var(--ae-text-1);">Trial Extension:</strong> No trial extensions are granted unless provided at the sole discretion of the Operators.</p>
             </div>
 
-            <div id="refunds" class="policy-section">
-                <h2><span class="section-num">5</span><i class="fas fa-money-bill-wave"></i> Refund Policy</h2>
-                <p><strong>7-Day Refund Window:</strong> After your trial ends and you subscribe, you have
-                    <strong>7 calendar days</strong> from the subscription date to request a full refund. Contact
-                    support at <a href="mailto:animeshkukreti@gatekeeper.sbs">animeshkukreti@gatekeeper.sbs</a> with
-                    your account email and order details.</p>
-                <p><strong>No Refunds After 7 Days:</strong> After the refund window, subscriptions are non-refundable.
-                    Partial months or unused periods will not be refunded.</p>
-                <p><strong>Refund Processing:</strong> Approved refunds will be processed within 5–10 business days to
-                    the original payment method.</p>
-                <p><strong>Trial &amp; Beta Code Access:</strong> No refunds apply during the free trial or for
-                    developer access code periods, as no payment has been collected for those.</p>
+            <div id="refunds">
+                <h2 style="font-family: var(--ae-font-serif); color: var(--ae-text-1); font-size: 1.6rem; margin-bottom: var(--s-4); padding-top: var(--s-7);">5. Refund Policy</h2>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);"><strong style="color:var(--ae-text-1);">7-Day Refund Window:</strong> After your trial ends and you subscribe, you have <strong style="color:var(--ae-text-1);">7 calendar days</strong> from the subscription date to request a full refund. Contact support at <a href="mailto:animeshkukreti@gatekeeper.sbs" style="color:var(--ae-gold);">animeshkukreti@gatekeeper.sbs</a> with your account email and order details.</p>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);"><strong style="color:var(--ae-text-1);">No Refunds After 7 Days:</strong> After the refund window, subscriptions are non-refundable. Partial months or unused periods will not be refunded.</p>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);"><strong style="color:var(--ae-text-1);">Refund Processing:</strong> Approved refunds will be processed within 5–10 business days to the original payment method.</p>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);"><strong style="color:var(--ae-text-1);">Trial &amp; Beta Code Access:</strong> No refunds apply during the free trial or for developer access code periods, as no payment has been collected for those.</p>
             </div>
 
-            <div id="security" class="policy-section">
-                <h2><span class="section-num">6</span><i class="fas fa-lock"></i> Account Security</h2>
-                <p>You are solely responsible for safeguarding your tokens, passwords, and login credentials. The
-                    Platform uses industry-standard encryption and implements 6-digit OTP verification for email
-                    authentication.</p>
-                <p>We cannot be held liable for unauthorized access caused by your failure to protect your credentials.
-                    Immediately notify support at
-                    <a href="mailto:animeshkukreti@gatekeeper.sbs">animeshkukreti@gatekeeper.sbs</a> if you suspect a
-                    security breach. We employ multi-factor authentication options including OTP-based verification for
-                    all sensitive account actions.</p>
+            <div id="security">
+                <h2 style="font-family: var(--ae-font-serif); color: var(--ae-text-1); font-size: 1.6rem; margin-bottom: var(--s-4); padding-top: var(--s-7);">6. Account Security</h2>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">You are solely responsible for safeguarding your tokens, passwords, and login credentials. The Platform uses industry-standard encryption and implements 6-digit OTP verification for email authentication.</p>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">We cannot be held liable for unauthorized access caused by your failure to protect your credentials. Immediately notify support at <a href="mailto:animeshkukreti@gatekeeper.sbs" style="color:var(--ae-gold);">animeshkukreti@gatekeeper.sbs</a> if you suspect a security breach. We employ multi-factor authentication options including OTP-based verification for all sensitive account actions.</p>
             </div>
 
-            <div id="termination" class="policy-section">
-                <h2><span class="section-num">7</span><i class="fas fa-ban"></i> Termination</h2>
-                <p>We reserve the right to suspend or terminate your account without prior notice if you violate these
-                    Terms or engage in abusive behaviour — including signal reverse-engineering, excessive API abuse,
-                    scraping, unauthorized sharing of credentials, or misuse of beta access codes.</p>
-                <p>You may cancel your subscription at any time via your dashboard or by contacting support. Upon
-                    termination, your access will be immediately revoked, and any pending refunds will be processed
-                    according to Section 5.</p>
+            <div id="termination">
+                <h2 style="font-family: var(--ae-font-serif); color: var(--ae-text-1); font-size: 1.6rem; margin-bottom: var(--s-4); padding-top: var(--s-7);">7. Termination</h2>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">We reserve the right to suspend or terminate your account without prior notice if you violate these Terms or engage in abusive behaviour — including signal reverse-engineering, excessive API abuse, scraping, unauthorized sharing of credentials, or misuse of beta access codes.</p>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">You may cancel your subscription at any time via your dashboard or by contacting support. Upon termination, your access will be immediately revoked, and any pending refunds will be processed according to Section 5.</p>
             </div>
 
-            <div id="disclaimer" class="policy-section">
-                <h2><span class="section-num">8</span><i class="fas fa-exclamation-triangle"></i> Risk Disclaimer &amp; Financial Warning</h2>
-                <div class="policy-warning">
-                    <strong>IMPORTANT:</strong> Cryptocurrency trading involves substantial risk of loss and is not
-                    suitable for all investors. The signals, predictions, and information provided by AEGIS v1.0 are for
-                    informational and educational purposes only and do not constitute financial, investment, or trading
-                    advice. This warning is amplified during the Beta period — signal logic and models are actively
-                    being refined and may produce unexpected results.
+            <div id="disclaimer">
+                <h2 style="font-family: var(--ae-font-serif); color: var(--ae-text-1); font-size: 1.6rem; margin-bottom: var(--s-4); padding-top: var(--s-7);">8. Risk Disclaimer &amp; Financial Warning</h2>
+                <div style="background: rgba(122,64,64,0.10); border-left: 2px solid var(--ae-sell); border-radius: var(--ae-radius); padding: var(--s-4) var(--s-5); margin: var(--s-5) 0;">
+                    <strong style="color:var(--ae-text-1);">IMPORTANT:</strong> <span style="color:var(--ae-text-2);">Cryptocurrency trading involves substantial risk of loss and is not suitable for all investors. The signals, predictions, and information provided by AEGIS v1.0 are for informational and educational purposes only and do not constitute financial, investment, or trading advice. This warning is amplified during the Beta period — signal logic and models are actively being refined and may produce unexpected results.</span>
                 </div>
-                <p>You should carefully consider your investment objectives, level of experience, and risk appetite
-                    before trading. Past performance is not indicative of future results. You are solely responsible for
-                    any trading decisions made based on information from the Platform.</p>
-                <p>By using AEGIS v1.0 Beta, you acknowledge and agree that:</p>
-                <ul>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">You should carefully consider your investment objectives, level of experience, and risk appetite before trading. Past performance is not indicative of future results. You are solely responsible for any trading decisions made based on information from the Platform.</p>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">By using AEGIS v1.0 Beta, you acknowledge and agree that:</p>
+                <ul style="color: var(--ae-text-2); line-height: 1.8; padding-left: var(--s-5); margin-bottom: var(--s-4);">
                     <li>You understand the risks associated with cryptocurrency trading</li>
                     <li>The Operators are not liable for any financial losses incurred</li>
                     <li>You will not hold the Operators responsible for trading outcomes</li>
@@ -502,74 +182,70 @@
                 </ul>
             </div>
 
-            <div id="governing" class="policy-section">
-                <h2><span class="section-num">9</span><i class="fas fa-gavel"></i> Governing Law &amp; Dispute Resolution</h2>
-                <p>These Terms are governed by the laws of India. Any disputes arising from or relating to these Terms
-                    or your use of the Platform shall be resolved exclusively in the courts of
-                    <strong>Dehradun, Uttarakhand, India</strong>. You consent to the personal jurisdiction of such
-                    courts and waive any objection based on forum non conveniens.</p>
-                <p><strong>Contact:</strong> For any questions about these Terms, reach Animesh Kukreti &amp; Aman Juiyal at
-                    <a href="mailto:animeshkukreti@gatekeeper.sbs">animeshkukreti@gatekeeper.sbs</a>.</p>
+            <div id="governing">
+                <h2 style="font-family: var(--ae-font-serif); color: var(--ae-text-1); font-size: 1.6rem; margin-bottom: var(--s-4); padding-top: var(--s-7);">9. Governing Law &amp; Dispute Resolution</h2>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">These Terms are governed by the laws of India. Any disputes arising from or relating to these Terms or your use of the Platform shall be resolved exclusively in the courts of <strong style="color:var(--ae-text-1);">Dehradun, Uttarakhand, India</strong>. You consent to the personal jurisdiction of such courts and waive any objection based on forum non conveniens.</p>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);"><strong style="color:var(--ae-text-1);">Contact:</strong> For any questions about these Terms, reach Animesh Kukreti &amp; Aman Juiyal at <a href="mailto:animeshkukreti@gatekeeper.sbs" style="color:var(--ae-gold);">animeshkukreti@gatekeeper.sbs</a>.</p>
             </div>
 
-        </div>
+        </article>
     </div>
 
-    <!-- Footer -->
-    <footer class="footer">
-        <div class="footer-links">
-            <a href="/web/src/pages/terms.html" class="active">Terms of Service</a>
-            <span class="separator">•</span>
-            <a href="/web/src/pages/conditions.html">Conditions</a>
-            <span class="separator">•</span>
-            <a href="/web/src/pages/privacy_policy.html">Privacy Policy</a>
-            <span class="separator">•</span>
-            <a href="/web/src/pages/refund_policy.html">Refund Policy</a>
-            <span class="separator">•</span>
-            <a href="/web/src/pages/risk_disclosure.html">Risk Disclosure</a>
-            <span class="separator">•</span>
-            <a href="/web/src/pages/pricing.html">Pricing</a>
+    <footer class="ae-footer">
+      <div class="ae-footer-grid">
+        <div>
+          <div class="ae-footer-brand">AEGIS v1.0</div>
+          <p class="ae-footer-desc">Institutional-grade crypto signal engine. Operated by Animesh Kukreti &amp; Aman Juiyal, Dehradun, Uttarakhand, India.</p>
         </div>
-        <div class="footer-founders">
-            <span class="footer-founder-chip"><i class="fas fa-crown"></i> Animesh Kukreti</span>
-            <span style="color:#4b5563;font-size:0.75rem;">&amp;</span>
-            <span class="footer-founder-chip"><i class="fas fa-crown"></i> Aman Juiyal</span>
+        <div>
+          <div class="ae-footer-col-title">Platform</div>
+          <div class="ae-footer-links">
+            <a href="/web/src/pages/pricing.html" class="ae-footer-link">Pricing</a>
+            <a href="/web/src/pages/track-record.html" class="ae-footer-link">Track Record</a>
+            <a href="/web/src/pages/review.html" class="ae-footer-link">Reviews</a>
+            <a href="/web/src/pages/pitch.html" class="ae-footer-link">Investor Brief</a>
+          </div>
         </div>
-        <div class="footer-location"><i class="fas fa-map-marker-alt" style="margin-right:0.3rem;color:#4b5563;"></i>Dehradun, Uttarakhand, India</div>
-        <p>© 2026 AEGIS v1.0 — Sovereign Intelligence Terminal</p>
+        <div>
+          <div class="ae-footer-col-title">Legal</div>
+          <div class="ae-footer-links">
+            <a href="/web/src/pages/terms.html" class="ae-footer-link">Terms of Service</a>
+            <a href="/web/src/pages/privacy_policy.html" class="ae-footer-link">Privacy Policy</a>
+            <a href="/web/src/pages/refund_policy.html" class="ae-footer-link">Refund Policy</a>
+            <a href="/web/src/pages/risk_disclosure.html" class="ae-footer-link">Risk Disclosure</a>
+          </div>
+        </div>
+        <div>
+          <div class="ae-footer-col-title">Contact</div>
+          <div class="ae-footer-links">
+            <a href="mailto:animeshkukreti@gatekeeper.sbs" class="ae-footer-link">animeshkukreti@gatekeeper.sbs</a>
+            <a href="/web/src/pages/conditions.html" class="ae-footer-link">Terms &amp; Conditions</a>
+          </div>
+        </div>
+      </div>
+      <div class="ae-footer-bottom">
+        <p class="ae-footer-legal">AEGIS v1.0 is a signal-generation tool and does not constitute financial advice. Cryptocurrency trading involves substantial risk of loss. Past signal performance is not indicative of future results. Not regulated by SEBI or any financial authority.</p>
+        <p style="font-size:0.72rem;color:var(--ae-text-4);white-space:nowrap;">© 2026 Animesh Kukreti &amp; Aman Juiyal</p>
+      </div>
     </footer>
 
     <script>
-    (function () {
-        var btn = document.getElementById('navHamburger');
-        var drawer = document.getElementById('navMobileDrawer');
-        if (!btn || !drawer) return;
-
-        function closeDrawer() {
-            drawer.classList.remove('open');
-            drawer.setAttribute('aria-hidden', 'true');
-            btn.setAttribute('aria-expanded', 'false');
-            var ico = btn.querySelector('i');
-            if (ico) ico.className = 'fas fa-bars';
-        }
-
-        btn.addEventListener('click', function (e) {
-            e.stopPropagation();
-            var open = drawer.classList.toggle('open');
-            drawer.setAttribute('aria-hidden', !open);
-            btn.setAttribute('aria-expanded', open);
-            var ico = btn.querySelector('i');
-            if (ico) ico.className = open ? 'fas fa-times' : 'fas fa-bars';
+      const _ham = document.getElementById('navHamburger');
+      const _drw = document.getElementById('navMobileDrawer');
+      if (_ham && _drw) {
+        _ham.addEventListener('click', () => {
+          const open = _drw.classList.toggle('open');
+          _ham.setAttribute('aria-expanded', String(open));
+          _drw.setAttribute('aria-hidden', String(!open));
         });
-
-        document.addEventListener('click', function (e) {
-            if (!btn.contains(e.target) && !drawer.contains(e.target)) closeDrawer();
+        document.addEventListener('click', e => {
+          if (!_ham.contains(e.target) && !_drw.contains(e.target)) {
+            _drw.classList.remove('open');
+            _ham.setAttribute('aria-expanded', 'false');
+            _drw.setAttribute('aria-hidden', 'true');
+          }
         });
-
-        drawer.querySelectorAll('.nav-mobile-link, .nav-btn-login, .nav-btn-cta').forEach(function (a) {
-            a.addEventListener('click', closeDrawer);
-        });
-    })();
+      }
     </script>
 
 </body>

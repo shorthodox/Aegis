@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -16,102 +16,100 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://cdnjs.cloudflare.com">
-    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap"></noscript>
-    <link rel="stylesheet" href="/web/dist/styles.css?v=1.1">
-    <link rel="stylesheet" href="/web/src/styles/main.css">
-    <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"></noscript>
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"></noscript>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="/web/src/styles/aegis-redesign.css">
     <link rel="canonical" href="https://gatekeeper.sbs/web/src/pages/risk_disclosure.html">
     <style>
-        .footer { text-align:center; padding:2rem; border-top:1px solid rgba(255,255,255,0.05); margin-top:3rem; }
-        .footer-links { display:flex; justify-content:center; gap:1rem; flex-wrap:wrap; margin-bottom:1rem; }
-        .footer-links a { color:#6b7280; text-decoration:none; font-size:0.8rem; }
-        .footer-links a:hover { color:#00f2ff; }
-        .separator { color:#374151; }
-        .footer-proprietor { font-size:0.75rem; color:#4b5563; margin-bottom:0.5rem; }
-        .footer p { font-size:0.7rem; color:#374151; }
+        @media (max-width: 700px) {
+            .legal-grid { grid-template-columns: 1fr !important; }
+            .legal-sidebar { position: static !important; }
+        }
+        .sidebar-link {
+            display: block;
+            padding: var(--s-2) 0;
+            font-size: 0.82rem;
+            color: var(--ae-text-2);
+            text-decoration: none;
+            border-bottom: none;
+            transition: color 0.15s;
+        }
+        .sidebar-link:hover { color: var(--ae-gold); }
     </style>
 </head>
 
-<body>
+<body style="background: var(--ae-base); color: var(--ae-text-1); font-family: var(--ae-font-sans);">
 
-    <header class="fixed-header" id="main-nav">
-        <a href="/web/src/pages/index.html" class="logo" style="text-decoration:none;">⚡ AEGIS <span>v1.0</span> <span style="font-size:0.52rem;font-weight:800;font-family:monospace;letter-spacing:0.1em;background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.35);color:#00ff88;padding:1px 6px;border-radius:4px;text-transform:uppercase;vertical-align:middle;margin-left:5px;position:relative;top:-1px;">LIVE</span></a>
-
-        <nav class="nav-links-centered" aria-label="Main navigation">
-            <a href="/web/src/pages/index.html" class="nav-link">Home</a>
-            <a href="/web/src/pages/index.html#sentinel" class="nav-link">Sentinel</a>
-            <a href="/web/src/pages/index.html#cockpit" class="nav-link">Cockpit</a>
-            <a href="/web/src/pages/index.html#security" class="nav-link">Security</a>
-            <a href="/web/src/pages/pricing.html" class="nav-link">Pricing</a>
-            <a href="/web/src/pages/review.html" class="nav-link">Reviews</a>
+    <header class="ae-nav" id="main-nav">
+      <div class="ae-nav-inner">
+        <a href="/web/src/pages/index.html" class="ae-brand" style="text-decoration:none;">
+          AEGIS<span>&nbsp;·&nbsp;</span>v1.0
+        </a>
+        <nav class="ae-nav-links" aria-label="Main navigation">
+          <a href="/web/src/pages/index.html" class="ae-nav-link">Home</a>
+          <a href="/web/src/pages/pricing.html" class="ae-nav-link">Pricing</a>
+          <a href="/web/src/pages/track-record.html" class="ae-nav-link">Track Record</a>
+          <a href="/web/src/pages/review.html" class="ae-nav-link">Reviews</a>
         </nav>
-
-        <div class="nav-auth-desktop" style="display:flex;align-items:center;gap:0.5rem;">
-            <a href="/web/src/pages/index.html" class="nav-btn-login">
-                <i class="fas fa-user-shield"></i> Sign In
-            </a>
-            <a href="/web/src/pages/pricing.html" class="nav-btn-cta">
-                Get Started
-            </a>
+        <div class="ae-nav-actions">
+          <a href="/web/src/pages/index.html" class="ae-btn ae-btn-ghost ae-btn-sm">Sign In</a>
+          <a href="/web/src/pages/pricing.html" class="ae-btn ae-btn-primary ae-btn-sm">Get Access</a>
         </div>
-
-        <button class="nav-hamburger-btn" id="navHamburger" aria-label="Toggle navigation" aria-expanded="false">
-            <i class="fas fa-bars"></i>
+        <button id="navHamburger" aria-label="Toggle navigation" aria-expanded="false">
+          <i class="fas fa-bars"></i>
         </button>
+      </div>
     </header>
-
-    <div class="nav-mobile-drawer" id="navMobileDrawer">
-        <a href="/web/src/pages/index.html" class="nav-mobile-link"><i class="fas fa-home"></i> Home</a>
-        <a href="/web/src/pages/index.html#sentinel" class="nav-mobile-link"><i class="fas fa-satellite-dish"></i> Sentinel</a>
-        <a href="/web/src/pages/index.html#cockpit" class="nav-mobile-link"><i class="fas fa-desktop"></i> Cockpit</a>
-        <a href="/web/src/pages/index.html#security" class="nav-mobile-link"><i class="fas fa-shield-alt"></i> Security</a>
-        <a href="/web/src/pages/pricing.html" class="nav-mobile-link"><i class="fas fa-tag"></i> Pricing</a>
-        <a href="/web/src/pages/review.html" class="nav-mobile-link"><i class="fas fa-star"></i> Reviews</a>
-        <div class="nav-mobile-auth">
-            <a href="/web/src/pages/index.html" class="nav-btn-login"><i class="fas fa-user-shield"></i> Sign In</a>
-            <a href="/web/src/pages/pricing.html" class="nav-btn-cta">Get Started</a>
-        </div>
+    <div class="ae-mobile-drawer" id="navMobileDrawer" aria-hidden="true">
+      <a href="/web/src/pages/index.html" class="ae-mobile-link">Home</a>
+      <a href="/web/src/pages/pricing.html" class="ae-mobile-link">Pricing</a>
+      <a href="/web/src/pages/track-record.html" class="ae-mobile-link">Track Record</a>
+      <a href="/web/src/pages/review.html" class="ae-mobile-link">Reviews</a>
+      <hr class="ae-divider" style="margin:var(--s-3) 0;">
+      <div style="display:flex;flex-direction:column;gap:var(--s-2);padding:0 var(--s-2);">
+        <a href="/web/src/pages/pricing.html" class="ae-btn ae-btn-primary ae-btn-md">Get Access</a>
+      </div>
     </div>
 
-    <!-- Main content with sticky sidebar + risk disclosure content -->
-    <div class="disclosure-layout">
+    <!-- Page Hero -->
+    <div style="padding: 7rem 2rem 3rem; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.05);">
+        <p style="font-size: 0.72rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ae-gold); margin-bottom: var(--s-3);">Legal Document</p>
+        <h1 style="font-family: var(--ae-font-serif); font-size: clamp(2rem, 5vw, 3rem); color: var(--ae-text-1); margin: 0 0 var(--s-3);">Risk Disclosure</h1>
+        <p style="color: var(--ae-text-2); font-size: 0.87rem;">Last Updated: <span id="risk-last-updated">May 14, 2026</span> &nbsp;&middot;&nbsp; Version: <span id="risk-version">1.0.0</span></p>
+        <p style="color: var(--ae-text-2); font-size: 0.82rem; margin-top: var(--s-2);">Provided by: AEGIS v1.0 — Animesh Kukreti &amp; Aman Juiyal, Dehradun, Uttarakhand, India</p>
+    </div>
 
-        <!-- Sticky Quick Jump Sidebar -->
-        <aside class="disclosure-sidebar">
-            <h3><i class="fas fa-exclamation-triangle"></i> Quick Jump</h3>
-            <ul>
-                <li><a href="#introduction">📌 Introduction</a></li>
-                <li><a href="#trading-risk">📉 Trading Risk</a></li>
-                <li><a href="#market-volatility">📊 Market Volatility</a></li>
-                <li><a href="#signal-accuracy">🎯 Signal Accuracy</a></li>
-                <li><a href="#financial-loss">💸 Financial Loss</a></li>
-                <li><a href="#technology-risk">⚙️ Technology Risk</a></li>
-                <li><a href="#limitation">⚖️ Limitation of Liability</a></li>
-                <li><a href="#acknowledgment">✅ Acknowledgment</a></li>
-            </ul>
+    <!-- Two-column layout -->
+    <div class="legal-grid" style="display:grid; grid-template-columns: 200px 1fr; gap: var(--s-7); max-width: var(--ae-max); margin: 0 auto; padding: var(--s-8) var(--s-5); align-items: start;">
+
+        <!-- Sidebar -->
+        <aside class="legal-sidebar" style="position:sticky; top: 80px;">
+            <div style="font-size:0.72rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:var(--ae-text-3); margin-bottom:var(--s-3);">On this page</div>
+            <a href="#introduction" class="sidebar-link">Introduction</a>
+            <a href="#trading-risk" class="sidebar-link">Trading Risk</a>
+            <a href="#market-volatility" class="sidebar-link">Market Volatility</a>
+            <a href="#signal-accuracy" class="sidebar-link">Signal Accuracy</a>
+            <a href="#financial-loss" class="sidebar-link">Financial Loss</a>
+            <a href="#no-advice" class="sidebar-link">No Financial Advice</a>
+            <a href="#uptime" class="sidebar-link">Technology Risk</a>
+            <a href="#alpha" class="sidebar-link">Alpha Mode Notice</a>
+            <a href="#limitation" class="sidebar-link">Limitation of Liability</a>
+            <a href="#acknowledgment" class="sidebar-link">Acknowledgment</a>
         </aside>
 
-        <!-- Risk Disclosure Content -->
-        <div class="math-article" style="flex: 1;">
-            <div class="math-block">
-                <h1>Risk Disclosure</h1>
-                <p><strong>Last Updated:</strong> <span id="risk-last-updated">May 14, 2026</span> |
-                    <strong>Version:</strong> <span id="risk-version">1.0.0</span></p>
-                <p><strong>⚠️ IMPORTANT RISK WARNING:</strong> Trading in cryptocurrency and utilizing algorithmic
-                    trading signals involve substantial risk of loss. Please read this entire disclosure carefully.</p>
-                <p><strong>Provided by:</strong> AEGIS v1.0 - Animesh Kukreti &amp; Aman Juiyal, Dehradun, Uttarakhand, India</p>
+        <!-- Main content -->
+        <article style="min-width:0;">
+
+            <div style="background: rgba(122,64,64,0.10); border-left: 2px solid var(--ae-sell); border-radius: var(--ae-radius); padding: var(--s-4) var(--s-5); margin: 0 0 var(--s-7);">
+                <strong style="color:var(--ae-text-1);">IMPORTANT RISK WARNING:</strong> <span style="color:var(--ae-text-2);">Trading in cryptocurrency and utilizing algorithmic trading signals involve substantial risk of loss. Please read this entire disclosure carefully.</span>
             </div>
 
-            <div class="math-block" id="introduction">
-                <h2><i class="fas fa-bookmark"></i> 1. Introduction</h2>
-                <p>AEGIS v1.0 is an algorithmic trading platform that provides signal recommendations for cryptocurrency
-                    trading. This platform uses machine learning models to analyze market data and generate trading
-                    signals. However, <strong>the use of these signals does not guarantee profitability, and trading
-                        involves inherent risks.</strong></p>
-                <p>Users must understand that:</p>
-                <ul style="margin-left: 2rem; margin-top: 1rem;">
+            <div id="introduction">
+                <h2 style="font-family: var(--ae-font-serif); color: var(--ae-text-1); font-size: 1.6rem; margin-bottom: var(--s-4); padding-top: var(--s-7);">1. Introduction</h2>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">AEGIS v1.0 is an algorithmic trading platform that provides signal recommendations for cryptocurrency trading. This platform uses machine learning models to analyze market data and generate trading signals. However, <strong style="color:var(--ae-text-1);">the use of these signals does not guarantee profitability, and trading involves inherent risks.</strong></p>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">Users must understand that:</p>
+                <ul style="color: var(--ae-text-2); line-height: 1.8; padding-left: var(--s-5); margin-bottom: var(--s-4);">
                     <li>Past performance is not indicative of future results</li>
                     <li>Algorithmic predictions can be inaccurate</li>
                     <li>Market conditions can change rapidly and unpredictably</li>
@@ -119,82 +117,92 @@
                 </ul>
             </div>
 
-            <div class="math-block" id="trading-risk">
-                <h2><i class="fas fa-chart-line"></i> 2. Trading and Investment Risk</h2>
-                <p>Cryptocurrency trading is highly speculative and volatile. By using AEGIS v1.0, you acknowledge and
-                    accept the following risks:</p>
-                <ul style="margin-left: 2rem; margin-top: 1rem;">
-                    <li><strong>Capital Loss:</strong> You may lose some or all of your invested capital</li>
-                    <li><strong>Leverage Risk:</strong> If using leveraged trading, losses can exceed initial investment
-                    </li>
-                    <li><strong>Forced Liquidation:</strong> Exchanges may liquidate positions due to margin
-                        requirements</li>
-                    <li><strong>Counterparty Risk:</strong> Exchange or broker failure may result in loss of funds</li>
-                    <li><strong>Regulatory Risk:</strong> Government actions may negatively impact cryptocurrency
-                        markets</li>
+            <div id="trading-risk">
+                <h2 style="font-family: var(--ae-font-serif); color: var(--ae-text-1); font-size: 1.6rem; margin-bottom: var(--s-4); padding-top: var(--s-7);">2. Trading and Investment Risk</h2>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">Cryptocurrency trading is highly speculative and volatile. By using AEGIS v1.0, you acknowledge and accept the following risks:</p>
+                <ul style="color: var(--ae-text-2); line-height: 1.8; padding-left: var(--s-5); margin-bottom: var(--s-4);">
+                    <li><strong style="color:var(--ae-text-1);">Capital Loss:</strong> You may lose some or all of your invested capital</li>
+                    <li><strong style="color:var(--ae-text-1);">Leverage Risk:</strong> If using leveraged trading, losses can exceed initial investment</li>
+                    <li><strong style="color:var(--ae-text-1);">Forced Liquidation:</strong> Exchanges may liquidate positions due to margin requirements</li>
+                    <li><strong style="color:var(--ae-text-1);">Counterparty Risk:</strong> Exchange or broker failure may result in loss of funds</li>
+                    <li><strong style="color:var(--ae-text-1);">Regulatory Risk:</strong> Government actions may negatively impact cryptocurrency markets</li>
                 </ul>
             </div>
 
-            <div class="math-block" id="market-volatility">
-                <h2><i class="fas fa-wave-square"></i> 3. Market Volatility</h2>
-                <p>Cryptocurrency markets are known for extreme volatility. Price movements can be sudden and severe,
-                    driven by:</p>
-                <ul style="margin-left: 2rem; margin-top: 1rem;">
+            <div id="market-volatility">
+                <h2 style="font-family: var(--ae-font-serif); color: var(--ae-text-1); font-size: 1.6rem; margin-bottom: var(--s-4); padding-top: var(--s-7);">3. Market Volatility</h2>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">Cryptocurrency markets are known for extreme volatility. Price movements can be sudden and severe, driven by:</p>
+                <ul style="color: var(--ae-text-2); line-height: 1.8; padding-left: var(--s-5); margin-bottom: var(--s-4);">
                     <li>News and social media sentiment</li>
                     <li>Regulatory announcements</li>
                     <li>Market manipulation or "flash crashes"</li>
                     <li>Global macroeconomic events</li>
                     <li>Technical factors and algorithmic trading feedback loops</li>
                 </ul>
-                <p style="margin-top: 1rem; color: #ff6b6b;"><strong>The volatility may result in rapid and substantial
-                        losses, sometimes within seconds or minutes.</strong></p>
+                <div style="background: rgba(122,64,64,0.10); border-left: 2px solid var(--ae-sell); border-radius: var(--ae-radius); padding: var(--s-4) var(--s-5); margin: var(--s-5) 0;">
+                    <strong style="color:var(--ae-text-1);">The volatility may result in rapid and substantial losses, sometimes within seconds or minutes.</strong>
+                </div>
             </div>
 
-            <div class="math-block" id="signal-accuracy">
-                <h2><i class="fas fa-crosshairs"></i> 4. Signal Accuracy and Reliability</h2>
-                <p>While AEGIS v1.0 uses advanced machine learning models, trading signals are NOT guaranteed to be
-                    accurate. Factors affecting accuracy include:</p>
-                <ul style="margin-left: 2rem; margin-top: 1rem;">
+            <div id="signal-accuracy">
+                <h2 style="font-family: var(--ae-font-serif); color: var(--ae-text-1); font-size: 1.6rem; margin-bottom: var(--s-4); padding-top: var(--s-7);">4. Signal Accuracy and Reliability</h2>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">While AEGIS v1.0 uses advanced machine learning models, trading signals are NOT guaranteed to be accurate. Factors affecting accuracy include:</p>
+                <ul style="color: var(--ae-text-2); line-height: 1.8; padding-left: var(--s-5); margin-bottom: var(--s-4);">
                     <li>Model bias or overfitting to historical data</li>
                     <li>Market regime changes not reflected in training data</li>
                     <li>Unexpected black-swan events</li>
                     <li>Data quality and timeliness issues</li>
                     <li>Inherent limitations of predictive modeling</li>
                 </ul>
-                <p style="margin-top: 1rem;"><strong>You assume full responsibility for all trading decisions made based
-                        on AEGIS signals.</strong></p>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);"><strong style="color:var(--ae-text-1);">You assume full responsibility for all trading decisions made based on AEGIS signals.</strong></p>
             </div>
 
-            <div class="math-block" id="financial-loss">
-                <h2><i class="fas fa-money-bill-wave"></i> 5. Financial Loss Disclaimer</h2>
-                <p>AEGIS v1.0 does NOT:</p>
-                <ul style="margin-left: 2rem; margin-top: 1rem;">
+            <div id="financial-loss">
+                <h2 style="font-family: var(--ae-font-serif); color: var(--ae-text-1); font-size: 1.6rem; margin-bottom: var(--s-4); padding-top: var(--s-7);">5. Financial Loss Disclaimer</h2>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">AEGIS v1.0 does NOT:</p>
+                <ul style="color: var(--ae-text-2); line-height: 1.8; padding-left: var(--s-5); margin-bottom: var(--s-4);">
                     <li>Guarantee any specific level of return or profit</li>
                     <li>Ensure that losses will not occur</li>
                     <li>Provide financial, investment, or tax advice</li>
                     <li>Assume responsibility for trading decisions made by users</li>
                     <li>Compensate users for losses incurred</li>
                 </ul>
-                <p style="margin-top: 1rem; color: #ff6b6b;"><strong>You may lose your entire investment. Only trade
-                        with capital you can afford to lose.</strong></p>
+                <div style="background: rgba(122,64,64,0.10); border-left: 2px solid var(--ae-sell); border-radius: var(--ae-radius); padding: var(--s-4) var(--s-5); margin: var(--s-5) 0;">
+                    <strong style="color:var(--ae-text-1);">You may lose your entire investment. Only trade with capital you can afford to lose.</strong>
+                </div>
             </div>
 
-            <div class="math-block" id="technology-risk">
-                <h2><i class="fas fa-server"></i> 6. Technology and System Risk</h2>
-                <p>Technology failures may occur despite security measures:</p>
-                <ul style="margin-left: 2rem; margin-top: 1rem;">
-                    <li><strong>System Outages:</strong> Platform downtime may prevent order execution</li>
-                    <li><strong>Network Latency:</strong> Delays may cause orders to execute at unfavorable prices</li>
-                    <li><strong>API Failures:</strong> Exchange connection issues may cause missed signals</li>
-                    <li><strong>Data Errors:</strong> Incorrect data could lead to incorrect signals</li>
-                    <li><strong>Security Breaches:</strong> Unauthorized access could compromise accounts</li>
+            <div id="no-advice">
+                <h2 style="font-family: var(--ae-font-serif); color: var(--ae-text-1); font-size: 1.6rem; margin-bottom: var(--s-4); padding-top: var(--s-7);">6. No Financial Advice</h2>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">All content, signals, predictions, and analysis provided by AEGIS v1.0 are for informational and educational purposes only. Nothing on this platform constitutes financial, investment, legal, or tax advice. You should consult with a qualified financial advisor before making any trading or investment decisions.</p>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">AEGIS v1.0 is not regulated by SEBI or any other financial authority. We do not hold any investment advisory license.</p>
+            </div>
+
+            <div id="uptime">
+                <h2 style="font-family: var(--ae-font-serif); color: var(--ae-text-1); font-size: 1.6rem; margin-bottom: var(--s-4); padding-top: var(--s-7);">7. Technology and System Risk</h2>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">Technology failures may occur despite security measures:</p>
+                <ul style="color: var(--ae-text-2); line-height: 1.8; padding-left: var(--s-5); margin-bottom: var(--s-4);">
+                    <li><strong style="color:var(--ae-text-1);">System Outages:</strong> Platform downtime may prevent order execution</li>
+                    <li><strong style="color:var(--ae-text-1);">Network Latency:</strong> Delays may cause orders to execute at unfavorable prices</li>
+                    <li><strong style="color:var(--ae-text-1);">API Failures:</strong> Exchange connection issues may cause missed signals</li>
+                    <li><strong style="color:var(--ae-text-1);">Data Errors:</strong> Incorrect data could lead to incorrect signals</li>
+                    <li><strong style="color:var(--ae-text-1);">Security Breaches:</strong> Unauthorized access could compromise accounts</li>
                 </ul>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">No uptime SLA is provided during the Beta period. The Platform is provided "as-is" and we make no guarantees of continuous availability.</p>
             </div>
 
-            <div class="math-block" id="limitation">
-                <h2><i class="fas fa-balance-scale"></i> 7. Limitation of Liability</h2>
-                <p>To the maximum extent permitted by law:</p>
-                <ul style="margin-left: 2rem; margin-top: 1rem;">
+            <div id="alpha">
+                <h2 style="font-family: var(--ae-font-serif); color: var(--ae-text-1); font-size: 1.6rem; margin-bottom: var(--s-4); padding-top: var(--s-7);">8. Alpha Mode Notice</h2>
+                <div style="background: rgba(122,64,64,0.10); border-left: 2px solid var(--ae-sell); border-radius: var(--ae-radius); padding: var(--s-4) var(--s-5); margin: var(--s-5) 0;">
+                    <strong style="color:var(--ae-text-1);">Alpha Mode — Coming Soon:</strong> <span style="color:var(--ae-text-2);">Alpha Mode is an experimental feature that provides unfiltered AI conviction outputs. When released, this feature will carry heightened risk as outputs are generated by models without additional safety filters. Users of Alpha Mode assume full responsibility for any trading actions taken.</span>
+                </div>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">Alpha Mode signals may be more aggressive, higher-conviction, and carry higher inherent risk than standard signals. Access to Alpha Mode requires Professional plan subscription and explicit acknowledgment of additional risk.</p>
+            </div>
+
+            <div id="limitation">
+                <h2 style="font-family: var(--ae-font-serif); color: var(--ae-text-1); font-size: 1.6rem; margin-bottom: var(--s-4); padding-top: var(--s-7);">9. Limitation of Liability</h2>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">To the maximum extent permitted by law:</p>
+                <ul style="color: var(--ae-text-2); line-height: 1.8; padding-left: var(--s-5); margin-bottom: var(--s-4);">
                     <li>AEGIS v1.0 is provided "AS IS" without warranties or guarantees</li>
                     <li>We are not liable for any direct, indirect, or consequential damages</li>
                     <li>Our total liability is limited to the amount paid for the subscription</li>
@@ -202,13 +210,12 @@
                 </ul>
             </div>
 
-            <div class="math-block" id="acknowledgment">
-                <h2><i class="fas fa-check-circle"></i> 8. User Acknowledgment</h2>
-                <p
-                    style="background: rgba(111, 99, 255, 0.1); border-left: 4px solid #6c63ff; padding: 1rem; margin-top: 1rem; border-radius: 4px;">
-                    <strong>By using AEGIS v1.0, you acknowledge that:</strong>
-                </p>
-                <ul style="margin-left: 2rem; margin-top: 1rem;">
+            <div id="acknowledgment">
+                <h2 style="font-family: var(--ae-font-serif); color: var(--ae-text-1); font-size: 1.6rem; margin-bottom: var(--s-4); padding-top: var(--s-7);">10. User Acknowledgment</h2>
+                <div style="background: var(--ae-surface); border-left: 2px solid var(--ae-gold); padding: var(--s-4) var(--s-5); margin: var(--s-5) 0;">
+                    <strong style="color:var(--ae-text-1);">By using AEGIS v1.0, you acknowledge that:</strong>
+                </div>
+                <ul style="color: var(--ae-text-2); line-height: 1.8; padding-left: var(--s-5); margin-bottom: var(--s-4);">
                     <li>You have read and understood this entire risk disclosure</li>
                     <li>You understand the risks involved in cryptocurrency trading</li>
                     <li>You accept full responsibility for your trading decisions</li>
@@ -216,68 +223,67 @@
                     <li>You are trading with capital you can afford to lose</li>
                     <li>You are of legal age and have authority to enter into this agreement</li>
                 </ul>
-                <p style="margin-top: 2rem; text-align: center; color: #999; font-size: 0.9rem;">
-                    <i class="fas fa-shield-alt"></i> AEGIS v1.0 is committed to transparency and user protection within
-                    the scope of applicable law.
-                </p>
+                <p style="color: var(--ae-text-3); font-size: 0.85rem; text-align: center; margin-top: var(--s-6);">AEGIS v1.0 is committed to transparency and user protection within the scope of applicable law.</p>
             </div>
-        </div>
+
+        </article>
     </div>
 
-    <footer class="footer">
-        <div class="footer-links">
-            <a href="/web/src/pages/terms.html">Terms of Service</a>
-            <span class="separator">•</span>
-            <a href="/web/src/pages/conditions.html">Conditions</a>
-            <span class="separator">•</span>
-            <a href="/web/src/pages/privacy_policy.html">Privacy Policy</a>
-            <span class="separator">•</span>
-            <a href="/web/src/pages/refund_policy.html">Refund Policy</a>
-            <span class="separator">•</span>
-            <a href="/web/src/pages/risk_disclosure.html">Risk Disclosure</a>
+    <footer class="ae-footer">
+      <div class="ae-footer-grid">
+        <div>
+          <div class="ae-footer-brand">AEGIS v1.0</div>
+          <p class="ae-footer-desc">Institutional-grade crypto signal engine. Operated by Animesh Kukreti &amp; Aman Juiyal, Dehradun, Uttarakhand, India.</p>
         </div>
-        <div class="footer-proprietor">
-            Operated by <strong>Animesh Kukreti &amp; Aman Juiyal</strong> &nbsp;|&nbsp; Dehradun, Uttarakhand, India
+        <div>
+          <div class="ae-footer-col-title">Platform</div>
+          <div class="ae-footer-links">
+            <a href="/web/src/pages/pricing.html" class="ae-footer-link">Pricing</a>
+            <a href="/web/src/pages/track-record.html" class="ae-footer-link">Track Record</a>
+            <a href="/web/src/pages/review.html" class="ae-footer-link">Reviews</a>
+            <a href="/web/src/pages/pitch.html" class="ae-footer-link">Investor Brief</a>
+          </div>
         </div>
-        <p>© 2026 AEGIS v1.0 — Sovereign Intelligence Terminal</p>
+        <div>
+          <div class="ae-footer-col-title">Legal</div>
+          <div class="ae-footer-links">
+            <a href="/web/src/pages/terms.html" class="ae-footer-link">Terms of Service</a>
+            <a href="/web/src/pages/privacy_policy.html" class="ae-footer-link">Privacy Policy</a>
+            <a href="/web/src/pages/refund_policy.html" class="ae-footer-link">Refund Policy</a>
+            <a href="/web/src/pages/risk_disclosure.html" class="ae-footer-link">Risk Disclosure</a>
+          </div>
+        </div>
+        <div>
+          <div class="ae-footer-col-title">Contact</div>
+          <div class="ae-footer-links">
+            <a href="mailto:animeshkukreti@gatekeeper.sbs" class="ae-footer-link">animeshkukreti@gatekeeper.sbs</a>
+            <a href="/web/src/pages/conditions.html" class="ae-footer-link">Terms &amp; Conditions</a>
+          </div>
+        </div>
+      </div>
+      <div class="ae-footer-bottom">
+        <p class="ae-footer-legal">AEGIS v1.0 is a signal-generation tool and does not constitute financial advice. Cryptocurrency trading involves substantial risk of loss. Past signal performance is not indicative of future results. Not regulated by SEBI or any financial authority.</p>
+        <p style="font-size:0.72rem;color:var(--ae-text-4);white-space:nowrap;">© 2026 Animesh Kukreti &amp; Aman Juiyal</p>
+      </div>
     </footer>
 
     <script>
-        // Logo click handler
-        document.querySelector('.logo').addEventListener('click', () => {
-            window.location.href = '/web/src/pages/index.html';
+      const _ham = document.getElementById('navHamburger');
+      const _drw = document.getElementById('navMobileDrawer');
+      if (_ham && _drw) {
+        _ham.addEventListener('click', () => {
+          const open = _drw.classList.toggle('open');
+          _ham.setAttribute('aria-expanded', String(open));
+          _drw.setAttribute('aria-hidden', String(!open));
         });
-
-    </script>
-    <script>
-    (function(){
-        var btn = document.getElementById('navHamburger');
-        var drawer = document.getElementById('navMobileDrawer');
-        if (!btn || !drawer) return;
-        btn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            var open = drawer.classList.toggle('open');
-            btn.setAttribute('aria-expanded', open);
-            var ico = btn.querySelector('i');
-            if (ico) ico.className = open ? 'fas fa-times' : 'fas fa-bars';
+        document.addEventListener('click', e => {
+          if (!_ham.contains(e.target) && !_drw.contains(e.target)) {
+            _drw.classList.remove('open');
+            _ham.setAttribute('aria-expanded', 'false');
+            _drw.setAttribute('aria-hidden', 'true');
+          }
         });
-        document.addEventListener('click', function(e) {
-            if (!btn.contains(e.target) && !drawer.contains(e.target)) {
-                drawer.classList.remove('open');
-                btn.setAttribute('aria-expanded','false');
-                var ico = btn.querySelector('i');
-                if (ico) ico.className = 'fas fa-bars';
-            }
-        });
-        drawer.querySelectorAll('.nav-mobile-link, .nav-btn-login, .nav-btn-cta').forEach(function(a) {
-            a.addEventListener('click', function() {
-                drawer.classList.remove('open');
-                btn.setAttribute('aria-expanded','false');
-                var ico = btn.querySelector('i');
-                if (ico) ico.className = 'fas fa-bars';
-            });
-        });
-    })();
+      }
     </script>
 </body>
 
