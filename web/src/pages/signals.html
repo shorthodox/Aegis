@@ -7,6 +7,7 @@
   <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"></noscript>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="/web/src/styles/main.css">
   <link rel="stylesheet" href="/web/src/styles/aegis-redesign.css">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -190,13 +191,16 @@
     </a>
     <nav class="ae-nav-links" aria-label="Main navigation">
       <a href="/" class="ae-nav-link">Home</a>
-      <a href="/dashboard" class="ae-nav-link">Dashboard</a>
-      <a href="/signals" class="ae-nav-link" style="color:var(--ae-gold);">Signals</a>
-      <a href="/track-record" class="ae-nav-link">Track Record</a>
+      <a href="/signals" class="ae-nav-link active">Signals</a>
       <a href="/pricing" class="ae-nav-link">Pricing</a>
+      <a href="/track-record" class="ae-nav-link">Track Record</a>
+      <a href="/reviews" class="ae-nav-link">Reviews</a>
     </nav>
-    <div class="ae-nav-actions">
-      <a href="/dashboard" class="ae-btn ae-btn-primary ae-btn-sm">Dashboard</a>
+    <div id="authButtonContainer" class="ae-nav-actions">
+      <button id="portalBtn" class="ae-btn ae-btn-ghost ae-btn-sm">Sign In</button>
+      <button id="dashboardBtn" class="ae-btn ae-btn-outline ae-btn-sm" style="display:none;">Dashboard</button>
+      <button id="signOutBtn" class="ae-btn ae-btn-ghost ae-btn-sm" style="display:none;">Sign Out</button>
+      <button id="createAccountBtn" class="ae-btn ae-btn-primary ae-btn-sm">Start Free Trial</button>
     </div>
     <button id="navHamburger" aria-label="Toggle navigation" aria-expanded="false">
       <i class="fas fa-bars"></i>
@@ -206,10 +210,10 @@
 
 <div class="ae-mobile-drawer" id="navMobileDrawer" aria-hidden="true">
   <a href="/" class="ae-mobile-link">Home</a>
-  <a href="/dashboard" class="ae-mobile-link">Dashboard</a>
   <a href="/signals" class="ae-mobile-link mobile-active">Signals</a>
-  <a href="/track-record" class="ae-mobile-link">Track Record</a>
   <a href="/pricing" class="ae-mobile-link">Pricing</a>
+  <a href="/track-record" class="ae-mobile-link">Track Record</a>
+  <a href="/reviews" class="ae-mobile-link">Reviews</a>
   <hr class="ae-divider" style="margin:var(--s-3) 0;">
   <div style="display:flex;flex-direction:column;gap:var(--s-2);padding:0 var(--s-2);">
     <a href="/dashboard" class="ae-btn ae-btn-primary ae-btn-md">Dashboard</a>
@@ -502,6 +506,39 @@
       }
     });
   }
+</script>
+
+<script>
+(function(){
+  var btn=document.getElementById('navHamburger'),drawer=document.getElementById('navMobileDrawer');
+  if(!btn||!drawer)return;
+  function close_(){drawer.classList.remove('open');drawer.setAttribute('aria-hidden','true');btn.setAttribute('aria-expanded','false');var ico=btn.querySelector('i');if(ico)ico.className='fas fa-bars';}
+  btn.addEventListener('click',function(e){e.stopPropagation();var open=drawer.classList.toggle('open');drawer.setAttribute('aria-hidden',String(!open));btn.setAttribute('aria-expanded',String(open));var ico=btn.querySelector('i');if(ico)ico.className=open?'fas fa-times':'fas fa-bars';});
+  document.addEventListener('click',function(e){if(!btn.contains(e.target)&&!drawer.contains(e.target))close_();});
+  drawer.querySelectorAll('.ae-mobile-link').forEach(function(a){a.addEventListener('click',close_);});
+  function proxy(pid,tid){var p=document.getElementById(pid),t=document.getElementById(tid);if(!p||!t)return;p.style.display=t.style.display||'';p.addEventListener('click',function(){close_();t.click();});new MutationObserver(function(){p.style.display=t.style.display;}).observe(t,{attributes:true,attributeFilter:['style']});}
+  proxy('mPortalProxy','portalBtn');proxy('mDashProxy','dashboardBtn');proxy('mSignoutProxy','signOutBtn');proxy('mCtaProxy','createAccountBtn');
+})();
+</script>
+<script type="module">
+import { initSignInUI, openSignInModal } from '../scripts/signin-ui.js';
+import { initSignUpUI, openSignUpModal } from '../scripts/signup-ui.js';
+import { handleLogout, subscribeToAuthState } from '../scripts/auth.js';
+document.addEventListener('DOMContentLoaded', () => {
+  try{initSignInUI();}catch(e){}
+  try{initSignUpUI();}catch(e){}
+  const show=el=>{if(el)el.style.display='inline-flex';};
+  const hide=el=>{if(el)el.style.display='none';};
+  const pBtn=document.getElementById('portalBtn'),dBtn=document.getElementById('dashboardBtn'),sBtn=document.getElementById('signOutBtn'),cBtn=document.getElementById('createAccountBtn');
+  subscribeToAuthState(state=>{
+    if(state.authenticated){hide(pBtn);hide(cBtn);show(dBtn);show(sBtn);}
+    else{show(pBtn);show(cBtn);hide(dBtn);hide(sBtn);}
+  });
+  if(pBtn)pBtn.addEventListener('click',e=>{e.preventDefault();openSignInModal();});
+  if(cBtn)cBtn.addEventListener('click',e=>{e.preventDefault();openSignUpModal();});
+  if(dBtn)dBtn.addEventListener('click',e=>{e.preventDefault();window.location.href='/dashboard';});
+  if(sBtn)sBtn.addEventListener('click',async e=>{e.preventDefault();['authToken','access_token','authenticated','userSession','refresh_token'].forEach(k=>localStorage.removeItem(k));try{await handleLogout();}catch(_){}window.location.href='/';});
+});
 </script>
 
 </body>

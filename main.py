@@ -2781,128 +2781,146 @@ async def send_password_reset(request: PasswordResetRequest, req: Request):
 
     try:
         print(f"[password-reset] Sending reset email to {email} via {os.getenv('MAIL_SERVER','smtp.neo.space')}:{os.getenv('MAIL_PORT','587')}")
-        message = MessageSchema(
-            subject="Reset Your Gatekeeper Password",
-            recipients=[NameEmail(name=email, email=email)],
-            body=f"""<!DOCTYPE html>
-<html lang="en">
+        sender_name  = os.getenv("MAIL_FROM_NAME", "AEGIS AI Terminal")
+        sender_email = os.getenv("MAIL_FROM",      "noreply@gatekeeper.sbs")
+        support_email = os.getenv("SUPPORT_EMAIL", sender_email)
+        base_url_display = os.getenv("BASE_URL", "https://gatekeeper.sbs").rstrip("/")
+        html_body = f"""<!DOCTYPE html>
+<html lang="en" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <!--[if mso]>
+  <noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript>
+  <![endif]-->
+  <title>Reset Your Password — AEGIS</title>
 </head>
-<body style="margin:0;padding:0;background:#050505;font-family:'Segoe UI',Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0"
-         style="background:#050505;padding:48px 16px;">
+<body style="margin:0;padding:0;background:#0b0f1a;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
+  <!--[if mso]><table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center"><![endif]-->
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+         style="background:#0b0f1a;padding:48px 16px;min-width:320px;">
     <tr><td align="center">
 
-      <!-- Card -->
-      <table width="520" cellpadding="0" cellspacing="0"
-             style="max-width:520px;width:100%;background:#0a0c14;
-                    border:1px solid rgba(0,242,255,0.14);
-                    border-radius:18px;overflow:hidden;">
+      <!-- Card wrapper -->
+      <table role="presentation" width="540" cellpadding="0" cellspacing="0"
+             style="max-width:540px;width:100%;background:#111827;border-radius:12px;overflow:hidden;
+                    border:1px solid #1e2d45;">
 
-        <!-- Top accent bar -->
+        <!-- Top gradient bar -->
         <tr>
-          <td style="height:3px;background:linear-gradient(90deg,#00f2ff,#7b2fff);"></td>
+          <td height="4" style="background:linear-gradient(90deg,#0055ff,#00aaff);font-size:0;line-height:0;">&nbsp;</td>
         </tr>
 
         <!-- Header -->
         <tr>
-          <td style="padding:36px 44px 28px;text-align:center;
-                     border-bottom:1px solid rgba(255,255,255,0.05);">
-            <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:6px;">
-              <span style="font-size:22px;">⚡</span>
-              <span style="font-size:22px;font-weight:800;letter-spacing:2.5px;
-                           background:linear-gradient(90deg,#00f2ff,#7b2fff);
-                           -webkit-background-clip:text;-webkit-text-fill-color:transparent;">
-                GATEKEEPER
-              </span>
-            </div>
-            <p style="margin:2px 0 0;font-size:11px;letter-spacing:2px;
-                      color:#4b5563;text-transform:uppercase;">Aegis-1 · Sovereign Terminal</p>
+          <td style="padding:36px 48px 28px;border-bottom:1px solid #1a2535;text-align:center;">
+            <p style="margin:0;font-size:11px;letter-spacing:3px;color:#4b6a9b;
+                      text-transform:uppercase;font-weight:600;">AEGIS AI TERMINAL</p>
+            <p style="margin:8px 0 0;font-size:28px;font-weight:800;letter-spacing:-0.5px;
+                      color:#f0f6ff;">Gatekeeper</p>
           </td>
         </tr>
 
         <!-- Body -->
         <tr>
-          <td style="padding:40px 44px 32px;">
+          <td style="padding:40px 48px 36px;">
 
-            <!-- Icon circle -->
-            <div style="text-align:center;margin-bottom:28px;">
-              <div style="display:inline-block;width:64px;height:64px;border-radius:50%;
-                          background:rgba(0,242,255,0.08);border:1px solid rgba(0,242,255,0.2);
-                          line-height:64px;font-size:26px;">🔐</div>
-            </div>
-
-            <h1 style="margin:0 0 10px;font-size:22px;font-weight:700;
-                       color:#f1f5f9;text-align:center;letter-spacing:-0.3px;">
+            <p style="margin:0 0 8px;font-size:20px;font-weight:700;color:#f0f6ff;line-height:1.3;">
               Password Reset Request
-            </h1>
-            <p style="margin:0 0 28px;font-size:14px;color:#94a3b8;
-                      text-align:center;line-height:1.65;">
-              We received a request to reset the password for<br>
-              <strong style="color:#e2e8f0;">{email}</strong>
+            </p>
+            <p style="margin:0 0 28px;font-size:14px;color:#6b87b0;line-height:1.7;">
+              We received a request to reset the password associated with
+              <strong style="color:#c8d9f0;">{email}</strong>.<br>
+              Click the button below to choose a new password.
             </p>
 
             <!-- CTA button -->
-            <div style="text-align:center;margin-bottom:28px;">
-              <a href="{custom_reset_url}"
-                 style="display:inline-block;padding:15px 40px;
-                        background:linear-gradient(95deg,#00f2ff,#00a8c6);
-                        color:#000;font-weight:700;font-size:15px;
-                        border-radius:10px;text-decoration:none;
-                        letter-spacing:0.4px;
-                        box-shadow:0 4px 20px rgba(0,242,255,0.25);">
-                Reset My Password
-              </a>
-            </div>
+            <!--[if mso]>
+            <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="{custom_reset_url}"
+              style="height:48px;v-text-anchor:middle;width:200px;" arcsize="8%"
+              fillcolor="#0066ff" stroke="f">
+              <w:anchorlock/>
+              <center style="color:#ffffff;font-family:'Segoe UI',Helvetica,Arial,sans-serif;
+                             font-size:15px;font-weight:700;">Reset My Password</center>
+            </v:roundrect>
+            <![endif]-->
+            <!--[if !mso]><!-->
+            <table role="presentation" cellpadding="0" cellspacing="0"
+                   style="margin:0 0 28px;">
+              <tr>
+                <td style="border-radius:6px;background:#0066ff;mso-padding-alt:0;">
+                  <a href="{custom_reset_url}"
+                     style="display:inline-block;padding:14px 36px;background:#0066ff;
+                            color:#ffffff;font-size:15px;font-weight:700;
+                            text-decoration:none;border-radius:6px;
+                            letter-spacing:0.3px;">
+                    Reset My Password
+                  </a>
+                </td>
+              </tr>
+            </table>
+            <!--<![endif]-->
 
-            <!-- Expiry notice -->
-            <div style="background:rgba(0,242,255,0.04);border:1px solid rgba(0,242,255,0.1);
-                        border-radius:10px;padding:16px 20px;margin-bottom:24px;">
-              <p style="margin:0;font-size:13px;color:#64748b;line-height:1.6;">
-                ⏱ &nbsp;This link expires in <strong style="color:#94a3b8;">1 hour</strong>.<br>
-                🔒 &nbsp;If you didn't request this, your account is safe — ignore this email.
-              </p>
-            </div>
+            <!-- Security notice -->
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+                   style="background:#0d1a2d;border:1px solid #1e2d45;border-radius:8px;
+                          margin-bottom:28px;">
+              <tr>
+                <td style="padding:16px 20px;">
+                  <p style="margin:0 0 6px;font-size:13px;font-weight:600;color:#4b6a9b;">
+                    Security Notice
+                  </p>
+                  <p style="margin:0;font-size:13px;color:#4b6a9b;line-height:1.65;">
+                    This link expires in <strong style="color:#7ea8d4;">1 hour</strong> and can only be used once.<br>
+                    If you did not request a password reset, no action is needed — your account remains secure.
+                  </p>
+                </td>
+              </tr>
+            </table>
 
-            <!-- Fallback link -->
-            <p style="margin:0;font-size:11.5px;color:#374151;
-                      word-break:break-all;line-height:1.7;">
-              Button not working? Copy and paste this link into your browser:<br>
-              <a href="{custom_reset_url}"
-                 style="color:#00f2ff;text-decoration:none;">{custom_reset_url}</a>
+            <!-- Fallback URL -->
+            <p style="margin:0;font-size:12px;color:#374151;line-height:1.7;">
+              If the button above does not work, copy and paste the link below into your browser:
             </p>
+            <p style="margin:6px 0 0;font-size:12px;color:#2563eb;word-break:break-all;line-height:1.6;">
+              <a href="{custom_reset_url}" style="color:#2563eb;text-decoration:none;">{custom_reset_url}</a>
+            </p>
+
           </td>
         </tr>
 
         <!-- Footer -->
         <tr>
-          <td style="padding:20px 44px 28px;
-                     border-top:1px solid rgba(255,255,255,0.04);
-                     text-align:center;">
-            <p style="margin:0 0 6px;font-size:12px;color:#374151;">
-              Sent by Gatekeeper (Aegis-1) &nbsp;·&nbsp;
-              <a href="https://gatekeeper.sbs"
-                 style="color:#00f2ff;text-decoration:none;">gatekeeper.sbs</a>
+          <td style="padding:20px 48px 28px;border-top:1px solid #1a2535;text-align:center;">
+            <p style="margin:0 0 4px;font-size:12px;color:#374151;">
+              Sent by <strong style="color:#4b6a9b;">{sender_name}</strong>
+              &nbsp;&middot;&nbsp;
+              <a href="{base_url_display}" style="color:#4b6a9b;text-decoration:none;">{base_url_display.replace('https://','')}</a>
             </p>
-            <p style="margin:0;font-size:11px;color:#1f2937;">
-              © 2025 Gatekeeper. All rights reserved.
+            <p style="margin:4px 0 0;font-size:11px;color:#1f2937;">
+              Questions? Contact
+              <a href="mailto:{support_email}" style="color:#374151;text-decoration:none;">{support_email}</a>
             </p>
           </td>
         </tr>
 
-        <!-- Bottom accent bar -->
+        <!-- Bottom gradient bar -->
         <tr>
-          <td style="height:3px;background:linear-gradient(90deg,#7b2fff,#00f2ff);"></td>
+          <td height="4" style="background:linear-gradient(90deg,#00aaff,#0055ff);font-size:0;line-height:0;">&nbsp;</td>
         </tr>
 
       </table>
 
     </td></tr>
   </table>
+  <!--[if mso]></td></tr></table><![endif]-->
 </body>
-</html>""",
+</html>"""
+        message = MessageSchema(
+            subject="Reset Your AEGIS Password",
+            recipients=[NameEmail(name=email, email=email)],
+            body=html_body,
             subtype=MessageType.html,
         )
         await fastmail.send_message(message)
@@ -3046,152 +3064,6 @@ async def msg91_webhook(req: Request):
                 break
 
     return {"received": True}
-
-    # Extract oobCode and apiKey from Firebase's link so our custom reset page
-    # can call confirmPasswordReset() directly without going through Firebase's UI.
-    parsed = urllib.parse.urlparse(firebase_link)
-    params = urllib.parse.parse_qs(parsed.query)
-    oob_code = params.get("oobCode", [""])[0]
-    api_key  = params.get("apiKey",  [""])[0]
-    base_url = os.getenv("BASE_URL", "https://gatekeeper.sbs").rstrip("/")
-    custom_reset_url = (
-        f"{base_url}/reset-password"
-        f"?oobCode={urllib.parse.quote(oob_code)}&apiKey={urllib.parse.quote(api_key)}"
-    )
-
-    try:
-        print(f"[password-reset] Sending reset email to {email} via {os.getenv('MAIL_SERVER','smtp.neo.space')}:{os.getenv('MAIL_PORT','587')}")
-        message = MessageSchema(
-            subject="Reset Your Gatekeeper Password",
-            recipients=[NameEmail(name=email, email=email)],
-            body=f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-</head>
-<body style="margin:0;padding:0;background:#050505;font-family:'Segoe UI',Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0"
-         style="background:#050505;padding:48px 16px;">
-    <tr><td align="center">
-
-      <!-- Card -->
-      <table width="520" cellpadding="0" cellspacing="0"
-             style="max-width:520px;width:100%;background:#0a0c14;
-                    border:1px solid rgba(0,242,255,0.14);
-                    border-radius:18px;overflow:hidden;">
-
-        <!-- Top accent bar -->
-        <tr>
-          <td style="height:3px;background:linear-gradient(90deg,#00f2ff,#7b2fff);"></td>
-        </tr>
-
-        <!-- Header -->
-        <tr>
-          <td style="padding:36px 44px 28px;text-align:center;
-                     border-bottom:1px solid rgba(255,255,255,0.05);">
-            <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:6px;">
-              <span style="font-size:22px;">⚡</span>
-              <span style="font-size:22px;font-weight:800;letter-spacing:2.5px;
-                           background:linear-gradient(90deg,#00f2ff,#7b2fff);
-                           -webkit-background-clip:text;-webkit-text-fill-color:transparent;">
-                GATEKEEPER
-              </span>
-            </div>
-            <p style="margin:2px 0 0;font-size:11px;letter-spacing:2px;
-                      color:#4b5563;text-transform:uppercase;">Aegis-1 · Sovereign Terminal</p>
-          </td>
-        </tr>
-
-        <!-- Body -->
-        <tr>
-          <td style="padding:40px 44px 32px;">
-
-            <!-- Icon circle -->
-            <div style="text-align:center;margin-bottom:28px;">
-              <div style="display:inline-block;width:64px;height:64px;border-radius:50%;
-                          background:rgba(0,242,255,0.08);border:1px solid rgba(0,242,255,0.2);
-                          line-height:64px;font-size:26px;">🔐</div>
-            </div>
-
-            <h1 style="margin:0 0 10px;font-size:22px;font-weight:700;
-                       color:#f1f5f9;text-align:center;letter-spacing:-0.3px;">
-              Password Reset Request
-            </h1>
-            <p style="margin:0 0 28px;font-size:14px;color:#94a3b8;
-                      text-align:center;line-height:1.65;">
-              We received a request to reset the password for<br>
-              <strong style="color:#e2e8f0;">{email}</strong>
-            </p>
-
-            <!-- CTA button -->
-            <div style="text-align:center;margin-bottom:28px;">
-              <a href="{custom_reset_url}"
-                 style="display:inline-block;padding:15px 40px;
-                        background:linear-gradient(95deg,#00f2ff,#00a8c6);
-                        color:#000;font-weight:700;font-size:15px;
-                        border-radius:10px;text-decoration:none;
-                        letter-spacing:0.4px;
-                        box-shadow:0 4px 20px rgba(0,242,255,0.25);">
-                Reset My Password
-              </a>
-            </div>
-
-            <!-- Expiry notice -->
-            <div style="background:rgba(0,242,255,0.04);border:1px solid rgba(0,242,255,0.1);
-                        border-radius:10px;padding:16px 20px;margin-bottom:24px;">
-              <p style="margin:0;font-size:13px;color:#64748b;line-height:1.6;">
-                ⏱ &nbsp;This link expires in <strong style="color:#94a3b8;">1 hour</strong>.<br>
-                🔒 &nbsp;If you didn't request this, your account is safe — ignore this email.
-              </p>
-            </div>
-
-            <!-- Fallback link -->
-            <p style="margin:0;font-size:11.5px;color:#374151;
-                      word-break:break-all;line-height:1.7;">
-              Button not working? Copy and paste this link into your browser:<br>
-              <a href="{custom_reset_url}"
-                 style="color:#00f2ff;text-decoration:none;">{custom_reset_url}</a>
-            </p>
-          </td>
-        </tr>
-
-        <!-- Footer -->
-        <tr>
-          <td style="padding:20px 44px 28px;
-                     border-top:1px solid rgba(255,255,255,0.04);
-                     text-align:center;">
-            <p style="margin:0 0 6px;font-size:12px;color:#374151;">
-              Sent by Gatekeeper (Aegis-1) &nbsp;·&nbsp;
-              <a href="https://gatekeeper.sbs"
-                 style="color:#00f2ff;text-decoration:none;">gatekeeper.sbs</a>
-            </p>
-            <p style="margin:0;font-size:11px;color:#1f2937;">
-              © 2025 Gatekeeper. All rights reserved.
-            </p>
-          </td>
-        </tr>
-
-        <!-- Bottom accent bar -->
-        <tr>
-          <td style="height:3px;background:linear-gradient(90deg,#7b2fff,#00f2ff);"></td>
-        </tr>
-
-      </table>
-
-    </td></tr>
-  </table>
-</body>
-</html>""",
-            subtype=MessageType.html,
-        )
-        await fastmail.send_message(message)
-    except Exception as e:
-        print(f"[password-reset] SMTP send failed ({type(e).__name__}): {e}")
-        raise HTTPException(status_code=500, detail="smtp_failure")
-
-    return {"success": True, "message": "Password reset link sent. Check your inbox (and spam folder)."}
-
 @app.post("/auth/complete-registration")
 async def complete_registration(profile: UserProfileComplete):
     email = profile.email

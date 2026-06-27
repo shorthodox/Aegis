@@ -11,25 +11,27 @@
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap"></noscript>
     <link rel="stylesheet" href="/web/dist/styles.css?v=1.1">
     <link rel="stylesheet" href="/web/src/styles/main.css">
+  <link rel="stylesheet" href="/web/src/styles/aegis-redesign.css">
     <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"></noscript>
-    <style>
-        :root {
-            --cyan: #00f2ff;
-            --purple: #7b2fff;
-            --gold: #ffd700;
-            --green: #4ade80;
-            --orange: #fb923c;
-            --red: #f87171;
-            --dim: #8892a4;
-            --bg: #0a0a0c;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+    <style>    /* -- Nav responsive / mobile drawer ----------------------------- */
+    body { background-color:var(--ae-base,#0C0F13); color:var(--ae-text-1,#EAE6DF); font-family:var(--ae-font-sans,'Inter',system-ui,sans-serif); padding-top:60px; -webkit-font-smoothing:antialiased; overflow-x:hidden; line-height:1.7; }
+    body::before, body::after { display:none !important; }
+    .ae-mobile-drawer { position:fixed; top:60px; left:0; right:0; z-index:800; background:var(--ae-base,#0C0F13); border-bottom:1px solid rgba(255,255,255,0.07); display:none; flex-direction:column; padding:16px; gap:4px; max-height:calc(100vh - 60px); overflow-y:auto; }
+    .ae-mobile-drawer.open { display:flex; }
+    .ae-mobile-link { font-size:.88rem; color:#7C8290; text-decoration:none; padding:10px 16px; border-radius:4px; display:block; transition:background 120ms,color 120ms; }
+    .ae-mobile-link:hover { background:rgba(255,255,255,0.04); color:#EAE6DF; }
+    #navHamburger { display:none; align-items:center; justify-content:center; width:36px; height:36px; background:transparent; border:1px solid rgba(255,255,255,0.07); border-radius:4px; cursor:pointer; color:#7C8290; font-size:.85rem; flex-shrink:0; transition:border-color 120ms,color 120ms; }
+    #navHamburger:hover { border-color:rgba(255,255,255,0.18); color:#EAE6DF; }
+    @media (max-width:900px) { .ae-nav-links { display:none !important; } #navHamburger { display:flex !important; } }
+    @media (min-width:901px) { #navMobileDrawer { display:none !important; } }
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            background: var(--bg);
+            background: var(--ae-base,#0C0F13);
             color: #e2e8f0;
             font-family: 'Inter', sans-serif;
-            padding-top: 80px;
+            padding-top: 60px;
             line-height: 1.7;
         }
 
@@ -45,12 +47,12 @@
             text-transform: uppercase; padding: 0.22rem 0.75rem;
             border-radius: 20px; margin-bottom: 1rem;
         }
-        .label-cyan   { background: rgba(0,242,255,0.08);  color: var(--cyan);   border: 1px solid rgba(0,242,255,0.25); }
-        .label-gold   { background: rgba(255,215,0,0.08);  color: var(--gold);   border: 1px solid rgba(255,215,0,0.2); }
-        .label-green  { background: rgba(74,222,128,0.08); color: var(--green);  border: 1px solid rgba(74,222,128,0.2); }
-        .label-orange { background: rgba(251,146,60,0.08); color: var(--orange); border: 1px solid rgba(251,146,60,0.2); }
-        .label-purple { background: rgba(123,47,255,0.08); color: #c084fc;       border: 1px solid rgba(123,47,255,0.25); }
-        .label-red    { background: rgba(248,113,113,0.08);color: var(--red);    border: 1px solid rgba(248,113,113,0.2); }
+        .label-cyan   { background: rgba(74,143,171,0.08);  color: var(--cyan);   border: 1px solid rgba(74,143,171,0.25); }
+        .label-gold   { background: rgba(184,150,106,0.08);  color: var(--gold);   border: 1px solid rgba(184,150,106,0.2); }
+        .label-green  { background: rgba(74,124,104,0.08); color: var(--green);  border: 1px solid rgba(74,124,104,0.2); }
+        .label-orange { background: rgba(184,150,106,0.08); color: var(--orange); border: 1px solid rgba(184,150,106,0.2); }
+        .label-purple { background: rgba(74,143,171,0.08); color: #7c8290;       border: 1px solid rgba(74,143,171,0.25); }
+        .label-red    { background: rgba(122,64,64,0.08);color: var(--red);    border: 1px solid rgba(122,64,64,0.2); }
 
         h2.section-title {
             font-size: clamp(1.6rem, 3.5vw, 2.4rem);
@@ -65,12 +67,12 @@
             background: rgba(0,0,0,0.35); border-radius: 18px;
             padding: 1.6rem; border: 1px solid rgba(255,255,255,0.07);
         }
-        .card-cyan   { border-color: rgba(0,242,255,0.18);   background: rgba(0,242,255,0.02); }
-        .card-gold   { border-color: rgba(255,215,0,0.15);   background: rgba(255,215,0,0.02); }
-        .card-green  { border-color: rgba(74,222,128,0.15);  background: rgba(74,222,128,0.02); }
-        .card-orange { border-color: rgba(251,146,60,0.15);  background: rgba(251,146,60,0.02); }
-        .card-purple { border-color: rgba(123,47,255,0.18);  background: rgba(123,47,255,0.02); }
-        .card-red    { border-color: rgba(248,113,113,0.15); background: rgba(248,113,113,0.02); }
+        .card-cyan   { border-color: rgba(74,143,171,0.18);   background: rgba(74,143,171,0.02); }
+        .card-gold   { border-color: rgba(184,150,106,0.15);   background: rgba(184,150,106,0.02); }
+        .card-green  { border-color: rgba(74,124,104,0.15);  background: rgba(74,124,104,0.02); }
+        .card-orange { border-color: rgba(184,150,106,0.15);  background: rgba(184,150,106,0.02); }
+        .card-purple { border-color: rgba(74,143,171,0.18);  background: rgba(74,143,171,0.02); }
+        .card-red    { border-color: rgba(122,64,64,0.15); background: rgba(122,64,64,0.02); }
 
         .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px,1fr)); gap: 1.4rem; }
         .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px,1fr)); gap: 1.4rem; }
@@ -80,12 +82,12 @@
         .card p, .card li { font-size: 0.875rem; color: var(--dim); line-height: 1.75; }
         .card ul { list-style: none; display: flex; flex-direction: column; gap: 0.45rem; }
         .card li::before { content: "→ "; color: rgba(255,255,255,0.2); }
-        .card-cyan   li::before { color: rgba(0,242,255,0.4); }
-        .card-green  li::before { color: rgba(74,222,128,0.4); }
-        .card-orange li::before { color: rgba(251,146,60,0.4); }
-        .card-purple li::before { color: rgba(192,132,252,0.4); }
-        .card-gold   li::before { color: rgba(255,215,0,0.4); }
-        .card-red    li::before { color: rgba(248,113,113,0.4); }
+        .card-cyan   li::before { color: rgba(74,143,171,0.4); }
+        .card-green  li::before { color: rgba(74,124,104,0.4); }
+        .card-orange li::before { color: rgba(184,150,106,0.4); }
+        .card-purple li::before { color: rgba(74,80,96,0.4); }
+        .card-gold   li::before { color: rgba(184,150,106,0.4); }
+        .card-red    li::before { color: rgba(122,64,64,0.4); }
 
         /* ── HERO ────────────────────────────────────────────────────────── */
         .hero {
@@ -98,7 +100,7 @@
         .hero::before {
             content: '';
             position: absolute; inset: 0;
-            background: radial-gradient(ellipse 60% 40% at 50% 0%, rgba(0,242,255,0.06) 0%, transparent 70%);
+            background: radial-gradient(ellipse 60% 40% at 50% 0%, rgba(74,143,171,0.06) 0%, transparent 70%);
             pointer-events: none;
         }
         .hero h1 {
@@ -119,12 +121,12 @@
             padding: 0.3rem 0.8rem; border-radius: 20px;
             font-size: 0.72rem; font-weight: 700; letter-spacing: 0.05em;
         }
-        .badge-live { background: rgba(74,222,128,0.1); color: var(--green); border: 1px solid rgba(74,222,128,0.25); }
+        .badge-live { background: rgba(74,124,104,0.1); color: var(--green); border: 1px solid rgba(74,124,104,0.25); }
         .badge-live::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
-        .badge-cyan   { background: rgba(0,242,255,0.08); color: var(--cyan); border: 1px solid rgba(0,242,255,0.2); }
-        .badge-gold   { background: rgba(255,215,0,0.08); color: var(--gold); border: 1px solid rgba(255,215,0,0.2); }
-        .badge-purple { background: rgba(123,47,255,0.08); color: #c084fc; border: 1px solid rgba(123,47,255,0.2); }
+        .badge-cyan   { background: rgba(74,143,171,0.08); color: var(--cyan); border: 1px solid rgba(74,143,171,0.2); }
+        .badge-gold   { background: rgba(184,150,106,0.08); color: var(--gold); border: 1px solid rgba(184,150,106,0.2); }
+        .badge-purple { background: rgba(74,143,171,0.08); color: #7c8290; border: 1px solid rgba(74,143,171,0.2); }
 
         /* ── STATS ───────────────────────────────────────────────────────── */
         .stats-grid {
@@ -155,10 +157,10 @@
             padding: 1.2rem; border-radius: 16px;
             transition: background 0.2s;
         }
-        .pipe-step:hover { background: rgba(0,242,255,0.03); }
+        .pipe-step:hover { background: rgba(74,143,171,0.03); }
         .pipe-num {
             flex-shrink: 0; width: 3.5rem; height: 3.5rem; border-radius: 50%;
-            background: rgba(0,0,0,0.5); border: 1px solid rgba(0,242,255,0.25);
+            background: rgba(0,0,0,0.5); border: 1px solid rgba(74,143,171,0.25);
             display: flex; align-items: center; justify-content: center;
             font-family: 'JetBrains Mono', monospace; font-weight: 700;
             color: var(--cyan); font-size: 0.85rem; position: relative; z-index: 1;
@@ -168,8 +170,8 @@
         .pipe-tag {
             display: inline-block; font-size: 0.6rem; font-weight: 700;
             letter-spacing: 0.08em; text-transform: uppercase;
-            background: rgba(0,242,255,0.08); color: var(--cyan);
-            border: 1px solid rgba(0,242,255,0.2); border-radius: 10px;
+            background: rgba(74,143,171,0.08); color: var(--cyan);
+            border: 1px solid rgba(74,143,171,0.2); border-radius: 10px;
             padding: 0.08rem 0.45rem; margin-left: 0.5rem; vertical-align: middle;
         }
 
@@ -202,10 +204,10 @@
             text-transform: uppercase; padding: 0.28rem 0.55rem;
             border-radius: 8px; text-align: center; margin-top: 0.2rem;
         }
-        .ph-live   { background: rgba(74,222,128,0.12); color: var(--green);  border: 1px solid rgba(74,222,128,0.25); }
-        .ph-q3     { background: rgba(0,242,255,0.08);  color: var(--cyan);   border: 1px solid rgba(0,242,255,0.2); }
-        .ph-q4     { background: rgba(255,215,0,0.08);  color: var(--gold);   border: 1px solid rgba(255,215,0,0.2); }
-        .ph-future { background: rgba(123,47,255,0.1);  color: #c084fc;       border: 1px solid rgba(123,47,255,0.25); }
+        .ph-live   { background: rgba(74,124,104,0.12); color: var(--green);  border: 1px solid rgba(74,124,104,0.25); }
+        .ph-q3     { background: rgba(74,143,171,0.08);  color: var(--cyan);   border: 1px solid rgba(74,143,171,0.2); }
+        .ph-q4     { background: rgba(184,150,106,0.08);  color: var(--gold);   border: 1px solid rgba(184,150,106,0.2); }
+        .ph-future { background: rgba(74,143,171,0.1);  color: #7c8290;       border: 1px solid rgba(74,143,171,0.25); }
         .tl-body h4 { font-size: 0.9rem; font-weight: 700; color: #e2e8f0; margin-bottom: 0.25rem; }
         .tl-body p  { font-size: 0.82rem; color: var(--dim); line-height: 1.65; }
 
@@ -241,7 +243,7 @@
 
         /* ── PROOF BOX ───────────────────────────────────────────────────── */
         .proof-box {
-            background: rgba(0,242,255,0.03); border: 1px solid rgba(0,242,255,0.15);
+            background: rgba(74,143,171,0.03); border: 1px solid rgba(74,143,171,0.15);
             border-radius: 16px; padding: 2rem;
             display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
             gap: 1.5rem; text-align: center;
@@ -266,53 +268,44 @@
 <body>
 
 <!-- Standard Nav -->
-<header class="fixed-header" id="main-nav">
-    <a href="/" class="logo" style="text-decoration:none;">⚡ AEGIS <span>v1.0</span> <span style="font-size:0.52rem;font-weight:800;font-family:monospace;letter-spacing:0.1em;background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.35);color:#00ff88;padding:1px 6px;border-radius:4px;text-transform:uppercase;vertical-align:middle;margin-left:5px;position:relative;top:-1px;">LIVE</span></a>
-
-    <nav class="nav-links-centered" aria-label="Main navigation">
-        <a href="/" class="nav-link">Home</a>
-        <a href="/#sentinel" class="nav-link">Sentinel</a>
-        <a href="/pricing" class="nav-link">Pricing</a>
-        <a href="/reviews" class="nav-link">Reviews</a>
-        <a href="/track-record" class="nav-link">Live Record</a>
-        <a href="/pitch" class="nav-link active">Investor Brief</a>
+<header class="ae-nav" id="main-nav">
+  <div class="ae-nav-inner">
+    <a href="/" class="ae-brand" style="text-decoration:none;">
+      AEGIS<span>&nbsp;&middot;&nbsp;</span>v1.0
+    </a>
+    <nav class="ae-nav-links" aria-label="Main navigation">
+      <a href="/" class="ae-nav-link">Home</a>
+      <a href="/signals" class="ae-nav-link">Signals</a>
+      <a href="/pricing" class="ae-nav-link">Pricing</a>
+      <a href="/track-record" class="ae-nav-link">Track Record</a>
+      <a href="/reviews" class="ae-nav-link">Reviews</a>
     </nav>
-
-    <div class="nav-auth-desktop" style="display:flex;align-items:center;gap:0.5rem;">
-        <a href="/" class="nav-btn-login">
-            <i class="fas fa-user-shield"></i> Sign In
-        </a>
-        <a href="/pricing" class="nav-btn-cta">
-            Get Started
-        </a>
+    <div id="authButtonContainer" class="ae-nav-actions">
+      <button id="portalBtn" class="ae-btn ae-btn-ghost ae-btn-sm">Sign In</button>
+      <button id="dashboardBtn" class="ae-btn ae-btn-outline ae-btn-sm" style="display:none;">Dashboard</button>
+      <button id="signOutBtn" class="ae-btn ae-btn-ghost ae-btn-sm" style="display:none;">Sign Out</button>
+      <button id="createAccountBtn" class="ae-btn ae-btn-primary ae-btn-sm">Start Free Trial</button>
     </div>
-
-    <button class="nav-hamburger-btn" id="navHamburger" aria-label="Toggle navigation" aria-expanded="false">
-        <i class="fas fa-bars"></i>
+    <button id="navHamburger" aria-label="Toggle navigation" aria-expanded="false">
+      <i class="fas fa-bars"></i>
     </button>
+  </div>
 </header>
 
-<div class="nav-mobile-drawer" id="navMobileDrawer">
-    <a href="/" class="nav-mobile-link"><i class="fas fa-home"></i> Home</a>
-    <a href="/#sentinel" class="nav-mobile-link"><i class="fas fa-satellite-dish"></i> Sentinel</a>
-    <a href="/pricing" class="nav-mobile-link"><i class="fas fa-tag"></i> Pricing</a>
-    <a href="/reviews" class="nav-mobile-link"><i class="fas fa-star"></i> Reviews</a>
-    <a href="/track-record" class="nav-mobile-link"><i class="fas fa-chart-bar"></i> Live Record</a>
-    <a href="/pitch" class="nav-mobile-link mobile-active"><i class="fas fa-chart-line"></i> Investor Brief</a>
-    <div class="nav-mobile-auth">
-        <a href="/" class="nav-btn-login"><i class="fas fa-user-shield"></i> Sign In</a>
-        <a href="/pricing" class="nav-btn-cta">Get Started</a>
-    </div>
+<div class="ae-mobile-drawer" id="navMobileDrawer" aria-hidden="true">
+  <a href="/" class="ae-mobile-link">Home</a>
+  <a href="/signals" class="ae-mobile-link">Signals</a>
+  <a href="/pricing" class="ae-mobile-link">Pricing</a>
+  <a href="/track-record" class="ae-mobile-link">Track Record</a>
+  <a href="/reviews" class="ae-mobile-link">Reviews</a>
+  <hr class="ae-divider" style="margin:var(--s-3,12px) 0;">
+  <div style="display:flex;flex-direction:column;gap:8px;padding:0 16px;">
+    <button id="mPortalProxy" class="ae-btn ae-btn-outline ae-btn-md">Sign In</button>
+    <button id="mDashProxy" class="ae-btn ae-btn-outline ae-btn-md" style="display:none;">Dashboard</button>
+    <button id="mSignoutProxy" class="ae-btn ae-btn-ghost ae-btn-md" style="display:none;">Sign Out</button>
+    <button id="mCtaProxy" class="ae-btn ae-btn-primary ae-btn-md">Start Free Trial</button>
+  </div>
 </div>
-
-<!-- ═══ HERO ═══════════════════════════════════════════════════════════════ -->
-<section class="hero">
-    <div class="label label-gold">Investor Brief &nbsp;&middot;&nbsp; June 2026</div>
-    <h1>AEGIS &mdash; Quantitative AI<br>Crypto Intelligence Platform</h1>
-    <p class="hero .sub" style="color:var(--dim); font-size:1.05rem; max-width:680px; margin:0 auto 1.8rem; line-height:1.85;">
-        A fully automated signal intelligence platform: 63 tokens monitored 24/7, individual XGBoost models per token,
-        meta-labeling precision gate, 8-layer signal filter + quality gate, beginner onboarding layer, and real-time WebSocket delivery &mdash; built by two engineers from Dehradun, India.
-    </p>
 
     <div class="hero-badges">
         <span class="hero-badge badge-live">Live &amp; Running</span>
@@ -854,33 +847,39 @@
     <p>&copy; 2026 AEGIS v1.0 — Sovereign Intelligence Terminal</p>
 </footer>
 
+
+
 <script>
 (function(){
-    var btn = document.getElementById('navHamburger');
-    var drawer = document.getElementById('navMobileDrawer');
-    if (!btn || !drawer) return;
-    function closeDrawer() {
-        drawer.classList.remove('open');
-        drawer.setAttribute('aria-hidden','true');
-        btn.setAttribute('aria-expanded','false');
-        var ico = btn.querySelector('i');
-        if (ico) ico.className = 'fas fa-bars';
-    }
-    btn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        var open = drawer.classList.toggle('open');
-        drawer.setAttribute('aria-hidden', !open);
-        btn.setAttribute('aria-expanded', open);
-        var ico = btn.querySelector('i');
-        if (ico) ico.className = open ? 'fas fa-times' : 'fas fa-bars';
-    });
-    document.addEventListener('click', function(e) {
-        if (!btn.contains(e.target) && !drawer.contains(e.target)) closeDrawer();
-    });
-    drawer.querySelectorAll('.nav-mobile-link').forEach(function(a) {
-        a.addEventListener('click', closeDrawer);
-    });
+  var btn=document.getElementById('navHamburger'),drawer=document.getElementById('navMobileDrawer');
+  if(!btn||!drawer)return;
+  function close_(){drawer.classList.remove('open');drawer.setAttribute('aria-hidden','true');btn.setAttribute('aria-expanded','false');var ico=btn.querySelector('i');if(ico)ico.className='fas fa-bars';}
+  btn.addEventListener('click',function(e){e.stopPropagation();var open=drawer.classList.toggle('open');drawer.setAttribute('aria-hidden',String(!open));btn.setAttribute('aria-expanded',String(open));var ico=btn.querySelector('i');if(ico)ico.className=open?'fas fa-times':'fas fa-bars';});
+  document.addEventListener('click',function(e){if(!btn.contains(e.target)&&!drawer.contains(e.target))close_();});
+  drawer.querySelectorAll('.ae-mobile-link').forEach(function(a){a.addEventListener('click',close_);});
+  function proxy(pid,tid){var p=document.getElementById(pid),t=document.getElementById(tid);if(!p||!t)return;p.style.display=t.style.display||'';p.addEventListener('click',function(){close_();t.click();});new MutationObserver(function(){p.style.display=t.style.display;}).observe(t,{attributes:true,attributeFilter:['style']});}
+  proxy('mPortalProxy','portalBtn');proxy('mDashProxy','dashboardBtn');proxy('mSignoutProxy','signOutBtn');proxy('mCtaProxy','createAccountBtn');
 })();
+</script>
+<script type="module">
+import { initSignInUI, openSignInModal } from '../scripts/signin-ui.js';
+import { initSignUpUI, openSignUpModal } from '../scripts/signup-ui.js';
+import { handleLogout, subscribeToAuthState } from '../scripts/auth.js';
+document.addEventListener('DOMContentLoaded', () => {
+  try{initSignInUI();}catch(e){}
+  try{initSignUpUI();}catch(e){}
+  const show=el=>{if(el)el.style.display='inline-flex';};
+  const hide=el=>{if(el)el.style.display='none';};
+  const pBtn=document.getElementById('portalBtn'),dBtn=document.getElementById('dashboardBtn'),sBtn=document.getElementById('signOutBtn'),cBtn=document.getElementById('createAccountBtn');
+  subscribeToAuthState(state=>{
+    if(state.authenticated){hide(pBtn);hide(cBtn);show(dBtn);show(sBtn);}
+    else{show(pBtn);show(cBtn);hide(dBtn);hide(sBtn);}
+  });
+  if(pBtn)pBtn.addEventListener('click',e=>{e.preventDefault();openSignInModal();});
+  if(cBtn)cBtn.addEventListener('click',e=>{e.preventDefault();openSignUpModal();});
+  if(dBtn)dBtn.addEventListener('click',e=>{e.preventDefault();window.location.href='/dashboard';});
+  if(sBtn)sBtn.addEventListener('click',async e=>{e.preventDefault();['authToken','access_token','authenticated','userSession','refresh_token'].forEach(k=>localStorage.removeItem(k));try{await handleLogout();}catch(_){}window.location.href='/';});
+});
 </script>
 
 </body>

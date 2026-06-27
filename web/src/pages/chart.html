@@ -9,26 +9,38 @@
   <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap"></noscript>
   <link rel="stylesheet" href="/web/dist/styles.css?v=1.1">
-  <link rel="stylesheet" href="/web/src/styles/main.css">
+    <link rel="stylesheet" href="/web/src/styles/aegis-redesign.css">
+<link rel="stylesheet" href="/web/src/styles/main.css">
   <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
-  <style>
-    :root {
+  <style>    /* -- Nav responsive / mobile drawer ----------------------------- */
+    body { background-color:var(--ae-base,#0C0F13); color:var(--ae-text-1,#EAE6DF); font-family:var(--ae-font-sans,'Inter',system-ui,sans-serif); padding-top:60px; -webkit-font-smoothing:antialiased; overflow-x:hidden; line-height:1.7; }
+    body::before, body::after { display:none !important; }
+    .ae-mobile-drawer { position:fixed; top:60px; left:0; right:0; z-index:800; background:var(--ae-base,#0C0F13); border-bottom:1px solid rgba(255,255,255,0.07); display:none; flex-direction:column; padding:16px; gap:4px; max-height:calc(100vh - 60px); overflow-y:auto; }
+    .ae-mobile-drawer.open { display:flex; }
+    .ae-mobile-link { font-size:.88rem; color:#7C8290; text-decoration:none; padding:10px 16px; border-radius:4px; display:block; transition:background 120ms,color 120ms; }
+    .ae-mobile-link:hover { background:rgba(255,255,255,0.04); color:#EAE6DF; }
+    #navHamburger { display:none; align-items:center; justify-content:center; width:36px; height:36px; background:transparent; border:1px solid rgba(255,255,255,0.07); border-radius:4px; cursor:pointer; color:#7C8290; font-size:.85rem; flex-shrink:0; transition:border-color 120ms,color 120ms; }
+    #navHamburger:hover { border-color:rgba(255,255,255,0.18); color:#EAE6DF; }
+    @media (max-width:900px) { .ae-nav-links { display:none !important; } #navHamburger { display:flex !important; } }
+    @media (min-width:901px) { #navMobileDrawer { display:none !important; } }
+
+:root {
       --bg-deep: #050505; --bg-void: #0a0a0c;
-      --glass: rgba(15,23,42,0.75); --glass-border: rgba(0,242,255,0.10);
-      --cyan: #00f2ff; --green: #00ff88; --red: #ff0055; --orange: #ff8c00;
+      --glass: rgba(15,23,42,0.75); --glass-border: rgba(74,143,171,0.10);
+      --cyan: #4a8fab; --green: #4a7c68; --red: #ff0055; --orange: #ff8c00;
       --dim: #94a3b8; --white: #ffffff; --purple: #a855f7;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { background: var(--bg-deep); color: var(--white); font-family: 'Inter', sans-serif; min-height: 100vh; }
-    body { background-image: radial-gradient(circle at 20% 20%, rgba(0,242,255,0.03) 0%, transparent 60%); }
+    body { background-image: radial-gradient(circle at 20% 20%, rgba(74,143,171,0.03) 0%, transparent 60%); }
 
     /* ── NAV ── */
     .chart-nav {
       display: flex; align-items: center; gap: 16px; padding: 12px 24px;
-      background: rgba(10,10,12,0.95); border-bottom: 1px solid var(--glass-border);
-      position: sticky; top: 0; z-index: 100; backdrop-filter: blur(20px);
+      background: rgba(12,15,19,0.97); border-bottom: 1px solid rgba(255,255,255,0.07);
+      position: sticky; top: 60px; z-index: 100; backdrop-filter: blur(20px);
     }
-    .nav-brand { font-weight: 800; font-size: 18px; color: var(--cyan); letter-spacing: 2px; text-decoration: none; }
+    .nav-brand { font-weight: 800; font-size: 18px; color: var(--ae-text-1,#EAE6DF); letter-spacing: 2px; text-decoration: none; }
     .nav-back { color: var(--dim); font-size: 13px; text-decoration: none; display: flex; align-items: center; gap: 6px; }
     .nav-back:hover { color: var(--white); }
     .nav-sep { color: var(--glass-border); }
@@ -40,12 +52,12 @@
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2300f2ff' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
       background-repeat: no-repeat; background-position: right 12px center;
     }
-    #token-select:focus { outline: none; border-color: var(--cyan); }
+    #token-select:focus { outline: none; border-color: #4a8fab; }
     .signal-pill {
       padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;
       letter-spacing: 0.5px; text-transform: uppercase;
     }
-    .pill-buy  { background: rgba(0,255,136,0.15); color: var(--green); border: 1px solid rgba(0,255,136,0.3); }
+    .pill-buy  { background: rgba(74,124,104,0.15); color: var(--green); border: 1px solid rgba(74,124,104,0.3); }
     .pill-sell { background: rgba(255,0,85,0.15);  color: var(--red);   border: 1px solid rgba(255,0,85,0.3); }
     .pill-hold { background: rgba(148,163,184,0.1); color: var(--dim); border: 1px solid rgba(148,163,184,0.2); }
 
@@ -64,7 +76,7 @@
     }
     .card-title {
       font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
-      text-transform: uppercase; color: var(--cyan); margin-bottom: 14px;
+      text-transform: uppercase; color: #4a8fab; margin-bottom: 14px;
       display: flex; align-items: center; gap: 8px;
     }
     .card-title::after { content: ''; flex: 1; height: 1px; background: var(--glass-border); }
@@ -79,24 +91,24 @@
 
     /* ── SIGNAL OVERVIEW ── */
     .sig-symbol { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 700; }
-    .sig-confidence { font-size: 48px; font-weight: 800; color: var(--cyan); line-height: 1; }
+    .sig-confidence { font-size: 48px; font-weight: 800; color: #4a8fab; line-height: 1; }
     .sig-conf-label { font-size: 11px; color: var(--dim); margin-top: 2px; }
     .levels-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
     .level-row { display: flex; flex-direction: column; gap: 2px; }
     .level-label { font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.8px; }
     .level-val { font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 600; }
-    .level-entry { color: var(--cyan); }
+    .level-entry { color: #4a8fab; }
     .level-tp1   { color: var(--green); }
     .level-tp2   { color: #00cc6a; }
     .level-tp3   { color: #009950; }
     .level-sl    { color: var(--red); }
     .rr-badge {
-      margin-top: 12px; padding: 6px 12px; background: rgba(0,242,255,0.08);
-      border: 1px solid rgba(0,242,255,0.2); border-radius: 8px;
+      margin-top: 12px; padding: 6px 12px; background: rgba(74,143,171,0.08);
+      border: 1px solid rgba(74,143,171,0.2); border-radius: 8px;
       display: flex; align-items: center; justify-content: space-between;
     }
     .rr-label { font-size: 11px; color: var(--dim); }
-    .rr-val { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 700; color: var(--cyan); }
+    .rr-val { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 700; color: #4a8fab; }
 
     /* ── CONFLUENCE BARS ── */
     .conf-row { margin-bottom: 12px; }
@@ -119,7 +131,7 @@
       padding: 10px 12px; border-radius: 8px; border: 1px solid;
       display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600;
     }
-    .regime-on  { background: rgba(0,255,136,0.07); border-color: rgba(0,255,136,0.25); color: var(--green); }
+    .regime-on  { background: rgba(74,124,104,0.07); border-color: rgba(74,124,104,0.25); color: var(--green); }
     .regime-off { background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.08); color: var(--dim); }
 
     /* ── HEALTH SCORE ── */
@@ -153,7 +165,7 @@
       border-bottom: 1px solid rgba(255,255,255,0.04);
     }
     .story-item:last-child { border-bottom: none; }
-    .story-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); flex-shrink: 0; margin-top: 6px; }
+    .story-dot { width: 6px; height: 6px; border-radius: 50%; background: #4a8fab; flex-shrink: 0; margin-top: 6px; }
     .story-text { font-size: 13px; color: var(--dim); line-height: 1.6; }
     .story-text strong { color: var(--white); }
 
@@ -179,8 +191,8 @@
 
     /* ── SUMMARY CARD ── */
     .summary-box {
-      background: linear-gradient(135deg, rgba(0,242,255,0.06), rgba(168,85,247,0.04));
-      border: 1px solid rgba(0,242,255,0.15); border-radius: 12px; padding: 18px 20px;
+      background: linear-gradient(135deg, rgba(74,143,171,0.06), rgba(168,85,247,0.04));
+      border: 1px solid rgba(74,143,171,0.15); border-radius: 12px; padding: 18px 20px;
       margin: 0 20px 20px; font-size: 14px; line-height: 1.7; color: var(--dim);
       max-width: calc(1600px - 40px); margin-left: auto; margin-right: auto;
     }
@@ -203,8 +215,8 @@
     #nav-auth-hint {
       display: none; align-items: center; gap: 8px;
       padding: 5px 12px 5px 10px; border-radius: 20px;
-      background: rgba(0,242,255,0.07); border: 1px solid rgba(0,242,255,0.2);
-      font-size: 11px; color: var(--cyan); font-weight: 600;
+      background: rgba(74,143,171,0.07); border: 1px solid rgba(74,143,171,0.2);
+      font-size: 11px; color: #4a8fab; font-weight: 600;
     }
 
     /* ── TIMEFRAME BAR ── */
@@ -213,8 +225,8 @@
       font-family: 'JetBrains Mono', monospace; cursor: pointer; border: 1px solid rgba(255,255,255,0.08);
       background: rgba(255,255,255,0.04); color: var(--dim); transition: all 0.15s; letter-spacing: 0.3px;
     }
-    .tf-btn:hover  { background: rgba(0,242,255,0.08); color: var(--white); border-color: rgba(0,242,255,0.2); }
-    .tf-btn.active { background: rgba(0,242,255,0.15); color: var(--cyan); border-color: rgba(0,242,255,0.4); }
+    .tf-btn:hover  { background: rgba(74,143,171,0.08); color: var(--white); border-color: rgba(74,143,171,0.2); }
+    .tf-btn.active { background: rgba(74,143,171,0.15); color: #4a8fab; border-color: rgba(74,143,171,0.4); }
 
     /* ── POSITION BANNER ── */
     .pos-banner {
@@ -222,14 +234,14 @@
       border: 1px solid; backdrop-filter: blur(12px);
       display: none; /* shown by JS */
     }
-    .pos-banner.long  { background: rgba(0,255,136,0.05); border-color: rgba(0,255,136,0.25); }
+    .pos-banner.long  { background: rgba(74,124,104,0.05); border-color: rgba(74,124,104,0.25); }
     .pos-banner.short { background: rgba(255,0,85,0.05);  border-color: rgba(255,0,85,0.25); }
     .pos-top { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; }
     .pos-badge {
       font-size: 11px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase;
       padding: 3px 10px; border-radius: 20px;
     }
-    .pos-badge.long  { background: rgba(0,255,136,0.15); color: var(--green); border: 1px solid rgba(0,255,136,0.3); }
+    .pos-badge.long  { background: rgba(74,124,104,0.15); color: var(--green); border: 1px solid rgba(74,124,104,0.3); }
     .pos-badge.short { background: rgba(255,0,85,0.15);  color: var(--red);   border: 1px solid rgba(255,0,85,0.3); }
     .pos-title { font-weight: 700; font-size: 15px; }
     .pos-timer { font-size: 11px; color: var(--dim); margin-left: auto; font-family: 'JetBrains Mono', monospace; }
@@ -243,9 +255,9 @@
       flex: 1; text-align: center; padding: 5px 8px; border-radius: 6px;
       font-size: 11px; font-family: 'JetBrains Mono', monospace; font-weight: 700; border: 1px solid;
     }
-    .tp-hit  { background: rgba(0,255,136,0.12); color: var(--green); border-color: rgba(0,255,136,0.3); }
+    .tp-hit  { background: rgba(74,124,104,0.12); color: var(--green); border-color: rgba(74,124,104,0.3); }
     .tp-miss { background: rgba(255,255,255,0.03); color: var(--dim); border-color: rgba(255,255,255,0.08); }
-    .tp-pending { background: rgba(0,242,255,0.06); color: var(--cyan); border-color: rgba(0,242,255,0.2); }
+    .tp-pending { background: rgba(74,143,171,0.06); color: #4a8fab; border-color: rgba(74,143,171,0.2); }
 
     /* ── SIGNAL GENESIS ── */
     .gate-row {
@@ -257,7 +269,7 @@
     .gate-name { font-size: 12px; font-weight: 700; color: var(--white); min-width: 90px; }
     .gate-desc { font-size: 11px; color: var(--dim); flex: 1; }
     .gate-val  { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; flex-shrink: 0; }
-    .gate-pass { border-color: rgba(0,255,136,0.2); }
+    .gate-pass { border-color: rgba(74,124,104,0.2); }
     .gate-fail { border-color: rgba(255,0,85,0.2); background: rgba(255,0,85,0.04); }
     .gate-warn { border-color: rgba(255,140,0,0.2); }
 
@@ -278,7 +290,7 @@
     .quality-fill { height: 100%; border-radius: 2px; }
     .open-pos-dot {
       display: inline-block; width: 7px; height: 7px; border-radius: 50%;
-      background: var(--cyan); margin-right: 5px; animation: blink 1.4s infinite;
+      background: #4a8fab; margin-right: 5px; animation: blink 1.4s infinite;
     }
     @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
@@ -286,7 +298,7 @@
     .text-buy    { color: var(--green); }
     .text-sell   { color: var(--red); }
     .text-hold   { color: var(--dim); }
-    .text-cyan   { color: var(--cyan); }
+    .text-cyan   { color: #4a8fab; }
     .text-orange { color: var(--orange); }
     .loader { text-align: center; padding: 60px; color: var(--dim); font-size: 14px; }
     .dot-pulse::after { content: '...'; animation: dots 1.5s infinite; }
@@ -295,7 +307,46 @@
 </head>
 <body>
 
-<!-- NAV -->
+<header class="ae-nav" id="main-nav">
+  <div class="ae-nav-inner">
+    <a href="/" class="ae-brand" style="text-decoration:none;">
+      AEGIS<span>&nbsp;&middot;&nbsp;</span>v1.0
+    </a>
+    <nav class="ae-nav-links" aria-label="Main navigation">
+      <a href="/" class="ae-nav-link">Home</a>
+      <a href="/signals" class="ae-nav-link">Signals</a>
+      <a href="/pricing" class="ae-nav-link">Pricing</a>
+      <a href="/track-record" class="ae-nav-link">Track Record</a>
+      <a href="/reviews" class="ae-nav-link">Reviews</a>
+    </nav>
+    <div id="authButtonContainer" class="ae-nav-actions">
+      <button id="portalBtn" class="ae-btn ae-btn-ghost ae-btn-sm">Sign In</button>
+      <button id="dashboardBtn" class="ae-btn ae-btn-outline ae-btn-sm" style="display:none;">Dashboard</button>
+      <button id="signOutBtn" class="ae-btn ae-btn-ghost ae-btn-sm" style="display:none;">Sign Out</button>
+      <button id="createAccountBtn" class="ae-btn ae-btn-primary ae-btn-sm">Start Free Trial</button>
+    </div>
+    <button id="navHamburger" aria-label="Toggle navigation" aria-expanded="false">
+      <i class="fas fa-bars"></i>
+    </button>
+  </div>
+</header>
+
+<div class="ae-mobile-drawer" id="navMobileDrawer" aria-hidden="true">
+  <a href="/" class="ae-mobile-link">Home</a>
+  <a href="/signals" class="ae-mobile-link">Signals</a>
+  <a href="/pricing" class="ae-mobile-link">Pricing</a>
+  <a href="/track-record" class="ae-mobile-link">Track Record</a>
+  <a href="/reviews" class="ae-mobile-link">Reviews</a>
+  <hr style="margin:12px 0;border:none;border-top:1px solid rgba(255,255,255,0.07);">
+  <div style="display:flex;flex-direction:column;gap:8px;padding:0 16px;">
+    <button id="mPortalProxy" class="ae-btn ae-btn-outline ae-btn-md">Sign In</button>
+    <button id="mDashProxy" class="ae-btn ae-btn-outline ae-btn-md" style="display:none;">Dashboard</button>
+    <button id="mSignoutProxy" class="ae-btn ae-btn-ghost ae-btn-md" style="display:none;">Sign Out</button>
+    <button id="mCtaProxy" class="ae-btn ae-btn-primary ae-btn-md">Start Free Trial</button>
+  </div>
+</div>
+
+<!-- CHART SUB-NAV (token selector) -->
 <nav class="chart-nav">
   <a href="/dashboard" class="nav-brand">AEGIS</a>
   <span class="nav-sep">›</span>
@@ -304,9 +355,9 @@
   <span style="font-size:13px;color:var(--dim)">Chart Analysis</span>
   <div class="token-select-wrap">
     <div id="nav-auth-hint">
-      🔒 <a href="/#signin" style="color:var(--cyan);text-decoration:none">Sign in</a> to unlock full analysis
+      🔒 <a href="/#signin" style="color:#4a8fab;text-decoration:none">Sign in</a> to unlock full analysis
     </div>
-    <span id="live-price" style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:#00f2ff;letter-spacing:0.5px;min-width:110px;text-align:right;"></span>
+    <span id="live-price" style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:#4a8fab;letter-spacing:0.5px;min-width:110px;text-align:right;"></span>
     <select id="token-select"><option>Loading...</option></select>
     <span id="nav-signal-pill" class="signal-pill pill-hold">—</span>
   </div>
@@ -334,12 +385,12 @@
       </div>
       <div id="tv-chart"><div class="loader">Loading chart<span class="dot-pulse"></span></div></div>
       <div class="chart-legend" id="chart-legend" style="display:none">
-        <div class="legend-item"><div class="legend-dot" style="background:#00f2ff"></div>Entry</div>
-        <div class="legend-item"><div class="legend-dot" style="background:#00ff88"></div>TP1</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#4a8fab"></div>Entry</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#4a7c68"></div>TP1</div>
         <div class="legend-item"><div class="legend-dot" style="background:#00cc6a"></div>TP2</div>
         <div class="legend-item"><div class="legend-dot" style="background:#009950"></div>TP3</div>
         <div class="legend-item"><div class="legend-dot" style="background:#ff0055"></div>SL</div>
-        <div class="legend-item"><div class="legend-dot" style="background:rgba(0,255,136,0.4)"></div>Support</div>
+        <div class="legend-item"><div class="legend-dot" style="background:rgba(74,124,104,0.4)"></div>Support</div>
         <div class="legend-item"><div class="legend-dot" style="background:rgba(255,0,85,0.4)"></div>Resistance</div>
       </div>
     </div>
@@ -415,7 +466,7 @@
         </div>
         <a href="/pricing"
            style="display:inline-block;padding:8px 20px;border-radius:8px;font-size:12px;font-weight:700;
-                  background:linear-gradient(135deg,#00f2ff,#0099cc);color:#000;text-decoration:none;">
+                  background:linear-gradient(135deg,#4a8fab,#0099cc);color:#000;text-decoration:none;">
           Upgrade to Pro →
         </a>
       </div>
@@ -433,7 +484,7 @@
         </div>
         <a href="/pricing"
            style="display:inline-block;padding:8px 20px;border-radius:8px;font-size:12px;font-weight:700;
-                  background:linear-gradient(135deg,#00f2ff,#0099cc);color:#000;text-decoration:none;">
+                  background:linear-gradient(135deg,#4a8fab,#0099cc);color:#000;text-decoration:none;">
           Upgrade to Pro →
         </a>
       </div>
@@ -513,7 +564,7 @@ const _gateOverlay = (() => {
   el.id = 'auth-gate-overlay';
   el.style.cssText = 'position:fixed;inset:0;background:#050505;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;';
   el.innerHTML = `
-    <div style="font-size:24px;font-weight:800;color:#00f2ff;letter-spacing:3px;font-family:Inter,sans-serif">⚡ AEGIS</div>
+    <div style="font-size:24px;font-weight:800;color:#4a8fab;letter-spacing:3px;font-family:Inter,sans-serif">⚡ AEGIS</div>
     <div style="font-size:12px;color:#94a3b8;font-family:Inter,sans-serif;">Checking access…</div>`;
   document.body.appendChild(el);
   return el;
@@ -588,7 +639,7 @@ function applyTierGates(tier) {
       </div>
       <a href="/#signin"
          style="display:inline-block;padding:8px 20px;border-radius:8px;font-size:12px;font-weight:700;
-                background:linear-gradient(135deg,#00f2ff,#0099cc);color:#000;text-decoration:none;
+                background:linear-gradient(135deg,#4a8fab,#0099cc);color:#000;text-decoration:none;
                 letter-spacing:0.5px;transition:opacity .2s"
          onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
         Sign In Free →
@@ -756,7 +807,7 @@ async function renderChart(sig) {
     if (!Array.isArray(raw) || !raw.length) throw new Error('empty');
 
     _chartBars = raw.map(k => ({ time: Math.floor(k[0]/1000), open: +k[1], high: +k[2], low: +k[3], close: +k[4] }));
-    _chartVols = raw.map(k => ({ time: Math.floor(k[0]/1000), value: +k[5], color: +k[4] >= +k[1] ? 'rgba(0,255,136,0.2)' : 'rgba(255,0,85,0.2)' }));
+    _chartVols = raw.map(k => ({ time: Math.floor(k[0]/1000), value: +k[5], color: +k[4] >= +k[1] ? 'rgba(74,124,104,0.2)' : 'rgba(255,0,85,0.2)' }));
     // Seed candle close time from last REST kline (index 6 = close time ms)
     _candleCloseTime = raw[raw.length - 1][6];
     _startCandleTimer();
@@ -771,21 +822,21 @@ async function renderChart(sig) {
       layout: { background: { color: 'transparent' }, textColor: '#94a3b8' },
       grid:   { vertLines: { color: 'rgba(255,255,255,0.04)' }, horzLines: { color: 'rgba(255,255,255,0.04)' } },
       crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-      rightPriceScale: { borderColor: 'rgba(0,242,255,0.15)' },
-      timeScale: { borderColor: 'rgba(0,242,255,0.15)', timeVisible: true, secondsVisible: showSeconds },
+      rightPriceScale: { borderColor: 'rgba(74,143,171,0.15)' },
+      timeScale: { borderColor: 'rgba(74,143,171,0.15)', timeVisible: true, secondsVisible: showSeconds },
     });
     chartInstance = chart;
 
     const candles = chart.addCandlestickSeries({
-      upColor: '#00ff88', downColor: '#ff0055',
-      borderUpColor: '#00ff88', borderDownColor: '#ff0055',
-      wickUpColor: '#00ff88', wickDownColor: '#ff0055',
+      upColor: '#4a7c68', downColor: '#ff0055',
+      borderUpColor: '#4a7c68', borderDownColor: '#ff0055',
+      wickUpColor: '#4a7c68', wickDownColor: '#ff0055',
     });
     candles.setData(_chartBars);
     _candlesSeries = candles;
 
     const vol = chart.addHistogramSeries({
-      color: 'rgba(0,242,255,0.15)', priceFormat: { type: 'volume' },
+      color: 'rgba(74,143,171,0.15)', priceFormat: { type: 'volume' },
       priceScaleId: 'vol', scaleMargins: { top: 0.85, bottom: 0 },
     });
     vol.setData(_chartVols);
@@ -796,20 +847,20 @@ async function renderChart(sig) {
       candles.createPriceLine({ price: parseFloat(price), color, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: label });
     };
     const entry = sig.entry_price || sig.price;
-    addLine(entry,            '#00f2ff',              'Entry');
+    addLine(entry,            '#4a8fab',              'Entry');
     addLine(sig.suggested_sl, '#ff0055',              'SL');
     if (sig.direction === 'SHORT' || sig.signal === 'SELL') {
-      addLine(sig.bear_tp1, '#00ff88', 'TP1');
+      addLine(sig.bear_tp1, '#4a7c68', 'TP1');
       addLine(sig.bear_tp2, '#00cc6a', 'TP2');
       addLine(sig.bear_tp3, '#009950', 'TP3');
     } else {
-      addLine(sig.bull_tp1, '#00ff88', 'TP1');
+      addLine(sig.bull_tp1, '#4a7c68', 'TP1');
       addLine(sig.bull_tp2, '#00cc6a', 'TP2');
       addLine(sig.bull_tp3, '#009950', 'TP3');
     }
-    addLine(sig.support,    'rgba(0,255,136,0.5)',  'Sup');
+    addLine(sig.support,    'rgba(74,124,104,0.5)',  'Sup');
     addLine(sig.resistance, 'rgba(255,0,85,0.5)',   'Res');
-    addLine(sig.pivot,      'rgba(0,242,255,0.35)', 'Pvt');
+    addLine(sig.pivot,      'rgba(74,143,171,0.35)', 'Pvt');
 
     $('chart-legend').style.display = 'flex';
 
@@ -893,7 +944,7 @@ function startLiveWs(symbol, interval) {
         else _liveBar = { ...bar }; // always sync with authoritative values
 
         _candlesSeries.update(bar);
-        _volSeriesRef.update({ time: bar.time, value: +k.v, color: +k.c >= +k.o ? 'rgba(0,255,136,0.2)' : 'rgba(255,0,85,0.2)' });
+        _volSeriesRef.update({ time: bar.time, value: +k.v, color: +k.c >= +k.o ? 'rgba(74,124,104,0.2)' : 'rgba(255,0,85,0.2)' });
         _updateLiveTicker(symbol, +k.c);
 
         // When candle closes, commit it to our local bars array
@@ -996,7 +1047,7 @@ async function loadMoreHistory(symbol, interval) {
       if (!Array.isArray(data) || data.length < 2) return;
 
       const newBars = data.map(k => ({ time: Math.floor(k[0]/1000), open: +k[1], high: +k[2], low: +k[3], close: +k[4] }));
-      const newVols = data.map(k => ({ time: Math.floor(k[0]/1000), value: +k[5], color: +k[4] >= +k[1] ? 'rgba(0,255,136,0.2)' : 'rgba(255,0,85,0.2)' }));
+      const newVols = data.map(k => ({ time: Math.floor(k[0]/1000), value: +k[5], color: +k[4] >= +k[1] ? 'rgba(74,124,104,0.2)' : 'rgba(255,0,85,0.2)' }));
 
       _chartBars = [...newBars, ..._chartBars];
       _chartVols = [...newVols, ..._chartVols];
@@ -1031,7 +1082,7 @@ function renderOverview(sig) {
       </div>
     </div>
 
-    <div style="text-align:center;padding:12px;background:rgba(0,242,255,0.05);border-radius:10px;border:1px solid rgba(0,242,255,0.12);margin-bottom:14px">
+    <div style="text-align:center;padding:12px;background:rgba(74,143,171,0.05);border-radius:10px;border:1px solid rgba(74,143,171,0.12);margin-bottom:14px">
       <div class="sig-confidence">${sig.quality_score != null ? sig.quality_score.toFixed(0) : '—'}</div>
       <div class="sig-conf-label">Signal Quality Score / 100</div>
     </div>
@@ -1092,10 +1143,10 @@ function renderExplanation(sig) {
   const normalize = v => Math.min(100, Math.max(0, ((v || 0) + 5) * 10)); // -5..+5 → 0..100
 
   const items = [
-    { name: 'Trend',        val: c.trend,       color: '#00f2ff' },
+    { name: 'Trend',        val: c.trend,       color: '#4a8fab' },
     { name: 'Momentum',     val: c.momentum,    color: '#a855f7' },
-    { name: 'Volume',       val: c.volume,      color: '#f59e0b' },
-    { name: 'Smart Money',  val: c.smart_money, color: '#00ff88' },
+    { name: 'Volume',       val: c.volume,      color: '#b8966a' },
+    { name: 'Smart Money',  val: c.smart_money, color: '#4a7c68' },
     { name: 'Bands',        val: c.bands,       color: '#06b6d4' },
     { name: 'Candle Pressure', val: c.candle,   color: '#f43f5e' },
   ].filter(i => i.val != null);
@@ -1151,7 +1202,7 @@ function renderExplanation(sig) {
 
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:14px;background:rgba(0,0,0,0.3);border-radius:10px;border:1px solid rgba(255,255,255,0.06)">
       <div style="text-align:center">
-        <div style="font-size:20px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--cyan)">${qualScore.toFixed(0)}</div>
+        <div style="font-size:20px;font-weight:800;font-family:'JetBrains Mono',monospace;color:#4a8fab">${qualScore.toFixed(0)}</div>
         <div style="font-size:10px;color:var(--dim)">Quality Score</div>
       </div>
       <div style="text-align:center">
@@ -1342,7 +1393,7 @@ function renderRegime(sig) {
   $('regime-section').innerHTML = `
     <div style="display:flex;justify-content:space-between;margin-bottom:12px;font-size:12px">
       <span style="color:var(--dim)">Rule-based</span>
-      <span style="font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--cyan)">${r.replace('_',' ')}</span>
+      <span style="font-family:'JetBrains Mono',monospace;font-weight:600;color:#4a8fab">${r.replace('_',' ')}</span>
     </div>
     <div style="display:flex;justify-content:space-between;margin-bottom:16px;font-size:12px">
       <span style="color:var(--dim)">HMM Model</span>
@@ -1457,7 +1508,7 @@ function renderSummary(sig) {
   const riskL = qual > 70 ? 'moderate' : qual > 55 ? 'elevated' : 'high';
 
   $('summary-box').innerHTML = `
-    <strong style="color:var(--cyan);font-size:14px">AEGIS Summary:</strong>
+    <strong style="color:#4a8fab;font-size:14px">AEGIS Summary:</strong>
     AEGIS identifies a <strong>${dir}</strong> setup on <strong>${sig.symbol}</strong> with
     <strong>${conf}% AI confidence</strong> and signal quality <strong>${qual.toFixed(0)}/100</strong>.
     Market regime is <strong>${(sig.regime||'').replace('_',' ')}</strong> with
@@ -1524,7 +1575,7 @@ function renderForensic(sig) {
   const lstmExh   = sig.lstm_exhaustion_prob != null ? `${(sig.lstm_exhaustion_prob*100).toFixed(0)}%` : '—';
 
   $('forensic-section').innerHTML = `
-    <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--cyan);margin-bottom:12px;word-break:break-all">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#4a8fab;margin-bottom:12px;word-break:break-all">
       ID: ${id}
     </div>
     ${[
@@ -1605,7 +1656,7 @@ function renderPositionBanner(symbol) {
     <div class="pos-grid">
       <div class="pos-stat">
         <div class="pos-stat-lbl">Entry Price</div>
-        <div class="pos-stat-val" style="color:var(--cyan)">${entry > 0 ? entry.toPrecision(6) : '—'}</div>
+        <div class="pos-stat-val" style="color:#4a8fab">${entry > 0 ? entry.toPrecision(6) : '—'}</div>
       </div>
       <div class="pos-stat">
         <div class="pos-stat-lbl">Current Price</div>
@@ -1678,8 +1729,8 @@ function renderSignalGenesis(sig) {
   el.innerHTML = `
     <div style="margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:10px;
-                  background:${fired ? 'rgba(0,255,136,0.07)' : 'rgba(255,0,85,0.07)'};
-                  border:1px solid ${fired ? 'rgba(0,255,136,0.25)' : 'rgba(255,0,85,0.25)'}">
+                  background:${fired ? 'rgba(74,124,104,0.07)' : 'rgba(255,0,85,0.07)'};
+                  border:1px solid ${fired ? 'rgba(74,124,104,0.25)' : 'rgba(255,0,85,0.25)'}">
         <span style="font-size:20px">${fired ? '🟢' : '🔴'}</span>
         <div>
           <div style="font-weight:800;font-size:14px;color:${fired ? 'var(--green)' : 'var(--red)'}">${fired ? 'SIGNAL FIRED' : 'SIGNAL NOT FIRED'}</div>
@@ -1689,7 +1740,7 @@ function renderSignalGenesis(sig) {
           </div>
         </div>
         <div style="margin-left:auto;text-align:right">
-          <div style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:800;color:var(--cyan)">${(sig.quality_score||0).toFixed(0)}<span style="font-size:11px;color:var(--dim)">/100</span></div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:800;color:#4a8fab">${(sig.quality_score||0).toFixed(0)}<span style="font-size:11px;color:var(--dim)">/100</span></div>
           <div style="font-size:10px;color:var(--dim)">Quality Score</div>
         </div>
       </div>
@@ -1716,7 +1767,7 @@ function renderSignalGenesis(sig) {
       <div style="font-size:12px;color:var(--dim)">
         Confidence margin: <strong style="color:${confGapColor}">${confGap > 0 ? '+' : ''}${confGap}pt</strong> above threshold
         ${dominant ? ` · Dominant factor: <strong style="color:var(--white)">${dominant.name}</strong>` : ''}
-        ${sig.edge_score != null ? ` · Edge score: <strong style="color:var(--cyan)">${sig.edge_score.toFixed(1)}</strong>` : ''}
+        ${sig.edge_score != null ? ` · Edge score: <strong style="color:#4a8fab">${sig.edge_score.toFixed(1)}</strong>` : ''}
       </div>
     </div>
 
@@ -1802,7 +1853,7 @@ function renderActiveSignals() {
                 <td style="font-family:'JetBrains Mono',monospace">${fmtP(sig.entry_price||sig.price)}</td>
                 <td style="font-family:'JetBrains Mono',monospace;color:var(--green)">${fmtP(tp1)}</td>
                 <td style="font-family:'JetBrains Mono',monospace;color:var(--red)">${fmtP(sig.suggested_sl)}</td>
-                <td style="font-family:'JetBrains Mono',monospace;color:var(--cyan)">${sig.risk_reward ? parseFloat(sig.risk_reward).toFixed(2) : '—'}</td>
+                <td style="font-family:'JetBrains Mono',monospace;color:#4a8fab">${sig.risk_reward ? parseFloat(sig.risk_reward).toFixed(2) : '—'}</td>
                 <td style="font-size:11px;color:var(--dim)">${(sig.regime||'').replace('_',' ')}</td>
                 <td style="font-family:'JetBrains Mono',monospace;color:${(sig.atr_pct||0)>2?'var(--orange)':'var(--dim)'}">${(sig.atr_pct||0).toFixed(2)}%</td>
                 <td style="font-family:'JetBrains Mono',monospace;color:${(sig.rsi||50)>65?'var(--red)':(sig.rsi||50)<35?'var(--green)':'var(--dim)'}">${(sig.rsi||0).toFixed(0)}</td>
@@ -1865,7 +1916,7 @@ function renderLstm(sig) {
     </div>`;
 
   el.innerHTML = `
-    ${row('Continuation', cont, '#00ff88', 'rgba(0,255,136,0.1)',
+    ${row('Continuation', cont, '#4a7c68', 'rgba(74,124,104,0.1)',
       cont >= 70 ? '✅ Strong continuation — trend likely to persist' :
       cont >= 45 ? '— Neutral continuation signal' : '⚠ Weak continuation — consider tightening TP')}
     ${row('Exhaustion', exh, '#ff0055', 'rgba(255,0,85,0.1)',
@@ -1903,8 +1954,8 @@ function renderHmmDeep(sig) {
   const hmmStateId  = sig.hmm_state_id != null ? `State #${sig.hmm_state_id}` : '—';
   const ruleRegime  = (sig.regime || '').replace(/_/g,' ');
 
-  const stabColor   = hmmStab >= 75 ? '#00ff88' : hmmStab >= 50 ? '#fbbf24' : '#ff0055';
-  const confColor   = hmmConf >= 70 ? '#00f2ff' : hmmConf >= 50 ? '#fbbf24' : '#ff0055';
+  const stabColor   = hmmStab >= 75 ? '#4a7c68' : hmmStab >= 50 ? '#fbbf24' : '#ff0055';
+  const confColor   = hmmConf >= 70 ? '#4a8fab' : hmmConf >= 50 ? '#fbbf24' : '#ff0055';
 
   const stabBar = pct => `
     <div style="height:6px;border-radius:3px;background:rgba(255,255,255,0.06);overflow:hidden;margin-top:4px">
@@ -1919,7 +1970,7 @@ function renderHmmDeep(sig) {
 
     <div style="display:flex;justify-content:space-between;margin-bottom:10px;font-size:12px">
       <span style="color:#64748b">Rule-based</span>
-      <span style="font-family:'JetBrains Mono',monospace;font-weight:600;color:#00f2ff">${ruleRegime || '—'}</span>
+      <span style="font-family:'JetBrains Mono',monospace;font-weight:600;color:#4a8fab">${ruleRegime || '—'}</span>
     </div>
     <div style="display:flex;justify-content:space-between;margin-bottom:10px;font-size:12px">
       <span style="color:#64748b">HMM Regime</span>
@@ -1945,12 +1996,45 @@ function renderHmmDeep(sig) {
     </div>
     <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11px">
       <span style="color:#64748b">Transition Risk</span>
-      <span style="font-weight:700;color:${hmmTrRisk ? '#ff0055' : '#00ff88'}">${hmmTrRisk ? '⚠ YES' : 'LOW'}</span>
+      <span style="font-weight:700;color:${hmmTrRisk ? '#ff0055' : '#4a7c68'}">${hmmTrRisk ? '⚠ YES' : 'LOW'}</span>
     </div>`;
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 loadData();
 </script>
+<script>
+(function(){
+  var btn=document.getElementById('navHamburger'),drawer=document.getElementById('navMobileDrawer');
+  if(!btn||!drawer)return;
+  function close_(){drawer.classList.remove('open');drawer.setAttribute('aria-hidden','true');btn.setAttribute('aria-expanded','false');var ico=btn.querySelector('i');if(ico)ico.className='fas fa-bars';}
+  btn.addEventListener('click',function(e){e.stopPropagation();var open=drawer.classList.toggle('open');drawer.setAttribute('aria-hidden',String(!open));btn.setAttribute('aria-expanded',String(open));var ico=btn.querySelector('i');if(ico)ico.className=open?'fas fa-times':'fas fa-bars';});
+  document.addEventListener('click',function(e){if(!btn.contains(e.target)&&!drawer.contains(e.target))close_();});
+  drawer.querySelectorAll('.ae-mobile-link').forEach(function(a){a.addEventListener('click',close_);});
+  function proxy(pid,tid){var p=document.getElementById(pid),t=document.getElementById(tid);if(!p||!t)return;p.style.display=t.style.display||'';p.addEventListener('click',function(){close_();t.click();});new MutationObserver(function(){p.style.display=t.style.display;}).observe(t,{attributes:true,attributeFilter:['style']});}
+  proxy('mPortalProxy','portalBtn');proxy('mDashProxy','dashboardBtn');proxy('mSignoutProxy','signOutBtn');proxy('mCtaProxy','createAccountBtn');
+})();
+</script>
+<script type="module">
+import { initSignInUI, openSignInModal } from '../scripts/signin-ui.js';
+import { initSignUpUI, openSignUpModal } from '../scripts/signup-ui.js';
+import { handleLogout, subscribeToAuthState } from '../scripts/auth.js';
+document.addEventListener('DOMContentLoaded', () => {
+  try{initSignInUI();}catch(e){}
+  try{initSignUpUI();}catch(e){}
+  const show=el=>{if(el)el.style.display='inline-flex';};
+  const hide=el=>{if(el)el.style.display='none';};
+  const pBtn=document.getElementById('portalBtn'),dBtn=document.getElementById('dashboardBtn'),sBtn=document.getElementById('signOutBtn'),cBtn=document.getElementById('createAccountBtn');
+  subscribeToAuthState(state=>{
+    if(state.authenticated){hide(pBtn);hide(cBtn);show(dBtn);show(sBtn);}
+    else{show(pBtn);show(cBtn);hide(dBtn);hide(sBtn);}
+  });
+  if(pBtn)pBtn.addEventListener('click',e=>{e.preventDefault();openSignInModal();});
+  if(cBtn)cBtn.addEventListener('click',e=>{e.preventDefault();openSignUpModal();});
+  if(dBtn)dBtn.addEventListener('click',e=>{e.preventDefault();window.location.href='/dashboard';});
+  if(sBtn)sBtn.addEventListener('click',async e=>{e.preventDefault();['authToken','access_token','authenticated','userSession','refresh_token'].forEach(k=>localStorage.removeItem(k));try{await handleLogout();}catch(_){}window.location.href='/';});
+});
+</script>
+
 </body>
 </html>
