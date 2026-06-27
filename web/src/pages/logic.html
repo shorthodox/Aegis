@@ -166,9 +166,9 @@
 })();
 </script>
 <script type="module">
-import { initSignInUI, openSignInModal } from '../scripts/signin-ui.js';
-import { initSignUpUI, openSignUpModal } from '../scripts/signup-ui.js';
-import { handleLogout, subscribeToAuthState } from '../scripts/auth.js';
+import { initSignInUI, openSignInModal } from '/web/src/scripts/signin-ui.js';
+import { initSignUpUI, openSignUpModal } from '/web/src/scripts/signup-ui.js';
+import { handleLogout, subscribeToAuthState } from '/web/src/scripts/auth.js';
 document.addEventListener('DOMContentLoaded', () => {
   try{initSignInUI();}catch(e){}
   try{initSignUpUI();}catch(e){}
