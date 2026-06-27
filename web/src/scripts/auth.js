@@ -555,7 +555,7 @@ export async function handleLogout() {
     Object.keys(localStorage).forEach(k => {
       if (k.startsWith('trialStart_')) localStorage.removeItem(k);
     });
-    window.location.href = '/web/src/pages/index.html';
+    window.location.href = '/';
     return { success: true };
   } catch (error) {
     console.error('❌ Logout error:', error);

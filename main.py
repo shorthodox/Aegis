@@ -1104,6 +1104,38 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
 )
 
+_LEGACY_HTML_REDIRECTS = {
+    "/web/src/pages/index.html":           "/",
+    "/web/src/pages/pricing.html":         "/pricing",
+    "/web/src/pages/signals.html":         "/signals",
+    "/web/src/pages/dashboard.html":       "/dashboard",
+    "/web/src/pages/contact.html":         "/contact",
+    "/web/src/pages/terms.html":           "/terms",
+    "/web/src/pages/privacy_policy.html":  "/privacy",
+    "/web/src/pages/risk_disclosure.html": "/risk-disclosure",
+    "/web/src/pages/refund-policy.html":   "/refund-policy",
+    "/web/src/pages/refund_policy.html":   "/refund-policy",
+    "/web/src/pages/conditions.html":      "/conditions",
+    "/web/src/pages/reset-password.html":  "/reset-password",
+    "/web/src/pages/track-record.html":    "/track-record",
+    "/web/src/pages/bot-record.html":      "/bot-record",
+    "/web/src/pages/trader-record.html":   "/trader-record",
+    "/web/src/pages/review.html":          "/reviews",
+    "/web/src/pages/reviews.html":         "/reviews",
+    "/web/src/pages/chart.html":           "/chart",
+    "/web/src/pages/logic.html":           "/logic",
+    "/web/src/pages/pitch.html":           "/pitch",
+}
+
+@app.middleware("http")
+async def redirect_legacy_html_paths(request: Request, call_next):
+    """301-redirect old /web/src/pages/*.html URLs to clean SEO-friendly paths.
+    Runs before the static-files mount so the mount never serves raw page HTML."""
+    clean = _LEGACY_HTML_REDIRECTS.get(request.url.path)
+    if clean:
+        return RedirectResponse(url=clean, status_code=301)
+    return await call_next(request)
+
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
@@ -1133,7 +1165,13 @@ async def add_security_headers(request: Request, call_next):
 
     # Prevent stale JS/HTML from disk cache after deploys
     path = request.url.path
-    if path.endswith((".js", ".html")) and "/web/" in path:
+    _CLEAN_PAGE_ROUTES = {
+        "/", "/pricing", "/signals", "/dashboard", "/contact", "/terms",
+        "/privacy", "/privacy-policy", "/risk-disclosure", "/refund-policy",
+        "/conditions", "/reset-password", "/track-record", "/bot-record",
+        "/trader-record", "/reviews", "/review", "/chart", "/logic", "/pitch",
+    }
+    if (path.endswith((".js", ".html")) and "/web/" in path) or path in _CLEAN_PAGE_ROUTES:
         response.headers["Cache-Control"] = "no-cache, must-revalidate"
 
     return response
@@ -1167,13 +1205,12 @@ async def health():
     return JSONResponse({"status": "ok"})
 
 @app.get("/")
-async def root_redirect():
-    # Permanent redirect — compliance checkers and search engines follow 301s reliably
-    return RedirectResponse(url="/web/src/pages/index.html", status_code=301)
+async def root_page():
+    return FileResponse(WEB_ROOT_PATH / "src/pages/index.html")
 
 @app.get("/dashboard")
-async def dashboard_redirect():
-    return RedirectResponse(url="/web/src/pages/dashboard.html")
+async def dashboard_page():
+    return FileResponse(WEB_ROOT_PATH / "src/pages/dashboard.html")
 
 
 
@@ -2058,6 +2095,64 @@ async def risk_disclosure_page():
 async def pricing_page():
     return FileResponse(WEB_ROOT_PATH / "src/pages/pricing.html")
 
+@app.get("/signals")
+async def signals_page():
+    return FileResponse(WEB_ROOT_PATH / "src/pages/signals.html")
+
+@app.get("/chart")
+async def chart_page():
+    return FileResponse(WEB_ROOT_PATH / "src/pages/chart.html")
+
+@app.get("/conditions")
+async def conditions_page():
+    return FileResponse(WEB_ROOT_PATH / "src/pages/conditions.html")
+
+@app.get("/reset-password")
+async def reset_password_page():
+    return FileResponse(WEB_ROOT_PATH / "src/pages/reset-password.html")
+
+@app.get("/track-record")
+async def track_record_page():
+    return FileResponse(WEB_ROOT_PATH / "src/pages/track-record.html")
+
+@app.get("/bot-record")
+async def bot_record_page():
+    return FileResponse(WEB_ROOT_PATH / "src/pages/bot-record.html")
+
+@app.get("/trader-record")
+async def trader_record_page():
+    return FileResponse(WEB_ROOT_PATH / "src/pages/trader-record.html")
+
+@app.get("/reviews")
+async def reviews_page():
+    return FileResponse(WEB_ROOT_PATH / "src/pages/reviews.html")
+
+@app.get("/review")
+async def review_redirect():
+    return RedirectResponse(url="/reviews", status_code=301)
+
+@app.get("/logic")
+async def logic_page():
+    return FileResponse(WEB_ROOT_PATH / "src/pages/logic.html")
+
+@app.get("/pitch")
+async def pitch_page():
+    return FileResponse(WEB_ROOT_PATH / "src/pages/pitch.html")
+
+@app.get("/privacy")
+async def privacy_alias():
+    return FileResponse(WEB_ROOT_PATH / "src/pages/privacy_policy.html")
+
+# ── Custom 404 handler ─────────────────────────────────────────────────
+from fastapi.exceptions import HTTPException as FastAPIHTTPException
+
+@app.exception_handler(404)
+async def not_found_handler(request: Request, exc):
+    page_404 = WEB_ROOT_PATH / "src/pages/404.html"
+    if page_404.exists():
+        return FileResponse(page_404, status_code=404)
+    return JSONResponse({"error": "Not found"}, status_code=404)
+
 # -------------------------------------------------------------------
 # Auth helpers (JWT)
 # -------------------------------------------------------------------
@@ -2422,7 +2517,7 @@ async def oauth_callback(request: Request, provider: str):
         return JSONResponse(content={"error": "Email not provided"}, status_code=400)
     user = get_or_create_user_from_oauth(email, name, provider, sub)
     jwt_token = create_token(email)
-    return RedirectResponse(f"/web/src/pages/dashboard.html#token={jwt_token}")
+    return RedirectResponse(f"/dashboard#token={jwt_token}")
 
 # -------------------------------------------------------------------
 # Pydantic models
@@ -2680,7 +2775,7 @@ async def send_password_reset(request: PasswordResetRequest, req: Request):
     api_key = params.get("apiKey", [""])[0]
     base_url = os.getenv("BASE_URL", "https://gatekeeper.sbs").rstrip("/")
     custom_reset_url = (
-        f"{base_url}/web/src/pages/reset-password.html"
+        f"{base_url}/reset-password"
         f"?oobCode={urllib.parse.quote(oob_code)}&apiKey={urllib.parse.quote(api_key)}"
     )
 
@@ -2960,7 +3055,7 @@ async def msg91_webhook(req: Request):
     api_key  = params.get("apiKey",  [""])[0]
     base_url = os.getenv("BASE_URL", "https://gatekeeper.sbs").rstrip("/")
     custom_reset_url = (
-        f"{base_url}/web/src/pages/reset-password.html"
+        f"{base_url}/reset-password"
         f"?oobCode={urllib.parse.quote(oob_code)}&apiKey={urllib.parse.quote(api_key)}"
     )
 
@@ -3795,7 +3890,7 @@ async def send_trial_expiry_reminder(email: str, trial_end_date: datetime, hours
                     <li>Real-time WebSocket feed</li>
                     <li>Priority support</li>
                 </ul>
-                <p><a href="{BASE_URL}/web/src/pages/pricing.html" style="color: #00f2ff;">Click here to upgrade now →</a></p>
+                <p><a href="{BASE_URL}/pricing" style="color: #00f2ff;">Click here to upgrade now →</a></p>
                 <hr>
                 <small style="color: #6b7280;">Aegis‑1 Sovereign Terminal</small>
             </body>
@@ -3825,7 +3920,7 @@ async def send_subscription_expiry_reminder(email: str, expiry_date: datetime, d
                     <li>Real-time WebSocket feed</li>
                     <li>Priority support</li>
                 </ul>
-                <p><a href="{BASE_URL}/web/src/pages/pricing.html" style="color: #00f2ff;">Click here to renew →</a></p>
+                <p><a href="{BASE_URL}/pricing" style="color: #00f2ff;">Click here to renew →</a></p>
                 <hr>
                 <small style="color: #6b7280;">Aegis‑1 Sovereign Terminal</small>
             </body>

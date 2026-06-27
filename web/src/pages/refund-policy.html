@@ -167,21 +167,21 @@
 
 <body>
     <header class="fixed-header" id="main-nav">
-        <a href="/web/src/pages/index.html" class="logo" style="text-decoration:none;">⚡ AEGIS <span>v1.0</span></a>
+        <a href="/" class="logo" style="text-decoration:none;">⚡ AEGIS <span>v1.0</span></a>
 
         <nav class="nav-links-centered" aria-label="Main navigation">
-            <a href="/web/src/pages/index.html" class="nav-link">Home</a>
-            <a href="/web/src/pages/index.html#sentinel" class="nav-link">Sentinel</a>
-            <a href="/web/src/pages/index.html#cockpit" class="nav-link">Cockpit</a>
-            <a href="/web/src/pages/index.html#security" class="nav-link">Security</a>
-            <a href="/web/src/pages/pricing.html" class="nav-link">Pricing</a>
+            <a href="/" class="nav-link">Home</a>
+            <a href="/#sentinel" class="nav-link">Sentinel</a>
+            <a href="/#cockpit" class="nav-link">Cockpit</a>
+            <a href="/#security" class="nav-link">Security</a>
+            <a href="/pricing" class="nav-link">Pricing</a>
         </nav>
 
         <div class="nav-auth-desktop" style="display:flex;align-items:center;gap:0.5rem;">
-            <a href="/web/src/pages/index.html" class="nav-btn-login">
+            <a href="/" class="nav-btn-login">
                 <i class="fas fa-user-shield"></i> Sign In
             </a>
-            <a href="/web/src/pages/pricing.html" class="nav-btn-cta">
+            <a href="/pricing" class="nav-btn-cta">
                 Get Started
             </a>
         </div>
@@ -192,14 +192,14 @@
     </header>
 
     <div class="nav-mobile-drawer" id="navMobileDrawer">
-        <a href="/web/src/pages/index.html" class="nav-mobile-link"><i class="fas fa-home"></i> Home</a>
-        <a href="/web/src/pages/index.html#sentinel" class="nav-mobile-link"><i class="fas fa-satellite-dish"></i> Sentinel</a>
-        <a href="/web/src/pages/index.html#cockpit" class="nav-mobile-link"><i class="fas fa-desktop"></i> Cockpit</a>
-        <a href="/web/src/pages/index.html#security" class="nav-mobile-link"><i class="fas fa-shield-alt"></i> Security</a>
-        <a href="/web/src/pages/pricing.html" class="nav-mobile-link"><i class="fas fa-tag"></i> Pricing</a>
+        <a href="/" class="nav-mobile-link"><i class="fas fa-home"></i> Home</a>
+        <a href="/#sentinel" class="nav-mobile-link"><i class="fas fa-satellite-dish"></i> Sentinel</a>
+        <a href="/#cockpit" class="nav-mobile-link"><i class="fas fa-desktop"></i> Cockpit</a>
+        <a href="/#security" class="nav-mobile-link"><i class="fas fa-shield-alt"></i> Security</a>
+        <a href="/pricing" class="nav-mobile-link"><i class="fas fa-tag"></i> Pricing</a>
         <div class="nav-mobile-auth">
-            <a href="/web/src/pages/index.html" class="nav-btn-login"><i class="fas fa-user-shield"></i> Sign In</a>
-            <a href="/web/src/pages/pricing.html" class="nav-btn-cta">Get Started</a>
+            <a href="/" class="nav-btn-login"><i class="fas fa-user-shield"></i> Sign In</a>
+            <a href="/pricing" class="nav-btn-cta">Get Started</a>
         </div>
     </div>
 
@@ -300,11 +300,11 @@
     <!-- Footer -->
     <footer class="footer">
         <div class="footer-links">
-            <a href="/web/src/pages/terms.html">Terms of Service</a>
+            <a href="/terms">Terms of Service</a>
             <span class="separator">•</span>
-            <a href="/web/src/pages/refund-policy.html">Refund Policy</a>
+            <a href="/refund-policy">Refund Policy</a>
             <span class="separator">•</span>
-            <a href="/web/src/pages/risk-disclosure.html">Risk Disclosure</a>
+            <a href="/risk-disclosure">Risk Disclosure</a>
         </div>
         <div class="footer-proprietor">
             Operated by: Animesh Kukreti &amp; Aman Juiyal | Dehradun, Uttarakhand, India
@@ -320,7 +320,7 @@
             if (isUserAuthenticated()) {
                 portalBtn.innerText = 'Dashboard';
                 portalBtn.addEventListener('click', () => {
-                    window.location.href = '/web/src/pages/dashboard.html';
+                    window.location.href = '/dashboard';
                 });
     </script>
     <script>

@@ -370,7 +370,7 @@ function initializeElements() {
 function attachEventListeners() {
   // Alpha toggle is handled via modal — no direct listener on alphaToggleBtn
   if (upgradeBtn) upgradeBtn.addEventListener('click', () => {
-    window.location.href = '/web/src/pages/pricing.html';
+    window.location.href = '/pricing';
   });
   if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
   if (saveSettingsBtn) saveSettingsBtn.addEventListener('click', saveUserSettings);
@@ -844,7 +844,7 @@ function showProvisionErrorState() {
       <button onclick="location.reload()" style="padding:10px 28px;background:linear-gradient(135deg,#f97316,#ef4444);border:none;color:white;border-radius:8px;font-size:1rem;font-weight:bold;cursor:pointer;">
         Retry
       </button>
-      <button onclick="window.location.href='/web/src/pages/index.html'" style="padding:10px 28px;background:transparent;border:2px solid rgba(255,255,255,0.2);color:white;border-radius:8px;font-size:1rem;font-weight:bold;cursor:pointer;">
+      <button onclick="window.location.href='/'" style="padding:10px 28px;background:transparent;border:2px solid rgba(255,255,255,0.2);color:white;border-radius:8px;font-size:1rem;font-weight:bold;cursor:pointer;">
         Go Home
       </button>
     </div>
@@ -1020,7 +1020,7 @@ function updateUI() {
   const aegisLogoBtn = document.getElementById('aegis-logo-btn');
   if (aegisLogoBtn) {
     aegisLogoBtn.addEventListener('click', () => {
-      window.location.href = '/web/src/pages/index.html';
+      window.location.href = '/';
     });
   }
 
@@ -1028,7 +1028,7 @@ function updateUI() {
   const returnHomeBtn = document.getElementById('returnHomeBtn');
   if (returnHomeBtn) {
     returnHomeBtn.addEventListener('click', () => {
-      window.location.href = '/web/src/pages/index.html';
+      window.location.href = '/';
     });
   }
 
@@ -1620,7 +1620,7 @@ function renderSignals(signals) {
       <div class="no-signals">
         <i class="fas fa-chart-line"></i>
         <p>No signals available for your plan</p>
-        ${userPlan !== 'pro' ? '<a href="/web/src/pages/pricing.html" class="upgrade-link">Upgrade to unlock Confluence Scorecards →</a>' : ''}
+        ${userPlan !== 'pro' ? '<a href="/pricing" class="upgrade-link">Upgrade to unlock Confluence Scorecards →</a>' : ''}
       </div>
     `;
     return;
@@ -1843,7 +1843,7 @@ function renderSignals(signals) {
               <div class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/60 backdrop-blur-md rounded border border-white/10">
                 <i class="fas fa-lock text-white/50 text-xl mb-2"></i>
                 <div class="text-[10px] text-gray-400 mb-2">Logic Locked</div>
-                <button class="upgrade-btn text-[10px] bg-cyan/20 text-cyan px-2 py-1 rounded border border-cyan/30 hover:bg-cyan/30 transition-colors" onclick="window.location.href='/web/src/pages/pricing.html'; event.stopPropagation();">Upgrade to Sentinel</button>
+                <button class="upgrade-btn text-[10px] bg-cyan/20 text-cyan px-2 py-1 rounded border border-cyan/30 hover:bg-cyan/30 transition-colors" onclick="window.location.href='/pricing'; event.stopPropagation();">Upgrade to Sentinel</button>
               </div>
               ` : '' }
               <div class="pt-2 border-t border-white/10 mt-2 ${ (userPlan === 'trial' || userPlan === 'basic') ? 'opacity-30 blur-sm pointer-events-none' : '' }">
@@ -2371,7 +2371,7 @@ window.AegisDashboard = {
 
     if (!token) {
       alert('Please log in first');
-      window.location.href = '/web/src/pages/index.html';
+      window.location.href = '/';
       return;
     }
 
@@ -2401,7 +2401,7 @@ window.AegisDashboard = {
         _hidePaymentLoader();
         if (orderResp.status === 401 || orderResp.status === 403) {
           alert('Your session has expired. Please sign in again.');
-          window.location.href = '/web/src/pages/index.html';
+          window.location.href = '/';
           return;
         }
         const err = await orderResp.json().catch(() => ({}));
@@ -2680,15 +2680,15 @@ async function handleLogout() {
     await signOut(auth);
 
     // Redirect to home
-    window.location.href = '/web/src/pages/index.html';
+    window.location.href = '/';
   } catch (error) {
     console.error('Logout error:', error);
-    window.location.href = '/web/src/pages/index.html';
+    window.location.href = '/';
   }
 }
 
 function redirectToLogin() {
-  window.location.href = '/web/src/pages/index.html';
+  window.location.href = '/';
 }
 
 // -------------------------------------------------------------------
@@ -2702,11 +2702,11 @@ function setupFooter() {
   if (!footer.innerHTML.includes('Proprietor')) {
     const legalHtml = `
       <div class="footer-links">
-        <a href="/web/src/pages/terms.html">Terms of Service</a>
+        <a href="/terms">Terms of Service</a>
         <span class="separator">•</span>
-        <a href="/web/src/pages/refund-policy.html">Refund Policy</a>
+        <a href="/refund-policy">Refund Policy</a>
         <span class="separator">•</span>
-        <a href="/web/src/pages/risk-disclosure.html">Risk Disclosure</a>
+        <a href="/risk-disclosure">Risk Disclosure</a>
       </div>
       <div class="footer-proprietor">
         Proprietor: Animesh Kukreti | Dehradun, Uttarakhand, India

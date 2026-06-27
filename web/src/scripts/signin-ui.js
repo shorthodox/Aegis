@@ -177,7 +177,7 @@ async function performEmailSignin(e) {
       setTimeout(() => {
         closeSignInModal();
         if (!window.pendingPlan && !window.pendingAction) {
-          window.location.href = '/web/src/pages/dashboard.html';
+          window.location.href = '/dashboard';
         }
       }, 1000);
     } else if (result.needsSignup) {
@@ -218,7 +218,7 @@ async function performGoogleSignin() {
       setTimeout(() => {
         closeSignInModal();
         if (!window.pendingPlan && !window.pendingAction) {
-          window.location.href = '/web/src/pages/dashboard.html';
+          window.location.href = '/dashboard';
         }
       }, 1000);
     } else {
@@ -335,7 +335,7 @@ export function updateSignInButtonState() {
     btn.onclick = (e) => {
       e.preventDefault();
       // Show account menu or navigate to dashboard
-      window.location.href = '/web/src/pages/dashboard.html';
+      window.location.href = '/dashboard';
     };
   } else {
     btn.textContent = '🔐 Client Login';

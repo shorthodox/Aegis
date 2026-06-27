@@ -368,14 +368,14 @@ function setExpiredView() {
     if (subBtn) {
       subBtn.style.setProperty('pointer-events', 'auto', 'important');
       subBtn.addEventListener('click', (e) => {
-        window.location.href = '/web/src/pages/pricing.html';
+        window.location.href = '/pricing';
       });
     }
 
     if (homeBtn) {
       homeBtn.style.setProperty('pointer-events', 'auto', 'important');
       homeBtn.addEventListener('click', (e) => {
-        window.location.href = '/web/src/pages/index.html';
+        window.location.href = '/';
       });
     }
   }
@@ -468,14 +468,14 @@ function createExpiredCard() {
     const subscribeBtn = document.getElementById('expired-subscribe-btn');
     if (subscribeBtn) {
       subscribeBtn.addEventListener('click', () => {
-        window.location.href = '/web/src/pages/pricing.html';
+        window.location.href = '/pricing';
       });
     }
 
     const homeBtn = document.getElementById('expired-home-btn');
     if (homeBtn) {
       homeBtn.addEventListener('click', () => {
-        window.location.href = '/web/src/pages/index.html';
+        window.location.href = '/';
       });
     }
   }
@@ -605,7 +605,7 @@ function initializeLogoClickHandler() {
     logoElement.style.cursor = 'pointer';
     logoElement.addEventListener('click', (e) => {
       e.preventDefault();
-      window.location.href = '/web/src/pages/index.html';
+      window.location.href = '/';
     });
     console.log('✅ Logo click handler initialized');
   }
@@ -1284,7 +1284,7 @@ window.showSignalDetailsModal = function (signal) {
             <i class="fas fa-chart-pie mr-1"></i>View in Analytics
           </button>
         </div>` : `
-        <a href="/web/src/pages/pricing.html"
+        <a href="/pricing"
           class="flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500/10 to-orange/10 hover:from-amber-500/20 hover:to-orange/20 text-amber-400 font-bold py-2 rounded-xl text-xs border border-amber-500/30 transition-colors">
           <i class="fas fa-crown"></i>Unlock Pro &mdash; Copy JSON, Advanced Analytics &amp; more
         </a>`}
@@ -1539,7 +1539,7 @@ function _renderFpConfluence(body, signal, tier) {
       <i class="fas fa-lock text-3xl text-gray-500 mb-3"></i>
       <h3 class="text-lg font-bold text-white mb-1">Intermediate Plan Required</h3>
       <p class="text-sm text-gray-400 mb-4 text-center px-4">Upgrade to Intermediate or Pro to access detailed confluence analysis</p>
-      <a href="/web/src/pages/pricing.html" class="px-6 py-2 bg-gradient-to-r from-cyan to-blue-600 text-white font-bold rounded-xl text-sm">Upgrade Now</a>
+      <a href="/pricing" class="px-6 py-2 bg-gradient-to-r from-cyan to-blue-600 text-white font-bold rounded-xl text-sm">Upgrade Now</a>
     </div>` : '';
 
   body.innerHTML = `
@@ -1677,7 +1677,7 @@ function _renderFpZones(body, signal, tier) {
     <div class="absolute inset-0 bg-black/80 backdrop-blur-md rounded-xl flex flex-col items-center justify-center z-10">
       <i class="fas fa-lock text-3xl text-gray-500 mb-3"></i>
       <h3 class="text-lg font-bold text-white mb-1">Intermediate Plan Required</h3>
-      <a href="/web/src/pages/pricing.html" class="px-6 py-2 bg-gradient-to-r from-cyan to-blue-600 text-white font-bold rounded-xl text-sm mt-2">Upgrade Now</a>
+      <a href="/pricing" class="px-6 py-2 bg-gradient-to-r from-cyan to-blue-600 text-white font-bold rounded-xl text-sm mt-2">Upgrade Now</a>
     </div>` : '';
 
   let statusMsg = '';
@@ -1839,7 +1839,7 @@ function _renderFpExpectancy(body, signal, tier) {
       <i class="fas fa-crown text-3xl text-amber-400 mb-3"></i>
       <h3 class="text-lg font-bold text-white mb-1">Pro Plan Required</h3>
       <p class="text-sm text-gray-400 mb-4 text-center px-4">Statistical edge analysis is exclusively available to Pro subscribers</p>
-      <a href="/web/src/pages/pricing.html" class="px-6 py-2 bg-gradient-to-r from-amber-500 to-orange text-white font-bold rounded-xl text-sm">Upgrade to Pro</a>
+      <a href="/pricing" class="px-6 py-2 bg-gradient-to-r from-amber-500 to-orange text-white font-bold rounded-xl text-sm">Upgrade to Pro</a>
     </div>` : '';
 
   body.innerHTML = `
@@ -1977,7 +1977,7 @@ function _renderFpShap(body, signal, tier) {
       <i class="fas fa-crown text-3xl text-amber-400 mb-3"></i>
       <h3 class="text-lg font-bold text-white mb-1">Pro Plan Required</h3>
       <p class="text-sm text-gray-400 mb-4 text-center px-4">Raw ML probability vectors and SHAP attribution are Pro-exclusive</p>
-      <a href="/web/src/pages/pricing.html" class="px-6 py-2 bg-gradient-to-r from-amber-500 to-orange text-white font-bold rounded-xl text-sm">Upgrade to Pro</a>
+      <a href="/pricing" class="px-6 py-2 bg-gradient-to-r from-amber-500 to-orange text-white font-bold rounded-xl text-sm">Upgrade to Pro</a>
     </div>` : '';
 
   const maxShap = Math.max(...shapValues.map(s => Math.abs(s.value)));
@@ -2096,7 +2096,7 @@ function _renderFpApi(body, signal, tier) {
       <i class="fas fa-crown text-3xl text-amber-400 mb-3"></i>
       <h3 class="text-lg font-bold text-white mb-1">Pro Plan Required</h3>
       <p class="text-sm text-gray-400 mb-4 text-center px-4">API access and developer data export are Pro-exclusive features</p>
-      <a href="/web/src/pages/pricing.html" class="px-6 py-2 bg-gradient-to-r from-amber-500 to-orange text-white font-bold rounded-xl text-sm">Upgrade to Pro</a>
+      <a href="/pricing" class="px-6 py-2 bg-gradient-to-r from-amber-500 to-orange text-white font-bold rounded-xl text-sm">Upgrade to Pro</a>
     </div>` : '';
 
   body.innerHTML = `

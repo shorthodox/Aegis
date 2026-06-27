@@ -500,7 +500,7 @@ const TrialManager = (() => {
         element.innerHTML = `
           <i class="fas fa-exclamation-triangle"></i>
           Trial Expired &mdash;
-          <a href="/web/src/pages/pricing.html"
+          <a href="/pricing"
              style="color:#00f2ff;font-weight:700;margin-left:6px;text-decoration:none;white-space:nowrap;">
             Get a Plan &rarr;
           </a>

@@ -156,7 +156,7 @@ function renderLiveTeaser(openCount) {
             <span style="width:8px;height:8px;border-radius:50%;background:#00ff88;box-shadow:0 0 6px #00ff88;flex-shrink:0;animation:tr-pulse 1.5s ease-in-out infinite;"></span>
             <span><strong style="color:#00ff88;">${openCount} live signal${openCount !== 1 ? 's' : ''}</strong> active right now — entry price, TP &amp; SL visible on the dashboard.</span>
         </div>
-        <a href="/web/src/pages/pricing.html" style="
+        <a href="/pricing" style="
             padding:0.4rem 1rem;background:rgba(0,242,255,0.12);border:1px solid rgba(0,242,255,0.35);
             border-radius:20px;color:#00f2ff;font-size:0.8rem;font-weight:700;text-decoration:none;
             white-space:nowrap;transition:background 0.2s;flex-shrink:0;

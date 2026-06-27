@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>404 — Page Not Found | AEGIS</title>
+  <link rel="canonical" href="https://gatekeeper.sbs/">
+  <link rel="icon" href="/web/favicon.ico" type="image/x-icon">
+  <style>
+    :root {
+      --bg: #060a0f;
+      --surface: #0d1520;
+      --border: rgba(0,212,255,0.12);
+      --cyan: #00d4ff;
+      --text: #e2e8f0;
+      --muted: #64748b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 2rem;
+    }
+    .logo {
+      font-size: 1.125rem;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      color: var(--cyan);
+      text-decoration: none;
+      margin-bottom: 3rem;
+    }
+    .code {
+      font-size: clamp(6rem, 20vw, 10rem);
+      font-weight: 800;
+      line-height: 1;
+      background: linear-gradient(135deg, var(--cyan), #0ea5e9);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-top: 1rem;
+      color: var(--text);
+    }
+    p {
+      color: var(--muted);
+      margin-top: 0.75rem;
+      max-width: 400px;
+      line-height: 1.6;
+    }
+    .actions {
+      display: flex;
+      gap: 1rem;
+      margin-top: 2.5rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .btn {
+      padding: 0.625rem 1.5rem;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary {
+      background: var(--cyan);
+      color: #060a0f;
+    }
+    .btn-secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+  <a class="logo" href="/">⬡ AEGIS</a>
+  <div class="code">404</div>
+  <h1>Page not found</h1>
+  <p>The page you're looking for doesn't exist or has been moved.</p>
+  <div class="actions">
+    <a href="/" class="btn btn-primary">Go Home</a>
+    <a href="/dashboard" class="btn btn-secondary">Dashboard</a>
+  </div>
+</body>
+</html>

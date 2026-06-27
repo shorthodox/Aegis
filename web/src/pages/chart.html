@@ -297,14 +297,14 @@
 
 <!-- NAV -->
 <nav class="chart-nav">
-  <a href="/web/src/pages/dashboard.html" class="nav-brand">AEGIS</a>
+  <a href="/dashboard" class="nav-brand">AEGIS</a>
   <span class="nav-sep">›</span>
-  <a href="/web/src/pages/dashboard.html" class="nav-back">← Dashboard</a>
+  <a href="/dashboard" class="nav-back">← Dashboard</a>
   <span class="nav-sep">›</span>
   <span style="font-size:13px;color:var(--dim)">Chart Analysis</span>
   <div class="token-select-wrap">
     <div id="nav-auth-hint">
-      🔒 <a href="/web/src/pages/index.html#signin" style="color:var(--cyan);text-decoration:none">Sign in</a> to unlock full analysis
+      🔒 <a href="/#signin" style="color:var(--cyan);text-decoration:none">Sign in</a> to unlock full analysis
     </div>
     <span id="live-price" style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:#00f2ff;letter-spacing:0.5px;min-width:110px;text-align:right;"></span>
     <select id="token-select"><option>Loading...</option></select>
@@ -413,7 +413,7 @@
         <div style="font-size:11px;color:#94a3b8;text-align:center;max-width:220px;margin-bottom:14px;line-height:1.5">
           Deep learning trend continuation, exhaustion and volatility signals — AEGIS Pro only
         </div>
-        <a href="/web/src/pages/pricing.html"
+        <a href="/pricing"
            style="display:inline-block;padding:8px 20px;border-radius:8px;font-size:12px;font-weight:700;
                   background:linear-gradient(135deg,#00f2ff,#0099cc);color:#000;text-decoration:none;">
           Upgrade to Pro →
@@ -431,7 +431,7 @@
         <div style="font-size:11px;color:#94a3b8;text-align:center;max-width:220px;margin-bottom:14px;line-height:1.5">
           Hidden Markov Model regime stability, transition risk and state confidence — AEGIS Pro only
         </div>
-        <a href="/web/src/pages/pricing.html"
+        <a href="/pricing"
            style="display:inline-block;padding:8px 20px;border-radius:8px;font-size:12px;font-weight:700;
                   background:linear-gradient(135deg,#00f2ff,#0099cc);color:#000;text-decoration:none;">
           Upgrade to Pro →
@@ -529,7 +529,7 @@ const _gateFallback = setTimeout(() => {
   if (_gateResolved) return;
   _gateResolved = true;
   _gateOverlay.remove();
-  if (!_cachedToken) window.location.href = '/web/src/pages/index.html';
+  if (!_cachedToken) window.location.href = '/';
 }, 4000);
 
 onAuthStateChanged(_auth, u => {
@@ -547,7 +547,7 @@ onAuthStateChanged(_auth, u => {
     applyTierGates('pro');
   } else {
     // No session, no token → definite guest → send to login
-    window.location.href = '/web/src/pages/index.html';
+    window.location.href = '/';
   }
 });
 
@@ -586,7 +586,7 @@ function applyTierGates(tier) {
       <div style="font-size:11px;color:#94a3b8;text-align:center;max-width:220px;margin-bottom:14px;line-height:1.5">
         Sign in to unlock detailed signal intelligence
       </div>
-      <a href="/web/src/pages/index.html#signin"
+      <a href="/#signin"
          style="display:inline-block;padding:8px 20px;border-radius:8px;font-size:12px;font-weight:700;
                 background:linear-gradient(135deg,#00f2ff,#0099cc);color:#000;text-decoration:none;
                 letter-spacing:0.5px;transition:opacity .2s"
@@ -1788,7 +1788,7 @@ function renderActiveSignals() {
             const hasDot = pos ? `<span class="open-pos-dot"></span>` : '';
 
             return `
-              <tr onclick="window.location.href='/web/src/pages/chart.html?symbol=${encodeURIComponent(sig.symbol)}&tf=${currentTf}'" title="Open chart for ${sig.symbol}">
+              <tr onclick="window.location.href='/chart?symbol=${encodeURIComponent(sig.symbol)}&tf=${currentTf}'" title="Open chart for ${sig.symbol}">
                 <td>
                   ${hasDot}<span class="sig-sym">${sig.symbol.replace('/USDT','')}</span>
                   <div style="font-size:9px;color:var(--dim)">/USDT</div>

@@ -217,7 +217,7 @@ async function subscribeToPlan(planType) {
       hidePaymentLoader();
       if (orderResp.status === 401 || orderResp.status === 403) {
         alert('Your session has expired. Please sign in again.');
-        window.location.href = '/web/src/pages/index.html';
+        window.location.href = '/';
         return;
       }
       const err = await orderResp.json().catch(() => ({}));
@@ -264,7 +264,7 @@ async function subscribeToPlan(planType) {
             const verifyData = await verifyResp.json().catch(() => ({}));
             if (verifyResp.ok && verifyData.status === 'success') {
               alert('Payment successful! Redirecting to your dashboard...');
-              window.location.href = '/web/src/pages/dashboard.html';
+              window.location.href = '/dashboard';
             } else {
               alert('Payment verification failed. Please contact support with your payment ID: ' + response.razorpay_payment_id);
             }
@@ -319,7 +319,7 @@ function portalClickHandler(e) {
   e.preventDefault();
   const token = localStorage.getItem('access_token') || localStorage.getItem('authToken');
   if (token) {
-    window.location.href = '/web/src/pages/dashboard.html';
+    window.location.href = '/dashboard';
   } else {
     openModal();
   }
@@ -329,7 +329,7 @@ function trialClickHandler(e) {
   e.preventDefault();
   const token = localStorage.getItem('access_token') || localStorage.getItem('authToken');
   if (token) {
-    window.location.href = '/web/src/pages/dashboard.html';
+    window.location.href = '/dashboard';
   } else {
     openModal();
   }

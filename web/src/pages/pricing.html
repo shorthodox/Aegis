@@ -28,7 +28,7 @@
   <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"></noscript>
 
-  <link rel="canonical" href="https://gatekeeper.sbs/web/src/pages/pricing.html">
+  <link rel="canonical" href="https://gatekeeper.sbs/pricing">
   <meta name="author" content="Animesh Kukreti &amp; Aman Juiyal">
   <meta name="owner" content="Animesh Kukreti &amp; Aman Juiyal">
 
@@ -37,7 +37,7 @@
     "@context": "https://schema.org",
     "@type": "WebPage",
     "name": "Pricing — Gatekeeper (Aegis-1)",
-    "url": "https://gatekeeper.sbs/web/src/pages/pricing.html",
+    "url": "https://gatekeeper.sbs/pricing",
     "publisher": {
       "@type": "Organization",
       "name": "Gatekeeper (Aegis-1)",
@@ -215,16 +215,16 @@
 <header class="ae-nav" id="main-nav">
   <div class="ae-nav-inner">
 
-    <a href="/web/src/pages/index.html" class="ae-brand" style="text-decoration:none;">
+    <a href="/" class="ae-brand" style="text-decoration:none;">
       AEGIS<span>&nbsp;·&nbsp;</span>v1.0
     </a>
 
     <nav class="ae-nav-links" aria-label="Main navigation">
-      <a href="/web/src/pages/index.html" class="ae-nav-link">Home</a>
-      <a href="/web/src/pages/index.html#how-it-works" class="ae-nav-link">Signal Demo</a>
-      <a href="/web/src/pages/review.html" class="ae-nav-link">Reviews</a>
-      <a href="/web/src/pages/pricing.html" class="ae-nav-link active">Pricing</a>
-      <a href="/web/src/pages/track-record.html" class="ae-nav-link">Track Record</a>
+      <a href="/" class="ae-nav-link">Home</a>
+      <a href="/#how-it-works" class="ae-nav-link">Signal Demo</a>
+      <a href="/reviews" class="ae-nav-link">Reviews</a>
+      <a href="/pricing" class="ae-nav-link active">Pricing</a>
+      <a href="/track-record" class="ae-nav-link">Track Record</a>
     </nav>
 
     <div id="authButtonContainer" class="ae-nav-actions">
@@ -242,10 +242,10 @@
 
 <!-- Mobile drawer -->
 <div class="ae-mobile-drawer" id="navMobileDrawer" aria-hidden="true">
-  <a href="/web/src/pages/index.html" class="ae-mobile-link">Home</a>
-  <a href="/web/src/pages/pricing.html" class="ae-mobile-link mobile-active">Pricing</a>
-  <a href="/web/src/pages/review.html" class="ae-mobile-link">Reviews</a>
-  <a href="/web/src/pages/track-record.html" class="ae-mobile-link">Track Record</a>
+  <a href="/" class="ae-mobile-link">Home</a>
+  <a href="/pricing" class="ae-mobile-link mobile-active">Pricing</a>
+  <a href="/reviews" class="ae-mobile-link">Reviews</a>
+  <a href="/track-record" class="ae-mobile-link">Track Record</a>
   <hr class="ae-divider" style="margin: var(--s-3) 0;">
   <div style="display:flex; flex-direction:column; gap:var(--s-2); padding: 0 var(--s-2);">
     <button class="ae-btn ae-btn-ghost ae-btn-md" id="mPortalProxy" style="justify-content:flex-start;">Sign In</button>
@@ -384,7 +384,7 @@
         <div>
           <div style="font-size:0.88rem; font-weight:600; color:var(--ae-text-1); margin-bottom:4px;">Every signal is logged publicly</div>
           <p style="font-size:0.82rem; color:var(--ae-text-2); line-height:1.6; margin:0;">
-            <a href="/web/src/pages/track-record.html" style="color:var(--ae-data); text-decoration:none;">See the live Track Record →</a>
+            <a href="/track-record" style="color:var(--ae-data); text-decoration:none;">See the live Track Record →</a>
           </p>
         </div>
       </div>
@@ -635,19 +635,19 @@
     <div>
       <div class="ae-footer-col-title">Platform</div>
       <div class="ae-footer-links">
-        <a href="/web/src/pages/index.html" class="ae-footer-link">Home</a>
-        <a href="/web/src/pages/track-record.html" class="ae-footer-link">Track Record</a>
-        <a href="/web/src/pages/review.html" class="ae-footer-link">Reviews</a>
+        <a href="/" class="ae-footer-link">Home</a>
+        <a href="/track-record" class="ae-footer-link">Track Record</a>
+        <a href="/reviews" class="ae-footer-link">Reviews</a>
       </div>
     </div>
     <div>
       <div class="ae-footer-col-title">Legal</div>
       <div class="ae-footer-links">
-        <a href="/web/src/pages/terms.html" class="ae-footer-link">Terms of Service</a>
-        <a href="/web/src/pages/conditions.html" class="ae-footer-link">Conditions</a>
-        <a href="/web/src/pages/privacy_policy.html" class="ae-footer-link">Privacy Policy</a>
-        <a href="/web/src/pages/refund_policy.html" class="ae-footer-link">Refund Policy</a>
-        <a href="/web/src/pages/risk_disclosure.html" class="ae-footer-link">Risk Disclosure</a>
+        <a href="/terms" class="ae-footer-link">Terms of Service</a>
+        <a href="/conditions" class="ae-footer-link">Conditions</a>
+        <a href="/privacy" class="ae-footer-link">Privacy Policy</a>
+        <a href="/refund-policy" class="ae-footer-link">Refund Policy</a>
+        <a href="/risk-disclosure" class="ae-footer-link">Risk Disclosure</a>
       </div>
     </div>
     <div>
@@ -744,7 +744,7 @@
         });
 
         if (portalBtn)       portalBtn.addEventListener('click', (e) => { e.preventDefault(); openSignInModal(); });
-        if (dashboardBtn)    dashboardBtn.addEventListener('click', (e) => { e.preventDefault(); window.location.href = '/web/src/pages/dashboard.html'; });
+        if (dashboardBtn)    dashboardBtn.addEventListener('click', (e) => { e.preventDefault(); window.location.href = '/dashboard'; });
         if (createAccountBtn) createAccountBtn.addEventListener('click', (e) => { e.preventDefault(); openSignUpModal(); });
 
         if (signOutBtn) {
@@ -752,7 +752,7 @@
                 e.preventDefault();
                 ['authToken','access_token','authenticated','userSession','refresh_token'].forEach(k => localStorage.removeItem(k));
                 try { await handleLogout(); } catch (err) { console.warn('Logout failed during sign out:', err); }
-                window.location.href = '/web/src/pages/index.html';
+                window.location.href = '/';
             });
         }
 
@@ -782,7 +782,7 @@
                         trialStatusMsg.style.color = 'var(--ae-buy)';
                         trialStatusMsg.textContent = '✓ ' + data.message;
                     }
-                    setTimeout(() => { window.location.href = '/web/src/pages/dashboard.html'; }, 1200);
+                    setTimeout(() => { window.location.href = '/dashboard'; }, 1200);
                 } else {
                     if (trialStatusMsg) { trialStatusMsg.style.color = 'var(--ae-sell)'; trialStatusMsg.textContent = data.detail || 'Could not start trial. Please try again.'; }
                     if (trialBtn) { trialBtn.disabled = false; trialBtn.textContent = 'Try Free for 3 Days'; }
@@ -866,7 +866,7 @@
 
         function _redirectToDashboard() {
             sessionStorage.removeItem(SESSION_CODE_KEY);
-            window.location.replace('/web/src/pages/dashboard.html');
+            window.location.replace('/dashboard');
         }
 
         async function redeemDevCode() {
@@ -901,7 +901,7 @@
                     const exp = data.expires_at ? new Date(data.expires_at).toLocaleDateString() : '';
                     devCodeMsg.style.color = 'var(--ae-buy)';
                     devCodeMsg.innerHTML = `✓ ${data.plan.toUpperCase()} access activated${exp ? ' until ' + exp : ''}.
-                        <a href="/web/src/pages/dashboard.html"
+                        <a href="/dashboard"
                            style="color:var(--ae-data);display:block;margin-top:6px;font-weight:600;font-size:0.9rem;text-decoration:underline;">
                            → Go to Dashboard
                         </a>`;

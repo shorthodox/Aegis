@@ -21,7 +21,7 @@
     <link rel="stylesheet" href="/web/src/styles/main.css">
     <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"></noscript>
-    <link rel="canonical" href="https://gatekeeper.sbs/web/src/pages/track-record.html">
+    <link rel="canonical" href="https://gatekeeper.sbs/track-record">
     <meta name="author" content="Animesh Kukreti &amp; Aman Juiyal">
     <meta name="description" content="AEGIS v1.0 public signal track record — every signal logged with timestamp, direction, and outcome. Wins and losses, no cherry-picking.">
 
@@ -354,16 +354,16 @@
 
     <!-- Fixed Glass Header — same structure as index.html -->
     <header class="fixed-header" id="main-nav">
-        <a href="/web/src/pages/index.html" class="logo" style="text-decoration:none;">⚡ AEGIS <span>v1.0</span> <span style="font-size:0.52rem;font-weight:800;font-family:monospace;letter-spacing:0.1em;background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.35);color:#00ff88;padding:1px 6px;border-radius:4px;text-transform:uppercase;vertical-align:middle;margin-left:5px;position:relative;top:-1px;">LIVE</span></a>
+        <a href="/" class="logo" style="text-decoration:none;">⚡ AEGIS <span>v1.0</span> <span style="font-size:0.52rem;font-weight:800;font-family:monospace;letter-spacing:0.1em;background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.35);color:#00ff88;padding:1px 6px;border-radius:4px;text-transform:uppercase;vertical-align:middle;margin-left:5px;position:relative;top:-1px;">LIVE</span></a>
 
         <nav class="nav-links-centered" aria-label="Main navigation">
-            <a href="/web/src/pages/index.html" class="nav-link">Home</a>
-            <a href="/web/src/pages/index.html#sentinel" class="nav-link">Sentinel</a>
-            <a href="/web/src/pages/index.html#cockpit" class="nav-link">Cockpit</a>
-            <a href="/web/src/pages/index.html#security" class="nav-link">Security</a>
-            <a href="/web/src/pages/review.html" class="nav-link">Reviews</a>
-            <a href="/web/src/pages/pricing.html" class="nav-link">Pricing</a>
-            <a href="/web/src/pages/track-record.html" class="nav-link active">Live Record</a>
+            <a href="/" class="nav-link">Home</a>
+            <a href="/#sentinel" class="nav-link">Sentinel</a>
+            <a href="/#cockpit" class="nav-link">Cockpit</a>
+            <a href="/#security" class="nav-link">Security</a>
+            <a href="/reviews" class="nav-link">Reviews</a>
+            <a href="/pricing" class="nav-link">Pricing</a>
+            <a href="/track-record" class="nav-link active">Live Record</a>
         </nav>
 
         <div id="authButtonContainer" class="nav-auth-desktop" style="display:flex;align-items:center;gap:0.5rem;">
@@ -387,13 +387,13 @@
     </header>
 
     <div class="nav-mobile-drawer" id="navMobileDrawer">
-        <a href="/web/src/pages/index.html" class="nav-mobile-link"><i class="fas fa-home"></i> Home</a>
-        <a href="/web/src/pages/index.html#sentinel" class="nav-mobile-link" style="padding-left:2.2rem;font-size:0.82rem;opacity:0.85;"><i class="fas fa-satellite-dish"></i> Sentinel</a>
-        <a href="/web/src/pages/index.html#cockpit" class="nav-mobile-link" style="padding-left:2.2rem;font-size:0.82rem;opacity:0.85;"><i class="fas fa-desktop"></i> Cockpit</a>
-        <a href="/web/src/pages/index.html#security" class="nav-mobile-link" style="padding-left:2.2rem;font-size:0.82rem;opacity:0.85;"><i class="fas fa-shield-alt"></i> Security</a>
-        <a href="/web/src/pages/review.html" class="nav-mobile-link"><i class="fas fa-star"></i> Reviews</a>
-        <a href="/web/src/pages/pricing.html" class="nav-mobile-link"><i class="fas fa-tag"></i> Pricing</a>
-        <a href="/web/src/pages/track-record.html" class="nav-mobile-link mobile-active"><i class="fas fa-chart-bar"></i> Live Record</a>
+        <a href="/" class="nav-mobile-link"><i class="fas fa-home"></i> Home</a>
+        <a href="/#sentinel" class="nav-mobile-link" style="padding-left:2.2rem;font-size:0.82rem;opacity:0.85;"><i class="fas fa-satellite-dish"></i> Sentinel</a>
+        <a href="/#cockpit" class="nav-mobile-link" style="padding-left:2.2rem;font-size:0.82rem;opacity:0.85;"><i class="fas fa-desktop"></i> Cockpit</a>
+        <a href="/#security" class="nav-mobile-link" style="padding-left:2.2rem;font-size:0.82rem;opacity:0.85;"><i class="fas fa-shield-alt"></i> Security</a>
+        <a href="/reviews" class="nav-mobile-link"><i class="fas fa-star"></i> Reviews</a>
+        <a href="/pricing" class="nav-mobile-link"><i class="fas fa-tag"></i> Pricing</a>
+        <a href="/track-record" class="nav-mobile-link mobile-active"><i class="fas fa-chart-bar"></i> Live Record</a>
         <div class="nav-mobile-auth">
             <button class="nav-btn-login" id="mPortalProxy"><i class="fas fa-user-shield"></i> Sign In</button>
             <button class="nav-btn-dashboard" id="mDashProxy" style="display:none;"><i class="fas fa-chart-line"></i> Dashboard</button>
@@ -527,7 +527,7 @@
             <h3 style="color:#fff;">The Engine Is Running — Signals Close Soon</h3>
             <p style="max-width:520px;margin:0.5rem auto 1rem;line-height:1.75;">The bot is actively scanning <strong style="color:#00f2ff;"><span class="trTokenCountRef">60</span> tokens</strong> every 5 minutes. Closed outcomes appear here the moment a Take Profit or Stop Loss is hit. <br><br>Open signals are visible on the dashboard (subscribers only) — they include live entry price, TP, SL, and the AI's plain-English reasoning. <strong style="color:#e2e8f0;">Check back in a few hours.</strong></p>
             <div style="display:flex;gap:0.8rem;justify-content:center;flex-wrap:wrap;margin-top:0.8rem;">
-                <a href="/web/src/pages/pricing.html" style="background:linear-gradient(95deg,#00f2ff,#00a1b0);padding:0.6rem 1.5rem;border-radius:30px;font-weight:800;font-size:0.85rem;color:#050505;text-decoration:none;">See Live Signals →</a>
+                <a href="/pricing" style="background:linear-gradient(95deg,#00f2ff,#00a1b0);padding:0.6rem 1.5rem;border-radius:30px;font-weight:800;font-size:0.85rem;color:#050505;text-decoration:none;">See Live Signals →</a>
                 <a href="#" onclick="window.refreshAegisTrackRecord && window.refreshAegisTrackRecord();return false;" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);padding:0.6rem 1.5rem;border-radius:30px;font-weight:700;font-size:0.85rem;color:#94a3b8;text-decoration:none;">↻ Refresh</a>
             </div>
         </div>
@@ -544,17 +544,17 @@
     <!-- Footer — same as index.html -->
     <footer class="footer">
         <div class="footer-links">
-            <a href="/web/src/pages/terms.html">Terms of Service</a>
+            <a href="/terms">Terms of Service</a>
             <span class="separator">•</span>
-            <a href="/web/src/pages/conditions.html">Conditions</a>
+            <a href="/conditions">Conditions</a>
             <span class="separator">•</span>
-            <a href="/web/src/pages/privacy_policy.html">Privacy Policy</a>
+            <a href="/privacy">Privacy Policy</a>
             <span class="separator">•</span>
-            <a href="/web/src/pages/refund_policy.html">Refund Policy</a>
+            <a href="/refund-policy">Refund Policy</a>
             <span class="separator">•</span>
-            <a href="/web/src/pages/risk_disclosure.html">Risk Disclosure</a>
+            <a href="/risk-disclosure">Risk Disclosure</a>
             <span class="separator">•</span>
-            <a href="/web/src/pages/track-record.html" style="color:#00f2ff;">Track Record</a>
+            <a href="/track-record" style="color:#00f2ff;">Track Record</a>
         </div>
         <div class="footer-proprietor">
             Operated by <strong>Animesh Kukreti &amp; Aman Juiyal</strong> &nbsp;|&nbsp; Dehradun, Uttarakhand, India
@@ -636,12 +636,12 @@
 
             if (portalBtn) portalBtn.addEventListener('click', e => { e.preventDefault(); openSignInModal(); });
             if (createAccountBtn) createAccountBtn.addEventListener('click', e => { e.preventDefault(); openSignUpModal(); });
-            if (dashboardBtn) dashboardBtn.addEventListener('click', e => { e.preventDefault(); window.location.href = '/web/src/pages/dashboard.html'; });
+            if (dashboardBtn) dashboardBtn.addEventListener('click', e => { e.preventDefault(); window.location.href = '/dashboard'; });
             if (signOutBtn) signOutBtn.addEventListener('click', async e => {
                 e.preventDefault();
                 ['authToken','access_token','authenticated','userSession','refresh_token'].forEach(k => localStorage.removeItem(k));
                 try { await handleLogout(); } catch(_) {}
-                window.location.href = '/web/src/pages/index.html';
+                window.location.href = '/';
             });
         });
     </script>

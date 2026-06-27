@@ -467,7 +467,7 @@ async function handleStep2Verify() {
   _pending = { name: '', email: '', password: '', mobile: '' };
   window.dispatchEvent(new CustomEvent('authStateChange', { detail: { authenticated: true } }));
   closeSignUpModal();
-  window.location.href = '/web/src/pages/pricing.html?newUser=1';
+  window.location.href = '/pricing?newUser=1';
 }
 
 // ============================================================
@@ -500,7 +500,7 @@ function showGooglePhoneStep() {
 function finishGoogleSignup() {
   window.dispatchEvent(new CustomEvent('authStateChange', { detail: { authenticated: true } }));
   closeSignUpModal();
-  window.location.href = '/web/src/pages/pricing.html?newUser=1';
+  window.location.href = '/pricing?newUser=1';
 }
 
 function attachGooglePhoneListeners() {

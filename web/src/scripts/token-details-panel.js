@@ -40,7 +40,7 @@ function _lock(requiredTier, msg) {
       <p class="text-xs text-slate-300 text-center px-5 font-medium leading-relaxed">${msg}</p>
       <span class="mt-3 text-[9px] font-black uppercase tracking-widest px-3 py-1
                    rounded-full border ${c}">${requiredTier} TIER</span>
-      <a href="/web/src/pages/pricing.html"
+      <a href="/pricing"
          class="mt-3 text-[10px] font-bold text-white bg-gradient-to-r
                 from-cyan-500/80 to-blue-600/80 px-4 py-1.5 rounded-lg
                 hover:from-cyan-500 hover:to-blue-600 transition-all">
@@ -932,7 +932,7 @@ data <span class="text-slate-300">=</span> resp.<span class="text-cyan-300">json
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 p-1" data-tdp-symbol="${sym}">
       <!-- Chart Analysis shortcut -->
       <div class="lg:col-span-2 flex justify-end mb-1">
-        <a href="/web/src/pages/chart.html?symbol=${symEncoded}"
+        <a href="/chart?symbol=${symEncoded}"
            target="_blank"
            class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-bold
                   bg-cyan-500/10 text-cyan-300 border border-cyan-500/20
