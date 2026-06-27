@@ -91,9 +91,12 @@ class Position:
     entry_time:      str
     meta_confidence: float
     atr_multiplier:  float
-    take_profit_1:   float = 0.0   # TP1: 1× ATR step from entry
-    take_profit_2:   float = 0.0   # TP2: 2× ATR step — hard ceiling
-    take_profit_3:   float = 0.0   # TP3: 3.5× ATR step — extended target
+    atr:             float = 0.0   # ATR at entry (used for trailing stop distance)
+    take_profit_1:   float = 0.0   # TP1: 1.0× ATR from entry — 20% partial close
+    take_profit_2:   float = 0.0   # TP2: 1.8× ATR from entry — 20% partial close
+    take_profit_3:   float = 0.0   # TP3: 2.7× ATR from entry — 20% partial close
+    take_profit_4:   float = 0.0   # TP4: 3.8× ATR from entry — 20% partial close
+    take_profit_5:   float = 0.0   # TP5: 5.2× ATR from entry — close remainder
 
 
 @dataclass
@@ -490,13 +493,36 @@ class SignalQualityFilter:
 
 class DynamicRiskEngine:
     """
-    Volatility-aware position sizing and stop/take-profit calculation.
+    Volatility-aware position sizing and ATR-based stop/take-profit calculation.
     All methods are pure functions (no state) — safe to call from async context.
+
+    ATR configuration
+    -----------------
+    All TP/SL distances are expressed as multiples of the current 1-hour ATR(14).
+    Changing a multiplier here automatically adapts every new position opened.
     """
 
+    # ── Position sizing ───────────────────────────────────────────────────────
     BASE_POSITION_PCT = 0.07   # 7 % of balance as the base allocation
     MIN_POSITION_PCT  = 0.02   # floor: never risk less than 2 %
     MAX_POSITION_PCT  = 0.10   # ceiling: never risk more than 10 % per trade
+
+    # ── ATR-based risk parameters ─────────────────────────────────────────────
+    ATR_PERIOD        = 14     # lookback period for ATR calculation
+    ATR_SL_MULTIPLIER = 1.2    # SL distance = ATR × this
+
+    TP1_MULTIPLIER    = 1.0    # 20 % partial close — start break-even protection
+    TP2_MULTIPLIER    = 1.8    # 20 % partial close — activate trailing stop
+    TP3_MULTIPLIER    = 2.7    # 20 % partial close — used for RR validation
+    TP4_MULTIPLIER    = 3.8    # 20 % partial close
+    TP5_MULTIPLIER    = 5.2    # close remaining position
+
+    MIN_RISK_REWARD   = 2.0    # Reward / Risk using TP3 as target; trades below this are rejected
+
+    TRAIL_MULTIPLIER  = 1.0    # trailing stop distance = ATR × this (active after TP2)
+
+    # ── Partial-close percentages (must sum to 1.0) ───────────────────────────
+    TP_CLOSE_PCTS = (0.20, 0.20, 0.20, 0.20, 0.20)  # TP1 … TP5
 
     def calculate_position_size(
         self,
@@ -540,70 +566,79 @@ class DynamicRiskEngine:
 
     def calculate_stops(
         self,
-        price:              float,
-        side:               str,    # 'BUY' | 'SELL'
-        atr:                float,
-        atr_mult:           float,
-        quality_score:      float,
-        lstm_vol_expansion: float = 0.5,   # P(ATR expansion) from LSTM  [0, 1]
-        lstm_continuation:  float = 0.5,   # P(continuation)  from LSTM  [0, 1]
+        price:  float,
+        side:   str,    # 'BUY' | 'SELL'
+        atr:    float,
+        **_kwargs,      # absorbs legacy keyword args for backward compatibility
     ) -> Dict[str, float]:
         """
-        Returns a dict with sl, tp1, tp2, tp3, trailing_trigger.
+        Pure ATR-based TP/SL calculation — no fixed percentages.
 
-        ATR multiplier for stop loss
-        ----------------------------
-        - quality > 70  → 1.5× (tighter stop — higher conviction entry)
-        - quality > 50  → 2.0×
-        - quality ≤ 50  → 2.5× (wider stop — lower conviction, more room)
+        Stop Loss
+        ---------
+        SL distance = ATR × ATR_SL_MULTIPLIER (default 1.2).
+        Wide enough to survive intra-candle noise; adapts automatically when
+        volatility expands or contracts.
 
-        TP levels use risk_distance (price to SL) as the unit:
-        TP1 = 1.0 × risk   (quick partial)
-        TP2 = 2.0 × risk   (main target)
-        TP3 = 3.5 × risk   (extended runner)
+        Take Profit Levels (TP1–TP5)
+        -----------------------------
+        Each TP is Entry ± (ATR × multiplier).  Five levels support scaled
+        partial-profit exits: 20 % of position closed at each TP.
+
+        Risk/Reward Validation
+        ----------------------
+        Reward is measured to TP3 (the first "full trend" target).
+        Trades where Reward / Risk < MIN_RISK_REWARD are flagged invalid
+        and should be rejected by the caller.
+
+        Returns
+        -------
+        dict with: sl, tp1–tp5, risk, reward, risk_reward, valid_rr, atr
         """
         if price <= 0 or atr <= 0:
-            return {'sl': 0.0, 'tp1': 0.0, 'tp2': 0.0, 'tp3': 0.0, 'trailing_trigger': 0.0}
+            return {
+                'sl': 0.0, 'tp1': 0.0, 'tp2': 0.0, 'tp3': 0.0,
+                'tp4': 0.0, 'tp5': 0.0,
+                'risk': 0.0, 'reward': 0.0, 'risk_reward': 0.0,
+                'valid_rr': False, 'atr': atr,
+            }
 
-        # Quality-based floor for stop multiplier (tighter stops only for highest conviction)
-        if quality_score > 70:
-            sl_floor = 1.5
-        elif quality_score > 50:
-            sl_floor = 2.0
-        else:
-            sl_floor = 2.5
-
-        # LSTM vol-expansion adjustment: widen stop to survive the incoming
-        # volatility spike without getting flushed by noise.
-        if lstm_vol_expansion > 0.70:
-            sl_floor *= 1.20   # +20 % ATR room for imminent expansion
-        # LSTM high-continuation: tighten stop on confirmed momentum conviction.
-        elif lstm_continuation > 0.72:
-            sl_floor *= 0.90   # −10 % — move is clean, let price run tight
-
-        # Use the larger of: quality-floor or the caller's atr_mult (which already
-        # includes HMM regime adjustments, e.g. 1.2× for VOLATILE_EXPANSION).
-        # This ensures HMM widening is never ignored while the quality floor is respected.
-        sl_mult = max(sl_floor, atr_mult)
-        risk_distance = sl_mult * atr
+        # SL distance is fixed at ATR × SL_MULTIPLIER — no quality adjustments.
+        # Volatility already informs the distance implicitly through ATR itself.
+        risk = self.ATR_SL_MULTIPLIER * atr
 
         if side == 'BUY':
-            sl  = price - risk_distance
-            tp1 = price + 1.0 * risk_distance
-            tp2 = price + 2.0 * risk_distance
-            tp3 = price + 3.5 * risk_distance
+            sl  = price - risk
+            tp1 = price + self.TP1_MULTIPLIER * atr
+            tp2 = price + self.TP2_MULTIPLIER * atr
+            tp3 = price + self.TP3_MULTIPLIER * atr
+            tp4 = price + self.TP4_MULTIPLIER * atr
+            tp5 = price + self.TP5_MULTIPLIER * atr
         else:  # SELL / SHORT
-            sl  = price + risk_distance
-            tp1 = price - 1.0 * risk_distance
-            tp2 = price - 2.0 * risk_distance
-            tp3 = price - 3.5 * risk_distance
+            sl  = price + risk
+            tp1 = price - self.TP1_MULTIPLIER * atr
+            tp2 = price - self.TP2_MULTIPLIER * atr
+            tp3 = price - self.TP3_MULTIPLIER * atr
+            tp4 = price - self.TP4_MULTIPLIER * atr
+            tp5 = price - self.TP5_MULTIPLIER * atr
+
+        # RR measured to TP3 — the first target that represents a full trend move.
+        reward     = self.TP3_MULTIPLIER * atr
+        rr         = round(reward / risk, 3) if risk > 0 else 0.0
+        valid_rr   = rr >= self.MIN_RISK_REWARD
 
         return {
-            'sl':               round(sl,  8),
-            'tp1':              round(tp1, 8),
-            'tp2':              round(tp2, 8),
-            'tp3':              round(tp3, 8),
-            'trailing_trigger': round(tp1, 8),   # start trailing once TP1 is reached
+            'sl':          round(sl,  8),
+            'tp1':         round(tp1, 8),
+            'tp2':         round(tp2, 8),
+            'tp3':         round(tp3, 8),
+            'tp4':         round(tp4, 8),
+            'tp5':         round(tp5, 8),
+            'risk':        round(risk,   8),
+            'reward':      round(reward, 8),
+            'risk_reward': rr,
+            'valid_rr':    valid_rr,
+            'atr':         round(atr, 8),
         }
 
 
@@ -1131,10 +1166,13 @@ class VirtualWallet:
                         signal_id       = s.get('signal_id', ''),
                         entry_time      = s.get('entry_time', ''),
                         meta_confidence = float(s.get('meta_confidence', 0)),
-                        atr_multiplier  = 1.5,
+                        atr_multiplier  = float(s.get('atr_multiplier', 1.2)),
+                        atr             = float(s.get('atr', 0)),
                         take_profit_1   = float(s.get('take_profit_1', 0)),
                         take_profit_2   = float(s.get('take_profit_2', 0)),
                         take_profit_3   = float(s.get('take_profit_3', 0)),
+                        take_profit_4   = float(s.get('take_profit_4', 0)),
+                        take_profit_5   = float(s.get('take_profit_5', 0)),
                     )
                     self.open_positions[sym] = pos
                     open_restored += 1
@@ -1153,6 +1191,7 @@ class VirtualWallet:
 
     def close_trade(self, symbol: str, exit_price: float,
                     exit_reason: str) -> Optional[TradeRecord]:
+        """Full close — removes the position and books PnL on remaining size."""
         pos = self.open_positions.pop(symbol, None)
         if pos is None:
             return None
@@ -1180,6 +1219,56 @@ class VirtualWallet:
             exit_reason     = exit_reason,
             meta_confidence = pos.meta_confidence,
             position_value  = pos.position_value,
+        )
+        self.trade_history.append(rec)
+        return rec
+
+    def partial_close_trade(
+        self,
+        symbol:       str,
+        exit_price:   float,
+        exit_reason:  str,
+        close_pct:    float,   # fraction of current position_value to close, e.g. 0.20
+    ) -> Optional[TradeRecord]:
+        """Partial close — reduces position_value, books PnL on the closed slice.
+
+        The position stays open in open_positions so subsequent TP levels can
+        still fire.  close_pct is applied to the *current* position_value (which
+        shrinks each time this is called) so each call correctly closes the
+        intended fraction of the original allocation.
+        """
+        pos = self.open_positions.get(symbol)
+        if pos is None:
+            return None
+
+        close_value = round(pos.position_value * close_pct, 2)
+        if close_value <= 0:
+            return None
+
+        if pos.direction == 'LONG':
+            pnl_pct = (exit_price - pos.entry_price) / pos.entry_price * 100
+        else:
+            pnl_pct = (pos.entry_price - exit_price) / pos.entry_price * 100
+
+        pnl_usdt = round(close_value * pnl_pct / 100, 2)
+        self.balance  += pnl_usdt
+        pos.position_value = round(pos.position_value - close_value, 2)
+
+        rec = TradeRecord(
+            signal_id       = pos.signal_id,
+            symbol          = symbol,
+            direction       = pos.direction,
+            side            = pos.side,
+            entry_price     = pos.entry_price,
+            exit_price      = round(exit_price, 8),
+            entry_time      = pos.entry_time,
+            close_time      = datetime.now(timezone.utc).isoformat(),
+            pnl_pct         = round(pnl_pct, 3),
+            pnl_usdt        = pnl_usdt,
+            outcome         = 'WIN' if pnl_pct > 0 else 'LOSS',
+            exit_reason     = exit_reason,
+            meta_confidence = pos.meta_confidence,
+            position_value  = close_value,
         )
         self.trade_history.append(rec)
         return rec
@@ -1259,8 +1348,11 @@ class LiveEngine:
         self._last_close_time:  Dict[str, float] = {}
         self._last_close_side:  Dict[str, str]   = {}
 
-        # Trailing stop tracking
-        self._tp1_hit:    Dict[str, bool]  = {}
+        # Partial-TP hit tracking (one flag per level per symbol)
+        self._tp1_hit:    Dict[str, bool]  = {}   # break-even triggered after TP1
+        self._tp2_hit:    Dict[str, bool]  = {}   # trailing stop activated after TP2
+        self._tp3_hit:    Dict[str, bool]  = {}
+        self._tp4_hit:    Dict[str, bool]  = {}
         self._peak_price: Dict[str, float] = {}   # highest (LONG) or lowest (SHORT) seen since entry
 
         self.bootstrap_done  = 0
@@ -1295,6 +1387,9 @@ class LiveEngine:
             except Exception:
                 self._open_time[sym] = time.time()
             self._tp1_hit[sym]    = False
+            self._tp2_hit[sym]    = False
+            self._tp3_hit[sym]    = False
+            self._tp4_hit[sym]    = False
             self._peak_price[sym] = pos.entry_price
 
         self._load_predictors([c.symbol for c in token_configs])
@@ -1793,27 +1888,37 @@ class LiveEngine:
 
         now  = time.time()
         held = now - self._open_time.get(symbol, 0)
-        atr  = float(result.get('atr', pos.entry_price * 0.015) or pos.entry_price * 0.015)
 
-        # ── Update peak price for trailing stop tracking ──────────────────────
+        # Current ATR: use live result first, then fall back to the ATR stored at
+        # entry (pos.atr), then a price-based estimate.
+        atr = (float(result.get('atr') or 0)
+               or pos.atr
+               or pos.entry_price * 0.015)
+
+        # ── Update peak price for trailing-stop tracking ──────────────────────
+        # LONG: track the highest price; SHORT: track the lowest price (trough).
         if pos.direction == 'LONG':
-            current_peak = self._peak_price.get(symbol, pos.entry_price)
-            self._peak_price[symbol] = max(current_peak, check_price)
-        else:   # SHORT: track trough (lowest point since entry)
-            current_trough = self._peak_price.get(symbol, pos.entry_price)
-            self._peak_price[symbol] = min(current_trough, check_price)
+            self._peak_price[symbol] = max(
+                self._peak_price.get(symbol, pos.entry_price), check_price)
+        else:
+            self._peak_price[symbol] = min(
+                self._peak_price.get(symbol, pos.entry_price), check_price)
 
+        peak = self._peak_price[symbol]
+
+        # ── Helper: full close (removes position, cleans all TP-hit state) ────
         def _close(reason: str, exit_px: Optional[float] = None) -> None:
-            rec = self.wallet.close_trade(symbol, exit_px if exit_px is not None else check_price, reason)
+            rec = self.wallet.close_trade(
+                symbol, exit_px if exit_px is not None else check_price, reason)
             if rec:
                 self._last_close_time[symbol] = now
                 self._last_close_side[symbol] = pos.side
-                # Clean up trailing stop state
-                self._tp1_hit.pop(symbol, None)
-                self._peak_price.pop(symbol, None)
+                for d in (self._tp1_hit, self._tp2_hit,
+                          self._tp3_hit, self._tp4_hit, self._peak_price):
+                    d.pop(symbol, None)
                 tag = 'WIN' if rec.pnl_pct > 0 else 'LOSS'
-                print(f'[{symbol}] {reason} {tag} {rec.pnl_pct:+.2f}% @ {check_price:.6g}')
-                # Record outcome in performance tracker (persists to disk inside)
+                print(f'[{symbol}] {reason} {tag} {rec.pnl_pct:+.2f}% @ '
+                      f'{(exit_px or check_price):.6g}')
                 self.perf_tracker.record_outcome(
                     symbol        = symbol,
                     regime        = self.last_signals.get(symbol, {}).get('regime', 'UNKNOWN'),
@@ -1821,67 +1926,93 @@ class LiveEngine:
                     pnl_pct       = rec.pnl_pct,
                     quality_score = float(self.last_signals.get(symbol, {}).get('quality_score', 0)),
                 )
-                # Feed drift monitor so it can compare against training benchmark
                 self.drift_monitor.record(symbol, rec.outcome)
                 self.drift_monitor.save_state()
-
                 drift_sev = self.drift_monitor.severity(symbol)
                 if drift_sev in ('WARNING', 'CRITICAL'):
-                    live_wr    = self.drift_monitor._live_win_rate(symbol)
-                    benchmark  = self.drift_monitor._benchmarks.get(symbol, 0.60)
+                    live_wr   = self.drift_monitor._live_win_rate(symbol)
+                    benchmark = self.drift_monitor._benchmarks.get(symbol, 0.60)
                     print(f'[{symbol}] DRIFT {drift_sev}: '
-                          f'live_wr={live_wr:.1%} vs benchmark={benchmark:.1%} '
+                          f'live_wr={live_wr:.1%} benchmark={benchmark:.1%} '
                           f'(drop={((benchmark - (live_wr or 0)) * 100):.1f}pp)')
-
-                # Persist immediately so the outcome survives a crash
                 self._save_track_record()
-                # Fire exit notification (non-blocking, best-effort)
                 try:
                     from scripts.notifications.dispatcher import get_notifier
                     _hold = int(time.time() - self._open_time.get(symbol, time.time()))
                     get_notifier().send_exit(
-                        symbol=symbol,
-                        direction=pos.side,
-                        outcome=tag,
-                        pnl_pct=rec.pnl_pct,
-                        hold_seconds=_hold,
-                        exit_reason=reason,
+                        symbol=symbol, direction=pos.side, outcome=tag,
+                        pnl_pct=rec.pnl_pct, hold_seconds=_hold, exit_reason=reason,
                     )
                 except Exception:
                     pass
+
+        # ── Helper: partial close (keeps position open for next TP levels) ────
+        def _partial(reason: str, pct: float, exit_px: Optional[float] = None) -> None:
+            px  = exit_px if exit_px is not None else check_price
+            rec = self.wallet.partial_close_trade(symbol, px, reason, pct)
+            if rec:
+                print(f'[{symbol}] {reason} {rec.pnl_pct:+.2f}% '
+                      f'(closed {pct*100:.0f}% @ {px:.6g}) '
+                      f'remaining≈{pos.position_value:.0f} USDT')
+                self._save_track_record()
 
         # ── 1. Maximum hold time (zombie guard) ──────────────────────────────
         if held >= self.MAX_HOLD_SECONDS:
             _close('MAX_HOLD_EXPIRED')
             return
 
-        # ── 2. TP3 hit — full exit at maximum target ──────────────────────────
-        if pos.take_profit_3 > 0:
-            tp3_current = (
+        # ── 2. TP5 hit — close all remaining size ────────────────────────────
+        # By this point TPs 1-4 have already taken 80 %; this closes the last 20 %.
+        if pos.take_profit_5 > 0:
+            tp5_hit = (
+                (pos.direction == 'LONG'  and check_price >= pos.take_profit_5) or
+                (pos.direction == 'SHORT' and check_price <= pos.take_profit_5)
+            )
+            tp5_via_peak = self._tp4_hit.get(symbol, False) and (
+                (pos.direction == 'LONG'  and peak >= pos.take_profit_5) or
+                (pos.direction == 'SHORT' and peak <= pos.take_profit_5)
+            )
+            if tp5_hit:
+                _close('TP5_HIT')
+                return
+            if tp5_via_peak:
+                _close('TP5_HIT', exit_px=pos.take_profit_5)
+                return
+
+        # ── 3. TP4 hit — 20 % partial close ──────────────────────────────────
+        if pos.take_profit_4 > 0 and not self._tp4_hit.get(symbol, False):
+            tp4_hit = (
+                (pos.direction == 'LONG'  and check_price >= pos.take_profit_4) or
+                (pos.direction == 'SHORT' and check_price <= pos.take_profit_4)
+            )
+            tp4_via_peak = self._tp3_hit.get(symbol, False) and (
+                (pos.direction == 'LONG'  and peak >= pos.take_profit_4) or
+                (pos.direction == 'SHORT' and peak <= pos.take_profit_4)
+            )
+            if tp4_hit or tp4_via_peak:
+                exit_px = pos.take_profit_4 if tp4_via_peak else None
+                _partial('TP4_PARTIAL', self.risk_engine.TP_CLOSE_PCTS[3], exit_px)
+                self._tp4_hit[symbol] = True
+
+        # ── 4. TP3 hit — 20 % partial close ──────────────────────────────────
+        if pos.take_profit_3 > 0 and not self._tp3_hit.get(symbol, False):
+            tp3_hit = (
                 (pos.direction == 'LONG'  and check_price >= pos.take_profit_3) or
                 (pos.direction == 'SHORT' and check_price <= pos.take_profit_3)
             )
-            if tp3_current:
-                _close('TP3_HIT')
-                return
-            # Peak-based TP3 detection (catches candles that touched TP3 then reversed)
-            peak_tp3 = self._peak_price.get(symbol, pos.entry_price)
-            tp3_via_peak = self._tp1_hit.get(symbol, False) and (
-                (pos.direction == 'LONG'  and peak_tp3 >= pos.take_profit_3) or
-                (pos.direction == 'SHORT' and peak_tp3 <= pos.take_profit_3)
+            tp3_via_peak = self._tp2_hit.get(symbol, False) and (
+                (pos.direction == 'LONG'  and peak >= pos.take_profit_3) or
+                (pos.direction == 'SHORT' and peak <= pos.take_profit_3)
             )
-            if tp3_via_peak:
-                _close('TP3_HIT', exit_px=pos.take_profit_3)
-                return
+            if tp3_hit or tp3_via_peak:
+                exit_px = pos.take_profit_3 if tp3_via_peak else None
+                _partial('TP3_PARTIAL', self.risk_engine.TP_CLOSE_PCTS[2], exit_px)
+                self._tp3_hit[symbol] = True
 
-        # ── 3. TP2 hit — checked BEFORE trailing stop so a candle that touches
-        #    TP2 and reverses before the next scan still books profit at TP2
-        #    price.  Uses peak_price to detect TP2 was reached even when current
-        #    price has since reversed (peak-based detection only applies after
-        #    TP1 is confirmed so we know the move is real, not noise).
-        if pos.take_profit_2 > 0:
-            peak = self._peak_price.get(symbol, pos.entry_price)
-            tp2_current = (
+        # ── 5. TP2 hit — 20 % partial close, activate trailing stop ──────────
+        # Peak-based detection applies only after TP1 is confirmed (real move).
+        if pos.take_profit_2 > 0 and not self._tp2_hit.get(symbol, False):
+            tp2_hit = (
                 (pos.direction == 'LONG'  and check_price >= pos.take_profit_2) or
                 (pos.direction == 'SHORT' and check_price <= pos.take_profit_2)
             )
@@ -1889,44 +2020,48 @@ class LiveEngine:
                 (pos.direction == 'LONG'  and peak >= pos.take_profit_2) or
                 (pos.direction == 'SHORT' and peak <= pos.take_profit_2)
             )
-            if tp2_current:
-                _close('TP2_HIT')
-                return
-            if tp2_via_peak:
-                # Price reached TP2 and reversed before next scan — exit at TP2
-                _close('TP2_HIT', exit_px=pos.take_profit_2)
-                return
+            if tp2_hit or tp2_via_peak:
+                exit_px = pos.take_profit_2 if tp2_via_peak else None
+                _partial('TP2_PARTIAL', self.risk_engine.TP_CLOSE_PCTS[1], exit_px)
+                self._tp2_hit[symbol] = True
+                print(f'[{symbol}] TRAILING activated @ TP2 — '
+                      f'trail distance = ATR×{self.risk_engine.TRAIL_MULTIPLIER}')
 
-        # ── 4. Trailing stop (active after TP1 is hit) ────────────────────────
-        # Trailing stop is always AT or ABOVE TP1 for LONG (AT or BELOW for SHORT),
-        # guaranteeing at least TP1 profit if price reverses after TP1.
-        if self._tp1_hit.get(symbol, False):
-            trail_atr  = 0.5 * atr
-            peak       = self._peak_price.get(symbol, pos.entry_price)
+        # ── 6. Trailing stop — active after TP2 is hit ───────────────────────
+        # Trail distance = ATR × TRAIL_MULTIPLIER.
+        # Floor = TP2 price so the stop never gives back more than one ATR of
+        # TP2 profit once the trailing level is above TP2.
+        if self._tp2_hit.get(symbol, False):
+            trail_dist = self.risk_engine.TRAIL_MULTIPLIER * atr
             if pos.direction == 'LONG':
-                trail_stop = max(pos.take_profit_1, peak - trail_atr)
+                trail_stop = max(pos.take_profit_2, peak - trail_dist)
                 if check_price <= trail_stop:
                     _close('TRAILING_STOP', exit_px=trail_stop)
                     return
             else:  # SHORT
-                trail_stop = min(pos.take_profit_1, peak + trail_atr)
+                trail_stop = min(pos.take_profit_2, peak + trail_dist)
                 if check_price >= trail_stop:
                     _close('TRAILING_STOP', exit_px=trail_stop)
                     return
 
-        # ── 5. TP1 hit — activate trailing stop from here ─────────────────────
+        # ── 7. TP1 hit — 20 % partial close, move SL to break-even ──────────
+        # Break-even: update pos.stop_loss to entry price so that if price
+        # reverses all the way back, we exit at entry (no loss on the position).
         if pos.take_profit_1 > 0 and not self._tp1_hit.get(symbol, False):
             tp1_hit = (
                 (pos.direction == 'LONG'  and check_price >= pos.take_profit_1) or
                 (pos.direction == 'SHORT' and check_price <= pos.take_profit_1)
             )
             if tp1_hit:
+                _partial('TP1_PARTIAL', self.risk_engine.TP_CLOSE_PCTS[0])
                 self._tp1_hit[symbol]    = True
-                self._peak_price[symbol] = check_price   # reset peak to TP1 price
-                print(f'[{symbol}] TP1_HIT @ {check_price:.6g} — trailing to TP2/TP3, locked ≥ TP1')
-                # Do NOT close here — trailing stop now protects TP1 profit
+                self._peak_price[symbol] = check_price   # reset peak tracking from TP1
+                # Break-even: SL moves to entry — guarantees no loss on remaining position
+                pos.stop_loss = pos.entry_price
+                print(f'[{symbol}] TP1_HIT @ {check_price:.6g} — '
+                      f'SL moved to break-even ({pos.entry_price:.6g})')
 
-        # ── 6. Model-reversal TP (dynamic exit) ──────────────────────────────
+        # ── 8. Model-reversal exit (dynamic exit on opposing signal) ─────────
         side = result.get('side', 'FLAT')
         fire = bool(result.get('fire', False))
         opposite = (
@@ -1934,15 +2069,15 @@ class LiveEngine:
             (pos.direction == 'SHORT' and side == 'BUY'  and fire)
         )
         if opposite:
-            # If TP1 already hit the trade is in profit — close immediately
-            # to lock gains when the model flips direction.
-            # Without TP1, require minimum hold to prevent churn on noisy flips.
+            # Require minimum hold unless TP1 is already secured.
             _reversal_min = 0 if self._tp1_hit.get(symbol, False) else self.MIN_HOLD_SECONDS
             if held >= _reversal_min:
                 _close('MODEL_REVERSAL_TP')
                 return
 
-        # ── 7. ATR-based stop loss ────────────────────────────────────────────
+        # ── 9. Stop loss / break-even SL ─────────────────────────────────────
+        # Before TP1: uses the original ATR-based SL.
+        # After  TP1: pos.stop_loss was moved to entry_price (break-even).
         if pos.stop_loss > 0:
             sl_hit = (
                 (pos.direction == 'LONG'  and check_price <= pos.stop_loss) or
@@ -1998,32 +2133,30 @@ class LiveEngine:
 
         pos_value = max(pos_value, 1.0)   # safety floor
 
-        # ── Dynamic stop/TP calculation ───────────────────────────────────────
-        if regime is not None and quality_score > 0:
-            stops = self.risk_engine.calculate_stops(
-                price              = price,
-                side               = side,
-                atr                = atr,
-                atr_mult           = atr_mult,
-                quality_score      = quality_score,
-                lstm_vol_expansion = float(result.get('lstm_vol_expansion_prob', 0.5)),
-                lstm_continuation  = float(result.get('lstm_continuation_prob',  0.5)),
-            )
-            stop_loss = stops['sl']
-            tp1       = stops['tp1']
-            tp2       = stops['tp2']
-            tp3       = stops['tp3']
-        else:
-            step      = atr_mult * atr
-            stop_loss = (price - step) if direction == 'LONG' else (price + step)
-            if direction == 'LONG':
-                tp1 = float(result.get('bull_tp1') or round(price + 1.0 * step, 8))
-                tp2 = float(result.get('bull_tp2') or round(price + 2.0 * step, 8))
-                tp3 = float(result.get('bull_tp3') or round(price + 3.5 * step, 8))
-            else:
-                tp1 = float(result.get('bear_tp1') or round(price - 1.0 * step, 8))
-                tp2 = float(result.get('bear_tp2') or round(price - 2.0 * step, 8))
-                tp3 = float(result.get('bear_tp3') or round(price - 3.5 * step, 8))
+        # ── ATR-based stop/TP calculation ────────────────────────────────────
+        # All levels derived from a single ATR value — no fixed percentages.
+        stops = self.risk_engine.calculate_stops(price=price, side=side, atr=atr)
+
+        stop_loss = stops['sl']
+        tp1       = stops['tp1']
+        tp2       = stops['tp2']
+        tp3       = stops['tp3']
+        tp4       = stops['tp4']
+        tp5       = stops['tp5']
+        rr        = stops['risk_reward']
+
+        # ── Risk/Reward gate ─────────────────────────────────────────────────
+        # Reward is measured to TP3 (first full-trend target).
+        # Trades below the minimum RR are rejected to protect track record quality.
+        if not stops['valid_rr']:
+            print(f'[{symbol}] RR_REJECTED {side} — '
+                  f'RR={rr:.2f} < min={self.risk_engine.MIN_RISK_REWARD} '
+                  f'(ATR={atr:.4g})')
+            if symbol in self.last_signals:
+                self.last_signals[symbol]['fire']       = False
+                self.last_signals[symbol]['signal']     = 'HOLD'
+                self.last_signals[symbol]['rr_blocked'] = True
+            return
 
         pos = Position(
             symbol          = symbol,
@@ -2035,25 +2168,31 @@ class LiveEngine:
             signal_id       = str(uuid.uuid4()),
             entry_time      = datetime.now(timezone.utc).isoformat(),
             meta_confidence = round(meta_conf, 4),
-            atr_multiplier  = atr_mult,
+            atr_multiplier  = self.risk_engine.ATR_SL_MULTIPLIER,
+            atr             = round(atr, 8),
             take_profit_1   = round(tp1, 8),
             take_profit_2   = round(tp2, 8),
             take_profit_3   = round(tp3, 8),
+            take_profit_4   = round(tp4, 8),
+            take_profit_5   = round(tp5, 8),
         )
         self.wallet.open_trade(pos)
         self._open_time[symbol]    = time.time()
         self._tp1_hit[symbol]      = False
+        self._tp2_hit[symbol]      = False
+        self._tp3_hit[symbol]      = False
+        self._tp4_hit[symbol]      = False
         self._peak_price[symbol]   = price
 
         regime_label = regime.regime if regime else 'UNKNOWN'
-        print(f'[{symbol}] OPEN {direction} @ {price} | '
-              f'conf={meta_conf:.3f} quality={quality_score:.0f} '
-              f'regime={regime_label} '
-              f'SL={stop_loss:.6g} TP1={tp1:.6g} TP2={tp2:.6g} '
-              f'size={pos_value:.0f} USDT')
-        # Persist the new open position immediately
+        print(
+            f'[{symbol}] OPEN {direction} @ {price:.6g} | '
+            f'conf={meta_conf:.3f} quality={quality_score:.0f} regime={regime_label}\n'
+            f'         ATR={atr:.4g}  SL={stop_loss:.6g}  RR={rr:.2f}\n'
+            f'         TP1={tp1:.6g}  TP2={tp2:.6g}  TP3={tp3:.6g}  '
+            f'TP4={tp4:.6g}  TP5={tp5:.6g}  size={pos_value:.0f} USDT'
+        )
         self._save_track_record()
-        # Fire entry notification (non-blocking, best-effort)
         try:
             from scripts.notifications.dispatcher import get_notifier
             get_notifier().send_entry({
@@ -2063,12 +2202,16 @@ class LiveEngine:
                 'confluence_score': 0.0,
                 'current_price':    price,
                 'mode':             'live',
-                'timeframe':        '—',
+                'timeframe':        '1h',
                 'top_strategies':   [],
+                'atr':              atr,
+                'risk_reward':      rr,
                 'stop_loss':        stop_loss,
                 'take_profit_1':    tp1,
                 'take_profit_2':    tp2,
                 'take_profit_3':    tp3,
+                'take_profit_4':    tp4,
+                'take_profit_5':    tp5,
                 'guidance':         {},
                 'timestamp':        pos.entry_time,
             })
@@ -2130,17 +2273,35 @@ class LiveEngine:
             'volatility_score':    round(min(atr_pct / 5.0 * 100.0, 100.0), 1),
         }
 
-        # TP/SL levels for the active direction
-        step = atr_mult * atr
+        # ── ATR-based TP/SL levels for the active direction ──────────────────
+        # Use DynamicRiskEngine class constants directly (static method — no self).
+        # calculate_stops() is called as an unbound helper via a throw-away instance;
+        # it is a pure function so this is safe and cheap.
+        _re = DynamicRiskEngine()
+        _stops: Dict[str, float] = (
+            _re.calculate_stops(price=price, side=side, atr=atr)
+            if side in ('BUY', 'SELL') and atr > 0 and price > 0
+            else {}
+        )
+
         if side == 'BUY':
-            entry['suggested_tp'] = result.get('bull_tp1', round(price + step, 8))
-            entry['suggested_sl'] = round(price - step, 8)
+            entry['suggested_sl'] = _stops.get('sl', round(price - _re.ATR_SL_MULTIPLIER * atr, 8))
+            entry['suggested_tp'] = _stops.get('tp1', round(price + _re.TP1_MULTIPLIER * atr, 8))
+            entry['tp2']          = _stops.get('tp2')
+            entry['tp3']          = _stops.get('tp3')
+            entry['tp4']          = _stops.get('tp4')
+            entry['tp5']          = _stops.get('tp5')
         elif side == 'SELL':
-            entry['suggested_tp'] = result.get('bear_tp1', round(price - step, 8))
-            entry['suggested_sl'] = round(price + step, 8)
+            entry['suggested_sl'] = _stops.get('sl', round(price + _re.ATR_SL_MULTIPLIER * atr, 8))
+            entry['suggested_tp'] = _stops.get('tp1', round(price - _re.TP1_MULTIPLIER * atr, 8))
+            entry['tp2']          = _stops.get('tp2')
+            entry['tp3']          = _stops.get('tp3')
+            entry['tp4']          = _stops.get('tp4')
+            entry['tp5']          = _stops.get('tp5')
         else:
             entry['suggested_tp'] = None
             entry['suggested_sl'] = None
+            entry['tp2'] = entry['tp3'] = entry['tp4'] = entry['tp5'] = None
 
         # Expected move projection
         _conf_data  = result.get('confluence') or {}
@@ -2148,15 +2309,18 @@ class LiveEngine:
         _conf_raw   = abs(_conf_total - 5.0) / 5.0
         entry['expected_move_pct'] = round(_conf_raw * atr_pct * 3.0, 2)
 
-        # Risk/reward ratio (TP1 vs SL)
-        sl_val = entry.get('suggested_sl', 0)
-        tp_val = entry.get('suggested_tp', 0)
-        if price > 0 and sl_val and tp_val:
-            risk   = abs(price - sl_val)
-            reward = abs(price - tp_val)
-            entry['risk_reward'] = round(reward / risk, 2) if risk > 0 else 0
+        # Risk/Reward ratio: reward measured to TP3 (first full-trend target),
+        # which matches the MIN_RISK_REWARD gate used in _open_position().
+        sl_val  = entry.get('suggested_sl') or 0
+        tp3_val = entry.get('tp3') or 0
+        if price > 0 and sl_val and tp3_val:
+            _risk   = abs(price - sl_val)
+            _reward = abs(price - tp3_val)
+            entry['risk_reward'] = round(_reward / _risk, 2) if _risk > 0 else 0
         else:
             entry['risk_reward'] = 0
+        entry['atr_sl_multiplier'] = _re.ATR_SL_MULTIPLIER
+        entry['min_risk_reward']   = _re.MIN_RISK_REWARD
 
         # Forward all market context fields from predictor
         _CONTEXT_KEYS = (
@@ -2322,6 +2486,10 @@ class LiveEngine:
                     'stop_loss':      p.stop_loss,
                     'take_profit_1':  p.take_profit_1,
                     'take_profit_2':  p.take_profit_2,
+                    'take_profit_3':  p.take_profit_3,
+                    'take_profit_4':  p.take_profit_4,
+                    'take_profit_5':  p.take_profit_5,
+                    'atr':            p.atr,
                     'signal_strength': '',
                 })
 
@@ -2400,10 +2568,14 @@ class LiveEngine:
                     'meta_confidence': p.meta_confidence,
                     'position_value':  p.position_value,
                     'signal_strength': '',
+                    'atr':             p.atr,
+                    'atr_multiplier':  p.atr_multiplier,
                     'stop_loss':       p.stop_loss,
                     'take_profit_1':   p.take_profit_1,
                     'take_profit_2':   p.take_profit_2,
                     'take_profit_3':   p.take_profit_3,
+                    'take_profit_4':   p.take_profit_4,
+                    'take_profit_5':   p.take_profit_5,
                 })
 
             wallet_records = [asdict(t) for t in self.wallet.trade_history] + open_records
