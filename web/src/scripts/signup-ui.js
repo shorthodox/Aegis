@@ -96,7 +96,7 @@ export function createSignUpModal() {
         <!-- ── STEP 1: registration form ── -->
         <div id="signupStep1">
           <div class="auth-header">
-            <div class="auth-logo">⚡ AEGIS</div>
+            <div class="auth-logo">AEGIS · v1.0</div>
             <h2>Create Account</h2>
             <p>Join our trading community and get 3-day free trial</p>
           </div>
@@ -160,7 +160,7 @@ export function createSignUpModal() {
         <!-- ── STEP 1b: Phone for Google users ── -->
         <div id="signupStep1b" style="display:none;">
           <div class="auth-header">
-            <div class="auth-logo">⚡ AEGIS</div>
+            <div class="auth-logo">AEGIS · v1.0</div>
             <h2>One Last Step</h2>
             <p>Add your mobile number to secure your account</p>
           </div>
@@ -180,10 +180,10 @@ export function createSignUpModal() {
         <!-- ── STEP 2: OTP verification ── -->
         <div id="signupStep2" style="display:none;">
           <div class="auth-header">
-            <div class="auth-logo">⚡ AEGIS</div>
+            <div class="auth-logo">AEGIS · v1.0</div>
             <h2>Verify Your Mobile</h2>
             <p>Enter the 6-digit code sent to<br>
-               <strong id="otpEmailDisplay" style="color:#00f2ff;"></strong>
+               <strong id="otpEmailDisplay" style="color: var(--ae-gold, #B8966A);"></strong>
             </p>
           </div>
 
@@ -199,8 +199,9 @@ export function createSignUpModal() {
                 pattern="[0-9]"
                 autocomplete="one-time-code"
                 style="width:44px;height:52px;text-align:center;font-size:1.4rem;font-weight:700;
-                       background:#0a0a0c;border:1px solid rgba(255,255,255,0.15);border-radius:10px;
-                       color:#fff;outline:none;transition:border-color .2s;"
+                       font-family:'JetBrains Mono',monospace;
+                       background:rgba(255,255,255,0.04);border:1px solid rgba(184,150,106,0.2);border-radius:8px;
+                       color:var(--ae-text-1,#EAE6DF);outline:none;transition:border-color .2s,box-shadow .2s;"
               >
             `).join('')}
           </div>

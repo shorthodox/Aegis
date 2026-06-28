@@ -19,7 +19,7 @@ export function createSignInModal() {
 
         <!-- SIGNIN FORM -->
         <div class="auth-header">
-          <div class="auth-logo">⚡ AEGIS</div>
+          <div class="auth-logo">AEGIS · v1.0</div>
           <h2>Welcome Back</h2>
           <p>Sign in to your trading account</p>
         </div>
