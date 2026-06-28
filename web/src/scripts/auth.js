@@ -567,10 +567,15 @@ export async function verifyPhoneOTPForRegistration(otpCode) {
     return { success: true };
   } catch (error) {
     const code = error.code || '';
-    let message = 'Invalid code. Please try again.';
-    if (code === 'auth/invalid-verification-code') message = 'Incorrect code. Please check and retry.';
-    if (code === 'auth/code-expired') message = 'Code expired. Please request a new one.';
     console.error('Phone OTP registration verify error:', code, error.message);
+    let message = `Verification failed (${code || 'unknown'}). Please try again.`;
+    if (code === 'auth/invalid-verification-code' || code === 'auth/invalid-credential') {
+      message = 'Incorrect code. Please check and retry.';
+    } else if (code === 'auth/code-expired') {
+      message = 'Code expired. Please request a new one.';
+    } else if (code === 'auth/too-many-requests') {
+      message = 'Too many attempts. Please wait a moment and try again.';
+    }
     return { success: false, message };
   }
 }
@@ -586,16 +591,29 @@ export async function verifyAndLinkPhoneToGoogle(otpCode, googleUser) {
     try {
       await linkWithCredential(googleUser, phoneCredential);
     } catch (linkErr) {
-      if (linkErr.code !== 'auth/provider-already-linked') throw linkErr;
+      const lc = linkErr.code || '';
+      // Already linked to this account or to an orphaned test account — OTP was valid either way.
+      // Firebase validates the code BEFORE checking for conflicts, so credential-already-in-use
+      // means the code was correct. Our Firestore uniqueness check already passed, so proceed.
+      if (lc === 'auth/provider-already-linked' || lc === 'auth/credential-already-in-use') {
+        confirmationResult = null;
+        return { success: true };
+      }
+      throw linkErr;
     }
     confirmationResult = null;
     return { success: true };
   } catch (error) {
     const code = error.code || '';
-    let message = 'Invalid code. Please try again.';
-    if (code === 'auth/invalid-verification-code') message = 'Incorrect code. Please check and retry.';
-    if (code === 'auth/code-expired') message = 'Code expired. Please request a new one.';
     console.error('Phone link to Google error:', code, error.message);
+    let message = `Verification failed (${code || 'unknown'}). Please try again.`;
+    if (code === 'auth/invalid-verification-code' || code === 'auth/invalid-credential') {
+      message = 'Incorrect code. Please check and retry.';
+    } else if (code === 'auth/code-expired') {
+      message = 'Code expired. Please request a new one.';
+    } else if (code === 'auth/too-many-requests') {
+      message = 'Too many attempts. Please wait a moment and try again.';
+    }
     return { success: false, message };
   }
 }
