@@ -560,15 +560,16 @@ export async function verifyPhoneOTPForRegistration(otpCode) {
     }
     await confirmationResult.confirm(otpCode);
     confirmationResult = null;
-    // Sign out the ephemeral phone-only user so email/password signup proceeds cleanly.
-    await signOut(auth);
+    // Do NOT sign out here — callers manage auth state:
+    // • Google flow: current user stays signed in to write Firestore doc
+    // • Email flow: createUserWithEmailAndPassword switches the session automatically
     return { success: true };
   } catch (error) {
     const code = error.code || '';
     let message = 'Invalid code. Please try again.';
     if (code === 'auth/invalid-verification-code') message = 'Incorrect code. Please check and retry.';
     if (code === 'auth/code-expired') message = 'Code expired. Please request a new one.';
-    console.error('❌ Phone OTP registration verify error:', code, error.message);
+    console.error('Phone OTP registration verify error:', code, error.message);
     return { success: false, message };
   }
 }
