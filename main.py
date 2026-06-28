@@ -2780,7 +2780,7 @@ async def send_password_reset(request: PasswordResetRequest, req: Request):
     )
 
     try:
-        print(f"[password-reset] Sending reset email to {email} via {os.getenv('MAIL_SERVER','smtp.neo.space')}:{os.getenv('MAIL_PORT','587')}")
+        print(f"[password-reset] Sending reset email to {email} via {os.getenv('MAIL_SERVER','smtp.gmail.com')}:{os.getenv('MAIL_PORT','587')}")
         sender_name  = os.getenv("MAIL_FROM_NAME", "AEGIS AI Terminal")
         sender_email = os.getenv("MAIL_FROM",      "noreply@gatekeeper.sbs")
         support_email = os.getenv("SUPPORT_EMAIL", sender_email)
@@ -2923,7 +2923,10 @@ async def send_password_reset(request: PasswordResetRequest, req: Request):
             body=html_body,
             subtype=MessageType.html,
         )
-        await fastmail.send_message(message)
+        await asyncio.wait_for(fastmail.send_message(message), timeout=12.0)
+    except asyncio.TimeoutError:
+        print(f"[password-reset] SMTP timed out after 12s — client will fall back to Firebase")
+        raise HTTPException(status_code=500, detail="smtp_failure")
     except Exception as e:
         print(f"[password-reset] SMTP send failed ({type(e).__name__}): {e}")
         raise HTTPException(status_code=500, detail="smtp_failure")

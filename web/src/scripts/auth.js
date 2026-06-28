@@ -20,6 +20,7 @@ import {
   updateProfile,
   onAuthStateChanged,
   GoogleAuthProvider,
+  sendPasswordResetEmail,
 } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
 
 import {
@@ -582,12 +583,21 @@ export async function handlePasswordReset(email) {
     if (res.status === 429) {
       return { success: false, message: 'Too many attempts. Please wait a few minutes and try again.' };
     }
-    // Any other server error — show a clear message; never fall through to Firebase
+    // SMTP failure — silently fall back to Firebase's own reset email
+    if (data.detail === 'smtp_failure') {
+      try {
+        await sendPasswordResetEmail(auth, email);
+        return { success: true, message: 'Reset link sent — check your inbox (and spam folder).' };
+      } catch (fbErr) {
+        if (fbErr.code === 'auth/user-not-found') {
+          return { success: true, message: 'If an account with this email exists, a reset link has been sent.' };
+        }
+        return { success: false, message: 'Failed to send reset email. Please contact support@gatekeeper.sbs.' };
+      }
+    }
     return {
       success: false,
-      message: data.detail === 'smtp_failure'
-        ? 'Email delivery is temporarily unavailable. Please try again in a few minutes or contact support@gatekeeper.sbs.'
-        : (data.detail || 'Failed to send reset email. Please try again.'),
+      message: data.detail || 'Failed to send reset email. Please try again.',
     };
   } catch (error) {
     console.error('❌ Password reset error:', error);
