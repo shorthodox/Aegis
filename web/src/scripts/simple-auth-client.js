@@ -303,16 +303,9 @@ function attachHandlers() {
     portalBtn.addEventListener('click', portalClickHandler);
   }
 
-  // Trial button
-  const trialBtn = document.getElementById('trialBtn');
-  if (trialBtn) {
-    trialBtn.removeEventListener('click', trialClickHandler);
-    trialBtn.addEventListener('click', trialClickHandler);
-  }
-
-  // [data-plan] buttons are handled entirely by pricing.html's own module script
-  // which owns the pendingPlan + authStateChange resume flow. Adding listeners
-  // here would create a double-handler and open two modals simultaneously.
+  // trialBtn and [data-plan] buttons are handled entirely by pricing.html's own
+  // module script. Adding listeners here creates double-handlers that redirect to
+  // /dashboard before the trial API call completes.
 }
 
 function portalClickHandler(e) {

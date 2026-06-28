@@ -1078,6 +1078,20 @@ async def _trader_scan_loop():
         await asyncio.sleep(_TRADER_SCAN_INTERVAL)
 
 
+async def _otp_cleanup_loop():
+    """Delete expired OTP documents from Firestore every 5 minutes."""
+    while True:
+        await asyncio.sleep(300)
+        try:
+            now = datetime.now(timezone.utc)
+            expired = db.collection(_OTP_COL).where("expires_at", "<", now).stream()
+            count = sum(1 for doc in expired if not doc.reference.delete())
+            if count:
+                print(f"[OTP cleanup] Purged {count} expired OTP document(s)")
+        except Exception as exc:
+            print(f"[OTP cleanup] Error: {exc}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _load_track_record()
@@ -1089,6 +1103,7 @@ async def lifespan(app: FastAPI):
     analytics_task    = asyncio.create_task(analytics_loop())
     dev_token_task    = asyncio.create_task(dev_token_display_loop())
     dev_key_task      = asyncio.create_task(dev_key_display_loop())
+    otp_cleanup_task  = asyncio.create_task(_otp_cleanup_loop())
     # Trader bot disabled — AEGIS-1 live_engine is the sole signal source.
     # trader_task = asyncio.create_task(_trader_scan_loop())
     yield
@@ -1098,6 +1113,7 @@ async def lifespan(app: FastAPI):
     analytics_task.cancel()
     dev_token_task.cancel()
     dev_key_task.cancel()
+    otp_cleanup_task.cancel()
     # trader_task.cancel()
 
 app = FastAPI(title="Aegis-1 by Gatekeeper", lifespan=lifespan)

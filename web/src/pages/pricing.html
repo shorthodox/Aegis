@@ -761,17 +761,48 @@
         const trialStatusMsg = document.getElementById('trialStatusMsg');
 
         async function startTrialWithBackend() {
-            const token = localStorage.getItem('access_token') || localStorage.getItem('authToken');
+            // Always try to get a fresh Firebase token; fall back to localStorage
+            let token;
+            try {
+                const { getAuth } = await import("https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js");
+                const fbUser = getAuth().currentUser;
+                if (fbUser) {
+                    token = await fbUser.getIdToken(true);
+                    localStorage.setItem('access_token', token);
+                }
+            } catch (_) {}
+            if (!token) token = localStorage.getItem('access_token') || localStorage.getItem('authToken');
             if (!token) { openSignUpModal(); return; }
 
             if (trialBtn) { trialBtn.disabled = true; trialBtn.textContent = 'Starting…'; }
             if (trialStatusMsg) trialStatusMsg.textContent = '';
 
             try {
-                const res = await fetch('/api/v1/trial/start', {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-                });
+                const authHeader = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+                // Auto-provision backend doc if missing (Google users who never hit /dashboard)
+                let res = await fetch('/api/v1/trial/start', { method: 'POST', headers: authHeader });
+                if (res.status === 404) {
+                    try {
+                        const { getAuth } = await import("https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js");
+                        const fbUser = getAuth().currentUser;
+                        if (fbUser) {
+                            await fetch('/api/users/provision', {
+                                method: 'POST',
+                                headers: authHeader,
+                                body: JSON.stringify({
+                                    uid: fbUser.uid,
+                                    email: fbUser.email,
+                                    display_name: fbUser.displayName || '',
+                                    provider: fbUser.providerData?.[0]?.providerId === 'password' ? 'password' : 'google'
+                                })
+                            });
+                            // Retry after provisioning
+                            res = await fetch('/api/v1/trial/start', { method: 'POST', headers: authHeader });
+                        }
+                    } catch (_) {}
+                }
+
                 const data = await res.json();
 
                 if (res.ok) {
