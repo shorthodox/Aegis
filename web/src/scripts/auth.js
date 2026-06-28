@@ -17,6 +17,8 @@ import {
   signOut,
   signInWithPhoneNumber,
   RecaptchaVerifier,
+  PhoneAuthProvider,
+  linkWithCredential,
   updateProfile,
   onAuthStateChanged,
   GoogleAuthProvider,
@@ -323,12 +325,11 @@ export async function handleEmailSignup(email, password, displayName, signupToke
       throw new Error('Password must be at least 8 characters');
     }
 
-    if (!signupToken) {
-      throw new Error('Email verification required before creating an account.');
+    // signupToken is only present in the legacy email-OTP flow.
+    // Firebase Phone Auth flow sets it to null; that's fine — phone was verified client-side.
+    if (signupToken) {
+      sessionStorage.setItem('otp_signup_token', signupToken);
     }
-
-    // Store token so provisionUserFromFirebase can present it to the backend
-    sessionStorage.setItem('otp_signup_token', signupToken);
     if (mobile) sessionStorage.setItem('pending_phone', mobile);
 
     // OTP already proved email is reachable — create account and sign in directly.
@@ -570,6 +571,31 @@ export async function verifyPhoneOTPForRegistration(otpCode) {
     if (code === 'auth/invalid-verification-code') message = 'Incorrect code. Please check and retry.';
     if (code === 'auth/code-expired') message = 'Code expired. Please request a new one.';
     console.error('Phone OTP registration verify error:', code, error.message);
+    return { success: false, message };
+  }
+}
+
+// For Google signup: links the phone credential to the Google user WITHOUT
+// replacing auth.currentUser. confirmationResult.confirm() would sign in a
+// new phone user, kicking out the Google user and breaking the Firestore write.
+export async function verifyAndLinkPhoneToGoogle(otpCode, googleUser) {
+  try {
+    if (!otpCode || !confirmationResult) throw new Error('OTP code required');
+    const verificationId = confirmationResult.verificationId;
+    const phoneCredential = PhoneAuthProvider.credential(verificationId, otpCode);
+    try {
+      await linkWithCredential(googleUser, phoneCredential);
+    } catch (linkErr) {
+      if (linkErr.code !== 'auth/provider-already-linked') throw linkErr;
+    }
+    confirmationResult = null;
+    return { success: true };
+  } catch (error) {
+    const code = error.code || '';
+    let message = 'Invalid code. Please try again.';
+    if (code === 'auth/invalid-verification-code') message = 'Incorrect code. Please check and retry.';
+    if (code === 'auth/code-expired') message = 'Code expired. Please request a new one.';
+    console.error('Phone link to Google error:', code, error.message);
     return { success: false, message };
   }
 }

@@ -9,6 +9,7 @@ import {
   handleEmailSignup,
   sendPhoneOTP,
   verifyPhoneOTPForRegistration,
+  verifyAndLinkPhoneToGoogle,
   completeGoogleSignupWithPhone,
 } from './auth.js';
 
@@ -360,16 +361,17 @@ async function handleStep2Verify() {
     return showError('otpError', 'Please enter all 6 digits');
   }
 
-  setLoading(true, 'Verifying code…');
-  const verifyResult = await verifyPhoneOTPForRegistration(otp);
-
-  if (!verifyResult.success) {
-    setLoading(false);
-    return showError('otpError', verifyResult.message);
-  }
-
   if (_flow === 'google') {
-    // Google user — create Firestore doc now that phone is verified
+    // Google flow: link phone to Google user WITHOUT replacing auth.currentUser.
+    // verifyPhoneOTPForRegistration calls confirm() which signs in a phone user,
+    // kicking out the Google user and breaking the subsequent Firestore write.
+    setLoading(true, 'Verifying code…');
+    const verifyResult = await verifyAndLinkPhoneToGoogle(otp, _pendingGoogleUser);
+    if (!verifyResult.success) {
+      setLoading(false);
+      return showError('otpError', verifyResult.message);
+    }
+
     setLoading(true, 'Creating your account…');
     const signupResult = await completeGoogleSignupWithPhone(_pendingGoogleUser, _pending.mobile);
     setLoading(false);
@@ -384,7 +386,15 @@ async function handleStep2Verify() {
     return;
   }
 
-  // Email/password flow — create Firebase account + Firestore doc
+  // Email/password flow — confirm phone OTP (signs in phone user temporarily),
+  // then createUserWithEmailAndPassword replaces auth state with the email user.
+  setLoading(true, 'Verifying code…');
+  const verifyResult = await verifyPhoneOTPForRegistration(otp);
+  if (!verifyResult.success) {
+    setLoading(false);
+    return showError('otpError', verifyResult.message);
+  }
+
   setLoading(true, 'Creating your account…');
   const signupResult = await handleEmailSignup(_pending.email, _pending.password, _pending.name, null, _pending.mobile);
   setLoading(false);
