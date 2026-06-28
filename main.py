@@ -2684,17 +2684,52 @@ async def _send_email(to: str, subject: str, html: str, from_addr: str = "", fro
 # 3-Step Onboarding with OTP
 # -------------------------------------------------------------------
 async def _send_sms_otp(phone_number: str, otp: str) -> bool:
-    """Try Fast2SMS then Twilio. Returns True only when SMS was actually dispatched."""
-    # Fast2SMS (primary for Indian numbers — no Twilio dependency)
+    """
+    Send OTP via SMS. Provider priority:
+      1. MSG91  (MSG91_AUTH_KEY + MSG91_OTP_TEMPLATE_ID) — DLT-compliant, production
+      2. Fast2SMS (FAST2SMS_API_KEY) — quick setup, works for India
+      3. Twilio  (TWILIO_ACCOUNT_SID/AUTH_TOKEN/PHONE_NUMBER) — global fallback
+    Returns True only when SMS was actually dispatched.
+    """
+    # Strip to digits-only for providers that need it (E.164 minus the +)
+    e164 = phone_number if phone_number.startswith('+') else '+' + phone_number
+    digits_only = e164.lstrip('+')      # e.g. 919876543210
+    indian_10   = digits_only[-10:]     # last 10 digits
+
+    # 1. MSG91 — production-grade DLT-compliant Indian SMS
+    msg91_key  = os.getenv("MSG91_AUTH_KEY", "").strip()
+    msg91_tmpl = os.getenv("MSG91_OTP_TEMPLATE_ID", "").strip()
+    if msg91_key and msg91_tmpl:
+        try:
+            async with httpx.AsyncClient(timeout=12.0) as client:
+                resp = await client.post(
+                    "https://control.msg91.com/api/v5/otp",
+                    headers={"authkey": msg91_key, "Content-Type": "application/json"},
+                    json={
+                        "mobile":       digits_only,
+                        "authkey":      msg91_key,
+                        "template_id":  msg91_tmpl,
+                        "otp":          otp,
+                        "otp_expiry":   5,
+                    },
+                )
+            data = resp.json()
+            if data.get("type") == "success" or resp.status_code in (200, 201):
+                print(f"[MSG91] OTP dispatched to {phone_number}")
+                return True
+            print(f"[MSG91] Non-success response {resp.status_code}: {data}")
+        except Exception as exc:
+            print(f"[MSG91] Exception: {exc}")
+
+    # 2. Fast2SMS — simpler setup, good for India
     fast2sms_key = os.getenv("FAST2SMS_API_KEY", "").strip()
     if fast2sms_key:
         try:
-            number = phone_number.lstrip('+').lstrip('91') if phone_number.startswith('+91') else phone_number.lstrip('+')
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.get(
                     "https://www.fast2sms.com/dev/bulkV2",
                     headers={"authorization": fast2sms_key},
-                    params={"variables_values": otp, "route": "otp", "numbers": number},
+                    params={"variables_values": otp, "route": "otp", "numbers": indian_10},
                 )
             data = resp.json()
             if data.get("return"):
@@ -2704,19 +2739,19 @@ async def _send_sms_otp(phone_number: str, otp: str) -> bool:
         except Exception as exc:
             print(f"[Fast2SMS] Exception: {exc}")
 
-    # Twilio fallback
+    # 3. Twilio — global fallback
     try:
         from twilio.rest import Client as TwilioClient
         account_sid = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
         auth_token  = os.getenv("TWILIO_AUTH_TOKEN",  "").strip()
-        from_number = os.getenv("TWILIO_PHONE_NUMBER","").strip()
+        from_number = os.getenv("TWILIO_PHONE_NUMBER", "").strip()
         if account_sid and auth_token and from_number:
             loop = asyncio.get_event_loop()
             tc = TwilioClient(account_sid, auth_token)
             await loop.run_in_executor(None, lambda: tc.messages.create(
-                body=f"Your AEGIS code is {otp}. Expires in 5 min.",
+                body=f"Your AEGIS verification code is {otp}. Valid for 5 minutes. Do not share.",
                 from_=from_number,
-                to=phone_number,
+                to=e164,
             ))
             print(f"[Twilio] OTP dispatched to {phone_number}")
             return True
@@ -2725,7 +2760,7 @@ async def _send_sms_otp(phone_number: str, otp: str) -> bool:
     except Exception as exc:
         print(f"[Twilio] Exception: {exc}")
 
-    print(f"[SMS OTP] No SMS provider available. OTP for {phone_number}: {otp}")
+    print(f"[SMS OTP] No SMS provider configured — cannot deliver to {phone_number}")
     return False
 
 
@@ -2769,18 +2804,19 @@ async def send_otp_for_registration(request: OTPSendRequest, req: Request):
         "cooldown_until": cooldown_until,
         "phone_number": phone_number,
     }
+    sms_sent = False
     try:
         sms_sent = await _send_sms_otp(phone_number, otp)
     except Exception as e:
         print(f"SMS sending error: {e}")
-        sms_sent = False
 
-    via = "sms"
-    if not sms_sent:
-        # Fall back to Resend email — always reliable
-        via = "email"
-        name = email.split("@")[0]
-        html = f"""
+    if sms_sent:
+        return {"success": True, "message": f"Verification code sent to {phone_number}.", "via": "sms"}
+
+    # SMS provider not configured — fall back to email so signup isn't blocked.
+    # In production set MSG91_AUTH_KEY + MSG91_OTP_TEMPLATE_ID to send via SMS.
+    name = email.split("@")[0]
+    html = f"""
 <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#0d0d1a;padding:32px;border-radius:12px;">
   <div style="text-align:center;margin-bottom:24px;">
     <span style="font-size:1.1rem;font-weight:700;color:#B8966A;letter-spacing:4px;">AEGIS · v1.0</span>
@@ -2790,14 +2826,14 @@ async def send_otp_for_registration(request: OTPSendRequest, req: Request):
   <div style="font-size:2.2rem;font-weight:700;letter-spacing:10px;text-align:center;padding:20px;background:rgba(184,150,106,0.08);border:1px solid rgba(184,150,106,0.3);color:#B8966A;border-radius:8px;margin-bottom:24px;">{otp}</div>
   <p style="color:#6b7280;font-size:0.85rem;text-align:center;">Expires in 5 minutes. Do not share this code.</p>
 </div>"""
-        try:
-            await _send_email(email, "AEGIS – Your Verification Code", html)
-        except Exception as e:
-            otp_store.pop(email, None)
-            print(f"Email OTP fallback failed: {e}")
-            raise HTTPException(status_code=500, detail="Failed to deliver verification code. Please try again.")
+    try:
+        await _send_email(email, "AEGIS – Your Phone Verification Code", html)
+    except Exception as e:
+        otp_store.pop(email, None)
+        print(f"Email OTP fallback failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to deliver verification code. Please try again.")
 
-    return {"success": True, "message": f"Verification code sent to your {via}.", "via": via}
+    return {"success": True, "message": f"Verification code sent to {email}.", "via": "email"}
 
 @app.post("/auth/verify-otp-for-registration")
 async def verify_otp_for_registration(request: OTPVerifyRequest, req: Request):
