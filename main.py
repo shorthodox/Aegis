@@ -2646,6 +2646,41 @@ conf_ssl = ConnectionConfig(
 fastmail_ssl = FastMail(conf_ssl)
 
 # -------------------------------------------------------------------
+# Resend email helper — HTTP API, bypasses Railway SMTP port blocks.
+# Set RESEND_API_KEY in Railway env to enable. Falls back to SMTP.
+# -------------------------------------------------------------------
+_RESEND_API_KEY  = os.getenv("RESEND_API_KEY", "")
+_RESEND_FROM_ADDR = os.getenv("MAIL_FROM", "animeshkukreti@gatekeeper.sbs")
+_RESEND_FROM_NAME = os.getenv("MAIL_FROM_NAME", "AEGIS v1.0")
+
+async def _send_email(to: str, subject: str, html: str, from_addr: str = "", from_name: str = "") -> None:
+    """Send transactional email via Resend API (when RESEND_API_KEY is set) or SMTP fallback."""
+    _addr = from_addr or _RESEND_FROM_ADDR
+    _name = from_name or _RESEND_FROM_NAME
+
+    if _RESEND_API_KEY:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                "https://api.resend.com/emails",
+                headers={"Authorization": f"Bearer {_RESEND_API_KEY}", "Content-Type": "application/json"},
+                json={"from": f"{_name} <{_addr}>", "to": [to], "subject": subject, "html": html},
+            )
+        if resp.status_code not in (200, 201):
+            raise RuntimeError(f"Resend API error {resp.status_code}: {resp.text}")
+        print(f"[email] Sent via Resend ✓ → {to}")
+        return
+
+    # SMTP fallback (local dev where SMTP is not blocked)
+    msg = MessageSchema(recipients=[to], subject=subject, body=html, subtype=MessageType.html)
+    try:
+        await asyncio.wait_for(fastmail.send_message(msg), timeout=12.0)
+        print(f"[email] Sent via SMTP/587 ✓ → {to}")
+    except Exception as e1:
+        print(f"[email] SMTP/587 failed: {e1} — trying SSL/465")
+        await asyncio.wait_for(fastmail_ssl.send_message(msg), timeout=12.0)
+        print(f"[email] Sent via SMTP/465 ✓ → {to}")
+
+# -------------------------------------------------------------------
 # 3-Step Onboarding with OTP
 # -------------------------------------------------------------------
 async def _send_sms_otp(phone_number: str, otp: str) -> bool:
@@ -2936,25 +2971,20 @@ async def send_password_reset(request: PasswordResetRequest, req: Request):
   <!--[if mso]></td></tr></table><![endif]-->
 </body>
 </html>"""
-        message = MessageSchema(
-            subject="Reset Your AEGIS Password",
-            recipients=[NameEmail(name=email, email=email)],
-            body=html_body,
-            subtype=MessageType.html,
-        )
-        # Try STARTTLS port 587 first
         try:
-            await asyncio.wait_for(fastmail.send_message(message), timeout=12.0)
-            print(f"[password-reset] Sent via STARTTLS/587 ✓")
-        except (asyncio.TimeoutError, Exception) as e1:
-            print(f"[password-reset] STARTTLS/587 failed ({type(e1).__name__}): {e1} — trying SSL/465")
-            # Fallback: SSL port 465
-            try:
-                await asyncio.wait_for(fastmail_ssl.send_message(message), timeout=12.0)
-                print(f"[password-reset] Sent via SSL/465 ✓")
-            except (asyncio.TimeoutError, Exception) as e2:
-                print(f"[password-reset] SSL/465 also failed ({type(e2).__name__}): {e2}")
-                raise HTTPException(status_code=500, detail="smtp_failure")
+            await _send_email(
+                to=email,
+                subject="Reset Your AEGIS Password",
+                html=html_body,
+                from_addr=sender_email,
+                from_name=sender_name,
+            )
+            print(f"[password-reset] Email sent ✓ → {email}")
+        except Exception as e:
+            print(f"[password-reset] Failed ({type(e).__name__}): {e}")
+            raise HTTPException(status_code=500, detail="smtp_failure")
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"[password-reset] Outer error ({type(e).__name__}): {e}")
         raise HTTPException(status_code=500, detail="smtp_failure")
@@ -5089,79 +5119,49 @@ async def send_otp(request: OTPSendRequest):
         "expires_at": expires_at,
         "cooldown_until": cooldown_until
     }
+    otp_html = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#0C0F13;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0C0F13;padding:40px 0;">
+    <tr><td align="center">
+      <table width="480" cellpadding="0" cellspacing="0"
+             style="background:#141820;border:1px solid rgba(184,150,106,0.18);border-radius:16px;overflow:hidden;max-width:480px;">
+        <tr>
+          <td style="padding:32px 40px 24px;text-align:center;border-bottom:1px solid rgba(184,150,106,0.1);">
+            <div style="font-size:22px;font-weight:700;letter-spacing:3px;color:#B8966A;font-family:Georgia,serif;">AEGIS</div>
+            <p style="color:#6b7280;margin:6px 0 0;font-size:13px;letter-spacing:1px;">AI SIGNAL TERMINAL</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:36px 40px;">
+            <p style="color:#9ca3af;font-size:15px;margin:0 0 8px;">Email Verification</p>
+            <h2 style="color:#EAE6DF;font-size:20px;font-weight:600;margin:0 0 24px;">Your one-time verification code</h2>
+            <div style="background:#0C0F13;border:1px solid rgba(184,150,106,0.25);border-radius:12px;padding:24px;text-align:center;margin:0 0 24px;">
+              <span style="font-family:'Courier New',Courier,monospace;font-size:38px;font-weight:700;letter-spacing:12px;color:#B8966A;">{otp}</span>
+            </div>
+            <p style="color:#9ca3af;font-size:14px;margin:0 0 8px;">
+              This code expires in <strong style="color:#EAE6DF;">5 minutes</strong>. Do not share it with anyone.
+            </p>
+            <p style="color:#6b7280;font-size:13px;margin:0;">If you didn't request this, you can safely ignore this email.</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 40px 28px;border-top:1px solid rgba(255,255,255,0.05);text-align:center;">
+            <p style="color:#4b5563;font-size:12px;margin:0;">
+              Sent by <a href="mailto:animeshkukreti@gatekeeper.sbs" style="color:#B8966A;text-decoration:none;">animeshkukreti@gatekeeper.sbs</a>
+              &nbsp;·&nbsp;
+              <a href="https://gatekeeper.sbs" style="color:#B8966A;text-decoration:none;">gatekeeper.sbs</a>
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
     try:
-        message = MessageSchema(
-            subject="Your AEGIS Verification Code",
-            recipients=[NameEmail(name=email, email=email)],
-            body=f"""
-            <!DOCTYPE html>
-            <html>
-            <head><meta charset="UTF-8"></head>
-            <body style="margin:0;padding:0;background:#0a0a0c;font-family:'Segoe UI',Arial,sans-serif;">
-              <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0c;padding:40px 0;">
-                <tr><td align="center">
-                  <table width="480" cellpadding="0" cellspacing="0"
-                         style="background:#0f111a;border:1px solid rgba(0,242,255,0.15);border-radius:16px;overflow:hidden;max-width:480px;">
-
-                    <!-- Header -->
-                    <tr>
-                      <td style="background:linear-gradient(135deg,#00f2ff22,#7b2fff22);padding:32px 40px 24px;text-align:center;border-bottom:1px solid rgba(0,242,255,0.1);">
-                        <div style="font-size:28px;font-weight:800;letter-spacing:3px;
-                                    background:linear-gradient(90deg,#00f2ff,#7b2fff);
-                                    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-                                    display:inline-block;">
-                          ⚡ AEGIS
-                        </div>
-                        <p style="color:#6b7280;margin:8px 0 0;font-size:13px;letter-spacing:1px;">SOVEREIGN TERMINAL</p>
-                      </td>
-                    </tr>
-
-                    <!-- Body -->
-                    <tr>
-                      <td style="padding:36px 40px;">
-                        <p style="color:#9ca3af;font-size:15px;margin:0 0 8px;">Email Verification</p>
-                        <h2 style="color:#f9fafb;font-size:20px;font-weight:600;margin:0 0 24px;">Your one-time verification code</h2>
-
-                        <!-- OTP display -->
-                        <div style="background:#0a0a0c;border:1px solid rgba(0,242,255,0.25);border-radius:12px;
-                                    padding:24px;text-align:center;margin:0 0 24px;">
-                          <span style="font-family:'Courier New',Courier,monospace;font-size:38px;font-weight:700;
-                                       letter-spacing:12px;color:#00f2ff;">{otp}</span>
-                        </div>
-
-                        <p style="color:#9ca3af;font-size:14px;margin:0 0 8px;">
-                          This code expires in <strong style="color:#f9fafb;">5 minutes</strong>.
-                          Do not share it with anyone.
-                        </p>
-                        <p style="color:#6b7280;font-size:13px;margin:0;">
-                          If you didn't request this, you can safely ignore this email.
-                        </p>
-                      </td>
-                    </tr>
-
-                    <!-- Footer -->
-                    <tr>
-                      <td style="padding:20px 40px 28px;border-top:1px solid rgba(255,255,255,0.05);text-align:center;">
-                        <p style="color:#4b5563;font-size:12px;margin:0;">
-                          Sent by
-                          <a href="mailto:animeshkukreti@gatekeeper.sbs"
-                             style="color:#00f2ff;text-decoration:none;">animeshkukreti@gatekeeper.sbs</a>
-                          &nbsp;·&nbsp;
-                          <a href="https://gatekeeper.sbs"
-                             style="color:#00f2ff;text-decoration:none;">gatekeeper.sbs</a>
-                        </p>
-                      </td>
-                    </tr>
-
-                  </table>
-                </td></tr>
-              </table>
-            </body>
-            </html>
-            """,
-            subtype=MessageType.html,
-        )
-        await fastmail.send_message(message)
+        await _send_email(to=email, subject="Your AEGIS Verification Code", html=otp_html)
     except Exception as e:
         otp_store.pop(email, None)
         print(f"Email sending failed: {e}")
