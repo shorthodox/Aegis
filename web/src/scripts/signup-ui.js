@@ -9,11 +9,14 @@ import {
   handleEmailSignup,
   sendPhoneOTP,
   verifyPhoneOTPForRegistration,
+  completeGoogleSignupWithPhone,
 } from './auth.js';
 
 // Pending form data stored between step 1 and step 2
 let _pending = { name: '', email: '', password: '', mobile: '' };
 let _resendTimer = null;
+let _flow = 'email'; // 'email' | 'google'
+let _pendingGoogleUser = null;
 
 function normalizeMobile(raw) {
   const stripped = raw.replace(/[\s\-\.\(\)]/g, '');
@@ -365,7 +368,23 @@ async function handleStep2Verify() {
     return showError('otpError', verifyResult.message);
   }
 
-  // Phone verified — create Firebase email/password account + Firestore doc
+  if (_flow === 'google') {
+    // Google user — create Firestore doc now that phone is verified
+    setLoading(true, 'Creating your account…');
+    const signupResult = await completeGoogleSignupWithPhone(_pendingGoogleUser, _pending.mobile);
+    setLoading(false);
+    if (!signupResult.success) {
+      return showError('otpError', signupResult.message);
+    }
+    clearResendTimer();
+    _pending = { name: '', email: '', password: '', mobile: '' };
+    _pendingGoogleUser = null;
+    _flow = 'email';
+    finishGoogleSignup();
+    return;
+  }
+
+  // Email/password flow — create Firebase account + Firestore doc
   setLoading(true, 'Creating your account…');
   const signupResult = await handleEmailSignup(_pending.email, _pending.password, _pending.name, null, _pending.mobile);
   setLoading(false);
@@ -376,26 +395,34 @@ async function handleStep2Verify() {
 
   clearResendTimer();
   _pending = { name: '', email: '', password: '', mobile: '' };
+  _flow = 'email';
   window.dispatchEvent(new CustomEvent('authStateChange', { detail: { authenticated: true } }));
   closeSignUpModal();
   window.location.href = '/pricing?newUser=1';
 }
 
 // ============================================================
-// Google signup — collect phone number if new user
+// Google signup — new users must verify phone via OTP
 // ============================================================
 async function performGoogleSignup() {
   setLoading(true, 'Connecting to Google…');
   try {
     const result = await handleGoogleAuth();
     setLoading(false);
-    if (result.success) {
-      // Always collect phone via the phone step — backend requires it for new accounts
-      // and returning users lacking phone are blocked at the dashboard overlay.
-      showGooglePhoneStep();
-    } else {
-      showError('signupFormError', result.message);
+    if (!result.success) {
+      return showError('signupFormError', result.message);
     }
+    if (!result.isNewUser) {
+      // Returning Google user — already authenticated, go to dashboard
+      window.dispatchEvent(new CustomEvent('authStateChange', { detail: { authenticated: true } }));
+      closeSignUpModal();
+      window.location.href = '/dashboard';
+      return;
+    }
+    // New Google user — require phone + OTP before creating account
+    _pendingGoogleUser = result.user;
+    _flow = 'google';
+    showGooglePhoneStep();
   } catch (error) {
     setLoading(false);
     showError('signupFormError', error.message);
@@ -431,14 +458,22 @@ async function handleGooglePhoneSubmit(e) {
 
   setLoading(true, 'Checking mobile number…');
   const available = await checkPhoneUnique(mobile);
-  setLoading(false);
-
   if (!available) {
+    setLoading(false);
     return showError('googleMobileError', 'This mobile number is already registered to another account');
   }
 
-  sessionStorage.setItem('pending_phone', mobile);
-  finishGoogleSignup();
+  // Send Firebase Phone OTP
+  const otpResult = await sendPhoneOTP(mobile, _pendingGoogleUser?.displayName || 'User');
+  setLoading(false);
+  if (!otpResult.success) {
+    return showError('googlePhoneFormError', otpResult.message || 'Failed to send SMS. Check your number.');
+  }
+
+  _pending.mobile = mobile;
+  document.getElementById('signupStep1b').style.display = 'none';
+  showStep2(mobile);
+  startResendCountdown(60);
 }
 
 // ============================================================
@@ -513,6 +548,8 @@ export function closeSignUpModal() {
     document.getElementById('signupEmailForm')?.reset();
     clearError('signupFormError');
     clearResendTimer();
+    _flow = 'email';
+    _pendingGoogleUser = null;
     showStep1();
   }
 }

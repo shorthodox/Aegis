@@ -43,25 +43,21 @@ let confirmationResult = null;
 // ============================================================
 // HELPER: Create/Update User Document in Firestore
 // ============================================================
-export async function ensureUserDocumentV2(user, authMethod = 'email') {
+export async function ensureUserDocumentV2(user, authMethod = 'email', phone = '') {
   if (!user) return null;
 
-  // Using the db instance imported from gatekeeper.js
-  // The firebaseConfig should be properly initialized in gatekeeper.js
-  // Make sure gatekeeper.js has the correct Firestore configuration
-  
   const userDocRef = doc(db, 'users', user.uid);
   const docSnap = await getDoc(userDocRef);
-  
+
   const now = new Date();
   const trialEndDate = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000); // +3 days
-  
+
   if (!docSnap.exists()) {
     // NEW USER - CREATE WITH TRIAL
     const userData = {
       uid: user.uid,
       email: user.email || '',
-      phone: user.phoneNumber || '',
+      phone: phone || user.phoneNumber || '',
       displayName: user.displayName || 'User',
       photoURL: user.photoURL || '',
       
@@ -135,36 +131,49 @@ export async function ensureUserDocumentV2(user, authMethod = 'email') {
 // ============================================================
 export async function handleGoogleAuth() {
   try {
-    console.log('🔐 Starting Google Auth...');
-    // Set scopes to help with popup/window.closed operations
     googleProvider.addScope('email');
     googleProvider.addScope('profile');
-    
+
     const result = await signInWithPopup(auth, googleProvider);
     const user = result.user;
-    
-    // Create/update user document
-    const userData = await ensureUserDocumentV2(user, 'google');
-    
-    // Store token
+
+    // Check if this is an existing user (has a Firestore doc already)
+    const userDocRef = doc(db, 'users', user.uid);
+    const docSnap = await getDoc(userDocRef);
+
+    if (docSnap.exists()) {
+      // Returning user — update last login and complete auth immediately
+      const existingData = docSnap.data();
+      const loginMethods = new Set(existingData.loginMethods || []);
+      loginMethods.add('google');
+      await updateDoc(userDocRef, { loginMethods: Array.from(loginMethods), lastLogin: serverTimestamp() });
+      const idToken = await user.getIdToken();
+      AuthManager.setToken(idToken);
+      AuthManager.setUser(existingData);
+      localStorage.setItem('authenticated', 'true');
+      return { success: true, user, isNewUser: false, message: 'Logged in successfully!' };
+    }
+
+    // New user — phone verification required before Firestore doc is created
+    return { success: true, user, isNewUser: true, message: 'Phone verification required' };
+  } catch (error) {
+    console.error('Google Auth error:', error.code, error.message);
+    return { success: false, message: error.message || 'Google authentication failed' };
+  }
+}
+
+// Called after phone OTP is verified for a new Google user.
+export async function completeGoogleSignupWithPhone(user, phone) {
+  try {
+    const userData = await ensureUserDocumentV2(user, 'google', phone);
     const idToken = await user.getIdToken();
     AuthManager.setToken(idToken);
     AuthManager.setUser(userData);
     localStorage.setItem('authenticated', 'true');
-    
-    console.log('✅ Google Auth successful');
-    return { success: true, user, message: 'Logged in successfully!', userData };
+    return { success: true };
   } catch (error) {
-    console.error('❌ Google Auth error:', error.code, error.message);
-    // COOP error handling: if the error is about window.closed being blocked
-    if (error.code === 'auth/popup-blocked' || error.message?.includes('window.closed')) {
-      console.error('⚠️ COOP/COEP Error detected. Make sure your server sends proper headers.');
-      console.error('Expected headers: Cross-Origin-Opener-Policy: same-origin-allow-popups, Cross-Origin-Embedder-Policy: unsafe-none');
-    }
-    return { 
-      success: false, 
-      message: error.message || 'Google authentication failed'
-    };
+    console.error('completeGoogleSignupWithPhone error:', error);
+    return { success: false, message: error.message || 'Failed to complete signup' };
   }
 }
 
