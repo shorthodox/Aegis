@@ -485,12 +485,15 @@ export async function sendPhoneOTP(phoneNumber, displayName) {
     if (!phoneNumber || !displayName) {
       throw new Error('Phone number and name required');
     }
-    
-    // Format phone number (ensure +country code)
+
+    // Always clear stale verifier — previous errors leave it in a broken state
+    if (window.recaptchaVerifier) {
+      try { window.recaptchaVerifier.clear(); } catch (_) {}
+      window.recaptchaVerifier = null;
+    }
+
     const formattedPhone = phoneNumber.startsWith('+') ? phoneNumber : '+91' + phoneNumber;
-    
-    console.log('📞 Sending OTP...');
-    
+
     const recaptcha = await setupPhoneRecaptcha();
     confirmationResult = await signInWithPhoneNumber(auth, formattedPhone, recaptcha);
     
