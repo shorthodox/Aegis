@@ -2626,6 +2626,25 @@ conf = ConnectionConfig(
 
 fastmail = FastMail(conf)
 
+# SSL fallback config (port 465) — tried when STARTTLS/587 times out
+_mail_server = os.getenv("MAIL_SERVER", "smtp.gmail.com")
+_mail_user   = os.getenv("MAIL_USERNAME", "")
+_mail_pass   = os.getenv("MAIL_PASSWORD", "")
+_mail_from   = os.getenv("MAIL_FROM", "")
+_mail_name   = os.getenv("MAIL_FROM_NAME", "AEGIS v1.0")
+
+conf_ssl = ConnectionConfig(
+    MAIL_USERNAME=_mail_user,
+    MAIL_PASSWORD=SecretStr(_mail_pass),
+    MAIL_FROM=_mail_from,
+    MAIL_FROM_NAME=_mail_name,
+    MAIL_PORT=465,
+    MAIL_SERVER=_mail_server,
+    MAIL_STARTTLS=False,
+    MAIL_SSL_TLS=True,
+)
+fastmail_ssl = FastMail(conf_ssl)
+
 # -------------------------------------------------------------------
 # 3-Step Onboarding with OTP
 # -------------------------------------------------------------------
@@ -2923,12 +2942,21 @@ async def send_password_reset(request: PasswordResetRequest, req: Request):
             body=html_body,
             subtype=MessageType.html,
         )
-        await asyncio.wait_for(fastmail.send_message(message), timeout=12.0)
-    except asyncio.TimeoutError:
-        print(f"[password-reset] SMTP timed out after 12s — client will fall back to Firebase")
-        raise HTTPException(status_code=500, detail="smtp_failure")
+        # Try STARTTLS port 587 first
+        try:
+            await asyncio.wait_for(fastmail.send_message(message), timeout=12.0)
+            print(f"[password-reset] Sent via STARTTLS/587 ✓")
+        except (asyncio.TimeoutError, Exception) as e1:
+            print(f"[password-reset] STARTTLS/587 failed ({type(e1).__name__}): {e1} — trying SSL/465")
+            # Fallback: SSL port 465
+            try:
+                await asyncio.wait_for(fastmail_ssl.send_message(message), timeout=12.0)
+                print(f"[password-reset] Sent via SSL/465 ✓")
+            except (asyncio.TimeoutError, Exception) as e2:
+                print(f"[password-reset] SSL/465 also failed ({type(e2).__name__}): {e2}")
+                raise HTTPException(status_code=500, detail="smtp_failure")
     except Exception as e:
-        print(f"[password-reset] SMTP send failed ({type(e).__name__}): {e}")
+        print(f"[password-reset] Outer error ({type(e).__name__}): {e}")
         raise HTTPException(status_code=500, detail="smtp_failure")
 
     return {"success": True, "message": "Password reset link sent. Check your inbox (and spam folder)."}
@@ -4557,6 +4585,39 @@ def _make_dev_code() -> str:
 async def _require_admin(x_admin_key: Optional[str] = Header(None)) -> None:
     if not ADMIN_SECRET or x_admin_key != ADMIN_SECRET:
         raise HTTPException(status_code=403, detail="Admin access required")
+
+@app.get("/api/admin/smtp-test")
+async def smtp_test(_: None = Depends(_require_admin)):
+    """Test SMTP connectivity and return exact error — protected by X-Admin-Key header."""
+    server  = os.getenv("MAIL_SERVER",   "NOT SET")
+    user    = os.getenv("MAIL_USERNAME", "NOT SET")
+    from_   = os.getenv("MAIL_FROM",     "NOT SET")
+    has_pw  = bool(os.getenv("MAIL_PASSWORD"))
+    result  = {"server": server, "user": user, "from": from_, "has_password": has_pw, "port587": None, "port465": None}
+
+    test_msg = MessageSchema(
+        subject="AEGIS SMTP Test",
+        recipients=[NameEmail(name=user, email=user)],
+        body="<p>SMTP test from AEGIS admin panel.</p>",
+        subtype=MessageType.html,
+    )
+    try:
+        await asyncio.wait_for(fastmail.send_message(test_msg), timeout=10.0)
+        result["port587"] = "OK"
+    except asyncio.TimeoutError:
+        result["port587"] = "TIMEOUT after 10s"
+    except Exception as e:
+        result["port587"] = f"{type(e).__name__}: {e}"
+
+    try:
+        await asyncio.wait_for(fastmail_ssl.send_message(test_msg), timeout=10.0)
+        result["port465"] = "OK"
+    except asyncio.TimeoutError:
+        result["port465"] = "TIMEOUT after 10s"
+    except Exception as e:
+        result["port465"] = f"{type(e).__name__}: {e}"
+
+    return result
 
 @app.delete("/api/admin/track-record/{signal_id}")
 async def delete_track_record_entry(signal_id: str, _: None = Depends(_require_admin)):
