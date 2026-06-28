@@ -521,9 +521,49 @@ def _update_track_record(signals_data: dict, live_prices: dict) -> None:
         _tr_seen_ids = {r["signal_id"] for r in _track_store if r.get("signal_id")}
 
 # -------------------------------------------------------------------
-# OTP Store (in-memory)
+# OTP Store — Firestore-backed (collection: phone_verifications)
+# Replaces the old in-memory dict so OTPs survive server restarts.
+# Enable TTL on the 'expires_at' field in Firebase Console →
+#   Firestore → TTL Policies → collection: phone_verifications, field: expires_at
 # -------------------------------------------------------------------
-otp_store: Dict[str, Dict] = {}
+_OTP_COL = "phone_verifications"
+
+def _otp_ref(email: str):
+    return db.collection(_OTP_COL).document(email)
+
+def _otp_get(email: str) -> Optional[Dict]:
+    snap = _otp_ref(email).get()
+    if not snap.exists:
+        return None
+    data = snap.to_dict() or {}
+    # Firestore returns DatetimeWithNanoseconds (tz-aware datetime subclass) — no conversion needed
+    return data
+
+def _otp_set(email: str, data: Dict):
+    _otp_ref(email).set(data)
+
+def _otp_update(email: str, updates: Dict):
+    _otp_ref(email).update(updates)
+
+def _otp_delete(email: str):
+    _otp_ref(email).delete()
+
+def _otp_find_by_signup_token(token: str) -> Optional[str]:
+    """Return the email (doc ID) whose signup_token matches, or None."""
+    docs = db.collection(_OTP_COL).where("signup_token", "==", token).limit(1).stream()
+    for doc in docs:
+        return doc.id
+    return None
+
+def _otp_find_by_phone(phone: str) -> Optional[str]:
+    """Return the email (doc ID) whose phone_number matches, or None."""
+    docs = db.collection(_OTP_COL).where("phone_number", "==", phone).limit(1).stream()
+    for doc in docs:
+        return doc.id
+    return None
+
+# Keep a module-level alias for old code paths not yet migrated
+otp_store: Dict[str, Dict] = {}  # legacy — new code uses _otp_* helpers above
 
 def generate_otp() -> str:
     return ''.join(random.choices(string.digits, k=6))
@@ -574,9 +614,10 @@ def get_client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 def is_cooldown_active(email: str) -> bool:
-    if email not in otp_store:
+    record = _otp_get(email)
+    if not record:
         return False
-    cooldown = otp_store[email].get("cooldown_until")
+    cooldown = record.get("cooldown_until")
     return bool(cooldown and datetime.now(timezone.utc) < cooldown)
 
 # -------------------------------------------------------------------
@@ -2394,17 +2435,11 @@ async def provision_user(request: Request, user_id: str = Depends(get_current_us
             signup_token = data.get("signup_token")
             if not signup_token:
                 raise HTTPException(status_code=403, detail="OTP verification required before account creation.")
-            valid = any(
-                isinstance(entry, dict) and entry.get("signup_token") == signup_token
-                for entry in otp_store.values()
-            )
-            if not valid:
+            email_key = _otp_find_by_signup_token(signup_token)
+            if not email_key:
                 raise HTTPException(status_code=403, detail="Invalid or expired OTP verification token.")
             # Invalidate the token — single use only
-            for k, entry in list(otp_store.items()):
-                if isinstance(entry, dict) and entry.get("signup_token") == signup_token:
-                    otp_store.pop(k, None)
-                    break
+            _otp_delete(email_key)
             # Mark Firebase email as verified — this is the gate used in decode_token
             # so accounts that bypassed OTP can never authenticate.
             try:
@@ -2798,12 +2833,14 @@ async def send_otp_for_registration(request: OTPSendRequest, req: Request):
     otp = generate_otp()
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
     cooldown_until = datetime.now(timezone.utc) + timedelta(seconds=60)
-    otp_store[email] = {
+    _otp_set(email, {
         "otp": otp,
         "expires_at": expires_at,
         "cooldown_until": cooldown_until,
         "phone_number": phone_number,
-    }
+        "email": email,
+        "verified": False,
+    })
     sms_sent = False
     try:
         sms_sent = await _send_sms_otp(phone_number, otp)
@@ -2829,7 +2866,7 @@ async def send_otp_for_registration(request: OTPSendRequest, req: Request):
     try:
         await _send_email(email, "AEGIS – Your Phone Verification Code", html)
     except Exception as e:
-        otp_store.pop(email, None)
+        _otp_delete(email)
         print(f"Email OTP fallback failed: {e}")
         raise HTTPException(status_code=500, detail="Failed to deliver verification code. Please try again.")
 
@@ -2845,19 +2882,18 @@ async def verify_otp_for_registration(request: OTPVerifyRequest, req: Request):
         raise HTTPException(status_code=429, detail="Too many verification attempts. Please request a new OTP.")
     if not _rate_limit(f"otp_verify_ip:{get_client_ip(req)}", max_calls=30, window_seconds=900):
         raise HTTPException(status_code=429, detail="Too many requests from this IP. Please try again later.")
-    if email not in otp_store:
+    record = _otp_get(email)
+    if not record:
         raise HTTPException(status_code=400, detail="No OTP request found. Please request a new OTP.")
-    record = otp_store[email]
     if phone_number and record.get("phone_number") and record.get("phone_number") != phone_number:
         raise HTTPException(status_code=400, detail="Phone number mismatch. Please request a new OTP.")
     if datetime.now(timezone.utc) > record["expires_at"]:
-        otp_store.pop(email, None)
+        _otp_delete(email)
         raise HTTPException(status_code=400, detail="OTP has expired. Please request a new one.")
     if record["otp"] != otp:
         raise HTTPException(status_code=400, detail="Invalid OTP. Please try again.")
     signup_token = str(uuid.uuid4())
-    otp_store[email]["verified"] = True
-    otp_store[email]["signup_token"] = signup_token
+    _otp_update(email, {"verified": True, "signup_token": signup_token})
     return {"success": True, "message": "OTP verified successfully. Please complete your profile.", "signup_token": signup_token}
 
 @app.post("/auth/check-phone")
@@ -3187,28 +3223,26 @@ async def msg91_webhook(req: Request):
     mobile = payload.get("mobile") or payload.get("phone") or payload.get("recipient")
     if event and mobile and str(status).lower() in ("success", "verified", "completed"):
         norm = normalize_phone_number(mobile)
-        # Find matching otp_store entry by phone_number
-        for email_key, rec in list(otp_store.items()):
-            if rec.get("phone_number") and rec.get("phone_number") == norm:
-                otp_store[email_key]["verified"] = True
-                otp_store[email_key]["signup_token"] = str(uuid.uuid4())
-                print(f"[msg91-webhook] marked {email_key} verified via webhook for {norm}")
-                break
+        email_key = _otp_find_by_phone(norm)
+        if email_key:
+            _otp_update(email_key, {"verified": True, "signup_token": str(uuid.uuid4())})
+            print(f"[msg91-webhook] marked {email_key} verified via webhook for {norm}")
 
     return {"received": True}
 @app.post("/auth/complete-registration")
 async def complete_registration(profile: UserProfileComplete):
     email = profile.email
-    if email not in otp_store or not otp_store[email].get("verified"):
+    record = _otp_get(email)
+    if not record or not record.get("verified"):
         raise HTTPException(status_code=400, detail="Please verify OTP first before completing registration.")
-    
+
     existing_user = get_user_doc(email)
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered.")
-    
+
     password_hash = hash_password(profile.password) if profile.password else None
     user = create_user_doc(email, password_hash=password_hash, full_name=profile.full_name, location=profile.location)
-    otp_store.pop(email, None)
+    _otp_delete(email)
     token = create_token(email)
     return {"access_token": token, "token_type": "bearer", "user": user}
 
