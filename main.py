@@ -2684,31 +2684,49 @@ async def _send_email(to: str, subject: str, html: str, from_addr: str = "", fro
 # 3-Step Onboarding with OTP
 # -------------------------------------------------------------------
 async def _send_sms_otp(phone_number: str, otp: str) -> bool:
-    """Send a signup OTP via Twilio when configured; otherwise log it for development."""
-    try:
-        from twilio.rest import Client
-    except Exception:
-        print(f"[SMS OTP] Twilio package unavailable. OTP for {phone_number}: {otp}")
-        return True
+    """Try Fast2SMS then Twilio. Returns True only when SMS was actually dispatched."""
+    # Fast2SMS (primary for Indian numbers — no Twilio dependency)
+    fast2sms_key = os.getenv("FAST2SMS_API_KEY", "").strip()
+    if fast2sms_key:
+        try:
+            number = phone_number.lstrip('+').lstrip('91') if phone_number.startswith('+91') else phone_number.lstrip('+')
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(
+                    "https://www.fast2sms.com/dev/bulkV2",
+                    headers={"authorization": fast2sms_key},
+                    params={"variables_values": otp, "route": "otp", "numbers": number},
+                )
+            data = resp.json()
+            if data.get("return"):
+                print(f"[Fast2SMS] OTP dispatched to {phone_number}")
+                return True
+            print(f"[Fast2SMS] Non-success response: {data}")
+        except Exception as exc:
+            print(f"[Fast2SMS] Exception: {exc}")
 
-    account_sid = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
-    auth_token = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
-    from_number = os.getenv("TWILIO_PHONE_NUMBER", "").strip()
-    if not account_sid or not auth_token or not from_number:
-        print(f"[SMS OTP] Twilio not configured. OTP for {phone_number}: {otp}")
-        return True
-
+    # Twilio fallback
     try:
-        client = Client(account_sid, auth_token)
-        client.messages.create(
-            body=f"Your AEGIS verification code is {otp}. It expires in 5 minutes.",
-            from_=from_number,
-            to=phone_number,
-        )
-        return True
+        from twilio.rest import Client as TwilioClient
+        account_sid = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
+        auth_token  = os.getenv("TWILIO_AUTH_TOKEN",  "").strip()
+        from_number = os.getenv("TWILIO_PHONE_NUMBER","").strip()
+        if account_sid and auth_token and from_number:
+            loop = asyncio.get_event_loop()
+            tc = TwilioClient(account_sid, auth_token)
+            await loop.run_in_executor(None, lambda: tc.messages.create(
+                body=f"Your AEGIS code is {otp}. Expires in 5 min.",
+                from_=from_number,
+                to=phone_number,
+            ))
+            print(f"[Twilio] OTP dispatched to {phone_number}")
+            return True
+    except ImportError:
+        pass
     except Exception as exc:
-        print(f"[SMS OTP] Failed to send SMS for {phone_number}: {exc}")
-        return False
+        print(f"[Twilio] Exception: {exc}")
+
+    print(f"[SMS OTP] No SMS provider available. OTP for {phone_number}: {otp}")
+    return False
 
 
 @app.post("/auth/send-otp-for-registration")
@@ -2753,16 +2771,33 @@ async def send_otp_for_registration(request: OTPSendRequest, req: Request):
     }
     try:
         sms_sent = await _send_sms_otp(phone_number, otp)
-        if not sms_sent:
-            raise HTTPException(status_code=500, detail="Failed to send OTP SMS. Please try again.")
-    except HTTPException:
-        otp_store.pop(email, None)
-        raise
     except Exception as e:
-        otp_store.pop(email, None)
-        print(f"SMS sending failed: {e}")
-        raise HTTPException(status_code=500, detail="Failed to send OTP SMS. Please try again.")
-    return {"success": True, "message": f"OTP sent to {phone_number}."}
+        print(f"SMS sending error: {e}")
+        sms_sent = False
+
+    via = "sms"
+    if not sms_sent:
+        # Fall back to Resend email — always reliable
+        via = "email"
+        name = email.split("@")[0]
+        html = f"""
+<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#0d0d1a;padding:32px;border-radius:12px;">
+  <div style="text-align:center;margin-bottom:24px;">
+    <span style="font-size:1.1rem;font-weight:700;color:#B8966A;letter-spacing:4px;">AEGIS · v1.0</span>
+  </div>
+  <h2 style="color:#EAE6DF;margin:0 0 8px;">Phone Verification Code</h2>
+  <p style="color:#9ca3af;margin:0 0 24px;">Hi {name}, here is your one-time code to verify <strong style="color:#B8966A;">{phone_number}</strong>:</p>
+  <div style="font-size:2.2rem;font-weight:700;letter-spacing:10px;text-align:center;padding:20px;background:rgba(184,150,106,0.08);border:1px solid rgba(184,150,106,0.3);color:#B8966A;border-radius:8px;margin-bottom:24px;">{otp}</div>
+  <p style="color:#6b7280;font-size:0.85rem;text-align:center;">Expires in 5 minutes. Do not share this code.</p>
+</div>"""
+        try:
+            await _send_email(email, "AEGIS – Your Verification Code", html)
+        except Exception as e:
+            otp_store.pop(email, None)
+            print(f"Email OTP fallback failed: {e}")
+            raise HTTPException(status_code=500, detail="Failed to deliver verification code. Please try again.")
+
+    return {"success": True, "message": f"Verification code sent to your {via}.", "via": via}
 
 @app.post("/auth/verify-otp-for-registration")
 async def verify_otp_for_registration(request: OTPVerifyRequest, req: Request):

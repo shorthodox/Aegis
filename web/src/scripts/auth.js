@@ -194,7 +194,7 @@ export async function sendOTPForSignup(email, phone = null) {
     });
     const data = await res.json();
     if (!res.ok) return { success: false, message: data.detail || 'Failed to send OTP' };
-    return { success: true, message: data.message };
+    return { success: true, message: data.message, via: data.via || 'email' };
   } catch {
     return { success: false, message: 'Network error. Please try again.' };
   }

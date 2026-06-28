@@ -7,9 +7,8 @@
 import {
   handleGoogleAuth,
   handleEmailSignup,
-  sendPhoneOTP,
-  verifyPhoneOTPForRegistration,
-  verifyAndLinkPhoneToGoogle,
+  sendOTPForSignup,
+  verifyOTPForSignup,
   completeGoogleSignupWithPhone,
 } from './auth.js';
 
@@ -18,6 +17,8 @@ let _pending = { name: '', email: '', password: '', mobile: '' };
 let _resendTimer = null;
 let _flow = 'email'; // 'email' | 'google'
 let _pendingGoogleUser = null;
+let _otpEmail = ''; // email used to send OTP (for verification + resend)
+let _otpVia = 'email'; // 'email' | 'sms' — where OTP was delivered
 
 function normalizeMobile(raw) {
   const stripped = raw.replace(/[\s\-\.\(\)]/g, '');
@@ -184,8 +185,6 @@ export function createSignUpModal() {
           </div>
         </div>
 
-        <!-- Firebase invisible reCAPTCHA anchor (required by signInWithPhoneNumber) -->
-        <div id="recaptcha-container"></div>
       </div>
     </div>
 
@@ -281,17 +280,19 @@ async function handleStep1Submit(e) {
   }
 
   setLoading(true, 'Sending verification code…');
-  const result = await sendPhoneOTP(mobile, name);
+  const result = await sendOTPForSignup(email, mobile);
   setLoading(false);
 
   if (!result.success) {
-    return showError('signupFormError', result.message || 'Failed to send SMS. Check your number and try again.');
+    return showError('signupFormError', result.message || 'Failed to send code. Please try again.');
   }
 
   // Store for step 2
   _pending = { name, email, password, mobile };
+  _otpEmail = email;
+  _otpVia = result.via || 'email';
 
-  showStep2(mobile);
+  showStep2(_otpVia, mobile, email);
   startResendCountdown(60);
 }
 
@@ -333,9 +334,10 @@ function attachStep2Listeners() {
     e.preventDefault();
     clearError('otpError');
     setLoading(true, 'Resending code…');
-    const result = await sendPhoneOTP(_pending.mobile, _pending.name);
+    const result = await sendOTPForSignup(_otpEmail, _pending.mobile);
     setLoading(false);
     if (result.success) {
+      _otpVia = result.via || _otpVia;
       clearOtpBoxes();
       startResendCountdown(60);
     } else {
@@ -361,17 +363,14 @@ async function handleStep2Verify() {
     return showError('otpError', 'Please enter all 6 digits');
   }
 
-  if (_flow === 'google') {
-    // Google flow: link phone to Google user WITHOUT replacing auth.currentUser.
-    // verifyPhoneOTPForRegistration calls confirm() which signs in a phone user,
-    // kicking out the Google user and breaking the subsequent Firestore write.
-    setLoading(true, 'Verifying code…');
-    const verifyResult = await verifyAndLinkPhoneToGoogle(otp, _pendingGoogleUser);
-    if (!verifyResult.success) {
-      setLoading(false);
-      return showError('otpError', verifyResult.message);
-    }
+  setLoading(true, 'Verifying code…');
+  const verifyResult = await verifyOTPForSignup(_otpEmail, otp, _pending.mobile);
+  if (!verifyResult.success) {
+    setLoading(false);
+    return showError('otpError', verifyResult.message);
+  }
 
+  if (_flow === 'google') {
     setLoading(true, 'Creating your account…');
     const signupResult = await completeGoogleSignupWithPhone(_pendingGoogleUser, _pending.mobile);
     setLoading(false);
@@ -381,22 +380,17 @@ async function handleStep2Verify() {
     clearResendTimer();
     _pending = { name: '', email: '', password: '', mobile: '' };
     _pendingGoogleUser = null;
+    _otpEmail = '';
     _flow = 'email';
     finishGoogleSignup();
     return;
   }
 
-  // Email/password flow — confirm phone OTP (signs in phone user temporarily),
-  // then createUserWithEmailAndPassword replaces auth state with the email user.
-  setLoading(true, 'Verifying code…');
-  const verifyResult = await verifyPhoneOTPForRegistration(otp);
-  if (!verifyResult.success) {
-    setLoading(false);
-    return showError('otpError', verifyResult.message);
-  }
-
+  // Email/password flow
   setLoading(true, 'Creating your account…');
-  const signupResult = await handleEmailSignup(_pending.email, _pending.password, _pending.name, null, _pending.mobile);
+  const signupResult = await handleEmailSignup(
+    _pending.email, _pending.password, _pending.name, verifyResult.signup_token, _pending.mobile
+  );
   setLoading(false);
 
   if (!signupResult.success) {
@@ -405,6 +399,7 @@ async function handleStep2Verify() {
 
   clearResendTimer();
   _pending = { name: '', email: '', password: '', mobile: '' };
+  _otpEmail = '';
   _flow = 'email';
   window.dispatchEvent(new CustomEvent('authStateChange', { detail: { authenticated: true } }));
   closeSignUpModal();
@@ -473,16 +468,19 @@ async function handleGooglePhoneSubmit(e) {
     return showError('googleMobileError', 'This mobile number is already registered to another account');
   }
 
-  // Send Firebase Phone OTP
-  const otpResult = await sendPhoneOTP(mobile, _pendingGoogleUser?.displayName || 'User');
+  // Send OTP via backend (email fallback if SMS unavailable)
+  const googleEmail = _pendingGoogleUser?.email || '';
+  const otpResult = await sendOTPForSignup(googleEmail, mobile);
   setLoading(false);
   if (!otpResult.success) {
-    return showError('googlePhoneFormError', otpResult.message || 'Failed to send SMS. Check your number.');
+    return showError('googlePhoneFormError', otpResult.message || 'Failed to send code. Please try again.');
   }
 
   _pending.mobile = mobile;
+  _otpEmail = googleEmail;
+  _otpVia = otpResult.via || 'email';
   document.getElementById('signupStep1b').style.display = 'none';
-  showStep2(mobile);
+  showStep2(_otpVia, mobile, googleEmail);
   startResendCountdown(60);
 }
 
@@ -495,10 +493,13 @@ function showStep1() {
   document.getElementById('signupStep2').style.display = 'none';
 }
 
-function showStep2(phone) {
+function showStep2(via, phone, email) {
   document.getElementById('signupStep1').style.display = 'none';
   document.getElementById('signupStep2').style.display = '';
-  document.getElementById('otpEmailDisplay').textContent = phone;
+  const dest = via === 'sms' ? phone : email;
+  document.getElementById('otpEmailDisplay').textContent = dest;
+  const label = document.querySelector('#signupStep2 .auth-header p');
+  if (label) label.innerHTML = `Enter the 6-digit code sent to<br><strong id="otpEmailDisplay" style="color:var(--ae-gold,#B8966A);font-family:'JetBrains Mono',monospace;">${dest}</strong>`;
   clearOtpBoxes();
   clearError('otpError');
   document.getElementById('otpBox0')?.focus();
@@ -560,6 +561,8 @@ export function closeSignUpModal() {
     clearResendTimer();
     _flow = 'email';
     _pendingGoogleUser = null;
+    _otpEmail = '';
+    _otpVia = 'email';
     showStep1();
   }
 }
