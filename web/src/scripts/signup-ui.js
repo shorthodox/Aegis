@@ -7,11 +7,8 @@
 import {
   handleGoogleAuth,
   handleEmailSignup,
-  sendOTPForSignup,
-  verifyOTPForSignup,
-  initMsg91Widget,
-  sendOTPWithWidget,
-  verifyOTPWithWidget
+  sendPhoneOTP,
+  verifyPhoneOTPForRegistration,
 } from './auth.js';
 
 // Pending form data stored between step 1 and step 2
@@ -23,49 +20,6 @@ function normalizeMobile(raw) {
   if (/^\d{10}$/.test(stripped)) return '+91' + stripped;
   if (/^\+\d{7,15}$/.test(stripped)) return stripped;
   return null;
-}
-
-// Inject and initialize external OTP provider widget (MSG91 / Phone91)
-export function initExternalOtpWidget({ tokenAuth, identifier, exposeMethods = true, success = () => {}, failure = () => {} }) {
-  return new Promise((resolve, reject) => {
-    if (!tokenAuth || !identifier) return reject(new Error('tokenAuth and identifier required'));
-    const configuration = {
-      widgetId: (window.MSG91_WIDGET_ID || '3666416a7042373730323037'),
-      tokenAuth: tokenAuth,
-      identifier: identifier,
-      exposeMethods: exposeMethods,
-      success: (data) => { success(data); resolve(data); },
-      failure: (err) => { failure(err); reject(err); }
-    };
-
-    (function loadOtpScript(urls) {
-      let i = 0;
-      function attempt() {
-        const s = document.createElement('script');
-        s.src = urls[i];
-        s.async = true;
-        s.onload = () => {
-          if (typeof window.initSendOTP === 'function') {
-            try {
-              window.initSendOTP(configuration);
-            } catch (err) {
-              console.warn('initSendOTP failed', err);
-            }
-          }
-        };
-        s.onerror = () => {
-          i++;
-          if (i < urls.length) attempt();
-          else reject(new Error('Could not load external OTP scripts'));
-        };
-        document.head.appendChild(s);
-      }
-      attempt();
-    })([
-      'https://verify.msg91.com/otp-provider.js',
-      'https://verify.phone91.com/otp-provider.js'
-    ]);
-  });
 }
 
 async function checkPhoneUnique(phone) {
@@ -182,8 +136,8 @@ export function createSignUpModal() {
           <div class="auth-header">
             <div class="auth-logo">AEGIS · v1.0</div>
             <h2>Verify Your Mobile</h2>
-            <p>Enter the 6-digit code sent to<br>
-               <strong id="otpEmailDisplay" style="color: var(--ae-gold, #B8966A);"></strong>
+            <p>Enter the 6-digit SMS code sent to<br>
+               <strong id="otpEmailDisplay" style="color: var(--ae-gold, #B8966A);font-family:'JetBrains Mono',monospace;"></strong>
             </p>
           </div>
 
@@ -225,6 +179,9 @@ export function createSignUpModal() {
             </a>
           </div>
         </div>
+
+        <!-- Firebase invisible reCAPTCHA anchor (required by signInWithPhoneNumber) -->
+        <div id="recaptcha-container"></div>
       </div>
     </div>
 
@@ -320,53 +277,17 @@ async function handleStep1Submit(e) {
   }
 
   setLoading(true, 'Sending verification code…');
-  // Try MSG91 widget flow if available; fallback to backend email/SMS OTP
-  let result = { success: false };
-  try {
-    const token = await fetchMsg91WidgetToken();
-    if (token) {
-      const sdkReady = await initMsg91Widget(window.MSG91_WIDGET_ID || '3666416a7042373730323037', token);
-      if (sdkReady) {
-        try {
-          const widgetResponse = await sendOTPWithWidget(mobile.replace(/^\+/, ''));
-          window.msg91ReqId = widgetResponse?.reqId || widgetResponse?.requestId || widgetResponse?.data?.reqId || null;
-          result = { success: true, message: 'OTP sent via MSG91 widget' };
-        } catch (widgetErr) {
-          console.warn('MSG91 widget send failed, falling back', widgetErr);
-          result = await sendOTPForSignup(email, mobile);
-        }
-      } else {
-        // Fallback to the existing provider-script integration
-        await initExternalOtpWidget({
-          tokenAuth: token,
-          identifier: mobile,
-          exposeMethods: true,
-          success: (data) => {
-            console.log('external widget success', data);
-          },
-          failure: (err) => {
-            console.error('external widget failure', err);
-          }
-        });
-        result = { success: true, message: 'OTP sent via external provider' };
-      }
-    } else {
-      result = await sendOTPForSignup(email, mobile);
-    }
-  } catch (e) {
-    console.warn('OTP provider attempt failed, falling back', e);
-    result = await sendOTPForSignup(email, mobile);
-  }
+  const result = await sendPhoneOTP(mobile, name);
   setLoading(false);
 
   if (!result.success) {
-    return showError('signupFormError', result.message);
+    return showError('signupFormError', result.message || 'Failed to send SMS. Check your number and try again.');
   }
 
   // Store for step 2
   _pending = { name, email, password, mobile };
 
-  showStep2(email);
+  showStep2(mobile);
   startResendCountdown(60);
 }
 
@@ -408,13 +329,13 @@ function attachStep2Listeners() {
     e.preventDefault();
     clearError('otpError');
     setLoading(true, 'Resending code…');
-    const result = await sendOTPForSignup(_pending.email, _pending.mobile);
+    const result = await sendPhoneOTP(_pending.mobile, _pending.name);
     setLoading(false);
     if (result.success) {
       clearOtpBoxes();
       startResendCountdown(60);
     } else {
-      showError('otpError', result.message);
+      showError('otpError', result.message || 'Failed to resend. Please try again.');
     }
   });
 
@@ -437,27 +358,16 @@ async function handleStep2Verify() {
   }
 
   setLoading(true, 'Verifying code…');
-  let verifyResult = await verifyOTPForSignup(_pending.email, otp, _pending.mobile);
-
-  if (!verifyResult.success && window.msg91ReqId) {
-    try {
-      const widgetVerify = await verifyOTPWithWidget(window.msg91ReqId, otp);
-      if (widgetVerify?.success !== false) {
-        verifyResult = { success: true, signup_token: widgetVerify?.signup_token || null };
-      }
-    } catch (widgetErr) {
-      console.warn('MSG91 widget verify failed, using backend fallback', widgetErr);
-    }
-  }
+  const verifyResult = await verifyPhoneOTPForRegistration(otp);
 
   if (!verifyResult.success) {
     setLoading(false);
     return showError('otpError', verifyResult.message);
   }
 
-  // OTP passed — create Firebase account + Firestore doc
+  // Phone verified — create Firebase email/password account + Firestore doc
   setLoading(true, 'Creating your account…');
-  const signupResult = await handleEmailSignup(_pending.email, _pending.password, _pending.name, verifyResult.signup_token, _pending.mobile);
+  const signupResult = await handleEmailSignup(_pending.email, _pending.password, _pending.name, null, _pending.mobile);
   setLoading(false);
 
   if (!signupResult.success) {
@@ -540,10 +450,10 @@ function showStep1() {
   document.getElementById('signupStep2').style.display = 'none';
 }
 
-function showStep2(email) {
+function showStep2(phone) {
   document.getElementById('signupStep1').style.display = 'none';
   document.getElementById('signupStep2').style.display = '';
-  document.getElementById('otpEmailDisplay').textContent = email;
+  document.getElementById('otpEmailDisplay').textContent = phone;
   clearOtpBoxes();
   clearError('otpError');
   document.getElementById('otpBox0')?.focus();

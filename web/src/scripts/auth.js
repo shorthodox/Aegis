@@ -531,10 +531,33 @@ export async function verifyPhoneOTP(otpCode) {
     return { success: true, user, message: 'Account created via phone!' };
   } catch (error) {
     console.error('❌ OTP verification error:', error.code, error.message);
-    return { 
-      success: false, 
+    return {
+      success: false,
       message: error.message || 'Invalid OTP'
     };
+  }
+}
+
+// Lightweight variant used during email/password signup.
+// Confirms the Firebase phone OTP, signs out the temp phone user,
+// then lets handleEmailSignup create the real email/password account.
+export async function verifyPhoneOTPForRegistration(otpCode) {
+  try {
+    if (!otpCode || !confirmationResult) {
+      throw new Error('OTP code required');
+    }
+    await confirmationResult.confirm(otpCode);
+    confirmationResult = null;
+    // Sign out the ephemeral phone-only user so email/password signup proceeds cleanly.
+    await signOut(auth);
+    return { success: true };
+  } catch (error) {
+    const code = error.code || '';
+    let message = 'Invalid code. Please try again.';
+    if (code === 'auth/invalid-verification-code') message = 'Incorrect code. Please check and retry.';
+    if (code === 'auth/code-expired') message = 'Code expired. Please request a new one.';
+    console.error('❌ Phone OTP registration verify error:', code, error.message);
+    return { success: false, message };
   }
 }
 
