@@ -3,20 +3,20 @@
    Glassmorphism | OLED Black | Monospace Data
    ============================================================ */
 :root {
-    --bg-deep: #050505;
-    --bg-void: #0a0a0c;
-    --glass-bg: rgba(15, 23, 42, 0.8);
-    --glass-border: rgba(0, 242, 255, 0.12);
-    --primary-cyan: #00f2ff;
-    --neon-blue: #00f2ff;
-    --warning-orange: #ff8c00;
-    --risk-orange: #ff8c00;
-    --text-white: #ffffff;
-    --text-dim: #94a3b8;
-    --success-green: #00ff88;
-    --danger-red: #ff0055;
+    --bg-deep: #0C0F13;
+    --bg-void: #0C0F13;
+    --glass-bg: rgba(20, 24, 32, 0.82);
+    --glass-border: rgba(184, 150, 106, 0.12);
+    --primary-cyan: #4A8FAB;
+    --neon-blue: #4A8FAB;
+    --warning-orange: #B8966A;
+    --risk-orange: #B8966A;
+    --text-white: #EAE6DF;
+    --text-dim: #6b7280;
+    --success-green: #5ea888;
+    --danger-red: #b87070;
     --hold-grey: #6b7280;
-    --glow-cyan: 0 0 12px rgba(0, 242, 255, 0.3);
+    --glow-cyan: 0 0 10px rgba(184, 150, 106, 0.22);
 }
 
 * {
@@ -28,7 +28,6 @@
 /* BASE BODY */
 body {
     background: var(--bg-deep);
-    background-image: radial-gradient(circle at 15% 30%, rgba(0, 242, 255, 0.03) 0%, #020202 100%);
     background-attachment: fixed;
     color: var(--text-white);
     font-family: 'Inter', sans-serif;
@@ -72,7 +71,7 @@ body.dashboard-body .glass-nav {
 }
 
 .hud-glow {
-    text-shadow: 0 0 10px rgba(0, 242, 255, 0.6);
+    text-shadow: 0 0 8px rgba(184, 150, 106, 0.4);
 }
 
 .alpha-glow {
