@@ -25,8 +25,7 @@
   <link rel="stylesheet" href="/web/src/styles/main.css">
   <link rel="stylesheet" href="/web/src/styles/aegis-redesign.css">
 
-  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
-  <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"></noscript>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
   <link rel="canonical" href="https://gatekeeper.sbs/">
   <meta name="author" content="Animesh Kukreti &amp; Aman Juiyal">
@@ -341,12 +340,11 @@
     </a>
 
     <nav class="ae-nav-links" aria-label="Main navigation">
-      <a href="#how-it-works" class="ae-nav-link">Signal Demo</a>
-      <a href="#methodology" class="ae-nav-link">Methodology</a>
+      <a href="/" class="ae-nav-link ae-nav-link--active" aria-current="page">Home</a>
       <a href="/signals" class="ae-nav-link">Signals</a>
-      <a href="/reviews" class="ae-nav-link">Reviews</a>
       <a href="/pricing" class="ae-nav-link">Pricing</a>
       <a href="/track-record" class="ae-nav-link">Track Record</a>
+      <a href="/reviews" class="ae-nav-link">Reviews</a>
     </nav>
 
     <div id="authButtonContainer" class="ae-nav-actions">
@@ -364,12 +362,11 @@
 
 <!-- Mobile drawer -->
 <div class="ae-mobile-drawer" id="navMobileDrawer" aria-hidden="true">
-  <a href="/" class="ae-mobile-link mobile-active">Home</a>
-  <a href="#how-it-works" class="ae-mobile-link">Signal Demo</a>
-  <a href="#methodology" class="ae-mobile-link">Methodology</a>
-  <a href="/reviews" class="ae-mobile-link">Reviews</a>
+  <a href="/" class="ae-mobile-link ae-mobile-link--active" aria-current="page">Home</a>
+  <a href="/signals" class="ae-mobile-link">Signals</a>
   <a href="/pricing" class="ae-mobile-link">Pricing</a>
   <a href="/track-record" class="ae-mobile-link">Track Record</a>
+  <a href="/reviews" class="ae-mobile-link">Reviews</a>
   <hr class="ae-divider" style="margin: var(--s-3) 0;">
   <div style="display:flex; flex-direction:column; gap:var(--s-2); padding: 0 var(--s-2);">
     <button class="ae-btn ae-btn-ghost ae-btn-md" id="mPortalProxy" style="justify-content:flex-start;">Sign In</button>
