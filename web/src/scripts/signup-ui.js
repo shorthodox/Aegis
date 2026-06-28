@@ -20,10 +20,23 @@ let _pendingGoogleUser = null;
 let _otpEmail = ''; // email used to send OTP (for verification + resend)
 let _otpVia = 'email'; // 'email' | 'sms' — where OTP was delivered
 
-function normalizeMobile(raw) {
+function normalizeMobile(raw, countryCodeSelectId = 'signupCountryCode') {
+  if (!raw) return null;
   const stripped = raw.replace(/[\s\-\.\(\)]/g, '');
-  if (/^\d{10}$/.test(stripped)) return '+91' + stripped;
+  // Already full E.164 (user typed it manually with +)
   if (/^\+\d{7,15}$/.test(stripped)) return stripped;
+  const digits = stripped.replace(/\D/g, '');
+  if (!digits) return null;
+  const cc = document.getElementById(countryCodeSelectId)?.value || '+91';
+  const ccDigits = cc.replace('+', '');
+  // Subscriber number only — prepend selected country code
+  if (digits.length >= 7 && digits.length <= 12) {
+    // Avoid double-prepending country code (e.g. user typed 919876543210)
+    if (digits.startsWith(ccDigits) && digits.length > ccDigits.length + 5) {
+      return '+' + digits;
+    }
+    return cc + digits;
+  }
   return null;
 }
 
@@ -75,7 +88,21 @@ export function createSignUpModal() {
 
             <div class="form-group">
               <label>Mobile Number</label>
-              <input type="tel" id="signupMobile" placeholder="9876543210 or +91 9876543210" required>
+              <div style="display:flex;align-items:stretch;border:1px solid rgba(184,150,106,0.25);border-radius:8px;overflow:hidden;background:rgba(255,255,255,0.04);">
+                <select id="signupCountryCode"
+                  style="border:none;border-right:1px solid rgba(184,150,106,0.25);background:rgba(184,150,106,0.08);color:#B8966A;padding:0 10px;font-family:'JetBrains Mono',monospace;font-size:0.85rem;cursor:pointer;outline:none;min-width:90px;">
+                  <option value="+91">🇮🇳 +91</option>
+                  <option value="+1">🇺🇸 +1</option>
+                  <option value="+44">🇬🇧 +44</option>
+                  <option value="+61">🇦🇺 +61</option>
+                  <option value="+971">🇦🇪 +971</option>
+                  <option value="+65">🇸🇬 +65</option>
+                  <option value="+60">🇲🇾 +60</option>
+                </select>
+                <input type="tel" id="signupMobile" placeholder="9876543210" required inputmode="numeric"
+                  style="border:none;background:transparent;flex:1;padding:12px 14px;color:inherit;font-size:inherit;outline:none;">
+              </div>
+              <span style="font-size:0.72rem;color:#6b7280;margin-top:4px;display:block;">Select country code, then enter your number — used for account security</span>
               <span class="error-msg" id="signupMobileError"></span>
             </div>
 
@@ -126,7 +153,21 @@ export function createSignUpModal() {
           <form id="googlePhoneForm" class="auth-form">
             <div class="form-group">
               <label>Mobile Number</label>
-              <input type="tel" id="googleMobile" placeholder="9876543210 or +91 9876543210" required>
+              <div style="display:flex;align-items:stretch;border:1px solid rgba(184,150,106,0.25);border-radius:8px;overflow:hidden;background:rgba(255,255,255,0.04);">
+                <select id="googleCountryCode"
+                  style="border:none;border-right:1px solid rgba(184,150,106,0.25);background:rgba(184,150,106,0.08);color:#B8966A;padding:0 10px;font-family:'JetBrains Mono',monospace;font-size:0.85rem;cursor:pointer;outline:none;min-width:90px;">
+                  <option value="+91">🇮🇳 +91</option>
+                  <option value="+1">🇺🇸 +1</option>
+                  <option value="+44">🇬🇧 +44</option>
+                  <option value="+61">🇦🇺 +61</option>
+                  <option value="+971">🇦🇪 +971</option>
+                  <option value="+65">🇸🇬 +65</option>
+                  <option value="+60">🇲🇾 +60</option>
+                </select>
+                <input type="tel" id="googleMobile" placeholder="9876543210" required inputmode="numeric"
+                  style="border:none;background:transparent;flex:1;padding:12px 14px;color:inherit;font-size:inherit;outline:none;">
+              </div>
+              <span style="font-size:0.72rem;color:#6b7280;margin-top:4px;display:block;">Select country code, then enter your number</span>
               <span class="error-msg" id="googleMobileError"></span>
             </div>
             <button type="submit" class="auth-btn-primary" id="googlePhoneSubmitBtn">
@@ -140,8 +181,8 @@ export function createSignUpModal() {
         <div id="signupStep2" style="display:none;">
           <div class="auth-header">
             <div class="auth-logo">AEGIS · v1.0</div>
-            <h2>Verify Your Mobile</h2>
-            <p>Enter the 6-digit SMS code sent to<br>
+            <h2>Enter Verification Code</h2>
+            <p id="otpDeliveryMsg">Enter the 6-digit code sent to<br>
                <strong id="otpEmailDisplay" style="color: var(--ae-gold, #B8966A);font-family:'JetBrains Mono',monospace;"></strong>
             </p>
           </div>
@@ -456,7 +497,7 @@ async function handleGooglePhoneSubmit(e) {
   clearError('googlePhoneFormError');
 
   const raw = document.getElementById('googleMobile')?.value?.trim();
-  const mobile = normalizeMobile(raw || '');
+  const mobile = normalizeMobile(raw || '', 'googleCountryCode');
   if (!mobile) {
     return showError('googleMobileError', 'Enter a valid mobile number (e.g. 9876543210 or +91 9876543210)');
   }
@@ -495,11 +536,14 @@ function showStep1() {
 
 function showStep2(via, phone, email) {
   document.getElementById('signupStep1').style.display = 'none';
+  document.getElementById('signupStep1b').style.display = 'none';
   document.getElementById('signupStep2').style.display = '';
   const dest = via === 'sms' ? phone : email;
-  document.getElementById('otpEmailDisplay').textContent = dest;
-  const label = document.querySelector('#signupStep2 .auth-header p');
-  if (label) label.innerHTML = `Enter the 6-digit code sent to<br><strong id="otpEmailDisplay" style="color:var(--ae-gold,#B8966A);font-family:'JetBrains Mono',monospace;">${dest}</strong>`;
+  const channelLabel = via === 'sms' ? 'SMS sent to' : 'Email sent to';
+  const msgEl = document.getElementById('otpDeliveryMsg');
+  if (msgEl) {
+    msgEl.innerHTML = `${channelLabel}<br><strong id="otpEmailDisplay" style="color:var(--ae-gold,#B8966A);font-family:'JetBrains Mono',monospace;">${dest}</strong>`;
+  }
   clearOtpBoxes();
   clearError('otpError');
   document.getElementById('otpBox0')?.focus();
