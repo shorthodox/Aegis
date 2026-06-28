@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -16,13 +16,15 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://cdnjs.cloudflare.com">
-    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600&display=swap"></noscript>
-    <link rel="stylesheet" href="/web/dist/styles.css?v=1.1">
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"></noscript>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <link rel="stylesheet" href="/web/src/styles/main.css">
   <link rel="stylesheet" href="/web/src/styles/aegis-redesign.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-    <style>    /* -- Nav responsive / mobile drawer ----------------------------- */
+    <link rel="canonical" href="https://gatekeeper.sbs/refund-policy">
+    <meta name="author" content="Animesh Kukreti &amp; Aman Juiyal">
+    <style>
+    /* -- Nav responsive / mobile drawer ----------------------------- */
     body { background-color:var(--ae-base,#0C0F13); color:var(--ae-text-1,#EAE6DF); font-family:var(--ae-font-sans,'Inter',system-ui,sans-serif); padding-top:60px; -webkit-font-smoothing:antialiased; overflow-x:hidden; }
     body::before, body::after { display:none !important; }
     .ae-mobile-drawer { position:fixed; top:60px; left:0; right:0; z-index:800; background:var(--ae-base); border-bottom:1px solid var(--ae-border); display:none; flex-direction:column; padding:var(--s-4); gap:var(--s-1); max-height:calc(100vh - 60px); overflow-y:auto; }
@@ -34,285 +36,205 @@
     @media (max-width:900px) { .ae-nav-links { display:none !important; } #navHamburger { display:flex !important; } }
     @media (min-width:901px) { #navMobileDrawer { display:none !important; } }
 
-.portal-btn {
-            background: rgba(74, 143, 171, 0.1);
-            border: 1px solid rgba(74, 143, 171, 0.3);
-            border-radius: 40px;
-            padding: 0.4rem 1.2rem;
-            color: var(--primary-cyan, #4a8fab);
-            font-weight: 600;
-            cursor: pointer;
-            transition: 0.2s;
-            white-space: nowrap;
+        @media (max-width: 700px) {
+            .legal-grid { grid-template-columns: 1fr !important; }
+            .legal-sidebar { position: static !important; }
         }
-
-        .portal-btn:hover {
-            background: rgba(74, 143, 171, 0.2);
-            box-shadow: 0 0 12px rgba(74, 143, 171, 0.3);
-        }
-
-        body {
-            padding-top: 60px;
-            overflow-y: auto;
-            background: var(--ae-base,#0C0F13);
-            color: #e2e8f0;
-        }
-
-        .content-container {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 4rem 2rem;
-        }
-
-        .section-title {
-            font-size: 2rem;
-            margin: 2rem 0 1rem 0;
-            color: #4a8fab;
-        }
-
-        .subsection-title {
-            font-size: 1.3rem;
-            margin: 1.5rem 0 0.8rem 0;
-            color: #e2e8f0;
-        }
-
-        .policy-text {
-            line-height: 1.8;
-            color: #94a3b8;
-            margin-bottom: 1rem;
-        }
-
-        .policy-list {
-            margin: 1rem 0 1rem 2rem;
-            color: #94a3b8;
-        }
-
-        .policy-list li {
-            margin-bottom: 0.8rem;
-            line-height: 1.6;
-        }
-
-        .footer {
-            text-align: center;
-            padding: 3rem 2rem;
-            border-top: 1px solid rgba(74, 143, 171, 0.2);
-            margin-top: 3rem;
-            color: #64748b;
-            font-size: 0.9rem;
-        }
-
-        .footer-links {
-            margin-bottom: 1rem;
-        }
-
-        .footer-links a {
-            color: #4a8fab;
+        .sidebar-link {
+            display: block;
+            padding: var(--s-2) 0;
+            font-size: 0.82rem;
+            color: var(--ae-text-2);
             text-decoration: none;
-            margin: 0 0.5rem;
+            border-bottom: none;
+            transition: color 0.15s;
         }
-
-        .footer-links a:hover {
-            text-decoration: underline;
-        }
-
-        .separator {
-            color: #475569;
-            margin: 0 0.5rem;
-        }
-
-        .footer-proprietor {
-            margin: 1rem 0;
-            font-size: 0.85rem;
-            color: #64748b;
-        }
+        .sidebar-link:hover { color: var(--ae-gold); }
     </style>
 </head>
 
-<body>
+<body style="background: var(--ae-base); color: var(--ae-text-1); font-family: var(--ae-font-sans);">
+
     <header class="ae-nav" id="main-nav">
-  <div class="ae-nav-inner">
-    <a href="/" class="ae-brand" style="text-decoration:none;">
-      AEGIS<span>&nbsp;&middot;&nbsp;</span>v1.0
-    </a>
-    <nav class="ae-nav-links" aria-label="Main navigation">
-      <a href="/" class="ae-nav-link">Home</a>
-      <a href="/signals" class="ae-nav-link">Signals</a>
-      <a href="/pricing" class="ae-nav-link">Pricing</a>
-      <a href="/track-record" class="ae-nav-link">Track Record</a>
-      <a href="/reviews" class="ae-nav-link">Reviews</a>
-    </nav>
-    <div id="authButtonContainer" class="ae-nav-actions">
-      <button id="portalBtn" class="ae-btn ae-btn-ghost ae-btn-sm">Sign In</button>
-      <button id="dashboardBtn" class="ae-btn ae-btn-outline ae-btn-sm" style="display:none;">Dashboard</button>
-      <button id="signOutBtn" class="ae-btn ae-btn-ghost ae-btn-sm" style="display:none;">Sign Out</button>
-      <button id="createAccountBtn" class="ae-btn ae-btn-primary ae-btn-sm">Start Free Trial</button>
-    </div>
-    <button id="navHamburger" aria-label="Toggle navigation" aria-expanded="false">
-      <i class="fas fa-bars"></i>
-    </button>
-  </div>
-</header>
-
-<div class="ae-mobile-drawer" id="navMobileDrawer" aria-hidden="true">
-  <a href="/" class="ae-mobile-link">Home</a>
-  <a href="/signals" class="ae-mobile-link">Signals</a>
-  <a href="/pricing" class="ae-mobile-link">Pricing</a>
-  <a href="/track-record" class="ae-mobile-link">Track Record</a>
-  <a href="/reviews" class="ae-mobile-link">Reviews</a>
-  <hr class="ae-divider" style="margin:var(--s-3) 0;">
-  <div style="display:flex;flex-direction:column;gap:var(--s-2);padding:0 var(--s-2);">
-    <button id="mPortalProxy" class="ae-btn ae-btn-outline ae-btn-md">Sign In</button>
-    <button id="mDashProxy" class="ae-btn ae-btn-outline ae-btn-md" style="display:none;">Dashboard</button>
-    <button id="mSignoutProxy" class="ae-btn ae-btn-ghost ae-btn-md" style="display:none;">Sign Out</button>
-    <button id="mCtaProxy" class="ae-btn ae-btn-primary ae-btn-md">Start Free Trial</button>
-  </div>
-</div>
-
-    <!-- Content -->
-    <div class="content-container">
-        <h1 class="section-title">Refund Policy</h1>
-
-        <div class="policy-text">
-            <p><strong>Last Updated: May 11, 2026</strong></p>
-        </div>
-
-        <h2 class="subsection-title">1. Refund Eligibility</h2>
-        <p class="policy-text">
-            AEGIS v1.0 offers refunds under the following circumstances:
-        </p>
-        <ul class="policy-list">
-            <li>If you request a refund within 7 days of your first subscription payment, you are eligible for a full
-                refund, provided you have not accessed the Pro or Basic plan features beyond initial setup.</li>
-            <li>If the service is unavailable for more than 48 consecutive hours due to our infrastructure failure, you
-                are entitled to a pro-rata refund for the affected period.</li>
-            <li>If the subscription was charged in error (duplicate charges, unauthorized transactions), a full refund
-                will be issued.</li>
-        </ul>
-
-        <h2 class="subsection-title">2. Trial Refund Policy</h2>
-        <p class="policy-text">
-            The 72-hour Explorer Trial is completely free and does not require a refund process. No payment method is
-            charged during the trial period.
-        </p>
-
-        <h2 class="subsection-title">3. How to Request a Refund</h2>
-        <p class="policy-text">
-            To request a refund, please:
-        </p>
-        <ul class="policy-list">
-            <li>Email support@aegis-trading.io with your account email and transaction ID</li>
-            <li>Provide a clear reason for your refund request</li>
-            <li>Include any relevant screenshots or documentation</li>
-            <li>Allow 5-7 business days for processing</li>
-        </ul>
-
-        <h2 class="subsection-title">4. Refund Processing Timeline</h2>
-        <p class="policy-text">
-            Once approved, refunds are processed through the original payment method:
-        </p>
-        <ul class="policy-list">
-            <li>Credit/Debit Card: 5-10 business days</li>
-            <li>Digital Wallets (Paddle, UPI): 2-3 business days</li>
-            <li>Bank Transfers: 5-7 business days</li>
-        </ul>
-
-        <h2 class="subsection-title">5. Non-Refundable Situations</h2>
-        <p class="policy-text">
-            The following situations are NOT eligible for refunds:
-        </p>
-        <ul class="policy-list">
-            <li>Refund requests made after 7 days of the initial subscription payment</li>
-            <li>Trading losses incurred using AEGIS signals (signals are advisory only)</li>
-            <li>Requests due to user error or misuse of the platform</li>
-            <li>Changes of mind after the 7-day window has passed</li>
-            <li>Cancellation of recurring subscriptions (use the dashboard to cancel future renewals)</li>
-        </ul>
-
-        <h2 class="subsection-title">6. Subscription Cancellation</h2>
-        <p class="policy-text">
-            You can cancel your subscription at any time through your dashboard. Cancellation takes effect at the end of
-            your current billing cycle. No refunds are issued for partially used months, but you will not be charged for
-            future periods.
-        </p>
-
-        <h2 class="subsection-title">7. Paddle Payment Disputes</h2>
-        <p class="policy-text">
-            If you believe your payment was processed incorrectly, you can file a dispute directly with Paddle:
-        </p>
-        <ul class="policy-list">
-            <li>Log into your Paddle account</li>
-            <li>Navigate to Transaction History</li>
-            <li>Click "Dispute" on the relevant transaction</li>
-            <li>Provide supporting documentation</li>
-        </ul>
-
-        <h2 class="subsection-title">8. Contact Us</h2>
-        <p class="policy-text">
-            For any refund inquiries or disputes, contact our support team:
-        </p>
-        <ul class="policy-list">
-            <li><strong>Email:</strong> support@aegis-trading.io</li>
-            <li><strong>Response Time:</strong> Within 24-48 hours</li>
-        </ul>
-
-        <p class="policy-text" style="margin-top: 2rem; font-size: 0.85rem; color: #64748b;">
-            <strong>Disclaimer:</strong> AEGIS v1.0 is provided for educational and advisory purposes only. Trading
-            involves substantial risk of loss. Past performance is not indicative of future results. Please trade
-            responsibly and only risk capital you can afford to lose.
-        </p>
+      <div class="ae-nav-inner">
+        <a href="/" class="ae-brand" style="text-decoration:none;">
+          AEGIS<span>&nbsp;·&nbsp;</span>v1.0
+        </a>
+              <nav class="ae-nav-links" aria-label="Main navigation">
+        <a href="/" class="ae-nav-link">Home</a>
+        <a href="/signals" class="ae-nav-link">Signals</a>
+        <a href="/pricing" class="ae-nav-link">Pricing</a>
+        <a href="/track-record" class="ae-nav-link">Track Record</a>
+        <a href="/reviews" class="ae-nav-link">Reviews</a>
+      </nav>
+                    <div id="authButtonContainer" class="ae-nav-actions">
+        <button id="portalBtn" class="ae-btn ae-btn-ghost ae-btn-sm">Sign In</button>
+        <button id="dashboardBtn" class="ae-btn ae-btn-outline ae-btn-sm" style="display:none;">Dashboard</button>
+        <button id="signOutBtn" class="ae-btn ae-btn-ghost ae-btn-sm" style="display:none;">Sign Out</button>
+        <button id="createAccountBtn" class="ae-btn ae-btn-primary ae-btn-sm">Start Free Trial</button>
+      </div>
+        <button id="navHamburger" aria-label="Toggle navigation" aria-expanded="false">
+          <i class="fas fa-bars"></i>
+        </button>
+      </div>
+    </header>
+        <div class="ae-mobile-drawer" id="navMobileDrawer" aria-hidden="true">
+      <a href="/" class="ae-mobile-link">Home</a>
+      <a href="/signals" class="ae-mobile-link">Signals</a>
+      <a href="/pricing" class="ae-mobile-link">Pricing</a>
+      <a href="/track-record" class="ae-mobile-link">Track Record</a>
+      <a href="/reviews" class="ae-mobile-link">Reviews</a>
+      <hr class="ae-divider" style="margin:var(--s-3) 0;">
+      <div style="display:flex;flex-direction:column;gap:var(--s-2);padding:0 var(--s-2);">
+        <button id="mPortalProxy" class="ae-btn ae-btn-outline ae-btn-md">Sign In</button>
+        <button id="mDashProxy" class="ae-btn ae-btn-outline ae-btn-md" style="display:none;">Dashboard</button>
+        <button id="mSignoutProxy" class="ae-btn ae-btn-ghost ae-btn-md" style="display:none;">Sign Out</button>
+        <button id="mCtaProxy" class="ae-btn ae-btn-primary ae-btn-md">Start Free Trial</button>
+      </div>
     </div>
 
-    <!-- Footer -->
+    <!-- Page Hero -->
+    <div style="padding: 7rem 2rem 3rem; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.05);">
+        <p style="font-size: 0.72rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ae-gold); margin-bottom: var(--s-3);">Legal Document</p>
+        <h1 style="font-family: var(--ae-font-serif); font-size: clamp(2rem, 5vw, 3rem); color: var(--ae-text-1); margin: 0 0 var(--s-3);">Refund Policy</h1>
+        <p style="color: var(--ae-text-2); font-size: 0.87rem;">Last Updated: May 27, 2026 &nbsp;&middot;&nbsp; Dehradun, Uttarakhand, India</p>
+        <p style="color: var(--ae-text-2); font-size: 0.82rem; margin-top: var(--s-2);">Owned &amp; Operated by <strong style="color: var(--ae-text-1);">Animesh Kukreti</strong> &amp; <strong style="color: var(--ae-text-1);">Aman Juiyal</strong> — Co-Founders of AEGIS v1.0</p>
+    </div>
+
+    <!-- Two-column layout -->
+    <div class="legal-grid" style="display:grid; grid-template-columns: 200px 1fr; gap: var(--s-7); max-width: var(--ae-max); margin: 0 auto; padding: var(--s-8) var(--s-5); align-items: start;">
+
+        <!-- Sidebar -->
+        <aside class="legal-sidebar" style="position:sticky; top: 80px;">
+            <div style="font-size:0.72rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:var(--ae-text-3); margin-bottom:var(--s-3);">On this page</div>
+            <a href="#eligibility" class="sidebar-link">Refund Eligibility</a>
+            <a href="#trial" class="sidebar-link">Trial Policy</a>
+            <a href="#request" class="sidebar-link">How to Request</a>
+            <a href="#timeline" class="sidebar-link">Processing Timeline</a>
+            <a href="#non-refundable" class="sidebar-link">Non-Refundable</a>
+            <a href="#cancellation" class="sidebar-link">Cancellation</a>
+            <a href="#disputes" class="sidebar-link">Payment Disputes</a>
+            <a href="#contact" class="sidebar-link">Contact Us</a>
+        </aside>
+
+        <!-- Main content -->
+        <article style="min-width:0;">
+
+            <div id="eligibility">
+                <h2 style="font-family: var(--ae-font-serif); font-size: 1.4rem; font-weight: 400; color: var(--ae-text-1); margin: var(--s-7) 0 var(--s-3); padding-bottom: var(--s-2); border-bottom: 1px solid rgba(255,255,255,0.05);">1. Refund Eligibility</h2>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">AEGIS v1.0 offers refunds under the following circumstances:</p>
+                <ul style="color: var(--ae-text-2); line-height: 1.8; margin: var(--s-3) 0 var(--s-4) var(--s-5);">
+                    <li style="margin-bottom: var(--s-2);">If you request a refund within 7 days of your first subscription payment, you are eligible for a full refund, provided you have not accessed the Pro or Basic plan features beyond initial setup.</li>
+                    <li style="margin-bottom: var(--s-2);">If the service is unavailable for more than 48 consecutive hours due to our infrastructure failure, you are entitled to a pro-rata refund for the affected period.</li>
+                    <li style="margin-bottom: var(--s-2);">If the subscription was charged in error (duplicate charges, unauthorized transactions), a full refund will be issued.</li>
+                </ul>
+            </div>
+
+            <div id="trial">
+                <h2 style="font-family: var(--ae-font-serif); font-size: 1.4rem; font-weight: 400; color: var(--ae-text-1); margin: var(--s-7) 0 var(--s-3); padding-bottom: var(--s-2); border-bottom: 1px solid rgba(255,255,255,0.05);">2. Trial Refund Policy</h2>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">The 72-hour Explorer Trial is completely free and does not require a refund process. No payment method is charged during the trial period.</p>
+            </div>
+
+            <div id="request">
+                <h2 style="font-family: var(--ae-font-serif); font-size: 1.4rem; font-weight: 400; color: var(--ae-text-1); margin: var(--s-7) 0 var(--s-3); padding-bottom: var(--s-2); border-bottom: 1px solid rgba(255,255,255,0.05);">3. How to Request a Refund</h2>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">To request a refund, please:</p>
+                <ul style="color: var(--ae-text-2); line-height: 1.8; margin: var(--s-3) 0 var(--s-4) var(--s-5);">
+                    <li style="margin-bottom: var(--s-2);">Email <a href="mailto:animeshkukreti@gatekeeper.sbs" style="color: var(--ae-gold);">animeshkukreti@gatekeeper.sbs</a> with your account email and transaction ID</li>
+                    <li style="margin-bottom: var(--s-2);">Provide a clear reason for your refund request</li>
+                    <li style="margin-bottom: var(--s-2);">Include any relevant screenshots or documentation</li>
+                    <li style="margin-bottom: var(--s-2);">Allow 5–7 business days for processing</li>
+                </ul>
+            </div>
+
+            <div id="timeline">
+                <h2 style="font-family: var(--ae-font-serif); font-size: 1.4rem; font-weight: 400; color: var(--ae-text-1); margin: var(--s-7) 0 var(--s-3); padding-bottom: var(--s-2); border-bottom: 1px solid rgba(255,255,255,0.05);">4. Refund Processing Timeline</h2>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">Once approved, refunds are processed through the original payment method:</p>
+                <ul style="color: var(--ae-text-2); line-height: 1.8; margin: var(--s-3) 0 var(--s-4) var(--s-5);">
+                    <li style="margin-bottom: var(--s-2);">Credit/Debit Card: 5–10 business days</li>
+                    <li style="margin-bottom: var(--s-2);">Digital Wallets (Paddle, UPI): 2–3 business days</li>
+                    <li style="margin-bottom: var(--s-2);">Bank Transfers: 5–7 business days</li>
+                </ul>
+            </div>
+
+            <div id="non-refundable">
+                <h2 style="font-family: var(--ae-font-serif); font-size: 1.4rem; font-weight: 400; color: var(--ae-text-1); margin: var(--s-7) 0 var(--s-3); padding-bottom: var(--s-2); border-bottom: 1px solid rgba(255,255,255,0.05);">5. Non-Refundable Situations</h2>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">The following situations are <strong style="color: var(--ae-text-1);">NOT</strong> eligible for refunds:</p>
+                <ul style="color: var(--ae-text-2); line-height: 1.8; margin: var(--s-3) 0 var(--s-4) var(--s-5);">
+                    <li style="margin-bottom: var(--s-2);">Refund requests made after 7 days of the initial subscription payment</li>
+                    <li style="margin-bottom: var(--s-2);">Trading losses incurred using AEGIS signals (signals are advisory only)</li>
+                    <li style="margin-bottom: var(--s-2);">Requests due to user error or misuse of the platform</li>
+                    <li style="margin-bottom: var(--s-2);">Changes of mind after the 7-day window has passed</li>
+                    <li style="margin-bottom: var(--s-2);">Cancellation of recurring subscriptions (use the dashboard to cancel future renewals)</li>
+                </ul>
+            </div>
+
+            <div id="cancellation">
+                <h2 style="font-family: var(--ae-font-serif); font-size: 1.4rem; font-weight: 400; color: var(--ae-text-1); margin: var(--s-7) 0 var(--s-3); padding-bottom: var(--s-2); border-bottom: 1px solid rgba(255,255,255,0.05);">6. Subscription Cancellation</h2>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">You can cancel your subscription at any time through your dashboard. Cancellation takes effect at the end of your current billing cycle. No refunds are issued for partially used months, but you will not be charged for future periods.</p>
+            </div>
+
+            <div id="disputes">
+                <h2 style="font-family: var(--ae-font-serif); font-size: 1.4rem; font-weight: 400; color: var(--ae-text-1); margin: var(--s-7) 0 var(--s-3); padding-bottom: var(--s-2); border-bottom: 1px solid rgba(255,255,255,0.05);">7. Paddle Payment Disputes</h2>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">If you believe your payment was processed incorrectly, you can file a dispute directly with Paddle:</p>
+                <ul style="color: var(--ae-text-2); line-height: 1.8; margin: var(--s-3) 0 var(--s-4) var(--s-5);">
+                    <li style="margin-bottom: var(--s-2);">Log into your Paddle account</li>
+                    <li style="margin-bottom: var(--s-2);">Navigate to Transaction History</li>
+                    <li style="margin-bottom: var(--s-2);">Click "Dispute" on the relevant transaction</li>
+                    <li style="margin-bottom: var(--s-2);">Provide supporting documentation</li>
+                </ul>
+            </div>
+
+            <div id="contact">
+                <h2 style="font-family: var(--ae-font-serif); font-size: 1.4rem; font-weight: 400; color: var(--ae-text-1); margin: var(--s-7) 0 var(--s-3); padding-bottom: var(--s-2); border-bottom: 1px solid rgba(255,255,255,0.05);">8. Contact Us</h2>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4);">For any refund inquiries or disputes, contact our support team:</p>
+                <ul style="color: var(--ae-text-2); line-height: 1.8; margin: var(--s-3) 0 var(--s-4) var(--s-5);">
+                    <li style="margin-bottom: var(--s-2);"><strong style="color: var(--ae-text-1);">Email:</strong> <a href="mailto:animeshkukreti@gatekeeper.sbs" style="color: var(--ae-gold);">animeshkukreti@gatekeeper.sbs</a></li>
+                    <li style="margin-bottom: var(--s-2);"><strong style="color: var(--ae-text-1);">Response Time:</strong> Within 24–48 hours</li>
+                </ul>
+                <p style="color: var(--ae-text-2); line-height: 1.8; margin-bottom: var(--s-4); font-size: 0.85rem;"><strong style="color: var(--ae-text-1);">Disclaimer:</strong> AEGIS v1.0 is provided for educational and advisory purposes only. Trading involves substantial risk of loss. Past performance is not indicative of future results. Please trade responsibly and only risk capital you can afford to lose.</p>
+            </div>
+
+        </article>
+    </div>
+
     <footer class="ae-footer">
-  <div class="ae-footer-grid">
-    <div>
-      <div class="ae-footer-brand">AEGIS v1.0</div>
-      <p class="ae-footer-desc">Institutional-grade crypto signal engine. Operated by Animesh Kukreti &amp; Aman Juiyal, Dehradun, Uttarakhand, India.</p>
-    </div>
-    <div>
-      <div class="ae-footer-col-title">Platform</div>
-      <div class="ae-footer-links">
-        <a href="/pricing" class="ae-footer-link">Pricing</a>
-        <a href="/track-record" class="ae-footer-link">Track Record</a>
-        <a href="/reviews" class="ae-footer-link">Reviews</a>
-        <a href="/pitch" class="ae-footer-link">Investor Brief</a>
+      <div class="ae-footer-grid">
+        <div>
+          <div class="ae-footer-brand">AEGIS v1.0</div>
+          <p class="ae-footer-desc">Institutional-grade crypto signal engine. Operated by Animesh Kukreti &amp; Aman Juiyal, Dehradun, Uttarakhand, India.</p>
+        </div>
+        <div>
+          <div class="ae-footer-col-title">Platform</div>
+          <div class="ae-footer-links">
+            <a href="/pricing" class="ae-footer-link">Pricing</a>
+            <a href="/track-record" class="ae-footer-link">Track Record</a>
+            <a href="/reviews" class="ae-footer-link">Reviews</a>
+            <a href="/pitch" class="ae-footer-link">Investor Brief</a>
+          </div>
+        </div>
+        <div>
+          <div class="ae-footer-col-title">Legal</div>
+          <div class="ae-footer-links">
+            <a href="/terms" class="ae-footer-link">Terms of Service</a>
+            <a href="/privacy" class="ae-footer-link">Privacy Policy</a>
+            <a href="/refund-policy" class="ae-footer-link">Refund Policy</a>
+            <a href="/risk-disclosure" class="ae-footer-link">Risk Disclosure</a>
+          </div>
+        </div>
+        <div>
+          <div class="ae-footer-col-title">Contact</div>
+          <div class="ae-footer-links">
+            <a href="mailto:animeshkukreti@gatekeeper.sbs" class="ae-footer-link">animeshkukreti@gatekeeper.sbs</a>
+            <a href="/conditions" class="ae-footer-link">Terms &amp; Conditions</a>
+          </div>
+        </div>
       </div>
-    </div>
-    <div>
-      <div class="ae-footer-col-title">Legal</div>
-      <div class="ae-footer-links">
-        <a href="/terms" class="ae-footer-link">Terms of Service</a>
-        <a href="/privacy" class="ae-footer-link">Privacy Policy</a>
-        <a href="/refund-policy" class="ae-footer-link">Refund Policy</a>
-        <a href="/risk-disclosure" class="ae-footer-link">Risk Disclosure</a>
+      <div class="ae-footer-bottom">
+        <p class="ae-footer-legal">AEGIS v1.0 is a signal-generation tool and does not constitute financial advice. Cryptocurrency trading involves substantial risk of loss. Past signal performance is not indicative of future results. Not regulated by SEBI or any financial authority.</p>
+        <p style="font-size:0.72rem;color:var(--ae-text-4);white-space:nowrap;">&copy; 2026 Animesh Kukreti &amp; Aman Juiyal</p>
       </div>
-    </div>
-    <div>
-      <div class="ae-footer-col-title">Contact</div>
-      <div class="ae-footer-links">
-        <a href="mailto:animeshkukreti@gatekeeper.sbs" class="ae-footer-link">animeshkukreti@gatekeeper.sbs</a>
-        <a href="/conditions" class="ae-footer-link">Terms &amp; Conditions</a>
-      </div>
-    </div>
-  </div>
-  <div class="ae-footer-bottom">
-    <p class="ae-footer-legal">AEGIS v1.0 is a signal-generation tool and does not constitute financial advice. Cryptocurrency trading involves substantial risk of loss. Past signal performance is not indicative of future results. Not regulated by SEBI or any financial authority.</p>
-    <p style="font-size:0.72rem;color:var(--ae-text-4,#555);white-space:nowrap;">&copy; 2026 Animesh Kukreti &amp; Aman Juiyal</p>
-  </div>
-</footer>
+    </footer>
 
-    <script type="module">
-        import { isUserAuthenticated } from '/web/src/scripts/auth.js';
-
-        document.addEventListener('DOMContentLoaded', () => {
-            const portalBtn = document.getElementById('portalBtn');
-            if (isUserAuthenticated()) {
-                portalBtn.innerText = 'Dashboard';
-                portalBtn.addEventListener('click', () => {
-                    window.location.href = '/dashboard';
-                });
-    </script>
-    
 <script>
 (function(){
   var btn=document.getElementById('navHamburger'),drawer=document.getElementById('navMobileDrawer');

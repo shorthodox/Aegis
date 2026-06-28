@@ -35,6 +35,7 @@
     <!-- Tailwind CSS: compiled utilities first, then custom design-system on top -->
     <link rel="stylesheet" href="/web/dist/styles.css?v=1.1">
     <link rel="stylesheet" href="/web/src/styles/main.css">
+    <link rel="stylesheet" href="/web/src/styles/aegis-redesign.css">
     <!-- FontAwesome: async to avoid blocking first paint -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
@@ -62,7 +63,7 @@
             padding: 1rem 1.25rem;
             background: rgba(0,0,0,0.25);
             border-radius: 1rem;
-            border-left: 3px solid var(--room-accent, rgba(0,242,255,0.5));
+            border-left: 3px solid var(--room-accent, var(--ae-gold, #B8966A));
             margin-bottom: 1.5rem;
         }
         .room-header-row {
@@ -77,7 +78,7 @@
             font-weight: 900;
             letter-spacing: 0.1em;
             text-transform: uppercase;
-            color: #fff;
+            color: var(--ae-text-1, #EAE6DF);
             display: flex;
             align-items: center;
             gap: 0.6rem;
@@ -85,25 +86,25 @@
         }
         .room-subtitle {
             font-size: 0.71rem;
-            color: #6b7280;
+            color: var(--ae-text-3, #6b7280);
             margin-top: 0.3rem;
             line-height: 1.4;
         }
         .beginner-tip {
             margin-top: 0.75rem;
             padding: 0.6rem 0.875rem;
-            background: rgba(0,242,255,0.04);
-            border: 1px solid rgba(0,242,255,0.12);
+            background: rgba(74,143,171,0.05);
+            border: 1px solid rgba(74,143,171,0.14);
             border-radius: 0.6rem;
             font-size: 0.69rem;
-            color: #9ca3af;
+            color: var(--ae-text-2, #9ca3af);
             display: flex;
             align-items: flex-start;
             gap: 0.5rem;
             line-height: 1.55;
         }
-        .beginner-tip i { color: rgba(0,242,255,0.5); margin-top: 1px; flex-shrink: 0; }
-        .beginner-tip strong { color: #d1d5db; }
+        .beginner-tip i { color: var(--ae-data, #4A8FAB); margin-top: 1px; flex-shrink: 0; }
+        .beginner-tip strong { color: var(--ae-text-1, #EAE6DF); }
 
         /* ── Sidebar section labels ───────────────────────────────── */
         .sidebar-group-label {
@@ -111,7 +112,7 @@
             font-weight: 800;
             letter-spacing: 0.18em;
             text-transform: uppercase;
-            color: #374151;
+            color: var(--ae-text-4, #374151);
             padding: 0 0.5rem;
             margin-top: 1rem;
             margin-bottom: 0.35rem;
@@ -153,11 +154,11 @@
             width: 1.4rem;
             height: 1.4rem;
             border-radius: 50%;
-            background: rgba(0,242,255,0.12);
-            border: 1px solid rgba(0,242,255,0.25);
+            background: rgba(184,150,106,0.12);
+            border: 1px solid rgba(184,150,106,0.28);
             font-size: 0.65rem;
             font-weight: 900;
-            color: rgba(0,242,255,0.8);
+            color: var(--ae-gold, #B8966A);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -168,14 +169,14 @@
         .flow-step-title {
             font-size: 0.7rem;
             font-weight: 800;
-            color: #e2e8f0;
+            color: var(--ae-text-1, #EAE6DF);
             text-transform: uppercase;
             letter-spacing: 0.06em;
             white-space: nowrap;
         }
         .flow-step-desc {
             font-size: 0.62rem;
-            color: #6b7280;
+            color: var(--ae-text-3, #6b7280);
             margin-top: 0.15rem;
             line-height: 1.4;
         }
@@ -197,7 +198,7 @@
             font-weight: 700;
             letter-spacing: 0.12em;
             text-transform: uppercase;
-            color: #4b5563;
+            color: var(--ae-text-4, #4b5563);
         }
         .tw-stat-icon {
             font-size: 0.65rem;
@@ -210,7 +211,7 @@
         }
         .tw-stat-hint {
             font-size: 0.58rem;
-            color: #374151;
+            color: var(--ae-text-4, #374151);
             margin-top: 0.1rem;
         }
     </style>
