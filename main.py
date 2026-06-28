@@ -4616,6 +4616,17 @@ async def _require_admin(x_admin_key: Optional[str] = Header(None)) -> None:
     if not ADMIN_SECRET or x_admin_key != ADMIN_SECRET:
         raise HTTPException(status_code=403, detail="Admin access required")
 
+@app.delete("/api/admin/clear-users")
+async def clear_users(_: None = Depends(_require_admin)):
+    """Delete all documents in the users collection. Admin only."""
+    users_ref = db.collection("users")
+    docs = users_ref.stream()
+    deleted = 0
+    for doc in docs:
+        doc.reference.delete()
+        deleted += 1
+    return {"deleted": deleted, "message": f"Cleared {deleted} user documents from Firestore"}
+
 @app.get("/api/admin/smtp-test")
 async def smtp_test(_: None = Depends(_require_admin)):
     """Test SMTP connectivity and return exact error — protected by X-Admin-Key header."""
