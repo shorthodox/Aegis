@@ -1065,8 +1065,11 @@ async function loadMoreHistory(symbol, interval) {
 // ── Signal Overview ───────────────────────────────────────────────────────────
 function renderOverview(sig) {
   const entry = sig.entry_price || sig.price;
-  const tp1   = sig.direction === 'SHORT' ? sig.bear_tp1 : sig.bull_tp1;
-  const sl    = sig.suggested_sl || (sig.direction === 'SHORT' ? sig.bull_tp1 : sig.bear_tp1);
+  const isShort = sig.direction === 'SHORT';
+  const tp1   = isShort ? sig.bear_tp1 : sig.bull_tp1;
+  const tp2   = isShort ? sig.bear_tp2 : sig.bull_tp2;
+  const tp3   = isShort ? sig.bear_tp3 : sig.bull_tp3;
+  const sl    = sig.suggested_sl || (isShort ? sig.bull_tp1 : sig.bear_tp1);
   const rr    = sig.risk_reward || '—';
   const dirClass = sig.direction === 'LONG' ? 'text-buy' : sig.direction === 'SHORT' ? 'text-sell' : 'text-hold';
   const sigLabel = (sig.signal_strength || sig.signal || 'HOLD').replace('_', ' ');
@@ -1099,15 +1102,15 @@ function renderOverview(sig) {
       </div>
       <div class="level-row">
         <div class="level-label">TP1</div>
-        <div class="level-val level-tp1">${fmt(tp1 || sig.bear_tp1, 6)}</div>
+        <div class="level-val level-tp1">${fmt(tp1, 6)}</div>
       </div>
       <div class="level-row">
         <div class="level-label">TP2</div>
-        <div class="level-val level-tp2">${fmt(sig.bear_tp2 || sig.bull_tp2, 6)}</div>
+        <div class="level-val level-tp2">${fmt(tp2, 6)}</div>
       </div>
       <div class="level-row">
         <div class="level-label">TP3</div>
-        <div class="level-val level-tp3">${fmt(sig.bear_tp3 || sig.bull_tp3, 6)}</div>
+        <div class="level-val level-tp3">${fmt(tp3, 6)}</div>
       </div>
       <div class="level-row">
         <div class="level-label">Support</div>
