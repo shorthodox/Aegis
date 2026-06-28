@@ -6,7 +6,8 @@ import {
   handleGoogleAuth,
   handleEmailLogin,
   handlePasswordReset,
-  isUserAuthenticated
+  isUserAuthenticated,
+  handleLogout
 } from './auth.js';
 
 export function createSignInModal() {
@@ -212,8 +213,15 @@ async function performGoogleSignin() {
   showLoading();
   try {
     const result = await handleGoogleAuth();
+    if (result.success && result.isNewUser) {
+      // No account exists — reject sign-in and sign them out of Firebase
+      await handleLogout().catch(() => {});
+      hideLoading();
+      showError('signinFormError', 'No account found for this Google account. Please sign up first.');
+      return;
+    }
     if (result.success) {
-      showSuccess('Google sign in successful!');
+      showSuccess('Signed in successfully!');
       window.dispatchEvent(new CustomEvent('authStateChange', { detail: { authenticated: true } }));
       setTimeout(() => {
         closeSignInModal();
