@@ -696,12 +696,6 @@ function applyUserData(userData, token) {
   const isActive = userData.trial_active ?? true;
   trialActive = typeof AuthManager !== 'undefined' ? AuthManager.isTrialValid() : isActive;
 
-  // Phone number is required — prompt any user who doesn't have one on record
-  if (!userData.phone_number) {
-    showPhoneRequiredOverlay(token);
-    return;
-  }
-
   // Show subscription expired overlay for any user without an active paid plan or trial.
   // This covers plan values like 'none', 'expired', 'trial' (with elapsed date), etc.
   const _PAID = ['pro', 'premium', 'intermediate', 'basic', 'pro-dev'];
