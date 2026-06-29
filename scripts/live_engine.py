@@ -357,15 +357,28 @@ class SignalQualityFilter:
         if meta_conf > 75.0:
             score += 10; reasons.append(f'high_edge_score({meta_conf:.1f})')
 
-        # +10: RSI not in extreme exhaustion zone for the proposed direction
-        rsi_ok = (
-            (side == 'BUY'  and rsi < 75) or
-            (side == 'SELL' and rsi > 25)
-        )
-        if rsi_ok:
-            score += 10; reasons.append(f'rsi_ok({rsi:.1f})')
-        else:
-            reasons.append(f'rsi_extreme({rsi:.1f})')
+        # RSI zone scoring — graduated, not binary.
+        # Rewards fresh-momentum entries; penalises late/overbought entries.
+        # is_fake_breakout() hard-blocks RSI > 70 (BUY) / < 30 (SELL) so the
+        # -8 penalty here is a belt-and-suspenders quality deduction.
+        if side == 'BUY':
+            if rsi < 55:
+                score += 10; reasons.append(f'rsi_ideal({rsi:.1f})')    # fresh momentum
+            elif rsi < 65:
+                score += 5;  reasons.append(f'rsi_ok({rsi:.1f})')       # acceptable
+            elif rsi < 70:
+                pass;                                                      # neutral — no bonus
+            else:
+                score -= 8;  reasons.append(f'rsi_overbought({rsi:.1f})')
+        elif side == 'SELL':
+            if rsi > 45:
+                score += 10; reasons.append(f'rsi_ideal({rsi:.1f})')
+            elif rsi > 35:
+                score += 5;  reasons.append(f'rsi_ok({rsi:.1f})')
+            elif rsi > 30:
+                pass
+            else:
+                score -= 8;  reasons.append(f'rsi_oversold({rsi:.1f})')
 
         # +10: funding bias aligns with direction
         funding_align = (
@@ -486,11 +499,22 @@ class SignalQualityFilter:
                 if side == 'SELL' and conf_mom > 6.0 and conf_total > 5.5:
                     return True
 
-            # RSI divergence: signal direction but momentum is near exhaustion
-            if side == 'BUY'  and rsi > 75:
+            # RSI at classic overbought/oversold extremes — momentum structurally exhausted
+            if side == 'BUY'  and rsi > 70:
                 return True
-            if side == 'SELL' and rsi < 25:
+            if side == 'SELL' and rsi < 30:
                 return True
+
+            # RSI deceleration: elevated RSI that is now rolling over is the classic
+            # "0.5-1% up then reverses" pattern — momentum was already peaking when
+            # the signal fired.  rsi_slope < 0 means RSI is falling despite being
+            # elevated; rsi_acceleration < 0 means it is speeding up downward.
+            rsi_slope = _f('rsi_slope', 0.0)
+            rsi_accel = _f('rsi_acceleration', 0.0)
+            if side == 'BUY' and rsi > 60 and rsi_slope < -0.3 and rsi_accel < 0:
+                return True   # overbought + decelerating = entry is likely too late
+            if side == 'SELL' and rsi < 40 and rsi_slope > 0.3 and rsi_accel > 0:
+                return True   # oversold + recovering = entry is likely too late
 
             # LSTM exhaustion: sequence analysis suggests momentum is collapsing
             if bool(result.get('lstm_available', False)):
