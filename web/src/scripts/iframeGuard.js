@@ -12,11 +12,22 @@ const _loaded = new Set();
 export function loadThirdPartyScript(src, { timeout = LOAD_TIMEOUT_MS } = {}) {
   if (_loaded.has(src)) return Promise.resolve();
 
-  // If a static tag already exists and loaded, mark it and resolve immediately
+  // If a script tag already exists but is still loading, wait for it instead
+  // of resolving immediately (which would leave window.Razorpay undefined).
   const existing = document.querySelector(`script[src="${src}"]`);
   if (existing) {
-    _loaded.add(src);
-    return Promise.resolve();
+    if (existing.dataset.loaded === 'true') {
+      _loaded.add(src);
+      return Promise.resolve();
+    }
+    // Script tag exists but hasn't fired load yet — wait for it
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new Error(`Script load timeout (existing tag): ${src}`));
+      }, timeout);
+      existing.addEventListener('load', () => { clearTimeout(timer); _loaded.add(src); resolve(); });
+      existing.addEventListener('error', () => { clearTimeout(timer); reject(new Error(`Script load failed (existing tag): ${src}`)); });
+    });
   }
 
   return new Promise((resolve, reject) => {
@@ -31,6 +42,7 @@ export function loadThirdPartyScript(src, { timeout = LOAD_TIMEOUT_MS } = {}) {
 
     script.addEventListener('load', () => {
       clearTimeout(timer);
+      script.dataset.loaded = 'true';
       _loaded.add(src);
       resolve();
     });

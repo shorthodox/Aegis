@@ -2,6 +2,24 @@
 // Works with server endpoints: POST /auth/login and POST /create-subscription
 import { loadThirdPartyScript } from './iframeGuard.js';
 
+function _showPaymentError(msg) {
+  // In-page toast — visible even if browser suppresses alert() (e.g. on mobile)
+  const existing = document.getElementById('aegis-pay-error');
+  if (existing) existing.remove();
+  const el = document.createElement('div');
+  el.id = 'aegis-pay-error';
+  el.style.cssText = [
+    'position:fixed', 'bottom:24px', 'left:50%', 'transform:translateX(-50%)',
+    'z-index:100001', 'background:#1a0a0a', 'border:1px solid #ff5555',
+    'color:#ff9999', 'font-family:monospace', 'font-size:13px',
+    'padding:14px 20px', 'border-radius:8px', 'max-width:90vw',
+    'box-shadow:0 4px 24px rgba(0,0,0,0.7)', 'text-align:center',
+  ].join(';');
+  el.textContent = '⚠ ' + msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 8000);
+}
+
 function showPaymentLoader() {
   if (document.getElementById('aegis-pay-loader')) return;
   const el = document.createElement('div');
@@ -203,7 +221,7 @@ async function subscribeToPlan(planType) {
     const keyId = config?.razorpay?.key_id;
     if (!keyId) {
       hidePaymentLoader();
-      alert('Payment gateway is not configured. Please contact support.');
+      _showPaymentError('Payment gateway is not configured. Please contact support.');
       return;
     }
 
@@ -216,12 +234,12 @@ async function subscribeToPlan(planType) {
     if (!orderResp.ok) {
       hidePaymentLoader();
       if (orderResp.status === 401 || orderResp.status === 403) {
-        alert('Your session has expired. Please sign in again.');
+        _showPaymentError('Your session has expired. Please sign in again.');
         window.location.href = '/';
         return;
       }
       const err = await orderResp.json().catch(() => ({}));
-      alert('Could not create payment order. ' + (err.detail || 'Please try again.'));
+      _showPaymentError('Could not create payment order. ' + (err.detail || 'Please try again.'));
       return;
     }
     const orderData = await orderResp.json();
@@ -232,7 +250,15 @@ async function subscribeToPlan(planType) {
     } catch (sdkErr) {
       hidePaymentLoader();
       console.error('[Razorpay] Checkout script failed to load:', sdkErr);
-      alert('Payment gateway failed to load. Please disable ad-blockers and refresh.');
+      _showPaymentError('Payment gateway failed to load. Please disable ad-blockers and try again.');
+      return;
+    }
+
+    // Guard: ensure Razorpay SDK is actually available after script load
+    if (typeof window.Razorpay !== 'function') {
+      hidePaymentLoader();
+      console.error('[Razorpay] window.Razorpay not defined after script load');
+      _showPaymentError('Payment gateway unavailable. Please refresh the page and try again.');
       return;
     }
 
@@ -263,14 +289,14 @@ async function subscribeToPlan(planType) {
             });
             const verifyData = await verifyResp.json().catch(() => ({}));
             if (verifyResp.ok && verifyData.status === 'success') {
-              alert('Payment successful! Redirecting to your dashboard...');
+              _showPaymentError('✓ Payment successful! Redirecting to your dashboard...');
               window.location.href = '/dashboard';
             } else {
-              alert('Payment verification failed. Please contact support with your payment ID: ' + response.razorpay_payment_id);
+              _showPaymentError('Payment verification failed. Contact support with payment ID: ' + response.razorpay_payment_id);
             }
           } catch (verifyErr) {
             console.error('[Razorpay] Verify error:', verifyErr);
-            alert('Network error during verification. Contact support with payment ID: ' + response.razorpay_payment_id);
+            _showPaymentError('Network error during verification. Contact support with payment ID: ' + response.razorpay_payment_id);
           }
           resolve();
         },
@@ -283,7 +309,7 @@ async function subscribeToPlan(planType) {
       });
       rzp.on('payment.failed', (response) => {
         console.error('[Razorpay] Payment failed:', response.error);
-        alert('Payment failed: ' + (response.error?.description || 'Please try again.'));
+        _showPaymentError('Payment failed: ' + (response.error?.description || 'Please try again.'));
         resolve();
       });
       rzp.open();
@@ -291,7 +317,7 @@ async function subscribeToPlan(planType) {
   } catch (err) {
     hidePaymentLoader();
     console.error('subscribeToPlan error', err);
-    alert('Network error while creating subscription');
+    _showPaymentError('Network error while creating subscription. Please try again.');
   }
 }
 
