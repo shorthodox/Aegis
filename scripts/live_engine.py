@@ -1845,12 +1845,12 @@ class LiveEngine:
                     # bias, RANGING penalty (-15), low-volume penalty (-10), macro
                     # conflict penalty (-15).  Previously this was dead code
                     # (quality_score was set to edge_score, fake_breakout = False).
-                    _CONTEXT_FLOOR = 45.0
+                    _CONTEXT_FLOOR = 70.0
                     # When HMM detects elevated regime-transition risk, raise the
                     # context floor proportionally.  A transition risk > 0.50 means
                     # the current regime may flip mid-trade; entries at these points
                     # have systematically lower expected win rates.
-                    # Max adjustment: +20 pts at trans_risk = 1.0 → floor = 65.
+                    # Max adjustment: +20 pts at trans_risk = 1.0 → floor = 90.
                     if _hmm_available and _hmm_trans_risk > 0.50:
                         _trans_adj    = min((_hmm_trans_risk - 0.50) * 40.0, 20.0)
                         _CONTEXT_FLOOR = _CONTEXT_FLOOR + _trans_adj
