@@ -439,6 +439,22 @@ class SignalQualityFilter:
             if lstm_vol > 0.70:
                 score += 8; reasons.append(f'lstm_vol_expansion({lstm_vol:.2f})')
 
+        # ── MACD momentum alignment / conflict ────────────────────────────────
+        # macd_signal is 'BULLISH' | 'BEARISH' | 'NEUTRAL' — same field already
+        # consumed by MarketRegimeDetector, so no extra computation.
+        # MACD (EMA crossover) is independent of RSI (price-change velocity),
+        # making it a genuinely uncorrelated confirmation source.
+        # Penalty for conflict (-12) > bonus for alignment (+8): conservative
+        # asymmetry — blocking a false entry matters more than confirming a valid one.
+        macd_sig = str(result.get('macd_signal', 'NEUTRAL') or 'NEUTRAL').upper()
+        if macd_sig != 'NEUTRAL':
+            if (side == 'BUY'  and macd_sig == 'BULLISH') or \
+               (side == 'SELL' and macd_sig == 'BEARISH'):
+                score += 8;  reasons.append(f'macd_aligned({macd_sig})')
+            elif (side == 'BUY'  and macd_sig == 'BEARISH') or \
+                 (side == 'SELL' and macd_sig == 'BULLISH'):
+                score -= 12; reasons.append(f'macd_conflict({macd_sig})')
+
         return round(max(0.0, min(score, 100.0)), 1), reasons
 
     def is_fake_breakout(self, result: Dict[str, Any], side: str) -> bool:
@@ -721,7 +737,7 @@ class PerformanceTracker:
     def safe_mode_active(self) -> bool:
         """
         Return True if the last SAFE_MODE_LOSS global trades were all losses.
-        When in safe-mode, low-quality signals (< 70) are blocked to protect capital.
+        When in safe-mode, the edge-score floor is raised from 70 → 80 (Gate 3.5).
         """
         recent = list(self._global)
         if len(recent) < self.SAFE_MODE_LOSS:
@@ -1027,6 +1043,7 @@ class PortfolioGuard:
                 self._sym_to_cluster[s] = cluster
         # Runtime state (populated from wallet)
         self._open_positions: Dict[str, str] = {}   # symbol → direction ('LONG'/'SHORT')
+        self._deployed_usdt:  float          = 0.0  # sum of all open position_values
 
     def sync_from_wallet(self, open_positions: Dict[str, Any]) -> None:
         """Sync open positions from the VirtualWallet on every scan cycle."""
@@ -1034,6 +1051,7 @@ class PortfolioGuard:
             sym: pos.direction
             for sym, pos in open_positions.items()
         }
+        self._deployed_usdt = sum(pos.position_value for pos in open_positions.values())
 
     def _cluster_open_count(self, cluster: str) -> int:
         cluster_syms = set(self._CLUSTERS.get(cluster, []))
@@ -1063,12 +1081,12 @@ class PortfolioGuard:
                         f'CLUSTER_CAP: {cluster} already has {n_in_cluster} '
                         f'open ({", ".join(open_in_cluster)})')
 
-        # Capital deployment cap
+        # Capital deployment cap — sum actual deployed + new position vs balance.
         if wallet_balance > 0:
-            deployed_pct = (self._total_open() * position_value) / wallet_balance
+            deployed_pct = (self._deployed_usdt + position_value) / wallet_balance
             if deployed_pct >= self.MAX_CAPITAL_PCT:
                 return (False,
-                        f'CAPITAL_CAP: {deployed_pct:.0%} already deployed '
+                        f'CAPITAL_CAP: {deployed_pct:.0%} would be deployed '
                         f'(max {self.MAX_CAPITAL_PCT:.0%})')
 
         return True, 'OK'
@@ -1322,6 +1340,11 @@ class LiveEngine:
     CONFLUENCE_BUY_MIN    = 6.0   # need mildly bullish consensus (≥60th pct)
     CONFLUENCE_SELL_MAX   = 4.0   # need mildly bearish consensus (≤40th pct)
 
+    # Signal stability: require N consecutive same-direction signals before entry.
+    # Signals with edge_score >= SIGNAL_BYPASS_EDGE skip this gate (high conviction).
+    SIGNAL_STABILITY_WINDOW = 2
+    SIGNAL_BYPASS_EDGE      = 85.0
+
     # Regimes where entry is unconditionally blocked
     NO_TRADE_REGIMES: set = {_REGIME_LIQUIDITY_TRAP, _REGIME_RANGING}
 
@@ -1347,6 +1370,9 @@ class LiveEngine:
         self._open_time:        Dict[str, float] = {}
         self._last_close_time:  Dict[str, float] = {}
         self._last_close_side:  Dict[str, str]   = {}
+
+        # Signal direction history for stability gate (symbol → last N directions)
+        self._signal_history:   Dict[str, Deque[str]] = {}
 
         # Partial-TP hit tracking (one flag per level per symbol)
         self._tp1_hit:    Dict[str, bool]  = {}   # break-even triggered after TP1
@@ -1672,6 +1698,17 @@ class LiveEngine:
                     )
 
             new_side      = result.get('side', 'FLAT')
+
+            # Track signal direction history for the stability gate.
+            # HOLD/FLAT resets the counter; directional signals accumulate.
+            if new_side in ('BUY', 'SELL'):
+                if symbol not in self._signal_history:
+                    self._signal_history[symbol] = deque(maxlen=self.SIGNAL_STABILITY_WINDOW)
+                self._signal_history[symbol].append(new_side)
+            elif new_side in ('FLAT', 'HOLD', ''):
+                if symbol in self._signal_history:
+                    self._signal_history[symbol].clear()
+
             quality_score, _quality_reasons = self.quality_filter.score_signal(
                 result, regime, new_side)
             fake_breakout = self.quality_filter.is_fake_breakout(result, new_side)
@@ -1758,11 +1795,19 @@ class LiveEngine:
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
 
-                    # ── Gate 3: model edge score floor ───────────────────────
+                    # ── Gate 3: model edge score floor (drift-adjusted) ──────
+                    # confidence_penalty() returns 0.0–0.10 in probability space;
+                    # ×100 converts to edge-score points (floor raised 0–10 pts).
+                    # WARNING drift (10–20 pp below benchmark) thus proportionally
+                    # tightens the gate without a hard block — CRITICAL still blocks
+                    # entirely via Gate 0 (drift_monitor.is_blocked).
                     _model_quality = min(float(result.get('edge_score', 0.0)), 100.0)
-                    if _model_quality < SignalQualityFilter.MIN_QUALITY_SCORE:
+                    _drift_pen     = self.drift_monitor.confidence_penalty(symbol) * 100.0
+                    _edge_floor    = SignalQualityFilter.MIN_QUALITY_SCORE + _drift_pen
+                    if _model_quality < _edge_floor:
+                        _drift_note = f' (drift+{_drift_pen:.1f}pts)' if _drift_pen > 0 else ''
                         print(f'[{symbol}] QUALITY_GATE blocked {new_side}: '
-                              f'edge={_model_quality:.1f} < {SignalQualityFilter.MIN_QUALITY_SCORE:.0f}')
+                              f'edge={_model_quality:.1f} < {_edge_floor:.1f}{_drift_note}')
                         if symbol in self.last_signals:
                             self.last_signals[symbol]['fire']            = False
                             self.last_signals[symbol]['signal']          = 'HOLD'
@@ -1777,10 +1822,21 @@ class LiveEngine:
                     # conflict penalty (-15).  Previously this was dead code
                     # (quality_score was set to edge_score, fake_breakout = False).
                     _CONTEXT_FLOOR = 45.0
+                    # When HMM detects elevated regime-transition risk, raise the
+                    # context floor proportionally.  A transition risk > 0.50 means
+                    # the current regime may flip mid-trade; entries at these points
+                    # have systematically lower expected win rates.
+                    # Max adjustment: +20 pts at trans_risk = 1.0 → floor = 65.
+                    if _hmm_available and _hmm_trans_risk > 0.50:
+                        _trans_adj    = min((_hmm_trans_risk - 0.50) * 40.0, 20.0)
+                        _CONTEXT_FLOOR = _CONTEXT_FLOOR + _trans_adj
                     if quality_score < _CONTEXT_FLOOR:
                         _qr_str = ', '.join(_quality_reasons[:4]) if _quality_reasons else 'n/a'
+                        _trans_note = (f' hmm_trans={_hmm_trans_risk:.2f}'
+                                       if _hmm_available and _hmm_trans_risk > 0.50 else '')
                         print(f'[{symbol}] CONTEXT_GATE blocked {new_side}: '
-                              f'ctx={quality_score:.1f} < {_CONTEXT_FLOOR} [{_qr_str}]')
+                              f'ctx={quality_score:.1f} < {_CONTEXT_FLOOR:.1f}'
+                              f'{_trans_note} [{_qr_str}]')
                         if symbol in self.last_signals:
                             self.last_signals[symbol]['fire']            = False
                             self.last_signals[symbol]['signal']          = 'HOLD'
@@ -1801,10 +1857,30 @@ class LiveEngine:
                     # floor to 80 to protect capital during drawdowns.
                     if self.perf_tracker.safe_mode_active() and _model_quality < 80.0:
                         print(f'[{symbol}] SAFE-MODE blocked {new_side}: '
-                              f'edge={_model_quality:.1f} < 70 (elevated floor)')
+                              f'edge={_model_quality:.1f} < 80 (elevated floor)')
                         if symbol in self.last_signals:
                             self.last_signals[symbol]['fire']   = False
                             self.last_signals[symbol]['signal'] = 'HOLD'
+                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                        return
+
+                    # ── Gate 3.8: signal stability ────────────────────────────
+                    # Require N consecutive same-direction model outputs before entry.
+                    # Very high conviction signals (edge >= SIGNAL_BYPASS_EDGE) skip
+                    # this gate — they're strong enough to act on immediately.
+                    _sig_hist = list(self._signal_history.get(symbol, []))
+                    _is_stable = (
+                        len(_sig_hist) >= self.SIGNAL_STABILITY_WINDOW and
+                        all(s == new_side for s in _sig_hist)
+                    )
+                    if not _is_stable and _model_quality < self.SIGNAL_BYPASS_EDGE:
+                        print(f'[{symbol}] STABILITY_GATE blocked {new_side}: '
+                              f'{len(_sig_hist)}/{self.SIGNAL_STABILITY_WINDOW} '
+                              f'consecutive cycles (edge={_model_quality:.1f})')
+                        if symbol in self.last_signals:
+                            self.last_signals[symbol]['fire']              = False
+                            self.last_signals[symbol]['signal']            = 'HOLD'
+                            self.last_signals[symbol]['stability_blocked'] = True
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
 
@@ -2061,6 +2137,24 @@ class LiveEngine:
                 print(f'[{symbol}] TP1_HIT @ {check_price:.6g} — '
                       f'SL moved to break-even ({pos.entry_price:.6g})')
 
+        # ── 7b. TP1 re-cross exit — protect profit after TP1 is secured ─────
+        # After TP1 hit (SL at break-even), if price crosses back below TP1
+        # (LONG) or above TP1 (SHORT) AND the model is no longer confirming the
+        # original direction, close at the TP1 level.  This locks in the partial
+        # TP1 gain instead of waiting for price to grind all the way to break-even.
+        # Inactive after TP2 — the trailing stop manages profit protection then.
+        if (self._tp1_hit.get(symbol, False) and
+                not self._tp2_hit.get(symbol, False)):
+            _model_side  = str(result.get('side', 'FLAT') or 'FLAT').upper()
+            _orig_dir_sig = 'BUY' if pos.direction == 'LONG' else 'SELL'
+            _tp1_recross = (
+                (pos.direction == 'LONG'  and check_price < pos.take_profit_1) or
+                (pos.direction == 'SHORT' and check_price > pos.take_profit_1)
+            )
+            if _tp1_recross and _model_side != _orig_dir_sig:
+                _close('TP1_RECROSS', exit_px=pos.take_profit_1)
+                return
+
         # ── 8. Model-reversal exit (dynamic exit on opposing signal) ─────────
         side = result.get('side', 'FLAT')
         fire = bool(result.get('fire', False))
@@ -2072,8 +2166,20 @@ class LiveEngine:
             # Require minimum hold unless TP1 is already secured.
             _reversal_min = 0 if self._tp1_hit.get(symbol, False) else self.MIN_HOLD_SECONDS
             if held >= _reversal_min:
-                _close('MODEL_REVERSAL_TP')
-                return
+                # Guard against low-conviction one-candle noise without depending on
+                # consecutive-cycle counting (which breaks when the model outputs FLAT
+                # between reversal cycles, clearing _signal_history each time).
+                # Instead, require the reversal signal to meet the same quality floor
+                # used for entry (edge_score >= MIN_QUALITY_SCORE = 70).
+                # After TP1 (SL at break-even, profit secured): close immediately.
+                _tp1_secured = self._tp1_hit.get(symbol, False)
+                _rev_edge    = float(result.get('edge_score', 0.0))
+                if _tp1_secured or _rev_edge >= SignalQualityFilter.MIN_QUALITY_SCORE:
+                    _close('MODEL_REVERSAL_TP')
+                    return
+                print(f'[{symbol}] REVERSAL_GATE deferred {pos.direction}→{side}: '
+                      f'reversal edge={_rev_edge:.1f} < '
+                      f'{SignalQualityFilter.MIN_QUALITY_SCORE:.0f} (tp1_secured=False)')
 
         # ── 9. Stop loss / break-even SL ─────────────────────────────────────
         # Before TP1: uses the original ATR-based SL.
