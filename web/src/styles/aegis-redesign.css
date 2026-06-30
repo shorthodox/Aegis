@@ -996,6 +996,10 @@ body.dashboard-body .glass-panel {
   }
 }
 
+@media (max-width: 900px) {
+  #authButtonContainer { display: none !important; }
+}
+
 @media (max-width: 768px) {
   .ae-nav-links { display: none; }
   .ae-grid-2,
