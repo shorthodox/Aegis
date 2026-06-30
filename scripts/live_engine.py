@@ -601,10 +601,10 @@ class DynamicRiskEngine:
     ATR_SL_MULTIPLIER = 1.2    # SL distance = ATR × this
 
     TP1_MULTIPLIER    = 0.55   # 20 % partial close — fires early to lock break-even fast
-    TP2_MULTIPLIER    = 1.8    # 20 % partial close — activate trailing stop
-    TP3_MULTIPLIER    = 2.7    # 20 % partial close — used for RR validation
-    TP4_MULTIPLIER    = 3.8    # 20 % partial close
-    TP5_MULTIPLIER    = 5.2    # close remaining position
+    TP2_MULTIPLIER    = 2.3    # 20 % partial close — activate trailing stop
+    TP3_MULTIPLIER    = 3.6    # 20 % partial close — used for RR validation
+    TP4_MULTIPLIER    = 5.4    # 20 % partial close
+    TP5_MULTIPLIER    = 8.0    # close remaining position — extended runner target
 
     MIN_RISK_REWARD   = 2.0    # Reward / Risk using TP3 as target; trades below this are rejected
 
@@ -1411,8 +1411,8 @@ class LiveEngine:
     MAX_CONCURRENT        = 8
     HOURS_CONTEXT         = 300
     MIN_HOLD_SECONDS      = 3_600    # 1 h minimum hold before model-reversal exit
-    COOLDOWN_SECONDS      = 3_600    # 1 h post-close cooldown
-    FLIP_COOLDOWN_SECONDS = 7_200    # 2 h extra cooldown when new signal flips direction
+    COOLDOWN_SECONDS      = 1_800    # 30 min post-close cooldown
+    FLIP_COOLDOWN_SECONDS = 3_600    # 1 h extra cooldown when new signal flips direction
     MAX_HOLD_SECONDS      = 86_400   # 24 h zombie guard
     CONFLUENCE_BUY_MIN    = 6.0   # need mildly bullish consensus (≥60th pct)
     CONFLUENCE_SELL_MAX   = 4.0   # need mildly bearish consensus (≤40th pct)
@@ -1782,14 +1782,16 @@ class LiveEngine:
             new_side      = result.get('side', 'FLAT')
 
             # Track signal direction history for the stability gate.
-            # HOLD/FLAT resets the counter; directional signals accumulate.
+            # Only directional signals accumulate; FLAT/HOLD is ignored so that
+            # BUY→FLAT→BUY doesn't reset the counter (volatile markets produce
+            # intermittent FLAT cycles that previously erased valid setups).
+            # A genuine direction flip (BUY→SELL) is handled by the stability
+            # check itself: all(s == new_side) will fail if the deque has the
+            # opposite side, so no explicit clear is needed.
             if new_side in ('BUY', 'SELL'):
                 if symbol not in self._signal_history:
                     self._signal_history[symbol] = deque(maxlen=self.SIGNAL_STABILITY_WINDOW)
                 self._signal_history[symbol].append(new_side)
-            elif new_side in ('FLAT', 'HOLD', ''):
-                if symbol in self._signal_history:
-                    self._signal_history[symbol].clear()
 
             quality_score, _quality_reasons = self.quality_filter.score_signal(
                 result, regime, new_side)
