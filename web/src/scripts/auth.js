@@ -164,6 +164,15 @@ export async function handleGoogleAuth() {
   }
 }
 
+// Sign out the current Firebase session without redirecting — used to clean up
+// an incomplete Google signup when the user is blocked (e.g. duplicate phone).
+export async function cancelIncompleteGoogleSignup() {
+  try { await signOut(auth); } catch (_) {}
+  localStorage.removeItem('authenticated');
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('authToken');
+}
+
 // Called after phone OTP is verified for a new Google user.
 export async function completeGoogleSignupWithPhone(user, phone) {
   try {
@@ -370,6 +379,21 @@ export async function handleEmailSignup(email, password, displayName, signupToke
       });
       if (provisionRes.ok) {
         sessionStorage.removeItem('otp_signup_token');
+      } else if (provisionRes.status === 409) {
+        // Backend detected a duplicate phone number and has already disabled the
+        // Firebase account. Sign out the local session so the user can retry cleanly.
+        const errData = await provisionRes.json().catch(() => ({}));
+        try { await signOut(auth); } catch (_) {}
+        localStorage.removeItem('authenticated');
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('authToken');
+        return {
+          success: false,
+          message: errData.detail || 'This phone number is already registered to another account. Please use a different number.',
+        };
+      } else {
+        const errData = await provisionRes.json().catch(() => ({}));
+        console.warn('[signup] Backend provision failed (non-fatal):', provisionRes.status, errData.detail || '');
       }
     } catch (provisionErr) {
       console.warn('[signup] Backend provision failed (non-fatal):', provisionErr.message);

@@ -10,6 +10,7 @@ import {
   sendOTPForSignup,
   verifyOTPForSignup,
   completeGoogleSignupWithPhone,
+  cancelIncompleteGoogleSignup,
 } from './auth.js';
 
 // Pending form data stored between step 1 and step 2
@@ -506,7 +507,13 @@ async function handleGooglePhoneSubmit(e) {
   const available = await checkPhoneUnique(mobile);
   if (!available) {
     setLoading(false);
-    return showError('googleMobileError', 'This mobile number is already registered to another account');
+    // Sign out the Firebase session for this new Google user. If we don't,
+    // onAuthStateChanged fires as "authenticated" and breaks the page UI state
+    // (e.g. the Sign Up button disappears and buttons stop responding).
+    cancelIncompleteGoogleSignup().catch(() => {});
+    _pendingGoogleUser = null;
+    _flow = 'email';
+    return showError('googleMobileError', 'This mobile number is already registered to another account. Please sign in to the existing account instead.');
   }
 
   // Send OTP via backend (email fallback if SMS unavailable)
@@ -598,10 +605,24 @@ export function openSignUpModal() {
 export function closeSignUpModal() {
   const modal = document.getElementById('signupModal');
   if (modal) {
+    // Always clear the loading overlay — prevents it from blocking the page
+    // if the modal is closed while a request is in-flight.
+    setLoading(false);
+
+    // If a Google signup was started but never completed (user got blocked on
+    // phone step or manually closed), sign out the Firebase session so it doesn't
+    // leak into the page's auth state and lock up navigation/buttons.
+    if (_flow === 'google' && _pendingGoogleUser) {
+      cancelIncompleteGoogleSignup().catch(() => {});
+    }
+
     modal.classList.remove('active');
     document.body.style.overflow = 'auto';
     document.getElementById('signupEmailForm')?.reset();
+    document.getElementById('googlePhoneForm')?.reset();
     clearError('signupFormError');
+    clearError('googleMobileError');
+    clearError('googlePhoneFormError');
     clearResendTimer();
     _flow = 'email';
     _pendingGoogleUser = null;
