@@ -186,6 +186,16 @@
     #navHamburger:hover { border-color:var(--ae-border-bright); color:var(--ae-text-1); }
     @media (max-width:900px) { .ae-nav-links { display:none !important; } #navHamburger { display:flex !important; } }
   </style>
+  <script>
+    // Auth guard — redirect unauthenticated visitors before rendering anything
+    (function () {
+      var token = localStorage.getItem('access_token') || localStorage.getItem('authToken');
+      var authed = localStorage.getItem('authenticated');
+      if (!token && authed !== 'true') {
+        window.location.replace('/');
+      }
+    })();
+  </script>
 </head>
 <body>
 
@@ -196,7 +206,6 @@
     </a>
     <nav class="ae-nav-links" aria-label="Main navigation">
       <a href="/" class="ae-nav-link">Home</a>
-      <a href="/signals" class="ae-nav-link active">Signals</a>
       <a href="/pricing" class="ae-nav-link">Pricing</a>
       <a href="/track-record" class="ae-nav-link">Track Record</a>
       <a href="/reviews" class="ae-nav-link">Reviews</a>
@@ -215,7 +224,6 @@
 
 <div class="ae-mobile-drawer" id="navMobileDrawer" aria-hidden="true">
   <a href="/" class="ae-mobile-link">Home</a>
-  <a href="/signals" class="ae-mobile-link mobile-active">Signals</a>
   <a href="/pricing" class="ae-mobile-link">Pricing</a>
   <a href="/track-record" class="ae-mobile-link">Track Record</a>
   <a href="/reviews" class="ae-mobile-link">Reviews</a>
