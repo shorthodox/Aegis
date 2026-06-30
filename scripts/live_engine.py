@@ -3300,8 +3300,11 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
         s       = wallet.summary
         wr      = round(s['win_rate'] * 100, 1) if s['total_trades'] else 0.0
         warmup  = engine.bootstrap_done >= engine.bootstrap_total
-        status  = '[bold green]● LIVE[/]' if warmup \
-                  else f'[yellow]⏳ WARMUP {engine.bootstrap_done}/{engine.bootstrap_total}[/]'
+        if warmup:
+            status = '[bold green]● LIVE[/]'
+        else:
+            _ready = len(engine.last_signals)
+            status = f'[yellow]⏳ WARMING UP  {_ready}/{engine.bootstrap_total} tokens ready[/]'
         now_utc = datetime.now(timezone.utc).strftime('%Y-%m-%d  %H:%M:%S UTC')
         perf    = engine.perf_tracker.get_performance_summary()
         safe_tag = '[bold red]  ⚠ SAFE-MODE[/]' if perf['safe_mode'] else ''
