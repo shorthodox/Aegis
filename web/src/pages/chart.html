@@ -27,13 +27,13 @@
 
 :root {
       --bg-deep: #050505; --bg-void: #0a0a0c;
-      --glass: rgba(15,23,42,0.75); --glass-border: rgba(74,143,171,0.10);
-      --cyan: #4a8fab; --green: #4a7c68; --red: #ff0055; --orange: #ff8c00;
+      --glass: rgba(15,23,42,0.75); --glass-border: rgba(184,150,106,0.12);
+      --cyan: #B8966A; --green: #4a7c68; --red: #ff0055; --orange: #ff8c00;
       --dim: #94a3b8; --white: #ffffff; --purple: #a855f7;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { background: var(--bg-deep); color: var(--white); font-family: 'Inter', sans-serif; min-height: 100vh; }
-    body { background-image: radial-gradient(circle at 20% 20%, rgba(74,143,171,0.03) 0%, transparent 60%); }
+    body { background-image: radial-gradient(circle at 20% 20%, rgba(184,150,106,0.03) 0%, transparent 60%); }
 
     /* ── NAV ── */
     .chart-nav {
@@ -50,10 +50,10 @@
       background: var(--glass); border: 1px solid var(--glass-border); color: var(--white);
       padding: 8px 36px 8px 14px; border-radius: 8px; font-family: 'JetBrains Mono', monospace;
       font-size: 14px; font-weight: 600; cursor: pointer; appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2300f2ff' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23B8966A' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
       background-repeat: no-repeat; background-position: right 12px center;
     }
-    #token-select:focus { outline: none; border-color: #4a8fab; }
+    #token-select:focus { outline: none; border-color: #B8966A; }
     .signal-pill {
       padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;
       letter-spacing: 0.5px; text-transform: uppercase;
@@ -77,7 +77,7 @@
     }
     .card-title {
       font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
-      text-transform: uppercase; color: #4a8fab; margin-bottom: 14px;
+      text-transform: uppercase; color: #B8966A; margin-bottom: 14px;
       display: flex; align-items: center; gap: 8px;
     }
     .card-title::after { content: ''; flex: 1; height: 1px; background: var(--glass-border); }
@@ -92,24 +92,24 @@
 
     /* ── SIGNAL OVERVIEW ── */
     .sig-symbol { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 700; }
-    .sig-confidence { font-size: 48px; font-weight: 800; color: #4a8fab; line-height: 1; }
+    .sig-confidence { font-size: 48px; font-weight: 800; color: #B8966A; line-height: 1; }
     .sig-conf-label { font-size: 11px; color: var(--dim); margin-top: 2px; }
     .levels-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
     .level-row { display: flex; flex-direction: column; gap: 2px; }
     .level-label { font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.8px; }
     .level-val { font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 600; }
-    .level-entry { color: #4a8fab; }
+    .level-entry { color: #B8966A; }
     .level-tp1   { color: var(--green); }
     .level-tp2   { color: #00cc6a; }
     .level-tp3   { color: #009950; }
     .level-sl    { color: var(--red); }
     .rr-badge {
-      margin-top: 12px; padding: 6px 12px; background: rgba(74,143,171,0.08);
-      border: 1px solid rgba(74,143,171,0.2); border-radius: 8px;
+      margin-top: 12px; padding: 6px 12px; background: rgba(184,150,106,0.08);
+      border: 1px solid rgba(184,150,106,0.22); border-radius: 8px;
       display: flex; align-items: center; justify-content: space-between;
     }
     .rr-label { font-size: 11px; color: var(--dim); }
-    .rr-val { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 700; color: #4a8fab; }
+    .rr-val { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 700; color: #B8966A; }
 
     /* ── CONFLUENCE BARS ── */
     .conf-row { margin-bottom: 12px; }
@@ -166,7 +166,7 @@
       border-bottom: 1px solid rgba(255,255,255,0.04);
     }
     .story-item:last-child { border-bottom: none; }
-    .story-dot { width: 6px; height: 6px; border-radius: 50%; background: #4a8fab; flex-shrink: 0; margin-top: 6px; }
+    .story-dot { width: 6px; height: 6px; border-radius: 50%; background: #B8966A; flex-shrink: 0; margin-top: 6px; }
     .story-text { font-size: 13px; color: var(--dim); line-height: 1.6; }
     .story-text strong { color: var(--white); }
 
@@ -192,8 +192,8 @@
 
     /* ── SUMMARY CARD ── */
     .summary-box {
-      background: linear-gradient(135deg, rgba(74,143,171,0.06), rgba(168,85,247,0.04));
-      border: 1px solid rgba(74,143,171,0.15); border-radius: 12px; padding: 18px 20px;
+      background: linear-gradient(135deg, rgba(184,150,106,0.05), rgba(168,85,247,0.03));
+      border: 1px solid rgba(184,150,106,0.18); border-radius: 12px; padding: 18px 20px;
       margin: 0 20px 20px; font-size: 14px; line-height: 1.7; color: var(--dim);
       max-width: calc(1600px - 40px); margin-left: auto; margin-right: auto;
     }
@@ -216,8 +216,8 @@
     #nav-auth-hint {
       display: none; align-items: center; gap: 8px;
       padding: 5px 12px 5px 10px; border-radius: 20px;
-      background: rgba(74,143,171,0.07); border: 1px solid rgba(74,143,171,0.2);
-      font-size: 11px; color: #4a8fab; font-weight: 600;
+      background: rgba(184,150,106,0.08); border: 1px solid rgba(184,150,106,0.22);
+      font-size: 11px; color: #B8966A; font-weight: 600;
     }
 
     /* ── TIMEFRAME BAR ── */
@@ -226,8 +226,8 @@
       font-family: 'JetBrains Mono', monospace; cursor: pointer; border: 1px solid rgba(255,255,255,0.08);
       background: rgba(255,255,255,0.04); color: var(--dim); transition: all 0.15s; letter-spacing: 0.3px;
     }
-    .tf-btn:hover  { background: rgba(74,143,171,0.08); color: var(--white); border-color: rgba(74,143,171,0.2); }
-    .tf-btn.active { background: rgba(74,143,171,0.15); color: #4a8fab; border-color: rgba(74,143,171,0.4); }
+    .tf-btn:hover  { background: rgba(184,150,106,0.08); color: var(--white); border-color: rgba(184,150,106,0.2); }
+    .tf-btn.active { background: rgba(184,150,106,0.15); color: #B8966A; border-color: rgba(184,150,106,0.4); }
 
     /* ── POSITION BANNER ── */
     .pos-banner {
@@ -258,7 +258,7 @@
     }
     .tp-hit  { background: rgba(74,124,104,0.12); color: var(--green); border-color: rgba(74,124,104,0.3); }
     .tp-miss { background: rgba(255,255,255,0.03); color: var(--dim); border-color: rgba(255,255,255,0.08); }
-    .tp-pending { background: rgba(74,143,171,0.06); color: #4a8fab; border-color: rgba(74,143,171,0.2); }
+    .tp-pending { background: rgba(184,150,106,0.06); color: #B8966A; border-color: rgba(184,150,106,0.2); }
 
     /* ── SIGNAL GENESIS ── */
     .gate-row {
@@ -291,7 +291,7 @@
     .quality-fill { height: 100%; border-radius: 2px; }
     .open-pos-dot {
       display: inline-block; width: 7px; height: 7px; border-radius: 50%;
-      background: #4a8fab; margin-right: 5px; animation: blink 1.4s infinite;
+      background: #B8966A; margin-right: 5px; animation: blink 1.4s infinite;
     }
     @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
@@ -299,7 +299,7 @@
     .text-buy    { color: var(--green); }
     .text-sell   { color: var(--red); }
     .text-hold   { color: var(--dim); }
-    .text-cyan   { color: #4a8fab; }
+    .text-cyan   { color: #B8966A; }
     .text-orange { color: var(--orange); }
     .loader { text-align: center; padding: 60px; color: var(--dim); font-size: 14px; }
     .dot-pulse::after { content: '...'; animation: dots 1.5s infinite; }
@@ -356,9 +356,9 @@
   <span style="font-size:13px;color:var(--dim)">Chart Analysis</span>
   <div class="token-select-wrap">
     <div id="nav-auth-hint">
-      🔒 <a href="/#signin" style="color:#4a8fab;text-decoration:none">Sign in</a> to unlock full analysis
+      🔒 <a href="/#signin" style="color:#B8966A;text-decoration:none">Sign in</a> to unlock full analysis
     </div>
-    <span id="live-price" style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:#4a8fab;letter-spacing:0.5px;min-width:110px;text-align:right;"></span>
+    <span id="live-price" style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:#B8966A;letter-spacing:0.5px;min-width:110px;text-align:right;"></span>
     <select id="token-select"><option>Loading...</option></select>
     <span id="nav-signal-pill" class="signal-pill pill-hold">—</span>
   </div>
@@ -386,7 +386,7 @@
       </div>
       <div id="tv-chart"><div class="loader">Loading chart<span class="dot-pulse"></span></div></div>
       <div class="chart-legend" id="chart-legend" style="display:none">
-        <div class="legend-item"><div class="legend-dot" style="background:#4a8fab"></div>Entry</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#B8966A"></div>Entry</div>
         <div class="legend-item"><div class="legend-dot" style="background:#4a7c68"></div>TP1</div>
         <div class="legend-item"><div class="legend-dot" style="background:#00cc6a"></div>TP2</div>
         <div class="legend-item"><div class="legend-dot" style="background:#009950"></div>TP3</div>
@@ -467,7 +467,7 @@
         </div>
         <a href="/pricing"
            style="display:inline-block;padding:8px 20px;border-radius:8px;font-size:12px;font-weight:700;
-                  background:linear-gradient(135deg,#4a8fab,#0099cc);color:#000;text-decoration:none;">
+                  background:linear-gradient(to right,#B8966A,#8B6840);color:#fff;text-decoration:none;">
           Upgrade to Pro →
         </a>
       </div>
@@ -485,7 +485,7 @@
         </div>
         <a href="/pricing"
            style="display:inline-block;padding:8px 20px;border-radius:8px;font-size:12px;font-weight:700;
-                  background:linear-gradient(135deg,#4a8fab,#0099cc);color:#000;text-decoration:none;">
+                  background:linear-gradient(to right,#B8966A,#8B6840);color:#fff;text-decoration:none;">
           Upgrade to Pro →
         </a>
       </div>
@@ -565,7 +565,7 @@ const _gateOverlay = (() => {
   el.id = 'auth-gate-overlay';
   el.style.cssText = 'position:fixed;inset:0;background:#050505;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;';
   el.innerHTML = `
-    <div style="font-size:24px;font-weight:800;color:#4a8fab;letter-spacing:3px;font-family:Inter,sans-serif">⚡ AEGIS</div>
+    <div style="font-size:24px;font-weight:800;color:#B8966A;letter-spacing:3px;font-family:Inter,sans-serif">⚡ AEGIS</div>
     <div style="font-size:12px;color:#94a3b8;font-family:Inter,sans-serif;">Checking access…</div>`;
   document.body.appendChild(el);
   return el;
@@ -640,7 +640,7 @@ function applyTierGates(tier) {
       </div>
       <a href="/#signin"
          style="display:inline-block;padding:8px 20px;border-radius:8px;font-size:12px;font-weight:700;
-                background:linear-gradient(135deg,#4a8fab,#0099cc);color:#000;text-decoration:none;
+                background:linear-gradient(to right,#B8966A,#8B6840);color:#fff;text-decoration:none;
                 letter-spacing:0.5px;transition:opacity .2s"
          onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
         Sign In Free →
@@ -823,8 +823,8 @@ async function renderChart(sig) {
       layout: { background: { color: 'transparent' }, textColor: '#94a3b8' },
       grid:   { vertLines: { color: 'rgba(255,255,255,0.04)' }, horzLines: { color: 'rgba(255,255,255,0.04)' } },
       crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-      rightPriceScale: { borderColor: 'rgba(74,143,171,0.15)' },
-      timeScale: { borderColor: 'rgba(74,143,171,0.15)', timeVisible: true, secondsVisible: showSeconds },
+      rightPriceScale: { borderColor: 'rgba(184,150,106,0.15)' },
+      timeScale: { borderColor: 'rgba(184,150,106,0.15)', timeVisible: true, secondsVisible: showSeconds },
     });
     chartInstance = chart;
 
@@ -837,7 +837,7 @@ async function renderChart(sig) {
     _candlesSeries = candles;
 
     const vol = chart.addHistogramSeries({
-      color: 'rgba(74,143,171,0.15)', priceFormat: { type: 'volume' },
+      color: 'rgba(184,150,106,0.15)', priceFormat: { type: 'volume' },
       priceScaleId: 'vol', scaleMargins: { top: 0.85, bottom: 0 },
     });
     vol.setData(_chartVols);
@@ -848,7 +848,7 @@ async function renderChart(sig) {
       candles.createPriceLine({ price: parseFloat(price), color, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: label });
     };
     const entry = sig.entry_price || sig.price;
-    addLine(entry,            '#4a8fab',              'Entry');
+    addLine(entry,            '#B8966A',              'Entry');
     addLine(sig.suggested_sl, '#ff0055',              'SL');
     if (sig.direction === 'SHORT' || sig.signal === 'SELL') {
       addLine(sig.bear_tp1, '#4a7c68', 'TP1');
@@ -861,7 +861,7 @@ async function renderChart(sig) {
     }
     addLine(sig.support,    'rgba(74,124,104,0.5)',  'Sup');
     addLine(sig.resistance, 'rgba(255,0,85,0.5)',   'Res');
-    addLine(sig.pivot,      'rgba(74,143,171,0.35)', 'Pvt');
+    addLine(sig.pivot,      'rgba(184,150,106,0.35)', 'Pvt');
 
     $('chart-legend').style.display = 'flex';
 
@@ -1086,7 +1086,7 @@ function renderOverview(sig) {
       </div>
     </div>
 
-    <div style="text-align:center;padding:12px;background:rgba(74,143,171,0.05);border-radius:10px;border:1px solid rgba(74,143,171,0.12);margin-bottom:14px">
+    <div style="text-align:center;padding:12px;background:rgba(184,150,106,0.05);border-radius:10px;border:1px solid rgba(184,150,106,0.12);margin-bottom:14px">
       <div class="sig-confidence">${sig.quality_score != null ? sig.quality_score.toFixed(0) : '—'}</div>
       <div class="sig-conf-label">Signal Quality Score / 100</div>
     </div>
@@ -1147,7 +1147,7 @@ function renderExplanation(sig) {
   const normalize = v => Math.min(100, Math.max(0, ((v || 0) + 5) * 10)); // -5..+5 → 0..100
 
   const items = [
-    { name: 'Trend',        val: c.trend,       color: '#4a8fab' },
+    { name: 'Trend',        val: c.trend,       color: '#B8966A' },
     { name: 'Momentum',     val: c.momentum,    color: '#a855f7' },
     { name: 'Volume',       val: c.volume,      color: '#b8966a' },
     { name: 'Smart Money',  val: c.smart_money, color: '#4a7c68' },
@@ -1206,7 +1206,7 @@ function renderExplanation(sig) {
 
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:14px;background:rgba(0,0,0,0.3);border-radius:10px;border:1px solid rgba(255,255,255,0.06)">
       <div style="text-align:center">
-        <div style="font-size:20px;font-weight:800;font-family:'JetBrains Mono',monospace;color:#4a8fab">${qualScore.toFixed(0)}</div>
+        <div style="font-size:20px;font-weight:800;font-family:'JetBrains Mono',monospace;color:#B8966A">${qualScore.toFixed(0)}</div>
         <div style="font-size:10px;color:var(--dim)">Quality Score</div>
       </div>
       <div style="text-align:center">
@@ -1397,7 +1397,7 @@ function renderRegime(sig) {
   $('regime-section').innerHTML = `
     <div style="display:flex;justify-content:space-between;margin-bottom:12px;font-size:12px">
       <span style="color:var(--dim)">Rule-based</span>
-      <span style="font-family:'JetBrains Mono',monospace;font-weight:600;color:#4a8fab">${r.replace('_',' ')}</span>
+      <span style="font-family:'JetBrains Mono',monospace;font-weight:600;color:#B8966A">${r.replace('_',' ')}</span>
     </div>
     <div style="display:flex;justify-content:space-between;margin-bottom:16px;font-size:12px">
       <span style="color:var(--dim)">HMM Model</span>
@@ -1512,7 +1512,7 @@ function renderSummary(sig) {
   const riskL = qual > 70 ? 'moderate' : qual > 55 ? 'elevated' : 'high';
 
   $('summary-box').innerHTML = `
-    <strong style="color:#4a8fab;font-size:14px">AEGIS Summary:</strong>
+    <strong style="color:#B8966A;font-size:14px">AEGIS Summary:</strong>
     AEGIS identifies a <strong>${dir}</strong> setup on <strong>${sig.symbol}</strong> with
     <strong>${conf}% AI confidence</strong> and signal quality <strong>${qual.toFixed(0)}/100</strong>.
     Market regime is <strong>${(sig.regime||'').replace('_',' ')}</strong> with
@@ -1579,7 +1579,7 @@ function renderForensic(sig) {
   const lstmExh   = sig.lstm_exhaustion_prob != null ? `${(sig.lstm_exhaustion_prob*100).toFixed(0)}%` : '—';
 
   $('forensic-section').innerHTML = `
-    <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#4a8fab;margin-bottom:12px;word-break:break-all">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#B8966A;margin-bottom:12px;word-break:break-all">
       ID: ${id}
     </div>
     ${[
@@ -1660,7 +1660,7 @@ function renderPositionBanner(symbol) {
     <div class="pos-grid">
       <div class="pos-stat">
         <div class="pos-stat-lbl">Entry Price</div>
-        <div class="pos-stat-val" style="color:#4a8fab">${entry > 0 ? entry.toPrecision(6) : '—'}</div>
+        <div class="pos-stat-val" style="color:#B8966A">${entry > 0 ? entry.toPrecision(6) : '—'}</div>
       </div>
       <div class="pos-stat">
         <div class="pos-stat-lbl">Current Price</div>
@@ -1744,7 +1744,7 @@ function renderSignalGenesis(sig) {
           </div>
         </div>
         <div style="margin-left:auto;text-align:right">
-          <div style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:800;color:#4a8fab">${(sig.quality_score||0).toFixed(0)}<span style="font-size:11px;color:var(--dim)">/100</span></div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:800;color:#B8966A">${(sig.quality_score||0).toFixed(0)}<span style="font-size:11px;color:var(--dim)">/100</span></div>
           <div style="font-size:10px;color:var(--dim)">Quality Score</div>
         </div>
       </div>
@@ -1771,7 +1771,7 @@ function renderSignalGenesis(sig) {
       <div style="font-size:12px;color:var(--dim)">
         Confidence margin: <strong style="color:${confGapColor}">${confGap > 0 ? '+' : ''}${confGap}pt</strong> above threshold
         ${dominant ? ` · Dominant factor: <strong style="color:var(--white)">${dominant.name}</strong>` : ''}
-        ${sig.edge_score != null ? ` · Edge score: <strong style="color:#4a8fab">${sig.edge_score.toFixed(1)}</strong>` : ''}
+        ${sig.edge_score != null ? ` · Edge score: <strong style="color:#B8966A">${sig.edge_score.toFixed(1)}</strong>` : ''}
       </div>
     </div>
 
@@ -1857,7 +1857,7 @@ function renderActiveSignals() {
                 <td style="font-family:'JetBrains Mono',monospace">${fmtP(sig.entry_price||sig.price)}</td>
                 <td style="font-family:'JetBrains Mono',monospace;color:var(--green)">${fmtP(tp1)}</td>
                 <td style="font-family:'JetBrains Mono',monospace;color:var(--red)">${fmtP(sig.suggested_sl)}</td>
-                <td style="font-family:'JetBrains Mono',monospace;color:#4a8fab">${sig.risk_reward ? parseFloat(sig.risk_reward).toFixed(2) : '—'}</td>
+                <td style="font-family:'JetBrains Mono',monospace;color:#B8966A">${sig.risk_reward ? parseFloat(sig.risk_reward).toFixed(2) : '—'}</td>
                 <td style="font-size:11px;color:var(--dim)">${(sig.regime||'').replace('_',' ')}</td>
                 <td style="font-family:'JetBrains Mono',monospace;color:${(sig.atr_pct||0)>2?'var(--orange)':'var(--dim)'}">${(sig.atr_pct||0).toFixed(2)}%</td>
                 <td style="font-family:'JetBrains Mono',monospace;color:${(sig.rsi||50)>65?'var(--red)':(sig.rsi||50)<35?'var(--green)':'var(--dim)'}">${(sig.rsi||0).toFixed(0)}</td>
@@ -1959,7 +1959,7 @@ function renderHmmDeep(sig) {
   const ruleRegime  = (sig.regime || '').replace(/_/g,' ');
 
   const stabColor   = hmmStab >= 75 ? '#4a7c68' : hmmStab >= 50 ? '#fbbf24' : '#ff0055';
-  const confColor   = hmmConf >= 70 ? '#4a8fab' : hmmConf >= 50 ? '#fbbf24' : '#ff0055';
+  const confColor   = hmmConf >= 70 ? '#B8966A' : hmmConf >= 50 ? '#fbbf24' : '#ff0055';
 
   const stabBar = pct => `
     <div style="height:6px;border-radius:3px;background:rgba(255,255,255,0.06);overflow:hidden;margin-top:4px">
@@ -1974,7 +1974,7 @@ function renderHmmDeep(sig) {
 
     <div style="display:flex;justify-content:space-between;margin-bottom:10px;font-size:12px">
       <span style="color:#64748b">Rule-based</span>
-      <span style="font-family:'JetBrains Mono',monospace;font-weight:600;color:#4a8fab">${ruleRegime || '—'}</span>
+      <span style="font-family:'JetBrains Mono',monospace;font-weight:600;color:#B8966A">${ruleRegime || '—'}</span>
     </div>
     <div style="display:flex;justify-content:space-between;margin-bottom:10px;font-size:12px">
       <span style="color:#64748b">HMM Regime</span>
