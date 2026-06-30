@@ -384,34 +384,129 @@
      ═══════════════════════════════════════ -->
 <section style="padding: var(--s-10) 0 var(--s-9);">
   <div class="ae-container">
-    <div style="max-width: 760px;">
+    <div class="hero-demo-grid">
 
-      <div class="ae-eyebrow">Live on Binance &nbsp;·&nbsp; 63 Tokens &nbsp;·&nbsp; XGBoost Engine</div>
+      <!-- ── Left: headline + CTA ── -->
+      <div style="padding-top: var(--s-2);">
+        <div class="ae-eyebrow">Live on Binance &nbsp;·&nbsp; 63 Tokens &nbsp;·&nbsp; XGBoost Engine</div>
 
-      <h1 class="ae-display" style="margin-bottom: var(--s-5);">
-        Crypto signals<br>that explain<br><em>themselves.</em>
-      </h1>
+        <h1 class="ae-display" style="margin-bottom: var(--s-5);">
+          Crypto signals<br>that explain<br><em>themselves.</em>
+        </h1>
 
-      <div style="width: 48px; height: 1px; background: var(--ae-gold); margin-bottom: var(--s-6);"></div>
+        <div style="width: 48px; height: 1px; background: var(--ae-gold); margin-bottom: var(--s-6);"></div>
 
-      <p style="font-size: 1.05rem; line-height: 1.8; color: var(--ae-text-2); max-width: 58ch; margin-bottom: var(--s-7);">
-        Most signal bots shout BUY or SELL and vanish. AEGIS gives you the complete picture — which gates fired, what the model weighted, and in plain language, exactly why the signal exists. Like a senior trader narrating every decision in real time.
-      </p>
+        <p style="font-size: 1.05rem; line-height: 1.8; color: var(--ae-text-2); max-width: 52ch; margin-bottom: var(--s-7);">
+          Most signal bots shout BUY or SELL and vanish. AEGIS gives you the complete picture — which gates fired, what the model weighted, and in plain language, exactly why the signal exists.
+        </p>
 
-      <div style="display:flex; align-items:center; gap: var(--s-4); flex-wrap:wrap;">
-        <button id="heroMathBtn" class="ae-btn ae-btn-primary ae-btn-lg">
-          Start 3-Day Free Trial
-        </button>
-        <a href="/track-record" class="ae-btn ae-btn-ghost ae-btn-lg" style="color: var(--ae-text-2);">
-          Live Track Record &nbsp;→
-        </a>
+        <div style="display:flex; align-items:center; gap: var(--s-4); flex-wrap:wrap;">
+          <button id="heroMathBtn" class="ae-btn ae-btn-primary ae-btn-lg">
+            Start 3-Day Free Trial
+          </button>
+          <a href="/track-record" class="ae-btn ae-btn-ghost ae-btn-lg" style="color: var(--ae-text-2);">
+            Live Track Record &nbsp;→
+          </a>
+        </div>
+
+        <p style="font-size: 0.75rem; color: var(--ae-text-3); margin-top: var(--s-4);">
+          No credit card required &nbsp;·&nbsp; Full access from day one &nbsp;·&nbsp; Cancel anytime
+        </p>
+        <div id="trialCountdown"></div>
       </div>
 
-      <p style="font-size: 0.75rem; color: var(--ae-text-3); margin-top: var(--s-4);">
-        No credit card required &nbsp;·&nbsp; Full access from day one &nbsp;·&nbsp; Cancel anytime
-      </p>
-      <div id="trialCountdown"></div>
+      <!-- ── Right: live engine preview ── -->
+      <div style="display:flex; flex-direction:column; gap:var(--s-4);">
 
+        <!-- Engine status bar -->
+        <div style="background:var(--ae-surface); border:1px solid var(--ae-border); border-radius:var(--ae-radius-md); padding:var(--s-4) var(--s-5); display:flex; align-items:center; justify-content:space-between;">
+          <div style="display:flex; align-items:center; gap:var(--s-3);">
+            <span style="width:8px;height:8px;border-radius:50%;background:var(--ae-buy);display:inline-block;box-shadow:0 0 8px var(--ae-buy);flex-shrink:0;"></span>
+            <span style="font-family:var(--ae-font-mono); font-size:0.78rem; color:var(--ae-text-1); letter-spacing:0.08em;">AEGIS ENGINE · LIVE</span>
+          </div>
+          <span style="font-family:var(--ae-font-mono); font-size:0.7rem; color:var(--ae-text-3);">63 TOKENS MONITORED</span>
+        </div>
+
+        <!-- Quick stats -->
+        <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:var(--s-3);">
+          <div style="background:var(--ae-surface); border:1px solid var(--ae-border); border-radius:var(--ae-radius-md); padding:var(--s-4); text-align:center;">
+            <div style="font-family:var(--ae-font-mono); font-size:1.5rem; font-weight:700; color:var(--ae-buy);">3</div>
+            <div style="font-size:0.68rem; color:var(--ae-text-3); text-transform:uppercase; letter-spacing:0.08em; margin-top:3px;">Active Signals</div>
+          </div>
+          <div style="background:var(--ae-surface); border:1px solid var(--ae-border); border-radius:var(--ae-radius-md); padding:var(--s-4); text-align:center;">
+            <div style="font-family:var(--ae-font-mono); font-size:1.5rem; font-weight:700; color:var(--ae-gold);">70</div>
+            <div style="font-size:0.68rem; color:var(--ae-text-3); text-transform:uppercase; letter-spacing:0.08em; margin-top:3px;">Min Quality</div>
+          </div>
+          <div style="background:var(--ae-surface); border:1px solid var(--ae-border); border-radius:var(--ae-radius-md); padding:var(--s-4); text-align:center;">
+            <div style="font-family:var(--ae-font-mono); font-size:1.5rem; font-weight:700; color:var(--ae-text-1);">1H</div>
+            <div style="font-size:0.68rem; color:var(--ae-text-3); text-transform:uppercase; letter-spacing:0.08em; margin-top:3px;">Timeframe</div>
+          </div>
+        </div>
+
+        <!-- Compact signal card -->
+        <div class="ae-signal-card buy">
+          <div class="ae-signal-header">
+            <div style="display:flex; align-items:center; gap:var(--s-3);">
+              <span class="ae-signal-pair">BTC<span>/USDT</span></span>
+              <span class="ae-badge ae-badge-buy">▲ LONG</span>
+              <span class="ae-badge" style="color:var(--ae-text-3); border-color:var(--ae-border); font-size:0.6rem;">1H</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:var(--s-2);">
+              <span style="width:6px;height:6px;border-radius:50%;background:var(--ae-buy);display:inline-block;flex-shrink:0;"></span>
+              <span class="ae-mono-sm" style="color:var(--ae-buy);">ACTIVE</span>
+            </div>
+          </div>
+
+          <div class="demo-price-row" style="grid-template-columns:repeat(2,1fr);">
+            <div class="ae-card ae-card-sm" style="padding:var(--s-3);">
+              <div class="ae-signal-datum-label">Entry</div>
+              <div class="ae-signal-datum-value">67,134</div>
+            </div>
+            <div class="ae-card ae-card-sm" style="padding:var(--s-3); border-color:var(--ae-buy-border); background:var(--ae-buy-bg);">
+              <div class="ae-signal-datum-label" style="color:var(--ae-buy);">TP1 · +2.25%</div>
+              <div class="ae-signal-datum-value" style="color:var(--ae-buy);">68,644</div>
+            </div>
+            <div class="ae-card ae-card-sm" style="padding:var(--s-3); border-color:var(--ae-buy-border); background:var(--ae-buy-bg); opacity:0.6;">
+              <div class="ae-signal-datum-label" style="color:var(--ae-buy);">TP2 · +4.5%</div>
+              <div class="ae-signal-datum-value" style="color:var(--ae-buy);">70,155</div>
+            </div>
+            <div class="ae-card ae-card-sm" style="padding:var(--s-3); border-color:var(--ae-sell-border); background:var(--ae-sell-bg);">
+              <div class="ae-signal-datum-label" style="color:var(--ae-sell);">Stop Loss</div>
+              <div class="ae-signal-datum-value" style="color:var(--ae-sell);">65,625</div>
+            </div>
+          </div>
+
+          <div style="padding: var(--s-4) var(--s-5);">
+            <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:var(--s-3); padding-bottom:var(--s-4); border-bottom:1px solid var(--ae-border-dim); margin-bottom:var(--s-4);">
+              <div class="ae-signal-datum">
+                <div class="ae-signal-datum-label">Quality</div>
+                <div class="ae-signal-datum-value ae-text-gold">89</div>
+              </div>
+              <div class="ae-signal-datum">
+                <div class="ae-signal-datum-label">Edge</div>
+                <div class="ae-signal-datum-value ae-text-gold">81.4</div>
+              </div>
+              <div class="ae-signal-datum">
+                <div class="ae-signal-datum-label">RSI (14)</div>
+                <div class="ae-signal-datum-value">43.2</div>
+              </div>
+              <div class="ae-signal-datum">
+                <div class="ae-signal-datum-label">Regime</div>
+                <div class="ae-signal-datum-value ae-text-buy" style="font-size:0.72rem;">TREND↑</div>
+              </div>
+            </div>
+            <p style="font-size:0.8rem; line-height:1.7; color:var(--ae-text-2); margin:0;">
+              BTC holding firm support at <strong style="color:var(--ae-text-1);">$67,100</strong>. RSI recovering from oversold at <strong style="color:var(--ae-data);">43</strong> with volume <strong style="color:var(--ae-text-1);">1.4× average</strong>. Model assigns <strong style="color:var(--ae-buy);">78% probability</strong> of clearing TP1.
+            </p>
+          </div>
+
+          <div class="ae-signal-footer">
+            <span class="ae-signal-regime">REGIME: TRENDING · BULLISH</span>
+            <span class="ae-signal-time ae-mono-sm">Jun 27, 14:52 UTC</span>
+          </div>
+        </div>
+
+      </div>
     </div>
   </div>
 </section>
