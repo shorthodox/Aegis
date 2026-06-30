@@ -37,20 +37,6 @@
     @media (max-width:900px) { .ae-nav-links { display:none !important; } #navHamburger { display:flex !important; } }
     @media (min-width:901px) { #navMobileDrawer { display:none !important; } }
 
-body {
-            padding-top: 60px;
-            overflow-y: auto;
-            background: var(--ae-base,#0C0F13);
-            color: #e2e8f0;
-            font-family: 'Inter', sans-serif;
-        }
-        
-        
-        
-        
-        
-        
-
         /* Footer */
         .footer {
             text-align: center;
@@ -66,14 +52,14 @@ body {
             margin-bottom: 1rem;
         }
         .footer-links a {
-            color: #6b7280;
+            color: var(--ae-text-2);
             text-decoration: none;
             font-size: 0.8rem;
         }
-        .footer-links a:hover { color: #4a8fab; }
-        .separator { color: #374151; }
-        .footer-proprietor { font-size: 0.75rem; color: #4b5563; margin-bottom: 0.5rem; }
-        .footer p { font-size: 0.7rem; color: #374151; }
+        .footer-links a:hover { color: var(--ae-data); }
+        .separator { color: var(--ae-text-3); }
+        .footer-proprietor { font-size: 0.75rem; color: var(--ae-text-3); margin-bottom: 0.5rem; }
+        .footer p { font-size: 0.7rem; color: var(--ae-text-3); }
 
         @media (max-width: 768px) {
             body { padding-top: 70px; }
@@ -137,14 +123,14 @@ body {
         .tr-title {
             font-size: 2.2rem;
             font-weight: 800;
-            background: linear-gradient(135deg, #fff, #4a8fab);
+            background: linear-gradient(135deg, #fff, var(--ae-data));
             -webkit-background-clip: text;
             background-clip: text;
             color: transparent;
             margin: 0.3rem 0 0.8rem;
         }
         .tr-sub {
-            color: #8892a4;
+            color: var(--ae-text-2);
             max-width: 680px;
             margin: 0 auto;
             line-height: 1.75;
@@ -179,11 +165,11 @@ body {
             border-radius: 8px;
             padding: 0.8rem 1rem;
             font-size: 0.78rem;
-            color: #7ba8b0;
+            color: var(--ae-text-2);
             margin-bottom: 2rem;
             line-height: 1.7;
         }
-        .tr-history-note strong { color: #4a8fab; }
+        .tr-history-note strong { color: var(--ae-data); }
 
         /* Summary strip */
         .tr-summary {
@@ -203,23 +189,23 @@ body {
             font-size: 1.6rem;
             font-weight: 800;
             font-family: 'JetBrains Mono', monospace;
-            color: #4a8fab;
+            color: var(--ae-data);
             display: block;
             margin-bottom: 0.3rem;
         }
         .tr-stat-value.tr-win  { color: #4a7c68; }
         .tr-stat-value.tr-loss { color: #7a4040; }
-        .tr-stat-value.tr-na   { color: #6b7280; font-size: 1rem; padding-top: 0.35rem; }
+        .tr-stat-value.tr-na   { color: var(--ae-text-2); font-size: 1rem; padding-top: 0.35rem; }
         .tr-stat-label {
             font-size: 0.68rem;
             letter-spacing: 0.1em;
             text-transform: uppercase;
-            color: #6b7280;
+            color: var(--ae-text-2);
             font-weight: 600;
         }
         .tr-stat-sub {
             font-size: 0.65rem;
-            color: #4b5563;
+            color: var(--ae-text-3);
             margin-top: 0.2rem;
             line-height: 1.45;
         }
@@ -253,7 +239,7 @@ body {
         .tr-table td {
             padding: 0.75rem 1rem;
             border-bottom: 1px solid rgba(255,255,255,0.04);
-            color: #c0cad8;
+            color: var(--ae-text-1);
             font-family: 'JetBrains Mono', monospace;
             font-size: 0.82rem;
             white-space: nowrap;
@@ -273,23 +259,23 @@ body {
         }
         .tr-badge-win  { background: rgba(74,124,104,0.12); color: #4a7c68; border: 1px solid rgba(74,124,104,0.25); }
         .tr-badge-loss { background: rgba(122,64,64,0.12);  color: #7a4040; border: 1px solid rgba(122,64,64,0.25); }
-        .tr-badge-open { background: rgba(74,143,171,0.08);  color: #4a8fab; border: 1px solid rgba(74,143,171,0.2); }
-        .tr-badge-hold { background: rgba(255,255,255,0.06); color: #6b7280; border: 1px solid rgba(255,255,255,0.1); }
+        .tr-badge-open { background: var(--ae-data-bg);  color: var(--ae-data); border: 1px solid rgba(74,143,171,0.2); }
+        .tr-badge-hold { background: rgba(255,255,255,0.06); color: var(--ae-text-2); border: 1px solid rgba(255,255,255,0.1); }
 
         /* Direction chip */
         .tr-dir-long  { color: #4a7c68; }
         .tr-dir-short { color: #7a4040; }
-        .tr-dir-hold  { color: #6b7280; }
+        .tr-dir-hold  { color: var(--ae-text-2); }
 
         /* Loading / empty states */
         .tr-loading, .tr-empty {
             text-align: center;
             padding: 4rem 2rem;
-            color: #4b5563;
+            color: var(--ae-text-3);
         }
         .tr-loading i { font-size: 2rem; color: rgba(74,143,171,0.3); animation: tr-spin 1s linear infinite; }
         .tr-empty i   { font-size: 2.5rem; color: rgba(74,143,171,0.15); margin-bottom: 1rem; }
-        .tr-empty h3  { color: #374151; font-size: 1rem; margin-bottom: 0.5rem; }
+        .tr-empty h3  { color: var(--ae-text-3); font-size: 1rem; margin-bottom: 0.5rem; }
         .tr-empty p   { font-size: 0.82rem; line-height: 1.75; max-width: 500px; margin: 0 auto; }
         @keyframes tr-spin  { to { transform: rotate(360deg); } }
         @keyframes tr-pulse { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
@@ -299,19 +285,19 @@ body {
             background: rgba(255,255,255,0.04);
             border: 1px solid rgba(255,255,255,0.1);
             border-radius: 20px;
-            color: #6b7280;
+            color: var(--ae-text-2);
             font-size: 0.75rem;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.15s;
             letter-spacing: 0.04em;
         }
-        .tr-filter-btn:hover  { border-color: rgba(74,143,171,0.3); color: #4a8fab; }
-        .tr-filter-btn.active { background: rgba(74,143,171,0.1); border-color: rgba(74,143,171,0.4); color: #4a8fab; }
+        .tr-filter-btn:hover  { border-color: rgba(74,143,171,0.3); color: var(--ae-data); }
+        .tr-filter-btn.active { background: rgba(74,143,171,0.1); border-color: rgba(74,143,171,0.4); color: var(--ae-data); }
 
         .tr-winrate-note {
             font-size: 0.68rem;
-            color: #4b5563;
+            color: var(--ae-text-3);
             text-align: center;
             margin-top: 1.8rem;
             line-height: 1.7;

@@ -914,7 +914,7 @@
                 window.pendingAction = 'redeemDevCode';
                 if (devCodeMsg) {
                     devCodeMsg.style.color = 'var(--ae-data)';
-                    devCodeMsg.textContent = 'Please sign in first — your code is saved and will be applied automatically.';
+                    devCodeMsg.textContent = 'Please log in first — your code is saved and will be applied automatically.';
                 }
                 setTimeout(() => openSignInModal(), 400);
                 return;
@@ -943,7 +943,7 @@
                 } else if (res.status === 401) {
                     ['authToken','access_token','authenticated','userSession','refresh_token'].forEach(k => localStorage.removeItem(k));
                     devCodeMsg.style.color = 'var(--ae-sell)';
-                    devCodeMsg.textContent = 'Session expired. Please sign in again — your code is saved.';
+                    devCodeMsg.textContent = 'Session expired. Please log in again — your code is saved.';
                     if (devCodeSubmit) { devCodeSubmit.disabled = false; devCodeSubmit.textContent = 'Redeem'; }
                     window.pendingAction = 'redeemDevCode';
                     setTimeout(() => openSignInModal(), 1000);
@@ -986,7 +986,7 @@
             }
             if (devCodeMsg) {
                 devCodeMsg.style.color = 'var(--ae-data)';
-                devCodeMsg.textContent = 'Your code is ready — sign in to activate it.';
+                devCodeMsg.textContent = 'Your code is ready — log in to activate it.';
             }
         }
     });
