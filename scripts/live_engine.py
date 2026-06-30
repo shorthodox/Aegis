@@ -69,6 +69,27 @@ def _fetch_spot_price(symbol: str) -> float:
         return 0.0
 
 
+# Shared futures exchange for multi-timeframe OHLCV candle fetches.
+# Binance USDM perpetuals — same symbols as the main trading fleet.
+_usdm_ex      = None
+_usdm_ex_lock = __import__('threading').Lock()
+
+def _fetch_ohlcv_sync(symbol: str, timeframe: str, limit: int) -> list:
+    """Thread-safe OHLCV fetch from Binance USDM perpetuals. Returns [] on error."""
+    global _usdm_ex
+    try:
+        import ccxt as _ccxt
+        if _usdm_ex is None:
+            _new = _ccxt.binanceusdm({'enableRateLimit': True, 'timeout': 8000})  # type: ignore[arg-type]
+            with _usdm_ex_lock:
+                if _usdm_ex is None:
+                    _usdm_ex = _new
+        with _usdm_ex_lock:
+            return _usdm_ex.fetch_ohlcv(symbol, timeframe, limit=limit) or []
+    except Exception:
+        return []
+
+
 # =============================================================================
 # Data classes
 # =============================================================================
@@ -1317,8 +1338,12 @@ class VirtualWallet:
 
     @property
     def summary(self) -> Dict[str, Any]:
-        won   = sum(1 for t in self.trade_history if t.outcome == 'WIN')
-        lost  = sum(1 for t in self.trade_history if t.outcome == 'LOSS')
+        # Exclude TP partial-close records (exit_reason contains 'PARTIAL') from
+        # the signal count — they represent slices of an open position, not closed
+        # trades, and inflate wins/losses/total when the position is still running.
+        _full = [t for t in self.trade_history if 'PARTIAL' not in (t.exit_reason or '')]
+        won   = sum(1 for t in _full if t.outcome == 'WIN')
+        lost  = sum(1 for t in _full if t.outcome == 'LOSS')
         total = won + lost
         pnl_u = round(self.balance - self.initial_capital, 2)
         return {
@@ -1397,6 +1422,11 @@ class LiveEngine:
 
         # Signal direction history for stability gate (symbol → last N directions)
         self._signal_history:   Dict[str, Deque[str]] = {}
+
+        # OHLCV candle cache for multi-timeframe reversal gate
+        # key = "SYMBOL|timeframe" → {'candles': list, 'ts': float}
+        self._candle_cache: Dict[str, Dict] = {}
+        self._candle_cache_ttl = 240  # seconds; refresh every 4 min (< 5m candle period)
 
         # Partial-TP hit tracking (one flag per level per symbol)
         self._tp1_hit:    Dict[str, bool]  = {}   # break-even triggered after TP1
@@ -1925,6 +1955,57 @@ class LiveEngine:
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
 
+                    # ── Gate 4.5: multi-timeframe candle reversal confirmation ──
+                    # Problem: the 1H model fires mid-trend (e.g. BUY at RSI 68
+                    # after 3 green candles).  Fix: before a BUY, require the
+                    # recent price action to have been BEARISH on both 5m and 15m —
+                    # i.e. the move down has already happened, the reversal is now.
+                    # Before a SELL, require recent price action to have been BULLISH.
+                    #
+                    # BUY:  last 4 closed 5m candles bearish + last 2 closed 15m bearish
+                    # SELL: last 4 closed 5m candles bullish + last 2 closed 15m bullish
+                    #
+                    # Gate fails OPEN (allows trade) when candle data is unavailable,
+                    # so a network hiccup never permanently blocks entries.
+                    MTF_5M_BARS  = 4
+                    MTF_15M_BARS = 2
+
+                    _5m_raw  = await self._fetch_candles(symbol, '5m',  MTF_5M_BARS  + 2)
+                    _15m_raw = await self._fetch_candles(symbol, '15m', MTF_15M_BARS + 2)
+
+                    def _all_directional(candles: list, direction: str, n: int) -> bool:
+                        """True if the last n CLOSED candles all match direction."""
+                        if len(candles) < n + 1:
+                            return True   # not enough data → fail open
+                        # candles[-1] is still forming; closed candles are [-(n+1):-1]
+                        closed = candles[-(n + 1):-1]
+                        for c in closed:
+                            o, cl = float(c[1]), float(c[4])
+                            if direction == 'bearish' and cl >= o:
+                                return False
+                            if direction == 'bullish' and cl <= o:
+                                return False
+                        return True
+
+                    if new_side == 'BUY':
+                        _ok_5m  = not _5m_raw  or _all_directional(_5m_raw,  'bearish', MTF_5M_BARS)
+                        _ok_15m = not _15m_raw or _all_directional(_15m_raw, 'bearish', MTF_15M_BARS)
+                    else:  # SELL
+                        _ok_5m  = not _5m_raw  or _all_directional(_5m_raw,  'bullish', MTF_5M_BARS)
+                        _ok_15m = not _15m_raw or _all_directional(_15m_raw, 'bullish', MTF_15M_BARS)
+
+                    if not (_ok_5m and _ok_15m):
+                        _dir_needed = 'bearish' if new_side == 'BUY' else 'bullish'
+                        print(f'[{symbol}] MTF_GATE blocked {new_side}: '
+                              f'5m_{_dir_needed}={_ok_5m} '
+                              f'15m_{_dir_needed}={_ok_15m} — mid-trend entry avoided')
+                        if symbol in self.last_signals:
+                            self.last_signals[symbol]['fire']        = False
+                            self.last_signals[symbol]['signal']      = 'HOLD'
+                            self.last_signals[symbol]['mtf_blocked'] = True
+                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                        return
+
                     # ── RSI exhaustion / deceleration gate ───────────────────
                     # Block entries when RSI momentum has already peaked (late signal).
                     _rsi_val   = float(result.get('rsi', 50) or 50)
@@ -1978,6 +2059,36 @@ class LiveEngine:
                         self.last_signals[symbol]['cooldown_blocked'] = True
 
             self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+
+    # ── multi-timeframe candle fetch ──────────────────────────────────────────
+
+    async def _fetch_candles(self, symbol: str, timeframe: str, limit: int) -> List:
+        """
+        Return up to `limit` closed OHLCV candles for `symbol` on `timeframe`.
+        Results are cached for _candle_cache_ttl seconds to avoid hammering the
+        exchange on every scan cycle.  Returns [] on any error (gate fails open).
+        """
+        cache_key = f'{symbol}|{timeframe}'
+        now = time.time()
+        entry = self._candle_cache.get(cache_key)
+        if entry and (now - entry['ts']) < self._candle_cache_ttl:
+            return entry['candles']
+
+        loop = asyncio.get_event_loop()
+        try:
+            candles = await asyncio.wait_for(
+                loop.run_in_executor(
+                    self._executor,
+                    lambda: _fetch_ohlcv_sync(symbol, timeframe, limit),
+                ),
+                timeout=8,
+            )
+        except Exception:
+            candles = []
+
+        if candles:
+            self._candle_cache[cache_key] = {'candles': candles, 'ts': now}
+        return candles or []
 
     # ── trade management ──────────────────────────────────────────────────────
 
