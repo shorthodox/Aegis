@@ -215,17 +215,38 @@ body.ae-body {
 .ae-brand {
   font-family: var(--ae-font-mono);
   font-size: 0.85rem;
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--ae-text-1);
   text-decoration: none;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
-.ae-brand span {
+.ae-brand-icon {
   color: var(--ae-gold);
+  font-size: 0.78rem;
 }
+
+.ae-brand-word {
+  background: linear-gradient(to right, var(--ae-text-1), var(--ae-gold));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.ae-brand-sub {
+  color: var(--ae-gold);
+  opacity: 0.6;
+  font-weight: 400;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+}
+
+/* legacy: .ae-brand span used as separator on older markup */
+.ae-brand span { color: var(--ae-gold); }
 
 .ae-nav-links {
   display: flex;
