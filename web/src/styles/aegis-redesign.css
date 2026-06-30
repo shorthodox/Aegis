@@ -258,6 +258,49 @@ body.ae-body {
   flex-shrink: 0;
 }
 
+/* ── Hamburger — hidden on desktop, shown via media query below ── */
+#navHamburger {
+  display: none;
+  align-items: center; justify-content: center;
+  width: 36px; height: 36px;
+  background: transparent;
+  border: 1px solid var(--ae-border);
+  border-radius: var(--ae-radius);
+  cursor: pointer;
+  color: var(--ae-text-2);
+  font-size: 0.85rem;
+  flex-shrink: 0;
+  transition: border-color 120ms, color 120ms;
+}
+#navHamburger:hover { border-color: var(--ae-border-bright); color: var(--ae-text-1); }
+
+/* ── Mobile drawer (hidden by default on all pages) ── */
+.ae-mobile-drawer {
+  position: fixed;
+  top: 60px; left: 0; right: 0;
+  z-index: 800;
+  background: var(--ae-base);
+  border-bottom: 1px solid var(--ae-border);
+  display: none;
+  flex-direction: column;
+  padding: var(--s-4);
+  gap: var(--s-1);
+  max-height: calc(100vh - 60px);
+  overflow-y: auto;
+}
+.ae-mobile-drawer.open { display: flex; }
+.ae-mobile-link {
+  font-size: 0.88rem;
+  color: var(--ae-text-2);
+  text-decoration: none;
+  padding: 10px var(--s-4);
+  border-radius: var(--ae-radius);
+  display: block;
+  transition: background 120ms, color 120ms;
+}
+.ae-mobile-link:hover,
+.ae-mobile-link.mobile-active { background: var(--ae-raised); color: var(--ae-text-1); }
+
 /* --------------------------------------------------------------------------
    5. Buttons — restrained, precise
    -------------------------------------------------------------------------- */
@@ -998,6 +1041,8 @@ body.dashboard-body .glass-panel {
 
 @media (max-width: 900px) {
   #authButtonContainer { display: none !important; }
+  #navHamburger { display: flex !important; }
+  .ae-nav-links { display: none !important; }
 }
 
 @media (max-width: 768px) {
