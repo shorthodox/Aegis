@@ -71,243 +71,257 @@
         }
 
         /* ===== TRACK RECORD — .tr- namespaced ===== */
-        /* ── single-column centered layout ──────────────────────────────── */
         .tr-layout {
-            max-width: min(1600px, calc(100vw - 2rem));
+            max-width: 1400px;
             margin: 0 auto;
-            padding: 1.5rem 1.5rem 5rem;
+            padding: var(--s-5) var(--s-5) var(--s-9);
         }
+        @media (max-width: 1024px) { .tr-layout { padding: var(--s-4); } }
+
+        /* ── Hero ── */
+        .tr-eyebrow {
+            display: inline-block;
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--ae-gold);
+            font-family: var(--ae-font-mono);
+            margin-bottom: 0.75rem;
+            opacity: 0.8;
+        }
+        .tr-title {
+            font-family: var(--ae-font-serif);
+            font-size: 2.4rem;
+            font-weight: 400;
+            background: linear-gradient(135deg, var(--ae-text-1), var(--ae-gold));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            margin: 0 0 0.8rem;
+            line-height: 1.2;
+        }
+        .tr-sub {
+            color: var(--ae-text-2);
+            max-width: 640px;
+            margin: 0 auto;
+            line-height: 1.75;
+            font-size: 0.9rem;
+        }
+
+        /* ── Disclaimer banner ── */
+        .tr-disclaimer {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            background: var(--ae-gold-dim, rgba(184,150,106,0.06));
+            border: 1px solid var(--ae-gold-mid, rgba(184,150,106,0.2));
+            border-radius: var(--ae-radius-md);
+            padding: 0.9rem 1.2rem;
+            margin-bottom: 2.5rem;
+            font-size: 0.82rem;
+            color: var(--ae-gold);
+            line-height: 1.65;
+            opacity: 0.9;
+        }
+        .tr-disclaimer i { flex-shrink: 0; margin-top: 0.12rem; }
+        .tr-disclaimer strong { color: var(--ae-text-1); }
+
+        /* ── Panel ── */
         .tr-panel {
-            background: rgba(0,0,0,0.2);
-            border: 1px solid rgba(255,255,255,0.06);
-            border-radius: 16px;
+            background: var(--ae-surface);
+            border: 1px solid var(--ae-border);
+            border-radius: var(--ae-radius-lg, 16px);
             overflow: hidden;
         }
         .tr-panel-header {
             display: flex;
             align-items: center;
             gap: 0.75rem;
-            padding: 1rem 1.2rem;
-            background: rgba(0,0,0,0.3);
-            border-bottom: 1px solid rgba(255,255,255,0.06);
+            padding: var(--s-4) var(--s-5);
+            background: var(--ae-raised);
+            border-bottom: 1px solid var(--ae-border);
             position: sticky;
-            top: 80px;
+            top: 60px;
             z-index: 10;
             backdrop-filter: blur(12px);
         }
-        .tr-panel-body {
-            padding: 1.2rem;
-        }
-        .tr-page {
-            max-width: min(1600px, calc(100vw - 2rem));
-            margin: 0 auto;
-            padding: 3rem 2rem 5rem;
-        }
-        @media (max-width: 1024px) {
-            .tr-layout { padding: 1rem; }
-        }
-        .tr-hero {
-            text-align: center;
-            margin-bottom: 2.5rem;
-        }
-        .tr-eyebrow {
-            display: inline-block;
-            font-size: 0.7rem;
-            font-weight: 700;
-            letter-spacing: 0.18em;
-            text-transform: uppercase;
-            color: rgba(74,143,171,0.6);
-            font-family: 'JetBrains Mono', monospace;
-            margin-bottom: 0.6rem;
-        }
-        .tr-title {
-            font-size: 2.2rem;
-            font-weight: 800;
-            background: linear-gradient(135deg, #fff, var(--ae-data));
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-            margin: 0.3rem 0 0.8rem;
-        }
-        .tr-sub {
-            color: var(--ae-text-2);
-            max-width: 680px;
-            margin: 0 auto;
-            line-height: 1.75;
-            font-size: 0.93rem;
-        }
+        .tr-panel-body { padding: var(--s-5); }
 
-        /* Disclaimer banner */
-        .tr-disclaimer {
-            display: flex;
-            align-items: flex-start;
-            gap: 0.75rem;
-            background: rgba(255, 200, 0, 0.06);
-            border: 1px solid rgba(255, 200, 0, 0.22);
-            border-radius: 12px;
-            padding: 0.9rem 1.2rem;
-            margin-bottom: 2.5rem;
-            font-size: 0.82rem;
-            color: rgba(255, 220, 100, 0.85);
-            line-height: 1.65;
-        }
-        .tr-disclaimer i {
-            flex-shrink: 0;
-            margin-top: 0.12rem;
-            color: rgba(255, 200, 0, 0.7);
-        }
-
-        /* History-gap notice */
+        /* ── History note ── */
         .tr-history-note {
-            background: rgba(74,143,171,0.04);
-            border: 1px solid rgba(74,143,171,0.14);
-            border-left: 3px solid rgba(74,143,171,0.5);
-            border-radius: 8px;
-            padding: 0.8rem 1rem;
+            background: var(--ae-gold-dim, rgba(184,150,106,0.04));
+            border: 1px solid var(--ae-gold-mid, rgba(184,150,106,0.15));
+            border-left: 3px solid var(--ae-gold);
+            border-radius: var(--ae-radius);
+            padding: 0.75rem 1rem;
             font-size: 0.78rem;
             color: var(--ae-text-2);
-            margin-bottom: 2rem;
+            margin-bottom: 1.5rem;
             line-height: 1.7;
         }
-        .tr-history-note strong { color: var(--ae-data); }
+        .tr-history-note strong { color: var(--ae-gold); }
 
-        /* Summary strip */
+        /* ── Summary stat cards ── */
         .tr-summary {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2.5rem;
+            gap: var(--s-4);
+            margin-bottom: var(--s-6);
         }
         .tr-stat {
-            background: rgba(0,0,0,0.45);
-            border: 1px solid rgba(255,255,255,0.08);
-            border-radius: 14px;
-            padding: 1.1rem 1rem;
+            background: var(--ae-raised);
+            border: 1px solid var(--ae-border);
+            border-radius: var(--ae-radius-md);
+            padding: var(--s-4) var(--s-3);
             text-align: center;
+            transition: border-color var(--ae-fast);
         }
+        .tr-stat:hover { border-color: var(--ae-gold-mid, rgba(184,150,106,0.3)); }
         .tr-stat-value {
             font-size: 1.6rem;
-            font-weight: 800;
-            font-family: 'JetBrains Mono', monospace;
-            color: var(--ae-data);
+            font-weight: 700;
+            font-family: var(--ae-font-mono);
+            color: var(--ae-gold);
             display: block;
             margin-bottom: 0.3rem;
+            line-height: 1;
         }
-        .tr-stat-value.tr-win  { color: #4a7c68; }
-        .tr-stat-value.tr-loss { color: #7a4040; }
-        .tr-stat-value.tr-na   { color: var(--ae-text-2); font-size: 1rem; padding-top: 0.35rem; }
+        .tr-stat-value.tr-win  { color: var(--ae-buy); }
+        .tr-stat-value.tr-loss { color: var(--ae-sell); }
+        .tr-stat-value.tr-na   { color: var(--ae-text-3); font-size: 1rem; padding-top: 0.35rem; }
         .tr-stat-label {
-            font-size: 0.68rem;
+            font-size: 0.65rem;
             letter-spacing: 0.1em;
             text-transform: uppercase;
-            color: var(--ae-text-2);
+            color: var(--ae-text-3);
             font-weight: 600;
         }
         .tr-stat-sub {
-            font-size: 0.65rem;
+            font-size: 0.62rem;
             color: var(--ae-text-3);
-            margin-top: 0.2rem;
+            margin-top: 0.25rem;
             line-height: 1.45;
         }
 
-        /* Table */
+        /* ── Filters ── */
+        .tr-filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--s-2);
+            margin-bottom: var(--s-5);
+            align-items: center;
+        }
+        .tr-filter-label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: var(--ae-text-3);
+            margin-right: var(--s-1);
+        }
+        .tr-filter-sep { width: 1px; height: 16px; background: var(--ae-border); margin: 0 var(--s-1); }
+        .tr-filter-btn {
+            padding: 0.28rem 0.75rem;
+            background: var(--ae-surface);
+            border: 1px solid var(--ae-border);
+            border-radius: 100px;
+            color: var(--ae-text-2);
+            font-size: 0.72rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--ae-fast);
+            letter-spacing: 0.03em;
+        }
+        .tr-filter-btn:hover { border-color: var(--ae-gold-mid, rgba(184,150,106,0.3)); color: var(--ae-gold); }
+        .tr-filter-btn.active { background: var(--ae-gold-dim, rgba(184,150,106,0.1)); border-color: var(--ae-gold-mid, rgba(184,150,106,0.4)); color: var(--ae-gold); }
+        .tr-filter-btn.active-green { background: var(--ae-buy-bg); border-color: var(--ae-buy-border); color: var(--ae-buy); }
+        .tr-filter-btn.active-red   { background: var(--ae-sell-bg); border-color: var(--ae-sell-border); color: var(--ae-sell); }
+
+        /* ── Table ── */
         .tr-table-wrap {
             overflow-x: auto;
-            border-radius: 14px;
-            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: var(--ae-radius-md);
+            border: 1px solid var(--ae-border);
         }
         .tr-table {
             width: 100%;
             border-collapse: collapse;
-            background: rgba(0,0,0,0.4);
-            font-size: 0.85rem;
+            background: var(--ae-surface);
+            font-size: 0.82rem;
         }
         .tr-table thead tr {
-            border-bottom: 1px solid rgba(74,143,171,0.15);
-            background: rgba(0,0,0,0.6);
+            border-bottom: 1px solid var(--ae-border);
+            background: var(--ae-raised);
         }
         .tr-table th {
-            padding: 0.9rem 1rem;
+            padding: 0.85rem 1rem;
             text-align: left;
-            font-size: 0.68rem;
+            font-size: 0.65rem;
             letter-spacing: 0.12em;
             text-transform: uppercase;
-            color: rgba(74,143,171,0.7);
+            color: var(--ae-gold);
             font-weight: 700;
             white-space: nowrap;
+            opacity: 0.75;
         }
         .tr-table td {
             padding: 0.75rem 1rem;
-            border-bottom: 1px solid rgba(255,255,255,0.04);
+            border-bottom: 1px solid var(--ae-border-dim, rgba(255,255,255,0.04));
             color: var(--ae-text-1);
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.82rem;
+            font-family: var(--ae-font-mono);
+            font-size: 0.8rem;
             white-space: nowrap;
         }
-        .tr-table tbody tr:hover { background: rgba(74,143,171,0.03); }
+        .tr-table tbody tr:hover { background: var(--ae-raised); }
         .tr-table tbody tr:last-child td { border-bottom: none; }
 
-        /* Outcome badges */
+        /* ── Outcome badges ── */
         .tr-badge {
             display: inline-block;
-            padding: 0.15rem 0.55rem;
-            border-radius: 20px;
-            font-size: 0.7rem;
+            padding: 0.12rem 0.55rem;
+            border-radius: 100px;
+            font-size: 0.65rem;
             font-weight: 700;
             letter-spacing: 0.06em;
             text-transform: uppercase;
         }
-        .tr-badge-win  { background: rgba(74,124,104,0.12); color: #4a7c68; border: 1px solid rgba(74,124,104,0.25); }
-        .tr-badge-loss { background: rgba(122,64,64,0.12);  color: #7a4040; border: 1px solid rgba(122,64,64,0.25); }
-        .tr-badge-open { background: var(--ae-data-bg);  color: var(--ae-data); border: 1px solid rgba(74,143,171,0.2); }
-        .tr-badge-hold { background: rgba(255,255,255,0.06); color: var(--ae-text-2); border: 1px solid rgba(255,255,255,0.1); }
+        .tr-badge-win  { background: var(--ae-buy-bg);  color: var(--ae-buy);  border: 1px solid var(--ae-buy-border); }
+        .tr-badge-loss { background: var(--ae-sell-bg); color: var(--ae-sell); border: 1px solid var(--ae-sell-border); }
+        .tr-badge-open { background: var(--ae-gold-dim, rgba(184,150,106,0.1)); color: var(--ae-gold); border: 1px solid var(--ae-gold-mid, rgba(184,150,106,0.3)); }
+        .tr-badge-hold { background: var(--ae-surface); color: var(--ae-text-2); border: 1px solid var(--ae-border); }
 
-        /* Direction chip */
-        .tr-dir-long  { color: #4a7c68; }
-        .tr-dir-short { color: #7a4040; }
+        /* ── Direction ── */
+        .tr-dir-long  { color: var(--ae-buy); }
+        .tr-dir-short { color: var(--ae-sell); }
         .tr-dir-hold  { color: var(--ae-text-2); }
 
-        /* Loading / empty states */
+        /* ── Loading / empty states ── */
         .tr-loading, .tr-empty {
             text-align: center;
             padding: 4rem 2rem;
             color: var(--ae-text-3);
         }
-        .tr-loading i { font-size: 2rem; color: rgba(74,143,171,0.3); animation: tr-spin 1s linear infinite; }
-        .tr-empty i   { font-size: 2.5rem; color: rgba(74,143,171,0.15); margin-bottom: 1rem; }
-        .tr-empty h3  { color: var(--ae-text-3); font-size: 1rem; margin-bottom: 0.5rem; }
+        .tr-loading i { font-size: 2rem; color: var(--ae-gold); opacity: 0.3; animation: tr-spin 1s linear infinite; }
+        .tr-empty i   { font-size: 2.5rem; color: var(--ae-gold); opacity: 0.15; margin-bottom: 1rem; }
+        .tr-empty h3  { color: var(--ae-text-2); font-size: 1rem; margin-bottom: 0.5rem; }
         .tr-empty p   { font-size: 0.82rem; line-height: 1.75; max-width: 500px; margin: 0 auto; }
         @keyframes tr-spin  { to { transform: rotate(360deg); } }
         @keyframes tr-pulse { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
 
-        .tr-filter-btn {
-            padding: 0.3rem 0.75rem;
-            background: rgba(255,255,255,0.04);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 20px;
-            color: var(--ae-text-2);
-            font-size: 0.75rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.15s;
-            letter-spacing: 0.04em;
-        }
-        .tr-filter-btn:hover  { border-color: rgba(74,143,171,0.3); color: var(--ae-data); }
-        .tr-filter-btn.active { background: rgba(74,143,171,0.1); border-color: rgba(74,143,171,0.4); color: var(--ae-data); }
-
+        /* ── Win rate note ── */
         .tr-winrate-note {
-            font-size: 0.68rem;
+            font-size: 0.66rem;
             color: var(--ae-text-3);
             text-align: center;
-            margin-top: 1.8rem;
+            margin-top: var(--s-5);
             line-height: 1.7;
         }
 
         @media (max-width: 600px) {
-            .tr-page { padding: 2rem 1rem 4rem; }
-            .tr-title { font-size: 1.7rem; }
-            .tr-table th, .tr-table td { padding: 0.65rem 0.6rem; font-size: 0.75rem; }
+            .tr-title { font-size: 1.8rem; }
+            .tr-table th, .tr-table td { padding: 0.6rem 0.6rem; font-size: 0.72rem; }
             .tr-summary { grid-template-columns: repeat(2, 1fr); }
+            .tr-panel-body { padding: var(--s-4); }
         }
     </style>
 </head>
@@ -351,13 +365,13 @@
   </div>
 </div>
 
-    <!-- ===== SHARED HEADER ===== -->
-    <div style="max-width:min(1600px, calc(100vw - 2rem));margin:3rem auto 1.5rem;padding:0 1.5rem;text-align:center;">
+    <!-- ===== HERO ===== -->
+    <div style="max-width:1400px;margin:3rem auto 2rem;padding:0 var(--s-5);text-align:center;">
         <span class="tr-eyebrow">Public Signal Logs</span>
         <h1 class="tr-title">AEGIS Track Records</h1>
         <p class="tr-sub">Two engines. One transparent log. Every BUY/SELL signal — wins and losses — shown publicly with no filters.</p>
-        <div class="tr-disclaimer" style="text-align:left;margin-top:1.2rem;">
-            <i class="fas fa-exclamation-triangle"></i>
+        <div class="tr-disclaimer" style="text-align:left;margin-top:1.5rem;max-width:800px;margin-left:auto;margin-right:auto;">
+            <i class="fas fa-triangle-exclamation"></i>
             <span><strong>Not financial advice.</strong> Past performance does not guarantee future results. Crypto markets carry significant risk. Never trade more than you can afford to lose.</span>
         </div>
     </div>
@@ -368,23 +382,25 @@
         <!-- ════ LEFT: AEGIS-1 Engine ════ -->
         <div class="tr-panel">
             <div class="tr-panel-header">
-                <i class="fas fa-satellite-dish" style="color:#4a8fab;font-size:1.1rem;"></i>
+                <i class="fas fa-satellite-dish" style="color:var(--ae-gold);font-size:1rem;opacity:0.8;"></i>
                 <div>
-                    <div style="font-size:0.9rem;font-weight:800;color:#fff;letter-spacing:0.05em;">AEGIS-1 Signal Engine</div>
-                    <div style="font-size:0.65rem;color:#4b6280;letter-spacing:0.1em;text-transform:uppercase;"><span id="trTokenCount">63</span> tokens · 1h candles · directional precision gate</div>
+                    <div style="font-size:0.88rem;font-weight:600;color:var(--ae-text-1);letter-spacing:0.04em;">AEGIS-1 Signal Engine</div>
+                    <div style="font-size:0.62rem;color:var(--ae-text-3);letter-spacing:0.1em;text-transform:uppercase;margin-top:2px;"><span id="trTokenCount">63</span> tokens · 1h candles · directional precision gate</div>
                 </div>
                 <div style="margin-left:auto;display:flex;align-items:center;gap:0.75rem;">
-                    <div id="trScanStatus" style="display:flex;align-items:center;gap:0.35rem;" title="Bot is actively scanning all tokens">
-                        <span style="width:6px;height:6px;border-radius:50%;background:#4a8fab;box-shadow:0 0 6px #4a8fab;animation:tr-pulse 2s ease-in-out infinite;"></span>
-                        <span style="font-size:0.65rem;color:rgba(74,143,171,0.7);font-family:'JetBrains Mono',monospace;" id="trScanLabel">scanning</span>
+                    <div id="trScanStatus" style="display:flex;align-items:center;gap:0.4rem;" title="Bot is actively scanning all tokens">
+                        <span style="width:6px;height:6px;border-radius:50%;background:var(--ae-buy);box-shadow:0 0 6px var(--ae-buy);animation:tr-pulse 2s ease-in-out infinite;display:inline-block;"></span>
+                        <span style="font-size:0.65rem;color:var(--ae-text-3);font-family:var(--ae-font-mono);" id="trScanLabel">live</span>
                     </div>
-                    <a href="#" onclick="window.refreshAegisTrackRecord && window.refreshAegisTrackRecord();return false;" style="font-size:0.7rem;color:rgba(74,143,171,0.5);text-decoration:none;" title="Refresh">&#8635;</a>
+                    <span style="color:var(--ae-border);font-size:0.7rem;">·</span>
+                    <span style="font-size:0.65rem;color:var(--ae-text-3);font-family:var(--ae-font-mono);" id="trRefreshLabel">refreshed <span id="trRefreshTime">—</span> UTC</span>
+                    <a href="#" onclick="window.refreshAegisTrackRecord && window.refreshAegisTrackRecord();return false;" style="font-size:0.75rem;color:var(--ae-text-3);text-decoration:none;transition:color 120ms;" onmouseover="this.style.color='var(--ae-gold)'" onmouseout="this.style.color='var(--ae-text-3)'" title="Refresh">&#8635;</a>
                 </div>
             </div>
             <div class="tr-panel-body">
                 <!-- History note -->
-                <div class="tr-history-note" style="margin-bottom:1rem;">
-                    Signals logged with entry price, TP &amp; SL. <strong>WIN</strong> = TP hit. <strong>LOSS</strong> = SL hit. Only <em>closed</em> signals shown here.
+                <div class="tr-history-note">
+                    Signals logged with entry price, TP &amp; SL. <strong>WIN</strong> = TP hit. <strong>LOSS</strong> = SL hit. Only <em>closed</em> signals shown publicly.
                 </div>
 
         <!-- Summary strip -->
@@ -408,7 +424,7 @@
                 <span class="tr-stat-value tr-na" id="trRateVal">—</span>
                 <div class="tr-stat-label">Win Rate</div>
                 <div class="tr-stat-sub" id="trRateNote">computed from closed signals</div>
-                <div id="trLowSampleNote" style="display:none;font-size:0.6rem;color:#b8966a;margin-top:0.2rem;">⚠ low sample — not reliable yet</div>
+                <div id="trLowSampleNote" style="display:none;font-size:0.6rem;color:var(--ae-gold);opacity:0.7;margin-top:0.2rem;">⚠ low sample — not reliable yet</div>
             </div>
             <div class="tr-stat">
                 <span class="tr-stat-value" id="trAvgPnlVal">—</span>
@@ -425,19 +441,19 @@
         <!-- Live signal teaser — populated by JS, hidden until open count known -->
         <div id="trLiveTeaser" style="
             display:none; align-items:center; gap:1rem;
-            background:rgba(74,124,104,0.04); border:1px solid rgba(74,124,104,0.18);
-            border-radius:12px; padding:0.85rem 1.2rem; margin-bottom:1.5rem;
-            font-size:0.85rem; color:rgba(255,255,255,0.7); line-height:1.5;
+            background:var(--ae-buy-bg); border:1px solid var(--ae-buy-border);
+            border-radius:var(--ae-radius-md); padding:0.85rem 1.2rem; margin-bottom:1.5rem;
+            font-size:0.82rem; color:var(--ae-text-2); line-height:1.5;
         "></div>
 
-        <!-- Filter bar — only closed signals shown publicly -->
-        <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:1.5rem;align-items:center;">
-            <span style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.1em;color:#4b5563;margin-right:0.25rem;">Direction:</span>
+        <!-- Filter bar -->
+        <div class="tr-filters">
+            <span class="tr-filter-label">Direction</span>
             <button class="tr-filter-btn active" data-tr-filter-dir="ALL">All</button>
             <button class="tr-filter-btn" data-tr-filter-dir="LONG">Long</button>
             <button class="tr-filter-btn" data-tr-filter-dir="SHORT">Short</button>
-            <span style="margin:0 0.5rem;color:#374151;">|</span>
-            <span style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.1em;color:#4b5563;margin-right:0.25rem;">Outcome:</span>
+            <div class="tr-filter-sep"></div>
+            <span class="tr-filter-label">Outcome</span>
             <button class="tr-filter-btn active" data-tr-filter-out="ALL">All</button>
             <button class="tr-filter-btn" data-tr-filter-out="WIN">Wins</button>
             <button class="tr-filter-btn" data-tr-filter-out="LOSS">Losses</button>
@@ -472,12 +488,12 @@
 
         <!-- Empty state -->
         <div id="trEmpty" class="tr-empty" style="display:none;">
-            <i class="fas fa-satellite-dish" style="color:#4a8fab;"></i>
-            <h3 style="color:#fff;">The Engine Is Running — Signals Close Soon</h3>
-            <p style="max-width:520px;margin:0.5rem auto 1rem;line-height:1.75;">The bot is actively scanning <strong style="color:#4a8fab;"><span class="trTokenCountRef">60</span> tokens</strong> every 5 minutes. Closed outcomes appear here the moment a Take Profit or Stop Loss is hit. <br><br>Open signals are visible on the dashboard (subscribers only) — they include live entry price, TP, SL, and the AI's plain-English reasoning. <strong style="color:#e2e8f0;">Check back in a few hours.</strong></p>
-            <div style="display:flex;gap:0.8rem;justify-content:center;flex-wrap:wrap;margin-top:0.8rem;">
-                <a href="/pricing" style="background:linear-gradient(95deg,#4a8fab,#00a1b0);padding:0.6rem 1.5rem;border-radius:30px;font-weight:800;font-size:0.85rem;color:#050505;text-decoration:none;">See Live Signals →</a>
-                <a href="#" onclick="window.refreshAegisTrackRecord && window.refreshAegisTrackRecord();return false;" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);padding:0.6rem 1.5rem;border-radius:30px;font-weight:700;font-size:0.85rem;color:#94a3b8;text-decoration:none;">↻ Refresh</a>
+            <i class="fas fa-satellite-dish"></i>
+            <h3>The Engine Is Running — Signals Close Soon</h3>
+            <p style="max-width:520px;margin:0.5rem auto 1rem;line-height:1.75;">The bot is actively scanning <strong style="color:var(--ae-gold);"><span class="trTokenCountRef">63</span> tokens</strong> every 5 minutes. Closed outcomes appear here the moment a Take Profit or Stop Loss is hit.<br><br>Open signals are visible on the dashboard (subscribers only) — they include live entry price, TP, SL, and the AI's plain-English reasoning. <strong style="color:var(--ae-text-1);">Check back in a few hours.</strong></p>
+            <div style="display:flex;gap:0.75rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;">
+                <a href="/pricing" class="ae-btn ae-btn-primary ae-btn-md">See Plans →</a>
+                <a href="#" onclick="window.refreshAegisTrackRecord && window.refreshAegisTrackRecord();return false;" class="ae-btn ae-btn-outline ae-btn-md">↻ Refresh</a>
             </div>
         </div>
 
