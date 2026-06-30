@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-live_engine.py — Aegis-1 Live Signal Engine  (Institutional-Grade Adaptive)
+live_engine.py — Aegis-1 Live Signal Engine  (Glass-Box Adaptive)
 ============================================================================
 Loads trained XGBoost models from the model store, runs Predictor.predict_realtime()
 for every tradeable symbol on a configurable interval, manages a virtual paper-trading
