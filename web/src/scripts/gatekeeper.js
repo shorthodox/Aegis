@@ -532,9 +532,9 @@ function filterAndRenderSignals() {
   const strategySelect = document.getElementById('strategy-matchmaker');
   const currentStrategy = strategySelect ? strategySelect.value : '';
 
-  // Validate timeframe for trial users
+  // Validate timeframe for trial/basic users (30m & 1h only; 15m+ requires intermediate)
   if (!['pro', 'premium', 'intermediate'].includes(userPlan)) {
-      if (!['15m', '30m', '1h'].includes(currentTimeframe)) {
+      if (!['30m', '1h'].includes(currentTimeframe)) {
           currentTimeframe = '1h';
           if (typeof window !== 'undefined') window.activeTimeframe = '1h';
       }
@@ -1303,8 +1303,8 @@ function updateDashboardData(data) {
   if (signalsContainer && data.signals) {
     // Populate window.latestSignals from WebSocket
     Object.entries(data.signals).forEach(([sym, sig]) => {
-      // For trial users, create signals for multiple timeframes (15m, 30m, 1h)
-      const trialTimeframes = ['15m', '30m', '1h'];
+      // For trial/basic users, populate only the 2 allowed timeframes (30m & 1h)
+      const trialTimeframes = ['30m', '1h'];
 
       // Build a complete signal object that includes all fields the panel
       // renderers need. Real field names from live_engine._build_signal_entry:
@@ -1429,7 +1429,7 @@ function updateDashboardData(data) {
             tp: sig.tp || 0,
             confidence_score: sig.confidence_score || 0,
             signal_id: sig.signal_id || '',
-            trading_accuracy: sig.trading_accuracy || 0.5,
+            trading_accuracy: sig.trading_accuracy || (sig.win_rate ? sig.win_rate / 100 : 0.65),
             profitability_index: sig.profitability_index || 0,
             sr_telemetry: sig.sr_telemetry || null,
             macro_regime: sig.macro_regime || null,
@@ -1560,7 +1560,7 @@ function renderSignals(signals) {
   const effectiveTrialActive = typeof AuthManager !== 'undefined' ? AuthManager.isTrialValid() : ((trialActive === null && userPlan === 'trial') ? true : trialActive);
 
   function getUserTier() {
-    if (userPlan === 'pro') return 3;
+    if (userPlan === 'pro' || userPlan === 'premium' || userPlan === 'pro-dev') return 3;
     if (userPlan === 'intermediate') return 2;
     if (userPlan === 'basic') return 1;
     return 1; // Trial or none
@@ -1668,9 +1668,16 @@ function renderSignals(signals) {
       directionBadge = '<span class="bg-red-500/20 text-red-400 border border-red-500/50 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider">SHORT</span>';
     }
 
-    const slStr = signal.sl ? signal.sl.toFixed(4) : '-';
-    const tpStr = signal.tp ? signal.tp.toFixed(4) : '-';
-    const entryStr = signal.entry_price ? signal.entry_price.toFixed(4) : '-';
+    const _fmtP = p => {
+      if (!p) return '-';
+      if (p < 0.0001) return p.toFixed(8);
+      if (p < 0.01)   return p.toFixed(6);
+      if (p < 1)      return p.toFixed(4);
+      return p.toFixed(2);
+    };
+    const slStr    = _fmtP(signal.sl);
+    const tpStr    = _fmtP(signal.tp);
+    const entryStr = _fmtP(signal.entry_price);
     const profIndex = (signal.profitability_index || 0).toFixed(2);
 
     const confluence = signal.confluence || { trend: 50, momentum: 50, volume: 50 };
@@ -1811,10 +1818,14 @@ function renderSignals(signals) {
         <div class="signal-details mt-3">
           ${dontTradeHTML}
           <div class="signal-confidence flex justify-between items-center mb-2">
-            <div class="confidence-bar flex-1 h-1.5 bg-black/50 rounded overflow-hidden mr-3">
-              <div class="confidence-fill h-full bg-current" style="width: ${confidence}%"></div>
-            </div>
-            <span class="text-xs font-mono">AI: ${confidence.toFixed(1)}%</span>
+            ${_isPro ? `<div class="confidence-bar flex-1 h-1.5 bg-black/50 rounded overflow-hidden mr-3"><div class="confidence-fill h-full bg-current" style="width: ${confidence}%"></div></div>` : ''}
+            <span class="text-xs font-mono">${
+              _isPro
+                ? `AI: ${confidence.toFixed(1)}%`
+                : _isSentinel
+                  ? `AI: <span class="${{'HIGH':'text-green-400','MEDIUM':'text-yellow-400','LOW':'text-red-400'}[signal.ai_conviction] || 'text-gray-500'}">${signal.ai_conviction || 'N/A'}</span>`
+                  : `AI: <span class="text-gray-600"><i class="fas fa-lock text-[8px]"></i></span>`
+            }</span>
           </div>
           <div class="signal-meta grid grid-cols-2 gap-2 mt-3 text-xs text-gray-400">
             <span class="signal-strength ${signal.signal_strength?.toLowerCase()}">
@@ -1882,7 +1893,7 @@ window.toggleScorecard = function (event, symbol) {
 
   // Calculate tier
   let userTier = 0;
-  if (userPlan === 'pro') userTier = 3;
+  if (userPlan === 'pro' || userPlan === 'premium' || userPlan === 'pro-dev') userTier = 3;
   else if (userPlan === 'intermediate') userTier = 2;
   else if (userPlan === 'basic') userTier = 1;
 
@@ -2082,7 +2093,7 @@ function setupFirestoreListeners() {
         }
 
         if (!['pro', 'premium', 'intermediate'].includes(userPlan)) {
-          const trialTimeframes = ['15m', '30m', '1h'];
+          const trialTimeframes = ['30m', '1h'];
           trialTimeframes.forEach(trialTf => {
             const key = `${symbol}_${trialTf}`;
             window.latestSignals[key] = { ...signalObj, timeframe: trialTf };
@@ -2102,7 +2113,7 @@ function setupFirestoreListeners() {
         }
 
         if (!['pro', 'premium', 'intermediate'].includes(userPlan)) {
-          const trialTimeframes = ['15m', '30m', '1h'];
+          const trialTimeframes = ['30m', '1h'];
           trialTimeframes.forEach(trialTf => {
             const key = `${symbol}_${trialTf}`;
             delete window.latestSignals[key];

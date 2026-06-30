@@ -2587,15 +2587,15 @@ class LiveEngine:
         )
 
         if side == 'BUY':
-            entry['suggested_sl'] = _stops.get('sl', round(price - _re.ATR_SL_MULTIPLIER * atr, 8))
-            entry['suggested_tp'] = _stops.get('tp1', round(price + _re.TP1_MULTIPLIER * atr, 8))
+            entry['suggested_sl'] = _stops.get('sl') if _stops else None
+            entry['suggested_tp'] = _stops.get('tp1') if _stops else None
             entry['tp2']          = _stops.get('tp2')
             entry['tp3']          = _stops.get('tp3')
             entry['tp4']          = _stops.get('tp4')
             entry['tp5']          = _stops.get('tp5')
         elif side == 'SELL':
-            entry['suggested_sl'] = _stops.get('sl', round(price + _re.ATR_SL_MULTIPLIER * atr, 8))
-            entry['suggested_tp'] = _stops.get('tp1', round(price - _re.TP1_MULTIPLIER * atr, 8))
+            entry['suggested_sl'] = _stops.get('sl') if _stops else None
+            entry['suggested_tp'] = _stops.get('tp1') if _stops else None
             entry['tp2']          = _stops.get('tp2')
             entry['tp3']          = _stops.get('tp3')
             entry['tp4']          = _stops.get('tp4')

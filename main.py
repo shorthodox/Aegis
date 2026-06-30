@@ -4052,6 +4052,44 @@ async def check_and_send_subscription_reminders():
             await asyncio.sleep(86400)
 
 # -------------------------------------------------------------------
+# WebSocket signal field filtering by plan tier
+# -------------------------------------------------------------------
+_WS_PRO_ONLY_FIELDS = frozenset((
+    'p_buy', 'p_sell', 'p_hold',
+    'raw_probabilities', 'shap_contributions',
+    'hmm_transition_risk', 'hmm_regime', 'hmm_state',
+    'lstm_exhaustion_prob', 'lstm_continuation_prob', 'lstm_sequence',
+    'meta_confidence', 'ai_prob', 'confidence_score',
+    'signal_id',
+))
+
+def _ws_filter_signal(sig: dict, plan: str) -> dict:
+    """Strip plan-gated fields from a signal dict before sending over WebSocket."""
+    is_intermediate = plan in ('intermediate', 'pro', 'premium', 'active', 'pro-dev')
+    is_pro          = plan in ('pro', 'premium', 'active', 'pro-dev')
+
+    if is_pro:
+        return sig  # pro gets everything
+
+    out = {k: v for k, v in sig.items() if k not in _WS_PRO_ONLY_FIELDS}
+
+    # Intermediate gets a coarse conviction label instead of the raw confidence number
+    if is_intermediate:
+        raw_conf = float(sig.get('meta_confidence', 0) or sig.get('ai_prob', 0))
+        thr      = float(sig.get('threshold', 0.6) or 0.6)
+        if raw_conf == 0:
+            out['ai_conviction'] = 'NO_DATA'
+        elif raw_conf >= thr * 1.15:
+            out['ai_conviction'] = 'HIGH'
+        elif raw_conf >= thr:
+            out['ai_conviction'] = 'MEDIUM'
+        else:
+            out['ai_conviction'] = 'LOW'
+
+    return out
+
+
+# -------------------------------------------------------------------
 # WebSocket Dashboard with Plan Filtering
 # -------------------------------------------------------------------
 @app.websocket("/ws/dashboard")
@@ -4401,6 +4439,7 @@ async def websocket_dashboard(websocket: WebSocket):
                                 "p_buy":            float(sig_data.get("p_buy") or 0),
                                 "p_sell":           float(sig_data.get("p_sell") or 0),
                                 "p_hold":           float(sig_data.get("p_hold") or 0),
+                                "trading_accuracy": _acc,
                             })
                             filtered_signals[sym] = _out
 
@@ -4434,6 +4473,14 @@ async def websocket_dashboard(websocket: WebSocket):
                                 "timeframe":       "1h",
                                 "timestamp":       datetime.now(timezone.utc).isoformat(),
                                 "signal_id":       f"{_sym.replace('/','_')}_FLAT",
+                                "trading_accuracy": float(
+                                    getattr(_pred, 'meta', {}).get('holdout_trading', {}).get('directional_precision', 0)
+                                    or 0.65
+                                ),
+                                "win_rate": round(float(
+                                    getattr(_pred, 'meta', {}).get('holdout_trading', {}).get('directional_precision', 0)
+                                    or 0.65
+                                ) * 100, 1),
                             }
                             if _px > 0:
                                 live_tickers[_sym] = _px
@@ -4475,9 +4522,16 @@ async def websocket_dashboard(websocket: WebSocket):
                         LIVE_STATE.data.get("alpha_mode", False)
                         and _user_plan_cache in ("pro", "premium", "pro-dev")
                     )
+
+                    # Strip plan-gated ML fields before sending to client
+                    _plan_filtered_signals = {
+                        sym: _ws_filter_signal(sig, _user_plan_cache)
+                        for sym, sig in filtered_signals.items()
+                    }
+
                     response_data = {
                         "tickers": live_tickers,
-                        "signals": filtered_signals,
+                        "signals": _plan_filtered_signals,
                         "alpha_signals": (
                             numpy_to_native(LIVE_STATE.data.get("alpha_signals", {}))
                             if _alpha_on else {}

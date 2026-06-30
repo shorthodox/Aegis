@@ -144,7 +144,7 @@ export class AuthManager {
         const user = this.getUser();
         if (user?.plan) return user.plan;
 
-        return 'free_trial';
+        return 'trial';
     }
 
     static isTrialValid() {
