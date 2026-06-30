@@ -600,7 +600,7 @@ class DynamicRiskEngine:
     ATR_PERIOD        = 14     # lookback period for ATR calculation
     ATR_SL_MULTIPLIER = 1.2    # SL distance = ATR × this
 
-    TP1_MULTIPLIER    = 1.0    # 20 % partial close — start break-even protection
+    TP1_MULTIPLIER    = 0.55   # 20 % partial close — fires early to lock break-even fast
     TP2_MULTIPLIER    = 1.8    # 20 % partial close — activate trailing stop
     TP3_MULTIPLIER    = 2.7    # 20 % partial close — used for RR validation
     TP4_MULTIPLIER    = 3.8    # 20 % partial close
@@ -608,7 +608,7 @@ class DynamicRiskEngine:
 
     MIN_RISK_REWARD   = 2.0    # Reward / Risk using TP3 as target; trades below this are rejected
 
-    TRAIL_MULTIPLIER  = 1.0    # trailing stop distance = ATR × this (active after TP2)
+    TRAIL_MULTIPLIER  = 0.8    # trailing stop distance = ATR × this (tightened after TP2)
 
     # ── Partial-close percentages (must sum to 1.0) ───────────────────────────
     TP_CLOSE_PCTS = (0.20, 0.20, 0.20, 0.20, 0.20)  # TP1 … TP5
