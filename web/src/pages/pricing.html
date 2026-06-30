@@ -735,6 +735,14 @@
             if (globalAuthState) {
                 hideElement(portalBtn); hideElement(createAccountBtn);
                 showElement(dashboardBtn); showElement(signOutBtn);
+                // If user already has an active trial, relabel button to "Start Basic"
+                const _tb = document.getElementById('trialBtn');
+                if (_tb) {
+                    const trialEndStr = localStorage.getItem('trial_end_timestamp');
+                    if (trialEndStr && new Date(trialEndStr) > new Date()) {
+                        _tb.textContent = 'Start Basic';
+                    }
+                }
             } else {
                 showElement(portalBtn); showElement(createAccountBtn);
                 hideElement(dashboardBtn); hideElement(signOutBtn);
@@ -826,7 +834,13 @@
             trialBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 if (globalAuthState || isUserAuthenticated()) {
-                    startTrialWithBackend();
+                    const trialEndStr = localStorage.getItem('trial_end_timestamp');
+                    const hasActiveTrial = trialEndStr && new Date(trialEndStr) > new Date();
+                    if (hasActiveTrial) {
+                        subscribeToPlan('basic');
+                    } else {
+                        startTrialWithBackend();
+                    }
                 } else {
                     window.pendingAction = 'startTrial';
                     openSignUpModal();
