@@ -548,7 +548,7 @@ function filterAndRenderSignals() {
 
       let isMatch = true;
       if (currentStrategy) {
-        const acc = (sig.trading_accuracy || 0.5); // Provide fallback if no accuracy data
+        const acc = sig.trading_accuracy || (sig.win_rate ? sig.win_rate / 100 : 0.65);
         if (currentStrategy === 'conservative') {
           if (acc <= 0.75) isMatch = false;
         } else if (currentStrategy === 'balanced') {
@@ -559,9 +559,9 @@ function filterAndRenderSignals() {
           if (acc <= 0.40) isMatch = false;
         }
       }
-      if (isMatch) {
-        currentSignals[sig.symbol] = sig;
-      }
+      // Always include all signals — strategy filter highlights matches, not hides misses
+      sig._strategyMatch = isMatch;
+      currentSignals[sig.symbol] = sig;
     }
   });
 
@@ -1684,7 +1684,7 @@ function renderSignals(signals) {
 
     let matchClasses = '';
     let matchBadge = '';
-    if (isStrategyActive) {
+    if (isStrategyActive && signal._strategyMatch) {
       matchClasses = 'border-cyan shadow-[0_0_15px_rgba(0,242,255,0.4)]';
       matchBadge = '<span class="bg-cyan/20 text-cyan border border-cyan/50 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider animate-pulse">ALPHA MATCH</span>';
     }
