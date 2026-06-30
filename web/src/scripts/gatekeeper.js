@@ -1647,7 +1647,8 @@ function renderSignals(signals) {
         : (sigUp.includes('SELL') || signal.direction === 'SHORT') ? 'sell'
         : 'hold')
       : 'hold';
-    const confidence = (signal.ai_prob || 0) * 100;
+    // ai_prob is already on 0-100 scale (edge_score from live engine)
+    const confidence = Math.min(Math.max(signal.ai_prob || 0, 0), 100);
 
     // Determine status badge
     let statusBadge = '';
@@ -1791,7 +1792,7 @@ function renderSignals(signals) {
     }
 
     return `
-      <div class="signal-card ${cardTypeClass}${statusIndicator} cursor-pointer hover:shadow-[0_0_15px_rgba(0,242,255,0.2)] transition-all transform hover:-translate-y-1 overflow-hidden ${matchClasses}" onclick="window.openSignalDetails('${symbol}', '${timeframe}')" data-symbol="${symbol}" data-status="${signalStatus}" data-dir="${dirAttr}">
+      <div class="signal-card ${cardTypeClass}${statusIndicator} cursor-pointer hover:shadow-[0_0_15px_rgba(184,150,106,0.2)] transition-all transform hover:-translate-y-1 overflow-hidden ${matchClasses}" onclick="window.openSignalDetails('${symbol}', '${timeframe}')" data-symbol="${symbol}" data-status="${signalStatus}" data-dir="${dirAttr}">
         <div class="signal-header flex justify-between items-center">
           <div class="flex items-center gap-1.5 flex-wrap">
             <span class="signal-symbol font-bold">${symbol}</span>
@@ -1823,7 +1824,7 @@ function renderSignals(signals) {
               <span><i class="fas fa-shield-alt"></i> Risk: ${signal.risk_pct || 2}%</span>
               <span class="text-orange font-bold px-1 rounded bg-orange/10 border border-orange/20" title="Profitability Index">PI: ${profIndex}</span>
             </span>
-            <span class="col-span-2 text-cyan font-mono bg-black/30 p-1.5 rounded flex justify-between">
+            <span class="col-span-2 font-mono bg-black/30 p-1.5 rounded flex justify-between" style="color:#B8966A">
                <span>Entry: ${entryStr}</span>
                <span>SL: ${slStr} | TP: ${tpStr}</span>
             </span>
@@ -1837,21 +1838,21 @@ function renderSignals(signals) {
               <div class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/60 backdrop-blur-md rounded border border-white/10">
                 <i class="fas fa-lock text-white/50 text-xl mb-2"></i>
                 <div class="text-[10px] text-gray-400 mb-2">Logic Locked</div>
-                <button class="upgrade-btn text-[10px] bg-cyan/20 text-cyan px-2 py-1 rounded border border-cyan/30 hover:bg-cyan/30 transition-colors" onclick="window.location.href='/pricing'; event.stopPropagation();">Upgrade to Sentinel</button>
+                <button class="upgrade-btn text-[10px] px-2 py-1 rounded transition-colors" style="background:rgba(184,150,106,0.15);color:#B8966A;border:1px solid rgba(184,150,106,0.35);" onclick="window.location.href='/pricing'; event.stopPropagation();">Upgrade to Sentinel</button>
               </div>
               ` : '' }
               <div class="pt-2 border-t border-white/10 mt-2 ${ (userPlan === 'trial' || userPlan === 'basic') ? 'opacity-30 blur-sm pointer-events-none' : '' }">
                 <div class="text-[10px] font-bold text-gray-400 uppercase mb-2">AI Reasoning: XGBoost Confluence</div>
                 <div class="mb-2">
-                  <div class="flex justify-between text-[10px]"><span class="text-gray-400">Trend Alignment (EMA 50/200)</span><span class="text-cyan font-mono">${confluence.trend}%</span></div>
+                  <div class="flex justify-between text-[10px]"><span class="text-gray-400">Trend Alignment (EMA 50/200)</span><span class="font-mono" style="color:#B8966A">${confluence.trend}%</span></div>
                   <div class="confluence-bar"><div class="fill" style="width: ${confluence.trend}%;"></div></div>
                 </div>
                 <div class="mb-2">
-                  <div class="flex justify-between text-[10px]"><span class="text-gray-400">Momentum (RSI Regime)</span><span class="text-cyan font-mono">${confluence.momentum}%</span></div>
+                  <div class="flex justify-between text-[10px]"><span class="text-gray-400">Momentum (RSI Regime)</span><span class="font-mono" style="color:#B8966A">${confluence.momentum}%</span></div>
                   <div class="confluence-bar"><div class="fill" style="width: ${confluence.momentum}%;"></div></div>
                 </div>
                 <div class="mb-2">
-                  <div class="flex justify-between text-[10px]"><span class="text-gray-400">Volume Delta</span><span class="text-cyan font-mono">${confluence.volume}%</span></div>
+                  <div class="flex justify-between text-[10px]"><span class="text-gray-400">Volume Delta</span><span class="font-mono" style="color:#B8966A">${confluence.volume}%</span></div>
                   <div class="confluence-bar"><div class="fill" style="width: ${confluence.volume}%;"></div></div>
                 </div>
               </div>
