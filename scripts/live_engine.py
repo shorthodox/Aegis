@@ -441,15 +441,43 @@ class SignalQualityFilter:
         if vol_zscore < -0.8:
             score -= 10; reasons.append(f'low_volume(z={vol_zscore:.1f})')
 
-        # -15: conflicting macro signals (weekly disagrees with daily)
-        macro_daily  = _f('macro_daily', 0.0)
+        # ── HTF macro bias (weekly + daily EMA50 trend) ──────────────────────
+        # macro_weekly / macro_daily are binary: +1.0 (above EMA50) / -1.0 (below).
+        # Threshold 0.5 separates the two states cleanly.
+        #
+        # Scoring tiers:
+        #   +15: both weekly AND daily align with signal (strongest confirmation)
+        #   +10: weekly aligns, daily opposing (pullback/bounce setup — ideal entry)
+        #   -20: both weekly AND daily oppose signal (worst setup — nearly certain loss)
+        #   -10: weekly opposes, daily neutral/aligned (counter-trend caution)
+        #
+        # Hard block (weekly+daily both opposing) is also enforced in Gate 1.7
+        # of _process_symbol; the -20 here is belt-and-suspenders quality deduction.
+        macro_daily  = _f('macro_daily',  0.0)
         macro_weekly = _f('macro_weekly', 0.0)
-        macro_conflict = (
-            (side == 'BUY'  and macro_daily < -0.15 and macro_weekly < -0.10) or
-            (side == 'SELL' and macro_daily >  0.15 and macro_weekly >  0.10)
-        )
-        if macro_conflict:
-            score -= 15; reasons.append('conflicting_macro')
+        if macro_weekly != 0.0 or macro_daily != 0.0:
+            _w_bull = macro_weekly > 0.5
+            _w_bear = macro_weekly < -0.5
+            _d_bull = macro_daily  > 0.5
+            _d_bear = macro_daily  < -0.5
+            if side == 'BUY':
+                if _w_bull and _d_bull:
+                    score += 15; reasons.append('htf_both_bullish')
+                elif _w_bull and _d_bear:
+                    score += 10; reasons.append('htf_pullback_buy(w+/d-)')
+                elif _w_bear and _d_bear:
+                    score -= 20; reasons.append('htf_both_bearish')
+                elif _w_bear:
+                    score -= 10; reasons.append('htf_weekly_bearish')
+            elif side == 'SELL':
+                if _w_bear and _d_bear:
+                    score += 15; reasons.append('htf_both_bearish')
+                elif _w_bear and _d_bull:
+                    score += 10; reasons.append('htf_bounce_sell(w-/d+)')
+                elif _w_bull and _d_bull:
+                    score -= 20; reasons.append('htf_both_bullish')
+                elif _w_bull:
+                    score -= 10; reasons.append('htf_weekly_bullish')
 
         # ── LSTM temporal intelligence bonuses / penalties ─────────────────────
         # Only applied when LSTM models are available for this symbol.
@@ -1836,6 +1864,37 @@ class LiveEngine:
                             self.last_signals[symbol]['regime_blocked'] = True
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
+
+                    # ── Gate 1.7: HTF macro trend hard veto ─────────────────
+                    # Hard block when weekly EMA50 trend AND daily EMA50 trend
+                    # both clearly oppose the signal direction.
+                    # - Weekly bearish + daily bearish → BUY blocked (no longs in macro downtrend)
+                    # - Weekly bullish + daily bullish → SELL blocked (no shorts in macro uptrend)
+                    # When only the weekly opposes (daily is recovering/pulling back),
+                    # we allow the trade but the quality penalty in score_signal()
+                    # already suppresses it below 70 in most cases.
+                    _htf_w = float(result.get('macro_weekly', 0.0) or 0.0)
+                    _htf_d = float(result.get('macro_daily',  0.0) or 0.0)
+                    _htf_data_ok = (_htf_w != 0.0 or _htf_d != 0.0)
+                    if _htf_data_ok:
+                        if new_side == 'BUY' and _htf_w < -0.5 and _htf_d < -0.5:
+                            print(f'[{symbol}] HTF_VETO blocked BUY: '
+                                  f'weekly={_htf_w:+.1f} daily={_htf_d:+.1f} both bearish')
+                            if symbol in self.last_signals:
+                                self.last_signals[symbol]['fire']        = False
+                                self.last_signals[symbol]['signal']      = 'HOLD'
+                                self.last_signals[symbol]['htf_blocked'] = True
+                            self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                            return
+                        if new_side == 'SELL' and _htf_w > 0.5 and _htf_d > 0.5:
+                            print(f'[{symbol}] HTF_VETO blocked SELL: '
+                                  f'weekly={_htf_w:+.1f} daily={_htf_d:+.1f} both bullish')
+                            if symbol in self.last_signals:
+                                self.last_signals[symbol]['fire']        = False
+                                self.last_signals[symbol]['signal']      = 'HOLD'
+                                self.last_signals[symbol]['htf_blocked'] = True
+                            self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                            return
 
                     # ── Gate 2: ATR floor — stops would be inside tick noise ──
                     _fe_atr_pct = float(result.get('atr_pct', 0.0))
