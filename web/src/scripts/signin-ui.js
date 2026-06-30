@@ -177,7 +177,7 @@ async function performEmailSignin(e) {
       window.dispatchEvent(new CustomEvent('authStateChange', { detail: { authenticated: true } }));
       setTimeout(() => {
         closeSignInModal();
-        if (!window.pendingPlan && !window.pendingAction) {
+        if (!window.pendingPlan && !window.pendingAction && !window._aegisPaymentInFlight) {
           window.location.href = '/dashboard';
         }
       }, 1000);
@@ -225,7 +225,7 @@ async function performGoogleSignin() {
       window.dispatchEvent(new CustomEvent('authStateChange', { detail: { authenticated: true } }));
       setTimeout(() => {
         closeSignInModal();
-        if (!window.pendingPlan && !window.pendingAction) {
+        if (!window.pendingPlan && !window.pendingAction && !window._aegisPaymentInFlight) {
           window.location.href = '/dashboard';
         }
       }, 1000);

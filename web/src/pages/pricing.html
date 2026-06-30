@@ -839,12 +839,15 @@
         window.addEventListener('authStateChange', (ev) => {
             if (!ev.detail?.authenticated) return;
             if (window.pendingAction === 'startTrial') {
-                window.pendingAction = null;
-                startTrialWithBackend();
+                // Keep pendingAction set until trial is done so signin-ui won't
+                // redirect to /dashboard while the async request is in-flight.
+                startTrialWithBackend().finally(() => { window.pendingAction = null; });
             } else if (window.pendingPlan) {
                 const plan = window.pendingPlan;
                 window.pendingPlan = null;
-                subscribeToPlan(plan);
+                // Signal to signin-ui not to redirect while payment is in-flight.
+                window._aegisPaymentInFlight = true;
+                subscribeToPlan(plan).finally(() => { window._aegisPaymentInFlight = false; });
             }
         });
 

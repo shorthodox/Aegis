@@ -158,7 +158,21 @@ async function doLogin() {
 }
 
 async function subscribeToPlan(planType) {
-  const token = localStorage.getItem('access_token') || localStorage.getItem('authToken');
+  // Try Firebase session first so an expired/missing localStorage token doesn't
+  // block payment when the Firebase SDK session is still valid.
+  let token = localStorage.getItem('access_token') || localStorage.getItem('authToken');
+  let userEmail = null, userId = null;
+
+  try {
+    const { auth } = await import('./gatekeeper.js');
+    if (auth?.currentUser) {
+      token = await auth.currentUser.getIdToken();
+      localStorage.setItem('access_token', token);
+      userEmail = auth.currentUser.email;
+      userId    = auth.currentUser.uid;
+    }
+  } catch (_) {}
+
   if (!token) {
     openModal();
     return;
@@ -167,30 +181,20 @@ async function subscribeToPlan(planType) {
   showPaymentLoader();
 
   try {
-    // Prefer locally-stored profile (Firebase auth flow populates this via AuthManager.setUser).
-    // Avoids hitting /auth/me with a Firebase ID token that the custom server endpoint rejects.
-    let userEmail = null, userId = null;
-    try {
-      const profileRaw = localStorage.getItem('user_profile');
-      if (profileRaw) {
-        const profile = JSON.parse(profileRaw);
-        userEmail = profile.email || null;
-        userId = profile.uid || null;
-      }
-    } catch (_) {}
+    // Fill email/userId from locally-stored profile if Firebase didn't supply them.
+    if (!userEmail || !userId) {
+      try {
+        const profileRaw = localStorage.getItem('user_profile');
+        if (profileRaw) {
+          const profile = JSON.parse(profileRaw);
+          if (!userEmail) userEmail = profile.email || null;
+          if (!userId)   userId   = profile.uid   || null;
+        }
+      } catch (_) {}
+    }
 
-    // Get a fresh Firebase token (handles 1-hour expiry; Firebase SDK auto-refreshes).
-    // Also fills userEmail/userId if the stored profile was missing.
-    let freshToken = token;
-    try {
-      const { auth } = await import('./gatekeeper.js');
-      if (auth?.currentUser) {
-        freshToken = await auth.currentUser.getIdToken();
-        localStorage.setItem('access_token', freshToken);
-        if (!userEmail) userEmail = auth.currentUser.email;
-        if (!userId)   userId   = auth.currentUser.uid;
-      }
-    } catch (_) {}
+    // freshToken is the token we'll use for all API calls (already refreshed above).
+    const freshToken = token;
 
     // Hard fallback: server-issued JWT users who never went through Firebase login
     if (!userEmail) {
