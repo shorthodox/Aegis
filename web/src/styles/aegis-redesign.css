@@ -213,36 +213,49 @@ body.ae-body {
 }
 
 .ae-brand {
-  font-family: var(--ae-font-mono);
-  font-size: 0.85rem;
-  font-weight: 700;
-  letter-spacing: 0.18em;
+  font-family: var(--ae-font-sans);
+  font-size: 1.2rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
   text-transform: uppercase;
   text-decoration: none;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.45rem;
 }
 
 .ae-brand-icon {
-  color: var(--ae-gold);
-  font-size: 0.78rem;
-}
-
-.ae-brand-word {
-  background: linear-gradient(to right, var(--ae-text-1), var(--ae-gold));
+  font-size: 0.9rem;
+  background: linear-gradient(180deg, #ffe49c 0%, #c8901a 50%, #a06010 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  filter: drop-shadow(0 0 6px rgba(200,144,26,0.55));
+}
+
+.ae-brand-word {
+  background: linear-gradient(135deg,
+    #fff8e8 0%,
+    #f0d070 18%,
+    #c8901a 42%,
+    #B8966A 62%,
+    #e8c050 80%,
+    #c09030 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5));
 }
 
 .ae-brand-sub {
-  color: var(--ae-gold);
-  opacity: 0.6;
-  font-weight: 400;
-  font-size: 0.75rem;
-  letter-spacing: 0.12em;
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  color: #B8966A;
+  opacity: 0.55;
+  margin-top: 1px;
 }
 
 /* legacy: .ae-brand span used as separator on older markup */
