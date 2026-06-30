@@ -12,7 +12,7 @@
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AEGIS v1.0 — Glass-Box Crypto Signal Engine</title>
+  <title>AEGIS — The Glass-Box Crypto Signal Engine</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -30,7 +30,20 @@
   <link rel="canonical" href="https://gatekeeper.sbs/">
   <meta name="author" content="Animesh Kukreti &amp; Aman Juiyal">
   <meta name="owner" content="Animesh Kukreti &amp; Aman Juiyal">
-  <meta name="description" content="AEGIS v1.0 — a glass-box crypto signal engine that explains every decision in plain English. XGBoost model analyzing 60+ features across 63 tokens. 3-day free trial.">
+  <meta name="description" content="63 tokens, 63 individual models, every signal explained in plain English. Crypto signals that show their work — wins and losses public. 3-day free trial, no card required.">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://gatekeeper.sbs/">
+  <meta property="og:title" content="AEGIS — The Glass-Box Crypto Signal Engine">
+  <meta property="og:description" content="63 tokens, 63 individual models, every signal explained in plain English. Wins and losses public. 3-day free trial.">
+  <meta property="og:image" content="https://gatekeeper.sbs/web/src/assets/og-cover.png">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="AEGIS — The Glass-Box Crypto Signal Engine">
+  <meta name="twitter:description" content="63 tokens, 63 individual models, every signal explained in plain English. Wins and losses public. 3-day free trial.">
+  <meta name="twitter:image" content="https://gatekeeper.sbs/web/src/assets/og-cover.png">
 
   <script type="application/ld+json">
   {
@@ -396,8 +409,12 @@
 
         <div style="width: 48px; height: 1px; background: var(--ae-gold); margin-bottom: var(--s-6);"></div>
 
-        <p style="font-size: 1.05rem; line-height: 1.8; color: var(--ae-text-2); max-width: 52ch; margin-bottom: var(--s-7);">
+        <p style="font-size: 1.05rem; line-height: 1.8; color: var(--ae-text-2); max-width: 52ch; margin-bottom: var(--s-5);">
           Most signal bots shout BUY or SELL and vanish. AEGIS gives you the complete picture — which gates fired, what the model weighted, and in plain language, exactly why the signal exists.
+        </p>
+
+        <p style="font-size: 0.85rem; line-height: 1.7; color: var(--ae-text-3); max-width: 52ch; margin-bottom: var(--s-7); border-left: 2px solid var(--ae-border-bright); padding-left: var(--s-4);">
+          Every signal shows its reasoning. Every closed trade — wins and losses — is public and unedited.
         </p>
 
         <div style="display:flex; align-items:center; gap: var(--s-4); flex-wrap:wrap;">
@@ -445,6 +462,10 @@
 
         <!-- Compact signal card -->
         <div class="ae-signal-card buy">
+          <!-- Illustrative example label -->
+          <div style="padding: var(--s-2) var(--s-4); background:rgba(184,150,106,0.06); border-bottom:1px solid var(--ae-border-dim);">
+            <span style="font-family:var(--ae-font-mono); font-size:0.6rem; letter-spacing:0.1em; text-transform:uppercase; color:var(--ae-text-3);">Illustrative example — not live data</span>
+          </div>
           <div class="ae-signal-header">
             <div style="display:flex; align-items:center; gap:var(--s-3);">
               <span class="ae-signal-pair">BTC<span>/USDT</span></span>
@@ -537,6 +558,7 @@
         <div class="ae-stat-note">Live Binance WebSocket</div>
       </div>
 
+      <!-- // REVIEW: gate count inconsistent (9 vs 8 vs 5 detailed) — confirm the right number before next release -->
       <div class="ae-stat-block">
         <div class="ae-stat-number">9</div>
         <div class="ae-stat-label">Signal Gates</div>
@@ -546,6 +568,52 @@
     </div>
   </div>
 </div>
+
+
+<!-- ═══════════════════════════════════════
+     63 COINS · 63 MODELS
+     ═══════════════════════════════════════ -->
+<section class="ae-section" style="background: var(--ae-surface); border-top: 1px solid var(--ae-border);">
+  <div class="ae-container">
+    <div class="method-label-grid">
+
+      <!-- Sticky label column -->
+      <div style="position:sticky; top:80px;">
+        <div class="ae-eyebrow">The Core Differentiator</div>
+        <h2 class="ae-h2" style="margin-bottom: var(--s-5);">63 coins.<br>63 models.</h2>
+        <p class="ae-body-text">
+          Most signal bots run one universal model for every coin. AEGIS runs sixty-three — one trained per token, on that token's own history and behaviour.
+        </p>
+      </div>
+
+      <!-- Cards column -->
+      <div style="display:flex; flex-direction:column; gap: var(--s-5);">
+
+        <div style="padding: var(--s-6); background:var(--ae-raised); border:1px solid var(--ae-border); border-radius:var(--ae-radius-md);">
+          <div class="ae-h3" style="margin-bottom: var(--s-3);">One model per token — not one model for all</div>
+          <p class="ae-body-text">
+            BTC and FLOKI have different volatility profiles, different liquidity regimes, different participant behaviours. A model trained on BTC data is the wrong tool for a micro-cap. AEGIS trains a separate XGBoost classifier for each of the 63 tokens it monitors, on that token's own 7,000+ hours of OHLCV history, with its own feature set pruned by SHAP importance. Each token gets the model it deserves.
+          </p>
+        </div>
+
+        <div style="padding: var(--s-6); background:var(--ae-raised); border:1px solid var(--ae-border); border-radius:var(--ae-radius-md);">
+          <div class="ae-h3" style="margin-bottom: var(--s-3);">Meta-labeling: the quant technique behind the filter</div>
+          <p class="ae-body-text">
+            After the primary model says BUY, a second model — the meta model — asks: is <em>this</em> a good BUY? It's trained on the primary model's out-of-fold predictions, so it learns to distinguish high-conviction setups from lucky calls. The technique is used by systematic quant funds to cut false positives without sacrificing true ones. AEGIS applies it per token, per side (buy and sell separately).
+          </p>
+        </div>
+
+        <div style="padding: var(--s-6); background:var(--ae-raised); border:1px solid var(--ae-border); border-radius:var(--ae-radius-md);">
+          <div class="ae-h3" style="margin-bottom: var(--s-3);">27-regime adaptive thresholds</div>
+          <p class="ae-body-text">
+            The confidence bar for a BUY in "high volatility, downtrend" is higher than in "low volatility, uptrend." AEGIS models this with 27 market buckets (3 volume tiers × 3 volatility tiers × 3 trend tiers) and auto-adjusts thresholds per-regime, per-token, on a rolling out-of-sample window. No manual tuning. No fixed numbers written once and forgotten.
+          </p>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</section>
 
 
 <!-- ═══════════════════════════════════════
@@ -600,6 +668,11 @@
 
       <!-- Demo signal card -->
       <div class="ae-signal-card buy">
+
+        <!-- Illustrative example label -->
+        <div style="padding: var(--s-2) var(--s-5); background:rgba(184,150,106,0.06); border-bottom:1px solid var(--ae-border-dim);">
+          <span style="font-family:var(--ae-font-mono); font-size:0.6rem; letter-spacing:0.1em; text-transform:uppercase; color:var(--ae-text-3);">Illustrative example — not live data</span>
+        </div>
 
         <div class="ae-signal-header">
           <div style="display:flex; align-items:center; gap: var(--s-3);">
@@ -680,11 +753,12 @@
     <div class="method-label-grid">
 
       <!-- Sticky label column -->
+      <!-- // REVIEW: gate count inconsistent across the page (stats strip: 9, copy below: "Nine", investor brief: 8, steps shown: 5) — confirm correct number -->
       <div style="position:sticky; top: 80px;">
         <div class="ae-eyebrow">Under The Hood</div>
         <h2 class="ae-h2" style="margin-bottom: var(--s-5);">How a signal is built.</h2>
         <p class="ae-body-text">
-          Nine sequential gates separate a candidate signal from a live one. Most candidates are vetoed. Only setups that pass every layer get through.
+          Sequential gates separate a candidate signal from a live one. Most candidates are vetoed — the engine stays quiet when conditions are poor. Only setups that clear every layer reach users.
         </p>
       </div>
 
@@ -737,6 +811,20 @@
             <div class="ae-h3" style="margin-bottom: var(--s-3);">Portfolio Guard & Position Sizing</div>
             <p class="ae-body-text">
               The final gate evaluates portfolio exposure: maximum open positions, sector concentration, and correlation across concurrent signals. Only then are TP and stop-loss levels calculated using <span class="gloss">triple-barrier labelling<span class="gloss-tip"><strong>Triple-Barrier Labels</strong><br>Exit levels are set by ATR multiples, not fixed percentages — so targets adapt to real current volatility, not historical averages.</span></span> based on real current ATR.
+            </p>
+          </div>
+        </div>
+
+        <!-- Model integrity callout -->
+        <div style="margin-top: var(--s-7); padding: var(--s-6); background:rgba(74,124,104,0.04); border:1px solid rgba(74,124,104,0.2); border-radius:var(--ae-radius-md); display:flex; align-items:flex-start; gap: var(--s-6);">
+          <div style="font-family:var(--ae-font-mono); font-size:2.4rem; font-weight:700; color:var(--ae-buy); flex-shrink:0; line-height:1;">58</div>
+          <div>
+            <div class="ae-h3" style="margin-bottom: var(--s-3); color:var(--ae-buy);">We bench our own models.</div>
+            <p class="ae-body-text" style="margin-bottom: var(--s-3);">
+              5 of the 63 models are withheld from live trading. They passed training but didn't clear the 62% holdout precision floor — so they don't fire signals. We'd rather run 58 models that work than 63 that don't.
+            </p>
+            <p style="font-size:0.82rem; color:var(--ae-text-3); line-height:1.65; margin:0;">
+              No signal service publicly admits this. We do — because the track record is public and every underperforming model would show up in it anyway.
             </p>
           </div>
         </div>
@@ -831,8 +919,12 @@
     <div style="text-align:center; max-width:520px; margin: 0 auto var(--s-8);">
       <div class="ae-eyebrow">Access Tiers</div>
       <h2 class="ae-h2">Transparent pricing. No dark patterns.</h2>
+      <p class="ae-body-text" style="margin-top: var(--s-4);">
+        Quant methods the desks use. Retail price point. Start free — no card, no partial access.
+      </p>
     </div>
 
+    <!-- // REVIEW: pricing conflicts with brief — site displays ₹1,999/₹3,299 (INR); brief quotes $3.60/$7.20/$14 (USD). Confirm which set is live before updating displayed numbers. -->
     <div class="pricing-grid">
 
       <div class="ae-price-card">
@@ -926,7 +1018,7 @@
           </li>
           <li style="font-size:0.85rem; color:var(--ae-text-2); line-height:1.65; padding-left: var(--s-4); position:relative;">
             <span style="position:absolute; left:0; color:var(--ae-buy);">–</span>
-            Context-aware filtering via 9-gate pipeline — the engine stays quiet in bad conditions
+            Context-aware filtering via multi-gate pipeline — the engine stays quiet in bad conditions
           </li>
           <li style="font-size:0.85rem; color:var(--ae-text-2); line-height:1.65; padding-left: var(--s-4); position:relative;">
             <span style="position:absolute; left:0; color:var(--ae-buy);">–</span>
