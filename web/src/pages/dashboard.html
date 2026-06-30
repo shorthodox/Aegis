@@ -653,6 +653,26 @@
                     <span id="token-search-count" class="token-search-count"></span>
                 </div>
 
+                <!-- Telegram connect prompt — auto-hidden once connected -->
+                <div id="tg-prompt-banner" class="mb-4 flex items-center gap-3 rounded-xl px-4 py-3 border border-blue-500/20" style="background:rgba(59,130,246,0.05)">
+                  <div class="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg bg-blue-500/10">
+                    <i class="fab fa-telegram text-blue-400 text-base"></i>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <p class="text-xs font-semibold text-blue-300">Get instant signal alerts on Telegram</p>
+                    <p class="text-[11px] text-blue-300/50 mt-0.5 leading-tight">Connect your account in Settings to receive a DM every time a signal fires.</p>
+                  </div>
+                  <button onclick="switchRoom('settings')"
+                    class="shrink-0 text-[11px] font-bold text-blue-200 bg-blue-500/15 border border-blue-400/30 hover:bg-blue-500/25 transition-colors px-3 py-1.5 rounded-lg whitespace-nowrap">
+                    Connect Now <i class="fas fa-arrow-right text-[9px] ml-0.5"></i>
+                  </button>
+                  <button onclick="document.getElementById('tg-prompt-banner').style.display='none'"
+                    aria-label="Dismiss"
+                    class="shrink-0 text-gray-600 hover:text-gray-400 transition-colors p-1">
+                    <i class="fas fa-times text-[11px]"></i>
+                  </button>
+                </div>
+
                 <!-- Responsive Grid: 1 col on mobile, 2 or 3 on desktop -->
                 <div id="signalsContainer"
                     class="signals-grid grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">

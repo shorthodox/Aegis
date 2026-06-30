@@ -2680,6 +2680,8 @@ function _tgSetState(state, chatId) {
     const disp = document.getElementById('tg-chat-id-display');
     if (disp) disp.textContent = `(${chatId})`;
   }
+  const banner = document.getElementById('tg-prompt-banner');
+  if (banner) banner.style.display = state === 'connected' ? 'none' : '';
 }
 
 async function _refreshTelegramStatus() {
@@ -2815,6 +2817,21 @@ window.disconnectTelegram = async function() {
     }
   } catch (_) {}
 };
+
+// On page load, hide the Telegram banner immediately for already-connected users
+setTimeout(async function _initTgBannerCheck() {
+  try {
+    const tok = _notifToken();
+    if (!tok) return;
+    const r = await fetch('/api/notifications/telegram/status', {
+      headers: { Authorization: `Bearer ${tok}` }
+    });
+    if (r.ok) {
+      const data = await r.json();
+      _tgSetState(data.connected ? 'connected' : 'disconnected', data.chat_id);
+    }
+  } catch (_) {}
+}, 1500);
 
 // Hook into switchRoom so settings auto-load when the room opens
 (function _patchSwitchForNotif() {
