@@ -598,17 +598,17 @@ class DynamicRiskEngine:
 
     # ── ATR-based risk parameters ─────────────────────────────────────────────
     ATR_PERIOD        = 14     # lookback period for ATR calculation
-    ATR_SL_MULTIPLIER = 1.2    # SL distance = ATR × this
+    ATR_SL_MULTIPLIER = 1.8    # SL distance = ATR × this — 1.2 was inside normal 1H candle noise; 1.8× clears it
 
-    TP1_MULTIPLIER    = 0.55   # 20 % partial close — fires early to lock break-even fast
-    TP2_MULTIPLIER    = 2.3    # 20 % partial close — activate trailing stop
-    TP3_MULTIPLIER    = 3.6    # 20 % partial close — used for RR validation
-    TP4_MULTIPLIER    = 5.4    # 20 % partial close
-    TP5_MULTIPLIER    = 8.0    # close remaining position — extended runner target
+    TP1_MULTIPLIER    = 0.55   # 20 % partial close — fires early to lock break-even fast (intentionally tight)
+    TP2_MULTIPLIER    = 2.8    # 20 % partial close — activate trailing stop
+    TP3_MULTIPLIER    = 4.5    # 20 % partial close — used for RR validation (RR = 4.5/1.8 = 2.5)
+    TP4_MULTIPLIER    = 6.5    # 20 % partial close
+    TP5_MULTIPLIER    = 9.5    # close remaining position — extended runner target
 
     MIN_RISK_REWARD   = 2.0    # Reward / Risk using TP3 as target; trades below this are rejected
 
-    TRAIL_MULTIPLIER  = 0.8    # trailing stop distance = ATR × this (tightened after TP2)
+    TRAIL_MULTIPLIER  = 1.0    # trailing stop distance = ATR × this (widened to match wider SL)
 
     # ── Partial-close percentages (must sum to 1.0) ───────────────────────────
     TP_CLOSE_PCTS = (0.20, 0.20, 0.20, 0.20, 0.20)  # TP1 … TP5
@@ -665,7 +665,7 @@ class DynamicRiskEngine:
 
         Stop Loss
         ---------
-        SL distance = ATR × ATR_SL_MULTIPLIER (default 1.2).
+        SL distance = ATR × ATR_SL_MULTIPLIER (default 1.8).
         Wide enough to survive intra-candle noise; adapts automatically when
         volatility expands or contracts.
 

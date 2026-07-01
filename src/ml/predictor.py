@@ -1120,8 +1120,14 @@ class Predictor:
             }
         result = self.predict_signal(df, risk_tier=risk_tier)
         price = float(df['close'].iloc[-1])
-        atr   = (float(df['_atr'].iloc[-1])
-                 if '_atr' in df.columns
+        # atr_14 is the canonical ATR column set by prepare_features().
+        # _atr is a legacy alias that was never populated; reading it always
+        # triggered the price*0.015 fallback, causing a hardcoded 1.5% ATR
+        # regardless of actual market volatility.
+        atr   = (float(df['atr_14'].iloc[-1])
+                 if 'atr_14' in df.columns
+                 else float(df['_atr'].iloc[-1])
+                 if '_atr'   in df.columns
                  else price * 0.015)
         atr_mult = float(self.meta.get('atr_multiplier', 1.5))
         result['price']          = price
