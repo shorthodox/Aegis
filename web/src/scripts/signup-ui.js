@@ -542,7 +542,9 @@ async function handleStep1Submit(e) {
   const phoneAvailable = await checkPhoneUnique(mobile);
   if (!phoneAvailable) {
     setLoading(false);
-    return showError('signupMobileError', 'This mobile number is already registered to another account');
+    showError('signupMobileError', 'This mobile number is already registered to another account.');
+    _appendSignInLink('signupMobileError');
+    return;
   }
 
   setLoading(true, 'Sending verification code…');
@@ -641,6 +643,12 @@ async function handleStep2Verify() {
     const signupResult = await completeGoogleSignupWithPhone(_pendingGoogleUser, _pending.mobile);
     setLoading(false);
     if (!signupResult.success) {
+      if (signupResult.needsSignin) {
+        showStep1();
+        showError('signupFormError', signupResult.message);
+        _appendSignInLink('signupFormError');
+        return;
+      }
       return showError('otpError', signupResult.message);
     }
     clearResendTimer();
@@ -660,6 +668,14 @@ async function handleStep2Verify() {
   setLoading(false);
 
   if (!signupResult.success) {
+    if (signupResult.needsSignin) {
+      // Account already exists (duplicate email or phone) — go back to step 1 so
+      // the error appears in context and the "Sign In" link is reachable.
+      showStep1();
+      showError('signupFormError', signupResult.message);
+      _appendSignInLink('signupFormError');
+      return;
+    }
     return showError('otpError', signupResult.message);
   }
 
@@ -737,7 +753,9 @@ async function handleGooglePhoneSubmit(e) {
     cancelIncompleteGoogleSignup().catch(() => {});
     _pendingGoogleUser = null;
     _flow = 'email';
-    return showError('googleMobileError', 'This mobile number is already registered to another account. Please sign in to the existing account instead.');
+    showError('googleMobileError', 'This mobile number is already registered to another account.');
+    _appendSignInLink('googleMobileError');
+    return;
   }
 
   // Send OTP via backend (email fallback if SMS unavailable)
@@ -878,4 +896,20 @@ function showError(id, message) {
 function clearError(id) {
   const el = document.getElementById(id);
   if (el) { el.textContent = ''; el.style.display = ''; }
+}
+
+function _appendSignInLink(elementId) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  const link = document.createElement('a');
+  link.href = '#';
+  link.textContent = ' Sign in instead →';
+  link.className = 'auth-link';
+  link.style.display = 'inline';
+  link.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    closeSignUpModal();
+    window.dispatchEvent(new CustomEvent('openSignin'));
+  });
+  el.appendChild(link);
 }

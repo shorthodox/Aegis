@@ -778,8 +778,7 @@ async function provisionUserFromFirebase(firebaseUser, token, attempt = 1) {
       } catch (_) {}
       localStorage.clear();
       sessionStorage.clear();
-      alert(detail);
-      redirectToLogin();
+      _showAuthErrorOverlay(detail, 'Go to Sign In', () => { redirectToLogin(); });
     } else if (response.status === 403) {
       // OTP token rejected by backend — never retry, send to signup
       hideProvisioningState();
@@ -787,8 +786,11 @@ async function provisionUserFromFirebase(firebaseUser, token, attempt = 1) {
     } else if (response.status === 422) {
       // Backend requires a phone number — redirect to login so user can re-signup with phone
       hideProvisioningState();
-      alert('A mobile number is required to complete sign-up. Please sign up again and provide your phone number.');
-      redirectToLogin();
+      _showAuthErrorOverlay(
+        'A mobile number is required to complete sign-up. Please sign up again and provide your phone number.',
+        'Back to Sign Up',
+        () => { redirectToLogin(); }
+      );
     } else if (attempt < MAX_ATTEMPTS) {
       await new Promise(r => setTimeout(r, 1000 * attempt));
       return provisionUserFromFirebase(firebaseUser, token, attempt + 1);
@@ -805,6 +807,25 @@ async function provisionUserFromFirebase(firebaseUser, token, attempt = 1) {
     hideProvisioningState();
     showProvisionErrorState();
   }
+}
+
+function _showAuthErrorOverlay(message, btnLabel, onAction) {
+  const existing = document.getElementById('auth-error-overlay');
+  if (existing) existing.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'auth-error-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;padding:1.5rem;';
+  overlay.innerHTML = `
+    <i class="fas fa-exclamation-circle" style="font-size:2.5rem;color:#f97316;"></i>
+    <h2 style="color:#f97316;font-size:1.2rem;font-weight:700;margin:0;text-align:center;">Registration Rejected</h2>
+    <p style="color:#e2e8f0;font-size:0.95rem;text-align:center;max-width:340px;margin:0;line-height:1.6;">${message}</p>
+    <button id="auth-error-action-btn" style="margin-top:0.5rem;padding:10px 28px;background:linear-gradient(135deg,#f97316,#ef4444);border:none;color:white;border-radius:8px;font-size:1rem;font-weight:bold;cursor:pointer;">${btnLabel}</button>
+  `;
+  document.body.appendChild(overlay);
+  document.getElementById('auth-error-action-btn')?.addEventListener('click', () => {
+    overlay.remove();
+    if (onAction) onAction();
+  });
 }
 
 function showProvisioningState() {

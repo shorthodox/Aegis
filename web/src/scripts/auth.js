@@ -478,7 +478,8 @@ export async function handleEmailSignup(email, password, displayName, signupToke
         localStorage.removeItem('authToken');
         return {
           success: false,
-          message: errData.detail || 'This phone number is already registered to another account. Please use a different number.',
+          needsSignin: true,
+          message: errData.detail || 'This phone number is already registered. Sign in to your account instead.',
         };
       } else {
         const errData = await provisionRes.json().catch(() => ({}));
@@ -498,7 +499,7 @@ export async function handleEmailSignup(email, password, displayName, signupToke
     console.error('❌ Email signup error:', error.code, error.message);
     let message = 'Signup failed. Please try again.';
     if (error.code === 'auth/email-already-in-use') {
-      message = 'Email already in use. Please sign in instead.';
+      return { success: false, needsSignin: true, message: 'This email is already registered. Sign in to your account instead.' };
     } else if (error.code === 'auth/invalid-email') {
       message = 'Invalid email address. Please check and try again.';
     } else if (error.code === 'auth/weak-password') {
@@ -568,15 +569,20 @@ export async function handleEmailLogin(email, password) {
   } catch (error) {
     console.error('❌ Email login error:', error.code, error.message);
 
-    let userMessage = 'Login failed';
     if (error.code === 'auth/user-not-found') {
-      userMessage = 'No account found with this email. Please sign up first.';
-    } else if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+      return { success: false, needsSignup: true, message: 'No account found with this email. Please create an account first.' };
+    }
+
+    let userMessage = 'Login failed';
+    if (error.code === 'auth/wrong-password') {
       userMessage = 'Incorrect password. Please try again.';
+    } else if (error.code === 'auth/invalid-credential') {
+      // Firebase v9+ folds user-not-found + wrong-password into this single code
+      userMessage = 'Incorrect email or password. Please try again.';
     } else if (error.code === 'auth/invalid-email') {
       userMessage = 'Invalid email address.';
     } else if (error.code === 'auth/too-many-requests') {
-      userMessage = 'Too many failed attempts. Please try again later.';
+      userMessage = 'Too many failed attempts. Your account has been temporarily locked. Please try again later or reset your password.';
     }
 
     return {

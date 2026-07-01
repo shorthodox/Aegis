@@ -208,7 +208,7 @@ async function performEmailSignin(e) {
   try {
     const result = await handleEmailLogin(email, password);
     if (result.success) {
-      showSuccess('Sign in successful!');
+      showSuccess('Signed in successfully! Redirecting…');
       window.dispatchEvent(new CustomEvent('authStateChange', { detail: { authenticated: true } }));
       setTimeout(() => {
         closeSignInModal();
@@ -217,23 +217,17 @@ async function performEmailSignin(e) {
         }
       }, 1000);
     } else if (result.needsVerification) {
-      showError('signinFormError', result.message || 'Account setup incomplete. Please sign up and complete phone verification.');
+      showError('signinFormError', result.message || 'Account setup is incomplete. Please sign up again and complete phone verification.');
+      _appendActionLink('signinFormError', 'Complete Sign Up →', () => {
+        closeSignInModal();
+        window.dispatchEvent(new CustomEvent('openSignup'));
+      });
     } else if (result.needsSignup) {
       showError('signinFormError', result.message);
-      const errEl = document.getElementById('signinFormError');
-      if (errEl) {
-        const link = document.createElement('a');
-        link.href = '#';
-        link.textContent = ' Create an account →';
-        link.className = 'auth-link';
-        link.style.display = 'inline';
-        link.addEventListener('click', (ev) => {
-          ev.preventDefault();
-          closeSignInModal();
-          window.dispatchEvent(new CustomEvent('openSignup'));
-        });
-        errEl.appendChild(link);
-      }
+      _appendActionLink('signinFormError', 'Create an account →', () => {
+        closeSignInModal();
+        window.dispatchEvent(new CustomEvent('openSignup'));
+      });
       showResetPasswordPrompt(email);
     } else {
       showError('signinFormError', result.message);
@@ -263,11 +257,15 @@ async function performGoogleSignin() {
     }
     if (result.needsVerification) {
       hideLoading();
-      showError('signinFormError', result.message || 'Account setup incomplete. Please sign up and complete phone verification.');
+      showError('signinFormError', result.message || 'Account setup is incomplete. Please sign up again and complete phone verification.');
+      _appendActionLink('signinFormError', 'Complete Sign Up →', () => {
+        closeSignInModal();
+        window.dispatchEvent(new CustomEvent('openSignup'));
+      });
       return;
     }
     if (result.success) {
-      showSuccess('Signed in successfully!');
+      showSuccess('Signed in successfully! Redirecting…');
       window.dispatchEvent(new CustomEvent('authStateChange', { detail: { authenticated: true } }));
       setTimeout(() => {
         closeSignInModal();
@@ -329,7 +327,8 @@ export function closeSignInModal() {
     modal.classList.remove('active');
     document.body.style.overflow = 'auto';
     document.getElementById('signinEmailForm')?.reset();
-    document.getElementById('signinFormError').textContent = '';
+    const errEl = document.getElementById('signinFormError');
+    if (errEl) { errEl.textContent = ''; errEl.style.color = ''; errEl.style.display = ''; }
     document.getElementById('resetPasswordPrompt')?.remove();
   }
 }
@@ -372,12 +371,30 @@ function showError(elementId, message) {
   const el = document.getElementById(elementId);
   if (el) {
     el.textContent = message;
+    el.style.color = '';
     el.style.display = 'block';
   }
 }
 
 function showSuccess(message) {
-  console.log('✅', message);
+  const el = document.getElementById('signinFormError');
+  if (el) {
+    el.textContent = message;
+    el.style.color = '#22c55e';
+    el.style.display = 'block';
+  }
+}
+
+function _appendActionLink(elementId, label, onClick) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  const link = document.createElement('a');
+  link.href = '#';
+  link.textContent = ' ' + label;
+  link.className = 'auth-link';
+  link.style.display = 'inline';
+  link.addEventListener('click', (ev) => { ev.preventDefault(); onClick(); });
+  el.appendChild(link);
 }
 
 export function updateSignInButtonState() {
