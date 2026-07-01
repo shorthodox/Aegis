@@ -2552,7 +2552,7 @@ class LiveEngine:
             get_notifier().send_entry({
                 'symbol':           symbol,
                 'direction':        side,
-                'confidence':       meta_conf,
+                'confidence':       meta_conf / 100.0,  # edge_score is 0-100; formatters expect 0-1
                 'confluence_score': 0.0,
                 'current_price':    price,
                 'mode':             'live',
