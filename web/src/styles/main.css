@@ -3673,6 +3673,24 @@ body.modal-open {
     --success-green: #007a44;
     --danger-red: #cc0033;
     --hold-grey: #64748b;
+
+    /* aegis-redesign.css surface tokens */
+    --ae-void:           #eef2f7;
+    --ae-base:           #e8edf4;
+    --ae-surface:        #dde4ee;
+    --ae-raised:         #f4f6fa;
+    --ae-overlay:        #ffffff;
+    --ae-border-dim:     rgba(0,0,0,0.05);
+    --ae-border:         rgba(0,0,0,0.09);
+    --ae-border-mid:     rgba(0,0,0,0.14);
+    --ae-border-bright:  rgba(0,0,0,0.22);
+    --ae-text-1:         #0f172a;
+    --ae-text-2:         #475569;
+    --ae-text-3:         #64748b;
+    --ae-text-4:         #94a3b8;
+    --ae-gold:           #a07030;
+    --ae-gold-dim:       rgba(160,112,48,0.10);
+    --ae-gold-mid:       rgba(160,112,48,0.22);
 }
 
 [data-theme="light"] body,
@@ -3695,31 +3713,75 @@ body.modal-open {
     background-color: rgba(238, 242, 247, 0.95) !important;
 }
 
-/* Panel overlays */
-[data-theme="light"] .bg-black\/40,
-[data-theme="light"] .bg-black\/30,
+/* Panel overlays — all bg-black/* variants */
 [data-theme="light"] .bg-black\/20,
+[data-theme="light"] .bg-black\/30,
+[data-theme="light"] .bg-black\/40,
+[data-theme="light"] .bg-black\/50,
 [data-theme="light"] .bg-black\/60,
 [data-theme="light"] .bg-black\/80,
 [data-theme="light"] .bg-black\/95 {
-    background-color: rgba(0, 0, 0, 0.055) !important;
+    background-color: rgba(0, 0, 0, 0.04) !important;
 }
 
-/* White transparency backgrounds → subtle dark */
-[data-theme="light"] .bg-white\/5  { background-color: rgba(0, 0, 0, 0.04) !important; }
-[data-theme="light"] .bg-white\/10 { background-color: rgba(0, 0, 0, 0.07) !important; }
-[data-theme="light"] .bg-white\/20 { background-color: rgba(0, 0, 0, 0.12) !important; }
+/* White transparency backgrounds → subtle ink tint */
+[data-theme="light"] .bg-white\/5  { background-color: rgba(0, 0, 0, 0.03) !important; }
+[data-theme="light"] .bg-white\/10 { background-color: rgba(0, 0, 0, 0.06) !important; }
+[data-theme="light"] .bg-white\/20 { background-color: rgba(0, 0, 0, 0.10) !important; }
+
+/* bg-void variants */
+[data-theme="light"] .bg-void\/95,
+[data-theme="light"] .bg-void\/90,
+[data-theme="light"] .bg-void { background-color: var(--bg-void) !important; }
+
+/* Hardcoded dark gray backgrounds */
+[data-theme="light"] .bg-gray-700,
+[data-theme="light"] .bg-gray-800,
+[data-theme="light"] .bg-gray-900,
+[data-theme="light"] .bg-slate-800,
+[data-theme="light"] .bg-slate-900 { background-color: rgba(0, 0, 0, 0.06) !important; }
+
+[data-theme="light"] .bg-gray-500 { background-color: rgba(0, 0, 0, 0.10) !important; }
+
+/* Arbitrary dark hex backgrounds */
+[data-theme="light"] .bg-\[\#050505\],
+[data-theme="light"] .bg-\[\#0d1117\],
+[data-theme="light"] .bg-\[\#0a0e14\],
+[data-theme="light"] .bg-\[\#0c1018\] { background-color: rgba(0, 0, 0, 0.04) !important; }
 
 /* Borders */
 [data-theme="light"] .border-white\/5  { border-color: rgba(0, 0, 0, 0.07) !important; }
 [data-theme="light"] .border-white\/10 { border-color: rgba(0, 0, 0, 0.10) !important; }
 [data-theme="light"] .border-white\/20 { border-color: rgba(0, 0, 0, 0.16) !important; }
+[data-theme="light"] .border-gray-500,
+[data-theme="light"] .border-gray-700,
+[data-theme="light"] .border-gray-800  { border-color: rgba(0, 0, 0, 0.14) !important; }
 
 /* Tailwind text overrides */
 [data-theme="light"] .text-white       { color: #0f172a !important; }
+[data-theme="light"] .text-gray-200    { color: #1e293b !important; }
 [data-theme="light"] .text-gray-300    { color: #334155 !important; }
 [data-theme="light"] .text-gray-400    { color: #4a5568 !important; }
 [data-theme="light"] .text-gray-500    { color: #64748b !important; }
+[data-theme="light"] .text-gray-600    { color: #64748b !important; }
+
+/* Glass panel cards — use light surface */
+[data-theme="light"] .glass-panel {
+    background: rgba(255, 255, 255, 0.72) !important;
+    border-color: rgba(0, 153, 187, 0.18) !important;
+}
+
+/* Table rows and dividers */
+[data-theme="light"] .divide-white\/5 > * + * { border-color: rgba(0, 0, 0, 0.07) !important; }
+
+/* Input fields inside panels */
+[data-theme="light"] input,
+[data-theme="light"] select,
+[data-theme="light"] textarea {
+    background: rgba(255, 255, 255, 0.8) !important;
+    border-color: rgba(0, 0, 0, 0.14) !important;
+    color: #0f172a !important;
+}
 
 /* Logo gradient stays legible */
 [data-theme="light"] .logo {
