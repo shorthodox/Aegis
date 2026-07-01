@@ -3669,10 +3669,17 @@ body.modal-open {
 
 [data-theme="grey"] body,
 [data-theme="grey"] body.dashboard-body {
-    background: var(--bg-deep);
-    background-image: radial-gradient(circle at 15% 30%, rgba(0, 242, 255, 0.03) 0%, var(--bg-void) 100%);
+    background: var(--bg-deep) !important;
+    background-image: radial-gradient(circle at 15% 30%, rgba(0, 242, 255, 0.03) 0%, var(--bg-void) 100%) !important;
     background-attachment: fixed;
 }
+
+/* Override Tailwind's hardcoded bg-deep / bg-void colors for grey theme */
+[data-theme="grey"] .bg-deep,
+[data-theme="grey"] .bg-deep\/95  { background-color: #2a2d35 !important; }
+[data-theme="grey"] .bg-void,
+[data-theme="grey"] .bg-void\/90,
+[data-theme="grey"] .bg-void\/95  { background-color: #32363f !important; }
 
 /* Light */
 [data-theme="light"] {
@@ -3711,11 +3718,18 @@ body.modal-open {
 
 [data-theme="light"] body,
 [data-theme="light"] body.dashboard-body {
-    background: var(--bg-deep);
-    background-image: radial-gradient(circle at 15% 30%, rgba(0, 153, 187, 0.07) 0%, var(--bg-void) 100%);
+    background: var(--bg-deep) !important;
+    background-image: radial-gradient(circle at 15% 30%, rgba(0, 153, 187, 0.07) 0%, var(--bg-void) 100%) !important;
     background-attachment: fixed;
     color: var(--text-white);
 }
+
+/* Override Tailwind's hardcoded bg-deep / bg-void colors for light theme */
+[data-theme="light"] .bg-deep,
+[data-theme="light"] .bg-deep\/95  { background-color: #eef2f7 !important; }
+[data-theme="light"] .bg-void,
+[data-theme="light"] .bg-void\/90,
+[data-theme="light"] .bg-void\/95  { background-color: #dde4ee !important; }
 
 /* Header */
 [data-theme="light"] header.glass-panel {
