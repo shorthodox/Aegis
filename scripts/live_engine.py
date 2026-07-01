@@ -136,7 +136,14 @@ class TradeRecord:
     exit_reason:     Optional[str]
     meta_confidence: float
     position_value:  float
-    signal_strength: str = ''
+    signal_strength: str   = ''
+    stop_loss:       float = 0.0
+    take_profit_1:   float = 0.0
+    take_profit_2:   float = 0.0
+    take_profit_3:   float = 0.0
+    take_profit_4:   float = 0.0
+    take_profit_5:   float = 0.0
+    atr:             float = 0.0
 
 
 # =============================================================================
@@ -1229,6 +1236,13 @@ class VirtualWallet:
                         meta_confidence = float(s.get('meta_confidence', 0)),
                         position_value  = float(s.get('position_value', 0)),
                         signal_strength = s.get('signal_strength', ''),
+                        stop_loss       = float(s.get('stop_loss', 0)),
+                        take_profit_1   = float(s.get('take_profit_1', 0)),
+                        take_profit_2   = float(s.get('take_profit_2', 0)),
+                        take_profit_3   = float(s.get('take_profit_3', 0)),
+                        take_profit_4   = float(s.get('take_profit_4', 0)),
+                        take_profit_5   = float(s.get('take_profit_5', 0)),
+                        atr             = float(s.get('atr', 0)),
                     )
                     self.trade_history.append(rec)
                     self.balance += float(s.get('pnl_usdt', 0))
@@ -1310,6 +1324,13 @@ class VirtualWallet:
             exit_reason     = exit_reason,
             meta_confidence = pos.meta_confidence,
             position_value  = pos.position_value,
+            stop_loss       = pos.stop_loss,
+            take_profit_1   = pos.take_profit_1,
+            take_profit_2   = pos.take_profit_2,
+            take_profit_3   = pos.take_profit_3,
+            take_profit_4   = pos.take_profit_4,
+            take_profit_5   = pos.take_profit_5,
+            atr             = pos.atr,
         )
         self.trade_history.append(rec)
         return rec
@@ -1360,6 +1381,13 @@ class VirtualWallet:
             exit_reason     = exit_reason,
             meta_confidence = pos.meta_confidence,
             position_value  = close_value,
+            stop_loss       = pos.stop_loss,
+            take_profit_1   = pos.take_profit_1,
+            take_profit_2   = pos.take_profit_2,
+            take_profit_3   = pos.take_profit_3,
+            take_profit_4   = pos.take_profit_4,
+            take_profit_5   = pos.take_profit_5,
+            atr             = pos.atr,
         )
         self.trade_history.append(rec)
         return rec
