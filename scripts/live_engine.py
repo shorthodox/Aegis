@@ -2016,50 +2016,74 @@ class LiveEngine:
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
 
-                    # ── Gate 4.5: multi-timeframe candle reversal confirmation ──
-                    # Problem: the 1H model fires mid-trend (e.g. BUY at RSI 68
-                    # after 3 green candles).  Fix: before a BUY, require the
-                    # recent price action to have been BEARISH on both 5m and 15m —
-                    # i.e. the move down has already happened, the reversal is now.
-                    # Before a SELL, require recent price action to have been BULLISH.
+                    # ── Gate 4.5: two-zone multi-timeframe reversal timing ────────
+                    # Old logic required ALL last-N 5m/15m candles to be in the
+                    # prior-trend direction.  That caused two failure modes:
+                    #   (a) Fires too early — no lower-TF reversal signal yet (false setup)
+                    #   (b) Fires too late  — blocks the moment the first reversal 5m bar
+                    #       appears, then fires again only mid-move on the next scan
                     #
-                    # BUY:  last 4 closed 5m candles bearish + last 2 closed 15m bearish
-                    # SELL: last 4 closed 5m candles bullish + last 2 closed 15m bullish
+                    # Fix: split 5m history into two zones.
+                    #   PRIOR zone  (bars 3–6 ago): ≥60% match prior trend direction
+                    #   REVERSAL zone (last 2 bars): ≥1 bar matches reversal direction
+                    #   15m check (last closed bar): matches reversal direction
                     #
-                    # Gate fails OPEN (allows trade) when candle data is unavailable,
-                    # so a network hiccup never permanently blocks entries.
-                    MTF_5M_BARS  = 4
-                    MTF_15M_BARS = 2
+                    # This fires at the FIRST 5m reversal candle after a confirmed prior
+                    # trend — neither too early (no signal yet) nor mid-trend (all flipped).
+                    #
+                    # Gate fails OPEN when data is unavailable (network hiccup never
+                    # permanently blocks an entry).
+                    MTF_5M_PRIOR   = 4   # older bars: confirm prior trend existed
+                    MTF_5M_RECENT  = 2   # recent bars: confirm reversal is starting
+                    MTF_15M_CHECK  = 1   # 15m bars to confirm reversal direction
 
-                    _5m_raw  = await self._fetch_candles(symbol, '5m',  MTF_5M_BARS  + 2)
-                    _15m_raw = await self._fetch_candles(symbol, '15m', MTF_15M_BARS + 2)
+                    _5m_raw  = await self._fetch_candles(
+                        symbol, '5m',  MTF_5M_PRIOR + MTF_5M_RECENT + 2)
+                    _15m_raw = await self._fetch_candles(
+                        symbol, '15m', MTF_15M_CHECK + 2)
 
-                    def _all_directional(candles: list, direction: str, n: int) -> bool:
-                        """True if the last n CLOSED candles all match direction."""
-                        if len(candles) < n + 1:
-                            return True   # not enough data → fail open
-                        # candles[-1] is still forming; closed candles are [-(n+1):-1]
-                        closed = candles[-(n + 1):-1]
-                        for c in closed:
-                            o, cl = float(c[1]), float(c[4])
-                            if direction == 'bearish' and cl >= o:
-                                return False
-                            if direction == 'bullish' and cl <= o:
-                                return False
-                        return True
+                    def _get_closed(candles: list, n: int) -> list:
+                        """Last n CLOSED candles (index [-1] is still forming)."""
+                        if len(candles) < 2:
+                            return []
+                        closed = candles[:-1]
+                        return closed[-n:] if len(closed) >= n else closed
 
-                    if new_side == 'BUY':
-                        _ok_5m  = not _5m_raw  or _all_directional(_5m_raw,  'bearish', MTF_5M_BARS)
-                        _ok_15m = not _15m_raw or _all_directional(_15m_raw, 'bearish', MTF_15M_BARS)
-                    else:  # SELL
-                        _ok_5m  = not _5m_raw  or _all_directional(_5m_raw,  'bullish', MTF_5M_BARS)
-                        _ok_15m = not _15m_raw or _all_directional(_15m_raw, 'bullish', MTF_15M_BARS)
+                    def _dir_frac(candles: list, direction: str) -> float:
+                        """Fraction of candles matching direction. Empty → 0.5 (neutral)."""
+                        if not candles:
+                            return 0.5
+                        hits = sum(
+                            1 for c in candles
+                            if (direction == 'bearish' and float(c[4]) < float(c[1]))
+                            or (direction == 'bullish' and float(c[4]) > float(c[1]))
+                        )
+                        return hits / len(candles)
+
+                    _prior_dir = 'bearish' if new_side == 'BUY' else 'bullish'
+                    _rev_dir   = 'bullish' if new_side == 'BUY' else 'bearish'
+
+                    _all_closed_5m = _get_closed(_5m_raw, MTF_5M_PRIOR + MTF_5M_RECENT) \
+                                     if _5m_raw else []
+                    # Prior zone: the older portion of the closed 5m window
+                    _prior_5m  = _all_closed_5m[:-MTF_5M_RECENT] \
+                                 if len(_all_closed_5m) > MTF_5M_RECENT else _all_closed_5m
+                    # Reversal zone: the most-recent closed 5m bars
+                    _recent_5m = _all_closed_5m[-MTF_5M_RECENT:] \
+                                 if len(_all_closed_5m) >= MTF_5M_RECENT else []
+
+                    _prior_ok  = (not _prior_5m)  or _dir_frac(_prior_5m,  _prior_dir) >= 0.60
+                    _rev_ok_5m = (not _recent_5m) or _dir_frac(_recent_5m, _rev_dir)   >= 0.50
+                    _ok_5m     = _prior_ok and _rev_ok_5m
+
+                    _closed_15m = _get_closed(_15m_raw, MTF_15M_CHECK) if _15m_raw else []
+                    _ok_15m     = (not _closed_15m) or _dir_frac(_closed_15m, _rev_dir) >= 0.50
 
                     if not (_ok_5m and _ok_15m):
-                        _dir_needed = 'bearish' if new_side == 'BUY' else 'bullish'
                         print(f'[{symbol}] MTF_GATE blocked {new_side}: '
-                              f'5m_{_dir_needed}={_ok_5m} '
-                              f'15m_{_dir_needed}={_ok_15m} — mid-trend entry avoided')
+                              f'prior_5m({_prior_dir})={_dir_frac(_prior_5m, _prior_dir):.2f} '
+                              f'rev_5m({_rev_dir})={_dir_frac(_recent_5m, _rev_dir):.2f} '
+                              f'15m({_rev_dir})={_dir_frac(_closed_15m, _rev_dir):.2f}')
                         if symbol in self.last_signals:
                             self.last_signals[symbol]['fire']        = False
                             self.last_signals[symbol]['signal']      = 'HOLD'
