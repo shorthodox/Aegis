@@ -157,6 +157,30 @@ async function _resolveGoogleUser(user) {
     loginMethods.add('google');
     await updateDoc(userDocRef, { loginMethods: Array.from(loginMethods), lastLogin: serverTimestamp() });
     const idToken = await user.getIdToken();
+
+    // Gate: confirm the backend has a fully-provisioned record for this user.
+    // The frontend Firestore doc (users/{uid}) can exist from a partial signup that
+    // never reached /api/users/provision, leaving users/{email} un-created on the
+    // backend. /auth/me returns 404 in that case and 403 if otp_verified is false.
+    try {
+      const meRes = await fetch('/auth/me', { headers: { Authorization: `Bearer ${idToken}` } });
+      if (!meRes.ok) {
+        // Backend doesn't recognize this user — sign them out of Firebase so the
+        // session doesn't linger and ask them to complete registration.
+        try { await signOut(auth); } catch (_) {}
+        localStorage.removeItem('authenticated');
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('authToken');
+        return {
+          success: false,
+          needsVerification: true,
+          message: 'Your account setup is incomplete. Please sign up and complete verification.',
+        };
+      }
+    } catch (_) {
+      // Network failure — allow through rather than locking out verified users
+    }
+
     AuthManager.setToken(idToken);
     AuthManager.setUser(existingData);
     localStorage.setItem('authenticated', 'true');
@@ -223,6 +247,26 @@ export async function completeGoogleSignupWithPhone(user, phone) {
   try {
     const userData = await ensureUserDocumentV2(user, 'google', phone);
     const idToken = await user.getIdToken();
+
+    // Provision the backend record (users/{email}) with otp_verified:true.
+    // Without this step the backend's /auth/me returns 404 because it looks up
+    // users/{email} — a completely separate doc from the frontend's users/{uid}.
+    const provRes = await fetch('/api/users/provision', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+      body: JSON.stringify({
+        uid:          user.uid,
+        email:        user.email,
+        display_name: user.displayName || '',
+        provider:     'google',
+        phone_number: phone || null,
+      }),
+    });
+    if (!provRes.ok && provRes.status !== 409) {
+      const errBody = await provRes.json().catch(() => ({}));
+      throw new Error(errBody.detail || `Provision failed (${provRes.status})`);
+    }
+
     AuthManager.setToken(idToken);
     AuthManager.setUser(userData);
     localStorage.setItem('authenticated', 'true');
@@ -496,6 +540,25 @@ export async function handleEmailLogin(email, password) {
 
     // Store token
     const idToken = await user.getIdToken();
+
+    // Gate: verify the backend has a fully-provisioned, otp_verified record.
+    // The Firestore doc (users/{uid}) can exist from a partial signup that never
+    // reached /api/users/provision, so users/{email} on the backend may be absent
+    // or have otp_verified:false.
+    try {
+      const meRes = await fetch('/auth/me', { headers: { Authorization: `Bearer ${idToken}` } });
+      if (!meRes.ok) {
+        await signOut(auth);
+        return {
+          success: false,
+          needsVerification: true,
+          message: 'Your account setup is incomplete. Please sign up and complete phone verification.',
+        };
+      }
+    } catch (_) {
+      // Network failure — allow through rather than locking out verified users
+    }
+
     AuthManager.setToken(idToken);
     AuthManager.setUser(userData);
     localStorage.setItem('authenticated', 'true');

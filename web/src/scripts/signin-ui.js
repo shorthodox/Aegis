@@ -216,6 +216,8 @@ async function performEmailSignin(e) {
           window.location.href = '/dashboard';
         }
       }, 1000);
+    } else if (result.needsVerification) {
+      showError('signinFormError', result.message || 'Account setup incomplete. Please sign up and complete phone verification.');
     } else if (result.needsSignup) {
       showError('signinFormError', result.message);
       const errEl = document.getElementById('signinFormError');
@@ -257,6 +259,11 @@ async function performGoogleSignin() {
       await handleLogout().catch(() => {});
       hideLoading();
       showError('signinFormError', 'No account found for this Google account. Please sign up first.');
+      return;
+    }
+    if (result.needsVerification) {
+      hideLoading();
+      showError('signinFormError', result.message || 'Account setup incomplete. Please sign up and complete phone verification.');
       return;
     }
     if (result.success) {
