@@ -3641,20 +3641,36 @@ body.modal-open {
     color-scheme: dark;
 }
 
-/* Grey (elevated slate dark) */
+/* Grey (mid-tone — between dark and light) */
 [data-theme="grey"] {
     color-scheme: dark;
-    --bg-deep: #12131b;
-    --bg-void: #1c1d28;
-    --glass-bg: rgba(26, 30, 50, 0.88);
-    --glass-border: rgba(0, 242, 255, 0.14);
-    --text-dim: #7e8fa8;
+    --bg-deep:    #2a2d35;
+    --bg-void:    #32363f;
+    --glass-bg:   rgba(48, 52, 64, 0.90);
+    --glass-border: rgba(0, 242, 255, 0.12);
+    --text-white: #dde2ea;
+    --text-dim:   #8a96a8;
+
+    /* aegis-redesign tokens shifted to mid-grey surfaces */
+    --ae-void:          #22252d;
+    --ae-base:          #2a2d35;
+    --ae-surface:       #32363f;
+    --ae-raised:        #3b3f4a;
+    --ae-overlay:       #454a56;
+    --ae-border-dim:    rgba(255,255,255,0.05);
+    --ae-border:        rgba(255,255,255,0.09);
+    --ae-border-mid:    rgba(255,255,255,0.14);
+    --ae-border-bright: rgba(255,255,255,0.22);
+    --ae-text-1:  #dde2ea;
+    --ae-text-2:  #8a96a8;
+    --ae-text-3:  #5e6878;
+    --ae-text-4:  #3e4656;
 }
 
 [data-theme="grey"] body,
 [data-theme="grey"] body.dashboard-body {
     background: var(--bg-deep);
-    background-image: radial-gradient(circle at 15% 30%, rgba(0, 242, 255, 0.04) 0%, var(--bg-void) 100%);
+    background-image: radial-gradient(circle at 15% 30%, rgba(0, 242, 255, 0.03) 0%, var(--bg-void) 100%);
     background-attachment: fixed;
 }
 
