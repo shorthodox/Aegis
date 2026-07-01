@@ -1141,3 +1141,110 @@ body.dashboard-body .glass-panel {
   height: 1px;
   background: var(--ae-border);
 }
+
+/* --------------------------------------------------------------------------
+   19. Theme overrides — must be AFTER :root block so they win via source order.
+       !important on custom properties forces them to beat :root regardless of
+       file-load order across pages.
+   -------------------------------------------------------------------------- */
+
+/* Grey (mid-tone) */
+[data-theme="grey"] {
+  --ae-void:          #22252d !important;
+  --ae-base:          #2a2d35 !important;
+  --ae-surface:       #32363f !important;
+  --ae-raised:        #3b3f4a !important;
+  --ae-overlay:       #454a56 !important;
+  --ae-border-dim:    rgba(255,255,255,0.05) !important;
+  --ae-border:        rgba(255,255,255,0.09) !important;
+  --ae-border-mid:    rgba(255,255,255,0.14) !important;
+  --ae-border-bright: rgba(255,255,255,0.22) !important;
+  --ae-text-1:  #dde2ea !important;
+  --ae-text-2:  #8a96a8 !important;
+  --ae-text-3:  #5e6878 !important;
+  --ae-text-4:  #3e4656 !important;
+}
+
+html[data-theme="grey"],
+[data-theme="grey"] body,
+[data-theme="grey"] body.dashboard-body,
+[data-theme="grey"] body.ae-body {
+  background-color: #22252d !important;
+}
+
+[data-theme="grey"] body.dashboard-body {
+  --bg-deep:    #22252d !important;
+  --bg-void:    #2a2d35 !important;
+  background-color: #22252d !important;
+}
+
+/* Light */
+[data-theme="light"] {
+  color-scheme: light;
+  --ae-void:           #eef2f7 !important;
+  --ae-base:           #e8edf4 !important;
+  --ae-surface:        #dde4ee !important;
+  --ae-raised:         #f4f6fa !important;
+  --ae-overlay:        #ffffff !important;
+  --ae-border-dim:     rgba(0,0,0,0.05) !important;
+  --ae-border:         rgba(0,0,0,0.09) !important;
+  --ae-border-mid:     rgba(0,0,0,0.14) !important;
+  --ae-border-bright:  rgba(0,0,0,0.22) !important;
+  --ae-text-1:         #0f172a !important;
+  --ae-text-2:         #475569 !important;
+  --ae-text-3:         #64748b !important;
+  --ae-text-4:         #94a3b8 !important;
+  --ae-gold:           #a07030 !important;
+  --ae-gold-dim:       rgba(160,112,48,0.10) !important;
+  --ae-gold-mid:       rgba(160,112,48,0.22) !important;
+  --ae-buy:            #007a44 !important;
+  --ae-buy-bg:         rgba(0,122,68,0.10) !important;
+  --ae-buy-border:     rgba(0,122,68,0.28) !important;
+  --ae-sell:           #cc0033 !important;
+  --ae-sell-bg:        rgba(204,0,51,0.08) !important;
+  --ae-sell-border:    rgba(204,0,51,0.24) !important;
+  --ae-hold:           #64748b !important;
+  --ae-hold-bg:        rgba(100,116,139,0.10) !important;
+  --ae-data:           #0099bb !important;
+  --ae-data-bg:        rgba(0,153,187,0.08) !important;
+}
+
+html[data-theme="light"],
+[data-theme="light"] body,
+[data-theme="light"] body.dashboard-body,
+[data-theme="light"] body.ae-body {
+  background-color: #eef2f7 !important;
+  color: #0f172a !important;
+}
+
+[data-theme="light"] body.dashboard-body {
+  --bg-deep:    #eef2f7 !important;
+  --bg-void:    #dde4ee !important;
+  background-color: #eef2f7 !important;
+}
+
+/* Glass panels */
+[data-theme="light"] .ae-card,
+[data-theme="light"] .ae-panel,
+[data-theme="light"] .glass-panel {
+  background: rgba(255,255,255,0.80) !important;
+  border-color: rgba(0,0,0,0.09) !important;
+}
+
+[data-theme="grey"] .ae-card,
+[data-theme="grey"] .ae-panel,
+[data-theme="grey"] .glass-panel {
+  background: var(--ae-surface) !important;
+  border-color: var(--ae-border) !important;
+}
+
+/* Nav / sidebar using ae-base */
+[data-theme="light"] .ae-mobile-drawer,
+[data-theme="light"] header { background: rgba(238,242,247,0.95) !important; }
+
+[data-theme="grey"] .ae-mobile-drawer,
+[data-theme="grey"] header { background: rgba(42,45,53,0.95) !important; }
+
+/* Table rows */
+[data-theme="light"] .ae-table tbody tr:hover { background: rgba(0,0,0,0.04) !important; }
+[data-theme="grey"] .ae-table tbody tr:hover  { background: var(--ae-raised) !important; }
