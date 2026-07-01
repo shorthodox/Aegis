@@ -60,7 +60,7 @@ _DEFAULT_SETTINGS: Dict[str, Any] = {
     "whatsapp_to":         "",
     "min_confidence":      0.65,
     "allowed_directions":  ["BUY", "SELL"],
-    "allowed_modes":       ["scalping", "scalping_15m", "intraday", "swing"],
+    "allowed_modes":       ["scalping", "scalping_15m", "intraday", "swing", "live"],
     "quiet_hours":         {"start": "23:00", "end": "06:00"},
     "max_alerts_per_hour": 5,
 }

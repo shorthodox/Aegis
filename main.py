@@ -1092,6 +1092,24 @@ async def _otp_cleanup_loop():
             print(f"[OTP cleanup] Error: {exc}")
 
 
+async def _telegram_cleanup_loop():
+    """Disconnect Telegram for users whose trial has ended or plan has lapsed — runs hourly."""
+    while True:
+        await asyncio.sleep(3600)
+        try:
+            to_remove = [
+                email for email in list(_tg_connections)
+                if is_trial_expired(email)
+            ]
+            if to_remove:
+                for email in to_remove:
+                    _tg_connections.pop(email, None)
+                _tg_save_connections()
+                print(f"[TG cleanup] Disconnected {len(to_remove)} expired user(s): {to_remove}")
+        except Exception as exc:
+            print(f"[TG cleanup] Error: {exc}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _load_track_record()
@@ -1104,6 +1122,7 @@ async def lifespan(app: FastAPI):
     dev_token_task    = asyncio.create_task(dev_token_display_loop())
     dev_key_task      = asyncio.create_task(dev_key_display_loop())
     otp_cleanup_task  = asyncio.create_task(_otp_cleanup_loop())
+    tg_cleanup_task   = asyncio.create_task(_telegram_cleanup_loop())
     # Trader bot disabled — AEGIS-1 live_engine is the sole signal source.
     # trader_task = asyncio.create_task(_trader_scan_loop())
     yield
@@ -1114,6 +1133,7 @@ async def lifespan(app: FastAPI):
     dev_token_task.cancel()
     dev_key_task.cancel()
     otp_cleanup_task.cancel()
+    tg_cleanup_task.cancel()
     # trader_task.cancel()
 
 app = FastAPI(title="Aegis-1 by Gatekeeper", lifespan=lifespan)
@@ -3623,6 +3643,24 @@ async def _get_fx_rates() -> Dict[str, float]:
     except Exception as exc:
         print(f"[FX] Rate fetch failed, using cached: {exc}")
     return _fx["rates"]
+
+
+@app.get("/api/engine-track-record")
+async def engine_track_record_endpoint():
+    """Serve the live engine's raw track_record.json for chart display.
+
+    Returns the engine's data/track_record.json as-is so the chart can show
+    actual open position prices (entry, SL, TPs stored at trade-open time).
+    Falls back to an empty payload if the file doesn't exist yet.
+    """
+    _path = Path(BASE_DIR) / "data" / "track_record.json"
+    if not _path.exists():
+        return JSONResponse({"signals": [], "summary": {}})
+    try:
+        with open(_path, "r", encoding="utf-8") as _f:
+            return JSONResponse(json.load(_f))
+    except Exception:
+        return JSONResponse({"signals": [], "summary": {}})
 
 
 @app.get("/api/track-record")

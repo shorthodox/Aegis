@@ -4,6 +4,7 @@
 
 import {
   handleGoogleAuth,
+  handleGoogleRedirectResult,
   handleEmailLogin,
   handlePasswordReset,
   isUserAuthenticated,
@@ -118,7 +119,41 @@ export function initSignInUI() {
   document.body.appendChild(modalContainer);
 
   attachSignInEventListeners();
+
+  // Handle the result of a signInWithRedirect Google auth round-trip.
+  // getRedirectResult() returns null on a normal page load, so this is a no-op
+  // unless the user was redirected back from accounts.google.com.
+  if (sessionStorage.getItem('google_redirect_pending')) {
+    _processGoogleRedirect();
+  }
+
   console.log('✅ Sign In UI initialized');
+}
+
+async function _processGoogleRedirect() {
+  try {
+    const result = await handleGoogleRedirectResult();
+    if (!result) return;
+    if (result.success && result.isNewUser) {
+      await handleLogout().catch(() => {});
+      showError('signinFormError', 'No account found for this Google account. Please sign up first.');
+      openSignInModal();
+      return;
+    }
+    if (result.success) {
+      window.dispatchEvent(new CustomEvent('authStateChange', { detail: { authenticated: true } }));
+      if (!window.pendingPlan && !window.pendingAction && !window._aegisPaymentInFlight) {
+        window.location.href = '/dashboard';
+      }
+    } else if (result.redirecting) {
+      // Mid-redirect — nothing to do, page is navigating away
+    } else {
+      openSignInModal();
+      showError('signinFormError', result.message || 'Google sign-in failed. Please try again.');
+    }
+  } catch (err) {
+    console.error('Redirect result processing error:', err);
+  }
 }
 
 function attachSignInEventListeners() {
@@ -213,8 +248,12 @@ async function performGoogleSignin() {
   showLoading();
   try {
     const result = await handleGoogleAuth();
+
+    // Redirect flow: page is navigating away — keep loading spinner, do nothing else
+    if (result.redirecting) return;
+
     if (result.success && result.isNewUser) {
-      // No account exists — reject sign-in and sign them out of Firebase
+      // No Firestore doc — reject and sign the Firebase session out
       await handleLogout().catch(() => {});
       hideLoading();
       showError('signinFormError', 'No account found for this Google account. Please sign up first.');

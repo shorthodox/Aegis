@@ -12,6 +12,8 @@ import { AuthManager } from '../auth/authManager.js';
 
 import {
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
@@ -34,6 +36,17 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js";
 
 const googleProvider = new GoogleAuthProvider();
+googleProvider.addScope('email');
+googleProvider.addScope('profile');
+
+// Errors where signInWithPopup cannot work — fall back to redirect
+const _POPUP_FALLBACK_ERRORS = new Set([
+  'auth/popup-blocked',
+  'auth/popup-closed-by-user',
+  'auth/cancelled-popup-request',
+  'auth/operation-not-supported-in-this-environment',
+  'auth/web-storage-unsupported',
+]);
 
 // ============================================================
 // STATE & DOM ELEMENTS
@@ -131,36 +144,68 @@ export async function ensureUserDocumentV2(user, authMethod = 'email', phone = '
 // ============================================================
 // GOOGLE LOGIN/SIGNUP
 // ============================================================
+
+// Shared logic: given a successfully-signed-in Firebase user, check Firestore
+// and return the standard { success, isNewUser, user } shape.
+async function _resolveGoogleUser(user) {
+  const userDocRef = doc(db, 'users', user.uid);
+  const docSnap = await getDoc(userDocRef);
+
+  if (docSnap.exists()) {
+    const existingData = docSnap.data();
+    const loginMethods = new Set(existingData.loginMethods || []);
+    loginMethods.add('google');
+    await updateDoc(userDocRef, { loginMethods: Array.from(loginMethods), lastLogin: serverTimestamp() });
+    const idToken = await user.getIdToken();
+    AuthManager.setToken(idToken);
+    AuthManager.setUser(existingData);
+    localStorage.setItem('authenticated', 'true');
+    return { success: true, user, isNewUser: false, message: 'Logged in successfully!' };
+  }
+
+  // New user — phone verification required before Firestore doc is created
+  return { success: true, user, isNewUser: true, message: 'Phone verification required' };
+}
+
 export async function handleGoogleAuth() {
   try {
-    googleProvider.addScope('email');
-    googleProvider.addScope('profile');
-
-    const result = await signInWithPopup(auth, googleProvider);
-    const user = result.user;
-
-    // Check if this is an existing user (has a Firestore doc already)
-    const userDocRef = doc(db, 'users', user.uid);
-    const docSnap = await getDoc(userDocRef);
-
-    if (docSnap.exists()) {
-      // Returning user — update last login and complete auth immediately
-      const existingData = docSnap.data();
-      const loginMethods = new Set(existingData.loginMethods || []);
-      loginMethods.add('google');
-      await updateDoc(userDocRef, { loginMethods: Array.from(loginMethods), lastLogin: serverTimestamp() });
-      const idToken = await user.getIdToken();
-      AuthManager.setToken(idToken);
-      AuthManager.setUser(existingData);
-      localStorage.setItem('authenticated', 'true');
-      return { success: true, user, isNewUser: false, message: 'Logged in successfully!' };
+    // Attempt popup first. On COOP / popup-blocked failures, fall through to
+    // signInWithRedirect so the auth always has a working path.
+    let result;
+    try {
+      result = await signInWithPopup(auth, googleProvider);
+    } catch (popupError) {
+      const code = popupError?.code || '';
+      console.warn('Google popup failed:', code, '— falling back to redirect');
+      if (_POPUP_FALLBACK_ERRORS.has(code) || !code) {
+        // Redirect flow: page will reload; handleGoogleRedirectResult() picks up
+        // the result when the page re-initialises after the Google OAuth round-trip.
+        sessionStorage.setItem('google_redirect_pending', 'signin');
+        await signInWithRedirect(auth, googleProvider);
+        return { success: false, redirecting: true, message: 'Redirecting to Google…' };
+      }
+      throw popupError;
     }
 
-    // New user — phone verification required before Firestore doc is created
-    return { success: true, user, isNewUser: true, message: 'Phone verification required' };
+    return await _resolveGoogleUser(result.user);
   } catch (error) {
     console.error('Google Auth error:', error.code, error.message);
     return { success: false, message: error.message || 'Google authentication failed' };
+  }
+}
+
+// Call this once on page load (in signin-ui.js initSignInUI) to pick up the
+// result of a signInWithRedirect round-trip.
+export async function handleGoogleRedirectResult() {
+  try {
+    const result = await getRedirectResult(auth);
+    if (!result) return null; // No pending redirect — normal page load
+    sessionStorage.removeItem('google_redirect_pending');
+    return await _resolveGoogleUser(result.user);
+  } catch (error) {
+    sessionStorage.removeItem('google_redirect_pending');
+    console.error('Google redirect result error:', error.code, error.message);
+    return { success: false, message: error.message || 'Google sign-in failed after redirect' };
   }
 }
 
