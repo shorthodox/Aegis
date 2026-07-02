@@ -82,6 +82,20 @@ function signalChip(type) {
     return `<span style="color:#6b7280;">${t}</span>`;
 }
 
+// Risk tier badge — set at entry by the engine's risk-tier classifier.
+// RISKY  = fired while carrying advisory-gate warnings (disclosed, not hidden)
+// STRONG = fired with zero objections and top-tier conviction
+function tierBadge(strength) {
+    const s = (strength || '').toUpperCase();
+    if (s === 'RISKY') {
+        return ' <span class="tr-badge" style="background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.4);color:#fbbf24;" title="Fired with advisory-gate warnings — higher risk entry, disclosed for transparency">RISKY!</span>';
+    }
+    if (s === 'STRONG') {
+        return ' <span class="tr-badge" style="background:rgba(0,255,136,0.10);border:1px solid rgba(0,255,136,0.35);color:#00ff88;" title="Zero gate objections and top-tier model conviction at entry">STRONG SIGNAL!</span>';
+    }
+    return '';
+}
+
 
 // ── Stats strip ───────────────────────────────────────────────────────────────
 function renderStats(summary) {
@@ -199,7 +213,7 @@ function renderTable(rows) {
             <td style="color:#e2e8f0;font-weight:600;">${r.symbol || '—'}</td>
             <td>${r.timeframe || '—'}</td>
             <td class="${dirClass(r.direction)}">${dirLabel(r.direction)}</td>
-            <td>${signalChip(r.signal_type)}</td>
+            <td style="white-space:nowrap;">${signalChip(r.signal_type)}${tierBadge(r.signal_strength)}</td>
             <td>${fmtPrice(r.entry_price)}</td>
             <td style="color:rgba(0,255,136,0.7);">${fmtPrice(r.take_profit)}</td>
             <td style="color:rgba(255,85,85,0.7);">${fmtPrice(r.stop_loss)}</td>

@@ -118,6 +118,7 @@ class Position:
     take_profit_3:   float = 0.0   # TP3: 2.7× ATR from entry — 20% partial close
     take_profit_4:   float = 0.0   # TP4: 3.8× ATR from entry — 20% partial close
     take_profit_5:   float = 0.0   # TP5: 5.2× ATR from entry — close remainder
+    signal_strength: str   = ''    # risk tier at entry: STRONG | NORMAL | RISKY
 
 
 @dataclass
@@ -1297,6 +1298,7 @@ class VirtualWallet:
                         take_profit_3   = float(s.get('take_profit_3', 0)),
                         take_profit_4   = float(s.get('take_profit_4', 0)),
                         take_profit_5   = float(s.get('take_profit_5', 0)),
+                        signal_strength = s.get('signal_strength', ''),
                     )
                     self.open_positions[sym] = pos
                     open_restored += 1
@@ -1343,6 +1345,7 @@ class VirtualWallet:
             exit_reason     = exit_reason,
             meta_confidence = pos.meta_confidence,
             position_value  = pos.position_value,
+            signal_strength = pos.signal_strength,
             stop_loss       = pos.stop_loss,
             take_profit_1   = pos.take_profit_1,
             take_profit_2   = pos.take_profit_2,
@@ -1400,6 +1403,7 @@ class VirtualWallet:
             exit_reason     = exit_reason,
             meta_confidence = pos.meta_confidence,
             position_value  = close_value,
+            signal_strength = pos.signal_strength,
             stop_loss       = pos.stop_loss,
             take_profit_1   = pos.take_profit_1,
             take_profit_2   = pos.take_profit_2,
@@ -1504,6 +1508,12 @@ class LiveEngine:
     # ADVISORY_WARNING_BUDGET advisory objections before it is blocked
     # (user-confirmed 2026-07-02: tolerate 2, block at 3+).
     ADVISORY_WARNING_BUDGET = 2
+
+    # RISKY signals (passed the budget but carrying warnings) must also clear
+    # an expected-value margin in R-multiples before firing — see the
+    # risk-tier block in _process_symbol.  0 = breakeven; 0.25 demands a
+    # meaningfully positive edge before risking the public track record.
+    RISKY_EV_MARGIN = 0.25
 
     # Regimes where entry is unconditionally blocked.  RANGING was demoted to
     # an advisory warning: the structure gate (BUY at support / SELL at
@@ -2249,6 +2259,49 @@ class LiveEngine:
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
 
+                    # ── Risk-tier classification + expected-value hold ────────
+                    # STRONG: zero advisory objections and top-tier conviction.
+                    # RISKY:  passed the budget but carries 1-2 objections.
+                    # NORMAL: everything else.
+                    # A RISKY entry must also justify itself economically:
+                    # using the symbol's LIVE win rate (drift monitor, falling
+                    # back to the training benchmark), penalised 5 pp per
+                    # warning, the expected value in R-multiples must clear
+                    # RISKY_EV_MARGIN.  EV_R = p×RR − (1−p), RR to TP3.
+                    # Symbols whose live performance can't support the added
+                    # risk get HELD instead — the public track record is the
+                    # product; a marginal risky trade isn't worth staining it.
+                    _n_warn = len(_gate_warnings)
+                    if _n_warn == 0 and (_model_quality >= self.SIGNAL_BYPASS_EDGE
+                                         or quality_score >= 80.0):
+                        _risk_tier = 'STRONG'
+                    elif _n_warn >= 1:
+                        _risk_tier = 'RISKY'
+                    else:
+                        _risk_tier = 'NORMAL'
+
+                    if _risk_tier == 'RISKY':
+                        _p_live = self.drift_monitor._live_win_rate(symbol)
+                        _p_base = (_p_live if _p_live is not None
+                                   else self.drift_monitor._benchmarks.get(symbol, 0.55))
+                        _p_adj  = max(0.05, _p_base - 0.05 * _n_warn)
+                        _rr_est = (self.risk_engine.TP3_MULTIPLIER
+                                   / self.risk_engine.ATR_SL_MULTIPLIER)
+                        _ev_r   = _p_adj * _rr_est - (1.0 - _p_adj)
+                        if _ev_r < self.RISKY_EV_MARGIN:
+                            print(f'[{symbol}] RISKY_EV_HOLD blocked {new_side}: '
+                                  f'EV={_ev_r:+.2f}R < {self.RISKY_EV_MARGIN}R '
+                                  f'(p={_p_adj:.2f} after {_n_warn} warnings, '
+                                  f'RR={_rr_est:.1f}) '
+                                  f'[{"; ".join(_gate_warnings)}]')
+                            if symbol in self.last_signals:
+                                self.last_signals[symbol]['fire']          = False
+                                self.last_signals[symbol]['signal']        = 'HOLD'
+                                self.last_signals[symbol]['risky_ev_hold'] = True
+                                self.last_signals[symbol]['gate_warnings'] = _gate_warnings
+                            self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                            return
+
                     # ── Model approved — open the position ────────────────────
                     # predictor.predict_realtime() already applied:
                     #   meta_threshold_buy/sell, hold_calibrator, regime_thresholds
@@ -2256,12 +2309,14 @@ class LiveEngine:
                     _warn_note = (f' warnings={len(_gate_warnings)} '
                                   f'[{"; ".join(_gate_warnings)}]'
                                   if _gate_warnings else '')
-                    print(f'[{symbol}] MODEL PASS {new_side} '
+                    print(f'[{symbol}] MODEL PASS {new_side} tier={_risk_tier} '
                           f'edge={_model_quality:.1f} atr={_fe_atr_pct:.2f}% '
                           f'regime={regime.regime}{_warn_note}')
                     if symbol in self.last_signals:
                         self.last_signals[symbol]['gate_warnings'] = _gate_warnings
-                    self._open_position(symbol, result, price, regime, _model_quality)
+                        self.last_signals[symbol]['risk_tier']     = _risk_tier
+                    self._open_position(symbol, result, price, regime, _model_quality,
+                                        risk_tier=_risk_tier)
 
                 elif is_flip:
                     print(f'[{symbol}] FLIP-FLOP BLOCKED {last_side}→{new_side} '
@@ -2552,6 +2607,7 @@ class LiveEngine:
         price:         float,
         regime:        Optional[RegimeState] = None,
         quality_score: float                 = 0.0,
+        risk_tier:     str                   = '',
     ) -> None:
         side = result.get('side', 'FLAT')
         if side not in ('BUY', 'SELL'):
@@ -2634,6 +2690,7 @@ class LiveEngine:
             take_profit_3   = round(tp3, 8),
             take_profit_4   = round(tp4, 8),
             take_profit_5   = round(tp5, 8),
+            signal_strength = risk_tier,
         )
         self.wallet.open_trade(pos)
         self._open_time[symbol]    = time.time()
@@ -3027,7 +3084,7 @@ class LiveEngine:
                     'exit_reason':     None,
                     'meta_confidence': p.meta_confidence,
                     'position_value':  p.position_value,
-                    'signal_strength': '',
+                    'signal_strength': p.signal_strength,
                     'atr':             p.atr,
                     'atr_multiplier':  p.atr_multiplier,
                     'stop_loss':       p.stop_loss,
