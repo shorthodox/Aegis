@@ -1330,6 +1330,16 @@ class VirtualWallet:
         pnl_usdt = round(pos.position_value * pnl_pct / 100, 2)
         self.balance += pnl_usdt
 
+        # Whole-trade outcome: include profits already banked by TP partial
+        # closes of the same position (same signal_id).  A trade that banked
+        # TP1–TP4 and then closed its remainder at break-even is a WIN — the
+        # final slice alone would mislabel it a LOSS.
+        _banked_usdt = sum(
+            t.pnl_usdt for t in self.trade_history
+            if t.signal_id == pos.signal_id and 'PARTIAL' in (t.exit_reason or '')
+        )
+        _trade_outcome = 'WIN' if (pnl_usdt + _banked_usdt) > 0 else 'LOSS'
+
         rec = TradeRecord(
             signal_id       = pos.signal_id,
             symbol          = symbol,
@@ -1341,7 +1351,7 @@ class VirtualWallet:
             close_time      = datetime.now(timezone.utc).isoformat(),
             pnl_pct         = round(pnl_pct, 3),
             pnl_usdt        = pnl_usdt,
-            outcome         = 'WIN' if pnl_pct > 0 else 'LOSS',
+            outcome         = _trade_outcome,
             exit_reason     = exit_reason,
             meta_confidence = pos.meta_confidence,
             position_value  = pos.position_value,
@@ -2400,14 +2410,24 @@ class LiveEngine:
                 for d in (self._tp1_hit, self._tp2_hit,
                           self._tp3_hit, self._tp4_hit, self._peak_price):
                     d.pop(symbol, None)
-                tag = 'WIN' if rec.pnl_pct > 0 else 'LOSS'
-                print(f'[{symbol}] {reason} {tag} {rec.pnl_pct:+.2f}% @ '
+                # Whole-trade view: rec.outcome already accounts for banked
+                # TP partials (close_trade); aggregate PnL across all slices
+                # of this signal_id so logs/alerts report the REAL result.
+                _slices   = [t for t in self.wallet.trade_history
+                             if t.signal_id == rec.signal_id]
+                _tot_usdt = sum(t.pnl_usdt for t in _slices)
+                _tot_val  = sum(t.position_value for t in _slices)
+                _tot_pct  = (_tot_usdt / _tot_val * 100) if _tot_val > 0 else rec.pnl_pct
+                tag = rec.outcome
+                _slice_note = (f' (final slice {rec.pnl_pct:+.2f}%)'
+                               if len(_slices) > 1 else '')
+                print(f'[{symbol}] {reason} {tag} {_tot_pct:+.2f}%{_slice_note} @ '
                       f'{(exit_px or check_price):.6g}')
                 self.perf_tracker.record_outcome(
                     symbol        = symbol,
                     regime        = self.last_signals.get(symbol, {}).get('regime', 'UNKNOWN'),
                     outcome       = rec.outcome,
-                    pnl_pct       = rec.pnl_pct,
+                    pnl_pct       = round(_tot_pct, 3),
                     quality_score = float(self.last_signals.get(symbol, {}).get('quality_score', 0)),
                 )
                 self.drift_monitor.record(symbol, rec.outcome)
@@ -2425,7 +2445,8 @@ class LiveEngine:
                     _hold = int(time.time() - self._open_time.get(symbol, time.time()))
                     get_notifier().send_exit(
                         symbol=symbol, direction=pos.side, outcome=tag,
-                        pnl_pct=rec.pnl_pct, hold_seconds=_hold, exit_reason=reason,
+                        pnl_pct=round(_tot_pct, 3), hold_seconds=_hold,
+                        exit_reason=reason,
                     )
                 except Exception:
                     pass
@@ -2439,6 +2460,19 @@ class LiveEngine:
                       f'(closed {pct*100:.0f}% @ {px:.6g}) '
                       f'remaining≈{pos.position_value:.0f} USDT')
                 self._save_track_record()
+                # TP hits are outcome events — keep subscribers' Telegram in
+                # sync with the position as profit is banked, not just at the
+                # final close.
+                try:
+                    from scripts.notifications.dispatcher import get_notifier
+                    _hold = int(time.time() - self._open_time.get(symbol, time.time()))
+                    get_notifier().send_exit(
+                        symbol=symbol, direction=pos.side, outcome=rec.outcome,
+                        pnl_pct=rec.pnl_pct, hold_seconds=_hold,
+                        exit_reason=f'{reason} ({pct*100:.0f}% closed, position still open)',
+                    )
+                except Exception:
+                    pass
 
         # ── 1. Maximum hold time (zombie guard) ──────────────────────────────
         if held >= self.MAX_HOLD_SECONDS:

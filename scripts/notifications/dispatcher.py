@@ -61,8 +61,12 @@ _DEFAULT_SETTINGS: Dict[str, Any] = {
     "min_confidence":      0.65,
     "allowed_directions":  ["BUY", "SELL"],
     "allowed_modes":       ["scalping", "scalping_15m", "intraday", "swing", "live"],
-    "quiet_hours":         {"start": "23:00", "end": "06:00"},
-    "max_alerts_per_hour": 5,
+    # Crypto trades 24/7 and subscribers expect every signal live —
+    # quiet hours are opt-in (set both to enable, e.g. 23:00/06:00).
+    "quiet_hours":         {"start": "", "end": ""},
+    # Entry-alert budget per sliding hour. Exit/outcome alerts are
+    # CRITICAL (accountability) and never count against this budget.
+    "max_alerts_per_hour": 20,
 }
 
 
@@ -131,13 +135,23 @@ class NotificationDispatcher:
             return False
         return True
 
-    def _should_send(self, cfg: Dict[str, Any], sig: Optional[Dict[str, Any]] = None) -> bool:
+    def _should_send(
+        self,
+        cfg:      Dict[str, Any],
+        sig:      Optional[Dict[str, Any]] = None,
+        critical: bool = False,
+    ) -> bool:
+        """critical=True (exit/outcome alerts): only the global enabled flag
+        applies — trade outcomes must always reach subscribers, regardless of
+        quiet hours or the entry-alert rate budget."""
         if not cfg.get("enabled", True):
             return False
+        if critical:
+            return True
         if self._in_quiet_hours(cfg.get("quiet_hours") or {}):
             log.debug("[Notif] Quiet hours active — skipping")
             return False
-        max_per_hr = int(cfg.get("max_alerts_per_hour", 5))
+        max_per_hr = int(cfg.get("max_alerts_per_hour", 20))
         if self._rate_limited(max_per_hr):
             log.info(f"[Notif] Rate limit ({max_per_hr}/hr) reached — skipping")
             return False
@@ -176,7 +190,6 @@ class NotificationDispatcher:
         tg_text:         Optional[str],
         wa_text:         Optional[str],
     ) -> None:
-        self._record_send()
         # Telegram — server-side bot token, all connected users
         if tg_text:
             self._tg_send_all(tg_text)
@@ -199,6 +212,7 @@ class NotificationDispatcher:
         cfg = self._load_settings()
         if not self._should_send(cfg, sig):
             return
+        self._record_send()   # only entries consume the hourly alert budget
         dp  = format_entry_discord(sig)
         tg  = format_entry_telegram(sig)
         wa  = format_entry_whatsapp(sig)
@@ -213,9 +227,14 @@ class NotificationDispatcher:
         hold_seconds: int,
         exit_reason:  str = "",
     ) -> None:
-        """Dispatch exit notification when a position closes (non-blocking)."""
+        """Dispatch exit notification when a position closes (non-blocking).
+
+        Exit alerts are CRITICAL: they bypass quiet hours and the hourly
+        rate budget so every WIN/LOSS outcome reaches subscribers — the
+        public accountability these notifications exist for.
+        """
         cfg = self._load_settings()
-        if not self._should_send(cfg):
+        if not self._should_send(cfg, critical=True):
             return
         dp = format_exit_discord(symbol, direction, outcome, pnl_pct, hold_seconds, exit_reason)
         tg = format_exit_telegram(symbol, direction, outcome, pnl_pct, hold_seconds, exit_reason)
