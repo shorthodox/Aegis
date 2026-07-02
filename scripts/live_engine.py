@@ -1445,14 +1445,40 @@ class LiveEngine:
     Signal flow
     -----------
     1. Predictor.predict_realtime() → dict with fire/side/edge_score/price/atr
-    2. MarketRegimeDetector.detect()  → RegimeState
+    2. MarketRegimeDetector.detect()  → RegimeState (HMM-informed)
     3. SignalQualityFilter.score_signal() → (quality_score, reasons)
-    4. If quality_score < 55 or fake breakout detected → block entry
-    5. If fire=True and no open position → open paper trade (VirtualWallet)
+    4. Two-tier entry gates (see below)
+    5. If all gates pass and no open position → open paper trade (VirtualWallet)
     6. If fire=True and opposite position → MODEL_REVERSAL_TP exit, then re-enter
     7. If price hits ATR stop → STOP_HIT exit
     8. After TP1 hit → activate trailing stop at 0.5× ATR below peak (LONG)
     9. After every cycle → write data/track_record.json
+
+    Entry gate hierarchy
+    --------------------
+    CRITICAL — any single failure blocks the entry:
+      · predictor fire/tradeable (model + meta-labeler + calibration)
+      · cooldown / flip-flop cooldown
+      · Gate 0    drift monitor (live WR critically below benchmark)
+      · Gate 1    no-trade regime (liquidity trap)
+      · Gate 1.5  direction-regime veto (LONG in bear / SHORT in bull regime)
+      · Gate 1.7  HTF macro veto (weekly AND daily EMA50 both opposing)
+      · Gate 2    ATR floor (stops inside tick noise)
+      · Gate 3    model edge floor (edge_score >= 70, drift-adjusted)
+      · Gate 3.5  safe mode (edge >= 80 after 3 consecutive losses)
+      · Gate 4    portfolio guard (capital / concurrency limits)
+
+    ADVISORY — each failure appends a warning; entry blocked only when more
+    than ADVISORY_WARNING_BUDGET (2) advisory gates object:
+      · Gate 1.2  ranging regime
+      · Gate 1.6  S/R structure location (BUY near resistance / SELL near support)
+      · Gate 1.65 candlestick reversal confirmation (last 3 closed 1h bars)
+      · Gate 3b   context quality score < 70 (HMM-transition adjusted)
+      · Gate 3c   fake breakout / exhaustion heuristics
+      · Gate 3.8  signal stability (consecutive same-direction cycles)
+      · Gate 4.5  5m/15m multi-timeframe reversal timing
+      · RSI exhaustion / deceleration
+    Warnings are logged and forwarded to the dashboard via gate_warnings.
     """
 
     MAX_CONCURRENT        = 8
@@ -1469,8 +1495,22 @@ class LiveEngine:
     SIGNAL_STABILITY_WINDOW = 2
     SIGNAL_BYPASS_EDGE      = 85.0
 
-    # Regimes where entry is unconditionally blocked
-    NO_TRADE_REGIMES: set = {_REGIME_LIQUIDITY_TRAP, _REGIME_RANGING}
+    # Two-tier gating.  CRITICAL gates hard-block on their own (drift monitor,
+    # no-trade regime, direction-regime veto, HTF macro veto, ATR floor, edge
+    # floor, safe mode, portfolio guard).  ADVISORY gates (ranging regime,
+    # structure location, reversal pattern, context score, fake breakout,
+    # stability, MTF timing, RSI exhaustion) append a warning instead of
+    # blocking — a signal that clears every critical gate tolerates up to
+    # ADVISORY_WARNING_BUDGET advisory objections before it is blocked
+    # (user-confirmed 2026-07-02: tolerate 2, block at 3+).
+    ADVISORY_WARNING_BUDGET = 2
+
+    # Regimes where entry is unconditionally blocked.  RANGING was demoted to
+    # an advisory warning: the structure gate (BUY at support / SELL at
+    # resistance) plus candlestick reversal confirmation are exactly the
+    # setups that remain valid inside a range, so a blanket ban both starved
+    # the engine of signals and contradicted those gates.
+    NO_TRADE_REGIMES: set = {_REGIME_LIQUIDITY_TRAP}
 
     def __init__(
         self,
@@ -1867,6 +1907,11 @@ class LiveEngine:
                 )
 
                 if cooldown_elapsed >= required_cooldown:
+                    # Advisory-gate warning ledger (see ADVISORY_WARNING_BUDGET).
+                    # Advisory gates append here instead of returning; the
+                    # budget check runs after all gates have been evaluated.
+                    _gate_warnings: List[str] = []
+
                     # ── Gate 0: drift monitor — block critically degraded models ─
                     if self.drift_monitor.is_blocked(symbol):
                         live_wr   = self.drift_monitor._live_win_rate(symbol)
@@ -1880,7 +1925,7 @@ class LiveEngine:
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
 
-                    # ── Gate 1: genuinely untradeable regime ──────────────────
+                    # ── Gate 1 (CRITICAL): genuinely untradeable regime ──────
                     if regime.regime in self.NO_TRADE_REGIMES:
                         print(f'[{symbol}] NO_TRADE_REGIME={regime.regime} — blocked')
                         if symbol in self.last_signals:
@@ -1889,6 +1934,13 @@ class LiveEngine:
                             self.last_signals[symbol]['regime_blocked'] = True
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
+
+                    # ── Gate 1.2 (ADVISORY): ranging market ──────────────────
+                    # No directional edge in a range unless the entry sits at
+                    # structure with a reversal pattern — exactly what the
+                    # structure + reversal gates verify.  Warn, don't block.
+                    if regime.regime == _REGIME_RANGING:
+                        _gate_warnings.append(f'ranging_regime(conf={regime.confidence:.2f})')
 
                     # ── Gate 1.5: Hard direction-regime veto ─────────────────
                     # meta_override_confidence bypasses the predictor's daily
@@ -1914,7 +1966,7 @@ class LiveEngine:
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
 
-                    # ── Gate 1.6: S/R structure location ─────────────────────
+                    # ── Gate 1.6 (ADVISORY): S/R structure location ──────────
                     # A BUY fired in the top of the rolling S/R range is buying
                     # into resistance (minimal headroom to TP, stop far from
                     # structure); a SELL at the bottom is the mirror error.
@@ -1924,31 +1976,15 @@ class LiveEngine:
                     _range_pos = result.get('range_position')
                     if _range_pos is not None:
                         _range_pos = float(_range_pos)
-                        _sup = float(result.get('support', 0) or 0)
-                        _res = float(result.get('resistance', 0) or 0)
                         if new_side == 'BUY' and _range_pos > 0.65:
-                            print(f'[{symbol}] STRUCTURE_GATE blocked BUY: '
-                                  f'range_pos={_range_pos:.2f} — too close to '
-                                  f'resistance {_res:.6g} (support {_sup:.6g})')
-                            if symbol in self.last_signals:
-                                self.last_signals[symbol]['fire']              = False
-                                self.last_signals[symbol]['signal']            = 'HOLD'
-                                self.last_signals[symbol]['structure_blocked'] = True
-                            self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
-                            return
-                        if new_side == 'SELL' and _range_pos < 0.35:
-                            print(f'[{symbol}] STRUCTURE_GATE blocked SELL: '
-                                  f'range_pos={_range_pos:.2f} — too close to '
-                                  f'support {_sup:.6g} (resistance {_res:.6g})')
-                            if symbol in self.last_signals:
-                                self.last_signals[symbol]['fire']              = False
-                                self.last_signals[symbol]['signal']            = 'HOLD'
-                                self.last_signals[symbol]['structure_blocked'] = True
-                            self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
-                            return
+                            _gate_warnings.append(
+                                f'structure(range_pos={_range_pos:.2f} near resistance)')
+                        elif new_side == 'SELL' and _range_pos < 0.35:
+                            _gate_warnings.append(
+                                f'structure(range_pos={_range_pos:.2f} near support)')
 
-                    # ── Gate 1.65: candlestick reversal confirmation ─────────
-                    # Entries must be timed at a trend turn, not mid-trend.
+                    # ── Gate 1.65 (ADVISORY): candlestick reversal pattern ───
+                    # Entries should be timed at a trend turn, not mid-trend.
                     # The predictor forwards the max weighted reversal-pattern
                     # score over the last 3 closed 1h bars (1/2/3-candle
                     # patterns, trend-context gated in feature_engine).
@@ -1957,17 +1993,9 @@ class LiveEngine:
                     _bear_rev = float(result.get('cdl_bear_reversal', -1.0))
                     _rev_score = _bull_rev if new_side == 'BUY' else _bear_rev
                     if _rev_score == 0.0:
-                        _active = result.get('cdl_patterns_active') or []
-                        print(f'[{symbol}] REVERSAL_GATE blocked {new_side}: no '
-                              f'{"bullish" if new_side == "BUY" else "bearish"} '
-                              f'reversal pattern in last 3 bars '
-                              f'(active: {", ".join(_active) if _active else "none"})')
-                        if symbol in self.last_signals:
-                            self.last_signals[symbol]['fire']             = False
-                            self.last_signals[symbol]['signal']           = 'HOLD'
-                            self.last_signals[symbol]['reversal_blocked'] = True
-                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
-                        return
+                        _gate_warnings.append(
+                            f'reversal(no {"bullish" if new_side == "BUY" else "bearish"} '
+                            f'pattern in last 3 bars)')
 
                     # ── Gate 1.7: HTF macro trend hard veto ─────────────────
                     # Hard block when weekly EMA50 trend AND daily EMA50 trend
@@ -2032,12 +2060,11 @@ class LiveEngine:
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
 
-                    # ── Gate 3b: contextual quality filter ────────────────────
+                    # ── Gate 3b (ADVISORY): contextual quality filter ─────────
                     # score_signal() checks: ADX trend, volume conviction, regime
                     # confidence, RSI zone, funding alignment, OI alignment, market
                     # bias, RANGING penalty (-15), low-volume penalty (-10), macro
-                    # conflict penalty (-15).  Previously this was dead code
-                    # (quality_score was set to edge_score, fake_breakout = False).
+                    # conflict penalty (-15), candlestick reversal alignment.
                     _CONTEXT_FLOOR = 70.0
                     # When HMM detects elevated regime-transition risk, raise the
                     # context floor proportionally.  A transition risk > 0.50 means
@@ -2049,25 +2076,12 @@ class LiveEngine:
                         _CONTEXT_FLOOR = _CONTEXT_FLOOR + _trans_adj
                     if quality_score < _CONTEXT_FLOOR:
                         _qr_str = ', '.join(_quality_reasons[:4]) if _quality_reasons else 'n/a'
-                        _trans_note = (f' hmm_trans={_hmm_trans_risk:.2f}'
-                                       if _hmm_available and _hmm_trans_risk > 0.50 else '')
-                        print(f'[{symbol}] CONTEXT_GATE blocked {new_side}: '
-                              f'ctx={quality_score:.1f} < {_CONTEXT_FLOOR:.1f}'
-                              f'{_trans_note} [{_qr_str}]')
-                        if symbol in self.last_signals:
-                            self.last_signals[symbol]['fire']            = False
-                            self.last_signals[symbol]['signal']          = 'HOLD'
-                            self.last_signals[symbol]['quality_blocked'] = True
-                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
-                        return
+                        _gate_warnings.append(
+                            f'context(ctx={quality_score:.1f}<{_CONTEXT_FLOOR:.0f} [{_qr_str}])')
+
+                    # ── Gate 3c (ADVISORY): fake breakout / exhaustion ────────
                     if fake_breakout:
-                        print(f'[{symbol}] FAKE_BREAKOUT blocked {new_side}')
-                        if symbol in self.last_signals:
-                            self.last_signals[symbol]['fire']            = False
-                            self.last_signals[symbol]['signal']          = 'HOLD'
-                            self.last_signals[symbol]['quality_blocked'] = True
-                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
-                        return
+                        _gate_warnings.append('fake_breakout')
 
                     # ── Gate 3.5: safe-mode quality escalation ───────────────
                     # When last 3 global trades are all losses, raise the quality
@@ -2081,25 +2095,18 @@ class LiveEngine:
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
 
-                    # ── Gate 3.8: signal stability ────────────────────────────
-                    # Require N consecutive same-direction model outputs before entry.
+                    # ── Gate 3.8 (ADVISORY): signal stability ─────────────────
+                    # Prefer N consecutive same-direction model outputs before entry.
                     # Very high conviction signals (edge >= SIGNAL_BYPASS_EDGE) skip
-                    # this gate — they're strong enough to act on immediately.
+                    # this check — they're strong enough to act on immediately.
                     _sig_hist = list(self._signal_history.get(symbol, []))
                     _is_stable = (
                         len(_sig_hist) >= self.SIGNAL_STABILITY_WINDOW and
                         all(s == new_side for s in _sig_hist)
                     )
                     if not _is_stable and _model_quality < self.SIGNAL_BYPASS_EDGE:
-                        print(f'[{symbol}] STABILITY_GATE blocked {new_side}: '
-                              f'{len(_sig_hist)}/{self.SIGNAL_STABILITY_WINDOW} '
-                              f'consecutive cycles (edge={_model_quality:.1f})')
-                        if symbol in self.last_signals:
-                            self.last_signals[symbol]['fire']              = False
-                            self.last_signals[symbol]['signal']            = 'HOLD'
-                            self.last_signals[symbol]['stability_blocked'] = True
-                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
-                        return
+                        _gate_warnings.append(
+                            f'stability({len(_sig_hist)}/{self.SIGNAL_STABILITY_WINDOW} cycles)')
 
                     # ── Gate 4: portfolio capital limits ──────────────────────
                     # Use the model's edge_score (0-100) directly for position sizing.
@@ -2118,7 +2125,23 @@ class LiveEngine:
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
 
-                    # ── Gate 4.5: two-zone multi-timeframe reversal timing ────────
+                    # ── Advisory budget short-circuit ─────────────────────────
+                    # The MTF gate below costs two exchange API calls.  If the
+                    # warning budget is already exhausted the entry cannot pass
+                    # regardless of the MTF outcome — block now without the fetch.
+                    if len(_gate_warnings) > self.ADVISORY_WARNING_BUDGET:
+                        print(f'[{symbol}] ADVISORY_GATES blocked {new_side}: '
+                              f'{len(_gate_warnings)} warnings '
+                              f'[{"; ".join(_gate_warnings)}]')
+                        if symbol in self.last_signals:
+                            self.last_signals[symbol]['fire']             = False
+                            self.last_signals[symbol]['signal']           = 'HOLD'
+                            self.last_signals[symbol]['advisory_blocked'] = True
+                            self.last_signals[symbol]['gate_warnings']    = _gate_warnings
+                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                        return
+
+                    # ── Gate 4.5 (ADVISORY): two-zone multi-timeframe timing ─────
                     # Old logic required ALL last-N 5m/15m candles to be in the
                     # prior-trend direction.  That caused two failure modes:
                     #   (a) Fires too early — no lower-TF reversal signal yet (false setup)
@@ -2182,19 +2205,13 @@ class LiveEngine:
                     _ok_15m     = (not _closed_15m) or _dir_frac(_closed_15m, _rev_dir) >= 0.50
 
                     if not (_ok_5m and _ok_15m):
-                        print(f'[{symbol}] MTF_GATE blocked {new_side}: '
-                              f'prior_5m({_prior_dir})={_dir_frac(_prior_5m, _prior_dir):.2f} '
-                              f'rev_5m({_rev_dir})={_dir_frac(_recent_5m, _rev_dir):.2f} '
-                              f'15m({_rev_dir})={_dir_frac(_closed_15m, _rev_dir):.2f}')
-                        if symbol in self.last_signals:
-                            self.last_signals[symbol]['fire']        = False
-                            self.last_signals[symbol]['signal']      = 'HOLD'
-                            self.last_signals[symbol]['mtf_blocked'] = True
-                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
-                        return
+                        _gate_warnings.append(
+                            f'mtf_timing(prior_5m={_dir_frac(_prior_5m, _prior_dir):.2f} '
+                            f'rev_5m={_dir_frac(_recent_5m, _rev_dir):.2f} '
+                            f'15m={_dir_frac(_closed_15m, _rev_dir):.2f})')
 
-                    # ── RSI exhaustion / deceleration gate ───────────────────
-                    # Block entries when RSI momentum has already peaked (late signal).
+                    # ── RSI exhaustion / deceleration (ADVISORY) ─────────────
+                    # Warn when RSI momentum has already peaked (late signal).
                     _rsi_val   = float(result.get('rsi', 50) or 50)
                     _rsi_slope = float(result.get('rsi_slope', 0) or 0)
                     _rsi_accel = float(result.get('rsi_acceleration', 0) or 0)
@@ -2215,11 +2232,20 @@ class LiveEngine:
                             _exhausted = True
                             _exhaust_reason = f'RSI decel sell accel={_rsi_accel:.4f}'
                     if _exhausted:
-                        print(f'[{symbol}] EXHAUSTION_GATE blocked {new_side}: {_exhaust_reason}')
+                        _gate_warnings.append(f'exhaustion({_exhaust_reason})')
+
+                    # ── Advisory warning budget — final check ─────────────────
+                    # All critical gates passed.  Block only when more than
+                    # ADVISORY_WARNING_BUDGET advisory gates objected.
+                    if len(_gate_warnings) > self.ADVISORY_WARNING_BUDGET:
+                        print(f'[{symbol}] ADVISORY_GATES blocked {new_side}: '
+                              f'{len(_gate_warnings)} warnings '
+                              f'[{"; ".join(_gate_warnings)}]')
                         if symbol in self.last_signals:
-                            self.last_signals[symbol]['fire']               = False
-                            self.last_signals[symbol]['signal']             = 'HOLD'
-                            self.last_signals[symbol]['exhaustion_blocked'] = True
+                            self.last_signals[symbol]['fire']             = False
+                            self.last_signals[symbol]['signal']           = 'HOLD'
+                            self.last_signals[symbol]['advisory_blocked'] = True
+                            self.last_signals[symbol]['gate_warnings']    = _gate_warnings
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
 
@@ -2227,9 +2253,14 @@ class LiveEngine:
                     # predictor.predict_realtime() already applied:
                     #   meta_threshold_buy/sell, hold_calibrator, regime_thresholds
                     # Trusting the model's fire=True directly.
+                    _warn_note = (f' warnings={len(_gate_warnings)} '
+                                  f'[{"; ".join(_gate_warnings)}]'
+                                  if _gate_warnings else '')
                     print(f'[{symbol}] MODEL PASS {new_side} '
                           f'edge={_model_quality:.1f} atr={_fe_atr_pct:.2f}% '
-                          f'regime={regime.regime}')
+                          f'regime={regime.regime}{_warn_note}')
+                    if symbol in self.last_signals:
+                        self.last_signals[symbol]['gate_warnings'] = _gate_warnings
                     self._open_position(symbol, result, price, regime, _model_quality)
 
                 elif is_flip:

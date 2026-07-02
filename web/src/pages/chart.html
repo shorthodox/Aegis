@@ -390,11 +390,13 @@
       </div>
       <div id="tv-chart"><div class="loader">Loading chart<span class="dot-pulse"></span></div></div>
       <div class="chart-legend" id="chart-legend" style="display:none">
-        <div class="legend-item"><div class="legend-dot" style="background:#B8966A"></div>Entry</div>
-        <div class="legend-item"><div class="legend-dot" style="background:#4a7c68"></div>TP1</div>
-        <div class="legend-item"><div class="legend-dot" style="background:#00cc6a"></div>TP2</div>
-        <div class="legend-item"><div class="legend-dot" style="background:#009950"></div>TP3</div>
-        <div class="legend-item"><div class="legend-dot" style="background:#ff0055"></div>SL</div>
+        <span id="chart-legend-trade" style="display:none">
+          <div class="legend-item"><div class="legend-dot" style="background:#B8966A"></div>Entry</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#4a7c68"></div>TP1</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#00cc6a"></div>TP2</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#009950"></div>TP3</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#ff0055"></div>SL</div>
+        </span>
         <div class="legend-item"><div class="legend-dot" style="background:rgba(74,124,104,0.4)"></div>Support</div>
         <div class="legend-item"><div class="legend-dot" style="background:rgba(255,0,85,0.4)"></div>Resistance</div>
       </div>
@@ -852,16 +854,21 @@ async function renderChart(sig) {
       candles.createPriceLine({ price: parseFloat(price), color, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: label });
     };
 
-    // Prefer open position prices (stored at the moment the trade was actually opened)
-    // over live signal prices (which reflect the current market price, not entry candle).
+    // Trade levels (Entry / SL / TP) are only drawn for a real trade:
+    // an OPEN tracked position, or a signal the engine actually FIRED.
+    // A displayed-but-not-fired signal (fire=false → HOLD) must not paint
+    // trade levels on the chart — only Support / Resistance context lines.
     const openPosForChart = TRACK_DATA.signals.find(s => s.symbol === sig.symbol && s.outcome === 'OPEN');
+    const signalFired = sig.fire === true && (sig.signal === 'BUY' || sig.signal === 'SELL');
+    let tradeLevelsDrawn = false;
     if (openPosForChart) {
       addLine(openPosForChart.entry_price,   '#B8966A', 'Entry');
       addLine(openPosForChart.stop_loss,     '#ff0055', 'SL');
       addLine(openPosForChart.take_profit_1, '#4a7c68', 'TP1');
       addLine(openPosForChart.take_profit_2, '#00cc6a', 'TP2');
       addLine(openPosForChart.take_profit_3, '#009950', 'TP3');
-    } else {
+      tradeLevelsDrawn = true;
+    } else if (signalFired) {
       const entry = sig.entry_price || sig.price;
       addLine(entry,            '#B8966A',              'Entry');
       addLine(sig.suggested_sl, '#ff0055',              'SL');
@@ -874,12 +881,15 @@ async function renderChart(sig) {
         addLine(sig.bull_tp2, '#00cc6a', 'TP2');
         addLine(sig.bull_tp3, '#009950', 'TP3');
       }
+      tradeLevelsDrawn = true;
     }
     addLine(sig.support,    'rgba(74,124,104,0.5)',  'Sup');
     addLine(sig.resistance, 'rgba(255,0,85,0.5)',   'Res');
     addLine(sig.pivot,      'rgba(184,150,106,0.35)', 'Pvt');
 
     $('chart-legend').style.display = 'flex';
+    const tradeLegend = $('chart-legend-trade');
+    if (tradeLegend) tradeLegend.style.display = tradeLevelsDrawn ? 'contents' : 'none';
 
     if (_resizeOff) window.removeEventListener('resize', _resizeOff);
     _resizeOff = () => chart.resize(container.clientWidth, 420);
