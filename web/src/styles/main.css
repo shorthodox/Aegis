@@ -3905,6 +3905,48 @@ body.modal-open {
     box-shadow: 0 0 6px rgba(246, 236, 212, 0.9);
 }
 
+/* ── Signal-details modal + fullscreen feature panels ──────────
+   These overlays are dark-designed (bg-black/80 backdrop, bg-[#050505]
+   fullscreen panels). The generic bg-black softening rules above made
+   them nearly TRANSPARENT in light mode — the page bled through and
+   the analytics (Confluence / Zones / Expectancy / SHAP) were
+   unreadable. Give them solid light surfaces and a real dim backdrop. */
+[data-theme="light"] #token-details-modal {
+    background: rgba(15, 23, 42, 0.45) !important;
+}
+[data-theme="light"] #signalDetailsModal {
+    background: #f4f6fa !important;
+    border-color: rgba(0, 153, 187, 0.35) !important;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25) !important;
+}
+[data-theme="light"] #signalDetailsModal .bg-black\/40,
+[data-theme="light"] #signalDetailsModal .bg-black\/20 {
+    background-color: rgba(15, 23, 42, 0.05) !important;
+    border-color: rgba(15, 23, 42, 0.10) !important;
+}
+[data-theme="light"] #fp-confluence,
+[data-theme="light"] #fp-zones,
+[data-theme="light"] #fp-expectancy,
+[data-theme="light"] #fp-shap,
+[data-theme="light"] #fp-api {
+    background-color: #eef2f7 !important;
+}
+[data-theme="light"] #fp-confluence .bg-black\/40,
+[data-theme="light"] #fp-zones .bg-black\/40,
+[data-theme="light"] #fp-expectancy .bg-black\/40,
+[data-theme="light"] #fp-shap .bg-black\/40,
+[data-theme="light"] #fp-api .bg-black\/40 {
+    background-color: rgba(15, 23, 42, 0.05) !important;
+    border-color: rgba(15, 23, 42, 0.10) !important;
+}
+/* Readable status text inside the light panels */
+[data-theme="light"] #signalDetailsModal .text-gray-300,
+[data-theme="light"] #fp-confluence .text-gray-300,
+[data-theme="light"] #fp-zones .text-gray-300,
+[data-theme="light"] #fp-expectancy .text-gray-300,
+[data-theme="light"] #fp-shap .text-gray-300,
+[data-theme="light"] #fp-api .text-gray-300 { color: #334155 !important; }
+
 /* Onboarding / login modal */
 [data-theme="light"] #loginModal .modal-card {
     background: linear-gradient(160deg, #6e4f16 0%, #8a651f 100%);

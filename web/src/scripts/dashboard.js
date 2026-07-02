@@ -2,6 +2,15 @@ import { initializeTrialCountdown, fetchTrialStartFromFirestore } from './trial-
 import { auth, db } from './gatekeeper.js?v=2.0';
 import { doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js';
 
+// Confidence values arrive on two scales depending on source: 0-1 (legacy
+// meta probability) or 0-100 (edge_score from the live engine). Normalise
+// to a 0-100 integer so the UI never shows "8977.7%".
+function _confPct(v, fallback = 0) {
+  const n = parseFloat(v);
+  if (!isFinite(n) || n <= 0) return fallback;
+  return Math.round(n > 1.5 ? n : n * 100);
+}
+
 function _showToast(msg, type = 'info') {
   const existing = document.getElementById('_dash-toast');
   if (existing) existing.remove();
@@ -1064,7 +1073,7 @@ window.showSignalDetailsModal = function (signal) {
     : (signal.entry_price || 0);
 
   document.getElementById('sd-live-price').textContent = `$${currentPrice.toFixed(4)}`;
-  document.getElementById('sd-confidence').textContent = `${((signal.ai_prob || signal.confidence || 0) * 100).toFixed(1)}%`;
+  document.getElementById('sd-confidence').textContent = `${_confPct(signal.ai_prob || signal.confidence)}%`;
   document.getElementById('sd-sl').textContent = `$${(signal.sl || 0).toFixed(4)}`;
   document.getElementById('sd-tp').textContent = `$${(signal.tp || 0).toFixed(4)}`;
 
@@ -1136,10 +1145,10 @@ window.showSignalDetailsModal = function (signal) {
   const _lead = Object.entries(_probs).sort((a,b) => b[1]-a[1])[0];
   const _leadPct = (_lead[1]*100).toFixed(0);
   const _leadColor = _lead[0]==='LONG' ? 'text-green-400' : _lead[0]==='SHORT' ? 'text-red-400' : 'text-gray-400';
-  const _metaConf = Math.round((signal.meta_confidence || 0) * 100);
+  const _metaConf = _confPct(signal.meta_confidence);
   _shapLeadHTML = `
     <div class="text-lg font-black ${_leadColor}">${_leadPct}% ${_lead[0]}</div>
-    ${_metaConf > 0 ? `<div class="text-[9px] text-gray-500 mt-0.5">Meta: ${_metaConf}% vs ${Math.round((signal.threshold||0.6)*100)}% required</div>` : ''}`;
+    ${_metaConf > 0 ? `<div class="text-[9px] text-gray-500 mt-0.5">Meta: ${_metaConf}% vs ${_confPct(signal.threshold, 60)}% required</div>` : ''}`;
 
   const cardsHTML = `
     <!-- Card 1: Confluence -->
@@ -1820,8 +1829,8 @@ function _renderFpExpectancy(body, signal, tier) {
   const locked = tier !== 'PRO';
 
   // Use real signal fields from live_engine v3 first; fall back to track record
-  const metaConf   = Math.round((signal.meta_confidence || 0) * 100);
-  const threshold  = Math.round((signal.threshold || 0.6) * 100);
+  const metaConf   = _confPct(signal.meta_confidence);
+  const threshold  = _confPct(signal.threshold, 60);
   const expectedMv = parseFloat(signal.expected_move_pct || 0);
   const rr         = parseFloat(signal.risk_reward || 0);
   const atrPct     = parseFloat(signal.atr_pct || 0);

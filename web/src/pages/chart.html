@@ -308,6 +308,57 @@
     .loader { text-align: center; padding: 60px; color: var(--dim); font-size: 14px; }
     .dot-pulse::after { content: '...'; animation: dots 1.5s infinite; }
     @keyframes dots { 0%,20%{content:'.'} 40%{content:'..'} 60%,100%{content:'...'} }
+
+    /* ── LIGHT THEME ─────────────────────────────────────────────
+       This page defines its own :root tokens AFTER main.css loads,
+       so the global theme overrides never reach it. Remap the
+       page-local tokens + every hardcoded dark rule here. */
+    html[data-theme="light"] {
+      --bg-deep: #eef2f7; --bg-void: #dde4ee;
+      --glass: rgba(255,255,255,0.80); --glass-border: rgba(122,89,27,0.28);
+      --dim: #4a5568; --white: #0f172a;
+    }
+    html[data-theme="light"] body {
+      background-image: radial-gradient(circle at 20% 20%, rgba(122,89,27,0.05) 0%, transparent 60%);
+    }
+    html[data-theme="light"] .chart-nav {
+      background: rgba(238,242,247,0.97);
+      border-bottom-color: rgba(0,0,0,0.08);
+    }
+    html[data-theme="light"] .tf-btn {
+      background: rgba(0,0,0,0.04);
+      border-color: rgba(0,0,0,0.10);
+    }
+    html[data-theme="light"] .tf-btn:hover { background: rgba(160,112,48,0.10); }
+    html[data-theme="light"] .conf-bar,
+    html[data-theme="light"] .prob-track,
+    html[data-theme="light"] .quality-bar { background: rgba(0,0,0,0.08); }
+    html[data-theme="light"] .health-track { stroke: rgba(0,0,0,0.08); }
+    html[data-theme="light"] .regime-off,
+    html[data-theme="light"] .metric-box,
+    html[data-theme="light"] .tp-miss,
+    html[data-theme="light"] .gate-row {
+      background: rgba(0,0,0,0.03);
+      border-color: rgba(0,0,0,0.09);
+    }
+    html[data-theme="light"] .gate-fail { background: rgba(255,0,85,0.05); border-color: rgba(255,0,85,0.25); }
+    html[data-theme="light"] .story-item { border-bottom-color: rgba(0,0,0,0.06); }
+    html[data-theme="light"] .tp-acc-row,
+    html[data-theme="light"] .forensic-row { border-bottom-color: rgba(0,0,0,0.07); }
+    html[data-theme="light"] .sig-table th { border-bottom-color: rgba(0,0,0,0.10); }
+    html[data-theme="light"] .sig-table td { border-bottom-color: rgba(0,0,0,0.05); }
+    html[data-theme="light"] .sig-table tr:hover td { background: rgba(0,0,0,0.03); }
+    html[data-theme="light"] .pro-lock-overlay { background: rgba(238,242,247,0.88); }
+    html[data-theme="light"] .ae-mobile-drawer { border-bottom-color: rgba(0,0,0,0.08); }
+    /* Gold text deepened for contrast on light surfaces */
+    html[data-theme="light"] .card-title,
+    html[data-theme="light"] .sig-confidence,
+    html[data-theme="light"] .rr-val,
+    html[data-theme="light"] .level-entry,
+    html[data-theme="light"] .text-cyan { color: #8a6420; }
+    html[data-theme="light"] .tf-btn.active { color: #8a6420; border-color: rgba(138,100,32,0.5); }
+    html[data-theme="light"] .tp-pending { color: #8a6420; }
+    html[data-theme="light"] #live-price { color: #8a6420 !important; }
   </style>
 </head>
 <body>
@@ -569,7 +620,7 @@ function _planFromStorage() {
 const _gateOverlay = (() => {
   const el = document.createElement('div');
   el.id = 'auth-gate-overlay';
-  el.style.cssText = 'position:fixed;inset:0;background:#050505;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;';
+  el.style.cssText = 'position:fixed;inset:0;background:var(--bg-deep,#050505);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;';
   el.innerHTML = `
     <div style="font-size:24px;font-weight:800;color:#B8966A;letter-spacing:3px;font-family:Inter,sans-serif">⚡ AEGIS</div>
     <div style="font-size:12px;color:#94a3b8;font-family:Inter,sans-serif;">Checking access…</div>`;
@@ -823,14 +874,16 @@ async function renderChart(sig) {
     if (chartInstance) { try { chartInstance.remove(); } catch(e) {} }
 
     const showSeconds = ['1m','3m','5m'].includes(tfCfg.interval);
+    const _isLight = document.documentElement.getAttribute('data-theme') === 'light';
+    const _gridColor = _isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.04)';
     const chart = LightweightCharts.createChart(container, {
       width:  container.clientWidth,
       height: 420,
-      layout: { background: { color: 'transparent' }, textColor: '#94a3b8' },
-      grid:   { vertLines: { color: 'rgba(255,255,255,0.04)' }, horzLines: { color: 'rgba(255,255,255,0.04)' } },
+      layout: { background: { color: 'transparent' }, textColor: _isLight ? '#475569' : '#94a3b8' },
+      grid:   { vertLines: { color: _gridColor }, horzLines: { color: _gridColor } },
       crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-      rightPriceScale: { borderColor: 'rgba(184,150,106,0.15)' },
-      timeScale: { borderColor: 'rgba(184,150,106,0.15)', timeVisible: true, secondsVisible: showSeconds },
+      rightPriceScale: { borderColor: _isLight ? 'rgba(138,100,32,0.3)' : 'rgba(184,150,106,0.15)' },
+      timeScale: { borderColor: _isLight ? 'rgba(138,100,32,0.3)' : 'rgba(184,150,106,0.15)', timeVisible: true, secondsVisible: showSeconds },
     });
     chartInstance = chart;
 
