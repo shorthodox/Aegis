@@ -41,15 +41,17 @@ function fmtPrice(v) {
 }
 
 function fmtPnl(pnl, outcome) {
-    if (outcome === 'OPEN' || pnl == null) return '—';
+    if (pnl == null) return '—';
     const n = parseFloat(pnl);
     if (isNaN(n)) return '—';
     const sign = n >= 0 ? '+' : '';
-    return `${sign}${n.toFixed(2)}%`;
+    // Open rows show live unrealized PnL, marked so it reads as provisional
+    const liveTag = (outcome || '').toUpperCase() === 'OPEN' ? ' <span style="font-size:0.85em;opacity:0.6;">live</span>' : '';
+    return `${sign}${n.toFixed(2)}%${liveTag}`;
 }
 
 function pnlColor(pnl, outcome) {
-    if (outcome === 'OPEN' || pnl == null) return '';
+    if (pnl == null) return '';
     return parseFloat(pnl) >= 0 ? 'color:#00ff88;' : 'color:#ff5555;';
 }
 
@@ -180,17 +182,14 @@ function renderLiveTeaser(openCount) {
     `;
 }
 
-// ── Table — only closed signals are shown publicly ────────────────────────────
+// ── Table — open AND closed signals are shown (full transparency) ─────────────
 function applyFilters(rows) {
-    // Strip open signals from public view — they contain live actionable data
-    const closed = rows.filter(r => (r.outcome || '').toUpperCase() !== 'OPEN');
-    return closed.filter(r => {
+    return rows.filter(r => {
         const dir = _activeFilter.direction;
         const out = _activeFilter.outcome;
+        const outcome = (r.outcome || '').toUpperCase();
         const matchDir = dir === 'ALL' || dirLabel(r.direction) === dir;
-        const matchOut = out === 'ALL' || out === 'OPEN'
-            ? true
-            : (r.outcome || '').toUpperCase() === out;
+        const matchOut = out === 'ALL' ? true : outcome === out;
         return matchDir && matchOut;
     });
 }
@@ -202,7 +201,7 @@ function renderTable(rows) {
 
     if (filtered.length === 0) {
         tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:2.5rem;color:#4b5563;">
-            No closed signals yet. Signals appear here once their TP or SL is hit.
+            No signals match this filter yet. Open signals appear the moment they fire; closed ones when TP or SL is hit.
         </td></tr>`;
         return;
     }
@@ -264,13 +263,13 @@ function render(data) {
     if (tcEl && summary.token_count) tcEl.textContent = summary.token_count;
 
     _allRows = allSignals;
-    const closedRows = allSignals.filter(r => (r.outcome || '').toUpperCase() !== 'OPEN');
 
-    if (closedRows.length === 0) {
+    if (allSignals.length === 0) {
         if (emptyEl) emptyEl.style.display = 'block';
         return;
     }
 
+    if (emptyEl) emptyEl.style.display = 'none';
     if (wrapEl) wrapEl.style.display = 'block';
     renderTable(_allRows);
 }

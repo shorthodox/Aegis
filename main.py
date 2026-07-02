@@ -472,7 +472,11 @@ def _update_track_record(signals_data: dict, live_prices: dict) -> None:
                 continue  # Hard ceiling hit — do not immediately re-enter
 
             else:
-                continue  # Position still open, nothing to do
+                # Position still open — refresh live unrealized PnL so the
+                # public track record shows a moving number, not the entry 0.00
+                open_rec["pnl_pct"]       = pnl_pct
+                open_rec["current_price"] = current_price
+                continue
 
         # ── Open a new position if the signal is actionable and fresh ───────
         # Only fire=True signals should create track-record entries.

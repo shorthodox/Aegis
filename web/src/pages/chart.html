@@ -1126,6 +1126,7 @@ function _startCandleTimer() {
 }
 
 function _updateLiveTicker(symbol, price) {
+  _updatePosBannerLive(symbol, price);
   const el = document.getElementById('live-price');
   if (!el) return;
   const d = price < 0.1 ? 6 : price < 10 ? 4 : price < 1000 ? 2 : 1;
@@ -1707,12 +1708,17 @@ function renderForensic(sig) {
 }
 
 // ── Position Banner ───────────────────────────────────────────────────────────
+// Context for live P/L updates — consumed by _updatePosBannerLive() on every
+// WebSocket price tick so the banner never freezes on the load-time snapshot.
+let _posLiveCtx = null;
+
 function renderPositionBanner(symbol) {
   const banner = $('pos-banner');
   const pos = TRACK_DATA.signals.find(s => s.symbol === symbol && s.outcome === 'OPEN');
 
   if (!pos) {
     banner.style.display = 'none';
+    _posLiveCtx = null;
     return;
   }
 
@@ -1761,15 +1767,15 @@ function renderPositionBanner(symbol) {
       </div>
       <div class="pos-stat">
         <div class="pos-stat-lbl">Current Price</div>
-        <div class="pos-stat-val">${current > 0 ? current.toPrecision(6) : '—'}</div>
+        <div class="pos-stat-val" id="pos-live-px">${current > 0 ? current.toPrecision(6) : '—'}</div>
       </div>
       <div class="pos-stat">
         <div class="pos-stat-lbl">Unrealized PnL</div>
-        <div class="pos-stat-val" style="color:${pnlColor}">${pnlSign}${pnl.toFixed(3)}%</div>
+        <div class="pos-stat-val" id="pos-live-pnl" style="color:${pnlColor}">${pnlSign}${pnl.toFixed(3)}%</div>
       </div>
       <div class="pos-stat">
         <div class="pos-stat-lbl">PnL (USD)</div>
-        <div class="pos-stat-val" style="color:${pnlColor}">${pnl >= 0 ? '+' : ''}$${parseFloat(pos.pnl_usdt || 0).toFixed(2)}</div>
+        <div class="pos-stat-val" id="pos-live-usd" style="color:${pnlColor}">${pnl >= 0 ? '+' : ''}$${parseFloat(pos.pnl_usdt || 0).toFixed(2)}</div>
       </div>
       <div class="pos-stat">
         <div class="pos-stat-lbl">Stop Loss</div>
@@ -1783,6 +1789,40 @@ function renderPositionBanner(symbol) {
       <div class="pos-tp-chip tp-miss">SL<br><small>${sl > 0 ? sl.toPrecision(5) : '—'}</small></div>
     </div>
   `;
+
+  // Arm live updates — every WS/REST price tick recomputes P/L from here
+  _posLiveCtx = {
+    symbol,
+    entry,
+    isShort,
+    positionValue: parseFloat(pos.position_value) || 0,
+  };
+}
+
+// Recompute the open-position P/L from the live tick price.
+// Called by _updateLiveTicker on every aggTrade/kline/REST update.
+function _updatePosBannerLive(symbol, price) {
+  const ctx = _posLiveCtx;
+  // Ticker uses Binance format (BTCUSDT); track record uses BTC/USDT — normalise
+  if (!ctx || !(ctx.entry > 0) || !(price > 0)) return;
+  if (String(symbol).replace('/', '') !== String(ctx.symbol).replace('/', '')) return;
+
+  const pnl = ctx.isShort
+    ? (ctx.entry - price) / ctx.entry * 100
+    : (price - ctx.entry) / ctx.entry * 100;
+  const color = pnl >= 0 ? 'var(--green)' : 'var(--red)';
+  const sign  = pnl >= 0 ? '+' : '';
+
+  const pxEl  = document.getElementById('pos-live-px');
+  const pnlEl = document.getElementById('pos-live-pnl');
+  const usdEl = document.getElementById('pos-live-usd');
+  if (pxEl)  pxEl.textContent = price.toPrecision(6);
+  if (pnlEl) { pnlEl.textContent = `${sign}${pnl.toFixed(3)}%`; pnlEl.style.color = color; }
+  if (usdEl && ctx.positionValue > 0) {
+    const usd = pnl / 100 * ctx.positionValue;
+    usdEl.textContent = `${usd >= 0 ? '+' : ''}$${usd.toFixed(2)}`;
+    usdEl.style.color = color;
+  }
 }
 
 // ── Signal Genesis ─────────────────────────────────────────────────────────────
@@ -1899,9 +1939,31 @@ function renderActiveSignals() {
     .filter(s => s.fire === true)
     .sort((a,b) => (b.quality_score||0) - (a.quality_score||0));
 
-  if (countEl) countEl.textContent = fired.length;
+  // Open positions whose signal is no longer firing (subsequent scans flip it
+  // to HOLD once the entry is consumed) must stay visible — build synthetic
+  // rows from the tracked position, enriched with any current signal context.
+  const firedSyms = new Set(fired.map(s => s.symbol));
+  const openOnly = Object.values(openPos)
+    .filter(p => !firedSyms.has(p.symbol))
+    .map(p => {
+      const live = SIGNAL_DATA[p.symbol] || {};
+      return {
+        ...live,
+        symbol:          p.symbol,
+        direction:       p.direction,
+        signal_strength: 'OPEN POSITION',
+        quality_score:   live.quality_score || parseFloat(p.meta_confidence) || 0,
+        entry_price:     p.entry_price,
+        _pos_tp1:        p.take_profit_1,
+        suggested_sl:    p.stop_loss,
+        _openRow:        true,
+      };
+    });
 
-  if (!fired.length) {
+  const rows = [...fired, ...openOnly];
+  if (countEl) countEl.textContent = rows.length;
+
+  if (!rows.length) {
     tableEl.innerHTML = `<div style="text-align:center;padding:30px;color:var(--dim);font-size:13px">No signals currently fired — all gates blocked</div>`;
     return;
   }
@@ -1930,9 +1992,9 @@ function renderActiveSignals() {
           </tr>
         </thead>
         <tbody>
-          ${fired.map(sig => {
+          ${rows.map(sig => {
             const isShort = sig.direction === 'SHORT';
-            const tp1 = isShort ? sig.bear_tp1 : sig.bull_tp1;
+            const tp1 = sig._openRow ? sig._pos_tp1 : (isShort ? sig.bear_tp1 : sig.bull_tp1);
             const q   = sig.quality_score || 0;
             const pos = openPos[sig.symbol];
             const pnl = pos ? parseFloat(pos.pnl_pct || 0) : null;
