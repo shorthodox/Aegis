@@ -592,7 +592,7 @@
 <!-- ALL ACTIVE FIRED SIGNALS -->
 <div class="active-signals-wrap">
   <div class="card" style="margin-bottom:0">
-    <div class="card-title">⚡ All Currently Fired Signals — <span id="fired-count" style="color:var(--white)">…</span> Active</div>
+    <div class="card-title">⚡ All Currently Fired Signals — <span id="fired-count" style="color:var(--white)">…</span></div>
     <div id="active-signals-table"></div>
   </div>
 </div>
@@ -1968,7 +1968,12 @@ function renderActiveSignals() {
     });
 
   const rows = [...fired, ...openOnly];
-  if (countEl) countEl.textContent = rows.length;
+  // Open count comes from the engine's tracked positions — the same source
+  // the dashboard and track record use — so all three views agree. Firing =
+  // signals currently passing the gates (may not have opened a position yet).
+  const openCount = Object.keys(openPos).length;
+  if (countEl) countEl.textContent =
+    `${openCount} Open · ${fired.filter(s => !openPos[s.symbol]).length} Firing`;
 
   if (!rows.length) {
     tableEl.innerHTML = `<div style="text-align:center;padding:30px;color:var(--dim);font-size:13px">No signals currently fired — all gates blocked</div>`;

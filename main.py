@@ -3715,12 +3715,20 @@ async def track_record_endpoint(source: str = None):
     seen_pos:   set  = set()
     all_signals: list = []
 
+    # OPEN truth lives ONLY in the engine's own data/track_record.json (the
+    # wallet).  The web copy and main.py's in-memory store run a parallel
+    # tracker with different signal_ids and their own exit timing — their
+    # OPEN rows are ghosts that inflate the public open count whenever the
+    # minute-level dedup key misses.  Closed history from all sources is
+    # still merged so no outcome is ever lost.
     for path, src in [(_ENGINE_RECORD, "live_engine"), (_WEB_RECORD, "live_engine_web")]:
         if path.exists():
             try:
                 with open(path, "r", encoding="utf-8") as f:
                     _d = json.load(f)
                 for s in _d.get("signals", []):
+                    if src != "live_engine" and s.get("outcome") == "OPEN":
+                        continue
                     sid = s.get("signal_id")
                     pk  = _pos_key(s)
                     if (sid and sid in seen_ids) or pk in seen_pos:
@@ -3733,9 +3741,11 @@ async def track_record_endpoint(source: str = None):
             except Exception:
                 pass
 
-    # ── 2. Supplement with main.py's in-memory store (catches any gaps) ──
+    # ── 2. Supplement with main.py's in-memory store (closed gaps only) ──
     # Copy each record: the masking pass below must never mutate the live store.
     for r in _track_store:
+        if r.get("outcome") == "OPEN":
+            continue
         sid = r.get("signal_id")
         pk  = _pos_key(r)
         if (sid and sid in seen_ids) or pk in seen_pos:

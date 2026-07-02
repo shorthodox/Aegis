@@ -3207,6 +3207,13 @@ class LiveEngine:
                     for r in _old.get('signals', []):
                         sid = r.get('signal_id')
                         if (sid and sid not in wallet_ids) and _pos_key(r) not in wallet_pos_keys:
+                            # Never resurrect OPEN ghosts: an open record the
+                            # wallet no longer tracks is a stale duplicate
+                            # (restart artifact or parallel-writer leftover).
+                            # The wallet is the single source of truth for
+                            # open positions; only closed history is preserved.
+                            if r.get('outcome') == 'OPEN':
+                                continue
                             orphan_records.append(r)
                             wallet_pos_keys.add(_pos_key(r))
                 except Exception:
