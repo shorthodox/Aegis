@@ -551,7 +551,7 @@
       </div>
 
       <div class="ae-stat-block">
-        <div class="ae-stat-number">60+</div>
+        <div class="ae-stat-number">70+</div>
         <div class="ae-stat-label">Model Features</div>
         <div class="ae-stat-note">OHLCV + structural signals</div>
       </div>
@@ -562,11 +562,10 @@
         <div class="ae-stat-note">Live Binance WebSocket</div>
       </div>
 
-      <!-- // REVIEW: gate count inconsistent (9 vs 8 vs 5 detailed) — confirm the right number before next release -->
       <div class="ae-stat-block">
-        <div class="ae-stat-number">9</div>
-        <div class="ae-stat-label">Signal Gates</div>
-        <div class="ae-stat-note">Regime → ATR → Quality → RSI</div>
+        <div class="ae-stat-number">18</div>
+        <div class="ae-stat-label">Entry Checks</div>
+        <div class="ae-stat-note">10 critical gates + 8 advisory</div>
       </div>
 
     </div>
@@ -632,7 +631,7 @@
         <div class="ae-eyebrow">Live Signal Preview</div>
         <h2 class="ae-h2" style="margin-bottom: var(--s-5);">This is what you actually get.</h2>
         <p class="ae-body-text" style="margin-bottom: var(--s-5);">
-          Every signal surfaces four pieces of information most tools omit: the exact entry price, three take-profit levels, a stop-loss anchored to real market structure, and a plain-English explanation of every factor the model weighted.
+          Every signal surfaces four pieces of information most tools omit: the exact entry price, five ATR-scaled take-profit levels, a stop-loss anchored to real market structure, and a plain-English explanation of every factor the model weighted.
         </p>
         <p class="ae-body-text" style="margin-bottom: var(--s-6);">
           No black box. AEGIS shows its work — the same numbers the model processed, in language that doesn't require a quant background to read.
@@ -648,8 +647,8 @@
             <div style="display:flex; gap: var(--s-4); align-items:flex-start;">
               <div class="ae-badge ae-badge-buy" style="flex-shrink:0; margin-top:2px;">TP</div>
               <div>
-                <div style="font-size:0.88rem; font-weight:500; color:var(--ae-text-1); margin-bottom:2px;">Three take-profit levels</div>
-                <div style="font-size:0.8rem; color:var(--ae-text-3);">ATR-calibrated, not fixed percentages</div>
+                <div style="font-size:0.88rem; font-weight:500; color:var(--ae-text-1); margin-bottom:2px;">Five take-profit levels</div>
+                <div style="font-size:0.8rem; color:var(--ae-text-3);">ATR-calibrated scaled exits — not fixed percentages</div>
               </div>
             </div>
             <div style="display:flex; gap: var(--s-4); align-items:flex-start;">
@@ -757,12 +756,11 @@
     <div class="method-label-grid">
 
       <!-- Sticky label column -->
-      <!-- // REVIEW: gate count inconsistent across the page (stats strip: 9, copy below: "Nine", investor brief: 8, steps shown: 5) — confirm correct number -->
       <div style="position:sticky; top: 80px;">
         <div class="ae-eyebrow">Under The Hood</div>
         <h2 class="ae-h2" style="margin-bottom: var(--s-5);">How a signal is built.</h2>
         <p class="ae-body-text">
-          Sequential gates separate a candidate signal from a live one. Most candidates are vetoed — the engine stays quiet when conditions are poor. Only setups that clear every layer reach users.
+          Two tiers of gates separate a candidate signal from a live one. Ten critical gates veto outright — regime, macro trend, model quality, risk limits. Eight advisory gates flag warnings; a setup carrying three or more is blocked. Most candidates never make it through. The engine stays quiet when conditions are poor.
         </p>
       </div>
 
@@ -774,7 +772,7 @@
           <div>
             <div class="ae-h3" style="margin-bottom: var(--s-3);">Market Regime Detection</div>
             <p class="ae-body-text">
-              Before any signal is evaluated, AEGIS classifies the market regime — trending, ranging, volatile, or reversal. Signals are suppressed in regimes where the model's historical edge is below threshold. If BTC is chopping sideways, the engine mostly stays quiet.
+              Before any signal is evaluated, AEGIS classifies the market regime — trending, ranging, volatile, accumulation, or distribution — using a rule-based classifier sharpened by a probabilistic HMM layer. Hard vetoes fire here: no LONG in a confirmed bear regime, no SHORT in a confirmed bull regime, and nothing at all in liquidity traps or when the weekly and daily macro trends both oppose the direction.
             </p>
           </div>
         </div>
@@ -784,7 +782,7 @@
           <div>
             <div class="ae-h3" style="margin-bottom: var(--s-3);">XGBoost Ensemble Scoring</div>
             <p class="ae-body-text">
-              An XGBoost model trained on 60+ structural features — OHLCV, EMA slopes, RSI momentum, volume Z-score, ATR normalisation, VWAP deviation, funding rate alignment, and more — produces a directional probability and an edge score. Scores below 65 are rejected outright.
+              An XGBoost model trained on 70+ structural features — OHLCV, EMA slopes, RSI momentum, volume Z-score, ATR normalisation, VWAP deviation, funding rate alignment, and more — produces a directional probability and an edge score. Edge scores below 70 are rejected outright, and the floor rises automatically when a model's live win rate drifts below its training benchmark.
             </p>
           </div>
         </div>
@@ -792,9 +790,9 @@
         <div class="method-step">
           <div class="method-index">03</div>
           <div>
-            <div class="ae-h3" style="margin-bottom: var(--s-3);">Contextual Quality Filter</div>
+            <div class="ae-h3" style="margin-bottom: var(--s-3);">Structure & Reversal Confirmation</div>
             <p class="ae-body-text">
-              A secondary scorer evaluates the signal's environmental context: ADX strength, volume confirmation, regime confidence, macro BTC/ETH bias alignment, funding rate and open interest divergence. Weak context scores below 55 are blocked here — even if the XGBoost edge is high.
+              Location matters as much as direction. AEGIS checks where price sits inside the rolling support/resistance range — a BUY near resistance or a SELL near support is flagged. It then scans the last three closed candles against a 26-pattern candlestick library (hammers, engulfing, morning/evening stars, three-soldier formations and more) for reversal confirmation, so entries are timed at trend turns instead of mid-trend.
             </p>
           </div>
         </div>
@@ -802,9 +800,9 @@
         <div class="method-step">
           <div class="method-index">04</div>
           <div>
-            <div class="ae-h3" style="margin-bottom: var(--s-3);">RSI Exhaustion & ATR Floor</div>
+            <div class="ae-h3" style="margin-bottom: var(--s-3);">Contextual Quality & Timing</div>
             <p class="ae-body-text">
-              Late entries at momentum peaks are blocked by the RSI exhaustion gate: no BUY when RSI ≥ 72 with declining slope, no SELL when RSI ≤ 28 with recovering slope. The ATR floor ensures the market is moving enough to justify execution costs.
+              An advisory tier scores the signal's environment: ADX strength, volume confirmation, regime confidence, macro bias alignment, funding and open-interest divergence, fake-breakout heuristics, 5m/15m timing, and RSI exhaustion — no BUY at momentum peaks, no SELL at capitulation lows. Each weak reading adds a warning; a signal carrying three or more is blocked, and every warning it does carry is shown to you.
             </p>
           </div>
         </div>
@@ -814,7 +812,7 @@
           <div>
             <div class="ae-h3" style="margin-bottom: var(--s-3);">Portfolio Guard & Position Sizing</div>
             <p class="ae-body-text">
-              The final gate evaluates portfolio exposure: maximum open positions, sector concentration, and correlation across concurrent signals. Only then are TP and stop-loss levels calculated using <span class="gloss">triple-barrier labelling<span class="gloss-tip"><strong>Triple-Barrier Labels</strong><br>Exit levels are set by ATR multiples, not fixed percentages — so targets adapt to real current volatility, not historical averages.</span></span> based on real current ATR.
+              The final gates evaluate risk: reward-to-risk must be at least 2:1, correlated tokens are capped per cluster so one BTC flush can't wipe five positions, and total deployed capital is limited. Only then are the stop-loss and five take-profit levels calculated using <span class="gloss">triple-barrier labelling<span class="gloss-tip"><strong>Triple-Barrier Labels</strong><br>Exit levels are set by ATR multiples, not fixed percentages — so targets adapt to real current volatility, not historical averages.</span></span> based on real current ATR.
             </p>
           </div>
         </div>
@@ -863,7 +861,7 @@
       <div class="ae-card">
         <div class="ae-h3" style="margin-bottom: var(--s-3);">Signal Genesis Report</div>
         <p style="font-size:0.85rem; color:var(--ae-text-2); line-height:1.7;">
-          Gate-by-gate audit trail for every signal: regime check, ATR floor, quality score, portfolio gate, RSI exhaustion — each with a pass/fail status and the raw value that determined it.
+          Gate-by-gate audit trail for every signal: regime check, structure location, reversal confirmation, quality score, portfolio gate — each with the raw value that determined it, plus any advisory warnings the signal carried through.
         </p>
       </div>
 
@@ -973,12 +971,12 @@
           <div class="ae-price-tier">Pro</div>
           <div class="ae-price-value" style="margin-top: var(--s-3);">₹3,299 <span>/ month</span></div>
         </div>
-        <div class="ae-price-desc">Priority access, alpha multi-timeframe scanner, and dedicated Telegram alert delivery when available.</div>
+        <div class="ae-price-desc">Priority access, alpha multi-timeframe scanner, and Telegram alert delivery the moment a signal fires.</div>
         <ul class="ae-feature-list">
           <li>Everything in Intermediate</li>
           <li>Priority signal delivery</li>
           <li>Alpha scanner access</li>
-          <li>Telegram alerts <span style="color:var(--ae-text-3); font-size:0.78em;">(coming soon)</span></li>
+          <li>Telegram alerts</li>
           <li>Advanced portfolio tracking</li>
           <li class="locked">API access</li>
         </ul>
@@ -1022,7 +1020,11 @@
           </li>
           <li style="font-size:0.85rem; color:var(--ae-text-2); line-height:1.65; padding-left: var(--s-4); position:relative;">
             <span style="position:absolute; left:0; color:var(--ae-buy);">–</span>
-            Context-aware filtering via multi-gate pipeline — the engine stays quiet in bad conditions
+            Context-aware filtering via a two-tier gate pipeline — the engine stays quiet in bad conditions
+          </li>
+          <li style="font-size:0.85rem; color:var(--ae-text-2); line-height:1.65; padding-left: var(--s-4); position:relative;">
+            <span style="position:absolute; left:0; color:var(--ae-buy);">–</span>
+            Structure-aware entries — buys near support, sells near resistance, confirmed by candlestick reversal patterns
           </li>
           <li style="font-size:0.85rem; color:var(--ae-text-2); line-height:1.65; padding-left: var(--s-4); position:relative;">
             <span style="position:absolute; left:0; color:var(--ae-buy);">–</span>
@@ -1044,11 +1046,11 @@
           </li>
           <li style="font-size:0.85rem; color:var(--ae-text-2); line-height:1.65; padding-left: var(--s-4); position:relative;">
             <span style="position:absolute; left:0; color:var(--ae-text-3);">–</span>
-            No LSTM or sentiment model in the current stack (planned)
+            LSTM temporal layer is built but not yet trained — currently inactive
           </li>
           <li style="font-size:0.85rem; color:var(--ae-text-2); line-height:1.65; padding-left: var(--s-4); position:relative;">
             <span style="position:absolute; left:0; color:var(--ae-text-3);">–</span>
-            Signals are for spot / manual execution — no automated order placement
+            Signals are for manual execution — no automated order placement
           </li>
           <li style="font-size:0.85rem; color:var(--ae-text-2); line-height:1.65; padding-left: var(--s-4); position:relative;">
             <span style="position:absolute; left:0; color:var(--ae-text-3);">–</span>
@@ -1062,11 +1064,11 @@
         <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap: var(--s-3);">
           <li style="font-size:0.85rem; color:var(--ae-text-2); line-height:1.65; padding-left: var(--s-4); position:relative;">
             <span style="position:absolute; left:0; color:var(--ae-gold);">–</span>
-            Telegram alert delivery — push notifications on signal fires
+            LSTM continuation layer — training the already-built temporal models
           </li>
           <li style="font-size:0.85rem; color:var(--ae-text-2); line-height:1.65; padding-left: var(--s-4); position:relative;">
             <span style="position:absolute; left:0; color:var(--ae-gold);">–</span>
-            LSTM continuation layer — adds sequential pattern recognition
+            Dynamic correlation clustering — portfolio limits from live price correlations
           </li>
           <li style="font-size:0.85rem; color:var(--ae-text-2); line-height:1.65; padding-left: var(--s-4); position:relative;">
             <span style="position:absolute; left:0; color:var(--ae-gold);">–</span>
