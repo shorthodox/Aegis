@@ -1,0 +1,15 @@
+[
+  {
+    "symbol": "SOL/USDT",
+    "mode": "balanced",
+    "hours": 2000,
+    "total_trades": 12,
+    "wins": 5,
+    "losses": 7,
+    "win_rate": 41.67,
+    "avg_edge_win": 89.55,
+    "avg_edge_loss": 90.19,
+    "avg_sig_win": 53.4,
+    "avg_sig_loss": 56.57
+  }
+]

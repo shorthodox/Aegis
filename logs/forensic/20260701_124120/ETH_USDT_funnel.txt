@@ -1,0 +1,48 @@
++---------------------------------------------------------+
+|  GATE FUNNEL -- ETH/USDT                                |
++---------------------------------------------------------+
+|  Total 1H bars:           2722                        |
+|  Model BUY signals:        622  ( 22.9% of bars)        |
+|  Model SELL signals:      1714  ( 63.0% of bars)        |
++---------------------------------------------------------+
+|  HOLD (no trade signal)        0    0.0%                            |
+|  G1    Regime veto           497   21.3%  ##########                |
+|  G2    Edge/regime block     865   37.0%  ##################        |
+|  G1.5  Dir-regime veto         0    0.0%                            |
+|  G1.7  HTF macro veto          0    0.0%                            |
+|  G3    Min quality <70       264   11.3%  #####                     |
+|  G3    S&R opposition          0    0.0%                            |
+|  G3    HTF trend opposing      0    0.0%                            |
+|  G3    Confluence oppose       0    0.0%                            |
+|  G3    Choppiness > 60         0    0.0%                            |
+|  G3    BOS opposing            0    0.0%                            |
+|  G3.5  ADX < 25               15    0.6%                            |
+|  G3.8  Signal stability      118    5.1%  ##                        |
+|  G4.5  MTF reversal gate     444   19.0%  #########                 |
+|  G5    RSI level exhaust       1    0.0%                            |
+|  G5    RSI accel exhaust      67    2.9%  #                         |
+|  G6    Post-trade cdwn         4    0.2%                            |
+|  G7    ATR floor (dead)        0    0.0%                            |
++---------------------------------------------------------+
+|  TRADES OPENED:             61  (  2.6% pass rate)         |
+|    Wins:                    26                        |
+|    Losses:                  35                        |
+|    Timeouts:                 0                        |
++---------------------------------------------------------+
+
+REGIME x GATE BREAKDOWN (top 15 regimes by signal count)
+  low_low_flat            signals= 429  trades=  7  dominant_block=G2_EDGE
+  med_med_down            signals= 221  trades=  4  dominant_block=G2_EDGE
+  low_low_up              signals= 184  trades= 18  dominant_block=G4_5_MTF
+  high_high_up            signals= 158  trades=  0  dominant_block=G1_REGIME
+  med_med_flat            signals= 140  trades=  3  dominant_block=G2_EDGE
+  high_high_down          signals= 130  trades=  4  dominant_block=G4_5_MTF
+  med_med_up              signals= 121  trades= 12  dominant_block=G4_5_MTF
+  low_med_flat            signals= 118  trades=  2  dominant_block=G2_EDGE
+  low_med_up              signals= 105  trades=  0  dominant_block=G2_EDGE
+  low_med_down            signals=  93  trades=  0  dominant_block=G3_MIN_QUALITY
+  low_low_down            signals=  87  trades=  7  dominant_block=G2_EDGE
+  med_low_down            signals=  73  trades=  1  dominant_block=G3_MIN_QUALITY
+  high_med_up             signals=  70  trades=  0  dominant_block=G1_REGIME
+  med_high_down           signals=  58  trades=  0  dominant_block=G1_REGIME
+  med_high_flat           signals=  57  trades=  0  dominant_block=G1_REGIME

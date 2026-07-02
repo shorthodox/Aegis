@@ -1,0 +1,27 @@
+[
+  {
+    "symbol": "SOL/USDT",
+    "total_bars": 2722,
+    "model_buy": 0,
+    "model_sell": 1525,
+    "hold": 0,
+    "g1_regime": 293,
+    "g2_tradeable": 0,
+    "g2_edge": 483,
+    "g3_sr": 0,
+    "g3_trend": 0,
+    "g3_confluence": 0,
+    "g3_choppiness": 0,
+    "g3_bos": 0,
+    "g4_ev": 73,
+    "g4_5_mtf": 526,
+    "g5_rsi_level": 3,
+    "g5_rsi_accel": 93,
+    "g6_cooldown": 5,
+    "g7_atr_floor": 0,
+    "trades": 49,
+    "wins": 23,
+    "losses": 26,
+    "timeouts": 7
+  }
+]

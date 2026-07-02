@@ -1,0 +1,44 @@
++---------------------------------------------------------+
+|  GATE FUNNEL -- BNB/USDT                                |
++---------------------------------------------------------+
+|  Total 1H bars:           2722                        |
+|  Model BUY signals:       1996  ( 73.3% of bars)        |
+|  Model SELL signals:       671  ( 24.7% of bars)        |
++---------------------------------------------------------+
+|  HOLD (no trade signal)        0    0.0%                            |
+|  G1  Regime veto             192    7.2%  ###                       |
+|  G2  Not tradeable             0    0.0%                            |
+|  G2  Edge score < thr       1485   55.7%  ###########################|
+|  G3  S&R opposition            0    0.0%                            |
+|  G3  HTF trend opposing        0    0.0%                            |
+|  G3  Confluence opposing       0    0.0%                            |
+|  G3  Choppiness > 60           0    0.0%                            |
+|  G3  BOS opposing              0    0.0%                            |
+|  G4.5 MTF reversal gate        8    0.3%                            |
+|  G5  RSI level exhaust         0    0.0%                            |
+|  G5  RSI accel exhaust         4    0.1%                            |
+|  G6  Post-trade cooldown       0    0.0%                            |
+|  G7  ATR floor (dead mkt)      0    0.0%                            |
++---------------------------------------------------------+
+|  TRADES OPENED:              0  (  0.0% pass rate)         |
+|    Wins:                     0                        |
+|    Losses:                   0                        |
+|    Timeouts:                 0                        |
++---------------------------------------------------------+
+
+REGIME x GATE BREAKDOWN (top 15 regimes by signal count)
+  low_low_flat            signals= 445  trades=  0  dominant_block=G4_EV
+  med_med_down            signals= 201  trades=  0  dominant_block=G4_EV
+  low_low_up              signals= 198  trades=  0  dominant_block=G4_EV
+  high_high_down          signals= 197  trades=  0  dominant_block=G2_EDGE
+  med_med_up              signals= 174  trades=  0  dominant_block=G2_EDGE
+  high_high_up            signals= 145  trades=  0  dominant_block=G2_EDGE
+  low_med_flat            signals= 140  trades=  0  dominant_block=G2_EDGE
+  high_med_up             signals= 134  trades=  0  dominant_block=G2_EDGE
+  med_med_flat            signals= 132  trades=  0  dominant_block=G4_EV
+  low_low_down            signals= 123  trades=  0  dominant_block=G2_EDGE
+  med_low_up              signals=  89  trades=  0  dominant_block=G4_EV
+  low_med_down            signals=  85  trades=  0  dominant_block=G4_EV
+  high_med_flat           signals=  80  trades=  0  dominant_block=G2_EDGE
+  med_low_flat            signals=  79  trades=  0  dominant_block=G4_EV
+  low_med_up              signals=  72  trades=  0  dominant_block=G2_EDGE

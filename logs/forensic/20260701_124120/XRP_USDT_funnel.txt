@@ -1,0 +1,34 @@
++---------------------------------------------------------+
+|  GATE FUNNEL -- XRP/USDT                                |
++---------------------------------------------------------+
+|  Total 1H bars:           2722                        |
+|  Model BUY signals:       1614  ( 59.3% of bars)        |
+|  Model SELL signals:         2  (  0.1% of bars)        |
++---------------------------------------------------------+
+|  HOLD (no trade signal)        0    0.0%                            |
+|  G1    Regime veto             0    0.0%                            |
+|  G2    Edge/regime block     161   10.0%  ####                      |
+|  G1.5  Dir-regime veto         0    0.0%                            |
+|  G1.7  HTF macro veto          0    0.0%                            |
+|  G3    Min quality <70       306   18.9%  #########                 |
+|  G3    S&R opposition          0    0.0%                            |
+|  G3    HTF trend opposing      0    0.0%                            |
+|  G3    Confluence oppose       0    0.0%                            |
+|  G3    Choppiness > 60         0    0.0%                            |
+|  G3    BOS opposing            0    0.0%                            |
+|  G3.5  ADX < 25               66    4.1%  ##                        |
+|  G3.8  Signal stability        0    0.0%                            |
+|  G4.5  MTF reversal gate     809   50.1%  ######################### |
+|  G5    RSI level exhaust       0    0.0%                            |
+|  G5    RSI accel exhaust     160    9.9%  ####                      |
+|  G6    Post-trade cdwn        15    0.9%                            |
+|  G7    ATR floor (dead)        0    0.0%                            |
++---------------------------------------------------------+
+|  TRADES OPENED:             99  (  6.1% pass rate)         |
+|    Wins:                    28                        |
+|    Losses:                  71                        |
+|    Timeouts:                 2                        |
++---------------------------------------------------------+
+
+REGIME x GATE BREAKDOWN (top 15 regimes by signal count)
+  unknown                 signals=1616  trades= 99  dominant_block=G4_5_MTF

@@ -3837,6 +3837,92 @@ body.modal-open {
     background: rgba(238, 242, 247, 0.8);
 }
 
+/* ── Deep-golden accents (light theme) ─────────────────────────
+   Elements that stayed black in light mode are restyled as deep
+   golden surfaces (cream text on rich gold) or deep golden text:
+   token search bar, signal-card symbol/price, AI confidence bar,
+   confluence bars, macro + S/R telemetry strips, Guardian FAB,
+   and the onboarding (login) modal. */
+
+/* Token search bar */
+[data-theme="light"] .token-search-inner {
+    background: linear-gradient(135deg, #7a591b 0%, #8f6a22 100%) !important;
+    border-color: rgba(122, 89, 27, 0.55) !important;
+}
+[data-theme="light"] .token-search-inner input { color: #f6ecd4 !important; }
+[data-theme="light"] .token-search-inner input::placeholder { color: rgba(246, 236, 212, 0.55); }
+[data-theme="light"] .token-search-icon { color: rgba(246, 236, 212, 0.75); }
+[data-theme="light"] .token-search-inner:focus-within {
+    border-color: #b8966a;
+    box-shadow: 0 0 0 3px rgba(160, 112, 48, 0.15), 0 0 18px rgba(160, 112, 48, 0.12);
+}
+[data-theme="light"] .token-search-inner:focus-within .token-search-icon { color: #f6ecd4; }
+[data-theme="light"] #token-search-clear { color: rgba(246, 236, 212, 0.7); }
+
+/* Signal-card token name + live price */
+[data-theme="light"] .signal-card .signal-symbol { color: #7a5518 !important; }
+[data-theme="light"] .signal-card .price-container .live-price { color: #7a5518 !important; }
+
+/* AI confidence bar + label */
+[data-theme="light"] .signal-card .signal-confidence { color: #7a5518; }
+[data-theme="light"] .signal-card .confidence-bar {
+    background: rgba(122, 85, 24, 0.18) !important;
+}
+[data-theme="light"] .signal-card .confidence-fill {
+    background: linear-gradient(90deg, #8f6a22, #7a5518) !important;
+}
+
+/* Confluence scorecard bars (Logic dropdown) */
+[data-theme="light"] .confluence-bar { background: rgba(122, 85, 24, 0.15); }
+[data-theme="light"] .confluence-bar .fill {
+    background: linear-gradient(90deg, #b8966a, #7a5518);
+}
+
+/* Macro regime strip + S/R telemetry box (dark slate → deep gold) */
+[data-theme="light"] .signal-card .bg-slate-900\/80,
+[data-theme="light"] .signal-card .bg-slate-950\/70 {
+    background: linear-gradient(135deg, #7a591b 0%, #8f6a22 100%) !important;
+    border-color: rgba(122, 89, 27, 0.5) !important;
+    color: #f6ecd4 !important;
+}
+[data-theme="light"] .signal-card .bg-slate-900\/80 .text-slate-200,
+[data-theme="light"] .signal-card .bg-slate-950\/70 .text-slate-400 { color: #f6ecd4 !important; }
+[data-theme="light"] .signal-card .bg-slate-950\/70 .text-slate-500 { color: rgba(246, 236, 212, 0.7) !important; }
+
+/* Guardian FAB */
+[data-theme="light"] #guardian-fab {
+    background: linear-gradient(135deg, #7a591b 0%, #8f6a22 100%);
+    border-color: rgba(122, 89, 27, 0.6);
+    color: #f6ecd4;
+    box-shadow: 0 4px 24px rgba(122, 89, 27, 0.35), 0 0 0 1px rgba(184, 150, 106, 0.15);
+}
+[data-theme="light"] #guardian-fab:hover {
+    border-color: rgba(184, 150, 106, 0.8);
+    box-shadow: 0 4px 28px rgba(122, 89, 27, 0.45), 0 0 18px rgba(160, 112, 48, 0.3);
+}
+[data-theme="light"] #guardian-fab .gfab-dot {
+    background: #f6ecd4;
+    box-shadow: 0 0 6px rgba(246, 236, 212, 0.9);
+}
+
+/* Onboarding / login modal */
+[data-theme="light"] #loginModal .modal-card {
+    background: linear-gradient(160deg, #6e4f16 0%, #8a651f 100%);
+    border-color: rgba(184, 150, 106, 0.45);
+}
+[data-theme="light"] #loginModal .modal-card h3 { color: #f6ecd4; }
+[data-theme="light"] #loginModal .modal-card p,
+[data-theme="light"] #loginModal .modal-card label,
+[data-theme="light"] #loginModal .info-note { color: rgba(246, 236, 212, 0.75); }
+[data-theme="light"] #loginModal .auth-input,
+[data-theme="light"] #loginModal .otp-digit {
+    background: rgba(0, 0, 0, 0.28) !important;
+    border-color: rgba(246, 236, 212, 0.28) !important;
+    color: #f6ecd4 !important;
+}
+[data-theme="light"] #loginModal .auth-input::placeholder { color: rgba(246, 236, 212, 0.5); }
+[data-theme="light"] #loginModal .close-modal { color: rgba(246, 236, 212, 0.7) !important; }
+
 /* ── Screen Mode Button Widget ────────────────────────────── */
 .screen-mode-btn {
     cursor: pointer;
