@@ -314,7 +314,9 @@
        Keep every block inside the viewport; the sub-nav wraps and
        tightens instead of forcing a sideways page scroll. */
     @media (max-width: 700px) {
-      .chart-nav { flex-wrap: wrap; gap: 8px 12px; padding: 10px 12px; }
+      /* Static on phones: the wrapped two-row sub-nav must scroll away with
+         the page instead of floating sticky over the position P/L banner. */
+      .chart-nav { position: static; top: auto; flex-wrap: wrap; gap: 8px 12px; padding: 10px 12px; }
       .token-select-wrap { margin-left: 0; width: 100%; justify-content: space-between; gap: 8px; }
       #live-price { min-width: 0; }
       #token-select { min-width: 0; flex: 1; }
