@@ -1077,25 +1077,33 @@ body.dashboard-body .glass-nav {
     color: var(--primary-cyan);
 }
 
-/* SCROLLBAR */
+/* SCROLLBAR — brand gold */
 ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-    background: #1a1f2e;
+    background: #14110b;
 }
 
 ::-webkit-scrollbar-thumb {
-    background: var(--primary-cyan);
+    background: #B8966A;
     border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #C9A87A;
 }
 
 * {
     scrollbar-width: thin;
-    scrollbar-color: var(--primary-cyan) #1a1f2e;
+    scrollbar-color: #B8966A #14110b;
 }
+
+[data-theme="light"] ::-webkit-scrollbar-track { background: #e2e6ee; }
+[data-theme="light"] ::-webkit-scrollbar-thumb { background: #a07030; }
+[data-theme="light"] * { scrollbar-color: #a07030 #e2e6ee; }
 
 /* ============================================
    PRICING PAGE & EXTERNAL STYLES
@@ -3137,7 +3145,7 @@ body.modal-open {
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(0, 242, 255, 0.3);
+    background: rgba(184, 150, 106, 0.45);
     border-radius: 4px;
 }
 
@@ -3356,7 +3364,7 @@ body.modal-open {
     display: block !important;   /* override any stale Tailwind hidden */
     -webkit-overflow-scrolling: touch;
     scrollbar-width: thin;
-    scrollbar-color: rgba(0, 242, 255, 0.2) transparent;
+    scrollbar-color: rgba(184, 150, 106, 0.4) transparent;
 }
 
 #fp-confluence-body::-webkit-scrollbar,
@@ -3380,7 +3388,7 @@ body.modal-open {
 #fp-expectancy-body::-webkit-scrollbar-thumb,
 #fp-shap-body::-webkit-scrollbar-thumb,
 #fp-api-body::-webkit-scrollbar-thumb {
-    background: rgba(0, 242, 255, 0.2);
+    background: rgba(184, 150, 106, 0.4);
     border-radius: 2px;
 }
 
