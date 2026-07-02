@@ -119,6 +119,8 @@ class Position:
     take_profit_4:   float = 0.0   # TP4: 3.8× ATR from entry — 20% partial close
     take_profit_5:   float = 0.0   # TP5: 5.2× ATR from entry — close remainder
     signal_strength: str   = ''    # risk tier at entry: STRONG | NORMAL | RISKY
+    entry_mode:      str   = ''    # structure-gate verdict detail at entry
+                                   # (support_reversal / breakout_* / GATE_SKIPPED: …)
 
 
 @dataclass
@@ -1299,6 +1301,7 @@ class VirtualWallet:
                         take_profit_4   = float(s.get('take_profit_4', 0)),
                         take_profit_5   = float(s.get('take_profit_5', 0)),
                         signal_strength = s.get('signal_strength', ''),
+                        entry_mode      = s.get('entry_mode', ''),
                     )
                     self.open_positions[sym] = pos
                     open_restored += 1
@@ -1527,6 +1530,12 @@ class LiveEngine:
     # meaningfully positive edge before risking the public track record.
     RISKY_EV_MARGIN = 0.25
 
+    # Deploy-verification marker: printed at startup and written into
+    # track_record.json → visible at /api/engine-track-record.  If the live
+    # payload shows an older (or no) version, the server is running stale
+    # code — the recurring "gate fix didn't work" false alarm.
+    GATE_VERSION = 'structure-gate-v3 (break-required, fail-closed)'
+
     # ── Structure gate (Gate 1.6) ─────────────────────────────────────────
     # Zone boundaries on range_position (0 = rolling support, 1 = resistance)
     STRUCT_SUPPORT_ZONE    = 0.35   # at/below → support zone
@@ -1688,7 +1697,7 @@ class LiveEngine:
 
     async def run(self) -> None:
         print(f'[LiveEngine] Starting — interval={self.scan_interval_seconds}s '
-              f'symbols={len(self.predictors)}')
+              f'symbols={len(self.predictors)} | {self.GATE_VERSION}')
         asyncio.create_task(self._ws_price_ticker())
         await asyncio.sleep(2)   # let WebSocket populate live_prices first
         self._purge_subquality_positions()
@@ -2027,8 +2036,14 @@ class LiveEngine:
                             self.last_signals[symbol]['structure_reason']  = _sg_detail
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
-                    if _sg_verdict == 'PASS' and symbol in self.last_signals:
-                        self.last_signals[symbol]['entry_mode'] = _sg_detail
+                    if _sg_verdict == 'SKIP':
+                        # A silent fail-open is how resistance longs slipped
+                        # through undetected — every skip is logged.
+                        print(f'[{symbol}] STRUCTURE_GATE skipped for {new_side}: {_sg_detail}')
+                    _entry_mode = (_sg_detail if _sg_verdict == 'PASS'
+                                   else f'GATE_SKIPPED: {_sg_detail}')
+                    if symbol in self.last_signals:
+                        self.last_signals[symbol]['entry_mode'] = _entry_mode
 
                     # ── Gate 1.65 (ADVISORY): candlestick reversal pattern ───
                     # Entries should be timed at a trend turn, not mid-trend.
@@ -2274,7 +2289,7 @@ class LiveEngine:
                         self.last_signals[symbol]['gate_warnings'] = _gate_warnings
                         self.last_signals[symbol]['risk_tier']     = _risk_tier
                     self._open_position(symbol, result, price, regime, _model_quality,
-                                        risk_tier=_risk_tier)
+                                        risk_tier=_risk_tier, entry_mode=_entry_mode)
 
                 elif is_flip:
                     print(f'[{symbol}] FLIP-FLOP BLOCKED {last_side}→{new_side} '
@@ -2341,25 +2356,50 @@ class LiveEngine:
 
         Mid-range entries are blocked: signals belong at structure.
 
-        Returns (verdict, detail): 'PASS' | 'BLOCK' | 'SKIP' (data missing —
-        gate fails open so a network hiccup never mutes the engine).
+        Fail-open policy is ASYMMETRIC.  Missing data on the CORRECT side of
+        the range (BUY at support) skips the confirmation — a network hiccup
+        never mutes safe entries.  Missing data on the WRONG side (BUY at
+        resistance) BLOCKS: an unverifiable breakout is not a breakout.  The
+        silent-SKIP fail-open here was exactly how longs kept firing at
+        resistance when the exchange candle feed was unavailable.
+
+        Returns (verdict, detail): 'PASS' | 'BLOCK' | 'SKIP'.
         """
         range_pos  = result.get('range_position')
         support    = float(result.get('support', 0) or 0)
         resistance = float(result.get('resistance', 0) or 0)
-        if range_pos is None or not (0 < support < resistance) or price <= 0:
-            return 'SKIP', 'S/R data unavailable'
+        if range_pos is None:
+            # Predictor result has no range_position → the deployed
+            # predictor.py predates the structure gate.  Nothing to check
+            # against; skip loudly (caller logs) so stale deploys are visible.
+            return 'SKIP', 'range_position missing — predictor predates structure gate (redeploy!)'
+        if not (0 < support < resistance) or price <= 0:
+            return 'SKIP', 'S/R data degenerate'
         range_pos = float(range_pos)
+
+        bullish = (side == 'BUY')
+        at_support_zone    = range_pos <= self.STRUCT_SUPPORT_ZONE
+        at_resistance_zone = range_pos >= self.STRUCT_RESISTANCE_ZONE
+
+        # Mid-range needs no candle data — blocked outright.
+        if not at_support_zone and not at_resistance_zone:
+            return 'BLOCK', (f'mid-range entry (range_pos={range_pos:.2f}) — '
+                             f'entries only at support/resistance')
 
         raw_5m  = await self._fetch_candles(
             symbol, '5m', max(self.STRUCT_5M_WINDOW, self.STRUCT_RETEST_LOOKBACK) + 2)
         raw_15m = await self._fetch_candles(symbol, '15m', self.STRUCT_15M_WINDOW + 2)
         closed_5m  = raw_5m[:-1]  if len(raw_5m)  >= 2 else []   # [-1] is forming
         closed_15m = raw_15m[:-1] if len(raw_15m) >= 2 else []
-        if len(closed_5m) < self.STRUCT_5M_WINDOW or len(closed_15m) < self.STRUCT_15M_WINDOW:
-            return 'SKIP', 'candle data unavailable'
-
-        bullish = (side == 'BUY')
+        _no_candles = (len(closed_5m) < self.STRUCT_5M_WINDOW
+                       or len(closed_15m) < self.STRUCT_15M_WINDOW)
+        if _no_candles:
+            _wrong_side = at_resistance_zone if bullish else at_support_zone
+            if _wrong_side:
+                return 'BLOCK', (f'{"BUY at resistance" if bullish else "SELL at support"} '
+                                 f'but 5m/15m candles unavailable — an unverifiable '
+                                 f'breakout is not a breakout')
+            return 'SKIP', 'candle data unavailable — reversal at correct level allowed'
 
         def _n_trending(candles: list, n: int) -> int:
             """Candles among the last n that closed in the signal direction."""
@@ -2374,10 +2414,8 @@ class LiveEngine:
                    f'15m {n15}/{self.STRUCT_15M_WINDOW} '
                    f'{"bullish" if bullish else "bearish"}')
 
-        at_support    = range_pos <= self.STRUCT_SUPPORT_ZONE
-        at_resistance = range_pos >= self.STRUCT_RESISTANCE_ZONE
-        correct_level  = at_support    if bullish else at_resistance
-        breakout_level = at_resistance if bullish else at_support
+        correct_level  = at_support_zone    if bullish else at_resistance_zone
+        breakout_level = at_resistance_zone if bullish else at_support_zone
         level_name     = 'support' if bullish else 'resistance'
 
         if correct_level:
@@ -2414,8 +2452,8 @@ class LiveEngine:
                              f'({_counts}; no retest-hold) — waiting for '
                              f'continuation or a held retest')
 
-        return 'BLOCK', (f'mid-range entry (range_pos={range_pos:.2f}) — '
-                         f'entries only at support/resistance')
+        # Unreachable: mid-range was blocked before the candle fetch.
+        return 'BLOCK', f'mid-range entry (range_pos={range_pos:.2f})'
 
     @staticmethod
     def _retest_held(candles: list, side: str, level: float, tol: float) -> bool:
@@ -2711,6 +2749,7 @@ class LiveEngine:
         regime:        Optional[RegimeState] = None,
         quality_score: float                 = 0.0,
         risk_tier:     str                   = '',
+        entry_mode:    str                   = '',
     ) -> None:
         side = result.get('side', 'FLAT')
         if side not in ('BUY', 'SELL'):
@@ -2794,6 +2833,7 @@ class LiveEngine:
             take_profit_4   = round(tp4, 8),
             take_profit_5   = round(tp5, 8),
             signal_strength = risk_tier,
+            entry_mode      = entry_mode,
         )
         self.wallet.open_trade(pos)
         self._open_time[symbol]    = time.time()
@@ -2806,7 +2846,8 @@ class LiveEngine:
         regime_label = regime.regime if regime else 'UNKNOWN'
         print(
             f'[{symbol}] OPEN {direction} @ {price:.6g} | '
-            f'conf={meta_conf:.3f} quality={quality_score:.0f} regime={regime_label}\n'
+            f'conf={meta_conf:.3f} quality={quality_score:.0f} regime={regime_label} '
+            f'mode={entry_mode or "n/a"}\n'
             f'         ATR={atr:.4g}  SL={stop_loss:.6g}  RR={rr:.2f}\n'
             f'         TP1={tp1:.6g}  TP2={tp2:.6g}  TP3={tp3:.6g}  '
             f'TP4={tp4:.6g}  TP5={tp5:.6g}  size={pos_value:.0f} USDT'
@@ -3188,6 +3229,7 @@ class LiveEngine:
                     'meta_confidence': p.meta_confidence,
                     'position_value':  p.position_value,
                     'signal_strength': p.signal_strength,
+                    'entry_mode':      p.entry_mode,
                     'atr':             p.atr,
                     'atr_multiplier':  p.atr_multiplier,
                     'stop_loss':       p.stop_loss,
@@ -3239,6 +3281,7 @@ class LiveEngine:
             self.portfolio_guard.sync_from_wallet(self.wallet.open_positions)
             payload: Dict[str, Any] = {
                 'generated_at':      datetime.now(timezone.utc).isoformat(),
+                'engine_version':    self.GATE_VERSION,
                 'summary':           self.wallet.summary,
                 'signals':           all_records,
                 'performance':       self.perf_tracker.get_performance_summary(),
