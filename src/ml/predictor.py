@@ -1367,6 +1367,39 @@ class Predictor:
         else:
             range_position = 0.5
 
+        # ── Recent level breaks (dynamic breakout tracking) ──────────────────
+        # The rolling 24h max/min moves the moment a breakout candle closes,
+        # so "price beyond current resistance" is only true for a candle or
+        # two.  To let the live engine validate breakout entries (and their
+        # retests) for hours afterwards, detect a close crossing the rolling
+        # level within the last _BREAK_LOOKBACK closed 1h bars and forward
+        # the LEVEL THAT ACTUALLY BROKE.
+        _BREAK_LOOKBACK = 6   # 1h bars ≈ six hours of breakout validity
+        resistance_broken_recent = False
+        support_broken_recent    = False
+        broken_resistance_level  = 0.0
+        broken_support_level     = 0.0
+        if 'rolling_resistance' in df.columns and len(df) > _BREAK_LOOKBACK + 1:
+            _cl = df['close']
+            _rr = df['rolling_resistance']
+            _rs = df['rolling_support']
+            _cross_up = ((_cl > _rr) & (_cl.shift(1) <= _rr.shift(1))).fillna(False)
+            _cross_dn = ((_cl < _rs) & (_cl.shift(1) >= _rs.shift(1))).fillna(False)
+            _up_recent = _cross_up.tail(_BREAK_LOOKBACK)
+            _dn_recent = _cross_dn.tail(_BREAK_LOOKBACK)
+            if bool(_up_recent.any()):
+                _idx = _up_recent[_up_recent].index[-1]
+                _lvl = float(_rr.loc[_idx])
+                if _lvl > 0 and _lvl == _lvl:  # NaN guard
+                    resistance_broken_recent = True
+                    broken_resistance_level  = _lvl
+            if bool(_dn_recent.any()):
+                _idx = _dn_recent[_dn_recent].index[-1]
+                _lvl = float(_rs.loc[_idx])
+                if _lvl > 0 and _lvl == _lvl:
+                    support_broken_recent = True
+                    broken_support_level  = _lvl
+
         # ── Candlestick reversal aggregates ──────────────────────────────────
         # Max weighted reversal score over the last 3 CLOSED bars — a reversal
         # pattern one or two bars ago still validates a fresh entry.  Names of
@@ -1506,6 +1539,12 @@ class Predictor:
             "r1": round(r1, 8), "r2": round(r2, 8),
             "s1": round(s1, 8), "s2": round(s2, 8),
             "range_position": round(range_position, 3),
+
+            # Dynamic breakout tracking (live-engine structure gate)
+            "resistance_broken_recent": resistance_broken_recent,
+            "support_broken_recent":    support_broken_recent,
+            "broken_resistance_level":  round(broken_resistance_level, 8),
+            "broken_support_level":     round(broken_support_level, 8),
 
             # Candlestick reversal confirmation (live-engine structure gate)
             "cdl_bull_reversal":   round(cdl_bull_reversal, 2),

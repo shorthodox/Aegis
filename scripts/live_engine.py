@@ -2434,7 +2434,22 @@ class LiveEngine:
             # 2026-07-02) is the classic pre-break gamble that rejects at the
             # wall.  Price must be beyond the level first, then confirmed by
             # unanimous continuation momentum or a retest that held.
-            level  = resistance if bullish else support
+            #
+            # DYNAMIC level: the rolling 24h extreme moves the moment a
+            # breakout candle closes, so comparing against today's new high
+            # would reject valid post-break entries as "pre-break".  When the
+            # predictor reports a level break within the last ~6 hours, the
+            # break and its retest are verified against the LEVEL THAT
+            # ACTUALLY BROKE.
+            level = resistance if bullish else support
+            if bullish and bool(result.get('resistance_broken_recent')):
+                _bl = float(result.get('broken_resistance_level', 0) or 0)
+                if 0 < _bl <= level:
+                    level = _bl
+            elif not bullish and bool(result.get('support_broken_recent')):
+                _bl = float(result.get('broken_support_level', 0) or 0)
+                if _bl >= level > 0:
+                    level = _bl
             beyond = price > level if bullish else price < level
             if not beyond:
                 return 'BLOCK', (f'{"BUY at resistance" if bullish else "SELL at support"} '
@@ -2987,6 +3002,8 @@ class LiveEngine:
             'market_bias', 'bias_strength', 'trend_regime', 'volatility_regime',
             'atr_pct', 'support', 'resistance', 'pivot',
             'r1', 'r2', 's1', 's2', 'range_position',
+            'resistance_broken_recent', 'support_broken_recent',
+            'broken_resistance_level', 'broken_support_level',
             'cdl_bull_reversal', 'cdl_bear_reversal', 'cdl_patterns_active',
             'bull_tp1', 'bull_tp2', 'bull_tp3',
             'bear_tp1', 'bear_tp2', 'bear_tp3',
