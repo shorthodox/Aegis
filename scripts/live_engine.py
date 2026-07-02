@@ -2390,18 +2390,29 @@ class LiveEngine:
                              f'{self.STRUCT_15M_WINDOW})')
 
         if breakout_level:
-            # Wrong side of the range — only an imminent or confirmed break
-            # justifies the entry.
+            # Wrong side of the range — only a break that has ALREADY happened
+            # justifies the entry.  Momentum alone is not enough: a vertical
+            # rally INTO resistance (TIA @0.67, PENDLE @0.88 range_pos,
+            # 2026-07-02) is the classic pre-break gamble that rejects at the
+            # wall.  Price must be beyond the level first, then confirmed by
+            # unanimous continuation momentum or a retest that held.
+            level  = resistance if bullish else support
+            beyond = price > level if bullish else price < level
+            if not beyond:
+                return 'BLOCK', (f'{"BUY at resistance" if bullish else "SELL at support"} '
+                                 f'but the level has not broken '
+                                 f'(price {price:.6g} vs {level:.6g}) — '
+                                 f'pre-break entries rejected')
             if n5 >= self.STRUCT_5M_WINDOW and n15 >= self.STRUCT_15M_WINDOW:
-                return 'PASS', f'breakout_momentum ({_counts})'
-            level = resistance if bullish else support
-            atr   = float(result.get('atr', 0) or 0)
-            tol   = max(price * 0.001, atr * 0.25)
+                return 'PASS', f'breakout_momentum (level {level:.6g} broken, {_counts})'
+            atr = float(result.get('atr', 0) or 0)
+            tol = max(price * 0.001, atr * 0.25)
             if self._retest_held(
                     closed_5m[-self.STRUCT_RETEST_LOOKBACK:], side, level, tol):
                 return 'PASS', f'breakout_retest (level {level:.6g} held)'
-            return 'BLOCK', (f'{"BUY at resistance" if bullish else "SELL at support"} '
-                             f'without breakout confirmation ({_counts}; no retest-hold)')
+            return 'BLOCK', (f'level {level:.6g} broken but unconfirmed '
+                             f'({_counts}; no retest-hold) — waiting for '
+                             f'continuation or a held retest')
 
         return 'BLOCK', (f'mid-range entry (range_pos={range_pos:.2f}) — '
                          f'entries only at support/resistance')

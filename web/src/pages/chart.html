@@ -806,6 +806,15 @@ function renderAll(symbol) {
 // ── Nav pill ──────────────────────────────────────────────────────────────────
 function renderNavPill(sig) {
   const pill = $('nav-signal-pill');
+  // An open position outranks the model's current read: after entry the
+  // signal flips back to HOLD/NEUTRAL, which read as "no trade" while a
+  // live LONG/SHORT was running — confusing. Show the position instead.
+  const pos = TRACK_DATA.signals.find(p => p.symbol === sig.symbol && p.outcome === 'OPEN');
+  if (pos) {
+    pill.className = `signal-pill ${pos.direction === 'SHORT' ? 'pill-sell' : 'pill-buy'}`;
+    pill.textContent = `📍 OPEN ${pos.direction}`;
+    return;
+  }
   const s = sig.signal_strength || sig.signal || 'HOLD';
   const cls = sig.direction === 'SHORT' ? 'pill-sell' : sig.direction === 'LONG' ? 'pill-buy' : 'pill-hold';
   pill.className = `signal-pill ${cls}`;
@@ -1171,8 +1180,13 @@ function renderOverview(sig) {
   const tp3   = isShort ? sig.bear_tp3 : sig.bull_tp3;
   const sl    = sig.suggested_sl || (isShort ? sig.bull_tp1 : sig.bear_tp1);
   const rr    = sig.risk_reward || '—';
-  const dirClass = sig.direction === 'LONG' ? 'text-buy' : sig.direction === 'SHORT' ? 'text-sell' : 'text-hold';
-  const sigLabel = (sig.signal_strength || sig.signal || 'HOLD').replace('_', ' ');
+  // Open position outranks the model's current (post-entry) HOLD read
+  const _ovPos = TRACK_DATA.signals.find(p => p.symbol === sig.symbol && p.outcome === 'OPEN');
+  const _dispDir   = _ovPos ? _ovPos.direction : (sig.direction || '—');
+  const dirClass = _dispDir === 'LONG' ? 'text-buy' : _dispDir === 'SHORT' ? 'text-sell' : 'text-hold';
+  const sigLabel = _ovPos
+    ? `OPEN ${_ovPos.direction}`
+    : (sig.signal_strength || sig.signal || 'HOLD').replace('_', ' ');
 
   $('signal-overview').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
@@ -1181,8 +1195,8 @@ function renderOverview(sig) {
         <div style="font-size:12px;color:var(--dim);margin-top:2px">${sig.session || ''} · ${sig.timeframe || '1h'}</div>
       </div>
       <div style="text-align:right">
-        <div style="font-size:18px;font-weight:800" class="${dirClass}">🔥 ${sigLabel}</div>
-        <div style="font-size:11px;color:var(--dim);margin-top:3px">Direction: ${sig.direction || '—'}</div>
+        <div style="font-size:18px;font-weight:800" class="${dirClass}">${_ovPos ? '📍' : '🔥'} ${sigLabel}</div>
+        <div style="font-size:11px;color:var(--dim);margin-top:3px">Direction: ${_dispDir}</div>
       </div>
     </div>
 
