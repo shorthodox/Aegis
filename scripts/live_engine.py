@@ -508,6 +508,25 @@ class SignalQualityFilter:
             if lstm_vol > 0.70:
                 score += 8; reasons.append(f'lstm_vol_expansion({lstm_vol:.2f})')
 
+        # ── Candlestick reversal pattern alignment ────────────────────────────
+        # cdl_bull/bear_reversal is the max weighted 1/2/3-candle reversal
+        # pattern score over the last 3 closed bars (feature_engine, trend-
+        # context gated).  -1.0 = data unavailable → no adjustment.
+        # A strong aligned pattern (>= 1.5, i.e. a 3-candle formation) is the
+        # highest-reliability entry timing evidence available to this scorer;
+        # an opposing pattern printing right at entry is a direct warning.
+        _cdl_bull = _f('cdl_bull_reversal', -1.0)
+        _cdl_bear = _f('cdl_bear_reversal', -1.0)
+        if _cdl_bull >= 0.0 and _cdl_bear >= 0.0:
+            _aligned  = _cdl_bull if side == 'BUY' else _cdl_bear
+            _opposing = _cdl_bear if side == 'BUY' else _cdl_bull
+            if _aligned >= 1.5:
+                score += 10; reasons.append(f'strong_reversal_pattern({_aligned:.1f})')
+            elif _aligned > 0.0:
+                score += 5;  reasons.append(f'reversal_pattern({_aligned:.1f})')
+            if _opposing >= 1.0 and _opposing > _aligned:
+                score -= 12; reasons.append(f'opposing_pattern({_opposing:.1f})')
+
         # ── MACD momentum alignment / conflict ────────────────────────────────
         # macd_signal is 'BULLISH' | 'BEARISH' | 'NEUTRAL' — same field already
         # consumed by MarketRegimeDetector, so no extra computation.
@@ -1895,6 +1914,61 @@ class LiveEngine:
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
 
+                    # ── Gate 1.6: S/R structure location ─────────────────────
+                    # A BUY fired in the top of the rolling S/R range is buying
+                    # into resistance (minimal headroom to TP, stop far from
+                    # structure); a SELL at the bottom is the mirror error.
+                    # range_position: 0 = at support, 1 = at resistance
+                    # (computed by the predictor from the 24-bar rolling range).
+                    # Fails open when S/R data is missing or degenerate.
+                    _range_pos = result.get('range_position')
+                    if _range_pos is not None:
+                        _range_pos = float(_range_pos)
+                        _sup = float(result.get('support', 0) or 0)
+                        _res = float(result.get('resistance', 0) or 0)
+                        if new_side == 'BUY' and _range_pos > 0.65:
+                            print(f'[{symbol}] STRUCTURE_GATE blocked BUY: '
+                                  f'range_pos={_range_pos:.2f} — too close to '
+                                  f'resistance {_res:.6g} (support {_sup:.6g})')
+                            if symbol in self.last_signals:
+                                self.last_signals[symbol]['fire']              = False
+                                self.last_signals[symbol]['signal']            = 'HOLD'
+                                self.last_signals[symbol]['structure_blocked'] = True
+                            self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                            return
+                        if new_side == 'SELL' and _range_pos < 0.35:
+                            print(f'[{symbol}] STRUCTURE_GATE blocked SELL: '
+                                  f'range_pos={_range_pos:.2f} — too close to '
+                                  f'support {_sup:.6g} (resistance {_res:.6g})')
+                            if symbol in self.last_signals:
+                                self.last_signals[symbol]['fire']              = False
+                                self.last_signals[symbol]['signal']            = 'HOLD'
+                                self.last_signals[symbol]['structure_blocked'] = True
+                            self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                            return
+
+                    # ── Gate 1.65: candlestick reversal confirmation ─────────
+                    # Entries must be timed at a trend turn, not mid-trend.
+                    # The predictor forwards the max weighted reversal-pattern
+                    # score over the last 3 closed 1h bars (1/2/3-candle
+                    # patterns, trend-context gated in feature_engine).
+                    # -1.0 = pattern data unavailable → gate fails open.
+                    _bull_rev = float(result.get('cdl_bull_reversal', -1.0))
+                    _bear_rev = float(result.get('cdl_bear_reversal', -1.0))
+                    _rev_score = _bull_rev if new_side == 'BUY' else _bear_rev
+                    if _rev_score == 0.0:
+                        _active = result.get('cdl_patterns_active') or []
+                        print(f'[{symbol}] REVERSAL_GATE blocked {new_side}: no '
+                              f'{"bullish" if new_side == "BUY" else "bearish"} '
+                              f'reversal pattern in last 3 bars '
+                              f'(active: {", ".join(_active) if _active else "none"})')
+                        if symbol in self.last_signals:
+                            self.last_signals[symbol]['fire']             = False
+                            self.last_signals[symbol]['signal']           = 'HOLD'
+                            self.last_signals[symbol]['reversal_blocked'] = True
+                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                        return
+
                     # ── Gate 1.7: HTF macro trend hard veto ─────────────────
                     # Hard block when weekly EMA50 trend AND daily EMA50 trend
                     # both clearly oppose the signal direction.
@@ -2680,7 +2754,8 @@ class LiveEngine:
         _CONTEXT_KEYS = (
             'market_bias', 'bias_strength', 'trend_regime', 'volatility_regime',
             'atr_pct', 'support', 'resistance', 'pivot',
-            'r1', 'r2', 's1', 's2',
+            'r1', 'r2', 's1', 's2', 'range_position',
+            'cdl_bull_reversal', 'cdl_bear_reversal', 'cdl_patterns_active',
             'bull_tp1', 'bull_tp2', 'bull_tp3',
             'bear_tp1', 'bear_tp2', 'bear_tp3',
             'confluence',

@@ -1506,30 +1506,93 @@ def add_support_resistance_features(df: pd.DataFrame, window: int = 24) -> pd.Da
     return output
 
 def compute_candlestick_patterns(df: pd.DataFrame) -> pd.DataFrame:
-    """Pure Python implementation of common candlestick patterns."""
+    """
+    Vectorised candlestick pattern library — 1-, 2- and 3-candle patterns.
+
+    All patterns use only the current bar and prior bars (via .shift()), so
+    there is no lookahead bias and no repainting.  The original seven columns
+    (CDL_DOJI … CDL_EVENINGSTAR) keep their exact definitions for model
+    compatibility; everything below them is additive.
+
+    Reversal patterns are context-gated where the classic definition demands
+    it: a hammer only counts toward the bullish reversal score when it prints
+    after a short-term downtrend (and mirrored for bearish).  The trend proxy
+    uses only PRIOR closes (shift(1) vs its own rolling mean).
+
+    Aggregate outputs consumed by the live engine's reversal-confirmation gate:
+      cdl_bull_reversal_score — weighted sum of bullish reversal patterns
+      cdl_bear_reversal_score — weighted sum of bearish reversal patterns
+    Weights reflect pattern reliability: 3-candle (1.5) > 2-candle (1.0)
+    > harami (0.75) > 1-candle (0.5).
+    """
     o, h, l, c = df['open'], df['high'], df['low'], df['close']
     body = abs(c - o)
     range_hl = h - l
     upper_shadow = h - np.maximum(o, c)
     lower_shadow = np.minimum(o, c) - l
+    body_frac = body / (range_hl + 1e-9)
+    avg_body = body.rolling(14, min_periods=5).mean()
 
-    # 1. Doji
-    is_doji = (body / (range_hl + 1e-9)) < 0.1
-
-    # 2. Hammer & Shooting Star
-    is_hammer = (lower_shadow > 2 * body) & (upper_shadow < 0.2 * body)
-    is_shootingstar = (upper_shadow > 2 * body) & (lower_shadow < 0.2 * body)
-
-    # 3. Engulfing
     is_green = c > o
     is_red = o > c
     prev_green = is_green.shift(1)
     prev_red = is_red.shift(1)
 
+    # Short-term trend context from PRIOR bars only (no lookahead):
+    # the close going INTO this bar vs its own 5-bar mean.
+    prior_close = c.shift(1)
+    prior_ma5 = prior_close.rolling(5, min_periods=3).mean()
+    downtrend = (prior_close < prior_ma5).fillna(False)
+    uptrend = (prior_close > prior_ma5).fillna(False)
+
+    # ── 1-candle patterns ─────────────────────────────────────────────
+    is_doji = body_frac < 0.1
+    is_hammer = (lower_shadow > 2 * body) & (upper_shadow < 0.2 * body)
+    is_shootingstar = (upper_shadow > 2 * body) & (lower_shadow < 0.2 * body)
+
+    dragonfly_doji = is_doji & (lower_shadow > 0.6 * range_hl) & (upper_shadow < 0.1 * range_hl)
+    gravestone_doji = is_doji & (upper_shadow > 0.6 * range_hl) & (lower_shadow < 0.1 * range_hl)
+
+    # Same shapes with the trend context that gives them reversal meaning
+    inv_hammer = is_shootingstar & downtrend      # bullish after decline
+    hanging_man = is_hammer & uptrend             # bearish after rally
+
+    bull_marubozu = is_green & (body_frac > 0.9)  # full-body conviction bars
+    bear_marubozu = is_red & (body_frac > 0.9)
+
+    spinning_top = (body_frac < 0.3) & (upper_shadow > body) & (lower_shadow > body) & ~is_doji
+
+    # ── 2-candle patterns ─────────────────────────────────────────────
     bullish_engulfing = prev_red & is_green & (c > o.shift(1)) & (o < c.shift(1))
     bearish_engulfing = prev_green & is_red & (c < o.shift(1)) & (o > c.shift(1))
 
-    # 4. Morning & Evening Star
+    prev_body_mid = (o.shift(1) + c.shift(1)) / 2.0
+    # Crypto trades 24/7 so the classic "gap open" never occurs; the standard
+    # adaptation is open at-or-below the prior close (piercing) / at-or-above
+    # (dark cloud).
+    piercing = (
+        prev_red & is_green
+        & (o <= c.shift(1)) & (c > prev_body_mid) & (c < o.shift(1))
+    )
+    dark_cloud = (
+        prev_green & is_red
+        & (o >= c.shift(1)) & (c < prev_body_mid) & (c > o.shift(1))
+    )
+
+    prev_large_body = body.shift(1) > avg_body.shift(1)
+    body_inside_prev = (
+        (np.maximum(o, c) < np.maximum(o.shift(1), c.shift(1)))
+        & (np.minimum(o, c) > np.minimum(o.shift(1), c.shift(1)))
+    )
+    bull_harami = prev_red & prev_large_body & body_inside_prev & is_green
+    bear_harami = prev_green & prev_large_body & body_inside_prev & is_red
+
+    lows_match = (l - l.shift(1)).abs() <= (0.001 * c)
+    highs_match = (h - h.shift(1)).abs() <= (0.001 * c)
+    tweezer_bottom = lows_match & prev_red & is_green & downtrend
+    tweezer_top = highs_match & prev_green & is_red & uptrend
+
+    # ── 3-candle patterns ─────────────────────────────────────────────
     prev2_red = is_red.shift(2)
     prev2_green = is_green.shift(2)
     prev1_small_body = (body.shift(1) / (range_hl.shift(1) + 1e-9)) < 0.3
@@ -1537,14 +1600,88 @@ def compute_candlestick_patterns(df: pd.DataFrame) -> pd.DataFrame:
     morning_star = prev2_red & prev1_small_body & is_green & (c > o.shift(2) - (body.shift(2) * 0.5))
     evening_star = prev2_green & prev1_small_body & is_red & (c < o.shift(2) + (body.shift(2) * 0.5))
 
+    solid_body = body_frac > 0.5
+    opens_inside_prev = (o > np.minimum(o.shift(1), c.shift(1))) & (o < np.maximum(o.shift(1), c.shift(1)))
+    three_white_soldiers = (
+        is_green & is_green.shift(1) & is_green.shift(2)
+        & solid_body & solid_body.shift(1) & solid_body.shift(2)
+        & (c > c.shift(1)) & (c.shift(1) > c.shift(2))
+        & opens_inside_prev & opens_inside_prev.shift(1)
+    )
+    three_black_crows = (
+        is_red & is_red.shift(1) & is_red.shift(2)
+        & solid_body & solid_body.shift(1) & solid_body.shift(2)
+        & (c < c.shift(1)) & (c.shift(1) < c.shift(2))
+        & opens_inside_prev & opens_inside_prev.shift(1)
+    )
+
+    # Harami / engulfing followed by a confirming close beyond the first bar
+    three_inside_up = bull_harami.shift(1).fillna(False) & is_green & (c > o.shift(2))
+    three_inside_down = bear_harami.shift(1).fillna(False) & is_red & (c < o.shift(2))
+    three_outside_up = bullish_engulfing.shift(1).fillna(False) & is_green & (c > c.shift(1))
+    three_outside_down = bearish_engulfing.shift(1).fillna(False) & is_red & (c < c.shift(1))
+
+    # ── Weighted reversal aggregates ──────────────────────────────────
+    # Only patterns with genuine reversal semantics contribute; marubozu is
+    # continuation and doji/spinning-top are direction-less, so all three are
+    # excluded.  1- and 2-candle patterns require the matching prior trend;
+    # 3-candle patterns embed the prior move in their own structure.
+    def _w(cond: pd.Series, weight: float) -> pd.Series:
+        return cond.fillna(False).astype(float) * weight
+
+    bull_reversal_score = (
+        _w(morning_star, 1.5) + _w(three_white_soldiers, 1.5)
+        + _w(three_inside_up, 1.5) + _w(three_outside_up, 1.5)
+        + _w(bullish_engulfing & downtrend, 1.0) + _w(piercing & downtrend, 1.0)
+        + _w(tweezer_bottom, 1.0)
+        + _w(bull_harami & downtrend, 0.75)
+        + _w(is_hammer & downtrend, 0.5) + _w(inv_hammer, 0.5)
+        + _w(dragonfly_doji & downtrend, 0.5)
+    )
+    bear_reversal_score = (
+        _w(evening_star, 1.5) + _w(three_black_crows, 1.5)
+        + _w(three_inside_down, 1.5) + _w(three_outside_down, 1.5)
+        + _w(bearish_engulfing & uptrend, 1.0) + _w(dark_cloud & uptrend, 1.0)
+        + _w(tweezer_top, 1.0)
+        + _w(bear_harami & uptrend, 0.75)
+        + _w(is_shootingstar & uptrend, 0.5) + _w(hanging_man, 0.5)
+        + _w(gravestone_doji & uptrend, 0.5)
+    )
+
     return pd.DataFrame({
+        # Original seven — definitions unchanged (model compatibility)
         'CDL_DOJI': is_doji.astype(int),
         'CDL_HAMMER': is_hammer.astype(int),
         'CDL_SHOOTINGSTAR': is_shootingstar.astype(int),
         'CDL_BULL_ENGULFING': bullish_engulfing.astype(int),
         'CDL_BEAR_ENGULFING': bearish_engulfing.astype(int),
         'CDL_MORNINGSTAR': morning_star.astype(int),
-        'CDL_EVENINGSTAR': evening_star.astype(int)
+        'CDL_EVENINGSTAR': evening_star.astype(int),
+        # 1-candle additions
+        'CDL_DRAGONFLY_DOJI': dragonfly_doji.astype(int),
+        'CDL_GRAVESTONE_DOJI': gravestone_doji.astype(int),
+        'CDL_INV_HAMMER': inv_hammer.astype(int),
+        'CDL_HANGING_MAN': hanging_man.astype(int),
+        'CDL_BULL_MARUBOZU': bull_marubozu.astype(int),
+        'CDL_BEAR_MARUBOZU': bear_marubozu.astype(int),
+        'CDL_SPINNING_TOP': spinning_top.astype(int),
+        # 2-candle additions
+        'CDL_PIERCING': piercing.astype(int),
+        'CDL_DARK_CLOUD': dark_cloud.astype(int),
+        'CDL_BULL_HARAMI': bull_harami.astype(int),
+        'CDL_BEAR_HARAMI': bear_harami.astype(int),
+        'CDL_TWEEZER_BOTTOM': tweezer_bottom.astype(int),
+        'CDL_TWEEZER_TOP': tweezer_top.astype(int),
+        # 3-candle additions
+        'CDL_3_WHITE_SOLDIERS': three_white_soldiers.astype(int),
+        'CDL_3_BLACK_CROWS': three_black_crows.astype(int),
+        'CDL_3_INSIDE_UP': three_inside_up.astype(int),
+        'CDL_3_INSIDE_DOWN': three_inside_down.astype(int),
+        'CDL_3_OUTSIDE_UP': three_outside_up.astype(int),
+        'CDL_3_OUTSIDE_DOWN': three_outside_down.astype(int),
+        # Weighted reversal aggregates (live-engine confirmation gate)
+        'cdl_bull_reversal_score': bull_reversal_score,
+        'cdl_bear_reversal_score': bear_reversal_score,
     }, index=df.index)
 
 

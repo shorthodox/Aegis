@@ -1358,6 +1358,33 @@ class Predictor:
         r1 = _f('r1', price * 1.010); r2 = _f('r2', price * 1.020)
         s1 = _f('s1', price * 0.990); s2 = _f('s2', price * 0.980)
 
+        # Where price sits inside the rolling S/R range: 0 = at support,
+        # 1 = at resistance.  Consumed by the live engine's structure gate
+        # (BUY near support only / SELL near resistance only).
+        _sr_span = resistance - support
+        if _sr_span > 0:
+            range_position = float(np.clip((price - support) / _sr_span, 0.0, 1.0))
+        else:
+            range_position = 0.5
+
+        # ── Candlestick reversal aggregates ──────────────────────────────────
+        # Max weighted reversal score over the last 3 CLOSED bars — a reversal
+        # pattern one or two bars ago still validates a fresh entry.  Names of
+        # patterns active on the last bar are forwarded for explainability.
+        _CDL_REVERSAL_WINDOW = 3
+        if 'cdl_bull_reversal_score' in df.columns:
+            cdl_bull_reversal = float(df['cdl_bull_reversal_score'].tail(_CDL_REVERSAL_WINDOW).max())
+            cdl_bear_reversal = float(df['cdl_bear_reversal_score'].tail(_CDL_REVERSAL_WINDOW).max())
+        else:
+            # Feature build predates the pattern library — signal "unavailable"
+            # so the live-engine gate fails open rather than blocking all trades.
+            cdl_bull_reversal = -1.0
+            cdl_bear_reversal = -1.0
+        cdl_patterns_active = [
+            col for col in df.columns
+            if col.startswith('CDL_') and _f(col, 0.0) > 0
+        ]
+
         # ── Price targets (ATR-projected) ─────────────────────────────────────
         step = atr * atr_mult
         bull_tp1 = round(price + 1.0 * step, 8)
@@ -1478,6 +1505,12 @@ class Predictor:
             "pivot":      round(pivot, 8),
             "r1": round(r1, 8), "r2": round(r2, 8),
             "s1": round(s1, 8), "s2": round(s2, 8),
+            "range_position": round(range_position, 3),
+
+            # Candlestick reversal confirmation (live-engine structure gate)
+            "cdl_bull_reversal":   round(cdl_bull_reversal, 2),
+            "cdl_bear_reversal":   round(cdl_bear_reversal, 2),
+            "cdl_patterns_active": cdl_patterns_active,
 
             # Price targets
             "bull_tp1": bull_tp1, "bull_tp2": bull_tp2, "bull_tp3": bull_tp3,
