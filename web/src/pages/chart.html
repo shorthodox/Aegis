@@ -1243,8 +1243,9 @@ function renderOverview(sig) {
 // ── AI Explanation ────────────────────────────────────────────────────────────
 function renderExplanation(sig) {
   const c = sig.confluence || {};
-  // Normalize confluence values (0–10 scale → 0–100%)
-  const normalize = v => Math.min(100, Math.max(0, ((v || 0) + 5) * 10)); // -5..+5 → 0..100
+  // Confluence values arrive on a 0–10 scale (5 = neutral) → 0–100%.
+  // The old (v+5)*10 mapping assumed -5..+5 and pinned everything ≥5 at 100%.
+  const normalize = v => Math.min(100, Math.max(0, (v || 0) * 10));
 
   const items = [
     { name: 'Trend',        val: c.trend,       color: '#B8966A' },
@@ -1267,7 +1268,7 @@ function renderExplanation(sig) {
   if (sig.volume_zscore > 0.8)  factors.push({ icon: '✅', text: `Volume spike +${fmt(sig.volume_zscore,1)}σ above average` });
   if (sig.volume_zscore < -0.8) factors.push({ icon: '⚠️', text: `Low volume (-${fmt(Math.abs(sig.volume_zscore),1)}σ) — weak confirmation` });
   if (sig.oi_trend === 'INCREASING')  factors.push({ icon: '✅', text: 'Open interest increasing — new money entering' });
-  if (sig.funding_rate > 0.005 && isShort) factors.push({ icon: '✅', text: `Funding rate ${(sig.funding_rate*100).toFixed(3)}% — longs overextended` });
+  if (sig.funding_rate > 0.005 && isShort) factors.push({ icon: '✅', text: `Funding rate ${parseFloat(sig.funding_rate).toFixed(3)}% — longs overextended` });
   if (sig.regime === 'TRENDING_BEAR' && isShort) factors.push({ icon: '✅', text: 'Confirmed ↓BEAR regime — trend-aligned entry' });
   if (sig.regime === 'TRENDING_BULL' && !isShort) factors.push({ icon: '✅', text: 'Confirmed ↑BULL regime — trend-aligned entry' });
   if (sig.regime_confidence > 0.7) factors.push({ icon: '✅', text: `Regime confidence ${(sig.regime_confidence*100).toFixed(0)}% — high certainty` });
@@ -1346,9 +1347,13 @@ function generateStoryPoints(sig) {
   else if (sig.regime === 'RANGING')
     pts.push(`<strong>${sym}</strong> is ranging — price oscillating between established support and resistance zones.`);
 
-  // Price action
-  if (sig.resistance && sig.entry_price)
-    pts.push(`Price approached the <strong>resistance zone at ${fmt(sig.resistance, 6)}</strong>, showing rejection and providing a clean short entry.`);
+  // Price action — direction-aware: describe the level this entry is built on
+  if (sig.entry_price && (sig.support || sig.resistance)) {
+    if (dir === 'bearish' && sig.resistance)
+      pts.push(`Price is trading into the <strong>resistance zone at ${fmt(sig.resistance, 6)}</strong> — rejection here is what the short entry is built on.`);
+    else if (dir === 'bullish' && sig.support)
+      pts.push(`Price is holding above the <strong>support zone at ${fmt(sig.support, 6)}</strong> — the long entry is built on this level continuing to hold.`);
+  }
 
   // Volume
   if (sig.volume_zscore > 1.0)
@@ -1376,9 +1381,9 @@ function generateStoryPoints(sig) {
   else if (sig.adx < 20)
     pts.push(`ADX at <strong>${fmt(sig.adx,0)}</strong> indicates a <strong>weak trend</strong> — be cautious with position size.`);
 
-  // Funding / OI
+  // Funding / OI — sig.funding_rate is already a PERCENTAGE (predictor × 100)
   if (sig.funding_rate != null) {
-    const fr = (sig.funding_rate * 100).toFixed(4);
+    const fr = parseFloat(sig.funding_rate).toFixed(4);
     if (sig.funding_rate > 0.01)
       pts.push(`Funding rate is <strong>positive at ${fr}%</strong> — longs are paying shorts, a headwind for bulls.`);
     else if (sig.funding_rate < -0.01)
@@ -1519,7 +1524,7 @@ function renderRegime(sig) {
 
 // ── Whale / Institutional ─────────────────────────────────────────────────────
 function renderWhale(sig) {
-  const frPct = sig.funding_rate != null ? (sig.funding_rate * 100).toFixed(4) + '%' : '—';
+  const frPct = sig.funding_rate != null ? parseFloat(sig.funding_rate).toFixed(4) + '%' : '—';
   const frColor = sig.funding_rate > 0.005 ? 'var(--red)' : sig.funding_rate < -0.005 ? 'var(--green)' : 'var(--dim)';
   const oiColor = sig.oi_trend === 'INCREASING' ? 'var(--green)' : sig.oi_trend === 'DECREASING' ? 'var(--red)' : 'var(--dim)';
   const fgColor = sig.fear_greed ? (sig.fear_greed.value < 30 ? 'var(--red)' : sig.fear_greed.value > 70 ? 'var(--orange)' : 'var(--dim)') : 'var(--dim)';

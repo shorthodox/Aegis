@@ -206,20 +206,30 @@ function renderTable(rows) {
         return;
     }
 
-    tbody.innerHTML = filtered.map(r => `
+    tbody.innerHTML = filtered.map(r => {
+        // Open positions arrive masked from the API (symbol "HIDDEN", null
+        // prices) — the trade is the paid product.  Render the lock state
+        // explicitly; direction, live PnL and the tier badge stay visible.
+        const isOpen = (r.outcome || '').toUpperCase() === 'OPEN';
+        const masked = isOpen;
+        const tokenCell = masked
+            ? '<span style="color:#64748b;letter-spacing:2px;" title="Live signal — token visible on the dashboard (subscribers)"><i class="fas fa-lock" style="font-size:0.75em;margin-right:5px;"></i>•••••</span>'
+            : `<span style="color:#e2e8f0;font-weight:600;">${r.symbol || '—'}</span>`;
+        const priceCell = v => masked ? '<span style="color:#475569;">•••</span>' : fmtPrice(v);
+        return `
         <tr>
             <td>${fmtTs(r.close_time || r.entry_time)}</td>
-            <td style="color:#e2e8f0;font-weight:600;">${r.symbol || '—'}</td>
+            <td>${tokenCell}</td>
             <td>${r.timeframe || '—'}</td>
             <td class="${dirClass(r.direction)}">${dirLabel(r.direction)}</td>
             <td style="white-space:nowrap;">${signalChip(r.signal_type)}${tierBadge(r.signal_strength)}</td>
-            <td>${fmtPrice(r.entry_price)}</td>
-            <td style="color:rgba(0,255,136,0.7);">${fmtPrice(r.take_profit)}</td>
-            <td style="color:rgba(255,85,85,0.7);">${fmtPrice(r.stop_loss)}</td>
+            <td>${priceCell(r.entry_price)}</td>
+            <td style="color:rgba(0,255,136,0.7);">${priceCell(r.take_profit)}</td>
+            <td style="color:rgba(255,85,85,0.7);">${priceCell(r.stop_loss)}</td>
             <td style="${pnlColor(r.pnl_pct, r.outcome)}">${fmtPnl(r.pnl_pct, r.outcome)}</td>
             <td>${outcomeBadge(r.outcome)}</td>
-        </tr>
-    `).join('');
+        </tr>`;
+    }).join('');
 }
 
 // ── Filter UI ─────────────────────────────────────────────────────────────────

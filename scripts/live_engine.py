@@ -1476,6 +1476,10 @@ class LiveEngine:
       · Gate 0    drift monitor (live WR critically below benchmark)
       · Gate 1    no-trade regime (liquidity trap)
       · Gate 1.5  direction-regime veto (LONG in bear / SHORT in bull regime)
+      · Gate 1.6  structure gate: LONG at support / SHORT at resistance with
+                  5m+15m direction confirmation; BUY at resistance (SELL at
+                  support) only on unanimous breakout momentum or a confirmed
+                  break-and-retest hold; mid-range entries blocked
       · Gate 1.7  HTF macro veto (weekly AND daily EMA50 both opposing)
       · Gate 2    ATR floor (stops inside tick noise)
       · Gate 3    model edge floor (edge_score >= 70, drift-adjusted)
@@ -1485,12 +1489,10 @@ class LiveEngine:
     ADVISORY — each failure appends a warning; entry blocked only when more
     than ADVISORY_WARNING_BUDGET (2) advisory gates object:
       · Gate 1.2  ranging regime
-      · Gate 1.6  S/R structure location (BUY near resistance / SELL near support)
       · Gate 1.65 candlestick reversal confirmation (last 3 closed 1h bars)
       · Gate 3b   context quality score < 70 (HMM-transition adjusted)
       · Gate 3c   fake breakout / exhaustion heuristics
       · Gate 3.8  signal stability (consecutive same-direction cycles)
-      · Gate 4.5  5m/15m multi-timeframe reversal timing
       · RSI exhaustion / deceleration
     Warnings are logged and forwarded to the dashboard via gate_warnings.
     """
@@ -1524,6 +1526,22 @@ class LiveEngine:
     # risk-tier block in _process_symbol.  0 = breakeven; 0.25 demands a
     # meaningfully positive edge before risking the public track record.
     RISKY_EV_MARGIN = 0.25
+
+    # ── Structure gate (Gate 1.6) ─────────────────────────────────────────
+    # Zone boundaries on range_position (0 = rolling support, 1 = resistance)
+    STRUCT_SUPPORT_ZONE    = 0.35   # at/below → support zone
+    STRUCT_RESISTANCE_ZONE = 0.65   # at/above → resistance zone
+    # Lower-timeframe confirmation: candles must already be moving in the
+    # signal direction.  Reversal entries at the correct level tolerate one
+    # consolidation candle on 5m (3 of 4); breakout entries require ALL of
+    # them (4/4 + 2/2) — momentum has to be unanimous to justify buying
+    # into resistance / selling into support.
+    STRUCT_5M_WINDOW  = 4
+    STRUCT_5M_MIN     = 3
+    STRUCT_15M_WINDOW = 2
+    STRUCT_15M_MIN    = 2
+    # Break-and-retest scan depth (closed 5m candles ≈ one hour)
+    STRUCT_RETEST_LOOKBACK = 12
 
     # Regimes where entry is unconditionally blocked.  RANGING was demoted to
     # an advisory warning: the structure gate (BUY at support / SELL at
@@ -1986,22 +2004,31 @@ class LiveEngine:
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
 
-                    # ── Gate 1.6 (ADVISORY): S/R structure location ──────────
-                    # A BUY fired in the top of the rolling S/R range is buying
-                    # into resistance (minimal headroom to TP, stop far from
-                    # structure); a SELL at the bottom is the mirror error.
-                    # range_position: 0 = at support, 1 = at resistance
-                    # (computed by the predictor from the 24-bar rolling range).
-                    # Fails open when S/R data is missing or degenerate.
-                    _range_pos = result.get('range_position')
-                    if _range_pos is not None:
-                        _range_pos = float(_range_pos)
-                        if new_side == 'BUY' and _range_pos > 0.65:
-                            _gate_warnings.append(
-                                f'structure(range_pos={_range_pos:.2f} near resistance)')
-                        elif new_side == 'SELL' and _range_pos < 0.35:
-                            _gate_warnings.append(
-                                f'structure(range_pos={_range_pos:.2f} near support)')
+                    # ── Gate 1.6 (CRITICAL): entry location + breakout rules ──
+                    # Entries are taken AT structure only:
+                    #   BUY at support / SELL at resistance — confirmed by the
+                    #   lower timeframes already turning in the signal direction
+                    #   (≥3 of last 4 closed 5m candles + 2 of 2 closed 15m).
+                    # The single exception is an imminent or confirmed break:
+                    #   BUY at resistance (SELL at support) requires EITHER
+                    #   full momentum into the level (4/4 5m + 2/2 15m trending)
+                    #   OR a completed break-and-retest where the crossed level
+                    #   held — old resistance acting as support (mirror for
+                    #   SELL).  Mid-range entries are blocked outright.
+                    # Fails open when S/R or candle data is unavailable.
+                    _sg_verdict, _sg_detail = await self._structure_gate(
+                        symbol, new_side, price, result)
+                    if _sg_verdict == 'BLOCK':
+                        print(f'[{symbol}] STRUCTURE_GATE blocked {new_side}: {_sg_detail}')
+                        if symbol in self.last_signals:
+                            self.last_signals[symbol]['fire']              = False
+                            self.last_signals[symbol]['signal']            = 'HOLD'
+                            self.last_signals[symbol]['structure_blocked'] = True
+                            self.last_signals[symbol]['structure_reason']  = _sg_detail
+                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                        return
+                    if _sg_verdict == 'PASS' and symbol in self.last_signals:
+                        self.last_signals[symbol]['entry_mode'] = _sg_detail
 
                     # ── Gate 1.65 (ADVISORY): candlestick reversal pattern ───
                     # Entries should be timed at a trend turn, not mid-trend.
@@ -2145,90 +2172,11 @@ class LiveEngine:
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
 
-                    # ── Advisory budget short-circuit ─────────────────────────
-                    # The MTF gate below costs two exchange API calls.  If the
-                    # warning budget is already exhausted the entry cannot pass
-                    # regardless of the MTF outcome — block now without the fetch.
-                    if len(_gate_warnings) > self.ADVISORY_WARNING_BUDGET:
-                        print(f'[{symbol}] ADVISORY_GATES blocked {new_side}: '
-                              f'{len(_gate_warnings)} warnings '
-                              f'[{"; ".join(_gate_warnings)}]')
-                        if symbol in self.last_signals:
-                            self.last_signals[symbol]['fire']             = False
-                            self.last_signals[symbol]['signal']           = 'HOLD'
-                            self.last_signals[symbol]['advisory_blocked'] = True
-                            self.last_signals[symbol]['gate_warnings']    = _gate_warnings
-                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
-                        return
-
-                    # ── Gate 4.5 (ADVISORY): two-zone multi-timeframe timing ─────
-                    # Old logic required ALL last-N 5m/15m candles to be in the
-                    # prior-trend direction.  That caused two failure modes:
-                    #   (a) Fires too early — no lower-TF reversal signal yet (false setup)
-                    #   (b) Fires too late  — blocks the moment the first reversal 5m bar
-                    #       appears, then fires again only mid-move on the next scan
-                    #
-                    # Fix: split 5m history into two zones.
-                    #   PRIOR zone  (bars 3–6 ago): ≥60% match prior trend direction
-                    #   REVERSAL zone (last 2 bars): ≥1 bar matches reversal direction
-                    #   15m check (last closed bar): matches reversal direction
-                    #
-                    # This fires at the FIRST 5m reversal candle after a confirmed prior
-                    # trend — neither too early (no signal yet) nor mid-trend (all flipped).
-                    #
-                    # Gate fails OPEN when data is unavailable (network hiccup never
-                    # permanently blocks an entry).
-                    MTF_5M_PRIOR   = 4   # older bars: confirm prior trend existed
-                    MTF_5M_RECENT  = 2   # recent bars: confirm reversal is starting
-                    MTF_15M_CHECK  = 1   # 15m bars to confirm reversal direction
-
-                    _5m_raw  = await self._fetch_candles(
-                        symbol, '5m',  MTF_5M_PRIOR + MTF_5M_RECENT + 2)
-                    _15m_raw = await self._fetch_candles(
-                        symbol, '15m', MTF_15M_CHECK + 2)
-
-                    def _get_closed(candles: list, n: int) -> list:
-                        """Last n CLOSED candles (index [-1] is still forming)."""
-                        if len(candles) < 2:
-                            return []
-                        closed = candles[:-1]
-                        return closed[-n:] if len(closed) >= n else closed
-
-                    def _dir_frac(candles: list, direction: str) -> float:
-                        """Fraction of candles matching direction. Empty → 0.5 (neutral)."""
-                        if not candles:
-                            return 0.5
-                        hits = sum(
-                            1 for c in candles
-                            if (direction == 'bearish' and float(c[4]) < float(c[1]))
-                            or (direction == 'bullish' and float(c[4]) > float(c[1]))
-                        )
-                        return hits / len(candles)
-
-                    _prior_dir = 'bearish' if new_side == 'BUY' else 'bullish'
-                    _rev_dir   = 'bullish' if new_side == 'BUY' else 'bearish'
-
-                    _all_closed_5m = _get_closed(_5m_raw, MTF_5M_PRIOR + MTF_5M_RECENT) \
-                                     if _5m_raw else []
-                    # Prior zone: the older portion of the closed 5m window
-                    _prior_5m  = _all_closed_5m[:-MTF_5M_RECENT] \
-                                 if len(_all_closed_5m) > MTF_5M_RECENT else _all_closed_5m
-                    # Reversal zone: the most-recent closed 5m bars
-                    _recent_5m = _all_closed_5m[-MTF_5M_RECENT:] \
-                                 if len(_all_closed_5m) >= MTF_5M_RECENT else []
-
-                    _prior_ok  = (not _prior_5m)  or _dir_frac(_prior_5m,  _prior_dir) >= 0.60
-                    _rev_ok_5m = (not _recent_5m) or _dir_frac(_recent_5m, _rev_dir)   >= 0.50
-                    _ok_5m     = _prior_ok and _rev_ok_5m
-
-                    _closed_15m = _get_closed(_15m_raw, MTF_15M_CHECK) if _15m_raw else []
-                    _ok_15m     = (not _closed_15m) or _dir_frac(_closed_15m, _rev_dir) >= 0.50
-
-                    if not (_ok_5m and _ok_15m):
-                        _gate_warnings.append(
-                            f'mtf_timing(prior_5m={_dir_frac(_prior_5m, _prior_dir):.2f} '
-                            f'rev_5m={_dir_frac(_recent_5m, _rev_dir):.2f} '
-                            f'15m={_dir_frac(_closed_15m, _rev_dir):.2f})')
+                    # (The old Gate 4.5 multi-timeframe timing check was
+                    #  superseded by Gate 1.6's 5m/15m direction confirmation —
+                    #  every entry now proves its lower-timeframe alignment at
+                    #  the structure gate, so a second overlapping check would
+                    #  only double-count the same candles.)
 
                     # ── RSI exhaustion / deceleration (ADVISORY) ─────────────
                     # Warn when RSI momentum has already peaked (late signal).
@@ -2372,6 +2320,116 @@ class LiveEngine:
         if candles:
             self._candle_cache[cache_key] = {'candles': candles, 'ts': now}
         return candles or []
+
+    # ── structure gate (Gate 1.6) ─────────────────────────────────────────────
+
+    async def _structure_gate(
+        self, symbol: str, side: str, price: float, result: Dict[str, Any]
+    ) -> Tuple[str, str]:
+        """
+        Hard entry-location gate: LONG at support, SHORT at resistance — each
+        confirmed by the lower timeframes already turning in the signal
+        direction.  The single exception is a level break:
+
+          BUY at resistance / SELL at support is allowed only when
+            (a) momentum into the level is unanimous — every one of the last
+                STRUCT_5M_WINDOW closed 5m candles and STRUCT_15M_WINDOW
+                closed 15m candles trends in the signal direction, OR
+            (b) the level already broke and a pullback HELD it: a 5m candle
+                opened beyond the level, tagged it, and closed back beyond —
+                old resistance acting as support (mirror for SELL).
+
+        Mid-range entries are blocked: signals belong at structure.
+
+        Returns (verdict, detail): 'PASS' | 'BLOCK' | 'SKIP' (data missing —
+        gate fails open so a network hiccup never mutes the engine).
+        """
+        range_pos  = result.get('range_position')
+        support    = float(result.get('support', 0) or 0)
+        resistance = float(result.get('resistance', 0) or 0)
+        if range_pos is None or not (0 < support < resistance) or price <= 0:
+            return 'SKIP', 'S/R data unavailable'
+        range_pos = float(range_pos)
+
+        raw_5m  = await self._fetch_candles(
+            symbol, '5m', max(self.STRUCT_5M_WINDOW, self.STRUCT_RETEST_LOOKBACK) + 2)
+        raw_15m = await self._fetch_candles(symbol, '15m', self.STRUCT_15M_WINDOW + 2)
+        closed_5m  = raw_5m[:-1]  if len(raw_5m)  >= 2 else []   # [-1] is forming
+        closed_15m = raw_15m[:-1] if len(raw_15m) >= 2 else []
+        if len(closed_5m) < self.STRUCT_5M_WINDOW or len(closed_15m) < self.STRUCT_15M_WINDOW:
+            return 'SKIP', 'candle data unavailable'
+
+        bullish = (side == 'BUY')
+
+        def _n_trending(candles: list, n: int) -> int:
+            """Candles among the last n that closed in the signal direction."""
+            return sum(
+                1 for c in candles[-n:]
+                if (float(c[4]) > float(c[1])) == bullish and float(c[4]) != float(c[1])
+            )
+
+        n5  = _n_trending(closed_5m,  self.STRUCT_5M_WINDOW)
+        n15 = _n_trending(closed_15m, self.STRUCT_15M_WINDOW)
+        _counts = (f'5m {n5}/{self.STRUCT_5M_WINDOW}, '
+                   f'15m {n15}/{self.STRUCT_15M_WINDOW} '
+                   f'{"bullish" if bullish else "bearish"}')
+
+        at_support    = range_pos <= self.STRUCT_SUPPORT_ZONE
+        at_resistance = range_pos >= self.STRUCT_RESISTANCE_ZONE
+        correct_level  = at_support    if bullish else at_resistance
+        breakout_level = at_resistance if bullish else at_support
+        level_name     = 'support' if bullish else 'resistance'
+
+        if correct_level:
+            # Reversal at the right level — the turn must already be underway.
+            if n5 >= self.STRUCT_5M_MIN and n15 >= self.STRUCT_15M_MIN:
+                return 'PASS', f'{level_name}_reversal ({_counts})'
+            return 'BLOCK', (f'at {level_name} but reversal unconfirmed '
+                             f'({_counts}; need {self.STRUCT_5M_MIN}/'
+                             f'{self.STRUCT_5M_WINDOW} + {self.STRUCT_15M_MIN}/'
+                             f'{self.STRUCT_15M_WINDOW})')
+
+        if breakout_level:
+            # Wrong side of the range — only an imminent or confirmed break
+            # justifies the entry.
+            if n5 >= self.STRUCT_5M_WINDOW and n15 >= self.STRUCT_15M_WINDOW:
+                return 'PASS', f'breakout_momentum ({_counts})'
+            level = resistance if bullish else support
+            atr   = float(result.get('atr', 0) or 0)
+            tol   = max(price * 0.001, atr * 0.25)
+            if self._retest_held(
+                    closed_5m[-self.STRUCT_RETEST_LOOKBACK:], side, level, tol):
+                return 'PASS', f'breakout_retest (level {level:.6g} held)'
+            return 'BLOCK', (f'{"BUY at resistance" if bullish else "SELL at support"} '
+                             f'without breakout confirmation ({_counts}; no retest-hold)')
+
+        return 'BLOCK', (f'mid-range entry (range_pos={range_pos:.2f}) — '
+                         f'entries only at support/resistance')
+
+    @staticmethod
+    def _retest_held(candles: list, side: str, level: float, tol: float) -> bool:
+        """
+        True when the level broke and a pullback held it.  For BUY: price is
+        currently above old resistance AND some closed 5m candle opened above
+        the level, dipped its low into the level zone (± tol), and closed back
+        above it — the broken level acting as support.  Mirror for SELL.
+        """
+        if not candles or level <= 0:
+            return False
+        last_close = float(candles[-1][4])
+        if side == 'BUY':
+            if last_close <= level:
+                return False
+            return any(
+                float(c[1]) > level and float(c[3]) <= level + tol and float(c[4]) > level
+                for c in candles
+            )
+        if last_close >= level:
+            return False
+        return any(
+            float(c[1]) < level and float(c[2]) >= level - tol and float(c[4]) < level
+            for c in candles
+        )
 
     # ── trade management ──────────────────────────────────────────────────────
 

@@ -3701,6 +3701,7 @@ async def track_record_endpoint(source: str = None):
             "exit_reason":     s.get("exit_reason"),
             "ai_prob":         s.get("meta_confidence"),
             "confluence_rate": None,
+            "signal_strength": s.get("signal_strength", ""),
             "source":          src,
         }
 
@@ -3733,12 +3734,13 @@ async def track_record_endpoint(source: str = None):
                 pass
 
     # ── 2. Supplement with main.py's in-memory store (catches any gaps) ──
+    # Copy each record: the masking pass below must never mutate the live store.
     for r in _track_store:
         sid = r.get("signal_id")
         pk  = _pos_key(r)
         if (sid and sid in seen_ids) or pk in seen_pos:
             continue
-        all_signals.append(r)
+        all_signals.append(dict(r))
         if sid:
             seen_ids.add(sid)
         seen_pos.add(pk)
@@ -3749,6 +3751,20 @@ async def track_record_endpoint(source: str = None):
         key=lambda r: r.get("entry_time") or "",
         reverse=True,
     )[:500]
+
+    # ── 3b. Mask OPEN positions in the public payload ──────────────────
+    # Open signals are the paid product: token and price levels are hidden
+    # from this unauthenticated endpoint (subscribers see them on the
+    # dashboard).  Direction, live PnL, tier and outcome stay visible so
+    # the public page still proves the engine is trading in real time.
+    for r in all_signals:
+        if r.get("outcome") == "OPEN":
+            r["symbol"]      = "HIDDEN"
+            r["signal_id"]   = None
+            r["entry_price"] = None
+            r["take_profit"] = None
+            r["stop_loss"]   = None
+            r["exit_price"]  = None
 
     wins   = sum(1 for r in all_signals if r.get("outcome") == "WIN")
     losses = sum(1 for r in all_signals if r.get("outcome") == "LOSS")
