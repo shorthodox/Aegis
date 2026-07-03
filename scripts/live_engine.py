@@ -598,6 +598,28 @@ class SignalQualityFilter:
         oi_trend    = str(result.get('oi_trend', 'STABLE') or 'STABLE').upper()
         market_bias = str(result.get('market_bias', 'NEUTRAL') or 'NEUTRAL').upper()
 
+        # ── Reversal-setup detection ──────────────────────────────────────────
+        # A counter-trend signal AT the structural extreme with an EXHAUSTED
+        # oscillator (overbought SELL at resistance / oversold BUY at support) is
+        # a legitimate turn, not a weak trend entry.  Without this the scorer
+        # double-penalises reversals — they necessarily miss the trend-following
+        # confluence/bias bonuses AND take the HTF-oppose penalty — which drags
+        # genuine exhaustion signals far below the 70 floor (ADA SELL @
+        # resistance, RSI 97.7, scored 43).  We reward the setup and skip the
+        # HTF penalty for it (being counter-trend is the definition of a
+        # reversal — penalising it for that is double-counting).
+        _rev_sup   = _f('support', 0.0)
+        _rev_res   = _f('resistance', 0.0)
+        _rev_price = _f('price', 0.0) or _f('entry_price', 0.0)
+        if 0 < _rev_sup < _rev_res and _rev_price > 0:
+            _rev_rp = max(0.0, min(1.0, (_rev_price - _rev_sup) / (_rev_res - _rev_sup)))
+        else:
+            _rev_rp = float(result.get('range_position') or 0.5)
+        is_reversal = (
+            (side == 'SELL' and _rev_rp >= 0.65 and rsi >= 68) or
+            (side == 'BUY'  and _rev_rp <= 0.35 and rsi <= 32)
+        )
+
         # ── Positive contributions ────────────────────────────────────────────
 
         # +20: strong confluence lean in signal direction
@@ -671,14 +693,21 @@ class SignalQualityFilter:
         if bias_align:
             score += 5; reasons.append('bias_aligned')
 
+        # +18: reversal setup — offsets the trend-following bonuses a genuine
+        # exhaustion turn necessarily misses (see is_reversal above).
+        if is_reversal:
+            score += 18; reasons.append(f'reversal_setup(rp={_rev_rp:.2f},rsi={rsi:.0f})')
+
         # ── Penalties ─────────────────────────────────────────────────────────
 
         # -20: no-trade zone
         if regime.regime == _REGIME_LIQUIDITY_TRAP:
             score -= 20; reasons.append('liquidity_trap_penalty')
 
-        # -15: ranging market — no directional edge, signals are noise
-        if regime.regime == _REGIME_RANGING:
+        # -15: ranging market — no directional edge, signals are noise.  Skipped
+        # for a reversal at the range extreme: SELL at range resistance / BUY at
+        # range support IS the high-probability range trade, not noise.
+        if regime.regime == _REGIME_RANGING and not is_reversal:
             score -= 15; reasons.append('ranging_market_penalty')
 
         # -10: low volume — no conviction behind the move
@@ -704,23 +733,26 @@ class SignalQualityFilter:
             _w_bear = macro_weekly < -0.5
             _d_bull = macro_daily  > 0.5
             _d_bear = macro_daily  < -0.5
+            # Opposing-HTF penalties are skipped for a genuine reversal at the
+            # extreme — being counter-trend is what a reversal IS, so penalising
+            # it here on top of the missed trend bonuses is double-counting.
             if side == 'BUY':
                 if _w_bull and _d_bull:
                     score += 15; reasons.append('htf_both_bullish')
                 elif _w_bull and _d_bear:
                     score += 10; reasons.append('htf_pullback_buy(w+/d-)')
-                elif _w_bear and _d_bear:
+                elif _w_bear and _d_bear and not is_reversal:
                     score -= 20; reasons.append('htf_both_bearish')
-                elif _w_bear:
+                elif _w_bear and not is_reversal:
                     score -= 10; reasons.append('htf_weekly_bearish')
             elif side == 'SELL':
                 if _w_bear and _d_bear:
                     score += 15; reasons.append('htf_both_bearish')
                 elif _w_bear and _d_bull:
                     score += 10; reasons.append('htf_bounce_sell(w-/d+)')
-                elif _w_bull and _d_bull:
+                elif _w_bull and _d_bull and not is_reversal:
                     score -= 20; reasons.append('htf_both_bullish')
-                elif _w_bull:
+                elif _w_bull and not is_reversal:
                     score -= 10; reasons.append('htf_weekly_bullish')
 
         # ── LSTM temporal intelligence bonuses / penalties ─────────────────────
@@ -1804,7 +1836,7 @@ class LiveEngine:
     # track_record.json → visible at /api/engine-track-record.  If the live
     # payload shows an older (or no) version, the server is running stale
     # code — the recurring "gate fix didn't work" false alarm.
-    GATE_VERSION = 'structure-gate-v9 (v8 + reversal-aware regime veto: counter-trend allowed at S/R extreme, structure gate confirms the turn)'
+    GATE_VERSION = 'structure-gate-v10 (v9 + reversal-aware HTF macro veto + score_signal reversal-fair: bonus, no HTF/ranging double-penalty)'
 
     # ── Structure gate (Gate 1.6) ─────────────────────────────────────────
     # Zone boundaries on range_position (0 = rolling support, 1 = resistance)
@@ -2405,30 +2437,36 @@ class LiveEngine:
                     # opposing), so it promotes STRONG tier and lifts the
                     # quality score — it just no longer forces RISKY on its own.
 
-                    # ── Gate 1.7: HTF macro trend hard veto ─────────────────
-                    # Hard block when weekly EMA50 trend AND daily EMA50 trend
-                    # both clearly oppose the signal direction.
-                    # - Weekly bearish + daily bearish → BUY blocked (no longs in macro downtrend)
-                    # - Weekly bullish + daily bullish → SELL blocked (no shorts in macro uptrend)
-                    # When only the weekly opposes (daily is recovering/pulling back),
-                    # we allow the trade but the quality penalty in score_signal()
-                    # already suppresses it below 70 in most cases.
+                    # ── Gate 1.7: HTF macro trend veto (REVERSAL-AWARE) ─────
+                    # Hard block when weekly EMA50 AND daily EMA50 both oppose the
+                    # signal — BUT, like Gate 1.5, NOT when the signal is a
+                    # reversal at the structural extreme (SELL at resistance / BUY
+                    # at support).  Catching an exhaustion turn against the macro
+                    # trend is a legitimate (higher-risk) reversal — the structure
+                    # gate still requires the actual 5m/15m turn, and score_signal
+                    # applies the HTF quality penalty so it rates as MODERATE, not
+                    # STRONG.  Only mid-trend counter-macro entries (no structural
+                    # basis) are hard-vetoed here — those are the "nearly certain
+                    # loss" case.  (The old blanket veto killed reversals like the
+                    # ADA SELL @ resistance, RSI 97.7, alongside Gate 1.5.)
                     _htf_w = float(result.get('macro_weekly', 0.0) or 0.0)
                     _htf_d = float(result.get('macro_daily',  0.0) or 0.0)
                     _htf_data_ok = (_htf_w != 0.0 or _htf_d != 0.0)
                     if _htf_data_ok:
-                        if new_side == 'BUY' and _htf_w < -0.5 and _htf_d < -0.5:
-                            print(f'[{symbol}] HTF_VETO blocked BUY: '
-                                  f'weekly={_htf_w:+.1f} daily={_htf_d:+.1f} both bearish')
+                        if (new_side == 'BUY' and _htf_w < -0.5 and _htf_d < -0.5
+                                and not _buy_at_sup):
+                            print(f'[{symbol}] HTF_VETO blocked BUY: weekly={_htf_w:+.1f} '
+                                  f'daily={_htf_d:+.1f} both bearish and not at support')
                             if symbol in self.last_signals:
                                 self.last_signals[symbol]['fire']        = False
                                 self.last_signals[symbol]['signal']      = 'HOLD'
                                 self.last_signals[symbol]['htf_blocked'] = True
                             self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                             return
-                        if new_side == 'SELL' and _htf_w > 0.5 and _htf_d > 0.5:
-                            print(f'[{symbol}] HTF_VETO blocked SELL: '
-                                  f'weekly={_htf_w:+.1f} daily={_htf_d:+.1f} both bullish')
+                        if (new_side == 'SELL' and _htf_w > 0.5 and _htf_d > 0.5
+                                and not _sell_at_res):
+                            print(f'[{symbol}] HTF_VETO blocked SELL: weekly={_htf_w:+.1f} '
+                                  f'daily={_htf_d:+.1f} both bullish and not at resistance')
                             if symbol in self.last_signals:
                                 self.last_signals[symbol]['fire']        = False
                                 self.last_signals[symbol]['signal']      = 'HOLD'
