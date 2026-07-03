@@ -1804,7 +1804,7 @@ class LiveEngine:
     # track_record.json → visible at /api/engine-track-record.  If the live
     # payload shows an older (or no) version, the server is running stale
     # code — the recurring "gate fix didn't work" false alarm.
-    GATE_VERSION = 'structure-gate-v6 (v5 + BOS/CHoCH + RSI/MACD divergence + volume climax/absorption confirmation)'
+    GATE_VERSION = 'structure-gate-v8 (v7 + wrong-side entries require break-and-retest hold + 2x15m confirm; no momentum shortcut)'
 
     # ── Structure gate (Gate 1.6) ─────────────────────────────────────────
     # Zone boundaries on range_position (0 = rolling support, 1 = resistance)
@@ -2336,7 +2336,13 @@ class LiveEngine:
                         # definition, higher risk (so it can never be STRONG).
                         print(f'[{symbol}] STRUCTURE_GATE skipped for {new_side}: {_sg_detail}')
                         _gate_warnings.append(f'structure_unverified({_sg_detail})')
-                    _entry_mode = (_sg_detail if _sg_verdict == 'PASS'
+                    elif _sg_verdict == 'WARN':
+                        # Confirmed reversal at a slightly early location (gap to
+                        # the level).  Not blocked — carried as one advisory
+                        # objection so it can fire as MODERATE, not muted.
+                        print(f'[{symbol}] STRUCTURE_GATE suboptimal for {new_side}: {_sg_detail}')
+                        _gate_warnings.append(f'structure_suboptimal({_sg_detail})')
+                    _entry_mode = (_sg_detail if _sg_verdict in ('PASS', 'WARN')
                                    else f'GATE_SKIPPED: {_sg_detail}')
                     if symbol in self.last_signals:
                         self.last_signals[symbol]['entry_mode'] = _entry_mode
@@ -2347,7 +2353,14 @@ class LiveEngine:
                     # direction; only a NET contradiction objects (advisory
                     # warning → tier RISKY → held under the no-high-risk rule).
                     # Agreement passes silently and is surfaced for the UI.
-                    _conf = await self._confirmation_gate(symbol, new_side, result)
+                    try:
+                        _conf = await self._confirmation_gate(symbol, new_side, result)
+                    except Exception as _cf_err:
+                        # A bug in the confirmation helpers must never mute a
+                        # signal — degrade to NEUTRAL (no objection) and log.
+                        print(f'[{symbol}] CONFIRMATION_GATE error (ignored): {_cf_err}')
+                        _conf = {'verdict': 'NEUTRAL', 'score': 0.0,
+                                 'reason': 'confirmation gate error', 'signals': {}}
                     if symbol in self.last_signals:
                         self.last_signals[symbol]['confirmation'] = _conf
                     if _conf['verdict'] == 'CONFLICT':
@@ -2526,62 +2539,33 @@ class LiveEngine:
                     if _exhausted:
                         _gate_warnings.append(f'exhaustion({_exhaust_reason})')
 
-                    # ── Advisory warning budget — final check ─────────────────
-                    # All critical gates passed.  Block only when more than
-                    # ADVISORY_WARNING_BUDGET advisory gates objected.
-                    if len(_gate_warnings) > self.ADVISORY_WARNING_BUDGET:
-                        print(f'[{symbol}] ADVISORY_GATES blocked {new_side}: '
-                              f'{len(_gate_warnings)} warnings '
-                              f'[{"; ".join(_gate_warnings)}]')
-                        if symbol in self.last_signals:
-                            self.last_signals[symbol]['fire']             = False
-                            self.last_signals[symbol]['signal']           = 'HOLD'
-                            self.last_signals[symbol]['advisory_blocked'] = True
-                            self.last_signals[symbol]['gate_warnings']    = _gate_warnings
-                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
-                        return
-
-                    # ── Risk-tier classification ──────────────────────────────
-                    # STRONG (LOW risk):     zero advisory objections + top-tier
-                    #                        conviction (edge≥85 or quality≥80).
-                    # NORMAL (MODERATE risk): zero objections, ordinary conviction.
-                    # RISKY  (HIGH risk):     one or more advisory objections.
-                    # Only STRONG and NORMAL are published — RISKY is blocked
-                    # below (user policy 2026-07-03: no high-risk signals).  The
-                    # public track record is the product; a marginal risky trade
-                    # isn't worth staining it.
+                    # ── Coordinative advisory policy — block only HIGH risk ───
+                    # The advisory gates VOTE; they do not each veto.  A signal
+                    # tolerates up to ADVISORY_WARNING_BUDGET (2) objections and
+                    # still publishes (LOW / MODERATE risk); one more makes it
+                    # HIGH risk and it is held.  The previous version fought
+                    # itself — a budget of 2 but a tier that flipped to RISKY
+                    # (blocked) at the FIRST warning — so almost every candidate
+                    # was muted.  Restored to the user's "tolerate 2" policy:
+                    #   0 objections   → STRONG  (LOW risk)
+                    #   1-2 objections → NORMAL  (MODERATE risk) — still fires
+                    #   3+ objections  → RISKY   (HIGH risk) — held
                     _n_warn = len(_gate_warnings)
-                    if _n_warn == 0 and (_model_quality >= self.SIGNAL_BYPASS_EDGE
-                                         or quality_score >= 80.0):
-                        _risk_tier = 'STRONG'   # LOW risk
-                    elif _n_warn >= 1:
-                        _risk_tier = 'RISKY'    # HIGH risk
-                    else:
-                        _risk_tier = 'NORMAL'   # MODERATE risk
-
-                    # ── High-risk signals are not published (user policy) ─────
-                    # Only LOW-risk (STRONG) and MODERATE-risk (NORMAL) tiers
-                    # fire.  A RISKY tier means at least one advisory gate
-                    # objected — unverified structure, fake breakout, RSI
-                    # exhaustion, stability, or thin context — which are exactly
-                    # the setups that reject or round-trip.  The previous
-                    # RISKY_EV_HOLD let some through on a positive expected-value
-                    # estimate, but that estimate leaned on a benchmark win rate
-                    # the live book rarely meets, so RISKY entries kept staining
-                    # the public track record.  They are now blocked outright.
-                    if _risk_tier == 'RISKY':
+                    if _n_warn > self.ADVISORY_WARNING_BUDGET:
                         print(f'[{symbol}] HIGH_RISK_HOLD blocked {new_side}: '
-                              f'{_n_warn} advisory warning'
-                              f'{"s" if _n_warn != 1 else ""} — only LOW/MODERATE '
-                              f'risk signals fire [{"; ".join(_gate_warnings)}]')
+                              f'{_n_warn} advisory warnings (> budget '
+                              f'{self.ADVISORY_WARNING_BUDGET}) — HIGH risk; only '
+                              f'LOW/MODERATE fire [{"; ".join(_gate_warnings)}]')
                         if symbol in self.last_signals:
                             self.last_signals[symbol]['fire']          = False
                             self.last_signals[symbol]['signal']        = 'HOLD'
-                            self.last_signals[symbol]['risky_blocked']  = True
-                            self.last_signals[symbol]['risk_tier']      = _risk_tier
-                            self.last_signals[symbol]['gate_warnings']  = _gate_warnings
+                            self.last_signals[symbol]['risky_blocked'] = True
+                            self.last_signals[symbol]['risk_tier']     = 'RISKY'
+                            self.last_signals[symbol]['gate_warnings'] = _gate_warnings
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
+
+                    _risk_tier = 'STRONG' if _n_warn == 0 else 'NORMAL'
 
                     # ── Model approved — open the position ────────────────────
                     # predictor.predict_realtime() already applied:
@@ -2750,48 +2734,50 @@ class LiveEngine:
         level_name     = 'support' if bullish else 'resistance'
 
         if correct_level:
-            # Reversal at the right level — TWO things must hold:
-            #   1. price must have actually TESTED the level it is reversing
-            #      from (a recent 5m wick into the level ± tol).  The zone is the
-            #      top/bottom third of the range, so range_pos 0.80 still leaves
-            #      a gap to the wall — shorting there is a counter-trend entry in
-            #      open air, not a rejection.  This closes the "gap between
-            #      resistance and entry".
-            #   2. the turn must already be underway on the lower timeframes
-            #      (≥3/4 closed 5m + 2/2 closed 15m in the signal direction).
+            # Reversal at the right level.  Order matters:
+            #   1. CONFIRMATION is REQUIRED (hard) — the turn must already be
+            #      underway on the lower timeframes (≥3/4 closed 5m + 2/2 closed
+            #      15m in the signal direction).  Unconfirmed = the "shorting a
+            #      rising candle" case, blocked outright.
+            #   2. The level-tag (gap) is ADVISORY, not a hard veto.  A confirmed
+            #      turn whose recent wicks didn't quite reach the level is a
+            #      slightly EARLY entry, not a wrong one — it fires as MODERATE
+            #      risk (one advisory warning) rather than being muted.  (This
+            #      softens the over-strict hard gap-block added earlier.)
+            if not (n5 >= self.STRUCT_5M_MIN and n15 >= self.STRUCT_15M_MIN):
+                return 'BLOCK', (f'at {level_name} but reversal unconfirmed '
+                                 f'({_counts}; need {self.STRUCT_5M_MIN}/'
+                                 f'{self.STRUCT_5M_WINDOW} + {self.STRUCT_15M_MIN}/'
+                                 f'{self.STRUCT_15M_WINDOW})')
             level  = support if bullish else resistance
             tol    = max(price * 0.0015, atr_g * 0.25)
             recent = closed_5m[-self.STRUCT_RETEST_LOOKBACK:]
-            if bullish:
-                tested = any(float(c[3]) <= level + tol for c in recent)   # low tagged support
-            else:
-                tested = any(float(c[2]) >= level - tol for c in recent)   # high tagged resistance
+            tested = (any(float(c[3]) <= level + tol for c in recent) if bullish
+                      else any(float(c[2]) >= level - tol for c in recent))
             if not tested:
-                return 'BLOCK', (f'{"BUY" if bullish else "SELL"} at {level_name} but '
-                                 f'price never tested {level:.6g} (±{tol:.6g}) in the '
-                                 f'last {len(recent)} 5m bars — gap to the level, '
-                                 f'no rejection to trade')
-            if n5 >= self.STRUCT_5M_MIN and n15 >= self.STRUCT_15M_MIN:
-                return 'PASS', f'{level_name}_reversal ({_counts}; {level:.6g} tested)'
-            return 'BLOCK', (f'at {level_name} but reversal unconfirmed '
-                             f'({_counts}; need {self.STRUCT_5M_MIN}/'
-                             f'{self.STRUCT_5M_WINDOW} + {self.STRUCT_15M_MIN}/'
-                             f'{self.STRUCT_15M_WINDOW})')
+                return 'WARN', (f'{level_name}_reversal confirmed ({_counts}) but price '
+                                f'gapped from {level:.6g} — slightly early entry')
+            return 'PASS', f'{level_name}_reversal ({_counts}; {level:.6g} tested)'
 
         if breakout_level:
-            # Wrong side of the range — only a break that has ALREADY happened
-            # justifies the entry.  Momentum alone is not enough: a vertical
-            # rally INTO resistance (TIA @0.67, PENDLE @0.88 range_pos,
-            # 2026-07-02) is the classic pre-break gamble that rejects at the
-            # wall.  Price must be beyond the level first, then confirmed by
-            # unanimous continuation momentum or a retest that held.
+            # Wrong side of the range (BUY at resistance / SELL at support).
+            # Valid ONLY as a completed BREAK-AND-RETEST — never on momentum
+            # alone.  Rule (user-specified after FIL BUY fired AT resistance and
+            # round-tripped, 2026-07-04):
+            #   1. the level must have BROKEN (price closed beyond it), then
+            #   2. price pulls back INTO the level and it HOLDS as the opposite
+            #      structure — old resistance now acting as SUPPORT for a BUY
+            #      (mirror for SELL), and
+            #   3. the bounce is confirmed by 2/2 closed 15m candles in the
+            #      signal direction.
+            # The old momentum-only shortcut (a strong push straight through the
+            # wall with no pullback) is REMOVED — that is exactly the entry that
+            # fires "at resistance" and reverses.  We wait for resistance→support
+            # to prove itself before entering.
             #
-            # DYNAMIC level: the rolling 24h extreme moves the moment a
-            # breakout candle closes, so comparing against today's new high
-            # would reject valid post-break entries as "pre-break".  When the
-            # predictor reports a level break within the last ~6 hours, the
-            # break and its retest are verified against the LEVEL THAT
-            # ACTUALLY BROKE.
+            # DYNAMIC level: the rolling 24h extreme moves the instant a breakout
+            # candle closes, so the break and retest are verified against the
+            # LEVEL THAT ACTUALLY BROKE when the predictor reports one.
             level = resistance if bullish else support
             if bullish and bool(result.get('resistance_broken_recent')):
                 _bl = float(result.get('broken_resistance_level', 0) or 0)
@@ -2807,15 +2793,22 @@ class LiveEngine:
                                  f'but the level has not broken '
                                  f'(price {price:.6g} vs {level:.6g}) — '
                                  f'pre-break entries rejected')
-            if n5 >= self.STRUCT_5M_WINDOW and n15 >= self.STRUCT_15M_WINDOW:
-                return 'PASS', f'breakout_momentum (level {level:.6g} broken, {_counts})'
+            # Break-and-retest-hold on 5m (old level flips and holds) + the
+            # bounce confirmed on 2/2 closed 15m candles in the signal direction.
             tol = max(price * 0.001, atr_g * 0.25)
-            if self._retest_held(
-                    closed_5m[-self.STRUCT_RETEST_LOOKBACK:], side, level, tol):
-                return 'PASS', f'breakout_retest (level {level:.6g} held)'
-            return 'BLOCK', (f'level {level:.6g} broken but unconfirmed '
-                             f'({_counts}; no retest-hold) — waiting for '
-                             f'continuation or a held retest')
+            retest_ok     = self._retest_held(
+                closed_5m[-self.STRUCT_RETEST_LOOKBACK:], side, level, tol)
+            confirmed_15m = n15 >= self.STRUCT_15M_MIN
+            if retest_ok and confirmed_15m:
+                _flip = 'support' if bullish else 'resistance'
+                return 'PASS', (f'breakout_retest (level {level:.6g} broke, retested and '
+                                f'held as {_flip}; 15m {n15}/{self.STRUCT_15M_WINDOW} confirmed)')
+            _why = ('no retest-hold yet' if not retest_ok
+                    else f'retest held, 15m bounce unconfirmed '
+                         f'({n15}/{self.STRUCT_15M_MIN})')
+            _flip_txt = 'resistance->support' if bullish else 'support->resistance'
+            return 'BLOCK', (f'level {level:.6g} broke - {_why} - waiting for '
+                             f'{_flip_txt} retest confirmed by {self.STRUCT_15M_MIN}x15m')
 
         # Unreachable: mid-range was blocked before the candle fetch.
         return 'BLOCK', f'mid-range entry (range_pos={range_pos:.2f})'
