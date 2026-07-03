@@ -1490,13 +1490,18 @@ class LiveEngine:
       · Gate 4    portfolio guard (capital / concurrency limits)
 
     ADVISORY — each failure appends a warning; entry blocked only when more
-    than ADVISORY_WARNING_BUDGET (2) advisory gates object:
-      · Gate 1.2  ranging regime
-      · Gate 1.65 candlestick reversal confirmation (last 3 closed 1h bars)
+    than ADVISORY_WARNING_BUDGET (2) advisory gates object.  Zero warnings →
+    NORMAL/STRONG tier (low risk); any warning → RISKY (+ EV hold).
+      · structure_unverified (structure gate SKIP — location not confirmable)
       · Gate 3b   context quality score < 70 (HMM-transition adjusted)
       · Gate 3c   fake breakout / exhaustion heuristics
       · Gate 3.8  signal stability (consecutive same-direction cycles)
       · RSI exhaustion / deceleration
+    RETIRED (now enforced by the structure gate, so they no longer force
+    RISKY on setups the structure gate approves):
+      · Gate 1.2  ranging regime — range S/R reversals are the intended setup
+      · Gate 1.65 candlestick reversal — 5m/15m confirmation supersedes it
+                  (still feeds score_signal to promote STRONG)
     Warnings are logged and forwarded to the dashboard via gate_warnings.
     """
 
@@ -1982,12 +1987,16 @@ class LiveEngine:
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
 
-                    # ── Gate 1.2 (ADVISORY): ranging market ──────────────────
-                    # No directional edge in a range unless the entry sits at
-                    # structure with a reversal pattern — exactly what the
-                    # structure + reversal gates verify.  Warn, don't block.
-                    if regime.regime == _REGIME_RANGING:
-                        _gate_warnings.append(f'ranging_regime(conf={regime.confidence:.2f})')
+                    # ── Gate 1.2 RETIRED: ranging regime is no longer a risk ──
+                    # A range used to be penalised because entries could land
+                    # mid-range or chase a fading trend.  The hard structure
+                    # gate (1.6) now forces every entry to a confirmed reversal
+                    # at support/resistance (or a confirmed breakout) — which
+                    # in a range is the intended high-probability setup, not a
+                    # risk.  Penalising it here guaranteed every structure-valid
+                    # signal carried a warning and could never reach STRONG/
+                    # NORMAL tier.  Genuinely bad regimes are still hard-blocked
+                    # by Gate 1 (no-trade) and Gate 1.5 (direction-regime veto).
 
                     # ── Gate 1.5: Hard direction-regime veto ─────────────────
                     # meta_override_confidence bypasses the predictor's daily
@@ -2038,26 +2047,26 @@ class LiveEngine:
                         return
                     if _sg_verdict == 'SKIP':
                         # A silent fail-open is how resistance longs slipped
-                        # through undetected — every skip is logged.
+                        # through undetected — every skip is logged, AND it
+                        # counts as an advisory warning: an entry whose
+                        # structural location could not be verified is, by
+                        # definition, higher risk (so it can never be STRONG).
                         print(f'[{symbol}] STRUCTURE_GATE skipped for {new_side}: {_sg_detail}')
+                        _gate_warnings.append(f'structure_unverified({_sg_detail})')
                     _entry_mode = (_sg_detail if _sg_verdict == 'PASS'
                                    else f'GATE_SKIPPED: {_sg_detail}')
                     if symbol in self.last_signals:
                         self.last_signals[symbol]['entry_mode'] = _entry_mode
 
-                    # ── Gate 1.65 (ADVISORY): candlestick reversal pattern ───
-                    # Entries should be timed at a trend turn, not mid-trend.
-                    # The predictor forwards the max weighted reversal-pattern
-                    # score over the last 3 closed 1h bars (1/2/3-candle
-                    # patterns, trend-context gated in feature_engine).
-                    # -1.0 = pattern data unavailable → gate fails open.
-                    _bull_rev = float(result.get('cdl_bull_reversal', -1.0))
-                    _bear_rev = float(result.get('cdl_bear_reversal', -1.0))
-                    _rev_score = _bull_rev if new_side == 'BUY' else _bear_rev
-                    if _rev_score == 0.0:
-                        _gate_warnings.append(
-                            f'reversal(no {"bullish" if new_side == "BUY" else "bearish"} '
-                            f'pattern in last 3 bars)')
+                    # ── Gate 1.65 RETIRED as a warning: reversal is confirmed ─
+                    # by the structure gate's 5m+15m directional check, which
+                    # is stronger and fresher evidence than a 1h candlestick
+                    # pattern.  Demanding a formal 1h pattern on top of that
+                    # added a near-permanent second warning that blocked the
+                    # low-risk tiers.  The candlestick reversal score still
+                    # feeds score_signal() (+10 strong / +5 weak / -12
+                    # opposing), so it promotes STRONG tier and lifts the
+                    # quality score — it just no longer forces RISKY on its own.
 
                     # ── Gate 1.7: HTF macro trend hard veto ─────────────────
                     # Hard block when weekly EMA50 trend AND daily EMA50 trend
