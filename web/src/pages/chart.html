@@ -1350,7 +1350,12 @@ function renderStory(sig) {
 function generateStoryPoints(sig) {
   const pts = [];
   const sym  = sig.symbol;
-  const dir  = sig.direction === 'SHORT' ? 'bearish' : 'bullish';
+  // Open position outranks the model's current (post-entry FLAT) read;
+  // fall back to the signal direction. `null` when genuinely neutral so the
+  // direction-specific narrative lines are skipped instead of defaulting bullish.
+  const _pos = TRACK_DATA.signals.find(p => p.symbol === sig.symbol && p.outcome === 'OPEN');
+  const _effDir = _pos ? _pos.direction : sig.direction;
+  const dir  = _effDir === 'SHORT' ? 'bearish' : _effDir === 'LONG' ? 'bullish' : null;
   const oDir = dir === 'bearish' ? 'downside' : 'upside';
 
   // Regime
@@ -1420,10 +1425,12 @@ function generateStoryPoints(sig) {
   if (sig.session)
     pts.push(`Current session: <strong>${sig.session}</strong>. ${sig.session_note || ''}`);
 
-  // Target
-  const tp1 = sig.direction === 'SHORT' ? sig.bear_tp1 : sig.bull_tp1;
-  if (tp1)
-    pts.push(`AEGIS projects ${oDir} continuation toward <strong>${fmt(tp1,6)}</strong> (TP1) based on ATR extension and market structure.`);
+  // Target — only when there is an actual direction (open position or fired signal)
+  if (dir) {
+    const tp1 = dir === 'bearish' ? sig.bear_tp1 : sig.bull_tp1;
+    if (tp1)
+      pts.push(`AEGIS projects ${oDir} continuation toward <strong>${fmt(tp1,6)}</strong> (TP1) based on ATR extension and market structure.`);
+  }
 
   return pts;
 }
@@ -1431,7 +1438,15 @@ function generateStoryPoints(sig) {
 // ── Probabilities ─────────────────────────────────────────────────────────────
 function renderProbabilities(sig) {
   const q    = (sig.quality_score || 50) / 100;
-  const pDir = sig.direction === 'SHORT' ? sig.p_sell : sig.p_buy;
+  // TP/SL probabilities are for THIS trade's direction. Use the open
+  // position first (its TPs are what's on the chart); fall back to the
+  // signal, and when neutral use the model's leading side so the bars
+  // reflect the dominant probability rather than defaulting to bullish.
+  const _pp = TRACK_DATA.signals.find(p => p.symbol === sig.symbol && p.outcome === 'OPEN');
+  const _ed = _pp ? _pp.direction : sig.direction;
+  const pDir = _ed === 'SHORT' ? (sig.p_sell || 0)
+             : _ed === 'LONG'  ? (sig.p_buy || 0)
+             : Math.max(sig.p_buy || 0, sig.p_sell || 0);
 
   // Derived probabilities
   const tp1p = Math.min(95, Math.round(pDir * 100 * 0.92 + q * 8));
@@ -1626,19 +1641,41 @@ function renderHealth(sig) {
 // ── Summary ───────────────────────────────────────────────────────────────────
 function renderSummary(sig) {
   const qual = sig.quality_score || 0;
-  const dir  = sig.direction === 'SHORT' ? 'bearish short' : 'bullish long';
   const conf = sig.meta_confidence?.toFixed(0) || '—';
   const riskL = qual > 70 ? 'moderate' : qual > 55 ? 'elevated' : 'high';
 
+  // Direction: an OPEN position outranks the model's current read (after
+  // entry the signal flips to NEUTRAL/FLAT). The old binary
+  // `=== 'SHORT' ? … : 'bullish long'` mislabeled every non-short as a
+  // "bullish long" — so an open SHORT whose signal had flipped to FLAT was
+  // described as a bullish long setup.
+  const pos = TRACK_DATA.signals.find(p => p.symbol === sig.symbol && p.outcome === 'OPEN');
+  const effDir = pos ? pos.direction : sig.direction;
+  const isLong  = effDir === 'LONG';
+  const isShort = effDir === 'SHORT';
+
+  const lead = pos
+    ? `AEGIS is holding an <strong>${isShort ? 'open short' : 'open long'}</strong> on <strong>${sig.symbol}</strong>`
+    : isShort
+      ? `AEGIS identifies a <strong>bearish short</strong> setup on <strong>${sig.symbol}</strong>`
+      : isLong
+        ? `AEGIS identifies a <strong>bullish long</strong> setup on <strong>${sig.symbol}</strong>`
+        : `AEGIS sees <strong>no directional setup</strong> on <strong>${sig.symbol}</strong> right now`;
+
+  // Entry-criteria line only makes sense for an actionable (fired) signal.
+  const actionable = pos || isLong || isShort;
+
   $('summary-box').innerHTML = `
     <strong style="color:#B8966A;font-size:14px">AEGIS Summary:</strong>
-    AEGIS identifies a <strong>${dir}</strong> setup on <strong>${sig.symbol}</strong> with
+    ${lead} with
     <strong>${conf}% AI confidence</strong> and signal quality <strong>${qual.toFixed(0)}/100</strong>.
     Market regime is <strong>${(sig.regime||'').replace('_',' ')}</strong> with
     <strong>${((sig.regime_confidence||0)*100).toFixed(0)}% confidence</strong>.
     ${sig.confluence?.summary ? `Overall technical picture: <strong>${sig.confluence.summary}</strong>.` : ''}
     Risk level is <strong>${riskL}</strong> based on ${fmtPct(sig.atr_pct)} ATR volatility.
-    ${qual >= 70 ? 'Signal quality is above threshold — entry criteria are well-aligned.' : 'Signal quality is marginal — consider waiting for stronger confirmation before entry.'}
+    ${!actionable ? 'The engine is watching but has not fired — no entry criteria are met yet.'
+      : qual >= 70 ? 'Signal quality is above threshold — entry criteria are well-aligned.'
+      : 'Signal quality is marginal — consider waiting for stronger confirmation before entry.'}
   `;
 }
 
