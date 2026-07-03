@@ -5277,26 +5277,43 @@ async def submit_review(review: Review):
         "created_at": datetime.now(timezone.utc),
     }
 
+    # 1) Persist to Firestore (best-effort).
+    saved = False
     try:
         db.collection('reviews').add(review_doc)
+        saved = True
         print(f"✅ Review saved to Firestore: {review.email}")
-        return {"status": "saved", "method": "firestore"}
     except Exception as e:
-        print(f"❌ Failed to save review to Firestore: {e}. Falling back to email.")
-        try:
-            message = MessageSchema(
-                subject=f"New Review from {review.name}",
-                recipients=[NameEmail(name="Animesh Kukreti", email="animeshkukreti60@gmail.com")],
-                body=(f"Name: {review.name}\nEmail: {review.email}\nRating: {rating}\nProduct: {review.product or ''}\n\n"
-                      f"Message:\n{review.message or ''}"),
-                subtype=MessageType.plain,
-            )
-            await fastmail.send_message(message)
-            print("✅ Review emailed as fallback")
-            return {"status": "saved", "method": "email_fallback"}
-        except Exception as e2:
-            print(f"❌ Failed to send review email fallback: {e2}")
-            raise HTTPException(status_code=500, detail="Failed to save review or send fallback email")
+        print(f"❌ Failed to save review to Firestore: {e}")
+
+    # 2) ALWAYS notify the work inbox.  Previously the email was only sent when
+    #    the Firestore write FAILED — so with Firestore working (the normal
+    #    case) no notification was ever delivered, even though the page showed
+    #    "review sent".  It also went to the personal gmail, not the Neo work
+    #    mailbox.  Now it always fires, to REVIEW_NOTIFY_EMAIL (defaulting to the
+    #    Neo-hosted work address), via the robust Resend/SMTP helper.
+    notify_to = os.getenv("REVIEW_NOTIFY_EMAIL", "animeshkukreti@gatekeeper.sbs")
+    _msg_html = (review.message or "").replace("\n", "<br>") or "—"
+    emailed = False
+    try:
+        await _send_email(
+            to=notify_to,
+            subject=f"New {rating}★ review from {review.name}",
+            html=(f"<h3>New {rating}★ review</h3>"
+                  f"<p><b>Name:</b> {review.name}<br>"
+                  f"<b>Email:</b> {review.email}<br>"
+                  f"<b>Product:</b> {review.product or '—'}<br>"
+                  f"<b>Rating:</b> {rating}/5</p>"
+                  f"<p><b>Message:</b><br>{_msg_html}</p>"),
+        )
+        emailed = True
+        print(f"✅ Review notification emailed → {notify_to}")
+    except Exception as e2:
+        print(f"❌ Failed to send review notification email: {e2}")
+
+    if not saved and not emailed:
+        raise HTTPException(status_code=500, detail="Failed to record review")
+    return {"status": "saved", "firestore": saved, "emailed": emailed}
 
 # -------------------------------------------------------------------
 # Trade Execution endpoint
