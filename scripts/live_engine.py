@@ -1804,7 +1804,7 @@ class LiveEngine:
     # track_record.json → visible at /api/engine-track-record.  If the live
     # payload shows an older (or no) version, the server is running stale
     # code — the recurring "gate fix didn't work" false alarm.
-    GATE_VERSION = 'structure-gate-v8 (v7 + wrong-side entries require break-and-retest hold + 2x15m confirm; no momentum shortcut)'
+    GATE_VERSION = 'structure-gate-v9 (v8 + reversal-aware regime veto: counter-trend allowed at S/R extreme, structure gate confirms the turn)'
 
     # ── Structure gate (Gate 1.6) ─────────────────────────────────────────
     # Zone boundaries on range_position (0 = rolling support, 1 = resistance)
@@ -2281,23 +2281,47 @@ class LiveEngine:
                     # NORMAL tier.  Genuinely bad regimes are still hard-blocked
                     # by Gate 1 (no-trade) and Gate 1.5 (direction-regime veto).
 
-                    # ── Gate 1.5: Hard direction-regime veto ─────────────────
-                    # meta_override_confidence bypasses the predictor's daily
-                    # trend-filter feature (trend_1d), but must NEVER override
-                    # the live regime classifier which reflects current price
-                    # action (HMM + rule-based).  Opening a LONG in a confirmed
-                    # BEAR regime — or a SHORT in a confirmed BULL — is the
-                    # single most common way a high-conviction model gets wrecked.
-                    if new_side == 'BUY' and regime.regime == _REGIME_TRENDING_BEAR:
-                        print(f'[{symbol}] REGIME_VETO blocked BUY: ↓BEAR prevents LONG entry')
+                    # ── Gate 1.5: direction-regime veto (REVERSAL-AWARE) ─────
+                    # A counter-trend signal is the model's JOB when it sits at
+                    # the structural extreme: SELL at resistance / BUY at support
+                    # is a reversal attempt — catching the turn is the entire
+                    # point of the prediction.  Do NOT veto it here; the
+                    # structure gate (1.6) then demands the actual 5m/15m turn
+                    # before it fires, so a genuine exhaustion reversal survives
+                    # while an unconfirmed one still waits.
+                    # Only veto counter-trend signals with NO structural basis —
+                    # mid-trend or at the WRONG extreme.  Shorting a bull mid-move
+                    # (not at resistance) is the classic way a high-conviction
+                    # model gets wrecked; that stays blocked.
+                    # (The old blanket veto killed exactly the reversals the
+                    #  engine exists to catch — ADA SELL @ resistance, RSI 97.7,
+                    #  edge 93.8, muted purely for being counter-trend, 2026-07-04.)
+                    _rv_sup = float(result.get('support', 0) or 0)
+                    _rv_res = float(result.get('resistance', 0) or 0)
+                    _rv_rp  = result.get('range_position')
+                    if _rv_rp is not None:
+                        _rv_range_pos = float(_rv_rp)
+                    elif 0 < _rv_sup < _rv_res and price > 0:
+                        _rv_range_pos = max(0.0, min(1.0,
+                                            (price - _rv_sup) / (_rv_res - _rv_sup)))
+                    else:
+                        _rv_range_pos = 0.5   # location unknown → no reversal exception
+                    _sell_at_res = _rv_range_pos >= self.STRUCT_RESISTANCE_ZONE
+                    _buy_at_sup  = _rv_range_pos <= self.STRUCT_SUPPORT_ZONE
+                    if (new_side == 'BUY' and regime.regime == _REGIME_TRENDING_BEAR
+                            and not _buy_at_sup):
+                        print(f'[{symbol}] REGIME_VETO blocked BUY: BEAR trend and not at '
+                              f'support (rp={_rv_range_pos:.2f}) — no reversal basis')
                         if symbol in self.last_signals:
                             self.last_signals[symbol]['fire']           = False
                             self.last_signals[symbol]['signal']         = 'HOLD'
                             self.last_signals[symbol]['regime_blocked'] = True
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
-                    if new_side == 'SELL' and regime.regime == _REGIME_TRENDING_BULL:
-                        print(f'[{symbol}] REGIME_VETO blocked SELL: ↑BULL prevents SHORT entry')
+                    if (new_side == 'SELL' and regime.regime == _REGIME_TRENDING_BULL
+                            and not _sell_at_res):
+                        print(f'[{symbol}] REGIME_VETO blocked SELL: BULL trend and not at '
+                              f'resistance (rp={_rv_range_pos:.2f}) — no reversal basis')
                         if symbol in self.last_signals:
                             self.last_signals[symbol]['fire']           = False
                             self.last_signals[symbol]['signal']         = 'HOLD'
