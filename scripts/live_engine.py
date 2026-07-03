@@ -1539,7 +1539,7 @@ class LiveEngine:
     # track_record.json → visible at /api/engine-track-record.  If the live
     # payload shows an older (or no) version, the server is running stale
     # code — the recurring "gate fix didn't work" false alarm.
-    GATE_VERSION = 'structure-gate-v3 (break-required, fail-closed)'
+    GATE_VERSION = 'structure-gate-v4 (self-computed range_pos, mid-range fail-closed)'
 
     # ── Structure gate (Gate 1.6) ─────────────────────────────────────────
     # Zone boundaries on range_position (0 = rolling support, 1 = resistance)
@@ -2374,17 +2374,28 @@ class LiveEngine:
 
         Returns (verdict, detail): 'PASS' | 'BLOCK' | 'SKIP'.
         """
-        range_pos  = result.get('range_position')
+        range_pos_fwd = result.get('range_position')
         support    = float(result.get('support', 0) or 0)
         resistance = float(result.get('resistance', 0) or 0)
-        if range_pos is None:
-            # Predictor result has no range_position → the deployed
-            # predictor.py predates the structure gate.  Nothing to check
-            # against; skip loudly (caller logs) so stale deploys are visible.
-            return 'SKIP', 'range_position missing — predictor predates structure gate (redeploy!)'
+
+        # S/R must be sane to classify location at all.  The predictor always
+        # provides support/resistance (with price×0.97 / ×1.03 fallbacks), so
+        # this is essentially never degenerate; when it truly is, we cannot
+        # place the entry against structure.
         if not (0 < support < resistance) or price <= 0:
             return 'SKIP', 'S/R data degenerate'
-        range_pos = float(range_pos)
+
+        # range_position: prefer the predictor's value, but COMPUTE it locally
+        # when absent.  Trusting the forwarded field opened a fail-OPEN hole —
+        # a predictor that predated the gate returned None and the WHOLE gate
+        # was skipped, letting mid-range entries fire (LDO short @0.2586,
+        # mid-range, SL below resistance, 2026-07-03).  Deriving it here from
+        # support/resistance/price makes the gate self-sufficient and
+        # fail-CLOSED on mid-range regardless of the deployed predictor.
+        if range_pos_fwd is not None:
+            range_pos = float(range_pos_fwd)
+        else:
+            range_pos = max(0.0, min(1.0, (price - support) / (resistance - support)))
 
         bullish = (side == 'BUY')
         at_support_zone    = range_pos <= self.STRUCT_SUPPORT_ZONE
