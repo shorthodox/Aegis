@@ -75,8 +75,21 @@ _usdm_ex      = None
 _usdm_ex_lock = __import__('threading').Lock()
 
 def _fetch_ohlcv_sync(symbol: str, timeframe: str, limit: int) -> list:
-    """Thread-safe OHLCV fetch from Binance USDM perpetuals. Returns [] on error."""
-    global _usdm_ex
+    """
+    Thread-safe OHLCV fetch.  Primary source is Binance USDM perpetuals; on any
+    failure — network, rate-limit, or a geo-block on the futures endpoint — it
+    falls back to Binance spot so lower-timeframe confirmation keeps working.
+    5m/15m candle DIRECTION and level tags are effectively identical across the
+    perp and spot books, so the fallback is a faithful proxy for the structure
+    gate.  Returns [] only when BOTH sources fail.
+    """
+    global _usdm_ex, _spot_ex
+    # Primary: USDM perpetuals.  ccxt's binanceusdm market id is the unified
+    # SWAP notation 'BASE/USDT:USDT' — passing the plain spot symbol 'BASE/USDT'
+    # raises BadSymbol and returns nothing.  This mismatch (the fleet configures
+    # symbols as 'BASE/USDT') is why the structure gate NEVER received perp
+    # candles and always fell through to the fail-open SKIP — it was never a
+    # geo-block.  Convert exactly as the predictor does (predictor.py: futures_sym).
     try:
         import ccxt as _ccxt
         if _usdm_ex is None:
@@ -84,10 +97,231 @@ def _fetch_ohlcv_sync(symbol: str, timeframe: str, limit: int) -> list:
             with _usdm_ex_lock:
                 if _usdm_ex is None:
                     _usdm_ex = _new
+        perp_sym = symbol if ':' in symbol else symbol.replace('/USDT', '/USDT:USDT')
         with _usdm_ex_lock:
-            return _usdm_ex.fetch_ohlcv(symbol, timeframe, limit=limit) or []
+            candles = _usdm_ex.fetch_ohlcv(perp_sym, timeframe, limit=limit) or []
+        if candles:
+            return candles
+    except Exception:
+        pass
+    # Fallback: Binance spot (shared instance with the index-price fetcher).
+    try:
+        import ccxt as _ccxt
+        if _spot_ex is None:
+            _new = _ccxt.binance({'enableRateLimit': True, 'timeout': 8000})  # type: ignore[arg-type]
+            (_new.options or {})['defaultType'] = 'spot'  # type: ignore[index]
+            with _spot_ex_lock:
+                if _spot_ex is None:
+                    _spot_ex = _new
+        with _spot_ex_lock:
+            return _spot_ex.fetch_ohlcv(symbol, timeframe, limit=limit) or []
     except Exception:
         return []
+
+
+# =============================================================================
+# Confirmation indicators  (pure-Python, closed-bar, non-repainting)
+# =============================================================================
+# These operate on a list of OHLCV candles [ts, open, high, low, close, volume]
+# and are used ONLY by the post-model confirmation gate in live_engine — never
+# by the ML model (the model is pinned to its saved feature_cols at inference,
+# so nothing here can change a prediction).  Every function is fed CLOSED bars
+# (caller drops the forming candle) and looks strictly backward, so there is no
+# repainting / lookahead: a decision made now uses only data that existed now.
+
+def _closes(candles: List) -> List[float]:
+    return [float(c[4]) for c in candles]
+
+
+def _ema_last(values: List[float], span: int) -> List[float]:
+    """Full EMA series (adjust=False), matching feature_engine.compute_macd."""
+    if not values:
+        return []
+    k = 2.0 / (span + 1.0)
+    out = [values[0]]
+    for v in values[1:]:
+        out.append(v * k + out[-1] * (1.0 - k))
+    return out
+
+
+def _rsi_series(closes: List[float], period: int = 14) -> List[float]:
+    """Wilder-free simple-MA RSI — identical formula to compute_rsi (rolling mean)."""
+    n = len(closes)
+    rsi = [50.0] * n
+    if n <= period:
+        return rsi
+    gains, losses = [0.0], [0.0]
+    for i in range(1, n):
+        d = closes[i] - closes[i - 1]
+        gains.append(d if d > 0 else 0.0)
+        losses.append(-d if d < 0 else 0.0)
+    for i in range(period, n):
+        avg_gain = sum(gains[i - period + 1:i + 1]) / period
+        avg_loss = sum(losses[i - period + 1:i + 1]) / period
+        rs = avg_gain / (avg_loss + 1e-9)
+        rsi[i] = 100.0 - (100.0 / (1.0 + rs))
+    return rsi
+
+
+def _macd_line(closes: List[float], fast: int = 12, slow: int = 26) -> List[float]:
+    """MACD line (fast EMA − slow EMA), matching compute_macd."""
+    if len(closes) < 2:
+        return [0.0] * len(closes)
+    ef, es = _ema_last(closes, fast), _ema_last(closes, slow)
+    return [a - b for a, b in zip(ef, es)]
+
+
+def _detect_bos_choch(candles: List, lookback: int = 20, recent: int = 3) -> Dict[str, float]:
+    """
+    Faithful port of feature_engine.compute_bos_choch evaluated at the last
+    closed bar.  Returns a single directional 'signal' in {-1, 0, +1}:
+    a fresh CHoCH dominates (character change = reversal), then a fresh BOS,
+    then the standing bos_state (inside/above/below the rolling range).
+    """
+    n = len(candles)
+    if n < lookback + 2:
+        return {'signal': 0.0, 'bos_state': 0.0, 'structure_bias': 0.0,
+                'choch_bull': 0.0, 'choch_bear': 0.0}
+    highs = [float(c[2]) for c in candles]
+    lows  = [float(c[3]) for c in candles]
+    closes = _closes(candles)
+
+    def _above(i: int) -> bool:  # close above previous `lookback` high
+        return closes[i] > max(highs[i - lookback:i])
+
+    def _below(i: int) -> bool:
+        return closes[i] < min(lows[i - lookback:i])
+
+    def _bias(i: int) -> float:  # sign(close - close lookback ago)
+        d = closes[i] - closes[i - lookback]
+        return 1.0 if d > 0 else (-1.0 if d < 0 else 0.0)
+
+    last = n - 1
+    bos_state = (1.0 if _above(last) else 0.0) - (1.0 if _below(last) else 0.0)
+    structure_bias = _bias(last)
+
+    fresh_choch_bull = fresh_choch_bear = 0.0
+    fresh_bos_up = fresh_bos_down = 0.0
+    for i in range(max(lookback + 1, n - recent), n):
+        up, dn = _above(i), _below(i)
+        prev_up = _above(i - 1) if i - 1 >= lookback else False
+        prev_dn = _below(i - 1) if i - 1 >= lookback else False
+        bos_up   = up and not prev_up
+        bos_down = dn and not prev_dn
+        prior_bias = _bias(i - 1)
+        if bos_up:
+            fresh_bos_up = 1.0
+            if prior_bias < 0:
+                fresh_choch_bull = 1.0
+        if bos_down:
+            fresh_bos_down = 1.0
+            if prior_bias > 0:
+                fresh_choch_bear = 1.0
+
+    if   fresh_choch_bear: signal = -1.0
+    elif fresh_choch_bull: signal =  1.0
+    elif fresh_bos_down:   signal = -1.0
+    elif fresh_bos_up:     signal =  1.0
+    else:                  signal = float(bos_state)
+    return {'signal': signal, 'bos_state': bos_state, 'structure_bias': structure_bias,
+            'choch_bull': fresh_choch_bull, 'choch_bear': fresh_choch_bear}
+
+
+def _confirmed_pivots(vals: List[float], k: int, want_high: bool) -> List[int]:
+    """
+    Indices of confirmed swing pivots — a local extreme with k bars on BOTH
+    sides.  Requiring k bars AFTER the pivot is what makes it non-repainting:
+    the most recent detectable pivot is already k bars old, so it can never be
+    revised by a future bar.
+    """
+    out = []
+    for i in range(k, len(vals) - k):
+        w = vals[i - k:i + k + 1]
+        if (want_high and vals[i] >= max(w)) or (not want_high and vals[i] <= min(w)):
+            out.append(i)
+    return out
+
+
+def _detect_divergence(candles: List, k: int = 3, rsi_period: int = 14) -> Dict[str, float]:
+    """
+    RSI and MACD divergence against price, using the last two CONFIRMED swing
+    pivots.  Bearish (-1): price higher-high but oscillator lower-high.
+    Bullish (+1): price lower-low but oscillator higher-low.  Reported per
+    oscillator; the gate sums them (aligned RSI+MACD divergence = ±2).
+    """
+    out = {'rsi': 0.0, 'macd': 0.0}
+    n = len(candles)
+    if n < rsi_period + 2 * k + 4:
+        return out
+    highs = [float(c[2]) for c in candles]
+    lows  = [float(c[3]) for c in candles]
+    closes = _closes(candles)
+    rsi  = _rsi_series(closes, rsi_period)
+    macd = _macd_line(closes)
+
+    hi_piv = _confirmed_pivots(highs, k, True)
+    lo_piv = _confirmed_pivots(lows,  k, False)
+    # warmup: never compare against an un-warmed oscillator (RSI is a flat 50
+    # default for the first `period` bars; MACD's slow EMA needs ~26 to settle).
+    for osc_name, osc, warmup in (('rsi', rsi, rsi_period), ('macd', macd, 26)):
+        vote = 0.0
+        if len(hi_piv) >= 2:
+            a, b = hi_piv[-2], hi_piv[-1]
+            if a >= warmup and highs[b] > highs[a] and osc[b] < osc[a]:
+                vote = -1.0                      # bearish divergence
+        if len(lo_piv) >= 2 and vote == 0.0:
+            a, b = lo_piv[-2], lo_piv[-1]
+            if a >= warmup and lows[b] < lows[a] and osc[b] > osc[a]:
+                vote = 1.0                       # bullish divergence
+        out[osc_name] = vote
+    return out
+
+
+def _detect_volume_events(candles: List, window: int = 20,
+                          climax_z: float = 2.0, absorb_z: float = 1.5) -> Dict[str, float]:
+    """
+    Volume climax + absorption on the last closed bar.
+
+    Climax   — a volume z-score spike marks EXHAUSTION, so it points AGAINST the
+               bar's own direction (blow-off top on a green bar = bearish −1;
+               capitulation on a red bar = bullish +1).
+    Absorption — a high-volume bar with a small body and a long rejection wick:
+               large size soaked up by the opposite side.  Long upper wick that
+               closes weak = sellers absorbing buyers (bearish −1); long lower
+               wick that closes strong = buyers absorbing sellers (bullish +1).
+    """
+    out = {'climax': 0.0, 'absorption': 0.0, 'vol_z': 0.0}
+    n = len(candles)
+    if n < window + 1:
+        return out
+    vols = [float(c[5]) for c in candles]
+    ref = vols[-window - 1:-1]                       # prior `window` bars (exclude last)
+    mean = sum(ref) / len(ref)
+    var  = sum((v - mean) ** 2 for v in ref) / len(ref)
+    std  = var ** 0.5
+    # Degenerate volume (flat or zero) — can't assess an anomaly, report nothing.
+    if std <= 1e-9 or mean <= 0:
+        return out
+    z = (vols[-1] - mean) / std
+    out['vol_z'] = z
+
+    o, h, l, c = (float(candles[-1][1]), float(candles[-1][2]),
+                  float(candles[-1][3]), float(candles[-1][4]))
+    rng = max(h - l, 1e-9)
+    body = abs(c - o)
+    upper_wick = h - max(o, c)
+    lower_wick = min(o, c) - l
+    close_pos  = (c - l) / rng                       # 0 = closed on low, 1 = on high
+
+    if z >= climax_z:
+        out['climax'] = -1.0 if c > o else (1.0 if c < o else 0.0)
+
+    if z >= absorb_z and body <= 0.5 * rng:
+        if upper_wick >= 1.5 * body and upper_wick >= 0.45 * rng and close_pos <= 0.4:
+            out['absorption'] = -1.0             # bearish absorption at highs
+        elif lower_wick >= 1.5 * body and lower_wick >= 0.45 * rng and close_pos >= 0.6:
+            out['absorption'] = 1.0              # bullish absorption at lows
+    return out
 
 
 # =============================================================================
@@ -113,11 +347,11 @@ class Position:
     meta_confidence: float
     atr_multiplier:  float
     atr:             float = 0.0   # ATR at entry (used for trailing stop distance)
-    take_profit_1:   float = 0.0   # TP1: 1.0× ATR from entry — 20% partial close
-    take_profit_2:   float = 0.0   # TP2: 1.8× ATR from entry — 20% partial close
-    take_profit_3:   float = 0.0   # TP3: 2.7× ATR from entry — 20% partial close
-    take_profit_4:   float = 0.0   # TP4: 3.8× ATR from entry — 20% partial close
-    take_profit_5:   float = 0.0   # TP5: 5.2× ATR from entry — close remainder
+    take_profit_1:   float = 0.0   # TP1: 0.55× ATR from entry — 20% partial close
+    take_profit_2:   float = 0.0   # TP2: 2.8× ATR, capped at TP2_MAX_PCT of entry — 20% partial + trail
+    take_profit_3:   float = 0.0   # TP3: 4.5× ATR from entry — 20% partial close (RR anchor)
+    take_profit_4:   float = 0.0   # TP4: 6.5× ATR from entry — 20% partial close
+    take_profit_5:   float = 0.0   # TP5: 9.5× ATR from entry — close remainder
     signal_strength: str   = ''    # risk tier at entry: STRONG | NORMAL | RISKY
     entry_mode:      str   = ''    # structure-gate verdict detail at entry
                                    # (support_reversal / breakout_* / GATE_SKIPPED: …)
@@ -630,10 +864,22 @@ class DynamicRiskEngine:
     ATR_SL_MULTIPLIER = 1.8    # SL distance = ATR × this — 1.2 was inside normal 1H candle noise; 1.8× clears it
 
     TP1_MULTIPLIER    = 0.55   # 20 % partial close — fires early to lock break-even fast (intentionally tight)
-    TP2_MULTIPLIER    = 2.8    # 20 % partial close — activate trailing stop
+    TP2_MULTIPLIER    = 2.8    # 20 % partial close — activate trailing stop (ATR distance, before the % cap below)
     TP3_MULTIPLIER    = 4.5    # 20 % partial close — used for RR validation (RR = 4.5/1.8 = 2.5)
     TP4_MULTIPLIER    = 6.5    # 20 % partial close
     TP5_MULTIPLIER    = 9.5    # close remaining position — extended runner target
+
+    # ── TP2 volatility cap ────────────────────────────────────────────────────
+    # In high-volatility markets 2.8×ATR can sit at 3-5 %+ of entry — a move the
+    # market rarely completes in one swing before retracing.  Symptom: price hits
+    # TP1, runs 1.5-2 %, then reverses back through TP1 to break-even before TP2
+    # (and its trailing stop) ever activates, banking only the tiny TP1 partial.
+    # Capping the TP2 DISTANCE at a fixed % of entry keeps trailing activation
+    # reachable inside a realistic swing.  Low-vol trades (2.8×ATR already below
+    # the cap) are unaffected; only TP2 is capped — TP3-TP5 stay pure ATR runners
+    # so the RR-to-TP3 gate is untouched.
+    TP2_MAX_PCT       = 1.5    # cap TP2 at 1.5 % of entry (the low end of the observed swing)
+    TP2_MIN_TP1_RATIO = 1.4    # ordering guard: TP2 distance ≥ 1.4× TP1 even after the cap
 
     MIN_RISK_REWARD   = 2.0    # Reward / Risk using TP3 as target; trades below this are rejected
 
@@ -725,17 +971,25 @@ class DynamicRiskEngine:
         # Volatility already informs the distance implicitly through ATR itself.
         risk = self.ATR_SL_MULTIPLIER * atr
 
+        # TP2 distance: ATR-based, but capped at a fixed % of entry so a
+        # high-volatility TP2 doesn't sit beyond a realistic swing (see
+        # TP2_MAX_PCT).  Floored above TP1 so the cap can never invert the
+        # ladder when ATR% is extreme.
+        tp1_dist = self.TP1_MULTIPLIER * atr
+        tp2_dist = min(self.TP2_MULTIPLIER * atr, price * (self.TP2_MAX_PCT / 100.0))
+        tp2_dist = max(tp2_dist, tp1_dist * self.TP2_MIN_TP1_RATIO)
+
         if side == 'BUY':
             sl  = price - risk
-            tp1 = price + self.TP1_MULTIPLIER * atr
-            tp2 = price + self.TP2_MULTIPLIER * atr
+            tp1 = price + tp1_dist
+            tp2 = price + tp2_dist
             tp3 = price + self.TP3_MULTIPLIER * atr
             tp4 = price + self.TP4_MULTIPLIER * atr
             tp5 = price + self.TP5_MULTIPLIER * atr
         else:  # SELL / SHORT
             sl  = price + risk
-            tp1 = price - self.TP1_MULTIPLIER * atr
-            tp2 = price - self.TP2_MULTIPLIER * atr
+            tp1 = price - tp1_dist
+            tp2 = price - tp2_dist
             tp3 = price - self.TP3_MULTIPLIER * atr
             tp4 = price - self.TP4_MULTIPLIER * atr
             tp5 = price - self.TP5_MULTIPLIER * atr
@@ -1119,9 +1373,20 @@ class PortfolioGuard:
     price returns is a Phase 2 improvement.
     """
 
-    MAX_PER_CLUSTER    = 2     # max 2 concurrent open positions per correlation cluster
-    MAX_OPEN_TOTAL     = 6     # hard cap: never more than 6 open at once across all tokens
-    MAX_CAPITAL_PCT    = 0.40  # never deploy more than 40 % of balance simultaneously
+    # AEGIS is a glass-box SIGNAL SERVICE, not a single managed account: each
+    # signal is an INDEPENDENT recommendation and every subscriber sizes and
+    # chooses trades themselves.  Correlated-exposure / capital-deployment caps
+    # belong to a fund running one book — here they only muted opportunities on
+    # OTHER tokens once a handful of signals were already open (the reported
+    # "engine stops firing when signals are open" bug).  The only rule that
+    # still applies is per-symbol: a token with an open signal won't re-fire —
+    # and that is enforced upstream in _process_symbol (open position → manage
+    # exit, never a second entry), independent of these caps.  So the portfolio
+    # caps are set non-binding; re-tighten them only if AEGIS ever trades one
+    # real account.
+    MAX_PER_CLUSTER    = 999   # no cluster cap — surface every token's signal
+    MAX_OPEN_TOTAL     = 999   # no global cap — up to one open signal per token
+    MAX_CAPITAL_PCT    = 100.0 # no capital cap — position values are notional per-signal
 
     # Static correlation clusters (tightest first)
     _CLUSTERS: Dict[str, List[str]] = {
@@ -1529,17 +1794,17 @@ class LiveEngine:
     # (user-confirmed 2026-07-02: tolerate 2, block at 3+).
     ADVISORY_WARNING_BUDGET = 2
 
-    # RISKY signals (passed the budget but carrying warnings) must also clear
-    # an expected-value margin in R-multiples before firing — see the
-    # risk-tier block in _process_symbol.  0 = breakeven; 0.25 demands a
-    # meaningfully positive edge before risking the public track record.
+    # RETIRED (user policy, 2026-07-03): RISKY (HIGH-risk) signals no longer
+    # fire at all — only LOW (STRONG) and MODERATE (NORMAL) tiers are published,
+    # so the expected-value hold that used to let some RISKY entries through is
+    # gone.  Kept defined for backward compatibility with any external reader.
     RISKY_EV_MARGIN = 0.25
 
     # Deploy-verification marker: printed at startup and written into
     # track_record.json → visible at /api/engine-track-record.  If the live
     # payload shows an older (or no) version, the server is running stale
     # code — the recurring "gate fix didn't work" false alarm.
-    GATE_VERSION = 'structure-gate-v4 (self-computed range_pos, mid-range fail-closed)'
+    GATE_VERSION = 'structure-gate-v6 (v5 + BOS/CHoCH + RSI/MACD divergence + volume climax/absorption confirmation)'
 
     # ── Structure gate (Gate 1.6) ─────────────────────────────────────────
     # Zone boundaries on range_position (0 = rolling support, 1 = resistance)
@@ -1556,6 +1821,24 @@ class LiveEngine:
     STRUCT_15M_MIN    = 2
     # Break-and-retest scan depth (closed 5m candles ≈ one hour)
     STRUCT_RETEST_LOOKBACK = 12
+
+    # ── Confirmation gate (Gate 1.75) ─────────────────────────────────────
+    # Post-model, post-structure agreement check on the SIGNAL timeframe (1h):
+    # Break of Structure / CHoCH, RSI+MACD divergence, and volume climax +
+    # absorption each cast a directional vote (bullish +, bearish −).  These
+    # are NOT model features — the model is pinned to its saved feature_cols at
+    # inference, so nothing here alters a prediction.  The gate only flags when
+    # the NET evidence CONTRADICTS the trade (advisory warning); agreement or a
+    # neutral read passes silently.  Fail-open on thin data (advisory only).
+    CONFIRM_1H_BARS          = 60    # closed 1h candles to fetch
+    CONFIRM_MIN_BARS         = 35    # floor for divergence pivots + RSI/MACD warmup
+    CONFIRM_BOS_LOOKBACK     = 20
+    CONFIRM_PIVOT_K          = 3
+    CONFIRM_VOL_WINDOW       = 20
+    CONFIRM_CLIMAX_Z         = 2.0
+    CONFIRM_ABSORB_Z         = 1.5
+    CONFIRM_CONFLICT_THRESHOLD = 2   # net opposing votes ≥ this → confirmation_conflict warning
+    CONFIRM_CONFIRM_THRESHOLD  = 2   # net agreeing  votes ≥ this → tagged 'confirmed' for the UI
 
     # Regimes where entry is unconditionally blocked.  RANGING was demoted to
     # an advisory warning: the structure gate (BUY at support / SELL at
@@ -2058,6 +2341,23 @@ class LiveEngine:
                     if symbol in self.last_signals:
                         self.last_signals[symbol]['entry_mode'] = _entry_mode
 
+                    # ── Gate 1.75 (ADVISORY): structure + momentum + volume ───
+                    # confirmation on the 1h signal timeframe.  BOS/CHoCH, RSI+
+                    # MACD divergence and volume climax/absorption each vote on
+                    # direction; only a NET contradiction objects (advisory
+                    # warning → tier RISKY → held under the no-high-risk rule).
+                    # Agreement passes silently and is surfaced for the UI.
+                    _conf = await self._confirmation_gate(symbol, new_side, result)
+                    if symbol in self.last_signals:
+                        self.last_signals[symbol]['confirmation'] = _conf
+                    if _conf['verdict'] == 'CONFLICT':
+                        print(f'[{symbol}] CONFIRMATION_CONFLICT {new_side} '
+                              f'score={_conf["score"]:+.0f}: {_conf["reason"]}')
+                        _gate_warnings.append(f'confirmation_conflict({_conf["reason"]})')
+                    elif _conf['verdict'] == 'CONFIRM':
+                        print(f'[{symbol}] CONFIRMATION_OK {new_side} '
+                              f'score={_conf["score"]:+.0f}: {_conf["reason"]}')
+
                     # ── Gate 1.65 RETIRED as a warning: reversal is confirmed ─
                     # by the structure gate's 5m+15m directional check, which
                     # is stronger and fresher evidence than a 1h candlestick
@@ -2241,48 +2541,47 @@ class LiveEngine:
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
 
-                    # ── Risk-tier classification + expected-value hold ────────
-                    # STRONG: zero advisory objections and top-tier conviction.
-                    # RISKY:  passed the budget but carries 1-2 objections.
-                    # NORMAL: everything else.
-                    # A RISKY entry must also justify itself economically:
-                    # using the symbol's LIVE win rate (drift monitor, falling
-                    # back to the training benchmark), penalised 5 pp per
-                    # warning, the expected value in R-multiples must clear
-                    # RISKY_EV_MARGIN.  EV_R = p×RR − (1−p), RR to TP3.
-                    # Symbols whose live performance can't support the added
-                    # risk get HELD instead — the public track record is the
-                    # product; a marginal risky trade isn't worth staining it.
+                    # ── Risk-tier classification ──────────────────────────────
+                    # STRONG (LOW risk):     zero advisory objections + top-tier
+                    #                        conviction (edge≥85 or quality≥80).
+                    # NORMAL (MODERATE risk): zero objections, ordinary conviction.
+                    # RISKY  (HIGH risk):     one or more advisory objections.
+                    # Only STRONG and NORMAL are published — RISKY is blocked
+                    # below (user policy 2026-07-03: no high-risk signals).  The
+                    # public track record is the product; a marginal risky trade
+                    # isn't worth staining it.
                     _n_warn = len(_gate_warnings)
                     if _n_warn == 0 and (_model_quality >= self.SIGNAL_BYPASS_EDGE
                                          or quality_score >= 80.0):
-                        _risk_tier = 'STRONG'
+                        _risk_tier = 'STRONG'   # LOW risk
                     elif _n_warn >= 1:
-                        _risk_tier = 'RISKY'
+                        _risk_tier = 'RISKY'    # HIGH risk
                     else:
-                        _risk_tier = 'NORMAL'
+                        _risk_tier = 'NORMAL'   # MODERATE risk
 
+                    # ── High-risk signals are not published (user policy) ─────
+                    # Only LOW-risk (STRONG) and MODERATE-risk (NORMAL) tiers
+                    # fire.  A RISKY tier means at least one advisory gate
+                    # objected — unverified structure, fake breakout, RSI
+                    # exhaustion, stability, or thin context — which are exactly
+                    # the setups that reject or round-trip.  The previous
+                    # RISKY_EV_HOLD let some through on a positive expected-value
+                    # estimate, but that estimate leaned on a benchmark win rate
+                    # the live book rarely meets, so RISKY entries kept staining
+                    # the public track record.  They are now blocked outright.
                     if _risk_tier == 'RISKY':
-                        _p_live = self.drift_monitor._live_win_rate(symbol)
-                        _p_base = (_p_live if _p_live is not None
-                                   else self.drift_monitor._benchmarks.get(symbol, 0.55))
-                        _p_adj  = max(0.05, _p_base - 0.05 * _n_warn)
-                        _rr_est = (self.risk_engine.TP3_MULTIPLIER
-                                   / self.risk_engine.ATR_SL_MULTIPLIER)
-                        _ev_r   = _p_adj * _rr_est - (1.0 - _p_adj)
-                        if _ev_r < self.RISKY_EV_MARGIN:
-                            print(f'[{symbol}] RISKY_EV_HOLD blocked {new_side}: '
-                                  f'EV={_ev_r:+.2f}R < {self.RISKY_EV_MARGIN}R '
-                                  f'(p={_p_adj:.2f} after {_n_warn} warnings, '
-                                  f'RR={_rr_est:.1f}) '
-                                  f'[{"; ".join(_gate_warnings)}]')
-                            if symbol in self.last_signals:
-                                self.last_signals[symbol]['fire']          = False
-                                self.last_signals[symbol]['signal']        = 'HOLD'
-                                self.last_signals[symbol]['risky_ev_hold'] = True
-                                self.last_signals[symbol]['gate_warnings'] = _gate_warnings
-                            self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
-                            return
+                        print(f'[{symbol}] HIGH_RISK_HOLD blocked {new_side}: '
+                              f'{_n_warn} advisory warning'
+                              f'{"s" if _n_warn != 1 else ""} — only LOW/MODERATE '
+                              f'risk signals fire [{"; ".join(_gate_warnings)}]')
+                        if symbol in self.last_signals:
+                            self.last_signals[symbol]['fire']          = False
+                            self.last_signals[symbol]['signal']        = 'HOLD'
+                            self.last_signals[symbol]['risky_blocked']  = True
+                            self.last_signals[symbol]['risk_tier']      = _risk_tier
+                            self.last_signals[symbol]['gate_warnings']  = _gate_warnings
+                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                        return
 
                     # ── Model approved — open the position ────────────────────
                     # predictor.predict_realtime() already applied:
@@ -2385,6 +2684,11 @@ class LiveEngine:
         if not (0 < support < resistance) or price <= 0:
             return 'SKIP', 'S/R data degenerate'
 
+        # ATR for level-proximity tolerances (level-tag test + breakout retest
+        # band).  Prefer the forwarded ATR; fall back to a small % of price so
+        # the tolerance is never zero when the field is missing.
+        atr_g = float(result.get('atr', 0) or 0) or price * 0.005
+
         # range_position: prefer the predictor's value, but COMPUTE it locally
         # when absent.  Trusting the forwarded field opened a fail-OPEN hole —
         # a predictor that predated the gate returned None and the WHOLE gate
@@ -2414,12 +2718,19 @@ class LiveEngine:
         _no_candles = (len(closed_5m) < self.STRUCT_5M_WINDOW
                        or len(closed_15m) < self.STRUCT_15M_WINDOW)
         if _no_candles:
-            _wrong_side = at_resistance_zone if bullish else at_support_zone
-            if _wrong_side:
-                return 'BLOCK', (f'{"BUY at resistance" if bullish else "SELL at support"} '
-                                 f'but 5m/15m candles unavailable — an unverifiable '
-                                 f'breakout is not a breakout')
-            return 'SKIP', 'candle data unavailable — reversal at correct level allowed'
+            # Fail-CLOSED on BOTH sides.  The old policy let a reversal at the
+            # correct level SKIP (fail-open) when the 5m/15m feed was down —
+            # which is exactly how unconfirmed SHORTs fired at resistance (and
+            # LONGs at support) with a visible gap and no lower-timeframe turn.
+            # Candle confirmation is now mandatory: no candles → no verifiable
+            # rejection → no entry.  (The real reason candles "never fetched"
+            # was a symbol-format bug in _fetch_ohlcv_sync — the perp exchange
+            # needs 'BASE/USDT:USDT', not the fleet's 'BASE/USDT' — now fixed,
+            # with a spot fallback behind it.  So this branch rarely trips.)
+            return 'BLOCK', (f'{"BUY" if bullish else "SELL"} at '
+                             f'{"resistance" if at_resistance_zone else "support"} '
+                             f'but 5m/15m candles unavailable — entry needs '
+                             f'lower-timeframe confirmation')
 
         def _n_trending(candles: list, n: int) -> int:
             """Candles among the last n that closed in the signal direction."""
@@ -2439,9 +2750,29 @@ class LiveEngine:
         level_name     = 'support' if bullish else 'resistance'
 
         if correct_level:
-            # Reversal at the right level — the turn must already be underway.
+            # Reversal at the right level — TWO things must hold:
+            #   1. price must have actually TESTED the level it is reversing
+            #      from (a recent 5m wick into the level ± tol).  The zone is the
+            #      top/bottom third of the range, so range_pos 0.80 still leaves
+            #      a gap to the wall — shorting there is a counter-trend entry in
+            #      open air, not a rejection.  This closes the "gap between
+            #      resistance and entry".
+            #   2. the turn must already be underway on the lower timeframes
+            #      (≥3/4 closed 5m + 2/2 closed 15m in the signal direction).
+            level  = support if bullish else resistance
+            tol    = max(price * 0.0015, atr_g * 0.25)
+            recent = closed_5m[-self.STRUCT_RETEST_LOOKBACK:]
+            if bullish:
+                tested = any(float(c[3]) <= level + tol for c in recent)   # low tagged support
+            else:
+                tested = any(float(c[2]) >= level - tol for c in recent)   # high tagged resistance
+            if not tested:
+                return 'BLOCK', (f'{"BUY" if bullish else "SELL"} at {level_name} but '
+                                 f'price never tested {level:.6g} (±{tol:.6g}) in the '
+                                 f'last {len(recent)} 5m bars — gap to the level, '
+                                 f'no rejection to trade')
             if n5 >= self.STRUCT_5M_MIN and n15 >= self.STRUCT_15M_MIN:
-                return 'PASS', f'{level_name}_reversal ({_counts})'
+                return 'PASS', f'{level_name}_reversal ({_counts}; {level:.6g} tested)'
             return 'BLOCK', (f'at {level_name} but reversal unconfirmed '
                              f'({_counts}; need {self.STRUCT_5M_MIN}/'
                              f'{self.STRUCT_5M_WINDOW} + {self.STRUCT_15M_MIN}/'
@@ -2478,8 +2809,7 @@ class LiveEngine:
                                  f'pre-break entries rejected')
             if n5 >= self.STRUCT_5M_WINDOW and n15 >= self.STRUCT_15M_WINDOW:
                 return 'PASS', f'breakout_momentum (level {level:.6g} broken, {_counts})'
-            atr = float(result.get('atr', 0) or 0)
-            tol = max(price * 0.001, atr * 0.25)
+            tol = max(price * 0.001, atr_g * 0.25)
             if self._retest_held(
                     closed_5m[-self.STRUCT_RETEST_LOOKBACK:], side, level, tol):
                 return 'PASS', f'breakout_retest (level {level:.6g} held)'
@@ -2514,6 +2844,102 @@ class LiveEngine:
             float(c[1]) < level and float(c[2]) >= level - tol and float(c[4]) < level
             for c in candles
         )
+
+    # ── confirmation gate (Gate 1.7) ──────────────────────────────────────────
+    async def _confirmation_gate(
+        self, symbol: str, side: str, result: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Score structure + momentum + volume AGREEMENT with the signal on the 1h
+        (model) timeframe.  Three independent families vote bullish (+) / bearish
+        (−) / neutral (0):
+
+          • Break of Structure / CHoCH   (_detect_bos_choch)
+          • RSI + MACD divergence        (_detect_divergence, ±2 when aligned)
+          • Volume climax + absorption   (_detect_volume_events)
+
+        The votes are summed and re-signed to the trade direction:
+        `agreement > 0` supports the trade, `< 0` fights it.  Returns a dict with
+        verdict CONFIRM / NEUTRAL / CONFLICT, the score, a human reason, and the
+        raw sub-signals (surfaced for the UI / track record).  Never fetches or
+        touches the model; fail-open (NEUTRAL) on thin data so it can only ever
+        add an advisory objection, never a silent block.
+        """
+        bullish = (side == 'BUY')
+        raw = await self._fetch_candles(symbol, '1h', self.CONFIRM_1H_BARS + 2)
+        closed = raw[:-1] if len(raw) >= 2 else []
+        if len(closed) < self.CONFIRM_MIN_BARS:
+            return {'verdict': 'NEUTRAL', 'score': 0.0,
+                    'reason': f'insufficient 1h data ({len(closed)} bars)',
+                    'signals': {}}
+
+        bos = _detect_bos_choch(closed, lookback=self.CONFIRM_BOS_LOOKBACK)
+        div = _detect_divergence(closed, k=self.CONFIRM_PIVOT_K)
+        vol = _detect_volume_events(closed, window=self.CONFIRM_VOL_WINDOW,
+                                    climax_z=self.CONFIRM_CLIMAX_Z,
+                                    absorb_z=self.CONFIRM_ABSORB_Z)
+
+        # Directional votes: bullish (+) / bearish (−).  `agree()` re-signs a
+        # vote to the TRADE direction (+ supports the trade, − fights it).
+        def agree(vote: float) -> float:
+            return vote if bullish else -vote
+
+        v_choch  = float(bos['choch_bull'] - bos['choch_bear'])   # character change (reversal)
+        v_div    = float(div['rsi'] + div['macd'])                # −2 … +2
+        v_climax = float(vol['climax'])
+        v_absorb = float(vol['absorption'])
+
+        # BOS *continuation* is CONFIRM-ONLY: a bullish break confirms a long /
+        # a bearish break confirms a short, but it must NEVER count against a
+        # reversal.  A short at resistance is FADING prior up-structure — that
+        # bullish BOS is the setup, not a contradiction.  So continuation adds
+        # to agreement only when it already points the trade's way.
+        bos_state = float(bos['bos_state'])
+        bos_confirm = 1.0 if (bos_state != 0 and (bos_state > 0) == bullish) else 0.0
+
+        agreement = (agree(v_choch) + agree(v_div) + agree(v_climax)
+                     + agree(v_absorb) + bos_confirm)
+
+        # Human-readable evidence, framed relative to the trade direction.
+        def _label(vote: float, name: str) -> Optional[str]:
+            if vote == 0:
+                return None
+            vote_bull = vote > 0
+            tag = 'confirms' if (vote_bull == bullish) else 'opposes'
+            return f'{name} {tag} ({"bull" if vote_bull else "bear"})'
+
+        parts = [p for p in (
+            _label(v_choch,  'CHoCH'),
+            _label(v_div,    'divergence'),
+            _label(v_climax, 'climax'),
+            _label(v_absorb, 'absorption'),
+        ) if p]
+        if bos_confirm:
+            parts.append(f'BOS confirms ({"bull" if bullish else "bear"})')
+        reason = '; '.join(parts) if parts else 'no structure/momentum/volume signal'
+
+        if agreement <= -self.CONFIRM_CONFLICT_THRESHOLD:
+            verdict = 'CONFLICT'
+        elif agreement >= self.CONFIRM_CONFIRM_THRESHOLD:
+            verdict = 'CONFIRM'
+        else:
+            verdict = 'NEUTRAL'
+
+        return {
+            'verdict': verdict,
+            'score':   round(agreement, 2),
+            'reason':  reason,
+            'signals': {
+                'choch':      v_choch,
+                'bos_state':  bos_state,
+                'divergence': v_div,
+                'rsi_div':    float(div['rsi']),
+                'macd_div':   float(div['macd']),
+                'climax':     v_climax,
+                'absorption': v_absorb,
+                'vol_z':      round(float(vol['vol_z']), 2),
+            },
+        }
 
     # ── trade management ──────────────────────────────────────────────────────
 
