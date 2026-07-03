@@ -3621,7 +3621,7 @@ async def initialize_subscription(
 
 # Base prices in USD — source of truth for all plans
 USD_PLAN_PRICES: Dict[str, float] = {
-    "basic": 3.60,
+    "basic": 5.90,
     "intermediate": 24.00,
     "pro": 40.00,
 }

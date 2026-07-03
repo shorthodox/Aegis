@@ -635,6 +635,18 @@ function _planFromStorage() {
   return '';
 }
 
+// Resolve the user's access tier from the stored plan.
+//   pro / premium / professional      → 'pro'
+//   intermediate / sentinel           → 'sentinel'
+//   basic / trial / anything else      → 'basic'
+// Trial users get Basic access (pricing: "full Basic access" during the trial).
+function _userTier() {
+  const p = _planFromStorage();
+  if (p === 'pro' || p === 'premium' || p === 'professional') return 'pro';
+  if (p === 'intermediate' || p === 'sentinel')               return 'sentinel';
+  return 'basic';
+}
+
 // ── Access gate: trial/paid only — guests are redirected to login ─────────────
 // Show a full-page overlay while Firebase resolves so guests never see content.
 const _gateOverlay = (() => {
@@ -667,13 +679,13 @@ onAuthStateChanged(_auth, u => {
   clearTimeout(_gateFallback);
   _gateOverlay.remove();
   if (u) {
-    // Logged-in (trial or paid) — full access
+    // Logged-in (trial or paid) — gate premium sections by the user's actual plan
     document.getElementById('nav-auth-hint')?.remove();
-    applyTierGates('pro');
+    applyTierGates(_userTier());
   } else if (_cachedToken) {
     // Firebase session lapsed but token exists — allow through (rare edge case)
     document.getElementById('nav-auth-hint')?.remove();
-    applyTierGates('pro');
+    applyTierGates(_userTier());
   } else {
     // No session, no token → definite guest → send to login
     window.location.href = '/';
@@ -687,48 +699,53 @@ onAuthStateChanged(_auth, u => {
 const PREMIUM_IDS = ['signal-genesis', 'forensic-section', 'probabilities', 'historical-section'];
 
 function applyTierGates(tier) {
-  const isUnlocked = tier !== 'guest';
+  // PREMIUM_IDS are Sentinel+ features (full gate breakdown, forensic report,
+  // target probabilities, historical accuracy).  Basic — and trial users, who
+  // get Basic access — see a lock with an upgrade-to-Sentinel CTA; Sentinel and
+  // Pro see them unlocked.  Pro-only panels (LSTM/HMM) are gated inside their
+  // own renderers.  Basic keeps the plain-English "Why AEGIS" narrative, the
+  // market context, price targets and indicators — plenty for the price.
+  const unlocked = (tier === 'sentinel' || tier === 'pro');
   PREMIUM_IDS.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
-    // Remove any existing overlay first (re-entry safety)
-    const existing = el.parentElement.querySelector('.pro-lock-overlay');
-    if (existing) existing.remove();
-    if (isUnlocked) return;
-
     const card = el.closest('.card') || el.parentElement;
+    // Remove any existing overlay first (re-entry safety)
+    const existing = card.querySelector('.pro-lock-overlay');
+    if (existing) existing.remove();
+    if (unlocked) return;
+
     card.style.position = 'relative';
     card.style.overflow  = 'hidden';
 
     const label = {
-      'signal-genesis':    'Signal Genesis Report',
+      'signal-genesis':    'Signal Genesis — Full Gate Breakdown',
       'forensic-section':  'AEGIS Forensic Report',
-      'probabilities':     'Probability Analysis',
+      'probabilities':     'Target Probability Analysis',
       'historical-section':'Historical Accuracy',
-    }[id] || 'Premium Feature';
+    }[id] || 'Sentinel Feature';
 
     const overlay = document.createElement('div');
     overlay.className = 'pro-lock-overlay';
     overlay.innerHTML = `
       <div style="font-size:22px;margin-bottom:6px">🔒</div>
       <div style="font-size:13px;font-weight:800;color:#fff;margin-bottom:4px">${label}</div>
-      <div style="font-size:11px;color:#94a3b8;text-align:center;max-width:220px;margin-bottom:14px;line-height:1.5">
-        Sign in to unlock detailed signal intelligence
+      <div style="font-size:11px;color:#94a3b8;text-align:center;max-width:240px;margin-bottom:14px;line-height:1.5">
+        Every gate the engine ran — structure, momentum &amp; volume confirmation, advisory warnings and the conviction tier — on <strong style="color:#4a7c68">Sentinel</strong> and above.
       </div>
-      <a href="/#signin"
+      <a href="/pricing"
          style="display:inline-block;padding:8px 20px;border-radius:8px;font-size:12px;font-weight:700;
-                background:linear-gradient(to right,#B8966A,#8B6840);color:#fff;text-decoration:none;
+                background:linear-gradient(to right,#4a7c68,#3a6153);color:#fff;text-decoration:none;
                 letter-spacing:0.5px;transition:opacity .2s"
          onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
-        Sign In Free →
+        Upgrade to Sentinel →
       </a>
     `;
     card.appendChild(overlay);
   });
 
-  // Update nav auth hint
   const hint = document.getElementById('nav-auth-hint');
-  if (hint) hint.style.display = isUnlocked ? 'none' : 'flex';
+  if (hint) hint.style.display = 'none';
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -1925,6 +1942,52 @@ function renderSignalGenesis(sig) {
     </div>
   `;
 
+  // ── Real engine gates (structure, confirmation, tier, warnings) ────────────
+  // Populated from the live engine's own gate output; degrade gracefully when a
+  // field is absent (e.g. before the v6 engine is deployed).
+  const stBlocked = sig.structure_blocked === true;
+  const stMode    = (sig.entry_mode || sig.structure_reason || '').toString();
+  const structRow = (stMode || sig.structure_blocked != null)
+    ? gate('', !stBlocked, 'Gate 1.6 · Structure',
+        stBlocked ? (sig.structure_reason || 'entry not at valid structure')
+                  : `Entry at structure — ${stMode.replace(/GATE_SKIPPED:\s*/, '')}`,
+        stBlocked ? 'BLOCKED' : 'AT STRUCTURE', stBlocked && !fired)
+    : '';
+
+  const cf = (sig.confirmation && typeof sig.confirmation === 'object') ? sig.confirmation : null;
+  let confRow = '';
+  if (cf) {
+    const v = cf.verdict || 'NEUTRAL';
+    const s = cf.signals || {};
+    const arrow = n => n > 0 ? '▲' : n < 0 ? '▼' : '–';
+    const acol  = n => n > 0 ? 'var(--green)' : n < 0 ? 'var(--red)' : 'var(--dim)';
+    const sub = (label, val) => `<span style="color:${acol(val||0)}">${arrow(val||0)} ${label}</span>`;
+    confRow = gate('', v !== 'CONFLICT', 'Gate 1.75 · Confirmation',
+        'Structure · momentum · volume agreement with the trade',
+        `${v}${cf.score != null ? ` ${cf.score > 0 ? '+' : ''}${cf.score}` : ''}`,
+        v === 'NEUTRAL')
+      + `<div style="display:flex;flex-wrap:wrap;gap:14px;font-size:10.5px;padding:2px 14px 10px 38px">
+           ${sub('CHoCH', s.choch)}${sub('BOS', s.bos_state)}${sub('RSI/MACD div', s.divergence)}${sub('Climax', s.climax)}${sub('Absorption', s.absorption)}
+         </div>`;
+  }
+
+  const _tierMap = { STRONG:{t:'LOW RISK',c:'#4a7c68'}, NORMAL:{t:'MODERATE RISK',c:'#B8966A'}, RISKY:{t:'HIGH RISK',c:'#ff0055'} };
+  const _rt = _tierMap[sig.risk_tier] || null;
+  const convBadge = _rt ? `
+    <div style="display:inline-flex;align-items:center;gap:6px;margin-bottom:12px;padding:5px 12px;border-radius:20px;
+                background:${_rt.c}1a;border:1px solid ${_rt.c}55;font-size:11px;font-weight:800;color:${_rt.c};letter-spacing:.5px">
+      ● ${_rt.t} · CONVICTION TIER
+    </div>` : '';
+
+  const _warns = Array.isArray(sig.gate_warnings) ? sig.gate_warnings : [];
+  const warnChips = _warns.length ? `
+    <div style="margin-top:12px">
+      <div style="font-size:10px;color:var(--dim);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Advisory Warnings Carried</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${_warns.map(w => `<span style="font-size:10.5px;padding:3px 9px;border-radius:6px;background:rgba(255,140,0,0.1);border:1px solid rgba(255,140,0,0.25);color:var(--orange)">⚠ ${String(w).replace(/\(.*/, '')}</span>`).join('')}
+      </div>
+    </div>` : '';
+
   el.innerHTML = `
     <div style="margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:10px;
@@ -1945,13 +2008,17 @@ function renderSignalGenesis(sig) {
       </div>
     </div>
 
+    ${convBadge}
     <div style="font-size:11px;color:var(--dim);margin-bottom:8px;letter-spacing:1px;text-transform:uppercase">Gate Checks</div>
     ${gate('', regOk,  'Gate 1 · Regime',    `Market regime: ${(sig.regime||'').replace('_',' ')}`, sig.regime || '—')}
     ${gate('', dirOk,  'Gate 1.5 · Direction', `${isShort ? 'SELL' : 'BUY'} in ${(sig.regime||'').replace('_',' ')} — direction-regime alignment`, dirOk ? 'ALIGNED' : 'CONFLICT')}
+    ${structRow}
     ${gate('', atrOk,  'Gate 2 · ATR Floor', `Minimum 0.8% volatility required for valid entry`, `${(sig.atr_pct||0).toFixed(2)}%`)}
     ${gate('', qualOk, 'Gate 3 · Quality',   `Signal quality ≥ 55 required. Score: ${(sig.quality_score||0).toFixed(0)}`, `${(sig.quality_score||0).toFixed(0)}/100`)}
+    ${confRow}
     ${gate('', confOk, 'Model Confidence',   `P(${isShort?'sell':'buy'}) vs dynamic threshold. Gap: ${confGap}pt`, `${((pDir||0)*100).toFixed(1)}% vs ${(thresh).toFixed(0)}`, !confOk && !fired)}
     ${gate('', hmOk,   'HMM Stability',      `Regime transition risk: ${sig.hmm_transition_risk ? 'YES' : 'NO'}. Stability: ${((sig.hmm_stability||0)*100).toFixed(0)}%`, hmOk ? 'STABLE' : 'UNSTABLE', !hmOk)}
+    ${warnChips}
 
     <div style="margin-top:16px;padding:12px 14px;background:rgba(0,0,0,0.3);border-radius:10px;border:1px solid rgba(255,255,255,0.06)">
       <div style="font-size:11px;color:var(--dim);margin-bottom:10px;letter-spacing:1px;text-transform:uppercase">Model Decision</div>
