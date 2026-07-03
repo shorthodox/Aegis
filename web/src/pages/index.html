@@ -563,9 +563,9 @@
       </div>
 
       <div class="ae-stat-block">
-        <div class="ae-stat-number">18</div>
+        <div class="ae-stat-number">20+</div>
         <div class="ae-stat-label">Entry Checks</div>
-        <div class="ae-stat-note">10 critical gates + 8 advisory</div>
+        <div class="ae-stat-note">Critical + advisory gates + BOS / divergence / volume confirmation</div>
       </div>
 
     </div>
@@ -760,7 +760,7 @@
         <div class="ae-eyebrow">Under The Hood</div>
         <h2 class="ae-h2" style="margin-bottom: var(--s-5);">How a signal is built.</h2>
         <p class="ae-body-text">
-          Two tiers of gates separate a candidate signal from a live one. Ten critical gates veto outright — regime, macro trend, model quality, risk limits. Eight advisory gates flag warnings; a setup carrying three or more is blocked. Most candidates never make it through. The engine stays quiet when conditions are poor.
+          Two tiers of gates separate a candidate signal from a live one. Critical gates veto outright — regime, macro trend, model quality, structure location, risk-reward. Advisory gates then flag anything questionable, and because AEGIS publishes only low- and moderate-risk signals, a single unresolved warning is enough to hold a setup back. Most candidates never make it through. The engine stays quiet when conditions are poor.
         </p>
       </div>
 
@@ -790,9 +790,9 @@
         <div class="method-step">
           <div class="method-index">03</div>
           <div>
-            <div class="ae-h3" style="margin-bottom: var(--s-3);">Structure & Reversal Confirmation</div>
+            <div class="ae-h3" style="margin-bottom: var(--s-3);">Structure & Candle Confirmation</div>
             <p class="ae-body-text">
-              Location matters as much as direction. AEGIS checks where price sits inside the rolling support/resistance range — a BUY near resistance or a SELL near support is flagged. It then scans the last three closed candles against a 26-pattern candlestick library (hammers, engulfing, morning/evening stars, three-soldier formations and more) for reversal confirmation, so entries are timed at trend turns instead of mid-trend.
+              Location matters as much as direction. AEGIS only takes entries <em>at</em> structure — a BUY at support, a SELL at resistance — never mid-range. Every entry must prove the turn is already underway on the lower timeframes: at least three of the last four closed 5-minute candles and both of the last two 15-minute candles moving in the signal's direction, with price having actually tested the level (no shorting into empty space below resistance). Breakout entries are taken only after a level has broken and held a retest — never on the run-up into it. If that confirmation can't be verified, the signal is held, not guessed.
             </p>
           </div>
         </div>
@@ -800,9 +800,9 @@
         <div class="method-step">
           <div class="method-index">04</div>
           <div>
-            <div class="ae-h3" style="margin-bottom: var(--s-3);">Contextual Quality & Timing</div>
+            <div class="ae-h3" style="margin-bottom: var(--s-3);">Quality, Momentum & Volume Confirmation</div>
             <p class="ae-body-text">
-              An advisory tier scores the signal's environment: ADX strength, volume confirmation, regime confidence, macro bias alignment, funding and open-interest divergence, fake-breakout heuristics, 5m/15m timing, and RSI exhaustion — no BUY at momentum peaks, no SELL at capitulation lows. Each weak reading adds a warning; a signal carrying three or more is blocked, and every warning it does carry is shown to you.
+              An advisory tier scores the signal's environment: ADX strength, volume confirmation, regime confidence, macro bias alignment, fake-breakout heuristics and RSI exhaustion — no BUY at momentum peaks, no SELL at capitulation lows. On top of that, a confirmation layer reads the 1-hour chart for Break-of-Structure / Change-of-Character, RSI and MACD divergence, and volume climax + absorption. When structure, momentum and volume all point against the trade, it's held. Every warning a published signal does carry is shown to you.
             </p>
           </div>
         </div>
@@ -810,9 +810,9 @@
         <div class="method-step">
           <div class="method-index">05</div>
           <div>
-            <div class="ae-h3" style="margin-bottom: var(--s-3);">Portfolio Guard & Position Sizing</div>
+            <div class="ae-h3" style="margin-bottom: var(--s-3);">Risk, Reward & Targets</div>
             <p class="ae-body-text">
-              The final gates evaluate risk: reward-to-risk must be at least 2:1, correlated tokens are capped per cluster so one BTC flush can't wipe five positions, and total deployed capital is limited. Only then are the stop-loss and five take-profit levels calculated using <span class="gloss">triple-barrier labelling<span class="gloss-tip"><strong>Triple-Barrier Labels</strong><br>Exit levels are set by ATR multiples, not fixed percentages — so targets adapt to real current volatility, not historical averages.</span></span> based on real current ATR.
+              The final check is economic: reward-to-risk must be at least 2:1, measured to a full-trend target. Because every signal is an independent recommendation — not positions in one shared book — AEGIS surfaces opportunities across all 63 tokens at once, with each token holding at most one open signal at a time. Stop-loss and five take-profit levels are then set from <span class="gloss">real current ATR<span class="gloss-tip"><strong>ATR-scaled targets</strong><br>Exit levels are set by ATR multiples, not fixed percentages — so targets adapt to real current volatility, not historical averages.</span></span>, with the trailing take-profit compressed in high volatility so it's reached within a realistic swing instead of round-tripping to break-even.
             </p>
           </div>
         </div>
@@ -861,7 +861,7 @@
       <div class="ae-card">
         <div class="ae-h3" style="margin-bottom: var(--s-3);">Signal Genesis Report</div>
         <p style="font-size:0.85rem; color:var(--ae-text-2); line-height:1.7;">
-          Gate-by-gate audit trail for every signal: regime check, structure location, reversal confirmation, quality score, portfolio gate — each with the raw value that determined it, plus any advisory warnings the signal carried through.
+          Gate-by-gate audit trail for every signal: regime check, structure location, 5m/15m candle confirmation, quality score, momentum & volume confirmation — each with the raw value that determined it, plus any advisory warnings the signal carried through.
         </p>
       </div>
 
