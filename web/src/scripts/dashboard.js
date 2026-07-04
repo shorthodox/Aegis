@@ -1,4 +1,4 @@
-import { initializeTrialCountdown, fetchTrialStartFromFirestore } from './trial-countdown.js';
+﻿import { initializeTrialCountdown, fetchTrialStartFromFirestore } from './trial-countdown.js';
 import { auth, db } from './gatekeeper.js?v=2.0';
 import { doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js';
 
@@ -25,7 +25,7 @@ function _showToast(msg, type = 'info') {
 }
 
 // ============================================================
-// SEALED SUBSCRIPTION STATE — console-proof
+// SEALED SUBSCRIPTION STATE â€” console-proof
 // window.isSubscriptionActive and window.isPremiumUser are
 // read-only getters; writes from the console silently no-op.
 // The WebSocket tick is the server-authority enforcement loop.
@@ -54,19 +54,19 @@ async function checkUserSubscriptionStatus(uid) {
   const now = new Date();
 
   // Fast path: AuthManager already resolved the plan on a previous auth cycle.
-  // Only trust it if subscription_active is explicitly true — never bypass on plan name alone.
+  // Only trust it if subscription_active is explicitly true â€” never bypass on plan name alone.
   if (typeof AuthManager !== 'undefined') {
     const u = AuthManager.getUser();
     if (u && u.subscription_active === true) {
       const p = (u.plan || u.tier || '').toLowerCase();
       if (p === 'pro' || p === 'premium' || p === 'intermediate' || p === 'basic') {
-        console.log('[SubCheck] AuthManager fast-path → paid (' + p + ')');
+        console.log('[SubCheck] AuthManager fast-path â†’ paid (' + p + ')');
         return 'paid';
       }
     }
   }
 
-  // Placeholder UID — skip Firestore, fall back to localStorage only
+  // Placeholder UID â€” skip Firestore, fall back to localStorage only
   if (!uid || uid === 'jwt-user') {
     const localEnd = localStorage.getItem('trial_end_timestamp');
     if (localEnd && new Date(localEnd) < now) return 'expired';
@@ -87,13 +87,13 @@ async function checkUserSubscriptionStatus(uid) {
       const data = userSnap.data();
       const plan = data.plan || data.tier;
 
-      // Paid plan — only valid if subscription is actually active in Firestore
+      // Paid plan â€” only valid if subscription is actually active in Firestore
       if (plan) {
         const p = plan.toLowerCase();
         if (p === 'premium' || p === 'pro' || p === 'intermediate' || p === 'basic') {
           const sub = data.subscription || {};
           if (sub.status === 'active') return 'paid';
-          // Plan name set but no active subscription — fall through to trial date check
+          // Plan name set but no active subscription â€” fall through to trial date check
         }
       }
 
@@ -117,7 +117,7 @@ async function checkUserSubscriptionStatus(uid) {
         }
       }
 
-      // No Firestore end date — fall back to localStorage
+      // No Firestore end date â€” fall back to localStorage
       const localEnd = localStorage.getItem('trial_end_timestamp');
       if (localEnd) {
         const localEndDate = new Date(localEnd);
@@ -130,7 +130,7 @@ async function checkUserSubscriptionStatus(uid) {
       return 'expired';
     }
 
-    // No Firestore doc — check localStorage trial end as last resort
+    // No Firestore doc â€” check localStorage trial end as last resort
     const localEnd = localStorage.getItem('trial_end_timestamp');
     if (localEnd) {
       const localEndDate = new Date(localEnd);
@@ -138,7 +138,7 @@ async function checkUserSubscriptionStatus(uid) {
     }
     return 'trial';
   } catch (error) {
-    console.error('[SubCheck] Invalid database error — falling back to AuthManager/localStorage:', error);
+    console.error('[SubCheck] Invalid database error â€” falling back to AuthManager/localStorage:', error);
     if (error.code) {
         console.error(`[SubCheck] Firestore error code: ${error.code}. This is a database problem.`);
     }
@@ -161,7 +161,7 @@ async function checkUserSubscriptionStatus(uid) {
         if (p === 'pro' || p === 'premium' || p === 'intermediate' || p === 'basic') return 'paid';
         if (p === 'trial' || p === 'free_tier') return 'trial';
       }
-      // Active token — safe to assume trial rather than blocking the user
+      // Active token â€” safe to assume trial rather than blocking the user
       if (AuthManager.getToken()) return 'trial';
     }
 
@@ -342,7 +342,7 @@ function setExpiredView() {
 
   const dashboardContent = document.getElementById('dashboard-main-content');
 
-  // Fully hide background content — opacity:0 so signals are invisible behind the overlay.
+  // Fully hide background content â€” opacity:0 so signals are invisible behind the overlay.
   if (dashboardContent) {
     dashboardContent.classList.remove('hidden');
     dashboardContent.classList.add('sub-expired');
@@ -526,11 +526,11 @@ function blockAllFeatures() {
     const isLogout = el.id === 'logout-btn' || el.id === 'btn-logout' || el.classList.contains('logout-button');
     const isNav = el.closest('nav') !== null || el.closest('header') !== null;
 
-    // Never block elements inside the signal modal or feature panels —
+    // Never block elements inside the signal modal or feature panels â€”
     // those overlays manage their own access gating via lock overlays.
     const isModalOrPanel = el.closest('#signalDetailsModal, #fp-confluence, #fp-zones, #fp-expectancy, #fp-shap, #fp-api') !== null;
 
-    // Never block the Guardian help panel — it must always be dismissible.
+    // Never block the Guardian help panel â€” it must always be dismissible.
     const isGuardian = el.closest('#guardian-drawer') !== null;
 
     if (!isExpiredElement && !isLogout && !isNav && !isModalOrPanel && !isGuardian) {
@@ -540,7 +540,7 @@ function blockAllFeatures() {
     }
   });
 
-  console.log('✅ All features blocked - subscription expired');
+  console.log('âœ… All features blocked - subscription expired');
 }
 
 // ============================================================
@@ -563,7 +563,7 @@ function unblockFeatures() {
     signalsContainer.style.opacity = '1';
   }
 
-  // Only restore elements that were explicitly blocked by aegis — avoids clobbering intentional disables.
+  // Only restore elements that were explicitly blocked by aegis â€” avoids clobbering intentional disables.
   const blockedElements = document.querySelectorAll('[data-aegis-blocked]');
   blockedElements.forEach(el => {
     el.style.removeProperty('pointer-events');
@@ -571,7 +571,7 @@ function unblockFeatures() {
     delete el.dataset.aegisBlocked;
   });
 
-  console.log('✅ All features unlocked - subscription active');
+  console.log('âœ… All features unlocked - subscription active');
 }
 
 // ============================================================
@@ -579,7 +579,7 @@ function unblockFeatures() {
 // ============================================================
 function canAccessFeatures() {
   if (window.isSubscriptionActive === false) {
-    console.warn('⛔ Feature access blocked - subscription expired');
+    console.warn('â›” Feature access blocked - subscription expired');
     setExpiredView();
     return false;
   }
@@ -587,7 +587,7 @@ function canAccessFeatures() {
 }
 
 // ============================================================
-// EXPORT FUNCTIONS FOR EXTERNAL USE — sealed so they cannot be
+// EXPORT FUNCTIONS FOR EXTERNAL USE â€” sealed so they cannot be
 // overwritten or deleted from the browser console.
 // ============================================================
 try {
@@ -616,7 +616,7 @@ function initializeLogoClickHandler() {
       e.preventDefault();
       window.location.href = '/';
     });
-    console.log('✅ Logo click handler initialized');
+    console.log('âœ… Logo click handler initialized');
   }
 }
 
@@ -644,13 +644,13 @@ function fetchLiveMarketData() {
             <div class="flex items-center justify-between">
               <span class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">${base}</span>
               <span id="market-card-signal-${idStr}"
-                    class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border hidden">—</span>
+                    class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border hidden">â€”</span>
             </div>
             <span id="market-card-price-${idStr}"
                   class="live-price text-lg font-mono transition-colors duration-300"
-                  data-symbol="${idStr}">—</span>
+                  data-symbol="${idStr}">â€”</span>
             <div class="flex items-center justify-between mt-auto">
-              <span id="market-card-change-${idStr}" class="text-[10px] font-mono text-gray-500">—</span>
+              <span id="market-card-change-${idStr}" class="text-[10px] font-mono text-gray-500">â€”</span>
               <span class="text-[9px] text-gray-600 group-hover:text-cyan/60 transition-colors">
                 <i class="fas fa-arrow-right"></i>
               </span>
@@ -715,7 +715,7 @@ window.updateMarketCardSignalBadges = function updateMarketCardSignalBadges() {
           card.classList.add(isLong ? 'border-green-500/50' : 'border-red-500/50');
         }
       } else {
-        // NEUTRAL or unknown direction — hide badge, neutral border
+        // NEUTRAL or unknown direction â€” hide badge, neutral border
         badge.classList.add('hidden');
         if (card) {
           card.classList.remove('border-green-500/50', 'border-red-500/50');
@@ -770,7 +770,7 @@ async function setupTrialNonBlocking(userId) {
 
   const now = Date.now();
   if (trialSetupRunning || (now - lastTrialSetupTime < 5000)) {
-    console.log('⏳ Skipping duplicate setupTrialNonBlocking call to prevent request bloat');
+    console.log('â³ Skipping duplicate setupTrialNonBlocking call to prevent request bloat');
     return;
   }
   trialSetupRunning = true;
@@ -778,11 +778,11 @@ async function setupTrialNonBlocking(userId) {
   const cacheKey = `trialStart_${userId}`;
 
   try {
-    // 1. Firestore is the PRIMARY source of truth — fetch it first
+    // 1. Firestore is the PRIMARY source of truth â€” fetch it first
     const freshStart = await fetchTrialStartFromFirestore(userId);
 
     if (freshStart) {
-      // Firestore returned a valid start — use it as the source of truth
+      // Firestore returned a valid start â€” use it as the source of truth
       const freshDate = new Date(freshStart);
       if (!isNaN(freshDate.getTime())) {
         const freshEnd = new Date(freshDate.getTime() + 3 * 24 * 60 * 60 * 1000);
@@ -798,7 +798,7 @@ async function setupTrialNonBlocking(userId) {
         initializeTrialCountdown(userId, freshStart);
       }
     } else {
-      // Firestore returned null — fall back to cached start from localStorage
+      // Firestore returned null â€” fall back to cached start from localStorage
       const cachedStart = localStorage.getItem(cacheKey);
 
       if (cachedStart) {
@@ -850,7 +850,7 @@ async function initDashboard(event) {
   fetchLiveMarketData();
 
   document.addEventListener('trialExpired', () => {
-    console.log('🔒 Trial expired event triggered');
+    console.log('ðŸ”’ Trial expired event triggered');
     setExpiredView();
   });
 
@@ -865,7 +865,7 @@ async function initDashboard(event) {
       setupTrialNonBlocking(initialUid);
     }
 
-    // Await true auth state — always resolve to a real Firebase UID
+    // Await true auth state â€” always resolve to a real Firebase UID
     const realUserId = eventUid || await (async () => {
       const localToken = localStorage.getItem('access_token') || localStorage.getItem('authToken');
       if (localToken && cachedUid) return cachedUid; // fast path: token + cached UID
@@ -909,7 +909,7 @@ if (document.readyState === 'loading') {
 }
 document.addEventListener('dashboardUserLoaded', initDashboard);
 
-// ── Periodic subscription re-verification ────────────────────────────────────
+// â”€â”€ Periodic subscription re-verification â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Re-checks Firestore every 5 minutes so a paid-to-expired transition is caught
 // even if the WebSocket is briefly disconnected. Also runs on tab focus so
 // returning users always see an up-to-date state without waiting for the interval.
@@ -938,7 +938,7 @@ async function _periodicSubscriptionCheck() {
       unblockFeatures();
     }
   } catch (_) {
-    // Silently ignore — the WS tick is the primary enforcement mechanism.
+    // Silently ignore â€” the WS tick is the primary enforcement mechanism.
   }
 }
 
@@ -1034,7 +1034,7 @@ window.showSignalDetailsModal = function (signal) {
     badge.className = 'px-2 py-1 rounded text-xs font-bold tracking-wider bg-gray-500/20 text-gray-400 border border-gray-500/30';
   }
 
-  // ── Signal Status Banner (reversal anticipation states) ──
+  // â”€â”€ Signal Status Banner (reversal anticipation states) â”€â”€
   const sigStatus = signal.signal_status || 'ACTIVE';
   let sdStatusEl = document.getElementById('sd-signal-status');
   if (!sdStatusEl) {
@@ -1048,22 +1048,22 @@ window.showSignalDetailsModal = function (signal) {
   sdStatusEl.innerHTML = '';
   sdStatusEl.className = 'hidden';
   if (sigStatus === 'EXPIRED') {
-    sdStatusEl.innerHTML = '<i class="fas fa-clock-rotate-left mr-1"></i>SIGNAL EXPIRED — Move exceeded 60% of target before entry';
+    sdStatusEl.innerHTML = '<i class="fas fa-clock-rotate-left mr-1"></i>SIGNAL EXPIRED â€” Move exceeded 60% of target before entry';
     sdStatusEl.className = 'w-full px-3 py-2 mb-3 rounded-lg text-xs font-bold tracking-wider bg-gray-700/40 text-gray-400 border border-gray-600/40 text-center';
   } else if (sigStatus === 'AWAITING_CONFIRMATION') {
     const cc = signal.candles_confirmed || 0;
-    sdStatusEl.innerHTML = '<i class="fas fa-hourglass-half mr-1"></i>CONFIRMING REVERSAL — ' + cc + '/3 candles confirmed';
+    sdStatusEl.innerHTML = '<i class="fas fa-hourglass-half mr-1"></i>CONFIRMING REVERSAL â€” ' + cc + '/3 candles confirmed';
     sdStatusEl.className = 'w-full px-3 py-2 mb-3 rounded-lg text-xs font-bold tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/30 text-center';
   } else if (sigStatus === 'AWAITING_SR_BREAK') {
-    sdStatusEl.innerHTML = '<i class="fas fa-lock mr-1"></i>WAITING FOR SUPPORT BREAK — SELL held until support breaks';
+    sdStatusEl.innerHTML = '<i class="fas fa-lock mr-1"></i>WAITING FOR SUPPORT BREAK â€” SELL held until support breaks';
     sdStatusEl.className = 'w-full px-3 py-2 mb-3 rounded-lg text-xs font-bold tracking-wider bg-orange-500/10 text-orange-400 border border-orange-500/30 text-center';
   } else if (sigStatus === 'SR_BREAK_CONFIRMED') {
-    sdStatusEl.innerHTML = '<i class="fas fa-unlock mr-1"></i>SUPPORT BROKEN — SELL confirmed after S/R breach';
+    sdStatusEl.innerHTML = '<i class="fas fa-unlock mr-1"></i>SUPPORT BROKEN â€” SELL confirmed after S/R breach';
     sdStatusEl.className = 'w-full px-3 py-2 mb-3 rounded-lg text-xs font-bold tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-center';
   } else if (sigStatus === 'CONFIRMED' && (signal.reversal_score || 0) > 0) {
     const rs = ((signal.reversal_score || 0) * 100).toFixed(0);
-    const tags = (signal.reversal_signals || []).slice(0, 3).join(' · ');
-    sdStatusEl.innerHTML = '<i class="fas fa-rotate-left mr-1"></i>EARLY REVERSAL — Score ' + rs + '% · ' + (tags || 'Technical Setup');
+    const tags = (signal.reversal_signals || []).slice(0, 3).join(' Â· ');
+    sdStatusEl.innerHTML = '<i class="fas fa-rotate-left mr-1"></i>EARLY REVERSAL â€” Score ' + rs + '% Â· ' + (tags || 'Technical Setup');
     sdStatusEl.className = 'w-full px-3 py-2 mb-3 rounded-lg text-xs font-bold tracking-wider bg-cyan/10 text-cyan border border-cyan/30 text-center';
   }
 
@@ -1086,14 +1086,14 @@ window.showSignalDetailsModal = function (signal) {
 
   // Populate Feature Access Cards
   // Confluence values are in [0,10] scale (5=neutral); convert to display %
-  // by mapping: 0→0%, 5→50%, 10→100%. Backward-compat: if abs(v)<=1.1 it's
-  // old [-1,+1] scale — convert first.
+  // by mapping: 0â†’0%, 5â†’50%, 10â†’100%. Backward-compat: if abs(v)<=1.1 it's
+  // old [-1,+1] scale â€” convert first.
   function _c10(v) {
     const n = parseFloat(v) || 5;
     if (Math.abs(n) <= 1.05) return parseFloat(((n + 1) / 2 * 10).toFixed(1));
     return Math.min(10, Math.max(0, n));
   }
-  function _cPct(v) { return Math.round(_c10(v) * 10); }  // [0,10] → [0,100]%
+  function _cPct(v) { return Math.round(_c10(v) * 10); }  // [0,10] â†’ [0,100]%
 
   const rawConf = signal.confluence || {};
   const _confDisp = {
@@ -1103,7 +1103,7 @@ window.showSignalDetailsModal = function (signal) {
     smart_money: _cPct(rawConf.smart_money ?? 5),
     candle:      _cPct(rawConf.candle      ?? 5),
     total:       _cPct(rawConf.total       ?? 5),
-    summary:     rawConf.summary || '—',
+    summary:     rawConf.summary || 'â€”',
   };
   const _currentPrice = window.currentTickers?.[signal.symbol] ? parseFloat(window.currentTickers[signal.symbol]) : (signal.entry_price || 0);
   const _tier = getUserTier();
@@ -1361,7 +1361,7 @@ window.showSignalDetailsModal = function (signal) {
 
     document.getElementById('sd-paper-trade-btn')?.addEventListener('click', (e) => {
       e.stopPropagation();
-      // Close both modal layers explicitly — don't rely on closure variable
+      // Close both modal layers explicitly â€” don't rely on closure variable
       const _mw = document.getElementById('token-details-modal');
       const _mi = document.getElementById('signalDetailsModal');
       if (_mw) _mw.classList.add('hidden');
@@ -1375,7 +1375,7 @@ window.showSignalDetailsModal = function (signal) {
     document.getElementById('sd-copy-signal-btn')?.addEventListener('click', () => {
       navigator.clipboard.writeText(JSON.stringify(signal, null, 2))
         .then(() => _showToast('Signal JSON copied to clipboard!', 'success'))
-        .catch(() => _showToast('Copy failed — check browser permissions', 'error'));
+        .catch(() => _showToast('Copy failed â€” check browser permissions', 'error'));
     });
 
     document.getElementById('sd-view-analytics-btn')?.addEventListener('click', (e) => {
@@ -1453,7 +1453,7 @@ function getUserTier() {
 
 window._fpSignal = null;
 
-// Explicit list — never accidentally matches *-body divs
+// Explicit list â€” never accidentally matches *-body divs
 const _FP_PANELS = ['fp-confluence', 'fp-zones', 'fp-expectancy', 'fp-shap', 'fp-api'];
 
 window.openFeaturePanel = function(panelId) {
@@ -1531,7 +1531,7 @@ function _renderFpConfluence(body, signal, tier) {
     total:       Math.round(_c10fp(rawConf.total       ?? 5) * 10),
   };
   // Recompute displayed total from all 6 visible categories using the same
-  // weights as compute_category_confluence — this ensures the total shown
+  // weights as compute_category_confluence â€” this ensures the total shown
   // always matches the sum of the bars the user can actually see.
   const _wTotal = (
     confluence.trend       * 2.0 +
@@ -1561,12 +1561,12 @@ function _renderFpConfluence(body, signal, tier) {
         </div>
         <div class="space-y-3">
           ${[
-            { label: 'Trend',          sublabel: 'EMA stack · macro · market structure',         val: confluence.trend,       weight: '×2.0', color: 'bg-cyan',        textColor: 'text-cyan' },
-            { label: 'Momentum',       sublabel: 'RSI · MACD · Stochastic · CCI',               val: confluence.momentum,    weight: '×1.5', color: 'bg-blue-400',    textColor: 'text-blue-300' },
-            { label: 'Volume / Flow',  sublabel: 'CMF · MFI · OBV delta',                       val: confluence.volume,      weight: '×1.5', color: 'bg-violet-400',  textColor: 'text-violet-300' },
-            { label: 'Smart Money',    sublabel: 'BOS · CHoCH · S/R proximity',                 val: confluence.smart_money, weight: '×1.5', color: 'bg-amber-400',   textColor: 'text-amber-300' },
-            { label: 'Price Position', sublabel: 'BB% · ATR band · Donchian · quantile',        val: confluence.bands,       weight: '×1.0', color: 'bg-teal-400',    textColor: 'text-teal-300' },
-            { label: 'Candle Patt.',   sublabel: 'Hammer · Engulfing · Morning Star',            val: confluence.candle,      weight: '×0.5', color: 'bg-pink-400',    textColor: 'text-pink-300' },
+            { label: 'Trend',          sublabel: 'EMA stack Â· macro Â· market structure',         val: confluence.trend,       weight: 'Ã—2.0', color: 'bg-cyan',        textColor: 'text-cyan' },
+            { label: 'Momentum',       sublabel: 'RSI Â· MACD Â· Stochastic Â· CCI',               val: confluence.momentum,    weight: 'Ã—1.5', color: 'bg-blue-400',    textColor: 'text-blue-300' },
+            { label: 'Volume / Flow',  sublabel: 'CMF Â· MFI Â· OBV delta',                       val: confluence.volume,      weight: 'Ã—1.5', color: 'bg-violet-400',  textColor: 'text-violet-300' },
+            { label: 'Smart Money',    sublabel: 'BOS Â· CHoCH Â· S/R proximity',                 val: confluence.smart_money, weight: 'Ã—1.5', color: 'bg-amber-400',   textColor: 'text-amber-300' },
+            { label: 'Price Position', sublabel: 'BB% Â· ATR band Â· Donchian Â· quantile',        val: confluence.bands,       weight: 'Ã—1.0', color: 'bg-teal-400',    textColor: 'text-teal-300' },
+            { label: 'Candle Patt.',   sublabel: 'Hammer Â· Engulfing Â· Morning Star',            val: confluence.candle,      weight: 'Ã—0.5', color: 'bg-pink-400',    textColor: 'text-pink-300' },
           ].map(item => {
             const isBull = item.val >= 55;
             const isBear = item.val <= 45;
@@ -1580,7 +1580,7 @@ function _renderFpConfluence(body, signal, tier) {
                   <span class="text-[9px] text-amber-400/60 font-bold">${item.weight}</span>
                 </div>
                 <div class="flex items-center gap-1.5">
-                  <span class="text-[9px] font-bold ${isBull ? 'text-emerald-400' : isBear ? 'text-rose-400' : 'text-gray-500'}">${isBull ? '▲' : isBear ? '▼' : '≈'}</span>
+                  <span class="text-[9px] font-bold ${isBull ? 'text-emerald-400' : isBear ? 'text-rose-400' : 'text-gray-500'}">${isBull ? 'â–²' : isBear ? 'â–¼' : 'â‰ˆ'}</span>
                   <div class="font-black font-mono text-lg ${valColor}">${item.val}%</div>
                 </div>
               </div>
@@ -1600,7 +1600,7 @@ function _renderFpConfluence(body, signal, tier) {
             <div class="h-full ${confluence.total >= 65 ? 'bg-gradient-to-r from-cyan to-emerald-400' : confluence.total <= 40 ? 'bg-gradient-to-r from-rose-500 to-amber-400' : 'bg-gradient-to-r from-gray-500 to-gray-400'} rounded-full"
                  style="width:${confluence.total}%"></div>
           </div>
-          <div class="text-[10px] text-gray-500 mt-2">${rawConf.summary || (confluence.total >= 65 ? 'Bullish' : confluence.total <= 40 ? 'Bearish' : 'Neutral')} · 50% = neutral</div>
+          <div class="text-[10px] text-gray-500 mt-2">${rawConf.summary || (confluence.total >= 65 ? 'Bullish' : confluence.total <= 40 ? 'Bearish' : 'Neutral')} Â· 50% = neutral</div>
         </div>
         <div class="mt-4 p-3 bg-black/30 rounded-lg border border-white/5">
           <div class="text-[10px] text-gray-500 font-mono">
@@ -1624,19 +1624,19 @@ function _renderFpConfluence(body, signal, tier) {
           const _agrCount = _cats.filter(c => _dir==='LONG' ? c[1]>=55 : c[1]<=45).length;
           
           const _why = `Weighted total is ${_sc}% (50% = neutral). ${_agrCount}/5 indicator groups support the ${_bias} ${_dir} direction. ${rawConf.summary || ''}.`;
-          const _what = `Dominant driver: ${_dom[0]} at ${_dom[1]}%. ${_alignment >= 65 ? 'Strong multi-group alignment — signal has high structural backing.' : _alignment >= 50 ? 'Moderate alignment — signal is valid but not a textbook setup.' : 'Low alignment — major groups are disagreeing.'}`;
+          const _what = `Dominant driver: ${_dom[0]} at ${_dom[1]}%. ${_alignment >= 65 ? 'Strong multi-group alignment â€” signal has high structural backing.' : _alignment >= 50 ? 'Moderate alignment â€” signal is valid but not a textbook setup.' : 'Low alignment â€” major groups are disagreeing.'}`;
           const _when = _alignment >= 65
-            ? 'Strong setup — full position size is justified at current price.'
+            ? 'Strong setup â€” full position size is justified at current price.'
             : _alignment >= 50
-            ? 'Entry is viable — reduce position size by 30% to account for incomplete alignment.'
-            : 'Stand aside — wait for confluence to improve before committing capital.';
+            ? 'Entry is viable â€” reduce position size by 30% to account for incomplete alignment.'
+            : 'Stand aside â€” wait for confluence to improve before committing capital.';
           
-          function _fmtPx(v) { v=parseFloat(v)||0; if(!v)return'—'; if(v>=100)return'$'+v.toLocaleString('en-US',{maximumFractionDigits:2}); if(v>=1)return'$'+v.toFixed(4); return'$'+v.toFixed(6); }
+          function _fmtPx(v) { v=parseFloat(v)||0; if(!v)return'â€”'; if(v>=100)return'$'+v.toLocaleString('en-US',{maximumFractionDigits:2}); if(v>=1)return'$'+v.toFixed(4); return'$'+v.toFixed(6); }
           const _ep = _fmtPx(signal.entry_price || signal.price);
           const _slVal = signal.suggested_sl || signal.sl || 0;
           const _slStr = _fmtPx(_slVal);
           
-          const _where = `Execute near ${_ep} with SL at ${_slStr}. ${_alignment >= 65 ? 'Full position size justified by strong confluence.' : _alignment >= 50 ? 'Scale in with 50-70% size. Add on confirmation.' : 'Observe only — wait for groups to align before entering.'}`;
+          const _where = `Execute near ${_ep} with SL at ${_slStr}. ${_alignment >= 65 ? 'Full position size justified by strong confluence.' : _alignment >= 50 ? 'Scale in with 50-70% size. Add on confirmation.' : 'Observe only â€” wait for groups to align before entering.'}`;
           
           return `<div class="mt-4 p-4 bg-black/40 rounded-xl border border-cyan/20">
             <div class="flex items-center justify-between mb-3">
@@ -1696,11 +1696,11 @@ function _renderFpZones(body, signal, tier) {
     const inProfit = isLong ? currentPrice > entry : currentPrice < entry;
     if (inProfit && Math.abs(pctFromEntry) > 0.2) {
       statusMsg = `<div class="mt-3 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold animate-pulse">
-        ⚠️ Breakout In Progress: Do Not Chase
+        âš ï¸ Breakout In Progress: Do Not Chase
       </div>`;
     } else {
       statusMsg = `<div class="mt-3 px-3 py-2 rounded-lg bg-cyan/10 border border-cyan/30 text-cyan text-xs font-bold">
-        ⚡ Inside Active Entry Buffer Zone
+        âš¡ Inside Active Entry Buffer Zone
       </div>`;
     }
   }
@@ -1771,13 +1771,13 @@ function _renderFpZones(body, signal, tier) {
           const _inProfit = _isLong ? currentPrice > entry : currentPrice < entry;
           const _stopDist = entry && sl ? Math.abs(((entry - sl) / entry * 100)).toFixed(2) : '0.00';
           const _tgtDist = entry && tp ? Math.abs(((tp - entry) / entry * 100)).toFixed(2) : '0.00';
-          const _why = `Price is ${Math.abs(_pctFromEntry).toFixed(2)}% ${_inProfit ? 'ahead of' : 'behind'} the entry at $${entry.toFixed(4)} — currently ${curPct.toFixed(1)}% across the SL-to-TP corridor.`;
-          const _what = `Risk/Reward is 1:${_rr}. Stop distance is ${_stopDist}% ($${sl.toFixed(4)}); target distance is ${_tgtDist}% ($${tp.toFixed(4)}). ${_rrRaw >= 2 ? 'Excellent asymmetry — reward far outweighs risk.' : _rrRaw >= 1.5 ? 'Acceptable ratio — proceed with standard sizing.' : 'Tight reward relative to risk — consider skipping or waiting for a better entry.'}`;
+          const _why = `Price is ${Math.abs(_pctFromEntry).toFixed(2)}% ${_inProfit ? 'ahead of' : 'behind'} the entry at $${entry.toFixed(4)} â€” currently ${curPct.toFixed(1)}% across the SL-to-TP corridor.`;
+          const _what = `Risk/Reward is 1:${_rr}. Stop distance is ${_stopDist}% ($${sl.toFixed(4)}); target distance is ${_tgtDist}% ($${tp.toFixed(4)}). ${_rrRaw >= 2 ? 'Excellent asymmetry â€” reward far outweighs risk.' : _rrRaw >= 1.5 ? 'Acceptable ratio â€” proceed with standard sizing.' : 'Tight reward relative to risk â€” consider skipping or waiting for a better entry.'}`;
           const _when = curPct < 30
-            ? 'Price is near the entry zone — valid window to initiate the position.'
+            ? 'Price is near the entry zone â€” valid window to initiate the position.'
             : curPct < 60
             ? 'Price has moved into the middle of the range. Entry is still viable but chase risk is elevated.'
-            : 'Price is deep into the TP corridor. Do not chase — wait for a pullback to the entry zone.';
+            : 'Price is deep into the TP corridor. Do not chase â€” wait for a pullback to the entry zone.';
           const _where = `Watch $${entry.toFixed(4)} (entry), $${sl.toFixed(4)} (invalidation). ${_isLong ? 'A close below SL signals the trade has failed.' : 'A close above SL signals the trade has failed.'} TP target at $${tp.toFixed(4)}.`;
           return `<div class="mt-4 p-4 bg-black/40 rounded-xl border border-emerald-500/20">
             <div class="flex items-center justify-between mb-3">
@@ -1836,7 +1836,7 @@ function _renderFpExpectancy(body, signal, tier) {
   const atrPct     = parseFloat(signal.atr_pct || 0);
   const volRegime  = (signal.volatility_regime || 'MEDIUM').toUpperCase();
 
-  // Historical stats — use signal values if present, else load from track record
+  // Historical stats â€” use signal values if present, else load from track record
   let expectancy   = typeof signal.expectancy    === 'number' ? signal.expectancy    : null;
   let maxDD        = typeof signal.max_dd        === 'number' ? signal.max_dd        : null;
   let profitFactor = typeof signal.profit_factor === 'number' ? signal.profit_factor : null;
@@ -1858,7 +1858,7 @@ function _renderFpExpectancy(body, signal, tier) {
         <div class="flex items-center gap-3 mb-4">
           <span class="font-black text-2xl text-white">${signal.symbol}</span>
           <span class="text-xs ${metaConf >= threshold ? 'text-emerald-400' : 'text-rose-400'} bg-black/40 px-2 py-0.5 rounded font-bold">
-            ${metaConf}% conf ${metaConf >= threshold ? '✓' : '✗'}
+            ${metaConf}% conf ${metaConf >= threshold ? 'âœ“' : 'âœ—'}
           </span>
         </div>
 
@@ -1873,26 +1873,26 @@ function _renderFpExpectancy(body, signal, tier) {
           <div class="bg-black/40 p-3 rounded-xl border border-cyan/20">
             <div class="text-[9px] text-gray-500 uppercase mb-1">Expected Move</div>
             <div class="text-2xl font-black font-mono ${expectedMv >= 2 ? 'text-emerald-400' : 'text-cyan'}">
-              ${expectedMv > 0 ? '~' + expectedMv.toFixed(1) + '%' : atrPct > 0 ? '~' + (atrPct * 1.5).toFixed(1) + '%' : '—'}
+              ${expectedMv > 0 ? '~' + expectedMv.toFixed(1) + '%' : atrPct > 0 ? '~' + (atrPct * 1.5).toFixed(1) + '%' : 'â€”'}
             </div>
             <div class="text-[9px] text-gray-600 mt-0.5">AI projection</div>
           </div>
           <div class="bg-black/40 p-3 rounded-xl border border-white/5">
             <div class="text-[9px] text-gray-500 uppercase mb-1">Risk / Reward</div>
-            <div class="text-2xl font-black font-mono text-cyan">${rr > 0 ? '1:' + rr.toFixed(2) : '—'}</div>
+            <div class="text-2xl font-black font-mono text-cyan">${rr > 0 ? '1:' + rr.toFixed(2) : 'â€”'}</div>
             <div class="text-[9px] text-gray-600 mt-0.5">TP1 vs SL</div>
           </div>
           <div class="bg-black/40 p-3 rounded-xl border border-white/5">
             <div class="text-[9px] text-gray-500 uppercase mb-1">Volatility</div>
             <div class="text-xl font-black font-mono ${volRegime === 'HIGH' ? 'text-rose-400' : volRegime === 'LOW' ? 'text-blue-400' : 'text-amber-400'}">${volRegime}</div>
-            <div class="text-[9px] text-gray-600 mt-0.5">ATR ${atrPct > 0 ? atrPct.toFixed(2) + '%' : '—'}</div>
+            <div class="text-[9px] text-gray-600 mt-0.5">ATR ${atrPct > 0 ? atrPct.toFixed(2) + '%' : 'â€”'}</div>
           </div>
         </div>
 
         <!-- Historical performance (loaded async) -->
         <div class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Track Record (AEGIS-1)</div>
         <div id="fp-exp-hist" class="bg-black/40 p-4 rounded-xl border border-white/5 text-[10px] text-gray-500 font-mono">
-          Loading…
+          Loadingâ€¦
         </div>
 
         <div class="mt-3 p-3 bg-black/30 rounded-lg border border-white/5">
@@ -1907,13 +1907,13 @@ function _renderFpExpectancy(body, signal, tier) {
             <div><span class="text-amber-400/60 font-bold text-[9px] uppercase mr-2">THIS SIGNAL</span>
               AI confidence is ${metaConf}% vs ${threshold}% required.
               ${metaConf >= threshold
-                ? `Signal is above the bar — model has sufficient evidence.${rr > 0 ? ` R:R of 1:${rr.toFixed(2)}.` : ''}`
-                : 'Signal is below threshold — model is watching but not confirmed.'}
+                ? `Signal is above the bar â€” model has sufficient evidence.${rr > 0 ? ` R:R of 1:${rr.toFixed(2)}.` : ''}`
+                : 'Signal is below threshold â€” model is watching but not confirmed.'}
               ${expectedMv > 0 ? ` Expected move: ~${expectedMv.toFixed(1)}%.` : ''}
             </div>
             <div><span class="text-amber-400/60 font-bold text-[9px] uppercase mr-2">VOLATILITY</span>
-              Regime is ${volRegime}${atrPct > 0 ? ` — ATR is ${atrPct.toFixed(2)}% of price` : ''}.
-              ${volRegime === 'HIGH' ? 'High volatility — use smaller position size and wider stops.' : volRegime === 'LOW' ? 'Low volatility — tighter stops viable, but expect smaller moves.' : 'Normal volatility — standard sizing applies.'}
+              Regime is ${volRegime}${atrPct > 0 ? ` â€” ATR is ${atrPct.toFixed(2)}% of price` : ''}.
+              ${volRegime === 'HIGH' ? 'High volatility â€” use smaller position size and wider stops.' : volRegime === 'LOW' ? 'Low volatility â€” tighter stops viable, but expect smaller moves.' : 'Normal volatility â€” standard sizing applies.'}
             </div>
           </div>
         </div>
@@ -1930,12 +1930,12 @@ function _renderFpExpectancy(body, signal, tier) {
       if (!r.ok) throw new Error();
       const d = await r.json();
       const s = d.summary || {};
-      const wr  = s.win_rate_pct != null ? s.win_rate_pct.toFixed(1) + '%' : '—';
-      const tot = s.total_signals ?? '—';
-      const w   = s.wins  ?? '—';
-      const l   = s.losses ?? '—';
-      const avg = s.avg_pnl_pct != null ? (s.avg_pnl_pct >= 0 ? '+' : '') + s.avg_pnl_pct.toFixed(2) + '%' : '—';
-      const ttl = s.total_pnl_pct != null ? (s.total_pnl_pct >= 0 ? '+' : '') + s.total_pnl_pct.toFixed(2) + '%' : '—';
+      const wr  = s.win_rate_pct != null ? s.win_rate_pct.toFixed(1) + '%' : 'â€”';
+      const tot = s.total_signals ?? 'â€”';
+      const w   = s.wins  ?? 'â€”';
+      const l   = s.losses ?? 'â€”';
+      const avg = s.avg_pnl_pct != null ? (s.avg_pnl_pct >= 0 ? '+' : '') + s.avg_pnl_pct.toFixed(2) + '%' : 'â€”';
+      const ttl = s.total_pnl_pct != null ? (s.total_pnl_pct >= 0 ? '+' : '') + s.total_pnl_pct.toFixed(2) + '%' : 'â€”';
       const wrNum = s.win_rate_pct || 0;
       el.innerHTML = `
         <div class="grid grid-cols-3 gap-x-4 gap-y-2">
@@ -1951,7 +1951,7 @@ function _renderFpExpectancy(body, signal, tier) {
           <div class="h-full bg-rose-500/40 rounded-r-full flex-1"></div>
         </div>`;
     } catch {
-      el.innerHTML = '<span class="text-gray-600">Track record unavailable — refresh to retry.</span>';
+      el.innerHTML = '<span class="text-gray-600">Track record unavailable â€” refresh to retry.</span>';
     }
   })();
 }
@@ -2070,14 +2070,14 @@ function _renderFpShap(body, signal, tier) {
             const _shortPct = (probs.SHORT * 100).toFixed(1);
             const _holdPct  = (probs.HOLD  * 100).toFixed(1);
             const _longPct  = (probs.LONG  * 100).toFixed(1);
-            const _why = `The primary model gives ${_longPct}% LONG, ${_shortPct}% SHORT, ${_holdPct}% HOLD. Meta gate score: ${metaCf}% (threshold: ${thrCf}%). ${_aligned ? 'Dominant indicator and model direction agree.' : 'Top driver conflicts with model direction — caution.'}`;
-            const _what = `Top driver: "${_topFeat}" (${_topVal}). ${_aligned ? 'Indicators and model are aligned — consistent signal.' : 'Divergence detected — model may be picking up a pattern that indicators do not yet show.'} ${metaCf >= thrCf ? 'Signal is ABOVE the confidence threshold.' : 'Signal is BELOW the threshold — not a valid trade.'}`;
+            const _why = `The primary model gives ${_longPct}% LONG, ${_shortPct}% SHORT, ${_holdPct}% HOLD. Meta gate score: ${metaCf}% (threshold: ${thrCf}%). ${_aligned ? 'Dominant indicator and model direction agree.' : 'Top driver conflicts with model direction â€” caution.'}`;
+            const _what = `Top driver: "${_topFeat}" (${_topVal}). ${_aligned ? 'Indicators and model are aligned â€” consistent signal.' : 'Divergence detected â€” model may be picking up a pattern that indicators do not yet show.'} ${metaCf >= thrCf ? 'Signal is ABOVE the confidence threshold.' : 'Signal is BELOW the threshold â€” not a valid trade.'}`;
             const _when = metaCf >= thrCf && _aligned
               ? `High conviction (${metaCf}% > ${thrCf}% required). Act at the entry zone with standard sizing.`
               : metaCf >= thrCf
               ? 'Above threshold but indicators diverge. Reduce size by 50% and wait for confluence to align.'
-              : `Below threshold (${metaCf}% < ${thrCf}%). Do not trade — wait until model confidence rises.`;
-            const _where = `Entry: $${(() => { const v=signal.entry_price||signal.price||0; return v>=100?v.toFixed(2):v>=1?v.toFixed(4):v.toFixed(6); })()}. ${metaCf >= thrCf ? 'Signal is valid — check zone tracker for SL/TP placement.' : 'Not a valid trade — add to watchlist and revisit at next scan.'}`;
+              : `Below threshold (${metaCf}% < ${thrCf}%). Do not trade â€” wait until model confidence rises.`;
+            const _where = `Entry: $${(() => { const v=signal.entry_price||signal.price||0; return v>=100?v.toFixed(2):v>=1?v.toFixed(4):v.toFixed(6); })()}. ${metaCf >= thrCf ? 'Signal is valid â€” check zone tracker for SL/TP placement.' : 'Not a valid trade â€” add to watchlist and revisit at next scan.'}`;
             return `<div class="mt-4 p-4 bg-black/40 rounded-xl border border-orange/20">
               <div class="flex items-center justify-between mb-3">
                 <h4 class="text-xs font-bold text-orange uppercase tracking-wider">Model Intelligence</h4>
@@ -2155,7 +2155,7 @@ API_KEY <span class="text-white">=</span> <span class="text-amber-300">"aegis_li
 HEADERS <span class="text-white">=</span> {<span class="text-amber-300">"X-API-Key"</span>: API_KEY}
 
 resp <span class="text-white">=</span> requests.<span class="text-cyan">get</span>(
-    <span class="text-amber-300">"https://gatekeeper.sbs/api/v1/signals/live"</span>,
+    <span class="text-amber-300">"https://aegisignal.pro/api/v1/signals/live"</span>,
     headers<span class="text-white">=</span>HEADERS
 )
 data <span class="text-white">=</span> resp.<span class="text-cyan">json</span>()
@@ -2186,7 +2186,7 @@ data <span class="text-white">=</span> resp.<span class="text-cyan">json</span>(
         const data = await r.json();
         const el = document.getElementById('fp-api-key-display');
         if (el) { el.textContent = data.key; el.dataset.rawKey = data.key; }
-        _showToast('New key generated — copy it now!', 'success');
+        _showToast('New key generated â€” copy it now!', 'success');
       } else {
         _showToast('Key regeneration failed', 'error');
       }
@@ -2214,13 +2214,13 @@ window.addEventListener('priceUpdate', (e) => {
 });
 
 // renderExpectancyPanel, renderTelemetryPanel, renderDeveloperPortal, updateZoneTracker
-// removed — superseded by the feature panel system (_renderFp* functions above).
+// removed â€” superseded by the feature panel system (_renderFp* functions above).
 
 async function renderExpectancyPanel() {
   // no-op: superseded by _renderFpExpectancy / openFeaturePanel('fp-expectancy')
 }
 
-// ── TOKEN SEARCH ─────────────────────────────────────────────────────────────
+// â”€â”€ TOKEN SEARCH â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 let _tokenSearchQuery = '';
 
@@ -2275,7 +2275,7 @@ function _applyTokenSearch(query) {
 }
 
 // ============================================================
-// DIRECTIONAL ROOMS — BUY / SELL filtered signal cockpits
+// DIRECTIONAL ROOMS â€” BUY / SELL filtered signal cockpits
 // ============================================================
 
 function _syncDirectionalRooms() {
@@ -2317,8 +2317,8 @@ function _syncDirectionalRooms() {
   // Update header counts
   const buyCount  = document.getElementById('buy-cockpit-count');
   const sellCount = document.getElementById('sell-cockpit-count');
-  if (buyCount)  buyCount.textContent  = buyCards.length  > 0 ? `— ${buyCards.length} signal${buyCards.length  !== 1 ? 's' : ''}` : '';
-  if (sellCount) sellCount.textContent = sellCards.length > 0 ? `— ${sellCards.length} signal${sellCards.length !== 1 ? 's' : ''}` : '';
+  if (buyCount)  buyCount.textContent  = buyCards.length  > 0 ? `â€” ${buyCards.length} signal${buyCards.length  !== 1 ? 's' : ''}` : '';
+  if (sellCount) sellCount.textContent = sellCards.length > 0 ? `â€” ${sellCards.length} signal${sellCards.length !== 1 ? 's' : ''}` : '';
 
   // Update nav badge counts
   const navBuy  = document.getElementById('nav-buy-count');
@@ -2406,7 +2406,7 @@ window.syncDirectionalRooms = _syncDirectionalRooms;
 }());
 
 // ============================================================
-// ADMIN PANEL — Settings room, owner-only
+// ADMIN PANEL â€” Settings room, owner-only
 // ============================================================
 
 const _ADMIN_PANEL_OWNER = 'animeshkukreti60@gmail.com';
@@ -2446,14 +2446,14 @@ window.adminSaveKey = async function() {
     });
     if (res.ok) {
       sessionStorage.setItem(_ADMIN_KEY_STORAGE, key);
-      if (statusEl) { statusEl.textContent = '✓ Authenticated'; statusEl.className = 'mt-1.5 text-[11px] text-green-400'; }
+      if (statusEl) { statusEl.textContent = 'âœ“ Authenticated'; statusEl.className = 'mt-1.5 text-[11px] text-green-400'; }
       adminFetchCurrent();
       adminListCodes();
     } else {
-      if (statusEl) { statusEl.textContent = '✗ Wrong key'; statusEl.className = 'mt-1.5 text-[11px] text-red-400'; }
+      if (statusEl) { statusEl.textContent = 'âœ— Wrong key'; statusEl.className = 'mt-1.5 text-[11px] text-red-400'; }
     }
   } catch (e) {
-    if (statusEl) { statusEl.textContent = '✗ Network error'; statusEl.className = 'mt-1.5 text-[11px] text-red-400'; }
+    if (statusEl) { statusEl.textContent = 'âœ— Network error'; statusEl.className = 'mt-1.5 text-[11px] text-red-400'; }
   }
 };
 
@@ -2466,7 +2466,7 @@ window.adminFetchCurrent = async function() {
     const res = await fetch('/admin/dev-codes/current', { headers: { 'X-Admin-Key': key } });
     if (res.ok) {
       const data = await res.json();
-      if (tokenEl) tokenEl.textContent = data.code || '—';
+      if (tokenEl) tokenEl.textContent = data.code || 'â€”';
       if (expiresEl) {
         try {
           const exp = new Date(data.expires_at);
@@ -2493,7 +2493,7 @@ window.adminGenerateCode = async function() {
     });
     if (res.ok) {
       const data = await res.json();
-      const code = data.codes?.[0]?.code || '—';
+      const code = data.codes?.[0]?.code || 'â€”';
       if (resultEl) {
         resultEl.textContent = code;
         resultEl.classList.remove('hidden');
@@ -2516,7 +2516,7 @@ window.adminListCodes = async function() {
   const listEl = document.getElementById('admin-codes-list');
   const includeUsed = document.getElementById('admin-show-used')?.checked || false;
   if (!listEl) return;
-  listEl.innerHTML = '<div class="text-xs text-gray-500 text-center py-3">Loading…</div>';
+  listEl.innerHTML = '<div class="text-xs text-gray-500 text-center py-3">Loadingâ€¦</div>';
   try {
     const res = await fetch(`/admin/dev-codes?include_used=${includeUsed}`, {
       headers: { 'X-Admin-Key': key }
@@ -2528,7 +2528,7 @@ window.adminListCodes = async function() {
         return;
       }
       listEl.innerHTML = data.codes.map(c => {
-        const used = c.used_by ? `<span class="text-gray-600 text-[10px] truncate max-w-[120px]">→ ${c.used_by}</span>` : '';
+        const used = c.used_by ? `<span class="text-gray-600 text-[10px] truncate max-w-[120px]">â†’ ${c.used_by}</span>` : '';
         const expired = c.expired ? '<span class="text-red-400/60 text-[10px]">expired</span>' : '';
         const badge = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${c.plan === 'pro' ? 'bg-amber-500/20 text-amber-300' : c.plan === 'intermediate' ? 'bg-cyan/20 text-cyan' : 'bg-white/10 text-gray-400'}">${c.plan}</span>`;
         return `
@@ -2537,11 +2537,11 @@ window.adminListCodes = async function() {
             ${badge}
             <span class="text-[10px] text-gray-600">${c.label || ''}</span>
             ${used}${expired}
-            <button onclick="adminDeleteCode('${c.code}')" class="opacity-0 group-hover:opacity-100 ml-1 text-red-400/60 hover:text-red-400 transition-all text-[10px]" title="Delete">✕</button>
+            <button onclick="adminDeleteCode('${c.code}')" class="opacity-0 group-hover:opacity-100 ml-1 text-red-400/60 hover:text-red-400 transition-all text-[10px]" title="Delete">âœ•</button>
           </div>`;
       }).join('');
     } else {
-      listEl.innerHTML = '<div class="text-xs text-red-400 text-center py-3">Failed to load — check admin key</div>';
+      listEl.innerHTML = '<div class="text-xs text-red-400 text-center py-3">Failed to load â€” check admin key</div>';
     }
   } catch {
     listEl.innerHTML = '<div class="text-xs text-red-400 text-center py-3">Network error</div>';
@@ -2551,11 +2551,11 @@ window.adminListCodes = async function() {
 window.adminDeleteCode = async function(code) {
   const key = _adminKey();
   if (!key) return;
-  // No dedicated delete endpoint yet — placeholder for future
+  // No dedicated delete endpoint yet â€” placeholder for future
   _showToast('Delete endpoint not implemented yet', 'info');
 };
 
-// ── Notification Settings ──────────────────────────────────────────────────────
+// â”€â”€ Notification Settings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function _notifToken() {
   return localStorage.getItem('access_token') || localStorage.getItem('authToken') || '';
@@ -2582,12 +2582,12 @@ window._loadNotifSettings = async function() {
     if (el('notif-twilio-sid')) {
       const redacted = cfg.twilio_account_sid === '***configured***';
       el('notif-twilio-sid').value       = redacted ? '' : (cfg.twilio_account_sid || '');
-      el('notif-twilio-sid').placeholder = redacted ? '✓ configured (leave blank to keep)' : 'Twilio Account SID';
+      el('notif-twilio-sid').placeholder = redacted ? 'âœ“ configured (leave blank to keep)' : 'Twilio Account SID';
     }
     if (el('notif-twilio-token')) {
       el('notif-twilio-token').value = '';
       if (cfg.twilio_account_sid === '***configured***')
-        el('notif-twilio-token').placeholder = '✓ configured (leave blank to keep)';
+        el('notif-twilio-token').placeholder = 'âœ“ configured (leave blank to keep)';
     }
     if (el('notif-wa-from')) el('notif-wa-from').value = cfg.whatsapp_from || '';
     if (el('notif-wa-to'))   el('notif-wa-to').value   = cfg.whatsapp_to   || '';
@@ -2623,13 +2623,13 @@ window.saveNotifSettings = async function() {
       end:   el('notif-quiet-end')?.value   || '06:00',
     },
   };
-  // Twilio only if typed (under construction — hidden inputs will be empty)
+  // Twilio only if typed (under construction â€” hidden inputs will be empty)
   const sid = el('notif-twilio-sid')?.value.trim();
   const tok = el('notif-twilio-token')?.value.trim();
   if (sid) body.twilio_account_sid = sid;
   if (tok) body.twilio_auth_token  = tok;
 
-  if (statusEl) { statusEl.className = 'text-[11px] text-center text-cyan-400'; statusEl.textContent = 'Saving…'; }
+  if (statusEl) { statusEl.className = 'text-[11px] text-center text-cyan-400'; statusEl.textContent = 'Savingâ€¦'; }
   try {
     const r = await fetch('/api/notifications/settings', {
       method:  'POST',
@@ -2639,7 +2639,7 @@ window.saveNotifSettings = async function() {
     if (statusEl) {
       if (r.ok) {
         statusEl.className   = 'text-[11px] text-center text-green-400';
-        statusEl.textContent = '✓ Settings saved';
+        statusEl.textContent = 'âœ“ Settings saved';
       } else {
         statusEl.className   = 'text-[11px] text-center text-red-400';
         statusEl.textContent = `Error ${r.status}`;
@@ -2653,7 +2653,7 @@ window.saveNotifSettings = async function() {
 
 window.testNotifSettings = async function() {
   const statusEl = document.getElementById('notif-status');
-  if (statusEl) { statusEl.className = 'text-[11px] text-center text-cyan-400'; statusEl.textContent = 'Sending test ping…'; }
+  if (statusEl) { statusEl.className = 'text-[11px] text-center text-cyan-400'; statusEl.textContent = 'Sending test pingâ€¦'; }
   try {
     const r = await fetch('/api/notifications/test', {
       method:  'POST',
@@ -2662,12 +2662,12 @@ window.testNotifSettings = async function() {
     const data = await r.json();
     const results = data.results || {};
     const parts = [];
-    if ('discord'  in results) parts.push(`Discord: ${results.discord  ? '✓ sent' : '✗ failed'}`);
-    if ('whatsapp' in results) parts.push(`WhatsApp: ${results.whatsapp ? '✓ sent' : '✗ failed'}`);
+    if ('discord'  in results) parts.push(`Discord: ${results.discord  ? 'âœ“ sent' : 'âœ— failed'}`);
+    if ('whatsapp' in results) parts.push(`WhatsApp: ${results.whatsapp ? 'âœ“ sent' : 'âœ— failed'}`);
     if (statusEl) {
       const allOk = Object.values(results).some(Boolean);
       statusEl.className   = `text-[11px] text-center ${allOk ? 'text-green-400' : 'text-red-400'}`;
-      statusEl.textContent = parts.length ? parts.join('  ·  ') : 'No channels configured yet';
+      statusEl.textContent = parts.length ? parts.join('  Â·  ') : 'No channels configured yet';
     }
     setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 8000);
   } catch (e) {
@@ -2675,7 +2675,7 @@ window.testNotifSettings = async function() {
   }
 };
 
-// ── Telegram one-tap connect ───────────────────────────────────────────────────
+// â”€â”€ Telegram one-tap connect â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 let _tgPollTimer = null;
 
@@ -2708,14 +2708,14 @@ window.connectTelegram = async function() {
   const btn     = document.querySelector('#tg-state-disconnected button');
   const statusEl = document.getElementById('notif-status');
 
-  // Open the window SYNCHRONOUSLY before any await — prevents popup blocker
+  // Open the window SYNCHRONOUSLY before any await â€” prevents popup blocker
   const tgWin = window.open('', '_blank');
   if (tgWin) {
-    tgWin.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Connect Telegram</title></head><body style="background:#0e1621;color:#8b949e;font-family:sans-serif;text-align:center;padding-top:25vh;margin:0"><p style="font-size:16px">Connecting to Telegram…</p></body></html>');
+    tgWin.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Connect Telegram</title></head><body style="background:#0e1621;color:#8b949e;font-family:sans-serif;text-align:center;padding-top:25vh;margin:0"><p style="font-size:16px">Connecting to Telegramâ€¦</p></body></html>');
   }
 
   // Show loading state on button
-  if (btn) { btn.disabled = true; btn.innerHTML = '<svg class="animate-spin h-4 w-4 inline mr-1" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Connecting…'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<svg class="animate-spin h-4 w-4 inline mr-1" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Connectingâ€¦'; }
 
   try {
     const r = await fetch('/api/notifications/telegram/connect', {
@@ -2728,7 +2728,7 @@ window.connectTelegram = async function() {
       const err = await r.json().catch(() => ({}));
       if (statusEl) {
         statusEl.className   = 'text-[11px] text-center text-red-400';
-        statusEl.textContent = err.detail || `Error ${r.status} — Telegram bot may not be configured on this server`;
+        statusEl.textContent = err.detail || `Error ${r.status} â€” Telegram bot may not be configured on this server`;
         setTimeout(() => { statusEl.textContent = ''; }, 7000);
       }
       return;
@@ -2748,19 +2748,19 @@ window.connectTelegram = async function() {
       tgWin.document.write(
         '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Connect Telegram</title></head>' +
         '<body style="background:#0e1621;color:#c8d1d9;font-family:sans-serif;text-align:center;padding:20vh 24px 0;margin:0">' +
-        '<p style="font-size:20px;margin:0 0 8px;font-weight:600">Opening Telegram…</p>' +
+        '<p style="font-size:20px;margin:0 0 8px;font-weight:600">Opening Telegramâ€¦</p>' +
         '<p style="font-size:13px;color:#8b949e;margin:0 0 28px">Your Telegram app should open automatically.</p>' +
         '<a id="tg-btn" href="' + deeplink + '" ' +
         'style="display:inline-block;background:#2ea6ff;color:#fff;padding:13px 28px;border-radius:10px;text-decoration:none;font-size:15px;font-weight:600">' +
         'Open in Telegram</a>' +
-        '<p style="font-size:11px;color:#656d76;margin-top:20px">Tap <b>START</b> in Telegram, then return here — you\'ll be connected automatically.</p>' +
+        '<p style="font-size:11px;color:#656d76;margin-top:20px">Tap <b>START</b> in Telegram, then return here â€” you\'ll be connected automatically.</p>' +
         '<p style="font-size:11px;color:#656d76;margin-top:8px">You can close this tab once done.</p>' +
         '<script>setTimeout(function(){var a=document.createElement("a");a.href="' + tgAppLink + '";document.body.appendChild(a);a.click();},200);<\/script>' +
         '</body></html>'
       );
       tgWin.document.close();
     } else {
-      // Popup was blocked — try opening the app link directly in current tab context,
+      // Popup was blocked â€” try opening the app link directly in current tab context,
       // then show a clickable button in the status area.
       window.open(tgAppLink, '_blank');
       if (statusEl) {
@@ -2786,7 +2786,7 @@ window.connectTelegram = async function() {
           _tgSetState('connected', data.chat_id);
           if (statusEl) {
             statusEl.className   = 'text-[11px] text-center text-green-400';
-            statusEl.textContent = '✓ Telegram connected! Signals will arrive as DMs.';
+            statusEl.textContent = 'âœ“ Telegram connected! Signals will arrive as DMs.';
             setTimeout(() => { statusEl.textContent = ''; }, 5000);
           }
         }
@@ -2802,7 +2802,7 @@ window.connectTelegram = async function() {
   } catch (e) {
     if (tgWin) tgWin.close();
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fab fa-telegram text-base"></i> Connect Telegram'; }
-    if (statusEl) { statusEl.className = 'text-[11px] text-center text-red-400'; statusEl.textContent = 'Network error — is the server running?'; }
+    if (statusEl) { statusEl.className = 'text-[11px] text-center text-red-400'; statusEl.textContent = 'Network error â€” is the server running?'; }
   }
 };
 
@@ -2852,4 +2852,5 @@ setTimeout(async function _initTgBannerCheck() {
   // Also expose for direct call
   window.switchRoom._notifPatched = true;
 }());
+
 

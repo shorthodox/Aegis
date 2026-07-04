@@ -1,5 +1,5 @@
-// ============================================================
-// AEGIS Authentication Module – Mobile-First Design
+﻿// ============================================================
+// AEGIS Authentication Module â€“ Mobile-First Design
 // Separate Login/Signup flows with multiple auth methods
 // ============================================================
 
@@ -39,7 +39,7 @@ const googleProvider = new GoogleAuthProvider();
 googleProvider.addScope('email');
 googleProvider.addScope('profile');
 
-// Errors where signInWithPopup cannot work — fall back to redirect
+// Errors where signInWithPopup cannot work â€” fall back to redirect
 const _POPUP_FALLBACK_ERRORS = new Set([
   'auth/popup-blocked',
   'auth/popup-closed-by-user',
@@ -121,7 +121,7 @@ export async function ensureUserDocumentV2(user, authMethod = 'email', phone = '
     };
     
     await setDoc(userDocRef, userData);
-    console.log('✅ New user document created');
+    console.log('âœ… New user document created');
     return { ...userData, isNewUser: true };
   } else {
     // EXISTING USER - UPDATE LOGIN METHOD & LAST LOGIN
@@ -136,7 +136,7 @@ export async function ensureUserDocumentV2(user, authMethod = 'email', phone = '
       lastLogin: serverTimestamp()
     });
     
-    console.log('✅ Existing user login updated');
+    console.log('âœ… Existing user login updated');
     return { ...existingData, isNewUser: false };
   }
 }
@@ -165,7 +165,7 @@ async function _resolveGoogleUser(user) {
     try {
       const meRes = await fetch('/auth/me', { headers: { Authorization: `Bearer ${idToken}` } });
       if (!meRes.ok) {
-        // Backend doesn't recognize this user — sign them out of Firebase so the
+        // Backend doesn't recognize this user â€” sign them out of Firebase so the
         // session doesn't linger and ask them to complete registration.
         try { await signOut(auth); } catch (_) {}
         localStorage.removeItem('authenticated');
@@ -178,7 +178,7 @@ async function _resolveGoogleUser(user) {
         };
       }
     } catch (_) {
-      // Network failure — allow through rather than locking out verified users
+      // Network failure â€” allow through rather than locking out verified users
     }
 
     AuthManager.setToken(idToken);
@@ -187,7 +187,7 @@ async function _resolveGoogleUser(user) {
     return { success: true, user, isNewUser: false, message: 'Logged in successfully!' };
   }
 
-  // New user — phone verification required before Firestore doc is created
+  // New user â€” phone verification required before Firestore doc is created
   return { success: true, user, isNewUser: true, message: 'Phone verification required' };
 }
 
@@ -200,13 +200,13 @@ export async function handleGoogleAuth() {
       result = await signInWithPopup(auth, googleProvider);
     } catch (popupError) {
       const code = popupError?.code || '';
-      console.warn('Google popup failed:', code, '— falling back to redirect');
+      console.warn('Google popup failed:', code, 'â€” falling back to redirect');
       if (_POPUP_FALLBACK_ERRORS.has(code) || !code) {
         // Redirect flow: page will reload; handleGoogleRedirectResult() picks up
         // the result when the page re-initialises after the Google OAuth round-trip.
         sessionStorage.setItem('google_redirect_pending', 'signin');
         await signInWithRedirect(auth, googleProvider);
-        return { success: false, redirecting: true, message: 'Redirecting to Google…' };
+        return { success: false, redirecting: true, message: 'Redirecting to Googleâ€¦' };
       }
       throw popupError;
     }
@@ -223,7 +223,7 @@ export async function handleGoogleAuth() {
 export async function handleGoogleRedirectResult() {
   try {
     const result = await getRedirectResult(auth);
-    if (!result) return null; // No pending redirect — normal page load
+    if (!result) return null; // No pending redirect â€” normal page load
     sessionStorage.removeItem('google_redirect_pending');
     return await _resolveGoogleUser(result.user);
   } catch (error) {
@@ -233,7 +233,7 @@ export async function handleGoogleRedirectResult() {
   }
 }
 
-// Sign out the current Firebase session without redirecting — used to clean up
+// Sign out the current Firebase session without redirecting â€” used to clean up
 // an incomplete Google signup when the user is blocked (e.g. duplicate phone).
 export async function cancelIncompleteGoogleSignup() {
   try { await signOut(auth); } catch (_) {}
@@ -250,7 +250,7 @@ export async function completeGoogleSignupWithPhone(user, phone) {
 
     // Provision the backend record (users/{email}) with otp_verified:true.
     // Without this step the backend's /auth/me returns 404 because it looks up
-    // users/{email} — a completely separate doc from the frontend's users/{uid}.
+    // users/{email} â€” a completely separate doc from the frontend's users/{uid}.
     const provRes = await fetch('/api/users/provision', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
@@ -281,7 +281,7 @@ export async function completeGoogleSignupWithPhone(user, phone) {
 // EMAIL/PASSWORD SIGNUP
 // ============================================================
 // ============================================================
-// OTP helpers — call backend before creating Firebase account
+// OTP helpers â€” call backend before creating Firebase account
 // ============================================================
 export async function sendOTPForSignup(email, phone = null) {
   try {
@@ -424,13 +424,13 @@ export async function handleEmailSignup(email, password, displayName, signupToke
     }
 
     // signupToken is only present in the legacy email-OTP flow.
-    // Firebase Phone Auth flow sets it to null; that's fine — phone was verified client-side.
+    // Firebase Phone Auth flow sets it to null; that's fine â€” phone was verified client-side.
     if (signupToken) {
       sessionStorage.setItem('otp_signup_token', signupToken);
     }
     if (mobile) sessionStorage.setItem('pending_phone', mobile);
 
-    // OTP already proved email is reachable — create account and sign in directly.
+    // OTP already proved email is reachable â€” create account and sign in directly.
     // fetchSignInMethodsForEmail is deprecated and broken when Firebase's email
     // enumeration protection is enabled; let createUserWithEmailAndPassword handle
     // duplicates via auth/email-already-in-use instead.
@@ -493,10 +493,10 @@ export async function handleEmailSignup(email, password, displayName, signupToke
     AuthManager.setUser(userData);
     localStorage.setItem('authenticated', 'true');
 
-    console.log('✅ Email signup successful');
+    console.log('âœ… Email signup successful');
     return { success: true, user, message: 'Account created successfully!', userData };
   } catch (error) {
-    console.error('❌ Email signup error:', error.code, error.message);
+    console.error('âŒ Email signup error:', error.code, error.message);
     let message = 'Signup failed. Please try again.';
     if (error.code === 'auth/email-already-in-use') {
       return { success: false, needsSignin: true, message: 'This email is already registered. Sign in to your account instead.' };
@@ -520,11 +520,11 @@ export async function handleEmailLogin(email, password) {
       throw new Error('Please enter email and password');
     }
 
-    console.log('🔐 Logging in with email...');
+    console.log('ðŸ” Logging in with email...');
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
 
-    // Gate: check Firestore — only users who completed OTP-verified signup exist here
+    // Gate: check Firestore â€” only users who completed OTP-verified signup exist here
     const userDocRef = doc(db, 'users', user.uid);
     const docSnap = await getDoc(userDocRef);
     if (!docSnap.exists()) {
@@ -536,7 +536,7 @@ export async function handleEmailLogin(email, password) {
       };
     }
 
-    // Firestore doc confirmed — update last login
+    // Firestore doc confirmed â€” update last login
     const userData = await ensureUserDocumentV2(user, 'email');
 
     // Store token
@@ -557,17 +557,17 @@ export async function handleEmailLogin(email, password) {
         };
       }
     } catch (_) {
-      // Network failure — allow through rather than locking out verified users
+      // Network failure â€” allow through rather than locking out verified users
     }
 
     AuthManager.setToken(idToken);
     AuthManager.setUser(userData);
     localStorage.setItem('authenticated', 'true');
 
-    console.log('✅ Email login successful');
+    console.log('âœ… Email login successful');
     return { success: true, user, message: 'Logged in successfully!', userData };
   } catch (error) {
-    console.error('❌ Email login error:', error.code, error.message);
+    console.error('âŒ Email login error:', error.code, error.message);
 
     if (error.code === 'auth/user-not-found') {
       return { success: false, needsSignup: true, message: 'No account found with this email. Please create an account first.' };
@@ -604,17 +604,17 @@ export async function setupPhoneRecaptcha() {
     const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
       'size': 'invisible',
       'callback': (response) => {
-        console.log('✅ reCAPTCHA verified:', response);
+        console.log('âœ… reCAPTCHA verified:', response);
       },
       'expired-callback': () => {
-        console.warn('⚠️ reCAPTCHA expired');
+        console.warn('âš ï¸ reCAPTCHA expired');
       }
     });
     
     window.recaptchaVerifier = verifier;
     return verifier;
   } catch (error) {
-    console.error('❌ reCAPTCHA setup error:', error);
+    console.error('âŒ reCAPTCHA setup error:', error);
     throw error;
   }
 }
@@ -625,7 +625,7 @@ export async function sendPhoneOTP(phoneNumber, displayName) {
       throw new Error('Phone number and name required');
     }
 
-    // Always clear stale verifier — previous errors leave it in a broken state
+    // Always clear stale verifier â€” previous errors leave it in a broken state
     if (window.recaptchaVerifier) {
       try { window.recaptchaVerifier.clear(); } catch (_) {}
       window.recaptchaVerifier = null;
@@ -638,10 +638,10 @@ export async function sendPhoneOTP(phoneNumber, displayName) {
     
     window.currentPhoneData = { phoneNumber: formattedPhone, displayName };
     
-    console.log('✅ OTP sent successfully');
+    console.log('âœ… OTP sent successfully');
     return { success: true, message: 'OTP sent! Check your phone.' };
   } catch (error) {
-    console.error('❌ OTP send error:', error.code, error.message);
+    console.error('âŒ OTP send error:', error.code, error.message);
     return { 
       success: false, 
       message: error.message || 'Failed to send OTP'
@@ -655,7 +655,7 @@ export async function verifyPhoneOTP(otpCode) {
       throw new Error('OTP code required');
     }
     
-    console.log('✔️ Verifying OTP...');
+    console.log('âœ”ï¸ Verifying OTP...');
     const userCredential = await confirmationResult.confirm(otpCode);
     const user = userCredential.user;
     
@@ -678,10 +678,10 @@ export async function verifyPhoneOTP(otpCode) {
     confirmationResult = null;
     window.currentPhoneData = null;
     
-    console.log('✅ Phone OTP verified successfully');
+    console.log('âœ… Phone OTP verified successfully');
     return { success: true, user, message: 'Account created via phone!' };
   } catch (error) {
-    console.error('❌ OTP verification error:', error.code, error.message);
+    console.error('âŒ OTP verification error:', error.code, error.message);
     return {
       success: false,
       message: error.message || 'Invalid OTP'
@@ -699,9 +699,9 @@ export async function verifyPhoneOTPForRegistration(otpCode) {
     }
     await confirmationResult.confirm(otpCode);
     confirmationResult = null;
-    // Do NOT sign out here — callers manage auth state:
-    // • Google flow: current user stays signed in to write Firestore doc
-    // • Email flow: createUserWithEmailAndPassword switches the session automatically
+    // Do NOT sign out here â€” callers manage auth state:
+    // â€¢ Google flow: current user stays signed in to write Firestore doc
+    // â€¢ Email flow: createUserWithEmailAndPassword switches the session automatically
     return { success: true };
   } catch (error) {
     const code = error.code || '';
@@ -730,7 +730,7 @@ export async function verifyAndLinkPhoneToGoogle(otpCode, googleUser) {
       await linkWithCredential(googleUser, phoneCredential);
     } catch (linkErr) {
       const lc = linkErr.code || '';
-      // Already linked to this account or to an orphaned test account — OTP was valid either way.
+      // Already linked to this account or to an orphaned test account â€” OTP was valid either way.
       // Firebase validates the code BEFORE checking for conflicts, so credential-already-in-use
       // means the code was correct. Our Firestore uniqueness check already passed, so proceed.
       if (lc === 'auth/provider-already-linked' || lc === 'auth/credential-already-in-use') {
@@ -776,7 +776,7 @@ export async function handleLogout() {
     window.location.href = '/';
     return { success: true };
   } catch (error) {
-    console.error('❌ Logout error:', error);
+    console.error('âŒ Logout error:', error);
     return { success: false, message: error.message };
   }
 }
@@ -785,7 +785,7 @@ export async function handleLogout() {
 // PASSWORD RESET
 // ============================================================
 // All reset emails are delivered exclusively via our Neo SMTP domain
-// so they land in the inbox branded as gatekeeper.sbs — never via Firebase.
+// so they land in the inbox branded as aegisignal.pro â€” never via Firebase.
 export async function handlePasswordReset(email) {
   if (!email) return { success: false, message: 'Email required.' };
   try {
@@ -796,21 +796,21 @@ export async function handlePasswordReset(email) {
     });
     const data = await res.json().catch(() => ({}));
     if (res.ok) {
-      return { success: true, message: data.message || 'Reset link sent — check your inbox (and spam folder).' };
+      return { success: true, message: data.message || 'Reset link sent â€” check your inbox (and spam folder).' };
     }
     if (res.status === 429) {
       return { success: false, message: 'Too many attempts. Please wait a few minutes and try again.' };
     }
-    // SMTP failure — silently fall back to Firebase's own reset email
+    // SMTP failure â€” silently fall back to Firebase's own reset email
     if (data.detail === 'smtp_failure') {
       try {
         await sendPasswordResetEmail(auth, email);
-        return { success: true, message: 'Reset link sent — check your inbox (and spam folder).' };
+        return { success: true, message: 'Reset link sent â€” check your inbox (and spam folder).' };
       } catch (fbErr) {
         if (fbErr.code === 'auth/user-not-found') {
           return { success: true, message: 'If an account with this email exists, a reset link has been sent.' };
         }
-        return { success: false, message: 'Failed to send reset email. Please contact support@gatekeeper.sbs.' };
+        return { success: false, message: 'Failed to send reset email. Please contact support@aegisignal.pro.' };
       }
     }
     return {
@@ -818,7 +818,7 @@ export async function handlePasswordReset(email) {
       message: data.detail || 'Failed to send reset email. Please try again.',
     };
   } catch (error) {
-    console.error('❌ Password reset error:', error);
+    console.error('âŒ Password reset error:', error);
     return { success: false, message: 'Network error. Please check your connection and try again.' };
   }
 }
@@ -870,7 +870,8 @@ export async function getUserData(userId) {
     const userDoc = await getDoc(doc(db, 'users', userId));
     return userDoc.exists() ? userDoc.data() : null;
   } catch (error) {
-    console.error('❌ Error fetching user data:', error);
+    console.error('âŒ Error fetching user data:', error);
     return null;
   }
 }
+

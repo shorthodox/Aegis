@@ -1,4 +1,4 @@
-# ===================================================================
+﻿# ===================================================================
 # main.py - CRITICAL: Load environment variables FIRST
 # ===================================================================
 from dotenv import load_dotenv
@@ -248,7 +248,7 @@ WEB_ROOT = os.path.join(BASE_DIR, "web")
 WEB_ROOT_PATH = Path(WEB_ROOT)
 
 if not WEB_ROOT_PATH.exists():
-    print(f"⚠️ Warning: 'web' directory not found at {WEB_ROOT_PATH}. Creating fallback structure.")
+    print(f"âš ï¸ Warning: 'web' directory not found at {WEB_ROOT_PATH}. Creating fallback structure.")
     WEB_ROOT_PATH.mkdir(parents=True, exist_ok=True)
     pages_dir = WEB_ROOT_PATH / "src" / "pages"
     scripts_dir = WEB_ROOT_PATH / "src" / "scripts"
@@ -256,7 +256,7 @@ if not WEB_ROOT_PATH.exists():
     pages_dir.mkdir(parents=True, exist_ok=True)
     scripts_dir.mkdir(parents=True, exist_ok=True)
     styles_dir.mkdir(parents=True, exist_ok=True)
-    (pages_dir / "index.html").write_text("<html><body><h1>Aegis‑1</h1><p>Frontend files missing. Please upload the correct static files to 'web/src/pages/'</p></body></html>")
+    (pages_dir / "index.html").write_text("<html><body><h1>Aegisâ€‘1</h1><p>Frontend files missing. Please upload the correct static files to 'web/src/pages/'</p></body></html>")
     (pages_dir / "dashboard.html").write_text("<html><body><h1>Dashboard unavailable</h1><p>Static files not found.</p></body></html>")
 
 # Restore dynamic track-record files from the engine STATE folder if present.
@@ -394,11 +394,11 @@ def _update_track_record(signals_data: dict, live_prices: dict) -> None:
     """Called from update_state on every engine tick.
 
     Exit logic (dynamic TP):
-      - Primary TP : the same model fires the OPPOSITE signal  → MODEL_REVERSAL_TP.
+      - Primary TP : the same model fires the OPPOSITE signal  â†’ MODEL_REVERSAL_TP.
                      This is the trend-reversal take-profit the user requested:
                      enter on one reversal, exit when the next reversal fires.
-      - Safety SL  : price crosses the ATR stop stored at entry → STOP_HIT.
-      - Hard ceiling: the stored take_profit price (wide ATR fallback) → TARGET_HIT.
+      - Safety SL  : price crosses the ATR stop stored at entry â†’ STOP_HIT.
+      - Hard ceiling: the stored take_profit price (wide ATR fallback) â†’ TARGET_HIT.
                      Prevents a position staying open forever if the model never
                      generates an opposite signal (e.g. a slow grind with no clean
                      re-entry signal on the other side).
@@ -407,7 +407,7 @@ def _update_track_record(signals_data: dict, live_prices: dict) -> None:
     now_iso = datetime.now(timezone.utc).isoformat()
 
     for sym, sig_map in signals_data.items():
-        # Resolve nested timeframe map → use 1h summary signal
+        # Resolve nested timeframe map â†’ use 1h summary signal
         if isinstance(sig_map, dict) and any(tf in sig_map for tf in ("1m","5m","15m","30m","1h","4h","1d")):
             sig = sig_map.get("1h") or next((v for v in sig_map.values() if isinstance(v, dict)), None)
         else:
@@ -423,7 +423,7 @@ def _update_track_record(signals_data: dict, live_prices: dict) -> None:
 
         current_price = float(live_prices.get(sym, sig.get("price", 0) or 0))
 
-        # ── Find the one open position for this symbol (if any) ────────────
+        # â”€â”€ Find the one open position for this symbol (if any) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         open_rec = next(
             (r for r in _track_store if r.get("symbol") == sym and r.get("outcome") == "OPEN"),
             None
@@ -442,7 +442,7 @@ def _update_track_record(signals_data: dict, live_prices: dict) -> None:
             )
 
             # Primary TP: opposite model signal fires (this is the reversal exit).
-            # Requires fire=True — a weak opposite prediction must not close the position.
+            # Requires fire=True â€” a weak opposite prediction must not close the position.
             # Does NOT depend on _tr_seen_ids: that set guards entries, not exits.
             opposite_fired = fire and (
                 (direction == "LONG"  and signal_type in _SELL_SIGNALS) or
@@ -479,7 +479,7 @@ def _update_track_record(signals_data: dict, live_prices: dict) -> None:
                     "pnl_pct":     pnl_pct,
                     "exit_reason": "STOP_HIT",
                 })
-                continue  # SL hit — do not open a new position this tick
+                continue  # SL hit â€” do not open a new position this tick
 
             elif ceiling_hit:
                 open_rec.update({
@@ -489,16 +489,16 @@ def _update_track_record(signals_data: dict, live_prices: dict) -> None:
                     "pnl_pct":     pnl_pct,
                     "exit_reason": "TARGET_HIT",
                 })
-                continue  # Hard ceiling hit — do not immediately re-enter
+                continue  # Hard ceiling hit â€” do not immediately re-enter
 
             else:
-                # Position still open — refresh live unrealized PnL so the
+                # Position still open â€” refresh live unrealized PnL so the
                 # public track record shows a moving number, not the entry 0.00
                 open_rec["pnl_pct"]       = pnl_pct
                 open_rec["current_price"] = current_price
                 continue
 
-        # ── Open a new position if the signal is actionable and fresh ───────
+        # â”€â”€ Open a new position if the signal is actionable and fresh â”€â”€â”€â”€â”€â”€â”€
         # Only fire=True signals should create track-record entries.
         if not fire:
             continue
@@ -535,7 +535,7 @@ def _update_track_record(signals_data: dict, live_prices: dict) -> None:
             "exit_reason":     None,
             "ai_prob":         round(float(sig.get("meta_confidence") or 0), 3),
             "confluence_rate": round(float(_conf_data.get("total") or 0), 2),
-            # Risk tier at entry (STRONG | NORMAL | RISKY) — set by the live
+            # Risk tier at entry (STRONG | NORMAL | RISKY) â€” set by the live
             # engine's risk-tier classifier; shown as a badge on the public page.
             "signal_strength": sig.get("risk_tier", ""),
             "source":          "live_engine",
@@ -548,10 +548,10 @@ def _update_track_record(signals_data: dict, live_prices: dict) -> None:
         _tr_seen_ids = {r["signal_id"] for r in _track_store if r.get("signal_id")}
 
 # -------------------------------------------------------------------
-# OTP Store — Firestore-backed (collection: phone_verifications)
+# OTP Store â€” Firestore-backed (collection: phone_verifications)
 # Replaces the old in-memory dict so OTPs survive server restarts.
-# Enable TTL on the 'expires_at' field in Firebase Console →
-#   Firestore → TTL Policies → collection: phone_verifications, field: expires_at
+# Enable TTL on the 'expires_at' field in Firebase Console â†’
+#   Firestore â†’ TTL Policies â†’ collection: phone_verifications, field: expires_at
 # -------------------------------------------------------------------
 _OTP_COL = "phone_verifications"
 
@@ -563,7 +563,7 @@ def _otp_get(email: str) -> Optional[Dict]:
     if not snap.exists:
         return None
     data = snap.to_dict() or {}
-    # Firestore returns DatetimeWithNanoseconds (tz-aware datetime subclass) — no conversion needed
+    # Firestore returns DatetimeWithNanoseconds (tz-aware datetime subclass) â€” no conversion needed
     return data
 
 def _otp_set(email: str, data: Dict):
@@ -590,7 +590,7 @@ def _otp_find_by_phone(phone: str) -> Optional[str]:
     return None
 
 # Keep a module-level alias for old code paths not yet migrated
-otp_store: Dict[str, Dict] = {}  # legacy — new code uses _otp_* helpers above
+otp_store: Dict[str, Dict] = {}  # legacy â€” new code uses _otp_* helpers above
 
 def generate_otp() -> str:
     return ''.join(random.choices(string.digits, k=6))
@@ -659,7 +659,7 @@ async def compute_system_analytics():
         if not db:
             return
             
-        print("📊 Running Institutional Analytics Computation...")
+        print("ðŸ“Š Running Institutional Analytics Computation...")
         signals_ref = db.collection("signals")
         
         # Query only closed trades
@@ -671,7 +671,7 @@ async def compute_system_analytics():
             trades.append(doc.to_dict())
             
         if not trades:
-            print("📊 No closed trades found for analytics.")
+            print("ðŸ“Š No closed trades found for analytics.")
             db.collection("analytics").document("global_performance").set({
                 "win_rate": 0.0,
                 "expectancy": 0.0,
@@ -742,10 +742,10 @@ async def compute_system_analytics():
         }
         
         db.collection("analytics").document("global_performance").set(analytics_data)
-        print(f"📊 Analytics updated: Exp {expectancy:.2f}%, PF {profit_factor:.2f}, MDD {max_dd_pct:.2f}%")
+        print(f"ðŸ“Š Analytics updated: Exp {expectancy:.2f}%, PF {profit_factor:.2f}, MDD {max_dd_pct:.2f}%")
         
     except Exception as e:
-        print(f"❌ Error computing analytics: {e}")
+        print(f"âŒ Error computing analytics: {e}")
 
 async def analytics_loop():
     while True:
@@ -753,7 +753,7 @@ async def analytics_loop():
         await asyncio.sleep(3600)  # Run every hour
 
 # -------------------------------------------------------------------
-# Engine runner as a background task (non‑blocking) with error handling
+# Engine runner as a background task (nonâ€‘blocking) with error handling
 # -------------------------------------------------------------------
 async def run_engine_background():
     """Run the live engine in the background without blocking startup."""
@@ -839,7 +839,7 @@ async def run_engine_background():
                         json.dump(safe_signals, sf, default=str)
                     os.replace(temp_file, signals_file)
                 except Exception as _e:
-                    print(f"⚠️ Failed to write live_signals.json: {_e}")
+                    print(f"âš ï¸ Failed to write live_signals.json: {_e}")
 
                 # --- write latest signals to Firebase Firestore ---
                 # Only push when: warmup is done AND (signals changed OR 5-min interval elapsed).
@@ -851,11 +851,11 @@ async def run_engine_background():
                 if _warming_up:
                     print(f"[PRODUCER] Warmup in progress "
                           f"({_eng.bootstrap_done}/{_eng.bootstrap_total}) "
-                          f"— Firestore push deferred.")
+                          f"â€” Firestore push deferred.")
 
                 _now = time.time()
                 _signals_now = LIVE_STATE.data.get('signals', {}) if not _warming_up else {}
-                # Fingerprint: (symbol, signal_side, fire) — stable between scans when
+                # Fingerprint: (symbol, signal_side, fire) â€” stable between scans when
                 # nothing fires.  signal_id uses uuid4() on fire=True, so hashing
                 # signal_id caused a push on every fired symbol within a scan cycle.
                 _sig_fingerprint = tuple(sorted(
@@ -868,13 +868,13 @@ async def run_engine_background():
                 _interval_elapsed = (_now - _last_firestore_push >= _FIRESTORE_MIN_INTERVAL)
 
                 if not _signals_now or (not _signals_changed and not _interval_elapsed):
-                    pass  # skip — nothing new to push
+                    pass  # skip â€” nothing new to push
                 else:
                     _last_signals_hash = _new_hash
                     _last_firestore_push = _now
 
                 try:
-                    # Only push FIRED signals (fire=True) — NEUTRAL/FLAT signals are
+                    # Only push FIRED signals (fire=True) â€” NEUTRAL/FLAT signals are
                     # market monitoring data, not trade signals. Live prices are never
                     # written to Firestore; they flow only through the WebSocket ticker
                     # stream to the dashboard.
@@ -910,7 +910,7 @@ async def run_engine_background():
                             continue
                         doc_id  = sym.replace('/', '_')
                         sig_ref = db.collection("signals").document(doc_id)
-                        # Strip live-price and heavy context keys — prices go via WS only
+                        # Strip live-price and heavy context keys â€” prices go via WS only
                         compact = {
                             k: v for k, v in numpy_to_native(sig).items()
                             if k not in _PRICE_CONTEXT_KEYS
@@ -935,9 +935,9 @@ async def run_engine_background():
                 except StopIteration:
                     pass  # nothing to push this tick
                 except Exception as _e:
-                    print(f"[PRODUCER ERROR] ⚠️ Failed to write signals to Firestore: {_e}")
+                    print(f"[PRODUCER ERROR] âš ï¸ Failed to write signals to Firestore: {_e}")
 
-                # Legacy track-record update disabled — live_engine.py wallet
+                # Legacy track-record update disabled â€” live_engine.py wallet
                 # is the sole track-record writer to avoid file conflicts.
 
             except Exception as e:
@@ -949,23 +949,23 @@ async def run_engine_background():
     try:
         await engine.run()
     except Exception as e:
-        print(f"⚠️ LiveEngine crashed: {e}")
+        print(f"âš ï¸ LiveEngine crashed: {e}")
 
 # -------------------------------------------------------------------
-# Telegram Bot Connect — one-tap flow
+# Telegram Bot Connect â€” one-tap flow
 # -------------------------------------------------------------------
 # Admin sets TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_USERNAME in .env / environment.
-# Users click "Connect Telegram" → get a deep link → tap Start → connected.
+# Users click "Connect Telegram" â†’ get a deep link â†’ tap Start â†’ connected.
 
 import secrets as _secrets
 
 def _tg_token()    -> str: return os.getenv("TELEGRAM_BOT_TOKEN", "")
 def _tg_username() -> str: return os.getenv("TELEGRAM_BOT_USERNAME", "").lstrip("@")
 
-# code → user_email (pending connections, in-memory)
+# code â†’ user_email (pending connections, in-memory)
 _tg_pending: dict = {}
 
-# user_email → chat_id (persisted)
+# user_email â†’ chat_id (persisted)
 _tg_connections: dict = {}
 _TG_CONNECTIONS_PATH = Path("data/telegram_connections.json")
 
@@ -1013,14 +1013,14 @@ def _tg_start_poller() -> None:
                                 email = _tg_pending.pop(code)
                                 _tg_connections[email] = chat_id
                                 _tg_save_connections()
-                                logger.info(f"[Telegram] Connected {email} → chat_id {chat_id}")
+                                logger.info(f"[Telegram] Connected {email} â†’ chat_id {chat_id}")
                                 # Send confirmation to user
                                 try:
                                     _req.post(
                                         f"https://api.telegram.org/bot{_tg_token()}/sendMessage",
                                         json={
                                             "chat_id":    chat_id,
-                                            "text":       "✅ *AEGIS Signal Bot connected!*\n\nYou'll now receive BUY/SELL signals directly here. Set a unique notification tone so you never miss one.",
+                                            "text":       "âœ… *AEGIS Signal Bot connected!*\n\nYou'll now receive BUY/SELL signals directly here. Set a unique notification tone so you never miss one.",
                                             "parse_mode": "Markdown",
                                         },
                                         timeout=5,
@@ -1039,11 +1039,11 @@ def _tg_start_poller() -> None:
 # -------------------------------------------------------------------
 # FastAPI app (lifespan runs engine as background task)
 # -------------------------------------------------------------------
-# ── Trader Engine background scan loop ────────────────────────────────────────
+# â”€â”€ Trader Engine background scan loop â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 _TRADER_SCAN_INTERVAL = 30    # 30 seconds
 
 def _save_trader_track_record() -> None:
-    """Copy data/trader_track_record.json → web/trader_track_record.json for static serving."""
+    """Copy data/trader_track_record.json â†’ web/trader_track_record.json for static serving."""
     try:
         engine = _get_trader_engine_lazy()
         if engine is None:
@@ -1096,7 +1096,7 @@ async def _trader_scan_loop():
                 )
                 _save_trader_track_record()
                 logger.info(
-                    f"[TraderEngine] scan complete — "
+                    f"[TraderEngine] scan complete â€” "
                     f"{len(engine.active_signals)} signal(s), "
                     f"{len(engine.token_status)} token(s) tracked"
                 )
@@ -1120,7 +1120,7 @@ async def _otp_cleanup_loop():
 
 
 async def _telegram_cleanup_loop():
-    """Disconnect Telegram for users whose trial has ended or plan has lapsed — runs hourly."""
+    """Disconnect Telegram for users whose trial has ended or plan has lapsed â€” runs hourly."""
     while True:
         await asyncio.sleep(3600)
         try:
@@ -1150,7 +1150,7 @@ async def lifespan(app: FastAPI):
     dev_key_task      = asyncio.create_task(dev_key_display_loop())
     otp_cleanup_task  = asyncio.create_task(_otp_cleanup_loop())
     tg_cleanup_task   = asyncio.create_task(_telegram_cleanup_loop())
-    # Trader bot disabled — AEGIS-1 live_engine is the sole signal source.
+    # Trader bot disabled â€” AEGIS-1 live_engine is the sole signal source.
     # trader_task = asyncio.create_task(_trader_scan_loop())
     yield
     engine_task.cancel()
@@ -1192,7 +1192,7 @@ async def websocket_track_record(websocket: WebSocket):
 
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
 
-# CORS — read allowed origins from env so production is locked to the real domain.
+# CORS â€” read allowed origins from env so production is locked to the real domain.
 # ALLOWED_ORIGINS env var: comma-separated list, e.g. "https://aegis.example.com,http://localhost:8000"
 _raw_origins = os.getenv("ALLOWED_ORIGINS", "")
 _ALLOWED_ORIGINS: list[str] = (
@@ -1203,7 +1203,7 @@ _ALLOWED_ORIGINS: list[str] = (
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_ALLOWED_ORIGINS,
-    allow_credentials=False,   # Bearer-token auth — cookies not used cross-origin
+    allow_credentials=False,   # Bearer-token auth â€” cookies not used cross-origin
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
 )
@@ -1248,7 +1248,7 @@ async def add_security_headers(request: Request, call_next):
     response.headers["Cross-Origin-Opener-Policy"] = "same-origin-allow-popups"
     response.headers["Cross-Origin-Embedder-Policy"] = "unsafe-none"
 
-    # Clickjacking protection — dashboard must never be embedded in a foreign frame
+    # Clickjacking protection â€” dashboard must never be embedded in a foreign frame
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
 
@@ -1258,7 +1258,7 @@ async def add_security_headers(request: Request, call_next):
     # Legacy XSS filter (IE/older Chrome)
     response.headers["X-XSS-Protection"] = "1; mode=block"
 
-    # HSTS — force HTTPS for 1 year (only meaningful in production behind TLS)
+    # HSTS â€” force HTTPS for 1 year (only meaningful in production behind TLS)
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
 
     # Referrer: send origin only, never full URL, to external hosts
@@ -1288,7 +1288,7 @@ WEB_ROOT = os.path.join(BASE_DIR, "web")
 WEB_ROOT_PATH = Path(WEB_ROOT)
 
 if not WEB_ROOT_PATH.exists():
-    print(f"⚠️ Warning: 'web' directory not found at {WEB_ROOT_PATH}. Creating fallback structure.")
+    print(f"âš ï¸ Warning: 'web' directory not found at {WEB_ROOT_PATH}. Creating fallback structure.")
     WEB_ROOT_PATH.mkdir(parents=True, exist_ok=True)
     pages_dir = WEB_ROOT_PATH / "src" / "pages"
     scripts_dir = WEB_ROOT_PATH / "src" / "scripts"
@@ -1296,7 +1296,7 @@ if not WEB_ROOT_PATH.exists():
     pages_dir.mkdir(parents=True, exist_ok=True)
     scripts_dir.mkdir(parents=True, exist_ok=True)
     styles_dir.mkdir(parents=True, exist_ok=True)
-    (pages_dir / "index.html").write_text("<html><body><h1>Aegis‑1</h1><p>Frontend files missing. Please upload the correct static files to 'web/src/pages/'</p></body></html>")
+    (pages_dir / "index.html").write_text("<html><body><h1>Aegisâ€‘1</h1><p>Frontend files missing. Please upload the correct static files to 'web/src/pages/'</p></body></html>")
     (pages_dir / "dashboard.html").write_text("<html><body><h1>Dashboard unavailable</h1><p>Static files not found.</p></body></html>")
 
 app.mount("/web", StaticFiles(directory=str(WEB_ROOT_PATH), html=True), name="web")
@@ -1382,10 +1382,10 @@ def _build_insight_payload(sig: dict, plan: str) -> dict:
 
     Tier rules
     ----------
-    trial / basic  → market bias, S/R, confluence, price targets, session, fear/greed.
+    trial / basic  â†’ market bias, S/R, confluence, price targets, session, fear/greed.
                       AI probability and fire signal hidden.
-    intermediate   → all of the above + AI probability bands (low/med/high label).
-    pro            → full signal including meta_confidence, fire, direction.
+    intermediate   â†’ all of the above + AI probability bands (low/med/high label).
+    pro            â†’ full signal including meta_confidence, fire, direction.
     """
     if not isinstance(sig, dict):
         return {}
@@ -1438,9 +1438,9 @@ async def token_insight(symbol: str, authorization: Optional[str] = Header(None)
     """
     Per-token market insight available to all authenticated users.
 
-    trial / basic   → S/R levels, confluence, price targets, market bias, trader views.
-    intermediate    → above + AI conviction label (HIGH / MEDIUM / LOW).
-    pro             → above + full fire/direction/meta_confidence signal.
+    trial / basic   â†’ S/R levels, confluence, price targets, market bias, trader views.
+    intermediate    â†’ above + AI conviction label (HIGH / MEDIUM / LOW).
+    pro             â†’ above + full fire/direction/meta_confidence signal.
 
     The symbol path parameter accepts slash notation, e.g. BTC/USDT or BTC%2FUSDT.
     """
@@ -1487,7 +1487,7 @@ async def token_insight(symbol: str, authorization: Optional[str] = Header(None)
         sig = sig.get('1h') or next((v for v in sig.values() if isinstance(v, dict)), None)
 
     if not sig:
-        # Engine may still be warming up — return what we know without AI fields
+        # Engine may still be warming up â€” return what we know without AI fields
         warmup = LIVE_STATE.data.get('warmup_progress', '0/0')
         return JSONResponse(content={
             'symbol': symbol,
@@ -1504,7 +1504,7 @@ async def token_insight(symbol: str, authorization: Optional[str] = Header(None)
 async def public_token_insight(symbol: str):
     """
     Unauthenticated teaser: returns only market bias, session, and confluence summary.
-    Used for landing-page previews — no S/R or price targets.
+    Used for landing-page previews â€” no S/R or price targets.
     """
     symbol = symbol.replace('%2F', '/').replace('%2f', '/').upper()
     if not re.match(r'^[A-Z0-9]{2,12}/[A-Z]{2,6}$', symbol):
@@ -1535,9 +1535,9 @@ async def public_token_insight(symbol: str):
     return JSONResponse(content=teaser)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # PROFESSIONAL TOKEN ANALYSIS ENGINE
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _generate_token_analysis(sig: dict) -> dict:
     """
@@ -1596,13 +1596,13 @@ def _generate_token_analysis(sig: dict) -> dict:
         return f'{v * 100:.1f}%'
 
     def _px(v: float) -> str:
-        if v <= 0:      return '—'
+        if v <= 0:      return 'â€”'
         if v < 0.001:   return f'${v:.6f}'
         if v < 1:       return f'${v:.4f}'
         if v < 100:     return f'${v:.3f}'
         return f'${v:,.2f}'
 
-    # ── Bull / bear vote tally ────────────────────────────────────────────────
+    # â”€â”€ Bull / bear vote tally â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     bull_votes: List[str] = []
     bear_votes: List[str] = []
 
@@ -1637,15 +1637,15 @@ def _generate_token_analysis(sig: dict) -> dict:
     bear_n = len(bear_votes)
     total_v = bull_n + bear_n or 1
 
-    # ── Overall verdict ───────────────────────────────────────────────────────
+    # â”€â”€ Overall verdict â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     bull_pct = bull_n / total_v
-    if bull_pct >= 0.70:   verdict_label, verdict_icon = 'Strong Bullish', '🟢'
-    elif bull_pct >= 0.55: verdict_label, verdict_icon = 'Bullish',         '🟢'
-    elif bull_pct >= 0.45: verdict_label, verdict_icon = 'Neutral / Mixed', '🟡'
-    elif bull_pct >= 0.30: verdict_label, verdict_icon = 'Bearish',         '🔴'
-    else:                  verdict_label, verdict_icon = 'Strong Bearish',  '🔴'
+    if bull_pct >= 0.70:   verdict_label, verdict_icon = 'Strong Bullish', 'ðŸŸ¢'
+    elif bull_pct >= 0.55: verdict_label, verdict_icon = 'Bullish',         'ðŸŸ¢'
+    elif bull_pct >= 0.45: verdict_label, verdict_icon = 'Neutral / Mixed', 'ðŸŸ¡'
+    elif bull_pct >= 0.30: verdict_label, verdict_icon = 'Bearish',         'ðŸ”´'
+    else:                  verdict_label, verdict_icon = 'Strong Bearish',  'ðŸ”´'
 
-    # ── Plain-English trend description ──────────────────────────────────────
+    # â”€â”€ Plain-English trend description â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     trend_desc = {
         'TRENDING_UP':   'moving upward in a clear trend',
         'TRENDING_DOWN': 'moving downward in a clear trend',
@@ -1654,32 +1654,32 @@ def _generate_token_analysis(sig: dict) -> dict:
     }.get(trend_regime, 'in an uncertain phase')
 
     vol_desc = {
-        'HIGH':   'high volatility — prices are swinging a lot',
+        'HIGH':   'high volatility â€” prices are swinging a lot',
         'MEDIUM': 'moderate volatility',
-        'LOW':    'low volatility — price is calm and moving slowly',
+        'LOW':    'low volatility â€” price is calm and moving slowly',
     }.get(vol_regime, 'moderate volatility')
 
-    # ── Two-sentence summary ──────────────────────────────────────────────────
+    # â”€â”€ Two-sentence summary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     base = sym.split('/')[0]
     summary = (
         f"{base} is currently {trend_desc}, with {vol_desc}. "
         f"{'Most indicators lean bullish' if bull_pct > 0.55 else 'Most indicators lean bearish' if bull_pct < 0.45 else 'Indicators are mixed'}"
-        f" — {bull_n} bullish signal{'s' if bull_n != 1 else ''} vs {bear_n} bearish."
+        f" â€” {bull_n} bullish signal{'s' if bull_n != 1 else ''} vs {bear_n} bearish."
     )
 
-    # ── Top indicators (max 6, sorted by impact) ─────────────────────────────
+    # â”€â”€ Top indicators (max 6, sorted by impact) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     indicators = []
 
     # RSI
     if rsi <= 30:
         indicators.append({
             'name': 'RSI (Momentum)',
-            'value': f'{rsi:.0f} — Oversold',
+            'value': f'{rsi:.0f} â€” Oversold',
             'direction': 'BULLISH',
-            'icon': '🔋',
+            'icon': 'ðŸ”‹',
             'impact': 'high',
             'simple': (
-                f"RSI is {rsi:.0f}. Think of RSI like a rubber band — when it stretches too far "
+                f"RSI is {rsi:.0f}. Think of RSI like a rubber band â€” when it stretches too far "
                 f"in one direction it snaps back. Below 30 means the token has been sold too "
                 f"aggressively. A bounce back up is increasingly likely."
             ),
@@ -1687,9 +1687,9 @@ def _generate_token_analysis(sig: dict) -> dict:
     elif rsi >= 70:
         indicators.append({
             'name': 'RSI (Momentum)',
-            'value': f'{rsi:.0f} — Overbought',
+            'value': f'{rsi:.0f} â€” Overbought',
             'direction': 'BEARISH',
-            'icon': '⚠️',
+            'icon': 'âš ï¸',
             'impact': 'high',
             'simple': (
                 f"RSI is {rsi:.0f}. The token has been bought very aggressively and may be "
@@ -1700,12 +1700,12 @@ def _generate_token_analysis(sig: dict) -> dict:
     else:
         indicators.append({
             'name': 'RSI (Momentum)',
-            'value': f'{rsi:.0f} — Neutral',
+            'value': f'{rsi:.0f} â€” Neutral',
             'direction': 'NEUTRAL',
-            'icon': '📊',
+            'icon': 'ðŸ“Š',
             'impact': 'medium',
             'simple': (
-                f"RSI is {rsi:.0f}, sitting in the neutral zone (30–70). There's no extreme "
+                f"RSI is {rsi:.0f}, sitting in the neutral zone (30â€“70). There's no extreme "
                 f"buying or selling pressure. The token can move in either direction without "
                 f"being 'overheated' or 'oversold'."
             ),
@@ -1717,12 +1717,12 @@ def _generate_token_analysis(sig: dict) -> dict:
             'name': 'Supertrend',
             'value': 'Bullish',
             'direction': 'BULLISH',
-            'icon': '📈',
+            'icon': 'ðŸ“ˆ',
             'impact': 'high',
             'simple': (
-                "The Supertrend indicator is green — price is trading above a dynamic "
+                "The Supertrend indicator is green â€” price is trading above a dynamic "
                 "support line that adapts to market volatility. This tells us sellers "
-                "are not in control right now. Think of it as a moving 'floor' — as "
+                "are not in control right now. Think of it as a moving 'floor' â€” as "
                 "long as price stays above it, the trend is up."
             ),
         })
@@ -1731,10 +1731,10 @@ def _generate_token_analysis(sig: dict) -> dict:
             'name': 'Supertrend',
             'value': 'Bearish',
             'direction': 'BEARISH',
-            'icon': '📉',
+            'icon': 'ðŸ“‰',
             'impact': 'high',
             'simple': (
-                "The Supertrend indicator is red — price is trading below a dynamic "
+                "The Supertrend indicator is red â€” price is trading below a dynamic "
                 "resistance line. This acts like a 'ceiling' pressing down on the price. "
                 "Until price breaks back above it, sellers remain in control."
             ),
@@ -1746,7 +1746,7 @@ def _generate_token_analysis(sig: dict) -> dict:
             'name': 'MACD (Momentum Shift)',
             'value': macd.capitalize(),
             'direction': macd,
-            'icon': '🔄',
+            'icon': 'ðŸ”„',
             'impact': 'medium',
             'simple': (
                 f"MACD is {'crossing upward' if macd == 'BULLISH' else 'crossing downward'}, "
@@ -1760,14 +1760,14 @@ def _generate_token_analysis(sig: dict) -> dict:
     if adx > 25:
         indicators.append({
             'name': 'ADX (Trend Strength)',
-            'value': f'{adx:.0f} — {"Strong" if adx > 40 else "Moderate"} trend',
+            'value': f'{adx:.0f} â€” {"Strong" if adx > 40 else "Moderate"} trend',
             'direction': 'NEUTRAL',
-            'icon': '💪',
+            'icon': 'ðŸ’ª',
             'impact': 'medium',
             'simple': (
-                f"ADX is {adx:.0f}. This measures how strong the current trend is — "
+                f"ADX is {adx:.0f}. This measures how strong the current trend is â€” "
                 f"it doesn't tell you the direction, just the conviction. "
-                f"{'Above 40 means the trend is very powerful and unlikely to reverse quickly.' if adx > 40 else 'Between 25–40 means a genuine trend exists and it is worth following.'}"
+                f"{'Above 40 means the trend is very powerful and unlikely to reverse quickly.' if adx > 40 else 'Between 25â€“40 means a genuine trend exists and it is worth following.'}"
             ),
         })
 
@@ -1777,13 +1777,13 @@ def _generate_token_analysis(sig: dict) -> dict:
             'name': 'Confluence Score',
             'value': f'{total_c:.1f}/10',
             'direction': 'BULLISH' if bias == 'BULLISH' else 'BEARISH',
-            'icon': '🎯',
+            'icon': 'ðŸŽ¯',
             'impact': 'high',
             'simple': (
-                f"Confluence score is {total_c:.1f}/10. This is our AI's internal vote count — "
+                f"Confluence score is {total_c:.1f}/10. This is our AI's internal vote count â€” "
                 f"it tallies up momentum, trend, volume, smart money flow, and candlestick "
                 f"patterns into a single score. "
-                f"{'Above 6 means most evidence is pointing in the same direction — higher quality setups.' if total_c >= 6 else ''} "
+                f"{'Above 6 means most evidence is pointing in the same direction â€” higher quality setups.' if total_c >= 6 else ''} "
                 f"Breakdown: Momentum {mom_c:.1f}, Trend {trend_c:.1f}, "
                 f"Volume {vol_c:.1f}, Smart Money {sm_c:.1f}."
             ),
@@ -1791,12 +1791,12 @@ def _generate_token_analysis(sig: dict) -> dict:
     elif total_c >= 3:
         indicators.append({
             'name': 'Confluence Score',
-            'value': f'{total_c:.1f}/10 — Weak',
+            'value': f'{total_c:.1f}/10 â€” Weak',
             'direction': 'NEUTRAL',
-            'icon': '⚖️',
+            'icon': 'âš–ï¸',
             'impact': 'medium',
             'simple': (
-                f"Confluence score is {total_c:.1f}/10 — indicators are split. "
+                f"Confluence score is {total_c:.1f}/10 â€” indicators are split. "
                 f"Some point bullish, others bearish. This is a 'wait and see' situation; "
                 f"there is no clear majority conviction from the market's internal structure."
             ),
@@ -1806,17 +1806,17 @@ def _generate_token_analysis(sig: dict) -> dict:
     if abs(funding) > 0.005:
         funding_desc = 'Longs are paying shorts' if funding_bias == 'LONGS_PAYING' else 'Shorts are paying longs'
         funding_meaning = (
-            'This means the market is over-leveraged to the upside — too many people are betting on a rise. '
+            'This means the market is over-leveraged to the upside â€” too many people are betting on a rise. '
             'These longs may be forced to close, creating selling pressure.'
         ) if funding_bias == 'LONGS_PAYING' else (
-            'The market is over-leveraged to the downside. Too many people are shorting — '
+            'The market is over-leveraged to the downside. Too many people are shorting â€” '
             'if price rises even slightly, forced short-covering can create a sharp rally (short squeeze).'
         )
         indicators.append({
             'name': 'Funding Rate',
-            'value': f'{funding:+.4f}% — {funding_desc}',
+            'value': f'{funding:+.4f}% â€” {funding_desc}',
             'direction': 'BEARISH' if funding_bias == 'LONGS_PAYING' else 'BULLISH',
-            'icon': '💸',
+            'icon': 'ðŸ’¸',
             'impact': 'medium',
             'simple': funding_meaning,
         })
@@ -1825,19 +1825,19 @@ def _generate_token_analysis(sig: dict) -> dict:
     if fg_val <= 25 or fg_val >= 75:
         indicators.append({
             'name': 'Market Sentiment (Fear & Greed)',
-            'value': f'{fg_val:.0f}/100 — {fg_label}',
+            'value': f'{fg_val:.0f}/100 â€” {fg_label}',
             'direction': 'BULLISH' if fg_val <= 25 else 'BEARISH',
-            'icon': '🧠',
+            'icon': 'ðŸ§ ',
             'impact': 'low',
             'simple': (
                 f"The Fear & Greed index is {fg_val:.0f} ({fg_label}). "
                 + (
                     "Extreme fear means most market participants are panicking and selling. "
-                    "Historically, extreme fear has been one of the best times to buy — "
+                    "Historically, extreme fear has been one of the best times to buy â€” "
                     "'be greedy when others are fearful.'"
                     if fg_val <= 25 else
                     "Extreme greed means everyone is euphoric and buying. "
-                    "Historically, this is when markets are most vulnerable to a sharp correction — "
+                    "Historically, this is when markets are most vulnerable to a sharp correction â€” "
                     "'be fearful when others are greedy.'"
                 )
             ),
@@ -1850,12 +1850,12 @@ def _generate_token_analysis(sig: dict) -> dict:
             'name': 'Daily Macro Trend',
             'value': f'{"Bullish" if macro_daily > 0 else "Bearish"} ({macro_daily:+.1%})',
             'direction': 'BULLISH' if macro_daily > 0 else 'BEARISH',
-            'icon': '🌐',
+            'icon': 'ðŸŒ',
             'impact': 'medium',
             'simple': (
                 f"On the daily chart, {base} has been trending {macro_dir} "
                 f"({macro_daily:+.1%} momentum). "
-                f"{'This longer-term upward pressure provides tailwind for bullish trades.' if macro_daily > 0 else 'This longer-term downward pressure creates headwind — even if short-term indicators look bullish, you are fighting the bigger trend.'}"
+                f"{'This longer-term upward pressure provides tailwind for bullish trades.' if macro_daily > 0 else 'This longer-term downward pressure creates headwind â€” even if short-term indicators look bullish, you are fighting the bigger trend.'}"
             ),
         })
 
@@ -1864,28 +1864,28 @@ def _generate_token_analysis(sig: dict) -> dict:
     indicators.sort(key=lambda x: impact_order.get(x.get('impact', 'low'), 2))
     indicators = indicators[:6]
 
-    # ── Why the signal fired or didn't ───────────────────────────────────────
+    # â”€â”€ Why the signal fired or didn't â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     signal_section: dict = {}
 
     if side == 'WAITING' or conf == 0 and not tradeable:
         signal_section = {
             'status': 'WAITING',
-            'headline': '⏳ Engine is warming up',
+            'headline': 'â³ Engine is warming up',
             'plain': (
                 f"The AI for {base} is still loading its data and running its first scan. "
-                f"Full analysis and signal decisions will appear within 2–3 minutes."
+                f"Full analysis and signal decisions will appear within 2â€“3 minutes."
             ),
             'technical': 'Model scan not yet completed.',
         }
     elif not tradeable and conf == 0:
         signal_section = {
             'status': 'MONITOR_ONLY',
-            'headline': '👁️ Watch mode — no signals',
+            'headline': 'ðŸ‘ï¸ Watch mode â€” no signals',
             'plain': (
                 f"{base} is in monitor-only mode. The AI model was trained on its data "
                 f"but the historical edge (win rate, expectancy) was not strong enough to "
                 f"justify trading it. We show the price and market context so you can "
-                f"watch it and make your own decision — but the bot won't trade it automatically."
+                f"watch it and make your own decision â€” but the bot won't trade it automatically."
             ),
             'technical': 'Model trained but did not pass backtesting quality gate (tradeable=False).',
         }
@@ -1893,43 +1893,43 @@ def _generate_token_analysis(sig: dict) -> dict:
         direction_word = 'BUY' if side in ('BUY', 'STRONG_BUY') else 'SELL'
         signal_section = {
             'status': 'SIGNAL_ACTIVE',
-            'headline': f'🚀 Signal ACTIVE — {direction_word}',
+            'headline': f'ðŸš€ Signal ACTIVE â€” {direction_word}',
             'plain': (
                 f"The AI fired a {direction_word} signal on {base}. It required "
-                f"at least {_pct(thr)} confidence and reached {_pct(conf)} — "
+                f"at least {_pct(thr)} confidence and reached {_pct(conf)} â€” "
                 f"clearing the bar with {'strong' if conf > thr * 1.2 else 'sufficient'} conviction. "
-                f"{'This is a Strong signal — confidence is significantly above threshold.' if conf > thr * 1.15 else ''}"
+                f"{'This is a Strong signal â€” confidence is significantly above threshold.' if conf > thr * 1.15 else ''}"
             ),
-            'technical': f'meta_confidence={conf:.3f} ≥ threshold={thr:.3f}. Fire=True.',
+            'technical': f'meta_confidence={conf:.3f} â‰¥ threshold={thr:.3f}. Fire=True.',
         }
     else:
-        # No signal — explain WHY
+        # No signal â€” explain WHY
         if conf == 0:
             plain = (
                 f"The AI model hasn't produced a clear directional probability yet "
                 f"for {base}. This usually means the market conditions are too noisy "
-                f"or ambiguous — no clean trade setup is visible."
+                f"or ambiguous â€” no clean trade setup is visible."
             )
-            headline = '🔍 No setup found'
+            headline = 'ðŸ” No setup found'
             tech = f'meta_confidence=0. Model output inconclusive.'
         elif thr > 0 and conf >= thr * 0.85:
             pct_away = (thr - conf) / thr * 100
             plain = (
-                f"Very close — the AI is at {_pct(conf)} confidence, just {pct_away:.1f}% "
+                f"Very close â€” the AI is at {_pct(conf)} confidence, just {pct_away:.1f}% "
                 f"below the {_pct(thr)} trigger threshold. "
                 f"One more bullish/bearish indicator aligning could push it over the line. "
-                f"Watch closely — a signal may fire in the next scan."
+                f"Watch closely â€” a signal may fire in the next scan."
             )
-            headline = '🔔 Almost there — watching for trigger'
+            headline = 'ðŸ”” Almost there â€” watching for trigger'
             tech = f'meta_confidence={conf:.3f}, threshold={thr:.3f}. Gap: {thr-conf:.3f}.'
         elif thr > 0 and conf >= 0.35:
             plain = (
                 f"The AI sees some directional evidence for {base} but confidence is "
                 f"{_pct(conf)}, below the {_pct(thr)} required. "
                 f"Indicators are not aligned strongly enough. The model is saying 'I see "
-                f"something but it's not convincing yet — wait for clearer confirmation.'"
+                f"something but it's not convincing yet â€” wait for clearer confirmation.'"
             )
-            headline = '⏸️ Building — not enough conviction yet'
+            headline = 'â¸ï¸ Building â€” not enough conviction yet'
             tech = f'meta_confidence={conf:.3f} < threshold={thr:.3f}.'
         else:
             # Check if near S&R
@@ -1944,21 +1944,21 @@ def _generate_token_analysis(sig: dict) -> dict:
                 plain = (
                     f"The AI sees bullish momentum building in {base}, but price is "
                     f"pressing against a resistance zone at {_px(resistance)}. "
-                    f"The model suppressed the BUY signal — buying into resistance means "
+                    f"The model suppressed the BUY signal â€” buying into resistance means "
                     f"you're buying right at a wall that sellers have historically defended. "
                     f"The signal is waiting for that wall to break."
                 )
-                headline = '🚧 BUY blocked by resistance'
+                headline = 'ðŸš§ BUY blocked by resistance'
                 tech = f'Price within 2% of resistance {_px(resistance)}. Signal suppressed by S&R filter.'
             elif near_support and p_sell > p_buy:
                 plain = (
                     f"The AI sees bearish pressure in {base}, but price is sitting "
                     f"right on a support level at {_px(support)}. "
-                    f"The model held back the SELL signal — shorting into support is risky "
+                    f"The model held back the SELL signal â€” shorting into support is risky "
                     f"because buyers historically step in at this level. "
                     f"Waiting to see if support breaks before confirming the trade."
                 )
-                headline = '🛡️ SELL held at support'
+                headline = 'ðŸ›¡ï¸ SELL held at support'
                 tech = f'Price within 2% of support {_px(support)}. Signal suppressed by S&R filter.'
             elif macro_conflicting:
                 trend_word = 'bearish' if macro_daily < 0 else 'bullish'
@@ -1967,19 +1967,19 @@ def _generate_token_analysis(sig: dict) -> dict:
                     f"the daily trend for {base} is strongly {trend_word} "
                     f"({macro_daily:+.1%}). "
                     f"The model won't fight the bigger trend unless confidence is very high. "
-                    f"Trading against the daily trend is like swimming against a strong current — "
+                    f"Trading against the daily trend is like swimming against a strong current â€” "
                     f"possible, but requires much more conviction."
                 )
-                headline = '⚔️ Signal conflicting with daily trend'
+                headline = 'âš”ï¸ Signal conflicting with daily trend'
                 tech = f'macro_daily={macro_daily:+.3f} conflicts with short-term direction.'
             else:
                 plain = (
-                    f"The AI model is at {_pct(conf)} confidence — well below the {_pct(thr)} "
+                    f"The AI model is at {_pct(conf)} confidence â€” well below the {_pct(thr)} "
                     f"required to trade. Indicators are too mixed or too weak. "
                     f"The market for {base} is not giving a clean enough signal right now. "
                     f"Patience: when the evidence aligns, the signal will fire automatically."
                 )
-                headline = '😴 No clear setup'
+                headline = 'ðŸ˜´ No clear setup'
                 tech = f'meta_confidence={conf:.3f}, threshold={thr:.3f}. No qualifying filter match.'
 
         signal_section = {
@@ -1989,7 +1989,7 @@ def _generate_token_analysis(sig: dict) -> dict:
             'technical': tech,
         }
 
-    # ── Key levels ────────────────────────────────────────────────────────────
+    # â”€â”€ Key levels â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     key_levels = {}
     if support > 0:
         dist_s = (price - support) / price * 100 if price > 0 else 0
@@ -2017,27 +2017,27 @@ def _generate_token_analysis(sig: dict) -> dict:
     if sig.get('bull_tp1') and fire and side in ('BUY', 'STRONG_BUY'):
         key_levels['target_1'] = {
             'price': round(float(sig['bull_tp1']), 8),
-            'meaning': 'First take-profit target (1× ATR above entry).',
+            'meaning': 'First take-profit target (1Ã— ATR above entry).',
         }
         if sig.get('bull_tp2'):
             key_levels['target_2'] = {
                 'price': round(float(sig['bull_tp2']), 8),
-                'meaning': 'Second take-profit target (2× ATR above entry).',
+                'meaning': 'Second take-profit target (2Ã— ATR above entry).',
             }
     elif sig.get('bear_tp1') and fire and side in ('SELL', 'STRONG_SELL'):
         key_levels['target_1'] = {
             'price': round(float(sig['bear_tp1']), 8),
-            'meaning': 'First take-profit target (1× ATR below entry).',
+            'meaning': 'First take-profit target (1Ã— ATR below entry).',
         }
 
-    # ── Macro / sentiment context ─────────────────────────────────────────────
+    # â”€â”€ Macro / sentiment context â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     macro_lines = []
 
     if abs(macro_weekly) > 0.05:
         macro_lines.append(
             f"Weekly trend: {'bullish' if macro_weekly > 0 else 'bearish'} "
             f"({macro_weekly:+.1%}). "
-            f"{'The longer-term picture supports the bulls.' if macro_weekly > 0 else 'The bigger picture still favors sellers — short-term bounces may be selling opportunities.'}"
+            f"{'The longer-term picture supports the bulls.' if macro_weekly > 0 else 'The bigger picture still favors sellers â€” short-term bounces may be selling opportunities.'}"
         )
 
     if funding_bias == 'LONGS_PAYING' and abs(funding) > 0.005:
@@ -2049,19 +2049,19 @@ def _generate_token_analysis(sig: dict) -> dict:
     elif funding_bias == 'SHORTS_PAYING' and abs(funding) > 0.005:
         macro_lines.append(
             f"Funding rate is negative ({funding:.4f}%). Short sellers are paying to hold their "
-            f"positions. This creates upward pressure — if shorts capitulate, it could trigger "
+            f"positions. This creates upward pressure â€” if shorts capitulate, it could trigger "
             f"a fast squeeze rally."
         )
 
     if oi_trend == 'INCREASING':
         macro_lines.append(
-            "Open Interest is rising — new money is entering the derivatives market. "
+            "Open Interest is rising â€” new money is entering the derivatives market. "
             "Combined with the current price direction, this confirms fresh conviction "
             f"behind the {'up' if bias == 'BULLISH' else 'down'}move."
         )
     elif oi_trend == 'DECREASING':
         macro_lines.append(
-            "Open Interest is falling — traders are closing positions and exiting. "
+            "Open Interest is falling â€” traders are closing positions and exiting. "
             "This usually means the current move is losing steam. "
             "Price may continue but with less force."
         )
@@ -2069,7 +2069,7 @@ def _generate_token_analysis(sig: dict) -> dict:
     if fg_val < 30:
         macro_lines.append(
             f"Market sentiment is in Fear ({fg_val:.0f}/100). Historically, extreme fear "
-            f"creates some of the best long-term buying opportunities — but don't catch "
+            f"creates some of the best long-term buying opportunities â€” but don't catch "
             f"a falling knife. Wait for a technical confirmation first."
         )
     elif fg_val > 70:
@@ -2083,7 +2083,7 @@ def _generate_token_analysis(sig: dict) -> dict:
         "signals are distorting the picture right now."
     )
 
-    # ── Session context ───────────────────────────────────────────────────────
+    # â”€â”€ Session context â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     session      = sig.get('session', '')
     session_note = sig.get('session_note', '')
     session_ctx  = f"Currently in the {session} session. {session_note}" if session else ''
@@ -2111,7 +2111,7 @@ def _generate_token_analysis(sig: dict) -> dict:
 @app.get("/api/token-analysis/{symbol:path}")
 async def token_analysis(symbol: str, authorization: Optional[str] = Header(None)):
     """
-    Professional market analysis for one token — accessible to all authenticated users.
+    Professional market analysis for one token â€” accessible to all authenticated users.
     Returns plain-English breakdown of indicators, why the signal fired or didn't,
     key price levels, and macro/sentiment context.
     """
@@ -2247,7 +2247,7 @@ async def pitch_page():
 async def privacy_alias():
     return FileResponse(WEB_ROOT_PATH / "src/pages/privacy_policy.html")
 
-# ── Custom 404 handler ─────────────────────────────────────────────────
+# â”€â”€ Custom 404 handler â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from fastapi.exceptions import HTTPException as FastAPIHTTPException
 
 @app.exception_handler(404)
@@ -2280,7 +2280,7 @@ def decode_token(token: str) -> Optional[str]:
         email = decoded_token.get("email")
         if email:
             return email
-        # UID-only token (some OAuth flows omit email) — look up email via Admin SDK
+        # UID-only token (some OAuth flows omit email) â€” look up email via Admin SDK
         uid = decoded_token.get("uid")
         if uid:
             try:
@@ -2299,7 +2299,7 @@ def decode_token(token: str) -> Optional[str]:
         return None
 
 def decode_uid_from_token(token: str) -> Optional[str]:
-    """Return Firebase UID (not email) — used for Firestore paths shared with the frontend."""
+    """Return Firebase UID (not email) â€” used for Firestore paths shared with the frontend."""
     try:
         decoded = firebase_auth.verify_id_token(token)
         return decoded.get("uid")
@@ -2320,7 +2320,7 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
     return email
 
 def get_firebase_uid(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
-    """Dependency that returns Firebase UID — keeps Firestore paths consistent with the frontend."""
+    """Dependency that returns Firebase UID â€” keeps Firestore paths consistent with the frontend."""
     uid = decode_uid_from_token(credentials.credentials)
     if not uid:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
@@ -2359,7 +2359,7 @@ def create_user_doc(email: str, password_hash: Optional[str] = None,
                     full_name: Optional[str] = None, location: Optional[str] = None,
                     phone_number: Optional[str] = None) -> Dict:
     now = datetime.now(timezone.utc).isoformat()
-    # Account is created in a "registered" state — the 3-day free trial does NOT
+    # Account is created in a "registered" state â€” the 3-day free trial does NOT
     # auto-start.  The user lands on /pricing and starts it themselves via the
     # "Start Free Trial" button (POST /api/v1/trial/start), which sets plan=trial
     # + trial_end.  Auto-starting here silently burned the trial the moment the
@@ -2415,7 +2415,7 @@ def is_trial_expired(email: str) -> bool:
         subscription = user_doc.get("subscription", {})
         if isinstance(subscription, dict) and subscription.get("status") == "active":
             return False
-        # No active subscription — fall through to trial date check
+        # No active subscription â€” fall through to trial date check
     trial_end_raw = user_doc.get("trial_end")
     if trial_end_raw:
         if isinstance(trial_end_raw, datetime):
@@ -2457,7 +2457,7 @@ async def get_me(credentials: HTTPAuthorizationCredentials = Depends(security)):
     otp_verified = user_doc.get("otp_verified", False)
     if not otp_verified:
         # Auto-stamp accounts that Firebase has already verified (Google / OAuth providers).
-        # Their email_verified claim is True natively — no OTP needed for them.
+        # Their email_verified claim is True natively â€” no OTP needed for them.
         try:
             decoded = firebase_auth.verify_id_token(credentials.credentials)
             if decoded.get("email_verified", False):
@@ -2506,9 +2506,9 @@ async def provision_user(request: Request, user_id: str = Depends(get_current_us
             email_key = _otp_find_by_signup_token(signup_token)
             if not email_key:
                 raise HTTPException(status_code=403, detail="Invalid or expired OTP verification token.")
-            # Invalidate the token — single use only
+            # Invalidate the token â€” single use only
             _otp_delete(email_key)
-            # Mark Firebase email as verified — this is the gate used in decode_token
+            # Mark Firebase email as verified â€” this is the gate used in decode_token
             # so accounts that bypassed OTP can never authenticate.
             try:
                 firebase_auth.update_user(firebase_uid, email_verified=True)
@@ -2729,7 +2729,7 @@ conf = ConnectionConfig(
 
 fastmail = FastMail(conf)
 
-# SSL fallback config (port 465) — tried when STARTTLS/587 times out
+# SSL fallback config (port 465) â€” tried when STARTTLS/587 times out
 _mail_server = os.getenv("MAIL_SERVER", "smtp.gmail.com")
 _mail_user   = os.getenv("MAIL_USERNAME", "")
 _mail_pass   = os.getenv("MAIL_PASSWORD", "")
@@ -2749,11 +2749,11 @@ conf_ssl = ConnectionConfig(
 fastmail_ssl = FastMail(conf_ssl)
 
 # -------------------------------------------------------------------
-# Resend email helper — HTTP API, bypasses Railway SMTP port blocks.
+# Resend email helper â€” HTTP API, bypasses Railway SMTP port blocks.
 # Set RESEND_API_KEY in Railway env to enable. Falls back to SMTP.
 # -------------------------------------------------------------------
 _RESEND_API_KEY  = os.getenv("RESEND_API_KEY", "")
-_RESEND_FROM_ADDR = os.getenv("MAIL_FROM", "animeshkukreti@gatekeeper.sbs")
+_RESEND_FROM_ADDR = os.getenv("MAIL_FROM", "animeshkukreti@aegisignal.pro")
 _RESEND_FROM_NAME = os.getenv("MAIL_FROM_NAME", "AEGIS v1.0")
 
 async def _send_email(to: str, subject: str, html: str, from_addr: str = "", from_name: str = "") -> None:
@@ -2770,18 +2770,18 @@ async def _send_email(to: str, subject: str, html: str, from_addr: str = "", fro
             )
         if resp.status_code not in (200, 201):
             raise RuntimeError(f"Resend API error {resp.status_code}: {resp.text}")
-        print(f"[email] Sent via Resend ✓ → {to}")
+        print(f"[email] Sent via Resend âœ“ â†’ {to}")
         return
 
     # SMTP fallback (local dev where SMTP is not blocked)
     msg = MessageSchema(recipients=[to], subject=subject, body=html, subtype=MessageType.html)
     try:
         await asyncio.wait_for(fastmail.send_message(msg), timeout=12.0)
-        print(f"[email] Sent via SMTP/587 ✓ → {to}")
+        print(f"[email] Sent via SMTP/587 âœ“ â†’ {to}")
     except Exception as e1:
-        print(f"[email] SMTP/587 failed: {e1} — trying SSL/465")
+        print(f"[email] SMTP/587 failed: {e1} â€” trying SSL/465")
         await asyncio.wait_for(fastmail_ssl.send_message(msg), timeout=12.0)
-        print(f"[email] Sent via SMTP/465 ✓ → {to}")
+        print(f"[email] Sent via SMTP/465 âœ“ â†’ {to}")
 
 # -------------------------------------------------------------------
 # 3-Step Onboarding with OTP
@@ -2789,9 +2789,9 @@ async def _send_email(to: str, subject: str, html: str, from_addr: str = "", fro
 async def _send_sms_otp(phone_number: str, otp: str) -> bool:
     """
     Send OTP via SMS. Provider priority:
-      1. MSG91  (MSG91_AUTH_KEY + MSG91_OTP_TEMPLATE_ID) — DLT-compliant, production
-      2. Fast2SMS (FAST2SMS_API_KEY) — quick setup, works for India
-      3. Twilio  (TWILIO_ACCOUNT_SID/AUTH_TOKEN/PHONE_NUMBER) — global fallback
+      1. MSG91  (MSG91_AUTH_KEY + MSG91_OTP_TEMPLATE_ID) â€” DLT-compliant, production
+      2. Fast2SMS (FAST2SMS_API_KEY) â€” quick setup, works for India
+      3. Twilio  (TWILIO_ACCOUNT_SID/AUTH_TOKEN/PHONE_NUMBER) â€” global fallback
     Returns True only when SMS was actually dispatched.
     """
     # Strip to digits-only for providers that need it (E.164 minus the +)
@@ -2799,7 +2799,7 @@ async def _send_sms_otp(phone_number: str, otp: str) -> bool:
     digits_only = e164.lstrip('+')      # e.g. 919876543210
     indian_10   = digits_only[-10:]     # last 10 digits
 
-    # 1. MSG91 — production-grade DLT-compliant Indian SMS
+    # 1. MSG91 â€” production-grade DLT-compliant Indian SMS
     msg91_key  = os.getenv("MSG91_AUTH_KEY", "").strip()
     msg91_tmpl = os.getenv("MSG91_OTP_TEMPLATE_ID", "").strip()
     if msg91_key and msg91_tmpl:
@@ -2824,7 +2824,7 @@ async def _send_sms_otp(phone_number: str, otp: str) -> bool:
         except Exception as exc:
             print(f"[MSG91] Exception: {exc}")
 
-    # 2. Fast2SMS — simpler setup, good for India
+    # 2. Fast2SMS â€” simpler setup, good for India
     fast2sms_key = os.getenv("FAST2SMS_API_KEY", "").strip()
     if fast2sms_key:
         try:
@@ -2842,7 +2842,7 @@ async def _send_sms_otp(phone_number: str, otp: str) -> bool:
         except Exception as exc:
             print(f"[Fast2SMS] Exception: {exc}")
 
-    # 3. Twilio — global fallback
+    # 3. Twilio â€” global fallback
     try:
         from twilio.rest import Client as TwilioClient
         account_sid = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
@@ -2863,7 +2863,7 @@ async def _send_sms_otp(phone_number: str, otp: str) -> bool:
     except Exception as exc:
         print(f"[Twilio] Exception: {exc}")
 
-    print(f"[SMS OTP] No SMS provider configured — cannot deliver to {phone_number}")
+    print(f"[SMS OTP] No SMS provider configured â€” cannot deliver to {phone_number}")
     return False
 
 
@@ -2886,7 +2886,7 @@ async def send_otp_for_registration(request: OTPSendRequest, req: Request):
     if domain in DISPOSABLE_EMAIL_DOMAINS:
         raise HTTPException(status_code=422, detail="Disposable or temporary email addresses are not allowed.")
 
-    # Validate email syntax only — no DNS/MX lookup.
+    # Validate email syntax only â€” no DNS/MX lookup.
     try:
         validated = validate_email(email, check_deliverability=False)
         email = validated.normalized
@@ -2918,13 +2918,13 @@ async def send_otp_for_registration(request: OTPSendRequest, req: Request):
     if sms_sent:
         return {"success": True, "message": f"Verification code sent to {phone_number}.", "via": "sms"}
 
-    # SMS provider not configured — fall back to email so signup isn't blocked.
+    # SMS provider not configured â€” fall back to email so signup isn't blocked.
     # In production set MSG91_AUTH_KEY + MSG91_OTP_TEMPLATE_ID to send via SMS.
     name = email.split("@")[0]
     html = f"""
 <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#0d0d1a;padding:32px;border-radius:12px;">
   <div style="text-align:center;margin-bottom:24px;">
-    <span style="font-size:1.1rem;font-weight:700;color:#B8966A;letter-spacing:4px;">AEGIS · v1.0</span>
+    <span style="font-size:1.1rem;font-weight:700;color:#B8966A;letter-spacing:4px;">AEGIS Â· v1.0</span>
   </div>
   <h2 style="color:#EAE6DF;margin:0 0 8px;">Phone Verification Code</h2>
   <p style="color:#9ca3af;margin:0 0 24px;">Hi {name}, here is your one-time code to verify <strong style="color:#B8966A;">{phone_number}</strong>:</p>
@@ -2932,7 +2932,7 @@ async def send_otp_for_registration(request: OTPSendRequest, req: Request):
   <p style="color:#6b7280;font-size:0.85rem;text-align:center;">Expires in 5 minutes. Do not share this code.</p>
 </div>"""
     try:
-        await _send_email(email, "AEGIS – Your Phone Verification Code", html)
+        await _send_email(email, "AEGIS â€“ Your Phone Verification Code", html)
     except Exception as e:
         _otp_delete(email)
         print(f"Email OTP fallback failed: {e}")
@@ -2976,7 +2976,7 @@ async def check_phone_unique(request: PhoneCheckRequest, req: Request):
     return {"available": phone_is_unique(phone)}
 
 # -------------------------------------------------------------------
-# Password reset — generate Firebase link, deliver via Neo SMTP
+# Password reset â€” generate Firebase link, deliver via Neo SMTP
 # Firebase's default noreply sender goes to spam; our domain is trusted.
 # -------------------------------------------------------------------
 class PasswordResetRequest(BaseModel):
@@ -3002,7 +3002,7 @@ async def send_password_reset(request: PasswordResetRequest, req: Request):
     params = urllib.parse.parse_qs(parsed.query)
     oob_code = params.get("oobCode", [""])[0]
     api_key = params.get("apiKey", [""])[0]
-    base_url = os.getenv("BASE_URL", "https://gatekeeper.sbs").rstrip("/")
+    base_url = os.getenv("BASE_URL", "https://aegisignal.pro").rstrip("/")
     custom_reset_url = (
         f"{base_url}/reset-password"
         f"?oobCode={urllib.parse.quote(oob_code)}&apiKey={urllib.parse.quote(api_key)}"
@@ -3011,9 +3011,9 @@ async def send_password_reset(request: PasswordResetRequest, req: Request):
     try:
         print(f"[password-reset] Sending reset email to {email} via {os.getenv('MAIL_SERVER','smtp.gmail.com')}:{os.getenv('MAIL_PORT','587')}")
         sender_name  = os.getenv("MAIL_FROM_NAME", "AEGIS AI Terminal")
-        sender_email = os.getenv("MAIL_FROM",      "noreply@gatekeeper.sbs")
+        sender_email = os.getenv("MAIL_FROM",      "noreply@aegisignal.pro")
         support_email = os.getenv("SUPPORT_EMAIL", sender_email)
-        base_url_display = os.getenv("BASE_URL", "https://gatekeeper.sbs").rstrip("/")
+        base_url_display = os.getenv("BASE_URL", "https://aegisignal.pro").rstrip("/")
         html_body = f"""<!DOCTYPE html>
 <html lang="en" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
@@ -3023,7 +3023,7 @@ async def send_password_reset(request: PasswordResetRequest, req: Request):
   <!--[if mso]>
   <noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript>
   <![endif]-->
-  <title>Reset Your Password — AEGIS</title>
+  <title>Reset Your Password â€” AEGIS</title>
 </head>
 <body style="margin:0;padding:0;background:#0b0f1a;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
   <!--[if mso]><table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center"><![endif]-->
@@ -3102,7 +3102,7 @@ async def send_password_reset(request: PasswordResetRequest, req: Request):
                   </p>
                   <p style="margin:0;font-size:13px;color:#4b6a9b;line-height:1.65;">
                     This link expires in <strong style="color:#7ea8d4;">1 hour</strong> and can only be used once.<br>
-                    If you did not request a password reset, no action is needed — your account remains secure.
+                    If you did not request a password reset, no action is needed â€” your account remains secure.
                   </p>
                 </td>
               </tr>
@@ -3154,7 +3154,7 @@ async def send_password_reset(request: PasswordResetRequest, req: Request):
                 from_addr=sender_email,
                 from_name=sender_name,
             )
-            print(f"[password-reset] Email sent ✓ → {email}")
+            print(f"[password-reset] Email sent âœ“ â†’ {email}")
         except Exception as e:
             print(f"[password-reset] Failed ({type(e).__name__}): {e}")
             raise HTTPException(status_code=500, detail="smtp_failure")
@@ -3365,7 +3365,7 @@ async def google_login(request: Request):
 BASIC_TOKENS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT"]
 
 # Full token universe for intermediate / pro / premium plans.
-# Mirrors FLEET in scripts/live_engine.py — kept in sync here so the
+# Mirrors FLEET in scripts/live_engine.py â€” kept in sync here so the
 # correct list is available even if the engine module fails to import.
 ALL_TOKENS = [
     "BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT",
@@ -3485,7 +3485,7 @@ async def start_free_trial(user_id: str = Depends(get_current_user)):
                     "message": "Your free trial is already active."
                 }
         except (ValueError, TypeError):
-            pass  # Corrupted date — fall through to fresh start
+            pass  # Corrupted date â€” fall through to fresh start
 
     # Start a new (or restart an expired) trial
     now = datetime.now(timezone.utc)
@@ -3502,7 +3502,7 @@ async def start_free_trial(user_id: str = Depends(get_current_user)):
     })
 
     remaining_seconds = int((trial_end_dt - now).total_seconds())
-    print(f"✅ Free trial started for {user_id}: ends {trial_end_iso}")
+    print(f"âœ… Free trial started for {user_id}: ends {trial_end_iso}")
 
     return {
         "status": "trial",
@@ -3645,7 +3645,7 @@ async def initialize_subscription(
     return {"subscription_id": subscription["id"]}
 
 
-# Base prices in USD — source of truth for all plans
+# Base prices in USD â€” source of truth for all plans
 USD_PLAN_PRICES: Dict[str, float] = {
     "basic": 5.90,
     "intermediate": 24.00,
@@ -3698,7 +3698,7 @@ async def engine_track_record_endpoint():
 
 @app.get("/api/track-record")
 async def track_record_endpoint(source: str = None):
-    """Public track record — merges live_engine + main.py stores so no records are lost."""
+    """Public track record â€” merges live_engine + main.py stores so no records are lost."""
 
     _ENGINE_RECORD = Path(os.environ.get('AEGIS_STATE_DIR') or (Path(BASE_DIR) / "data")) / "track_record.json"
     _WEB_RECORD    = Path(BASE_DIR) / "web"  / "track_record.json"
@@ -3736,14 +3736,14 @@ async def track_record_endpoint(source: str = None):
         dr = s.get("direction", "") or s.get("signal_type", "") or s.get("side", "")
         return (s.get("symbol", ""), (s.get("entry_time") or "")[:16], dr)
 
-    # ── 1. Primary: live_engine's data/track_record.json ──────────────
+    # â”€â”€ 1. Primary: live_engine's data/track_record.json â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     seen_ids:   set  = set()
     seen_pos:   set  = set()
     all_signals: list = []
 
     # OPEN truth lives ONLY in the engine's own data/track_record.json (the
     # wallet).  The web copy and main.py's in-memory store run a parallel
-    # tracker with different signal_ids and their own exit timing — their
+    # tracker with different signal_ids and their own exit timing â€” their
     # OPEN rows are ghosts that inflate the public open count whenever the
     # minute-level dedup key misses.  Closed history from all sources is
     # still merged so no outcome is ever lost.
@@ -3767,7 +3767,7 @@ async def track_record_endpoint(source: str = None):
             except Exception:
                 pass
 
-    # ── 2. Supplement with main.py's in-memory store (closed gaps only) ──
+    # â”€â”€ 2. Supplement with main.py's in-memory store (closed gaps only) â”€â”€
     # Copy each record: the masking pass below must never mutate the live store.
     for r in _track_store:
         if r.get("outcome") == "OPEN":
@@ -3781,14 +3781,14 @@ async def track_record_endpoint(source: str = None):
             seen_ids.add(sid)
         seen_pos.add(pk)
 
-    # ── 3. Sort by entry time, cap at 500 ──────────────────────────────
+    # â”€â”€ 3. Sort by entry time, cap at 500 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     all_signals = sorted(
         all_signals,
         key=lambda r: r.get("entry_time") or "",
         reverse=True,
     )[:500]
 
-    # ── 3b. Mask OPEN positions in the public payload ──────────────────
+    # â”€â”€ 3b. Mask OPEN positions in the public payload â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     # Open signals are the paid product: token and price levels are hidden
     # from this unauthenticated endpoint (subscribers see them on the
     # dashboard).  Direction, live PnL, tier and outcome stay visible so
@@ -3998,7 +3998,7 @@ async def send_subscription_confirmation(email: str, plan: str):
             body=f"""
             <html>
             <body style="font-family: monospace; background: #0a0a0c; color: #00f2ff; padding: 20px;">
-                <h2>✅ Subscription Activated</h2>
+                <h2>âœ… Subscription Activated</h2>
                 <p>Your Aegis-1 {plan.upper()} plan has been activated successfully.</p>
                 <p>You now have access to:</p>
                 <ul>
@@ -4009,14 +4009,14 @@ async def send_subscription_confirmation(email: str, plan: str):
                 </ul>
                 <p>Log in to your dashboard to start trading.</p>
                 <hr>
-                <small style="color: #6b7280;">Aegis‑1 Sovereign Terminal</small>
+                <small style="color: #6b7280;">Aegisâ€‘1 Sovereign Terminal</small>
             </body>
             </html>
             """,
             subtype=MessageType.html,
         )
         await fastmail.send_message(message)
-        print(f"✅ Subscription confirmation sent to {email}")
+        print(f"âœ… Subscription confirmation sent to {email}")
     except Exception as e:
         print(f"Failed to send subscription confirmation: {e}")
 
@@ -4031,7 +4031,7 @@ async def send_trial_expiry_reminder(email: str, trial_end_date: datetime, hours
             body=f"""
             <html>
             <body style="font-family: monospace; background: #0a0a0c; color: #00f2ff; padding: 20px;">
-                <h2>⏰ Trial Expiring Soon</h2>
+                <h2>â° Trial Expiring Soon</h2>
                 <p>Your Aegis-1 trial will expire in {hours_until} hours on {trial_end_date.strftime('%B %d, %Y')}.</p>
                 <p>After expiry, you will only have access to 5 tokens (BTC, ETH, SOL, BNB, XRP).</p>
                 <p><strong>Upgrade to Pro for:</strong></p>
@@ -4041,16 +4041,16 @@ async def send_trial_expiry_reminder(email: str, trial_end_date: datetime, hours
                     <li>Real-time WebSocket feed</li>
                     <li>Priority support</li>
                 </ul>
-                <p><a href="{BASE_URL}/pricing" style="color: #00f2ff;">Click here to upgrade now →</a></p>
+                <p><a href="{BASE_URL}/pricing" style="color: #00f2ff;">Click here to upgrade now â†’</a></p>
                 <hr>
-                <small style="color: #6b7280;">Aegis‑1 Sovereign Terminal</small>
+                <small style="color: #6b7280;">Aegisâ€‘1 Sovereign Terminal</small>
             </body>
             </html>
             """,
             subtype=MessageType.html,
         )
         await fastmail.send_message(message)
-        print(f"✅ Trial reminder sent to {email}")
+        print(f"âœ… Trial reminder sent to {email}")
     except Exception as e:
         print(f"Failed to send trial reminder: {e}")
 
@@ -4062,7 +4062,7 @@ async def send_subscription_expiry_reminder(email: str, expiry_date: datetime, d
             body=f"""
             <html>
             <body style="font-family: monospace; background: #0a0a0c; color: #00f2ff; padding: 20px;">
-                <h2>📅 Subscription Renewal Notice</h2>
+                <h2>ðŸ“… Subscription Renewal Notice</h2>
                 <p>Your Aegis-1 Pro subscription will expire in {days_until} days on {expiry_date.strftime('%B %d, %Y')}.</p>
                 <p><strong>Renew now to continue enjoying:</strong></p>
                 <ul>
@@ -4071,16 +4071,16 @@ async def send_subscription_expiry_reminder(email: str, expiry_date: datetime, d
                     <li>Real-time WebSocket feed</li>
                     <li>Priority support</li>
                 </ul>
-                <p><a href="{BASE_URL}/pricing" style="color: #00f2ff;">Click here to renew →</a></p>
+                <p><a href="{BASE_URL}/pricing" style="color: #00f2ff;">Click here to renew â†’</a></p>
                 <hr>
-                <small style="color: #6b7280;">Aegis‑1 Sovereign Terminal</small>
+                <small style="color: #6b7280;">Aegisâ€‘1 Sovereign Terminal</small>
             </body>
             </html>
             """,
             subtype=MessageType.html,
         )
         await fastmail.send_message(message)
-        print(f"✅ Subscription reminder sent to {email}")
+        print(f"âœ… Subscription reminder sent to {email}")
     except Exception as e:
         print(f"Failed to send subscription reminder: {e}")
 
@@ -4207,9 +4207,9 @@ async def websocket_dashboard(websocket: WebSocket):
                     await websocket.send_json({"type": "error", "message": "Invalid token"})
                     await websocket.close(code=1008)
                     return
-                print(f"✅ WebSocket authenticated: {current_user_email}")
+                print(f"âœ… WebSocket authenticated: {current_user_email}")
         except Exception as auth_err:
-            print(f"⚠️ Auth error: {auth_err}")
+            print(f"âš ï¸ Auth error: {auth_err}")
             pass
         
         # normalize_signal_data defined once outside the loop.
@@ -4237,7 +4237,7 @@ async def websocket_dashboard(websocket: WebSocket):
                 pass
             return {}
 
-        # Plan info cached for 10 s — avoids a Firestore round-trip on every 250 ms tick
+        # Plan info cached for 10 s â€” avoids a Firestore round-trip on every 250 ms tick
         _plan_cache_ts: float = 0.0
         _allowed_tokens_cache: list = PRO_TOKENS
         _trial_expired_cache: bool = True
@@ -4331,7 +4331,7 @@ async def websocket_dashboard(websocket: WebSocket):
                 allowed_tokens = _allowed_tokens_cache
 
                 # Build tickers: prefer live prices; fall back to cached or signal entry_price.
-                # Cast values to float explicitly — engine.live_prices contains numpy.float32.
+                # Cast values to float explicitly â€” engine.live_prices contains numpy.float32.
                 live_tickers = {
                     k: float(v)
                     for k, v in LIVE_STATE.data.get("tickers", {}).items()
@@ -4348,7 +4348,7 @@ async def websocket_dashboard(websocket: WebSocket):
                             # flat signal
                             _ep = _sig.get("entry_price") or _sig.get("price")
                             if _ep is None:
-                                # nested timeframe dict — pick best available tf
+                                # nested timeframe dict â€” pick best available tf
                                 for _tf in ("1h", "30m", "15m", "4h", "1d"):
                                     _tf_sig = _sig.get(_tf)
                                     if isinstance(_tf_sig, dict):
@@ -4361,11 +4361,11 @@ async def websocket_dashboard(websocket: WebSocket):
                 if live_tickers:
                     _cached_tickers.update(live_tickers)
                 elif _cached_tickers:
-                    # No fresh prices — serve stale cache so the UI stays populated
+                    # No fresh prices â€” serve stale cache so the UI stays populated
                     live_tickers = dict(_cached_tickers)
 
                 if tick_count % SIGNAL_EVERY_N == 0:
-                    # ── Full signal update (every ~2 s) ──────────────────────────
+                    # â”€â”€ Full signal update (every ~2 s) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                     filtered_signals: Dict[str, dict] = {}
                     timeframes_map: Dict[str, Dict[str, dict]] = {}
                     response_timeframe = None
@@ -4466,7 +4466,7 @@ async def websocket_dashboard(websocket: WebSocket):
                                 if response_timeframe is None:
                                     response_timeframe = summary.get("timeframe", "1h")
                         else:
-                            # Flat signal dict from the new live_engine — pass all fields through.
+                            # Flat signal dict from the new live_engine â€” pass all fields through.
                             # Add backward-compat aliases so the frontend never sees empty values.
                             sig_data = normalize_signal_data(sig)
                             if not isinstance(sig_data, dict):
@@ -4541,7 +4541,7 @@ async def websocket_dashboard(websocket: WebSocket):
                             filtered_signals[sym] = _out
 
                     # Pad filtered_signals with stub entries for every engine-tracked
-                    # symbol not yet covered — ensures all 60 symbols appear in the
+                    # symbol not yet covered â€” ensures all 60 symbols appear in the
                     # dashboard even during warmup or when a predictor hasn't run yet.
                     _eng_ref = LIVE_STATE.engine
                     if _eng_ref is not None:
@@ -4652,7 +4652,7 @@ async def websocket_dashboard(websocket: WebSocket):
                     await websocket.send_json(jsonable_encoder(numpy_to_native(response_data)))
 
                 else:
-                    # ── Ticker-only update (every 250 ms) ───────────────────────
+                    # â”€â”€ Ticker-only update (every 250 ms) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                     await websocket.send_json({"type": "ticker", "tickers": numpy_to_native(live_tickers)})
 
                 tick_count += 1
@@ -4688,12 +4688,12 @@ async def websocket_dashboard(websocket: WebSocket):
                 await asyncio.sleep(TICKER_INTERVAL)
                 continue
     except WebSocketDisconnect:
-        print(f"🔌 WebSocket disconnected: {current_user_email}")
+        print(f"ðŸ”Œ WebSocket disconnected: {current_user_email}")
     except asyncio.TimeoutError:
-        print(f"⏱️ WebSocket timeout during authentication")
+        print(f"â±ï¸ WebSocket timeout during authentication")
         await websocket.close(code=1000)
     except Exception as e:
-        print(f"❌ WebSocket error: {e}")
+        print(f"âŒ WebSocket error: {e}")
         try:
             await websocket.close(code=1011)
         except:
@@ -4716,7 +4716,7 @@ async def toggle_alpha_mode(email: str = Depends(get_current_user)):
     return {"alpha_mode": new_state}
 
 # -------------------------------------------------------------------
-# Dev code system — admin generation + user redemption
+# Dev code system â€” admin generation + user redemption
 # -------------------------------------------------------------------
 
 ADMIN_SECRET = os.getenv("ADMIN_SECRET", "")
@@ -4901,7 +4901,7 @@ async def clear_users(_: None = Depends(_require_admin)):
 
 @app.get("/api/admin/smtp-test")
 async def smtp_test(_: None = Depends(_require_admin)):
-    """Test SMTP connectivity and return exact error — protected by X-Admin-Key header."""
+    """Test SMTP connectivity and return exact error â€” protected by X-Admin-Key header."""
     server  = os.getenv("MAIL_SERVER",   "NOT SET")
     user    = os.getenv("MAIL_USERNAME", "NOT SET")
     from_   = os.getenv("MAIL_FROM",     "NOT SET")
@@ -5024,9 +5024,9 @@ async def admin_generate_dev_codes(
     if req.plan not in ("basic", "intermediate", "pro"):
         raise HTTPException(status_code=400, detail="Invalid plan")
     if not (1 <= req.count <= 50):
-        raise HTTPException(status_code=400, detail="count must be 1–50")
+        raise HTTPException(status_code=400, detail="count must be 1â€“50")
     if not (1 <= req.days <= 365):
-        raise HTTPException(status_code=400, detail="days must be 1–365")
+        raise HTTPException(status_code=400, detail="days must be 1â€“365")
 
     now = datetime.now(timezone.utc)
     expires_at = now + timedelta(days=req.days)
@@ -5154,7 +5154,7 @@ async def redeem_dev_code(req: DevCodeRequest, email: str = Depends(get_current_
         if inspect.isawaitable(mark_result):
             await mark_result
 
-        # Token consumed — provision a replacement immediately so the backend
+        # Token consumed â€” provision a replacement immediately so the backend
         # always has an active token available for the next developer.
         try:
             await asyncio.to_thread(_provision_dev_token)
@@ -5164,7 +5164,7 @@ async def redeem_dev_code(req: DevCodeRequest, email: str = Depends(get_current_
     return {"status": "success", "plan": plan, "expires_at": expires_iso}
 
 # -------------------------------------------------------------------
-# Dev Key System — validate-devkey endpoint
+# Dev Key System â€” validate-devkey endpoint
 # -------------------------------------------------------------------
 
 DEV_KEY_FEATURES = ["extended_timeframes", "alpha_mode", "all_signals", "pro_signals"]
@@ -5308,34 +5308,34 @@ async def submit_review(review: Review):
     try:
         db.collection('reviews').add(review_doc)
         saved = True
-        print(f"✅ Review saved to Firestore: {review.email}")
+        print(f"âœ… Review saved to Firestore: {review.email}")
     except Exception as e:
-        print(f"❌ Failed to save review to Firestore: {e}")
+        print(f"âŒ Failed to save review to Firestore: {e}")
 
     # 2) ALWAYS notify the work inbox.  Previously the email was only sent when
-    #    the Firestore write FAILED — so with Firestore working (the normal
+    #    the Firestore write FAILED â€” so with Firestore working (the normal
     #    case) no notification was ever delivered, even though the page showed
     #    "review sent".  It also went to the personal gmail, not the Neo work
     #    mailbox.  Now it always fires, to REVIEW_NOTIFY_EMAIL (defaulting to the
     #    Neo-hosted work address), via the robust Resend/SMTP helper.
-    notify_to = os.getenv("REVIEW_NOTIFY_EMAIL", "animeshkukreti@gatekeeper.sbs")
-    _msg_html = (review.message or "").replace("\n", "<br>") or "—"
+    notify_to = os.getenv("REVIEW_NOTIFY_EMAIL", "animeshkukreti@aegisignal.pro")
+    _msg_html = (review.message or "").replace("\n", "<br>") or "â€”"
     emailed = False
     try:
         await _send_email(
             to=notify_to,
-            subject=f"New {rating}★ review from {review.name}",
-            html=(f"<h3>New {rating}★ review</h3>"
+            subject=f"New {rating}â˜… review from {review.name}",
+            html=(f"<h3>New {rating}â˜… review</h3>"
                   f"<p><b>Name:</b> {review.name}<br>"
                   f"<b>Email:</b> {review.email}<br>"
-                  f"<b>Product:</b> {review.product or '—'}<br>"
+                  f"<b>Product:</b> {review.product or 'â€”'}<br>"
                   f"<b>Rating:</b> {rating}/5</p>"
                   f"<p><b>Message:</b><br>{_msg_html}</p>"),
         )
         emailed = True
-        print(f"✅ Review notification emailed → {notify_to}")
+        print(f"âœ… Review notification emailed â†’ {notify_to}")
     except Exception as e2:
-        print(f"❌ Failed to send review notification email: {e2}")
+        print(f"âŒ Failed to send review notification email: {e2}")
 
     if not saved and not emailed:
         raise HTTPException(status_code=500, detail="Failed to record review")
@@ -5368,17 +5368,17 @@ async def execute_trade(request: TradeExecuteRequest, user_id: str = Depends(get
     try:
         # NOTE: Connect to the Demat API here.
         # This is where the call will be sent to the broker API for execution.
-        print(f"🚀 Sending order to Demat API: Symbol: {trade_data.get('symbol')}, Side: {trade_data.get('side')}, Units: {trade_data.get('positionUnits')}")
+        print(f"ðŸš€ Sending order to Demat API: Symbol: {trade_data.get('symbol')}, Side: {trade_data.get('side')}, Units: {trade_data.get('positionUnits')}")
         # demat_response = await demat_client.place_order(...)
         
         trade_ref = db.collection("users").document(user_id).collection("trades").document()
         trade_data["id"] = trade_ref.id
         trade_data["demat_status"] = "sent_to_broker"
         trade_ref.set(trade_data)
-        print(f"✅ Trade executed and sent to Demat via API for {user_id}")
+        print(f"âœ… Trade executed and sent to Demat via API for {user_id}")
         return {"status": "success", "trade_id": trade_ref.id, "trade": trade_data, "message": "Order sent to Demat account successfully"}
     except Exception as e:
-        print(f"❌ Failed to execute trade for {user_id}: {e}")
+        print(f"âŒ Failed to execute trade for {user_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to execute trade")
 
 @app.post("/api/trades/{trade_id}/close")
@@ -5392,12 +5392,12 @@ async def close_trade(trade_id: str, user_id: str = Depends(get_firebase_uid)):
             "status": "closed",
             "closeTime": datetime.now(timezone.utc).isoformat()
         })
-        print(f"✅ Trade {trade_id} closed for {user_id}")
+        print(f"âœ… Trade {trade_id} closed for {user_id}")
         return {"status": "success", "trade_id": trade_id}
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Failed to close trade {trade_id} for {user_id}: {e}")
+        print(f"âŒ Failed to close trade {trade_id} for {user_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to close trade")
 
 # -------------------------------------------------------------------
@@ -5449,9 +5449,9 @@ async def send_otp(request: OTPSendRequest):
         <tr>
           <td style="padding:20px 40px 28px;border-top:1px solid rgba(255,255,255,0.05);text-align:center;">
             <p style="color:#4b5563;font-size:12px;margin:0;">
-              Sent by <a href="mailto:animeshkukreti@gatekeeper.sbs" style="color:#B8966A;text-decoration:none;">animeshkukreti@gatekeeper.sbs</a>
-              &nbsp;·&nbsp;
-              <a href="https://gatekeeper.sbs" style="color:#B8966A;text-decoration:none;">gatekeeper.sbs</a>
+              Sent by <a href="mailto:animeshkukreti@aegisignal.pro" style="color:#B8966A;text-decoration:none;">animeshkukreti@aegisignal.pro</a>
+              &nbsp;Â·&nbsp;
+              <a href="https://aegisignal.pro" style="color:#B8966A;text-decoration:none;">aegisignal.pro</a>
             </p>
           </td>
         </tr>
@@ -5484,7 +5484,7 @@ async def verify_otp(request: OTPVerifyRequest):
     return {"success": True, "message": "OTP verified successfully. You may now complete registration."}
 
 # -------------------------------------------------------------------
-# FIRESTORE SIGNALS API – Get all active signals
+# FIRESTORE SIGNALS API â€“ Get all active signals
 # -------------------------------------------------------------------
 @app.get("/api/signals")
 async def get_signals(
@@ -5526,11 +5526,11 @@ async def get_signals(
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
     except Exception as e:
-        print(f"❌ Error fetching signals: {str(e)}")
+        print(f"âŒ Error fetching signals: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to fetch signals")
 
 # -------------------------------------------------------------------
-# FIRESTORE SIGNALS API – Get specific signal
+# FIRESTORE SIGNALS API â€“ Get specific signal
 # -------------------------------------------------------------------
 @app.get("/api/signals/{symbol}")
 async def get_signal(symbol: str):
@@ -5559,11 +5559,11 @@ async def get_signal(symbol: str):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error fetching signal {symbol}: {str(e)}")
+        print(f"âŒ Error fetching signal {symbol}: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to fetch signal")
 
 # -------------------------------------------------------------------
-# FIRESTORE DASHBOARD API – Get dashboard data for user
+# FIRESTORE DASHBOARD API â€“ Get dashboard data for user
 # -------------------------------------------------------------------
 @app.get("/api/dashboard")
 async def get_dashboard(
@@ -5621,11 +5621,11 @@ async def get_dashboard(
     except HTTPException:
         raise
     except jwt.InvalidSignatureError:
-        print("❌ Invalid JWT signature")
+        print("âŒ Invalid JWT signature")
         raise HTTPException(status_code=401, detail="Invalid token")
     except Exception as e:
         # Fallback to generic data if personal data fails
-        print(f"❌ Error fetching dashboard (fallback): {str(e)}")
+        print(f"âŒ Error fetching dashboard (fallback): {str(e)}")
         return {
             "user": {
                 "authenticated": False,
@@ -5647,7 +5647,7 @@ async def get_dashboard(
         }
 
 # -------------------------------------------------------------------
-# FIRESTORE PUBLIC SIGNALS – No authentication required
+# FIRESTORE PUBLIC SIGNALS â€“ No authentication required
 # -------------------------------------------------------------------
 @app.get("/api/public/signals")
 async def get_public_signals():
@@ -5676,11 +5676,11 @@ async def get_public_signals():
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
     except Exception as e:
-        print(f"❌ Error fetching public signals: {str(e)}")
+        print(f"âŒ Error fetching public signals: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to fetch signals")
 
 # -------------------------------------------------------------------
-# FIRESTORE SIGNAL UPDATE – Backend trigger (admin only)
+# FIRESTORE SIGNAL UPDATE â€“ Backend trigger (admin only)
 # -------------------------------------------------------------------
 @app.post("/api/admin/signals/update")
 async def update_signal(
@@ -5716,7 +5716,7 @@ async def update_signal(
             "symbol": symbol
         }
     except Exception as e:
-        print(f"❌ Error updating signal: {str(e)}")
+        print(f"âŒ Error updating signal: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to update signal")
 
 # -------------------------------------------------------------------
@@ -5812,13 +5812,13 @@ async def regenerate_api_key(user_id: str = Depends(get_current_user)):
     
     return {"status": "SUCCESS", "api_key": raw_key}
 
-# Frontend uses /api/v1/keys/regenerate — alias to the canonical route above
+# Frontend uses /api/v1/keys/regenerate â€” alias to the canonical route above
 @app.post("/api/v1/keys/regenerate")
 async def regenerate_api_key_alias(user_id: str = Depends(get_current_user)):
     return await regenerate_api_key(user_id)
 
 # -------------------------------------------------------------------
-# User settings (capital + risk) — persisted to Firestore
+# User settings (capital + risk) â€” persisted to Firestore
 # Called by the Settings room in dashboard.js when user hits Save
 # -------------------------------------------------------------------
 class UserSettingsUpdate(BaseModel):
@@ -5845,9 +5845,9 @@ async def save_user_settings(
 # -------------------------------------------------------------------
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-#  AEGIS UNIVERSAL TRADER — API Endpoints
-# ═══════════════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+#  AEGIS UNIVERSAL TRADER â€” API Endpoints
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 _trader_engine_instance = None
 _trader_engine_lock = __import__('threading').Lock()
@@ -5878,9 +5878,9 @@ async def get_trader_signals(
     Return active Universal Trader signals.
 
     Query params:
-      mode         – filter by 'scalping' | 'intraday' | 'swing' (optional)
-      risk_profile – 'conservative' | 'balanced' | 'aggressive' (default: balanced)
-      scan         – if true, trigger a fresh scan (slow); otherwise return cached
+      mode         â€“ filter by 'scalping' | 'intraday' | 'swing' (optional)
+      risk_profile â€“ 'conservative' | 'balanced' | 'aggressive' (default: balanced)
+      scan         â€“ if true, trigger a fresh scan (slow); otherwise return cached
     """
     engine = _get_trader_engine_lazy()
     if engine is None:
@@ -5918,7 +5918,7 @@ async def get_trader_signals(
 
 @app.get("/api/trader/track-record")
 async def get_trader_track_record():
-    """Public endpoint — returns normalised trader_track_record.json (wallet + trade history)."""
+    """Public endpoint â€” returns normalised trader_track_record.json (wallet + trade history)."""
     trader_signals: list = []
     wins, losses, open_c, closed = 0, 0, 0, 0
     pnls = []
@@ -6095,7 +6095,7 @@ async def trigger_trader_scan(
 
 
 
-# ── Telegram Connect API ───────────────────────────────────────────────────────
+# â”€â”€ Telegram Connect API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @app.get("/api/notifications/telegram/connect")
 async def telegram_connect(_user: str = Depends(get_current_user)):
@@ -6126,7 +6126,7 @@ async def telegram_disconnect(_user: str = Depends(get_current_user)):
     return {"status": "disconnected"}
 
 
-# ── Notification Settings API ──────────────────────────────────────────────────
+# â”€â”€ Notification Settings API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @app.get("/api/notifications/settings")
 async def get_notification_settings(_user: str = Depends(get_current_user)):
@@ -6192,3 +6192,4 @@ if __name__ == "__main__":
         ws="websockets",
         log_level="info",
     )
+

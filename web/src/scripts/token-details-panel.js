@@ -1,5 +1,5 @@
-// ============================================================
-// token-details-panel.js  — v3 (rebuilt for accuracy)
+﻿// ============================================================
+// token-details-panel.js  â€” v3 (rebuilt for accuracy)
 //
 // All four panel sections now read from real signal fields:
 //   confluence.{total,trend,momentum,volume,smart_money,candle}
@@ -14,7 +14,7 @@
 // converts it to [0,10] automatically.
 // ============================================================
 
-// ── Toast helper ──────────────────────────────────────────────────
+// â”€â”€ Toast helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function _toast(msg, type = 'info') {
   if (typeof window._showToast === 'function') { window._showToast(msg, type); return; }
   const el = document.createElement('div');
@@ -28,7 +28,7 @@ function _toast(msg, type = 'info') {
   setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3000);
 }
 
-// ── Lock overlay ──────────────────────────────────────────────────
+// â”€â”€ Lock overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function _lock(requiredTier, msg) {
   const c = requiredTier === 'PRO'
     ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
@@ -44,15 +44,15 @@ function _lock(requiredTier, msg) {
          class="mt-3 text-[10px] font-bold text-white bg-gradient-to-r
                 from-cyan-500/80 to-blue-600/80 px-4 py-1.5 rounded-lg
                 hover:from-cyan-500 hover:to-blue-600 transition-all">
-        Upgrade →
+        Upgrade â†’
       </a>
     </div>`;
 }
 
-// ── Price formatter (handles PEPE/SHIB/BTC equally) ───────────────
+// â”€â”€ Price formatter (handles PEPE/SHIB/BTC equally) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function _px(v) {
   v = parseFloat(v) || 0;
-  if (v <= 0)        return '—';
+  if (v <= 0)        return 'â€”';
   if (v >= 10000)    return v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   if (v >= 1000)     return v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 3 });
   if (v >= 1)        return v.toFixed(4);
@@ -63,7 +63,7 @@ function _px(v) {
   return v.toExponential(4);
 }
 
-// ── Confluence scale normaliser ───────────────────────────────────
+// â”€â”€ Confluence scale normaliser â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Old engine used [-1, +1]; new engine (after fix) uses [0, 10].
 // Detect by checking if the absolute value exceeds 1.05.
 function _to10(raw) {
@@ -74,13 +74,13 @@ function _to10(raw) {
   return Math.min(10, Math.max(0, v));
 }
 
-// ── Confluence category bar ───────────────────────────────────────
+// â”€â”€ Confluence category bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // val10: [0, 10] where 5 = neutral, >5 = bullish, <5 = bearish
 function _confBar(label, val10, weight, tooltip) {
   const v     = parseFloat(val10) || 5;
   const pct   = (v / 10) * 100;
   const delta = v - 5;                  // negative = bearish, positive = bullish
-  const strength = Math.abs(delta) / 5; // 0–1 strength from neutral
+  const strength = Math.abs(delta) / 5; // 0â€“1 strength from neutral
 
   const isBull  = delta >  0.3;
   const isBear  = delta < -0.3;
@@ -101,7 +101,7 @@ function _confBar(label, val10, weight, tooltip) {
       <div class="flex items-center justify-between mb-1">
         <div class="flex items-center gap-1.5 min-w-0">
           <span class="text-[10px] font-mono text-slate-300 truncate">${label}</span>
-          <span class="text-[8px] font-bold ${wColor} flex-shrink-0">×${weight}</span>
+          <span class="text-[8px] font-bold ${wColor} flex-shrink-0">Ã—${weight}</span>
         </div>
         <div class="flex items-center gap-1.5 flex-shrink-0 ml-2">
           <span class="text-[9px] font-black ${dirColor} uppercase w-8 text-right">${dirLabel}</span>
@@ -124,7 +124,7 @@ function _confBar(label, val10, weight, tooltip) {
     </div>`;
 }
 
-// ── Indicator pill helper ─────────────────────────────────────────
+// â”€â”€ Indicator pill helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function _pill(label, value, bullish) {
   const color = bullish === true  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
               : bullish === false ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
@@ -134,21 +134,21 @@ function _pill(label, value, bullish) {
   </span>`;
 }
 
-// ── Main render ───────────────────────────────────────────────────
+// â”€â”€ Main render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export function renderTokenDetailsPanel(tokenData, userTier) {
   const tier          = (userTier || 'BASIC').toUpperCase();
   const canIntermediate = tier === 'INTERMEDIATE' || tier === 'PRO';
   const canPro          = tier === 'PRO';
 
-  // ── Core price & direction ────────────────────────────────────────
-  const sym      = tokenData.symbol  || '—';
+  // â”€â”€ Core price & direction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const sym      = tokenData.symbol  || 'â€”';
   const rawDir   = (tokenData.direction || tokenData.signal || 'NEUTRAL').toUpperCase();
   const isLong   = rawDir === 'LONG' || rawDir === 'BUY';
   const isSell   = rawDir === 'SHORT' || rawDir === 'SELL';
   const fire     = Boolean(tokenData.fire);
   const price    = parseFloat(tokenData.price || tokenData.entry_price || 0);
 
-  // ── SL / TP levels ────────────────────────────────────────────────
+  // â”€â”€ SL / TP levels â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const sl  = parseFloat(tokenData.suggested_sl || tokenData.stop_loss  || 0);
   const tp1 = parseFloat(
     (isLong ? tokenData.bull_tp1 : tokenData.bear_tp1) ||
@@ -157,14 +157,14 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
   const tp2 = parseFloat((isLong ? tokenData.bull_tp2 : tokenData.bear_tp2) || 0);
   const tp3 = parseFloat((isLong ? tokenData.bull_tp3 : tokenData.bear_tp3) || 0);
 
-  // ── S&R levels ────────────────────────────────────────────────────
+  // â”€â”€ S&R levels â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const support    = parseFloat(tokenData.support    || tokenData.s1 || 0);
   const resistance = parseFloat(tokenData.resistance || tokenData.r1 || 0);
   const pivot      = parseFloat(tokenData.pivot      || 0);
   const s1         = parseFloat(tokenData.s1         || 0);
   const r1         = parseFloat(tokenData.r1         || 0);
 
-  // ── AI probabilities ──────────────────────────────────────────────
+  // â”€â”€ AI probabilities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const pBuy      = parseFloat(tokenData.p_buy  || 0);
   const pSell     = parseFloat(tokenData.p_sell || 0);
   const pHold     = parseFloat(tokenData.p_hold || 0);
@@ -172,13 +172,13 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
   const threshold = parseFloat(tokenData.threshold || 0.6);
   const confGap   = (metaConf - threshold) * 100;  // positive = above threshold
 
-  // ── Expected move / R:R (from live_engine v3) ─────────────────────
+  // â”€â”€ Expected move / R:R (from live_engine v3) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const expectedMove = parseFloat(tokenData.expected_move_pct || 0);
   const riskReward   = parseFloat(tokenData.risk_reward       || 0);
   const atrPct       = parseFloat(tokenData.atr_pct           || 0);
   const atr          = parseFloat(tokenData.atr               || 0);
 
-  // ── Confluence (normalize to [0,10] regardless of engine version) ─
+  // â”€â”€ Confluence (normalize to [0,10] regardless of engine version) â”€
   const rawConf   = tokenData.confluence || {};
   const cTrend    = _to10(rawConf.trend       ?? 5);
   const cMom      = _to10(rawConf.momentum    ?? 5);
@@ -200,7 +200,7 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
   ).length;
   const totalCategories = 5;
 
-  // ── Other indicators ──────────────────────────────────────────────
+  // â”€â”€ Other indicators â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const rsi         = parseFloat(tokenData.rsi    || 50);
   const adx         = parseFloat(tokenData.adx    || 20);
   const macd        = (tokenData.macd_signal    || 'NEUTRAL').toUpperCase();
@@ -213,19 +213,19 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
   const trendRegime = (tokenData.trend_regime      || 'RANGING').toUpperCase();
   const marketBias  = (tokenData.market_bias        || 'NEUTRAL').toUpperCase();
 
-  // ── Live price (real-time, falls back to signal price) ────────────
+  // â”€â”€ Live price (real-time, falls back to signal price) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const livePx = parseFloat(
     (window.currentTickers && window.currentTickers[sym]) ||
     tokenData.livePrice || price
   );
 
-  // ── Dist helpers ──────────────────────────────────────────────────
+  // â”€â”€ Dist helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const distPct = (a, b) => b > 0 && a > 0 ? ((a - b) / b * 100) : 0;
   const distToTp1 = distPct(tp1, livePx);
   const distToSl  = distPct(sl, livePx);
   const distToTp2 = distPct(tp2, livePx);
 
-  // ── Overall confluence badge ──────────────────────────────────────
+  // â”€â”€ Overall confluence badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const confBadgeColor = cTotal >= 7 ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/25'
     : cTotal >= 5.5                  ? 'text-cyan-300    bg-cyan-500/10    border-cyan-500/25'
     : cTotal <= 3                    ? 'text-rose-300    bg-rose-500/10    border-rose-500/25'
@@ -233,22 +233,22 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
     :                                  'text-slate-400   bg-slate-700/30   border-slate-600/30';
   const confTierLabel = cTotal >= 7 ? 'Strong' : cTotal >= 5.5 ? 'Moderate' : cTotal <= 3 ? 'Weak Bear' : cTotal <= 4.5 ? 'Moderate Bear' : 'Neutral';
 
-  // ── Beginner plain-English confluence note ────────────────────────
+  // â”€â”€ Beginner plain-English confluence note â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const confPlain = signalCategories >= 4
-    ? `${signalCategories}/5 indicator groups support this ${isLong ? 'BUY' : 'SELL'} signal — strong setup.`
+    ? `${signalCategories}/5 indicator groups support this ${isLong ? 'BUY' : 'SELL'} signal â€” strong setup.`
     : signalCategories >= 3
-      ? `${signalCategories}/5 groups agree — reasonable setup, watch for confirmation.`
+      ? `${signalCategories}/5 groups agree â€” reasonable setup, watch for confirmation.`
       : signalCategories >= 2
-        ? `Only ${signalCategories}/5 groups align — mixed signals, trade smaller size.`
-        : `Most indicators are neutral or conflicting — avoid unless high conviction.`;
+        ? `Only ${signalCategories}/5 groups align â€” mixed signals, trade smaller size.`
+        : `Most indicators are neutral or conflicting â€” avoid unless high conviction.`;
 
-  // ══════════════════════════════════════════════════════════════════
-  // SECTION 1 — Confluence Scorecard
-  // ══════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // SECTION 1 â€” Confluence Scorecard
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   const sec1 = `
     <div class="relative bg-slate-900/60 backdrop-blur-md border border-slate-800/80
                 rounded-xl p-4 flex flex-col gap-1 overflow-hidden">
-      ${!canIntermediate ? _lock('INTERMEDIATE', '🔒 Unlock AI Confluence Scorecard') : ''}
+      ${!canIntermediate ? _lock('INTERMEDIATE', 'ðŸ”’ Unlock AI Confluence Scorecard') : ''}
       <div class="${!canIntermediate ? 'blur-sm pointer-events-none select-none' : ''}">
 
         <!-- Header -->
@@ -304,8 +304,8 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
         <!-- Weights explanation -->
         <div class="mt-3 pt-3 border-t border-slate-800/60">
           <div class="text-[10px] text-slate-500 font-mono leading-relaxed">
-            <span class="text-amber-400/80">×weight</span> = contribution to total score.
-            Trend (×2) and Smart Money (×1.5) carry the most weight — candles (×0.5) the least.
+            <span class="text-amber-400/80">Ã—weight</span> = contribution to total score.
+            Trend (Ã—2) and Smart Money (Ã—1.5) carry the most weight â€” candles (Ã—0.5) the least.
           </div>
         </div>
 
@@ -318,9 +318,9 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
       </div>
     </div>`;
 
-  // ══════════════════════════════════════════════════════════════════
-  // SECTION 2 — Zone Tracker  (multi-level TP + S&R)
-  // ══════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // SECTION 2 â€” Zone Tracker  (multi-level TP + S&R)
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
   // Build range: SL on one extreme, TP3 on the other
   const hasLevels = sl > 0 && tp1 > 0;
@@ -335,7 +335,7 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
     rangeLow  = lowestTp;
     rangeHigh = sl > 0 ? sl : price * 1.06;
   } else {
-    // No signal — show ±5% range around price
+    // No signal â€” show Â±5% range around price
     rangeLow  = price * 0.95;
     rangeHigh = price * 1.05;
   }
@@ -362,30 +362,30 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
   // Status label
   let zoneStatus = '';
   if (!hasLevels) {
-    zoneStatus = `<span class="text-[11px] text-slate-500">No open trade — no zone to track</span>`;
+    zoneStatus = `<span class="text-[11px] text-slate-500">No open trade â€” no zone to track</span>`;
   } else if (isLong) {
     if (livePx >= tp1 && tp1 > 0) {
-      zoneStatus = `<span class="text-[11px] font-bold text-emerald-400 animate-pulse">✅ TP1 Reached — consider taking profits</span>`;
+      zoneStatus = `<span class="text-[11px] font-bold text-emerald-400 animate-pulse">âœ… TP1 Reached â€” consider taking profits</span>`;
     } else if (livePx <= sl && sl > 0) {
-      zoneStatus = `<span class="text-[11px] font-bold text-rose-400 animate-pulse">⚠️ SL Zone — stop loss approaching</span>`;
+      zoneStatus = `<span class="text-[11px] font-bold text-rose-400 animate-pulse">âš ï¸ SL Zone â€” stop loss approaching</span>`;
     } else if (priceFromEntry >= 0) {
       const pctDone = tp1Dist > 0 ? ((priceFromEntry / tp1Dist) * 100).toFixed(0) : 0;
-      zoneStatus = `<span class="text-[11px] font-bold text-cyan-400">📈 In profit — ${pctDone}% to TP1</span>`;
+      zoneStatus = `<span class="text-[11px] font-bold text-cyan-400">ðŸ“ˆ In profit â€” ${pctDone}% to TP1</span>`;
     } else {
       const slDist = Math.abs(price - sl);
       const slUsed = slDist > 0 ? (Math.abs(priceFromEntry) / slDist * 100).toFixed(0) : 0;
-      zoneStatus = `<span class="text-[11px] font-bold text-amber-400">⏳ Below entry — ${slUsed}% toward SL</span>`;
+      zoneStatus = `<span class="text-[11px] font-bold text-amber-400">â³ Below entry â€” ${slUsed}% toward SL</span>`;
     }
   } else if (isSell) {
     if (livePx <= tp1 && tp1 > 0) {
-      zoneStatus = `<span class="text-[11px] font-bold text-emerald-400 animate-pulse">✅ TP1 Reached — consider taking profits</span>`;
+      zoneStatus = `<span class="text-[11px] font-bold text-emerald-400 animate-pulse">âœ… TP1 Reached â€” consider taking profits</span>`;
     } else if (livePx >= sl && sl > 0) {
-      zoneStatus = `<span class="text-[11px] font-bold text-rose-400 animate-pulse">⚠️ SL Zone — stop loss approaching</span>`;
+      zoneStatus = `<span class="text-[11px] font-bold text-rose-400 animate-pulse">âš ï¸ SL Zone â€” stop loss approaching</span>`;
     } else if (priceFromEntry >= 0) {
       const pctDone = tp1Dist > 0 ? ((priceFromEntry / tp1Dist) * 100).toFixed(0) : 0;
-      zoneStatus = `<span class="text-[11px] font-bold text-cyan-400">📉 In profit — ${pctDone}% to TP1</span>`;
+      zoneStatus = `<span class="text-[11px] font-bold text-cyan-400">ðŸ“‰ In profit â€” ${pctDone}% to TP1</span>`;
     } else {
-      zoneStatus = `<span class="text-[11px] font-bold text-amber-400">⏳ Above entry — moving toward SL</span>`;
+      zoneStatus = `<span class="text-[11px] font-bold text-amber-400">â³ Above entry â€” moving toward SL</span>`;
     }
   }
 
@@ -393,13 +393,13 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
   const zonePlain = !hasLevels
     ? 'No active trade levels to display. Open a position to see the zone tracker.'
     : isLong
-      ? `You entered LONG at $${_px(price)}. The green line shows TP1 — your first profit target. The red line (left) is your stop loss. The dot shows where the price is right now.`
+      ? `You entered LONG at $${_px(price)}. The green line shows TP1 â€” your first profit target. The red line (left) is your stop loss. The dot shows where the price is right now.`
       : `You entered SHORT at $${_px(price)}. Price moving DOWN is profit. The green marks on the left are your profit targets. Red on the right is your stop loss.`;
 
   const sec2 = `
     <div class="relative bg-slate-900/60 backdrop-blur-md border border-slate-800/80
                 rounded-xl p-4 flex flex-col gap-1 overflow-hidden">
-      ${!canIntermediate ? _lock('INTERMEDIATE', '🔒 Unlock Visual Zone Tracking') : ''}
+      ${!canIntermediate ? _lock('INTERMEDIATE', 'ðŸ”’ Unlock Visual Zone Tracking') : ''}
       <div class="${!canIntermediate ? 'blur-sm pointer-events-none select-none' : ''}">
 
         <!-- Header -->
@@ -411,7 +411,7 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
           ${hasLevels ? `<span class="ml-auto text-[9px] font-bold px-2 py-0.5 rounded-full
                        ${isLong ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25'
                                 : 'bg-rose-500/15 text-rose-300 border-rose-500/25'} border uppercase">
-            ${isLong ? '▲ LONG' : '▼ SHORT'}
+            ${isLong ? 'â–² LONG' : 'â–¼ SHORT'}
           </span>` : ''}
         </div>
 
@@ -419,7 +419,7 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
         <div class="relative h-14 bg-slate-800/80 rounded-xl overflow-hidden
                     border border-slate-700/50 mb-3 select-none">
 
-          <!-- Background gradient: loss side → profit side -->
+          <!-- Background gradient: loss side â†’ profit side -->
           ${isLong
             ? `<div class="absolute inset-0 bg-gradient-to-r from-rose-500/20 via-transparent to-emerald-500/20"></div>`
             : `<div class="absolute inset-0 bg-gradient-to-r from-emerald-500/20 via-transparent to-rose-500/20"></div>`
@@ -499,20 +499,20 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
           <div class="bg-slate-800/50 rounded-lg py-1.5 border border-slate-700/30">
             <div class="text-[8px] text-slate-500 uppercase font-mono mb-0.5">To SL</div>
             <div class="text-[11px] font-black font-mono text-rose-400">
-              ${sl > 0 ? (isLong ? distToSl : -distToSl).toFixed(2) + '%' : '—'}
+              ${sl > 0 ? (isLong ? distToSl : -distToSl).toFixed(2) + '%' : 'â€”'}
             </div>
           </div>
           <div class="bg-slate-800/50 rounded-lg py-1.5 border border-slate-700/30">
             <div class="text-[8px] text-slate-500 uppercase font-mono mb-0.5">To TP1</div>
             <div class="text-[11px] font-black font-mono text-emerald-400">
-              ${tp1 > 0 ? (isLong ? distToTp1 : -distToTp1).toFixed(2) + '%' : '—'}
+              ${tp1 > 0 ? (isLong ? distToTp1 : -distToTp1).toFixed(2) + '%' : 'â€”'}
             </div>
           </div>
           <div class="bg-slate-800/50 rounded-lg py-1.5 border border-slate-700/30">
             <div class="text-[8px] text-slate-500 uppercase font-mono mb-0.5">R:R</div>
             <div class="text-[11px] font-black font-mono text-cyan-400">
               ${riskReward > 0 ? '1:' + riskReward.toFixed(2) : tp1 > 0 && sl > 0
-                ? '1:' + (Math.abs(tp1 - price) / Math.abs(sl - price)).toFixed(2) : '—'}
+                ? '1:' + (Math.abs(tp1 - price) / Math.abs(sl - price)).toFixed(2) : 'â€”'}
             </div>
           </div>
         </div>
@@ -548,13 +548,13 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
         <!-- Status pill -->
         <div class="flex items-center justify-center py-2 px-3 rounded-lg
                     bg-slate-800/50 border border-slate-700/40">
-          ${zoneStatus || `<span class="text-[11px] text-slate-500">Monitoring — no active position</span>`}
+          ${zoneStatus || `<span class="text-[11px] text-slate-500">Monitoring â€” no active position</span>`}
         </div>
 
         <!-- ATR context -->
         ${atrPct > 0 ? `
         <div class="mt-2 flex items-center justify-between text-[9px] font-mono text-slate-600">
-          <span>ATR = ${atr > 0 ? '$' + _px(atr) : '—'} (${atrPct.toFixed(2)}% of price)</span>
+          <span>ATR = ${atr > 0 ? '$' + _px(atr) : 'â€”'} (${atrPct.toFixed(2)}% of price)</span>
           <span class="${volRegime === 'HIGH' ? 'text-rose-400/70' : volRegime === 'LOW' ? 'text-blue-400/70' : 'text-slate-500'}">
             ${volRegime} volatility
           </span>
@@ -569,9 +569,9 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
       </div>
     </div>`;
 
-  // ══════════════════════════════════════════════════════════════════
-  // SECTION 3 — Signal Quality & Expectancy
-  // ══════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // SECTION 3 â€” Signal Quality & Expectancy
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
   const confGapColor  = confGap >= 10 ? 'text-emerald-400' : confGap >= 0 ? 'text-cyan-400' : 'text-rose-400';
   const confGapLabel  = confGap >= 10 ? 'High Conviction' : confGap >= 0 ? 'Above Threshold' : 'Below Threshold';
@@ -582,7 +582,7 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
   const sec3 = `
     <div class="relative bg-slate-900/60 backdrop-blur-md border border-slate-800/80
                 rounded-xl p-4 flex flex-col gap-1 overflow-hidden">
-      ${!canPro ? _lock('PRO', '🔒 Unlock Signal Quality & Expectancy') : ''}
+      ${!canPro ? _lock('PRO', 'ðŸ”’ Unlock Signal Quality & Expectancy') : ''}
       <div class="${!canPro ? 'blur-sm pointer-events-none select-none' : ''}">
 
         <!-- Header -->
@@ -621,7 +621,7 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
           </div>
           <div class="flex justify-between text-[9px] font-mono mt-1.5">
             <span class="text-slate-600">0%</span>
-            <span class="text-amber-400/80">${threshPct}% ← required</span>
+            <span class="text-amber-400/80">${threshPct}% â† required</span>
             <span class="${confGapColor} font-bold">${metaConfPct}% current</span>
           </div>
         </div>
@@ -631,7 +631,7 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
           <div class="bg-slate-800/60 border border-slate-700/40 rounded-xl p-3">
             <div class="text-[9px] text-slate-500 uppercase tracking-widest mb-1.5 font-mono">Expected Move</div>
             <div class="text-lg font-black font-mono ${moveColor} leading-none">
-              ${expectedMove > 0 ? '~' + expectedMove.toFixed(1) + '%' : atrPct > 0 ? '~' + (atrPct * 1.5).toFixed(1) + '%' : '—'}
+              ${expectedMove > 0 ? '~' + expectedMove.toFixed(1) + '%' : atrPct > 0 ? '~' + (atrPct * 1.5).toFixed(1) + '%' : 'â€”'}
             </div>
             <div class="text-[9px] text-slate-500 mt-1 font-mono">AI projection</div>
           </div>
@@ -639,7 +639,7 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
             <div class="text-[9px] text-slate-500 uppercase tracking-widest mb-1.5 font-mono">Risk / Reward</div>
             <div class="text-lg font-black font-mono text-cyan-400 leading-none">
               ${riskReward > 0 ? '1:' + riskReward.toFixed(2)
-                : tp1 > 0 && sl > 0 ? '1:' + (Math.abs(tp1 - price) / Math.abs(sl - price)).toFixed(2) : '—'}
+                : tp1 > 0 && sl > 0 ? '1:' + (Math.abs(tp1 - price) / Math.abs(sl - price)).toFixed(2) : 'â€”'}
             </div>
             <div class="text-[9px] text-slate-500 mt-1 font-mono">per $ risked</div>
           </div>
@@ -648,7 +648,7 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
             <div class="text-lg font-black font-mono
                         ${volRegime === 'HIGH' ? 'text-rose-400' : volRegime === 'LOW' ? 'text-blue-400' : 'text-amber-400'}
                         leading-none">${volRegime}</div>
-            <div class="text-[9px] text-slate-500 mt-1 font-mono">ATR = ${atrPct > 0 ? atrPct.toFixed(2) + '%' : '—'}</div>
+            <div class="text-[9px] text-slate-500 mt-1 font-mono">ATR = ${atrPct > 0 ? atrPct.toFixed(2) + '%' : 'â€”'}</div>
           </div>
           <div class="bg-slate-800/60 border border-slate-700/40 rounded-xl p-3">
             <div class="text-[9px] text-slate-500 uppercase tracking-widest mb-1.5 font-mono">Trend Regime</div>
@@ -659,20 +659,20 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
           </div>
         </div>
 
-        <!-- Historical stats — loaded async -->
+        <!-- Historical stats â€” loaded async -->
         <div id="tdp-hist-stats" class="px-3 py-2 rounded-lg bg-slate-800/30 border border-slate-700/30
                                         text-[10px] text-slate-500 font-mono">
-          Loading historical stats…
+          Loading historical statsâ€¦
         </div>
 
         <!-- Beginner explanation -->
         <div class="mt-2 px-3 py-2 rounded-lg bg-slate-800/30 border border-slate-700/30">
           <div class="text-[9px] uppercase tracking-widest text-slate-600 font-mono mb-0.5">For beginners</div>
           <div class="text-[10px] text-slate-400 leading-relaxed">
-            The AI needs ${threshPct}% confidence to fire — it currently shows ${metaConfPct}%.
+            The AI needs ${threshPct}% confidence to fire â€” it currently shows ${metaConfPct}%.
             ${metaConfPct >= threshPct
-              ? `This signal is <strong class="text-emerald-400">above the bar</strong> — the model has enough evidence to act.`
-              : `This signal is <strong class="text-rose-400">below the bar</strong> — the model is watching but not yet certain.`}
+              ? `This signal is <strong class="text-emerald-400">above the bar</strong> â€” the model has enough evidence to act.`
+              : `This signal is <strong class="text-rose-400">below the bar</strong> â€” the model is watching but not yet certain.`}
             ${expectedMove > 0 ? ` Expect roughly ${expectedMove.toFixed(1)}% price movement if the setup plays out.` : ''}
           </div>
         </div>
@@ -680,9 +680,9 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
       </div>
     </div>`;
 
-  // ══════════════════════════════════════════════════════════════════
-  // SECTION 4 — AI Model Analysis (real p_buy/p_sell/p_hold + key drivers)
-  // ══════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // SECTION 4 â€” AI Model Analysis (real p_buy/p_sell/p_hold + key drivers)
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
   const pBuyPct  = Math.round(pBuy  * 100);
   const pSellPct = Math.round(pSell * 100);
@@ -695,49 +695,49 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
       label: 'RSI',
       value: rsi.toFixed(0),
       bull:  rsi < 40 ? true : rsi > 65 ? false : null,
-      tip:   rsi < 30 ? 'Oversold — potential bounce' : rsi > 70 ? 'Overbought — potential pullback' : rsi < 45 ? 'Mild bearish pressure' : rsi > 55 ? 'Mild bullish pressure' : 'Neutral — no clear signal',
+      tip:   rsi < 30 ? 'Oversold â€” potential bounce' : rsi > 70 ? 'Overbought â€” potential pullback' : rsi < 45 ? 'Mild bearish pressure' : rsi > 55 ? 'Mild bullish pressure' : 'Neutral â€” no clear signal',
     },
     {
       label: 'MACD',
       value: macd,
       bull:  macd === 'BULLISH' ? true : macd === 'BEARISH' ? false : null,
-      tip:   macd === 'BULLISH' ? 'MACD crossed up — buying momentum building' : macd === 'BEARISH' ? 'MACD crossed down — selling pressure' : 'MACD is neutral — no momentum crossover',
+      tip:   macd === 'BULLISH' ? 'MACD crossed up â€” buying momentum building' : macd === 'BEARISH' ? 'MACD crossed down â€” selling pressure' : 'MACD is neutral â€” no momentum crossover',
     },
     {
       label: 'Supertrend',
       value: supertrend === 'BULLISH' ? 'GREEN' : supertrend === 'BEARISH' ? 'RED' : 'FLAT',
       bull:  supertrend === 'BULLISH' ? true : supertrend === 'BEARISH' ? false : null,
-      tip:   supertrend === 'BULLISH' ? 'Price above Supertrend line — uptrend confirmed' : supertrend === 'BEARISH' ? 'Price below Supertrend line — downtrend confirmed' : 'No clear trend direction',
+      tip:   supertrend === 'BULLISH' ? 'Price above Supertrend line â€” uptrend confirmed' : supertrend === 'BEARISH' ? 'Price below Supertrend line â€” downtrend confirmed' : 'No clear trend direction',
     },
     {
       label: 'ADX',
       value: adx.toFixed(0),
       bull:  adx > 40 ? null : null,  // ADX is trend strength, not direction
-      tip:   adx > 40 ? 'Very strong trend — high confidence in direction' : adx > 25 ? 'Solid trend in place' : adx > 15 ? 'Mild trend — could be choppy' : 'Weak trend — ranging market, signals less reliable',
+      tip:   adx > 40 ? 'Very strong trend â€” high confidence in direction' : adx > 25 ? 'Solid trend in place' : adx > 15 ? 'Mild trend â€” could be choppy' : 'Weak trend â€” ranging market, signals less reliable',
     },
     {
       label: 'Volume',
       value: volStrength === 'ABOVE_AVERAGE' ? 'HIGH' : volStrength === 'BELOW_AVERAGE' ? 'LOW' : 'AVG',
       bull:  volStrength === 'ABOVE_AVERAGE' ? true : volStrength === 'BELOW_AVERAGE' ? false : null,
-      tip:   volStrength === 'ABOVE_AVERAGE' ? `Volume z-score ${volZscore.toFixed(1)} — unusual buying/selling activity` : volStrength === 'BELOW_AVERAGE' ? 'Low volume — move may not sustain' : 'Average volume — normal market activity',
+      tip:   volStrength === 'ABOVE_AVERAGE' ? `Volume z-score ${volZscore.toFixed(1)} â€” unusual buying/selling activity` : volStrength === 'BELOW_AVERAGE' ? 'Low volume â€” move may not sustain' : 'Average volume â€” normal market activity',
     },
     {
       label: 'Funding',
       value: fundingBias === 'LONGS_PAYING' ? 'OVER-LONG' : fundingBias === 'SHORTS_PAYING' ? 'OVER-SHORT' : 'NEUTRAL',
       bull:  fundingBias === 'SHORTS_PAYING' ? true : fundingBias === 'LONGS_PAYING' ? false : null,
-      tip:   fundingBias === 'LONGS_PAYING' ? 'Too many longs — risk of long squeeze (price drop)' : fundingBias === 'SHORTS_PAYING' ? 'Too many shorts — risk of short squeeze (price rise)' : 'Balanced positioning — no squeeze risk',
+      tip:   fundingBias === 'LONGS_PAYING' ? 'Too many longs â€” risk of long squeeze (price drop)' : fundingBias === 'SHORTS_PAYING' ? 'Too many shorts â€” risk of short squeeze (price rise)' : 'Balanced positioning â€” no squeeze risk',
     },
     {
       label: 'OI',
       value: oiTrend,
       bull:  oiTrend === 'INCREASING' && isLong ? true : oiTrend === 'DECREASING' && isSell ? true : null,
-      tip:   oiTrend === 'INCREASING' ? 'Open interest growing — more money entering the trade' : oiTrend === 'DECREASING' ? 'Open interest falling — participants exiting' : 'Stable open interest',
+      tip:   oiTrend === 'INCREASING' ? 'Open interest growing â€” more money entering the trade' : oiTrend === 'DECREASING' ? 'Open interest falling â€” participants exiting' : 'Stable open interest',
     },
     {
       label: 'Market',
       value: marketBias,
       bull:  marketBias === 'BULLISH' ? true : marketBias === 'BEARISH' ? false : null,
-      tip:   marketBias === 'BULLISH' ? 'Most indicators lean bullish overall' : marketBias === 'BEARISH' ? 'Most indicators lean bearish overall' : 'Mixed signals — no dominant direction',
+      tip:   marketBias === 'BULLISH' ? 'Most indicators lean bullish overall' : marketBias === 'BEARISH' ? 'Most indicators lean bearish overall' : 'Mixed signals â€” no dominant direction',
     },
   ];
 
@@ -766,7 +766,7 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
   const sec4 = `
     <div class="relative bg-slate-900/60 backdrop-blur-md border border-slate-800/80
                 rounded-xl p-4 flex flex-col gap-1 overflow-hidden">
-      ${!canPro ? _lock('PRO', '🔒 Unlock AI Model Analysis') : ''}
+      ${!canPro ? _lock('PRO', 'ðŸ”’ Unlock AI Model Analysis') : ''}
       <div class="${!canPro ? 'blur-sm pointer-events-none select-none' : ''}">
 
         <!-- Header -->
@@ -824,7 +824,7 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
           <span class="text-slate-600">vs required</span>
           <span class="text-amber-400 font-bold">${threshPct}%</span>
           <span class="${metaConfPct >= threshPct ? 'text-emerald-400/70' : 'text-rose-400/70'}">
-            ${metaConfPct >= threshPct ? '→ FIRE ✓' : '→ NO FIRE ✗'}
+            ${metaConfPct >= threshPct ? 'â†’ FIRE âœ“' : 'â†’ NO FIRE âœ—'}
           </span>
         </div>
 
@@ -849,7 +849,7 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
           <div class="text-[9px] uppercase tracking-widest text-slate-600 font-mono mb-0.5">For beginners</div>
           <div class="text-[10px] text-slate-400 leading-relaxed">
             The AI looks at 200+ indicators and gives three numbers: chance of going UP, chance of going DOWN, and chance of going SIDEWAYS.
-            Right now it says ${pBuyPct}% UP · ${pSellPct}% DOWN · ${pHoldPct}% SIDEWAYS.
+            Right now it says ${pBuyPct}% UP Â· ${pSellPct}% DOWN Â· ${pHoldPct}% SIDEWAYS.
             The signal only fires when the combined score (${metaConfPct}%) exceeds the required confidence level (${threshPct}%).
           </div>
         </div>
@@ -857,12 +857,12 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
       </div>
     </div>`;
 
-  // ── SECTION 5: API Export (unchanged) ──────────────────────────
-  const apiKeyDisplay = tokenData.apiKey || 'aegis_live_••••••••••••';
+  // â”€â”€ SECTION 5: API Export (unchanged) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const apiKeyDisplay = tokenData.apiKey || 'aegis_live_â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢';
   const sec5 = `
     <div class="relative bg-slate-900/60 backdrop-blur-md border border-slate-800/80
                 rounded-xl p-4 col-span-1 lg:col-span-2 overflow-hidden">
-      ${!canPro ? _lock('PRO', '🔒 Unlock API Access & JSON Data Export') : ''}
+      ${!canPro ? _lock('PRO', 'ðŸ”’ Unlock API Access & JSON Data Export') : ''}
       <div class="${!canPro ? 'blur-sm pointer-events-none select-none' : ''}">
         <div class="flex items-center gap-2 mb-4">
           <div class="w-6 h-6 rounded-md bg-blue-500/10 flex items-center justify-center flex-shrink-0">
@@ -895,14 +895,14 @@ export function renderTokenDetailsPanel(tokenData, userTier) {
               <i class="fas fa-sync-alt mr-2"></i>Regenerate API Key
             </button>
             <div class="mt-2 text-[10px] text-slate-600 text-center font-mono">
-              Key shown once — store it securely
+              Key shown once â€” store it securely
             </div>
           </div>
           <div>
             <div class="text-[10px] text-slate-500 uppercase tracking-widest font-mono mb-2">Python Quick-Start</div>
             <div class="bg-slate-950/80 border border-slate-700/40 rounded-xl overflow-hidden">
               <div class="flex items-center justify-between px-3 py-1.5 bg-slate-800/50 border-b border-slate-700/30">
-                <span class="text-[9px] font-mono text-slate-500">python · requests</span>
+                <span class="text-[9px] font-mono text-slate-500">python Â· requests</span>
                 <button onclick="window._tdpCopySnippet()"
                   class="text-[10px] text-slate-400 hover:text-white transition-colors
                          px-2 py-0.5 rounded hover:bg-white/5 font-bold">
@@ -916,7 +916,7 @@ API_KEY <span class="text-slate-300">=</span> <span class="text-amber-300">"aegi
 HEADERS <span class="text-slate-300">=</span> {<span class="text-amber-300">"X-API-Key"</span>: API_KEY}
 
 resp <span class="text-slate-300">=</span> requests.<span class="text-cyan-300">get</span>(
-    <span class="text-amber-300">"https://gatekeeper.sbs/api/v1/signals/fleet"</span>,
+    <span class="text-amber-300">"https://aegisignal.pro/api/v1/signals/fleet"</span>,
     headers<span class="text-slate-300">=</span>HEADERS
 )
 data <span class="text-slate-300">=</span> resp.<span class="text-cyan-300">json</span>()
@@ -938,7 +938,7 @@ data <span class="text-slate-300">=</span> resp.<span class="text-cyan-300">json
                   bg-cyan-500/10 text-cyan-300 border border-cyan-500/20
                   hover:bg-cyan-500/20 hover:text-cyan transition-all">
           <i class="fas fa-chart-candlestick text-[10px]"></i>
-          Deep Chart Analysis ↗
+          Deep Chart Analysis â†—
         </a>
       </div>
       ${sec1}
@@ -949,7 +949,7 @@ data <span class="text-slate-300">=</span> resp.<span class="text-cyan-300">json
     </div>`;
 }
 
-// ── Mount: render + bind live price ──────────────────────────────
+// â”€â”€ Mount: render + bind live price â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export function mountTokenDetailsPanel(containerEl, tokenData, userTier) {
   if (!containerEl) return;
   containerEl.innerHTML = renderTokenDetailsPanel(tokenData, userTier);
@@ -983,7 +983,7 @@ export function mountTokenDetailsPanel(containerEl, tokenData, userTier) {
   _loadHistStats(containerEl);
 }
 
-// ── Async historical stats loader ────────────────────────────────
+// â”€â”€ Async historical stats loader â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function _loadHistStats(containerEl) {
   const el = containerEl.querySelector('#tdp-hist-stats');
   if (!el) return;
@@ -992,16 +992,16 @@ async function _loadHistStats(containerEl) {
     if (!r.ok) throw new Error('no data');
     const d = await r.json();
     const s = d.summary || {};
-    const wr    = s.win_rate_pct != null ? s.win_rate_pct.toFixed(1) + '%' : '—';
-    const total = s.total_signals ?? '—';
-    const wins  = s.wins  ?? '—';
-    const loss  = s.losses ?? '—';
+    const wr    = s.win_rate_pct != null ? s.win_rate_pct.toFixed(1) + '%' : 'â€”';
+    const total = s.total_signals ?? 'â€”';
+    const wins  = s.wins  ?? 'â€”';
+    const loss  = s.losses ?? 'â€”';
     const avgPnl= s.avg_pnl_pct != null
       ? (s.avg_pnl_pct >= 0 ? '+' : '') + s.avg_pnl_pct.toFixed(2) + '%'
-      : '—';
+      : 'â€”';
     const totalPnl = s.total_pnl_pct != null
       ? (s.total_pnl_pct >= 0 ? '+' : '') + s.total_pnl_pct.toFixed(2) + '%'
-      : '—';
+      : 'â€”';
     el.innerHTML = `
       <div class="text-[9px] uppercase tracking-widest text-slate-600 font-mono mb-1.5">Live Track Record (AEGIS-1)</div>
       <div class="grid grid-cols-3 gap-x-4 gap-y-1">
@@ -1013,18 +1013,18 @@ async function _loadHistStats(containerEl) {
         <div><span class="text-slate-500">Total:</span>   <span class="${totalPnl.startsWith('+') ? 'text-emerald-400' : 'text-rose-400'} font-bold">${totalPnl}</span></div>
       </div>`;
   } catch {
-    el.innerHTML = `<span class="text-slate-600">Track record loading… refresh in a moment.</span>`;
+    el.innerHTML = `<span class="text-slate-600">Track record loadingâ€¦ refresh in a moment.</span>`;
   }
 }
 
-// ── Cleanup ───────────────────────────────────────────────────────
+// â”€â”€ Cleanup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export function unmountTokenDetailsPanel(containerEl) {
   if (!containerEl || !containerEl._tdpPriceHandler) return;
   window.removeEventListener('priceUpdate', containerEl._tdpPriceHandler);
   delete containerEl._tdpPriceHandler;
 }
 
-// ── Window helpers (inline onclick) ──────────────────────────────
+// â”€â”€ Window helpers (inline onclick) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 window._tdpCopyKey = () => {
   const el = document.getElementById('tdp-api-key');
   if (!el) return;
@@ -1044,7 +1044,7 @@ window._tdpCopySnippet = () => {
 
 window._tdpRegenKey = async () => {
   const btn = document.querySelector('[onclick="window._tdpRegenKey()"]');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Generating…'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Generatingâ€¦'; }
   try {
     const { getAuth } = await import('https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js');
     const fbUser = getAuth().currentUser;
@@ -1058,7 +1058,7 @@ window._tdpRegenKey = async () => {
       const d = await r.json();
       const el = document.getElementById('tdp-api-key');
       if (el) { el.textContent = d.api_key; el.dataset.rawKey = d.api_key; }
-      _toast('New key generated — copy it now!', 'success');
+      _toast('New key generated â€” copy it now!', 'success');
     } else {
       _toast('Key regeneration failed', 'error');
     }
@@ -1068,3 +1068,4 @@ window._tdpRegenKey = async () => {
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt mr-2"></i>Regenerate API Key'; }
   }
 };
+

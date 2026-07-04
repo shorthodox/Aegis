@@ -1837,13 +1837,18 @@ class LiveEngine:
 
     # Two-tier gating.  CRITICAL gates hard-block on their own (drift monitor,
     # no-trade regime, direction-regime veto, HTF macro veto, ATR floor, edge
-    # floor, safe mode, portfolio guard).  ADVISORY gates (ranging regime,
-    # structure location, reversal pattern, context score, fake breakout,
-    # stability, MTF timing, RSI exhaustion) append a warning instead of
-    # blocking — a signal that clears every critical gate tolerates up to
-    # ADVISORY_WARNING_BUDGET advisory objections before it is blocked
-    # (user-confirmed 2026-07-02: tolerate 2, block at 3+).
-    ADVISORY_WARNING_BUDGET = 2
+    # floor, safe mode, portfolio guard).  ADVISORY gates (structure_unverified,
+    # gap, context score, fake breakout, stability, RSI exhaustion,
+    # BOS/divergence/volume confirmation) append a warning instead of blocking —
+    # a signal that clears every critical gate tolerates up to
+    # ADVISORY_WARNING_BUDGET advisory objections before it is blocked.
+    # Raised 2→3 (2026-07-04): an at-S/R reversal fired when the candle feed is
+    # down carries structure_unverified + commonly context<70 + stability = 3;
+    # a budget of 2 muted those.  Tier map now:
+    #   0 warnings   → STRONG  (LOW risk, if high-conviction + trend-aligned)
+    #   1-3 warnings → NORMAL  (MODERATE risk) — fires
+    #   4+ warnings  → RISKY   (HIGH risk) — held
+    ADVISORY_WARNING_BUDGET = 3
 
     # RETIRED (user policy, 2026-07-03): RISKY (HIGH-risk) signals no longer
     # fire at all — only LOW (STRONG) and MODERATE (NORMAL) tiers are published,
@@ -2622,15 +2627,12 @@ class LiveEngine:
 
                     # ── Coordinative advisory policy — block only HIGH risk ───
                     # The advisory gates VOTE; they do not each veto.  A signal
-                    # tolerates up to ADVISORY_WARNING_BUDGET (2) objections and
+                    # tolerates up to ADVISORY_WARNING_BUDGET (3) objections and
                     # still publishes (LOW / MODERATE risk); one more makes it
-                    # HIGH risk and it is held.  The previous version fought
-                    # itself — a budget of 2 but a tier that flipped to RISKY
-                    # (blocked) at the FIRST warning — so almost every candidate
-                    # was muted.  Restored to the user's "tolerate 2" policy:
+                    # HIGH risk and it is held:
                     #   0 objections   → STRONG  (LOW risk)
-                    #   1-2 objections → NORMAL  (MODERATE risk) — still fires
-                    #   3+ objections  → RISKY   (HIGH risk) — held
+                    #   1-3 objections → NORMAL  (MODERATE risk) — still fires
+                    #   4+ objections  → RISKY   (HIGH risk) — held
                     _n_warn = len(_gate_warnings)
                     if _n_warn > self.ADVISORY_WARNING_BUDGET:
                         print(f'[{symbol}] HIGH_RISK_HOLD blocked {new_side}: '
@@ -2790,7 +2792,8 @@ class LiveEngine:
         at_support_zone    = range_pos <= self.STRUCT_SUPPORT_ZONE
         at_resistance_zone = range_pos >= self.STRUCT_RESISTANCE_ZONE
 
-        # Mid-range needs no candle data — blocked outright.
+        # Mid-range needs no candle data — blocked outright (user policy: entries
+        # belong at structure, not the middle of the range).
         if not at_support_zone and not at_resistance_zone:
             return 'BLOCK', (f'mid-range entry (range_pos={range_pos:.2f}) — '
                              f'entries only at support/resistance')
@@ -2803,19 +2806,25 @@ class LiveEngine:
         _no_candles = (len(closed_5m) < self.STRUCT_5M_WINDOW
                        or len(closed_15m) < self.STRUCT_15M_WINDOW)
         if _no_candles:
-            # Fail-CLOSED on BOTH sides.  The old policy let a reversal at the
-            # correct level SKIP (fail-open) when the 5m/15m feed was down —
-            # which is exactly how unconfirmed SHORTs fired at resistance (and
-            # LONGs at support) with a visible gap and no lower-timeframe turn.
-            # Candle confirmation is now mandatory: no candles → no verifiable
-            # rejection → no entry.  (The real reason candles "never fetched"
-            # was a symbol-format bug in _fetch_ohlcv_sync — the perp exchange
-            # needs 'BASE/USDT:USDT', not the fleet's 'BASE/USDT' — now fixed,
-            # with a spot fallback behind it.  So this branch rarely trips.)
-            return 'BLOCK', (f'{"BUY" if bullish else "SELL"} at '
-                             f'{"resistance" if at_resistance_zone else "support"} '
-                             f'but 5m/15m candles unavailable — entry needs '
-                             f'lower-timeframe confirmation')
+            # Candle feed unavailable (network / geo-block / partial deploy).
+            # ASYMMETRIC degradation — fail-CLOSED only on the dangerous side:
+            #   • Correct-side REVERSAL (SELL at resistance / BUY at support) —
+            #     the SAFE side — SKIPs: it fires as MODERATE with a
+            #     structure_unverified warning rather than being muted.  Blocking
+            #     these outright drops the at-S/R firing rate to ~0 the moment the
+            #     feed hiccups (the "7 signals → 1-2" regression).
+            #   • WRONG-side BREAKOUT (BUY at resistance / SELL at support) —
+            #     an unverifiable breakout is not a breakout → BLOCK.
+            # When the feed IS up (normal case, with the perp symbol-format fix in
+            # _fetch_ohlcv_sync + the spot fallback), this branch doesn't run and
+            # full 5m/15m confirmation applies.
+            _wrong_side = at_resistance_zone if bullish else at_support_zone
+            if _wrong_side:
+                return 'BLOCK', (f'{"BUY at resistance" if bullish else "SELL at support"} '
+                                 f'but 5m/15m candles unavailable — an unverifiable '
+                                 f'breakout is not a breakout')
+            return 'SKIP', ('5m/15m candles unavailable — reversal at the correct '
+                            'level allowed as unverified (fires MODERATE)')
 
         def _n_trending(candles: list, n: int) -> int:
             """Candles among the last n that closed in the signal direction."""

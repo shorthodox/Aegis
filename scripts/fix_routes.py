@@ -1,4 +1,4 @@
-"""
+﻿"""
 One-shot script: replace all /web/src/pages/*.html paths with clean URLs
 across every HTML and JS file in web/src/.
 
@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
 
-# ── Page map (order matters: longer/more-specific first) ──────────────
+# â”€â”€ Page map (order matters: longer/more-specific first) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 PAGE_MAP = [
     ("/web/src/pages/privacy_policy.html",  "/privacy"),
     ("/web/src/pages/risk_disclosure.html", "/risk-disclosure"),
@@ -37,7 +37,7 @@ PAGE_MAP = [
 
 # Also fix canonical URLs with full domain
 CANONICAL_MAP = [
-    (f"https://gatekeeper.sbs{old}", f"https://gatekeeper.sbs{new}")
+    (f"https://aegisignal.pro{old}", f"https://aegisignal.pro{new}")
     for old, new in PAGE_MAP
 ]
 
@@ -71,3 +71,4 @@ for d in DIRS:
                 changed += n
 
 print(f"\nDone: {files_changed} files updated, ~{changed} replacements.")
+

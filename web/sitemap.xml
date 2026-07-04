@@ -1,53 +1,54 @@
-<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 
   <url>
-    <loc>https://gatekeeper.sbs/</loc>
+    <loc>https://aegisignal.pro/</loc>
     <lastmod>2026-05-26</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
 
   <url>
-    <loc>https://gatekeeper.sbs/pricing</loc>
+    <loc>https://aegisignal.pro/pricing</loc>
     <lastmod>2026-05-26</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
 
   <url>
-    <loc>https://gatekeeper.sbs/contact</loc>
+    <loc>https://aegisignal.pro/contact</loc>
     <lastmod>2026-05-26</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
 
   <url>
-    <loc>https://gatekeeper.sbs/terms</loc>
+    <loc>https://aegisignal.pro/terms</loc>
     <lastmod>2026-05-26</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.5</priority>
   </url>
 
   <url>
-    <loc>https://gatekeeper.sbs/privacy-policy</loc>
+    <loc>https://aegisignal.pro/privacy-policy</loc>
     <lastmod>2026-05-26</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.5</priority>
   </url>
 
   <url>
-    <loc>https://gatekeeper.sbs/refund-policy</loc>
+    <loc>https://aegisignal.pro/refund-policy</loc>
     <lastmod>2026-05-26</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.5</priority>
   </url>
 
   <url>
-    <loc>https://gatekeeper.sbs/risk-disclosure</loc>
+    <loc>https://aegisignal.pro/risk-disclosure</loc>
     <lastmod>2026-05-26</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.4</priority>
   </url>
 
 </urlset>
+
