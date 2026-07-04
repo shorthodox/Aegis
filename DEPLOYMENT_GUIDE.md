@@ -78,7 +78,7 @@ MAIL_USERNAME=your_email@gmail.com
 MAIL_PASSWORD=your_app_password
 
 # Base URL
-BASE_URL=https://your-domain.com  # For production
+BASE_URL=https://aegisignal.pro  # For production
 ```
 
 #### 2.2 Frontend Configuration
