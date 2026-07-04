@@ -221,7 +221,7 @@
     <a href="/" title="Go to the home page" aria-label="Go to the home page" style="text-decoration:none;display:inline-flex;align-items:center;gap:0.5rem;">
       <i class="fas fa-bolt" style="color:#B8966A;font-size:0.9rem;"></i>
       <span style="font-family:'Inter',system-ui,sans-serif;font-size:1.35rem;font-weight:900;letter-spacing:-0.025em;background:linear-gradient(to right,#EAE6DF,#B8966A);-webkit-background-clip:text;background-clip:text;color:transparent;text-transform:uppercase;">AEGIS</span>
-      <span style="font-size:0.62rem;font-weight:600;background:rgba(184,150,106,0.12);color:#B8966A;border:1px solid rgba(184,150,106,0.28);padding:2px 7px;border-radius:4px;letter-spacing:0.08em;font-family:'Inter',system-ui,sans-serif;">v1.0</span>
+      <span style="font-size:0.62rem;font-weight:600;background:rgba(184,150,106,0.12);color:#B8966A;border:1px solid rgba(184,150,106,0.28);padding:2px 7px;border-radius:4px;letter-spacing:0.08em;font-family:'Inter',system-ui,sans-serif;">v1.0</span><span style="font-size:0.62rem;font-weight:600;background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.3);padding:2px 7px;border-radius:4px;letter-spacing:0.08em;font-family:'Inter',system-ui,sans-serif;">BETA</span>
     </a>
 
     <nav class="ae-nav-links" aria-label="Main navigation">
@@ -307,7 +307,7 @@
           <li>Volume Z-score, funding rate &amp; OI metrics</li>
           <li>Session context, fear/greed &amp; trader views</li>
           <li>Signal history archive</li>
-          <li>2 chart timeframes (30m &amp; 1h)</li>
+          <li>Live signal dashboard — deep chart analysis on Sentinel+</li>
         </ul>
         <div style="margin-top: auto;">
           <button id="trialBtn" class="ae-btn ae-btn-primary ae-btn-md" style="width:100%; justify-content:center;">
@@ -333,6 +333,7 @@
         </p>
         <ul class="ae-feature-list">
           <li>Everything in Basic</li>
+          <li><strong>Deep Chart Analysis view</strong> — live candles, gate-by-gate breakdown &amp; target probabilities</li>
           <li>AI Conviction Label per signal — HIGH / MEDIUM / LOW</li>
           <li>Quality Score Badge — instant signal strength read</li>
           <li>Warning Chips — fake breakout, volume anomaly, regime mismatch</li>
@@ -476,9 +477,17 @@
             <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
             <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
           </tr>
+          <tr><td colspan="4" class="ae-matrix-row-group">Deep Chart Analysis — Sentinel+</td></tr>
+
+          <tr>
+            <td>Deep Chart View (live candles, gate breakdown, target probabilities)</td>
+            <td class="mono" style="text-align:center; color:var(--ae-text-3);">–</td>
+            <td class="mono" style="text-align:center; color:var(--ae-buy);">✓</td>
+            <td class="mono" style="text-align:center; color:var(--ae-gold);">✓</td>
+          </tr>
           <tr>
             <td>Chart Timeframes</td>
-            <td style="text-align:center; font-size:0.78rem; color:var(--ae-text-3); font-family:var(--ae-font-mono);">30m &amp; 1h</td>
+            <td style="text-align:center; font-size:0.78rem; color:var(--ae-text-3); font-family:var(--ae-font-mono);">–</td>
             <td style="text-align:center; font-size:0.78rem; color:var(--ae-buy); font-family:var(--ae-font-mono);">All 8 (1m→1w)</td>
             <td style="text-align:center; font-size:0.78rem; color:var(--ae-gold); font-family:var(--ae-font-mono);">All 8 (1m→1w)</td>
           </tr>

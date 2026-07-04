@@ -390,7 +390,7 @@
     <a href="/" title="Go to the home page" aria-label="Go to the home page" style="text-decoration:none;display:inline-flex;align-items:center;gap:0.5rem;">
       <i class="fas fa-bolt" style="color:#B8966A;font-size:0.9rem;"></i>
       <span style="font-family:'Inter',system-ui,sans-serif;font-size:1.35rem;font-weight:900;letter-spacing:-0.025em;background:linear-gradient(to right,#EAE6DF,#B8966A);-webkit-background-clip:text;background-clip:text;color:transparent;text-transform:uppercase;">AEGIS</span>
-      <span style="font-size:0.62rem;font-weight:600;background:rgba(184,150,106,0.12);color:#B8966A;border:1px solid rgba(184,150,106,0.28);padding:2px 7px;border-radius:4px;letter-spacing:0.08em;font-family:'Inter',system-ui,sans-serif;">v1.0</span>
+      <span style="font-size:0.62rem;font-weight:600;background:rgba(184,150,106,0.12);color:#B8966A;border:1px solid rgba(184,150,106,0.28);padding:2px 7px;border-radius:4px;letter-spacing:0.08em;font-family:'Inter',system-ui,sans-serif;">v1.0</span><span style="font-size:0.62rem;font-weight:600;background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.3);padding:2px 7px;border-radius:4px;letter-spacing:0.08em;font-family:'Inter',system-ui,sans-serif;">BETA</span>
     </a>
     <nav class="ae-nav-links" aria-label="Main navigation">
       <a href="/" class="ae-nav-link">Home</a>
@@ -651,6 +651,40 @@ function _userTier() {
   return 'basic';
 }
 
+// Chart Analysis (the deep chart view) is a SENTINEL+ feature — with one
+// exception: FREE-TRIAL users get the full Sentinel-level chart as a taste to
+// drive conversion, even though their billing tier is Basic.  Paid Basic users
+// get the upgrade wall instead (their plan includes the live signal dashboard).
+// Pro-only panels (LSTM / HMM) stay gated by their own plan==='pro' check.
+function _chartTier() {
+  return _planFromStorage() === 'trial' ? 'sentinel' : _userTier();
+}
+function _chartAllowed() {
+  const t = _chartTier();
+  return t === 'sentinel' || t === 'pro';
+}
+
+function _showChartWall() {
+  document.getElementById('chart-lock-wall')?.remove();
+  const el = document.createElement('div');
+  el.id = 'chart-lock-wall';
+  el.style.cssText = 'position:fixed;inset:0;background:var(--bg-deep,#050505);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;text-align:center;';
+  el.innerHTML = `
+    <div style="font-size:22px;font-weight:800;color:#B8966A;letter-spacing:3px;font-family:Inter,sans-serif">⚡ AEGIS</div>
+    <div style="font-size:40px;line-height:1">🔒</div>
+    <div style="font-size:18px;font-weight:800;color:#fff;font-family:Inter,sans-serif">Chart Analysis is a Sentinel feature</div>
+    <div style="font-size:13px;color:#94a3b8;max-width:440px;line-height:1.65;font-family:Inter,sans-serif">
+      The deep chart view — live candles across all 8 timeframes, the full gate-by-gate breakdown, target probabilities and signal genesis — is available on
+      <strong style="color:#4a7c68">Sentinel</strong> and <strong style="color:#B8966A">AEGIS Pro</strong>.
+      Your current plan includes the live signal dashboard.
+    </div>
+    <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap;justify-content:center">
+      <a href="/pricing" style="display:inline-block;padding:9px 20px;border-radius:8px;font-size:13px;font-weight:700;background:linear-gradient(to right,#4a7c68,#3a6153);color:#fff;text-decoration:none;letter-spacing:0.4px">Upgrade to Sentinel →</a>
+      <a href="/dashboard" style="display:inline-block;padding:9px 20px;border-radius:8px;font-size:13px;font-weight:700;background:transparent;border:1px solid #334155;color:#94a3b8;text-decoration:none">Back to Dashboard</a>
+    </div>`;
+  document.body.appendChild(el);
+}
+
 // ── Access gate: trial/paid only — guests are redirected to login ─────────────
 // Show a full-page overlay while Firebase resolves so guests never see content.
 const _gateOverlay = (() => {
@@ -664,17 +698,20 @@ const _gateOverlay = (() => {
   return el;
 })();
 
-// Fast path: cached token → hide overlay immediately, Firebase confirms shortly
+// Fast path: cached token → hide overlay immediately ONLY if the plan can access
+// the chart; a Basic/trial user keeps the overlay up so the chart never flashes
+// before the upgrade wall replaces it.
 const _cachedToken = localStorage.getItem('access_token') || localStorage.getItem('authToken');
-if (_cachedToken) _gateOverlay.style.display = 'none';
+if (_cachedToken && _chartAllowed()) _gateOverlay.style.display = 'none';
 
 let _gateResolved = false;
-// Fallback timeout — if Firebase takes >4s, decide based on cached token
+// Fallback timeout — if Firebase takes >4s, decide based on cached token + tier
 const _gateFallback = setTimeout(() => {
   if (_gateResolved) return;
   _gateResolved = true;
   _gateOverlay.remove();
-  if (!_cachedToken) window.location.href = '/';
+  if (!_cachedToken) { window.location.href = '/'; return; }
+  if (!_chartAllowed()) _showChartWall();
 }, 4000);
 
 onAuthStateChanged(_auth, u => {
@@ -682,14 +719,12 @@ onAuthStateChanged(_auth, u => {
   _gateResolved = true;
   clearTimeout(_gateFallback);
   _gateOverlay.remove();
-  if (u) {
-    // Logged-in (trial or paid) — gate premium sections by the user's actual plan
+  if (u || _cachedToken) {
+    // Logged in (trial or paid).  Chart Analysis is Sentinel+ — Basic/trial get
+    // the upgrade wall; Sentinel/Pro proceed (with per-section tier gating).
     document.getElementById('nav-auth-hint')?.remove();
-    applyTierGates(_userTier());
-  } else if (_cachedToken) {
-    // Firebase session lapsed but token exists — allow through (rare edge case)
-    document.getElementById('nav-auth-hint')?.remove();
-    applyTierGates(_userTier());
+    if (!_chartAllowed()) { _showChartWall(); return; }
+    applyTierGates(_chartTier());
   } else {
     // No session, no token → definite guest → send to login
     window.location.href = '/';
@@ -1936,7 +1971,18 @@ function renderSignalGenesis(sig) {
   const qualOk   = (sig.quality_score || 0) >= 55;
   const atrOk    = (sig.atr_pct || 0) >= 0.8;
   const regOk    = !['RANGING', 'STABLE', 'UNKNOWN'].includes(sig.regime);
-  const dirOk    = !(isShort && sig.regime === 'TRENDING_BULL') && !(!isShort && sig.regime === 'TRENDING_BEAR');
+  // Gate 1.5 mirrors the engine's REVERSAL-AWARE direction veto: a counter-trend
+  // signal (BUY in a bear regime / SELL in a bull regime) is NOT a conflict when
+  // it's a reversal at the structural extreme (BUY at support / SELL at
+  // resistance) — that's the engine catching a turn.  And a signal the engine
+  // actually FIRED passed this gate by definition, so it can never be a block.
+  // The old blanket check painted "VETO" on fired counter-trend reversals.
+  const _rp          = sig.range_position;
+  const _atRevExtreme = _rp != null && (isShort ? _rp >= 0.65 : _rp <= 0.35);
+  const _counterTrend = (isShort && sig.regime === 'TRENDING_BULL') ||
+                        (!isShort && sig.regime === 'TRENDING_BEAR');
+  const _isReversal  = _counterTrend && (_atRevExtreme || fired);
+  const dirOk        = !_counterTrend || _atRevExtreme || fired;
   const confOk   = (sig.meta_confidence || 0) > (sig.threshold || 55);
   const hmOk     = !sig.hmm_transition_risk || sig.hmm_stability > 0.5;
 
@@ -2037,7 +2083,12 @@ function renderSignalGenesis(sig) {
     ${convBadge}
     <div style="font-size:11px;color:var(--dim);margin-bottom:8px;letter-spacing:1px;text-transform:uppercase">Gate Checks</div>
     ${gate('', regOk,  'Gate 1 · Regime',    `Market regime: ${(sig.regime||'').replace('_',' ')}`, sig.regime || '—')}
-    ${gate('', dirOk,  'Gate 1.5 · Direction', `${isShort ? 'SELL' : 'BUY'} in ${(sig.regime||'').replace('_',' ')} — direction-regime alignment`, dirOk ? 'ALIGNED' : 'CONFLICT')}
+    ${gate('', dirOk,  'Gate 1.5 · Direction',
+        _isReversal
+          ? `${isShort ? 'SELL at resistance' : 'BUY at support'} in ${(sig.regime||'').replace('_',' ')} — counter-trend REVERSAL (allowed at the extreme)`
+          : `${isShort ? 'SELL' : 'BUY'} in ${(sig.regime||'').replace('_',' ')} — direction-regime alignment`,
+        _isReversal ? 'REVERSAL' : (dirOk ? 'ALIGNED' : 'CONFLICT'),
+        _isReversal)}
     ${structRow}
     ${gate('', atrOk,  'Gate 2 · ATR Floor', `Minimum 0.8% volatility required for valid entry`, `${(sig.atr_pct||0).toFixed(2)}%`)}
     ${gate('', qualOk, 'Gate 3 · Quality',   `Signal quality ≥ 55 required. Score: ${(sig.quality_score||0).toFixed(0)}`, `${(sig.quality_score||0).toFixed(0)}/100`)}
@@ -2069,11 +2120,15 @@ function renderSignalGenesis(sig) {
       </div>
     ` : ''}
 
-    ${!dirOk ? `
-      <div style="margin-top:10px;padding:10px 12px;background:rgba(255,0,85,0.08);border:1px solid rgba(255,0,85,0.25);border-radius:8px;font-size:12px;color:var(--red)">
-        🚫 Gate 1.5 VETO: ${isShort ? 'SELL blocked in TRENDING_BULL' : 'BUY blocked in TRENDING_BEAR'} — regime direction conflict prevents entry
+    ${_isReversal ? `
+      <div style="margin-top:10px;padding:10px 12px;background:rgba(184,150,106,0.08);border:1px solid rgba(184,150,106,0.28);border-radius:8px;font-size:12px;color:#B8966A">
+        ↩ Counter-trend REVERSAL: ${isShort ? 'SELL at resistance' : 'BUY at support'} in ${(sig.regime||'').replace('_',' ')} — the engine allows a turn at the structural extreme (rated MODERATE risk, never STRONG).
       </div>
-    ` : ''}
+    ` : (!dirOk ? `
+      <div style="margin-top:10px;padding:10px 12px;background:rgba(255,0,85,0.08);border:1px solid rgba(255,0,85,0.25);border-radius:8px;font-size:12px;color:var(--red)">
+        🚫 Gate 1.5 VETO: ${isShort ? 'SELL blocked in TRENDING_BULL' : 'BUY blocked in TRENDING_BEAR'} — mid-trend counter-trend entry with no reversal basis
+      </div>
+    ` : '')}
   `;
 }
 
