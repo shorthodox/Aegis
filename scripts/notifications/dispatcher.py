@@ -66,7 +66,11 @@ _DEFAULT_SETTINGS: Dict[str, Any] = {
     "quiet_hours":         {"start": "", "end": ""},
     # Entry-alert budget per sliding hour. Exit/outcome alerts are
     # CRITICAL (accountability) and never count against this budget.
-    "max_alerts_per_hour": 20,
+    # AEGIS is a SIGNAL SERVICE — subscribers pay to receive EVERY signal, so
+    # this is set to an effectively-unlimited ceiling (a burst guard against a
+    # runaway bug, not a product limit).  The old value of 20 made entry alerts
+    # stop after ~20/hr, which read as "the engine stopped firing after 19".
+    "max_alerts_per_hour": 200,
 }
 
 

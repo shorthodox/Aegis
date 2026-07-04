@@ -23,6 +23,7 @@ Exported for main.py
 
 import asyncio
 import json
+import os
 import sys
 import time
 import uuid
@@ -39,11 +40,26 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 MODEL_STORE       = _ROOT / 'src' / 'ml' / 'model_store'
-TRACK_RECORD_PATH       = _ROOT / 'data' / 'track_record.json'
-ALPHA_TRACK_RECORD_PATH = _ROOT / 'data' / 'alpha_track_record.json'
+
+# ── Persistent runtime STATE directory ────────────────────────────────────────
+# Runtime state (track record, wallet, drift/perf) is WRITTEN LIVE and must
+# survive redeploys.  On an ephemeral platform (Railway/Render/Fly with no
+# volume) the container filesystem is wiped on every deploy, which is why the
+# track record kept resetting.  Point state at a persistent volume via
+# AEGIS_STATE_DIR (e.g. a Railway Volume mounted at /data); falls back to the
+# in-repo data/ dir for local dev.  Config artifacts the model LOADS
+# (token_params, regime_stats, model_store) stay in the image, unaffected.
+_STATE_DIR = Path(os.environ.get('AEGIS_STATE_DIR') or (_ROOT / 'data'))
+try:
+    _STATE_DIR.mkdir(parents=True, exist_ok=True)
+except Exception:
+    _STATE_DIR = _ROOT / 'data'
+
+TRACK_RECORD_PATH       = _STATE_DIR / 'track_record.json'
+ALPHA_TRACK_RECORD_PATH = _STATE_DIR / 'alpha_track_record.json'
 _ALPHA_TIMEFRAMES       = ['15m', '30m', '4h', '1d']
-_PERF_STATE_PATH  = _ROOT / 'data' / 'perf_state.json'
-_DRIFT_STATE_PATH = _ROOT / 'data' / 'drift_state.json'
+_PERF_STATE_PATH  = _STATE_DIR / 'perf_state.json'
+_DRIFT_STATE_PATH = _STATE_DIR / 'drift_state.json'
 
 # Shared exchange for lightweight index-price fetches (reuses the same instance
 # as Predictor once the class is loaded to avoid creating a second connection).
@@ -348,10 +364,10 @@ class Position:
     atr_multiplier:  float
     atr:             float = 0.0   # ATR at entry (used for trailing stop distance)
     take_profit_1:   float = 0.0   # TP1: 0.55× ATR from entry — 20% partial close
-    take_profit_2:   float = 0.0   # TP2: 2.8× ATR, capped at TP2_MAX_PCT of entry — 20% partial + trail
-    take_profit_3:   float = 0.0   # TP3: 4.5× ATR from entry — 20% partial close (RR anchor)
-    take_profit_4:   float = 0.0   # TP4: 6.5× ATR from entry — 20% partial close
-    take_profit_5:   float = 0.0   # TP5: 9.5× ATR from entry — close remainder
+    take_profit_2:   float = 0.0   # TP2: 1.3× ATR, capped at TP2_MAX_PCT of entry — 20% partial + trail
+    take_profit_3:   float = 0.0   # TP3: 2.2× ATR from entry — 20% partial close
+    take_profit_4:   float = 0.0   # TP4: 3.3× ATR from entry — 20% partial close
+    take_profit_5:   float = 0.0   # TP5: 4.5× ATR from entry — close remainder (RR anchor)
     signal_strength: str   = ''    # risk tier at entry: STRONG | NORMAL | RISKY
     entry_mode:      str   = ''    # structure-gate verdict detail at entry
                                    # (support_reversal / breakout_* / GATE_SKIPPED: …)
@@ -895,25 +911,26 @@ class DynamicRiskEngine:
     ATR_PERIOD        = 14     # lookback period for ATR calculation
     ATR_SL_MULTIPLIER = 1.8    # SL distance = ATR × this — 1.2 was inside normal 1H candle noise; 1.8× clears it
 
+    # TP ladder — COMPRESSED into a reachable region (2026-07-04).  The old
+    # ladder (2.8 / 4.5 / 6.5 / 9.5) left a huge TP2→TP3 gap and put TP3-TP5 so
+    # far out they almost never filled: price hit TP1+TP2 (~1.5%) and reversed
+    # long before 4.5×ATR.  Spacing is now even and inside a plausible swing so
+    # partials actually bank at each level.  SL stays 1.8×ATR; RR is validated to
+    # TP5 (4.5/1.8 = 2.5) so trade acceptance is unchanged — only the interior
+    # rungs moved closer.
     TP1_MULTIPLIER    = 0.55   # 20 % partial close — fires early to lock break-even fast (intentionally tight)
-    TP2_MULTIPLIER    = 2.8    # 20 % partial close — activate trailing stop (ATR distance, before the % cap below)
-    TP3_MULTIPLIER    = 4.5    # 20 % partial close — used for RR validation (RR = 4.5/1.8 = 2.5)
-    TP4_MULTIPLIER    = 6.5    # 20 % partial close
-    TP5_MULTIPLIER    = 9.5    # close remaining position — extended runner target
+    TP2_MULTIPLIER    = 1.3    # 20 % partial close — activate trailing stop (pure ATR distance)
+    TP3_MULTIPLIER    = 2.2    # 20 % partial close — small step past TP2 (was 4.5, a near-unreachable gap)
+    TP4_MULTIPLIER    = 3.3    # 20 % partial close — reachable stretch target
+    TP5_MULTIPLIER    = 4.5    # close remaining position — full-trend target + RR anchor (4.5/1.8 = 2.5)
 
-    # ── TP2 volatility cap ────────────────────────────────────────────────────
-    # In high-volatility markets 2.8×ATR can sit at 3-5 %+ of entry — a move the
-    # market rarely completes in one swing before retracing.  Symptom: price hits
-    # TP1, runs 1.5-2 %, then reverses back through TP1 to break-even before TP2
-    # (and its trailing stop) ever activates, banking only the tiny TP1 partial.
-    # Capping the TP2 DISTANCE at a fixed % of entry keeps trailing activation
-    # reachable inside a realistic swing.  Low-vol trades (2.8×ATR already below
-    # the cap) are unaffected; only TP2 is capped — TP3-TP5 stay pure ATR runners
-    # so the RR-to-TP3 gate is untouched.
-    TP2_MAX_PCT       = 1.5    # cap TP2 at 1.5 % of entry (the low end of the observed swing)
-    TP2_MIN_TP1_RATIO = 1.4    # ordering guard: TP2 distance ≥ 1.4× TP1 even after the cap
+    # RETIRED: the TP2 % cap was for the former wide TP2 (2.8×ATR); with the
+    # compressed ladder TP2 is only 1.3×ATR (modest at any volatility), so the
+    # cap only kinked the ladder in high vol and was removed from calculate_stops.
+    TP2_MAX_PCT       = 1.5    # (unused) former cap on TP2 distance, % of entry
+    TP2_MIN_TP1_RATIO = 1.4    # ordering guard: TP2 distance ≥ 1.4× TP1
 
-    MIN_RISK_REWARD   = 2.0    # Reward / Risk using TP3 as target; trades below this are rejected
+    MIN_RISK_REWARD   = 2.0    # Reward / Risk using TP5 (full-trend target) as reward; below this is rejected
 
     TRAIL_MULTIPLIER  = 1.0    # trailing stop distance = ATR × this (widened to match wider SL)
 
@@ -1003,13 +1020,13 @@ class DynamicRiskEngine:
         # Volatility already informs the distance implicitly through ATR itself.
         risk = self.ATR_SL_MULTIPLIER * atr
 
-        # TP2 distance: ATR-based, but capped at a fixed % of entry so a
-        # high-volatility TP2 doesn't sit beyond a realistic swing (see
-        # TP2_MAX_PCT).  Floored above TP1 so the cap can never invert the
-        # ladder when ATR% is extreme.
+        # TP2 distance: pure ATR (1.3×).  The old fixed-% cap was for the former
+        # wide TP2 (2.8×ATR); with the compressed ladder TP2 is already modest at
+        # any volatility, and the cap only KINKED the ladder in high vol (flat
+        # TP2 while TP3+ scaled with ATR).  Removed — the whole ladder now scales
+        # smoothly with ATR.  Ordering floor above TP1 kept as a guard.
         tp1_dist = self.TP1_MULTIPLIER * atr
-        tp2_dist = min(self.TP2_MULTIPLIER * atr, price * (self.TP2_MAX_PCT / 100.0))
-        tp2_dist = max(tp2_dist, tp1_dist * self.TP2_MIN_TP1_RATIO)
+        tp2_dist = max(self.TP2_MULTIPLIER * atr, tp1_dist * self.TP2_MIN_TP1_RATIO)
 
         if side == 'BUY':
             sl  = price - risk
@@ -1026,8 +1043,10 @@ class DynamicRiskEngine:
             tp4 = price - self.TP4_MULTIPLIER * atr
             tp5 = price - self.TP5_MULTIPLIER * atr
 
-        # RR measured to TP3 — the first target that represents a full trend move.
-        reward     = self.TP3_MULTIPLIER * atr
+        # RR measured to TP5 — the full-trend target (RR anchor).  The interior
+        # rungs (TP2-TP4) were compressed closer, so RR is validated to the final
+        # target to keep trade acceptance unchanged.
+        reward     = self.TP5_MULTIPLIER * atr
         rr         = round(reward / risk, 3) if risk > 0 else 0.0
         valid_rr   = rr >= self.MIN_RISK_REWARD
 
@@ -2627,7 +2646,27 @@ class LiveEngine:
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
 
-                    _risk_tier = 'STRONG' if _n_warn == 0 else 'NORMAL'
+                    # ── Tier label: STRONG is reserved, not a default ─────────
+                    # STRONG (published as "LOW RISK / STRONG SIGNAL") must mean a
+                    # genuinely high-conviction, trend-ALIGNED setup — otherwise a
+                    # clean-but-ordinary or counter-trend entry that loses stains
+                    # the STRONG badge (the "STRONG BUY that lost" case).  STRONG
+                    # requires: zero advisory objections AND top conviction
+                    # (edge≥85 or quality≥80) AND not counter-trend.  A
+                    # counter-trend reversal (BUY in a bear regime / SELL in a
+                    # bull regime — allowed at the S/R extreme by Gate 1.5/1.7) is
+                    # inherently a moderate-risk contrarian bet, so it caps at
+                    # NORMAL no matter how clean it looks.
+                    _counter_trend = (
+                        (new_side == 'BUY'  and regime.regime == _REGIME_TRENDING_BEAR) or
+                        (new_side == 'SELL' and regime.regime == _REGIME_TRENDING_BULL)
+                    )
+                    if (_n_warn == 0 and not _counter_trend
+                            and (_model_quality >= self.SIGNAL_BYPASS_EDGE
+                                 or quality_score >= 80.0)):
+                        _risk_tier = 'STRONG'   # LOW risk — clean, high-conviction, trend-aligned
+                    else:
+                        _risk_tier = 'NORMAL'   # MODERATE risk
 
                     # ── Model approved — open the position ────────────────────
                     # predictor.predict_realtime() already applied:
@@ -3485,13 +3524,13 @@ class LiveEngine:
         _conf_raw   = abs(_conf_total - 5.0) / 5.0
         entry['expected_move_pct'] = round(_conf_raw * atr_pct * 3.0, 2)
 
-        # Risk/Reward ratio: reward measured to TP3 (first full-trend target),
-        # which matches the MIN_RISK_REWARD gate used in _open_position().
+        # Risk/Reward ratio: reward measured to TP5 (full-trend target), matching
+        # the MIN_RISK_REWARD gate in _open_position() / calculate_stops().
         sl_val  = entry.get('suggested_sl') or 0
-        tp3_val = entry.get('tp3') or 0
-        if price > 0 and sl_val and tp3_val:
+        tp5_val = entry.get('tp5') or 0
+        if price > 0 and sl_val and tp5_val:
             _risk   = abs(price - sl_val)
-            _reward = abs(price - tp3_val)
+            _reward = abs(price - tp5_val)
             entry['risk_reward'] = round(_reward / _risk, 2) if _risk > 0 else 0
         else:
             entry['risk_reward'] = 0
@@ -3829,7 +3868,7 @@ class LiveEngine:
 # ScalpBot — 5m + 15m raw-prediction scalping engine (no gates)
 # =============================================================================
 
-_SCALP_RECORD_PATH = _ROOT / 'data' / 'scalp_trades.json'
+_SCALP_RECORD_PATH = _STATE_DIR / 'scalp_trades.json'
 
 class ScalpBot:
     """

@@ -42,3 +42,19 @@ skills-lock.json
 
 # web/dist/ is intentionally NOT excluded — styles.css is committed and must be
 # present in the image. See Dockerfile guard that validates this at build time.
+
+# Runtime STATE — written live and persisted on a volume (AEGIS_STATE_DIR).
+# NEVER bake these into the image: a stale local copy would overwrite the
+# production track record on every deploy (the "records deleted on deploy" bug).
+# Config artifacts the model LOADS (data/token_params, data/regime_stats,
+# data/meta_gate_profiles, data/oi_cache) are intentionally KEPT — only these
+# live-written state files are excluded.
+data/track_record.json
+data/alpha_track_record.json
+data/perf_state.json
+data/drift_state.json
+data/scalp_trades.json
+data/trader_track_record.json
+data/trader_signals_state.json
+web/track_record.json
+web/trader_track_record.json

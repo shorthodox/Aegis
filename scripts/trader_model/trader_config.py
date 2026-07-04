@@ -6,13 +6,18 @@ Train on 10 diverse tokens; deploy on 60.
 3 risk profiles: conservative / balanced / aggressive
 """
 
+import os
 from pathlib import Path
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 ROOT               = Path(__file__).resolve().parent.parent.parent
 TRADER_MODEL_STORE = ROOT / 'src' / 'ml' / 'trader_model_store'
-TRADER_STATE_PATH  = ROOT / 'data' / 'trader_signals_state.json'
-TRADER_RECORD_PATH = ROOT / 'data' / 'trader_track_record.json'
+# Runtime STATE (trader track record + signal state) must survive redeploys —
+# honour AEGIS_STATE_DIR (a persistent volume) like the main engine; fall back
+# to the in-repo data/ dir for local dev.  See scripts/live_engine.py _STATE_DIR.
+_STATE_DIR         = Path(os.environ.get('AEGIS_STATE_DIR') or (ROOT / 'data'))
+TRADER_STATE_PATH  = _STATE_DIR / 'trader_signals_state.json'
+TRADER_RECORD_PATH = _STATE_DIR / 'trader_track_record.json'
 TRAINING_SUMMARY   = ROOT / 'logs' / 'training_summary.json'
 
 # ── 10 Training Tokens ─────────────────────────────────────────────────────────

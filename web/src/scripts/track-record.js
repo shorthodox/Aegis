@@ -214,7 +214,7 @@ function renderTable(rows) {
         const masked = isOpen;
         const tokenCell = masked
             ? '<span style="color:#64748b;letter-spacing:2px;" title="Live signal — token visible on the dashboard (subscribers)"><i class="fas fa-lock" style="font-size:0.75em;margin-right:5px;"></i>•••••</span>'
-            : `<span style="color:#e2e8f0;font-weight:600;">${r.symbol || '—'}</span>`;
+            : `<span style="color:var(--ae-text-1);font-weight:600;">${r.symbol || '—'}</span>`;
         const priceCell = v => masked ? '<span style="color:#475569;">•••</span>' : fmtPrice(v);
         return `
         <tr>

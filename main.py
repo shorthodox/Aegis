@@ -40,6 +40,7 @@ from dataclasses import asdict
 from starlette.middleware.sessions import SessionMiddleware
 import numpy as np
 import logging
+import shutil
 from email_validator import validate_email, EmailNotValidError
 from functools import partial
 from generate_dev_code import generate_dev_key
@@ -257,6 +258,25 @@ if not WEB_ROOT_PATH.exists():
     styles_dir.mkdir(parents=True, exist_ok=True)
     (pages_dir / "index.html").write_text("<html><body><h1>Aegis‑1</h1><p>Frontend files missing. Please upload the correct static files to 'web/src/pages/'</p></body></html>")
     (pages_dir / "dashboard.html").write_text("<html><body><h1>Dashboard unavailable</h1><p>Static files not found.</p></body></html>")
+
+# Restore dynamic track-record files from the engine STATE folder if present.
+# This avoids losing history when the `web/` directory is replaced during deploys.
+# Reads from AEGIS_STATE_DIR (the persistent volume) so it picks up the RECORDS
+# THAT SURVIVED the deploy, not the stale copy baked into the image.
+try:
+    _data_root = Path(os.environ.get('AEGIS_STATE_DIR') or (Path(BASE_DIR) / "data"))
+    for _src_name in ("track_record.json", "trader_track_record.json"):
+        _src = _data_root / _src_name
+        _dst = WEB_ROOT_PATH / _src_name
+        if _src.exists():
+            _dst.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                shutil.copy2(_src, _dst)
+                print(f"[Startup] Restored {_dst} from {_src}")
+            except Exception as _e:
+                print(f"[Startup] Failed to copy {_src} -> {_dst}: {_e}")
+except Exception:
+    pass
 
 # -------------------------------------------------------------------
 # LiveState for global data (shared with engine and WebSocket)
@@ -2339,13 +2359,18 @@ def create_user_doc(email: str, password_hash: Optional[str] = None,
                     full_name: Optional[str] = None, location: Optional[str] = None,
                     phone_number: Optional[str] = None) -> Dict:
     now = datetime.now(timezone.utc).isoformat()
-    trial_end = (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()
+    # Account is created in a "registered" state — the 3-day free trial does NOT
+    # auto-start.  The user lands on /pricing and starts it themselves via the
+    # "Start Free Trial" button (POST /api/v1/trial/start), which sets plan=trial
+    # + trial_end.  Auto-starting here silently burned the trial the moment the
+    # account was created, before the user opted in.
     user_data = {
         "email": email,
-        "plan": "trial",
-        "trial_start": now,
-        "trial_end": trial_end,
-        "trial_active": True,
+        "plan": "registered",
+        "trial_start": None,
+        "trial_end": None,
+        "trial_active": False,
+        "trial_used": False,        # /api/v1/trial/start begins the one 3-day trial
         "created_at": now,
         "last_login": now,
         "subscription": {
@@ -2367,7 +2392,7 @@ def create_user_doc(email: str, password_hash: Optional[str] = None,
     if phone_number:
         user_data["phone_number"] = phone_number
     db.collection("users").document(email).set(user_data)
-    return {"email": email, "plan": "trial", "trial_end": trial_end, "full_name": full_name, "location": location}
+    return {"email": email, "plan": "registered", "trial_end": None, "full_name": full_name, "location": location}
 
 def update_last_login(email: str):
     db.collection("users").document(email).update({"last_login": datetime.now(timezone.utc).isoformat()})
@@ -3472,7 +3497,8 @@ async def start_free_trial(user_id: str = Depends(get_current_user)):
         "plan": "trial",
         "trial_start": trial_start_iso,
         "trial_end": trial_end_iso,
-        "trial_active": True
+        "trial_active": True,
+        "trial_used": True
     })
 
     remaining_seconds = int((trial_end_dt - now).total_seconds())
@@ -3660,7 +3686,7 @@ async def engine_track_record_endpoint():
     actual open position prices (entry, SL, TPs stored at trade-open time).
     Falls back to an empty payload if the file doesn't exist yet.
     """
-    _path = Path(BASE_DIR) / "data" / "track_record.json"
+    _path = Path(os.environ.get('AEGIS_STATE_DIR') or (Path(BASE_DIR) / "data")) / "track_record.json"
     if not _path.exists():
         return JSONResponse({"signals": [], "summary": {}})
     try:
@@ -3674,7 +3700,7 @@ async def engine_track_record_endpoint():
 async def track_record_endpoint(source: str = None):
     """Public track record — merges live_engine + main.py stores so no records are lost."""
 
-    _ENGINE_RECORD = Path(BASE_DIR) / "data" / "track_record.json"
+    _ENGINE_RECORD = Path(os.environ.get('AEGIS_STATE_DIR') or (Path(BASE_DIR) / "data")) / "track_record.json"
     _WEB_RECORD    = Path(BASE_DIR) / "web"  / "track_record.json"
 
     def _norm(s: dict, src: str) -> dict:

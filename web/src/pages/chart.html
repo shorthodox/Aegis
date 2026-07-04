@@ -106,6 +106,8 @@
     .level-tp1   { color: var(--green); }
     .level-tp2   { color: #00cc6a; }
     .level-tp3   { color: #009950; }
+    .level-tp4   { color: #007a3d; }
+    .level-tp5   { color: #006030; }
     .level-sl    { color: var(--red); }
     .rr-badge {
       margin-top: 12px; padding: 6px 12px; background: rgba(184,150,106,0.08);
@@ -385,7 +387,7 @@
 
 <header class="ae-nav" id="main-nav">
   <div class="ae-nav-inner">
-    <a href="/" style="text-decoration:none;display:inline-flex;align-items:center;gap:0.5rem;">
+    <a href="/" title="Go to the home page" aria-label="Go to the home page" style="text-decoration:none;display:inline-flex;align-items:center;gap:0.5rem;">
       <i class="fas fa-bolt" style="color:#B8966A;font-size:0.9rem;"></i>
       <span style="font-family:'Inter',system-ui,sans-serif;font-size:1.35rem;font-weight:900;letter-spacing:-0.025em;background:linear-gradient(to right,#EAE6DF,#B8966A);-webkit-background-clip:text;background-clip:text;color:transparent;text-transform:uppercase;">AEGIS</span>
       <span style="font-size:0.62rem;font-weight:600;background:rgba(184,150,106,0.12);color:#B8966A;border:1px solid rgba(184,150,106,0.28);padding:2px 7px;border-radius:4px;letter-spacing:0.08em;font-family:'Inter',system-ui,sans-serif;">v1.0</span>
@@ -466,6 +468,8 @@
           <div class="legend-item"><div class="legend-dot" style="background:#4a7c68"></div>TP1</div>
           <div class="legend-item"><div class="legend-dot" style="background:#00cc6a"></div>TP2</div>
           <div class="legend-item"><div class="legend-dot" style="background:#009950"></div>TP3</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#007a3d"></div>TP4</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#006030"></div>TP5</div>
           <div class="legend-item"><div class="legend-dot" style="background:#ff0055"></div>SL</div>
         </span>
         <div class="legend-item"><div class="legend-dot" style="background:rgba(74,124,104,0.4)"></div>Support</div>
@@ -966,20 +970,19 @@ async function renderChart(sig) {
       addLine(openPosForChart.take_profit_1, '#4a7c68', 'TP1');
       addLine(openPosForChart.take_profit_2, '#00cc6a', 'TP2');
       addLine(openPosForChart.take_profit_3, '#009950', 'TP3');
+      addLine(openPosForChart.take_profit_4, '#007a3d', 'TP4');
+      addLine(openPosForChart.take_profit_5, '#006030', 'TP5');
       tradeLevelsDrawn = true;
     } else if (signalFired) {
       const entry = sig.entry_price || sig.price;
       addLine(entry,            '#B8966A',              'Entry');
       addLine(sig.suggested_sl, '#ff0055',              'SL');
-      if (sig.direction === 'SHORT' || sig.signal === 'SELL') {
-        addLine(sig.bear_tp1, '#4a7c68', 'TP1');
-        addLine(sig.bear_tp2, '#00cc6a', 'TP2');
-        addLine(sig.bear_tp3, '#009950', 'TP3');
-      } else {
-        addLine(sig.bull_tp1, '#4a7c68', 'TP1');
-        addLine(sig.bull_tp2, '#00cc6a', 'TP2');
-        addLine(sig.bull_tp3, '#009950', 'TP3');
-      }
+      // Engine's ATR TP ladder (direction-correct from calculate_stops) — all 5 rungs.
+      addLine(sig.suggested_tp, '#4a7c68', 'TP1');
+      addLine(sig.tp2,          '#00cc6a', 'TP2');
+      addLine(sig.tp3,          '#009950', 'TP3');
+      addLine(sig.tp4,          '#007a3d', 'TP4');
+      addLine(sig.tp5,          '#006030', 'TP5');
       tradeLevelsDrawn = true;
     }
     addLine(sig.support,    'rgba(74,124,104,0.5)',  'Sup');
@@ -1192,9 +1195,16 @@ async function loadMoreHistory(symbol, interval) {
 function renderOverview(sig) {
   const entry = sig.entry_price || sig.price;
   const isShort = sig.direction === 'SHORT';
-  const tp1   = isShort ? sig.bear_tp1 : sig.bull_tp1;
-  const tp2   = isShort ? sig.bear_tp2 : sig.bull_tp2;
-  const tp3   = isShort ? sig.bear_tp3 : sig.bull_tp3;
+  // Prefer the engine's actual ATR trade TPs (suggested_tp / tp2..tp5 — the same
+  // 5-level ladder the position uses); fall back to the directional context
+  // targets (bull/bear_tp1-3) only when the engine TPs aren't present (e.g. a
+  // not-yet-fired preview).  This is why TP4/TP5 were never shown — the old
+  // bull/bear_tp field set only goes to 3.
+  const tp1   = sig.suggested_tp || (isShort ? sig.bear_tp1 : sig.bull_tp1);
+  const tp2   = sig.tp2 || (isShort ? sig.bear_tp2 : sig.bull_tp2);
+  const tp3   = sig.tp3 || (isShort ? sig.bear_tp3 : sig.bull_tp3);
+  const tp4   = sig.tp4;
+  const tp5   = sig.tp5;
   const sl    = sig.suggested_sl || (isShort ? sig.bull_tp1 : sig.bear_tp1);
   const rr    = sig.risk_reward || '—';
   // Open position outranks the model's current (post-entry) HOLD read
@@ -1242,6 +1252,14 @@ function renderOverview(sig) {
       <div class="level-row">
         <div class="level-label">TP3</div>
         <div class="level-val level-tp3">${fmt(tp3, 6)}</div>
+      </div>
+      <div class="level-row">
+        <div class="level-label">TP4</div>
+        <div class="level-val level-tp4">${fmt(tp4, 6)}</div>
+      </div>
+      <div class="level-row">
+        <div class="level-label">TP5</div>
+        <div class="level-val level-tp5">${fmt(tp5, 6)}</div>
       </div>
       <div class="level-row">
         <div class="level-label">Support</div>
@@ -1469,6 +1487,8 @@ function renderProbabilities(sig) {
   const tp1p = Math.min(95, Math.round(pDir * 100 * 0.92 + q * 8));
   const tp2p = Math.min(90, Math.round(pDir * 100 * 0.70 + q * 5));
   const tp3p = Math.min(80, Math.round(pDir * 100 * 0.50 + q * 3));
+  const tp4p = Math.min(65, Math.round(pDir * 100 * 0.35 + q * 2));
+  const tp5p = Math.min(50, Math.round(pDir * 100 * 0.25 + q * 1));
   const slp  = Math.max(5,  Math.round((1 - pDir) * 100 * 0.45));
 
   const row = (label, pct, color) => `
@@ -1483,6 +1503,8 @@ function renderProbabilities(sig) {
     ${row('TP1 Hit',   tp1p, 'var(--green)')}
     ${row('TP2 Hit',   tp2p, '#00cc6a')}
     ${row('TP3 Hit',   tp3p, '#009950')}
+    ${row('TP4 Hit',   tp4p, '#007a3d')}
+    ${row('TP5 Hit',   tp5p, '#006030')}
     ${row('SL Hit',    slp,  'var(--red)')}
     <div style="margin-top:10px;padding:8px 10px;background:rgba(0,0,0,0.3);border-radius:6px;font-size:11px;color:var(--dim)">
       Based on model confidence (${fmtPct((pDir||0)*100)}) and signal quality (${sig.quality_score?.toFixed(0)}/100).
@@ -1808,6 +1830,8 @@ function renderPositionBanner(symbol) {
   const tp1      = parseFloat(pos.take_profit_1) || 0;
   const tp2      = parseFloat(pos.take_profit_2) || 0;
   const tp3      = parseFloat(pos.take_profit_3) || 0;
+  const tp4      = parseFloat(pos.take_profit_4) || 0;
+  const tp5      = parseFloat(pos.take_profit_5) || 0;
 
   // Time open
   const entryTs  = pos.entry_time ? new Date(pos.entry_time) : null;
@@ -1861,6 +1885,8 @@ function renderPositionBanner(symbol) {
       ${tpChip('TP1', tp1, tpHit(tp1, pos.direction))}
       ${tpChip('TP2', tp2, tpHit(tp2, pos.direction))}
       ${tpChip('TP3', tp3, tpHit(tp3, pos.direction))}
+      ${tpChip('TP4', tp4, tpHit(tp4, pos.direction))}
+      ${tpChip('TP5', tp5, tpHit(tp5, pos.direction))}
       <div class="pos-tp-chip tp-miss">SL<br><small>${sl > 0 ? sl.toPrecision(5) : '—'}</small></div>
     </div>
   `;
