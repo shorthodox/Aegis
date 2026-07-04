@@ -58,7 +58,7 @@ function _hidePaymentLoader() {
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyDtudUL2sE1_fKbzIro5d2IP0-M2dYI6x4",
-  authDomain: "aegisignal.pro",
+  authDomain: "aegis-d78e1.firebaseapp.com",
   databaseURL: "https://aegis-d78e1-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "aegis-d78e1", // This is crucial for Firestore
   storageBucket: "aegis-d78e1.firebasestorage.app",
