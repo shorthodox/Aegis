@@ -3740,6 +3740,7 @@ async def track_record_endpoint(source: str = None):
     seen_ids:   set  = set()
     seen_pos:   set  = set()
     all_signals: list = []
+    _engine_summary: dict = {}   # authoritative wallet figures (capital / balance / $PnL)
 
     # OPEN truth lives ONLY in the engine's own data/track_record.json (the
     # wallet).  The web copy and main.py's in-memory store run a parallel
@@ -3752,6 +3753,8 @@ async def track_record_endpoint(source: str = None):
             try:
                 with open(path, "r", encoding="utf-8") as f:
                     _d = json.load(f)
+                if src == "live_engine" and _d.get("summary"):
+                    _engine_summary = _d.get("summary") or {}
                 for s in _d.get("signals", []):
                     if src != "live_engine" and s.get("outcome") == "OPEN":
                         continue
@@ -3825,6 +3828,11 @@ async def track_record_endpoint(source: str = None):
             "total_pnl_pct":  round(sum(pnls), 3) if pnls else 0.0,
             "tracking_since": min(times) if times else None,
             "token_count":    _token_count,
+            # Authoritative wallet $ figures (whole-account, reflects banked
+            # partial-close PnL). Give the % stats real dollar context.
+            "initial_capital": _engine_summary.get("initial_capital"),
+            "balance":         _engine_summary.get("balance"),
+            "total_pnl_usdt":  _engine_summary.get("total_pnl_usdt"),
         },
         "signals": all_signals,
     })

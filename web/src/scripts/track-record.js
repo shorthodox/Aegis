@@ -148,6 +148,43 @@ function renderStats(summary) {
         }
     }
 
+    // Net Profit ($) + Capital cards — real dollar context for the % stats.
+    const fmtUsd = (v) => {
+        const n = Number(v);
+        const sign = n < 0 ? '-' : (n > 0 ? '+' : '');
+        return sign + '$' + Math.abs(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
+    };
+    const netEl    = document.getElementById('trNetProfitVal');
+    const netSubEl  = document.getElementById('trNetProfitSub');
+    const capEl    = document.getElementById('trCapitalVal');
+    const capSubEl  = document.getElementById('trCapitalSub');
+    const pnlUsdt   = summary.total_pnl_usdt;
+    const initCap   = summary.initial_capital;
+    const balance   = summary.balance;
+    if (netEl) {
+        if (pnlUsdt != null) {
+            const n = Number(pnlUsdt);
+            netEl.textContent = fmtUsd(n);
+            netEl.style.color = n >= 0 ? '#00ff88' : '#ff5555';
+            if (netSubEl && initCap) {
+                const pct = (n / Number(initCap)) * 100;
+                netSubEl.textContent = `${(pct >= 0 ? '+' : '')}${pct.toFixed(2)}% on capital`;
+            }
+        } else {
+            netEl.textContent = '—';
+        }
+    }
+    if (capEl) {
+        if (initCap != null) {
+            capEl.textContent = '$' + Number(initCap).toLocaleString('en-US', { maximumFractionDigits: 0 });
+            if (capSubEl && balance != null) {
+                capSubEl.textContent = `now $${Number(balance).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+            }
+        } else {
+            capEl.textContent = '—';
+        }
+    }
+
     // Win-rate attribution note
     const noteEl = document.getElementById('trWinrateNote');
     if (noteEl) {
