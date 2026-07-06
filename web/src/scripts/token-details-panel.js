@@ -1003,7 +1003,7 @@ async function _loadHistStats(containerEl) {
       ? (s.total_pnl_pct >= 0 ? '+' : '') + s.total_pnl_pct.toFixed(2) + '%'
       : 'â€”';
     el.innerHTML = `
-      <div class="text-[9px] uppercase tracking-widest text-slate-600 font-mono mb-1.5">Live Track Record (AEGIS-1)</div>
+      <div class="text-[9px] uppercase tracking-widest text-slate-600 font-mono mb-1.5">Live Track Record (AEGIS)</div>
       <div class="grid grid-cols-3 gap-x-4 gap-y-1">
         <div><span class="text-slate-500">Signals:</span> <span class="text-white font-bold">${total}</span></div>
         <div><span class="text-slate-500">Wins:</span>    <span class="text-emerald-400 font-bold">${wins}</span></div>

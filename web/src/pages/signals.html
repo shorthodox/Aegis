@@ -251,7 +251,7 @@
         <p>All active fired signals from the AI engine — updated every 60 seconds</p>
       </div>
       <div class="hero-right">
-        <div class="stat-chip"><div class="pulse"></div><span class="val" id="stat-aegis-count">—</span><span class="lbl">AEGIS-1</span></div>
+        <div class="stat-chip"><div class="pulse"></div><span class="val" id="stat-aegis-count">—</span><span class="lbl">AEGIS</span></div>
         <div class="stat-chip"><i class="fas fa-clock" style="color:var(--ae-text-3);font-size:0.68rem;"></i><span id="lastRefresh" class="lbl">loading…</span></div>
       </div>
     </div>
@@ -280,13 +280,13 @@
         <div class="engine-header">
           <i class="fas fa-satellite-dish" style="color:var(--ae-data);font-size:0.9rem;"></i>
           <div>
-            <div class="engine-name">AEGIS-1 Signal Engine</div>
+            <div class="engine-name">AEGIS Signal Engine</div>
             <div class="engine-meta">60 tokens · 1h candles · XGBoost · 8-layer filter</div>
           </div>
           <span class="engine-count" id="aegis-count-badge">0</span>
         </div>
         <div class="engine-body" id="aegis-body">
-          <div class="loading-state"><i class="fas fa-circle-notch"></i> Loading AEGIS-1 signals…</div>
+          <div class="loading-state"><i class="fas fa-circle-notch"></i> Loading AEGIS signals…</div>
         </div>
       </div>
     </div>
@@ -387,7 +387,7 @@
         '</div></div>';
     }
 
-    // ── AEGIS-1 signal card ────────────────────────────────────────────
+    // ── AEGIS signal card ────────────────────────────────────────────
     function _aegisCard(sig) {
       var side = (sig.signal || sig.direction || 'FLAT').toUpperCase();
       var isBuy = side === 'BUY' || side === 'LONG' || side === 'STRONG_BUY';
@@ -416,7 +416,7 @@
         '</div>' +
         _confMini(sig.confluence) +
         '<div class="sig-bottom" style="margin-top:0.5rem;">' +
-          '<span class="sig-tag" style="color:var(--ae-data);border-color:var(--ae-data-bg);background:var(--ae-data-bg);">AEGIS-1</span>' +
+          '<span class="sig-tag" style="color:var(--ae-data);border-color:var(--ae-data-bg);background:var(--ae-data-bg);">AEGIS</span>' +
           '<span class="sig-strat">' + (sig.timeframe || '1h') + ' · ' + (sig.volatility_regime || '') + '</span>' +
           '<span class="sig-time">' + _ts(ts) + '</span>' +
         '</div>' +

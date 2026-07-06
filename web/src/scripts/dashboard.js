@@ -1890,7 +1890,7 @@ function _renderFpExpectancy(body, signal, tier) {
         </div>
 
         <!-- Historical performance (loaded async) -->
-        <div class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Track Record (AEGIS-1)</div>
+        <div class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Track Record (AEGIS)</div>
         <div id="fp-exp-hist" class="bg-black/40 p-4 rounded-xl border border-white/5 text-[10px] text-gray-500 font-mono">
           Loadingâ€¦
         </div>
