@@ -3770,14 +3770,35 @@ class LiveEngine:
             import os as _os, shutil as _shutil
             TRACK_RECORD_PATH.parent.mkdir(parents=True, exist_ok=True)
 
+            # ── Aggregate partial-TP slices into ONE record per trade ─────────
+            # Each TP hit and the final close append a SEPARATE TradeRecord with
+            # the same signal_id.  Serialising all of them made the public record
+            # keep only the FIRST slice (TP1, a tiny +0.5%), mark the trade
+            # "closed", and drop the still-open remainder + every later TP — so a
+            # trade that ran to TP3 showed as a closed +0.5% and the avg PnL
+            # looked weak.  Collapse each signal_id's slices into a single
+            # whole-trade record: summed PnL (usdt), position-weighted %, correct
+            # WIN/LOSS/OPEN, plus tp_hits and banked profit for display.
+            from collections import defaultdict as _defaultdict
+            _slices_by_id: Dict[str, list] = _defaultdict(list)
+            for t in self.wallet.trade_history:
+                _slices_by_id[t.signal_id].append(t)
+            _open_ids = {p.signal_id for p in self.wallet.open_positions.values()}
+
             open_records = []
             for p in self.wallet.open_positions.values():
                 cur = self.live_prices.get(p.symbol, p.entry_price) or p.entry_price
                 if p.direction == 'LONG':
-                    _pnl_pct  = (cur - p.entry_price) / p.entry_price * 100 if p.entry_price else 0.0
+                    _rem_pct = (cur - p.entry_price) / p.entry_price * 100 if p.entry_price else 0.0
                 else:
-                    _pnl_pct  = (p.entry_price - cur) / p.entry_price * 100 if p.entry_price else 0.0
-                _pnl_usdt = _pnl_pct / 100 * p.position_value
+                    _rem_pct = (p.entry_price - cur) / p.entry_price * 100 if p.entry_price else 0.0
+                _rem_usdt  = _rem_pct / 100 * p.position_value
+                _banked    = _slices_by_id.get(p.signal_id, [])
+                _bank_usdt = sum(t.pnl_usdt for t in _banked)
+                _bank_val  = sum(t.position_value for t in _banked)
+                _tot_val   = _bank_val + p.position_value
+                _tot_usdt  = _bank_usdt + _rem_usdt
+                _agg_pct   = (_tot_usdt / _tot_val * 100) if _tot_val else _rem_pct
                 open_records.append({
                     'signal_id':       p.signal_id,
                     'symbol':          p.symbol,
@@ -3788,12 +3809,14 @@ class LiveEngine:
                     'exit_price':      None,
                     'entry_time':      p.entry_time,
                     'close_time':      None,
-                    'pnl_pct':         round(_pnl_pct, 4),
-                    'pnl_usdt':        round(_pnl_usdt, 4),
+                    'pnl_pct':         round(_agg_pct, 4),
+                    'pnl_usdt':        round(_tot_usdt, 4),
+                    'banked_usdt':     round(_bank_usdt, 4),
+                    'tp_hits':         len(_banked),
                     'outcome':         'OPEN',
                     'exit_reason':     None,
                     'meta_confidence': p.meta_confidence,
-                    'position_value':  p.position_value,
+                    'position_value':  round(_tot_val, 2),
                     'signal_strength': p.signal_strength,
                     'entry_mode':      p.entry_mode,
                     'atr':             p.atr,
@@ -3806,7 +3829,26 @@ class LiveEngine:
                     'take_profit_5':   p.take_profit_5,
                 })
 
-            wallet_records = [asdict(t) for t in self.wallet.trade_history] + open_records
+            closed_records = []
+            for _sid, _slices in _slices_by_id.items():
+                if _sid in _open_ids:
+                    continue   # remainder still open — folded into open_records above
+                _tot_usdt = sum(t.pnl_usdt for t in _slices)
+                _tot_val  = sum(t.position_value for t in _slices)
+                _agg_pct  = (_tot_usdt / _tot_val * 100) if _tot_val else 0.0
+                _final    = next((t for t in reversed(_slices)
+                                  if 'PARTIAL' not in (t.exit_reason or '')), _slices[-1])
+                _rec = asdict(_final)
+                _rec.update({
+                    'pnl_pct':        round(_agg_pct, 4),
+                    'pnl_usdt':       round(_tot_usdt, 4),
+                    'tp_hits':        sum(1 for t in _slices if 'PARTIAL' in (t.exit_reason or '')),
+                    'outcome':        'WIN' if _tot_usdt > 0 else 'LOSS',
+                    'position_value': round(_tot_val, 2),
+                })
+                closed_records.append(_rec)
+
+            wallet_records = closed_records + open_records
             wallet_ids = {r.get('signal_id') for r in wallet_records if r.get('signal_id')}
 
             # Merge: preserve any on-disk records not currently in the wallet so
