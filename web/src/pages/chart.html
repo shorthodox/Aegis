@@ -1966,8 +1966,15 @@ function renderSignalGenesis(sig) {
   const el = $('signal-genesis');
   if (!el) return;
 
-  const isShort  = sig.direction === 'SHORT';
-  const fired    = Boolean(sig.fire);
+  // An OPEN position outranks the model's current read (same rule as
+  // renderSummary). After entry the live scan can flip to the opposite side and
+  // report that hypothetical new entry as "blocked" — but the genesis must
+  // describe the trade that is actually live (which fired, in its real
+  // direction), or it contradicts the summary box ("holding an open short")
+  // and paints a false Gate-1.5 VETO on a healthy position.
+  const _openPos = TRACK_DATA.signals.find(p => p.symbol === sig.symbol && p.outcome === 'OPEN');
+  const isShort  = _openPos ? _openPos.direction === 'SHORT' : sig.direction === 'SHORT';
+  const fired    = _openPos ? true : Boolean(sig.fire);
   const qualOk   = (sig.quality_score || 0) >= 55;
   const atrOk    = (sig.atr_pct || 0) >= 0.8;
   const regOk    = !['RANGING', 'STABLE', 'UNKNOWN'].includes(sig.regime);
