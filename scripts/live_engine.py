@@ -2146,11 +2146,30 @@ class LiveEngine:
         self._save_track_record()   # push restored positions to web immediately
         while True:
             t0 = time.time()
-            await self._scan_all()
-            self._save_track_record()
-            if self.alpha_mode:
-                self._save_alpha_track_record()
-            await self._push_signals_to_firestore()
+            # HARD GUARD: a single transient error (one bad candle fetch, a math
+            # edge case on one of 63 tokens, a Firestore hiccup) must NEVER kill
+            # the whole engine.  Before this, any unhandled exception here escaped
+            # run(), ended the coroutine, and froze the engine until the next
+            # redeploy (the recurring "signals stopped firing" stalls).  Now every
+            # cycle is isolated: log the traceback and keep scanning.
+            try:
+                await self._scan_all()
+                self._save_track_record()
+                if self.alpha_mode:
+                    self._save_alpha_track_record()
+                await self._push_signals_to_firestore()
+                # Heartbeat — makes "is the engine alive?" answerable from the
+                # Railway logs at a glance, and surfaces per-cycle fire counts.
+                _n_fired = sum(1 for s in self.last_signals.values() if s.get('fire'))
+                _n_open  = len(self.wallet.open_positions)
+                print(f'[LiveEngine] heartbeat {datetime.now(timezone.utc):%Y-%m-%d %H:%M:%S}Z '
+                      f'| cycle {time.time()-t0:0.1f}s | fired={_n_fired} '
+                      f'open={_n_open} | {self.GATE_VERSION.split("(")[0].strip()}')
+            except Exception as _cycle_err:
+                import traceback as _tb
+                print(f'[LiveEngine] scan cycle error (engine stays alive): '
+                      f'{_cycle_err!r}')
+                _tb.print_exc()
             sleep = max(0.0, self.scan_interval_seconds - (time.time() - t0))
             await asyncio.sleep(sleep)
 
@@ -4037,9 +4056,14 @@ class LiveEngine:
                 json.dump(payload, f, indent=2, default=str)
             _os.replace(tmp, TRACK_RECORD_PATH)
 
-            # Mirror to Firestore so the record survives the next Railway redeploy
-            # (best-effort — never blocks or breaks the save on failure).
-            _fs_save_track_record(payload)
+            # Mirror to Firestore so the record survives the next Railway redeploy.
+            # Fire-and-forget on a daemon thread: a slow/hung Firestore network
+            # call must never block the scan loop (a hang isn't caught by
+            # try/except and would freeze the engine).
+            import threading as _threading
+            _threading.Thread(
+                target=_fs_save_track_record, args=(payload,), daemon=True
+            ).start()
 
             # Sync to web/ so the static file server and main.py fallback stay current
             _web = _ROOT / 'web' / 'track_record.json'
