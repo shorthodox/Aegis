@@ -449,8 +449,8 @@ class Position:
     meta_confidence: float
     atr_multiplier:  float
     atr:             float = 0.0   # ATR at entry (used for trailing stop distance)
-    take_profit_1:   float = 0.0   # TP1: 0.55× ATR from entry — 20% partial close
-    take_profit_2:   float = 0.0   # TP2: 1.3× ATR, capped at TP2_MAX_PCT of entry — 20% partial + trail
+    take_profit_1:   float = 0.0   # TP1: 0.7× ATR from entry — 20% partial close
+    take_profit_2:   float = 0.0   # TP2: 1.6× ATR from entry — 20% partial + trailing-stop floor
     take_profit_3:   float = 0.0   # TP3: 2.2× ATR from entry — 20% partial close
     take_profit_4:   float = 0.0   # TP4: 3.3× ATR from entry — 20% partial close
     take_profit_5:   float = 0.0   # TP5: 4.5× ATR from entry — close remainder (RR anchor)
@@ -1004,8 +1004,8 @@ class DynamicRiskEngine:
     # partials actually bank at each level.  SL stays 1.8×ATR; RR is validated to
     # TP5 (4.5/1.8 = 2.5) so trade acceptance is unchanged — only the interior
     # rungs moved closer.
-    TP1_MULTIPLIER    = 0.55   # 20 % partial close — fires early to lock break-even fast (intentionally tight)
-    TP2_MULTIPLIER    = 1.3    # 20 % partial close — activate trailing stop (pure ATR distance)
+    TP1_MULTIPLIER    = 0.7    # 20 % partial close — early lock, nudged up from 0.55 so the first bank isn't tiny
+    TP2_MULTIPLIER    = 1.6    # 20 % partial close + activate trailing stop; also the trail FLOOR, so a higher TP2 locks more on every runner (up from 1.3)
     TP3_MULTIPLIER    = 2.2    # 20 % partial close — small step past TP2 (was 4.5, a near-unreachable gap)
     TP4_MULTIPLIER    = 3.3    # 20 % partial close — reachable stretch target
     TP5_MULTIPLIER    = 4.5    # close remaining position — full-trend target + RR anchor (4.5/1.8 = 2.5)
