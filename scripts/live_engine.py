@@ -459,6 +459,9 @@ class Position:
                                    # (support_reversal / breakout_* / GATE_SKIPPED: …)
     quality_score:   float = 0.0   # SignalQualityFilter score AT ENTRY — displayed
                                    # for open positions instead of a live re-score
+    gate_warnings:   list  = field(default_factory=list)  # advisory-gate ledger AT
+                                   # ENTRY — keeps the chart gate breakdown complete
+                                   # for open positions (rebuilt away otherwise)
 
 
 @dataclass
@@ -2410,6 +2413,16 @@ class LiveEngine:
                 if symbol in self.last_signals:
                     _entry_q = existing.quality_score or existing.meta_confidence
                     self.last_signals[symbol]['quality_score'] = round(_entry_q, 1)
+                    # Re-attach the entry-time gate context so the chart's gate
+                    # breakdown (tier, structure verdict, advisory ledger) stays
+                    # complete for open positions — these live on the fire path and
+                    # would otherwise be rebuilt away on every subsequent scan.
+                    if existing.signal_strength:
+                        self.last_signals[symbol]['risk_tier'] = existing.signal_strength
+                    if existing.entry_mode:
+                        self.last_signals[symbol]['entry_mode'] = existing.entry_mode
+                    if existing.gate_warnings:
+                        self.last_signals[symbol]['gate_warnings'] = existing.gate_warnings
             elif result.get('fire') and result.get('tradeable', False) and price > 0:
                 now               = time.time()
                 cooldown_elapsed  = now - self._last_close_time.get(symbol, 0)
@@ -2806,7 +2819,8 @@ class LiveEngine:
                         self.last_signals[symbol]['gate_warnings'] = _gate_warnings
                         self.last_signals[symbol]['risk_tier']     = _risk_tier
                     self._open_position(symbol, result, price, regime, _model_quality,
-                                        risk_tier=_risk_tier, entry_mode=_entry_mode)
+                                        risk_tier=_risk_tier, entry_mode=_entry_mode,
+                                        gate_warnings=_gate_warnings)
 
                 elif is_flip:
                     print(f'[{symbol}] FLIP-FLOP BLOCKED {last_side}→{new_side} '
@@ -3473,6 +3487,7 @@ class LiveEngine:
         quality_score: float                 = 0.0,
         risk_tier:     str                   = '',
         entry_mode:    str                   = '',
+        gate_warnings: Optional[list]        = None,
     ) -> None:
         side = result.get('side', 'FLAT')
         if side not in ('BUY', 'SELL'):
@@ -3558,6 +3573,7 @@ class LiveEngine:
             signal_strength = risk_tier,
             entry_mode      = entry_mode,
             quality_score   = round(quality_score, 1),
+            gate_warnings   = list(gate_warnings or []),
         )
         self.wallet.open_trade(pos)
         self._open_time[symbol]    = time.time()

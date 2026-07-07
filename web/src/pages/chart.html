@@ -2067,6 +2067,21 @@ function renderSignalGenesis(sig) {
       </div>
     </div>` : '';
 
+  // ── Derived states for the FULL gate breakdown (all data from the engine's
+  //    live_signals.json). Hard gates show red when they block; advisory gates
+  //    show orange when they object (the signal can still fire but is tagged
+  //    weaker). This is what makes a signal "weak" visible end-to-end.
+  const driftBlocked = sig.drift_blocked === true;
+  const _mw = Number(sig.macro_weekly) || 0, _md = Number(sig.macro_daily) || 0;
+  const _htfBias = b => b > 0.0001 ? 'BULL' : b < -0.0001 ? 'BEAR' : 'NEUTRAL';
+  const htfOppose = isShort ? (_mw > 0 && _md > 0) : (_mw < 0 && _md < 0);
+  const edgeVal = Number(sig.edge_score) || 0;
+  const edgeOk  = edgeVal >= 70;
+  const fbDetected = sig.is_fake_breakout === true;
+  const qVal = Number(sig.quality_score) || 0;
+  const ctxOk = qVal >= 70;                       // advisory context-quality floor
+  const stabWarn = _warns.some(w => String(w).toLowerCase().startsWith('stability'));
+
   el.innerHTML = `
     <div style="margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:10px;
@@ -2089,6 +2104,11 @@ function renderSignalGenesis(sig) {
 
     ${convBadge}
     <div style="font-size:11px;color:var(--dim);margin-bottom:8px;letter-spacing:1px;text-transform:uppercase">Gate Checks</div>
+    <div style="font-size:9.5px;color:var(--dim);margin:-2px 0 8px;opacity:.8">HARD gates block outright · ADVISORY gates (orange) let it fire but tag it weaker</div>
+    ${gate('', !driftBlocked, 'Gate 0 · Model Drift',
+        driftBlocked ? 'Live win-rate critically below benchmark — model suppressed'
+                     : 'Model performing within its benchmark win-rate',
+        driftBlocked ? 'BLOCKED' : 'HEALTHY', driftBlocked && !fired)}
     ${gate('', regOk,  'Gate 1 · Regime',    `Market regime: ${(sig.regime||'').replace('_',' ')}`, sig.regime || '—')}
     ${gate('', dirOk,  'Gate 1.5 · Direction',
         _isReversal
@@ -2097,9 +2117,16 @@ function renderSignalGenesis(sig) {
         _isReversal ? 'REVERSAL' : (dirOk ? 'ALIGNED' : 'CONFLICT'),
         _isReversal)}
     ${structRow}
-    ${gate('', atrOk,  'Gate 2 · ATR Floor', `Minimum 0.8% volatility required for valid entry`, `${(sig.atr_pct||0).toFixed(2)}%`)}
-    ${gate('', qualOk, 'Gate 3 · Quality',   `Signal quality ≥ 55 required. Score: ${(sig.quality_score||0).toFixed(0)}`, `${(sig.quality_score||0).toFixed(0)}/100`)}
+    ${gate('', !htfOppose, 'Gate 1.7 · HTF Macro',
+        `Higher-timeframe bias — Weekly ${_htfBias(_mw)} · Daily ${_htfBias(_md)}`,
+        htfOppose ? 'CONFLICT' : 'ALIGNED', htfOppose && !fired)}
     ${confRow}
+    ${gate('', atrOk,  'Gate 2 · ATR Floor', `Minimum 0.8% volatility required for valid entry`, `${(sig.atr_pct||0).toFixed(2)}%`)}
+    ${gate('', edgeOk, 'Gate 3 · Model Edge', `Model edge score ≥ 70 required to fire`, `${edgeVal.toFixed(0)}/100`, !edgeOk && !fired)}
+    ${gate('', ctxOk,  'Gate 3b · Context Quality', `Advisory — heuristic setup quality (floor 70), not a hard block. Score: ${qVal.toFixed(0)}`, `${qVal.toFixed(0)}/100`, true)}
+    ${gate('', !fbDetected, 'Gate 3c · Fake Breakout', fbDetected ? 'Exhaustion / fake-breakout pattern detected' : 'No exhaustion / fake-breakout pattern', fbDetected ? 'DETECTED' : 'CLEAR', true)}
+    ${gate('', !stabWarn, 'Gate 3.8 · Signal Stability', stabWarn ? 'Direction not yet stable across recent cycles' : 'Direction stable across recent cycles', stabWarn ? 'FORMING' : 'STABLE', true)}
+    ${gate('', true, 'Gate 4 · Portfolio', 'Capital & concurrency limits (signal service — non-binding)', 'OK')}
     ${gate('', confOk, 'Model Confidence',   `P(${isShort?'sell':'buy'}) vs dynamic threshold. Gap: ${confGap}pt`, `${((pDir||0)*100).toFixed(1)}% vs ${(thresh).toFixed(0)}`, !confOk && !fired)}
     ${gate('', hmOk,   'HMM Stability',      `Regime transition risk: ${sig.hmm_transition_risk ? 'YES' : 'NO'}. Stability: ${((sig.hmm_stability||0)*100).toFixed(0)}%`, hmOk ? 'STABLE' : 'UNSTABLE', !hmOk)}
     ${warnChips}
