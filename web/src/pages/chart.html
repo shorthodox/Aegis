@@ -2041,10 +2041,14 @@ function renderSignalGenesis(sig) {
     const arrow = n => n > 0 ? '▲' : n < 0 ? '▼' : '–';
     const acol  = n => n > 0 ? 'var(--green)' : n < 0 ? 'var(--red)' : 'var(--dim)';
     const sub = (label, val) => `<span style="color:${acol(val||0)}">${arrow(val||0)} ${label}</span>`;
-    confRow = gate('', v !== 'CONFLICT', 'Gate 1.75 · Confirmation',
-        'Structure · momentum · volume agreement with the trade',
+    // Confirmation is an ADVISORY gate — a CONFLICT does not hard-block, it just
+    // tags the signal weaker. So render agreement green, and both NEUTRAL and
+    // CONFLICT as orange (advisory) — never red, which would imply a hard block.
+    const _confAgrees = v !== 'CONFLICT' && v !== 'NEUTRAL';
+    confRow = gate('', _confAgrees, 'Gate 1.75 · Confirmation',
+        'Advisory — structure · momentum · volume agreement with the trade',
         `${v}${cf.score != null ? ` ${cf.score > 0 ? '+' : ''}${cf.score}` : ''}`,
-        v === 'NEUTRAL')
+        true)
       + `<div style="display:flex;flex-wrap:wrap;gap:14px;font-size:10.5px;padding:2px 14px 10px 38px">
            ${sub('CHoCH', s.choch)}${sub('BOS', s.bos_state)}${sub('RSI/MACD div', s.divergence)}${sub('Climax', s.climax)}${sub('Absorption', s.absorption)}
          </div>`;
@@ -2127,7 +2131,7 @@ function renderSignalGenesis(sig) {
     ${gate('', !fbDetected, 'Gate 3c · Fake Breakout', fbDetected ? 'Exhaustion / fake-breakout pattern detected' : 'No exhaustion / fake-breakout pattern', fbDetected ? 'DETECTED' : 'CLEAR', true)}
     ${gate('', !stabWarn, 'Gate 3.8 · Signal Stability', stabWarn ? 'Direction not yet stable across recent cycles' : 'Direction stable across recent cycles', stabWarn ? 'FORMING' : 'STABLE', true)}
     ${gate('', true, 'Gate 4 · Portfolio', 'Capital & concurrency limits (signal service — non-binding)', 'OK')}
-    ${gate('', confOk, 'Model Confidence',   `P(${isShort?'sell':'buy'}) vs dynamic threshold. Gap: ${confGap}pt`, `${((pDir||0)*100).toFixed(1)}% vs ${(thresh).toFixed(0)}`, !confOk && !fired)}
+    ${gate('', confOk, 'Model Confidence',   `Model edge vs dynamic threshold (raw P(${isShort?'sell':'buy'}) ${((pDir||0)*100).toFixed(1)}%). Gap: ${confGap}pt`, `${(sig.meta_confidence||0).toFixed(1)} vs ${(thresh).toFixed(0)}`, !confOk && !fired)}
     ${gate('', hmOk,   'HMM Stability',      `Regime transition risk: ${sig.hmm_transition_risk ? 'YES' : 'NO'}. Stability: ${((sig.hmm_stability||0)*100).toFixed(0)}%`, hmOk ? 'STABLE' : 'UNSTABLE', !hmOk)}
     ${warnChips}
 
