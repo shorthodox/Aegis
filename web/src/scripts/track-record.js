@@ -175,10 +175,15 @@ function renderStats(summary) {
         }
     }
     if (capEl) {
-        if (initCap != null) {
-            capEl.textContent = '$' + Number(initCap).toLocaleString('en-US', { maximumFractionDigits: 0 });
-            if (capSubEl && balance != null) {
-                capSubEl.textContent = `now $${Number(balance).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+        // Show CURRENT capital as the headline number (green when in profit),
+        // with the starting capital as context underneath.
+        const _cur = (balance != null) ? balance : initCap;
+        if (_cur != null) {
+            capEl.textContent = '$' + Number(_cur).toLocaleString('en-US', { maximumFractionDigits: 0 });
+            if (initCap != null) {
+                const c = Number(_cur), i = Number(initCap);
+                capEl.style.color = c > i ? '#00ff88' : c < i ? '#ff5555' : '';
+                if (capSubEl) capSubEl.textContent = `from $${i.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
             }
         } else {
             capEl.textContent = '—';
@@ -237,7 +242,7 @@ function renderTable(rows) {
     const filtered = applyFilters(rows);
 
     if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:2.5rem;color:#4b5563;">
+        tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:2.5rem;color:#4b5563;">
             No signals match this filter yet. Open signals appear the moment they fire; closed ones when TP or SL is hit.
         </td></tr>`;
         return;
@@ -263,6 +268,7 @@ function renderTable(rows) {
             <td>${priceCell(r.entry_price)}</td>
             <td style="color:rgba(0,255,136,0.7);">${priceCell(r.take_profit)}</td>
             <td style="color:rgba(255,85,85,0.7);">${priceCell(r.stop_loss)}</td>
+            <td style="color:#94a3b8;white-space:nowrap;">${r.position_value != null ? '$' + Number(r.position_value).toLocaleString('en-US', { maximumFractionDigits: 0 }) : '—'}</td>
             <td style="${pnlColor(r.pnl_pct, r.outcome)}">${fmtPnl(r.pnl_pct, r.outcome)}</td>
             <td>${outcomeBadge(r.outcome)}</td>
         </tr>`;
