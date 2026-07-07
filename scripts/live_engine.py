@@ -462,6 +462,11 @@ class Position:
     gate_warnings:   list  = field(default_factory=list)  # advisory-gate ledger AT
                                    # ENTRY — keeps the chart gate breakdown complete
                                    # for open positions (rebuilt away otherwise)
+    entry_support:    float = 0.0  # S/R the STRUCTURE GATE judged AT ENTRY — shown
+    entry_resistance: float = 0.0  # for open positions so the chart's S/R lines
+                                   # reflect the entry structure, not a live re-score
+                                   # that drifts after entry (a breakdown short can
+                                   # look like a naive "sell at support" otherwise)
 
 
 @dataclass
@@ -2423,6 +2428,13 @@ class LiveEngine:
                         self.last_signals[symbol]['entry_mode'] = existing.entry_mode
                     if existing.gate_warnings:
                         self.last_signals[symbol]['gate_warnings'] = existing.gate_warnings
+                    # Show the S/R the trade fired AGAINST, not the drifted live
+                    # levels — so a breakdown short doesn't render as "sell at
+                    # support" once support re-forms below the entry.
+                    if existing.entry_support > 0:
+                        self.last_signals[symbol]['support'] = existing.entry_support
+                    if existing.entry_resistance > 0:
+                        self.last_signals[symbol]['resistance'] = existing.entry_resistance
             elif result.get('fire') and result.get('tradeable', False) and price > 0:
                 now               = time.time()
                 cooldown_elapsed  = now - self._last_close_time.get(symbol, 0)
@@ -3574,6 +3586,8 @@ class LiveEngine:
             entry_mode      = entry_mode,
             quality_score   = round(quality_score, 1),
             gate_warnings   = list(gate_warnings or []),
+            entry_support   = float(result.get('support', 0) or 0),
+            entry_resistance= float(result.get('resistance', 0) or 0),
         )
         self.wallet.open_trade(pos)
         self._open_time[symbol]    = time.time()
