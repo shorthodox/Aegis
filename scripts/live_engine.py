@@ -61,6 +61,92 @@ _ALPHA_TIMEFRAMES       = ['15m', '30m', '4h', '1d']
 _PERF_STATE_PATH  = _STATE_DIR / 'perf_state.json'
 _DRIFT_STATE_PATH = _STATE_DIR / 'drift_state.json'
 
+# ── Durable track record via Firestore ──────────────────────────────────────
+# Railway's filesystem is EPHEMERAL: every git push rebuilds the image and the
+# container starts on a blank disk, so a file-only track record vanishes on each
+# redeploy (and the AEGIS_STATE_DIR volume only helps if it's actually mounted,
+# which kept not being the case).  We therefore mirror the record to Firestore —
+# an external store already wired into this project — so it survives ANY
+# redeploy regardless of volume config.  All ops are best-effort: if Firestore
+# is unreachable the engine silently falls back to local-file behaviour (no
+# regression).  The record is only ever wiped by the explicit admin reset — a
+# normal deploy never clears it.
+_FS_STATE_COLLECTION = 'engine_state'
+_FS_STATE_DOC        = 'track_record'
+
+def _fs_state_client():
+    """Best-effort Firestore client for durable state (None if unavailable)."""
+    try:
+        import firebase_admin
+        from firebase_admin import credentials as _creds, firestore as _fs
+        cred_path = _ROOT / 'config' / 'serviceAccountKey.json'
+        if not cred_path.exists():
+            return None
+        if not firebase_admin._apps:
+            firebase_admin.initialize_app(_creds.Certificate(str(cred_path)))
+        return _fs.client()
+    except Exception:
+        return None
+
+def _fs_save_track_record(payload: dict) -> None:
+    """Mirror the track record to Firestore (best-effort, never raises)."""
+    try:
+        db = _fs_state_client()
+        if db is None:
+            return
+        # Firestore's per-doc limit is ~1 MB; store only the restore-critical
+        # subset (the capped signals list + summary), which the wallet reads back.
+        slim = {
+            'signals':      payload.get('signals', []),
+            'summary':      payload.get('summary', {}),
+            'gate_version': payload.get('engine_version', ''),
+            'generated_at': payload.get('generated_at', ''),
+        }
+        db.collection(_FS_STATE_COLLECTION).document(_FS_STATE_DOC).set(slim)
+    except Exception:
+        pass
+
+def _fs_clear_track_record() -> None:
+    """Delete the durable track record from Firestore.  Used by the admin reset so
+    a deliberate wipe is NOT resurrected by the hydrate on the next redeploy."""
+    try:
+        db = _fs_state_client()
+        if db is None:
+            return
+        db.collection(_FS_STATE_COLLECTION).document(_FS_STATE_DOC).delete()
+    except Exception:
+        pass
+
+def _fs_load_track_record() -> Optional[dict]:
+    """Fetch the durable track record from Firestore (None if absent/unreachable)."""
+    try:
+        db = _fs_state_client()
+        if db is None:
+            return None
+        snap = db.collection(_FS_STATE_COLLECTION).document(_FS_STATE_DOC).get()
+        if not snap.exists:
+            return None
+        return snap.to_dict()
+    except Exception:
+        return None
+
+def _hydrate_track_record_from_firestore() -> None:
+    """On boot, if the local track record is missing/empty (ephemeral FS after a
+    redeploy), restore it from Firestore so history is never lost.  Writes the
+    same file VirtualWallet._load_history reads, so restore is transparent."""
+    try:
+        if TRACK_RECORD_PATH.exists() and TRACK_RECORD_PATH.stat().st_size > 2:
+            return  # local state already present — nothing to restore
+        data = _fs_load_track_record()
+        if not data or not data.get('signals'):
+            return
+        TRACK_RECORD_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(TRACK_RECORD_PATH, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, default=str)
+        print(f'[state] restored {len(data.get("signals", []))} track-record entries from Firestore')
+    except Exception as e:
+        print(f'[state] Firestore hydrate skipped: {e}')
+
 # Shared exchange for lightweight index-price fetches (reuses the same instance
 # as Predictor once the class is loaded to avoid creating a second connection).
 _spot_ex = None
@@ -1860,7 +1946,7 @@ class LiveEngine:
     # track_record.json → visible at /api/engine-track-record.  If the live
     # payload shows an older (or no) version, the server is running stale
     # code — the recurring "gate fix didn't work" false alarm.
-    GATE_VERSION = 'structure-gate-v10 (v9 + reversal-aware HTF macro veto + score_signal reversal-fair: bonus, no HTF/ranging double-penalty)'
+    GATE_VERSION = 'structure-gate-v12 (v11 + confirmed breakout-continuation: follow a break that runs and never retests when held 3+ closed 5m bars beyond + 5m/15m trend + not overextended) + reversal as-close-as-possible + Firestore-durable track record'
 
     # ── Structure gate (Gate 1.6) ─────────────────────────────────────────
     # Zone boundaries on range_position (0 = rolling support, 1 = resistance)
@@ -1877,6 +1963,15 @@ class LiveEngine:
     STRUCT_15M_MIN    = 2
     # Break-and-retest scan depth (closed 5m candles ≈ one hour)
     STRUCT_RETEST_LOOKBACK = 12
+    # Confirmed breakout CONTINUATION (a break that runs and never retests):
+    #   last N closed 5m candles must ALL hold beyond the broken level, and price
+    #   must not have run more than MAX_EXT ATRs past it (no late chase).
+    STRUCT_BREAKOUT_MIN_HOLD    = 3
+    STRUCT_BREAKOUT_MAX_EXT_ATR = 2.0
+    # Reversal entries fire "as close as possible" to the level: allowed when a
+    # wick has TAGGED the level OR price is within this many ATRs of it. Only
+    # clearly-early fills (further than this) wait. Not a hard on-the-level touch.
+    STRUCT_LEVEL_PROXIMITY_ATR = 0.9
 
     # ── Confirmation gate (Gate 1.75) ─────────────────────────────────────
     # Post-model, post-structure agreement check on the SIGNAL timeframe (1h):
@@ -1914,6 +2009,9 @@ class LiveEngine:
     ):
         self.scan_interval_seconds = scan_interval_seconds
         self.risk_tier = risk_tier
+        # Restore the track record from Firestore BEFORE the wallet loads, so a
+        # redeploy on Railway's ephemeral disk doesn't start from zero.
+        _hydrate_track_record_from_firestore()
         self.wallet    = VirtualWallet(capital, max_position_usdt)
         self._executor = ThreadPoolExecutor(
             max_workers=self.MAX_CONCURRENT, thread_name_prefix='aegis_pred')
@@ -2849,11 +2947,16 @@ class LiveEngine:
             #      underway on the lower timeframes (≥3/4 closed 5m + 2/2 closed
             #      15m in the signal direction).  Unconfirmed = the "shorting a
             #      rising candle" case, blocked outright.
-            #   2. The level-tag (gap) is ADVISORY, not a hard veto.  A confirmed
-            #      turn whose recent wicks didn't quite reach the level is a
-            #      slightly EARLY entry, not a wrong one — it fires as MODERATE
-            #      risk (one advisory warning) rather than being muted.  (This
-            #      softens the over-strict hard gap-block added earlier.)
+            #   2. Fire AS CLOSE AS POSSIBLE to the level — but not necessarily a
+            #      tick-perfect touch.  The entry is allowed when EITHER a recent
+            #      wick has tagged the level (best) OR price is already within
+            #      ~STRUCT_LEVEL_PROXIMITY_ATR of it (close enough).  Only fills
+            #      that are still FAR from the level wait — that's the early-entry
+            #      case (shorting well below resistance / buying well above
+            #      support), where you take a worse price with less room to run.
+            #      (User: LDO short fired at 0.3025 with resistance 0.31 — ~1.1 ATR
+            #      away — and went underwater; that one waits, a near-the-level one
+            #      still fires.)
             if not (n5 >= self.STRUCT_5M_MIN and n15 >= self.STRUCT_15M_MIN):
                 return 'BLOCK', (f'at {level_name} but reversal unconfirmed '
                                  f'({_counts}; need {self.STRUCT_5M_MIN}/'
@@ -2864,10 +2967,17 @@ class LiveEngine:
             recent = closed_5m[-self.STRUCT_RETEST_LOOKBACK:]
             tested = (any(float(c[3]) <= level + tol for c in recent) if bullish
                       else any(float(c[2]) >= level - tol for c in recent))
-            if not tested:
-                return 'WARN', (f'{level_name}_reversal confirmed ({_counts}) but price '
-                                f'gapped from {level:.6g} — slightly early entry')
-            return 'PASS', f'{level_name}_reversal ({_counts}; {level:.6g} tested)'
+            prox = (atr_g * self.STRUCT_LEVEL_PROXIMITY_ATR) if atr_g else price * 0.006
+            near = ((price - level) <= prox) if bullish else ((level - price) <= prox)
+            if not (tested or near):
+                _dist = abs(level - price)
+                return 'BLOCK', (f'{level_name}_reversal confirmed ({_counts}) but price '
+                                 f'{price:.6g} still far from {level:.6g} '
+                                 f'(dist {_dist:.6g} > {prox:.6g}) — waiting for a closer entry')
+            if tested:
+                return 'PASS', f'{level_name}_reversal ({_counts}; {level:.6g} tested)'
+            return 'WARN', (f'{level_name}_reversal ({_counts}); price {price:.6g} within '
+                            f'{prox:.6g} of {level:.6g} — close entry, level not yet tagged')
 
         if breakout_level:
             # Wrong side of the range (BUY at resistance / SELL at support).
@@ -2913,12 +3023,37 @@ class LiveEngine:
                 _flip = 'support' if bullish else 'resistance'
                 return 'PASS', (f'breakout_retest (level {level:.6g} broke, retested and '
                                 f'held as {_flip}; 15m {n15}/{self.STRUCT_15M_WINDOW} confirmed)')
-            _why = ('no retest-hold yet' if not retest_ok
+
+            # CONFIRMED breakout CONTINUATION — follow the trend when the break runs
+            # and does NOT come back to retest.  A strong break often never gives a
+            # retest; requiring one misses the whole move.  We follow it only when
+            # the break is genuinely confirmed (not the FIL single-spike fakeout):
+            #   • the last STRUCT_BREAKOUT_MIN_HOLD closed 5m candles ALL closed
+            #     beyond the broken level (price is established beyond, not
+            #     spiking through and reversing), AND
+            #   • both 5m and 15m are trending in the breakout direction, AND
+            #   • price has not already run > MAX_EXT ATRs past the level (so it's
+            #     an early continuation, not a late chase into a parabola).
+            _beyond_close = ((lambda c: float(c[4]) > level) if bullish
+                             else (lambda c: float(c[4]) < level))
+            _recent5 = closed_5m[-self.STRUCT_BREAKOUT_MIN_HOLD:]
+            _held    = (len(_recent5) >= self.STRUCT_BREAKOUT_MIN_HOLD
+                        and all(_beyond_close(c) for c in _recent5))
+            _ext     = (price - level) if bullish else (level - price)
+            _overext = atr_g > 0 and _ext > atr_g * self.STRUCT_BREAKOUT_MAX_EXT_ATR
+            _strong  = (n5 >= self.STRUCT_5M_MIN and n15 >= self.STRUCT_15M_MIN)
+            if _held and _strong and not _overext:
+                _dir = 'up' if bullish else 'down'
+                return 'WARN', (f'breakout_continuation (level {level:.6g} broke and held '
+                                f'{_dir} for {self.STRUCT_BREAKOUT_MIN_HOLD}+ closed 5m bars; '
+                                f'{_counts}; following trend without retest)')
+
+            _why = ('no retest-hold or sustained run yet' if not retest_ok
                     else f'retest held, 15m bounce unconfirmed '
                          f'({n15}/{self.STRUCT_15M_MIN})')
             _flip_txt = 'resistance->support' if bullish else 'support->resistance'
             return 'BLOCK', (f'level {level:.6g} broke - {_why} - waiting for '
-                             f'{_flip_txt} retest confirmed by {self.STRUCT_15M_MIN}x15m')
+                             f'{_flip_txt} retest OR a confirmed sustained run')
 
         # Unreachable: mid-range was blocked before the candle fetch.
         return 'BLOCK', f'mid-range entry (range_pos={range_pos:.2f})'
@@ -3901,6 +4036,10 @@ class LiveEngine:
             with open(tmp, 'w', encoding='utf-8') as f:
                 json.dump(payload, f, indent=2, default=str)
             _os.replace(tmp, TRACK_RECORD_PATH)
+
+            # Mirror to Firestore so the record survives the next Railway redeploy
+            # (best-effort — never blocks or breaks the save on failure).
+            _fs_save_track_record(payload)
 
             # Sync to web/ so the static file server and main.py fallback stay current
             _web = _ROOT / 'web' / 'track_record.json'

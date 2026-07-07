@@ -2175,6 +2175,15 @@ async def sitemap():
         return FileResponse(sitemap_path, media_type="application/xml")
     return Response(status_code=204)
 
+@app.get("/og-cover.png")
+async def og_cover():
+    """Social-share preview image at a clean root URL (referenced by the
+    OG/Twitter meta tags). Served from web/og-cover.png."""
+    og_path = WEB_ROOT_PATH / "og-cover.png"
+    if og_path.exists():
+        return FileResponse(og_path, media_type="image/png")
+    return Response(status_code=404)
+
 @app.get("/terms")
 async def terms_page():
     return FileResponse(WEB_ROOT_PATH / "src/pages/terms.html")
@@ -3719,6 +3728,7 @@ async def track_record_endpoint(source: str = None):
             "entry_price":     s.get("entry_price"),
             "take_profit":     s.get("take_profit_1") or s.get("take_profit"),
             "stop_loss":       s.get("stop_loss"),
+            "position_value":  s.get("position_value"),
             "exit_price":      s.get("exit_price"),
             "entry_time":      s.get("entry_time"),
             "close_time":      s.get("close_time"),
@@ -4997,6 +5007,14 @@ async def reset_track_record(_: None = Depends(_require_admin)):
             wallet.balance = wallet.initial_capital
         except Exception as e:
             print(f"[reset-track-record] Could not reset wallet: {e}")
+
+    # Clear the durable Firestore copy too — otherwise the engine's boot-time
+    # hydrate would restore the old record on the next redeploy, undoing this reset.
+    try:
+        from scripts.live_engine import _fs_clear_track_record
+        _fs_clear_track_record()
+    except Exception as e:
+        print(f"[reset-track-record] Could not clear Firestore copy: {e}")
 
     # Broadcast empty payload to any connected track-record WebSocket clients
     try:
