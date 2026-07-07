@@ -457,6 +457,8 @@ class Position:
     signal_strength: str   = ''    # risk tier at entry: STRONG | NORMAL | RISKY
     entry_mode:      str   = ''    # structure-gate verdict detail at entry
                                    # (support_reversal / breakout_* / GATE_SKIPPED: …)
+    quality_score:   float = 0.0   # SignalQualityFilter score AT ENTRY — displayed
+                                   # for open positions instead of a live re-score
 
 
 @dataclass
@@ -2400,11 +2402,14 @@ class LiveEngine:
             existing = self.wallet.open_positions.get(symbol)
             if existing:
                 self._manage_exit(symbol, existing, result, price)
-                # After exit management: overwrite last_signals quality with the
-                # entry confidence so the dashboard shows entry quality, not the
-                # current (potentially degraded) context score.
+                # After exit management: show the quality the signal FIRED at, not
+                # the live re-score (which decays as conditions change after entry
+                # and made healthy positions look like quality-6 garbage). Use the
+                # stored entry quality_score, falling back to meta_confidence for
+                # positions opened before this field existed.
                 if symbol in self.last_signals:
-                    self.last_signals[symbol]['quality_score'] = round(existing.meta_confidence, 1)
+                    _entry_q = existing.quality_score or existing.meta_confidence
+                    self.last_signals[symbol]['quality_score'] = round(_entry_q, 1)
             elif result.get('fire') and result.get('tradeable', False) and price > 0:
                 now               = time.time()
                 cooldown_elapsed  = now - self._last_close_time.get(symbol, 0)
@@ -3552,6 +3557,7 @@ class LiveEngine:
             take_profit_5   = round(tp5, 8),
             signal_strength = risk_tier,
             entry_mode      = entry_mode,
+            quality_score   = round(quality_score, 1),
         )
         self.wallet.open_trade(pos)
         self._open_time[symbol]    = time.time()
