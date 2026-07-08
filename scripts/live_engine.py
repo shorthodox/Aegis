@@ -1971,7 +1971,7 @@ class LiveEngine:
     # track_record.json → visible at /api/engine-track-record.  If the live
     # payload shows an older (or no) version, the server is running stale
     # code — the recurring "gate fix didn't work" false alarm.
-    GATE_VERSION = 'structure-gate-v21 (v20 + fully per-token dynamics: S/R zone width from each token ATR, pivot k sized to token volatility, reversal RSI thresholds from each token own RSI distribution)' # v20: (v19 + per-level state machine (NORMAL/PENDING/WAITING_RETEST/CONFIRMED/FAILED) exposed as sr_levels for the chart, + breakout-quality confidence: weak (wick/low-vol) breaks downgraded)' # v19: (v18 + Break->Retest->Confirmation: a broken level does NOT flip role until a retest holds; unconfirmed sweeps keep the original S/R)' # v18: (v17 + significant S/R: k=5 swing pivots + >=1 ATR gap from price, so levels land at real reversals not micro-wiggles next to price)' # v17: (v16 + LIVE role-reversed S/R for open positions: chart S/R updates as price moves instead of freezing the entry snapshot)' # v16: (v15 + S/R role reversal: every pivot is bidirectional, a broken resistance flips to support and vice versa; nearest pivot above=resistance, below=support)' # v15: (v14 + swing-based S/R: nearest confirmed 1h swing low/high around price instead of the crude 24h high/low)' # v14: (v13 + breakout-continuation must break the CURRENT support/resistance, never enter INTO the level: no more sell-at-support / buy-at-resistance)' # v13: (v12 + counter-trend reversal must prove the turn: no CONFLICT + RSI extreme; reversal proximity tightened 0.9->0.5 ATR)' # was: 'structure-gate-v12 (v11 + confirmed breakout-continuation: follow a break that runs and never retests when held 3+ closed 5m bars beyond + 5m/15m trend + not overextended) + reversal as-close-as-possible + Firestore-durable track record'
+    GATE_VERSION = 'structure-gate-v22 (v21 + declutter chart S/R: MAJOR swings only, congestion merged, max 2 levels per side)' # v21: (v20 + fully per-token dynamics: S/R zone width from each token ATR, pivot k sized to token volatility, reversal RSI thresholds from each token own RSI distribution)' # v20: (v19 + per-level state machine (NORMAL/PENDING/WAITING_RETEST/CONFIRMED/FAILED) exposed as sr_levels for the chart, + breakout-quality confidence: weak (wick/low-vol) breaks downgraded)' # v19: (v18 + Break->Retest->Confirmation: a broken level does NOT flip role until a retest holds; unconfirmed sweeps keep the original S/R)' # v18: (v17 + significant S/R: k=5 swing pivots + >=1 ATR gap from price, so levels land at real reversals not micro-wiggles next to price)' # v17: (v16 + LIVE role-reversed S/R for open positions: chart S/R updates as price moves instead of freezing the entry snapshot)' # v16: (v15 + S/R role reversal: every pivot is bidirectional, a broken resistance flips to support and vice versa; nearest pivot above=resistance, below=support)' # v15: (v14 + swing-based S/R: nearest confirmed 1h swing low/high around price instead of the crude 24h high/low)' # v14: (v13 + breakout-continuation must break the CURRENT support/resistance, never enter INTO the level: no more sell-at-support / buy-at-resistance)' # v13: (v12 + counter-trend reversal must prove the turn: no CONFLICT + RSI extreme; reversal proximity tightened 0.9->0.5 ATR)' # was: 'structure-gate-v12 (v11 + confirmed breakout-continuation: follow a break that runs and never retests when held 3+ closed 5m bars beyond + 5m/15m trend + not overextended) + reversal as-close-as-possible + Firestore-durable track record'
 
     # ── Structure gate (Gate 1.6) ─────────────────────────────────────────
     # Zone boundaries on range_position (0 = rolling support, 1 = resistance)
@@ -3183,20 +3183,31 @@ class LiveEngine:
             tol    = (atr * 0.35) if atr > 0 else price * 0.0025   # per-token (ATR)
             recent = closed_1h[-40:]
             band   = (atr * 8) if atr > 0 else price * 0.10        # per-token (ATR)
-            k = self._dynamic_k(atr, price)   # swing sensitivity per token
+            # DISPLAY uses MAJOR swings only (a wider window than the gate) so the
+            # chart shows the few big, obvious levels — not every micro-pivot.
+            k     = self._dynamic_k(atr, price) + 3
+            merge = max(atr, price * 0.007)   # collapse a congestion cluster into ONE line
             raw_levels = ([(highs[i], 'resistance') for i in _confirmed_pivots(highs, k, True)] +
                           [(lows[i],  'support')    for i in _confirmed_pivots(lows,  k, False)])
-            seen: list = []
-            picked: list = []
+            # Nearest-first: keep only the 2 closest MAJOR levels on each side of
+            # price, dropping any within `merge` of one already kept (so a stack
+            # of levels in one zone becomes a single line).
+            seen:  list = []
+            above: list = []
+            below: list = []
             for lvl, nat in sorted(raw_levels, key=lambda x: abs(x[0] - price)):
                 if abs(lvl - price) > band:
                     continue
-                if any(abs(lvl - s) <= tol for s in seen):   # dedup near-equal
+                if any(abs(lvl - s) <= merge for s in seen):
                     continue
                 seen.append(lvl)
-                picked.append((lvl, nat))
-                if len(picked) >= 8:
+                if lvl > price and len(above) < 2:
+                    above.append((lvl, nat))
+                elif lvl < price and len(below) < 2:
+                    below.append((lvl, nat))
+                if len(above) >= 2 and len(below) >= 2:
                     break
+            picked = above + below
             for lvl, nat in picked:
                 state = self._level_state(recent, lvl, nat, tol)
                 role, color, dashed = self._state_display(state, nat)
