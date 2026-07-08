@@ -1971,7 +1971,7 @@ class LiveEngine:
     # track_record.json → visible at /api/engine-track-record.  If the live
     # payload shows an older (or no) version, the server is running stale
     # code — the recurring "gate fix didn't work" false alarm.
-    GATE_VERSION = 'structure-gate-v19 (v18 + Break->Retest->Confirmation: a broken level does NOT flip role until a retest holds; unconfirmed sweeps keep the original S/R)' # v18: (v17 + significant S/R: k=5 swing pivots + >=1 ATR gap from price, so levels land at real reversals not micro-wiggles next to price)' # v17: (v16 + LIVE role-reversed S/R for open positions: chart S/R updates as price moves instead of freezing the entry snapshot)' # v16: (v15 + S/R role reversal: every pivot is bidirectional, a broken resistance flips to support and vice versa; nearest pivot above=resistance, below=support)' # v15: (v14 + swing-based S/R: nearest confirmed 1h swing low/high around price instead of the crude 24h high/low)' # v14: (v13 + breakout-continuation must break the CURRENT support/resistance, never enter INTO the level: no more sell-at-support / buy-at-resistance)' # v13: (v12 + counter-trend reversal must prove the turn: no CONFLICT + RSI extreme; reversal proximity tightened 0.9->0.5 ATR)' # was: 'structure-gate-v12 (v11 + confirmed breakout-continuation: follow a break that runs and never retests when held 3+ closed 5m bars beyond + 5m/15m trend + not overextended) + reversal as-close-as-possible + Firestore-durable track record'
+    GATE_VERSION = 'structure-gate-v21 (v20 + fully per-token dynamics: S/R zone width from each token ATR, pivot k sized to token volatility, reversal RSI thresholds from each token own RSI distribution)' # v20: (v19 + per-level state machine (NORMAL/PENDING/WAITING_RETEST/CONFIRMED/FAILED) exposed as sr_levels for the chart, + breakout-quality confidence: weak (wick/low-vol) breaks downgraded)' # v19: (v18 + Break->Retest->Confirmation: a broken level does NOT flip role until a retest holds; unconfirmed sweeps keep the original S/R)' # v18: (v17 + significant S/R: k=5 swing pivots + >=1 ATR gap from price, so levels land at real reversals not micro-wiggles next to price)' # v17: (v16 + LIVE role-reversed S/R for open positions: chart S/R updates as price moves instead of freezing the entry snapshot)' # v16: (v15 + S/R role reversal: every pivot is bidirectional, a broken resistance flips to support and vice versa; nearest pivot above=resistance, below=support)' # v15: (v14 + swing-based S/R: nearest confirmed 1h swing low/high around price instead of the crude 24h high/low)' # v14: (v13 + breakout-continuation must break the CURRENT support/resistance, never enter INTO the level: no more sell-at-support / buy-at-resistance)' # v13: (v12 + counter-trend reversal must prove the turn: no CONFLICT + RSI extreme; reversal proximity tightened 0.9->0.5 ATR)' # was: 'structure-gate-v12 (v11 + confirmed breakout-continuation: follow a break that runs and never retests when held 3+ closed 5m bars beyond + 5m/15m trend + not overextended) + reversal as-close-as-possible + Firestore-durable track record'
 
     # ── Structure gate (Gate 1.6) ─────────────────────────────────────────
     # Zone boundaries on range_position (0 = rolling support, 1 = resistance)
@@ -2428,6 +2428,14 @@ class LiveEngine:
                 symbol, result, price, regime=regime,
                 quality_score=quality_score, fake_breakout=fake_breakout)
 
+            # Labelled S/R levels + Break->Retest->Confirmation states for the chart.
+            try:
+                _srl = await self._sr_levels(symbol, price, float(result.get('atr', 0) or 0))
+                if _srl:
+                    self.last_signals[symbol]['sr_levels'] = _srl
+            except Exception:
+                pass
+
             existing = self.wallet.open_positions.get(symbol)
             if existing:
                 self._manage_exit(symbol, existing, result, price)
@@ -2645,10 +2653,21 @@ class LiveEngine:
                     )
                     if _ct_reversal:
                         _rsi_now = float(result.get('rsi', 50) or 50)
-                        _rsi_ok  = ((_rsi_now <= self.REVERSAL_RSI_LONG) if new_side == 'BUY'
-                                    else (_rsi_now >= self.REVERSAL_RSI_SHORT))
+                        # Per-token reversal RSI thresholds from the token's OWN
+                        # recent RSI distribution (fallback to the fixed 42/58).
+                        _rsi_lo, _rsi_hi = self.REVERSAL_RSI_LONG, self.REVERSAL_RSI_SHORT
+                        try:
+                            _rc = await self._fetch_candles(symbol, '1h', 120)
+                            _rc = _rc[:-1] if len(_rc) >= 2 else _rc
+                            if len(_rc) >= 30:
+                                _rsi_lo, _rsi_hi = self._dynamic_rsi_bounds(
+                                    _rsi_series([float(c[4]) for c in _rc]))
+                        except Exception:
+                            pass
+                        _rsi_ok  = ((_rsi_now <= _rsi_lo) if new_side == 'BUY'
+                                    else (_rsi_now >= _rsi_hi))
                         if _conf['verdict'] == 'CONFLICT' or not _rsi_ok:
-                            _lim = self.REVERSAL_RSI_LONG if new_side == 'BUY' else self.REVERSAL_RSI_SHORT
+                            _lim = _rsi_lo if new_side == 'BUY' else _rsi_hi
                             _why = ('confirmation opposes the reversal'
                                     if _conf['verdict'] == 'CONFLICT'
                                     else f'RSI {_rsi_now:.0f} not at extreme '
@@ -2984,6 +3003,72 @@ class LiveEngine:
         last_close = float(candles[-1][4])
         return (last_close > level) if break_up else (last_close < level)
 
+    @staticmethod
+    def _breakout_quality(candles: list, level: float, break_up: bool,
+                          atr: float) -> Tuple[bool, list]:
+        """Rate the breakout that pushed through `level` (on the level's own
+        timeframe).  A real break has a decisive BODY (not just a wick) and
+        ABOVE-AVERAGE VOLUME; a wick-only or low-volume push is a weak break
+        (often a sweep).  Returns (is_strong, weak_reasons).  Missing data →
+        (True, []) so we never penalise on absence of information.
+        """
+        weak: list = []
+        if len(candles) < 6 or atr <= 0:
+            return True, weak
+        brk = None
+        for c in candles:                     # last candle that CLOSED beyond
+            cl = float(c[4])
+            if (cl > level) if break_up else (cl < level):
+                brk = c
+        if brk is None or len(brk) < 6:
+            return True, weak
+        body = abs(float(brk[4]) - float(brk[1]))
+        if body < atr * 0.5:                  # mostly wick, small body
+            weak.append('wick_only')
+        vols = [float(c[5]) for c in candles if len(c) > 5]
+        if vols:
+            avg = sum(vols) / len(vols)
+            if float(brk[5]) < avg:           # below-average volume
+                weak.append('low_volume')
+        return (len(weak) == 0), weak
+
+    @staticmethod
+    def _dynamic_k(atr: float, price: float) -> int:
+        """Pivot half-window sized to THIS token's own volatility (ATR%).  A
+        choppier / higher-ATR% token needs a wider window so intrabar noise isn't
+        mistaken for structure; a calm token resolves real swings in fewer bars.
+        Every token therefore gets a swing sensitivity matched to how it moves.
+        """
+        if price <= 0 or atr <= 0:
+            return 5
+        atr_pct = atr / price * 100.0
+        if atr_pct >= 3.0:
+            return 7
+        if atr_pct >= 1.5:
+            return 6
+        if atr_pct >= 0.8:
+            return 5
+        return 4
+
+    @staticmethod
+    def _dynamic_rsi_bounds(rsi_series: list) -> Tuple[float, float]:
+        """Per-token counter-trend reversal RSI thresholds, calibrated to the
+        token's OWN recent RSI distribution rather than a fixed 42/58.  A token
+        that oscillates 40-60 needs only mild extremes to reverse; one that swings
+        20-80 must reach deeper.  Uses the 25th/75th percentiles of recent RSI,
+        clamped to a sane band so a trending token still needs a genuine extreme.
+        Returns (long_threshold, short_threshold).
+        """
+        vals = [v for v in rsi_series if v == v]        # drop NaNs
+        if len(vals) < 20:
+            return 42.0, 58.0
+        s = sorted(vals)
+        p25 = s[int(len(s) * 0.25)]
+        p75 = s[int(len(s) * 0.75)]
+        long_t  = min(45.0, max(25.0, p25))             # oversold for this token
+        short_t = max(55.0, min(75.0, p75))             # overbought for this token
+        return long_t, short_t
+
     async def _swing_sr(self, symbol: str, price: float,
                         atr: float = 0.0) -> Optional[Tuple[float, float]]:
         """Nearest SIGNIFICANT S/R around price, with RETEST-CONFIRMED role
@@ -3013,10 +3098,14 @@ class LiveEngine:
                 return None
             highs = [float(c[2]) for c in closed_1h]
             lows  = [float(c[3]) for c in closed_1h]
-            swing_highs = {highs[i] for i in _confirmed_pivots(highs, 5, True)}
-            swing_lows  = {lows[i]  for i in _confirmed_pivots(lows,  5, False)}
-            gap    = max(atr, price * 0.006) if atr > 0 else price * 0.006
-            tol    = max(atr * 0.35, price * 0.0025)
+            k = self._dynamic_k(atr, price)   # swing sensitivity per token
+            swing_highs = {highs[i] for i in _confirmed_pivots(highs, k, True)}
+            swing_lows  = {lows[i]  for i in _confirmed_pivots(lows,  k, False)}
+            # Per-token: the zone scales purely by THIS token's ATR (its own
+            # volatility), not a fixed % that is too wide for a calm token and too
+            # tight for a volatile one. The % is only a fallback when ATR is 0.
+            gap    = atr if atr > 0 else price * 0.006
+            tol    = (atr * 0.35) if atr > 0 else price * 0.0025
             recent = closed_1h[-40:]
 
             # Support candidates BELOW price: swing lows are always valid support;
@@ -3035,6 +3124,88 @@ class LiveEngine:
         except Exception:
             pass
         return None
+
+    def _level_state(self, recent: list, level: float, natural: str, tol: float) -> str:
+        """Break -> Retest -> Confirmation state machine for one S/R level, from
+        closed 1h candles.  `natural` is the level's original role ('resistance'
+        for a swing high, 'support' for a swing low).  States:
+          NORMAL             price never closed beyond it — original role intact
+          PENDING_BREAKOUT   resistance closed-through, no retest yet (don't flip)
+          PENDING_BREAKDOWN  support closed-through, no retest yet
+          WAITING_RETEST     price has pulled back TO the level, unresolved
+          CONFIRMED          break + retest + hold — role has flipped
+          FAILED             price closed back across without confirming — reverts
+        """
+        break_up = (natural == 'resistance')
+        beyond   = (lambda cl: cl > level + tol) if break_up else (lambda cl: cl < level - tol)
+        if not any(beyond(float(c[4])) for c in recent):
+            return 'NORMAL'
+        if self._flip_confirmed(recent, level, break_up, tol):
+            return 'CONFIRMED'
+        last_close = float(recent[-1][4])
+        if beyond(last_close):
+            return 'PENDING_BREAKOUT' if break_up else 'PENDING_BREAKDOWN'
+        if abs(last_close - level) <= tol:
+            return 'WAITING_RETEST'
+        return 'FAILED'
+
+    @staticmethod
+    def _state_display(state: str, natural: str) -> Tuple[str, str, bool]:
+        """Map a level state to (role, colour, dashed) for the chart.
+          NORMAL / FAILED  -> grey (original role restored)
+          PENDING_*        -> yellow dashed
+          WAITING_RETEST   -> orange
+          CONFIRMED        -> flipped role: support=green, resistance=red
+        """
+        if state == 'CONFIRMED':
+            role  = 'support' if natural == 'resistance' else 'resistance'
+            return role, ('green' if role == 'support' else 'red'), False
+        if state in ('PENDING_BREAKOUT', 'PENDING_BREAKDOWN'):
+            return natural, 'yellow', True
+        if state == 'WAITING_RETEST':
+            return natural, 'orange', False
+        return natural, 'grey', False   # NORMAL, FAILED
+
+    async def _sr_levels(self, symbol: str, price: float, atr: float) -> list:
+        """Labelled S/R levels near price for the chart: each significant swing
+        pivot with its Break->Retest->Confirmation state, effective role, colour
+        and dashed flag.  Capped and deduped to avoid clutter."""
+        out: list = []
+        try:
+            if price <= 0:
+                return out
+            raw_1h    = await self._fetch_candles(symbol, '1h', 300)
+            closed_1h = raw_1h[:-1] if len(raw_1h) >= 2 else raw_1h
+            if len(closed_1h) < 50:
+                return out
+            highs = [float(c[2]) for c in closed_1h]
+            lows  = [float(c[3]) for c in closed_1h]
+            tol    = (atr * 0.35) if atr > 0 else price * 0.0025   # per-token (ATR)
+            recent = closed_1h[-40:]
+            band   = (atr * 8) if atr > 0 else price * 0.10        # per-token (ATR)
+            k = self._dynamic_k(atr, price)   # swing sensitivity per token
+            raw_levels = ([(highs[i], 'resistance') for i in _confirmed_pivots(highs, k, True)] +
+                          [(lows[i],  'support')    for i in _confirmed_pivots(lows,  k, False)])
+            seen: list = []
+            picked: list = []
+            for lvl, nat in sorted(raw_levels, key=lambda x: abs(x[0] - price)):
+                if abs(lvl - price) > band:
+                    continue
+                if any(abs(lvl - s) <= tol for s in seen):   # dedup near-equal
+                    continue
+                seen.append(lvl)
+                picked.append((lvl, nat))
+                if len(picked) >= 8:
+                    break
+            for lvl, nat in picked:
+                state = self._level_state(recent, lvl, nat, tol)
+                role, color, dashed = self._state_display(state, nat)
+                out.append({'price': round(lvl, 8), 'state': state,
+                            'role': role, 'color': color, 'dashed': dashed})
+            out.sort(key=lambda d: d['price'])
+        except Exception:
+            pass
+        return out
 
     # ── structure gate (Gate 1.6) ─────────────────────────────────────────────
 
@@ -3248,10 +3419,24 @@ class LiveEngine:
             retest_ok     = self._retest_held(
                 closed_5m[-self.STRUCT_RETEST_LOOKBACK:], side, level, tol)
             confirmed_15m = n15 >= self.STRUCT_15M_MIN
+            # Break-candle quality on the level's OWN (1h) timeframe: a decisive
+            # body + above-average volume = strong break (higher confidence); a
+            # wick-only or low-volume push is a weak break (a sweep) → downgrade.
+            _bq_strong, _bq_weak = True, []
+            try:
+                _bq_raw = await self._fetch_candles(symbol, '1h', 40)
+                _bq_c   = _bq_raw[:-1] if len(_bq_raw) >= 2 else _bq_raw
+                _bq_strong, _bq_weak = self._breakout_quality(_bq_c[-20:], level, bullish, atr_g)
+            except Exception:
+                pass
             if retest_ok and confirmed_15m:
                 _flip = 'support' if bullish else 'resistance'
-                return 'PASS', (f'breakout_retest (level {level:.6g} broke, retested and '
-                                f'held as {_flip}; 15m {n15}/{self.STRUCT_15M_WINDOW} confirmed)')
+                if _bq_strong:
+                    return 'PASS', (f'breakout_retest (level {level:.6g} broke, retested and '
+                                    f'held as {_flip}; 15m {n15}/{self.STRUCT_15M_WINDOW} confirmed; '
+                                    f'strong break)')
+                return 'WARN', (f'breakout_retest (level {level:.6g} broke and held as {_flip}) '
+                                f'but WEAK break [{",".join(_bq_weak)}] — lower confidence')
 
             # CONFIRMED breakout CONTINUATION — follow the trend when the break runs
             # and does NOT come back to retest.  A strong break often never gives a
@@ -3282,10 +3467,11 @@ class LiveEngine:
             # fires, so trend-following breakdowns are unaffected.
             _broke_current = (price < support) if not bullish else (price > resistance)
             if _held and _strong and not _overext and _broke_current:
-                _dir = 'up' if bullish else 'down'
+                _dir  = 'up' if bullish else 'down'
+                _wtag = f'; WEAK break [{",".join(_bq_weak)}]' if _bq_weak else '; strong break'
                 return 'WARN', (f'breakout_continuation (level {level:.6g} broke and held '
                                 f'{_dir} for {self.STRUCT_BREAKOUT_MIN_HOLD}+ closed 5m bars; '
-                                f'{_counts}; following trend without retest)')
+                                f'{_counts}; following trend without retest{_wtag})')
 
             if not _broke_current:
                 _cur = support if not bullish else resistance
