@@ -73,6 +73,12 @@ _DRIFT_STATE_PATH = _STATE_DIR / 'drift_state.json'
 # normal deploy never clears it.
 _FS_STATE_COLLECTION = 'engine_state'
 _FS_STATE_DOC        = 'track_record'
+# State generation: bump this to force a ONE-TIME wipe of the durable track
+# record on the next deploy. On boot the engine ignores any restored record
+# whose generation != this, starting fresh — regardless of what an older engine
+# wrote to Firestore in the meantime. gen 2: wipe records produced by the pre-v14
+# (sell-into-support / loose-reversal) gates.
+_STATE_GENERATION    = 2
 
 def _fs_state_client():
     """Best-effort Firestore client for durable state (None if unavailable)."""
@@ -101,6 +107,7 @@ def _fs_save_track_record(payload: dict) -> None:
             'summary':      payload.get('summary', {}),
             'gate_version': payload.get('engine_version', ''),
             'generated_at': payload.get('generated_at', ''),
+            'generation':   _STATE_GENERATION,
         }
         db.collection(_FS_STATE_COLLECTION).document(_FS_STATE_DOC).set(slim)
     except Exception:
@@ -139,6 +146,14 @@ def _hydrate_track_record_from_firestore() -> None:
             return  # local state already present — nothing to restore
         data = _fs_load_track_record()
         if not data or not data.get('signals'):
+            return
+        # Generation guard: ignore any record from an older state generation so a
+        # bump wipes stale history exactly once, no matter what an older engine
+        # wrote to Firestore before this deploy took over.
+        if int(data.get('generation', 1)) != _STATE_GENERATION:
+            print(f'[state] Firestore record is generation '
+                  f'{data.get("generation", 1)} != {_STATE_GENERATION} — starting fresh (one-time wipe)')
+            _fs_clear_track_record()
             return
         TRACK_RECORD_PATH.parent.mkdir(parents=True, exist_ok=True)
         with open(TRACK_RECORD_PATH, 'w', encoding='utf-8') as f:
