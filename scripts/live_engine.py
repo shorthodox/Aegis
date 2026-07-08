@@ -1956,7 +1956,7 @@ class LiveEngine:
     # track_record.json → visible at /api/engine-track-record.  If the live
     # payload shows an older (or no) version, the server is running stale
     # code — the recurring "gate fix didn't work" false alarm.
-    GATE_VERSION = 'structure-gate-v13 (v12 + counter-trend reversal must prove the turn: no CONFLICT + RSI extreme; reversal proximity tightened 0.9->0.5 ATR)' # was: 'structure-gate-v12 (v11 + confirmed breakout-continuation: follow a break that runs and never retests when held 3+ closed 5m bars beyond + 5m/15m trend + not overextended) + reversal as-close-as-possible + Firestore-durable track record'
+    GATE_VERSION = 'structure-gate-v14 (v13 + breakout-continuation must break the CURRENT support/resistance, never enter INTO the level: no more sell-at-support / buy-at-resistance)' # v13: (v12 + counter-trend reversal must prove the turn: no CONFLICT + RSI extreme; reversal proximity tightened 0.9->0.5 ATR)' # was: 'structure-gate-v12 (v11 + confirmed breakout-continuation: follow a break that runs and never retests when held 3+ closed 5m bars beyond + 5m/15m trend + not overextended) + reversal as-close-as-possible + Firestore-durable track record'
 
     # ── Structure gate (Gate 1.6) ─────────────────────────────────────────
     # Zone boundaries on range_position (0 = rolling support, 1 = resistance)
@@ -3135,12 +3135,30 @@ class LiveEngine:
             _ext     = (price - level) if bullish else (level - price)
             _overext = atr_g > 0 and _ext > atr_g * self.STRUCT_BREAKOUT_MAX_EXT_ATR
             _strong  = (n5 >= self.STRUCT_5M_MIN and n15 >= self.STRUCT_15M_MIN)
-            if _held and _strong and not _overext:
+            # STRICT: the CURRENT structural level must ITSELF have broken — price
+            # is genuinely below the current support (SELL) / above the current
+            # resistance (BUY), not merely below some older/higher broken level
+            # while still sitting IN the support zone above the current support.
+            # Shorting while price is still above the current support is shorting
+            # INTO support (where it bounces): in a bear at support, wait for a
+            # reversal BUY or for support to actually break — never sell at it.
+            # A clean breakaway (price already below the current support) still
+            # fires, so trend-following breakdowns are unaffected.
+            _broke_current = (price < support) if not bullish else (price > resistance)
+            if _held and _strong and not _overext and _broke_current:
                 _dir = 'up' if bullish else 'down'
                 return 'WARN', (f'breakout_continuation (level {level:.6g} broke and held '
                                 f'{_dir} for {self.STRUCT_BREAKOUT_MIN_HOLD}+ closed 5m bars; '
                                 f'{_counts}; following trend without retest)')
 
+            if not _broke_current:
+                _cur = support if not bullish else resistance
+                _act = ('SELL while price still ABOVE support' if not bullish
+                        else 'BUY while price still BELOW resistance')
+                return 'BLOCK', (f'{_act} {_cur:.6g} (price {price:.6g}) — not a breakdown '
+                                 f'yet; at {"support" if not bullish else "resistance"} the '
+                                 f'engine waits for a reversal or a real break, never enters '
+                                 f'into the level')
             _why = ('no retest-hold or sustained run yet' if not retest_ok
                     else f'retest held, 15m bounce unconfirmed '
                          f'({n15}/{self.STRUCT_15M_MIN})')
