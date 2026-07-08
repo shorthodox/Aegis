@@ -472,8 +472,17 @@
           <div class="legend-item"><div class="legend-dot" style="background:#006030"></div>TP5</div>
           <div class="legend-item"><div class="legend-dot" style="background:#ff0055"></div>SL</div>
         </span>
-        <div class="legend-item"><div class="legend-dot" style="background:rgba(74,124,104,0.4)"></div>Support</div>
-        <div class="legend-item"><div class="legend-dot" style="background:rgba(255,0,85,0.4)"></div>Resistance</div>
+        <div class="legend-item"><div class="legend-dot" style="background:rgba(148,163,184,0.55)"></div>S/R (normal)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:rgba(251,191,36,0.9)"></div>Pending break</div>
+        <div class="legend-item"><div class="legend-dot" style="background:rgba(251,146,60,0.95)"></div>Waiting retest</div>
+        <div class="legend-item"><div class="legend-dot" style="background:rgba(34,197,94,0.75)"></div>Confirmed support</div>
+        <div class="legend-item"><div class="legend-dot" style="background:rgba(239,68,68,0.75)"></div>Confirmed resistance</div>
+      </div>
+      <div id="chart-source-note" style="width:100%;margin-top:8px;padding:7px 10px;border-radius:8px;background:rgba(184,150,106,0.06);border:1px solid rgba(184,150,106,0.18);font-size:11px;color:var(--dim);line-height:1.55;">
+        <i class="fas fa-circle-info" style="margin-right:6px;color:#B8966A;"></i>
+        Prices &amp; levels are <strong style="color:#B8966A;">Binance USD-M Futures</strong> — the exact market AEGIS trades. To compare on TradingView, use
+        <code id="chart-tv-symbol" style="color:#B8966A;background:rgba(0,0,0,0.25);padding:1px 5px;border-radius:4px;">BINANCE:…USDT.P</code>
+        (Binance perps), <strong style="color:var(--dim);">not Bitstamp or other spot feeds</strong> — their thin liquidity drifts a few % from the real price, so RSI and candles won't match.
       </div>
     </div>
 
@@ -943,6 +952,8 @@ async function renderChart(sig) {
 
   const titleEl = $('chart-tf-title');
   if (titleEl) titleEl.textContent = `📈 Live Chart — ${tfCfg.label}`;
+  const tvSymEl = $('chart-tv-symbol');
+  if (tvSymEl) tvSymEl.textContent = `BINANCE:${sym}.P`;   // e.g. BINANCE:MANAUSDT.P
 
   try {
     // Binance USD-M FUTURES (fapi) — the SAME market the engine trades and
@@ -991,9 +1002,28 @@ async function renderChart(sig) {
     vol.setData(_chartVols);
     _volSeriesRef = vol;
 
-    const addLine = (price, color, label) => {
+    const addLine = (price, color, label, lineStyle = 2) => {
       if (!price) return;
-      candles.createPriceLine({ price: parseFloat(price), color, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: label });
+      candles.createPriceLine({ price: parseFloat(price), color, lineWidth: 1, lineStyle, axisLabelVisible: true, title: label });
+    };
+
+    // S/R state → colour (Break→Retest→Confirmation state machine from the engine)
+    //   grey   normal / failed (original role)
+    //   yellow pending break (dashed)   orange waiting retest
+    //   green  confirmed support        red    confirmed resistance
+    const SR_COLORS = {
+      grey:   'rgba(148,163,184,0.55)',
+      yellow: 'rgba(251,191,36,0.90)',
+      orange: 'rgba(251,146,60,0.95)',
+      green:  'rgba(34,197,94,0.75)',
+      red:    'rgba(239,68,68,0.75)',
+    };
+    const srLabel = (lv) => {
+      const r = lv.role === 'support' ? 'Sup' : 'Res';
+      if (lv.state === 'CONFIRMED') return r + ' ✓';                 // flipped & held
+      if (lv.state === 'PENDING_BREAKOUT' || lv.state === 'PENDING_BREAKDOWN') return 'Break?';
+      if (lv.state === 'WAITING_RETEST') return 'Retest';
+      return r;                                                            // normal / failed
     };
 
     // Trade levels (Entry / SL / TP) are only drawn for a real trade:
@@ -1024,8 +1054,17 @@ async function renderChart(sig) {
       addLine(sig.tp5,          '#006030', 'TP5');
       tradeLevelsDrawn = true;
     }
-    addLine(sig.support,    'rgba(74,124,104,0.5)',  'Sup');
-    addLine(sig.resistance, 'rgba(255,0,85,0.5)',   'Res');
+    // Multi-level S/R with Break→Retest→Confirmation states (engine sr_levels).
+    // Falls back to the single support/resistance pair for older payloads.
+    if (Array.isArray(sig.sr_levels) && sig.sr_levels.length) {
+      sig.sr_levels.forEach(lv => {
+        addLine(lv.price, SR_COLORS[lv.color] || SR_COLORS.grey, srLabel(lv),
+                lv.dashed ? 2 : 0);   // pending = dashed, everything else solid
+      });
+    } else {
+      addLine(sig.support,    'rgba(74,124,104,0.5)', 'Sup');
+      addLine(sig.resistance, 'rgba(255,0,85,0.5)',   'Res');
+    }
     addLine(sig.pivot,      'rgba(184,150,106,0.35)', 'Pvt');
 
     $('chart-legend').style.display = 'flex';
