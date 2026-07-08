@@ -1971,7 +1971,7 @@ class LiveEngine:
     # track_record.json → visible at /api/engine-track-record.  If the live
     # payload shows an older (or no) version, the server is running stale
     # code — the recurring "gate fix didn't work" false alarm.
-    GATE_VERSION = 'structure-gate-v15 (v14 + swing-based S/R: nearest confirmed 1h swing low/high around price instead of the crude 24h high/low)' # v14: (v13 + breakout-continuation must break the CURRENT support/resistance, never enter INTO the level: no more sell-at-support / buy-at-resistance)' # v13: (v12 + counter-trend reversal must prove the turn: no CONFLICT + RSI extreme; reversal proximity tightened 0.9->0.5 ATR)' # was: 'structure-gate-v12 (v11 + confirmed breakout-continuation: follow a break that runs and never retests when held 3+ closed 5m bars beyond + 5m/15m trend + not overextended) + reversal as-close-as-possible + Firestore-durable track record'
+    GATE_VERSION = 'structure-gate-v16 (v15 + S/R role reversal: every pivot is bidirectional, a broken resistance flips to support and vice versa; nearest pivot above=resistance, below=support)' # v15: (v14 + swing-based S/R: nearest confirmed 1h swing low/high around price instead of the crude 24h high/low)' # v14: (v13 + breakout-continuation must break the CURRENT support/resistance, never enter INTO the level: no more sell-at-support / buy-at-resistance)' # v13: (v12 + counter-trend reversal must prove the turn: no CONFLICT + RSI extreme; reversal proximity tightened 0.9->0.5 ATR)' # was: 'structure-gate-v12 (v11 + confirmed breakout-continuation: follow a break that runs and never retests when held 3+ closed 5m bars beyond + 5m/15m trend + not overextended) + reversal as-close-as-possible + Firestore-durable track record'
 
     # ── Structure gate (Gate 1.6) ─────────────────────────────────────────
     # Zone boundaries on range_position (0 = rolling support, 1 = resistance)
@@ -2987,14 +2987,21 @@ class LiveEngine:
         # the tolerance is never zero when the field is missing.
         atr_g = float(result.get('atr', 0) or 0) or price * 0.005
 
-        # ── Swing-based S/R ────────────────────────────────────────────────────
+        # ── Swing-based S/R with role reversal ──────────────────────────────────
         # The model's rolling S/R is just the 24h high/low — ONE level pair that
-        # ignores every intermediate swing (why LINK judged against 7.666/8.05
-        # while the real broken level was 7.796).  Detect ALL confirmed 1h swing
-        # pivots and pick the NEAREST swing low below price as support and the
-        # nearest swing high above price as resistance — the levels an entry
-        # actually reacts to.  Non-repainting (_confirmed_pivots needs bars on
-        # both sides).  Falls back to the rolling levels when pivots are sparse.
+        # ignores every intermediate swing AND never flips a broken level. Detect
+        # ALL confirmed 1h swing pivots (highs AND lows) and treat each as a
+        # BIDIRECTIONAL level: once price crosses it, its role flips (broken
+        # resistance becomes support, broken support becomes resistance — classic
+        # polarity change). So:
+        #   resistance = the NEAREST pivot ABOVE price (a swing high not yet broken,
+        #                OR a former support that price fell back through), and
+        #   support    = the NEAREST pivot BELOW price (a swing low, OR a former
+        #                resistance that price broke above and now holds over).
+        # This is what "understand the level broke and set the new S/R" means —
+        # the engine stops drawing resistance at a level price already blew past.
+        # Non-repainting (_confirmed_pivots needs bars on both sides). Falls back
+        # to the rolling levels when pivots are sparse.
         _swing_used = False
         try:
             _raw_1h    = await self._fetch_candles(symbol, '1h', 250)
@@ -3002,13 +3009,13 @@ class LiveEngine:
             if len(_closed_1h) >= 40:
                 _highs = [float(c[2]) for c in _closed_1h]
                 _lows  = [float(c[3]) for c in _closed_1h]
-                _hi_lv = [_highs[i] for i in _confirmed_pivots(_highs, 3, True)]
-                _lo_lv = [_lows[i]  for i in _confirmed_pivots(_lows,  3, False)]
-                _res_above = [h for h in _hi_lv if h > price * 1.0005]
-                _sup_below = [l for l in _lo_lv if l < price * 0.9995]
+                _pivots = ([_highs[i] for i in _confirmed_pivots(_highs, 3, True)] +
+                           [_lows[i]  for i in _confirmed_pivots(_lows,  3, False)])
+                _res_above = [p for p in _pivots if p > price * 1.0005]
+                _sup_below = [p for p in _pivots if p < price * 0.9995]
                 if _res_above and _sup_below:
-                    resistance  = min(_res_above)   # nearest swing high above
-                    support     = max(_sup_below)   # nearest swing low below
+                    resistance  = min(_res_above)   # nearest pivot above (post-flip)
+                    support     = max(_sup_below)   # nearest pivot below (post-flip)
                     _swing_used = True
                     # Expose the swing levels downstream (chart S/R lines + the
                     # entry-support/resistance persisted on the Position) so the
