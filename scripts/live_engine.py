@@ -1971,7 +1971,7 @@ class LiveEngine:
     # track_record.json → visible at /api/engine-track-record.  If the live
     # payload shows an older (or no) version, the server is running stale
     # code — the recurring "gate fix didn't work" false alarm.
-    GATE_VERSION = 'structure-gate-v18 (v17 + significant S/R: k=5 swing pivots + >=1 ATR gap from price, so levels land at real reversals not micro-wiggles next to price)' # v17: (v16 + LIVE role-reversed S/R for open positions: chart S/R updates as price moves instead of freezing the entry snapshot)' # v16: (v15 + S/R role reversal: every pivot is bidirectional, a broken resistance flips to support and vice versa; nearest pivot above=resistance, below=support)' # v15: (v14 + swing-based S/R: nearest confirmed 1h swing low/high around price instead of the crude 24h high/low)' # v14: (v13 + breakout-continuation must break the CURRENT support/resistance, never enter INTO the level: no more sell-at-support / buy-at-resistance)' # v13: (v12 + counter-trend reversal must prove the turn: no CONFLICT + RSI extreme; reversal proximity tightened 0.9->0.5 ATR)' # was: 'structure-gate-v12 (v11 + confirmed breakout-continuation: follow a break that runs and never retests when held 3+ closed 5m bars beyond + 5m/15m trend + not overextended) + reversal as-close-as-possible + Firestore-durable track record'
+    GATE_VERSION = 'structure-gate-v19 (v18 + Break->Retest->Confirmation: a broken level does NOT flip role until a retest holds; unconfirmed sweeps keep the original S/R)' # v18: (v17 + significant S/R: k=5 swing pivots + >=1 ATR gap from price, so levels land at real reversals not micro-wiggles next to price)' # v17: (v16 + LIVE role-reversed S/R for open positions: chart S/R updates as price moves instead of freezing the entry snapshot)' # v16: (v15 + S/R role reversal: every pivot is bidirectional, a broken resistance flips to support and vice versa; nearest pivot above=resistance, below=support)' # v15: (v14 + swing-based S/R: nearest confirmed 1h swing low/high around price instead of the crude 24h high/low)' # v14: (v13 + breakout-continuation must break the CURRENT support/resistance, never enter INTO the level: no more sell-at-support / buy-at-resistance)' # v13: (v12 + counter-trend reversal must prove the turn: no CONFLICT + RSI extreme; reversal proximity tightened 0.9->0.5 ATR)' # was: 'structure-gate-v12 (v11 + confirmed breakout-continuation: follow a break that runs and never retests when held 3+ closed 5m bars beyond + 5m/15m trend + not overextended) + reversal as-close-as-possible + Firestore-durable track record'
 
     # ── Structure gate (Gate 1.6) ─────────────────────────────────────────
     # Zone boundaries on range_position (0 = rolling support, 1 = resistance)
@@ -2945,26 +2945,64 @@ class LiveEngine:
             self._candle_cache[cache_key] = {'candles': candles, 'ts': now}
         return candles or []
 
+    @staticmethod
+    def _flip_confirmed(candles: list, level: float, break_up: bool, tol: float) -> bool:
+        """True only when a break beyond `level` has been RETEST-CONFIRMED — not
+        merely a single close beyond it (which is often a liquidity sweep that
+        reverses).  Sequence enforced (Break -> Retest -> Confirmation):
+          1. a candle CLOSED beyond the level in the break direction, then
+          2. price came back and RETESTED it (a later wick returned to the level),
+          3. it HELD — the latest close is still beyond the level, and
+          4. it did NOT FAIL — no candle closed back across the level after the
+             break (that would cancel the flip; the level keeps its old role).
+        break_up=True checks a resistance->support flip (broke UP); False checks a
+        support->resistance flip (broke DOWN).  Uses closed candles only, so it is
+        non-repainting.
+        """
+        if len(candles) < 4:
+            return False
+        brk = -1
+        for i, c in enumerate(candles):
+            cl = float(c[4])
+            if (cl > level + tol) if break_up else (cl < level - tol):
+                brk = i
+                break
+        if brk < 0 or brk >= len(candles) - 1:
+            return False
+        after = candles[brk + 1:]
+        # RETEST: a wick returned to the level after the break.
+        retested = any((float(c[3]) <= level + tol) if break_up else (float(c[2]) >= level - tol)
+                       for c in after)
+        if not retested:
+            return False
+        # FAILED: any close back across the level after the break cancels the flip.
+        failed = any((float(c[4]) < level - tol) if break_up else (float(c[4]) > level + tol)
+                     for c in after)
+        if failed:
+            return False
+        # HELD: the most recent close is still on the break side.
+        last_close = float(candles[-1][4])
+        return (last_close > level) if break_up else (last_close < level)
+
     async def _swing_sr(self, symbol: str, price: float,
                         atr: float = 0.0) -> Optional[Tuple[float, float]]:
-        """Nearest SIGNIFICANT bidirectional pivot levels around price
-        (role-reversal aware).
+        """Nearest SIGNIFICANT S/R around price, with RETEST-CONFIRMED role
+        reversal — a broken level does NOT flip until a retest confirms it.
 
-        A confirmed 1h swing pivot (high OR low) can act as either S or R once
-        price crosses it:
-          support    = nearest SIGNIFICANT pivot BELOW price (swing low, or a
-                       former resistance price broke above and now holds over)
-          resistance = nearest SIGNIFICANT pivot ABOVE price (swing high, or a
-                       former support price fell back through)
+        support:
+          nearest swing LOW below price (natural support), OR a swing HIGH below
+          price that price broke ABOVE *and* a retest CONFIRMED as new support
+          (old resistance -> support). An unconfirmed break is ignored — the
+          support falls back to the last truly-held level.
+        resistance:
+          nearest swing HIGH above price (natural resistance), OR a swing LOW
+          above price whose breakdown was retest-CONFIRMED as new resistance
+          (old support -> resistance).
 
-        Two guards keep the zone meaningful instead of hugging the price:
-          1. Pivots use a WIDE window (k=5, i.e. an 11-bar swing) so minor
-             intra-range wiggles are NOT treated as levels — only real swings.
-          2. A level must sit at least ~1 ATR (or 0.6% of price) away — a pivot
-             right next to price is not where price actually reverses.
-        So a broken resistance becomes support and vice versa, and the levels
-        land where price truly turns. Non-repainting. Returns (support,
-        resistance), or None when pivots are too sparse (caller falls back).
+        Guards keep levels meaningful: k=5 swings only (no micro-wiggles), and a
+        level must sit >= ~1 ATR (or 0.6% of price) from price. Non-repainting.
+        Returns (support, resistance) or None when levels are sparse (caller
+        falls back to the rolling 24h levels).
         """
         try:
             if price <= 0:
@@ -2973,18 +3011,27 @@ class LiveEngine:
             closed_1h = raw_1h[:-1] if len(raw_1h) >= 2 else raw_1h
             if len(closed_1h) < 50:
                 return None
-            highs  = [float(c[2]) for c in closed_1h]
-            lows   = [float(c[3]) for c in closed_1h]
-            # k=5 → only swings that are the local extreme over 11 bars survive,
-            # so the noise near price stops being picked as "structure".
-            pivots = ([highs[i] for i in _confirmed_pivots(highs, 5, True)] +
-                      [lows[i]  for i in _confirmed_pivots(lows,  5, False)])
-            # A real level sits a meaningful distance from price.
-            _gap  = max(atr, price * 0.006) if (atr > 0) else price * 0.006
-            above = [p for p in pivots if p > price + _gap]
-            below = [p for p in pivots if p < price - _gap]
-            if above and below:
-                return (max(below), min(above))
+            highs = [float(c[2]) for c in closed_1h]
+            lows  = [float(c[3]) for c in closed_1h]
+            swing_highs = {highs[i] for i in _confirmed_pivots(highs, 5, True)}
+            swing_lows  = {lows[i]  for i in _confirmed_pivots(lows,  5, False)}
+            gap    = max(atr, price * 0.006) if atr > 0 else price * 0.006
+            tol    = max(atr * 0.35, price * 0.0025)
+            recent = closed_1h[-40:]
+
+            # Support candidates BELOW price: swing lows are always valid support;
+            # a swing high below price only counts once its break-up is confirmed.
+            sup = [l for l in swing_lows if l < price - gap]
+            sup += [h for h in swing_highs
+                    if h < price - gap and self._flip_confirmed(recent, h, True, tol)]
+            # Resistance candidates ABOVE price: swing highs are always valid;
+            # a swing low above price only counts once its break-down is confirmed.
+            res = [h for h in swing_highs if h > price + gap]
+            res += [l for l in swing_lows
+                    if l > price + gap and self._flip_confirmed(recent, l, False, tol)]
+
+            if sup and res:
+                return (max(sup), min(res))
         except Exception:
             pass
         return None
