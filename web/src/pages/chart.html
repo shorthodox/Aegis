@@ -945,7 +945,11 @@ async function renderChart(sig) {
   if (titleEl) titleEl.textContent = `📈 Live Chart — ${tfCfg.label}`;
 
   try {
-    const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${sym}&interval=${tfCfg.interval}&limit=${tfCfg.limit}`);
+    // Binance USD-M FUTURES (fapi) — the SAME market the engine trades and
+    // computes every level on (binanceusdm perps). Spot candles came from a
+    // different market than the entry/SL/TP/S-R overlays, so they didn't line
+    // up. The klines response shape is identical between spot and futures.
+    const res = await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${sym}&interval=${tfCfg.interval}&limit=${tfCfg.limit}`);
     const raw = await res.json();
     if (!Array.isArray(raw) || !raw.length) throw new Error('empty');
 
@@ -1069,7 +1073,7 @@ function startLiveWs(symbol, interval) {
   // Using port 443 (no port in URL) for better firewall compatibility.
   const sym = symbol.toLowerCase();
   const streams = `${sym}@kline_${interval}/${sym}@aggTrade`;
-  const ws = new WebSocket(`wss://stream.binance.com/stream?streams=${streams}`);
+  const ws = new WebSocket(`wss://fstream.binance.com/stream?streams=${streams}`);
   _ws = ws;
 
   ws.onopen = () => {
@@ -1148,7 +1152,7 @@ function _startRestFallback(symbol) {
       clearInterval(_restTimer); _restTimer = null; return;
     }
     try {
-      const r    = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`);
+      const r    = await fetch(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`);
       const data = await r.json();
       const price = parseFloat(data.price);
       if (_liveBar && _candlesSeries) {
@@ -1206,7 +1210,7 @@ async function loadMoreHistory(symbol, interval) {
     if (_historyAbort || _chartBars.length === 0) return;
     const endTime = _chartBars[0].time * 1000 - 1;
     try {
-      const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=1000&endTime=${endTime}`);
+      const res = await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=1000&endTime=${endTime}`);
       if (!res.ok) return;
       const data = await res.json();
       if (!Array.isArray(data) || data.length < 2) return;
