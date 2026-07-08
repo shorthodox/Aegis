@@ -106,6 +106,17 @@
         .beginner-tip i { color: var(--ae-data, #4A8FAB); margin-top: 1px; flex-shrink: 0; }
         .beginner-tip strong { color: var(--ae-text-1, #EAE6DF); }
 
+        /* ── Mobile menu open state ───────────────────────────────────
+           The sidebar sits off-screen on mobile via Tailwind's
+           -translate-x-full; toggleMenu() adds .open to slide it in, but no
+           rule existed for it, so the button did nothing. Override the
+           transform (and the --tw-translate-x var Tailwind's transform reads)
+           so the menu actually slides in on tap. */
+        #sidebar.open {
+            transform: translateX(0) !important;
+            --tw-translate-x: 0 !important;
+        }
+
         /* ── Sidebar section labels ───────────────────────────────── */
         .sidebar-group-label {
             font-size: 0.58rem;
