@@ -79,9 +79,17 @@ _FS_STATE_DOC        = 'track_record'
 # wrote to Firestore in the meantime. gen 2: wipe records produced by the pre-v14
 # (sell-into-support / loose-reversal) gates.
 _STATE_GENERATION    = 2
+# Circuit breaker: the backend Firebase project may have no Firestore database,
+# in which case EVERY Firestore call fails/retries and can stall the scan loop.
+# After the first failure we trip this and skip all Firestore ops thereafter,
+# so a missing/unreachable datastore never blocks signal generation.
+_FS_DOWN = False
 
 def _fs_state_client():
-    """Best-effort Firestore client for durable state (None if unavailable)."""
+    """Best-effort Firestore client for durable state (None if unavailable or the
+    circuit breaker has tripped)."""
+    if _FS_DOWN:
+        return None
     try:
         import firebase_admin
         from firebase_admin import credentials as _creds, firestore as _fs
@@ -111,7 +119,8 @@ def _fs_save_track_record(payload: dict) -> None:
         }
         db.collection(_FS_STATE_COLLECTION).document(_FS_STATE_DOC).set(slim)
     except Exception:
-        pass
+        global _FS_DOWN
+        _FS_DOWN = True   # trip breaker — stop retrying a broken datastore
 
 def _fs_clear_track_record() -> None:
     """Delete the durable track record from Firestore.  Used by the admin reset so
@@ -135,6 +144,8 @@ def _fs_load_track_record() -> Optional[dict]:
             return None
         return snap.to_dict()
     except Exception:
+        global _FS_DOWN
+        _FS_DOWN = True   # trip breaker — stop retrying a broken datastore
         return None
 
 def _hydrate_track_record_from_firestore() -> None:
@@ -1971,7 +1982,7 @@ class LiveEngine:
     # track_record.json → visible at /api/engine-track-record.  If the live
     # payload shows an older (or no) version, the server is running stale
     # code — the recurring "gate fix didn't work" false alarm.
-    GATE_VERSION = 'structure-gate-v23 (v22 + open positions show ENTRY edge/confidence, not the decayed live re-score — fixes Gate 3 rendering red on a healthy fired signal)' # v22: (v21 + declutter chart S/R: MAJOR swings only, congestion merged, max 2 levels per side)' # v21: (v20 + fully per-token dynamics: S/R zone width from each token ATR, pivot k sized to token volatility, reversal RSI thresholds from each token own RSI distribution)' # v20: (v19 + per-level state machine (NORMAL/PENDING/WAITING_RETEST/CONFIRMED/FAILED) exposed as sr_levels for the chart, + breakout-quality confidence: weak (wick/low-vol) breaks downgraded)' # v19: (v18 + Break->Retest->Confirmation: a broken level does NOT flip role until a retest holds; unconfirmed sweeps keep the original S/R)' # v18: (v17 + significant S/R: k=5 swing pivots + >=1 ATR gap from price, so levels land at real reversals not micro-wiggles next to price)' # v17: (v16 + LIVE role-reversed S/R for open positions: chart S/R updates as price moves instead of freezing the entry snapshot)' # v16: (v15 + S/R role reversal: every pivot is bidirectional, a broken resistance flips to support and vice versa; nearest pivot above=resistance, below=support)' # v15: (v14 + swing-based S/R: nearest confirmed 1h swing low/high around price instead of the crude 24h high/low)' # v14: (v13 + breakout-continuation must break the CURRENT support/resistance, never enter INTO the level: no more sell-at-support / buy-at-resistance)' # v13: (v12 + counter-trend reversal must prove the turn: no CONFLICT + RSI extreme; reversal proximity tightened 0.9->0.5 ATR)' # was: 'structure-gate-v12 (v11 + confirmed breakout-continuation: follow a break that runs and never retests when held 3+ closed 5m bars beyond + 5m/15m trend + not overextended) + reversal as-close-as-possible + Firestore-durable track record'
+    GATE_VERSION = 'structure-gate-v24 (v23 + STALL FIX: synchronous Firestore push moved off the event loop + circuit-breaker; sr_levels only for fired/open symbols to cut scan load)' # v23: (v22 + open positions show ENTRY edge/confidence, not the decayed live re-score — fixes Gate 3 rendering red on a healthy fired signal)' # v22: (v21 + declutter chart S/R: MAJOR swings only, congestion merged, max 2 levels per side)' # v21: (v20 + fully per-token dynamics: S/R zone width from each token ATR, pivot k sized to token volatility, reversal RSI thresholds from each token own RSI distribution)' # v20: (v19 + per-level state machine (NORMAL/PENDING/WAITING_RETEST/CONFIRMED/FAILED) exposed as sr_levels for the chart, + breakout-quality confidence: weak (wick/low-vol) breaks downgraded)' # v19: (v18 + Break->Retest->Confirmation: a broken level does NOT flip role until a retest holds; unconfirmed sweeps keep the original S/R)' # v18: (v17 + significant S/R: k=5 swing pivots + >=1 ATR gap from price, so levels land at real reversals not micro-wiggles next to price)' # v17: (v16 + LIVE role-reversed S/R for open positions: chart S/R updates as price moves instead of freezing the entry snapshot)' # v16: (v15 + S/R role reversal: every pivot is bidirectional, a broken resistance flips to support and vice versa; nearest pivot above=resistance, below=support)' # v15: (v14 + swing-based S/R: nearest confirmed 1h swing low/high around price instead of the crude 24h high/low)' # v14: (v13 + breakout-continuation must break the CURRENT support/resistance, never enter INTO the level: no more sell-at-support / buy-at-resistance)' # v13: (v12 + counter-trend reversal must prove the turn: no CONFLICT + RSI extreme; reversal proximity tightened 0.9->0.5 ATR)' # was: 'structure-gate-v12 (v11 + confirmed breakout-continuation: follow a break that runs and never retests when held 3+ closed 5m bars beyond + 5m/15m trend + not overextended) + reversal as-close-as-possible + Firestore-durable track record'
 
     # ── Structure gate (Gate 1.6) ─────────────────────────────────────────
     # Zone boundaries on range_position (0 = rolling support, 1 = resistance)
@@ -2205,9 +2216,16 @@ class LiveEngine:
             await asyncio.sleep(sleep)
 
     async def _push_signals_to_firestore(self) -> None:
-        """Push last_signals to Firestore 'signals' collection after each scan."""
-        if self.bootstrap_done < self.bootstrap_total:
-            return  # skip during warmup
+        """Push last_signals to Firestore 'signals' collection after each scan.
+        Runs the SYNCHRONOUS Firestore work in a worker thread so a slow/broken
+        datastore can never block the scan loop, and is skipped once the circuit
+        breaker trips (e.g. the project has no Firestore database)."""
+        if self.bootstrap_done < self.bootstrap_total or _FS_DOWN:
+            return  # skip during warmup, or if Firestore is known-down
+        await asyncio.get_event_loop().run_in_executor(self._executor, self._push_signals_sync)
+
+    def _push_signals_sync(self) -> None:
+        global _FS_DOWN
         try:
             import firebase_admin
             from firebase_admin import credentials as _creds, firestore as _fs
@@ -2241,7 +2259,8 @@ class LiveEngine:
                 batch.commit()
 
         except Exception as _e:
-            print(f'[FirebasePush] {_e}')
+            _FS_DOWN = True   # trip breaker — stop pushing to a broken datastore
+            print(f'[FirebasePush] disabled after error: {_e}')
 
     async def _ws_price_ticker(self) -> None:
         """
@@ -2428,15 +2447,21 @@ class LiveEngine:
                 symbol, result, price, regime=regime,
                 quality_score=quality_score, fake_breakout=fake_breakout)
 
-            # Labelled S/R levels + Break->Retest->Confirmation states for the chart.
-            try:
-                _srl = await self._sr_levels(symbol, price, float(result.get('atr', 0) or 0))
-                if _srl:
-                    self.last_signals[symbol]['sr_levels'] = _srl
-            except Exception:
-                pass
-
             existing = self.wallet.open_positions.get(symbol)
+
+            # Labelled S/R levels + Break->Retest->Confirmation states for the chart.
+            # ONLY for symbols a user actually views on the chart — a firing signal
+            # or an open position.  Computing this for all 63 tokens every scan (an
+            # extra 1h fetch + pivot/state pass each) was heavy load that slowed the
+            # scan loop; HOLD tokens fall back to the single support/resistance pair.
+            if result.get('fire') or existing is not None:
+                try:
+                    _srl = await self._sr_levels(symbol, price, float(result.get('atr', 0) or 0))
+                    if _srl:
+                        self.last_signals[symbol]['sr_levels'] = _srl
+                except Exception:
+                    pass
+
             if existing:
                 self._manage_exit(symbol, existing, result, price)
                 # After exit management: show the quality the signal FIRED at, not
