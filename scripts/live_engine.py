@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 live_engine.py — Aegis-1 Live Signal Engine  (Glass-Box Adaptive)
 ============================================================================
@@ -1956,7 +1956,7 @@ class LiveEngine:
     # track_record.json → visible at /api/engine-track-record.  If the live
     # payload shows an older (or no) version, the server is running stale
     # code — the recurring "gate fix didn't work" false alarm.
-    GATE_VERSION = 'structure-gate-v12 (v11 + confirmed breakout-continuation: follow a break that runs and never retests when held 3+ closed 5m bars beyond + 5m/15m trend + not overextended) + reversal as-close-as-possible + Firestore-durable track record'
+    GATE_VERSION = 'structure-gate-v13 (v12 + counter-trend reversal must prove the turn: no CONFLICT + RSI extreme; reversal proximity tightened 0.9->0.5 ATR)' # was: 'structure-gate-v12 (v11 + confirmed breakout-continuation: follow a break that runs and never retests when held 3+ closed 5m bars beyond + 5m/15m trend + not overextended) + reversal as-close-as-possible + Firestore-durable track record'
 
     # ── Structure gate (Gate 1.6) ─────────────────────────────────────────
     # Zone boundaries on range_position (0 = rolling support, 1 = resistance)
@@ -1978,10 +1978,16 @@ class LiveEngine:
     #   must not have run more than MAX_EXT ATRs past it (no late chase).
     STRUCT_BREAKOUT_MIN_HOLD    = 3
     STRUCT_BREAKOUT_MAX_EXT_ATR = 2.0
-    # Reversal entries fire "as close as possible" to the level: allowed when a
-    # wick has TAGGED the level OR price is within this many ATRs of it. Only
-    # clearly-early fills (further than this) wait. Not a hard on-the-level touch.
-    STRUCT_LEVEL_PROXIMITY_ATR = 0.9
+    # Reversal entries fire close to the level: allowed when a wick has TAGGED the
+    # level OR price is within this many ATRs of it. Tightened 0.9 -> 0.5 after
+    # late fills (entering well off the S/R zone) contributed to losses.
+    STRUCT_LEVEL_PROXIMITY_ATR = 0.5
+    # Counter-trend REVERSAL (buy at support in a bear / sell at resistance in a
+    # bull) must be at a genuine RSI extreme — a "reversal" with mid RSI is a
+    # bounce that resumes (the falling-knife longs / squeezed shorts). Long
+    # reversal needs RSI <= LONG floor; short reversal needs RSI >= SHORT ceiling.
+    REVERSAL_RSI_LONG  = 42.0
+    REVERSAL_RSI_SHORT = 58.0
 
     # ── Confirmation gate (Gate 1.75) ─────────────────────────────────────
     # Post-model, post-structure agreement check on the SIGNAL timeframe (1h):
@@ -2597,6 +2603,43 @@ class LiveEngine:
                     elif _conf['verdict'] == 'CONFIRM':
                         print(f'[{symbol}] CONFIRMATION_OK {new_side} '
                               f'score={_conf["score"]:+.0f}: {_conf["reason"]}')
+
+                    # ── Gate 1.76 (CRITICAL): counter-trend reversal must prove ──
+                    # the turn.  A reversal AGAINST a trending regime (buy at
+                    # support in a bear / sell at resistance in a bull) is the
+                    # riskiest entry: the 5m/15m momentum check is satisfied by a
+                    # brief bounce, then the trend resumes — the falling-knife
+                    # longs and squeezed shorts that produced the -2.5%/-5% losses.
+                    # For these, demand BOTH: (a) the confirmation gate is not
+                    # actively opposing (no CONFLICT), and (b) RSI is at a genuine
+                    # extreme (oversold for a long / overbought for a short).  A
+                    # "reversal" with mid RSI or opposing confirmation is a bounce,
+                    # not a turn.  Trend-FOLLOWING breakouts and range reversals
+                    # (non-trending regime) are unaffected.
+                    _ct_reversal = 'reversal' in (_entry_mode or '').lower() and (
+                        (new_side == 'BUY'  and regime.regime == _REGIME_TRENDING_BEAR) or
+                        (new_side == 'SELL' and regime.regime == _REGIME_TRENDING_BULL)
+                    )
+                    if _ct_reversal:
+                        _rsi_now = float(result.get('rsi', 50) or 50)
+                        _rsi_ok  = ((_rsi_now <= self.REVERSAL_RSI_LONG) if new_side == 'BUY'
+                                    else (_rsi_now >= self.REVERSAL_RSI_SHORT))
+                        if _conf['verdict'] == 'CONFLICT' or not _rsi_ok:
+                            _lim = self.REVERSAL_RSI_LONG if new_side == 'BUY' else self.REVERSAL_RSI_SHORT
+                            _why = ('confirmation opposes the reversal'
+                                    if _conf['verdict'] == 'CONFLICT'
+                                    else f'RSI {_rsi_now:.0f} not at extreme '
+                                         f'({"<=" if new_side=="BUY" else ">="}{_lim:.0f})')
+                            print(f'[{symbol}] COUNTER_TREND_REVERSAL blocked {new_side} '
+                                  f'in {regime.regime}: {_why} — bounce, not a turn')
+                            if symbol in self.last_signals:
+                                self.last_signals[symbol]['fire']              = False
+                                self.last_signals[symbol]['signal']            = 'HOLD'
+                                self.last_signals[symbol]['structure_blocked'] = True
+                                self.last_signals[symbol]['structure_reason']  = (
+                                    f'counter-trend reversal unconfirmed ({_why})')
+                            self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                            return
 
                     # ── Gate 1.65 RETIRED as a warning: reversal is confirmed ─
                     # by the structure gate's 5m+15m directional check, which
