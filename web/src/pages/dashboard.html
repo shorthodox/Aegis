@@ -2278,6 +2278,36 @@
         flex-shrink: 0;
       }
 
+      /* ── Pre-Trade Checklist FAB — sits just above the Guardian FAB ── */
+      #ptc-fab {
+        position: fixed;
+        bottom: 4.35rem;
+        right: 1.5rem;
+        z-index: 900;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0.55rem 1.1rem 0.55rem 0.9rem;
+        border-radius: 40px;
+        background: rgba(4,10,12,0.94);
+        border: 1px solid rgba(0,242,255,0.30);
+        color: #67e8f9;
+        font-size: 0.78rem;
+        font-weight: 700;
+        font-family: monospace;
+        letter-spacing: 0.06em;
+        white-space: nowrap;
+        cursor: pointer;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,242,255,0.06);
+        backdrop-filter: blur(12px);
+        transition: border-color 0.2s, box-shadow 0.2s;
+        text-transform: uppercase;
+      }
+      #ptc-fab:hover {
+        border-color: rgba(0,242,255,0.6);
+        box-shadow: 0 4px 28px rgba(0,0,0,0.5), 0 0 18px rgba(0,242,255,0.2);
+      }
+
       /* ── Drawer panel (shared by first-visit + FAB reopen) ── */
       #guardian-drawer {
         position: fixed;
@@ -2547,6 +2577,12 @@
     </div>
 
     <div id="guardian-backdrop"></div>
+
+    <!-- Pre-Trade Checklist FAB (reopen the checklist any time) -->
+    <button id="ptc-fab" aria-label="Open pre-trade checklist">
+      <i class="fas fa-clipboard-check" style="font-size:0.85rem;"></i>
+      Pre-Trade Checklist
+    </button>
 
     <!-- Floating Action Button -->
     <button id="guardian-fab" aria-label="Open Guardian guidance">
@@ -2907,13 +2943,21 @@
       function closeChecklist() {
         overlay.classList.remove('ptc-open');
         document.body.style.overflow = '';
-        sessionStorage.setItem('ptc_seen', '1');
+        try { localStorage.setItem('ptc_seen', '1'); } catch (e) {}
       }
 
-      // Show once per browser session only
-      if (!sessionStorage.getItem('ptc_seen')) {
+      // Auto-open on the user's FIRST visit ever (persisted in localStorage);
+      // after that it only opens when they tap the Pre-Trade Checklist button.
+      var _ptcSeen = false;
+      try { _ptcSeen = !!localStorage.getItem('ptc_seen'); } catch (e) {}
+      // Migrate the old per-session flag: if they saw it this session, treat as seen.
+      try { if (!_ptcSeen && sessionStorage.getItem('ptc_seen')) { localStorage.setItem('ptc_seen','1'); _ptcSeen = true; } } catch (e) {}
+      if (!_ptcSeen) {
         setTimeout(openChecklist, 400);
       }
+
+      var openBtn = document.getElementById('ptc-fab');
+      if (openBtn) openBtn.addEventListener('click', openChecklist);
 
       confirmBtn.addEventListener('click', closeChecklist);
       closeBtn.addEventListener('click', closeChecklist);
