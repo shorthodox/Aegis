@@ -1971,7 +1971,7 @@ class LiveEngine:
     # track_record.json → visible at /api/engine-track-record.  If the live
     # payload shows an older (or no) version, the server is running stale
     # code — the recurring "gate fix didn't work" false alarm.
-    GATE_VERSION = 'structure-gate-v16 (v15 + S/R role reversal: every pivot is bidirectional, a broken resistance flips to support and vice versa; nearest pivot above=resistance, below=support)' # v15: (v14 + swing-based S/R: nearest confirmed 1h swing low/high around price instead of the crude 24h high/low)' # v14: (v13 + breakout-continuation must break the CURRENT support/resistance, never enter INTO the level: no more sell-at-support / buy-at-resistance)' # v13: (v12 + counter-trend reversal must prove the turn: no CONFLICT + RSI extreme; reversal proximity tightened 0.9->0.5 ATR)' # was: 'structure-gate-v12 (v11 + confirmed breakout-continuation: follow a break that runs and never retests when held 3+ closed 5m bars beyond + 5m/15m trend + not overextended) + reversal as-close-as-possible + Firestore-durable track record'
+    GATE_VERSION = 'structure-gate-v17 (v16 + LIVE role-reversed S/R for open positions: chart S/R updates as price moves instead of freezing the entry snapshot)' # v16: (v15 + S/R role reversal: every pivot is bidirectional, a broken resistance flips to support and vice versa; nearest pivot above=resistance, below=support)' # v15: (v14 + swing-based S/R: nearest confirmed 1h swing low/high around price instead of the crude 24h high/low)' # v14: (v13 + breakout-continuation must break the CURRENT support/resistance, never enter INTO the level: no more sell-at-support / buy-at-resistance)' # v13: (v12 + counter-trend reversal must prove the turn: no CONFLICT + RSI extreme; reversal proximity tightened 0.9->0.5 ATR)' # was: 'structure-gate-v12 (v11 + confirmed breakout-continuation: follow a break that runs and never retests when held 3+ closed 5m bars beyond + 5m/15m trend + not overextended) + reversal as-close-as-possible + Firestore-durable track record'
 
     # ── Structure gate (Gate 1.6) ─────────────────────────────────────────
     # Zone boundaries on range_position (0 = rolling support, 1 = resistance)
@@ -2449,13 +2449,16 @@ class LiveEngine:
                         self.last_signals[symbol]['entry_mode'] = existing.entry_mode
                     if existing.gate_warnings:
                         self.last_signals[symbol]['gate_warnings'] = existing.gate_warnings
-                    # Show the S/R the trade fired AGAINST, not the drifted live
-                    # levels — so a breakdown short doesn't render as "sell at
-                    # support" once support re-forms below the entry.
-                    if existing.entry_support > 0:
-                        self.last_signals[symbol]['support'] = existing.entry_support
-                    if existing.entry_resistance > 0:
-                        self.last_signals[symbol]['resistance'] = existing.entry_resistance
+                    # Show LIVE, role-reversed S/R so the chart updates as price
+                    # moves: nearest pivot ABOVE price = resistance, nearest BELOW
+                    # = support. Once price trades above a level it flips to
+                    # support (and vice versa). v16's role-reversal makes this
+                    # correct even for breakdown shorts, so we no longer freeze the
+                    # entry snapshot (which left resistance drawn below the price).
+                    _live_sr = await self._swing_sr(symbol, price)
+                    if _live_sr:
+                        self.last_signals[symbol]['support']    = _live_sr[0]
+                        self.last_signals[symbol]['resistance'] = _live_sr[1]
             elif result.get('fire') and result.get('tradeable', False) and price > 0:
                 now               = time.time()
                 cooldown_elapsed  = now - self._last_close_time.get(symbol, 0)
@@ -2942,6 +2945,38 @@ class LiveEngine:
             self._candle_cache[cache_key] = {'candles': candles, 'ts': now}
         return candles or []
 
+    async def _swing_sr(self, symbol: str, price: float) -> Optional[Tuple[float, float]]:
+        """Nearest BIDIRECTIONAL pivot levels around price (role-reversal aware).
+
+        Every confirmed 1h swing pivot (high OR low) can act as either S or R once
+        price crosses it:
+          support    = nearest pivot BELOW price (swing low, or a former resistance
+                       price broke above and now holds over)
+          resistance = nearest pivot ABOVE price (swing high, or a former support
+                       price fell back through)
+        So a broken resistance becomes support and vice versa — the levels update
+        live as price moves. Non-repainting. Returns (support, resistance), or
+        None when pivots are too sparse (caller falls back to rolling S/R).
+        """
+        try:
+            if price <= 0:
+                return None
+            raw_1h    = await self._fetch_candles(symbol, '1h', 250)
+            closed_1h = raw_1h[:-1] if len(raw_1h) >= 2 else raw_1h
+            if len(closed_1h) < 40:
+                return None
+            highs  = [float(c[2]) for c in closed_1h]
+            lows   = [float(c[3]) for c in closed_1h]
+            pivots = ([highs[i] for i in _confirmed_pivots(highs, 3, True)] +
+                      [lows[i]  for i in _confirmed_pivots(lows,  3, False)])
+            above = [p for p in pivots if p > price * 1.0005]
+            below = [p for p in pivots if p < price * 0.9995]
+            if above and below:
+                return (max(below), min(above))
+        except Exception:
+            pass
+        return None
+
     # ── structure gate (Gate 1.6) ─────────────────────────────────────────────
 
     async def _structure_gate(
@@ -3003,27 +3038,14 @@ class LiveEngine:
         # Non-repainting (_confirmed_pivots needs bars on both sides). Falls back
         # to the rolling levels when pivots are sparse.
         _swing_used = False
-        try:
-            _raw_1h    = await self._fetch_candles(symbol, '1h', 250)
-            _closed_1h = _raw_1h[:-1] if len(_raw_1h) >= 2 else _raw_1h
-            if len(_closed_1h) >= 40:
-                _highs = [float(c[2]) for c in _closed_1h]
-                _lows  = [float(c[3]) for c in _closed_1h]
-                _pivots = ([_highs[i] for i in _confirmed_pivots(_highs, 3, True)] +
-                           [_lows[i]  for i in _confirmed_pivots(_lows,  3, False)])
-                _res_above = [p for p in _pivots if p > price * 1.0005]
-                _sup_below = [p for p in _pivots if p < price * 0.9995]
-                if _res_above and _sup_below:
-                    resistance  = min(_res_above)   # nearest pivot above (post-flip)
-                    support     = max(_sup_below)   # nearest pivot below (post-flip)
-                    _swing_used = True
-                    # Expose the swing levels downstream (chart S/R lines + the
-                    # entry-support/resistance persisted on the Position) so the
-                    # display shows the levels the gate actually judged against.
-                    result['support']    = support
-                    result['resistance'] = resistance
-        except Exception:
-            pass
+        _sr = await self._swing_sr(symbol, price)
+        if _sr:
+            support, resistance = _sr
+            _swing_used = True
+            # Expose the swing levels downstream (chart S/R lines + the entry
+            # levels persisted on the Position) so the display matches the gate.
+            result['support']    = support
+            result['resistance'] = resistance
 
         # range_position: with swing S/R computed here, derive it locally so the
         # location classification matches the swing levels.  Fall back to the
