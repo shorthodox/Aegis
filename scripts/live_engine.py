@@ -1991,7 +1991,7 @@ class LiveEngine:
     # track_record.json → visible at /api/engine-track-record.  If the live
     # payload shows an older (or no) version, the server is running stale
     # code — the recurring "gate fix didn't work" false alarm.
-    GATE_VERSION = 'structure-gate-v25 (v24 + FIRING FIX: zone/range_pos uses the predictor 24h range_position again, not the wide swing S/R that made everything mid-range and zeroed the fire rate)' # v24: (v23 + STALL FIX: synchronous Firestore push moved off the event loop + circuit-breaker; sr_levels only for fired/open symbols to cut scan load)' # v23: (v22 + open positions show ENTRY edge/confidence, not the decayed live re-score — fixes Gate 3 rendering red on a healthy fired signal)' # v22: (v21 + declutter chart S/R: MAJOR swings only, congestion merged, max 2 levels per side)' # v21: (v20 + fully per-token dynamics: S/R zone width from each token ATR, pivot k sized to token volatility, reversal RSI thresholds from each token own RSI distribution)' # v20: (v19 + per-level state machine (NORMAL/PENDING/WAITING_RETEST/CONFIRMED/FAILED) exposed as sr_levels for the chart, + breakout-quality confidence: weak (wick/low-vol) breaks downgraded)' # v19: (v18 + Break->Retest->Confirmation: a broken level does NOT flip role until a retest holds; unconfirmed sweeps keep the original S/R)' # v18: (v17 + significant S/R: k=5 swing pivots + >=1 ATR gap from price, so levels land at real reversals not micro-wiggles next to price)' # v17: (v16 + LIVE role-reversed S/R for open positions: chart S/R updates as price moves instead of freezing the entry snapshot)' # v16: (v15 + S/R role reversal: every pivot is bidirectional, a broken resistance flips to support and vice versa; nearest pivot above=resistance, below=support)' # v15: (v14 + swing-based S/R: nearest confirmed 1h swing low/high around price instead of the crude 24h high/low)' # v14: (v13 + breakout-continuation must break the CURRENT support/resistance, never enter INTO the level: no more sell-at-support / buy-at-resistance)' # v13: (v12 + counter-trend reversal must prove the turn: no CONFLICT + RSI extreme; reversal proximity tightened 0.9->0.5 ATR)' # was: 'structure-gate-v12 (v11 + confirmed breakout-continuation: follow a break that runs and never retests when held 3+ closed 5m bars beyond + 5m/15m trend + not overextended) + reversal as-close-as-possible + Firestore-durable track record'
+    GATE_VERSION = 'structure-gate-v26 (v25 + restore S/R reversal firing: proximity 0.5->0.9 ATR, counter-trend RSI/confirmation gate is ADVISORY unless BOTH fail; reversals are primary, breakouts secondary)' # v25: (v24 + FIRING FIX: zone/range_pos uses the predictor 24h range_position again, not the wide swing S/R that made everything mid-range and zeroed the fire rate)' # v24: (v23 + STALL FIX: synchronous Firestore push moved off the event loop + circuit-breaker; sr_levels only for fired/open symbols to cut scan load)' # v23: (v22 + open positions show ENTRY edge/confidence, not the decayed live re-score — fixes Gate 3 rendering red on a healthy fired signal)' # v22: (v21 + declutter chart S/R: MAJOR swings only, congestion merged, max 2 levels per side)' # v21: (v20 + fully per-token dynamics: S/R zone width from each token ATR, pivot k sized to token volatility, reversal RSI thresholds from each token own RSI distribution)' # v20: (v19 + per-level state machine (NORMAL/PENDING/WAITING_RETEST/CONFIRMED/FAILED) exposed as sr_levels for the chart, + breakout-quality confidence: weak (wick/low-vol) breaks downgraded)' # v19: (v18 + Break->Retest->Confirmation: a broken level does NOT flip role until a retest holds; unconfirmed sweeps keep the original S/R)' # v18: (v17 + significant S/R: k=5 swing pivots + >=1 ATR gap from price, so levels land at real reversals not micro-wiggles next to price)' # v17: (v16 + LIVE role-reversed S/R for open positions: chart S/R updates as price moves instead of freezing the entry snapshot)' # v16: (v15 + S/R role reversal: every pivot is bidirectional, a broken resistance flips to support and vice versa; nearest pivot above=resistance, below=support)' # v15: (v14 + swing-based S/R: nearest confirmed 1h swing low/high around price instead of the crude 24h high/low)' # v14: (v13 + breakout-continuation must break the CURRENT support/resistance, never enter INTO the level: no more sell-at-support / buy-at-resistance)' # v13: (v12 + counter-trend reversal must prove the turn: no CONFLICT + RSI extreme; reversal proximity tightened 0.9->0.5 ATR)' # was: 'structure-gate-v12 (v11 + confirmed breakout-continuation: follow a break that runs and never retests when held 3+ closed 5m bars beyond + 5m/15m trend + not overextended) + reversal as-close-as-possible + Firestore-durable track record'
 
     # ── Structure gate (Gate 1.6) ─────────────────────────────────────────
     # Zone boundaries on range_position (0 = rolling support, 1 = resistance)
@@ -2014,9 +2014,9 @@ class LiveEngine:
     STRUCT_BREAKOUT_MIN_HOLD    = 3
     STRUCT_BREAKOUT_MAX_EXT_ATR = 2.0
     # Reversal entries fire close to the level: allowed when a wick has TAGGED the
-    # level OR price is within this many ATRs of it. Tightened 0.9 -> 0.5 after
-    # late fills (entering well off the S/R zone) contributed to losses.
-    STRUCT_LEVEL_PROXIMITY_ATR = 0.5
+    # level OR price is within this many ATRs of it. Back to 0.9 (0.5 was too tight
+    # and muted most S/R reversals — the PRIMARY setup — leaving the fire rate low).
+    STRUCT_LEVEL_PROXIMITY_ATR = 0.9
     # Counter-trend REVERSAL (buy at support in a bear / sell at resistance in a
     # bull) must be at a genuine RSI extreme — a "reversal" with mid RSI is a
     # bounce that resumes (the falling-knife longs / squeezed shorts). Long
@@ -2709,20 +2709,29 @@ class LiveEngine:
                             pass
                         _rsi_ok  = ((_rsi_now <= _rsi_lo) if new_side == 'BUY'
                                     else (_rsi_now >= _rsi_hi))
-                        if _conf['verdict'] == 'CONFLICT' or not _rsi_ok:
+                        # ADVISORY (not a hard block): S/R reversals are the PRIMARY
+                        # setup, so a counter-trend reversal without an RSI extreme
+                        # or with opposing confirmation still fires — it is carried
+                        # as an advisory objection (higher risk tier), and only a
+                        # confirmation CONFLICT *plus* a non-extreme RSI (both bad)
+                        # blocks it, which is the genuine falling-knife case.
+                        _conf_opp = (_conf['verdict'] == 'CONFLICT')
+                        if _conf_opp or not _rsi_ok:
                             _lim = _rsi_lo if new_side == 'BUY' else _rsi_hi
-                            _why = ('confirmation opposes the reversal'
-                                    if _conf['verdict'] == 'CONFLICT'
-                                    else f'RSI {_rsi_now:.0f} not at extreme '
+                            _why = ('confirmation opposes' if _conf_opp
+                                    else f'RSI {_rsi_now:.0f} not extreme '
                                          f'({"<=" if new_side=="BUY" else ">="}{_lim:.0f})')
+                            _gate_warnings.append(f'counter_trend_reversal({_why})')
+                        if _conf_opp and not _rsi_ok:
                             print(f'[{symbol}] COUNTER_TREND_REVERSAL blocked {new_side} '
-                                  f'in {regime.regime}: {_why} — bounce, not a turn')
+                                  f'in {regime.regime}: confirmation opposes AND RSI not '
+                                  f'extreme — falling knife')
                             if symbol in self.last_signals:
                                 self.last_signals[symbol]['fire']              = False
                                 self.last_signals[symbol]['signal']            = 'HOLD'
                                 self.last_signals[symbol]['structure_blocked'] = True
                                 self.last_signals[symbol]['structure_reason']  = (
-                                    f'counter-trend reversal unconfirmed ({_why})')
+                                    'counter-trend reversal: confirmation opposes and RSI not extreme')
                             self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                             return
 
