@@ -1991,7 +1991,7 @@ class LiveEngine:
     # track_record.json → visible at /api/engine-track-record.  If the live
     # payload shows an older (or no) version, the server is running stale
     # code — the recurring "gate fix didn't work" false alarm.
-    GATE_VERSION = 'structure-gate-v27 (v26 + fire at BIG-SWING S/R: on a would-be mid-range BLOCK, consult nearest major swing S/R (_swing_sr, same levels as the chart); price within STRUCT_SWING_ZONE_ATR of one becomes a valid at-support/at-resistance zone and repoints the level for confirmation. Purely ADDITIVE — only rescues mid-range blocks, cannot lower fire rate. Chart _sr_levels: gap filter drops price-hugging noise levels)'  # v26: (v25 + restore S/R reversal firing: proximity 0.5->0.9 ATR, counter-trend RSI/confirmation gate is ADVISORY unless BOTH fail; reversals are primary, breakouts secondary)' # v25: (v24 + FIRING FIX: zone/range_pos uses the predictor 24h range_position again, not the wide swing S/R that made everything mid-range and zeroed the fire rate)' # v24: (v23 + STALL FIX: synchronous Firestore push moved off the event loop + circuit-breaker; sr_levels only for fired/open symbols to cut scan load)' # v23: (v22 + open positions show ENTRY edge/confidence, not the decayed live re-score — fixes Gate 3 rendering red on a healthy fired signal)' # v22: (v21 + declutter chart S/R: MAJOR swings only, congestion merged, max 2 levels per side)' # v21: (v20 + fully per-token dynamics: S/R zone width from each token ATR, pivot k sized to token volatility, reversal RSI thresholds from each token own RSI distribution)' # v20: (v19 + per-level state machine (NORMAL/PENDING/WAITING_RETEST/CONFIRMED/FAILED) exposed as sr_levels for the chart, + breakout-quality confidence: weak (wick/low-vol) breaks downgraded)' # v19: (v18 + Break->Retest->Confirmation: a broken level does NOT flip role until a retest holds; unconfirmed sweeps keep the original S/R)' # v18: (v17 + significant S/R: k=5 swing pivots + >=1 ATR gap from price, so levels land at real reversals not micro-wiggles next to price)' # v17: (v16 + LIVE role-reversed S/R for open positions: chart S/R updates as price moves instead of freezing the entry snapshot)' # v16: (v15 + S/R role reversal: every pivot is bidirectional, a broken resistance flips to support and vice versa; nearest pivot above=resistance, below=support)' # v15: (v14 + swing-based S/R: nearest confirmed 1h swing low/high around price instead of the crude 24h high/low)' # v14: (v13 + breakout-continuation must break the CURRENT support/resistance, never enter INTO the level: no more sell-at-support / buy-at-resistance)' # v13: (v12 + counter-trend reversal must prove the turn: no CONFLICT + RSI extreme; reversal proximity tightened 0.9->0.5 ATR)' # was: 'structure-gate-v12 (v11 + confirmed breakout-continuation: follow a break that runs and never retests when held 3+ closed 5m bars beyond + 5m/15m trend + not overextended) + reversal as-close-as-possible + Firestore-durable track record'
+    GATE_VERSION = 'structure-gate-v28 (v27 + S/R zone is now % of RANGE: an entry fires while price is within STRUCT_SR_ZONE_PCT (15%) of the support->resistance span from the level, floored by 0.9 ATR so tight ranges still fire; beyond 15% it waits. Applies to both the fine reversal-proximity check and the big-swing rescue band)'  # v27: (v26 + fire at BIG-SWING S/R on a would-be mid-range BLOCK via _swing_sr, purely additive; chart _sr_levels gap filter drops price-hugging noise levels)'  # v26: (v25 + restore S/R reversal firing: proximity 0.5->0.9 ATR, counter-trend RSI/confirmation gate is ADVISORY unless BOTH fail; reversals are primary, breakouts secondary)' # v25: (v24 + FIRING FIX: zone/range_pos uses the predictor 24h range_position again, not the wide swing S/R that made everything mid-range and zeroed the fire rate)' # v24: (v23 + STALL FIX: synchronous Firestore push moved off the event loop + circuit-breaker; sr_levels only for fired/open symbols to cut scan load)' # v23: (v22 + open positions show ENTRY edge/confidence, not the decayed live re-score — fixes Gate 3 rendering red on a healthy fired signal)' # v22: (v21 + declutter chart S/R: MAJOR swings only, congestion merged, max 2 levels per side)' # v21: (v20 + fully per-token dynamics: S/R zone width from each token ATR, pivot k sized to token volatility, reversal RSI thresholds from each token own RSI distribution)' # v20: (v19 + per-level state machine (NORMAL/PENDING/WAITING_RETEST/CONFIRMED/FAILED) exposed as sr_levels for the chart, + breakout-quality confidence: weak (wick/low-vol) breaks downgraded)' # v19: (v18 + Break->Retest->Confirmation: a broken level does NOT flip role until a retest holds; unconfirmed sweeps keep the original S/R)' # v18: (v17 + significant S/R: k=5 swing pivots + >=1 ATR gap from price, so levels land at real reversals not micro-wiggles next to price)' # v17: (v16 + LIVE role-reversed S/R for open positions: chart S/R updates as price moves instead of freezing the entry snapshot)' # v16: (v15 + S/R role reversal: every pivot is bidirectional, a broken resistance flips to support and vice versa; nearest pivot above=resistance, below=support)' # v15: (v14 + swing-based S/R: nearest confirmed 1h swing low/high around price instead of the crude 24h high/low)' # v14: (v13 + breakout-continuation must break the CURRENT support/resistance, never enter INTO the level: no more sell-at-support / buy-at-resistance)' # v13: (v12 + counter-trend reversal must prove the turn: no CONFLICT + RSI extreme; reversal proximity tightened 0.9->0.5 ATR)' # was: 'structure-gate-v12 (v11 + confirmed breakout-continuation: follow a break that runs and never retests when held 3+ closed 5m bars beyond + 5m/15m trend + not overextended) + reversal as-close-as-possible + Firestore-durable track record'
 
     # ── Structure gate (Gate 1.6) ─────────────────────────────────────────
     # Zone boundaries on range_position (0 = rolling support, 1 = resistance)
@@ -2017,12 +2017,12 @@ class LiveEngine:
     # level OR price is within this many ATRs of it. Back to 0.9 (0.5 was too tight
     # and muted most S/R reversals — the PRIMARY setup — leaving the fire rate low).
     STRUCT_LEVEL_PROXIMITY_ATR = 0.9
-    # Big-swing S/R zone: price within this many ATRs of a MAJOR swing level
-    # (the same obvious levels drawn on the chart) counts as "at" that level, so
-    # the engine also fires reversals at the visible swings — not only at the 24h
-    # rolling extreme. Wider than PROXIMITY (the coarse admit); the fine proximity
-    # check below still decides the actual entry. ADDITIVE — never blocks.
-    STRUCT_SWING_ZONE_ATR = 1.5
+    # "In the zone": an entry may fire while price is within this fraction of the
+    # support->resistance RANGE from the level (≈15% away is close enough; beyond
+    # that the entry is too far from structure — bad R:R — and waits for a closer
+    # price). A per-token % of the ACTUAL S/R span, not a fixed price %. Floored by
+    # STRUCT_LEVEL_PROXIMITY_ATR so a very tight range never zeroes the fire rate.
+    STRUCT_SR_ZONE_PCT = 0.15
     # Counter-trend REVERSAL (buy at support in a bear / sell at resistance in a
     # bull) must be at a genuine RSI extreme — a "reversal" with mid RSI is a
     # bounce that resumes (the falling-knife longs / squeezed shorts). Long
@@ -3377,7 +3377,8 @@ class LiveEngine:
                 _swing = None
             if _swing is not None and 0 < _swing[0] < _swing[1]:
                 _sw_sup, _sw_res = _swing
-                _zband = (atr_g * self.STRUCT_SWING_ZONE_ATR) if atr_g > 0 else price * 0.012
+                _zband = max(self.STRUCT_SR_ZONE_PCT * (_sw_res - _sw_sup),
+                             (atr_g * self.STRUCT_LEVEL_PROXIMITY_ATR) if atr_g > 0 else price * 0.012)
                 if abs(price - _sw_sup) <= _zband and _sw_sup < resistance:
                     at_support_zone = True
                     support = _sw_sup          # confirm against the visible level
@@ -3462,7 +3463,12 @@ class LiveEngine:
             recent = closed_5m[-self.STRUCT_RETEST_LOOKBACK:]
             tested = (any(float(c[3]) <= level + tol for c in recent) if bullish
                       else any(float(c[2]) >= level - tol for c in recent))
-            prox = (atr_g * self.STRUCT_LEVEL_PROXIMITY_ATR) if atr_g else price * 0.006
+            # Fire while within STRUCT_SR_ZONE_PCT of the S/R RANGE from the level
+            # ("in the zone", ~15% away is close enough), floored by the ATR
+            # proximity so a tight range still fires. Beyond it → wait for a closer
+            # entry (the far-from-level early-entry case that runs underwater).
+            prox = max(self.STRUCT_SR_ZONE_PCT * (resistance - support),
+                       (atr_g * self.STRUCT_LEVEL_PROXIMITY_ATR) if atr_g else price * 0.006)
             near = ((price - level) <= prox) if bullish else ((level - price) <= prox)
             if not (tested or near):
                 _dist = abs(level - price)
