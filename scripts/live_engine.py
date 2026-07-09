@@ -27,6 +27,15 @@ import os
 import sys
 import time
 import uuid
+import warnings
+# Silence the Python 3.12+ pandas DeprecationWarning about bitwise '~' on bool —
+# it floods the logs (obscuring the heartbeat) with no actionable signal. The
+# one real occurrence (BOS features) is fixed at source; this catches any others.
+warnings.filterwarnings(
+    'ignore',
+    message=r".*Bitwise inversion '~' on bool is deprecated.*",
+    category=DeprecationWarning,
+)
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field

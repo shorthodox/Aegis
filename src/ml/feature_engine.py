@@ -911,9 +911,12 @@ def compute_bos_choch(df: pd.DataFrame, lookback: int = 20) -> pd.DataFrame:
     above = close > sh
     below = close < sl
 
-    # Event: fired only on the bar where price first crosses the level
-    bos_up   = (above & ~above.shift(1).fillna(False)).astype(int)
-    bos_down = (below & ~below.shift(1).fillna(False)).astype(int)
+    # Event: fired only on the bar where price first crosses the level.
+    # shift(fill_value=False) keeps bool dtype — plain .shift().fillna(False)
+    # yields an OBJECT series of Python bools, and ~ on those returns -2/-1
+    # (bitwise int inversion), silently breaking the logic (and warning on 3.12).
+    bos_up   = (above & ~above.shift(1, fill_value=False)).astype(int)
+    bos_down = (below & ~below.shift(1, fill_value=False)).astype(int)
 
     # Continuous state (+1 / 0 / -1)
     bos_state = above.astype(int) - below.astype(int)
@@ -1616,10 +1619,10 @@ def compute_candlestick_patterns(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     # Harami / engulfing followed by a confirming close beyond the first bar
-    three_inside_up = bull_harami.shift(1).fillna(False) & is_green & (c > o.shift(2))
-    three_inside_down = bear_harami.shift(1).fillna(False) & is_red & (c < o.shift(2))
-    three_outside_up = bullish_engulfing.shift(1).fillna(False) & is_green & (c > c.shift(1))
-    three_outside_down = bearish_engulfing.shift(1).fillna(False) & is_red & (c < c.shift(1))
+    three_inside_up = bull_harami.shift(1, fill_value=False) & is_green & (c > o.shift(2))
+    three_inside_down = bear_harami.shift(1, fill_value=False) & is_red & (c < o.shift(2))
+    three_outside_up = bullish_engulfing.shift(1, fill_value=False) & is_green & (c > c.shift(1))
+    three_outside_down = bearish_engulfing.shift(1, fill_value=False) & is_red & (c < c.shift(1))
 
     # ── Weighted reversal aggregates ──────────────────────────────────
     # Only patterns with genuine reversal semantics contribute; marubozu is
