@@ -1991,7 +1991,7 @@ class LiveEngine:
     # track_record.json → visible at /api/engine-track-record.  If the live
     # payload shows an older (or no) version, the server is running stale
     # code — the recurring "gate fix didn't work" false alarm.
-    GATE_VERSION = 'structure-gate-v29 (v28 + entries land AT the VISIBLE S/R: repoint support/resistance to the nearest major swing (_swing_sr, the drawn levels) ALWAYS — not just on mid-range — so a fill can no longer sit inside the 24h rolling extreme, below the drawn resistance. Fine proximity back to 0.9 ATR of that swing level (the 15%-of-range prox let shorts fire far below the level). Rolling range_position still drives zone admission; STRUCT_SR_ZONE_PCT now only widens the swing zone ADMISSION band)'  # v28: (v27 + S/R zone as % of range) # v27: (v26 + fire at big-swing S/R on mid-range block, additive; chart _sr_levels gap filter)'  # v27: (v26 + fire at BIG-SWING S/R on a would-be mid-range BLOCK via _swing_sr, purely additive; chart _sr_levels gap filter drops price-hugging noise levels)'  # v26: (v25 + restore S/R reversal firing: proximity 0.5->0.9 ATR, counter-trend RSI/confirmation gate is ADVISORY unless BOTH fail; reversals are primary, breakouts secondary)' # v25: (v24 + FIRING FIX: zone/range_pos uses the predictor 24h range_position again, not the wide swing S/R that made everything mid-range and zeroed the fire rate)' # v24: (v23 + STALL FIX: synchronous Firestore push moved off the event loop + circuit-breaker; sr_levels only for fired/open symbols to cut scan load)' # v23: (v22 + open positions show ENTRY edge/confidence, not the decayed live re-score — fixes Gate 3 rendering red on a healthy fired signal)' # v22: (v21 + declutter chart S/R: MAJOR swings only, congestion merged, max 2 levels per side)' # v21: (v20 + fully per-token dynamics: S/R zone width from each token ATR, pivot k sized to token volatility, reversal RSI thresholds from each token own RSI distribution)' # v20: (v19 + per-level state machine (NORMAL/PENDING/WAITING_RETEST/CONFIRMED/FAILED) exposed as sr_levels for the chart, + breakout-quality confidence: weak (wick/low-vol) breaks downgraded)' # v19: (v18 + Break->Retest->Confirmation: a broken level does NOT flip role until a retest holds; unconfirmed sweeps keep the original S/R)' # v18: (v17 + significant S/R: k=5 swing pivots + >=1 ATR gap from price, so levels land at real reversals not micro-wiggles next to price)' # v17: (v16 + LIVE role-reversed S/R for open positions: chart S/R updates as price moves instead of freezing the entry snapshot)' # v16: (v15 + S/R role reversal: every pivot is bidirectional, a broken resistance flips to support and vice versa; nearest pivot above=resistance, below=support)' # v15: (v14 + swing-based S/R: nearest confirmed 1h swing low/high around price instead of the crude 24h high/low)' # v14: (v13 + breakout-continuation must break the CURRENT support/resistance, never enter INTO the level: no more sell-at-support / buy-at-resistance)' # v13: (v12 + counter-trend reversal must prove the turn: no CONFLICT + RSI extreme; reversal proximity tightened 0.9->0.5 ATR)' # was: 'structure-gate-v12 (v11 + confirmed breakout-continuation: follow a break that runs and never retests when held 3+ closed 5m bars beyond + 5m/15m trend + not overextended) + reversal as-close-as-possible + Firestore-durable track record'
+    GATE_VERSION = 'structure-gate-v30 (v29 + DEEP S/R + STRICT direction: S/R detection now scans 1500x1h (~9 wks, was 300/~12d) with a 25-ATR reach, and the chart draws the NEAREST + most-EXTREME major swing per side so a deep floor/high ceiling (e.g. AAVE ~84-85) is visible, not just nearby micro-levels. Gate enforces STRICT S/R: a SELL fires only at resistance, a BUY only at support — wrong-side breakout entries are blocked)'  # v29: (v28 + entries land AT the visible swing S/R via always-on repoint; fine prox back to 0.9 ATR) # v28: (S/R zone as % of range) # v27: (fire at big-swing S/R on mid-range, additive; chart gap filter)'  # v28: (v27 + S/R zone as % of range) # v27: (v26 + fire at big-swing S/R on mid-range block, additive; chart _sr_levels gap filter)'  # v27: (v26 + fire at BIG-SWING S/R on a would-be mid-range BLOCK via _swing_sr, purely additive; chart _sr_levels gap filter drops price-hugging noise levels)'  # v26: (v25 + restore S/R reversal firing: proximity 0.5->0.9 ATR, counter-trend RSI/confirmation gate is ADVISORY unless BOTH fail; reversals are primary, breakouts secondary)' # v25: (v24 + FIRING FIX: zone/range_pos uses the predictor 24h range_position again, not the wide swing S/R that made everything mid-range and zeroed the fire rate)' # v24: (v23 + STALL FIX: synchronous Firestore push moved off the event loop + circuit-breaker; sr_levels only for fired/open symbols to cut scan load)' # v23: (v22 + open positions show ENTRY edge/confidence, not the decayed live re-score — fixes Gate 3 rendering red on a healthy fired signal)' # v22: (v21 + declutter chart S/R: MAJOR swings only, congestion merged, max 2 levels per side)' # v21: (v20 + fully per-token dynamics: S/R zone width from each token ATR, pivot k sized to token volatility, reversal RSI thresholds from each token own RSI distribution)' # v20: (v19 + per-level state machine (NORMAL/PENDING/WAITING_RETEST/CONFIRMED/FAILED) exposed as sr_levels for the chart, + breakout-quality confidence: weak (wick/low-vol) breaks downgraded)' # v19: (v18 + Break->Retest->Confirmation: a broken level does NOT flip role until a retest holds; unconfirmed sweeps keep the original S/R)' # v18: (v17 + significant S/R: k=5 swing pivots + >=1 ATR gap from price, so levels land at real reversals not micro-wiggles next to price)' # v17: (v16 + LIVE role-reversed S/R for open positions: chart S/R updates as price moves instead of freezing the entry snapshot)' # v16: (v15 + S/R role reversal: every pivot is bidirectional, a broken resistance flips to support and vice versa; nearest pivot above=resistance, below=support)' # v15: (v14 + swing-based S/R: nearest confirmed 1h swing low/high around price instead of the crude 24h high/low)' # v14: (v13 + breakout-continuation must break the CURRENT support/resistance, never enter INTO the level: no more sell-at-support / buy-at-resistance)' # v13: (v12 + counter-trend reversal must prove the turn: no CONFLICT + RSI extreme; reversal proximity tightened 0.9->0.5 ATR)' # was: 'structure-gate-v12 (v11 + confirmed breakout-continuation: follow a break that runs and never retests when held 3+ closed 5m bars beyond + 5m/15m trend + not overextended) + reversal as-close-as-possible + Firestore-durable track record'
 
     # ── Structure gate (Gate 1.6) ─────────────────────────────────────────
     # Zone boundaries on range_position (0 = rolling support, 1 = resistance)
@@ -3150,7 +3150,7 @@ class LiveEngine:
         try:
             if price <= 0:
                 return None
-            raw_1h    = await self._fetch_candles(symbol, '1h', 300)
+            raw_1h    = await self._fetch_candles(symbol, '1h', 500)   # enough depth for the NEAREST swing (matches the chart); light on the hot gate path
             closed_1h = raw_1h[:-1] if len(raw_1h) >= 2 else raw_1h
             if len(closed_1h) < 50:
                 return None
@@ -3232,7 +3232,7 @@ class LiveEngine:
         try:
             if price <= 0:
                 return out
-            raw_1h    = await self._fetch_candles(symbol, '1h', 300)
+            raw_1h    = await self._fetch_candles(symbol, '1h', 1500)  # DEEP history (~9 wks) so the major HTF swings are in view, not just ~12 days
             closed_1h = raw_1h[:-1] if len(raw_1h) >= 2 else raw_1h
             if len(closed_1h) < 50:
                 return out
@@ -3240,38 +3240,31 @@ class LiveEngine:
             lows  = [float(c[3]) for c in closed_1h]
             tol    = (atr * 0.35) if atr > 0 else price * 0.0025   # per-token (ATR)
             recent = closed_1h[-40:]
-            band   = (atr * 8) if atr > 0 else price * 0.10        # per-token (ATR)
-            # A real level sits CLEAR of price. Without this, the 2-nearest rule
-            # keeps bar-adjacent wiggles (a low 0.1 ATR under price became "Sup",
-            # a minor high 0.9 ATR over it became "Res") — the "resistance too
-            # low / support too high" clutter. Mirror _swing_sr's gap so only the
-            # big, obvious swings are drawn (slightly wider here for a clean chart).
-            gap    = (atr * 1.2) if atr > 0 else price * 0.008     # per-token (ATR)
-            # DISPLAY uses MAJOR swings only (a wider window than the gate) so the
-            # chart shows the few big, obvious levels — not every micro-pivot.
+            # WIDE reach so a big FAR level (a deep floor / high ceiling well away
+            # from price) is eligible. The old 8-ATR band hid them — which is why
+            # AAVE's ~84-85 support never drew. Bounded to a sane % of price.
+            band   = (atr * 25) if atr > 0 else price * 0.35       # per-token (ATR)
+            gap    = (atr * 1.2) if atr > 0 else price * 0.008     # clear of price (no bar-adjacent wiggles)
+            # MAJOR swings only (wider window than the gate) — the few big obvious
+            # levels, not every micro-pivot.
             k     = self._dynamic_k(atr, price) + 3
             merge = max(atr, price * 0.007)   # collapse a congestion cluster into ONE line
-            raw_levels = ([(highs[i], 'resistance') for i in _confirmed_pivots(highs, k, True)] +
-                          [(lows[i],  'support')    for i in _confirmed_pivots(lows,  k, False)])
-            # Nearest-first: keep only the 2 closest MAJOR levels on each side of
-            # price, dropping any within `merge` of one already kept (so a stack
-            # of levels in one zone becomes a single line).
-            seen:  list = []
-            above: list = []
-            below: list = []
-            for lvl, nat in sorted(raw_levels, key=lambda x: abs(x[0] - price)):
-                if not (gap <= abs(lvl - price) <= band):   # too close (noise) or too far
-                    continue
-                if any(abs(lvl - s) <= merge for s in seen):
-                    continue
-                seen.append(lvl)
-                if lvl > price and len(above) < 2:
-                    above.append((lvl, nat))
-                elif lvl < price and len(below) < 2:
-                    below.append((lvl, nat))
-                if len(above) >= 2 and len(below) >= 2:
-                    break
-            picked = above + below
+            # Confirmed swing highs above / lows below price, within reach. Sorted so
+            # [0] is the NEAREST to price and [-1] is the most EXTREME (highest high
+            # ceiling / lowest low floor) of the deep window.
+            res_pivots = sorted({highs[i] for i in _confirmed_pivots(highs, k, True)
+                                 if gap <= (highs[i] - price) <= band})
+            sup_pivots = sorted({lows[i]  for i in _confirmed_pivots(lows,  k, False)
+                                 if gap <= (price - lows[i]) <= band}, reverse=True)
+            # Draw the NEAREST level (immediate context) AND the most EXTREME major
+            # level (the deep floor / high ceiling) on each side — big obvious lines,
+            # near and far, without the mid clutter. Deduped within `merge`.
+            picked: list = []
+            for cands, nat in ((res_pivots, 'resistance'), (sup_pivots, 'support')):
+                for lvl in ([cands[0], cands[-1]] if cands else []):
+                    if any(abs(lvl - p[0]) <= merge for p in picked):
+                        continue
+                    picked.append((lvl, nat))
             for lvl, nat in picked:
                 state = self._level_state(recent, lvl, nat, tol)
                 role, color, dashed = self._state_display(state, nat)
@@ -3441,6 +3434,15 @@ class LiveEngine:
         correct_level  = at_support_zone    if bullish else at_resistance_zone
         breakout_level = at_resistance_zone if bullish else at_support_zone
         level_name     = 'support' if bullish else 'resistance'
+
+        # STRICT S/R policy (user): a SELL fires ONLY at resistance, a BUY ONLY at
+        # support. Wrong-side "breakout" entries — buying INTO resistance / selling
+        # INTO support — are rejected outright, even as break-and-retest. Role flips
+        # are unaffected: once a resistance breaks and holds as support it sits
+        # BELOW price and reads as at_support, a legitimate BUY-at-support.
+        if breakout_level and not correct_level:
+            return 'BLOCK', (f'{"BUY at resistance" if bullish else "SELL at support"} — '
+                             f'strict S/R policy: buy only at support, sell only at resistance')
 
         if correct_level:
             # Reversal at the right level.  Order matters:
