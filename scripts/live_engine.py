@@ -144,6 +144,9 @@ def _fs_clear_track_record() -> None:
 
 def _fs_load_track_record() -> Optional[dict]:
     """Fetch the durable track record from Firestore (None if absent/unreachable)."""
+    global _FS_DOWN
+    if _FS_DOWN:            # breaker already tripped — don't retry a broken datastore
+        return None
     try:
         db = _fs_state_client()
         if db is None:
@@ -153,7 +156,6 @@ def _fs_load_track_record() -> Optional[dict]:
             return None
         return snap.to_dict()
     except Exception:
-        global _FS_DOWN
         _FS_DOWN = True   # trip breaker — stop retrying a broken datastore
         return None
 
