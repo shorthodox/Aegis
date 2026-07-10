@@ -1937,8 +1937,9 @@ class LiveEngine:
       · Gate 4    portfolio guard (capital / concurrency limits)
 
     ADVISORY — each failure appends a warning; entry blocked only when more
-    than ADVISORY_WARNING_BUDGET (2) advisory gates object.  Zero warnings →
-    NORMAL/STRONG tier (low risk); any warning → RISKY (+ EV hold).
+    than ADVISORY_WARNING_BUDGET (3) advisory gates object.  Zero warnings →
+    NORMAL/STRONG tier (low risk); 1-3 warnings → NORMAL (fires); 4+ → RISKY (held).
+    (Budget was 2 pre-2026-07-04; see the ADVISORY_WARNING_BUDGET note below.)
       · structure_unverified (structure gate SKIP — location not confirmable)
       · Gate 3b   context quality score < 70 (HMM-transition adjusted)
       · Gate 3c   fake breakout / exhaustion heuristics
@@ -2636,6 +2637,31 @@ class LiveEngine:
                             self.last_signals[symbol]['structure_reason']  = _sg_detail
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
+                    if _sg_verdict == 'WAIT':
+                        # Mid-range: the signal is VALID but not yet at its level. Do
+                        # NOT discard it — hold it as PENDING. The engine keeps
+                        # re-evaluating every scan; when price reaches the target S/R
+                        # (resistance for a SELL, support for a BUY) the structure
+                        # gate returns PASS/WARN and it fires with the 5m/15m
+                        # confirmation. Marked pending (not blocked) so it surfaces as
+                        # "waiting for <level>" rather than being thrown away.
+                        print(f'[{symbol}] STRUCTURE_GATE pending {new_side}: {_sg_detail}')
+                        if symbol in self.last_signals:
+                            self.last_signals[symbol]['fire']            = False
+                            self.last_signals[symbol]['signal']          = 'HOLD'
+                            self.last_signals[symbol]['pending_entry']   = True
+                            self.last_signals[symbol]['pending_side']    = new_side
+                            self.last_signals[symbol]['pending_reason']  = _sg_detail
+                            self.last_signals[symbol]['pending_target']  = (
+                                float(result.get('resistance', 0) or 0) if new_side == 'SELL'
+                                else float(result.get('support', 0) or 0))
+                            self.last_signals[symbol]['structure_blocked'] = False
+                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                        return
+                    # Reaching here means the location is confirmed (PASS/WARN/SKIP) —
+                    # clear any stale pending marker from an earlier mid-range scan.
+                    if symbol in self.last_signals and self.last_signals[symbol].get('pending_entry'):
+                        self.last_signals[symbol]['pending_entry'] = False
                     if _sg_verdict == 'SKIP':
                         # A silent fail-open is how resistance longs slipped
                         # through undetected — every skip is logged, AND it
@@ -3370,11 +3396,16 @@ class LiveEngine:
         # "mid-range phantom level" problems. Rolling S/R + range_position is the
         # v10-era behaviour that fired 7-11/night at good locations.
 
-        # Mid-range needs no candle data — blocked outright (user policy: entries
-        # belong at structure, not the middle of the range).
+        # Mid-range: DON'T discard the signal — HOLD it as PENDING and wait for the
+        # market to reach its level (resistance for a SELL, support for a BUY). The
+        # engine re-evaluates every scan; when price reaches the zone the 5m/15m
+        # confirmation below runs and it fires. (User policy: a mid-range signal is
+        # accepted and fired once the market reaches S/R, not thrown away.)
         if not at_support_zone and not at_resistance_zone:
-            return 'BLOCK', (f'mid-range entry (range_pos={range_pos:.2f}) — '
-                             f'entries only at support/resistance')
+            _wait_lvl = resistance if not bullish else support
+            return 'WAIT', (f'mid-range (range_pos={range_pos:.2f}) — waiting for '
+                            f'{"resistance" if not bullish else "support"} '
+                            f'{_wait_lvl:.6g} before firing')
 
         raw_5m  = await self._fetch_candles(
             symbol, '5m', max(self.STRUCT_5M_WINDOW, self.STRUCT_RETEST_LOOKBACK) + 2)
@@ -3578,8 +3609,8 @@ class LiveEngine:
             return 'BLOCK', (f'level {level:.6g} broke - {_why} - waiting for '
                              f'{_flip_txt} retest OR a confirmed sustained run')
 
-        # Unreachable: mid-range was blocked before the candle fetch.
-        return 'BLOCK', f'mid-range entry (range_pos={range_pos:.2f})'
+        # Unreachable: mid-range is held as WAIT before the candle fetch.
+        return 'WAIT', f'mid-range (range_pos={range_pos:.2f}) — waiting for S/R'
 
     @staticmethod
     def _retest_held(candles: list, side: str, level: float, tol: float) -> bool:
