@@ -1038,9 +1038,16 @@ class DynamicRiskEngine:
     MIN_POSITION_PCT  = 0.02   # floor: never risk less than 2 %
     MAX_POSITION_PCT  = 0.10   # ceiling: never risk more than 10 % per trade
 
-    # ── ATR-based risk parameters ─────────────────────────────────────────────
+    # ── ATR + Structure hybrid risk parameters ────────────────────────────────
     ATR_PERIOD        = 14     # lookback period for ATR calculation
-    ATR_SL_MULTIPLIER = 1.8    # SL distance = ATR × this — 1.2 was inside normal 1H candle noise; 1.8× clears it
+    ATR_SL_MULTIPLIER = 1.8    # SL distance CAP = ATR × this (also the pure-ATR fallback when structure is missing)
+    # Hybrid SL: anchor the stop just beyond the invalidation level (support for a
+    # LONG, resistance for a SHORT) + a wick buffer, then clamp the resulting risk
+    # leg to [FLOOR, CAP]×ATR so it is never noise-tight and never wider than the
+    # old fixed 1.8×ATR stop. Entries are near the level (gate v36), so this
+    # usually TIGHTENS risk → higher RR, without being inside the sweep zone.
+    STRUCT_SL_BUFFER_ATR = 0.5   # place the stop this far ATR beyond the level's wick
+    SL_FLOOR_ATR         = 0.7   # risk is never tighter than this (spread/noise floor)
 
     # TP ladder — COMPRESSED into a reachable region (2026-07-04).  The old
     # ladder (2.8 / 4.5 / 6.5 / 9.5) left a huge TP2→TP3 gap and put TP3-TP5 so
@@ -1066,7 +1073,9 @@ class DynamicRiskEngine:
     TRAIL_MULTIPLIER  = 1.0    # trailing stop distance = ATR × this (widened to match wider SL)
 
     # ── Partial-close percentages (must sum to 1.0) ───────────────────────────
-    TP_CLOSE_PCTS = (0.20, 0.20, 0.20, 0.20, 0.20)  # TP1 … TP5
+    # Front-loaded onto the two "significant objective" targets (TP2/TP3), 20 %
+    # runner rides TP5's trailing exit.
+    TP_CLOSE_PCTS = (0.15, 0.25, 0.25, 0.15, 0.20)  # TP1 … TP5
 
     def calculate_position_size(
         self,
@@ -1110,30 +1119,38 @@ class DynamicRiskEngine:
 
     def calculate_stops(
         self,
-        price:  float,
-        side:   str,    # 'BUY' | 'SELL'
-        atr:    float,
+        price:      float,
+        side:       str,    # 'BUY' | 'SELL'
+        atr:        float,
+        support:    float = 0.0,   # invalidation level for a LONG / downside target for a SHORT
+        resistance: float = 0.0,   # invalidation level for a SHORT / upside target for a LONG
         **_kwargs,      # absorbs legacy keyword args for backward compatibility
     ) -> Dict[str, float]:
         """
-        Pure ATR-based TP/SL calculation — no fixed percentages.
+        ATR + Structure HYBRID TP/SL.
 
-        Stop Loss
-        ---------
-        SL distance = ATR × ATR_SL_MULTIPLIER (default 1.8).
-        Wide enough to survive intra-candle noise; adapts automatically when
-        volatility expands or contracts.
+        Stop Loss (hybrid)
+        ------------------
+        Anchored just beyond the invalidation level (support for a LONG,
+        resistance for a SHORT) + STRUCT_SL_BUFFER_ATR wick buffer, then the risk
+        leg is clamped to [SL_FLOOR_ATR, ATR_SL_MULTIPLIER]×ATR.  Falls back to a
+        pure ATR_SL_MULTIPLIER×ATR stop when the level is missing/degenerate.
 
-        Take Profit Levels (TP1–TP5)
-        -----------------------------
-        Each TP is Entry ± (ATR × multiplier).  Five levels support scaled
-        partial-profit exits: 20 % of position closed at each TP.
+        Take Profit ladder (R = risk leg; Range = resistance−support)
+        ------------------------------------------------------------
+          TP1  = 1R                              (1:1, quick partial)
+          TP2  = 2R                              (1:2, first significant objective)
+          TP3  = the major structural level      (resistance for a LONG / support
+                 for a SHORT) — the HTF target / liquidity pool
+          TP4  = 1.618 fib extension of Range     (measured move / extended trend)
+          TP5  = 2.618 fib extension (display)    — actually a TRAILING exit; the
+                 runner rides the trailing stop, this is just the anchor
+        Levels are forced strictly monotonic (≥0.3R apart).
 
         Risk/Reward Validation
         ----------------------
-        Reward is measured to TP3 (the first "full trend" target).
-        Trades where Reward / Risk < MIN_RISK_REWARD are flagged invalid
-        and should be rejected by the caller.
+        Reward is measured to TP3 (the structural target) — so a setup whose real
+        target is too close for the risk is rejected (valid_rr = False).
 
         Returns
         -------
@@ -1147,39 +1164,52 @@ class DynamicRiskEngine:
                 'valid_rr': False, 'atr': atr,
             }
 
-        # SL distance is fixed at ATR × SL_MULTIPLIER — no quality adjustments.
-        # Volatility already informs the distance implicitly through ATR itself.
-        risk = self.ATR_SL_MULTIPLIER * atr
-
-        # TP2 distance: pure ATR (1.3×).  The old fixed-% cap was for the former
-        # wide TP2 (2.8×ATR); with the compressed ladder TP2 is already modest at
-        # any volatility, and the cap only KINKED the ladder in high vol (flat
-        # TP2 while TP3+ scaled with ATR).  Removed — the whole ladder now scales
-        # smoothly with ATR.  Ordering floor above TP1 kept as a guard.
-        tp1_dist = self.TP1_MULTIPLIER * atr
-        tp2_dist = max(self.TP2_MULTIPLIER * atr, tp1_dist * self.TP2_MIN_TP1_RATIO)
+        support    = float(support or 0.0)
+        resistance = float(resistance or 0.0)
+        buf   = self.STRUCT_SL_BUFFER_ATR * atr
+        floor = self.SL_FLOOR_ATR * atr
+        cap   = self.ATR_SL_MULTIPLIER * atr
 
         if side == 'BUY':
-            sl  = price - risk
-            tp1 = price + tp1_dist
-            tp2 = price + tp2_dist
-            tp3 = price + self.TP3_MULTIPLIER * atr
-            tp4 = price + self.TP4_MULTIPLIER * atr
-            tp5 = price + self.TP5_MULTIPLIER * atr
+            # Hybrid SL: just below support + buffer, clamped to [floor, cap].
+            risk = ((price - support) + buf) if (0 < support < price) else cap
+            risk = max(floor, min(risk, cap))
+            sl   = price - risk
+            # Structural strong target = the major resistance (else an R-multiple).
+            tp3  = resistance if resistance > price else price + 3.5 * risk
+            rng  = (resistance - support) if (0 < support < resistance) else (tp3 - price)
+            tp1  = price + 1.0 * risk
+            tp2  = price + 2.0 * risk
+            tp4  = (support + 1.618 * rng) if support > 0 else price + 5.0 * risk
+            tp5  = (support + 2.618 * rng) if support > 0 else price + 7.0 * risk
+            # Force strictly ascending, ≥0.3R apart.
+            tp2 = max(tp2, tp1 + 0.3 * risk)
+            tp3 = max(tp3, tp2 + 0.3 * risk)
+            tp4 = max(tp4, tp3 + 0.3 * risk)
+            tp5 = max(tp5, tp4 + 0.3 * risk)
+            # RR to the REAL structural target (not the guard-extended tp3), so a
+            # cramped setup whose resistance is too close is honestly rejected.
+            reward = (resistance - price) if resistance > price else 3.5 * risk
         else:  # SELL / SHORT
-            sl  = price + risk
-            tp1 = price - tp1_dist
-            tp2 = price - tp2_dist
-            tp3 = price - self.TP3_MULTIPLIER * atr
-            tp4 = price - self.TP4_MULTIPLIER * atr
-            tp5 = price - self.TP5_MULTIPLIER * atr
+            risk = ((resistance - price) + buf) if (resistance > price) else cap
+            risk = max(floor, min(risk, cap))
+            sl   = price + risk
+            tp3  = support if 0 < support < price else price - 3.5 * risk
+            rng  = (resistance - support) if (0 < support < resistance) else (price - tp3)
+            tp1  = price - 1.0 * risk
+            tp2  = price - 2.0 * risk
+            tp4  = (resistance - 1.618 * rng) if resistance > 0 else price - 5.0 * risk
+            tp5  = (resistance - 2.618 * rng) if resistance > 0 else price - 7.0 * risk
+            # Force strictly descending, ≥0.3R apart.
+            tp2 = min(tp2, tp1 - 0.3 * risk)
+            tp3 = min(tp3, tp2 - 0.3 * risk)
+            tp4 = min(tp4, tp3 - 0.3 * risk)
+            tp5 = min(tp5, tp4 - 0.3 * risk)
+            # RR to the REAL structural target (not the guard-extended tp3).
+            reward = (price - support) if 0 < support < price else 3.5 * risk
 
-        # RR measured to TP5 — the full-trend target (RR anchor).  The interior
-        # rungs (TP2-TP4) were compressed closer, so RR is validated to the final
-        # target to keep trade acceptance unchanged.
-        reward     = self.TP5_MULTIPLIER * atr
-        rr         = round(reward / risk, 3) if risk > 0 else 0.0
-        valid_rr   = rr >= self.MIN_RISK_REWARD
+        rr       = round(reward / risk, 3) if risk > 0 else 0.0
+        valid_rr = rr >= self.MIN_RISK_REWARD
 
         return {
             'sl':          round(sl,  8),
@@ -1992,7 +2022,7 @@ class LiveEngine:
     # track_record.json → visible at /api/engine-track-record.  If the live
     # payload shows an older (or no) version, the server is running stale
     # code — the recurring "gate fix didn't work" false alarm.
-    GATE_VERSION = 'structure-gate-v36 (v35 + STRICT S/R LOCATION: zone tightened 0.35/0.65 -> 0.20/0.80 so a BUY fires only in the bottom 20% (near support) and a SELL only in the top 20% (near resistance); anything looser waits PENDING for a real S/R touch) # v35 (v34 + MID-RANGE HELD AS PENDING: a mid-range signal is no longer BLOCKed/discarded — the structure gate returns WAIT and the engine holds it (pending_side/pending_target) until price reaches its level (resistance for a SELL, support for a BUY), then the 5m 3/4 + 15m 2/2 confirmation fires it. Other BLOCKs unchanged) # v34: (RESTORE v10 gate behaviour: removed the _swing_sr repoint (v29-v33) and the STRICT-direction block (v30) from the structure gate. Location is read straight off the predictor 24h rolling S/R + range_position zones (0.35/0.65); reversals AND confirmed breakouts both fire again. This is the v10-era logic the user confirmed "was doing it great" — the swing-anchor machinery is what caused the no-signals / mid-range-phantom / entry-gap regressions. _swing_sr kept for the open-position chart display only)'  # v33: (swing no longer opens zone) # v32: (k+1) # v31: (cache-key+limit) # v30: (strict direction) # v29: (swing repoint)'  # v32: (k+1 significant swing) # v31: (v30 + cache key includes limit; gate/chart both k+3 @1500)'  # v30: (v29 + deep 1500x1h S/R scan, nearest+extreme major per side, STRICT direction: sell only at resistance / buy only at support)'  # v29: (v28 + entries land AT the visible swing S/R via always-on repoint; fine prox back to 0.9 ATR) # v28: (S/R zone as % of range) # v27: (fire at big-swing S/R on mid-range, additive; chart gap filter)'  # v28: (v27 + S/R zone as % of range) # v27: (v26 + fire at big-swing S/R on mid-range block, additive; chart _sr_levels gap filter)'  # v27: (v26 + fire at BIG-SWING S/R on a would-be mid-range BLOCK via _swing_sr, purely additive; chart _sr_levels gap filter drops price-hugging noise levels)'  # v26: (v25 + restore S/R reversal firing: proximity 0.5->0.9 ATR, counter-trend RSI/confirmation gate is ADVISORY unless BOTH fail; reversals are primary, breakouts secondary)' # v25: (v24 + FIRING FIX: zone/range_pos uses the predictor 24h range_position again, not the wide swing S/R that made everything mid-range and zeroed the fire rate)' # v24: (v23 + STALL FIX: synchronous Firestore push moved off the event loop + circuit-breaker; sr_levels only for fired/open symbols to cut scan load)' # v23: (v22 + open positions show ENTRY edge/confidence, not the decayed live re-score — fixes Gate 3 rendering red on a healthy fired signal)' # v22: (v21 + declutter chart S/R: MAJOR swings only, congestion merged, max 2 levels per side)' # v21: (v20 + fully per-token dynamics: S/R zone width from each token ATR, pivot k sized to token volatility, reversal RSI thresholds from each token own RSI distribution)' # v20: (v19 + per-level state machine (NORMAL/PENDING/WAITING_RETEST/CONFIRMED/FAILED) exposed as sr_levels for the chart, + breakout-quality confidence: weak (wick/low-vol) breaks downgraded)' # v19: (v18 + Break->Retest->Confirmation: a broken level does NOT flip role until a retest holds; unconfirmed sweeps keep the original S/R)' # v18: (v17 + significant S/R: k=5 swing pivots + >=1 ATR gap from price, so levels land at real reversals not micro-wiggles next to price)' # v17: (v16 + LIVE role-reversed S/R for open positions: chart S/R updates as price moves instead of freezing the entry snapshot)' # v16: (v15 + S/R role reversal: every pivot is bidirectional, a broken resistance flips to support and vice versa; nearest pivot above=resistance, below=support)' # v15: (v14 + swing-based S/R: nearest confirmed 1h swing low/high around price instead of the crude 24h high/low)' # v14: (v13 + breakout-continuation must break the CURRENT support/resistance, never enter INTO the level: no more sell-at-support / buy-at-resistance)' # v13: (v12 + counter-trend reversal must prove the turn: no CONFLICT + RSI extreme; reversal proximity tightened 0.9->0.5 ATR)' # was: 'structure-gate-v12 (v11 + confirmed breakout-continuation: follow a break that runs and never retests when held 3+ closed 5m bars beyond + 5m/15m trend + not overextended) + reversal as-close-as-possible + Firestore-durable track record'
+    GATE_VERSION = 'structure-gate-v37 (v36 + ATR+STRUCTURE HYBRID SL/TP: SL anchored just beyond the invalidation level (support for a LONG / resistance for a SHORT) + 0.5 ATR buffer, clamped to [0.7,1.8] ATR — tighter near-S/R entries => higher RR. TP ladder: TP1=1R, TP2=2R, TP3=structural target (liquidity), TP4=1.618 fib measured move, TP5=2.618 (trailing runner). Partial split 15/25/25/15/20. RR validated to the REAL structural target (cramped setups rejected). Position size scales inverse to the risk leg, bounded [0.5x,2x] and re-capped) # v36 (v35 + STRICT S/R LOCATION: zone tightened 0.35/0.65 -> 0.20/0.80 so a BUY fires only in the bottom 20% (near support) and a SELL only in the top 20% (near resistance); anything looser waits PENDING for a real S/R touch) # v35 (v34 + MID-RANGE HELD AS PENDING: a mid-range signal is no longer BLOCKed/discarded — the structure gate returns WAIT and the engine holds it (pending_side/pending_target) until price reaches its level (resistance for a SELL, support for a BUY), then the 5m 3/4 + 15m 2/2 confirmation fires it. Other BLOCKs unchanged) # v34: (RESTORE v10 gate behaviour: removed the _swing_sr repoint (v29-v33) and the STRICT-direction block (v30) from the structure gate. Location is read straight off the predictor 24h rolling S/R + range_position zones (0.35/0.65); reversals AND confirmed breakouts both fire again. This is the v10-era logic the user confirmed "was doing it great" — the swing-anchor machinery is what caused the no-signals / mid-range-phantom / entry-gap regressions. _swing_sr kept for the open-position chart display only)'  # v33: (swing no longer opens zone) # v32: (k+1) # v31: (cache-key+limit) # v30: (strict direction) # v29: (swing repoint)'  # v32: (k+1 significant swing) # v31: (v30 + cache key includes limit; gate/chart both k+3 @1500)'  # v30: (v29 + deep 1500x1h S/R scan, nearest+extreme major per side, STRICT direction: sell only at resistance / buy only at support)'  # v29: (v28 + entries land AT the visible swing S/R via always-on repoint; fine prox back to 0.9 ATR) # v28: (S/R zone as % of range) # v27: (fire at big-swing S/R on mid-range, additive; chart gap filter)'  # v28: (v27 + S/R zone as % of range) # v27: (v26 + fire at big-swing S/R on mid-range block, additive; chart _sr_levels gap filter)'  # v27: (v26 + fire at BIG-SWING S/R on a would-be mid-range BLOCK via _swing_sr, purely additive; chart _sr_levels gap filter drops price-hugging noise levels)'  # v26: (v25 + restore S/R reversal firing: proximity 0.5->0.9 ATR, counter-trend RSI/confirmation gate is ADVISORY unless BOTH fail; reversals are primary, breakouts secondary)' # v25: (v24 + FIRING FIX: zone/range_pos uses the predictor 24h range_position again, not the wide swing S/R that made everything mid-range and zeroed the fire rate)' # v24: (v23 + STALL FIX: synchronous Firestore push moved off the event loop + circuit-breaker; sr_levels only for fired/open symbols to cut scan load)' # v23: (v22 + open positions show ENTRY edge/confidence, not the decayed live re-score — fixes Gate 3 rendering red on a healthy fired signal)' # v22: (v21 + declutter chart S/R: MAJOR swings only, congestion merged, max 2 levels per side)' # v21: (v20 + fully per-token dynamics: S/R zone width from each token ATR, pivot k sized to token volatility, reversal RSI thresholds from each token own RSI distribution)' # v20: (v19 + per-level state machine (NORMAL/PENDING/WAITING_RETEST/CONFIRMED/FAILED) exposed as sr_levels for the chart, + breakout-quality confidence: weak (wick/low-vol) breaks downgraded)' # v19: (v18 + Break->Retest->Confirmation: a broken level does NOT flip role until a retest holds; unconfirmed sweeps keep the original S/R)' # v18: (v17 + significant S/R: k=5 swing pivots + >=1 ATR gap from price, so levels land at real reversals not micro-wiggles next to price)' # v17: (v16 + LIVE role-reversed S/R for open positions: chart S/R updates as price moves instead of freezing the entry snapshot)' # v16: (v15 + S/R role reversal: every pivot is bidirectional, a broken resistance flips to support and vice versa; nearest pivot above=resistance, below=support)' # v15: (v14 + swing-based S/R: nearest confirmed 1h swing low/high around price instead of the crude 24h high/low)' # v14: (v13 + breakout-continuation must break the CURRENT support/resistance, never enter INTO the level: no more sell-at-support / buy-at-resistance)' # v13: (v12 + counter-trend reversal must prove the turn: no CONFLICT + RSI extreme; reversal proximity tightened 0.9->0.5 ATR)' # was: 'structure-gate-v12 (v11 + confirmed breakout-continuation: follow a break that runs and never retests when held 3+ closed 5m bars beyond + 5m/15m trend + not overextended) + reversal as-close-as-possible + Firestore-durable track record'
 
     # ── Structure gate (Gate 1.6) ─────────────────────────────────────────
     # Zone boundaries on range_position (0 = rolling support, 1 = resistance).
@@ -4049,9 +4079,15 @@ class LiveEngine:
 
         pos_value = max(pos_value, 1.0)   # safety floor
 
-        # ── ATR-based stop/TP calculation ────────────────────────────────────
-        # All levels derived from a single ATR value — no fixed percentages.
-        stops = self.risk_engine.calculate_stops(price=price, side=side, atr=atr)
+        # ── ATR + Structure hybrid stop/TP calculation ───────────────────────
+        # SL anchored to the gate's invalidation level (support for a LONG,
+        # resistance for a SHORT); TP ladder blends RR-multiples with the
+        # structural target and fib extensions.
+        stops = self.risk_engine.calculate_stops(
+            price=price, side=side, atr=atr,
+            support    = float(result.get('support', 0) or 0),
+            resistance = float(result.get('resistance', 0) or 0),
+        )
 
         stop_loss = stops['sl']
         tp1       = stops['tp1']
@@ -4060,6 +4096,19 @@ class LiveEngine:
         tp4       = stops['tp4']
         tp5       = stops['tp5']
         rr        = stops['risk_reward']
+
+        # ── Risk-based position sizing ───────────────────────────────────────
+        # The hybrid SL varies per trade, so scale the (quality/regime-sized)
+        # notional inversely with the actual risk leg to keep $-at-risk roughly
+        # constant: a tighter structural stop → larger size at the same dollar
+        # risk (this is how the improved RR turns into higher return). Bounded to
+        # [0.5×, 2×] and re-capped to the wallet max so it can never blow up.
+        _ref_risk    = self.risk_engine.ATR_SL_MULTIPLIER * atr
+        _actual_risk = float(stops.get('risk', 0) or _ref_risk) or _ref_risk
+        _risk_scale  = max(0.5, min(_ref_risk / _actual_risk, 2.0))
+        pos_value    = round(pos_value * _risk_scale, 2)
+        pos_value    = min(pos_value, self.wallet.max_position_usdt)
+        pos_value    = max(pos_value, 1.0)
 
         # ── Risk/Reward gate ─────────────────────────────────────────────────
         # Reward is measured to TP3 (first full-trend target).
@@ -4202,7 +4251,11 @@ class LiveEngine:
         # it is a pure function so this is safe and cheap.
         _re = DynamicRiskEngine()
         _stops: Dict[str, float] = (
-            _re.calculate_stops(price=price, side=side, atr=atr)
+            _re.calculate_stops(
+                price=price, side=side, atr=atr,
+                support    = float(result.get('support', 0) or 0),
+                resistance = float(result.get('resistance', 0) or 0),
+            )
             if side in ('BUY', 'SELL') and atr > 0 and price > 0
             else {}
         )
