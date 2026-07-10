@@ -696,9 +696,15 @@ window.updateMarketCardSignalBadges = function updateMarketCardSignalBadges() {
     const card = document.getElementById(`market-card-${idStr}`);
 
     if (match) {
+      // Only a FIRED signal counts as a directional setup. The rest of the app
+      // (SELL/BUY Setups, cockpit, card data-dir) all require signal.fire; showing
+      // the raw bias here made the overview flag SHORT/LONG for tokens that never
+      // fired (e.g. ETH/SOL SHORT bias), so it disagreed with the "1 signal" count
+      // in SELL Setups. Gate on fire so the overview matches the fired-only views.
+      const fired = match.fire === true;
       const dir = (match.direction || match.side || '').toUpperCase();
-      const isLong  = dir === 'LONG'  || dir === 'BUY';
-      const isShort = dir === 'SHORT' || dir === 'SELL';
+      const isLong  = fired && (dir === 'LONG'  || dir === 'BUY');
+      const isShort = fired && (dir === 'SHORT' || dir === 'SELL');
       const isDirectional = isLong || isShort;
 
       if (isDirectional) {
