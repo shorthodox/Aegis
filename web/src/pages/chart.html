@@ -995,6 +995,28 @@ async function renderChart(sig) {
     candles.setData(_chartBars);
     _candlesSeries = candles;
 
+    // createPriceLine does NOT expand the price axis, so an S/R line above/below
+    // the candle range was clipped off-screen (e.g. the 4H/D resistance after a
+    // breakout — the support showed, the resistance didn't). Collect every line
+    // price and auto-scale to include them, capped to ~2 candle-ranges beyond the
+    // candles so one very far level can't shrink the candles to nothing.
+    const _srLineLevels = [];
+    candles.applyOptions({
+      autoscaleInfoProvider: (baseImpl) => {
+        const base = baseImpl();
+        if (!base || !base.priceRange) return base;
+        let { minValue, maxValue } = base.priceRange;
+        const span = Math.max(maxValue - minValue, 1e-9);
+        for (const p of _srLineLevels) {
+          if (p > 0 && p >= minValue - 2 * span && p <= maxValue + 2 * span) {
+            minValue = Math.min(minValue, p);
+            maxValue = Math.max(maxValue, p);
+          }
+        }
+        return { priceRange: { minValue, maxValue } };
+      },
+    });
+
     const vol = chart.addHistogramSeries({
       color: 'rgba(184,150,106,0.15)', priceFormat: { type: 'volume' },
       priceScaleId: 'vol', scaleMargins: { top: 0.85, bottom: 0 },
@@ -1004,7 +1026,9 @@ async function renderChart(sig) {
 
     const addLine = (price, color, label, lineStyle = 2) => {
       if (!price) return;
-      candles.createPriceLine({ price: parseFloat(price), color, lineWidth: 1, lineStyle, axisLabelVisible: true, title: label });
+      const _p = parseFloat(price);
+      if (_p > 0) _srLineLevels.push(_p);   // feed the auto-scale so the line isn't clipped
+      candles.createPriceLine({ price: _p, color, lineWidth: 1, lineStyle, axisLabelVisible: true, title: label });
     };
 
     // S/R state → colour (Break→Retest→Confirmation state machine from the engine)
