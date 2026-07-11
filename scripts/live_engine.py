@@ -151,7 +151,11 @@ def _fs_load_track_record() -> Optional[dict]:
         db = _fs_state_client()
         if db is None:
             return None
-        snap = db.collection(_FS_STATE_COLLECTION).document(_FS_STATE_DOC).get()
+        # snap typed Any: _fs_state_client() returns the SYNC firestore client, so
+        # .get() yields a DocumentSnapshot — but the stubs resolve to the AsyncClient
+        # (Awaitable[DocumentSnapshot]), falsely flagging .exists/.to_dict(). This is
+        # a sync call; do NOT await it.
+        snap: Any = db.collection(_FS_STATE_COLLECTION).document(_FS_STATE_DOC).get()
         if not snap.exists:
             return None
         return snap.to_dict()
