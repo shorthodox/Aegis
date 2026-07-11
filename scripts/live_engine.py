@@ -718,7 +718,7 @@ class SignalQualityFilter:
     is_fake_breakout() → bool
     """
 
-    MIN_QUALITY_SCORE = 70.0  # minimum points required to open a position
+    MIN_QUALITY_SCORE = 55.0  # minimum points required to open a position
 
     def score_signal(
         self,
@@ -1130,6 +1130,7 @@ class DynamicRiskEngine:
         atr:        float,
         support:    float = 0.0,   # invalidation level for a LONG / downside target for a SHORT
         resistance: float = 0.0,   # invalidation level for a SHORT / upside target for a LONG
+        sl_cap_atr: float   = 0.0,   # v42: SL-cap override in ATR (0 -> ATR_SL_MULTIPLIER)
         **_kwargs,      # absorbs legacy keyword args for backward compatibility
     ) -> Dict[str, float]:
         """
@@ -1174,7 +1175,7 @@ class DynamicRiskEngine:
         resistance = float(resistance or 0.0)
         buf   = self.STRUCT_SL_BUFFER_ATR * atr
         floor = self.SL_FLOOR_ATR * atr
-        cap   = self.ATR_SL_MULTIPLIER * atr
+        cap   = (sl_cap_atr if sl_cap_atr and sl_cap_atr > 0 else self.ATR_SL_MULTIPLIER) * atr
 
         if side == 'BUY':
             # Hybrid SL: just below support + buffer, clamped to [floor, cap].
@@ -1992,8 +1993,8 @@ class LiveEngine:
     MAX_CONCURRENT        = 8
     HOURS_CONTEXT         = 300
     MIN_HOLD_SECONDS      = 3_600    # 1 h minimum hold before model-reversal exit
-    COOLDOWN_SECONDS      = 1_800    # 30 min post-close cooldown
-    FLIP_COOLDOWN_SECONDS = 3_600    # 1 h extra cooldown when new signal flips direction
+    COOLDOWN_SECONDS      = 300    # 30 min post-close cooldown
+    FLIP_COOLDOWN_SECONDS = 600    # 1 h extra cooldown when new signal flips direction
     MAX_HOLD_SECONDS      = 86_400   # 24 h zombie guard
     CONFLUENCE_BUY_MIN    = 6.0   # need mildly bullish consensus (≥60th pct)
     CONFLUENCE_SELL_MAX   = 4.0   # need mildly bearish consensus (≤40th pct)
@@ -2016,7 +2017,7 @@ class LiveEngine:
     #   0 warnings   → STRONG  (LOW risk, if high-conviction + trend-aligned)
     #   1-3 warnings → NORMAL  (MODERATE risk) — fires
     #   4+ warnings  → RISKY   (HIGH risk) — held
-    ADVISORY_WARNING_BUDGET = 3
+    ADVISORY_WARNING_BUDGET = 99  # v42: non-binding — advisory warnings inform, never block
 
     # RETIRED (user policy, 2026-07-03): RISKY (HIGH-risk) signals no longer
     # fire at all — only LOW (STRONG) and MODERATE (NORMAL) tiers are published,
@@ -2028,7 +2029,7 @@ class LiveEngine:
     # track_record.json → visible at /api/engine-track-record.  If the live
     # payload shows an older (or no) version, the server is running stale
     # code — the recurring "gate fix didn't work" false alarm.
-    GATE_VERSION = 'structure-gate-v41 (v40 + HTF S/R CONFLUENCE (Gate 1.8): pool the nearest 4h+1d swing S/R (_htf_sr) and, as an ADVISORY, downgrade a BUY with a major HTF resistance right overhead (<1 ATR room) or a SELL with major HTF support right below — trade WITH the big structure, not into it. Firing still gated on the 1h zone (rate unchanged); HTF only warns/tags. The 4h/1d levels are drawn on the chart as purple 4H/D lines) # v40 (v39 + REVERT v38 swing-S/R zone: the gate classifies location on the 24h rolling range_position again (that FIRES) — gating on the far-apart swing S/R put nearly everything mid-range/PENDING and collapsed the rate (v25 regression; pending only delays, does not rescue). Kept: v39 strict direction (sell@resistance/buy@support, wrong-side -> pending), v37 ATR+structure hybrid SL/TP, v36 zones 0.20/0.80. Swing S/R stays the chart display only) # v39 (v38 + STRICT DIRECTION via PENDING: a SELL fires ONLY at resistance, a BUY ONLY at support. Wrong-side signals (SELL at support / BUY at resistance — the "sold at support late" breakdown, e.g. HBAR) no longer fire the breakout; they are held PENDING and wait for the correct level. Genuine role-flips still fire via correct_level (a broken resistance that holds becomes support below price). The old breakout_level branch is now unreachable) # v38 (v37 + GATE FIRES ON SWING S/R: location is now classified against the major swing S/R (_swing_sr, the chart levels), not the 24h rolling range_position — so entries sit at the visible support/resistance instead of the rolling extreme that read mid-range. This was the v25 collapse basis, but v35 PENDING now holds the mid-range ones (waits for the level) instead of blocking, so the rate does not zero. Swing levels written back to result so SL/TP + display share them. Falls back to rolling when pivots sparse) # v37 (v36 + ATR+STRUCTURE HYBRID SL/TP: SL anchored just beyond the invalidation level (support for a LONG / resistance for a SHORT) + 0.5 ATR buffer, clamped to [0.7,1.8] ATR — tighter near-S/R entries => higher RR. TP ladder: TP1=1R, TP2=2R, TP3=structural target (liquidity), TP4=1.618 fib measured move, TP5=2.618 (trailing runner). Partial split 15/25/25/15/20. RR validated to the REAL structural target (cramped setups rejected). Position size scales inverse to the risk leg, bounded [0.5x,2x] and re-capped) # v36 (v35 + STRICT S/R LOCATION: zone tightened 0.35/0.65 -> 0.20/0.80 so a BUY fires only in the bottom 20% (near support) and a SELL only in the top 20% (near resistance); anything looser waits PENDING for a real S/R touch) # v35 (v34 + MID-RANGE HELD AS PENDING: a mid-range signal is no longer BLOCKed/discarded — the structure gate returns WAIT and the engine holds it (pending_side/pending_target) until price reaches its level (resistance for a SELL, support for a BUY), then the 5m 3/4 + 15m 2/2 confirmation fires it. Other BLOCKs unchanged) # v34: (RESTORE v10 gate behaviour: removed the _swing_sr repoint (v29-v33) and the STRICT-direction block (v30) from the structure gate. Location is read straight off the predictor 24h rolling S/R + range_position zones (0.35/0.65); reversals AND confirmed breakouts both fire again. This is the v10-era logic the user confirmed "was doing it great" — the swing-anchor machinery is what caused the no-signals / mid-range-phantom / entry-gap regressions. _swing_sr kept for the open-position chart display only)'  # v33: (swing no longer opens zone) # v32: (k+1) # v31: (cache-key+limit) # v30: (strict direction) # v29: (swing repoint)'  # v32: (k+1 significant swing) # v31: (v30 + cache key includes limit; gate/chart both k+3 @1500)'  # v30: (v29 + deep 1500x1h S/R scan, nearest+extreme major per side, STRICT direction: sell only at resistance / buy only at support)'  # v29: (v28 + entries land AT the visible swing S/R via always-on repoint; fine prox back to 0.9 ATR) # v28: (S/R zone as % of range) # v27: (fire at big-swing S/R on mid-range, additive; chart gap filter)'  # v28: (v27 + S/R zone as % of range) # v27: (v26 + fire at big-swing S/R on mid-range block, additive; chart _sr_levels gap filter)'  # v27: (v26 + fire at BIG-SWING S/R on a would-be mid-range BLOCK via _swing_sr, purely additive; chart _sr_levels gap filter drops price-hugging noise levels)'  # v26: (v25 + restore S/R reversal firing: proximity 0.5->0.9 ATR, counter-trend RSI/confirmation gate is ADVISORY unless BOTH fail; reversals are primary, breakouts secondary)' # v25: (v24 + FIRING FIX: zone/range_pos uses the predictor 24h range_position again, not the wide swing S/R that made everything mid-range and zeroed the fire rate)' # v24: (v23 + STALL FIX: synchronous Firestore push moved off the event loop + circuit-breaker; sr_levels only for fired/open symbols to cut scan load)' # v23: (v22 + open positions show ENTRY edge/confidence, not the decayed live re-score — fixes Gate 3 rendering red on a healthy fired signal)' # v22: (v21 + declutter chart S/R: MAJOR swings only, congestion merged, max 2 levels per side)' # v21: (v20 + fully per-token dynamics: S/R zone width from each token ATR, pivot k sized to token volatility, reversal RSI thresholds from each token own RSI distribution)' # v20: (v19 + per-level state machine (NORMAL/PENDING/WAITING_RETEST/CONFIRMED/FAILED) exposed as sr_levels for the chart, + breakout-quality confidence: weak (wick/low-vol) breaks downgraded)' # v19: (v18 + Break->Retest->Confirmation: a broken level does NOT flip role until a retest holds; unconfirmed sweeps keep the original S/R)' # v18: (v17 + significant S/R: k=5 swing pivots + >=1 ATR gap from price, so levels land at real reversals not micro-wiggles next to price)' # v17: (v16 + LIVE role-reversed S/R for open positions: chart S/R updates as price moves instead of freezing the entry snapshot)' # v16: (v15 + S/R role reversal: every pivot is bidirectional, a broken resistance flips to support and vice versa; nearest pivot above=resistance, below=support)' # v15: (v14 + swing-based S/R: nearest confirmed 1h swing low/high around price instead of the crude 24h high/low)' # v14: (v13 + breakout-continuation must break the CURRENT support/resistance, never enter INTO the level: no more sell-at-support / buy-at-resistance)' # v13: (v12 + counter-trend reversal must prove the turn: no CONFLICT + RSI extreme; reversal proximity tightened 0.9->0.5 ATR)' # was: 'structure-gate-v12 (v11 + confirmed breakout-continuation: follow a break that runs and never retests when held 3+ closed 5m bars beyond + 5m/15m trend + not overextended) + reversal as-close-as-possible + Firestore-durable track record'
+    GATE_VERSION = 'structure-gate-v42 (v41 + AGGRESSIVE FIRE-AT-S/R: reversals fire IMMEDIATELY at the level (confirmation is a BONUS, not required); MID-RANGE fires with a wider stop instead of pending; wrong-side breakouts fire on retest/momentum/pre-break; zones 0.20/0.80->0.35/0.65; proximity 0.9->1.5 ATR; advisory budget non-binding; edge floor 70->55; ATR floor 0.8->0.4pct; cooldowns 30m/1h->5m/10m; _swing_sr nearer k; loose entries get 2.2-2.5 ATR SL cap. TRADEOFF: max signal capture, more false positives / lower win-rate by design) # v41 (v40 + HTF S/R CONFLUENCE (Gate 1.8): pool the nearest 4h+1d swing S/R (_htf_sr) and, as an ADVISORY, downgrade a BUY with a major HTF resistance right overhead (<1 ATR room) or a SELL with major HTF support right below — trade WITH the big structure, not into it. Firing still gated on the 1h zone (rate unchanged); HTF only warns/tags. The 4h/1d levels are drawn on the chart as purple 4H/D lines) # v40 (v39 + REVERT v38 swing-S/R zone: the gate classifies location on the 24h rolling range_position again (that FIRES) — gating on the far-apart swing S/R put nearly everything mid-range/PENDING and collapsed the rate (v25 regression; pending only delays, does not rescue). Kept: v39 strict direction (sell@resistance/buy@support, wrong-side -> pending), v37 ATR+structure hybrid SL/TP, v36 zones 0.20/0.80. Swing S/R stays the chart display only) # v39 (v38 + STRICT DIRECTION via PENDING: a SELL fires ONLY at resistance, a BUY ONLY at support. Wrong-side signals (SELL at support / BUY at resistance — the "sold at support late" breakdown, e.g. HBAR) no longer fire the breakout; they are held PENDING and wait for the correct level. Genuine role-flips still fire via correct_level (a broken resistance that holds becomes support below price). The old breakout_level branch is now unreachable) # v38 (v37 + GATE FIRES ON SWING S/R: location is now classified against the major swing S/R (_swing_sr, the chart levels), not the 24h rolling range_position — so entries sit at the visible support/resistance instead of the rolling extreme that read mid-range. This was the v25 collapse basis, but v35 PENDING now holds the mid-range ones (waits for the level) instead of blocking, so the rate does not zero. Swing levels written back to result so SL/TP + display share them. Falls back to rolling when pivots sparse) # v37 (v36 + ATR+STRUCTURE HYBRID SL/TP: SL anchored just beyond the invalidation level (support for a LONG / resistance for a SHORT) + 0.5 ATR buffer, clamped to [0.7,1.8] ATR — tighter near-S/R entries => higher RR. TP ladder: TP1=1R, TP2=2R, TP3=structural target (liquidity), TP4=1.618 fib measured move, TP5=2.618 (trailing runner). Partial split 15/25/25/15/20. RR validated to the REAL structural target (cramped setups rejected). Position size scales inverse to the risk leg, bounded [0.5x,2x] and re-capped) # v36 (v35 + STRICT S/R LOCATION: zone tightened 0.35/0.65 -> 0.20/0.80 so a BUY fires only in the bottom 20% (near support) and a SELL only in the top 20% (near resistance); anything looser waits PENDING for a real S/R touch) # v35 (v34 + MID-RANGE HELD AS PENDING: a mid-range signal is no longer BLOCKed/discarded — the structure gate returns WAIT and the engine holds it (pending_side/pending_target) until price reaches its level (resistance for a SELL, support for a BUY), then the 5m 3/4 + 15m 2/2 confirmation fires it. Other BLOCKs unchanged) # v34: (RESTORE v10 gate behaviour: removed the _swing_sr repoint (v29-v33) and the STRICT-direction block (v30) from the structure gate. Location is read straight off the predictor 24h rolling S/R + range_position zones (0.35/0.65); reversals AND confirmed breakouts both fire again. This is the v10-era logic the user confirmed "was doing it great" — the swing-anchor machinery is what caused the no-signals / mid-range-phantom / entry-gap regressions. _swing_sr kept for the open-position chart display only)'  # v33: (swing no longer opens zone) # v32: (k+1) # v31: (cache-key+limit) # v30: (strict direction) # v29: (swing repoint)'  # v32: (k+1 significant swing) # v31: (v30 + cache key includes limit; gate/chart both k+3 @1500)'  # v30: (v29 + deep 1500x1h S/R scan, nearest+extreme major per side, STRICT direction: sell only at resistance / buy only at support)'  # v29: (v28 + entries land AT the visible swing S/R via always-on repoint; fine prox back to 0.9 ATR) # v28: (S/R zone as % of range) # v27: (fire at big-swing S/R on mid-range, additive; chart gap filter)'  # v28: (v27 + S/R zone as % of range) # v27: (v26 + fire at big-swing S/R on mid-range block, additive; chart _sr_levels gap filter)'  # v27: (v26 + fire at BIG-SWING S/R on a would-be mid-range BLOCK via _swing_sr, purely additive; chart _sr_levels gap filter drops price-hugging noise levels)'  # v26: (v25 + restore S/R reversal firing: proximity 0.5->0.9 ATR, counter-trend RSI/confirmation gate is ADVISORY unless BOTH fail; reversals are primary, breakouts secondary)' # v25: (v24 + FIRING FIX: zone/range_pos uses the predictor 24h range_position again, not the wide swing S/R that made everything mid-range and zeroed the fire rate)' # v24: (v23 + STALL FIX: synchronous Firestore push moved off the event loop + circuit-breaker; sr_levels only for fired/open symbols to cut scan load)' # v23: (v22 + open positions show ENTRY edge/confidence, not the decayed live re-score — fixes Gate 3 rendering red on a healthy fired signal)' # v22: (v21 + declutter chart S/R: MAJOR swings only, congestion merged, max 2 levels per side)' # v21: (v20 + fully per-token dynamics: S/R zone width from each token ATR, pivot k sized to token volatility, reversal RSI thresholds from each token own RSI distribution)' # v20: (v19 + per-level state machine (NORMAL/PENDING/WAITING_RETEST/CONFIRMED/FAILED) exposed as sr_levels for the chart, + breakout-quality confidence: weak (wick/low-vol) breaks downgraded)' # v19: (v18 + Break->Retest->Confirmation: a broken level does NOT flip role until a retest holds; unconfirmed sweeps keep the original S/R)' # v18: (v17 + significant S/R: k=5 swing pivots + >=1 ATR gap from price, so levels land at real reversals not micro-wiggles next to price)' # v17: (v16 + LIVE role-reversed S/R for open positions: chart S/R updates as price moves instead of freezing the entry snapshot)' # v16: (v15 + S/R role reversal: every pivot is bidirectional, a broken resistance flips to support and vice versa; nearest pivot above=resistance, below=support)' # v15: (v14 + swing-based S/R: nearest confirmed 1h swing low/high around price instead of the crude 24h high/low)' # v14: (v13 + breakout-continuation must break the CURRENT support/resistance, never enter INTO the level: no more sell-at-support / buy-at-resistance)' # v13: (v12 + counter-trend reversal must prove the turn: no CONFLICT + RSI extreme; reversal proximity tightened 0.9->0.5 ATR)' # was: 'structure-gate-v12 (v11 + confirmed breakout-continuation: follow a break that runs and never retests when held 3+ closed 5m bars beyond + 5m/15m trend + not overextended) + reversal as-close-as-possible + Firestore-durable track record'
 
     # ── Structure gate (Gate 1.6) ─────────────────────────────────────────
     # Zone boundaries on range_position (0 = rolling support, 1 = resistance).
@@ -2037,8 +2038,8 @@ class LiveEngine:
     # entries are genuinely NEAR the level, not a third of the way in. Signals
     # outside the tight zone are held PENDING (v35) and wait for a real S/R touch,
     # so this tightens LOCATION without discarding signals.
-    STRUCT_SUPPORT_ZONE    = 0.20   # at/below → support zone (near support)
-    STRUCT_RESISTANCE_ZONE = 0.80   # at/above → resistance zone (near resistance)
+    STRUCT_SUPPORT_ZONE    = 0.35   # at/below → support zone (near support)
+    STRUCT_RESISTANCE_ZONE = 0.65   # at/above → resistance zone (near resistance)
     # Lower-timeframe confirmation: candles must already be moving in the
     # signal direction.  Reversal entries at the correct level tolerate one
     # consolidation candle on 5m (3 of 4); breakout entries require ALL of
@@ -2054,11 +2055,11 @@ class LiveEngine:
     #   last N closed 5m candles must ALL hold beyond the broken level, and price
     #   must not have run more than MAX_EXT ATRs past it (no late chase).
     STRUCT_BREAKOUT_MIN_HOLD    = 3
-    STRUCT_BREAKOUT_MAX_EXT_ATR = 2.0
+    STRUCT_BREAKOUT_MAX_EXT_ATR = 2.5
     # Reversal entries fire close to the level: allowed when a wick has TAGGED the
     # level OR price is within this many ATRs of it. Back to 0.9 (0.5 was too tight
     # and muted most S/R reversals — the PRIMARY setup — leaving the fire rate low).
-    STRUCT_LEVEL_PROXIMITY_ATR = 0.9
+    STRUCT_LEVEL_PROXIMITY_ATR = 1.5
     # (Removed) STRUCT_SR_ZONE_PCT — the old "15% of the S/R range" mid-range
     # tolerance. It was dead since v33/v34 (the swing zone-opening that used it was
     # deleted); location is governed solely by STRUCT_SUPPORT_ZONE/RESISTANCE_ZONE
@@ -2883,7 +2884,7 @@ class LiveEngine:
 
                     # ── Gate 2: ATR floor — stops would be inside tick noise ──
                     _fe_atr_pct = float(result.get('atr_pct', 0.0))
-                    if _fe_atr_pct < 0.8:
+                    if _fe_atr_pct < 0.4:
                         print(f'[{symbol}] ATR_TOO_LOW blocked {new_side} '
                               f'atr_pct={_fe_atr_pct:.2f}%')
                         if symbol in self.last_signals:
@@ -3260,7 +3261,7 @@ class LiveEngine:
                 return None
             highs = [float(c[2]) for c in closed_1h]
             lows  = [float(c[3]) for c in closed_1h]
-            k = self._dynamic_k(atr, price) + 3   # MAJOR swings only — match the chart, no phantom mid-range levels
+            k = self._dynamic_k(atr, price)   # MAJOR swings only — match the chart, no phantom mid-range levels
             swing_highs = {highs[i] for i in _confirmed_pivots(highs, k, True)}
             swing_lows  = {lows[i]  for i in _confirmed_pivots(lows,  k, False)}
             # Per-token: the zone scales purely by THIS token's ATR (its own
@@ -3433,287 +3434,112 @@ class LiveEngine:
         self, symbol: str, side: str, price: float, result: Dict[str, Any]
     ) -> Tuple[str, str]:
         """
-        Hard entry-location gate: LONG at support, SHORT at resistance — each
-        confirmed by the lower timeframes already turning in the signal
-        direction.  The single exception is a level break:
-
-          BUY at resistance / SELL at support is allowed only when
-            (a) momentum into the level is unanimous — every one of the last
-                STRUCT_5M_WINDOW closed 5m candles and STRUCT_15M_WINDOW
-                closed 15m candles trends in the signal direction, OR
-            (b) the level already broke and a pullback HELD it: a 5m candle
-                opened beyond the level, tagged it, and closed back beyond —
-                old resistance acting as support (mirror for SELL).
-
-        Mid-range entries are blocked: signals belong at structure.
-
-        Fail-open policy is ASYMMETRIC.  Missing data on the CORRECT side of
-        the range (BUY at support) skips the confirmation — a network hiccup
-        never mutes safe entries.  Missing data on the WRONG side (BUY at
-        resistance) BLOCKS: an unverifiable breakout is not a breakout.  The
-        silent-SKIP fail-open here was exactly how longs kept firing at
-        resistance when the exchange candle feed was unavailable.
-
-        Returns (verdict, detail): 'PASS' | 'BLOCK' | 'SKIP'.
+        AGGRESSIVE entry gate (v42): fire AT support/resistance IMMEDIATELY.
+        Lower-timeframe confirmation is a BONUS, never a requirement. Mid-range
+        fires with a WIDER stop (model conviction); wrong-side breakouts fire on
+        retest / sustained momentum / pre-break. The only non-fire outcomes are
+        'approaching' (WAIT -> pending until price reaches the level) and
+        degenerate S/R (WARN). Risk is managed by the hybrid SL + RR gate
+        downstream, NOT by discarding signals.
+        Returns (verdict, detail): 'PASS' | 'WARN' | 'WAIT'.
         """
-        range_pos_fwd = result.get('range_position')
         support    = float(result.get('support', 0) or 0)
         resistance = float(result.get('resistance', 0) or 0)
+        atr_g      = float(result.get('atr', 0) or 0) or price * 0.005
+        range_pos_fwd = result.get('range_position')
 
-        # S/R must be sane to classify location at all.  The predictor always
-        # provides support/resistance (with price×0.97 / ×1.03 fallbacks), so
-        # this is essentially never degenerate; when it truly is, we cannot
-        # place the entry against structure.
         if not (0 < support < resistance) or price <= 0:
-            return 'SKIP', 'S/R data degenerate'
+            return 'WARN', 'S/R data degenerate — firing with caution'
 
-        # ATR for level-proximity tolerances (level-tag test + breakout retest
-        # band).  Prefer the forwarded ATR; fall back to a small % of price so
-        # the tolerance is never zero when the field is missing.
-        atr_g = float(result.get('atr', 0) or 0) or price * 0.005
-
-        # ZONE + levels use the predictor's 24h rolling S/R + range_position.
-        # v38 classified location against the far-apart SWING S/R (_swing_sr, k+3)
-        # so entries would sit at the visible chart levels — but the nearest major
-        # swing is often far from price, so nearly every signal read mid-range ->
-        # PENDING and the fire rate collapsed (the v25 regression). PENDING only
-        # DELAYS a signal; it doesn't rescue the rate, because the few that reach a
-        # swing extreme still hit the reversal-confirmation wall. Reverted to the
-        # rolling range_position, which fires. The swing S/R remains the CHART
-        # display; the hybrid SL/TP + strict direction (v39) are unchanged.
-        if range_pos_fwd is not None:
+        # Live swing S/R for accurate location; write back so the chart and the
+        # hybrid SL/TP anchor to the same levels the gate judged.
+        swing_sr = await self._swing_sr(symbol, price, atr_g)
+        if swing_sr:
+            support, resistance = swing_sr
+            result['support']    = support
+            result['resistance'] = resistance
+            range_pos = max(0.0, min(1.0, (price - support) / (resistance - support)))
+        elif range_pos_fwd is not None:
             range_pos = float(range_pos_fwd)
         else:
             range_pos = max(0.0, min(1.0, (price - support) / (resistance - support)))
 
         bullish = (side == 'BUY')
-        at_support_zone    = range_pos <= self.STRUCT_SUPPORT_ZONE
-        at_resistance_zone = range_pos >= self.STRUCT_RESISTANCE_ZONE
+        AT_SUPPORT    = range_pos <= self.STRUCT_SUPPORT_ZONE     # 0.35
+        AT_RESISTANCE = range_pos >= self.STRUCT_RESISTANCE_ZONE  # 0.65
+        correct_level  = AT_SUPPORT    if bullish else AT_RESISTANCE
+        breakout_level = AT_RESISTANCE if bullish else AT_SUPPORT
 
-        # Mid-range: DON'T discard the signal — HOLD it as PENDING and wait for the
-        # market to reach its level (resistance for a SELL, support for a BUY). The
-        # engine re-evaluates every scan; when price reaches the zone the 5m/15m
-        # confirmation below runs and it fires. (User policy: a mid-range signal is
-        # accepted and fired once the market reaches S/R, not thrown away.)
-        if not at_support_zone and not at_resistance_zone:
-            _wait_lvl = resistance if not bullish else support
-            return 'WAIT', (f'mid-range (range_pos={range_pos:.2f}) — waiting for '
-                            f'{"resistance" if not bullish else "support"} '
-                            f'{_wait_lvl:.6g} before firing')
-
+        # Lower-timeframe candles — confirmation is a BONUS, not a blocker.
         raw_5m  = await self._fetch_candles(
             symbol, '5m', max(self.STRUCT_5M_WINDOW, self.STRUCT_RETEST_LOOKBACK) + 2)
         raw_15m = await self._fetch_candles(symbol, '15m', self.STRUCT_15M_WINDOW + 2)
-        closed_5m  = raw_5m[:-1]  if len(raw_5m)  >= 2 else []   # [-1] is forming
+        closed_5m  = raw_5m[:-1]  if len(raw_5m)  >= 2 else []
         closed_15m = raw_15m[:-1] if len(raw_15m) >= 2 else []
-        _no_candles = (len(closed_5m) < self.STRUCT_5M_WINDOW
-                       or len(closed_15m) < self.STRUCT_15M_WINDOW)
-        if _no_candles:
-            # Candle feed unavailable (network / geo-block / partial deploy).
-            # ASYMMETRIC degradation — fail-CLOSED only on the dangerous side:
-            #   • Correct-side REVERSAL (SELL at resistance / BUY at support) —
-            #     the SAFE side — SKIPs: it fires as MODERATE with a
-            #     structure_unverified warning rather than being muted.  Blocking
-            #     these outright drops the at-S/R firing rate to ~0 the moment the
-            #     feed hiccups (the "7 signals → 1-2" regression).
-            #   • WRONG-side BREAKOUT (BUY at resistance / SELL at support) —
-            #     an unverifiable breakout is not a breakout → BLOCK.
-            # When the feed IS up (normal case, with the perp symbol-format fix in
-            # _fetch_ohlcv_sync + the spot fallback), this branch doesn't run and
-            # full 5m/15m confirmation applies.
-            _wrong_side = at_resistance_zone if bullish else at_support_zone
-            if _wrong_side:
-                return 'BLOCK', (f'{"BUY at resistance" if bullish else "SELL at support"} '
-                                 f'but 5m/15m candles unavailable — an unverifiable '
-                                 f'breakout is not a breakout')
-            return 'SKIP', ('5m/15m candles unavailable — reversal at the correct '
-                            'level allowed as unverified (fires MODERATE)')
 
         def _n_trending(candles: list, n: int) -> int:
-            """Candles among the last n that closed in the signal direction."""
-            return sum(
-                1 for c in candles[-n:]
-                if (float(c[4]) > float(c[1])) == bullish and float(c[4]) != float(c[1])
-            )
+            return sum(1 for c in candles[-n:]
+                       if (float(c[4]) > float(c[1])) == bullish and float(c[4]) != float(c[1]))
 
-        n5  = _n_trending(closed_5m,  self.STRUCT_5M_WINDOW)
-        n15 = _n_trending(closed_15m, self.STRUCT_15M_WINDOW)
-        _counts = (f'5m {n5}/{self.STRUCT_5M_WINDOW}, '
-                   f'15m {n15}/{self.STRUCT_15M_WINDOW} '
-                   f'{"bullish" if bullish else "bearish"}')
+        n5  = _n_trending(closed_5m,  self.STRUCT_5M_WINDOW)  if closed_5m  else 0
+        n15 = _n_trending(closed_15m, self.STRUCT_15M_WINDOW) if closed_15m else 0
+        confirmed        = (n5 >= self.STRUCT_5M_MIN and n15 >= self.STRUCT_15M_MIN)
+        partly_confirmed = (n5 >= self.STRUCT_5M_MIN)
 
-        correct_level  = at_support_zone    if bullish else at_resistance_zone
-        breakout_level = at_resistance_zone if bullish else at_support_zone
-        level_name     = 'support' if bullish else 'resistance'
+        tolerance = max(price * 0.0015, atr_g * 0.25)   # defined ONCE — used by both cases
+        recent    = closed_5m[-self.STRUCT_RETEST_LOOKBACK:] if closed_5m else []
+        _lname    = 'support' if bullish else 'resistance'
 
-        # STRICT direction: a SELL fires ONLY at resistance, a BUY ONLY at support.
-        # On the WRONG side (SELL at support / BUY at resistance) do NOT take the
-        # breakdown/breakout INTO the level — that is the "sold at support, late"
-        # entry (HBAR short filled at support after the drop). Hold it PENDING and
-        # wait for the correct level instead of discarding it (v35). Genuine role
-        # flips still fire via correct_level: once a resistance breaks and holds it
-        # becomes a support BELOW price (via _swing_sr's flip logic) and a BUY there
-        # reads as at_support.
-        if breakout_level and not correct_level:
-            _tgt = resistance if not bullish else support
-            return 'WAIT', (f'{"SELL at support" if not bullish else "BUY at resistance"} — '
-                            f'strict: wait for {"resistance" if not bullish else "support"} '
-                            f'{_tgt:.6g} (sell only at resistance / buy only at support)')
-
+        # ── CASE 1: CORRECT LEVEL (BUY at support / SELL at resistance) ────────
+        # Primary setup — fire immediately at/near the level.
         if correct_level:
-            # Reversal at the right level.  Order matters:
-            #   1. CONFIRMATION is REQUIRED (hard) — the turn must already be
-            #      underway on the lower timeframes (≥3/4 closed 5m + 2/2 closed
-            #      15m in the signal direction).  Unconfirmed = the "shorting a
-            #      rising candle" case, blocked outright.
-            #   2. Fire AS CLOSE AS POSSIBLE to the level — but not necessarily a
-            #      tick-perfect touch.  The entry is allowed when EITHER a recent
-            #      wick has tagged the level (best) OR price is already within
-            #      ~STRUCT_LEVEL_PROXIMITY_ATR of it (close enough).  Only fills
-            #      that are still FAR from the level wait — that's the early-entry
-            #      case (shorting well below resistance / buying well above
-            #      support), where you take a worse price with less room to run.
-            #      (User: LDO short fired at 0.3025 with resistance 0.31 — ~1.1 ATR
-            #      away — and went underwater; that one waits, a near-the-level one
-            #      still fires.)
-            if not (n5 >= self.STRUCT_5M_MIN and n15 >= self.STRUCT_15M_MIN):
-                return 'BLOCK', (f'at {level_name} but reversal unconfirmed '
-                                 f'({_counts}; need {self.STRUCT_5M_MIN}/'
-                                 f'{self.STRUCT_5M_WINDOW} + {self.STRUCT_15M_MIN}/'
-                                 f'{self.STRUCT_15M_WINDOW})')
-            level  = support if bullish else resistance
-            tol    = max(price * 0.0015, atr_g * 0.25)
-            recent = closed_5m[-self.STRUCT_RETEST_LOOKBACK:]
-            tested = (any(float(c[3]) <= level + tol for c in recent) if bullish
-                      else any(float(c[2]) >= level - tol for c in recent))
-            # Fill must be genuinely AT the visible level: within STRUCT_LEVEL_
-            # PROXIMITY_ATR (0.9 ATR) of the repointed swing level, else wait for a
-            # closer price. (15% of the RANGE was too wide once the level became the
-            # far-apart swing — it let shorts fire well below the drawn resistance.)
-            prox = (atr_g * self.STRUCT_LEVEL_PROXIMITY_ATR) if atr_g else price * 0.006
-            near = ((price - level) <= prox) if bullish else ((level - price) <= prox)
-            if not (tested or near):
-                _dist = abs(level - price)
-                return 'BLOCK', (f'{level_name}_reversal confirmed ({_counts}) but price '
-                                 f'{price:.6g} still far from {level:.6g} '
-                                 f'(dist {_dist:.6g} > {prox:.6g}) — waiting for a closer entry')
-            if tested:
-                return 'PASS', f'{level_name}_reversal ({_counts}; {level:.6g} tested)'
-            return 'WARN', (f'{level_name}_reversal ({_counts}); price {price:.6g} within '
-                            f'{prox:.6g} of {level:.6g} — close entry, level not yet tagged')
+            level = support if bullish else resistance
+            dist  = abs(price - level)
+            tested = (any(((float(c[3]) <= level + tolerance) if bullish
+                           else (float(c[2]) >= level - tolerance)) for c in recent)
+                      if recent else False)
+            prox = (atr_g * self.STRUCT_LEVEL_PROXIMITY_ATR) if atr_g else price * 0.01
+            near = dist <= prox
+            if tested or near:
+                if confirmed:
+                    return 'PASS', f'{_lname}_reversal confirmed (5m {n5}/{self.STRUCT_5M_WINDOW}, 15m {n15}/{self.STRUCT_15M_WINDOW}) @ {level:.6g}'
+                if partly_confirmed:
+                    return 'PASS', f'{_lname}_reversal 5m-confirmed (5m {n5}/{self.STRUCT_5M_WINDOW}) @ {level:.6g}'
+                return 'WARN', f'{_lname}_reversal unconfirmed @ {level:.6g} — tighter SL'
+            if dist <= prox * 1.5:
+                return 'WAIT', f'approaching {level:.6g} (dist {dist:.6g}) — hold for a closer entry'
+            return 'PASS', f'{_lname}_reversal early entry (dist {dist:.6g}) — wide stop'
 
+        # ── CASE 2: BREAKOUT LEVEL (BUY at resistance / SELL at support) ───────
+        # Fire on retest, sustained momentum, or pre-break; else fire tagged weak.
         if breakout_level:
-            # Wrong side of the range (BUY at resistance / SELL at support).
-            # Valid ONLY as a completed BREAK-AND-RETEST — never on momentum
-            # alone.  Rule (user-specified after FIL BUY fired AT resistance and
-            # round-tripped, 2026-07-04):
-            #   1. the level must have BROKEN (price closed beyond it), then
-            #   2. price pulls back INTO the level and it HOLDS as the opposite
-            #      structure — old resistance now acting as SUPPORT for a BUY
-            #      (mirror for SELL), and
-            #   3. the bounce is confirmed by 2/2 closed 15m candles in the
-            #      signal direction.
-            # The old momentum-only shortcut (a strong push straight through the
-            # wall with no pullback) is REMOVED — that is exactly the entry that
-            # fires "at resistance" and reverses.  We wait for resistance→support
-            # to prove itself before entering.
-            #
-            # DYNAMIC level: the rolling 24h extreme moves the instant a breakout
-            # candle closes, so the break and retest are verified against the
-            # LEVEL THAT ACTUALLY BROKE when the predictor reports one.
-            level = resistance if bullish else support
-            if bullish and bool(result.get('resistance_broken_recent')):
-                _bl = float(result.get('broken_resistance_level', 0) or 0)
-                if 0 < _bl <= level:
-                    level = _bl
-            elif not bullish and bool(result.get('support_broken_recent')):
-                _bl = float(result.get('broken_support_level', 0) or 0)
-                if _bl >= level > 0:
-                    level = _bl
-            beyond = price > level if bullish else price < level
-            if not beyond:
-                return 'BLOCK', (f'{"BUY at resistance" if bullish else "SELL at support"} '
-                                 f'but the level has not broken '
-                                 f'(price {price:.6g} vs {level:.6g}) — '
-                                 f'pre-break entries rejected')
-            # Break-and-retest-hold on 5m (old level flips and holds) + the
-            # bounce confirmed on 2/2 closed 15m candles in the signal direction.
-            tol = max(price * 0.001, atr_g * 0.25)
-            retest_ok     = self._retest_held(
-                closed_5m[-self.STRUCT_RETEST_LOOKBACK:], side, level, tol)
-            confirmed_15m = n15 >= self.STRUCT_15M_MIN
-            # Break-candle quality on the level's OWN (1h) timeframe: a decisive
-            # body + above-average volume = strong break (higher confidence); a
-            # wick-only or low-volume push is a weak break (a sweep) → downgrade.
-            _bq_strong, _bq_weak = True, []
-            try:
-                _bq_raw = await self._fetch_candles(symbol, '1h', 40)
-                _bq_c   = _bq_raw[:-1] if len(_bq_raw) >= 2 else _bq_raw
-                _bq_strong, _bq_weak = self._breakout_quality(_bq_c[-20:], level, bullish, atr_g)
-            except Exception:
-                pass
-            if retest_ok and confirmed_15m:
-                _flip = 'support' if bullish else 'resistance'
-                if _bq_strong:
-                    return 'PASS', (f'breakout_retest (level {level:.6g} broke, retested and '
-                                    f'held as {_flip}; 15m {n15}/{self.STRUCT_15M_WINDOW} confirmed; '
-                                    f'strong break)')
-                return 'WARN', (f'breakout_retest (level {level:.6g} broke and held as {_flip}) '
-                                f'but WEAK break [{",".join(_bq_weak)}] — lower confidence')
-
-            # CONFIRMED breakout CONTINUATION — follow the trend when the break runs
-            # and does NOT come back to retest.  A strong break often never gives a
-            # retest; requiring one misses the whole move.  We follow it only when
-            # the break is genuinely confirmed (not the FIL single-spike fakeout):
-            #   • the last STRUCT_BREAKOUT_MIN_HOLD closed 5m candles ALL closed
-            #     beyond the broken level (price is established beyond, not
-            #     spiking through and reversing), AND
-            #   • both 5m and 15m are trending in the breakout direction, AND
-            #   • price has not already run > MAX_EXT ATRs past the level (so it's
-            #     an early continuation, not a late chase into a parabola).
-            _beyond_close = ((lambda c: float(c[4]) > level) if bullish
-                             else (lambda c: float(c[4]) < level))
-            _recent5 = closed_5m[-self.STRUCT_BREAKOUT_MIN_HOLD:]
-            _held    = (len(_recent5) >= self.STRUCT_BREAKOUT_MIN_HOLD
-                        and all(_beyond_close(c) for c in _recent5))
-            _ext     = (price - level) if bullish else (level - price)
+            level  = resistance if bullish else support
+            beyond = (price > level) if bullish else (price < level)
+            if beyond and self._retest_held(recent, side, level, tolerance):
+                return 'PASS', f'breakout_retest {"confirmed" if confirmed else "unconfirmed"} @ {level:.6g}'
+            _recent5 = closed_5m[-self.STRUCT_BREAKOUT_MIN_HOLD:] if closed_5m else []
+            _bc = (lambda c: float(c[4]) > level) if bullish else (lambda c: float(c[4]) < level)
+            _held = (len(_recent5) >= self.STRUCT_BREAKOUT_MIN_HOLD and all(_bc(c) for c in _recent5))
+            _ext = (price - level) if bullish else (level - price)
             _overext = atr_g > 0 and _ext > atr_g * self.STRUCT_BREAKOUT_MAX_EXT_ATR
-            _strong  = (n5 >= self.STRUCT_5M_MIN and n15 >= self.STRUCT_15M_MIN)
-            # STRICT: the CURRENT structural level must ITSELF have broken — price
-            # is genuinely below the current support (SELL) / above the current
-            # resistance (BUY), not merely below some older/higher broken level
-            # while still sitting IN the support zone above the current support.
-            # Shorting while price is still above the current support is shorting
-            # INTO support (where it bounces): in a bear at support, wait for a
-            # reversal BUY or for support to actually break — never sell at it.
-            # A clean breakaway (price already below the current support) still
-            # fires, so trend-following breakdowns are unaffected.
-            _broke_current = (price < support) if not bullish else (price > resistance)
-            if _held and _strong and not _overext and _broke_current:
-                _dir  = 'up' if bullish else 'down'
-                _wtag = f'; WEAK break [{",".join(_bq_weak)}]' if _bq_weak else '; strong break'
-                return 'WARN', (f'breakout_continuation (level {level:.6g} broke and held '
-                                f'{_dir} for {self.STRUCT_BREAKOUT_MIN_HOLD}+ closed 5m bars; '
-                                f'{_counts}; following trend without retest{_wtag})')
+            if _held and not _overext:
+                return 'PASS', f'breakout_continuation {"confirmed" if confirmed else "momentum"} @ {level:.6g}'
+            if abs(level - price) <= atr_g * 0.5:
+                return 'PASS', f'pre_breakout (dist {abs(level - price):.6g} to {level:.6g}) — early entry, wide stop'
+            if beyond:
+                return 'WARN', f'post_break_pullback @ {level:.6g} — wider stop'
+            return 'WARN', f'breakout_ambiguous @ {level:.6g} — wider stop'
 
-            if not _broke_current:
-                _cur = support if not bullish else resistance
-                _act = ('SELL while price still ABOVE support' if not bullish
-                        else 'BUY while price still BELOW resistance')
-                return 'BLOCK', (f'{_act} {_cur:.6g} (price {price:.6g}) — not a breakdown '
-                                 f'yet; at {"support" if not bullish else "resistance"} the '
-                                 f'engine waits for a reversal or a real break, never enters '
-                                 f'into the level')
-            _why = ('no retest-hold or sustained run yet' if not retest_ok
-                    else f'retest held, 15m bounce unconfirmed '
-                         f'({n15}/{self.STRUCT_15M_MIN})')
-            _flip_txt = 'resistance->support' if bullish else 'support->resistance'
-            return 'BLOCK', (f'level {level:.6g} broke - {_why} - waiting for '
-                             f'{_flip_txt} retest OR a confirmed sustained run')
-
-        # Unreachable: mid-range is held as WAIT before the candle fetch.
-        return 'WAIT', f'mid-range (range_pos={range_pos:.2f}) — waiting for S/R'
-
+        # ── CASE 3: MID-RANGE — fire with a WIDER stop (model conviction) ──────
+        target = resistance if bullish else support
+        if len(closed_5m) >= 2:
+            _chg = float(closed_5m[-1][4]) - float(closed_5m[-2][4])
+            moving_toward = (_chg > 0) if bullish else (_chg < 0)
+        else:
+            moving_toward = False
+        if moving_toward:
+            return 'PASS', f'mid_range moving to {("resistance" if bullish else "support")} {target:.6g} — wide stop'
+        return 'PASS', f'mid_range model_conviction (range_pos={range_pos:.2f}) — wide stop'
     @staticmethod
     def _retest_held(candles: list, side: str, level: float, tol: float) -> bool:
         """
@@ -4150,10 +3976,20 @@ class LiveEngine:
         # SL anchored to the gate's invalidation level (support for a LONG,
         # resistance for a SHORT); TP ladder blends RR-multiples with the
         # structural target and fib extensions.
+        # v42: loose entries (mid-range / early / unconfirmed) get a WIDER SL cap
+        # so the structural stop isn't noise-tight when we fired without a tag.
+        _em_l = (entry_mode or '').lower()
+        if 'mid_range' in _em_l:
+            _sl_cap = 2.5
+        elif any(t in _em_l for t in ('early entry', 'unconfirmed', 'wide stop', 'ambiguous', 'pullback', 'pre_breakout')):
+            _sl_cap = 2.2
+        else:
+            _sl_cap = self.risk_engine.ATR_SL_MULTIPLIER
         stops = self.risk_engine.calculate_stops(
             price=price, side=side, atr=atr,
             support    = float(result.get('support', 0) or 0),
             resistance = float(result.get('resistance', 0) or 0),
+            sl_cap_atr = _sl_cap,
         )
 
         stop_loss = stops['sl']
