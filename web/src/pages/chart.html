@@ -2150,7 +2150,7 @@ function renderSignalGenesis(sig) {
   const _htfBias = b => b > 0.0001 ? 'BULL' : b < -0.0001 ? 'BEAR' : 'NEUTRAL';
   const htfOppose = isShort ? (_mw > 0 && _md > 0) : (_mw < 0 && _md < 0);
   const edgeVal = Number(sig.edge_score) || 0;
-  const edgeOk  = edgeVal >= 70;
+  const edgeOk  = edgeVal >= 60;   // engine edge floor is 60 (MIN_QUALITY_SCORE, v43)
   const fbDetected = sig.is_fake_breakout === true;
   const qVal = Number(sig.quality_score) || 0;
   const ctxOk = qVal >= 70;                       // advisory context-quality floor
@@ -2196,7 +2196,7 @@ function renderSignalGenesis(sig) {
         htfOppose ? 'CONFLICT' : 'ALIGNED', htfOppose && !fired)}
     ${confRow}
     ${gate('', atrOk,  'Gate 2 · ATR Floor', `Minimum 0.8% volatility required for valid entry`, `${(sig.atr_pct||0).toFixed(2)}%`)}
-    ${gate('', edgeOk, 'Gate 3 · Model Edge', `Model edge score ≥ 70 required to fire`, `${edgeVal.toFixed(0)}/100`, !edgeOk && !fired)}
+    ${gate('', edgeOk, 'Gate 3 · Model Edge', `Model edge score ≥ 60 required to fire`, `${edgeVal.toFixed(0)}/100`, !edgeOk && !fired)}
     ${gate('', ctxOk,  'Gate 3b · Context Quality', `Advisory — heuristic setup quality (floor 70), not a hard block. Score: ${qVal.toFixed(0)}`, `${qVal.toFixed(0)}/100`, true)}
     ${gate('', !fbDetected, 'Gate 3c · Fake Breakout', fbDetected ? 'Exhaustion / fake-breakout pattern detected' : 'No exhaustion / fake-breakout pattern', fbDetected ? 'DETECTED' : 'CLEAR', true)}
     ${gate('', !stabWarn, 'Gate 3.8 · Signal Stability', stabWarn ? 'Direction not yet stable across recent cycles' : 'Direction stable across recent cycles', stabWarn ? 'FORMING' : 'STABLE', true)}
