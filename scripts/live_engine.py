@@ -2059,12 +2059,10 @@ class LiveEngine:
     # level OR price is within this many ATRs of it. Back to 0.9 (0.5 was too tight
     # and muted most S/R reversals — the PRIMARY setup — leaving the fire rate low).
     STRUCT_LEVEL_PROXIMITY_ATR = 0.9
-    # "In the zone": an entry may fire while price is within this fraction of the
-    # support->resistance RANGE from the level (≈15% away is close enough; beyond
-    # that the entry is too far from structure — bad R:R — and waits for a closer
-    # price). A per-token % of the ACTUAL S/R span, not a fixed price %. Floored by
-    # STRUCT_LEVEL_PROXIMITY_ATR so a very tight range never zeroes the fire rate.
-    STRUCT_SR_ZONE_PCT = 0.15
+    # (Removed) STRUCT_SR_ZONE_PCT — the old "15% of the S/R range" mid-range
+    # tolerance. It was dead since v33/v34 (the swing zone-opening that used it was
+    # deleted); location is governed solely by STRUCT_SUPPORT_ZONE/RESISTANCE_ZONE
+    # on range_position now. Removed so nobody thinks it still fires anything.
     # Counter-trend REVERSAL (buy at support in a bear / sell at resistance in a
     # bull) must be at a genuine RSI extreme — a "reversal" with mid RSI is a
     # bounce that resumes (the falling-knife longs / squeezed shorts). Long
