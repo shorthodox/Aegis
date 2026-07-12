@@ -54,7 +54,10 @@ FIRE_THRESHOLD   = 45.0   # winning score must reach this (looser — steadier s
 FIRE_MARGIN      = 3.0    # winner must beat HOLD by this much
 DIR_MARGIN       = 3.0    # winner must beat the OTHER direction by this much
 SR_MIN           = 0.35   # srQuality below this → no-valid-S/R veto (V3)
-ATR_FLOOR_PCT    = 0.5    # atr_pct below this (%) → dead-market veto (V2)
+HOLD_DIR_FACTOR  = 0.7    # fraction of the un-won directional weight that pools in HOLD
+                          # (<1 so a few neutral gates don't let HOLD veto a clear lead)
+DEAD_ATR_PCT     = 0.15   # atr_pct below this (%) → truly flatlined → dead-market veto (V2)
+ATR_QUALITY_FLOOR= 0.20   # ATR quality gate ramps from here; below = low (not zero) quality
 EXTREME_ATR_PCT  = 6.0    # atr_pct at/above this (%) → extreme-vol veto (V4) [abs proxy]
 EXTREME_ATR_MULT = 3.0    # …or atr_pct ≥ this × rolling-normal atr_pct, when supplied
 LOW_VOL_Z        = -1.6   # volume z at/below this (+ weak rel-vol) → dead-market veto
@@ -248,11 +251,13 @@ class WeightedGateScorer:
         add_qual('Fake Breakout', W_FAKEBREAK, 0.0 if bool(result.get('is_fake_breakout')) else 1.0)
         # 7 · Context quality — reuse SignalQualityFilter score (0..100)
         add_qual('Context Quality', W_CONTEXT, _f(ctx, 'quality_score', 50.0) / 100.0)
-        # 8 · ATR floor — healthy band = full, dead / extreme = 0
-        if atr_pct < ATR_FLOOR_PCT or atr_pct >= EXTREME_ATR_PCT:
+        # 8 · ATR floor — healthy band = full, extreme = 0. Low volatility is a soft
+        # quality penalty (floor 0.3), NOT a zero — a calm-but-liquid market is still
+        # tradeable; only a genuine ATR spike zeroes it (the veto handles the extremes).
+        if atr_pct >= EXTREME_ATR_PCT:
             atr_q = 0.0
         else:
-            atr_q = _clip((atr_pct - ATR_FLOOR_PCT) / (2.0 - ATR_FLOOR_PCT), 0.3, 1.0)
+            atr_q = _clip((atr_pct - ATR_QUALITY_FLOOR) / (2.0 - ATR_QUALITY_FLOOR), 0.3, 1.0)
         add_qual('ATR Floor', W_ATR, atr_q)
         # 9 · Signal stability
         add_qual('Signal Stability', W_STABILITY, _f(ctx, 'stability_frac', 0.5))
@@ -277,15 +282,18 @@ class WeightedGateScorer:
         leader_buy = buy_frac >= sell_frac
         score_buy  = round(_clip(buy_frac  * W_DIR + (qual_gain if leader_buy else 0.0), 0.0, 100.0), 1)
         score_sell = round(_clip(sell_frac * W_DIR + (0.0 if leader_buy else qual_gain), 0.0, 100.0), 1)
-        score_hold = round(_clip((1.0 - max(buy_frac, sell_frac)) * W_DIR + (W_QUAL - qual_gain), 0.0, 100.0), 1)
+        score_hold = round(_clip((1.0 - max(buy_frac, sell_frac)) * W_DIR * HOLD_DIR_FACTOR
+                                 + (W_QUAL - qual_gain), 0.0, 100.0), 1)
 
         # ── HARD VETOES ───────────────────────────────────────────────────────
         vetoes: List[str] = []
         if bool(ctx.get('drift_blocked')) or sev == 'CRITICAL':
             vetoes.append('MODEL_DRIFT_CRITICAL')
-        # V2 dead / invalid market — thin ATR, collapsed volume, OR a wide book spread.
+        # V2 dead / invalid market — LIQUIDITY, not low volatility: collapsed volume,
+        # a wide book spread, or a genuinely flatlined ATR. A calm-but-liquid market
+        # (e.g. 0.49% ATR with healthy volume) is tradeable and must NOT be vetoed.
         spread_pct = _f(ctx, 'spread_pct', 0.0)
-        if (atr_pct < ATR_FLOOR_PCT or (vol_z <= LOW_VOL_Z and rel_vol < 0.6)
+        if (atr_pct < DEAD_ATR_PCT or (vol_z <= LOW_VOL_Z and rel_vol < 0.6)
                 or spread_pct > SPREAD_MAX_PCT):
             vetoes.append('DEAD_MARKET')
         _rr = _sr_rr(result)
