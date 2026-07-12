@@ -48,6 +48,15 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+from src.trading.gate_scorer import WeightedGateScorer
+
+# ── Unified Weighted Gate Score (UWGS) ────────────────────────────────────────
+# When True, the weighted per-direction gate score (src/trading/gate_scorer.py) is
+# the SOLE authority for signal direction, quality, and firing — it replaces the
+# legacy hard/advisory gate cascade in _process_symbol. Flip to False to revert to
+# the old model-led path instantly (kept intact behind the flag).
+USE_WEIGHTED_SCORER = True
+
 MODEL_STORE       = _ROOT / 'src' / 'ml' / 'model_store'
 
 # ── Persistent runtime STATE directory ────────────────────────────────────────
@@ -2504,6 +2513,36 @@ class LiveEngine:
                 result, regime, new_side)
             fake_breakout = self.quality_filter.is_fake_breakout(result, new_side)
 
+            # ── UWGS: weighted per-direction score is the SOLE fire authority ─────
+            # Scored BEFORE _build_signal_entry so that if the score picks the other
+            # side than the model, the SL/TP ladder is built for the chosen side.
+            if USE_WEIGHTED_SCORER:
+                result['is_fake_breakout'] = fake_breakout
+                result['price'] = price
+                _hist = self._signal_history.get(symbol)
+                _stab = (sum(1 for x in _hist if x == new_side) / len(_hist)) if _hist else 0.5
+                _uwgs = WeightedGateScorer.score(
+                    result, regime,
+                    {
+                        'drift_blocked':  self.drift_monitor.is_blocked(symbol),
+                        'drift_severity': self.drift_monitor.severity(symbol),
+                        'stability_frac': _stab,
+                        'quality_score':  quality_score,
+                        'portfolio_ok':   True,
+                    },
+                )
+                result['side']          = _uwgs['side']
+                result['fire']          = _uwgs['fire']
+                result['tradeable']     = True
+                result['signal_scores'] = {'buy':  _uwgs['score_buy'],
+                                           'sell': _uwgs['score_sell'],
+                                           'hold': _uwgs['score_hold']}
+                result['gate_breakdown'] = _uwgs['breakdown']
+                result['vetoes']         = _uwgs['vetoes']
+                result['sr_quality']     = _uwgs['sr_quality']
+                new_side      = result['side']
+                quality_score = _uwgs['quality_score']
+
             # Build signal entry with enriched fields
             self.last_signals[symbol] = self._build_signal_entry(
                 symbol, result, price, regime=regime,
@@ -2596,6 +2635,27 @@ class LiveEngine:
                     # Advisory gates append here instead of returning; the
                     # budget check runs after all gates have been evaluated.
                     _gate_warnings: List[str] = []
+
+                    # ── UWGS short-circuit: the weighted score already applied every
+                    # gate weight + the 4 hard vetoes and set result['fire'], so it is
+                    # the sole authority. Skip the legacy cascade and open directly.
+                    # entry_mode drives the SL cap; a firing UWGS signal sits at a
+                    # validated level (mid-range is vetoed) → treated as reversal-tight.
+                    if USE_WEIGHTED_SCORER:
+                        _rp_now     = float(result.get('range_position', 0.5) or 0.5)
+                        _entry_mode = 'reversal' if abs(_rp_now - 0.5) >= 0.3 else 'mid_range'
+                        _uwgs_q     = float(result.get('quality_score', 0.0) or 0.0)
+                        _risk_tier  = ('STRONG' if _uwgs_q >= 80 else
+                                       'NORMAL' if _uwgs_q >= 65 else 'RISKY')
+                        if symbol in self.last_signals:
+                            self.last_signals[symbol]['risk_tier'] = _risk_tier
+                        print(f'[{symbol}] UWGS FIRE {new_side} q={_uwgs_q:.0f} '
+                              f'scores={result.get("signal_scores", {})}')
+                        self._open_position(symbol, result, price, regime, _uwgs_q,
+                                            risk_tier=_risk_tier, entry_mode=_entry_mode,
+                                            gate_warnings=[])
+                        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                        return
 
                     # ── Gate 0: drift monitor — block critically degraded models ─
                     if self.drift_monitor.is_blocked(symbol):
@@ -4317,6 +4377,8 @@ class LiveEngine:
             # LSTM temporal intelligence fields
             'lstm_continuation_prob', 'lstm_vol_expansion_prob',
             'lstm_exhaustion_prob', 'lstm_available',
+            # UWGS — weighted per-direction gate score
+            'signal_scores', 'gate_breakdown', 'vetoes', 'sr_quality',
         )
         for k in _CONTEXT_KEYS:
             if k in result:

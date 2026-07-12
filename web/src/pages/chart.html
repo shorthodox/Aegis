@@ -2172,6 +2172,60 @@ function renderSignalGenesis(sig) {
       The gates below describe the <strong>open ${_heldDir.toLowerCase()}</strong> that is actually live — the model has since flipped, so this reads as a fading edge, not a conflict. The reversal-exit arms once the 1&nbsp;h minimum hold passes.
     </div>` : '';
 
+  // ── Unified Weighted Gate Score (UWGS) — the three scores that decide ─────────
+  const _ss  = sig.signal_scores || null;
+  const _sb  = Number((_ss || {}).buy  || 0);
+  const _ssl = Number((_ss || {}).sell || 0);
+  const _sh  = Number((_ss || {}).hold || 0);
+  const _uwWin = (!_ss) ? '' : (_sb >= _ssl && _sb >= _sh) ? 'BUY' : (_ssl >= _sh) ? 'SELL' : 'HOLD';
+  const _vetoes = Array.isArray(sig.vetoes) ? sig.vetoes : [];
+  const _bd = sig.gate_breakdown || {};
+  const _scoreBar = (label, val, color, win) => `
+    <div style="margin-bottom:7px">
+      <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px">
+        <span style="color:${win ? color : 'var(--dim)'};font-weight:${win ? 800 : 600}">${label}${win ? ' ◄ decides' : ''}</span>
+        <span style="font-family:'JetBrains Mono',monospace;color:${color};font-weight:800">${val.toFixed(1)}<span style="color:var(--dim);font-size:9px">/100</span></span>
+      </div>
+      <div style="height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden">
+        <div style="height:100%;width:${Math.min(100, val)}%;background:${color};opacity:${win ? 1 : 0.45}"></div>
+      </div>
+    </div>`;
+  const _vetoChips = _vetoes.length ? `
+    <div style="margin-top:9px;display:flex;flex-wrap:wrap;gap:6px">
+      ${_vetoes.map(v => `<span style="font-size:10.5px;padding:3px 9px;border-radius:6px;background:rgba(255,0,85,0.12);border:1px solid rgba(255,0,85,0.35);color:var(--red)">\u{1F6AB} ${String(v).replace(/_/g, ' ')}</span>`).join('')}
+    </div>` : '';
+  const _bdRows = Object.keys(_bd).map(name => {
+    const g = _bd[name] || {};
+    return `<tr>
+      <td style="padding:2px 8px;color:var(--dim)">${name}</td>
+      <td style="padding:2px 8px;text-align:right;color:var(--dim)">${g.weight != null ? g.weight : ''}</td>
+      <td style="padding:2px 8px;text-align:right;color:var(--green)">${Number(g.buy || 0).toFixed(1)}</td>
+      <td style="padding:2px 8px;text-align:right;color:var(--red)">${Number(g.sell || 0).toFixed(1)}</td>
+      <td style="padding:2px 8px;text-align:right;color:var(--dim)">${Number(g.hold || 0).toFixed(1)}</td>
+    </tr>`;
+  }).join('');
+  const uwgsPanel = _ss ? `
+    <div style="margin-bottom:14px;padding:12px 14px;background:rgba(0,0,0,0.28);border-radius:10px;border:1px solid rgba(255,255,255,0.08)">
+      <div style="font-size:11px;color:var(--dim);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px">
+        Weighted Gate Score · highest of the three decides direction, quality & fire${sig.sr_quality != null ? ` · S/R quality ${(Number(sig.sr_quality) * 100).toFixed(0)}%` : ''}
+      </div>
+      ${_scoreBar('BUY',  _sb,  'var(--green)', _uwWin === 'BUY')}
+      ${_scoreBar('SELL', _ssl, 'var(--red)',   _uwWin === 'SELL')}
+      ${_scoreBar('HOLD', _sh,  'var(--dim)',   _uwWin === 'HOLD')}
+      ${_vetoChips}
+      <details style="margin-top:10px">
+        <summary style="font-size:10.5px;color:var(--dim);cursor:pointer">Per-gate contribution (weight → buy / sell / hold)</summary>
+        <div style="overflow-x:auto"><table style="width:100%;font-size:10.5px;margin-top:6px;border-collapse:collapse">
+          <tr style="color:var(--dim);border-bottom:1px solid rgba(255,255,255,0.08)">
+            <td style="padding:2px 8px">Gate</td><td style="padding:2px 8px;text-align:right">Wt</td>
+            <td style="padding:2px 8px;text-align:right">Buy</td><td style="padding:2px 8px;text-align:right">Sell</td>
+            <td style="padding:2px 8px;text-align:right">Hold</td>
+          </tr>
+          ${_bdRows}
+        </table></div>
+      </details>
+    </div>` : '';
+
   el.innerHTML = `
     <div style="margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:10px;
@@ -2193,8 +2247,9 @@ function renderSignalGenesis(sig) {
     </div>
 
     ${divergeBanner}
+    ${uwgsPanel}
     ${convBadge}
-    <div style="font-size:11px;color:var(--dim);margin-bottom:8px;letter-spacing:1px;text-transform:uppercase">Gate Checks</div>
+    <div style="font-size:11px;color:var(--dim);margin-bottom:8px;letter-spacing:1px;text-transform:uppercase">Gate Checks <span style="text-transform:none;letter-spacing:0;opacity:.7">— raw gate states (the weighted score above is the decider)</span></div>
     <div style="font-size:9.5px;color:var(--dim);margin:-2px 0 8px;opacity:.8">HARD gates block outright · ADVISORY gates (orange) let it fire but tag it weaker</div>
     ${gate('', !driftBlocked, 'Gate 0 · Model Drift',
         driftBlocked ? 'Live win-rate critically below benchmark — model suppressed'
