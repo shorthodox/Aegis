@@ -58,6 +58,7 @@ ATR_FLOOR_PCT    = 0.5    # atr_pct below this (%) → dead-market veto (V2)
 EXTREME_ATR_PCT  = 6.0    # atr_pct at/above this (%) → extreme-vol veto (V4) [abs proxy]
 EXTREME_ATR_MULT = 3.0    # …or atr_pct ≥ this × rolling-normal atr_pct, when supplied
 LOW_VOL_Z        = -1.6   # volume z at/below this (+ weak rel-vol) → dead-market veto
+SPREAD_MAX_PCT   = 0.15   # book spread (%) above this → dead-market veto (illiquid)
 
 
 def _clip(x: float, lo: float = 0.0, hi: float = 1.0) -> float:
@@ -272,14 +273,20 @@ class WeightedGateScorer:
         vetoes: List[str] = []
         if bool(ctx.get('drift_blocked')) or sev == 'CRITICAL':
             vetoes.append('MODEL_DRIFT_CRITICAL')
-        if atr_pct < ATR_FLOOR_PCT or (vol_z <= LOW_VOL_Z and rel_vol < 0.6):
+        # V2 dead / invalid market — thin ATR, collapsed volume, OR a wide book spread.
+        spread_pct = _f(ctx, 'spread_pct', 0.0)
+        if (atr_pct < ATR_FLOOR_PCT or (vol_z <= LOW_VOL_Z and rel_vol < 0.6)
+                or spread_pct > SPREAD_MAX_PCT):
             vetoes.append('DEAD_MARKET')
         _rr = _sr_rr(result)
         if srq < SR_MIN or (0.42 < rp < 0.58) or (0 < _rr < 1.2):
             vetoes.append('NO_VALID_SR')
+        # V4 extreme volatility / news lock — ATR spike OR a scheduled macro event.
         atr_norm = _f(ctx, 'atr_normal_pct', 0.0)
         if atr_pct >= EXTREME_ATR_PCT or (atr_norm > 0 and atr_pct >= EXTREME_ATR_MULT * atr_norm):
             vetoes.append('EXTREME_VOLATILITY')
+        if ctx.get('news_locked'):
+            vetoes.append(str(ctx.get('news_label') or 'NEWS_LOCK'))
 
         # ── Winner + fire decision ────────────────────────────────────────────
         scores = {'BUY': score_buy, 'SELL': score_sell, 'HOLD': score_hold}

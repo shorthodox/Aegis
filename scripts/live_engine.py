@@ -49,6 +49,7 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from src.trading.gate_scorer import WeightedGateScorer
+from src.trading import econ_calendar
 
 # ── Unified Weighted Gate Score (UWGS) ────────────────────────────────────────
 # When True, the weighted per-direction gate score (src/trading/gate_scorer.py) is
@@ -269,6 +270,35 @@ def _fetch_ohlcv_sync(symbol: str, timeframe: str, limit: int) -> list:
             return _spot_ex.fetch_ohlcv(symbol, timeframe, limit=limit) or []
     except Exception:
         return []
+
+
+def _fetch_bids_asks_all() -> Dict[str, float]:
+    """Best bid/ask book spread (%) keyed by 'BASE/USDT' for the whole USDM fleet in
+    ONE call (bookTicker). Feeds the UWGS dead-market veto. Best-effort; never raises."""
+    global _usdm_ex
+    out: Dict[str, float] = {}
+    try:
+        import ccxt as _ccxt
+        if _usdm_ex is None:
+            _new = _ccxt.binanceusdm({'enableRateLimit': True, 'timeout': 8000})  # type: ignore[arg-type]
+            with _usdm_ex_lock:
+                if _usdm_ex is None:
+                    _usdm_ex = _new
+        with _usdm_ex_lock:
+            raw = _usdm_ex.fetch_bids_asks()          # /fapi/v1/ticker/bookTicker
+        items = raw.values() if isinstance(raw, dict) else (raw or [])
+        for t in items:
+            if not isinstance(t, dict):
+                continue
+            sym = str(t.get('symbol') or '')
+            bid = float(t.get('bid') or 0)
+            ask = float(t.get('ask') or 0)
+            if sym and bid > 0 and ask > 0:
+                mid = (bid + ask) / 2.0
+                out[sym.split(':')[0]] = (ask - bid) / mid * 100.0 if mid > 0 else 0.0
+    except Exception:
+        pass
+    return out
 
 
 # =============================================================================
@@ -2136,6 +2166,8 @@ class LiveEngine:
         self._last_close_time:  Dict[str, float] = {}
         self._last_close_side:  Dict[str, str]   = {}
         self._last_close_reason: Dict[str, str]  = {}   # reason of the most recent close (for reversal-flip throw)
+        self._spreads:          Dict[str, float] = {}   # symbol → book spread % (UWGS dead-market veto)
+        self._news_lock:        Tuple[bool, str] = (False, '')   # (locked?, label) — scheduled macro event
 
         # Signal direction history for stability gate (symbol → last N directions)
         self._signal_history:   Dict[str, Deque[str]] = {}
@@ -2266,6 +2298,10 @@ class LiveEngine:
             # redeploy (the recurring "signals stopped firing" stalls).  Now every
             # cycle is isolated: log the traceback and keep scanning.
             try:
+                # Once per cycle (market-wide): refresh the news-lock window and the
+                # book spreads that feed the UWGS dead-market / news vetoes.
+                self._news_lock = econ_calendar.is_locked()
+                await self._refresh_spreads()
                 await self._scan_all()
                 self._save_track_record()
                 if self.alpha_mode:
@@ -2399,6 +2435,20 @@ class LiveEngine:
         await self._fetch_index_prices()
         self.bootstrap_done = len(self.predictors)
 
+    async def _refresh_spreads(self) -> None:
+        """Refresh best bid/ask book spreads (%) for the fleet — one bulk call per
+        cycle, off the event loop. Feeds the UWGS dead-market veto. Never raises."""
+        try:
+            loop = asyncio.get_event_loop()
+            books = await asyncio.wait_for(
+                loop.run_in_executor(self._executor, _fetch_bids_asks_all),
+                timeout=10,
+            )
+            if books:
+                self._spreads = books
+        except Exception:
+            pass
+
     async def _fetch_index_prices(self) -> None:
         """Fetch spot prices for market overview symbols not covered by the tradeable fleet."""
         missing = [s for s in self._INDEX_SYMBOLS if s not in self.live_prices]
@@ -2529,6 +2579,9 @@ class LiveEngine:
                         'stability_frac': _stab,
                         'quality_score':  quality_score,
                         'portfolio_ok':   True,
+                        'spread_pct':     self._spreads.get(symbol, 0.0),
+                        'news_locked':    self._news_lock[0],
+                        'news_label':     self._news_lock[1],
                     },
                 )
                 result['side']          = _uwgs['side']
