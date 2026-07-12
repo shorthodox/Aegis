@@ -54,9 +54,11 @@ FIRE_THRESHOLD   = 45.0   # winning score must reach this (looser — steadier s
 FIRE_MARGIN      = 3.0    # winner must beat HOLD by this much
 DIR_MARGIN       = 3.0    # winner must beat the OTHER direction by this much
 SR_MIN           = 0.35   # srQuality below this → no-valid-S/R veto (V3)
-AT_LEVEL_RP      = 0.25   # a BUY must fire with range_position ≤ this (at support), a
-                          # SELL with range_position ≥ 1-this (at resistance). Enforces
-                          # "entries AT S/R" — no buying a pullback in open mid-range.
+AT_LEVEL_ATR     = 1.0    # winning direction must fire within this many ATR of its level
+                          # (BUY ≤ this above support, SELL ≤ this below resistance).
+                          # ATR distance, NOT range_position — 25% of a WIDE range can
+                          # still be 1.5 ATR from the level. The "how close to S/R" dial.
+AT_LEVEL_RP      = 0.25   # fallback proximity when support/price/atr is unavailable
 HOLD_DIR_FACTOR  = 0.7    # fraction of the un-won directional weight that pools in HOLD
                           # (<1 so a few neutral gates don't let HOLD veto a clear lead)
 DEAD_ATR_PCT     = 0.15   # atr_pct below this (%) → truly flatlined → dead-market veto (V2)
@@ -315,12 +317,21 @@ class WeightedGateScorer:
         win_score = scores[winner]
         other_dir = score_sell if winner == 'BUY' else score_buy
 
-        # The winning DIRECTION must be AT its structural level — a BUY at support
-        # (range_position ≤ AT_LEVEL_RP), a SELL at resistance (≥ 1-AT_LEVEL_RP).
-        # The score may LEAN a direction from mid-range, but it only fires when price
-        # is actually at the level — never on a pullback sitting in open space.
-        if ((winner == 'BUY'  and rp > AT_LEVEL_RP) or
-                (winner == 'SELL' and rp < 1.0 - AT_LEVEL_RP)):
+        # The winning DIRECTION must be AT its level, measured in ATR distance — a BUY
+        # within AT_LEVEL_ATR of support, a SELL within AT_LEVEL_ATR of resistance.
+        # range_position alone is a poor proxy: 25% of a WIDE range can still be 1.5
+        # ATR from the level, which is why pullbacks kept firing "not at support".
+        _px  = _f(result, 'price') or _f(result, 'entry_price')
+        _atr = (atr_pct / 100.0) * _px
+        _sup = _f(result, 'support')
+        _res = _f(result, 'resistance')
+        if winner == 'BUY':
+            _far = ((_px - _sup) / _atr > AT_LEVEL_ATR) if (_atr > 0 and _sup > 0) else (rp > AT_LEVEL_RP)
+        elif winner == 'SELL':
+            _far = ((_res - _px) / _atr > AT_LEVEL_ATR) if (_atr > 0 and _res > 0) else (rp < 1.0 - AT_LEVEL_RP)
+        else:
+            _far = False
+        if _far:
             vetoes.append('FAR_FROM_SR')
 
         fire = (
