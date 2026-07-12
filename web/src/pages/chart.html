@@ -2156,6 +2156,22 @@ function renderSignalGenesis(sig) {
   const ctxOk = qVal >= 70;                       // advisory context-quality floor
   const stabWarn = _warns.some(w => String(w).toLowerCase().startsWith('stability'));
 
+  // ── Held-position vs current-model divergence ──────────────────────────────
+  // The gate breakdown above is pinned to the live OPEN trade (_openPos) so a
+  // healthy position never shows a false VETO — but the MODEL DECISION panel
+  // below shows the CURRENT scan's probabilities, which can have since flipped
+  // to the opposite side. When they disagree, label it explicitly so the panel
+  // reads as "holding X, model now leans Y" instead of self-contradictory.
+  const _modelSide = (sig.p_sell || 0) > (sig.p_buy || 0) ? 'SHORT' : 'LONG';
+  const _modelPct  = Math.max(sig.p_buy || 0, sig.p_sell || 0) * 100;
+  const _heldDir   = _openPos ? _openPos.direction : null;
+  const _divergent = _openPos && (sig.p_buy || sig.p_sell) && _heldDir !== _modelSide;
+  const divergeBanner = _divergent ? `
+    <div style="margin-bottom:14px;padding:10px 12px;background:rgba(184,150,106,0.08);border:1px solid rgba(184,150,106,0.28);border-radius:8px;font-size:12px;color:#B8966A;line-height:1.5">
+      ↩ <strong>Holding ${_heldDir}</strong> · model now leans <strong>${_modelSide} ${_modelPct.toFixed(0)}%</strong>.
+      The gates below describe the <strong>open ${_heldDir.toLowerCase()}</strong> that is actually live — the model has since flipped, so this reads as a fading edge, not a conflict. The reversal-exit arms once the 1&nbsp;h minimum hold passes.
+    </div>` : '';
+
   el.innerHTML = `
     <div style="margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:10px;
@@ -2176,6 +2192,7 @@ function renderSignalGenesis(sig) {
       </div>
     </div>
 
+    ${divergeBanner}
     ${convBadge}
     <div style="font-size:11px;color:var(--dim);margin-bottom:8px;letter-spacing:1px;text-transform:uppercase">Gate Checks</div>
     <div style="font-size:9.5px;color:var(--dim);margin:-2px 0 8px;opacity:.8">HARD gates block outright · ADVISORY gates (orange) let it fire but tag it weaker</div>
