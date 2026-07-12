@@ -2,6 +2,14 @@ import pandas as pd
 import numpy as np
 from typing import Dict, Any, Union
 
+# ── S/R location weight ───────────────────────────────────────────────────────
+# Market-structure component magnitude: "hit resistance → weight SELL; hit support
+# → weight BUY", and dock the wrong side symmetrically. Raised from the original
+# ±10 so a correct-side-at-level signal clears the edge floor even when an opposing
+# macro trend (Trend Component, ±15) would otherwise cancel it — the reversal-at-S/R
+# setups have the best R/R and were being scored down into the ignore bucket.
+SR_STRUCTURE_WEIGHT: float = 20.0
+
 class EdgeScoringEngine:
     """
     Computes an Edge Score (0-100) combining multiple factors to replace the boolean
@@ -90,13 +98,14 @@ class EdgeScoringEngine:
             atr_pct = pd.Series(0.015, index=df.index)
         volatility_component = (atr_pct * 400.0 - 5.0).clip(-10.0, 10.0)
 
-        # 7. Market Structure Component (-10 to +10 points)
+        # 7. Market Structure Component (-SR_STRUCTURE_WEIGHT to +SR_STRUCTURE_WEIGHT)
+        # Hit support → weight BUY; hit resistance → weight SELL; wrong side docked.
         at_sup = _get_s('is_at_support')
         at_res = _get_s('is_at_resistance')
         if side == 'BUY':
-            structure_component = (at_sup * 10.0 - at_res * 10.0).clip(-10.0, 10.0)
+            structure_component = (at_sup * SR_STRUCTURE_WEIGHT - at_res * SR_STRUCTURE_WEIGHT).clip(-SR_STRUCTURE_WEIGHT, SR_STRUCTURE_WEIGHT)
         else:
-            structure_component = (at_res * 10.0 - at_sup * 10.0).clip(-10.0, 10.0)
+            structure_component = (at_res * SR_STRUCTURE_WEIGHT - at_sup * SR_STRUCTURE_WEIGHT).clip(-SR_STRUCTURE_WEIGHT, SR_STRUCTURE_WEIGHT)
 
         # Total Edge Score
         edge_score = (
@@ -286,13 +295,14 @@ class EdgeScoringEngine:
         atr_pct = float(result.get('atr_pct', 0.015) or 0.015)
         volatility_component = min(10.0, max(-10.0, atr_pct * 400.0 - 5.0))
 
-        # 7. Market Structure Component (-10 to +10)
+        # 7. Market Structure Component (-SR_STRUCTURE_WEIGHT to +SR_STRUCTURE_WEIGHT)
+        # Hit support → weight BUY; hit resistance → weight SELL; wrong side docked.
         at_sup = float(result.get('is_at_support', 0.0) or 0.0)
         at_res = float(result.get('is_at_resistance', 0.0) or 0.0)
         if side == 'BUY':
-            structure_component = min(10.0, max(-10.0, at_sup * 10.0 - at_res * 10.0))
+            structure_component = min(SR_STRUCTURE_WEIGHT, max(-SR_STRUCTURE_WEIGHT, at_sup * SR_STRUCTURE_WEIGHT - at_res * SR_STRUCTURE_WEIGHT))
         else:
-            structure_component = min(10.0, max(-10.0, at_res * 10.0 - at_sup * 10.0))
+            structure_component = min(SR_STRUCTURE_WEIGHT, max(-SR_STRUCTURE_WEIGHT, at_res * SR_STRUCTURE_WEIGHT - at_sup * SR_STRUCTURE_WEIGHT))
 
         # Total
         edge_score = (
