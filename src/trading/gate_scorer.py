@@ -54,6 +54,9 @@ FIRE_THRESHOLD   = 45.0   # winning score must reach this (looser — steadier s
 FIRE_MARGIN      = 3.0    # winner must beat HOLD by this much
 DIR_MARGIN       = 3.0    # winner must beat the OTHER direction by this much
 SR_MIN           = 0.35   # srQuality below this → no-valid-S/R veto (V3)
+MODEL_AGREE_MARGIN = 0.05 # veto a fire when the ML model opposes the winning direction
+                          # by more than this (p_sell−p_buy for a BUY). The score may
+                          # override a NEUTRAL model, not one clearly leaning the other way.
 AT_LEVEL_ATR     = 1.0    # winning direction must fire within this many ATR of its level
                           # (BUY ≤ this above support, SELL ≤ this below resistance).
                           # ATR distance, NOT range_position — 25% of a WIDE range can
@@ -333,6 +336,13 @@ class WeightedGateScorer:
             _far = False
         if _far:
             vetoes.append('FAR_FROM_SR')
+
+        # Model-agreement veto — don't fire a direction the ML model clearly opposes.
+        # The weighted score can override a NEUTRAL model, but not one leaning the
+        # other way past MODEL_AGREE_MARGIN (raw dual-model p_buy / p_sell).
+        if ((winner == 'BUY'  and (p_sell - p_buy) > MODEL_AGREE_MARGIN) or
+                (winner == 'SELL' and (p_buy - p_sell) > MODEL_AGREE_MARGIN)):
+            vetoes.append('MODEL_DISAGREES')
 
         fire = (
             not vetoes
