@@ -51,12 +51,23 @@ if str(_ROOT) not in sys.path:
 from src.trading.gate_scorer import WeightedGateScorer
 from src.trading import econ_calendar
 
-# ── Unified Weighted Gate Score (UWGS) ────────────────────────────────────────
-# When True, the weighted per-direction gate score (src/trading/gate_scorer.py) is
-# the SOLE authority for signal direction, quality, and firing — it replaces the
-# legacy hard/advisory gate cascade in _process_symbol. Flip to False to revert to
-# the old model-led path instantly (kept intact behind the flag).
+# ── Decision architecture: MODEL-FIRST, UWGS as confirmation ──────────────────
+# The ML model (predictor.predict_realtime) is the SOLE authority for signal
+# side + fire — this is the ~80%-WR decision that earlier worked. UWGS
+# (src/trading/gate_scorer.py) is computed for the chart breakdown, the risk
+# tier, and the four genuinely protective HARD vetoes only. It no longer picks
+# the side: demoting the proven model to 14/100 points and letting a
+# location-weighted composite (plus a MODEL_DISAGREES veto) override it is what
+# collapsed signal quality. When True, UWGS runs in this confirmation-only role;
+# False disables the UWGS computation entirely (model + hard vetoes still fire).
 USE_WEIGHTED_SCORER = True
+
+# Only these UWGS vetoes may BLOCK a model signal — the genuinely protective
+# ones. Everything else UWGS reports (FAR_FROM_SR, NO_VALID_SR) becomes a RISKY
+# tier downgrade so the model's signal still fires (flagged), never silenced;
+# MODEL_DISAGREES is ignored outright (meaningless once the model decides).
+# The scheduled-news lock is handled separately (its label is dynamic).
+_HARD_VETOES = frozenset({'MODEL_DRIFT_CRITICAL', 'DEAD_MARKET', 'EXTREME_VOLATILITY'})
 
 MODEL_STORE       = _ROOT / 'src' / 'ml' / 'model_store'
 
@@ -2068,7 +2079,7 @@ class LiveEngine:
     # track_record.json → visible at /api/engine-track-record.  If the live
     # payload shows an older (or no) version, the server is running stale
     # code — the recurring "gate fix didn't work" false alarm.
-    GATE_VERSION = 'structure-gate-v46 (v45 + REJECTION FAST-PATH: once price has TAGGED a level and moved back >STRUCT_REJECTION_PCT (10%) of the range off it — a SELL now >10% BELOW the resistance it hit, a BUY >10% ABOVE the support it hit — the reversal FIRES immediately. The rejection is the confirmation, so it bypasses the counter-trend 2-candle wait and the far-from-level pending. NOTE: direction still comes from the ML model — this fires a model SELL/BUY faster on a confirmed rejection, it does not create a SELL against a bullish model) # v45 (v44 + HTF-WALL EXHAUSTION BLOCK: Gate 1.8 now HARD-blocks a BUY buying into a nearby 4h/1d resistance (<2.5 ATR overhead) while RSI > 72 overbought — and the mirror SELL into a nearby 4h/1d support while RSI < 28 oversold. That is the exhaustion chase at the top/bottom of an extended move whose first target sits beyond the HTF wall (AAVE LONG, RSI 89, TP1 above 4H/D resistance). Mild overhead/below without an RSI extreme stays advisory) # v44 (v43 + COUNTER-TREND NEEDS 2 CANDLES: a counter-trend reversal at the level (SELL in an ADX-trending bull / BUY in a bear) no longer fires unconfirmed — it WAITS (pending) until >=2 of the 5m candles have turned in the signal direction, so we do not short a still-rising move / buy a still-falling one (the UNI 3.778 case). Aligned + range reversals still fire immediately at the level) # v43 (v42 + SMART STRICT (higher WR, count preserved via pending): the 3 WEAKEST fires now WAIT/pending instead of firing — reversal FAR from the level, mid-range with NO 5m momentum, and an UNCONFIRMED wrong-side breakout (no retest/momentum/pre-break). They fire later when price reaches the level or the move starts. Kept firing: at/near-level reversals (even unconfirmed), momentum mid-range, confirmed breakouts (retest/momentum/pre-break). Config: edge floor 55->60, ATR floor 0.4->0.5pct, advisory budget non-binding->4) # v42 (v41 + AGGRESSIVE FIRE-AT-S/R: reversals fire IMMEDIATELY at the level (confirmation is a BONUS, not required); MID-RANGE fires with a wider stop instead of pending; wrong-side breakouts fire on retest/momentum/pre-break; zones 0.20/0.80->0.35/0.65; proximity 0.9->1.5 ATR; advisory budget non-binding; edge floor 70->55; ATR floor 0.8->0.4pct; cooldowns 30m/1h->5m/10m; _swing_sr nearer k; loose entries get 2.2-2.5 ATR SL cap. TRADEOFF: max signal capture, more false positives / lower win-rate by design) # v41 (v40 + HTF S/R CONFLUENCE (Gate 1.8): pool the nearest 4h+1d swing S/R (_htf_sr) and, as an ADVISORY, downgrade a BUY with a major HTF resistance right overhead (<1 ATR room) or a SELL with major HTF support right below — trade WITH the big structure, not into it. Firing still gated on the 1h zone (rate unchanged); HTF only warns/tags. The 4h/1d levels are drawn on the chart as purple 4H/D lines) # v40 (v39 + REVERT v38 swing-S/R zone: the gate classifies location on the 24h rolling range_position again (that FIRES) — gating on the far-apart swing S/R put nearly everything mid-range/PENDING and collapsed the rate (v25 regression; pending only delays, does not rescue). Kept: v39 strict direction (sell@resistance/buy@support, wrong-side -> pending), v37 ATR+structure hybrid SL/TP, v36 zones 0.20/0.80. Swing S/R stays the chart display only) # v39 (v38 + STRICT DIRECTION via PENDING: a SELL fires ONLY at resistance, a BUY ONLY at support. Wrong-side signals (SELL at support / BUY at resistance — the "sold at support late" breakdown, e.g. HBAR) no longer fire the breakout; they are held PENDING and wait for the correct level. Genuine role-flips still fire via correct_level (a broken resistance that holds becomes support below price). The old breakout_level branch is now unreachable) # v38 (v37 + GATE FIRES ON SWING S/R: location is now classified against the major swing S/R (_swing_sr, the chart levels), not the 24h rolling range_position — so entries sit at the visible support/resistance instead of the rolling extreme that read mid-range. This was the v25 collapse basis, but v35 PENDING now holds the mid-range ones (waits for the level) instead of blocking, so the rate does not zero. Swing levels written back to result so SL/TP + display share them. Falls back to rolling when pivots sparse) # v37 (v36 + ATR+STRUCTURE HYBRID SL/TP: SL anchored just beyond the invalidation level (support for a LONG / resistance for a SHORT) + 0.5 ATR buffer, clamped to [0.7,1.8] ATR — tighter near-S/R entries => higher RR. TP ladder: TP1=1R, TP2=2R, TP3=structural target (liquidity), TP4=1.618 fib measured move, TP5=2.618 (trailing runner). Partial split 15/25/25/15/20. RR validated to the REAL structural target (cramped setups rejected). Position size scales inverse to the risk leg, bounded [0.5x,2x] and re-capped) # v36 (v35 + STRICT S/R LOCATION: zone tightened 0.35/0.65 -> 0.20/0.80 so a BUY fires only in the bottom 20% (near support) and a SELL only in the top 20% (near resistance); anything looser waits PENDING for a real S/R touch) # v35 (v34 + MID-RANGE HELD AS PENDING: a mid-range signal is no longer BLOCKed/discarded — the structure gate returns WAIT and the engine holds it (pending_side/pending_target) until price reaches its level (resistance for a SELL, support for a BUY), then the 5m 3/4 + 15m 2/2 confirmation fires it. Other BLOCKs unchanged) # v34: (RESTORE v10 gate behaviour: removed the _swing_sr repoint (v29-v33) and the STRICT-direction block (v30) from the structure gate. Location is read straight off the predictor 24h rolling S/R + range_position zones (0.35/0.65); reversals AND confirmed breakouts both fire again. This is the v10-era logic the user confirmed "was doing it great" — the swing-anchor machinery is what caused the no-signals / mid-range-phantom / entry-gap regressions. _swing_sr kept for the open-position chart display only)'  # v33: (swing no longer opens zone) # v32: (k+1) # v31: (cache-key+limit) # v30: (strict direction) # v29: (swing repoint)'  # v32: (k+1 significant swing) # v31: (v30 + cache key includes limit; gate/chart both k+3 @1500)'  # v30: (v29 + deep 1500x1h S/R scan, nearest+extreme major per side, STRICT direction: sell only at resistance / buy only at support)'  # v29: (v28 + entries land AT the visible swing S/R via always-on repoint; fine prox back to 0.9 ATR) # v28: (S/R zone as % of range) # v27: (fire at big-swing S/R on mid-range, additive; chart gap filter)'  # v28: (v27 + S/R zone as % of range) # v27: (v26 + fire at big-swing S/R on mid-range block, additive; chart _sr_levels gap filter)'  # v27: (v26 + fire at BIG-SWING S/R on a would-be mid-range BLOCK via _swing_sr, purely additive; chart _sr_levels gap filter drops price-hugging noise levels)'  # v26: (v25 + restore S/R reversal firing: proximity 0.5->0.9 ATR, counter-trend RSI/confirmation gate is ADVISORY unless BOTH fail; reversals are primary, breakouts secondary)' # v25: (v24 + FIRING FIX: zone/range_pos uses the predictor 24h range_position again, not the wide swing S/R that made everything mid-range and zeroed the fire rate)' # v24: (v23 + STALL FIX: synchronous Firestore push moved off the event loop + circuit-breaker; sr_levels only for fired/open symbols to cut scan load)' # v23: (v22 + open positions show ENTRY edge/confidence, not the decayed live re-score — fixes Gate 3 rendering red on a healthy fired signal)' # v22: (v21 + declutter chart S/R: MAJOR swings only, congestion merged, max 2 levels per side)' # v21: (v20 + fully per-token dynamics: S/R zone width from each token ATR, pivot k sized to token volatility, reversal RSI thresholds from each token own RSI distribution)' # v20: (v19 + per-level state machine (NORMAL/PENDING/WAITING_RETEST/CONFIRMED/FAILED) exposed as sr_levels for the chart, + breakout-quality confidence: weak (wick/low-vol) breaks downgraded)' # v19: (v18 + Break->Retest->Confirmation: a broken level does NOT flip role until a retest holds; unconfirmed sweeps keep the original S/R)' # v18: (v17 + significant S/R: k=5 swing pivots + >=1 ATR gap from price, so levels land at real reversals not micro-wiggles next to price)' # v17: (v16 + LIVE role-reversed S/R for open positions: chart S/R updates as price moves instead of freezing the entry snapshot)' # v16: (v15 + S/R role reversal: every pivot is bidirectional, a broken resistance flips to support and vice versa; nearest pivot above=resistance, below=support)' # v15: (v14 + swing-based S/R: nearest confirmed 1h swing low/high around price instead of the crude 24h high/low)' # v14: (v13 + breakout-continuation must break the CURRENT support/resistance, never enter INTO the level: no more sell-at-support / buy-at-resistance)' # v13: (v12 + counter-trend reversal must prove the turn: no CONFLICT + RSI extreme; reversal proximity tightened 0.9->0.5 ATR)' # was: 'structure-gate-v12 (v11 + confirmed breakout-continuation: follow a break that runs and never retests when held 3+ closed 5m bars beyond + 5m/15m trend + not overextended) + reversal as-close-as-possible + Firestore-durable track record'
+    GATE_VERSION = 'model-first-v47 (ML MODEL decides side+fire again; UWGS demoted to chart-breakdown + risk-tier + 4 hard vetoes only; FAR_FROM_SR/NO_VALID_SR + mid-range => RISKY tier NOT a block; hard vetoes = DRIFT/DEAD_MARKET/EXTREME_VOL/NEWS; MODEL_DISAGREES deleted) # prev: structure-gate-v46 (v45 + REJECTION FAST-PATH: once price has TAGGED a level and moved back >STRUCT_REJECTION_PCT (10%) of the range off it — a SELL now >10% BELOW the resistance it hit, a BUY >10% ABOVE the support it hit — the reversal FIRES immediately. The rejection is the confirmation, so it bypasses the counter-trend 2-candle wait and the far-from-level pending. NOTE: direction still comes from the ML model — this fires a model SELL/BUY faster on a confirmed rejection, it does not create a SELL against a bullish model) # v45 (v44 + HTF-WALL EXHAUSTION BLOCK: Gate 1.8 now HARD-blocks a BUY buying into a nearby 4h/1d resistance (<2.5 ATR overhead) while RSI > 72 overbought — and the mirror SELL into a nearby 4h/1d support while RSI < 28 oversold. That is the exhaustion chase at the top/bottom of an extended move whose first target sits beyond the HTF wall (AAVE LONG, RSI 89, TP1 above 4H/D resistance). Mild overhead/below without an RSI extreme stays advisory) # v44 (v43 + COUNTER-TREND NEEDS 2 CANDLES: a counter-trend reversal at the level (SELL in an ADX-trending bull / BUY in a bear) no longer fires unconfirmed — it WAITS (pending) until >=2 of the 5m candles have turned in the signal direction, so we do not short a still-rising move / buy a still-falling one (the UNI 3.778 case). Aligned + range reversals still fire immediately at the level) # v43 (v42 + SMART STRICT (higher WR, count preserved via pending): the 3 WEAKEST fires now WAIT/pending instead of firing — reversal FAR from the level, mid-range with NO 5m momentum, and an UNCONFIRMED wrong-side breakout (no retest/momentum/pre-break). They fire later when price reaches the level or the move starts. Kept firing: at/near-level reversals (even unconfirmed), momentum mid-range, confirmed breakouts (retest/momentum/pre-break). Config: edge floor 55->60, ATR floor 0.4->0.5pct, advisory budget non-binding->4) # v42 (v41 + AGGRESSIVE FIRE-AT-S/R: reversals fire IMMEDIATELY at the level (confirmation is a BONUS, not required); MID-RANGE fires with a wider stop instead of pending; wrong-side breakouts fire on retest/momentum/pre-break; zones 0.20/0.80->0.35/0.65; proximity 0.9->1.5 ATR; advisory budget non-binding; edge floor 70->55; ATR floor 0.8->0.4pct; cooldowns 30m/1h->5m/10m; _swing_sr nearer k; loose entries get 2.2-2.5 ATR SL cap. TRADEOFF: max signal capture, more false positives / lower win-rate by design) # v41 (v40 + HTF S/R CONFLUENCE (Gate 1.8): pool the nearest 4h+1d swing S/R (_htf_sr) and, as an ADVISORY, downgrade a BUY with a major HTF resistance right overhead (<1 ATR room) or a SELL with major HTF support right below — trade WITH the big structure, not into it. Firing still gated on the 1h zone (rate unchanged); HTF only warns/tags. The 4h/1d levels are drawn on the chart as purple 4H/D lines) # v40 (v39 + REVERT v38 swing-S/R zone: the gate classifies location on the 24h rolling range_position again (that FIRES) — gating on the far-apart swing S/R put nearly everything mid-range/PENDING and collapsed the rate (v25 regression; pending only delays, does not rescue). Kept: v39 strict direction (sell@resistance/buy@support, wrong-side -> pending), v37 ATR+structure hybrid SL/TP, v36 zones 0.20/0.80. Swing S/R stays the chart display only) # v39 (v38 + STRICT DIRECTION via PENDING: a SELL fires ONLY at resistance, a BUY ONLY at support. Wrong-side signals (SELL at support / BUY at resistance — the "sold at support late" breakdown, e.g. HBAR) no longer fire the breakout; they are held PENDING and wait for the correct level. Genuine role-flips still fire via correct_level (a broken resistance that holds becomes support below price). The old breakout_level branch is now unreachable) # v38 (v37 + GATE FIRES ON SWING S/R: location is now classified against the major swing S/R (_swing_sr, the chart levels), not the 24h rolling range_position — so entries sit at the visible support/resistance instead of the rolling extreme that read mid-range. This was the v25 collapse basis, but v35 PENDING now holds the mid-range ones (waits for the level) instead of blocking, so the rate does not zero. Swing levels written back to result so SL/TP + display share them. Falls back to rolling when pivots sparse) # v37 (v36 + ATR+STRUCTURE HYBRID SL/TP: SL anchored just beyond the invalidation level (support for a LONG / resistance for a SHORT) + 0.5 ATR buffer, clamped to [0.7,1.8] ATR — tighter near-S/R entries => higher RR. TP ladder: TP1=1R, TP2=2R, TP3=structural target (liquidity), TP4=1.618 fib measured move, TP5=2.618 (trailing runner). Partial split 15/25/25/15/20. RR validated to the REAL structural target (cramped setups rejected). Position size scales inverse to the risk leg, bounded [0.5x,2x] and re-capped) # v36 (v35 + STRICT S/R LOCATION: zone tightened 0.35/0.65 -> 0.20/0.80 so a BUY fires only in the bottom 20% (near support) and a SELL only in the top 20% (near resistance); anything looser waits PENDING for a real S/R touch) # v35 (v34 + MID-RANGE HELD AS PENDING: a mid-range signal is no longer BLOCKed/discarded — the structure gate returns WAIT and the engine holds it (pending_side/pending_target) until price reaches its level (resistance for a SELL, support for a BUY), then the 5m 3/4 + 15m 2/2 confirmation fires it. Other BLOCKs unchanged) # v34: (RESTORE v10 gate behaviour: removed the _swing_sr repoint (v29-v33) and the STRICT-direction block (v30) from the structure gate. Location is read straight off the predictor 24h rolling S/R + range_position zones (0.35/0.65); reversals AND confirmed breakouts both fire again. This is the v10-era logic the user confirmed "was doing it great" — the swing-anchor machinery is what caused the no-signals / mid-range-phantom / entry-gap regressions. _swing_sr kept for the open-position chart display only)'  # v33: (swing no longer opens zone) # v32: (k+1) # v31: (cache-key+limit) # v30: (strict direction) # v29: (swing repoint)'  # v32: (k+1 significant swing) # v31: (v30 + cache key includes limit; gate/chart both k+3 @1500)'  # v30: (v29 + deep 1500x1h S/R scan, nearest+extreme major per side, STRICT direction: sell only at resistance / buy only at support)'  # v29: (v28 + entries land AT the visible swing S/R via always-on repoint; fine prox back to 0.9 ATR) # v28: (S/R zone as % of range) # v27: (fire at big-swing S/R on mid-range, additive; chart gap filter)'  # v28: (v27 + S/R zone as % of range) # v27: (v26 + fire at big-swing S/R on mid-range block, additive; chart _sr_levels gap filter)'  # v27: (v26 + fire at BIG-SWING S/R on a would-be mid-range BLOCK via _swing_sr, purely additive; chart _sr_levels gap filter drops price-hugging noise levels)'  # v26: (v25 + restore S/R reversal firing: proximity 0.5->0.9 ATR, counter-trend RSI/confirmation gate is ADVISORY unless BOTH fail; reversals are primary, breakouts secondary)' # v25: (v24 + FIRING FIX: zone/range_pos uses the predictor 24h range_position again, not the wide swing S/R that made everything mid-range and zeroed the fire rate)' # v24: (v23 + STALL FIX: synchronous Firestore push moved off the event loop + circuit-breaker; sr_levels only for fired/open symbols to cut scan load)' # v23: (v22 + open positions show ENTRY edge/confidence, not the decayed live re-score — fixes Gate 3 rendering red on a healthy fired signal)' # v22: (v21 + declutter chart S/R: MAJOR swings only, congestion merged, max 2 levels per side)' # v21: (v20 + fully per-token dynamics: S/R zone width from each token ATR, pivot k sized to token volatility, reversal RSI thresholds from each token own RSI distribution)' # v20: (v19 + per-level state machine (NORMAL/PENDING/WAITING_RETEST/CONFIRMED/FAILED) exposed as sr_levels for the chart, + breakout-quality confidence: weak (wick/low-vol) breaks downgraded)' # v19: (v18 + Break->Retest->Confirmation: a broken level does NOT flip role until a retest holds; unconfirmed sweeps keep the original S/R)' # v18: (v17 + significant S/R: k=5 swing pivots + >=1 ATR gap from price, so levels land at real reversals not micro-wiggles next to price)' # v17: (v16 + LIVE role-reversed S/R for open positions: chart S/R updates as price moves instead of freezing the entry snapshot)' # v16: (v15 + S/R role reversal: every pivot is bidirectional, a broken resistance flips to support and vice versa; nearest pivot above=resistance, below=support)' # v15: (v14 + swing-based S/R: nearest confirmed 1h swing low/high around price instead of the crude 24h high/low)' # v14: (v13 + breakout-continuation must break the CURRENT support/resistance, never enter INTO the level: no more sell-at-support / buy-at-resistance)' # v13: (v12 + counter-trend reversal must prove the turn: no CONFLICT + RSI extreme; reversal proximity tightened 0.9->0.5 ATR)' # was: 'structure-gate-v12 (v11 + confirmed breakout-continuation: follow a break that runs and never retests when held 3+ closed 5m bars beyond + 5m/15m trend + not overextended) + reversal as-close-as-possible + Firestore-durable track record'
 
     # ── Structure gate (Gate 1.6) ─────────────────────────────────────────
     # Zone boundaries on range_position (0 = rolling support, 1 = resistance).
@@ -2563,39 +2574,69 @@ class LiveEngine:
                 result, regime, new_side)
             fake_breakout = self.quality_filter.is_fake_breakout(result, new_side)
 
-            # ── UWGS: weighted per-direction score is the SOLE fire authority ─────
-            # Scored BEFORE _build_signal_entry so that if the score picks the other
-            # side than the model, the SL/TP ladder is built for the chosen side.
+            # ── MODEL-FIRST decision: the ML model picks side + fire ──────────────
+            # The model's side/fire (from predict_realtime) is the authority — the
+            # ~80%-WR decision. UWGS is computed only for (a) the chart breakdown,
+            # (b) the risk tier, and (c) the four genuinely protective hard vetoes.
+            # It cannot change the side or manufacture a fire. Location signals
+            # (FAR_FROM_SR / NO_VALID_SR) downgrade the tier to RISKY; they never
+            # block. MODEL_DISAGREES is ignored (the model IS the decision now).
+            _model_side  = result.get('side', 'FLAT')       # 'BUY' | 'SELL' | 'FLAT'
+            _model_fire  = bool(result.get('fire', False))
+            _ctx_quality = quality_score                    # context score (0-100) → UWGS input
+            _loc_poor    = False
             if USE_WEIGHTED_SCORER:
                 result['is_fake_breakout'] = fake_breakout
                 result['price'] = price
                 _hist = self._signal_history.get(symbol)
-                _stab = (sum(1 for x in _hist if x == new_side) / len(_hist)) if _hist else 0.5
+                _stab = (sum(1 for x in _hist if x == _model_side) / len(_hist)) if _hist else 0.5
                 _uwgs = WeightedGateScorer.score(
                     result, regime,
                     {
                         'drift_blocked':  self.drift_monitor.is_blocked(symbol),
                         'drift_severity': self.drift_monitor.severity(symbol),
                         'stability_frac': _stab,
-                        'quality_score':  quality_score,
+                        'quality_score':  _ctx_quality,
                         'portfolio_ok':   True,
                         'spread_pct':     self._spreads.get(symbol, 0.0),
                         'news_locked':    self._news_lock[0],
                         'news_label':     self._news_lock[1],
                     },
                 )
-                result['side']          = _uwgs['side']
-                result['fire']          = _uwgs['fire']
-                result['tradeable']     = True
-                result['quality_score'] = _uwgs['quality_score']   # winning score → risk tier + sizing
+                # Informational — chart breakdown + S/R quality (does NOT decide side)
                 result['signal_scores'] = {'buy':  _uwgs['score_buy'],
                                            'sell': _uwgs['score_sell'],
                                            'hold': _uwgs['score_hold']}
                 result['gate_breakdown'] = _uwgs['breakdown']
-                result['vetoes']         = _uwgs['vetoes']
                 result['sr_quality']     = _uwgs['sr_quality']
+                # Confirmation: keep only the protective hard vetoes; location
+                # flags become a tier downgrade below (not a block).
+                _news_lbl = self._news_lock[1]
+                _hard = [v for v in _uwgs['vetoes']
+                         if v in _HARD_VETOES or v == 'NEWS_LOCK'
+                         or (_news_lbl and v == _news_lbl)]
+                _loc_poor = ('FAR_FROM_SR' in _uwgs['vetoes']
+                             or 'NO_VALID_SR' in _uwgs['vetoes'])
+                result['vetoes']      = _hard
+                result['sr_loc_poor'] = _loc_poor
+                # MODEL decides; a hard veto can only SUPPRESS its fire.
+                if _hard:
+                    result['side'] = 'FLAT'
+                    result['fire'] = False
+                else:
+                    result['side'] = _model_side
+                    result['fire'] = _model_fire and _model_side in ('BUY', 'SELL')
+                result['tradeable'] = True
+                # Sizing / tier conviction = the MODEL's edge (its own 0-100
+                # quality), not the UWGS composite. edge_score is 0-100;
+                # meta_confidence is 0-1 — normalise.
+                _edge = float(result.get('edge_score',
+                                         result.get('meta_confidence', 0)) or 0)
+                if _edge <= 1.0:
+                    _edge *= 100.0
+                result['quality_score'] = round(_edge, 1)
                 new_side      = result['side']
-                quality_score = _uwgs['quality_score']
+                quality_score = result['quality_score']
 
             # Build signal entry with enriched fields
             self.last_signals[symbol] = self._build_signal_entry(
@@ -2690,24 +2731,52 @@ class LiveEngine:
                     # budget check runs after all gates have been evaluated.
                     _gate_warnings: List[str] = []
 
-                    # ── UWGS short-circuit: the weighted score already applied every
-                    # gate weight + the 4 hard vetoes and set result['fire'], so it is
-                    # the sole authority. Skip the legacy cascade and open directly.
-                    # entry_mode drives the SL cap; a firing UWGS signal sits at a
-                    # validated level (mid-range is vetoed) → treated as reversal-tight.
+                    # ── MODEL-FIRST fire path (SOLE decision path) ────────────────
+                    # The model already chose side + fire and cleared the hard
+                    # vetoes in the decision block above. Here S/R confirmation only
+                    # sets the risk tier and the SL-cap entry_mode; it never blocks.
+                    # This returns before the legacy gate cascade below, which is
+                    # now dead code kept behind the flag for reference.
                     if USE_WEIGHTED_SCORER:
-                        _rp_now     = float(result.get('range_position', 0.5) or 0.5)
-                        _entry_mode = 'reversal' if abs(_rp_now - 0.5) >= 0.3 else 'mid_range'
-                        _uwgs_q     = float(result.get('quality_score', 0.0) or 0.0)
-                        _risk_tier  = ('STRONG' if _uwgs_q >= 80 else
-                                       'NORMAL' if _uwgs_q >= 65 else 'RISKY')
+                        _edge_q = float(result.get('quality_score', 0.0) or 0.0)  # model edge 0-100
+                        _srq    = float(result.get('sr_quality', 0.0) or 0.0)
+                        _poor   = bool(result.get('sr_loc_poor'))
+                        _rp_now = float(result.get('range_position', 0.5) or 0.5)
+
+                        # entry_mode: audit trail + SL cap. A signal far from its
+                        # level or mid-range gets a wider stop; at-level is tight.
+                        if _poor:
+                            _entry_mode = 'model_far_from_level'
+                        elif abs(_rp_now - 0.5) >= 0.3:
+                            _entry_mode = 'model_at_level'
+                        else:
+                            _entry_mode = 'model_mid_range'
+
+                        # Risk tier: model edge gated by S/R confirmation. A poor
+                        # location or a fake breakout caps at RISKY (fires, flagged).
+                        _warn: List[str] = []
+                        if _poor:          _warn.append('far_from_level')
+                        if fake_breakout:  _warn.append('fake_breakout')
+                        if _warn:
+                            _risk_tier = 'RISKY'
+                        elif _edge_q >= 80 and _srq >= 0.55 and _ctx_quality >= 65:
+                            _risk_tier = 'STRONG'
+                        elif _edge_q >= 68:
+                            _risk_tier = 'NORMAL'
+                        else:
+                            _risk_tier = 'RISKY'
+
                         if symbol in self.last_signals:
-                            self.last_signals[symbol]['risk_tier'] = _risk_tier
-                        print(f'[{symbol}] UWGS FIRE {new_side} q={_uwgs_q:.0f} '
-                              f'scores={result.get("signal_scores", {})}')
-                        self._open_position(symbol, result, price, regime, _uwgs_q,
+                            self.last_signals[symbol]['risk_tier']     = _risk_tier
+                            self.last_signals[symbol]['entry_mode']    = _entry_mode
+                            self.last_signals[symbol]['gate_warnings'] = _warn
+                        print(f'[{symbol}] MODEL FIRE {new_side} tier={_risk_tier} '
+                              f'edge={_edge_q:.0f} srq={_srq:.2f} mode={_entry_mode} '
+                              f'scores={result.get("signal_scores", {})}'
+                              f'{" warn=" + ",".join(_warn) if _warn else ""}')
+                        self._open_position(symbol, result, price, regime, _edge_q,
                                             risk_tier=_risk_tier, entry_mode=_entry_mode,
-                                            gate_warnings=[])
+                                            gate_warnings=_warn)
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
 
