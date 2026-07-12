@@ -571,7 +571,7 @@
       <div class="ae-stat-block">
         <div class="ae-stat-number">20+</div>
         <div class="ae-stat-label">Entry Checks</div>
-        <div class="ae-stat-note">Critical + advisory gates + BOS / divergence / volume confirmation</div>
+        <div class="ae-stat-note">13 importance-weighted gates + BOS / divergence / volume confirmation</div>
       </div>
 
     </div>
@@ -717,7 +717,7 @@
         <div style="padding: var(--s-5);">
           <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap: var(--s-3); margin-bottom: var(--s-5); padding-bottom: var(--s-5); border-bottom: 1px solid var(--ae-border-dim);">
             <div class="ae-signal-datum">
-              <div class="ae-signal-datum-label">Edge Score</div>
+              <div class="ae-signal-datum-label">Gate Score</div>
               <div class="ae-signal-datum-value ae-text-gold">81.4</div>
             </div>
             <div class="ae-signal-datum">
@@ -766,7 +766,7 @@
         <div class="ae-eyebrow">Under The Hood</div>
         <h2 class="ae-h2" style="margin-bottom: var(--s-5);">How a signal is built.</h2>
         <p class="ae-body-text">
-          Two tiers of gates separate a candidate signal from a live one. Critical gates veto outright — regime, macro trend, model quality, structure location, risk-reward. Advisory gates then flag anything questionable, and because AEGIS publishes only low- and moderate-risk signals, a single unresolved warning is enough to hold a setup back. Most candidates never make it through. The engine stays quiet when conditions are poor.
+          Every candidate is scored, not just filtered. Thirteen checks — market regime, higher-timeframe trend, setup type, support/resistance quality, the model's own read, volatility, liquidity and more — each carry a weight set by how much they actually matter, and combine into a single 0&#8211;100 score for BUY, SELL and HOLD. The highest of the three sets the direction, the signal's quality, and whether it fires at all. Four hard vetoes override the score entirely: a drifting model, a dead or illiquid market, no valid structural level, or extreme volatility around a scheduled macro event. Most candidates land on HOLD &mdash; the engine stays quiet when conditions are poor.
         </p>
       </div>
 
@@ -788,7 +788,7 @@
           <div>
             <div class="ae-h3" style="margin-bottom: var(--s-3);">XGBoost Ensemble Scoring</div>
             <p class="ae-body-text">
-              An XGBoost model trained on 70+ structural features — OHLCV, EMA slopes, RSI momentum, volume Z-score, ATR normalisation, VWAP deviation, funding rate alignment, and more — produces a directional probability and an edge score. Edge scores below 70 are rejected outright, and the floor rises automatically when a model's live win rate drifts below its training benchmark.
+              An XGBoost model trained on 70+ structural features — OHLCV, EMA slopes, RSI momentum, volume Z-score, ATR normalisation, VWAP deviation, funding-rate alignment, and more — produces a directional probability for each token. That read is <em>one weighted input</em> into the score, not the whole verdict: a confident model still can't fire a trade the market context won't back. Its weight is trimmed automatically when a model's live win rate drifts below its training benchmark, and a critically degraded model is vetoed outright.
             </p>
           </div>
         </div>
@@ -798,7 +798,7 @@
           <div>
             <div class="ae-h3" style="margin-bottom: var(--s-3);">Structure & Candle Confirmation</div>
             <p class="ae-body-text">
-              Location matters as much as direction. AEGIS only takes entries <em>at</em> structure — a BUY at support, a SELL at resistance — never mid-range. Every entry must prove the turn is already underway on the lower timeframes: at least three of the last four closed 5-minute candles and both of the last two 15-minute candles moving in the signal's direction, with price having actually tested the level (no shorting into empty space below resistance). Breakout entries are taken only after a level has broken and held a retest — never on the run-up into it. If that confirmation can't be verified, the signal is held, not guessed.
+              Location matters as much as direction. AEGIS only takes entries <em>at</em> structure — a BUY at support, a SELL at resistance — never mid-range. The support/resistance gate scores the level's quality: how close price sits to a real level, whether a recent break has actually retested and held (old resistance becoming support, never a run-up into the level), higher-timeframe 4h/1d confluence, and whether there's genuine room to a sensible target. A weak level, a mid-range setup, an unretested break, or too little reward for the risk is vetoed outright — no valid structure, no trade.
             </p>
           </div>
         </div>
@@ -808,7 +808,7 @@
           <div>
             <div class="ae-h3" style="margin-bottom: var(--s-3);">Quality, Momentum & Volume Confirmation</div>
             <p class="ae-body-text">
-              An advisory tier scores the signal's environment: ADX strength, volume confirmation, regime confidence, macro bias alignment, fake-breakout heuristics and RSI exhaustion — no BUY at momentum peaks, no SELL at capitulation lows. On top of that, a confirmation layer reads the 1-hour chart for Break-of-Structure / Change-of-Character, RSI and MACD divergence, and volume climax + absorption. When structure, momentum and volume all point against the trade, it's held. Every warning a published signal does carry is shown to you.
+              Context earns weight, it isn't just flagged. ADX strength, volume confirmation, regime confidence, macro-bias alignment, fake-breakout heuristics, RSI exhaustion and signal stability each add their own weight to the score — no BUY at momentum peaks, no SELL at capitulation lows. A confirmation layer reads the 1-hour chart for Break-of-Structure / Change-of-Character, RSI and MACD divergence, and volume climax + absorption. When these point against the trade, the score tilts to HOLD. Every factor that moved the score is shown to you, gate by gate.
             </p>
           </div>
         </div>
@@ -860,14 +860,14 @@
       <div class="ae-card">
         <div class="ae-h3" style="margin-bottom: var(--s-3);">Live Signal Cockpit</div>
         <p style="font-size:0.85rem; color:var(--ae-text-2); line-height:1.7;">
-          All 63 tokens on a single screen. Each card shows current signal state, edge score, regime, RSI, and time since last event. Refreshes every 5 minutes from the live engine.
+          All 63 tokens on a single screen. Each card shows current signal state, gate score, regime, RSI, and time since last event. Refreshes every 5 minutes from the live engine.
         </p>
       </div>
 
       <div class="ae-card">
         <div class="ae-h3" style="margin-bottom: var(--s-3);">Signal Genesis Report</div>
         <p style="font-size:0.85rem; color:var(--ae-text-2); line-height:1.7;">
-          Gate-by-gate audit trail for every signal: regime check, structure location, 5m/15m candle confirmation, quality score, momentum & volume confirmation — each with the raw value that determined it, plus any advisory warnings the signal carried through.
+          Gate-by-gate audit trail for every signal: the BUY / SELL / HOLD scores, each gate's weighted contribution, regime, structure quality, momentum &amp; volume — each with the raw value that determined it, plus any hard veto that blocked the trade.
         </p>
       </div>
 
@@ -1026,7 +1026,7 @@
           </li>
           <li style="font-size:0.85rem; color:var(--ae-text-2); line-height:1.65; padding-left: var(--s-4); position:relative;">
             <span style="position:absolute; left:0; color:var(--ae-buy);">–</span>
-            Context-aware filtering via a two-tier gate pipeline — the engine stays quiet in bad conditions
+            A single importance-weighted score across 13 gates decides BUY / SELL / HOLD — the engine stays quiet in bad conditions
           </li>
           <li style="font-size:0.85rem; color:var(--ae-text-2); line-height:1.65; padding-left: var(--s-4); position:relative;">
             <span style="position:absolute; left:0; color:var(--ae-buy);">–</span>
