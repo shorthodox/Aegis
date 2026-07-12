@@ -2126,6 +2126,7 @@ class LiveEngine:
         self._open_time:        Dict[str, float] = {}
         self._last_close_time:  Dict[str, float] = {}
         self._last_close_side:  Dict[str, str]   = {}
+        self._last_close_reason: Dict[str, str]  = {}   # reason of the most recent close (for reversal-flip throw)
 
         # Signal direction history for stability gate (symbol → last N directions)
         self._signal_history:   Dict[str, Deque[str]] = {}
@@ -2523,14 +2524,29 @@ class LiveEngine:
                 except Exception:
                     pass
 
+            _reversal_flip = False
             if existing:
                 self._manage_exit(symbol, existing, result, price)
+                # If the model just reversed us OUT of the position (a good opposite
+                # signal cleared the reversal exit's quality floor + min-hold), let
+                # the fire path below THROW the new opposite signal in the same scan
+                # rather than holding it back a full flip-cooldown. The reversal was
+                # already quality-gated, so a good signal shouldn't be silenced just
+                # because we sat on the other side a moment ago.
+                _reversal_flip = (
+                    symbol not in self.wallet.open_positions
+                    and self._last_close_reason.get(symbol) == 'MODEL_REVERSAL_TP'
+                    and bool(result.get('fire'))
+                    and bool(result.get('tradeable', False))
+                    and price > 0
+                )
                 # After exit management: show the quality the signal FIRED at, not
                 # the live re-score (which decays as conditions change after entry
                 # and made healthy positions look like quality-6 garbage). Use the
                 # stored entry quality_score, falling back to meta_confidence for
-                # positions opened before this field existed.
-                if symbol in self.last_signals:
+                # positions opened before this field existed. Skipped entirely when
+                # flipping — the fresh opposite signal built above must stand.
+                if not _reversal_flip and symbol in self.last_signals:
                     _entry_q = existing.quality_score or existing.meta_confidence
                     self.last_signals[symbol]['quality_score'] = round(_entry_q, 1)
                     # Re-attach the entry-time gate context so the chart's gate
@@ -2562,7 +2578,8 @@ class LiveEngine:
                     if _live_sr:
                         self.last_signals[symbol]['support']    = _live_sr[0]
                         self.last_signals[symbol]['resistance'] = _live_sr[1]
-            elif result.get('fire') and result.get('tradeable', False) and price > 0:
+            if (not existing or _reversal_flip) and result.get('fire') \
+                    and result.get('tradeable', False) and price > 0:
                 now               = time.time()
                 cooldown_elapsed  = now - self._last_close_time.get(symbol, 0)
                 last_side         = self._last_close_side.get(symbol, '')
@@ -2571,7 +2588,10 @@ class LiveEngine:
                     self.FLIP_COOLDOWN_SECONDS if is_flip else self.COOLDOWN_SECONDS
                 )
 
-                if cooldown_elapsed >= required_cooldown:
+                # A reversal flip has already passed the quality floor + min-hold in
+                # _manage_exit, so the flip-cooldown would only silence a signal we
+                # have already validated — bypass it and throw the reversal now.
+                if _reversal_flip or cooldown_elapsed >= required_cooldown:
                     # Advisory-gate warning ledger (see ADVISORY_WARNING_BUDGET).
                     # Advisory gates append here instead of returning; the
                     # budget check runs after all gates have been evaluated.
@@ -3761,8 +3781,9 @@ class LiveEngine:
             rec = self.wallet.close_trade(
                 symbol, exit_px if exit_px is not None else check_price, reason)
             if rec:
-                self._last_close_time[symbol] = now
-                self._last_close_side[symbol] = pos.side
+                self._last_close_time[symbol]   = now
+                self._last_close_side[symbol]   = pos.side
+                self._last_close_reason[symbol] = reason
                 for d in (self._tp1_hit, self._tp2_hit,
                           self._tp3_hit, self._tp4_hit, self._peak_price):
                     d.pop(symbol, None)
