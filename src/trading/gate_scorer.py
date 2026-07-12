@@ -50,9 +50,9 @@ W_PORTFOLIO  = 5.0    # ★★    Portfolio (non-binding for a signal service)
 W_DRIFT      = 5.0    # ★★    Model drift
 
 # ── Fire rule + veto thresholds (first-pass, tune in one place) ───────────────
-FIRE_THRESHOLD   = 47.0   # winning score must reach this (fires the best clean setups)
-FIRE_MARGIN      = 5.0    # winner must beat HOLD by this much
-DIR_MARGIN       = 5.0    # winner must beat the OTHER direction by this much
+FIRE_THRESHOLD   = 45.0   # winning score must reach this (looser — steadier signal flow)
+FIRE_MARGIN      = 3.0    # winner must beat HOLD by this much
+DIR_MARGIN       = 3.0    # winner must beat the OTHER direction by this much
 SR_MIN           = 0.35   # srQuality below this → no-valid-S/R veto (V3)
 ATR_FLOOR_PCT    = 0.5    # atr_pct below this (%) → dead-market veto (V2)
 EXTREME_ATR_PCT  = 6.0    # atr_pct at/above this (%) → extreme-vol veto (V4) [abs proxy]
@@ -174,10 +174,18 @@ class WeightedGateScorer:
         # ── PHASE 1 · directional gates ───────────────────────────────────────
         loc_lean = _clip((0.5 - rp) * 2.0, -1.0, 1.0)                 # +1 at support, −1 at resistance
         trend_lean = 1.0 if reg == 'TRENDING_BULL' else -1.0 if reg == 'TRENDING_BEAR' else 0.0
+        # Counter-trend-extreme strength: 1.0 when price sits at the level OPPOSING the
+        # trend (bear trend at support / bull trend at resistance) — the reversal zone
+        # where the trend is stretched and a bounce is likely.
+        counter = max(0.0, -trend_lean * loc_lean)
 
-        # 1 · Regime
+        # 1 · Regime — trend-led, but REVERSAL-AWARE: as price reaches the counter-
+        # trend extreme the trend vote fades and tilts toward the reversal, so a
+        # bear-trend-at-support stops voting hard SELL (mirror for a bull top). This
+        # is what turns a buy-at-support-in-a-downtrend from a conflicted tie into a
+        # coherent signal — the reversal setups the engine exists to catch.
         if reg in ('TRENDING_BULL', 'TRENDING_BEAR'):
-            add_dir('Regime', W_REGIME, trend_lean)
+            add_dir('Regime', W_REGIME, _clip(trend_lean * (1 - counter) + loc_lean * counter * 0.8, -1.0, 1.0))
         elif reg in ('RANGING', 'ACCUMULATION', 'DISTRIBUTION', 'COMPRESSION', 'VOLATILE_EXPANSION'):
             add_dir('Regime', W_REGIME, loc_lean)                    # range → reversal at the extreme
         else:                                                        # CHOPPY / UNKNOWN → all HOLD
@@ -193,11 +201,13 @@ class WeightedGateScorer:
         add_dir('HTF Macro', W_HTF, _clip(_htf_bias + _htf_neutral * 0.5 * _dir_proxy, -1.0, 1.0))
 
         # 3 · Direction / setup coherence. In a TREND the coherent setup is a
-        # continuation/pullback (trend-led, location-confirmed). In a RANGE the
-        # reversal at the extreme IS the whole thesis, so location leads and the
-        # (structurally absent) trend must not halve it.
+        # continuation/pullback (trend-led, location-confirmed) — UNLESS price is at
+        # the counter-trend extreme, where the coherent setup IS the reversal, so the
+        # lean flips to location. In a RANGE the reversal at the extreme is the whole
+        # thesis, so location leads outright.
         if reg in ('TRENDING_BULL', 'TRENDING_BEAR'):
-            setup_lean = _clip(0.6 * trend_lean + 0.4 * loc_lean, -1.0, 1.0)
+            _cont = 0.6 * trend_lean + 0.4 * loc_lean               # continuation / pullback
+            setup_lean = _clip(_cont * (1 - counter) + loc_lean * counter, -1.0, 1.0)
         else:
             setup_lean = loc_lean
         add_dir('Direction/Setup', W_SETUP, setup_lean)
@@ -263,7 +273,7 @@ class WeightedGateScorer:
         # direction leaves most of the quality budget in HOLD.
         Q          = qual_sum / W_QUAL
         conviction = abs(buy_frac - sell_frac)
-        qual_gain  = Q * W_QUAL * (0.5 + 0.5 * conviction)
+        qual_gain  = Q * W_QUAL * (0.65 + 0.35 * conviction)
         leader_buy = buy_frac >= sell_frac
         score_buy  = round(_clip(buy_frac  * W_DIR + (qual_gain if leader_buy else 0.0), 0.0, 100.0), 1)
         score_sell = round(_clip(sell_frac * W_DIR + (0.0 if leader_buy else qual_gain), 0.0, 100.0), 1)

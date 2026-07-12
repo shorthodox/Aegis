@@ -2587,6 +2587,7 @@ class LiveEngine:
                 result['side']          = _uwgs['side']
                 result['fire']          = _uwgs['fire']
                 result['tradeable']     = True
+                result['quality_score'] = _uwgs['quality_score']   # winning score → risk tier + sizing
                 result['signal_scores'] = {'buy':  _uwgs['score_buy'],
                                            'sell': _uwgs['score_sell'],
                                            'hold': _uwgs['score_hold']}
