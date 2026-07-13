@@ -2046,7 +2046,7 @@ function renderSignalGenesis(sig) {
   const isShort  = _openPos ? _openPos.direction === 'SHORT' : sig.direction === 'SHORT';
   const fired    = _openPos ? true : Boolean(sig.fire);
   const qualOk   = (sig.quality_score || 0) >= 55;
-  const atrOk    = (sig.atr_pct || 0) >= 0.8;
+  const atrOk    = (sig.atr_pct || 0) >= 0.5;   // engine MIN_FIRE_ATR_PCT = 0.5%
   const regOk    = !['RANGING', 'STABLE', 'UNKNOWN'].includes(sig.regime);
   // Gate 1.5 mirrors the engine's REVERSAL-AWARE direction veto: a counter-trend
   // signal (BUY in a bear regime / SELL in a bull regime) is NOT a conflict when
@@ -2267,7 +2267,7 @@ function renderSignalGenesis(sig) {
         `Higher-timeframe bias — Weekly ${_htfBias(_mw)} · Daily ${_htfBias(_md)}`,
         htfOppose ? 'CONFLICT' : 'ALIGNED', htfOppose && !fired)}
     ${confRow}
-    ${gate('', atrOk,  'Gate 2 · ATR Floor', `Minimum 0.8% volatility required for valid entry`, `${(sig.atr_pct||0).toFixed(2)}%`)}
+    ${gate('', atrOk,  'Gate 2 · ATR Floor', `Minimum 0.5% volatility required for valid entry`, `${(sig.atr_pct||0).toFixed(2)}%`)}
     ${gate('', edgeOk, 'Gate 3 · Model Edge', `Model edge score ≥ 60 required to fire`, `${edgeVal.toFixed(0)}/100`, !edgeOk && !fired)}
     ${gate('', ctxOk,  'Gate 3b · Context Quality', `Advisory — heuristic setup quality (floor 70), not a hard block. Score: ${qVal.toFixed(0)}`, `${qVal.toFixed(0)}/100`, true)}
     ${gate('', !fbDetected, 'Gate 3c · Fake Breakout', fbDetected ? 'Exhaustion / fake-breakout pattern detected' : 'No exhaustion / fake-breakout pattern', fbDetected ? 'DETECTED' : 'CLEAR', true)}
