@@ -47,7 +47,7 @@ import warnings
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -86,6 +86,20 @@ MAX_HOLD_CANDLES:    int   = 48             # time-based exit after 48 h
 MIN_SL_DISTANCE_PCT: float = 0.005         # minimum SL = 0.5 % of price
 COST_MULTIPLIER:     float = 1.5            # EV must beat 1.5× round-trip cost
 MIN_TRADES_REQUIRED: int   = 10
+
+# ── Trade management: partial-TP ladder (mirrors live_engine.py v37 hybrid) ───
+# The live engine never trades a single all-or-nothing TP. It scales out across
+# a 5-rung ladder, moves the stop to break-even after TP1, and trails after TP2.
+# Simulating a single 3-ATR TP instead systematically books directionally-correct
+# but noisy trades as full losses — which collapses an 80%-precision model to a
+# ~42% win rate. These constants restore the live ladder so the backtest reflects
+# the real management. Rungs are expressed in R = the SL distance (so TP1 = 1R).
+TP_R_MULTIPLES:  List[float] = [1.0, 2.0, 3.0, 4.0, 5.0]        # TP1..TP5, in R
+TP_FRACTIONS:    List[float] = [0.15, 0.25, 0.25, 0.15, 0.20]   # units closed / rung
+BREAKEVEN_AFTER_TP: int   = 1     # once TP1 fills → stop moves to entry (break-even)
+TRAIL_AFTER_TP:     int   = 2     # once TP2 fills → trailing stop engages
+TRAIL_ATR_MULT:     float = 1.0   # trailing stop rides this many ATR behind the peak
+                                  # (matches live_engine.py TRAIL_MULTIPLIER = 1.0)
 
 DATA_HOURS:          int   = 3_000
 MIN_HOURLY_BARS:     int   = 500
@@ -387,15 +401,11 @@ class AdaptiveBacktester:
 
         p        = self.params
         risk_pct = p["risk_pct"]
-        atr_sl   = self.atr_mult
-        atr_tp   = self.atr_mult * p["rr_ratio"]
+        atr_sl   = self.atr_mult    # SL distance in ATR (= 1R); ladder TPs derive from R
 
         capital       = self.initial_balance
         peak_capital  = capital
-        pos_units     = 0.0
-        entry_price   = 0.0
-        entry_atr_val = 0.0
-        entry_bar     = -1
+        pos: Optional[Dict[str, Any]] = None   # open-position state (None ⇒ flat)
         last_exit_bar = -1          # Gate 6: cooldown tracking
         direction: Optional[str] = None
         trade_returns: List[float] = []
@@ -420,62 +430,132 @@ class AdaptiveBacktester:
         for i in range(MTF_PRIOR_BARS + MTF_RECENT_BARS, n - MAX_HOLD_CANDLES - 1):
             row = df.iloc[i]
 
-            # ── EXIT ─────────────────────────────────────────────────────────
-            if pos_units != 0.0:
-                bars_held   = i - entry_bar
-                exit_px     = self._check_exit(row, entry_price, entry_atr_val,
-                                               atr_sl, atr_tp, direction)
-                exit_reason = ""
-                if exit_px is not None:
-                    exit_reason = "tp_sl"
-                elif bars_held >= MAX_HOLD_CANDLES:
-                    exit_px     = float(row["close"])
-                    exit_reason = "timeout"
+            # ── EXIT — partial-TP ladder + break-even + trailing ──────────────
+            # Mirrors live_engine.py v37 management instead of a single all-or-
+            # nothing TP: scale out across TP1..TP5, move the stop to break-even
+            # after TP1, and trail after TP2. A "trade" is one entry that may
+            # exit in several partial fills; it is counted once — when the last
+            # unit closes — carrying the summed net PnL (entry + exit costs).
+            if pos is not None:
+                is_long = pos["dir"] == "long"
+                bhigh, blow   = float(row["high"]), float(row["low"])
+                bopen, bclose = float(row["open"]), float(row["close"])
+                R         = pos["R"]
+                bars_held = i - pos["bar"]
+                fills: List[Tuple[float, float, str]] = []   # (units, price, reason)
 
-                if exit_px is not None:
-                    if direction == "long":
-                        exit_slipped = exit_px * (1.0 - SLIPPAGE_PCT)
-                        gross_pnl    = pos_units * (exit_slipped - entry_price)
+                # Trailing rides the peak reached on PRIOR bars only — this bar's
+                # extreme is folded in afterwards, so there is never lookahead.
+                if pos["trail"]:
+                    pos["sl"] = (max(pos["sl"], pos["peak"] - TRAIL_ATR_MULT * pos["atr"]) if is_long
+                                 else min(pos["sl"], pos["peak"] + TRAIL_ATR_MULT * pos["atr"]))
+
+                def _stop_hit() -> bool:
+                    return (blow <= pos["sl"]) if is_long else (bhigh >= pos["sl"])
+
+                def _fill_ladder() -> None:
+                    # Fill every TP rung this bar's extreme reached, in order. The
+                    # ladder is monotonic, so stop at the first rung not reached.
+                    for k in range(len(TP_R_MULTIPLES)):
+                        if pos["tp_filled"][k]:
+                            continue
+                        tp_px = pos["tp"][k]
+                        reached = (bhigh >= tp_px) if is_long else (blow <= tp_px)
+                        if not reached:
+                            break
+                        u = min(pos["units0"] * TP_FRACTIONS[k], pos["units"])
+                        if u > 0.0:
+                            fills.append((u, tp_px, "tp%d" % (k + 1)))
+                            pos["units"] -= u
+                        pos["tp_filled"][k] = True
+                        if (k + 1) >= BREAKEVEN_AFTER_TP and not pos["be_done"]:
+                            pos["sl"], pos["be_done"] = pos["entry"], True
+                        if (k + 1) >= TRAIL_AFTER_TP:
+                            pos["trail"] = True
+
+                # Intrabar path model: an up-bar (close ≥ open) is taken to print
+                # its low before its high, a down-bar the reverse. This decides
+                # whether the stop or the TPs are touched first — fair, not
+                # systematically pessimistic, and lookahead-free.
+                up_bar   = bclose >= bopen
+                sl_first = up_bar if is_long else (not up_bar)
+                closed   = False
+
+                if sl_first:
+                    if _stop_hit():
+                        # Stop side printed first and was hit → close the remainder.
+                        fills.append((pos["units"], pos["sl"], "stop"))
+                        pos["units"] = 0.0
+                        closed = True
                     else:
-                        exit_slipped = exit_px * (1.0 + SLIPPAGE_PCT)
-                        gross_pnl    = pos_units * (entry_price - exit_slipped)
+                        _fill_ladder()          # stop side already passed this bar
+                        closed = pos["units"] <= 1e-12
+                else:
+                    _fill_ladder()              # TP side prints first
+                    if pos["units"] <= 1e-12:
+                        closed = True
+                    else:
+                        if pos["trail"]:        # a fill this bar may have engaged the trail
+                            pos["sl"] = (max(pos["sl"], pos["peak"] - TRAIL_ATR_MULT * pos["atr"]) if is_long
+                                         else min(pos["sl"], pos["peak"] + TRAIL_ATR_MULT * pos["atr"]))
+                        if _stop_hit():
+                            fills.append((pos["units"], pos["sl"], "stop"))
+                            pos["units"] = 0.0
+                            closed = True
 
-                    exit_cost = abs(pos_units) * exit_slipped * (EXCHANGE_FEE_PCT + SLIPPAGE_PCT)
-                    net_pnl   = gross_pnl - exit_cost
-                    capital  += net_pnl
+                # Time-based exit on whatever remains.
+                if not closed and bars_held >= MAX_HOLD_CANDLES:
+                    fills.append((pos["units"], bclose, "timeout"))
+                    pos["units"] = 0.0
+                    closed = True
 
-                    pos_val  = entry_price * pos_units
-                    ret_pct  = (net_pnl / pos_val * 100) if pos_val > 0 else 0.0
+                # Fold this bar's extreme into the running peak (for next-bar trail).
+                pos["peak"] = (max(pos["peak"], bhigh) if is_long
+                               else min(pos["peak"], blow))
+
+                # Apply this bar's fills to capital — fee + slippage once per leg
+                # (the double-slippage exit charge of the old model is gone).
+                for u, px, reason in fills:
+                    gross = u * (px - pos["entry"]) if is_long else u * (pos["entry"] - px)
+                    cost  = u * px * (EXCHANGE_FEE_PCT + SLIPPAGE_PCT)
+                    net   = gross - cost
+                    capital          += net
+                    pos["realized"]  += net
+                    pos["last_px"]    = px
+                    pos["last_reason"] = reason
+
+                if closed:
+                    net_pnl = pos["realized"]
+                    ret_pct = (net_pnl / pos["notional0"] * 100) if pos["notional0"] > 0 else 0.0
                     trade_returns.append(ret_pct / 100.0)
-
                     if net_pnl >= 0:
                         result.wins         += 1
                         result.gross_profit += net_pnl
                     else:
-                        result.losses      += 1
-                        result.gross_loss  += abs(net_pnl)
+                        result.losses     += 1
+                        result.gross_loss += abs(net_pnl)
 
                     result.total_trades += 1
                     result.trades.append(TradeRecord(
-                        symbol=self.symbol, mode=self.mode, bar_index=entry_bar,
-                        timestamp=str(df.iloc[entry_bar]["timestamp"]),
-                        direction=direction or "",
-                        meta_conf=float(df.iloc[entry_bar].get("meta_conf", 0.0)),
-                        thr=self.thr_buy if direction == "long" else self.thr_sell,
-                        size_factor=round(pos_units * entry_price / capital, 4),
-                        entry_price=round(entry_price, 6),
-                        exit_price=round(exit_slipped, 6),
+                        symbol=self.symbol, mode=self.mode, bar_index=pos["bar"],
+                        timestamp=str(df.iloc[pos["bar"]]["timestamp"]),
+                        direction=pos["dir"],
+                        meta_conf=float(df.iloc[pos["bar"]].get("meta_conf", 0.0)),
+                        thr=self.thr_buy if pos["dir"] == "long" else self.thr_sell,
+                        size_factor=round(pos["notional0"] / capital, 4) if capital > 0 else 0.0,
+                        entry_price=round(pos["entry"], 6),
+                        exit_price=round(pos["last_px"], 6),
                         pnl=round(net_pnl, 4),
                         return_pct=round(ret_pct, 4),
-                        exit_reason=exit_reason,
+                        exit_reason=pos["last_reason"],
                     ))
 
                     peak_capital  = max(peak_capital, capital)
                     dd = (peak_capital - capital) / peak_capital * 100 if peak_capital > 0 else 0.0
                     max_dd        = max(max_dd, dd)
                     last_exit_bar = i
-                    pos_units     = 0.0
-                continue   # never open a new trade on the same bar as an exit
+                    pos           = None
+                continue   # never open a new trade while a position is being managed
 
             # ── GATE 1: REGIME ────────────────────────────────────────────────
             # Tokens trained without regime_thresholds bypass this gate entirely.
@@ -700,20 +780,42 @@ class AdaptiveBacktester:
                 skipped_atr_floor += 1
                 continue
 
-            # ── OPEN POSITION ─────────────────────────────────────────────────
+            # ── OPEN POSITION — build the partial-TP ladder ───────────────────
             size_factor   = _meta_size_factor(edge_score, thr)
             sl_dist       = max(atr_sl * cur_atr, float(row["close"]) * MIN_SL_DISTANCE_PCT)
             risk_amt      = capital * risk_pct * size_factor
-            units         = min(risk_amt / sl_dist, capital / float(row["close"]))
+            entry_price   = float(row["close"])
+            units         = min(risk_amt / sl_dist, capital / entry_price)
             if units <= 0:
                 continue
 
-            entry_price   = float(row["close"])
-            entry_atr_val = cur_atr
-            pos_units     = units
-            entry_bar     = i
-            entry_cost    = pos_units * entry_price * (EXCHANGE_FEE_PCT + SLIPPAGE_PCT)
-            capital      -= entry_cost
+            _long     = direction == "long"
+            sl_price  = entry_price - sl_dist if _long else entry_price + sl_dist
+            tp_prices = [(entry_price + m * sl_dist) if _long else (entry_price - m * sl_dist)
+                         for m in TP_R_MULTIPLES]
+
+            entry_cost = units * entry_price * (EXCHANGE_FEE_PCT + SLIPPAGE_PCT)
+            capital   -= entry_cost
+
+            pos = {
+                "dir":         direction,
+                "entry":       entry_price,
+                "bar":         i,
+                "atr":         cur_atr,                       # entry ATR (trailing distance)
+                "R":           sl_dist,                       # 1R in price terms
+                "units0":      units,                         # size at entry (for TP fractions)
+                "units":       units,                         # remaining size
+                "notional0":   units * entry_price,
+                "sl":          sl_price,
+                "tp":          tp_prices,
+                "tp_filled":   [False] * len(TP_R_MULTIPLES),
+                "be_done":     False,
+                "trail":       False,
+                "peak":        entry_price,                   # best price reached (for trailing)
+                "realized":    -entry_cost,                   # entry cost is part of trade net PnL
+                "last_px":     entry_price,
+                "last_reason": "open",
+            }
 
         # ── METRICS ──────────────────────────────────────────────────────────
         if result.total_trades == 0:
@@ -749,30 +851,6 @@ class AdaptiveBacktester:
         return result
 
     # ── Helpers ───────────────────────────────────────────────────────────────
-
-    def _check_exit(self, row: pd.Series, entry_price: float, entry_atr: float,
-                    atr_sl: float, atr_tp: float,
-                    direction: Optional[str]) -> Optional[float]:
-        """Check current bar's high/low for TP or SL. No lookahead."""
-        if direction == "long":
-            tp = entry_price + atr_tp * entry_atr
-            sl = entry_price - atr_sl * entry_atr
-            if row["high"] >= tp and row["low"] <= sl:
-                return sl   # gap-through: assume SL first (conservative)
-            if row["high"] >= tp:
-                return tp
-            if row["low"]  <= sl:
-                return sl
-        else:
-            tp = entry_price - atr_tp * entry_atr
-            sl = entry_price + atr_sl * entry_atr
-            if row["low"] <= tp and row["high"] >= sl:
-                return sl
-            if row["low"]  <= tp:
-                return tp
-            if row["high"] >= sl:
-                return sl
-        return None
 
     def _fetch_and_prepare(self, hours: int) -> Optional[pd.DataFrame]:
         if self.symbol in AdaptiveBacktester._df_cache:
