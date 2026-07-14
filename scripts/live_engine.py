@@ -2279,12 +2279,33 @@ class LiveEngine:
     def _load_predictors(self, symbols: List[str]) -> None:
         from src.ml.predictor import Predictor
         loaded = tradeable = 0
+        # Models BENCHED by their own meta: `risk_tier` disables the tier this
+        # engine runs (`self.risk_tier`).  predict_signal() early-returns
+        # fire=False / edge_score=0 for these on EVERY scan — they can never
+        # fire, no matter the market or any engine gate.  (Currently ATOM, BTC,
+        # COMP, SNX, VET: they failed the holdout precision floor.)  Before this,
+        # the binary-pair branch below force-set tradeable=True and logged them
+        # as live, which was a lie — and every scan still paid for a full
+        # predict_realtime (350h of feature engineering) just to have the tier
+        # gate throw it away.  Track them so _process_symbol can skip the work.
+        self._benched: set = set()
         for sym in symbols:
             try:
                 p = Predictor(sym)
                 base = sym.replace('/', '_')
                 buy_path  = MODEL_STORE / f"{base}_model_buy.json"
                 sell_path = MODEL_STORE / f"{base}_model_sell.json"
+
+                _tiers = p.meta.get('risk_tier') or {}
+                _benched = bool(_tiers) and not bool(_tiers.get(self.risk_tier, False))
+                if _benched:
+                    self._benched.add(sym)
+                    self.predictors[sym] = p
+                    loaded += 1
+                    print(f'[LiveEngine] BENCHED {sym} — meta risk_tier disables '
+                          f'"{self.risk_tier}"; it can never fire (monitor-only)')
+                    continue
+
                 if buy_path.exists() and sell_path.exists():
                     # Binary dual-model pair — force tradeable regardless of meta.json
                     p.meta['tradeable']      = True
@@ -2306,6 +2327,9 @@ class LiveEngine:
             except Exception as e:
                 print(f'[LiveEngine] Failed to load {sym}: {e}')
         self.bootstrap_total = max(loaded, 1)
+        if self._benched:
+            print(f'[LiveEngine] {len(self._benched)} benched (never fire): '
+                  f'{", ".join(sorted(self._benched))}')
         print(f'[LiveEngine] {loaded} predictors loaded '
               f'({tradeable} tradeable + {loaded - tradeable} monitor-only) '
               f'from {len(symbols)} configured symbols.')
@@ -2523,6 +2547,21 @@ class LiveEngine:
     async def _process_symbol(
         self, symbol: str, predictor: Any, sem: asyncio.Semaphore
     ) -> None:
+        # BENCHED model: its meta's risk_tier disables the tier we run, so
+        # predict_signal() would early-return fire=False / edge=0 anyway. Skip
+        # the call entirely — it costs a full 350h feature build per scan for a
+        # result that can never fire. Still surfaced as a monitor-only token.
+        if symbol in getattr(self, '_benched', ()):
+            self.last_signals.setdefault(symbol, {}).update({
+                'symbol':  symbol,
+                'signal':  'HOLD',
+                'fire':    False,
+                'benched': True,
+                'price':   self.live_prices.get(symbol, 0.0),
+            })
+            self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+            return
+
         async with sem:
             loop = asyncio.get_event_loop()
             try:
