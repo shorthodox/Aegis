@@ -59,7 +59,13 @@ _DEFAULT_SETTINGS: Dict[str, Any] = {
     "twilio_auth_token":   "",
     "whatsapp_from":       "",
     "whatsapp_to":         "",
-    "min_confidence":      0.65,
+    # 0.0 = notify EVERY fired signal. The old 0.65 silently dropped entries
+    # firing at edge_score 60-65 (the engine fires at edge >= 60, so confidence
+    # = edge/100 = 0.60-0.65 fell UNDER this bar) — "ETH fired but no Telegram".
+    # The engine's gate cascade IS the quality filter; the notification must not
+    # re-gate a fired signal on a mismatched threshold. Set > 0 only to opt into
+    # muting low-edge alerts.
+    "min_confidence":      0.0,
     "allowed_directions":  ["BUY", "SELL"],
     "allowed_modes":       ["scalping", "scalping_15m", "intraday", "swing", "live"],
     # Crypto trades 24/7 and subscribers expect every signal live —
@@ -141,7 +147,7 @@ class NotificationDispatcher:
         if direction not in cfg.get("allowed_directions", ["BUY", "SELL"]):
             return False
         conf = float(sig.get("confidence", 0))
-        if conf < float(cfg.get("min_confidence", 0.65)):
+        if conf < float(cfg.get("min_confidence", 0.0)):   # 0 default — see _DEFAULT_SETTINGS
             return False
         mode = sig.get("mode", "")
         allowed_modes = cfg.get("allowed_modes", [])
