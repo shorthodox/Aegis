@@ -39,6 +39,7 @@ from scripts.notifications.formatter import (
     format_exit_discord,
     format_exit_telegram,
     format_exit_whatsapp,
+    format_pending_telegram,
 )
 from scripts.notifications.discord_notifier import send_discord
 from scripts.notifications.telegram_notifier import send_telegram
@@ -71,6 +72,12 @@ _DEFAULT_SETTINGS: Dict[str, Any] = {
     # runaway bug, not a product limit).  The old value of 20 made entry alerts
     # stop after ~20/hr, which read as "the engine stopped firing after 19".
     "max_alerts_per_hour": 200,
+    # PENDING (armed-but-not-fired) heads-ups — a signal that cleared the
+    # JACKDLM direction gates and is waiting for price to reach its S/R level.
+    # Toggle off to silence them; they use their OWN hourly budget so they can
+    # never starve real entry alerts.
+    "notify_pending":       True,
+    "max_pending_per_hour": 30,
 }
 
 
@@ -87,6 +94,9 @@ class NotificationDispatcher:
         self._pool        = ThreadPoolExecutor(max_workers=2, thread_name_prefix="notif")
         self._lock        = threading.Lock()
         self._timestamps: Deque[float] = deque()
+        # Separate sliding-hour budget for PENDING heads-ups so they never
+        # consume the entry budget above.
+        self._pending_ts: Deque[float] = deque()
 
     # ── Settings ──────────────────────────────────────────────────────────────
 
@@ -221,6 +231,33 @@ class NotificationDispatcher:
         tg  = format_entry_telegram(sig)
         wa  = format_entry_whatsapp(sig)
         self._pool.submit(self._do_send, cfg, dp, tg, wa)
+
+    def send_pending(self, sig: Dict[str, Any]) -> None:
+        """Dispatch a heads-up that a signal has ARMED (Guard M) but not fired.
+
+        Informational, Telegram-only: respects the global enable flag, quiet
+        hours, and the `notify_pending` toggle, but draws on a SEPARATE hourly
+        budget (`max_pending_per_hour`) so a burst of pending signals can never
+        consume the entry budget and starve real entry alerts. Edge-triggered
+        de-duplication (one alert per pending episode) is the caller's job.
+        """
+        cfg = self._load_settings()
+        if not cfg.get("enabled", True) or not cfg.get("notify_pending", True):
+            return
+        if self._in_quiet_hours(cfg.get("quiet_hours") or {}):
+            return
+        max_pend = int(cfg.get("max_pending_per_hour", 30))
+        now_ts   = datetime.now(timezone.utc).timestamp()
+        with self._lock:
+            cutoff = now_ts - 3600
+            while self._pending_ts and self._pending_ts[0] < cutoff:
+                self._pending_ts.popleft()
+            if len(self._pending_ts) >= max_pend:
+                log.info(f"[Notif] Pending budget ({max_pend}/hr) reached — skipping")
+                return
+            self._pending_ts.append(now_ts)
+        tg = format_pending_telegram(sig)
+        self._pool.submit(self._do_send, cfg, None, tg, None)
 
     def send_exit(
         self,

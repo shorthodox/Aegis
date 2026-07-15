@@ -2331,6 +2331,7 @@ class LiveEngine:
         self._open_time:        Dict[str, float] = {}
         self._last_close_time:  Dict[str, float] = {}
         self._last_close_side:  Dict[str, str]   = {}
+        self._pending_notified: set              = set()   # symbols already Telegram-alerted while PENDING (edge-trigger)
         self._last_close_reason: Dict[str, str]  = {}   # reason of the most recent close (for reversal-flip throw)
         self._spreads:          Dict[str, float] = {}   # symbol → book spread % (UWGS dead-market veto)
         self._news_lock:        Tuple[bool, str] = (False, '')   # (locked?, label) — scheduled macro event
@@ -2623,7 +2624,42 @@ class LiveEngine:
             await asyncio.gather(*alpha_tasks, return_exceptions=True)
 
         await self._fetch_index_prices()
+        self._notify_new_pending()
         self.bootstrap_done = len(self.predictors)
+
+    def _notify_new_pending(self) -> None:
+        """Telegram heads-up when a symbol NEWLY enters PENDING (edge-triggered).
+
+        A signal held by Guard M — cleared the JACKDLM direction gates, waiting
+        for price to reach its S/R level and 3x5m confirm — is announced ONCE,
+        when it first arms, never every scan. Re-diffing the currently-pending
+        set against the last cycle self-clears a symbol the moment it fires or
+        stops pending, so a later re-arm re-announces. The dispatcher applies
+        its own quiet-hours + separate pending budget on top. Never raises.
+        """
+        try:
+            current = {
+                sym: sig for sym, sig in self.last_signals.items()
+                if isinstance(sig, dict) and sig.get('pending_entry')
+                and str(sig.get('pending_side') or '').upper() in ('BUY', 'SELL')
+            }
+            new_syms = [s for s in current if s not in self._pending_notified]
+            self._pending_notified = set(current.keys())   # only still-pending stay marked
+            if not new_syms:
+                return
+            from scripts.notifications.dispatcher import get_notifier
+            _notifier = get_notifier()
+            _now = datetime.now(timezone.utc).isoformat()
+            for sym in new_syms:
+                _sig = current[sym]
+                _notifier.send_pending({
+                    'symbol':         sym,
+                    'direction':      str(_sig.get('pending_side') or '').upper(),
+                    'pending_target': _sig.get('pending_target'),
+                    'timestamp':      _now,
+                })
+        except Exception:
+            pass
 
     async def _refresh_spreads(self) -> None:
         """Refresh best bid/ask book spreads (%) for the fleet — one bulk call per

@@ -254,6 +254,42 @@ def format_entry_telegram(sig: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def format_pending_telegram(sig: Dict[str, Any]) -> str:
+    """Build a Telegram message for a signal that has ARMED but not yet fired.
+
+    A pending signal has cleared the JACKDLM direction gates; the engine is
+    holding it (Guard M) until price reaches its S/R level and 3x5m candles
+    confirm. There is no entry / SL / TP yet — those are set the moment it
+    actually fires, which is when the normal entry alert goes out.
+    """
+    direction = sig.get("direction", "?")
+    symbol    = sig.get("symbol", "?")
+    target    = sig.get("pending_target") or sig.get("target")
+    role      = "support" if direction == "BUY" else "resistance"
+    dir_icon  = "📈" if direction == "BUY" else "📉"
+    arrow     = "LONG" if direction == "BUY" else "SHORT"
+    ts        = (sig.get("timestamp") or "")[:16].replace("T", " ")
+
+    lines = [
+        f"⏳ *AEGIS WATCHING — {symbol}*",
+        f"",
+        f"{dir_icon} Armed *{arrow}* — waiting to fire",
+    ]
+    if target:
+        try:
+            lines.append(f"🎯 *At {role}:* `{_px(float(target))}`")
+        except (TypeError, ValueError):
+            pass
+    lines += [
+        f"",
+        f"Entry, SL & TPs are set the moment price reaches the level and 3×5m candles confirm.",
+        f"",
+        f"🕐 {ts} UTC",
+        f"_AEGIS AI Signal Bot_",
+    ]
+    return "\n".join(lines)
+
+
 def format_exit_telegram(
     symbol:       str,
     direction:    str,
