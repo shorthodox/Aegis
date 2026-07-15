@@ -3823,16 +3823,58 @@ async def track_record_endpoint(source: str = None):
               if r.get("outcome") in ("WIN", "LOSS")]
     times  = [r.get("entry_time") for r in all_signals if r.get("entry_time")]
 
+    # â”€â”€ 3c. Surface PENDING signals (Guard M) â€” read-only from live state â”€â”€
+    # A pending signal has cleared the direction gates but is HELD until price
+    # reaches its S/R level and 3x5m confirms (see live_engine Guard M). These
+    # are NOT trades yet (no entry), so they never touch track_record.json and
+    # are excluded from the win/loss/open stats above. They are prepended to the
+    # table (masked like OPEN rows â€” token and the target level are the paid
+    # product) purely so the public page shows the engine armed and waiting.
+    _pending_rows: list = []
+    try:
+        _live_sigs = (LIVE_STATE.data or {}).get("signals", {}) or {}
+        for _sym, _sig in _live_sigs.items():
+            if not isinstance(_sig, dict) or not _sig.get("pending_entry"):
+                continue
+            _pside = str(_sig.get("pending_side") or _sig.get("side") or "").upper()
+            _pdir  = "LONG" if _pside == "BUY" else "SHORT" if _pside == "SELL" else ""
+            _pending_rows.append({
+                "signal_id":       None,
+                "symbol":          "HIDDEN",
+                "timeframe":       _sig.get("timeframe", "1h"),
+                "direction":       _pdir,
+                "signal_type":     _pside if _pside in ("BUY", "SELL") else "HOLD",
+                "signal_status":   "PENDING",
+                "entry_price":     None,
+                "take_profit":     None,
+                "stop_loss":       None,
+                "position_value":  None,
+                "exit_price":      None,
+                "entry_time":      datetime.now(timezone.utc).isoformat(),
+                "close_time":      None,
+                "pnl_pct":         None,
+                "outcome":         "PENDING",
+                "exit_reason":     None,
+                "signal_strength": _sig.get("risk_tier", ""),
+                "pending_reason":  _sig.get("pending_reason"),
+                "source":          "live_engine_pending",
+            })
+    except Exception:
+        _pending_rows = []
+    pending_c   = len(_pending_rows)
+    all_signals = _pending_rows + all_signals   # pending rows lead the table
+
     _MODEL_STORE = Path(BASE_DIR) / "src" / "ml" / "model_store"
     _token_count = len(list(_MODEL_STORE.glob("*_meta.json"))) if _MODEL_STORE.exists() else 0
 
     return JSONResponse({
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "summary": {
-            "total_signals":  len(all_signals),
+            "total_signals":  len(all_signals) - pending_c,   # trades only; pending are armed, not trades
             "wins":           wins,
             "losses":         losses,
             "open":           open_c,
+            "pending":        pending_c,
             "win_rate_pct":   round(wins / closed * 100, 1) if closed else None,
             "avg_pnl_pct":    round(sum(pnls) / len(pnls), 3) if pnls else None,
             "total_pnl_pct":  round(sum(pnls), 3) if pnls else 0.0,

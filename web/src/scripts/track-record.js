@@ -73,6 +73,9 @@ function outcomeBadge(outcome) {
     switch ((outcome || '').toUpperCase()) {
         case 'WIN':  return '<span class="tr-badge tr-badge-win">WIN</span>';
         case 'LOSS': return '<span class="tr-badge tr-badge-loss">LOSS</span>';
+        // PENDING = cleared the JACKDLM direction gates, held (Guard M) until
+        // price reaches its S/R level and 3x5m confirms. Not a trade yet.
+        case 'PENDING': return '<span class="tr-badge" style="background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.4);color:#fbbf24;" title="Armed and waiting — signal will fire when price reaches its support/resistance level and 3 5-minute candles confirm">⏳ PENDING</span>';
         default:     return '<span class="tr-badge tr-badge-open">OPEN</span>';
     }
 }
@@ -204,15 +207,22 @@ function renderStats(summary) {
 }
 
 // ── Live signal teaser (shown above the table) ────────────────────────────────
-function renderLiveTeaser(openCount) {
+function renderLiveTeaser(openCount, pendingCount = 0) {
     const el = document.getElementById('trLiveTeaser');
     if (!el) return;
-    if (openCount <= 0) { el.style.display = 'none'; return; }
+    if (openCount <= 0 && pendingCount <= 0) { el.style.display = 'none'; return; }
     el.style.display = 'flex';
+    // Pending = armed at a level, waiting for the touch + 3x5m confirm (Guard M).
+    const pendingBit = pendingCount > 0
+        ? ` <span style="color:#fbbf24;">· ⏳ ${pendingCount} armed &amp; waiting at S/R</span>`
+        : '';
+    const lead = openCount > 0
+        ? `<strong style="color:#00ff88;">${openCount} live signal${openCount !== 1 ? 's' : ''}</strong> active right now — entry price, TP &amp; SL visible on the dashboard.`
+        : `<strong style="color:#fbbf24;">${pendingCount} signal${pendingCount !== 1 ? 's' : ''} armed</strong> — waiting for price to reach its level and confirm.`;
     el.innerHTML = `
         <div style="display:flex;align-items:center;gap:0.6rem;flex:1;">
-            <span style="width:8px;height:8px;border-radius:50%;background:#00ff88;box-shadow:0 0 6px #00ff88;flex-shrink:0;animation:tr-pulse 1.5s ease-in-out infinite;"></span>
-            <span><strong style="color:#00ff88;">${openCount} live signal${openCount !== 1 ? 's' : ''}</strong> active right now — entry price, TP &amp; SL visible on the dashboard.</span>
+            <span style="width:8px;height:8px;border-radius:50%;background:${openCount > 0 ? '#00ff88' : '#fbbf24'};box-shadow:0 0 6px ${openCount > 0 ? '#00ff88' : '#fbbf24'};flex-shrink:0;animation:tr-pulse 1.5s ease-in-out infinite;"></span>
+            <span>${lead}${openCount > 0 ? pendingBit : ''}</span>
         </div>
         <a href="/pricing" style="
             padding:0.4rem 1rem;background:rgba(0,242,255,0.12);border:1px solid rgba(0,242,255,0.35);
@@ -252,15 +262,26 @@ function renderTable(rows) {
         // Open positions arrive masked from the API (symbol "HIDDEN", null
         // prices) — the trade is the paid product.  Render the lock state
         // explicitly; direction, live PnL and the tier badge stay visible.
-        const isOpen = (r.outcome || '').toUpperCase() === 'OPEN';
-        const masked = isOpen;
+        const outc = (r.outcome || '').toUpperCase();
+        const isOpen = outc === 'OPEN';
+        // PENDING rows are armed-but-not-fired signals surfaced from live state.
+        // Masked like OPEN (token + level are the paid product); the target
+        // price stays hidden so the public page shows only that a signal is
+        // waiting, not where it will enter.
+        const isPending = outc === 'PENDING';
+        const masked = isOpen || isPending;
         const tokenCell = masked
             ? '<span style="color:#64748b;letter-spacing:2px;" title="Live signal — token visible on the dashboard (subscribers)"><i class="fas fa-lock" style="font-size:0.75em;margin-right:5px;"></i>•••••</span>'
             : `<span style="color:var(--ae-text-1);font-weight:600;">${r.symbol || '—'}</span>`;
+        // For pending, the level cells read "at S/R" rather than •••/— so the
+        // row explains itself; prices stay hidden.
         const priceCell = v => masked ? '<span style="color:#475569;">•••</span>' : fmtPrice(v);
+        const pnlCell = isPending
+            ? '<span style="color:#fbbf24;font-size:0.85em;">waiting for level</span>'
+            : `<span style="${pnlColor(r.pnl_pct, r.outcome)}">${fmtPnl(r.pnl_pct, r.outcome)}</span>`;
         return `
         <tr>
-            <td>${fmtTs(r.close_time || r.entry_time)}</td>
+            <td>${isPending ? '<span style="color:#fbbf24;">now · armed</span>' : fmtTs(r.close_time || r.entry_time)}</td>
             <td>${tokenCell}</td>
             <td>${r.timeframe || '—'}</td>
             <td class="${dirClass(r.direction)}">${dirLabel(r.direction)}</td>
@@ -269,7 +290,7 @@ function renderTable(rows) {
             <td style="color:rgba(0,255,136,0.7);">${priceCell(r.take_profit)}</td>
             <td style="color:rgba(255,85,85,0.7);">${priceCell(r.stop_loss)}</td>
             <td style="color:#94a3b8;white-space:nowrap;">${r.position_value != null ? '$' + Number(r.position_value).toLocaleString('en-US', { maximumFractionDigits: 0 }) : '—'}</td>
-            <td style="${pnlColor(r.pnl_pct, r.outcome)}">${fmtPnl(r.pnl_pct, r.outcome)}</td>
+            <td>${pnlCell}</td>
             <td>${outcomeBadge(r.outcome)}</td>
         </tr>`;
     }).join('');
@@ -310,7 +331,7 @@ function render(data) {
     // Use API summary directly (already computed server-side)
     const summary = data.summary || {};
     renderStats(summary);
-    renderLiveTeaser(summary.open || 0);
+    renderLiveTeaser(summary.open || 0, summary.pending || 0);
 
     const tcEl = document.getElementById('trTokenCount');
     if (tcEl && summary.token_count) tcEl.textContent = summary.token_count;

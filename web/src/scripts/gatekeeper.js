@@ -1399,6 +1399,11 @@ function updateDashboardData(data) {
           profit_factor:      sig.profit_factor ?? null,
           win_rate:           sig.win_rate ?? null,
           total_trades:       sig.total_trades ?? 0,
+          // Guard M pending state (armed, waiting for price to reach its level)
+          pending_entry:      sig.pending_entry || false,
+          pending_side:       sig.pending_side || '',
+          pending_target:     sig.pending_target ?? null,
+          pending_reason:     sig.pending_reason || '',
         };
       }
 
@@ -1663,11 +1668,16 @@ function renderSignals(signals) {
     const signalClass = getSignalClass(signalType, signalStatus);
     const cardTypeClass = getSignalCardType(signal.fire ? signal.direction : 'NEUTRAL');
     const sigUp = signalType.toUpperCase();
+    // Guard M holds a fully-gated signal (fire=false) until price reaches its
+    // S/R level and 3x5m confirms. Surface it as PENDING and route it into the
+    // BUY/SELL rooms on its pending side so it is visible, not hidden.
+    const _pendUp = (signal.pending_side || '').toUpperCase();
+    const _isPending = signal.pending_entry === true && (_pendUp === 'BUY' || _pendUp === 'SELL');
     const dirAttr = signal.fire
       ? ((sigUp.includes('BUY') || signal.direction === 'LONG') ? 'buy'
         : (sigUp.includes('SELL') || signal.direction === 'SHORT') ? 'sell'
         : 'hold')
-      : 'hold';
+      : (_isPending ? (_pendUp === 'BUY' ? 'buy' : 'sell') : 'hold');
     // ai_prob is already on 0-100 scale (edge_score from live engine)
     const confidence = Math.min(Math.max(signal.ai_prob || 0, 0), 100);
 
@@ -1680,6 +1690,9 @@ function renderSignals(signals) {
     } else if (signalStatus === 'STOPPED_OUT') {
       statusBadge = '<span class="bg-red-500/20 text-red-400 border border-red-500/50 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider">✗ STOPPED OUT</span>';
       statusIndicator = ' opacity-50';
+    } else if (_isPending) {
+      statusBadge = '<span class="bg-amber-500/10 text-amber-400 border border-amber-500/40 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider" title="Armed — the JACKDLM gates passed; waiting for price to reach its support/resistance level and 3 5-minute candles to confirm before it fires">⏳ PENDING @ S/R</span>';
+      statusIndicator = ' opacity-80';
     }
 
     let directionBadge = '';
@@ -1687,6 +1700,10 @@ function renderSignals(signals) {
       directionBadge = '<span class="bg-green-500/20 text-green-400 border border-green-500/50 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider">LONG</span>';
     } else if (signal.fire && signal.direction === 'SHORT') {
       directionBadge = '<span class="bg-red-500/20 text-red-400 border border-red-500/50 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider">SHORT</span>';
+    } else if (_isPending && _pendUp === 'BUY') {
+      directionBadge = '<span class="bg-green-500/10 text-green-400 border border-green-500/40 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider">LONG · PENDING</span>';
+    } else if (_isPending && _pendUp === 'SELL') {
+      directionBadge = '<span class="bg-red-500/10 text-red-400 border border-red-500/40 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider">SHORT · PENDING</span>';
     }
 
     const _fmtP = p => {
