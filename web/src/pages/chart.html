@@ -1090,16 +1090,24 @@ async function renderChart(sig) {
               2);   // dashed
     }
     // Multi-level S/R with Break→Retest→Confirmation states (engine sr_levels).
-    // Falls back to the single support/resistance pair for older payloads.
     if (Array.isArray(sig.sr_levels) && sig.sr_levels.length) {
       sig.sr_levels.forEach(lv => {
         addLine(lv.price, SR_COLORS[lv.color] || SR_COLORS.grey, srLabel(lv),
                 lv.dashed ? 2 : 0);   // pending = dashed, everything else solid
       });
-    } else {
-      addLine(sig.support,    'rgba(74,124,104,0.5)', 'Sup');
-      addLine(sig.resistance, 'rgba(255,0,85,0.5)',   'Res');
     }
+    // ALWAYS draw the engine's primary 24h S/R — these are the levels the GATES
+    // and the trade story actually reference (range_position, the wrong-location
+    // check, "resistance zone at X … the short is built on"). Drawing only the
+    // swing sr_levels above hid them: the resistance a short is built on could be
+    // referenced everywhere yet appear nowhere on the chart. Skipped only when a
+    // swing level already sits essentially on top of it (avoids a double line).
+    const _srNear = (p) => Array.isArray(sig.sr_levels) &&
+      sig.sr_levels.some(lv => p > 0 && Math.abs(lv.price - p) / p < 0.0015);
+    if (sig.resistance > 0 && !_srNear(sig.resistance))
+      addLine(sig.resistance, 'rgba(255,0,85,0.7)', 'Res');
+    if (sig.support > 0 && !_srNear(sig.support))
+      addLine(sig.support, 'rgba(74,124,104,0.7)', 'Sup');
     addLine(sig.pivot,      'rgba(184,150,106,0.35)', 'Pvt');
 
     $('chart-legend').style.display = 'flex';
