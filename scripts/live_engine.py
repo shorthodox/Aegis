@@ -2205,6 +2205,12 @@ class LiveEngine:
     # and is rejected (mirror for BUY). 0.5 = "nearer its own level than the
     # opposite one." Raise toward 0.65 to demand price sit closer to the level.
     PENDING_WRONG_LOC_RP = 0.5
+    # Telegram pending heads-up de-dup: a (symbol, side) must have been ABSENT
+    # from the pending set for at least this long before a fresh pending re-alerts.
+    # The timestamp is refreshed every scan a signal is pending, so a continuous
+    # OR flickering pending (in the choppy tape a signal drops out for a scan when
+    # conviction/edge dips at a threshold, then re-arms) fires exactly ONE alert.
+    PENDING_ALERT_COOLDOWN = 7200   # seconds (2h)
 
     # ── Guard D: directional conviction floor ────────────────────────────────
     # THE fix for the all-SHORT pile-up. `fire = edge_score >= 60` is a QUANTILE
@@ -2368,7 +2374,7 @@ class LiveEngine:
         self._open_time:        Dict[str, float] = {}
         self._last_close_time:  Dict[str, float] = {}
         self._last_close_side:  Dict[str, str]   = {}
-        self._pending_notified: set              = set()   # symbols already Telegram-alerted while PENDING (edge-trigger)
+        self._pending_alert: Dict[str, float]    = {}      # 'SYM|SIDE' -> last time it was PENDING (Telegram dedup)
         self._last_close_reason: Dict[str, str]  = {}   # reason of the most recent close (for reversal-flip throw)
         self._spreads:          Dict[str, float] = {}   # symbol → book spread % (UWGS dead-market veto)
         self._news_lock:        Tuple[bool, str] = (False, '')   # (locked?, label) — scheduled macro event
@@ -2665,35 +2671,49 @@ class LiveEngine:
         self.bootstrap_done = len(self.predictors)
 
     def _notify_new_pending(self) -> None:
-        """Telegram heads-up when a symbol NEWLY enters PENDING (edge-triggered).
+        """Telegram heads-up when a symbol NEWLY enters PENDING — ONE alert per
+        pending episode, flickers tolerated.
 
-        A signal held by Guard M — cleared the JACKDLM direction gates, waiting
-        for price to reach its S/R level and 3x5m confirm — is announced ONCE,
-        when it first arms, never every scan. Re-diffing the currently-pending
-        set against the last cycle self-clears a symbol the moment it fires or
-        stops pending, so a later re-arm re-announces. The dispatcher applies
-        its own quiet-hours + separate pending budget on top. Never raises.
+        A signal held by Guard M (cleared the JACKDLM direction gates, waiting
+        for price to reach its S/R level + 3x5m confirm) is announced once. The
+        earlier version reset the "already alerted" set to the current pending
+        set every scan, so a signal that dropped out of pending for a SINGLE
+        scan — which happens all the time when conviction/edge wobbles across a
+        threshold in a choppy tape — looked new on its next scan and re-alerted,
+        spamming the same signal. Now each (symbol, side) records the last time
+        it was pending; a fresh pending only alerts when that key has been ABSENT
+        for >= PENDING_ALERT_COOLDOWN. The timestamp is refreshed EVERY pending
+        scan, so a continuous or flickering pending fires exactly one alert, and
+        a genuinely new setup (gone for hours, then re-armed) alerts again.
+        Dispatcher applies its own quiet-hours + pending budget on top. Never
+        raises.
         """
         try:
-            current = {
-                sym: sig for sym, sig in self.last_signals.items()
-                if isinstance(sig, dict) and sig.get('pending_entry')
-                and str(sig.get('pending_side') or '').upper() in ('BUY', 'SELL')
-            }
-            new_syms = [s for s in current if s not in self._pending_notified]
-            self._pending_notified = set(current.keys())   # only still-pending stay marked
-            if not new_syms:
+            now = time.time()
+            current: Dict[str, dict] = {}          # 'SYM|SIDE' -> sig
+            for sym, sig in self.last_signals.items():
+                if not (isinstance(sig, dict) and sig.get('pending_entry')):
+                    continue
+                side = str(sig.get('pending_side') or '').upper()
+                if side in ('BUY', 'SELL'):
+                    current[f'{sym}|{side}'] = sig
+            to_alert = []
+            for key, sig in current.items():
+                if now - self._pending_alert.get(key, 0.0) >= self.PENDING_ALERT_COOLDOWN:
+                    to_alert.append((key, sig))
+                self._pending_alert[key] = now     # refresh so a flicker/continuous pending won't re-alert
+            if not to_alert:
                 return
             from scripts.notifications.dispatcher import get_notifier
             _notifier = get_notifier()
-            _now = datetime.now(timezone.utc).isoformat()
-            for sym in new_syms:
-                _sig = current[sym]
+            _iso = datetime.now(timezone.utc).isoformat()
+            for key, sig in to_alert:
+                sym = key.rsplit('|', 1)[0]
                 _notifier.send_pending({
                     'symbol':         sym,
-                    'direction':      str(_sig.get('pending_side') or '').upper(),
-                    'pending_target': _sig.get('pending_target'),
-                    'timestamp':      _now,
+                    'direction':      str(sig.get('pending_side') or '').upper(),
+                    'pending_target': sig.get('pending_target'),
+                    'timestamp':      _iso,
                 })
         except Exception:
             pass
