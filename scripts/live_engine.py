@@ -50,6 +50,7 @@ if str(_ROOT) not in sys.path:
 
 from src.trading.gate_scorer import WeightedGateScorer
 from src.trading import econ_calendar
+from src.trading.trendline_channel import TrendlineChannelDetector
 
 # ── Decision architecture: MODEL-FIRST, UWGS as confirmation ──────────────────
 # The ML model (predictor.predict_realtime) is the SOLE authority for signal
@@ -2421,6 +2422,7 @@ class LiveEngine:
         self.regime_detector = MarketRegimeDetector()
         self.quality_filter  = SignalQualityFilter()
         self.risk_engine     = DynamicRiskEngine()
+        self._tlc_detector   = TrendlineChannelDetector()   # additive trendline/channel confirmation
         self.perf_tracker    = PerformanceTracker()
         self.drift_monitor   = DriftMonitor()
         self.portfolio_guard = PortfolioGuard()
@@ -2962,11 +2964,22 @@ class LiveEngine:
             # or an open position.  Computing this for all 63 tokens every scan (an
             # extra 1h fetch + pivot/state pass each) was heavy load that slowed the
             # scan loop; HOLD tokens fall back to the single support/resistance pair.
-            if result.get('fire') or existing is not None:
+            _pending_view = bool(self.last_signals.get(symbol, {}).get('pending_entry'))
+            if result.get('fire') or existing is not None or _pending_view:
+                _atr_view = float(result.get('atr', 0) or 0)
                 try:
-                    _srl = await self._sr_levels(symbol, price, float(result.get('atr', 0) or 0))
+                    _srl = await self._sr_levels(symbol, price, _atr_view)
                     if _srl:
                         self.last_signals[symbol]['sr_levels'] = _srl
+                except Exception:
+                    pass
+                # ADDITIVE confirmation only — Trendline & Trend Channel context.
+                # Never gates or changes the signal; it just attaches structure
+                # analysis + a confidence score (see TrendlineChannelDetector).
+                try:
+                    _tlc = await self._trendline_channel(symbol, price, _atr_view)
+                    if _tlc:
+                        self.last_signals[symbol]['trendline_channel'] = _tlc
                 except Exception:
                     pass
 
@@ -4453,6 +4466,23 @@ class LiveEngine:
             return md, mw
         except Exception:
             return 0.0, 0.0
+
+    async def _trendline_channel(self, symbol: str, price: float,
+                                 atr: float = 0.0) -> Optional[dict]:
+        """ADDITIVE confirmation: run the Trendline & Trend Channel detector on
+        HTF (4h) structure and return its analysis dict for display. It never
+        gates or changes the signal — it is context + a confidence score only.
+        Primary detection is on the 4h candles; `price` is the live 1h/execution
+        price used for the distance-to-boundary. Returns None on any error."""
+        try:
+            raw = await self._fetch_candles(symbol, '4h', 300)
+            if not raw or len(raw) < 40:
+                return None
+            # atr passed here is the 1h ATR; the detector recomputes its own 4h
+            # ATR internally (atr=0) so tolerances match the detection timeframe.
+            return self._tlc_detector.analyze(raw, price=price, atr=0.0)
+        except Exception:
+            return None
 
     async def _swing_sr(self, symbol: str, price: float,
                         atr: float = 0.0) -> Optional[Tuple[float, float]]:
