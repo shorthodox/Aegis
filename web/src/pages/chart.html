@@ -1110,6 +1110,38 @@ async function renderChart(sig) {
       addLine(sig.support, 'rgba(74,124,104,0.7)', 'Sup');
     addLine(sig.pivot,      'rgba(184,150,106,0.35)', 'Pvt');
 
+    // ── Trendline & Trend Channel (additive HTF structure) ───────────────────
+    // Diagonal lines from the engine's Trendline detector. Solid = primary
+    // trendline, dashed = parallel channel; blue for an uptrend, magenta for a
+    // downtrend. No price-axis labels — deliberately minimal so it reads clean
+    // against the horizontal S/R levels. Only for a live Bullish/Bearish
+    // structure whose trendline is not Broken.
+    (function drawTrendlines() {
+      const tlc = sig.trendline_channel;
+      if (!tlc || !tlc.lines || !_chartBars.length) return;
+      if (tlc.trend !== 'Bullish' && tlc.trend !== 'Bearish') return;
+      if (tlc.primary_trendline === 'Broken') return;
+      const t0 = _chartBars[0].time, tN = _chartBars[_chartBars.length - 1].time;
+      const up  = tlc.trend === 'Bullish';
+      const priceAt = (ln, t) => ln.p + ln.m * (t - ln.t);
+      const drawTL = (ln, color, style) => {
+        if (!ln || typeof ln.m !== 'number') return;
+        const startT = Math.max(t0, ln.t);          // never project before the anchor
+        if (startT >= tN) return;
+        const s = chart.addLineSeries({
+          color, lineWidth: style === 0 ? 2 : 1, lineStyle: style,
+          lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
+        });
+        s.setData([
+          { time: startT, value: priceAt(ln, startT) },
+          { time: tN,     value: priceAt(ln, tN) },
+        ]);
+      };
+      drawTL(tlc.lines.trendline,     up ? 'rgba(96,165,250,0.85)' : 'rgba(232,121,249,0.85)', 0);
+      drawTL(tlc.lines.channel_upper, up ? 'rgba(96,165,250,0.40)' : 'rgba(232,121,249,0.40)', 2);
+      drawTL(tlc.lines.channel_lower, up ? 'rgba(96,165,250,0.40)' : 'rgba(232,121,249,0.40)', 2);
+    })();
+
     $('chart-legend').style.display = 'flex';
     const tradeLegend = $('chart-legend-trade');
     if (tradeLegend) tradeLegend.style.display = tradeLevelsDrawn ? 'contents' : 'none';

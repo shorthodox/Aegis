@@ -105,12 +105,16 @@ class TrendlineChannelDetector:
             x_now = len(closed)           # the (forming) bar where `price` lives
 
             # ── PRIMARY TRENDLINE ────────────────────────────────────────────
+            # Slope from a regression over the recent higher-lows (uptrend) /
+            # lower-highs (downtrend) — robust to a single pullback pivot that
+            # would otherwise flip a 2-point line the wrong way. Anchored at the
+            # MOST RECENT pivot so the line stays tight to current price.
             if trend == 'BULL':
-                (x0, y0), slope = self._line(swing_lows[-2:])      # two recent Higher Lows
+                x0, y0, slope = self._fit_line(swing_lows[-6:])
                 tl = self._score_line(x0, y0, slope, highs, lows, closes,
                                       atr, support=True)
             else:  # BEAR
-                (x0, y0), slope = self._line(swing_highs[-2:])     # two recent Lower Highs
+                x0, y0, slope = self._fit_line(swing_highs[-6:])
                 tl = self._score_line(x0, y0, slope, highs, lows, closes,
                                       atr, support=False)
             tl_now = _line_at(x_now, x0, y0, slope)
@@ -135,6 +139,19 @@ class TrendlineChannelDetector:
             expected, confirmation = self._reaction(
                 trend, near_name, price, tl_now, dist_atr)
 
+            # ── Line geometry for the chart ──────────────────────────────────
+            # A reference (time in SECONDS, price) + slope per SECOND, so the
+            # frontend draws the diagonal correctly on ANY displayed timeframe
+            # (the 4h anchor is an absolute timestamp). Channel lines share the
+            # trendline slope (they are parallel); only their intercept differs.
+            _bar_ms = (closed[1][0] - closed[0][0]) if len(closed) >= 2 else 14_400_000
+            _ref_t  = float(closed[int(x0)][0]) / 1000.0
+            _m_sec  = (slope * 1000.0 / _bar_ms) if _bar_ms else 0.0
+            lines = {'trendline': {'t': _ref_t, 'p': round(y0, 10), 'm': _m_sec}}
+            if channel and channel['status'] in ('Valid', 'Weak'):
+                lines['channel_upper'] = {'t': _ref_t, 'p': round(channel['upper_y0'], 10), 'm': _m_sec}
+                lines['channel_lower'] = {'t': _ref_t, 'p': round(channel['lower_y0'], 10), 'm': _m_sec}
+
             return {
                 'trend':                {'BULL': 'Bullish', 'BEAR': 'Bearish'}[trend],
                 'primary_trendline':    tl['status'],          # Valid / Weak / Broken
@@ -148,6 +165,7 @@ class TrendlineChannelDetector:
                 'distance_atr':         round(dist_atr, 2),
                 'expected_reaction':    expected,               # Bounce/Rejection/Breakout/No Edge
                 'signal_confirmation':  confirmation,           # Bullish Support / Bearish Resistance / Neutral
+                'lines':                lines,                  # geometry for the chart (t=sec, p=price, m=slope/sec)
             }
         except Exception:
             return self._blank('Range')
@@ -184,12 +202,15 @@ class TrendlineChannelDetector:
             return 'BEAR'
         return 'RANGE'
 
-    @staticmethod
-    def _line(anchors: List[Tuple[int, float]]) -> Tuple[Tuple[int, float], float]:
-        """Two anchor pivots -> ((x0,y0), slope). Returns slope 0 if degenerate."""
-        (x1, y1), (x2, y2) = anchors
-        slope = (y2 - y1) / (x2 - x1) if x2 != x1 else 0.0
-        return (x1, y1), slope
+    def _fit_line(self, pivots: List[Tuple[int, float]]) -> Tuple[int, float, float]:
+        """Regression slope over the recent pivots (robust to one pullback),
+        anchored at the MOST RECENT pivot so the line stays tight to current
+        price. Returns (x0, y0, slope)."""
+        xs = [x for x, _ in pivots]
+        ys = [y for _, y in pivots]
+        slope = self._slope(xs, ys)
+        x0, y0 = pivots[-1]
+        return x0, y0, slope
 
     def _score_line(self, x0, y0, slope, highs, lows, closes, atr,
                     support: bool) -> Dict:
@@ -329,4 +350,5 @@ class TrendlineChannelDetector:
             'channel_confidence': 0.0, 'nearest_boundary': None,
             'distance_pct': None, 'distance_atr': None,
             'expected_reaction': 'No Edge', 'signal_confirmation': 'Neutral',
+            'lines': {},
         }
