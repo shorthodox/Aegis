@@ -239,6 +239,42 @@ def _fetch_spot_price(symbol: str) -> float:
 _usdm_ex      = None
 _usdm_ex_lock = __import__('threading').Lock()
 
+_perp_markets = None
+_perp_markets_lock = __import__('threading').Lock()
+
+
+def _usdm_perp_symbol(symbol: str) -> str:
+    """'BASE/USDT' -> ccxt USDM swap notation 'BASE/USDT:USDT'."""
+    return symbol if ':' in symbol else symbol.replace('/USDT', '/USDT:USDT')
+
+
+def _has_usdm_perp(symbol: str) -> bool:
+    """Does this symbol actually EXIST as a Binance USD-M perpetual?
+
+    PEPE/USDT and SHIB/USDT do NOT — their perps are listed as 1000PEPE/1000SHIB
+    (the token is too cheap to quote 1:1). Without this check the OHLCV fetch
+    below raised BadSymbol on the perp and fell straight through to the SPOT
+    book, so the engine produced a COMPLETE signal — entry, SL, TP, track-record
+    row — for an instrument it does not trade, on a token the chart (which
+    correctly requests the perp) cannot render at all. That is how PEPE fired a
+    SHORT while its chart read "Binance API blocked or symbol not found".
+
+    Fails OPEN (returns True) when the market list can't be loaded, so a network
+    blip never benches the whole fleet.
+    """
+    global _perp_markets
+    if _perp_markets is None:
+        try:
+            import ccxt as _ccxt
+            _ex = _ccxt.binanceusdm({'enableRateLimit': True, 'timeout': 8000})  # type: ignore[arg-type]
+            _mk = set((_ex.load_markets() or {}).keys())
+            with _perp_markets_lock:
+                _perp_markets = _mk
+        except Exception:
+            return True
+    return _usdm_perp_symbol(symbol) in (_perp_markets or ())
+
+
 def _fetch_ohlcv_sync(symbol: str, timeframe: str, limit: int) -> list:
     """
     Thread-safe OHLCV fetch.  Primary source is Binance USDM perpetuals; on any
@@ -262,13 +298,20 @@ def _fetch_ohlcv_sync(symbol: str, timeframe: str, limit: int) -> list:
             with _usdm_ex_lock:
                 if _usdm_ex is None:
                     _usdm_ex = _new
-        perp_sym = symbol if ':' in symbol else symbol.replace('/USDT', '/USDT:USDT')
+        perp_sym = _usdm_perp_symbol(symbol)
         with _usdm_ex_lock:
             candles = _usdm_ex.fetch_ohlcv(perp_sym, timeframe, limit=limit) or []
         if candles:
             return candles
     except Exception:
         pass
+    # The spot fallback exists for a TRANSIENT futures failure (rate limit, geo
+    # block) on a token that genuinely HAS a perp — there the two books track each
+    # other and spot is a faithful proxy. It must NEVER cover for a token with no
+    # perp at all: that silently SWAPS THE INSTRUMENT and manufactures a signal on
+    # a market we do not trade (the PEPE case). No perp => no candles => no signal.
+    if not _has_usdm_perp(symbol):
+        return []
     # Fallback: Binance spot (shared instance with the index-price fetcher).
     try:
         import ccxt as _ccxt
@@ -2595,6 +2638,18 @@ class LiveEngine:
                 base = sym.replace('/', '_')
                 buy_path  = MODEL_STORE / f"{base}_model_buy.json"
                 sell_path = MODEL_STORE / f"{base}_model_sell.json"
+
+                # No USD-M perpetual => this token cannot be traded on the market
+                # the product reports, and its chart cannot render. Bench it rather
+                # than let the spot fallback manufacture perp-labelled signals.
+                if not _has_usdm_perp(sym):
+                    self._benched.add(sym)
+                    self.predictors[sym] = p
+                    loaded += 1
+                    print(f'[LiveEngine] BENCHED {sym} — no Binance USD-M perpetual '
+                          f'(perp is listed as 1000{sym.split("/")[0]}); it can only be '
+                          f'served from SPOT, so it can never fire (monitor-only)')
+                    continue
 
                 _tiers = p.meta.get('risk_tier') or {}
                 _benched = bool(_tiers) and not bool(_tiers.get(self.risk_tier, False))
