@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 retrain_model.py - Aegis-1 Model Trainer (meta-labeling rebuild)
 ----------------------------------------------------------------
@@ -977,6 +977,154 @@ def analyze_training_labels_for_adaptation(
     return result
 
 
+# ============================================================
+# REVERSAL ALIGNMENT WITH live_engine.py
+# ============================================================
+# The engine only ever fires FADES at exhaustion (Guard N: never trend-follow),
+# at a structural extreme (Guard A/D, v70), confirmed by a real candlestick
+# reversal (Guard J, v69). But the labels above are strategy-AGNOSTIC: the
+# triple barrier tags every bar by whichever barrier is hit first, so in a
+# downtrend most bars label SELL and the model learns trend-FOLLOWING — exactly
+# the side Guard N then blocks. That train/serve mismatch is why the model and
+# the gates disagreed (measured: model wanted SELL on AAVE at RSI 21.9 sitting
+# on support, which is the engine's textbook BUY).
+#
+# The fix is NOT to relabel (the barrier outcome is ground truth) and NOT to
+# train on reversal bars only — measured, the candle-confirmed extremes are
+# ~3% of bars (~150 per token), far too few for a per-token XGBoost with 100+
+# features; it would overfit badly. Instead the reversal bars are UPWEIGHTED,
+# so the loss is dominated by the population the engine actually trades while
+# the full history still stabilises the fit.
+#
+# Thresholds mirror live_engine's EXTREME_* constants exactly — if those move,
+# move these with them or training and serving drift apart again.
+REVERSAL_RP_BUY       = 0.25   # bottom quarter of the range → BUY exhaustion
+REVERSAL_RP_SELL      = 0.75   # top quarter of the range    → SELL exhaustion
+REVERSAL_RSI_BUY      = 35.0
+REVERSAL_RSI_SELL     = 65.0
+REVERSAL_FOCUS_WEIGHT = 3.0    # loss multiplier on candle-confirmed extremes
+
+# How many bars back the confirming candle may have printed. KEEP THIS AT 1.
+#
+# The theory for raising it was that training was stricter than serving: the live
+# engine holds a setup pending AT the level and re-checks every 5m scan, so the
+# candle often arrives after price first reaches the extreme. Raising N to 3 does
+# find far more events (BTC 7000h: 161/103 at N=1 -> 390/300 at N=3), but it was
+# MEASURED ON BTC AND IT IS WORSE ON EVERY METRIC:
+#
+#     N=1  sig_prec 0.506 | exp +0.181% | gate lift +19.6% | PF 3.64 | Sharpe 32.6
+#     N=3  sig_prec 0.455 | exp +0.140% | gate lift  +9.0% | PF 3.15 | Sharpe 16.0
+#
+# The reason is selection bias, and it is the opposite of the intuition: if the
+# candle printed 2-3 bars ago and price is STILL pinned at the extreme, then the
+# reversal did not follow through. Those bars are disproportionately FAILED
+# reversals, so widening the window preferentially imports negative examples and
+# dilutes the ones that carry signal. The tight same-bar definition is what makes
+# the setup informative. Do not raise this without re-running the BTC A/B.
+REVERSAL_PENDING_BARS = 1
+
+
+def reversal_candle_flags(df: pd.DataFrame) -> Tuple[pd.Series, pd.Series]:
+    """Vectorised mirror of live_engine._reversal_candle (v69).
+
+    Returns (bullish, bearish) boolean Series marking a reversal pattern
+    COMPLETING on each bar: hammer / engulfing / harami / piercing-dark-cloud /
+    morning-evening star. Uses only the bar and its two predecessors, so it is
+    strictly backward-looking — no leakage.
+    """
+    o, h, l, c = df['open'], df['high'], df['low'], df['close']
+    o1, c1 = o.shift(1), c.shift(1)
+    o0, c0 = o.shift(2), c.shift(2)
+
+    rng   = (h - l).replace(0, np.nan)
+    body  = (c - o).abs()
+    up    = h - np.maximum(o, c)
+    dn    = np.minimum(o, c) - l
+    body1 = (c1 - o1).abs()
+    rng1  = (h.shift(1) - l.shift(1)).replace(0, np.nan)
+    body0 = (c0 - o0).abs()
+    mid1  = (o1 + c1) / 2.0
+
+    prev_red, prev_green = c1 < o1, c1 > o1
+    cur_red,  cur_green  = c < o,   c > o
+
+    hammer   = (dn >= 0.55 * rng) & (up <= 0.15 * rng) & (body <= 0.35 * rng)
+    bull_eng = prev_red & cur_green & (o <= c1) & (c >= o1) & (body > body1)
+    bull_har = (prev_red & cur_green & (o >= c1) & (c <= o1)
+                & (body < body1) & (body1 >= 0.5 * rng1))
+    pierce   = prev_red & cur_green & (o < c1) & (c > mid1) & (c < o1)
+    morning  = ((c0 < o0) & (body1 <= 0.5 * body0) & cur_green
+                & (c > (o0 + c0) / 2.0))
+
+    shooting = (up >= 0.55 * rng) & (dn <= 0.15 * rng) & (body <= 0.35 * rng)
+    bear_eng = prev_green & cur_red & (o >= c1) & (c <= o1) & (body > body1)
+    bear_har = (prev_green & cur_red & (o <= c1) & (c >= o1)
+                & (body < body1) & (body1 >= 0.5 * rng1))
+    dark     = prev_green & cur_red & (o > c1) & (c < mid1) & (c > o1)
+    evening  = ((c0 > o0) & (body1 <= 0.5 * body0) & cur_red
+                & (c < (o0 + c0) / 2.0))
+
+    # Wrapped as an explicit bool Series: the np.maximum/np.minimum in up/dn
+    # erase the pandas type mid-chain, so the union's .fillna is not provably
+    # a Series method to a type checker, and a bool dtype guarantee forecloses
+    # pandas' object-downcast FutureWarning. fillna BEFORE astype keeps the
+    # NaN -> False semantics bit-for-bit (this function is parity-verified
+    # against live_engine._reversal_candle — outputs must not change).
+    bullish = pd.Series(hammer | bull_eng | bull_har | pierce | morning,
+                        index=df.index).fillna(False).astype(bool)
+    bearish = pd.Series(shooting | bear_eng | bear_har | dark | evening,
+                        index=df.index).fillna(False).astype(bool)
+    return bullish, bearish
+
+
+def compute_reversal_events(df: pd.DataFrame) -> Tuple[pd.Series, pd.Series]:
+    """Bars where live_engine WOULD take a fade: (buy_event, sell_event).
+
+    Mirrors the deployed gate stack — counter-trend only (Guard N), at a
+    structural extreme (v70), with a candlestick confirmation (Guard J). Trend
+    is an EMA50/EMA200 proxy for MarketRegimeDetector's TRENDING_BULL/BEAR,
+    which is not reproducible offline; it agrees on the direction that matters
+    here. Missing inputs yield all-False, so this can only ever no-op.
+    """
+    need = ('open', 'high', 'low', 'close')
+    if any(col not in df.columns for col in need):
+        false = pd.Series(False, index=df.index)
+        return false, false
+
+    rsi_col = 'rsi_14' if 'rsi_14' in df.columns else ('rsi' if 'rsi' in df.columns else None)
+    rp_col  = 'range_position_score' if 'range_position_score' in df.columns else None
+    if rsi_col is None or rp_col is None:
+        false = pd.Series(False, index=df.index)
+        return false, false
+
+    rsi = pd.to_numeric(df[rsi_col], errors='coerce')
+    rp  = pd.to_numeric(df[rp_col],  errors='coerce')
+    ema_fast = df['close'].ewm(span=50,  adjust=False).mean()
+    ema_slow = df['close'].ewm(span=200, adjust=False).mean()
+    bear = ema_fast < ema_slow
+
+    bullish, bearish = reversal_candle_flags(df)
+    # The candle may have printed up to REVERSAL_PENDING_BARS ago (the engine holds
+    # the setup pending at the level); the EXTREME must still hold on this bar.
+    _n = max(1, int(REVERSAL_PENDING_BARS))
+    bullish_recent = bullish.rolling(_n, min_periods=1).max().astype(bool)
+    bearish_recent = bearish.rolling(_n, min_periods=1).max().astype(bool)
+
+    buy_event  = (bear  & (rp <= REVERSAL_RP_BUY)  & (rsi <= REVERSAL_RSI_BUY)  & bullish_recent)
+    sell_event = (~bear & (rp >= REVERSAL_RP_SELL) & (rsi >= REVERSAL_RSI_SELL) & bearish_recent)
+    return buy_event.fillna(False), sell_event.fillna(False)
+
+
+def reversal_focus_weights(event_mask: pd.Series, n: int,
+                           weight: float = REVERSAL_FOCUS_WEIGHT) -> np.ndarray:
+    """Per-sample weights: `weight` on the engine's fade bars, 1.0 elsewhere."""
+    w = np.ones(n, dtype=float)
+    if event_mask is None or len(event_mask) != n:
+        return w
+    w[np.asarray(event_mask.to_numpy(), dtype=bool)] = float(weight)
+    return w
+
+
 def create_triple_barrier_labels(df: pd.DataFrame, atr_multiplier: float,
                                   max_lookahead: int = MAX_LOOKAHEAD,
                                   volatility_regime: Optional[pd.Series] = None,
@@ -987,8 +1135,14 @@ def create_triple_barrier_labels(df: pd.DataFrame, atr_multiplier: float,
                                   adapt_params: Optional[Dict[str, Any]] = None,
                                   regime_atr_mult: Optional[Dict[str, float]] = None,
                                   barrier_up_skew: Optional[float] = None,
-                                  barrier_down_skew: Optional[float] = None) -> pd.Series:
+                                  barrier_down_skew: Optional[float] = None,
+                                  return_hit_bars: bool = False) -> Any:
     """3-class labels: 0=SELL, 1=HOLD, 2=BUY, -1=CENSORED (dropped upstream).
+
+    return_hit_bars: when True, also return a parallel float Series holding the
+        bar OFFSET at which the winning barrier was hit (NaN for HOLD/censored).
+        Used ONLY by evaluation to deduplicate overlapping trades by their real
+        holding time (see effective_sample_size_durations) — never as a feature.
 
     adapt_params: pre-computed per-training-split statistics from
         analyze_training_labels_for_adaptation().  When provided, the
@@ -1000,12 +1154,14 @@ def create_triple_barrier_labels(df: pd.DataFrame, atr_multiplier: float,
         per regime before the dynamic noise/vol factor is applied.
     """
     if df is None or df.empty:
-        return pd.Series(dtype=int)
+        _empty = pd.Series(dtype=int)
+        return (_empty, pd.Series(dtype=float)) if return_hit_bars else _empty
 
     _up_skew   = float(barrier_up_skew)   if barrier_up_skew   is not None else BARRIER_UP_SKEW
     _down_skew = float(barrier_down_skew) if barrier_down_skew is not None else BARRIER_DOWN_SKEW
 
     labels = pd.Series(1, index=df.index, dtype=int)
+    hit_bars = pd.Series(np.nan, index=df.index, dtype=float)
     atr = compute_atr(df, period=14)
     n = len(df)
     # Compute baseline confluence bounds from whatever series is passed in.
@@ -1066,14 +1222,17 @@ def create_triple_barrier_labels(df: pd.DataFrame, atr_multiplier: float,
 
         window_avail = min(max_lookahead, n - 1 - i)
         hit = None
+        hit_j = 0
         for j in range(1, window_avail + 1):
             high = df.iloc[i + j]['high']
             low = df.iloc[i + j]['low']
             if high >= upper:
                 hit = 2
+                hit_j = j
                 break
             if low <= lower:
                 hit = 0
+                hit_j = j
                 break
 
         if macro_confluence_score is not None and hit is not None and cs_lower < cs_upper:
@@ -1084,10 +1243,15 @@ def create_triple_barrier_labels(df: pd.DataFrame, atr_multiplier: float,
                 hit = None
 
         labels.iloc[i] = hit if hit is not None else (1 if window_avail >= max_lookahead else CENSORED)
+        if hit is not None:
+            hit_bars.iloc[i] = float(hit_j)
 
     if n > 0:
         tail = min(max_lookahead, n)
         labels.iloc[n - tail:] = CENSORED
+        hit_bars.iloc[n - tail:] = np.nan   # censored labels carry no hit offset
+    if return_hit_bars:
+        return labels, hit_bars
     return labels
 
 
@@ -1291,6 +1455,86 @@ def sample_weights(y: np.ndarray) -> np.ndarray:
 # ============================================================
 # TASK 2: FEATURE DRIFT DETECTION (PSI & KS Test)
 # ============================================================
+def wilson_lower_bound(successes: float, n: int, z: float = 1.96) -> float:
+    """Lower bound of the Wilson score interval for a proportion.
+
+    Lets threshold rows be compared FAIRLY across sample sizes. A raw precision
+    ignores n, so 60.0% measured on 50 bars looks better than 52.6% on 325 even
+    though its 95% interval is [0.46, 0.72] against [0.47, 0.58]. The threshold
+    sweep scans 33 candidates, so with small n at least one row clears any fixed
+    bar by luck — measured, a 97% chance of a spurious >=60% row at n=50 when the
+    true precision is 50%. Ranking on this bound instead of the point estimate
+    makes that luck cost the row rather than reward it.
+    """
+    if n <= 0:
+        return 0.0
+    p = max(0.0, min(1.0, float(successes) / float(n)))
+    denom  = 1.0 + z * z / n
+    centre = p + z * z / (2.0 * n)
+    margin = z * float(np.sqrt(p * (1.0 - p) / n + z * z / (4.0 * n * n)))
+    return max(0.0, (centre - margin) / denom)
+
+
+def effective_sample_size(fired_idx: np.ndarray, lookahead: int) -> int:
+    """Count NON-OVERLAPPING trades among fired signals.
+
+    Labels are triple-barrier outcomes measured over `lookahead` bars, so two
+    fires less than `lookahead` apart share most of their outcome path: they are
+    one market event observed twice, not two independent trials. Treating them as
+    independent is what let a holdout report 100.0% directional precision on
+    "58 trades" — at realistic concurrency that is ~4 independent events, and
+    4 coin flips landing the same way has probability 0.06, i.e. unremarkable.
+
+    The training pipeline already respects this when FITTING (purged CV with an
+    EMBARGO of MAX_LOOKAHEAD); this applies the same discipline to EVALUATION,
+    where it was missing. Greedy left-to-right selection — the standard
+    non-overlapping count, and deliberately conservative.
+    """
+    if fired_idx is None or len(fired_idx) == 0:
+        return 0
+    step = max(1, int(lookahead))
+    count = 1
+    last = int(fired_idx[0])
+    for i in fired_idx[1:]:
+        if int(i) - last >= step:
+            count += 1
+            last = int(i)
+    return count
+
+
+def effective_sample_size_durations(fired_idx: np.ndarray,
+                                    durations: Optional[np.ndarray],
+                                    max_step: int) -> int:
+    """Non-overlapping trade count using each trade's ACTUAL resolution time.
+
+    effective_sample_size() steps by the LABEL WINDOW (max lookahead), which
+    treats two trades as overlapping even when the first hit its barrier long
+    before the second opened. For long-lookahead tokens that is ruinous: a 72h
+    window on a 1,662-bar holdout allows at most ~23 "independent" events NO
+    MATTER how the trades actually resolved, so the LB>=60% enable bar is
+    unreachable below ~85% precision (measured: ETH DISABLED at 65.5% dir_prec
+    with LB 45.1% from exactly this). Two trades are one market event only
+    while their outcome paths overlap — a trade that resolved in 9 bars frees
+    the market after 9 bars, not 72. Durations come from the labeler's real
+    bar-of-hit (_hit_bars); bars with no recorded hit (HOLD timeouts) fall
+    back to the full window, staying conservative exactly where the trade
+    really did stay open the whole time.
+    """
+    if fired_idx is None or len(fired_idx) == 0:
+        return 0
+    count = 0
+    next_free = -1
+    for i in fired_idx:
+        i = int(i)
+        if i < next_free:
+            continue
+        d = durations[i] if durations is not None and i < len(durations) else None
+        step = int(d) if d is not None and np.isfinite(d) and d > 0 else int(max_step)
+        count += 1
+        next_free = i + max(1, step)
+    return count
+
+
 def compute_psi(X_train: np.ndarray, X_holdout: np.ndarray, n_bins: int = 10) -> float:
     """Population Stability Index: measures distribution shift in a feature.
     PSI > 0.25: Small shift, PSI > 1.0: Large shift"""
@@ -1494,12 +1738,17 @@ def objective_binary_multifold(
     splits: list,
     fw: Optional[np.ndarray] = None,
     spw: float = 1.0,
+    sw: Optional[np.ndarray] = None,
 ) -> float:
     """Optuna objective for binary XGBoost (minimise 1-AUPRC), averaged across folds.
 
     AUPRC (average precision score) weights precision at low-recall operating points
     more heavily than AUC-ROC. This directly optimises the high-confidence precision
     region that the calibrated threshold gate exploits at inference time.
+
+    `sw` are PER-SAMPLE weights (reversal focus, see reversal_focus_weights) and
+    are applied to the TRAINING fold only — never to the eval fold, so the score
+    still reflects real unweighted ranking quality and Optuna cannot game it.
     """
     from sklearn.metrics import average_precision_score as _ap
     params = {
@@ -1518,7 +1767,8 @@ def objective_binary_multifold(
     aps: List[float] = []
     for itr, iva in splits:
         # fw is feature weights (size=num_features), not sample weights — pass via fw= kwarg
-        m = xgb.train(params, _dm(X.iloc[itr], y[itr], fw=fw),
+        m = xgb.train(params, _dm(X.iloc[itr], y[itr],
+                                  None if sw is None else sw[itr], fw=fw),
                       num_boost_round=400,
                       evals=[(_dm(X.iloc[iva], y[iva], fw=fw), 'eval')],
                       early_stopping_rounds=30, verbose_eval=False)
@@ -1545,12 +1795,18 @@ def binary_primary_oof(
     n_splits: int,
     gap: int,
     fw: Optional[np.ndarray] = None,
+    sw: Optional[np.ndarray] = None,
 ) -> np.ndarray:
-    """OOF probabilities for a single binary XGBoost primary model."""
+    """OOF probabilities for a single binary XGBoost primary model.
+
+    `sw` (reversal-focus per-sample weights) applies to the training fold only,
+    so the OOF probabilities the meta gate is calibrated on stay unweighted.
+    """
     oof = np.full(len(X), np.nan)
     for tr, va in TimeSeriesSplit(n_splits=n_splits, gap=gap).split(X):
         # fw is feature weights (size=num_features), not sample weights — pass via fw= kwarg
-        m = xgb.train(params, _dm(X.iloc[tr], y[tr], fw=fw),
+        m = xgb.train(params, _dm(X.iloc[tr], y[tr],
+                                  None if sw is None else sw[tr], fw=fw),
                       num_boost_round=800,
                       evals=[(_dm(X.iloc[va], y[va], fw=fw), 'eval')],
                       early_stopping_rounds=60, verbose_eval=False)
@@ -2057,6 +2313,7 @@ def log_feature_importance(model, feature_names: List[str], symbol: str):
     logs_dir = Path(root_dir) / "logs" / "features"
     logs_dir.mkdir(parents=True, exist_ok=True)
     importance = model.get_score(importance_type='gain')
+    importance_dict: Dict[str, Any] = {}
     if importance:
         if all(k.startswith('f') for k in importance.keys()):
             idx = [int(k[1:]) for k in importance.keys()]
@@ -2073,7 +2330,7 @@ def log_feature_importance(model, feature_names: List[str], symbol: str):
         for name, imp in sorted_imp[:30]:
             f.write(f"{name:35} : {imp:.6f}\n")
     print(f"   Feature importance saved to {output_file}")
-    return importance_dict if 'importance_dict' in locals() else {}
+    return importance_dict
 
 
 # ============================================================
@@ -2489,7 +2746,7 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
               f"precision_target={token_precision_target:.1%} target_buy=[{target_buy_min:.1%},{target_buy_max:.1%}] "
               f"target_sell=[{target_sell_min:.1%},{target_sell_max:.1%}] hold_max={target_hold_max:.1%}")
 
-        labels = create_triple_barrier_labels(
+        labels, _hit_bars_s = create_triple_barrier_labels(
             df, atr_multiplier=atr_mult, max_lookahead=token_lookahead,
             volatility_regime=df['volatility_regime'],
             efficiency_ratio=df['efficiency_ratio_10'],
@@ -2497,8 +2754,13 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
             macro_confluence_score=df.get('macro_confluence_score'),
             adapt_params=_adapt_params,
             barrier_up_skew=_token_up_skew, barrier_down_skew=_token_down_skew,
+            return_hit_bars=True,
         )
         df['target'] = labels.astype(int).values
+        # Bar-of-hit per label, for overlap dedup in evaluation ONLY. The `_`
+        # prefix keeps it out of feature_cols (it encodes future outcome timing,
+        # same epistemic status as `target` itself — evaluation-side truth).
+        df['_hit_bars'] = _hit_bars_s.values
 
         n_censored = int((df['target'] == CENSORED).sum())
         df = df[df['target'] != CENSORED].reset_index(drop=True)
@@ -2540,6 +2802,19 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
         holdout['_close_raw'] = holdout['close'].copy()
         holdout['_atr_raw'] = holdout['_atr'].copy()
 
+        # Reversal events MUST be computed HERE, on RAW pre-normalisation values.
+        # AdaptiveNormalizer below z-scores every feature column, which makes the
+        # engine's thresholds meaningless: rsi_14 becomes ~[-3,+3] so `rsi >= 65`
+        # can NEVER fire (measured: SELL fades=0 on BTC, i.e. the focus silently
+        # became BUY-only) while `rsi <= 35` ALWAYS fires; and open/high/low/close
+        # are each scaled independently, which destroys the bar geometry the
+        # candlestick detector depends on. The `_` prefix keeps these masks out of
+        # feature_cols, so they are neither normalised nor leaked to the model.
+        _rb_tp, _rs_tp = compute_reversal_events(train_pool)
+        train_pool['_rev_buy'], train_pool['_rev_sell'] = _rb_tp.values, _rs_tp.values
+        _rb_ho, _rs_ho = compute_reversal_events(holdout)
+        holdout['_rev_buy'], holdout['_rev_sell'] = _rb_ho.values, _rs_ho.values
+
         Xtp = train_pool[feature_cols]
         ytp = train_pool['target'].to_numpy().astype(int)
 
@@ -2561,7 +2836,8 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
         holdout_norm = holdout.copy()
         holdout_norm[feature_cols] = normalizer.transform(holdout[feature_cols], feature_cols)[feature_cols]
         # Preserve non-feature columns needed by the backtest/regime engine
-        for _raw_col in ['_close_raw', '_atr_raw', 'hmm_regime', 'volatility_regime',
+        for _raw_col in ['_close_raw', '_atr_raw', '_rev_buy', '_rev_sell',
+                         'hmm_regime', 'volatility_regime',
                          'macro_trend_1d', 'total_confluence', 'is_at_resistance', 'is_at_support']:
             if _raw_col in train_pool.columns:
                 train_pool_norm[_raw_col] = train_pool[_raw_col].values
@@ -2626,10 +2902,29 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
         print(f"   Binary primary labels: BUY pos={int(_n_pos_buy)} neg={int(_n_neg_buy)} "
               f"spw={_spw_buy:.1f} | SELL pos={int(_n_pos_sell)} neg={int(_n_neg_sell)} spw={_spw_sell:.1f}")
 
+        # ---- Reversal focus: train where the ENGINE actually fires ----
+        # Upweight the candle-confirmed structural extremes that live_engine
+        # takes (see compute_reversal_events). Without this the loss is
+        # dominated by ordinary trend bars and the model learns the
+        # trend-following side that Guard N then blocks.
+        # Read the masks computed on RAW values before normalisation — do NOT
+        # recompute here, train_pool is z-scored by this point.
+        _rev_buy_ev  = train_pool['_rev_buy'].astype(bool)
+        _rev_sell_ev = train_pool['_rev_sell'].astype(bool)
+        _sw_buy  = reversal_focus_weights(_rev_buy_ev,  len(Xtp))
+        _sw_sell = reversal_focus_weights(_rev_sell_ev, len(Xtp))
+        _n_rev_buy, _n_rev_sell = int(_rev_buy_ev.sum()), int(_rev_sell_ev.sum())
+        print(f"   Reversal focus (x{REVERSAL_FOCUS_WEIGHT:.0f}): "
+              f"BUY fades={_n_rev_buy} ({100.0*_n_rev_buy/max(len(Xtp),1):.1f}% of bars) | "
+              f"SELL fades={_n_rev_sell} ({100.0*_n_rev_sell/max(len(Xtp),1):.1f}%)")
+        if _n_rev_buy + _n_rev_sell == 0:
+            print("   [WARN] no reversal events found — focus weighting is a no-op "
+                  "(check range_position_score / rsi_14 are present)")
+
         # BUY model — independent Optuna AUPRC run
         study_buy = optuna.create_study(direction='minimize',
                                         sampler=optuna.samplers.TPESampler(seed=42))
-        study_buy.optimize(lambda t: objective_binary_multifold(t, Xtp, ytp_buy, inner, fw=fw, spw=_spw_buy),
+        study_buy.optimize(lambda t: objective_binary_multifold(t, Xtp, ytp_buy, inner, fw=fw, spw=_spw_buy, sw=_sw_buy),
                            n_trials=OPTUNA_TRIALS, show_progress_bar=False)
         binary_params_buy = _binary_params(study_buy.best_params)
         binary_params_buy['scale_pos_weight'] = _spw_buy
@@ -2639,7 +2934,7 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
         # distributions and often need different depth/regularization.
         study_sell = optuna.create_study(direction='minimize',
                                          sampler=optuna.samplers.TPESampler(seed=43))
-        study_sell.optimize(lambda t: objective_binary_multifold(t, Xtp, ytp_sell, inner, fw=fw, spw=_spw_sell),
+        study_sell.optimize(lambda t: objective_binary_multifold(t, Xtp, ytp_sell, inner, fw=fw, spw=_spw_sell, sw=_sw_sell),
                             n_trials=OPTUNA_TRIALS, show_progress_bar=False)
         binary_params_sell = _binary_params(study_sell.best_params)
         binary_params_sell['scale_pos_weight'] = _spw_sell
@@ -2685,8 +2980,11 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
         # SMOTE removed: binary models use scale_pos_weight for imbalance correction.
 
         # ---- 3) Binary OOF → AUC check → synthetic 3-class probs ----
-        oof_buy  = binary_primary_oof(Xtp, ytp_buy,  binary_params_buy,  N_SPLITS_CV, EMBARGO, fw=fw)
-        oof_sell = binary_primary_oof(Xtp, ytp_sell, binary_params_sell, N_SPLITS_CV, EMBARGO, fw=fw)
+        # sw: same reversal focus as the deployed fit, so the OOF probabilities the
+        # meta gate calibrates against come from a model that behaves like the one
+        # that ships (the eval folds themselves stay unweighted).
+        oof_buy  = binary_primary_oof(Xtp, ytp_buy,  binary_params_buy,  N_SPLITS_CV, EMBARGO, fw=fw, sw=_sw_buy)
+        oof_sell = binary_primary_oof(Xtp, ytp_sell, binary_params_sell, N_SPLITS_CV, EMBARGO, fw=fw, sw=_sw_sell)
         mask = ~np.isnan(oof_buy)
         mask_idx = np.where(mask)[0]
 
@@ -3033,7 +3331,11 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
             _best_cov_po  = 0.0
             _rows_po: list = []   # always initialised so balance-guard below is safe
             if _n_dir_val >= 100:    # need ≥100 directional val bars to run sweep; inner threshold is 20
-                _min_fires_combined = 20 if (_po_use_calibrator and _calibrator_po is not None) else 50
+                # Floor raised 20 -> 50 on the calibrated path: a 20-fire row carries
+                # a +/-19.7pp confidence interval, which is not a measurement. The
+                # Wilson ranking above does the real work; this just stops degenerate
+                # rows entering the sweep at all.
+                _min_fires_combined = 50
                 for _thr_s in np.arange(0.30, 0.96, 0.02):
                     _fire_s = (_cal_conf_dir_val >= _thr_s)
                     _n_s    = int(_fire_s.sum())
@@ -3043,17 +3345,53 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
                     _cov_s  = _n_s / max(1, _n_dir_val)
                     _rows_po.append((float(_thr_s), _prec_s, _cov_s, _n_s))
                 if _rows_po:
-                    # Among rows where directional precision >= 60%, pick highest coverage.
-                    # If none reach 60%, fall back to highest precision (avoids total disable).
-                    _passing_rows = [r for r in _rows_po if r[1] >= 0.60]
+                    # Rank on the LOWER BOUND of each row's precision, not the raw
+                    # point estimate. Selecting on the point estimate made this a
+                    # lottery: 33 thresholds are swept, so a small-n row clears the
+                    # 60% bar by chance ~97% of the time, and whichever row got
+                    # lucky hijacked the whole gate. Measured on BTC, back-to-back
+                    # runs on the SAME data:
+                    #   spurious row  60.0% @ n=50  (CI [0.46,0.72]) -> thr 0.680,
+                    #       holdout precision 0.373, gate lift -0.1%  (DISABLED)
+                    #   supported row 52.6% @ n=325 (CI [0.47,0.58]) -> thr 0.540,
+                    #       holdout precision 0.506, gate lift +19.6% (ENABLED)
+                    # i.e. the run that PASSED the 60% bar produced the worse model.
+                    # The Wilson bound reverses that ordering (0.462 vs 0.472) with
+                    # no arbitrary rule — small samples simply cannot make a strong
+                    # claim. Applies to the fallback too, which previously took the
+                    # highest raw precision and so had the same small-n bias.
+                    _rows_lb = [(t, p, c, n, wilson_lower_bound(p * n, n))
+                                for (t, p, c, n) in _rows_po]
+                    _passing_rows = [r for r in _rows_lb if r[4] >= 0.60]
                     if _passing_rows:
-                        _best_thr_po, _best_prec_po, _best_cov_po, _best_n_po = max(
-                            _passing_rows, key=lambda r: r[2]
-                        )
+                        _sel = max(_passing_rows, key=lambda r: r[2])   # most coverage among genuinely good
                     else:
-                        _best_thr_po, _best_prec_po, _best_cov_po, _best_n_po = max(
-                            _rows_po, key=lambda r: r[1]
-                        )
+                        # No row is EVIDENCED at 60%. Taking the single best-LB row
+                        # here traded away coverage for a precision claim the data
+                        # cannot actually make: on BTC it chose thr 0.640 (n=120,
+                        # cov 12%) over lower thresholds whose LB sat within one
+                        # standard error — statistically the SAME row — with ~3x the
+                        # fires. One-standard-error rule instead: among rows whose
+                        # LB is within 1 SE of the best, take the most coverage.
+                        # Floor: the point estimate must clear token_breakeven by a
+                        # REAL margin (+2pp), not merely touch it. Measured on ETH:
+                        # with the floor AT breakeven, the band ran to 81.3% coverage
+                        # on a row at breakeven+0.2pp — an always-in-market gate whose
+                        # diluted 65.5% dir precision could never evidence the 60%
+                        # enable bar, with a 23% holdout drawdown. A row must be worth
+                        # firing, not just not-losing. Tokens with no row above the
+                        # floor fall back to exactly the old best-LB rule.
+                        _r_best  = max(_rows_lb, key=lambda r: r[4])
+                        _se_best = (_r_best[1] * (1.0 - _r_best[1]) / _r_best[3]) ** 0.5
+                        _prec_floor = token_breakeven + 0.02
+                        _near    = [r for r in _rows_lb
+                                    if r[4] >= _r_best[4] - _se_best
+                                    and r[1] >= _prec_floor]
+                        _sel = max(_near, key=lambda r: r[2]) if _near else _r_best
+                    _best_thr_po, _best_prec_po, _best_cov_po, _best_n_po = _sel[0], _sel[1], _sel[2], _sel[3]
+                    print(f"   [THR-SWEEP] thr={_best_thr_po:.3f} prec={_best_prec_po:.1%} "
+                          f"n={_best_n_po} cov={_best_cov_po:.1%} wilson_lb={_sel[4]:.3f} | "
+                          f"{len(_rows_po)} rows, {len(_passing_rows)} with LB>=60%")
             else:
                 # Small val set (<100 directional bars): derive threshold from training pool.
                 # Calibrated training confidence is more reliable than a noisy val sweep.
@@ -3472,6 +3810,26 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
             print(f"   Directional precision: {_dir_fired_prec2:.1%} ({_dir_fired_n2}/{_dir_total2} dir bars, cov={_dir_coverage2:.1%})"
                   f" | BUY={_dir_buy_prec:.1%}({_dir_buy_n}tr) SELL={_dir_sell_prec:.1%}({_dir_sell_n}tr)")
 
+            # ── Overlap-adjusted evidence ─────────────────────────────────
+            # The raw count above treats every fired bar as an independent trial.
+            # With an 18-96h barrier on 1h bars it is not: neighbouring fires
+            # share an outcome path. Deflate to non-overlapping events, then take
+            # the Wilson lower bound on THAT — so "100% on 58 trades" is scored as
+            # what it actually is (a handful of events), not as certainty.
+            _hit_arr = holdout['_hit_bars'].to_numpy() if '_hit_bars' in holdout.columns else None
+            _dir_eff_n = effective_sample_size_durations(
+                np.where(_dir_fired_mask2)[0], _hit_arr, token_lookahead)
+            _dir_prec_lb = wilson_lower_bound(_dir_fired_prec2 * _dir_eff_n, _dir_eff_n)
+            _sig_eff_n = effective_sample_size_durations(
+                np.where(fire)[0], _hit_arr, token_lookahead)
+            _med_hold = (float(np.nanmedian(_hit_arr[_dir_fired_mask2]))
+                         if _hit_arr is not None and _dir_fired_n2 > 0
+                         else float(token_lookahead))
+            print(f"   Overlap-adjusted: {_dir_eff_n} independent dir events "
+                  f"(from {_dir_fired_n2} raw, median hold {_med_hold:.0f}h, "
+                  f"label window {token_lookahead}h) "
+                  f"| dir_prec 95% lower bound = {_dir_prec_lb:.1%}")
+
             # ── Tradeable decision — directional precision ────────────────
             # Gate on directional precision (≥60%) not 3-class signal precision.
             # HOLD timeouts are fee-only events; direction errors are the real risk.
@@ -3605,10 +3963,23 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
                 fired_dir_prec  = _dir_fired_prec2    # reuse pre-computed directional stats
                 coverage_dir    = _dir_coverage2
                 _signal_prec_h  = float((prop_h[fire] == y_test[fire]).mean()) if fire.sum() > 0 else 0.0
+                # Ship on EVIDENCE and PROFIT, not on a raw point estimate.
+                #   1) dir_prec must clear 60% at its 95% LOWER BOUND, computed on
+                #      OVERLAP-DEFLATED events — a 100% that rests on ~4 independent
+                #      events can no longer enable a token (its LB is ~0.40).
+                #   2) enough INDEPENDENT events, not just enough bars.
+                #   3) expectancy must be positive. This is the honest profitability
+                #      test: backtest() prices all three outcomes correctly (win
+                #      +barrier-fee, wrong -barrier-fee, HOLD timeout -fee only),
+                #      whereas comparing signal_precision to `breakeven` double-counts
+                #      timeouts as full-barrier losses and is unfairly harsh.
+                _MIN_EFF_EVENTS = 12
                 tradeable_final = (
                     _dir_fired_n2 >= MIN_HOLDOUT_FIRES and
-                    fired_dir_prec >= 0.60 and
-                    coverage_dir >= MIN_COVERAGE
+                    _dir_eff_n    >= _MIN_EFF_EVENTS and
+                    _dir_prec_lb  >= 0.60 and
+                    coverage_dir  >= MIN_COVERAGE and
+                    bt["expectancy_pct"] > 0.0
                 )
                 tradeable_buy_holdout  = tradeable_final
                 tradeable_sell_holdout = tradeable_final
@@ -3616,16 +3987,23 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
                 passes_validation      = tradeable_final
                 _via_profitability_bypass = False
                 if tradeable_final:
-                    print(f"      [PRIMARY ONLY] ENABLED: dir_prec={fired_dir_prec:.1%}>=60% "
-                          f"dir_cov={coverage_dir:.1%}>={MIN_COVERAGE:.0%} | "
-                          f"{_dir_fired_n2} dir trades (total fired={fired_n} cov={coverage:.1%}) "
+                    print(f"      [PRIMARY ONLY] ENABLED: dir_prec={fired_dir_prec:.1%} "
+                          f"(LB={_dir_prec_lb:.1%}>=60% on {_dir_eff_n} independent events) "
+                          f"exp={bt['expectancy_pct']:+.3f}% dir_cov={coverage_dir:.1%} | "
+                          f"{_dir_fired_n2} raw dir trades (total fired={fired_n} cov={coverage:.1%}) "
                           f"| signal_prec={_signal_prec_h:.1%} (ref, incl HOLD timeouts)")
                 else:
                     _po_reasons: list = []
-                    if fired_dir_prec < 0.60:
-                        _po_reasons.append(f"dir_prec={fired_dir_prec:.1%}<60%")
-                    if coverage_dir < 0.05:
-                        _po_reasons.append(f"dir_cov={coverage_dir:.1%}<5%")
+                    if _dir_prec_lb < 0.60:
+                        _po_reasons.append(
+                            f"dir_prec_LB={_dir_prec_lb:.1%}<60% "
+                            f"(point={fired_dir_prec:.1%} on only {_dir_eff_n} independent events)")
+                    if _dir_eff_n < _MIN_EFF_EVENTS:
+                        _po_reasons.append(f"independent_events={_dir_eff_n}<{_MIN_EFF_EVENTS}")
+                    if bt["expectancy_pct"] <= 0.0:
+                        _po_reasons.append(f"expectancy={bt['expectancy_pct']:+.3f}%<=0")
+                    if coverage_dir < MIN_COVERAGE:
+                        _po_reasons.append(f"dir_cov={coverage_dir:.1%}<{MIN_COVERAGE:.0%}")
                     if _dir_fired_n2 < MIN_HOLDOUT_FIRES:
                         _po_reasons.append(f"dir_n={_dir_fired_n2}<{MIN_HOLDOUT_FIRES}")
                     print(f"      [PRIMARY ONLY] DISABLED: {', '.join(_po_reasons)}")
@@ -3727,6 +4105,17 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
         _hold_mask_all = (y_all == 1)   # HOLD bars in deployment training set
         _w_all_buy     = np.where(_hold_mask_all, 0.15, 1.0).astype(float)
         _w_all_sell    = np.where(_hold_mask_all, 0.15, 1.0).astype(float)
+        # Reversal focus on the SHIPPED models — multiplied INTO the existing
+        # HOLD downweight, never replacing it, so a fade bar that is also a HOLD
+        # stays suppressed rather than being promoted by the focus multiplier.
+        # Masks carried through from the raw pre-normalisation frames (usable is a
+        # concat of the already-normalised train_pool + holdout).
+        _rev_buy_all  = usable['_rev_buy'].astype(bool)
+        _rev_sell_all = usable['_rev_sell'].astype(bool)
+        _w_all_buy  *= reversal_focus_weights(_rev_buy_all,  len(X_all))
+        _w_all_sell *= reversal_focus_weights(_rev_sell_all, len(X_all))
+        print(f"   Deployment fit reversal focus: BUY fades={int(_rev_buy_all.sum())} "
+              f"| SELL fades={int(_rev_sell_all.sum())} of {len(X_all)} bars")
 
         deploy_buy = xgb.train(binary_params_buy,  _dm(X_all, y_all_buy,  _w_all_buy),
                                num_boost_round=800, verbose_eval=False)
@@ -3877,6 +4266,14 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
                     "coverage":             coverage,
                     "signal_precision":     fired_prec,
                     "directional_precision":round(_dir_fired_prec2, 4),
+                    # Overlap-adjusted evidence: raw counts overstate independence
+                    # because barrier windows overlap. These are what the enable
+                    # gate actually uses — a live monitor should trust them, not
+                    # the raw point estimate above.
+                    "dir_independent_events": int(locals().get('_dir_eff_n', 0)),
+                    "dir_precision_lower_bound": round(float(locals().get('_dir_prec_lb', 0.0)), 4),
+                    "signal_independent_events": int(locals().get('_sig_eff_n', 0)),
+                    "label_lookahead_hours": int(token_lookahead),
                     "dir_fired_n":          _dir_fired_n2,
                     "dir_coverage":         round(_dir_coverage2, 4),
                     "dir_buy_precision":    round(_dir_buy_prec,  4),

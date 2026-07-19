@@ -2262,6 +2262,21 @@ class LiveEngine:
     REVERSAL_RSI_LONG  = 42.0
     REVERSAL_RSI_SHORT = 58.0
 
+    # v72 — TRUST THE MODEL (user decision 2026-07-19). The retrained models are
+    # reversal-focused and holdout-validated (dir_prec lower bound >= 60% on
+    # independent events), so most doctrine/structure guards no longer hard-block
+    # a model fire: Guards A(soft)/D/L/K/F/I/N/B DEMOTE the signal to RISKY
+    # with a named warning instead of vetoing it.
+    # v73 — TWO GUARDS ARE HARD AGAIN by explicit user decision ("support/
+    # resistance gate and 3 candle confirmation a hard gate, other will be
+    # fine"): Guard M (fires ONLY at/tag-rejecting a tested level; wrong-half
+    # locations rejected) and Guard J (no entry without the 5m reversal candle,
+    # fails closed) block regardless of this flag. Capital-safety gates always
+    # hard-block: the dead-market ATR hard floor, NO_TRADE_REGIME, LOSS_COOLDOWN,
+    # safe mode, the portfolio guard, the RR gate, drift block, the no-perp
+    # bench. Set False to restore every hard block (full strict doctrine).
+    TRUST_MODEL_FIRE = True
+
     # Model-first hard floor: below this ATR% the market is too flat to trade
     # (stops sit inside 1h tick noise). 0.5% matches the legacy Gate 2 value.
     MIN_FIRE_ATR_PCT = 0.5
@@ -3263,6 +3278,10 @@ class LiveEngine:
                         _srq    = float(result.get('sr_quality', 0.0) or 0.0)
                         _poor   = bool(result.get('sr_loc_poor'))
                         _rp_now = _range_pos(result)
+                        # v72 trust-model ledger: guards that would have vetoed this
+                        # fire append their reason here instead; anything present
+                        # caps the tier at RISKY (see tier assignment below).
+                        _trust_warns: List[str] = []
 
                         # ── Structural extreme (v70) ──────────────────────────────
                         # The exhaustion point this engine exists to fade: price
@@ -3285,12 +3304,12 @@ class LiveEngine:
                         _atr_pct_now = float(result.get('atr_pct', 0.0) or 0.0)
                         if 0 < _atr_pct_now < self.MIN_FIRE_ATR_PCT:
                             if (_atr_pct_now >= self.MIN_FIRE_ATR_HARD_PCT
-                                    and _at_extreme):
+                                    and (_at_extreme or self.TRUST_MODEL_FIRE)):
                                 _atr_relaxed = True
                                 print(f'[{symbol}] MODEL RELAX {new_side}: ATR_FLOOR '
                                       f'atr={_atr_pct_now:.2f}% < {self.MIN_FIRE_ATR_PCT}% '
-                                      f'but at a structural extreme (rp={_rp_now:.2f} '
-                                      f'rsi={_rsi_now:.1f}) — firing tagged RISKY')
+                                      f'({"structural extreme" if _at_extreme else "trust-model"} '
+                                      f'rp={_rp_now:.2f} rsi={_rsi_now:.1f}) — firing tagged RISKY')
                             else:
                                 _atr_why = (
                                     f'below the {self.MIN_FIRE_ATR_HARD_PCT}% hard floor '
@@ -3339,20 +3358,27 @@ class LiveEngine:
                             _conv_floor   = self.MIN_DIR_CONVICTION_EXTREME
                             _conv_relaxed = _want < self.MIN_DIR_CONVICTION
                         if _want < _conv_floor:
-                            print(f'[{symbol}] MODEL BLOCK {new_side}: directional conviction '
-                                  f'{_want:+.3f} < {_conv_floor:.2f} '
-                                  f'(p_buy {_pb*100:.1f} vs p_sell {_ps*100:.1f}) — '
-                                  f'the model does not prefer this side, the edge '
-                                  f'percentile does')
-                            if symbol in self.last_signals:
-                                self.last_signals[symbol]['fire']             = False
-                                self.last_signals[symbol]['signal']           = 'HOLD'
-                                self.last_signals[symbol]['conviction_blocked'] = True
-                                self.last_signals[symbol]['dir_conviction']   = round(_want, 3)
-                                self.last_signals[symbol]['structure_reason'] = (
-                                    f'no directional conviction ({_want:+.2f})')
-                            self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
-                            return
+                            if self.TRUST_MODEL_FIRE:
+                                _conv_relaxed = True
+                                print(f'[{symbol}] TRUST_MODEL {new_side}: conviction '
+                                      f'{_want:+.3f} < {_conv_floor:.2f} '
+                                      f'(p_buy {_pb*100:.1f} vs p_sell {_ps*100:.1f}) '
+                                      f'— firing tagged RISKY')
+                            else:
+                                print(f'[{symbol}] MODEL BLOCK {new_side}: directional conviction '
+                                      f'{_want:+.3f} < {_conv_floor:.2f} '
+                                      f'(p_buy {_pb*100:.1f} vs p_sell {_ps*100:.1f}) — '
+                                      f'the model does not prefer this side, the edge '
+                                      f'percentile does')
+                                if symbol in self.last_signals:
+                                    self.last_signals[symbol]['fire']             = False
+                                    self.last_signals[symbol]['signal']           = 'HOLD'
+                                    self.last_signals[symbol]['conviction_blocked'] = True
+                                    self.last_signals[symbol]['dir_conviction']   = round(_want, 3)
+                                    self.last_signals[symbol]['structure_reason'] = (
+                                        f'no directional conviction ({_want:+.2f})')
+                                self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                                return
                         result['dir_conviction'] = round(_want, 3)
                         if _conv_relaxed:
                             print(f'[{symbol}] MODEL RELAX {new_side}: conviction '
@@ -3399,19 +3425,26 @@ class LiveEngine:
                             (new_side == 'BUY'  and _rp_conf <= 0.35 and _rsi_conf <= 32))
                         if not _conf_reversal and _dir_net < self.MIN_DIR_CONFLUENCE:
                             _opp = [k for k, v in _dir_ev.items() if v < 0]
-                            print(f'[{symbol}] MODEL BLOCK {new_side}: DIR_CONFLUENCE '
-                                  f'net={_dir_net:+d} < {self.MIN_DIR_CONFLUENCE} — the '
-                                  f'signed evidence does not back this direction '
-                                  f'(opposing: {",".join(_opp) or "none"})')
-                            if symbol in self.last_signals:
-                                self.last_signals[symbol]['fire']              = False
-                                self.last_signals[symbol]['signal']            = 'HOLD'
-                                self.last_signals[symbol]['confluence_blocked'] = True
-                                self.last_signals[symbol]['dir_confluence']    = result['dir_confluence']
-                                self.last_signals[symbol]['structure_reason']  = (
-                                    f'direction not confirmed (net {_dir_net:+d})')
-                            self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
-                            return
+                            if self.TRUST_MODEL_FIRE:
+                                _trust_warns.append('weak_confluence')
+                                print(f'[{symbol}] TRUST_MODEL {new_side}: DIR_CONFLUENCE '
+                                      f'net={_dir_net:+d} < {self.MIN_DIR_CONFLUENCE} '
+                                      f'(opposing: {",".join(_opp) or "none"}) '
+                                      f'— firing tagged RISKY')
+                            else:
+                                print(f'[{symbol}] MODEL BLOCK {new_side}: DIR_CONFLUENCE '
+                                      f'net={_dir_net:+d} < {self.MIN_DIR_CONFLUENCE} — the '
+                                      f'signed evidence does not back this direction '
+                                      f'(opposing: {",".join(_opp) or "none"})')
+                                if symbol in self.last_signals:
+                                    self.last_signals[symbol]['fire']              = False
+                                    self.last_signals[symbol]['signal']            = 'HOLD'
+                                    self.last_signals[symbol]['confluence_blocked'] = True
+                                    self.last_signals[symbol]['dir_confluence']    = result['dir_confluence']
+                                    self.last_signals[symbol]['structure_reason']  = (
+                                        f'direction not confirmed (net {_dir_net:+d})')
+                                self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                                return
 
                         # ── Guard M: hold until price is AT the level ─────────────
                         # No mid-range fires. Wait (PENDING) until price reaches the
@@ -3479,6 +3512,8 @@ class LiveEngine:
                             _wrong_loc_m = ((new_side == 'SELL' and _rp_m < self.PENDING_WRONG_LOC_RP) or
                                             (new_side == 'BUY'  and _rp_m > 1.0 - self.PENDING_WRONG_LOC_RP))
                             if _wrong_loc_m:
+                                # v73: HARD again by user decision — the S/R location
+                                # gate is doctrine even under trust-model.
                                 _opp_role = 'support' if new_side == 'SELL' else 'resistance'
                                 print(f'[{symbol}] MODEL BLOCK {new_side}: WRONG_LOCATION — '
                                       f'range_position {_rp_m:.2f} is in the {_opp_role} half; '
@@ -3494,6 +3529,8 @@ class LiveEngine:
                                 return
 
                         if _target_m is None or (not _at_level_m and not _came_from_m):
+                            # v73: HARD again by user decision — no fires away from a
+                            # tested level, even under trust-model. Wait at the level.
                             _why_m = (f'no tested {_role_m} to wait for'
                                       if _target_m is None else
                                       f'approaching {_role_m} {_target_m:.6g} '
@@ -3549,6 +3586,7 @@ class LiveEngine:
                         # harami / piercing / morning star); a SELL the bearish
                         # mirror. See _reversal_candle. No pattern yet => WAIT.
                         _want_up = (new_side == 'BUY')
+                        _pat = None
                         if len(_c5m) >= 3:
                             _pat = _reversal_candle(_c5m, want_bullish=_want_up)
                             _confirmed = _pat is not None
@@ -3560,6 +3598,8 @@ class LiveEngine:
                             _confirmed = False
                             _why5m = '5m confirmation unavailable (feed down)'
                         if not _confirmed:
+                            # v73: HARD again by user decision — no entry without the
+                            # 5m reversal candle, even under trust-model. Fails closed.
                             print(f'[{symbol}] MODEL WAIT {new_side}: {_why5m} — '
                                   f'not entering without a reversal candle')
                             if symbol in self.last_signals:
@@ -3612,19 +3652,25 @@ class LiveEngine:
                                 (_role == 'SUPPORT'    and new_side == 'SELL' and not _sup_broken)
                             )
                             if _wrong_side:
-                                print(f'[{symbol}] MODEL BLOCK {new_side}: WRONG_SIDE_AT_LEVEL — '
-                                      f'{_role.lower()} {_lv:.6g} touched {_touches}x is '
-                                      f'{_dist:.2f} ATR away and NOT broken; a {new_side} '
-                                      f'fires straight into it')
-                                if symbol in self.last_signals:
-                                    self.last_signals[symbol]['fire']            = False
-                                    self.last_signals[symbol]['signal']          = 'HOLD'
-                                    self.last_signals[symbol]['level_blocked']   = True
-                                    self.last_signals[symbol]['structure_reason'] = (
-                                        f'{new_side} into {_role.lower()} '
-                                        f'({_touches}x, {_dist:.2f} ATR)')
-                                self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
-                                return
+                                if self.TRUST_MODEL_FIRE:
+                                    _trust_warns.append('wrong_side_at_level')
+                                    print(f'[{symbol}] TRUST_MODEL {new_side}: fires into unbroken '
+                                          f'{_role.lower()} {_lv:.6g} ({_touches}x, {_dist:.2f} ATR) '
+                                          f'— firing tagged RISKY')
+                                else:
+                                    print(f'[{symbol}] MODEL BLOCK {new_side}: WRONG_SIDE_AT_LEVEL — '
+                                          f'{_role.lower()} {_lv:.6g} touched {_touches}x is '
+                                          f'{_dist:.2f} ATR away and NOT broken; a {new_side} '
+                                          f'fires straight into it')
+                                    if symbol in self.last_signals:
+                                        self.last_signals[symbol]['fire']            = False
+                                        self.last_signals[symbol]['signal']          = 'HOLD'
+                                        self.last_signals[symbol]['level_blocked']   = True
+                                        self.last_signals[symbol]['structure_reason'] = (
+                                            f'{new_side} into {_role.lower()} '
+                                            f'({_touches}x, {_dist:.2f} ATR)')
+                                    self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                                    return
 
 
                         # This gate was a DESIGN ERROR and is what took the engine to
@@ -3685,14 +3731,19 @@ class LiveEngine:
                         if (_htf_w != 0.0 or _htf_d != 0.0) and not _htf_reversal and (
                                 (new_side == 'BUY'  and _htf_w < -0.5 and _htf_d < -0.5) or
                                 (new_side == 'SELL' and _htf_w >  0.5 and _htf_d >  0.5)):
-                            print(f'[{symbol}] MODEL BLOCK {new_side}: HTF_VETO '
-                                  f'weekly={_htf_w:+.1f} daily={_htf_d:+.1f} both opposing')
-                            if symbol in self.last_signals:
-                                self.last_signals[symbol]['fire']        = False
-                                self.last_signals[symbol]['signal']      = 'HOLD'
-                                self.last_signals[symbol]['htf_blocked'] = True
-                            self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
-                            return
+                            if self.TRUST_MODEL_FIRE:
+                                _trust_warns.append('htf_opposing')
+                                print(f'[{symbol}] TRUST_MODEL {new_side}: HTF weekly={_htf_w:+.1f} '
+                                      f'daily={_htf_d:+.1f} both opposing — firing tagged RISKY')
+                            else:
+                                print(f'[{symbol}] MODEL BLOCK {new_side}: HTF_VETO '
+                                      f'weekly={_htf_w:+.1f} daily={_htf_d:+.1f} both opposing')
+                                if symbol in self.last_signals:
+                                    self.last_signals[symbol]['fire']        = False
+                                    self.last_signals[symbol]['signal']      = 'HOLD'
+                                    self.last_signals[symbol]['htf_blocked'] = True
+                                self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                                return
 
                         # ── Guard I: HTF (4h/1d) S/R is DIRECTIONAL ───────────────
                         # A 4h SUPPORT is a BUY level; a 4h RESISTANCE is a SELL
@@ -3739,14 +3790,20 @@ class LiveEngine:
                                 _block_why = (f'{_lvl_desc} {_room_atr:.2f} ATR away at RSI '
                                               f'{_rsi_h:.0f} — exhaustion chase into the wall')
                             if _block_why:
-                                print(f'[{symbol}] MODEL BLOCK {new_side}: HTF_WALL — {_block_why}')
-                                if symbol in self.last_signals:
-                                    self.last_signals[symbol]['fire']        = False
-                                    self.last_signals[symbol]['signal']      = 'HOLD'
-                                    self.last_signals[symbol]['htf_blocked'] = True
-                                    self.last_signals[symbol]['structure_reason'] = _block_why
-                                self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
-                                return
+                                if self.TRUST_MODEL_FIRE:
+                                    _htf_wall = True
+                                    _trust_warns.append('htf_wall_close')
+                                    print(f'[{symbol}] TRUST_MODEL {new_side}: HTF_WALL — '
+                                          f'{_block_why} — firing tagged RISKY')
+                                else:
+                                    print(f'[{symbol}] MODEL BLOCK {new_side}: HTF_WALL — {_block_why}')
+                                    if symbol in self.last_signals:
+                                        self.last_signals[symbol]['fire']        = False
+                                        self.last_signals[symbol]['signal']      = 'HOLD'
+                                        self.last_signals[symbol]['htf_blocked'] = True
+                                        self.last_signals[symbol]['structure_reason'] = _block_why
+                                    self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                                    return
                             # ADVISORY: trading toward a nearby HTF level — fires, tagged
                             # RISKY, so the rate holds (this is what the old model did).
                             if _room_atr < self.HTF_ADVISORY_ATR:
@@ -3783,17 +3840,23 @@ class LiveEngine:
                             (new_side == 'SELL' and _reg == _REGIME_TRENDING_BEAR) or
                             (new_side == 'BUY'  and _reg == _REGIME_TRENDING_BULL))
                         if _trend_follow:
-                            print(f'[{symbol}] MODEL BLOCK {new_side}: TREND_FOLLOW — '
-                                  f'{new_side} in {_reg} follows the trend; only counter-'
-                                  f'trend reversals at exhaustion are taken')
-                            if symbol in self.last_signals:
-                                self.last_signals[symbol]['fire']                = False
-                                self.last_signals[symbol]['signal']              = 'HOLD'
-                                self.last_signals[symbol]['trend_follow_blocked'] = True
-                                self.last_signals[symbol]['structure_reason']    = (
-                                    f'{new_side} follows {_reg} — fade-only')
-                            self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
-                            return
+                            if self.TRUST_MODEL_FIRE:
+                                _trust_warns.append('trend_follow')
+                                print(f'[{symbol}] TRUST_MODEL {new_side}: {new_side} in {_reg} '
+                                      f'follows the trend — firing tagged RISKY '
+                                      f'(fade-only doctrine relaxed by trust-model)')
+                            else:
+                                print(f'[{symbol}] MODEL BLOCK {new_side}: TREND_FOLLOW — '
+                                      f'{new_side} in {_reg} follows the trend; only counter-'
+                                      f'trend reversals at exhaustion are taken')
+                                if symbol in self.last_signals:
+                                    self.last_signals[symbol]['fire']                = False
+                                    self.last_signals[symbol]['signal']              = 'HOLD'
+                                    self.last_signals[symbol]['trend_follow_blocked'] = True
+                                    self.last_signals[symbol]['structure_reason']    = (
+                                        f'{new_side} follows {_reg} — fade-only')
+                                self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                                return
                         _ct_buy  = (new_side == 'BUY'  and _reg == _REGIME_TRENDING_BEAR)
                         _ct_sell = (new_side == 'SELL' and _reg == _REGIME_TRENDING_BULL)
                         if _ct_buy or _ct_sell:
@@ -3889,16 +3952,21 @@ class LiveEngine:
                                     _why = (f'5m reversal unconfirmed '
                                             f'({_n5}/{self.REVERSAL_5M_MIN} of last '
                                             f'{self.REVERSAL_5M_WINDOW} bars turned)')
-                                print(f'[{symbol}] MODEL WAIT {new_side}: counter-trend in '
-                                      f'{_reg} — {_why}')
-                                if symbol in self.last_signals:
-                                    self.last_signals[symbol]['fire']            = False
-                                    self.last_signals[symbol]['signal']          = 'HOLD'
-                                    self.last_signals[symbol]['regime_blocked']  = True
-                                    self.last_signals[symbol]['structure_reason'] = (
-                                        f'counter-trend {new_side} in {_reg}: {_why}')
-                                self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
-                                return
+                                if self.TRUST_MODEL_FIRE:
+                                    _trust_warns.append('reversal_unconfirmed')
+                                    print(f'[{symbol}] TRUST_MODEL {new_side}: counter-trend in '
+                                          f'{_reg} — {_why} — firing tagged RISKY')
+                                else:
+                                    print(f'[{symbol}] MODEL WAIT {new_side}: counter-trend in '
+                                          f'{_reg} — {_why}')
+                                    if symbol in self.last_signals:
+                                        self.last_signals[symbol]['fire']            = False
+                                        self.last_signals[symbol]['signal']          = 'HOLD'
+                                        self.last_signals[symbol]['regime_blocked']  = True
+                                        self.last_signals[symbol]['structure_reason'] = (
+                                            f'counter-trend {new_side} in {_reg}: {_why}')
+                                    self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                                    return
 
                         # ── Guard G: safe mode (legacy Gate 3.5) ──────────────────
                         # After 3 consecutive global losses, raise the edge floor to
@@ -3954,6 +4022,9 @@ class LiveEngine:
                         # of their kind, so they can never rate better than RISKY.
                         if _atr_relaxed:        _warn.append('thin_atr')
                         if _conv_relaxed:       _warn.append('thin_conviction')
+                        # v72 trust-model: every guard that would have vetoed this fire
+                        # demoted itself into this ledger instead — all cap at RISKY.
+                        _warn.extend(_trust_warns)
                         # Guard K survivors: price is AT an important level and the
                         # model's side agrees with it (a BUY off support / a SELL off
                         # resistance, or a confirmed break through it). That is real
@@ -4914,7 +4985,11 @@ class LiveEngine:
         """
         if not levels or price <= 0 or atr <= 0:
             return None
-        lvl, touches = min(levels, key=lambda t: abs(t[0] - price))
+
+        def _dist_to_price(t: Tuple[float, int]) -> float:
+            return abs(t[0] - price)
+
+        lvl, touches = min(levels, key=_dist_to_price)
         dist = (lvl - price) / atr              # +ve => level sits ABOVE price
         if abs(dist) > at_level_atr:
             return None
