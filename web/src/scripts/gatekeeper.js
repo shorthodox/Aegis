@@ -1669,15 +1669,18 @@ function renderSignals(signals) {
     const cardTypeClass = getSignalCardType(signal.fire ? signal.direction : 'NEUTRAL');
     const sigUp = signalType.toUpperCase();
     // Guard M holds a fully-gated signal (fire=false) until price reaches its
-    // S/R level and 3x5m confirms. Surface it as PENDING and route it into the
-    // BUY/SELL rooms on its pending side so it is visible, not hidden.
+    // S/R level and confirms. It stays visible in the MAIN cockpit grid with
+    // the PENDING badge below — but it never enters the BUY/SELL rooms: their
+    // subtitle promises "only tokens where the AI fired", and routing pending
+    // cards in there made 6 setups show when only 2 had fired (user report,
+    // 2026-07-19). Fired-only rooms mean fire === true, nothing else.
     const _pendUp = (signal.pending_side || '').toUpperCase();
     const _isPending = signal.pending_entry === true && (_pendUp === 'BUY' || _pendUp === 'SELL');
     const dirAttr = signal.fire
       ? ((sigUp.includes('BUY') || signal.direction === 'LONG') ? 'buy'
         : (sigUp.includes('SELL') || signal.direction === 'SHORT') ? 'sell'
         : 'hold')
-      : (_isPending ? (_pendUp === 'BUY' ? 'buy' : 'sell') : 'hold');
+      : 'hold';
     // ai_prob is already on 0-100 scale (edge_score from live engine)
     const confidence = Math.min(Math.max(signal.ai_prob || 0, 0), 100);
 
