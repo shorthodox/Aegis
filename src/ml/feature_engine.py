@@ -1709,7 +1709,9 @@ def add_macro_regime_features(df: pd.DataFrame, df_1d: Optional[pd.DataFrame], d
 
     try:
         # Derive weekly macro anchors from available daily macro history when 1w is unavailable.
+        _wk_from_daily = False
         if (df_1w is None or df_1w.empty) and df_1d is not None and not df_1d.empty:
+            _wk_from_daily = True
             weekly = df_1d.copy()
             weekly['timestamp'] = pd.to_datetime(weekly['timestamp'])
             weekly = weekly.sort_values('timestamp').set_index('timestamp')
@@ -1737,6 +1739,11 @@ def add_macro_regime_features(df: pd.DataFrame, df_1d: Optional[pd.DataFrame], d
             t1['macro_trend_200d']  = (t1['close'] > t1['ema200_1d']).astype(float).replace({0.0: -1.0, 1.0: 1.0})
             t1['dist_daily_ema200'] = (t1['close'] / (t1['ema200_1d'] + 1e-9)) - 1
             t1['dist_daily_sma200'] = (t1['close'] / (t1['sma200_1d'] + 1e-9)) - 1
+            # A daily bar is stamped at its OPEN, but its close/EMA are only
+            # known at its CLOSE — shift availability +1 day so an intraday 1h
+            # row sees only COMPLETED daily bars (no lookahead). The still-
+            # forming bar lands in the future; merge_asof(backward) skips it.
+            t1['timestamp'] = t1['timestamp'] + pd.Timedelta(days=1)
             macro_rows.append(t1[['timestamp', 'macro_trend_1d', 'macro_trend_200d',
                                    'dist_daily_ema200', 'dist_daily_sma200']])
 
@@ -1746,6 +1753,10 @@ def add_macro_regime_features(df: pd.DataFrame, df_1d: Optional[pd.DataFrame], d
             t2 = t2.sort_values('timestamp')
             t2['ema50_1w'] = t2['close'].ewm(span=50, adjust=False).mean()
             t2['macro_trend_1w'] = (t2['close'] > t2['ema50_1w']).astype(float).replace({0.0: -1.0, 1.0: 1.0})
+            # Same availability shift as the daily block: derived-from-daily
+            # weekly rows are daily-stamped (+1 day); a real weekly bar is
+            # stamped at its open and completes 7 days later.
+            t2['timestamp'] = t2['timestamp'] + pd.Timedelta(days=1 if _wk_from_daily else 7)
             macro_rows.append(t2[['timestamp', 'macro_trend_1w']])
 
         if not macro_rows:
@@ -1783,6 +1794,16 @@ def add_macro_regime_features(df: pd.DataFrame, df_1d: Optional[pd.DataFrame], d
         _macro_cols = ['timestamp', 'macro_trend_1d', 'macro_trend_1w',
                        'macro_trend_200d', 'dist_daily_ema200', 'dist_daily_sma200',
                        'macro_confluence_score']
+        # THE BUG THAT ZEROED THE DAY-TREND FOR THE PROJECT'S HISTORY: the
+        # neutral defaults pre-created at the top collide with the real merged
+        # columns — pandas suffixes both sides to _x/_y, the plain-name read
+        # below KeyErrors, and the except at the bottom silently returned the
+        # zeros. Every model was trained with macro_trend_1d/1w as constants
+        # (v58 revived the ENGINE side only). Drop the defaults so the merge
+        # lands on clean names.
+        df = df.drop(columns=[c for c in ('macro_trend_1d', 'macro_trend_1w',
+                                          'macro_confluence_score')
+                              if c in df.columns])
         merged = pd.merge_asof(
             df,
             macro_df[[c for c in _macro_cols if c in macro_df.columns]],
@@ -1795,7 +1816,11 @@ def add_macro_regime_features(df: pd.DataFrame, df_1d: Optional[pd.DataFrame], d
             merged[col] = merged[col].fillna(0.0)
 
         return merged
-    except Exception:
+    except Exception as _macro_err:
+        # Never silent again — the silent version hid the collision above for
+        # the project's entire history.
+        print(f"   [MACRO] add_macro_regime_features failed "
+              f"({type(_macro_err).__name__}: {_macro_err}) — macro columns neutral 0.0")
         df['macro_trend_1d'] = df.get('macro_trend_1d', 0.0)
         df['macro_trend_1w'] = df.get('macro_trend_1w', 0.0)
         df['macro_confluence_score'] = df.get('macro_confluence_score', 0.0)
