@@ -1774,19 +1774,17 @@ class PortfolioGuard:
     price returns is a Phase 2 improvement.
     """
 
-    # AEGIS is a glass-box SIGNAL SERVICE, not a single managed account: each
-    # signal is an INDEPENDENT recommendation and every subscriber sizes and
-    # chooses trades themselves.  Correlated-exposure / capital-deployment caps
-    # belong to a fund running one book — here they only muted opportunities on
-    # OTHER tokens once a handful of signals were already open (the reported
-    # "engine stops firing when signals are open" bug).  The only rule that
-    # still applies is per-symbol: a token with an open signal won't re-fire —
-    # and that is enforced upstream in _process_symbol (open position → manage
-    # exit, never a second entry), independent of these caps.  So the portfolio
-    # caps are set non-binding; re-tighten them only if AEGIS ever trades one
-    # real account.
-    MAX_PER_CLUSTER    = 999   # no cluster cap — surface every token's signal
-    MAX_OPEN_TOTAL     = 999   # no global cap — up to one open signal per token
+    # v74 — the caps are BINDING again (user decision 2026-07-19). The old
+    # rationale ("independent recommendations, caps only mute opportunities")
+    # died on contact with a real session: 16 simultaneous positions opened
+    # into one tape — 8 alt shorts that were ONE bet expressed eight times —
+    # and bled together on a BTC bounce. Crypto alts run ~0.8 correlation to
+    # BTC intraday, so an uncapped book is levered beta, not breadth. The
+    # public track record IS the product; it must be built from the best few
+    # setups, not everything the model will sign. Capital cap stays open
+    # (position values are notional per-signal).
+    MAX_PER_CLUSTER    = 2     # one thesis, max two expressions per cluster
+    MAX_OPEN_TOTAL     = 5     # the book holds the 5 best setups, not all 58
     MAX_CAPITAL_PCT    = 100.0 # no capital cap — position values are notional per-signal
 
     # Static correlation clusters (tightest first)
@@ -2600,6 +2598,8 @@ class LiveEngine:
         self.alpha_signals: Dict[str, Any] = {}
         self.alpha_wallet  = VirtualWallet(10_000.0, 1_000.0, ALPHA_TRACK_RECORD_PATH)
         self._alpha_open_time:       Dict[str, float] = {}
+        self._tide_val: str   = ''    # cached BTC 4h tide ('UP'/'DOWN'), see _btc_tide
+        self._tide_ts:  float = 0.0
         self._alpha_last_close_time: Dict[str, float] = {}
         self._alpha_last_close_side: Dict[str, str]   = {}
 
@@ -3156,6 +3156,35 @@ class LiveEngine:
 
             existing = self.wallet.open_positions.get(symbol)
 
+            # ── v74: manage the RISKY paper book (alpha wallet, SYMBOL|risky) ──
+            # RISKY-tier fires trade on paper until the tagged population proves
+            # itself (see the fire path). Exits mirror the alpha scanner's rules:
+            # SL, TP3 full take, opposing model fire, and the 24h zombie guard.
+            _rk_key = f'{symbol}|risky'
+            _rk_pos = self.alpha_wallet.open_positions.get(_rk_key)
+            if _rk_pos is not None:
+                _rk_px = float(self.live_prices.get(symbol, 0) or price or 0)
+                if _rk_px > 0:
+                    _rk_long = _rk_pos.direction == 'LONG'
+                    _rk_sl   = ((_rk_px <= _rk_pos.stop_loss) if _rk_long
+                                else (_rk_px >= _rk_pos.stop_loss))
+                    _rk_tp   = (_rk_pos.take_profit_3 > 0 and
+                                ((_rk_px >= _rk_pos.take_profit_3) if _rk_long
+                                 else (_rk_px <= _rk_pos.take_profit_3)))
+                    _rk_rev  = (bool(result.get('fire'))
+                                and result.get('side') in ('BUY', 'SELL')
+                                and result.get('side') != _rk_pos.side)
+                    _rk_old  = (time.time() - self._alpha_open_time.get(_rk_key, time.time())
+                                >= self.MAX_HOLD_SECONDS)
+                    _rk_why  = ('SL_HIT' if _rk_sl else 'TP3_HIT' if _rk_tp else
+                                'SIGNAL_REVERSAL' if _rk_rev else
+                                'MAX_HOLD_EXPIRED' if _rk_old else '')
+                    if _rk_why:
+                        self.alpha_wallet.close_trade(_rk_key, _rk_px, _rk_why)
+                        self._alpha_last_close_time[_rk_key] = time.time()
+                        self._save_alpha_track_record()
+                        print(f'[{symbol}] RISKY-PAPER {_rk_why} @ {_rk_px:.6g}')
+
             # Labelled S/R levels + Break->Retest->Confirmation states for the chart.
             # ONLY for symbols a user actually views on the chart — a firing signal
             # or an open position.  Computing this for all 63 tokens every scan (an
@@ -3337,6 +3366,30 @@ class LiveEngine:
                                 self.last_signals[symbol]['fire']           = False
                                 self.last_signals[symbol]['signal']         = 'HOLD'
                                 self.last_signals[symbol]['regime_blocked'] = True
+                            self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                            return
+
+                        # ── Guard O: exhaustion symmetry — never chase capitulation ──
+                        # A SELL at oversold shorts the squeeze zone; a BUY at over-
+                        # bought buys the blow-off. The doctrine fades exhaustion or
+                        # stands aside — it never chases it. HARD in every regime:
+                        # Guard B's RSI-extreme check only engages in trending
+                        # regimes, which is how a SELL fired at RSI 28 in COMPRESSION
+                        # (measured 2026-07-19 — the SELL models lean trend-following
+                        # because the training window was 60-71% bear, so their fade
+                        # focus got a third of the BUY side's reinforcement).
+                        if ((new_side == 'SELL' and _rsi_now <= self.EXTREME_RSI_BUY) or
+                                (new_side == 'BUY'  and _rsi_now >= self.EXTREME_RSI_SELL)):
+                            print(f'[{symbol}] MODEL BLOCK {new_side}: EXHAUSTION_CHASE — '
+                                  f'{new_side} at RSI {_rsi_now:.0f} chases '
+                                  f'{"capitulation" if new_side == "SELL" else "a blow-off"}; '
+                                  f'the fade of this bar is the {"BUY" if new_side == "SELL" else "SELL"}')
+                            if symbol in self.last_signals:
+                                self.last_signals[symbol]['fire']               = False
+                                self.last_signals[symbol]['signal']             = 'HOLD'
+                                self.last_signals[symbol]['exhaustion_blocked'] = True
+                                self.last_signals[symbol]['structure_reason']   = (
+                                    f'{new_side} at RSI {_rsi_now:.0f} — exhaustion chase')
                             self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                             return
 
@@ -4046,6 +4099,30 @@ class LiveEngine:
                             self.last_signals[symbol]['risk_tier']     = _risk_tier
                             self.last_signals[symbol]['entry_mode']    = _entry_mode
                             self.last_signals[symbol]['gate_warnings'] = _warn
+
+                        # ── v74: the REAL book takes clean doctrine only ──────────
+                        # RISKY signals still publish (tier + warnings visible) but
+                        # trade on PAPER (alpha wallet, key SYMBOL|risky) until the
+                        # tagged population PROVES itself. The public track record
+                        # is built from the trades the doctrine fully endorses —
+                        # measured 2026-07-19: the bleeding positions were exactly
+                        # the tagged ones (thin-RSI shorts, weak confluence).
+                        if _risk_tier == 'RISKY':
+                            _rk_key = f'{symbol}|risky'
+                            _rk_cd  = time.time() - self._alpha_last_close_time.get(_rk_key, 0)
+                            if (_rk_key not in self.alpha_wallet.open_positions
+                                    and _rk_cd >= 1800):
+                                self._alpha_open_position(_rk_key, symbol, result, price, 'risky')
+                            if symbol in self.last_signals:
+                                self.last_signals[symbol]['paper_only'] = True
+                            print(f'[{symbol}] MODEL FIRE {new_side} tier=RISKY -> PAPER '
+                                  f'edge={_edge_q:.0f} warn={",".join(_warn)}')
+                            self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                            return
+
+                        # ── v74 tide: sizing context for _open_position ───────────
+                        result['btc_tide'] = await self._btc_tide()
+
                         print(f'[{symbol}] MODEL FIRE {new_side} tier={_risk_tier} '
                               f'edge={_edge_q:.0f} srq={_srq:.2f} mode={_entry_mode} '
                               f'scores={result.get("signal_scores", {})}'
@@ -4995,6 +5072,35 @@ class LiveEngine:
             return None
         return (lvl, touches, 'RESISTANCE' if dist > 0 else 'SUPPORT', abs(dist))
 
+    async def _btc_tide(self) -> str:
+        """Market tide: BTC close vs its 4h EMA50 — 'UP', 'DOWN' or 'FLAT'.
+
+        The one portfolio-level fact no per-symbol gate can see: alts run
+        ~0.8 intraday correlation to BTC, so a short book opened into a
+        rising BTC bleeds together regardless of per-signal quality
+        (measured 2026-07-19: 8 alt shorts red on a BTC bounce while the
+        long book sat green). _open_position half-sizes any position that
+        fights the tide. Cached 15 min; fails to 'FLAT' (no scaling) so a
+        feed hiccup never distorts sizing.
+        """
+        now = time.time()
+        if self._tide_val and now - self._tide_ts < 900:
+            return self._tide_val
+        try:
+            raw = await self._fetch_candles('BTC/USDT', '4h', 60)
+            closes = [float(c[4]) for c in (raw[:-1] if len(raw) >= 2 else raw)]
+            if len(closes) < 50:
+                return self._tide_val or 'FLAT'
+            ema = closes[0]
+            k = 2.0 / (50 + 1)
+            for c in closes:
+                ema = c * k + ema * (1 - k)
+            self._tide_val = 'UP' if closes[-1] > ema else 'DOWN'
+            self._tide_ts  = now
+        except Exception:
+            return self._tide_val or 'FLAT'
+        return self._tide_val
+
     async def _htf_sr(self, symbol: str, price: float,
                       atr: float = 0.0) -> Optional[Tuple[float, float]]:
         """Nearest HIGHER-TIMEFRAME (4h + 1d) swing S/R around price.
@@ -5719,6 +5825,14 @@ class LiveEngine:
 
         pos_value = max(pos_value, 1.0)   # safety floor
 
+        # ── v74 tide dial: never fight the market's direction at full size ───
+        # BTC leads the alt tape intraday; a position against the 4h tide is
+        # statistically half the trade it looks like, so it gets half the size.
+        _tide = str(result.get('btc_tide', 'FLAT') or 'FLAT')
+        if (side == 'SELL' and _tide == 'UP') or (side == 'BUY' and _tide == 'DOWN'):
+            pos_value = round(pos_value * 0.5, 2)
+            print(f'[{symbol}] TIDE_HALF {side}: BTC 4h tide is {_tide} — half size')
+
         # ── ATR + Structure hybrid stop/TP calculation ───────────────────────
         # SL anchored to the gate's invalidation level (support for a LONG,
         # resistance for a SHORT); TP ladder blends RR-multiples with the
@@ -5737,10 +5851,27 @@ class LiveEngine:
             _sl_cap = 2.2
         else:
             _sl_cap = self.risk_engine.ATR_SL_MULTIPLIER
+        # v74: anchor the stop to the TESTED LEVEL this entry waited for.
+        # Guard M (hard since v73) only fires at/tag-rejecting a structural
+        # level — that level IS the thesis invalidation. When it sits closer
+        # than the rolling S/R, use it: the stop hugs where the fade is
+        # actually wrong instead of paying for 2+ ATR of room the thesis
+        # never asked for. calculate_stops adds the wick buffer and clamps
+        # to [SL_FLOOR_ATR, cap], so this can only tighten, never degenerate.
+        _sl_support    = float(result.get('support', 0) or 0)
+        _sl_resistance = float(result.get('resistance', 0) or 0)
+        _pend_lvl = float((result.get('at_pending_level') or {}).get('level', 0) or 0)
+        if _pend_lvl > 0:
+            if side == 'BUY' and _pend_lvl < price:
+                _sl_support = max(_sl_support, _pend_lvl)
+            elif side == 'SELL' and _pend_lvl > price:
+                _sl_resistance = (min(_sl_resistance, _pend_lvl)
+                                  if _sl_resistance > 0 else _pend_lvl)
+
         stops = self.risk_engine.calculate_stops(
             price=price, side=side, atr=atr,
-            support    = float(result.get('support', 0) or 0),
-            resistance = float(result.get('resistance', 0) or 0),
+            support    = _sl_support,
+            resistance = _sl_resistance,
             sl_cap_atr = _sl_cap,
         )
 
