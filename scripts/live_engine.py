@@ -3582,33 +3582,63 @@ class LiveEngine:
                                 return
 
                         if _target_m is None or (not _at_level_m and not _came_from_m):
-                            # v73: HARD again by user decision — no fires away from a
-                            # tested level, even under trust-model. Wait at the level.
                             _why_m = (f'no tested {_role_m} to wait for'
                                       if _target_m is None else
                                       f'approaching {_role_m} {_target_m:.6g} '
                                       f'({_near_pct_m:.2f}% away, needs <= {self.PENDING_NEAR_PCT}% '
                                       f'or a tag+reject)')
-                            print(f'[{symbol}] MODEL PENDING {new_side}: {_why_m} — '
-                                  f'holding until price reaches the level')
-                            if symbol in self.last_signals:
-                                self.last_signals[symbol]['fire']            = False
-                                self.last_signals[symbol]['signal']          = 'HOLD'
-                                self.last_signals[symbol]['pending_entry']    = True
-                                self.last_signals[symbol]['pending_side']     = new_side
-                                self.last_signals[symbol]['pending_target']   = (
-                                    round(_target_m, 10) if _target_m else None)
-                                self.last_signals[symbol]['pending_reason']   = _why_m
-                                self.last_signals[symbol]['structure_reason'] = f'pending — {_why_m}'
-                            self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
-                            return
+                            # ── v75: A PENDING SIGNAL MUST ALWAYS HAVE A PATH TO FIRE ──
+                            # (user, 2026-07-19: "waiting signals have no way to not
+                            # fire"). Measured live: 20+ armed signals never fired,
+                            # because a BUY fade at an oversold NEW LOW has no tested
+                            # support BELOW it (_target_m is None => pending forever),
+                            # and when price is ABOVE the level the market's second
+                            # outcome — reversing from HERE without the deeper tag —
+                            # had no watcher. Resolution 2: while pending, watch the
+                            # same 5m reversal-candle confirmation Guard J demands;
+                            # the moment it prints, fire THROUGH Guard J (which
+                            # re-verifies) instead of waiting for a touch that may
+                            # never come. The candle stays the hard qualification —
+                            # an unconfirmed pending still waits.
+                            _c5p: list = []
+                            try:
+                                _raw5p = await self._fetch_candles(
+                                    symbol, '5m', self.ENTRY_5M_WINDOW + 2)
+                                _c5p = _raw5p[:-1] if len(_raw5p) >= 2 else []
+                            except Exception:
+                                _c5p = []
+                            _pat_p = (_reversal_candle(_c5p, want_bullish=(new_side == 'BUY'))
+                                      if len(_c5p) >= 3 else None)
+                            if _pat_p is not None:
+                                result['off_level_fire'] = {'reason': _why_m, 'pattern': _pat_p}
+                                print(f'[{symbol}] MODEL OFF-LEVEL {new_side}: {_why_m} — '
+                                      f'but the 5m {_pat_p} confirmed the turn; firing now')
+                                if symbol in self.last_signals:
+                                    self.last_signals[symbol]['pending_entry'] = False
+                            else:
+                                print(f'[{symbol}] MODEL PENDING {new_side}: {_why_m} — '
+                                      f'holding for the level tag or a 5m reversal candle')
+                                if symbol in self.last_signals:
+                                    self.last_signals[symbol]['fire']            = False
+                                    self.last_signals[symbol]['signal']          = 'HOLD'
+                                    self.last_signals[symbol]['pending_entry']    = True
+                                    self.last_signals[symbol]['pending_side']     = new_side
+                                    self.last_signals[symbol]['pending_target']   = (
+                                        round(_target_m, 10) if _target_m else None)
+                                    self.last_signals[symbol]['pending_reason']   = _why_m
+                                    self.last_signals[symbol]['structure_reason'] = f'pending — {_why_m}'
+                                self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                                return
                         # AT the level, or just tagged-and-rejected it — record and
                         # fall through to the 3x5m confirmation (Guard J) below, then
                         # fire. Guard J still ensures price is moving the right way.
-                        result['at_pending_level'] = {
-                            'level': round(_target_m, 10), 'role': _role_m,
-                            'dist_pct': round(_near_pct_m, 3) if _near_pct_m is not None else None,
-                            'trigger': 'at_level' if _at_level_m else 'tag_reject'}
+                        # (An off-level v75 fire skips this record: it has no level,
+                        # that is the point — _target_m may even be None.)
+                        if not result.get('off_level_fire') and _target_m is not None:
+                            result['at_pending_level'] = {
+                                'level': round(_target_m, 10), 'role': _role_m,
+                                'dist_pct': round(_near_pct_m, 3) if _near_pct_m is not None else None,
+                                'trigger': 'at_level' if _at_level_m else 'tag_reject'}
                         if symbol in self.last_signals:
                             self.last_signals[symbol]['pending_entry'] = False
 
@@ -4053,7 +4083,9 @@ class LiveEngine:
 
                         # entry_mode: audit trail + SL cap. A signal far from its
                         # level or mid-range gets a wider stop; at-level is tight.
-                        if _poor:
+                        if result.get('off_level_fire'):
+                            _entry_mode = 'model_off_level_reversal'   # v75: candle fired it, not the level
+                        elif _poor:
                             _entry_mode = 'model_far_from_level'
                         elif abs(_rp_now - 0.5) >= 0.3:
                             _entry_mode = 'model_at_level'
@@ -4075,6 +4107,10 @@ class LiveEngine:
                         # of their kind, so they can never rate better than RISKY.
                         if _atr_relaxed:        _warn.append('thin_atr')
                         if _conv_relaxed:       _warn.append('thin_conviction')
+                        # v75: fired by the 5m candle while pending, without the level
+                        # tag — flagged so the record can grade this population.
+                        if result.get('off_level_fire'):
+                            _warn.append('off_level_reversal')
                         # v72 trust-model: every guard that would have vetoed this fire
                         # demoted itself into this ledger instead — all cap at RISKY.
                         _warn.extend(_trust_warns)
@@ -4100,14 +4136,17 @@ class LiveEngine:
                             self.last_signals[symbol]['entry_mode']    = _entry_mode
                             self.last_signals[symbol]['gate_warnings'] = _warn
 
-                        # ── v74: the REAL book takes clean doctrine only ──────────
-                        # RISKY signals still publish (tier + warnings visible) but
-                        # trade on PAPER (alpha wallet, key SYMBOL|risky) until the
-                        # tagged population PROVES itself. The public track record
-                        # is built from the trades the doctrine fully endorses —
-                        # measured 2026-07-19: the bleeding positions were exactly
-                        # the tagged ones (thin-RSI shorts, weak confluence).
-                        if _risk_tier == 'RISKY':
+                        # ── v74/v75: what goes to PAPER vs the real book ──────────
+                        # PAPER (alpha wallet, key SYMBOL|risky): fires a doctrine
+                        # guard would have VETOED outright (_trust_warns — trend-
+                        # follow, weak confluence, HTF opposing, ...). Measured
+                        # 2026-07-19: the bleeding positions were exactly these.
+                        # REAL book: everything else — including quality-tagged
+                        # RISKY fires (thin ATR, off-level candle fires, counter-
+                        # trend reversals). The v75 off-level path in particular
+                        # MUST reach the record ("waiting signals have no way to
+                        # not fire") — a paper detour would nullify it.
+                        if _trust_warns:
                             _rk_key = f'{symbol}|risky'
                             _rk_cd  = time.time() - self._alpha_last_close_time.get(_rk_key, 0)
                             if (_rk_key not in self.alpha_wallet.open_positions
