@@ -3944,10 +3944,12 @@ class LiveEngine:
                             (new_side == 'BUY'  and _reg == _REGIME_TRENDING_BULL))
                         if _trend_follow:
                             if self.TRUST_MODEL_FIRE:
-                                _trust_warns.append('trend_follow')
-                                print(f'[{symbol}] TRUST_MODEL {new_side}: {new_side} in {_reg} '
-                                      f'follows the trend — firing tagged RISKY '
-                                      f'(fade-only doctrine relaxed by trust-model)')
+                                # v77: trend-following is no longer the suspect class —
+                                # the day-tide gate (Guard T below) now decides
+                                # direction discipline at the market level. User
+                                # doctrine update 2026-07-19: trade WITH the day.
+                                print(f'[{symbol}] TREND_FOLLOW {new_side} in {_reg} — '
+                                      f'allowed; Guard T (day tide) governs direction')
                             else:
                                 print(f'[{symbol}] MODEL BLOCK {new_side}: TREND_FOLLOW — '
                                       f'{new_side} in {_reg} follows the trend; only counter-'
@@ -4071,6 +4073,28 @@ class LiveEngine:
                                     self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                                     return
 
+                        # ── Guard T (v77): trade WITH the day, never against it ───
+                        # User doctrine update 2026-07-19: "if today is market
+                        # bearish then let only bear signals be fired." The BTC 4h
+                        # tide is the day's direction; a fire against it — a BUY
+                        # into a falling day, a SELL into a rising one — goes to
+                        # the PAPER book tagged against_tide, where the counter-day
+                        # class must prove itself before touching the record. FLAT
+                        # or unknown tide gates nothing. This subsumes fade-vs-
+                        # follow: BOTH fire real when they agree with the day.
+                        # The models cannot learn this themselves yet — the daily/
+                        # weekly macro features are silently ZEROED in TRAINING by
+                        # the merge_asof collision (fixed engine-side only, v58) —
+                        # so the engine enforces it until the feature pipeline is
+                        # fixed and the fleet retrained.
+                        result['btc_tide'] = await self._btc_tide()
+                        _tide_now = str(result['btc_tide'] or 'FLAT')
+                        if ((new_side == 'BUY' and _tide_now == 'DOWN') or
+                                (new_side == 'SELL' and _tide_now == 'UP')):
+                            _trust_warns.append('against_tide')
+                            print(f'[{symbol}] AGAINST_TIDE {new_side}: BTC 4h tide is '
+                                  f'{_tide_now} — papered until this class proves itself')
+
                         # ── Guard G: safe mode (legacy Gate 3.5) ──────────────────
                         # After 3 consecutive global losses, raise the edge floor to
                         # protect capital during a drawdown.
@@ -4190,9 +4214,9 @@ class LiveEngine:
                             self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                             return
 
-                        # ── v74 tide: sizing context for _open_position ───────────
-                        result['btc_tide'] = await self._btc_tide()
-
+                        # (btc_tide already on result — set by Guard T above; the
+                        # _open_position half-sizing is belt-and-braces now, since
+                        # against-tide fires never reach the real book.)
                         print(f'[{symbol}] MODEL FIRE {new_side} tier={_risk_tier} '
                               f'edge={_edge_q:.0f} srq={_srq:.2f} mode={_entry_mode} '
                               f'scores={result.get("signal_scores", {})}'
