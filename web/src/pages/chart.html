@@ -43,7 +43,11 @@
     .chart-nav {
       display: flex; align-items: center; gap: 16px; padding: 12px 24px;
       background: rgba(12,15,19,0.97); border-bottom: 1px solid rgba(255,255,255,0.07);
-      position: sticky; top: 60px; z-index: 100; backdrop-filter: blur(20px);
+      /* Normal flow, NOT sticky: pinned at top:60px this bar floated OVER the
+         chart card's header on scroll and hid the timeframe buttons. It now
+         sits above the chart and scrolls away like the rest of the page
+         (mobile already behaved this way via the media query below). */
+      position: static; backdrop-filter: blur(20px);
     }
     .nav-brand { font-weight: 800; font-size: 18px; color: var(--ae-text-1,#EAE6DF); letter-spacing: 2px; text-decoration: none; }
     .nav-back { color: var(--dim); font-size: 13px; text-decoration: none; display: flex; align-items: center; gap: 6px; }
