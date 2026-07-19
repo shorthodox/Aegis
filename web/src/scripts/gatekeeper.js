@@ -1609,8 +1609,20 @@ function renderSignals(signals) {
   }
   const _curSess = _getCurrentSession();
 
+  // v77.1 (user, 2026-07-19): the cockpit shows only EXECUTED and WAITING
+  // signals. A token the engine evaluated and ignored (HOLD / vetoed /
+  // evaluating) is noise on this surface — its full state still lives on the
+  // per-token chart page. Executed = fire===true (real or paper); waiting =
+  // pending_entry with a directional pending_side.
+  const _cockpitVisible = ([, s]) => {
+    if (!s) return false;
+    if (s.fire === true) return true;
+    const _ps = String(s.pending_side || '').toUpperCase();
+    return s.pending_entry === true && (_ps === 'BUY' || _ps === 'SELL');
+  };
+
   // Session-aware + quality sort: fired first → session match → quality score
-  const filteredEntries = [...signalEntries].sort(([, a], [, b]) => {
+  const filteredEntries = [...signalEntries].filter(_cockpitVisible).sort(([, a], [, b]) => {
     const af = a.fire ? 1 : 0, bf = b.fire ? 1 : 0;
     if (af !== bf) return bf - af;
     if (_isSentinel) {
@@ -1623,6 +1635,18 @@ function renderSignals(signals) {
   });
 
   if (filteredEntries.length === 0) {
+    // Signals ARE loaded — the engine just has nothing executed or waiting.
+    // That is a normal, honest state, not a loading spinner or a plan issue.
+    if (signalEntries.length > 0) {
+      signalsContainer.innerHTML = `
+        <div class="no-signals">
+          <i class="fas fa-satellite-dish" style="opacity:0.4"></i>
+          <p>No executed or waiting signals right now</p>
+          <p style="font-size:0.8rem;opacity:0.6;margin-top:4px">The engine is live and watching ${signalEntries.length} tokens — a signal appears here the moment one fires or arms at its level.</p>
+        </div>
+      `;
+      return;
+    }
     const isExplicitlyExpired = userPlan === 'expired' || userPlan === 'none' || window.trialExpiredTriggered === true;
     const isTrialPlan = userPlan === 'trial' || userPlan === 'trial-active' || effectiveTrialActive;
 
