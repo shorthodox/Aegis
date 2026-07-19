@@ -2271,7 +2271,7 @@ function renderSignalGenesis(sig) {
   const uwgsPanel = _ss ? `
     <div style="margin-bottom:14px;padding:12px 14px;background:rgba(0,0,0,0.28);border-radius:10px;border:1px solid rgba(255,255,255,0.08)">
       <div style="font-size:11px;color:var(--dim);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px">
-        Weighted Gate Score · highest of the three decides direction, quality & fire${sig.sr_quality != null ? ` · S/R quality ${(Number(sig.sr_quality) * 100).toFixed(0)}%` : ''}
+        Weighted Gate Score · context conviction meter — the model decides direction &amp; fire; when this meter disagrees, the signal is tagged RISKY${sig.sr_quality != null ? ` · S/R quality ${(Number(sig.sr_quality) * 100).toFixed(0)}%` : ''}
       </div>
       ${_scoreBar('BUY',  _sb,  'var(--green)', _uwWin === 'BUY')}
       ${_scoreBar('SELL', _ssl, 'var(--red)',   _uwWin === 'SELL')}
