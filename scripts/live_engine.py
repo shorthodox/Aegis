@@ -3161,12 +3161,18 @@ class LiveEngine:
             # the cockpit as a live fire and then vanished. Demote the initial
             # publish to "evaluating"; the fire point commits fire=True only
             # AFTER a position (real or paper) actually opened. An already-open
-            # position keeps its fired state untouched.
+            # position — REAL or PAPER — keeps its fired state untouched
+            # (v76.1: the paper exemption was missing, so every paper fire
+            # demoted back to a dot on the next scan and the cockpit emptied).
+            _paper_open = f'{symbol}|risky' in self.alpha_wallet.open_positions
             if (self.last_signals[symbol].get('fire')
-                    and symbol not in self.wallet.open_positions):
+                    and symbol not in self.wallet.open_positions
+                    and not _paper_open):
                 self.last_signals[symbol]['fire']            = False
                 self.last_signals[symbol]['signal_strength'] = 'NEUTRAL'
                 self.last_signals[symbol]['evaluating']      = True
+            elif _paper_open:
+                self.last_signals[symbol]['paper_only'] = True
 
             existing = self.wallet.open_positions.get(symbol)
 
@@ -4087,13 +4093,14 @@ class LiveEngine:
                         _pg_ok, _pg_why = self.portfolio_guard.can_open(
                             symbol, self.wallet.balance, _pos_est)
                         if not _pg_ok:
-                            print(f'[{symbol}] MODEL BLOCK {new_side}: PORTFOLIO_GUARD {_pg_why}')
+                            # v76.1: the cap governs the TRACKED BOOK, not the feed.
+                            # A quality signal that arrives with the book full stays
+                            # live for subscribers and is graded on PAPER — it does
+                            # not vanish (that emptied the whole cockpit).
+                            print(f'[{symbol}] BOOK_FULL {new_side}: {_pg_why} — '
+                                  f'signal stays live, tracked on paper')
                             if symbol in self.last_signals:
-                                self.last_signals[symbol]['fire']              = False
-                                self.last_signals[symbol]['signal']            = 'HOLD'
                                 self.last_signals[symbol]['portfolio_blocked'] = True
-                            self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
-                            return
 
                         # entry_mode: audit trail + SL cap. A signal far from its
                         # level or mid-range gets a wider stop; at-level is tight.
@@ -4150,17 +4157,19 @@ class LiveEngine:
                             self.last_signals[symbol]['entry_mode']    = _entry_mode
                             self.last_signals[symbol]['gate_warnings'] = _warn
 
-                        # ── v74/v75: what goes to PAPER vs the real book ──────────
-                        # PAPER (alpha wallet, key SYMBOL|risky): fires a doctrine
-                        # guard would have VETOED outright (_trust_warns — trend-
-                        # follow, weak confluence, HTF opposing, ...). Measured
-                        # 2026-07-19: the bleeding positions were exactly these.
+                        # ── v74/v75/v76.1: what goes to PAPER vs the real book ────
+                        # PAPER (alpha wallet, key SYMBOL|risky):
+                        #   - fires a doctrine guard would have VETOED outright
+                        #     (_trust_warns — trend-follow, weak confluence, HTF
+                        #     opposing, ...): measured, the bleeding class; and
+                        #   - quality fires that arrive with the BOOK FULL (the cap
+                        #     protects the tracked record, never the feed).
                         # REAL book: everything else — including quality-tagged
                         # RISKY fires (thin ATR, off-level candle fires, counter-
-                        # trend reversals). The v75 off-level path in particular
-                        # MUST reach the record ("waiting signals have no way to
-                        # not fire") — a paper detour would nullify it.
-                        if _trust_warns:
+                        # trend reversals). Paper fires DISPLAY as live fires with
+                        # paper_only=True: the feed is the product; the books are
+                        # accounting.
+                        if _trust_warns or not _pg_ok:
                             _rk_key = f'{symbol}|risky'
                             _rk_cd  = time.time() - self._alpha_last_close_time.get(_rk_key, 0)
                             if (_rk_key not in self.alpha_wallet.open_positions
@@ -4168,14 +4177,16 @@ class LiveEngine:
                                 self._alpha_open_position(_rk_key, symbol, result, price, 'risky')
                             if symbol in self.last_signals:
                                 self.last_signals[symbol]['paper_only'] = True
-                                # v76 display commit: show as fired only when the
-                                # paper position actually exists.
+                                # display commit: fired once the paper position exists
                                 if _rk_key in self.alpha_wallet.open_positions:
                                     self.last_signals[symbol]['fire']       = True
                                     self.last_signals[symbol]['signal']     = new_side
                                     self.last_signals[symbol]['evaluating'] = False
-                            print(f'[{symbol}] MODEL FIRE {new_side} tier=RISKY -> PAPER '
-                                  f'edge={_edge_q:.0f} warn={",".join(_warn)}')
+                            _why_paper = 'book_full' if (_pg_ok is False and not _trust_warns) \
+                                         else ','.join(_trust_warns)
+                            print(f'[{symbol}] MODEL FIRE {new_side} tier={_risk_tier} -> PAPER '
+                                  f'({_why_paper}) edge={_edge_q:.0f}'
+                                  f'{" warn=" + ",".join(_warn) if _warn else ""}')
                             self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                             return
 
@@ -6860,11 +6871,15 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
         fire     = sig.get('fire', False)
         strength = sig.get('signal_strength', '')
         if not fire or side in ('FLAT', 'HOLD'):
+            if sig.get('pending_entry'):
+                _ps = str(sig.get('pending_side', '') or '')
+                return f'[yellow]⏳ ARMED {_ps}[/]'.rstrip()
             return '[dim]·[/]'
+        _p = ' [dim](paper)[/]' if sig.get('paper_only') else ''
         if 'STRONG' in strength:
-            return '[bold green]🔥 STRONG BUY[/]' if side == 'BUY' \
-              else '[bold red]🔥 STRONG SELL[/]'
-        return '[green]BUY[/]' if side == 'BUY' else '[red]SELL[/]'
+            return ('[bold green]🔥 STRONG BUY[/]' if side == 'BUY'
+                    else '[bold red]🔥 STRONG SELL[/]') + _p
+        return ('[green]BUY[/]' if side == 'BUY' else '[red]SELL[/]') + _p
 
     def _regime_short(r: str) -> str:
         r = r or 'UNKNOWN'
