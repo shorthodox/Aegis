@@ -3154,6 +3154,20 @@ class LiveEngine:
                 symbol, result, price, regime=regime,
                 quality_score=quality_score, fake_breakout=fake_breakout)
 
+            # ── v76: the cockpit shows COMMITTED fires only ───────────────────
+            # _build_signal_entry publishes the model's RAW intent, but the
+            # guard chain (with awaited fetches inside) only settles seconds
+            # later — so every vetoed, pending or parked signal flashed through
+            # the cockpit as a live fire and then vanished. Demote the initial
+            # publish to "evaluating"; the fire point commits fire=True only
+            # AFTER a position (real or paper) actually opened. An already-open
+            # position keeps its fired state untouched.
+            if (self.last_signals[symbol].get('fire')
+                    and symbol not in self.wallet.open_positions):
+                self.last_signals[symbol]['fire']            = False
+                self.last_signals[symbol]['signal_strength'] = 'NEUTRAL'
+                self.last_signals[symbol]['evaluating']      = True
+
             existing = self.wallet.open_positions.get(symbol)
 
             # ── v74: manage the RISKY paper book (alpha wallet, SYMBOL|risky) ──
@@ -4154,6 +4168,12 @@ class LiveEngine:
                                 self._alpha_open_position(_rk_key, symbol, result, price, 'risky')
                             if symbol in self.last_signals:
                                 self.last_signals[symbol]['paper_only'] = True
+                                # v76 display commit: show as fired only when the
+                                # paper position actually exists.
+                                if _rk_key in self.alpha_wallet.open_positions:
+                                    self.last_signals[symbol]['fire']       = True
+                                    self.last_signals[symbol]['signal']     = new_side
+                                    self.last_signals[symbol]['evaluating'] = False
                             print(f'[{symbol}] MODEL FIRE {new_side} tier=RISKY -> PAPER '
                                   f'edge={_edge_q:.0f} warn={",".join(_warn)}')
                             self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
@@ -4169,6 +4189,20 @@ class LiveEngine:
                         self._open_position(symbol, result, price, regime, _edge_q,
                                             risk_tier=_risk_tier, entry_mode=_entry_mode,
                                             gate_warnings=_warn)
+                        # v76 display commit: fire shows in the cockpit only if the
+                        # position actually opened (the RR gate inside _open_position
+                        # can still reject — that path must never display as fired).
+                        if symbol in self.wallet.open_positions and symbol in self.last_signals:
+                            _conf_c = float(result.get('edge_score',
+                                                       result.get('meta_confidence', 0)) or 0)
+                            _thr_c  = float(result.get('meta_threshold', 65.0) or 65.0)
+                            self.last_signals[symbol]['fire']            = True
+                            self.last_signals[symbol]['signal']          = new_side
+                            self.last_signals[symbol]['evaluating']      = False
+                            self.last_signals[symbol]['signal_strength'] = (
+                                f'STRONG_{new_side}'
+                                if (_conf_c >= _thr_c * 1.15 and _edge_q >= 70.0)
+                                else new_side)
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
 
