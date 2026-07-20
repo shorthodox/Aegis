@@ -5755,8 +5755,10 @@ async def get_dashboard(
         }
         
         # Get signals from engine with safe iteration
-        if LIVE_STATE.engine is not None and hasattr(LIVE_STATE.engine, 'last_signals') and LIVE_STATE.engine.last_signals:
-            dashboard_data["signals"] = {k: v for k, v in list(LIVE_STATE.engine.last_signals.items())[:10]}
+        if LIVE_STATE.data.get("signals"):
+            # v79.3: read the RECONCILED snapshot, never raw engine.last_signals —
+            # the snapshot enforces "fired iff an open position backs it".
+            dashboard_data["signals"] = {k: v for k, v in list(LIVE_STATE.data["signals"].items())[:10]}
         
         return dashboard_data
     except HTTPException:
