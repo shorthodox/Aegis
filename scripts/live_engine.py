@@ -2275,6 +2275,17 @@ class LiveEngine:
     # bench. Set False to restore every hard block (full strict doctrine).
     TRUST_MODEL_FIRE = True
 
+    # v79 — HTF-ANCHORED LEVEL DISCIPLINE (user, 2026-07-20): "in a bear market
+    # the engine is making lower lows the support — that is wrong; it should be
+    # near that purple support zone." A structural 1h shelf only counts as a
+    # real entry level when it sits within HTF_ZONE_CONFIRM_ATR of the 4h/1d
+    # level on the entry side; otherwise the pending target IS the HTF level
+    # and the signal waits for the zone. The v75 off-level candle fire is only
+    # honoured within OFF_LEVEL_MAX_ATR of the target zone — a 5m bounce candle
+    # in mid-air no longer fires a fade.
+    HTF_ZONE_CONFIRM_ATR = 1.0
+    OFF_LEVEL_MAX_ATR    = 1.5
+
     # Model-first hard floor: below this ATR% the market is too flat to trade
     # (stops sit inside 1h tick noise). 0.5% matches the legacy Gate 2 value.
     MIN_FIRE_ATR_PCT = 0.5
@@ -3567,6 +3578,37 @@ class LiveEngine:
                         else:
                             _target_m = min([l for l, _t in _lvls_m if l > price], default=None)
                             _role_m   = 'resistance'   # SELL waits at nearest RESISTANCE above
+
+                        # ── v79: lower lows are NOT support ───────────────────────
+                        # In a falling market the nearest-below structural shelf is
+                        # usually a fresh consolidation from the CURRENT leg down —
+                        # 3 wick-touches old, sliced on the next push (measured:
+                        # EGLD/LDO longs entered at such shelves, both red, while
+                        # the real 4h/1d zone sat far below). The engine already
+                        # computes that zone (_htf_sr, the chart's purple lines);
+                        # Guard M now demands the structural target AGREE with it:
+                        # a shelf counts only within HTF_ZONE_CONFIRM_ATR of the
+                        # HTF level on the entry side — otherwise the target IS
+                        # the HTF level and the signal waits for the zone.
+                        _htf_m = None
+                        try:
+                            _htf_m = await self._htf_sr(symbol, price, _atr_m)
+                        except Exception:
+                            _htf_m = None
+                        if _htf_m is not None and _atr_m > 0:
+                            _htf_sup_m, _htf_res_m = _htf_m
+                            if (new_side == 'BUY' and _htf_sup_m
+                                    and 0 < _htf_sup_m < price):
+                                if (_target_m is None
+                                        or abs(_target_m - _htf_sup_m)
+                                        > self.HTF_ZONE_CONFIRM_ATR * _atr_m):
+                                    _target_m = _htf_sup_m
+                            elif (new_side == 'SELL' and _htf_res_m
+                                    and _htf_res_m > price):
+                                if (_target_m is None
+                                        or abs(_htf_res_m - _target_m)
+                                        > self.HTF_ZONE_CONFIRM_ATR * _atr_m):
+                                    _target_m = _htf_res_m
                         _near_pct_m = (abs(price - _target_m) / price * 100.0
                                        if _target_m and price > 0 else None)
                         _at_level_m = (_target_m is not None and _near_pct_m is not None
@@ -3653,10 +3695,20 @@ class LiveEngine:
                                 _c5p = []
                             _pat_p = (_reversal_candle(_c5p, want_bullish=(new_side == 'BUY'))
                                       if len(_c5p) >= 3 else None)
-                            if _pat_p is not None:
+                            # v79: the candle shortcut only works NEAR the zone.
+                            # A 5m bounce candle printed in mid-air, an ATR-plus
+                            # above the real level, is the exact lower-low trap
+                            # the user flagged — that one keeps waiting. With no
+                            # target anywhere, the candle path stays (else the
+                            # pending-forever bug returns).
+                            _near_zone_p = True
+                            if _target_m is not None and _atr_m > 0:
+                                _near_zone_p = (abs(price - _target_m)
+                                                <= self.OFF_LEVEL_MAX_ATR * _atr_m)
+                            if _pat_p is not None and _near_zone_p:
                                 result['off_level_fire'] = {'reason': _why_m, 'pattern': _pat_p}
                                 print(f'[{symbol}] MODEL OFF-LEVEL {new_side}: {_why_m} — '
-                                      f'but the 5m {_pat_p} confirmed the turn; firing now')
+                                      f'but the 5m {_pat_p} confirmed the turn near the zone; firing now')
                                 if symbol in self.last_signals:
                                     self.last_signals[symbol]['pending_entry'] = False
                             else:
