@@ -1,5 +1,5 @@
 ﻿import { initializeTrialCountdown, fetchTrialStartFromFirestore } from './trial-countdown.js';
-import { auth, db } from './gatekeeper.js?v=79.4';
+import { auth, db } from './gatekeeper.js?v=79.5';
 import { doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js';
 
 // Confidence values arrive on two scales depending on source: 0-1 (legacy

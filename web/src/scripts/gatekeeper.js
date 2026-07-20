@@ -1665,15 +1665,20 @@ function renderSignals(signals) {
   const strategySelect = document.getElementById('strategy-matchmaker');
   const isStrategyActive = strategySelect && strategySelect.value !== '';
 
+  const _newestTs = Math.max(...filteredEntries
+    .map(([, s]) => Date.parse((s && s.timestamp) || ''))
+    .filter(Number.isFinite), -Infinity);
+
   signalsContainer.innerHTML = filteredEntries.map(([key, signal]) => {
     const symbol = signal.symbol;
-    // v79.1 freshness gate: the producer defers Firestore pushes through the
-    // engine's whole warmup, so after a restart the docs are the PREVIOUS
-    // session's states — ghost fires the track record rightly denies. A doc
-    // that hasn't been re-pushed within 15 min (push cadence is ~5 min) loses
-    // its fired/pending face and renders as HOLD until real state arrives.
+    // v79.5 freshness gate, RELATIVE: a doc loses its fired/pending face when
+    // it is >15 min older than the NEWEST doc in this batch (push cadence is
+    // ~5 min, and all live docs are pushed together). Comparing against the
+    // client clock (v79.1) broke on clock skew — UNI rendered LONG badge +
+    // HOLD label from the same doc. No timestamps at all => trust the docs.
     const _sigTs  = Date.parse(signal.timestamp || '');
-    const _fresh  = Number.isFinite(_sigTs) && (Date.now() - _sigTs) < 15 * 60 * 1000;
+    const _fresh  = !Number.isFinite(_newestTs)
+                    || (Number.isFinite(_sigTs) && (_newestTs - _sigTs) < 15 * 60 * 1000);
     const _fired  = signal.fire === true && _fresh;
     const _pendUp = (signal.pending_side || '').toUpperCase();
     const _isPending = _fresh && signal.pending_entry === true
@@ -1724,9 +1729,9 @@ function renderSignals(signals) {
     }
 
     let directionBadge = '';
-    if (signal.fire && signal.direction === 'LONG') {
+    if (_fired && signal.direction === 'LONG') {
       directionBadge = '<span class="bg-green-500/20 text-green-400 border border-green-500/50 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider">LONG</span>';
-    } else if (signal.fire && signal.direction === 'SHORT') {
+    } else if (_fired && signal.direction === 'SHORT') {
       directionBadge = '<span class="bg-red-500/20 text-red-400 border border-red-500/50 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider">SHORT</span>';
     } else if (_isPending && _pendUp === 'BUY') {
       directionBadge = '<span class="bg-green-500/10 text-green-400 border border-green-500/40 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider">LONG · PENDING</span>';
@@ -1813,7 +1818,7 @@ function renderSignals(signals) {
                      (_isShort && _regime === 'TRENDING_BULL');
     const wFundL   = _isLong  && (signal.funding_rate || 0) > 0.01;                    // Feature 5
     const wFundS   = _isShort && (signal.funding_rate || 0) < -0.01;                   // Feature 5
-    const wQual    = qualScore < 55 && signal.fire === true;
+    const wQual    = qualScore < 55 && _fired;
     const wHmmTr   = _isPro && (signal.hmm_transition_risk === true ||                  // Feature 7 (Pro)
                                  parseFloat(signal.hmm_transition_risk || 0) > 0);
     const wLstmEx  = _isPro && (signal.lstm_exhaustion_prob || 0) > 0.6;               // Feature 6 (Pro)
@@ -1829,7 +1834,7 @@ function renderSignals(signals) {
 
     // Warning chips row (Sentinel+ only, on fired signals)
     let warnChipsHTML = '';
-    if (_isSentinel && signal.fire) {
+    if (_isSentinel && _fired) {
       const _chips = [];
       if (wFake)    _chips.push(`<span style="padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700;background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.35);color:#f87171;white-space:nowrap">⚠ FAKE BREAK</span>`);
       if (wRegime)  _chips.push(`<span style="padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700;background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.35);color:#f87171;white-space:nowrap">⚠ REGIME CONFLICT</span>`);
@@ -1845,14 +1850,14 @@ function renderSignals(signals) {
     }
 
     // Feature 8: "Don't Trade This" composite banner (Sentinel+)
-    const dontTradeHTML = (_isSentinel && signal.fire && _warnCount >= 2) ? `
+    const dontTradeHTML = (_isSentinel && _fired && _warnCount >= 2) ? `
       <div style="display:flex;align-items:center;gap:6px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:6px 10px;margin-bottom:8px;font-size:10px;font-weight:700;color:#f87171">
         <i class="fas fa-ban" style="font-size:9px"></i> HIGH RISK — ${_warnCount} warning flags · review before entering
       </div>` : '';
 
     // Feature 10: Capital at risk per trade (Sentinel+)
     let capRiskHTML = '';
-    if (_isSentinel && signal.fire && signal.entry_price) {
+    if (_isSentinel && _fired && signal.entry_price) {
       const _cap  = parseFloat(document.getElementById('tr-capital')?.value || '10000');
       const _rPct = parseFloat(document.getElementById('tr-risk')?.value    || '2');
       const _rAmt = _cap * (_rPct / 100);

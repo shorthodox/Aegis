@@ -1,4 +1,4 @@
-import { getCurrentUserToken } from './gatekeeper.js';
+import { getCurrentUserToken } from './gatekeeper.js?v=79.5';
 
 document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('reviewForm');
