@@ -164,7 +164,7 @@ async function subscribeToPlan(planType) {
   let userEmail = null, userId = null;
 
   try {
-    const { auth } = await import('./gatekeeper.js?v=79.6');
+    const { auth } = await import('./gatekeeper.js?v=79.7');
     if (auth?.currentUser) {
       token = await auth.currentUser.getIdToken();
       localStorage.setItem('access_token', token);
