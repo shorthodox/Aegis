@@ -1609,20 +1609,13 @@ function renderSignals(signals) {
   }
   const _curSess = _getCurrentSession();
 
-  // v77.1 (user, 2026-07-19): the cockpit shows only EXECUTED and WAITING
-  // signals. A token the engine evaluated and ignored (HOLD / vetoed /
-  // evaluating) is noise on this surface — its full state still lives on the
-  // per-token chart page. Executed = fire===true (real or paper); waiting =
-  // pending_entry with a directional pending_side.
-  const _cockpitVisible = ([, s]) => {
-    if (!s) return false;
-    if (s.fire === true) return true;
-    const _ps = String(s.pending_side || '').toUpperCase();
-    return s.pending_entry === true && (_ps === 'BUY' || _ps === 'SELL');
-  };
-
+  // v77.2 (user clarification, 2026-07-20): the cockpit shows the WHOLE fleet —
+  // every monitored token, HOLD cards included. The honesty fix lives in the
+  // CARD, not in filtering: a lean the engine evaluated but never FIRED
+  // renders as HOLD, never as a BUY/SELL card (see signalType in the card
+  // builder). Fired-only filtering belongs to the BUY/SELL setup rooms.
   // Session-aware + quality sort: fired first → session match → quality score
-  const filteredEntries = [...signalEntries].filter(_cockpitVisible).sort(([, a], [, b]) => {
+  const filteredEntries = [...signalEntries].sort(([, a], [, b]) => {
     const af = a.fire ? 1 : 0, bf = b.fire ? 1 : 0;
     if (af !== bf) return bf - af;
     if (_isSentinel) {
@@ -1635,18 +1628,6 @@ function renderSignals(signals) {
   });
 
   if (filteredEntries.length === 0) {
-    // Signals ARE loaded — the engine just has nothing executed or waiting.
-    // That is a normal, honest state, not a loading spinner or a plan issue.
-    if (signalEntries.length > 0) {
-      signalsContainer.innerHTML = `
-        <div class="no-signals">
-          <i class="fas fa-satellite-dish" style="opacity:0.4"></i>
-          <p>No executed or waiting signals right now</p>
-          <p style="font-size:0.8rem;opacity:0.6;margin-top:4px">The engine is live and watching ${signalEntries.length} tokens — a signal appears here the moment one fires or arms at its level.</p>
-        </div>
-      `;
-      return;
-    }
     const isExplicitlyExpired = userPlan === 'expired' || userPlan === 'none' || window.trialExpiredTriggered === true;
     const isTrialPlan = userPlan === 'trial' || userPlan === 'trial-active' || effectiveTrialActive;
 
@@ -1686,20 +1667,25 @@ function renderSignals(signals) {
 
   signalsContainer.innerHTML = filteredEntries.map(([key, signal]) => {
     const symbol = signal.symbol;
-    const signalType = signal.signal || 'WAITING';
+    const _fired  = signal.fire === true;
+    const _pendUp = (signal.pending_side || '').toUpperCase();
+    const _isPending = signal.pending_entry === true && (_pendUp === 'BUY' || _pendUp === 'SELL');
+    // v77.2 — THE ORIGINAL BUG: a lean the engine evaluated but never fired
+    // was rendered as a BUY/SELL card, indistinguishable from a real signal.
+    // The display side is EARNED now: fired keeps its side, armed shows its
+    // pending side (with the PENDING badge below), everything else is HOLD.
+    const signalType = _fired ? (signal.signal || 'WAITING')
+                     : _isPending ? _pendUp
+                     : 'HOLD';
+    const _strengthLabel = _fired ? (signal.signal_strength || 'NORMAL')
+                         : _isPending ? 'PENDING' : 'NEUTRAL';
     const timeframe = signal.timeframe || '1h'; // Default to 1h if not provided
     const signalStatus = signal.status || getSignalStatus(signal);
     const signalClass = getSignalClass(signalType, signalStatus);
     const cardTypeClass = getSignalCardType(signal.fire ? signal.direction : 'NEUTRAL');
     const sigUp = signalType.toUpperCase();
-    // Guard M holds a fully-gated signal (fire=false) until price reaches its
-    // S/R level and confirms. It stays visible in the MAIN cockpit grid with
-    // the PENDING badge below — but it never enters the BUY/SELL rooms: their
-    // subtitle promises "only tokens where the AI fired", and routing pending
-    // cards in there made 6 setups show when only 2 had fired (user report,
-    // 2026-07-19). Fired-only rooms mean fire === true, nothing else.
-    const _pendUp = (signal.pending_side || '').toUpperCase();
-    const _isPending = signal.pending_entry === true && (_pendUp === 'BUY' || _pendUp === 'SELL');
+    // Fired-only rooms (BUY/SELL setups) key on data-dir: fire === true,
+    // nothing else — pending and HOLD cards stay out of them.
     const dirAttr = signal.fire
       ? ((sigUp.includes('BUY') || signal.direction === 'LONG') ? 'buy'
         : (sigUp.includes('SELL') || signal.direction === 'SHORT') ? 'sell'
@@ -1893,8 +1879,8 @@ function renderSignals(signals) {
             }</span>
           </div>
           <div class="signal-meta grid grid-cols-2 gap-2 mt-3 text-xs text-gray-400">
-            <span class="signal-strength ${signal.signal_strength?.toLowerCase()}">
-              <i class="fas fa-bolt"></i> ${signal.signal_strength || 'NORMAL'}
+            <span class="signal-strength ${_strengthLabel.toLowerCase()}">
+              <i class="fas fa-bolt"></i> ${_strengthLabel}
             </span>
             <span class="signal-risk flex justify-between items-center">
               <span><i class="fas fa-shield-alt"></i> Risk: ${signal.risk_pct || 2}%</span>
