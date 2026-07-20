@@ -1679,15 +1679,27 @@ function renderSignals(signals) {
     const _sigTs  = Date.parse(signal.timestamp || '');
     const _fresh  = !Number.isFinite(_newestTs)
                     || (Number.isFinite(_sigTs) && (_newestTs - _sigTs) < 15 * 60 * 1000);
-    const _fired  = signal.fire === true && _fresh;
-    const _pendUp = (signal.pending_side || '').toUpperCase();
-    const _isPending = _fresh && signal.pending_entry === true
-                       && (_pendUp === 'BUY' || _pendUp === 'SELL');
+    // v79.6 engine-truth overlay: while the poll is <2min fresh it IS the
+    // state; Firestore state is only the fallback when the API is down.
+    const _truth     = window.engineTruth;
+    const _truthLive = !!(_truth && (Date.now() - _truth.fetchedAt) < 120000);
+    const _tFired    = _truthLive ? (_truth.fired[symbol] || null) : null;
+    const _tArmed    = _truthLive ? (_truth.armed[symbol] || null) : null;
+    const _fired   = _truthLive ? !!_tFired : (signal.fire === true && _fresh);
+    const _isPaper = _truthLive ? !!(_tFired && _tFired.paper)
+                                : (signal.paper_only === true);
+    const _pendUp  = ((_tArmed && _tArmed.side) || signal.pending_side || '').toUpperCase();
+    const _isPending = _truthLive
+        ? (!_tFired && !!_tArmed && (_pendUp === 'BUY' || _pendUp === 'SELL'))
+        : (_fresh && signal.pending_entry === true
+           && (_pendUp === 'BUY' || _pendUp === 'SELL'));
+    const _dirShow  = (_tFired && _tFired.direction) || signal.direction;
+    const _sideShow = (_tFired && _tFired.side) || signal.signal;
     // v77.2 — THE ORIGINAL BUG: a lean the engine evaluated but never fired
     // was rendered as a BUY/SELL card, indistinguishable from a real signal.
     // The display side is EARNED now: fired keeps its side, armed shows its
     // pending side (with the PENDING badge below), everything else is HOLD.
-    const signalType = _fired ? (signal.signal || 'WAITING')
+    const signalType = _fired ? (_sideShow || 'WAITING')
                      : _isPending ? _pendUp
                      : 'HOLD';
     const _strengthLabel = _fired ? (signal.signal_strength || 'NORMAL')
@@ -1696,7 +1708,7 @@ function renderSignals(signals) {
     // visually distinct — they never appear on the public track record, and
     // unmarked they made the setup rooms disagree with it (user report:
     // "all 5 executed are BUY" while 3 unmarked paper SELLs sat in the room).
-    const paperBadge = (_fired && signal.paper_only === true)
+    const paperBadge = (_fired && _isPaper)
       ? '<span class="bg-amber-500/10 text-amber-400 border border-amber-500/40 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider" title="Graded on the paper book — not part of the public track record">PAPER</span>'
       : '';
     const timeframe = signal.timeframe || '1h'; // Default to 1h if not provided
@@ -1707,8 +1719,8 @@ function renderSignals(signals) {
     // Fired-only rooms (BUY/SELL setups) key on data-dir: a FRESH fire,
     // nothing else — pending, HOLD and stale ghosts stay out of them.
     const dirAttr = _fired
-      ? ((sigUp.includes('BUY') || signal.direction === 'LONG') ? 'buy'
-        : (sigUp.includes('SELL') || signal.direction === 'SHORT') ? 'sell'
+      ? ((sigUp.includes('BUY') || _dirShow === 'LONG') ? 'buy'
+        : (sigUp.includes('SELL') || _dirShow === 'SHORT') ? 'sell'
         : 'hold')
       : 'hold';
     // ai_prob is already on 0-100 scale (edge_score from live engine)
@@ -1729,9 +1741,9 @@ function renderSignals(signals) {
     }
 
     let directionBadge = '';
-    if (_fired && signal.direction === 'LONG') {
+    if (_fired && _dirShow === 'LONG') {
       directionBadge = '<span class="bg-green-500/20 text-green-400 border border-green-500/50 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider">LONG</span>';
-    } else if (_fired && signal.direction === 'SHORT') {
+    } else if (_fired && _dirShow === 'SHORT') {
       directionBadge = '<span class="bg-red-500/20 text-red-400 border border-red-500/50 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider">SHORT</span>';
     } else if (_isPending && _pendUp === 'BUY') {
       directionBadge = '<span class="bg-green-500/10 text-green-400 border border-green-500/40 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider">LONG · PENDING</span>';
@@ -2102,6 +2114,32 @@ function setupFirestoreListeners() {
 
   const token = AuthManager.getToken();
   if (!token) return;
+
+  // ── v79.6: AUTHORITATIVE state overlay — engine-direct, like the track record.
+  // Firestore proved lossy for STATE (dropped fields, warmup staleness, module
+  // races), so fired/armed truth now comes from /api/live-signal-state — the
+  // same reconciled snapshot the track record reads. Firestore keeps supplying
+  // card CONTENT only. Poll every 30s; cards trust the overlay while <2min old.
+  async function _pollEngineTruth() {
+    try {
+      const _t = AuthManager.getToken();
+      if (!_t) return;
+      const r = await fetch(`${API_BASE_URL}/api/live-signal-state`, {
+        headers: { 'Authorization': `Bearer ${_t}` }
+      });
+      if (!r.ok) return;
+      const j = await r.json();
+      const fired = {}, armed = {};
+      (j.fired || []).forEach(x => { if (x && x.symbol) fired[x.symbol] = x; });
+      (j.armed || []).forEach(x => { if (x && x.symbol) armed[x.symbol] = x; });
+      window.engineTruth = { fired, armed, fetchedAt: Date.now() };
+      if (typeof filterAndRenderSignals === 'function') filterAndRenderSignals();
+    } catch (e) { /* keep last known truth */ }
+  }
+  if (!window._engineTruthPoll) {
+    window._engineTruthPoll = setInterval(_pollEngineTruth, 30000);
+  }
+  _pollEngineTruth();
 
   // Listen to signals collection
   const signalsQuery = query(collection(db, 'signals'), orderBy('timestamp', 'desc'), limit(150));

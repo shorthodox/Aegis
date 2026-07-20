@@ -3778,6 +3778,40 @@ async def engine_track_record_endpoint():
         return JSONResponse({"signals": [], "summary": {}})
 
 
+@app.get("/api/live-signal-state")
+async def live_signal_state(user_id: str = Depends(get_current_user)):
+    """v79.6 — the dashboard's AUTHORITATIVE fired/armed state.
+
+    Served straight from the reconciled engine snapshot (the same source the
+    track record trusts), bypassing Firestore entirely: the listener pipeline
+    proved lossy (state fields dropped, warmup staleness, module races), so
+    signal STATE now flows engine -> here -> dashboard overlay, while
+    Firestore keeps supplying card CONTENT only.
+    """
+    sigs = LIVE_STATE.data.get("signals", {}) or {}
+    fired, armed = [], []
+    for _sym, _e in sigs.items():
+        if not isinstance(_e, dict):
+            continue
+        if _e.get("fire"):
+            fired.append({
+                "symbol":    _sym,
+                "side":      _e.get("signal"),
+                "direction": _e.get("direction"),
+                "paper":     bool(_e.get("paper_only")),
+                "risk_tier": _e.get("risk_tier", ""),
+            })
+        elif _e.get("pending_entry"):
+            armed.append({
+                "symbol": _sym,
+                "side":   _e.get("pending_side"),
+                "target": _e.get("pending_target"),
+                "reason": _e.get("pending_reason", ""),
+            })
+    return {"fired": fired, "armed": armed,
+            "ts": datetime.now(timezone.utc).isoformat()}
+
+
 @app.get("/api/track-record")
 async def track_record_endpoint(source: str = None):
     """Public track record â€” merges live_engine + main.py stores so no records are lost."""
