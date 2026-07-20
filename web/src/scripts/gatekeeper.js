@@ -2129,6 +2129,18 @@ function setupFirestoreListeners() {
         const signalObj = {
           symbol: symbol,
           signal: data.signal || 'WAITING',
+          // v79.4 — THE ingestion bug: this whitelist dropped the STATE fields,
+          // so the renderer's fire/pending/paper/freshness logic was always fed
+          // undefined — armed signals could never display, and display sides
+          // leaked from the raw `signal` lean instead of earned state.
+          fire: data.fire === true,
+          paper_only: data.paper_only === true,
+          pending_entry: data.pending_entry === true,
+          pending_side: data.pending_side || '',
+          evaluating: data.evaluating === true,
+          timestamp: data.timestamp || null,
+          risk_tier: data.risk_tier || '',
+          gate_warnings: Array.isArray(data.gate_warnings) ? data.gate_warnings : [],
           ai_prob: data.ai_prob || data.confidence || 0,
           signal_strength: data.signal_strength || 'NORMAL',
           risk_pct: data.risk_pct || 2,
