@@ -1618,6 +1618,9 @@ function renderSignals(signals) {
   const filteredEntries = [...signalEntries].sort(([, a], [, b]) => {
     const af = a.fire ? 1 : 0, bf = b.fire ? 1 : 0;
     if (af !== bf) return bf - af;
+    // armed (waiting) signals pin right after fired — never below the fold
+    const ap = a.pending_entry ? 1 : 0, bp = b.pending_entry ? 1 : 0;
+    if (ap !== bp) return bp - ap;
     if (_isSentinel) {
       const as = (a.session || '').toUpperCase().includes(_curSess) ? 1 : 0;
       const bs = (b.session || '').toUpperCase().includes(_curSess) ? 1 : 0;
@@ -2099,6 +2102,37 @@ function setupFirestoreListeners() {
 
   const token = AuthManager.getToken();
   if (!token) return;
+
+  // ── v80: STATE from the backend's own snapshot file ─────────────────────
+  // Probing production showed the truth: live_signals.json (written by the
+  // producer every tick) carried armed EGLD/FIL/SUI + 5 fires while Firestore
+  // docs held only stale fires — a NaN in any doc fails the WHOLE Firestore
+  // batch silently. So state now comes from the snapshot file itself:
+  // same-origin, no auth, no Firestore, updates every producer tick.
+  async function _pollSnapshotState() {
+    try {
+      const r = await fetch(`${API_BASE_URL}/web/src/data/live_signals.json?ts=${Date.now()}`,
+                            { cache: 'no-store' });
+      if (!r.ok) return;
+      const snap = await r.json();
+      window.latestSignals = window.latestSignals || {};
+      const STATE_KEYS = ['fire', 'paper_only', 'pending_entry', 'pending_side',
+                          'pending_target', 'pending_reason', 'signal', 'direction',
+                          'signal_strength', 'risk_tier', 'evaluating'];
+      Object.entries(snap).forEach(([sym, e]) => {
+        if (!e || typeof e !== 'object') return;
+        const key = `${sym}_${e.timeframe || '1h'}`;
+        const cur = window.latestSignals[key]
+                 || { symbol: sym, ai_prob: e.quality_score || 0 };
+        STATE_KEYS.forEach(k => { if (k in e) cur[k] = e[k]; });
+        cur.symbol = sym;
+        window.latestSignals[key] = cur;
+      });
+      if (typeof filterAndRenderSignals === 'function') filterAndRenderSignals();
+    } catch (err) { /* keep last known state */ }
+  }
+  if (!window._snapPoll) { window._snapPoll = setInterval(_pollSnapshotState, 30000); }
+  _pollSnapshotState();
 
   // Listen to signals collection
   const signalsQuery = query(collection(db, 'signals'), orderBy('timestamp', 'desc'), limit(150));

@@ -976,34 +976,64 @@ async def run_engine_background():
                     push_target = all_sigs_for_dashboard   # write everything but strip price fields
 
                     now_str = datetime.now(timezone.utc).isoformat()
-                    batch = db.batch()
-                    count = 0
+
+                    # v80: Firestore rejects NaN/Infinity, and ONE bad value used
+                    # to fail the WHOLE batch silently — stale fired docs survived
+                    # while every new state (incl. armed) died (measured live:
+                    # snapshot had 3 armed + 5 fired, Firestore served 2 old
+                    # fires). Sanitize recursively, and if a batch still fails,
+                    # fall back to per-doc writes that NAME the failing symbol.
+                    import math as _math
+                    def _fs_safe(v):
+                        if isinstance(v, float) and (_math.isnan(v) or _math.isinf(v)):
+                            return None
+                        if isinstance(v, dict):
+                            return {k: _fs_safe(x) for k, x in v.items()}
+                        if isinstance(v, (list, tuple)):
+                            return [_fs_safe(x) for x in v]
+                        return v
+
+                    _pairs = []
                     for sym, sig in push_target.items():
                         if not isinstance(sig, dict):
                             continue
-                        doc_id  = sym.replace('/', '_')
-                        sig_ref = db.collection("signals").document(doc_id)
+                        sig_ref = db.collection("signals").document(sym.replace('/', '_'))
                         # Strip live-price and heavy context keys â€” prices go via WS only
                         compact = {
-                            k: v for k, v in numpy_to_native(sig).items()
+                            k: _fs_safe(v) for k, v in numpy_to_native(sig).items()
                             if k not in _PRICE_CONTEXT_KEYS
                         }
                         compact['symbol']    = sym
                         compact['timestamp'] = now_str
                         compact['fire']      = bool(sig.get('fire', False))
-                        batch.set(sig_ref, compact, merge=True)
-                        count += 1
-                        if count >= 450:
-                            batch.commit()
-                            batch  = db.batch()
-                            count  = 0
+                        _pairs.append((sig_ref, compact))
 
-                    if count > 0:
-                        results = batch.commit()
-                        fired_count = len(fired)
-                        ts = results[-1].update_time if results else 'N/A'
-                        label = f'{fired_count} FIRED + {count - fired_count} monitoring'
-                        print(f"[PRODUCER] Firestore: {count} signals ({label}) @ {ts}")
+                    _pushed = 0
+                    try:
+                        batch = db.batch()
+                        _n = 0
+                        for _ref, _doc in _pairs:
+                            batch.set(_ref, _doc, merge=True)
+                            _n += 1
+                            if _n % 450 == 0:
+                                batch.commit()
+                                batch = db.batch()
+                        if _n % 450:
+                            batch.commit()
+                        _pushed = _n
+                    except Exception as _bt_e:
+                        print(f"[PRODUCER] batch push failed ({_bt_e}) â€” per-doc fallback")
+                        _pushed = 0
+                        for _ref, _doc in _pairs:
+                            try:
+                                _ref.set(_doc, merge=True)
+                                _pushed += 1
+                            except Exception as _doc_e:
+                                print(f"[PRODUCER] doc push FAILED "
+                                      f"{_doc.get('symbol')}: {_doc_e}")
+                    if _pairs:
+                        print(f"[PRODUCER] Firestore: {_pushed}/{len(_pairs)} signals "
+                              f"({len(fired)} fired) @ {now_str}")
 
                 except StopIteration:
                     pass  # nothing to push this tick
