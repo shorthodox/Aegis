@@ -6,7 +6,7 @@
 import {
   auth,
   db
-} from './gatekeeper.js?v=79.8';
+} from './gatekeeper.js?v=79.9';
 
 import { AuthManager } from '../auth/authManager.js';
 

@@ -2,7 +2,7 @@
 // AEGIS Trial Countdown – 3-Day Free Trial Management
 // ============================================================
 
-import { db } from './gatekeeper.js?v=79.8';
+import { db } from './gatekeeper.js?v=79.9';
 import { doc, getDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js";
 import { AuthManager } from '../auth/authManager.js';
 

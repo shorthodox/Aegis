@@ -1,7 +1,7 @@
 import { 
     auth, db, ensureUserDocument, subscribeUserSettings, updateUserSetting,
     getCurrentUserToken, logout, getUpgradeModal
-} from './gatekeeper.js?v=79.8';
+} from './gatekeeper.js?v=79.9';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
 import { collection, addDoc, onSnapshot, doc, updateDoc, query, where } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js";
 

@@ -1665,41 +1665,20 @@ function renderSignals(signals) {
   const strategySelect = document.getElementById('strategy-matchmaker');
   const isStrategyActive = strategySelect && strategySelect.value !== '';
 
-  const _newestTs = Math.max(...filteredEntries
-    .map(([, s]) => Date.parse((s && s.timestamp) || ''))
-    .filter(Number.isFinite), -Infinity);
-
   signalsContainer.innerHTML = filteredEntries.map(([key, signal]) => {
     const symbol = signal.symbol;
-    // v79.5 freshness gate, RELATIVE: a doc loses its fired/pending face when
-    // it is >15 min older than the NEWEST doc in this batch (push cadence is
-    // ~5 min, and all live docs are pushed together). Comparing against the
-    // client clock (v79.1) broke on clock skew — UNI rendered LONG badge +
-    // HOLD label from the same doc. No timestamps at all => trust the docs.
-    const _sigTs  = Date.parse(signal.timestamp || '');
-    const _fresh  = !Number.isFinite(_newestTs)
-                    || (Number.isFinite(_sigTs) && (_newestTs - _sigTs) < 15 * 60 * 1000);
-    // v79.6 engine-truth overlay: while the poll is <2min fresh it IS the
-    // state; Firestore state is only the fallback when the API is down.
-    const _truth     = window.engineTruth;
-    const _truthLive = !!(_truth && (Date.now() - _truth.fetchedAt) < 120000);
-    const _tFired    = _truthLive ? (_truth.fired[symbol] || null) : null;
-    const _tArmed    = _truthLive ? (_truth.armed[symbol] || null) : null;
-    // Paper fires live only in the Firestore state (the track record is the
-    // REAL book); real fires and armed come from the track-record truth.
-    const _fsFired = signal.fire === true && _fresh;
-    const _fired   = _truthLive
-        ? (!!_tFired || (_fsFired && signal.paper_only === true))
-        : _fsFired;
-    const _isPaper = _truthLive ? (_fired && !_tFired)
-                                : (signal.paper_only === true);
-    const _pendUp  = ((_tArmed && _tArmed.side) || signal.pending_side || '').toUpperCase();
-    const _isPending = _truthLive
-        ? (!_fired && !!_tArmed && (_pendUp === 'BUY' || _pendUp === 'SELL'))
-        : (_fresh && signal.pending_entry === true
-           && (_pendUp === 'BUY' || _pendUp === 'SELL'));
-    const _dirShow  = (_tFired && _tFired.direction) || signal.direction;
-    const _sideShow = (_tFired && _tFired.side) || signal.signal;
+    // v79.9 TRANSPARENT MODE (user): the dashboard renders the backend's raw
+    // pushed state — every kind of signal, no client-side gating. Honesty is
+    // enforced server-side (snapshot reconciliation: fired iff an open real
+    // or paper position; stale sweep on restart). What the backend says is
+    // what the user sees, exactly like the engine terminal.
+    const _fired    = signal.fire === true;
+    const _isPaper  = signal.paper_only === true;
+    const _pendUp   = (signal.pending_side || '').toUpperCase();
+    const _isPending = !_fired && signal.pending_entry === true
+                       && (_pendUp === 'BUY' || _pendUp === 'SELL');
+    const _dirShow  = signal.direction;
+    const _sideShow = signal.signal;
     // v77.2 — THE ORIGINAL BUG: a lean the engine evaluated but never fired
     // was rendered as a BUY/SELL card, indistinguishable from a real signal.
     // The display side is EARNED now: fired keeps its side, armed shows its
@@ -1741,7 +1720,8 @@ function renderSignals(signals) {
       statusBadge = '<span class="bg-red-500/20 text-red-400 border border-red-500/50 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider">✗ STOPPED OUT</span>';
       statusIndicator = ' opacity-50';
     } else if (_isPending) {
-      statusBadge = '<span class="bg-amber-500/10 text-amber-400 border border-amber-500/40 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider" title="Armed — the JACKDLM gates passed; waiting for price to reach its support/resistance level and 3 5-minute candles to confirm before it fires">⏳ PENDING @ S/R</span>';
+      const _pr = String(signal.pending_reason || 'waiting for price to reach its support/resistance level and confirm').replace(/"/g, "'");
+      statusBadge = `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/40 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider" title="Armed — ${_pr}">⏳ PENDING @ S/R</span>`;
       statusIndicator = ' opacity-80';
     }
 
@@ -2120,47 +2100,6 @@ function setupFirestoreListeners() {
   const token = AuthManager.getToken();
   if (!token) return;
 
-  // ── v79.6: AUTHORITATIVE state overlay — engine-direct, like the track record.
-  // Firestore proved lossy for STATE (dropped fields, warmup staleness, module
-  // races), so fired/armed truth now comes from /api/live-signal-state — the
-  // same reconciled snapshot the track record reads. Firestore keeps supplying
-  // card CONTENT only. Poll every 30s; cards trust the overlay while <2min old.
-  async function _pollEngineTruth() {
-    try {
-      // v79.8 (user): fill from THE SAME PLACE the track record fills from.
-      // A valid token unmasks open/armed symbols; without one the rows come
-      // back HIDDEN and we simply keep the Firestore fallback.
-      const _t = AuthManager.getToken();
-      const r = await fetch(`${API_BASE_URL}/api/track-record`, {
-        headers: _t ? { 'Authorization': `Bearer ${_t}` } : {}
-      });
-      if (!r.ok) return;
-      const j = await r.json();
-      const fired = {}, armed = {};
-      let _visible = 0;
-      (j.signals || []).forEach(row => {
-        if (!row || !row.symbol || row.symbol === 'HIDDEN') return;
-        _visible++;
-        if (row.outcome === 'OPEN') {
-          fired[row.symbol] = { symbol: row.symbol, side: row.signal_type,
-                                direction: row.direction, paper: false,
-                                risk_tier: row.signal_strength || '' };
-        } else if (row.outcome === 'PENDING') {
-          armed[row.symbol] = { symbol: row.symbol, side: row.signal_type };
-        }
-      });
-      // Masked payload (not signed in / token rejected) => no truth overlay.
-      const _sum = j.summary || {};
-      if (_visible === 0 && ((_sum.open || 0) + (_sum.pending || 0)) > 0) return;
-      window.engineTruth = { fired, armed, fetchedAt: Date.now() };
-      if (typeof filterAndRenderSignals === 'function') filterAndRenderSignals();
-    } catch (e) { /* keep last known truth */ }
-  }
-  if (!window._engineTruthPoll) {
-    window._engineTruthPoll = setInterval(_pollEngineTruth, 30000);
-  }
-  _pollEngineTruth();
-
   // Listen to signals collection
   const signalsQuery = query(collection(db, 'signals'), orderBy('timestamp', 'desc'), limit(150));
 
@@ -2200,6 +2139,8 @@ function setupFirestoreListeners() {
           paper_only: data.paper_only === true,
           pending_entry: data.pending_entry === true,
           pending_side: data.pending_side || '',
+          pending_target: data.pending_target ?? null,
+          pending_reason: data.pending_reason || '',
           evaluating: data.evaluating === true,
           timestamp: data.timestamp || null,
           risk_tier: data.risk_tier || '',
