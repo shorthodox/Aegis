@@ -1730,7 +1730,11 @@ def add_macro_regime_features(df: pd.DataFrame, df_1d: Optional[pd.DataFrame], d
         macro_rows = []
         if df_1d is not None and not df_1d.empty:
             t1 = df_1d.copy()
-            t1['timestamp'] = pd.to_datetime(t1['timestamp'])
+            # pandas>=2 preserves datetime64 unit resolutions (s/ms/us/ns) and
+            # merge_asof REFUSES mixed keys (measured live: "incompatible merge
+            # keys dtype('<M8[ms]') and dtype('<M8[us]')" — which silently
+            # re-zeroed the macro columns). Coerce everything to ns.
+            t1['timestamp'] = pd.to_datetime(t1['timestamp']).astype('datetime64[ns]')
             t1 = t1.sort_values('timestamp')
             t1['ema50_1d']  = t1['close'].ewm(span=50,  adjust=False).mean()
             t1['ema200_1d'] = t1['close'].ewm(span=200, adjust=False).mean()
@@ -1749,7 +1753,7 @@ def add_macro_regime_features(df: pd.DataFrame, df_1d: Optional[pd.DataFrame], d
 
         if df_1w is not None and not df_1w.empty:
             t2 = df_1w.copy()
-            t2['timestamp'] = pd.to_datetime(t2['timestamp'])
+            t2['timestamp'] = pd.to_datetime(t2['timestamp']).astype('datetime64[ns]')
             t2 = t2.sort_values('timestamp')
             t2['ema50_1w'] = t2['close'].ewm(span=50, adjust=False).mean()
             t2['macro_trend_1w'] = (t2['close'] > t2['ema50_1w']).astype(float).replace({0.0: -1.0, 1.0: 1.0})
@@ -1788,7 +1792,8 @@ def add_macro_regime_features(df: pd.DataFrame, df_1d: Optional[pd.DataFrame], d
             macro_df['macro_trend_1w'].fillna(0.0)
         )
 
-        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        df['timestamp'] = pd.to_datetime(df['timestamp']).astype('datetime64[ns]')
+        macro_df['timestamp'] = pd.to_datetime(macro_df['timestamp']).astype('datetime64[ns]')
         macro_df = macro_df.sort_values('timestamp')
         df = df.sort_values('timestamp')
         _macro_cols = ['timestamp', 'macro_trend_1d', 'macro_trend_1w',
