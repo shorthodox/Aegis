@@ -881,7 +881,7 @@ async def run_engine_background():
                 if _warming_up:
                     print(f"[PRODUCER] Warmup in progress "
                           f"({_eng.bootstrap_done}/{_eng.bootstrap_total}) "
-                          f"â€” Firestore push deferred.")
+                          f"â€” pushing scanned tokens as they complete.")
                     # ── Stale sweep (one-time per restart) ─────────────────────
                     # Pushes are deferred for the WHOLE warmup, so Firestore
                     # still holds the PREVIOUS session's docs — including
@@ -919,7 +919,15 @@ async def run_engine_background():
                             print(f"[PRODUCER] Stale sweep failed: {_sw_e}")
 
                 _now = time.time()
-                _signals_now = LIVE_STATE.data.get('signals', {}) if not _warming_up else {}
+                # v79.2: push DURING warmup too. A token's state is complete the
+                # moment ITS scan finishes — deferring everything until the whole
+                # fleet bootstrapped left the cockpit reading the neutralised
+                # stale-sweep docs while the track record (engine-direct) showed
+                # armed signals (user report 2026-07-20: "8 armed" vs empty
+                # cockpit). last_signals only contains scanned tokens, so partial
+                # pushes are always truthful; the change-fingerprint + 290s floor
+                # keep the write volume unchanged.
+                _signals_now = LIVE_STATE.data.get('signals', {})
                 # Fingerprint: (symbol, signal_side, fire) â€” stable between scans when
                 # nothing fires.  signal_id uses uuid4() on fire=True, so hashing
                 # signal_id caused a push on every fired symbol within a scan cycle.
