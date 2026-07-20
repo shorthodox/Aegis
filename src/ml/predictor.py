@@ -164,7 +164,6 @@ class Predictor:
         # inference when primary_only_mode=True to suppress HOLD timeouts.
         self.hold_calibrator      = None
         self.hold_disc_cols: list = []
-        self.cal_uses_p_resolve   = False   # v78: calibrator expects p_resolve as last input
         _hold_cal_file = self.meta.get("primary_calibrator_file")
         if _hold_cal_file:
             _hold_cal_path = model_store / _hold_cal_file
@@ -175,26 +174,10 @@ class Predictor:
                         _hc = pickle.load(f)
                     self.hold_calibrator = _hc.get("calibrator")
                     self.hold_disc_cols  = _hc.get("hold_disc_cols", [])
-                    self.cal_uses_p_resolve = bool(_hc.get("uses_p_resolve", False))
                     logger.info(f"HOLD calibrator loaded: {_hold_cal_path.name} "
-                                f"(features={self.hold_disc_cols}, "
-                                f"p_resolve={self.cal_uses_p_resolve})")
+                                f"(features={self.hold_disc_cols})")
                 except Exception as e:
                     logger.warning(f"Could not load HOLD calibrator: {e}")
-
-        # v78 resolution head: P(bar resolves at either barrier). Optional —
-        # older model sets simply don't have the file and everything degrades
-        # to the pre-v78 behaviour.
-        self.model_res: Optional[xgb.Booster] = None
-        _res_file = self.meta.get("resolution_model_file")
-        if _res_file and (model_store / _res_file).exists():
-            try:
-                self.model_res = xgb.Booster()
-                self.model_res.load_model(str(model_store / _res_file))
-                logger.info(f"Resolution head loaded: {_res_file}")
-            except Exception as e:
-                self.model_res = None
-                logger.warning(f"Could not load resolution head: {e}")
 
     def _load_token_params(self) -> Optional[Dict[str, Any]]:
         """Load per-token optimizer output from data/token_params/ if present."""
@@ -953,27 +936,15 @@ class Predictor:
                         _disc_vals = _last_row.reindex(
                             columns=self.hold_disc_cols, fill_value=0.0
                         ).fillna(0.0).to_numpy()
-                        _cal_parts = [_np.array([[_conf_raw]]), _disc_vals]
-                        # v78: p_resolve rides as the LAST column, exactly as the
-                        # calibrator was fitted. Neutral 0.5 if the head is
-                        # missing so the shape never breaks.
-                        _p_res_live = 0.5
-                        if self.cal_uses_p_resolve:
-                            if self.model_res is not None:
-                                _res_cols = self.model_res.feature_names or list(_last_row.columns)
-                                _X_res = self._align(_last_row, _res_cols)
-                                _p_res_live = float(self.model_res.predict(
-                                    xgb.DMatrix(_X_res, feature_names=list(_X_res.columns)))[0])
-                            _cal_parts.append(_np.array([[_p_res_live]]))
-                        _cal_x_live = _np.column_stack(_cal_parts)
+                        _cal_x_live = _np.column_stack([
+                            _np.array([[_conf_raw]]), _disc_vals
+                        ])
                     else:
                         _cal_x_live = _np.array([[_conf_raw]])
-                        _p_res_live = 0.5
                     _p_not_hold = float(
                         self.hold_calibrator.predict_proba(_cal_x_live)[0, 1]
                     )
-                    print(f"[CAL] {self.symbol} p_not_hold={_p_not_hold:.3f} "
-                          f"p_resolve={_p_res_live:.3f} thr={_po_thr}")
+                    print(f"[CAL] {self.symbol} p_not_hold={_p_not_hold:.3f} thr={_po_thr}")
                     if _p_not_hold < _po_thr:
                         fire = False
                 except Exception as e:

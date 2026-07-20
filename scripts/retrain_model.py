@@ -3133,37 +3133,6 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
         )
         primary_full = buy_full  # backward-compat alias
 
-        # ── v78 RESOLUTION HEAD: will this bar RESOLVE at all? ────────────────
-        # Measured (BTC-class tokens): ~39% of FIRED holdout bars end as HOLD
-        # timeouts — price hits NEITHER barrier — and every one counts as a
-        # miss in signal precision. The direction gate answers "which way?";
-        # nothing answered "will it actually move?". This binary head learns
-        # P(label != HOLD) and feeds the DIR-CAL calibrator as an input, so
-        # selection becomes P(resolves) x P(direction correct).
-        _y_tr_res = (_y_tr_es != 1).astype(int)
-        _y_va_res = (_y_va_es != 1).astype(int)
-        _spw_res  = min(float((_y_tr_res == 0).sum()) / max(float((_y_tr_res == 1).sum()), 1.0), 5.0)
-        _res_params = {'objective': 'binary:logistic', 'eval_metric': 'auc',
-                       'max_depth': 4, 'learning_rate': 0.05, 'subsample': 0.8,
-                       'colsample_bytree': 0.8, 'reg_lambda': 5.0, 'reg_alpha': 3.0,
-                       'min_child_weight': 15, 'seed': 42, 'tree_method': 'hist',
-                       'missing': np.nan, 'scale_pos_weight': _spw_res}
-        res_full = xgb.train(
-            _res_params,
-            _dm(_X_tr_es, _y_tr_res),
-            num_boost_round=600,
-            evals=[(_dm(_X_va_es, _y_va_res), 'eval')],
-            early_stopping_rounds=50,
-            verbose_eval=False,
-        )
-        try:
-            from sklearn.metrics import roc_auc_score as _auc_res_fn
-            _res_auc_val = float(_auc_res_fn(_y_va_res, res_full.predict(_dm(_X_va_es))))
-        except Exception:
-            _res_auc_val = float('nan')
-        print(f"   [RES] resolution head val AUC={_res_auc_val:.3f} "
-              f"(P(bar hits a barrier); feeds DIR-CAL as an input)")
-
         X_test = holdout[feature_cols]
         y_test = holdout['target'].to_numpy().astype(int)
         _pb_h = buy_full.predict(_dm(X_test))
@@ -3265,22 +3234,10 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
             # Calibrator training is strictly limited to Xtp[:_cal_end] to prevent
             # the val-set rows from leaking into the calibrator's learned weights.
             from sklearn.linear_model import LogisticRegression as _LRCal
-            # v78: the calibrator's context view, widened — it now sees the
-            # day-trend (un-zeroed by the merge_asof fix) and the location
-            # features that decide whether a fade has room to resolve. Only
-            # columns that survived SHAP pruning qualify.
             _hold_disc_cols: list = [c for c in ['atr_pct', 'macro_confluence_score',
                                                    'efficiency_ratio_10', 'volatility_regime',
-                                                   'adx_14', 'realized_volatility',
-                                                   'macro_trend_1d', 'macro_trend_200d',
-                                                   'dist_daily_ema200', 'rsi_14',
-                                                   'range_position_score', 'choppiness',
-                                                   'pct_dist_to_support', 'pct_dist_to_resistance']
+                                                   'adx_14', 'realized_volatility']
                                      if c in Xtp.columns]
-            # Resolution-head probabilities for every training-pool row (same
-            # in-sample convention the calibrator already uses for confidence).
-            _p_res_tp = res_full.predict(_dm(Xtp))
-            _cal_uses_pres = False   # set True when the fitted calibrator includes p_resolve
             _calibrator_hold_disc_cols: list = _hold_disc_cols  # persisted for holdout + sidecar
             # Restrict to non-val rows to avoid leakage
             _dir_tp_cal = _dir_tp.copy()
@@ -3292,11 +3249,7 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
                 _conf_base_cal = _conf_tp[_dir_tp_cal].reshape(-1, 1)
                 if _hold_disc_cols:
                     _hold_disc_feats = Xtp.iloc[_dir_idx][_hold_disc_cols].fillna(0.0).to_numpy()
-                    # v78: p_resolve rides as the LAST calibrator input — the LR
-                    # learns how much "will it move at all" matters per token.
-                    _cal_x = np.column_stack([_conf_base_cal, _hold_disc_feats,
-                                              _p_res_tp[_dir_idx].reshape(-1, 1)])
-                    _cal_uses_pres = True
+                    _cal_x = np.column_stack([_conf_base_cal, _hold_disc_feats])
                 else:
                     _cal_x = _conf_base_cal
                 if len(np.unique(_cal_y)) == 2:
@@ -3328,7 +3281,6 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
                     except Exception as _cal_err:
                         _calibrator_po = _LRCal(C=0.1, max_iter=500, solver='lbfgs')
                         _calibrator_po.fit(_conf_base_cal, _cal_y)
-                        _cal_uses_pres = False   # fallback is conf-only — no p_resolve column
                         print(f"   [DIR-CAL] fallback single-feature LR (multi-feature failed: {_cal_err})")
 
             # Step 3: Validation set (last 20%) — sweep for best threshold.
@@ -3365,11 +3317,7 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
                 )
                 if _use_multi_cal:
                     _val_disc_feats = _X_val_po.iloc[_dir_val_idx][_hold_disc_cols].fillna(0.0).to_numpy()
-                    _val_parts = [_conf_base_val, _val_disc_feats]
-                    if _cal_uses_pres:
-                        _val_parts.append(res_full.predict(
-                            _dm(_X_val_po))[_dir_val_idx].reshape(-1, 1))
-                    _cal_val_x = np.column_stack(_val_parts)
+                    _cal_val_x = np.column_stack([_conf_base_val, _val_disc_feats])
                 else:
                     _cal_val_x = _conf_base_val
                 _cal_conf_dir_val = _calibrator_po.predict_proba(_cal_val_x)[:, 1]
@@ -3457,10 +3405,7 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
                     if _use_multi_cal_tp:
                         _tp_dir_idx  = np.where(_dir_tp_cal)[0]
                         _tp_dir_disc = Xtp.iloc[_tp_dir_idx][_hold_disc_cols].fillna(0.0).to_numpy()
-                        _tp_parts = [_tp_dir_conf_base, _tp_dir_disc]
-                        if _cal_uses_pres:
-                            _tp_parts.append(_p_res_tp[_tp_dir_idx].reshape(-1, 1))
-                        _tp_cal_x = np.column_stack(_tp_parts)
+                        _tp_cal_x    = np.column_stack([_tp_dir_conf_base, _tp_dir_disc])
                     else:
                         _tp_cal_x = _tp_dir_conf_base
                     _cal_conf_tp_dir = _calibrator_po.predict_proba(_tp_cal_x)[:, 1]
@@ -3656,10 +3601,7 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
                     _h_disc_feats = holdout[feature_cols].reindex(
                         columns=_calibrator_hold_disc_cols, fill_value=0.0
                     ).fillna(0.0).to_numpy()
-                    _h_parts = [_conf_h_base, _h_disc_feats]
-                    if _cal_uses_pres:
-                        _h_parts.append(res_full.predict(_dm(X_test)).reshape(-1, 1))
-                    _cal_h_x = np.column_stack(_h_parts)
+                    _cal_h_x = np.column_stack([_conf_h_base, _h_disc_feats])
                 else:
                     _cal_h_x = _conf_h_base
                 _cal_conf_h = _calibrator_po.predict_proba(_cal_h_x)[:, 1]
@@ -3887,12 +3829,6 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
                   f"(from {_dir_fired_n2} raw, median hold {_med_hold:.0f}h, "
                   f"label window {token_lookahead}h) "
                   f"| dir_prec 95% lower bound = {_dir_prec_lb:.1%}")
-            # v78: what actually caps signal precision — the timeout slice.
-            _fired_hold_n = fired_n - _dir_fired_n2
-            print(f"   Fired-outcome mix: {_dir_fired_n2} dir-resolved | "
-                  f"{_fired_hold_n} HOLD-timeout "
-                  f"({100.0 * _fired_hold_n / max(fired_n, 1):.0f}% of fires) — "
-                  f"the resolution head exists to shrink this slice")
 
             # ── Tradeable decision — directional precision ────────────────
             # Gate on directional precision (≥60%) not 3-class signal precision.
@@ -4185,9 +4121,6 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
                                num_boost_round=800, verbose_eval=False)
         deploy_sell = xgb.train(binary_params_sell, _dm(X_all, y_all_sell, _w_all_sell),
                                 num_boost_round=800, verbose_eval=False)
-        # v78 resolution head, deployment fit (target: bar resolves != HOLD).
-        deploy_res = xgb.train(_res_params, _dm(X_all, (y_all != 1).astype(int)),
-                               num_boost_round=400, verbose_eval=False)
 
         store_dir = Path(root_dir) / "src" / "ml" / "model_store"
         store_dir.mkdir(parents=True, exist_ok=True)
@@ -4196,11 +4129,9 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
         # Save binary primary models
         buy_path  = store_dir / f"{base}_model_buy.json"
         sell_path = store_dir / f"{base}_model_sell.json"
-        res_path  = store_dir / f"{base}_model_res.json"   # v78 resolution head
         model_path = store_dir / f"{base}_model.json"  # backward-compat: keep buy copy here
         deploy_buy.save_model(str(buy_path))
         deploy_sell.save_model(str(sell_path))
-        deploy_res.save_model(str(res_path))
         deploy_buy.save_model(str(model_path))
 
         # Save clean per-fold buy model (trained only on train pool)
@@ -4214,8 +4145,8 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
             meta_path = store_dir / f"{base}_meta_model.pkl"
             with open(meta_path, "wb") as _f:
                 _pkl.dump(meta_full, _f)
-        print(f"Models saved: {buy_path.name} + {sell_path.name} + {res_path.name} + "
-              f"{clean_model_path.name}" + (f" + {meta_path.name}" if meta_path else ""))
+        print(f"Models saved: {buy_path.name} + {sell_path.name} + {clean_model_path.name}" +
+              (f" + {meta_path.name}" if meta_path else ""))
 
         sidecar = store_dir / f"{base}_meta.json"
         import pickle
@@ -4237,11 +4168,7 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
         if _cal_po_obj is not None:
             with open(_cal_po_path, "wb") as f:
                 pickle.dump({'calibrator': _cal_po_obj,
-                             'hold_disc_cols': _cal_po_cols,
-                             # v78: the predictor must append p_resolve as the
-                             # LAST input column iff the calibrator was fitted
-                             # with it — shape mismatch otherwise.
-                             'uses_p_resolve': bool(locals().get('_cal_uses_pres', False))}, f)
+                             'hold_disc_cols': _cal_po_cols}, f)
         else:
             _cal_po_path = None
         with open(sidecar, "w") as f:
@@ -4326,13 +4253,6 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
                 "primary_calibrator_exists": bool(_po_use_calibrator) if _primary_only_gate else False,
                 "primary_calibrator_file": _cal_po_path.name if _cal_po_path else None,
                 "calibrator_hold_disc_cols": list(_cal_po_cols),
-                # v78 resolution head: P(bar resolves) model; when
-                # calibrator_uses_p_resolve is true the predictor appends its
-                # output as the calibrator's LAST input column.
-                "resolution_model_file": res_path.name,
-                "calibrator_uses_p_resolve": bool(locals().get('_cal_uses_pres', False)),
-                "resolution_auc_val": (float(_res_auc_val)
-                                       if _res_auc_val == _res_auc_val else None),
                 "token_breakeven": float(token_breakeven),
                 "target_precision": float(token_precision_target),
                 # DEV estimate = how the gate scored on out-of-fold data (this is
