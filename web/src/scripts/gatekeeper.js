@@ -1679,6 +1679,13 @@ function renderSignals(signals) {
                      : 'HOLD';
     const _strengthLabel = _fired ? (signal.signal_strength || 'NORMAL')
                          : _isPending ? 'PENDING' : 'NEUTRAL';
+    // v77.3: paper fires (doctrine-suspect class graded off-record) must be
+    // visually distinct — they never appear on the public track record, and
+    // unmarked they made the setup rooms disagree with it (user report:
+    // "all 5 executed are BUY" while 3 unmarked paper SELLs sat in the room).
+    const paperBadge = (_fired && signal.paper_only === true)
+      ? '<span class="bg-amber-500/10 text-amber-400 border border-amber-500/40 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider" title="Graded on the paper book — not part of the public track record">PAPER</span>'
+      : '';
     const timeframe = signal.timeframe || '1h'; // Default to 1h if not provided
     const signalStatus = signal.status || getSignalStatus(signal);
     const signalClass = getSignalClass(signalType, signalStatus);
@@ -1856,6 +1863,7 @@ function renderSignals(signals) {
             <span class="signal-symbol font-bold">${symbol}</span>
             <span class="signal-timeframe text-xs text-gray-500">${timeframe}</span>
             ${directionBadge}
+            ${paperBadge}
             ${statusBadge}
             ${matchBadge}
           </div>

@@ -3172,7 +3172,17 @@ class LiveEngine:
                 self.last_signals[symbol]['signal_strength'] = 'NEUTRAL'
                 self.last_signals[symbol]['evaluating']      = True
             elif _paper_open:
+                # v77.3: an open PAPER position IS an active (paper) signal —
+                # its card must not fade out of the cockpit when the model's
+                # live lean drifts. Display follows the paper book while open.
+                _pp = self.alpha_wallet.open_positions.get(f'{symbol}|risky')
                 self.last_signals[symbol]['paper_only'] = True
+                if _pp is not None:
+                    self.last_signals[symbol]['fire']            = True
+                    self.last_signals[symbol]['signal']          = _pp.side
+                    self.last_signals[symbol]['direction']       = _pp.direction
+                    self.last_signals[symbol]['signal_strength'] = _pp.side
+                    self.last_signals[symbol]['evaluating']      = False
 
             existing = self.wallet.open_positions.get(symbol)
 
@@ -3252,6 +3262,20 @@ class LiveEngine:
                 # positions opened before this field existed. Skipped entirely when
                 # flipping — the fresh opposite signal built above must stand.
                 if not _reversal_flip and symbol in self.last_signals:
+                    # v77.3: an open REAL position IS the active signal — the
+                    # card must not drop out of the cockpit/setup rooms when
+                    # the model's live lean fades mid-trade (measured: 5 open
+                    # BUYs on the record but only 2 still showing in the BUY
+                    # room). While the position is open, display follows the
+                    # BOOK: side, fired state and strength come from the trade.
+                    self.last_signals[symbol]['fire']       = True
+                    self.last_signals[symbol]['signal']     = existing.side
+                    self.last_signals[symbol]['direction']  = existing.direction
+                    self.last_signals[symbol]['evaluating'] = False
+                    _tier_open = str(existing.signal_strength or '').upper()
+                    self.last_signals[symbol]['signal_strength'] = (
+                        f'STRONG_{existing.side}' if _tier_open == 'STRONG'
+                        else existing.side)
                     _entry_q = existing.quality_score or existing.meta_confidence
                     self.last_signals[symbol]['quality_score'] = round(_entry_q, 1)
                     # Re-attach the entry-time gate context so the chart's gate
@@ -4203,9 +4227,15 @@ class LiveEngine:
                                 self.last_signals[symbol]['paper_only'] = True
                                 # display commit: fired once the paper position exists
                                 if _rk_key in self.alpha_wallet.open_positions:
-                                    self.last_signals[symbol]['fire']       = True
-                                    self.last_signals[symbol]['signal']     = new_side
-                                    self.last_signals[symbol]['evaluating'] = False
+                                    self.last_signals[symbol]['fire']            = True
+                                    self.last_signals[symbol]['signal']          = new_side
+                                    self.last_signals[symbol]['direction']       = (
+                                        'LONG' if new_side == 'BUY' else 'SHORT')
+                                    # restore the side chip — the evaluating
+                                    # demotion left it NEUTRAL (measured: a
+                                    # NEUTRAL-chip card sitting in the SELL room)
+                                    self.last_signals[symbol]['signal_strength'] = new_side
+                                    self.last_signals[symbol]['evaluating']      = False
                             _why_paper = 'book_full' if (_pg_ok is False and not _trust_warns) \
                                          else ','.join(_trust_warns)
                             print(f'[{symbol}] MODEL FIRE {new_side} tier={_risk_tier} -> PAPER '
@@ -6123,6 +6153,13 @@ class LiveEngine:
             'meta_confidence': round(conf, 4),
             'threshold':       round(thr, 4),
             'tradeable':       result.get('tradeable', True),
+            # State flags ALWAYS present so the Firestore merge=True push can
+            # never ghost a stale True from a previous scan (measured: tokens
+            # kept paper_only/pending_entry forever once set, because a fresh
+            # entry simply lacked the key and merge kept the old value).
+            'pending_entry':   False,
+            'paper_only':      False,
+            'evaluating':      False,
             'p_buy':           round(float(result.get('p_buy',  0)), 4),
             'p_sell':          round(float(result.get('p_sell', 0)), 4),
             'p_hold':          round(float(result.get('p_hold', 0)), 4),
