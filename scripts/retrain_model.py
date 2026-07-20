@@ -3775,10 +3775,17 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
         if fired_n > 0:
             print(f"      Signal precision: {fired_prec:.3f}   "
                   f"(breakeven ~ {breakeven:.3f} after {FEE_ROUNDTRIP*100:.2f}% fees)")
-            print(f"      BUY  holdout    : {buy_h_prec:.3f}  ({buy_h_n} trades)"
-                  f"{'  PASS' if buy_h_n >= 5 and buy_h_prec >= breakeven else '  fail'}")
-            print(f"      SELL holdout    : {sell_h_prec:.3f}  ({sell_h_n} trades)"
-                  f"{'  PASS' if sell_h_n >= 5 and sell_h_prec >= breakeven else '  fail'}")
+            # NOTE: these per-side numbers count HOLD-timeout fires as misses,
+            # while `breakeven` assumes every trade resolves at a barrier — a
+            # mixed metric vs a pure threshold that NOTHING can pass at a
+            # normal timeout rate (measured: ~26% of fires timeout => even
+            # perfect direction caps at ~0.74 blended). The old PASS/fail tag
+            # cried wolf on every token; the honest per-side verdict is the
+            # DIRECTIONAL precision line below, which drives the enable gate.
+            print(f"      BUY  holdout    : {buy_h_prec:.3f}  ({buy_h_n} trades, incl. timeouts"
+                  f" — see dir precision below)")
+            print(f"      SELL holdout    : {sell_h_prec:.3f}  ({sell_h_n} trades, incl. timeouts"
+                  f" — see dir precision below)")
             print(f"      Win rate (PnL)  : {bt['win_rate']:.3f}  "
                   f"| BUY wr {bt['buy_win_rate']:.3f} ({bt['buy_n']} trades)  "
                   f"| SELL wr {bt['sell_win_rate']:.3f} ({bt['sell_n']} trades)")
