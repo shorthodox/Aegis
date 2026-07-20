@@ -1667,9 +1667,17 @@ function renderSignals(signals) {
 
   signalsContainer.innerHTML = filteredEntries.map(([key, signal]) => {
     const symbol = signal.symbol;
-    const _fired  = signal.fire === true;
+    // v79.1 freshness gate: the producer defers Firestore pushes through the
+    // engine's whole warmup, so after a restart the docs are the PREVIOUS
+    // session's states — ghost fires the track record rightly denies. A doc
+    // that hasn't been re-pushed within 15 min (push cadence is ~5 min) loses
+    // its fired/pending face and renders as HOLD until real state arrives.
+    const _sigTs  = Date.parse(signal.timestamp || '');
+    const _fresh  = Number.isFinite(_sigTs) && (Date.now() - _sigTs) < 15 * 60 * 1000;
+    const _fired  = signal.fire === true && _fresh;
     const _pendUp = (signal.pending_side || '').toUpperCase();
-    const _isPending = signal.pending_entry === true && (_pendUp === 'BUY' || _pendUp === 'SELL');
+    const _isPending = _fresh && signal.pending_entry === true
+                       && (_pendUp === 'BUY' || _pendUp === 'SELL');
     // v77.2 — THE ORIGINAL BUG: a lean the engine evaluated but never fired
     // was rendered as a BUY/SELL card, indistinguishable from a real signal.
     // The display side is EARNED now: fired keeps its side, armed shows its
@@ -1689,11 +1697,11 @@ function renderSignals(signals) {
     const timeframe = signal.timeframe || '1h'; // Default to 1h if not provided
     const signalStatus = signal.status || getSignalStatus(signal);
     const signalClass = getSignalClass(signalType, signalStatus);
-    const cardTypeClass = getSignalCardType(signal.fire ? signal.direction : 'NEUTRAL');
+    const cardTypeClass = getSignalCardType(_fired ? signal.direction : 'NEUTRAL');
     const sigUp = signalType.toUpperCase();
-    // Fired-only rooms (BUY/SELL setups) key on data-dir: fire === true,
-    // nothing else — pending and HOLD cards stay out of them.
-    const dirAttr = signal.fire
+    // Fired-only rooms (BUY/SELL setups) key on data-dir: a FRESH fire,
+    // nothing else — pending, HOLD and stale ghosts stay out of them.
+    const dirAttr = _fired
       ? ((sigUp.includes('BUY') || signal.direction === 'LONG') ? 'buy'
         : (sigUp.includes('SELL') || signal.direction === 'SHORT') ? 'sell'
         : 'hold')

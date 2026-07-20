@@ -800,13 +800,43 @@ async def run_engine_background():
     _last_signals_hash: int = 0       # hash of last signals pushed to Firestore
     _last_firestore_push: float = 0.0 # epoch of last Firestore write
     _FIRESTORE_MIN_INTERVAL = 290.0   # push at most once per ~5 min (matches scan cycle)
+    _stale_sweep_done: bool = False   # one-time Firestore neutralise after restart
 
     async def update_state():
-        nonlocal _last_tr_mtime, _last_signals_hash, _last_firestore_push
+        nonlocal _last_tr_mtime, _last_signals_hash, _last_firestore_push, _stale_sweep_done
         while True:
             try:
                 LIVE_STATE.data["tickers"]       = engine.live_prices.copy()
-                LIVE_STATE.data["signals"]       = engine.last_signals.copy()
+                # ── v79.1: the snapshot enforces the display invariant ─────────
+                # "Signal cockpits hold ONLY HOLD and the FIRED signals" (user).
+                # A fired face is EARNED by an open position — real book or paper
+                # book — at THIS instant. Scan-time flags can outlive their
+                # positions between scans (measured: '0 OPEN · 2 FIRING', cards
+                # with no SL and POSITION=no-trade), so the reconciliation lives
+                # here, where every consumer (cockpit, rooms, Firestore) reads.
+                _snap_sigs = {}
+                for _sym, _ent in engine.last_signals.items():
+                    if not isinstance(_ent, dict):
+                        _snap_sigs[_sym] = _ent
+                        continue
+                    _e = dict(_ent)
+                    _real_pos = engine.wallet.open_positions.get(_sym)
+                    _pap_pos  = engine.alpha_wallet.open_positions.get(f'{_sym}|risky')
+                    if _real_pos is not None:
+                        _e['fire'], _e['paper_only'] = True, False
+                        _e['signal']    = _real_pos.side
+                        _e['direction'] = _real_pos.direction
+                    elif _pap_pos is not None:
+                        _e['fire'], _e['paper_only'] = True, True
+                        _e['signal']    = _pap_pos.side
+                        _e['direction'] = _pap_pos.direction
+                    elif _e.get('fire'):
+                        _e['fire']            = False
+                        _e['paper_only']      = False
+                        _e['signal']          = 'HOLD'
+                        _e['signal_strength'] = 'NEUTRAL'
+                    _snap_sigs[_sym] = _e
+                LIVE_STATE.data["signals"] = _snap_sigs
                 LIVE_STATE.data["alpha_signals"] = engine.alpha_signals.copy() if engine.alpha_mode else {}
                 LIVE_STATE.data["open_trades"]   = [
                     asdict(p) for p in engine.wallet.open_positions.values()
@@ -852,6 +882,41 @@ async def run_engine_background():
                     print(f"[PRODUCER] Warmup in progress "
                           f"({_eng.bootstrap_done}/{_eng.bootstrap_total}) "
                           f"â€” Firestore push deferred.")
+                    # ── Stale sweep (one-time per restart) ─────────────────────
+                    # Pushes are deferred for the WHOLE warmup, so Firestore
+                    # still holds the PREVIOUS session's docs — including
+                    # fire=true — and the dashboard rooms render ghost signals
+                    # that the track record (live engine state) rightly denies
+                    # (measured 2026-07-20: 4 stale SELL cards vs 0 fired / 5
+                    # armed). Neutralise every doc once, immediately; scans
+                    # repopulate them with real state as warmup completes.
+                    if not _stale_sweep_done:
+                        _stale_sweep_done = True   # attempt once even if it fails
+                        try:
+                            _reset_ts = datetime.now(timezone.utc).isoformat()
+                            _sw_batch = db.batch()
+                            _sw_n = 0
+                            for _sw_doc in db.collection("signals").stream():
+                                _sw_batch.set(_sw_doc.reference, {
+                                    'fire': False,
+                                    'signal': 'HOLD',
+                                    'signal_strength': 'NEUTRAL',
+                                    'paper_only': False,
+                                    'pending_entry': False,
+                                    'evaluating': True,
+                                    'stale_reset': _reset_ts,
+                                    'timestamp': _reset_ts,
+                                }, merge=True)
+                                _sw_n += 1
+                                if _sw_n % 450 == 0:
+                                    _sw_batch.commit()
+                                    _sw_batch = db.batch()
+                            if _sw_n % 450:
+                                _sw_batch.commit()
+                            print(f"[PRODUCER] Stale sweep: neutralised {_sw_n} "
+                                  f"Firestore docs from the previous session")
+                        except Exception as _sw_e:
+                            print(f"[PRODUCER] Stale sweep failed: {_sw_e}")
 
                 _now = time.time()
                 _signals_now = LIVE_STATE.data.get('signals', {}) if not _warming_up else {}
