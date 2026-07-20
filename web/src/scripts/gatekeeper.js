@@ -1685,12 +1685,17 @@ function renderSignals(signals) {
     const _truthLive = !!(_truth && (Date.now() - _truth.fetchedAt) < 120000);
     const _tFired    = _truthLive ? (_truth.fired[symbol] || null) : null;
     const _tArmed    = _truthLive ? (_truth.armed[symbol] || null) : null;
-    const _fired   = _truthLive ? !!_tFired : (signal.fire === true && _fresh);
-    const _isPaper = _truthLive ? !!(_tFired && _tFired.paper)
+    // Paper fires live only in the Firestore state (the track record is the
+    // REAL book); real fires and armed come from the track-record truth.
+    const _fsFired = signal.fire === true && _fresh;
+    const _fired   = _truthLive
+        ? (!!_tFired || (_fsFired && signal.paper_only === true))
+        : _fsFired;
+    const _isPaper = _truthLive ? (_fired && !_tFired)
                                 : (signal.paper_only === true);
     const _pendUp  = ((_tArmed && _tArmed.side) || signal.pending_side || '').toUpperCase();
     const _isPending = _truthLive
-        ? (!_tFired && !!_tArmed && (_pendUp === 'BUY' || _pendUp === 'SELL'))
+        ? (!_fired && !!_tArmed && (_pendUp === 'BUY' || _pendUp === 'SELL'))
         : (_fresh && signal.pending_entry === true
            && (_pendUp === 'BUY' || _pendUp === 'SELL'));
     const _dirShow  = (_tFired && _tFired.direction) || signal.direction;
@@ -2122,16 +2127,31 @@ function setupFirestoreListeners() {
   // card CONTENT only. Poll every 30s; cards trust the overlay while <2min old.
   async function _pollEngineTruth() {
     try {
+      // v79.8 (user): fill from THE SAME PLACE the track record fills from.
+      // A valid token unmasks open/armed symbols; without one the rows come
+      // back HIDDEN and we simply keep the Firestore fallback.
       const _t = AuthManager.getToken();
-      if (!_t) return;
-      const r = await fetch(`${API_BASE_URL}/api/live-signal-state`, {
-        headers: { 'Authorization': `Bearer ${_t}` }
+      const r = await fetch(`${API_BASE_URL}/api/track-record`, {
+        headers: _t ? { 'Authorization': `Bearer ${_t}` } : {}
       });
       if (!r.ok) return;
       const j = await r.json();
       const fired = {}, armed = {};
-      (j.fired || []).forEach(x => { if (x && x.symbol) fired[x.symbol] = x; });
-      (j.armed || []).forEach(x => { if (x && x.symbol) armed[x.symbol] = x; });
+      let _visible = 0;
+      (j.signals || []).forEach(row => {
+        if (!row || !row.symbol || row.symbol === 'HIDDEN') return;
+        _visible++;
+        if (row.outcome === 'OPEN') {
+          fired[row.symbol] = { symbol: row.symbol, side: row.signal_type,
+                                direction: row.direction, paper: false,
+                                risk_tier: row.signal_strength || '' };
+        } else if (row.outcome === 'PENDING') {
+          armed[row.symbol] = { symbol: row.symbol, side: row.signal_type };
+        }
+      });
+      // Masked payload (not signed in / token rejected) => no truth overlay.
+      const _sum = j.summary || {};
+      if (_visible === 0 && ((_sum.open || 0) + (_sum.pending || 0)) > 0) return;
       window.engineTruth = { fired, armed, fetchedAt: Date.now() };
       if (typeof filterAndRenderSignals === 'function') filterAndRenderSignals();
     } catch (e) { /* keep last known truth */ }

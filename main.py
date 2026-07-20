@@ -3813,8 +3813,22 @@ async def live_signal_state(user_id: str = Depends(get_current_user)):
 
 
 @app.get("/api/track-record")
-async def track_record_endpoint(source: str = None):
-    """Public track record â€” merges live_engine + main.py stores so no records are lost."""
+async def track_record_endpoint(source: str = None,
+                                authorization: Optional[str] = Header(None)):
+    """Public track record â€” merges live_engine + main.py stores so no records are lost.
+
+    v79.8: optional auth. A valid Bearer token UNMASKS open/armed symbols —
+    subscribers already see them on the dashboard, and the dashboard cockpit
+    now fills its fired/armed state from THIS endpoint (user decision: one
+    source for the track record and the cockpits). Unauthenticated callers
+    keep the masked public view.
+    """
+    _authed = False
+    try:
+        if authorization and authorization.lower().startswith("bearer "):
+            _authed = bool(decode_token(authorization.split(" ", 1)[1]))
+    except Exception:
+        _authed = False
 
     _ENGINE_RECORD = Path(os.environ.get('AEGIS_STATE_DIR') or (Path(BASE_DIR) / "data")) / "track_record.json"
     _WEB_RECORD    = Path(BASE_DIR) / "web"  / "track_record.json"
@@ -3914,7 +3928,7 @@ async def track_record_endpoint(source: str = None):
     # dashboard).  Direction, live PnL, tier and outcome stay visible so
     # the public page still proves the engine is trading in real time.
     for r in all_signals:
-        if r.get("outcome") == "OPEN":
+        if r.get("outcome") == "OPEN" and not _authed:
             r["symbol"]      = "HIDDEN"
             r["signal_id"]   = None
             r["entry_price"] = None
@@ -3947,7 +3961,7 @@ async def track_record_endpoint(source: str = None):
             _pdir  = "LONG" if _pside == "BUY" else "SHORT" if _pside == "SELL" else ""
             _pending_rows.append({
                 "signal_id":       None,
-                "symbol":          "HIDDEN",
+                "symbol":          _sym if _authed else "HIDDEN",
                 "timeframe":       _sig.get("timeframe", "1h"),
                 "direction":       _pdir,
                 "signal_type":     _pside if _pside in ("BUY", "SELL") else "HOLD",
