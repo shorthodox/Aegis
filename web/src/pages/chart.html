@@ -991,10 +991,24 @@ async function renderChart(sig) {
     });
     chartInstance = chart;
 
+    // Dynamic price precision for Y-axis price labels based on current asset price scale
+    const lastBarClose = _chartBars.length ? _chartBars[_chartBars.length - 1].close : (sig.entry_price || sig.price || 1.0);
+    let pxPrecision = 2;
+    let pxMinMove = 0.01;
+    if (lastBarClose < 0.0001) { pxPrecision = 8; pxMinMove = 0.00000001; }
+    else if (lastBarClose < 0.01) { pxPrecision = 6; pxMinMove = 0.000001; }
+    else if (lastBarClose < 1.0) { pxPrecision = 4; pxMinMove = 0.0001; }
+    else if (lastBarClose < 10.0) { pxPrecision = 3; pxMinMove = 0.001; }
+
     const candles = chart.addCandlestickSeries({
       upColor: '#4a7c68', downColor: '#ff0055',
       borderUpColor: '#4a7c68', borderDownColor: '#ff0055',
       wickUpColor: '#4a7c68', wickDownColor: '#ff0055',
+      priceFormat: {
+        type: 'price',
+        precision: pxPrecision,
+        minMove: pxMinMove,
+      },
     });
     candles.setData(_chartBars);
     _candlesSeries = candles;
@@ -1057,41 +1071,56 @@ async function renderChart(sig) {
       return r;                                                            // normal / failed
     };
 
-    // Trade levels (Entry / SL / TP) are only drawn for a real trade:
-    // an OPEN tracked position, or a signal the engine actually FIRED.
-    // A displayed-but-not-fired signal (fire=false → HOLD) must not paint
-    // trade levels on the chart — only Support / Resistance context lines.
+    // Trade levels (Entry / SL / TP) rendering logic:
+    // 1. OPEN position (tracked trade) -> solid lines
+    // 2. FIRED signal -> solid lines
+    // 3. ARMED/PENDING signal -> dashed lines showing projected Entry, SL, TP ladder & Target level
     const openPosForChart = TRACK_DATA.signals.find(s => s.symbol === sig.symbol && s.outcome === 'OPEN');
     const signalFired = sig.fire === true && (sig.signal === 'BUY' || sig.signal === 'SELL');
+    const isArmedPending = !signalFired && sig.pending_entry === true;
     let tradeLevelsDrawn = false;
     if (openPosForChart) {
-      addLine(openPosForChart.entry_price,   '#B8966A', 'Entry');
-      addLine(openPosForChart.stop_loss,     '#ff0055', 'SL');
-      addLine(openPosForChart.take_profit_1, '#4a7c68', 'TP1');
-      addLine(openPosForChart.take_profit_2, '#00cc6a', 'TP2');
-      addLine(openPosForChart.take_profit_3, '#009950', 'TP3');
-      addLine(openPosForChart.take_profit_4, '#007a3d', 'TP4');
-      addLine(openPosForChart.take_profit_5, '#006030', 'TP5');
+      addLine(openPosForChart.entry_price,   '#B8966A', 'Entry', 0);
+      addLine(openPosForChart.stop_loss,     '#ff0055', 'SL', 0);
+      addLine(openPosForChart.take_profit_1, '#4a7c68', 'TP1', 0);
+      addLine(openPosForChart.take_profit_2, '#00cc6a', 'TP2', 0);
+      addLine(openPosForChart.take_profit_3, '#009950', 'TP3', 0);
+      addLine(openPosForChart.take_profit_4, '#007a3d', 'TP4', 0);
+      addLine(openPosForChart.take_profit_5, '#006030', 'TP5', 0);
       tradeLevelsDrawn = true;
     } else if (signalFired) {
       const entry = sig.entry_price || sig.price;
-      addLine(entry,            '#B8966A',              'Entry');
-      addLine(sig.suggested_sl, '#ff0055',              'SL');
+      addLine(entry,            '#B8966A', 'Entry', 0);
+      addLine(sig.suggested_sl, '#ff0055', 'SL', 0);
       // Engine's ATR TP ladder (direction-correct from calculate_stops) — all 5 rungs.
-      addLine(sig.suggested_tp, '#4a7c68', 'TP1');
-      addLine(sig.tp2,          '#00cc6a', 'TP2');
-      addLine(sig.tp3,          '#009950', 'TP3');
-      addLine(sig.tp4,          '#007a3d', 'TP4');
-      addLine(sig.tp5,          '#006030', 'TP5');
+      addLine(sig.suggested_tp, '#4a7c68', 'TP1', 0);
+      addLine(sig.tp2,          '#00cc6a', 'TP2', 0);
+      addLine(sig.tp3,          '#009950', 'TP3', 0);
+      addLine(sig.tp4,          '#007a3d', 'TP4', 0);
+      addLine(sig.tp5,          '#006030', 'TP5', 0);
       tradeLevelsDrawn = true;
-    } else if (sig.pending_entry === true && sig.pending_target) {
-      // PENDING (Guard M): no trade yet — mark the level the signal is armed
-      // to fire at, dashed, so the user sees exactly where it is waiting.
-      const _pSide = (sig.pending_side || '').toUpperCase();
-      addLine(sig.pending_target,
-              _pSide === 'BUY' ? '#4a7c68' : '#ff5555',
-              _pSide === 'BUY' ? '⏳ Pending BUY @ support' : '⏳ Pending SELL @ resistance',
-              2);   // dashed
+    } else if (isArmedPending) {
+      // PENDING/ARMED: draw projected Entry, SL, TP ladder & target level as dashed lines
+      const _pSide = (sig.pending_side || sig.direction || '').toUpperCase();
+      const entry = sig.entry_price || sig.suggested_entry || sig.pending_target || sig.price;
+      const sl = sig.suggested_sl || sig.sl;
+      const tp1 = sig.suggested_tp || sig.tp;
+      
+      if (entry) addLine(entry, '#B8966A', 'Entry (Armed)', 2);
+      if (sl)    addLine(sl,    '#ff0055', 'SL (Armed)', 2);
+      if (tp1)   addLine(tp1,   '#4a7c68', 'TP1 (Armed)', 2);
+      if (sig.tp2) addLine(sig.tp2, '#00cc6a', 'TP2 (Armed)', 2);
+      if (sig.tp3) addLine(sig.tp3, '#009950', 'TP3 (Armed)', 2);
+      if (sig.tp4) addLine(sig.tp4, '#007a3d', 'TP4 (Armed)', 2);
+      if (sig.tp5) addLine(sig.tp5, '#006030', 'TP5 (Armed)', 2);
+
+      if (sig.pending_target && Math.abs(parseFloat(sig.pending_target) - parseFloat(entry || 0)) > 1e-6) {
+        addLine(sig.pending_target,
+                _pSide === 'BUY' ? '#4a7c68' : '#ff5555',
+                _pSide === 'BUY' ? '⏳ Target Support' : '⏳ Target Resistance',
+                2);
+      }
+      tradeLevelsDrawn = true;
     }
     // Multi-level S/R with Break→Retest→Confirmation states (engine sr_levels).
     if (Array.isArray(sig.sr_levels) && sig.sr_levels.length) {
