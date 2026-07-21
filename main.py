@@ -973,7 +973,7 @@ async def run_engine_background():
                 # nothing fires.  signal_id uses uuid4() on fire=True, so hashing
                 # signal_id caused a push on every fired symbol within a scan cycle.
                 _sig_fingerprint = tuple(sorted(
-                    (sym, v.get('signal', 'FLAT'), bool(v.get('fire', False)))
+                    (sym, v.get('signal', 'FLAT'), bool(v.get('fire', False)), bool(v.get('pending_entry', False)))
                     for sym, v in _signals_now.items()
                     if isinstance(v, dict)
                 ))

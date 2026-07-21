@@ -34,6 +34,19 @@ def test_armed_pending_setup_lifecycle():
     assert sym in engine._armed_pending_setups
     assert engine._armed_pending_setups[sym]['side'] == 'BUY'
 
+    # 1b. Simulate indicator wobble on subsequent scan where last_signals reset pending_entry=False
+    engine.last_signals[sym] = {
+        'symbol': sym,
+        'signal': 'HOLD',
+        'fire': False,
+        'pending_entry': False,
+        'price': 61000.0,
+    }
+    # Run sync: should preserve pending_entry=True in last_signals
+    engine._sync_armed_pending_state(sym)
+    assert engine.last_signals[sym]['pending_entry'] is True
+    assert engine.last_signals[sym]['pending_side'] == 'BUY'
+
     # 2. Simulate level hit (Path A): price reaches 60000.0 (near target)
     price_hit = 60010.0 # 0.016% away
     target = engine._armed_pending_setups[sym]['target']

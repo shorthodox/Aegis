@@ -2904,8 +2904,49 @@ class LiveEngine:
             await asyncio.gather(*alpha_tasks, return_exceptions=True)
 
         await self._fetch_index_prices()
+
+        # Preserve persistent armed setups in last_signals across indicator wobbles
+        for sym in list(self.last_signals.keys()):
+            self._sync_armed_pending_state(sym)
+
         self._notify_new_pending()
         self.bootstrap_done = len(self.predictors)
+
+    def _sync_armed_pending_state(self, symbol: str) -> None:
+        """Ensure persistent armed setup state is preserved in last_signals unless fired/expired/invalidated."""
+        if symbol not in self.last_signals:
+            return
+        sig = self.last_signals[symbol]
+        if sig.get('fire'):
+            self._armed_pending_setups.pop(symbol, None)
+            sig['pending_entry'] = False
+            return
+
+        if symbol in self._armed_pending_setups:
+            armed = self._armed_pending_setups[symbol]
+            armed_age = time.time() - armed.get('armed_time', 0.0)
+            target = armed.get('target')
+            price = float(sig.get('price', 0.0) or 0.0)
+            side = armed.get('side', '')
+
+            # Invalidation: expired (>12h) or price moved past target level by > 3%
+            is_expired = armed_age >= 12 * 3600
+            is_invalid = False
+            if price > 0 and target and target > 0:
+                if side == 'BUY' and price < target * 0.97:
+                    is_invalid = True
+                elif side == 'SELL' and price > target * 1.03:
+                    is_invalid = True
+
+            if is_expired or is_invalid:
+                self._armed_pending_setups.pop(symbol, None)
+                sig['pending_entry'] = False
+            else:
+                sig['pending_entry']  = True
+                sig['pending_side']   = side
+                sig['pending_target'] = target
+                sig['pending_reason'] = armed.get('reason', 'waiting for level / 5m turn')
+                sig['structure_reason'] = f"pending — {sig['pending_reason']}"
 
     def _notify_new_pending(self) -> None:
         """Telegram heads-up when a symbol NEWLY enters PENDING — ONE alert per
