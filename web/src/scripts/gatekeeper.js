@@ -1815,8 +1815,8 @@ function renderSignals(signals) {
     const wFake    = signal.is_fake_breakout === true;                                   // Feature 2
     const wVolLow  = (signal.volume_zscore || 0) < -1.0;                                // Feature 3
     const wVolHigh = (signal.volume_zscore || 0) > 1.5;                                 // Feature 3
-    const wRegime  = (_isLong && _regime === 'TRENDING_BEAR') ||                        // Feature 4
-                     (_isShort && _regime === 'TRENDING_BULL');
+    const wRegime  = (_isLong && _regime === 'TRENDING_BULL') ||                        // Feature 4 (trend-following prohibited)
+                     (_isShort && _regime === 'TRENDING_BEAR');
     const wFundL   = _isLong  && (signal.funding_rate || 0) > 0.01;                    // Feature 5
     const wFundS   = _isShort && (signal.funding_rate || 0) < -0.01;                   // Feature 5
     const wQual    = qualScore < 55 && _fired;

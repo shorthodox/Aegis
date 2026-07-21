@@ -779,8 +779,11 @@ class MarketRegimeDetector:
         is_ranging   = adx < 20
         is_volatile  = (vol_regime == 'HIGH' or atr_pct > 3.0)
         is_quiet     = (vol_regime == 'LOW'  and atr_pct < 1.2)
-        is_bullish   = market_bias == 'BULLISH'
-        is_bearish   = market_bias == 'BEARISH'
+        is_bull_momentum = (rsi > 52) or (macd_signal == 'BULLISH') or ('UP' in trend_regime) or (market_bias == 'BULLISH')
+        is_bear_momentum = (rsi < 48) or (macd_signal == 'BEARISH') or ('DOWN' in trend_regime) or (market_bias == 'BEARISH')
+
+        is_bullish   = is_bull_momentum and not (rsi < 45 and market_bias == 'BEARISH')
+        is_bearish   = is_bear_momentum and not (rsi > 55 and market_bias == 'BULLISH')
         low_volume   = (volume_strength == 'BELOW_AVERAGE' or vol_zscore < -0.5)
         high_oi      = oi_trend == 'INCREASING'
         low_oi       = oi_trend == 'DECREASING'

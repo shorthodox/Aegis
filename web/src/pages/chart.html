@@ -1487,8 +1487,10 @@ function renderExplanation(sig) {
   if (sig.volume_zscore < -0.8) factors.push({ icon: '⚠️', text: `Low volume (-${fmt(Math.abs(sig.volume_zscore),1)}σ) — weak confirmation` });
   if (sig.oi_trend === 'INCREASING')  factors.push({ icon: '✅', text: 'Open interest increasing — new money entering' });
   if (sig.funding_rate > 0.005 && isShort) factors.push({ icon: '✅', text: `Funding rate ${parseFloat(sig.funding_rate).toFixed(3)}% — longs overextended` });
-  if (sig.regime === 'TRENDING_BEAR' && isShort) factors.push({ icon: '✅', text: 'Confirmed ↓BEAR regime — trend-aligned entry' });
-  if (sig.regime === 'TRENDING_BULL' && !isShort) factors.push({ icon: '✅', text: 'Confirmed ↑BULL regime — trend-aligned entry' });
+  if (sig.regime === 'TRENDING_BULL' && isShort) factors.push({ icon: '✅', text: 'Confirmed ↑BULL regime — counter-trend SELL fade at resistance' });
+  if (sig.regime === 'TRENDING_BEAR' && !isShort) factors.push({ icon: '✅', text: 'Confirmed ↓BEAR regime — counter-trend BUY fade at support' });
+  if (sig.regime === 'TRENDING_BEAR' && isShort) factors.push({ icon: '🚫', text: 'TRENDING_BEAR regime — SELL prohibited (fade-only strategy)' });
+  if (sig.regime === 'TRENDING_BULL' && !isShort) factors.push({ icon: '🚫', text: 'TRENDING_BULL regime — BUY prohibited (fade-only strategy)' });
   if (sig.regime_confidence > 0.7) factors.push({ icon: '✅', text: `Regime confidence ${(sig.regime_confidence*100).toFixed(0)}% — high certainty` });
   if (sig.fear_greed) factors.push({ icon: '📊', text: `Fear & Greed ${sig.fear_greed.value} (${sig.fear_greed.label})` });
 
@@ -2120,10 +2122,12 @@ function renderSignalGenesis(sig) {
   // The old blanket check painted "VETO" on fired counter-trend reversals.
   const _rp          = sig.range_position;
   const _atRevExtreme = _rp != null && (isShort ? _rp >= 0.65 : _rp <= 0.35);
-  const _counterTrend = (isShort && sig.regime === 'TRENDING_BULL') ||
+  const _fadeReversal = (isShort && sig.regime === 'TRENDING_BULL') ||
                         (!isShort && sig.regime === 'TRENDING_BEAR');
-  const _isReversal  = _counterTrend && (_atRevExtreme || fired);
-  const dirOk        = !_counterTrend || _atRevExtreme || fired;
+  const _trendFollow  = (isShort && sig.regime === 'TRENDING_BEAR') ||
+                        (!isShort && sig.regime === 'TRENDING_BULL');
+  const _isReversal   = _fadeReversal && (_atRevExtreme || fired);
+  const dirOk         = !_trendFollow && (_fadeReversal || sig.regime === 'RANGING' || sig.regime === 'VOLATILE_COMPRESSION' || sig.regime === 'ACCUMULATION' || sig.regime === 'DISTRIBUTION');
   const confOk   = (sig.meta_confidence || 0) > (sig.threshold || 55);
   const hmOk     = !sig.hmm_transition_risk || sig.hmm_stability > 0.5;
 
@@ -2320,12 +2324,14 @@ function renderSignalGenesis(sig) {
                      : 'Model performing within its benchmark win-rate',
         driftBlocked ? 'BLOCKED' : 'HEALTHY', driftBlocked && !fired)}
     ${gate('', regOk,  'Gate 1 · Regime',    `Market regime: ${(sig.regime||'').replace('_',' ')}`, sig.regime || '—')}
-    ${gate('', dirOk,  'Gate 1.5 · Direction',
+    ${gate('', dirOk && !_trendFollow, 'Gate 1.5 · Direction',
         _isReversal
-          ? `${isShort ? 'SELL at resistance' : 'BUY at support'} in ${(sig.regime||'').replace('_',' ')} — counter-trend REVERSAL (allowed at the extreme)`
-          : `${isShort ? 'SELL' : 'BUY'} in ${(sig.regime||'').replace('_',' ')} — direction-regime alignment`,
-        _isReversal ? 'REVERSAL' : (dirOk ? 'ALIGNED' : 'CONFLICT'),
-        _isReversal)}
+          ? `${isShort ? 'SELL at resistance' : 'BUY at support'} in ${(sig.regime||'').replace('_',' ')} — counter-trend REVERSAL fade`
+          : _trendFollow
+            ? `${isShort ? 'SELL in TRENDING_BEAR' : 'BUY in TRENDING_BULL'} — BLOCKED (trend-following prohibited; fade-only engine)`
+            : `${isShort ? 'SELL' : 'BUY'} in ${(sig.regime||'').replace('_',' ')} — direction-regime location check`,
+        _isReversal ? 'REVERSAL' : (_trendFollow ? 'BLOCKED' : (dirOk ? 'ALIGNED' : 'CONFLICT')),
+        _trendFollow || !dirOk)}
     ${structRow}
     ${gate('', !htfOppose, 'Gate 1.7 · HTF Macro',
         `Higher-timeframe bias — Weekly ${_htfBias(_mw)} · Daily ${_htfBias(_md)}`,
@@ -2366,11 +2372,11 @@ function renderSignalGenesis(sig) {
 
     ${_isReversal ? `
       <div style="margin-top:10px;padding:10px 12px;background:rgba(184,150,106,0.08);border:1px solid rgba(184,150,106,0.28);border-radius:8px;font-size:12px;color:#B8966A">
-        ↩ Counter-trend REVERSAL: ${isShort ? 'SELL at resistance' : 'BUY at support'} in ${(sig.regime||'').replace('_',' ')} — the engine allows a turn at the structural extreme (rated MODERATE risk, never STRONG).
+        ↩ Counter-trend REVERSAL: ${isShort ? 'SELL at resistance in TRENDING_BULL' : 'BUY at support in TRENDING_BEAR'} — the engine allows a fade turn at the structural extreme (rated MODERATE risk, never STRONG).
       </div>
-    ` : (!dirOk ? `
+    ` : (!dirOk || _trendFollow ? `
       <div style="margin-top:10px;padding:10px 12px;background:rgba(255,0,85,0.08);border:1px solid rgba(255,0,85,0.25);border-radius:8px;font-size:12px;color:var(--red)">
-        🚫 Gate 1.5 VETO: ${isShort ? 'SELL blocked in TRENDING_BULL' : 'BUY blocked in TRENDING_BEAR'} — mid-trend counter-trend entry with no reversal basis
+        🚫 Gate 1.5 VETO: ${isShort ? 'SELL blocked in TRENDING_BEAR' : 'BUY blocked in TRENDING_BULL'} — trend-following entry prohibited (fade-only engine)
       </div>
     ` : '')}
   `;
