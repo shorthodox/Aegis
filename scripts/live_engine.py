@@ -3737,20 +3737,24 @@ class LiveEngine:
                                 _c5p = []
                             _pat_p = (_reversal_candle(_c5p, want_bullish=(new_side == 'BUY'))
                                       if len(_c5p) >= 3 else None)
-                            # v79: the candle shortcut only works NEAR the zone.
-                            # A 5m bounce candle printed in mid-air, an ATR-plus
-                            # above the real level, is the exact lower-low trap
-                            # the user flagged — that one keeps waiting. With no
-                            # target anywhere, the candle path stays (else the
-                            # pending-forever bug returns).
-                            _near_zone_p = True
-                            if _target_m is not None and _atr_m > 0:
-                                _near_zone_p = (abs(price - _target_m)
-                                                <= self.OFF_LEVEL_MAX_ATR * _atr_m)
-                            if _pat_p is not None and _near_zone_p:
-                                result['off_level_fire'] = {'reason': _why_m, 'pattern': _pat_p}
-                                print(f'[{symbol}] MODEL OFF-LEVEL {new_side}: {_why_m} — '
-                                      f'but the 5m {_pat_p} confirmed the turn near the zone; firing now')
+                            # Check 3-bar 5m candle turn (3 of last 4 5m candles closing in signal direction)
+                            _turn_5m = False
+                            if len(_c5p) >= self.ENTRY_5M_WINDOW:
+                                _closed_dir = [
+                                    (c[4] > c[1]) if (new_side == 'BUY') else (c[4] < c[1])
+                                    for c in _c5p[-self.ENTRY_5M_WINDOW:]
+                                ]
+                                if sum(_closed_dir) >= self.ENTRY_5M_MIN:
+                                    _turn_5m = True
+
+                            _early_5m_confirmed = (_pat_p is not None) or _turn_5m
+                            _pattern_str = _pat_p if _pat_p else '3x5m candle turn'
+
+                            if _early_5m_confirmed:
+                                result['off_level_fire'] = {'reason': _why_m, 'pattern': _pattern_str}
+                                result['reversal_pattern'] = _pattern_str
+                                print(f'[{symbol}] MODEL EARLY REVERSAL FIRE {new_side}: {_why_m} — '
+                                      f'5m {_pattern_str} confirmed genuine market reversal before reaching fire zone; firing now')
                                 if symbol in self.last_signals:
                                     self.last_signals[symbol]['pending_entry'] = False
                             else:
