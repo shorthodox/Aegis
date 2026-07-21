@@ -229,7 +229,7 @@ async function subscribeToPlan(planType) {
       return;
     }
 
-    // 2. Create Razorpay order on the backend
+    // 2. Create payment order/checkout session on backend
     const orderResp = await fetch('/api/create-order', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${freshToken}`, 'Content-Type': 'application/json' },
@@ -247,6 +247,15 @@ async function subscribeToPlan(planType) {
       return;
     }
     const orderData = await orderResp.json();
+
+    // 3. Handle DODO Payments Checkout Redirect
+    if (orderData.checkout_url || orderData.provider === 'dodopayments') {
+      hidePaymentLoader();
+      if (orderData.checkout_url) {
+        window.location.href = orderData.checkout_url;
+        return;
+      }
+    }
 
     // 3. Load Razorpay checkout.js on-demand
     try {

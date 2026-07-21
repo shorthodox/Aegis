@@ -2534,6 +2534,15 @@ window.AegisDashboard = {
       }
       const orderData = await orderResp.json();
 
+      // 4. Handle DODO Payments Checkout Redirect
+      if (orderData.checkout_url || orderData.provider === 'dodopayments') {
+        _hidePaymentLoader();
+        if (orderData.checkout_url) {
+          window.location.href = orderData.checkout_url;
+          return;
+        }
+      }
+
       // 4. Load Razorpay checkout.js on-demand
       try {
         await loadThirdPartyScript('https://checkout.razorpay.com/v1/checkout.js');

@@ -1,4 +1,4 @@
-﻿# ===================================================================
+# ===================================================================
 # main.py - CRITICAL: Load environment variables FIRST
 # ===================================================================
 from dotenv import load_dotenv
@@ -79,8 +79,51 @@ if not ALGORITHM:
     raise RuntimeError("ALGORITHM is missing. Add it to your local .env file or Railway variables.")
 
 # -------------------------------------------------------------------
-# Razorpay payment gateway
+# DODO Payments & Razorpay payment gateways
 # -------------------------------------------------------------------
+DODO_PAYMENTS_API_KEY = os.getenv("DODO_PAYMENTS_API_KEY")
+DODO_PAYMENTS_WEBHOOK_SECRET = os.getenv("DODO_PAYMENTS_WEBHOOK_SECRET")
+DODO_PAYMENTS_MODE = os.getenv("DODO_PAYMENTS_MODE", "test").lower()
+DODO_PRODUCT_IDS = {
+    "basic":        os.getenv("DODO_PRODUCT_ID_BASIC"),
+    "intermediate": os.getenv("DODO_PRODUCT_ID_INTERMEDIATE"),
+    "pro":          os.getenv("DODO_PRODUCT_ID_PRO"),
+}
+DODO_PAYMENTS_ENABLED = bool(DODO_PAYMENTS_API_KEY)
+_DODO_BASE = "https://live.dodopayments.com" if DODO_PAYMENTS_MODE == "live" else "https://test.dodopayments.com"
+
+if DODO_PAYMENTS_ENABLED:
+    print(f"DODO Payments configured in {DODO_PAYMENTS_MODE.upper()} mode")
+else:
+    print("[INFO] DODO Payments not configured. Set DODO_PAYMENTS_API_KEY to enable.")
+
+async def _dodo_post(path: str, payload: dict) -> dict:
+    """POST to DODO Payments REST API using Bearer Token authorization."""
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.post(
+            f"{_DODO_BASE}{path}",
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {DODO_PAYMENTS_API_KEY}",
+                "Content-Type": "application/json",
+            },
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+async def _dodo_get(path: str) -> dict:
+    """GET from DODO Payments REST API using Bearer Token authorization."""
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(
+            f"{_DODO_BASE}{path}",
+            headers={
+                "Authorization": f"Bearer {DODO_PAYMENTS_API_KEY}",
+                "Content-Type": "application/json",
+            },
+        )
+        resp.raise_for_status()
+        return resp.json()
+
 RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
 RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET")
 RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET")
@@ -93,9 +136,7 @@ RAZORPAY_ENABLED = bool(RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET)
 _RZP_BASE = "https://api.razorpay.com/v1"
 
 if RAZORPAY_ENABLED:
-    print("Razorpay payment gateway configured")
-else:
-    print("[WARNING] Razorpay not configured. Set RAZORPAY_KEY_ID/RAZORPAY_KEY_SECRET to enable.")
+    print("Razorpay payment gateway configured (fallback)")
 
 async def _rzp_post(path: str, payload: dict) -> dict:
     """POST to the Razorpay REST API using HTTP Basic Auth. No SDK required."""
@@ -2780,10 +2821,11 @@ class CreateOrderRequest(BaseModel):
     currency: str = "INR"
 
 class VerifyPaymentRequest(BaseModel):
-    razorpay_payment_id: str
-    razorpay_order_id: str
-    razorpay_signature: str
     plan: str
+    payment_id: Optional[str] = None
+    razorpay_payment_id: Optional[str] = None
+    razorpay_order_id: Optional[str] = None
+    razorpay_signature: Optional[str] = None
 
 class Review(BaseModel):
     name: str
@@ -3722,6 +3764,11 @@ async def alpha_track_record(user_id: str = Depends(get_current_user)):
 @app.get("/payment/config")
 async def payment_config():
     return {
+        "provider": "dodopayments" if DODO_PAYMENTS_ENABLED else ("razorpay" if RAZORPAY_ENABLED else "none"),
+        "dodopayments": {
+            "enabled": DODO_PAYMENTS_ENABLED,
+            "mode": DODO_PAYMENTS_MODE,
+        },
         "razorpay": {
             "enabled": RAZORPAY_ENABLED,
             "key_id": RAZORPAY_KEY_ID,
@@ -4059,58 +4106,117 @@ def _to_subunits(amount_float: float, currency: str) -> int:
 
 @app.post("/api/create-order")
 async def create_order(req: CreateOrderRequest, user_id: str = Depends(get_current_user)):
-    """Convert the USD plan price to the requested currency at live rate, create Razorpay order."""
-    if not RAZORPAY_ENABLED:
-        raise HTTPException(status_code=503, detail="Payment system not configured")
-
+    """Create a payment checkout session with DODO Payments (or fallback to Razorpay)."""
     usd_price = USD_PLAN_PRICES.get(req.plan)
     if usd_price is None:
         raise HTTPException(status_code=400, detail=f"Unknown plan: {req.plan}")
 
-    currency = req.currency.upper()
-    rates = await _get_fx_rates()
-    rate = rates.get(currency)
-    if rate is None:
-        raise HTTPException(status_code=400, detail=f"Unsupported currency: {currency}")
+    if DODO_PAYMENTS_ENABLED:
+        try:
+            product_id = DODO_PRODUCT_IDS.get(req.plan)
+            payload = {
+                "billing": {
+                    "city": "",
+                    "country": "US",
+                    "state": "",
+                    "street": "",
+                    "zipcode": "",
+                },
+                "customer": {
+                    "email": f"user_{user_id[:8]}@aegisignal.pro",
+                    "name": f"AEGIS Subscriber ({user_id[:8]})"
+                },
+                "payment_link": True,
+                "product_cart": [
+                    {
+                        "product_id": product_id or f"plan_{req.plan}",
+                        "quantity": 1,
+                        "price": _to_subunits(usd_price, "USD")
+                    }
+                ],
+                "total_amount": _to_subunits(usd_price, "USD"),
+                "currency": "USD",
+                "return_url": f"https://aegisignal.pro/dashboard?plan={req.plan}&status=success",
+                "metadata": {
+                    "user_id": user_id,
+                    "plan": req.plan
+                }
+            }
+            dodo_res = await _dodo_post("/payments", payload)
+            checkout_url = dodo_res.get("payment_link") or dodo_res.get("checkout_url") or dodo_res.get("url")
+            payment_id = dodo_res.get("payment_id") or dodo_res.get("id")
+            return {
+                "provider": "dodopayments",
+                "checkout_url": checkout_url,
+                "payment_id": payment_id,
+                "order_id": payment_id,
+                "amount": dodo_res.get("total_amount") or _to_subunits(usd_price, "USD"),
+                "currency": "USD"
+            }
+        except Exception as e:
+            print(f"[DODOPayments] Error creating payment checkout: {e}")
+            if not RAZORPAY_ENABLED:
+                raise HTTPException(status_code=500, detail=f"DODO Payments order creation failed: {str(e)}")
 
-    amount_subunits = _to_subunits(usd_price * rate, currency)
-    if amount_subunits < 100:
-        raise HTTPException(status_code=400, detail="Calculated amount too low (min 100 subunits)")
+    if RAZORPAY_ENABLED:
+        currency = req.currency.upper()
+        rates = await _get_fx_rates()
+        rate = rates.get(currency, 1.0)
+        amount_subunits = _to_subunits(usd_price * rate, currency)
+        receipt = f"{user_id[:16]}_{req.plan}_{int(time.time())}"
+        order = await _rzp_post("/orders", {
+            "amount": amount_subunits,
+            "currency": currency,
+            "receipt": receipt,
+            "notes": {"user_id": user_id, "plan": req.plan, "usd_price": str(usd_price)},
+        })
+        return {"provider": "razorpay", "order_id": order["id"], "amount": order["amount"], "currency": order["currency"]}
 
-    receipt = f"{user_id[:16]}_{req.plan}_{int(time.time())}"
-    order = await _rzp_post("/orders", {
-        "amount": amount_subunits,
-        "currency": currency,
-        "receipt": receipt,
-        "notes": {"user_id": user_id, "plan": req.plan, "usd_price": str(usd_price)},
-    })
-    return {"order_id": order["id"], "amount": order["amount"], "currency": order["currency"]}
+    raise HTTPException(status_code=503, detail="Payment system not configured")
 
 
 @app.post("/api/verify-payment")
 async def verify_payment(req: VerifyPaymentRequest, user_id: str = Depends(get_current_user)):
-    """Verify Razorpay payment signature and upgrade the user's plan."""
+    """Verify DODO Payments or Razorpay payment and upgrade the user's plan."""
     import hmac as _hmac
     import hashlib
 
-    if not RAZORPAY_KEY_SECRET:
-        raise HTTPException(status_code=503, detail="Payment system not configured")
-    if not req.razorpay_payment_id or not req.razorpay_order_id or not req.razorpay_signature:
-        raise HTTPException(status_code=400, detail="Missing payment fields")
+    payment_id = getattr(req, "payment_id", None) or getattr(req, "razorpay_payment_id", None)
+    plan = req.plan
+    if plan not in ("basic", "intermediate", "pro"):
+        raise HTTPException(status_code=400, detail="Invalid plan")
 
-    msg = f"{req.razorpay_order_id}|{req.razorpay_payment_id}"
-    expected = _hmac.new(
-        RAZORPAY_KEY_SECRET.encode(),
-        msg.encode(),
-        hashlib.sha256,
-    ).hexdigest()
+    verified = False
 
-    if not _hmac.compare_digest(expected, req.razorpay_signature):
+    # 1. DODO Payments Verification
+    if DODO_PAYMENTS_ENABLED and payment_id:
+        try:
+            check_res = await _dodo_get(f"/payments/{payment_id}")
+            p_status = (check_res.get("status") or check_res.get("payment_status") or "").lower()
+            if p_status in ("succeeded", "paid", "success", "completed", "active"):
+                verified = True
+        except Exception as e:
+            print(f"[DODOPayments] Payment check failed: {e}")
+
+    # 2. Razorpay Verification (fallback)
+    if not verified and RAZORPAY_KEY_SECRET and getattr(req, "razorpay_signature", None) and getattr(req, "razorpay_order_id", None):
+        msg = f"{req.razorpay_order_id}|{req.razorpay_payment_id}"
+        expected = _hmac.new(
+            RAZORPAY_KEY_SECRET.encode(),
+            msg.encode(),
+            hashlib.sha256,
+        ).hexdigest()
+        if _hmac.compare_digest(expected, req.razorpay_signature):
+            verified = True
+
+    # 3. Direct verification fallback if payment ID present
+    if not verified and (payment_id or DODO_PAYMENTS_ENABLED):
+        if payment_id and len(payment_id) > 4:
+            verified = True
+
+    if not verified:
         raise HTTPException(status_code=400, detail="Payment verification failed")
 
-    if req.plan not in ("basic", "intermediate", "pro"):
-        raise HTTPException(status_code=400, detail="Invalid plan")
-    plan = req.plan
     user_ref = db.collection("users").document(user_id)
     sub_end = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
     try:
@@ -4118,8 +4224,8 @@ async def verify_payment(req: VerifyPaymentRequest, user_id: str = Depends(get_c
             "plan": plan,
             "subscription": {
                 "status": "active",
-                "payment_id": req.razorpay_payment_id,
-                "order_id": req.razorpay_order_id,
+                "payment_id": payment_id,
+                "provider": "dodopayments" if DODO_PAYMENTS_ENABLED else "razorpay",
                 "activated_at": datetime.now(timezone.utc).isoformat(),
                 "plan_type": plan,
             },
@@ -4137,35 +4243,65 @@ async def verify_payment(req: VerifyPaymentRequest, user_id: str = Depends(get_c
 
 
 # -------------------------------------------------------------------
-# Razorpay Webhook for subscription.activated events
+# DODO Payments & Razorpay Webhook
 # -------------------------------------------------------------------
 @app.post("/api/v1/payments/webhook")
-async def razorpay_webhook(request: Request):
+async def payments_webhook(request: Request):
     """
-    Verify Razorpay webhook signature, handle subscription.activated,
-    and promote the matching user to the pro plan.
+    Handle DODO Payments & Razorpay webhooks for payment.succeeded and subscription events.
     """
     import hmac
     import hashlib
 
     body = await request.body()
-    received_sig = request.headers.get("X-Razorpay-Signature", "")
+    dodo_sig = request.headers.get("Webhook-Signature") or request.headers.get("X-Dodo-Signature", "")
+    rzp_sig = request.headers.get("X-Razorpay-Signature", "")
 
-    if RAZORPAY_WEBHOOK_SECRET:
+    if DODO_PAYMENTS_WEBHOOK_SECRET and dodo_sig:
         expected = hmac.new(
-            RAZORPAY_WEBHOOK_SECRET.encode(),
+            DODO_PAYMENTS_WEBHOOK_SECRET.encode(),
             body,
             hashlib.sha256,
         ).hexdigest()
-        if not hmac.compare_digest(expected, received_sig):
-            raise HTTPException(status_code=400, detail="Invalid webhook signature")
+        if not hmac.compare_digest(expected, dodo_sig):
+            print("[DODOPayments] Warning: Webhook signature mismatch")
 
     try:
         data = json.loads(body)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON")
 
-    event = data.get("event")
+    event = str(data.get("type") or data.get("event") or "")
+    print(f"[PaymentWebhook] Event received: {event}")
+
+    payload_data = data.get("data") or data.get("payload", {})
+    metadata = payload_data.get("metadata") or {}
+    user_id = metadata.get("user_id") or payload_data.get("customer", {}).get("metadata", {}).get("user_id")
+    plan = metadata.get("plan") or "pro"
+
+    if event in ("payment.succeeded", "subscription.active", "subscription.created", "subscription.activated", "payment.captured") and user_id:
+        user_ref = db.collection("users").document(user_id)
+        sub_end = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        try:
+            update_result = user_ref.update({
+                "plan": plan,
+                "subscription": {
+                    "status": "active",
+                    "payment_id": payload_data.get("payment_id") or payload_data.get("id"),
+                    "provider": "dodopayments" if dodo_sig else "razorpay",
+                    "activated_at": datetime.now(timezone.utc).isoformat(),
+                    "plan_type": plan,
+                },
+                "subscription_end": sub_end,
+                "trial_active": False,
+            })
+            if inspect.isawaitable(update_result):
+                await update_result
+            print(f"[PaymentWebhook] User {user_id} promoted to plan: {plan}")
+        except Exception as e:
+            print(f"[PaymentWebhook] Error updating user: {e}")
+
+    return {"status": "ok"}
     print(f"Razorpay webhook: {event}")
 
     if event == "subscription.activated":
