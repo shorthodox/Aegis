@@ -219,15 +219,11 @@ async function subscribeToPlan(planType) {
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const currency = (timeZone === 'Asia/Calcutta' || timeZone === 'Asia/Kolkata') ? 'INR' : 'USD';
 
-    // 1. Fetch Razorpay key_id from backend config (keeps secret off the frontend)
+    // 1. Fetch payment provider config from backend
     const configResp = await fetch('/payment/config');
     const config = await configResp.json().catch(() => ({}));
-    const keyId = config?.razorpay?.key_id;
-    if (!keyId) {
-      hidePaymentLoader();
-      _showPaymentError('Payment gateway is not configured. Please contact support.');
-      return;
-    }
+
+    const isDodo = config?.provider === 'dodopayments' || config?.dodopayments?.enabled;
 
     // 2. Create payment order/checkout session on backend
     const orderResp = await fetch('/api/create-order', {
@@ -249,12 +245,20 @@ async function subscribeToPlan(planType) {
     const orderData = await orderResp.json();
 
     // 3. Handle DODO Payments Checkout Redirect
-    if (orderData.checkout_url || orderData.provider === 'dodopayments') {
+    if (isDodo || orderData.checkout_url || orderData.provider === 'dodopayments') {
       hidePaymentLoader();
       if (orderData.checkout_url) {
         window.location.href = orderData.checkout_url;
         return;
       }
+    }
+
+    // 4. Fallback to Razorpay if DODO is disabled and Razorpay is enabled
+    const keyId = config?.razorpay?.key_id;
+    if (!keyId) {
+      hidePaymentLoader();
+      _showPaymentError('Payment gateway is not configured. Please contact support.');
+      return;
     }
 
     // 3. Load Razorpay checkout.js on-demand

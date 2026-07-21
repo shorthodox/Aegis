@@ -2501,21 +2501,16 @@ window.AegisDashboard = {
 
     _showPaymentLoader();
     try {
-      // 1. Get Razorpay key_id from backend (keeps secret off the frontend)
+      // 1. Get payment gateway config from backend
       const configResp = await fetch(`${API_BASE_URL}/payment/config`);
       const config = await configResp.json().catch(() => ({}));
-      const keyId = config?.razorpay?.key_id;
-      if (!keyId) {
-        _hidePaymentLoader();
-        alert('Payment gateway is not configured. Please contact support.');
-        return;
-      }
+      const isDodo = config?.provider === 'dodopayments' || config?.dodopayments?.enabled;
 
       // 2. Detect currency from timezone
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const currency = (tz === 'Asia/Calcutta' || tz === 'Asia/Kolkata') ? 'INR' : 'USD';
 
-      // 3. Create Razorpay order on backend (amount converted from USD at live rate)
+      // 3. Create payment order / checkout session on backend
       const orderResp = await fetch(`${API_BASE_URL}/api/create-order`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -2535,12 +2530,20 @@ window.AegisDashboard = {
       const orderData = await orderResp.json();
 
       // 4. Handle DODO Payments Checkout Redirect
-      if (orderData.checkout_url || orderData.provider === 'dodopayments') {
+      if (isDodo || orderData.checkout_url || orderData.provider === 'dodopayments') {
         _hidePaymentLoader();
         if (orderData.checkout_url) {
           window.location.href = orderData.checkout_url;
           return;
         }
+      }
+
+      // 5. Fallback to Razorpay if DODO is disabled
+      const keyId = config?.razorpay?.key_id;
+      if (!keyId) {
+        _hidePaymentLoader();
+        alert('Payment gateway is not configured. Please contact support.');
+        return;
       }
 
       // 4. Load Razorpay checkout.js on-demand
