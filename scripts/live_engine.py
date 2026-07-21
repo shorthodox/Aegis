@@ -2585,6 +2585,7 @@ class LiveEngine:
         self._last_loss_time:   Dict[str, float] = {}   # last LOSING close per token (post-loss cooldown)
         self._last_close_side:  Dict[str, str]   = {}
         self._pending_alert: Dict[str, float]    = {}      # 'SYM|SIDE' -> last time it was PENDING (Telegram dedup)
+        self._armed_pending_setups: Dict[str, Dict[str, Any]] = {}  # Persistent queue of ARMED signals waiting for level / 5m turn
         self._last_close_reason: Dict[str, str]  = {}   # reason of the most recent close (for reversal-flip throw)
         self._spreads:          Dict[str, float] = {}   # symbol → book spread % (UWGS dead-market veto)
         self._news_lock:        Tuple[bool, str] = (False, '')   # (locked?, label) — scheduled macro event
@@ -3756,6 +3757,7 @@ class LiveEngine:
                             if _early_5m_confirmed:
                                 result['off_level_fire'] = {'reason': _why_m, 'pattern': _pattern_str}
                                 result['reversal_pattern'] = _pattern_str
+                                self._armed_pending_setups.pop(symbol, None)
                                 print(f'[{symbol}] MODEL EARLY REVERSAL FIRE {new_side}: {_why_m} — '
                                       f'5m {_pattern_str} confirmed genuine market reversal before reaching fire zone; firing now')
                                 if symbol in self.last_signals:
@@ -3763,6 +3765,12 @@ class LiveEngine:
                             else:
                                 print(f'[{symbol}] MODEL PENDING {new_side}: {_why_m} — '
                                       f'holding for the level tag or a 5m reversal candle')
+                                self._armed_pending_setups[symbol] = {
+                                    'side': new_side,
+                                    'target': round(_target_m, 10) if _target_m else None,
+                                    'reason': _why_m,
+                                    'armed_time': time.time(),
+                                }
                                 if symbol in self.last_signals:
                                     self.last_signals[symbol]['fire']            = False
                                     self.last_signals[symbol]['signal']          = 'HOLD'
@@ -3784,6 +3792,7 @@ class LiveEngine:
                                 'level': round(_target_m, 10), 'role': _role_m,
                                 'dist_pct': round(_near_pct_m, 3) if _near_pct_m is not None else None,
                                 'trigger': 'at_level' if _at_level_m else 'tag_reject'}
+                        self._armed_pending_setups.pop(symbol, None)
                         if symbol in self.last_signals:
                             self.last_signals[symbol]['pending_entry'] = False
 
