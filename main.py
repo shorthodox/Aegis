@@ -4300,7 +4300,13 @@ async def payments_webhook(request: Request):
     payload_data = data.get("data") or data.get("payload", {})
     metadata = payload_data.get("metadata") or {}
     user_id = metadata.get("user_id") or payload_data.get("customer", {}).get("metadata", {}).get("user_id")
-    plan = metadata.get("plan") or "pro"
+    
+    # Reverse lookup DODO Product ID to internal plan tier (basic, intermediate, pro)
+    product_id_map = {v: k for k, v in DODO_PRODUCT_IDS.items() if v}
+    pid = payload_data.get("product_id") or payload_data.get("subscription", {}).get("product_id")
+    plan = metadata.get("plan") or product_id_map.get(pid) or payload_data.get("plan")
+    if plan not in ("basic", "intermediate", "pro"):
+        plan = "intermediate"
 
     if event in ("payment.succeeded", "subscription.active", "subscription.created", "subscription.activated", "payment.captured") and user_id:
         user_ref = db.collection("users").document(user_id)

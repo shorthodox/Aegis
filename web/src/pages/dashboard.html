@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en" class="dark">
 
 <head>
@@ -2212,17 +2212,32 @@
     <script type="module" src="/web/src/scripts/dashboard.js?v=80.0"></script>
     <script type="module" src="/web/src/scripts/trading-rooms.js?v=80.0"></script>
 
-    <!-- Payment return handler: Cashfree _self redirect lands here with ?order_id=... -->
+    <!-- Payment return handler: DODO Payments / Cashfree redirect lands here with ?status=success&plan=... -->
     <script>
     (function () {
       var params = new URLSearchParams(window.location.search);
-      var orderId = params.get('order_id');
-      if (!orderId) return;
+      var orderId = params.get('order_id') || params.get('payment_id');
+      var plan = params.get('plan');
+      var status = params.get('status');
+
+      if (!orderId && !status) return;
 
       // Clean the URL so a reload doesn't re-trigger the banner
       try {
         history.replaceState(null, '', window.location.pathname);
       } catch (e) {}
+
+      // Trigger verification API if plan parameter exists
+      if (plan && ['basic', 'intermediate', 'pro'].indexOf(plan) !== -1) {
+        var token = localStorage.getItem('access_token') || localStorage.getItem('authToken');
+        if (token) {
+          fetch('/api/verify-payment', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ plan: plan, payment_id: orderId || 'dodo_return' })
+          }).catch(function(e){ console.error('Return verify error:', e); });
+        }
+      }
 
       // Show a non-blocking success banner at the top of the page
       var banner = document.createElement('div');
@@ -2233,7 +2248,7 @@
         'background:rgba(0,242,255,0.12)', 'border-bottom:1px solid rgba(0,242,255,0.3)',
         'color:#00f2ff', 'backdrop-filter:blur(8px)',
       ].join(';');
-      banner.innerHTML = '<span style="font-size:1.1em;">✅</span> Payment received — your subscription is being activated. This may take a moment.';
+      banner.innerHTML = '<span style="font-size:1.1em;">✅</span> Payment received — your ' + (plan ? plan.toUpperCase() : '') + ' subscription has been activated!';
 
       var closeBtn = document.createElement('button');
       closeBtn.textContent = '✕';
