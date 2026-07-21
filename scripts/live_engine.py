@@ -2585,6 +2585,7 @@ class LiveEngine:
         self._last_loss_time:   Dict[str, float] = {}   # last LOSING close per token (post-loss cooldown)
         self._last_close_side:  Dict[str, str]   = {}
         self._pending_alert: Dict[str, float]    = {}      # 'SYM|SIDE' -> last time it was PENDING (Telegram dedup)
+        self._blocked_alert: Dict[str, float]    = {}      # 'SYM|SIDE' -> last time it was BLOCKED (Telegram dedup)
         self._armed_pending_setups: Dict[str, Dict[str, Any]] = {}  # Persistent queue of ARMED signals waiting for level / 5m turn
         self._last_close_reason: Dict[str, str]  = {}   # reason of the most recent close (for reversal-flip throw)
         self._spreads:          Dict[str, float] = {}   # symbol → book spread % (UWGS dead-market veto)
@@ -2940,6 +2941,24 @@ class LiveEngine:
                     'direction':      str(sig.get('pending_side') or '').upper(),
                     'pending_target': sig.get('pending_target'),
                     'timestamp':      _iso,
+                })
+        except Exception:
+            pass
+
+    def _notify_blocked(self, symbol: str, side: str, price: float, reason: str) -> None:
+        """Dispatch a Telegram notification for an UNFIRED · BLOCKED model lean (deduplicated)."""
+        try:
+            key = f"{symbol}|{side}"
+            now = time.time()
+            if now - self._blocked_alert.get(key, 0.0) >= 1800:
+                self._blocked_alert[key] = now
+                from scripts.notifications.dispatcher import get_notifier
+                get_notifier().send_blocked({
+                    'symbol': symbol,
+                    'direction': side,
+                    'current_price': price,
+                    'structure_reason': reason,
+                    'timestamp': datetime.now(timezone.utc).isoformat(),
                 })
         except Exception:
             pass
@@ -3440,13 +3459,14 @@ class LiveEngine:
                         _bos_conflict = ((new_side == 'BUY'  and _bos_sig < 0) or
                                          (new_side == 'SELL' and _bos_sig > 0))
                         if _bos_conflict:
+                            _why_bos = f'{new_side} opposes active BOS/CHoCH (market changing moving path)'
                             print(f'[{symbol}] MODEL BLOCK {new_side}: BOS_CONFLICT — market changing moving path (BOS={_bos_sig:+.0f} opposes {new_side})')
+                            self._notify_blocked(symbol, new_side, price, _why_bos)
                             if symbol in self.last_signals:
                                 self.last_signals[symbol]['fire']           = False
                                 self.last_signals[symbol]['signal']         = 'HOLD'
                                 self.last_signals[symbol]['bos_blocked']    = True
-                                self.last_signals[symbol]['structure_reason'] = (
-                                    f'{new_side} opposes active BOS/CHoCH (market changing moving path)')
+                                self.last_signals[symbol]['structure_reason'] = _why_bos
                             self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                             return
 
@@ -4077,15 +4097,16 @@ class LiveEngine:
                             (new_side == 'SELL' and _reg == _REGIME_TRENDING_BEAR) or
                             (new_side == 'BUY'  and _reg == _REGIME_TRENDING_BULL))
                         if _trend_follow:
+                            _why_tf = f'{new_side} in {_reg} follows trend (fade-only strategy)'
                             print(f'[{symbol}] MODEL BLOCK {new_side}: TREND_FOLLOW — '
                                   f'{new_side} in {_reg} follows the trend; only counter-'
                                   f'trend reversals at exhaustion are taken (BUY in BEAR at support / SELL in BULL at resistance)')
+                            self._notify_blocked(symbol, new_side, price, _why_tf)
                             if symbol in self.last_signals:
                                 self.last_signals[symbol]['fire']                = False
                                 self.last_signals[symbol]['signal']              = 'HOLD'
                                 self.last_signals[symbol]['trend_follow_blocked'] = True
-                                self.last_signals[symbol]['structure_reason']    = (
-                                    f'{new_side} follows {_reg} — fade-only')
+                                self.last_signals[symbol]['structure_reason']    = _why_tf
                             self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                             return
                         _ct_buy  = (new_side == 'BUY'  and _reg == _REGIME_TRENDING_BEAR)
@@ -4343,6 +4364,19 @@ class LiveEngine:
                             print(f'[{symbol}] MODEL FIRE {new_side} tier={_risk_tier} -> PAPER '
                                   f'({_why_paper}) edge={_edge_q:.0f}'
                                   f'{" warn=" + ",".join(_warn) if _warn else ""}')
+                            try:
+                                from scripts.notifications.dispatcher import get_notifier
+                                get_notifier().send_observation({
+                                    'symbol': symbol,
+                                    'direction': new_side,
+                                    'current_price': price,
+                                    'stop_loss': float(result.get('stop_loss', 0) or 0),
+                                    'take_profit_1': float(result.get('take_profit_1', 0) or 0),
+                                    'paper_reason': _why_paper,
+                                    'timestamp': datetime.now(timezone.utc).isoformat(),
+                                })
+                            except Exception:
+                                pass
                             self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                             return
 

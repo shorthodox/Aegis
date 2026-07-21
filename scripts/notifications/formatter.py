@@ -317,3 +317,55 @@ def format_exit_telegram(
         f"_AEGIS AI Signal Bot_",
     ]
     return "\n".join(lines)
+
+
+def format_observation_telegram(sig: Dict[str, Any]) -> str:
+    """Build a Telegram Markdown message for a signal under paper observation."""
+    direction = sig.get("direction", "BUY")
+    symbol    = sig.get("symbol", "?")
+    price     = float(sig.get("current_price") or sig.get("price") or 0)
+    sl        = float(sig.get("stop_loss") or 0)
+    tp1       = float(sig.get("take_profit_1") or 0)
+    reason    = sig.get("paper_reason") or "Internal paper validation"
+    dir_icon  = "📈" if direction == "BUY" else "📉"
+    ts        = (sig.get("timestamp") or "")[:16].replace("T", " ")
+
+    lines = [
+        f"🧪 *TRADABLE · UNDER OBSERVATION — {symbol}*",
+        f"",
+        f"{dir_icon} Direction: *{direction}*",
+        f"💰 *Entry:* `{_px(price)}`",
+        f"🛑 *Stop Loss:* `{_px(sl)}`",
+    ]
+    if tp1 > 0:
+        lines.append(f"🎯 *TP1:* `{_px(tp1)}`")
+    lines += [
+        f"📋 *Status:* {reason}",
+        f"",
+        f"🕐 {ts} UTC",
+        f"_AEGIS AI Signal Bot_",
+    ]
+    return "\n".join(lines)
+
+
+def format_blocked_telegram(sig: Dict[str, Any]) -> str:
+    """Build a Telegram Markdown message for an unfired/blocked model lean."""
+    direction = sig.get("direction", "BUY")
+    symbol    = sig.get("symbol", "?")
+    price     = float(sig.get("current_price") or sig.get("price") or 0)
+    reason    = sig.get("structure_reason") or sig.get("blocked_reason") or "Engine guard block"
+    dir_icon  = "📈" if direction == "BUY" else "📉"
+    ts        = (sig.get("timestamp") or "")[:16].replace("T", " ")
+
+    lines = [
+        f"🚫 *UNFIRED · BLOCKED — {symbol}*",
+        f"",
+        f"{dir_icon} Model Lean: *{direction}* @ `{_px(price)}`",
+        f"🛡 *Guard Reason:* {reason}",
+        f"",
+        f"The model detected a potential lean but AEGIS engine guards prevented entry.",
+        f"",
+        f"🕐 {ts} UTC",
+        f"_AEGIS AI Signal Bot_",
+    ]
+    return "\n".join(lines)

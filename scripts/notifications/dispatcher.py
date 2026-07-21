@@ -40,6 +40,8 @@ from scripts.notifications.formatter import (
     format_exit_telegram,
     format_exit_whatsapp,
     format_pending_telegram,
+    format_observation_telegram,
+    format_blocked_telegram,
 )
 from scripts.notifications.discord_notifier import send_discord
 from scripts.notifications.telegram_notifier import send_telegram
@@ -263,6 +265,26 @@ class NotificationDispatcher:
                 return
             self._pending_ts.append(now_ts)
         tg = format_pending_telegram(sig)
+        self._pool.submit(self._do_send, cfg, None, tg, None)
+
+    def send_observation(self, sig: Dict[str, Any]) -> None:
+        """Dispatch a notification for a signal under TRADABLE · UNDER OBSERVATION (paper validation)."""
+        cfg = self._load_settings()
+        if not cfg.get("enabled", True):
+            return
+        if self._in_quiet_hours(cfg.get("quiet_hours") or {}):
+            return
+        tg = format_observation_telegram(sig)
+        self._pool.submit(self._do_send, cfg, None, tg, None)
+
+    def send_blocked(self, sig: Dict[str, Any]) -> None:
+        """Dispatch a notification for an UNFIRED · BLOCKED model lean."""
+        cfg = self._load_settings()
+        if not cfg.get("enabled", True):
+            return
+        if self._in_quiet_hours(cfg.get("quiet_hours") or {}):
+            return
+        tg = format_blocked_telegram(sig)
         self._pool.submit(self._do_send, cfg, None, tg, None)
 
     def send_exit(
