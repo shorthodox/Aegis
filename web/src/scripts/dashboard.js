@@ -1,4 +1,4 @@
-﻿import { initializeTrialCountdown, fetchTrialStartFromFirestore } from './trial-countdown.js';
+import { initializeTrialCountdown, fetchTrialStartFromFirestore } from './trial-countdown.js';
 import { auth, db } from './gatekeeper.js?v=80.0';
 import { doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js';
 
@@ -696,35 +696,34 @@ window.updateMarketCardSignalBadges = function updateMarketCardSignalBadges() {
     const card = document.getElementById(`market-card-${idStr}`);
 
     if (match) {
-      // Only a FIRED signal counts as a directional setup. The rest of the app
-      // (SELL/BUY Setups, cockpit, card data-dir) all require signal.fire; showing
-      // the raw bias here made the overview flag SHORT/LONG for tokens that never
-      // fired (e.g. ETH/SOL SHORT bias), so it disagreed with the "1 signal" count
-      // in SELL Setups. Gate on fire so the overview matches the fired-only views.
       const fired = match.fire === true;
-      const dir = (match.direction || match.side || '').toUpperCase();
-      const isLong  = fired && (dir === 'LONG'  || dir === 'BUY');
-      const isShort = fired && (dir === 'SHORT' || dir === 'SELL');
+      const pendSide = (match.pending_entry === true) ? (match.pending_side || '').toUpperCase() : '';
+      const isPending = !fired && (pendSide === 'BUY' || pendSide === 'SELL');
+      const dir = (fired ? (match.direction || match.side || '') : pendSide).toUpperCase();
+      const isLong  = (fired && (dir === 'LONG'  || dir === 'BUY'))  || (isPending && pendSide === 'BUY');
+      const isShort = (fired && (dir === 'SHORT' || dir === 'SELL')) || (isPending && pendSide === 'SELL');
       const isDirectional = isLong || isShort;
 
       if (isDirectional) {
-        badge.textContent = isLong ? 'LONG' : 'SHORT';
+        badge.textContent = isPending ? (isLong ? 'LONG · ARMED' : 'SHORT · ARMED') : (isLong ? 'LONG' : 'SHORT');
         badge.className = `text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border ${
-          isLong
-            ? 'bg-green-500/20 text-green-400 border-green-500/40'
-            : 'bg-red-500/20 text-red-400 border-red-500/40'
+          isPending
+            ? 'bg-amber-500/20 text-amber-400 border-amber-500/40 animate-pulse'
+            : isLong
+              ? 'bg-green-500/20 text-green-400 border-green-500/40'
+              : 'bg-red-500/20 text-red-400 border-red-500/40'
         }`;
         badge.classList.remove('hidden');
 
         if (card) {
-          card.classList.remove('border-cyan/40', 'border-green-500/50', 'border-red-500/50');
-          card.classList.add(isLong ? 'border-green-500/50' : 'border-red-500/50');
+          card.classList.remove('border-cyan/40', 'border-green-500/50', 'border-red-500/50', 'border-amber-500/50');
+          card.classList.add(isPending ? 'border-amber-500/50' : (isLong ? 'border-green-500/50' : 'border-red-500/50'));
         }
       } else {
-        // NEUTRAL or unknown direction â€” hide badge, neutral border
+        // NEUTRAL or unknown direction — hide badge, neutral border
         badge.classList.add('hidden');
         if (card) {
-          card.classList.remove('border-green-500/50', 'border-red-500/50');
+          card.classList.remove('border-green-500/50', 'border-red-500/50', 'border-amber-500/50');
           card.classList.add('border-cyan/40');
         }
       }

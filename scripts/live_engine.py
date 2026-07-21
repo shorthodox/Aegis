@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 live_engine.py — Aegis-1 Live Signal Engine  (Glass-Box Adaptive)
 ============================================================================
@@ -3410,10 +3410,7 @@ class LiveEngine:
                                 self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                                 return
 
-                        # ── Guard C: no-trade regime (liquidity trap) ─────────────
-                        # The legacy Gate 1 hard-blocked NO_TRADE_REGIMES; the
-                        # model-first path had dropped it, letting SAND + HBAR fire
-                        # inside a LIQUIDITY TRAP (2026-07-13).
+                        # ── Guard C: no-trade regime & Volatile Compression / BOS gates ───────────
                         _reg0 = regime.regime if regime else 'UNKNOWN'
                         if _reg0 in self.NO_TRADE_REGIMES:
                             print(f'[{symbol}] MODEL BLOCK {new_side}: NO_TRADE_REGIME={_reg0}')
@@ -3423,6 +3420,51 @@ class LiveEngine:
                                 self.last_signals[symbol]['regime_blocked'] = True
                             self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                             return
+
+                        # Check BOS (Break of Structure) & CHoCH to catch "market changing moving path"
+                        _bos_sig = 0.0
+                        try:
+                            _c1h_bos = await self._fetch_candles(symbol, '1h', self.CONFIRM_BOS_LOOKBACK + 5)
+                            _closed1h_bos = _c1h_bos[:-1] if len(_c1h_bos) >= 2 else []
+                            if _closed1h_bos:
+                                _bos_info = _detect_bos_choch(_closed1h_bos, lookback=self.CONFIRM_BOS_LOOKBACK)
+                                _bos_sig = float(_bos_info.get('signal', 0.0) or 0.0)
+                        except Exception:
+                            _bos_sig = 0.0
+
+                        # 1. Opposing BOS Veto: Market is changing moving path in opposite direction
+                        _bos_conflict = ((new_side == 'BUY'  and _bos_sig < 0) or
+                                         (new_side == 'SELL' and _bos_sig > 0))
+                        if _bos_conflict:
+                            print(f'[{symbol}] MODEL BLOCK {new_side}: BOS_CONFLICT — market changing moving path (BOS={_bos_sig:+.0f} opposes {new_side})')
+                            if symbol in self.last_signals:
+                                self.last_signals[symbol]['fire']           = False
+                                self.last_signals[symbol]['signal']         = 'HOLD'
+                                self.last_signals[symbol]['bos_blocked']    = True
+                                self.last_signals[symbol]['structure_reason'] = (
+                                    f'{new_side} opposes active BOS/CHoCH (market changing moving path)')
+                            self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                            return
+
+                        # 2. VOLATILE_COMPRESSION pre-breakout squeeze gate:
+                        # In VOLATILE_COMPRESSION, market is coiling pre-breakout. Unconfirmed buys/sells
+                        # without BOS in signal direction or extreme S/R location are bad signals.
+                        if _reg0 == _REGIME_VOLATILE_COMPRESS:
+                            _cmpr_confirmed = ((new_side == 'BUY'  and _bos_sig > 0) or
+                                               (new_side == 'SELL' and _bos_sig < 0))
+                            _rp_now0 = _range_pos(result)
+                            _cmpr_at_extreme = ((new_side == 'BUY'  and _rp_now0 <= self.STRUCT_SUPPORT_ZONE) or
+                                                (new_side == 'SELL' and _rp_now0 >= self.STRUCT_RESISTANCE_ZONE))
+                            if not (_cmpr_confirmed or _cmpr_at_extreme):
+                                print(f'[{symbol}] MODEL BLOCK {new_side}: VOLATILE_COMPRESSION — coiling pre-breakout squeeze requires BOS confirmation in signal direction')
+                                if symbol in self.last_signals:
+                                    self.last_signals[symbol]['fire']           = False
+                                    self.last_signals[symbol]['signal']         = 'HOLD'
+                                    self.last_signals[symbol]['regime_blocked'] = True
+                                    self.last_signals[symbol]['structure_reason'] = (
+                                        f'{new_side} in VOLATILE_COMPRESSION without BOS confirmation or extreme location')
+                                self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                                return
 
                         # ── Guard O: exhaustion symmetry — never chase capitulation ──
                         # A SELL at oversold shorts the squeeze zone; a BUY at over-
@@ -4019,25 +4061,17 @@ class LiveEngine:
                             (new_side == 'SELL' and _reg == _REGIME_TRENDING_BEAR) or
                             (new_side == 'BUY'  and _reg == _REGIME_TRENDING_BULL))
                         if _trend_follow:
-                            if self.TRUST_MODEL_FIRE:
-                                # v77: trend-following is no longer the suspect class —
-                                # the day-tide gate (Guard T below) now decides
-                                # direction discipline at the market level. User
-                                # doctrine update 2026-07-19: trade WITH the day.
-                                print(f'[{symbol}] TREND_FOLLOW {new_side} in {_reg} — '
-                                      f'allowed; Guard T (day tide) governs direction')
-                            else:
-                                print(f'[{symbol}] MODEL BLOCK {new_side}: TREND_FOLLOW — '
-                                      f'{new_side} in {_reg} follows the trend; only counter-'
-                                      f'trend reversals at exhaustion are taken')
-                                if symbol in self.last_signals:
-                                    self.last_signals[symbol]['fire']                = False
-                                    self.last_signals[symbol]['signal']              = 'HOLD'
-                                    self.last_signals[symbol]['trend_follow_blocked'] = True
-                                    self.last_signals[symbol]['structure_reason']    = (
-                                        f'{new_side} follows {_reg} — fade-only')
-                                self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
-                                return
+                            print(f'[{symbol}] MODEL BLOCK {new_side}: TREND_FOLLOW — '
+                                  f'{new_side} in {_reg} follows the trend; only counter-'
+                                  f'trend reversals at exhaustion are taken (BUY in BEAR at support / SELL in BULL at resistance)')
+                            if symbol in self.last_signals:
+                                self.last_signals[symbol]['fire']                = False
+                                self.last_signals[symbol]['signal']              = 'HOLD'
+                                self.last_signals[symbol]['trend_follow_blocked'] = True
+                                self.last_signals[symbol]['structure_reason']    = (
+                                    f'{new_side} follows {_reg} — fade-only')
+                            self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                            return
                         _ct_buy  = (new_side == 'BUY'  and _reg == _REGIME_TRENDING_BEAR)
                         _ct_sell = (new_side == 'SELL' and _reg == _REGIME_TRENDING_BULL)
                         if _ct_buy or _ct_sell:

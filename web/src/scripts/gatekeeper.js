@@ -1691,25 +1691,20 @@ function renderSignals(signals) {
                      : 'HOLD';
     const _strengthLabel = _fired ? (signal.signal_strength || 'NORMAL')
                          : _isPending ? 'PENDING' : 'NEUTRAL';
-    // v77.3: paper fires (doctrine-suspect class graded off-record) must be
-    // visually distinct — they never appear on the public track record, and
-    // unmarked they made the setup rooms disagree with it (user report:
-    // "all 5 executed are BUY" while 3 unmarked paper SELLs sat in the room).
     const paperBadge = (_fired && _isPaper)
-      ? '<span class="bg-amber-500/10 text-amber-400 border border-amber-500/40 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider" title="Tradeable, but under observation — AEGIS is validating this signal class on its internal paper book before it joins the public track record. Watch it play out first and size down if you take it.">PAPER</span>'
+      ? '<span class="bg-amber-500/15 text-amber-400 border border-amber-500/50 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider" title="Tradeable, but under observation — AEGIS is validating this signal class on its internal paper book before it joins the public track record. Watch it play out first and size down if you take it.">TRADABLE · UNDER OBSERVATION</span>'
       : '';
     const timeframe = signal.timeframe || '1h'; // Default to 1h if not provided
     const signalStatus = signal.status || getSignalStatus(signal);
     const signalClass = getSignalClass(signalType, signalStatus);
-    const cardTypeClass = getSignalCardType(_fired ? signal.direction : 'NEUTRAL');
+    const cardTypeClass = getSignalCardType(_fired ? signal.direction : (_isPending ? (_pendUp === 'BUY' ? 'LONG' : 'SHORT') : 'NEUTRAL'));
     const sigUp = signalType.toUpperCase();
-    // Fired-only rooms (BUY/SELL setups) key on data-dir: a FRESH fire,
-    // nothing else — pending, HOLD and stale ghosts stay out of them.
+    // Fired-only rooms (BUY/SELL setups) key on data-dir: fired or armed/pending setups
     const dirAttr = _fired
       ? ((sigUp.includes('BUY') || _dirShow === 'LONG') ? 'buy'
         : (sigUp.includes('SELL') || _dirShow === 'SHORT') ? 'sell'
         : 'hold')
-      : 'hold';
+      : (_isPending ? (_pendUp === 'BUY' ? 'buy' : (_pendUp === 'SELL' ? 'sell' : 'hold')) : 'hold');
     // ai_prob is already on 0-100 scale (edge_score from live engine)
     const confidence = Math.min(Math.max(signal.ai_prob || 0, 0), 100);
 
@@ -1724,8 +1719,12 @@ function renderSignals(signals) {
       statusIndicator = ' opacity-50';
     } else if (_isPending) {
       const _pr = String(signal.pending_reason || 'waiting for price to reach its support/resistance level and confirm').replace(/"/g, "'");
-      statusBadge = `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/40 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider" title="Armed — ${_pr}">⏳ PENDING @ S/R</span>`;
-      statusIndicator = ' opacity-80';
+      statusBadge = `<span class="bg-amber-500/15 text-amber-400 border border-amber-500/50 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider animate-pulse" title="Armed — ${_pr}">⏳ ARMED · WAITING FOR LEVEL</span>`;
+      statusIndicator = ' opacity-90';
+    } else if (!_fired) {
+      const _blkReason = String(signal.structure_reason || 'Engine blocked').replace(/"/g, "'");
+      statusBadge = `<span class="bg-gray-500/20 text-gray-400 border border-gray-500/40 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider" title="${_blkReason}">UNFIRED · BLOCKED</span>`;
+      statusIndicator = ' opacity-50';
     }
 
     let directionBadge = '';
@@ -1734,9 +1733,11 @@ function renderSignals(signals) {
     } else if (_fired && _dirShow === 'SHORT') {
       directionBadge = '<span class="bg-red-500/20 text-red-400 border border-red-500/50 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider">SHORT</span>';
     } else if (_isPending && _pendUp === 'BUY') {
-      directionBadge = '<span class="bg-green-500/10 text-green-400 border border-green-500/40 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider">LONG · PENDING</span>';
+      directionBadge = '<span class="bg-green-500/20 text-green-400 border border-green-500/50 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider">LONG · ARMED</span>';
     } else if (_isPending && _pendUp === 'SELL') {
-      directionBadge = '<span class="bg-red-500/10 text-red-400 border border-red-500/40 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider">SHORT · PENDING</span>';
+      directionBadge = '<span class="bg-red-500/20 text-red-400 border border-red-500/50 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider">SHORT · ARMED</span>';
+    } else if (!_fired) {
+      directionBadge = '<span class="bg-gray-500/20 text-gray-400 border border-gray-500/40 px-2 py-0.5 rounded text-[10px] ml-2 font-bold tracking-wider">UNFIRED</span>';
     }
 
     const _fmtP = p => {

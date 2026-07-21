@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -2386,7 +2386,7 @@ function renderActiveSignals() {
   TRACK_DATA.signals.forEach(s => { if (s.outcome === 'OPEN') openPos[s.symbol] = s; });
 
   const fired = Object.values(SIGNAL_DATA)
-    .filter(s => s.fire === true)
+    .filter(s => s.fire === true || s.pending_entry === true || s.paper_only === true)
     .sort((a,b) => (b.quality_score||0) - (a.quality_score||0));
 
   // Open positions whose signal is no longer firing (subsequent scans flip it
@@ -2412,14 +2412,15 @@ function renderActiveSignals() {
 
   const rows = [...fired, ...openOnly];
   // Open count comes from the engine's tracked positions — the same source
-  // the dashboard and track record use — so all three views agree. Firing =
-  // signals currently passing the gates (may not have opened a position yet).
+  // the dashboard and track record use — so all three views agree.
   const openCount = Object.keys(openPos).length;
+  const armedCount = fired.filter(s => s.pending_entry === true && !openPos[s.symbol]).length;
+  const activeFiredCount = fired.filter(s => s.fire === true && !s.paper_only && !openPos[s.symbol]).length;
   if (countEl) countEl.textContent =
-    `${openCount} Open · ${fired.filter(s => !openPos[s.symbol]).length} Firing`;
+    `${openCount} Open · ${armedCount} Armed · ${activeFiredCount} Firing`;
 
   if (!rows.length) {
-    tableEl.innerHTML = `<div style="text-align:center;padding:30px;color:var(--dim);font-size:13px">No signals currently fired — all gates blocked</div>`;
+    tableEl.innerHTML = `<div style="text-align:center;padding:30px;color:var(--dim);font-size:13px">No signals currently active — all gates blocked</div>`;
     return;
   }
 
@@ -2443,18 +2444,29 @@ function renderActiveSignals() {
             <th>ATR%</th>
             <th>RSI</th>
             <th>Conf%</th>
-            <th>Position</th>
+            <th>Position / Status</th>
           </tr>
         </thead>
         <tbody>
           ${rows.map(sig => {
-            const isShort = sig.direction === 'SHORT';
+            const isPending = sig.pending_entry === true;
+            const isPaper   = sig.paper_only === true;
+            const pendSide  = isPending ? (sig.pending_side || '').toUpperCase() : '';
+            const dirStr    = sig.direction || (pendSide === 'BUY' ? 'LONG' : (pendSide === 'SELL' ? 'SHORT' : '—'));
+            const isShort   = dirStr === 'SHORT';
             const tp1 = sig._openRow ? sig._pos_tp1 : (isShort ? sig.bear_tp1 : sig.bull_tp1);
             const q   = sig.quality_score || 0;
             const pos = openPos[sig.symbol];
             const pnl = pos ? parseFloat(pos.pnl_pct || 0) : null;
             const pnlStr = pnl !== null ? `<span style="color:${pnl>=0?'var(--green)':'var(--red)'}">${pnl>=0?'+':''}${pnl.toFixed(2)}%</span>` : '—';
             const hasDot = pos ? `<span class="open-pos-dot"></span>` : '';
+
+            const posCol = pos ? pnlStr
+                         : isPending ? `<span style="color:#fbbf24;font-size:11px;font-weight:700">⏳ ARMED @ S/R</span>`
+                         : isPaper ? `<span style="color:#f59e0b;font-size:11px;font-weight:700">TRADABLE (PAPER)</span>`
+                         : '<span style="color:var(--dim);font-size:11px">UNFIRED / BLOCKED</span>';
+
+            const sigLabelStr = pos ? 'OPEN POSITION' : (isPending ? `ARMED (${pendSide || 'WAITING'})` : (sig.signal_strength || sig.signal || 'HOLD').replace('_', ' '));
 
             return `
               <tr onclick="window.location.href='/chart?symbol=${encodeURIComponent(sig.symbol)}&tf=${currentTf}'" title="Open chart for ${sig.symbol}">
@@ -2463,7 +2475,7 @@ function renderActiveSignals() {
                   <div style="font-size:9px;color:var(--dim)">/USDT</div>
                 </td>
                 <td><span class="${isShort ? 'sig-dir-sell' : 'sig-dir-buy'}">${isShort ? '▼ SHORT' : '▲ LONG'}</span></td>
-                <td style="font-size:11px;color:var(--dim)">${(sig.signal_strength||sig.signal||'').replace('_',' ')}</td>
+                <td style="font-size:11px;color:var(--dim)">${sigLabelStr}</td>
                 <td>
                   <div style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:${qualColor(q)}">${q.toFixed(0)}</div>
                   <div class="quality-bar"><div class="quality-fill" style="width:${q}%;background:${qualColor(q)}"></div></div>
@@ -2476,7 +2488,7 @@ function renderActiveSignals() {
                 <td style="font-family:'JetBrains Mono',monospace;color:${(sig.atr_pct||0)>2?'var(--orange)':'var(--dim)'}">${(sig.atr_pct||0).toFixed(2)}%</td>
                 <td style="font-family:'JetBrains Mono',monospace;color:${(sig.rsi||50)>65?'var(--red)':(sig.rsi||50)<35?'var(--green)':'var(--dim)'}">${(sig.rsi||0).toFixed(0)}</td>
                 <td style="font-family:'JetBrains Mono',monospace">${(sig.meta_confidence||0).toFixed(0)}</td>
-                <td>${pos ? pnlStr : '<span style="color:var(--dim);font-size:11px">no trade</span>'}</td>
+                <td>${posCol}</td>
               </tr>
             `;
           }).join('')}
