@@ -2810,7 +2810,9 @@ class LiveEngine:
             batch_count = 0
 
             for sym, sig in self.last_signals.items():
-                if not sig.get('fire') or sig.get('signal', 'HOLD') in ('HOLD', 'FLAT', ''):
+                is_fired = bool(sig.get('fire')) and sig.get('signal', 'HOLD') not in ('HOLD', 'FLAT', '')
+                is_pending = bool(sig.get('pending_entry'))
+                if not (is_fired or is_pending):
                     continue
                 doc_id = sym.replace('/', '_')
                 doc_ref = db.collection('signals').document(doc_id)
@@ -2825,6 +2827,14 @@ class LiveEngine:
 
             if batch_count > 0:
                 batch.commit()
+
+            # Always save local JSON fallback state for REST API endpoints
+            try:
+                state_path = _ROOT / 'data' / 'trader_signals_state.json'
+                state_path.parent.mkdir(parents=True, exist_ok=True)
+                state_path.write_text(_json.dumps(self.last_signals, indent=2, default=str))
+            except Exception:
+                pass
 
         except Exception as _e:
             _FS_DOWN = True   # trip breaker — stop pushing to a broken datastore

@@ -188,20 +188,26 @@ class NotificationDispatcher:
     # ── Internal send ─────────────────────────────────────────────────────────
 
     @staticmethod
-    def _tg_send_all(tg_text: str) -> None:
+    def _tg_send_all(tg_text: str, default_chat_id: str = "") -> None:
         """Send to every connected Telegram chat_id using server-side bot token."""
         import os as _os, json as _json
         token = _os.getenv("TELEGRAM_BOT_TOKEN", "")
         if not token or not tg_text:
             return
+        chat_ids = set()
+        env_chat = default_chat_id or _os.getenv("TELEGRAM_CHAT_ID", "")
+        if env_chat:
+            chat_ids.add(str(env_chat).strip())
         conn_path = _ROOT / "data" / "telegram_connections.json"
-        if not conn_path.exists():
-            return
-        try:
-            connections: Dict[str, str] = _json.loads(conn_path.read_text())
-        except Exception:
-            return
-        for _email, chat_id in connections.items():
+        if conn_path.exists():
+            try:
+                connections: Dict[str, str] = _json.loads(conn_path.read_text())
+                for _email, cid in connections.items():
+                    if cid:
+                        chat_ids.add(str(cid).strip())
+            except Exception:
+                pass
+        for chat_id in chat_ids:
             if chat_id:
                 send_telegram(token, chat_id, tg_text)
 
@@ -214,7 +220,7 @@ class NotificationDispatcher:
     ) -> None:
         # Telegram — server-side bot token, all connected users
         if tg_text:
-            self._tg_send_all(tg_text)
+            self._tg_send_all(tg_text, default_chat_id=cfg.get("telegram_chat_id", ""))
         # Discord webhook
         webhook = cfg.get("discord_webhook_url", "")
         if webhook and discord_payload:
