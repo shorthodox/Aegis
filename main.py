@@ -4129,7 +4129,10 @@ async def create_order(req: CreateOrderRequest, user_id: str = Depends(get_curre
                 "payment_link": True,
                 "product_cart": [
                     {
-                        "product_id": product_id or f"plan_{req.plan}",
+                        "product_id": product_id,
+                        "quantity": 1
+                    } if product_id else {
+                        "product_id": f"plan_{req.plan}",
                         "quantity": 1,
                         "price": _to_subunits(usd_price, "USD")
                     }
