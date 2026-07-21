@@ -4114,13 +4114,35 @@ async def create_order(req: CreateOrderRequest, user_id: str = Depends(get_curre
     if DODO_PAYMENTS_ENABLED:
         try:
             product_id = DODO_PRODUCT_IDS.get(req.plan)
+            
+            # Recurring subscription payload for DODO Payments
             payload = {
                 "billing": {
-                    "city": "",
+                    "city": "New York",
                     "country": "US",
-                    "state": "",
-                    "street": "",
-                    "zipcode": "",
+                    "state": "NY",
+                    "street": "123 Main St",
+                    "zipcode": "10001",
+                },
+                "customer": {
+                    "email": f"user_{user_id[:8]}@aegisignal.pro",
+                    "name": f"AEGIS Subscriber ({user_id[:8]})"
+                },
+                "payment_link": True,
+                "product_id": product_id,
+                "quantity": 1,
+                "return_url": f"https://aegisignal.pro/dashboard?plan={req.plan}&status=success",
+                "metadata": {
+                    "user_id": user_id,
+                    "plan": req.plan
+                }
+            } if product_id else {
+                "billing": {
+                    "city": "New York",
+                    "country": "US",
+                    "state": "NY",
+                    "street": "123 Main St",
+                    "zipcode": "10001",
                 },
                 "customer": {
                     "email": f"user_{user_id[:8]}@aegisignal.pro",
@@ -4129,37 +4151,35 @@ async def create_order(req: CreateOrderRequest, user_id: str = Depends(get_curre
                 "payment_link": True,
                 "product_cart": [
                     {
-                        "product_id": product_id,
-                        "quantity": 1
-                    } if product_id else {
                         "product_id": f"plan_{req.plan}",
                         "quantity": 1,
                         "price": _to_subunits(usd_price, "USD")
                     }
                 ],
-                "total_amount": _to_subunits(usd_price, "USD"),
-                "currency": "USD",
                 "return_url": f"https://aegisignal.pro/dashboard?plan={req.plan}&status=success",
                 "metadata": {
                     "user_id": user_id,
                     "plan": req.plan
                 }
             }
-            dodo_res = await _dodo_post("/payments", payload)
+
+            endpoint = "/subscriptions" if product_id else "/payments"
+            dodo_res = await _dodo_post(endpoint, payload)
+            
             checkout_url = dodo_res.get("payment_link") or dodo_res.get("checkout_url") or dodo_res.get("url")
-            payment_id = dodo_res.get("payment_id") or dodo_res.get("id")
+            payment_id = dodo_res.get("payment_id") or dodo_res.get("subscription_id") or dodo_res.get("id")
+            
             return {
                 "provider": "dodopayments",
                 "checkout_url": checkout_url,
                 "payment_id": payment_id,
                 "order_id": payment_id,
-                "amount": dodo_res.get("total_amount") or _to_subunits(usd_price, "USD"),
+                "amount": dodo_res.get("recurring_pre_tax_amount") or dodo_res.get("total_amount") or _to_subunits(usd_price, "USD"),
                 "currency": "USD"
             }
         except Exception as e:
-            print(f"[DODOPayments] Error creating payment checkout: {e}")
-            if not RAZORPAY_ENABLED:
-                raise HTTPException(status_code=500, detail=f"DODO Payments order creation failed: {str(e)}")
+            print(f"[DODOPayments] Error creating checkout: {e}")
+            raise HTTPException(status_code=500, detail=f"DODO Payments checkout creation failed: {str(e)}")
 
     if RAZORPAY_ENABLED:
         currency = req.currency.upper()
