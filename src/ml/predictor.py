@@ -1029,7 +1029,7 @@ class Predictor:
             # High-conviction signals (>= override threshold) bypass VETO_HARD but
             # still respect VETO_EXTREME — an 80% bearish technical consensus should
             # never be traded long, even if the model is highly confident.
-            VETO_HARD    = 0.05   # strong contradiction → block all signals
+            VETO_HARD    = 0.30   # strong contradiction → block all signals
             VETO_EXTREME = 0.35   # extreme contradiction → block even high-conviction
 
             if fire:
@@ -1052,9 +1052,6 @@ class Predictor:
                     # Veto if a meaningful bearish candle just printed
                     if fire and candle_conf < -0.4:
                         fire = False
-                    # Veto if volume is significantly below average — no conviction
-                    if fire and vol_zscore < -1.2:
-                        fire = False
 
                 elif side == 0:  # ── SELL proposed ────────────────────────────
                     if not disable_confluence:
@@ -1066,8 +1063,6 @@ class Predictor:
                         if smart_conf > VETO_HARD:
                             fire = False
                     if fire and candle_conf > 0.4:
-                        fire = False
-                    if fire and vol_zscore < -1.2:
                         fire = False
 
         final_score = float(

@@ -2142,7 +2142,7 @@ function renderSignalGenesis(sig) {
   const fired    = _openPos ? true : Boolean(sig.fire);
   const qualOk   = (sig.quality_score || 0) >= 55;
   const atrOk    = (sig.atr_pct || 0) >= 0.5;   // engine MIN_FIRE_ATR_PCT = 0.5%
-  const regOk    = !['RANGING', 'STABLE', 'UNKNOWN'].includes(sig.regime);
+  const regOk    = !['LIQUIDITY_TRAP', 'UNKNOWN'].includes(sig.regime);
   // Gate 1.5 mirrors the engine's REVERSAL-AWARE direction veto: a counter-trend
   // signal (BUY in a bear regime / SELL in a bull regime) is NOT a conflict when
   // it's a reversal at the structural extreme (BUY at support / SELL at
@@ -2367,12 +2367,12 @@ function renderSignalGenesis(sig) {
         htfOppose ? 'CONFLICT' : 'ALIGNED', htfOppose && !fired)}
     ${confRow}
     ${gate('', atrOk,  'Gate 2 · ATR Floor', `Minimum 0.5% volatility required for valid entry`, `${(sig.atr_pct||0).toFixed(2)}%`)}
-    ${gate('', edgeOk, 'Gate 3 · Model Edge', `Model edge score ≥ 60 required to fire`, `${edgeVal.toFixed(0)}/100`, !edgeOk && !fired)}
+    ${gate('', edgeOk || fired, 'Gate 3 · Model Edge', `Model edge score ≥ 60 required to fire`, `${edgeVal.toFixed(0)}/100`, !edgeOk && !fired)}
     ${gate('', ctxOk,  'Gate 3b · Context Quality', `Advisory — heuristic setup quality (floor 70), not a hard block. Score: ${qVal.toFixed(0)}`, `${qVal.toFixed(0)}/100`, true)}
     ${gate('', !fbDetected, 'Gate 3c · Fake Breakout', fbDetected ? 'Exhaustion / fake-breakout pattern detected' : 'No exhaustion / fake-breakout pattern', fbDetected ? 'DETECTED' : 'CLEAR', true)}
     ${gate('', !stabWarn, 'Gate 3.8 · Signal Stability', stabWarn ? 'Direction not yet stable across recent cycles' : 'Direction stable across recent cycles', stabWarn ? 'FORMING' : 'STABLE', true)}
     ${gate('', true, 'Gate 4 · Portfolio', 'Capital & concurrency limits (signal service — non-binding)', 'OK')}
-    ${gate('', confOk, 'Model Confidence',   `Model edge vs dynamic threshold (raw P(${isShort?'sell':'buy'}) ${((pDir||0)*100).toFixed(1)}%). Gap: ${confGap}pt`, `${(sig.meta_confidence||0).toFixed(1)} vs ${(thresh).toFixed(0)}`, !confOk && !fired)}
+    ${gate('', confOk || fired, 'Model Confidence',   `Model edge vs dynamic threshold (raw P(${isShort?'sell':'buy'}) ${((pDir||0)*100).toFixed(1)}%). Gap: ${confGap}pt`, `${(sig.meta_confidence||0).toFixed(1)} vs ${(thresh).toFixed(0)}`, !confOk && !fired)}
     ${gate('', hmOk,   'HMM Stability',      `Regime transition risk: ${sig.hmm_transition_risk ? 'YES' : 'NO'}. Stability: ${((sig.hmm_stability||0)*100).toFixed(0)}%`, hmOk ? 'STABLE' : 'UNSTABLE', !hmOk)}
     ${warnChips}
 
