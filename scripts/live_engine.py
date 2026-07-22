@@ -525,8 +525,8 @@ def _reversal_candle(candles: List, want_bullish: bool) -> Optional[str]:
     mid1 = (o1 + x1) / 2.0
 
     if want_bullish:
-        # Hammer: long lower wick (>= half the range), small body, tiny upper wick.
-        if dn2 >= 0.55 * rng2 and up2 <= 0.15 * rng2 and body2 <= 0.35 * rng2:
+        # Hammer: preceding red candle, long lower wick (>= 55% range), small body, tiny upper wick.
+        if prev_red and dn2 >= 0.55 * rng2 and up2 <= 0.15 * rng2 and body2 <= 0.35 * rng2:
             return 'hammer'
         # Bullish engulfing: a red candle then a larger green one engulfing its body.
         if prev_red and cur_green and o2 <= x1 and x2 >= o1 and body2 > body1:
@@ -543,8 +543,8 @@ def _reversal_candle(candles: List, want_bullish: bool) -> Optional[str]:
             if x0 < o0 and body1 <= 0.5 * abs(x0 - o0) and cur_green and x2 > (o0 + x0) / 2.0:
                 return 'morning_star'
     else:
-        # Shooting star: long upper wick (>= half the range), small body, tiny lower wick.
-        if up2 >= 0.55 * rng2 and dn2 <= 0.15 * rng2 and body2 <= 0.35 * rng2:
+        # Shooting star: preceding green candle, long upper wick (>= 55% range), small body, tiny lower wick.
+        if prev_green and up2 >= 0.55 * rng2 and dn2 <= 0.15 * rng2 and body2 <= 0.35 * rng2:
             return 'shooting_star'
         if prev_green and cur_red and o2 >= x1 and x2 <= o1 and body2 > body1:
             return 'bearish_engulfing'
@@ -2389,7 +2389,7 @@ class LiveEngine:
     # (range_position >= 0.5); a SELL in the SUPPORT half is the wrong location
     # and is rejected (mirror for BUY). 0.5 = "nearer its own level than the
     # opposite one." Raise toward 0.65 to demand price sit closer to the level.
-    PENDING_WRONG_LOC_RP = 0.5
+    PENDING_WRONG_LOC_RP = 0.35
     # Telegram pending heads-up de-dup: a (symbol, side) must have been ABSENT
     # from the pending set for at least this long before a fresh pending re-alerts.
     # The timestamp is refreshed every scan a signal is pending, so a continuous
@@ -3763,7 +3763,7 @@ class LiveEngine:
                         # tag+reject fired above and are exempt (a genuine reject can
                         # sit anywhere). Fails OPEN when range_position is missing.
                         _rp_m = result.get('range_position')
-                        if _rp_m is not None and not _at_level_m and not _came_from_m:
+                        if _rp_m is not None and not _at_level_m:
                             _rp_m = float(_rp_m)
                             _wrong_loc_m = ((new_side == 'SELL' and _rp_m < self.PENDING_WRONG_LOC_RP) or
                                             (new_side == 'BUY'  and _rp_m > 1.0 - self.PENDING_WRONG_LOC_RP))
@@ -3790,75 +3790,29 @@ class LiveEngine:
                                       f'approaching {_role_m} {_target_m:.6g} '
                                       f'({_near_pct_m:.2f}% away, needs <= {self.PENDING_NEAR_PCT}% '
                                       f'or a tag+reject)')
-                            # ── v75: A PENDING SIGNAL MUST ALWAYS HAVE A PATH TO FIRE ──
-                            # (user, 2026-07-19: "waiting signals have no way to not
-                            # fire"). Measured live: 20+ armed signals never fired,
-                            # because a BUY fade at an oversold NEW LOW has no tested
-                            # support BELOW it (_target_m is None => pending forever),
-                            # and when price is ABOVE the level the market's second
-                            # outcome — reversing from HERE without the deeper tag —
-                            # had no watcher. Resolution 2: while pending, watch the
-                            # same 5m reversal-candle confirmation Guard J demands;
-                            # the moment it prints, fire THROUGH Guard J (which
-                            # re-verifies) instead of waiting for a touch that may
-                            # never come. The candle stays the hard qualification —
-                            # an unconfirmed pending still waits.
-                            _c5p: list = []
-                            try:
-                                _raw5p = await self._fetch_candles(
-                                    symbol, '5m', self.ENTRY_5M_WINDOW + 2)
-                                _c5p = _raw5p[:-1] if len(_raw5p) >= 2 else []
-                            except Exception:
-                                _c5p = []
-                            _pat_p = (_reversal_candle(_c5p, want_bullish=(new_side == 'BUY'))
-                                      if len(_c5p) >= 3 else None)
-                            # Check 3-bar 5m candle turn (3 of last 4 5m candles closing in signal direction)
-                            _turn_5m = False
-                            if len(_c5p) >= self.ENTRY_5M_WINDOW:
-                                _closed_dir = [
-                                    (c[4] > c[1]) if (new_side == 'BUY') else (c[4] < c[1])
-                                    for c in _c5p[-self.ENTRY_5M_WINDOW:]
-                                ]
-                                if sum(_closed_dir) >= self.ENTRY_5M_MIN:
-                                    _turn_5m = True
+                            print(f'[{symbol}] MODEL PENDING {new_side}: {_why_m} — '
+                                  f'holding for price to reach the {_role_m} level')
+                            self._armed_pending_setups[symbol] = {
+                                'side': new_side,
+                                'target': round(_target_m, 10) if _target_m else None,
+                                'reason': _why_m,
+                                'armed_time': time.time(),
+                            }
+                            if symbol in self.last_signals:
+                                self.last_signals[symbol]['fire']            = False
+                                self.last_signals[symbol]['signal']          = 'HOLD'
+                                self.last_signals[symbol]['pending_entry']    = True
+                                self.last_signals[symbol]['pending_side']     = new_side
+                                self.last_signals[symbol]['pending_target']   = (
+                                    round(_target_m, 10) if _target_m else None)
+                                self.last_signals[symbol]['pending_reason']   = _why_m
+                                self.last_signals[symbol]['structure_reason'] = f'pending — {_why_m}'
+                            self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                            return
 
-                            _early_5m_confirmed = (_pat_p is not None) or _turn_5m
-                            _pattern_str = _pat_p if _pat_p else '3x5m candle turn'
-
-                            if _early_5m_confirmed:
-                                result['off_level_fire'] = {'reason': _why_m, 'pattern': _pattern_str}
-                                result['reversal_pattern'] = _pattern_str
-                                self._armed_pending_setups.pop(symbol, None)
-                                print(f'[{symbol}] MODEL EARLY REVERSAL FIRE {new_side}: {_why_m} — '
-                                      f'5m {_pattern_str} confirmed genuine market reversal before reaching fire zone; firing now')
-                                if symbol in self.last_signals:
-                                    self.last_signals[symbol]['pending_entry'] = False
-                            else:
-                                print(f'[{symbol}] MODEL PENDING {new_side}: {_why_m} — '
-                                      f'holding for the level tag or a 5m reversal candle')
-                                self._armed_pending_setups[symbol] = {
-                                    'side': new_side,
-                                    'target': round(_target_m, 10) if _target_m else None,
-                                    'reason': _why_m,
-                                    'armed_time': time.time(),
-                                }
-                                if symbol in self.last_signals:
-                                    self.last_signals[symbol]['fire']            = False
-                                    self.last_signals[symbol]['signal']          = 'HOLD'
-                                    self.last_signals[symbol]['pending_entry']    = True
-                                    self.last_signals[symbol]['pending_side']     = new_side
-                                    self.last_signals[symbol]['pending_target']   = (
-                                        round(_target_m, 10) if _target_m else None)
-                                    self.last_signals[symbol]['pending_reason']   = _why_m
-                                    self.last_signals[symbol]['structure_reason'] = f'pending — {_why_m}'
-                                self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
-                                return
                         # AT the level, or just tagged-and-rejected it — record and
-                        # fall through to the 3x5m confirmation (Guard J) below, then
-                        # fire. Guard J still ensures price is moving the right way.
-                        # (An off-level v75 fire skips this record: it has no level,
-                        # that is the point — _target_m may even be None.)
-                        if not result.get('off_level_fire') and _target_m is not None:
+                        # fall through to Guard J (5m pattern + momentum confirmation).
+                        if _target_m is not None:
                             result['at_pending_level'] = {
                                 'level': round(_target_m, 10), 'role': _role_m,
                                 'dist_pct': round(_near_pct_m, 3) if _near_pct_m is not None else None,
@@ -3867,19 +3821,7 @@ class LiveEngine:
                         if symbol in self.last_signals:
                             self.last_signals[symbol]['pending_entry'] = False
 
-                        # ── Guard J: 5m momentum alignment (UNIVERSAL) ────────────
-                        # Never enter against the move that is still running. A SELL
-                        # requires the 5m to have ALREADY turned down, a BUY that it
-                        # has turned up. This is the single check that would have
-                        # stopped the 12-short pile-up into a 1h rally (RSI 76-86,
-                        # 1W/8L): 8 of those were VOLATILE_COMPRESSION / RANGING, so
-                        # the counter-trend gate (Guard B) never even engaged.
-                        # Fails CLOSED: no 5m confirmation, NO entry. If the 5m
-                        # feed is unavailable (rate limit / error) the turn cannot
-                        # be confirmed, so the signal WAITS rather than firing blind
-                        # — the old fail-open let a BUY enter into a falling 5m
-                        # whenever the fetch missed. It re-evaluates next scan when
-                        # the 5m is back and the turn (3/4 candles) has formed.
+                        # ── Guard J: 5m momentum alignment & pattern confirmation ──
                         _c5m: list = []
                         try:
                             _raw5 = await self._fetch_candles(
@@ -3887,29 +3829,28 @@ class LiveEngine:
                             _c5m = _raw5[:-1] if len(_raw5) >= 2 else []   # closed only
                         except Exception:
                             _c5m = []
-                        # Confirmation is a real candlestick REVERSAL PATTERN, not
-                        # "3 random green 5m candles" (which is just noise in a
-                        # downtrend and was throwing premature entries). A BUY needs
-                        # a bullish reversal candle (hammer / bullish engulfing /
-                        # harami / piercing / morning star); a SELL the bearish
-                        # mirror. See _reversal_candle. No pattern yet => WAIT.
+
                         _want_up = (new_side == 'BUY')
                         _pat = None
-                        if len(_c5m) >= 3:
+                        if len(_c5m) >= self.ENTRY_5M_WINDOW:
                             _pat = _reversal_candle(_c5m, want_bullish=_want_up)
-                            _confirmed = _pat is not None
-                            _why5m = (f'5m {_pat} confirmed'
-                                      if _pat else
-                                      f'no 5m {"bullish" if _want_up else "bearish"} '
-                                      f'reversal candle yet (hammer/engulfing/harami/star)')
+                            _closed_dir = [
+                                (float(c[4]) > float(c[1])) if _want_up else (float(c[4]) < float(c[1]))
+                                for c in _c5m[-self.ENTRY_5M_WINDOW:]
+                            ]
+                            _n5 = sum(_closed_dir)
+                            _confirmed = (_pat is not None) and (_n5 >= 2)
+                            _why5m = (f'5m {_pat} pattern + {_n5}/{self.ENTRY_5M_WINDOW} directional candles confirmed'
+                                      if _confirmed else
+                                      f'needs 5m {"bullish" if _want_up else "bearish"} '
+                                      f'reversal pattern + 2+ directional candles (pattern={_pat}, dir={_n5})')
                         else:
                             _confirmed = False
                             _why5m = '5m confirmation unavailable (feed down)'
+
                         if not _confirmed:
-                            # v73: HARD again by user decision — no entry without the
-                            # 5m reversal candle, even under trust-model. Fails closed.
                             print(f'[{symbol}] MODEL WAIT {new_side}: {_why5m} — '
-                                  f'not entering without a reversal candle')
+                                  f'not entering without a confirmed reversal candle + 5m momentum')
                             if symbol in self.last_signals:
                                 self.last_signals[symbol]['fire']            = False
                                 self.last_signals[symbol]['signal']          = 'HOLD'
@@ -3942,6 +3883,27 @@ class LiveEngine:
                                 {'level': round(l, 10), 'touches': t} for l, t in _levels]
                         except Exception:
                             _lvl_ctx = None
+
+                        # Strict S/R Location Veto: BUY belongs at SUPPORT (rp <= 0.35),
+                        # SELL belongs at RESISTANCE (rp >= 0.65). Block wrong location entries.
+                        _rp_k = _range_pos(result)
+                        _wrong_range = (
+                            (new_side == 'BUY'  and _rp_k > self.PENDING_WRONG_LOC_RP) or
+                            (new_side == 'SELL' and _rp_k < 1.0 - self.PENDING_WRONG_LOC_RP)
+                        )
+                        if _wrong_range:
+                            _opp_role = 'resistance' if new_side == 'BUY' else 'support'
+                            print(f'[{symbol}] MODEL BLOCK {new_side}: WRONG_LOCATION — '
+                                  f'range_position {_rp_k:.2f} is in the {_opp_role} half; '
+                                  f'a {new_side} belongs at {"support" if new_side == "BUY" else "resistance"} (rp={_rp_k:.2f})')
+                            if symbol in self.last_signals:
+                                self.last_signals[symbol]['fire']             = False
+                                self.last_signals[symbol]['signal']           = 'HOLD'
+                                self.last_signals[symbol]['location_blocked']  = True
+                                self.last_signals[symbol]['pending_entry']     = False
+                                self.last_signals[symbol]['structure_reason']  = f'{new_side} in the {_opp_role} half (rp {_rp_k:.2f})'
+                            self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                            return
 
                         _at_level = False
                         if _lvl_ctx is not None:
