@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 live_engine.py — Aegis-1 Live Signal Engine  (Glass-Box Adaptive)
 ============================================================================
@@ -946,9 +946,17 @@ class SignalQualityFilter:
             _rev_rp = max(0.0, min(1.0, (_rev_price - _rev_sup) / (_rev_res - _rev_sup)))
         else:
             _rev_rp = float(result.get('range_position') or 0.5)
-        is_reversal = (
+        # Strict reversal (requires both extreme location + exhausted oscillator)
+        is_reversal_strict = (
             (side == 'SELL' and _rev_rp >= 0.65 and rsi >= 68) or
             (side == 'BUY'  and _rev_rp <= 0.35 and rsi <= 32)
+        )
+        # Structural reversal: price sits at the support/resistance zone (weaker
+        # than strict reversal but still a valid fade candidate). Used to avoid
+        # double-penalising legitimate counter-trend setups.
+        is_structural_reversal = (
+            (side == 'BUY'  and _rev_rp <= self.STRUCT_SUPPORT_ZONE) or
+            (side == 'SELL' and _rev_rp >= self.STRUCT_RESISTANCE_ZONE)
         )
 
         # ── Positive contributions ────────────────────────────────────────────
@@ -1024,10 +1032,14 @@ class SignalQualityFilter:
         if bias_align:
             score += 5; reasons.append('bias_aligned')
 
-        # +18: reversal setup — offsets the trend-following bonuses a genuine
-        # exhaustion turn necessarily misses (see is_reversal above).
-        if is_reversal:
+        # +18: strict reversal setup — offsets the trend-following bonuses a
+        # genuine exhaustion turn necessarily misses. Structural reversals (at
+        # support/resistance zone) get a smaller bonus so they can still reach
+        # the quality floor when appropriate.
+        if is_reversal_strict:
             score += 18; reasons.append(f'reversal_setup(rp={_rev_rp:.2f},rsi={rsi:.0f})')
+        elif is_structural_reversal:
+            score += 8; reasons.append(f'structural_reversal(rp={_rev_rp:.2f})')
 
         # ── Penalties ─────────────────────────────────────────────────────────
 
@@ -1038,7 +1050,7 @@ class SignalQualityFilter:
         # -15: ranging market — no directional edge, signals are noise.  Skipped
         # for a reversal at the range extreme: SELL at range resistance / BUY at
         # range support IS the high-probability range trade, not noise.
-        if regime.regime == _REGIME_RANGING and not is_reversal:
+        if regime.regime == _REGIME_RANGING and not (is_reversal_strict or is_structural_reversal):
             score -= 15; reasons.append('ranging_market_penalty')
 
         # -10: low volume — no conviction behind the move
@@ -1072,7 +1084,7 @@ class SignalQualityFilter:
                     score += 15; reasons.append('htf_both_bullish')
                 elif _w_bull and _d_bear:
                     score += 10; reasons.append('htf_pullback_buy(w+/d-)')
-                elif _w_bear and _d_bear and not is_reversal:
+                elif _w_bear and _d_bear and not (is_reversal_strict or is_structural_reversal):
                     score -= 20; reasons.append('htf_both_bearish')
                 elif _w_bear and not is_reversal:
                     score -= 10; reasons.append('htf_weekly_bearish')
@@ -1081,7 +1093,7 @@ class SignalQualityFilter:
                     score += 15; reasons.append('htf_both_bearish')
                 elif _w_bear and _d_bull:
                     score += 10; reasons.append('htf_bounce_sell(w-/d+)')
-                elif _w_bull and _d_bull and not is_reversal:
+                elif _w_bull and _d_bull and not (is_reversal_strict or is_structural_reversal):
                     score -= 20; reasons.append('htf_both_bullish')
                 elif _w_bull and not is_reversal:
                     score -= 10; reasons.append('htf_weekly_bullish')
@@ -2423,6 +2435,22 @@ class LiveEngine:
                           f'served from SPOT, so it can never fire (monitor-only)')
                     continue
 
+                # Binary dual-model pair: check BEFORE risk_tier benching so a
+                # dual-direction retrained token isn't permanently benched by
+                # an older meta.json tier flag. If both side models exist, mark
+                # it tradeable regardless of the legacy `risk_tier` setting.
+                if buy_path.exists() and sell_path.exists():
+                    p.meta['tradeable']      = True
+                    p.meta['tradeable_buy']  = True
+                    p.meta['tradeable_sell'] = True
+                    self.predictors[sym] = p
+                    loaded += 1
+                    tradeable += 1
+                    print(f'[LiveEngine] Loaded binary dual model for {sym} (tradeable)')
+                    continue
+
+                # Legacy risk_tier benching: if meta explicitly disables the
+                # current engine `risk_tier`, mark symbol as benched (monitor-only).
                 _tiers = p.meta.get('risk_tier') or {}
                 _benched = bool(_tiers) and not bool(_tiers.get(self.risk_tier, False))
                 if _benched:
@@ -2433,16 +2461,8 @@ class LiveEngine:
                           f'"{self.risk_tier}"; it can never fire (monitor-only)')
                     continue
 
-                if buy_path.exists() and sell_path.exists():
-                    # Binary dual-model pair — force tradeable regardless of meta.json
-                    p.meta['tradeable']      = True
-                    p.meta['tradeable_buy']  = True
-                    p.meta['tradeable_sell'] = True
-                    self.predictors[sym] = p
-                    loaded += 1
-                    tradeable += 1
-                    print(f'[LiveEngine] Loaded binary dual model for {sym} (tradeable)')
-                elif p.model is not None:
+                # Fallback: legacy single-direction model
+                if p.model is not None:
                     self.predictors[sym] = p
                     loaded += 1
                     _is_tradeable = p.meta.get('tradeable', False)
@@ -3517,12 +3537,34 @@ class LiveEngine:
                                 self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                                 return
 
-                        if _target_m is None or (not _at_level_m and not _came_from_m):
+                        # Before placing into pending, check if short-term 5m
+                        # reversal momentum has already printed — if 3 of the
+                        # last ENTRY_5M_WINDOW closed 5m candles align with the
+                        # signal direction or a reversal candlestick pattern is
+                        # present, allow immediate firing as an off-level 5m
+                        # momentum reversal (bypass pending).
+                        _has_5m_reversal = False
+                        try:
+                            _raw5_pre = await self._fetch_candles(symbol, '5m', self.ENTRY_5M_WINDOW + 2)
+                            _c5m_pre = _raw5_pre[:-1] if len(_raw5_pre) >= 2 else []
+                            if len(_c5m_pre) >= self.ENTRY_5M_WINDOW:
+                                _want_up_pre = (new_side == 'BUY')
+                                _pat_pre = _reversal_candle(_c5m_pre, want_bullish=_want_up_pre)
+                                _closed_dir_pre = [
+                                    (float(c[4]) > float(c[1])) if _want_up_pre else (float(c[4]) < float(c[1]))
+                                    for c in _c5m_pre[-self.ENTRY_5M_WINDOW:]
+                                ]
+                                _n5_pre = sum(_closed_dir_pre)
+                                _has_5m_reversal = (_pat_pre is not None) or (_n5_pre >= max(3, self.ENTRY_5M_WINDOW - 1))
+                        except Exception:
+                            _has_5m_reversal = False
+
+                        if _target_m is None or (not _at_level_m and not _came_from_m and not _has_5m_reversal):
                             _why_m = (f'no tested {_role_m} to wait for'
                                       if _target_m is None else
                                       f'approaching {_role_m} {_target_m:.6g} '
                                       f'({_near_pct_m:.2f}% away, needs <= {self.PENDING_NEAR_PCT}% '
-                                      f'or a tag+reject)')
+                                      f'or a tag+reject or 3x5m reversal)')
                             print(f'[{symbol}] MODEL PENDING {new_side}: {_why_m} — '
                                   f'holding for price to reach the {_role_m} level')
                             self._armed_pending_setups[symbol] = {
@@ -3982,11 +4024,29 @@ class LiveEngine:
                         # fixed and the fleet retrained.
                         result['btc_tide'] = await self._btc_tide()
                         _tide_now = str(result['btc_tide'] or 'FLAT')
+                        # Exempt validated reversal fades from the against-tide
+                        # papering. A setup qualifies if it's a strict structural
+                        # extreme (_at_extreme) or a structural reversal at the
+                        # support/resistance zone confirmed by short-term BOS.
+                        _is_extreme_fade = False
+                        try:
+                            _is_extreme_fade = (
+                                _at_extreme or (
+                                    (new_side == 'BUY' and _rp_now <= self.STRUCT_SUPPORT_ZONE and _bos_sig > 0) or
+                                    (new_side == 'SELL' and _rp_now >= self.STRUCT_RESISTANCE_ZONE and _bos_sig < 0)
+                                )
+                            )
+                        except Exception:
+                            _is_extreme_fade = _at_extreme
+
                         if ((new_side == 'BUY' and _tide_now == 'DOWN') or
                                 (new_side == 'SELL' and _tide_now == 'UP')):
-                            _trust_warns.append('against_tide')
-                            print(f'[{symbol}] AGAINST_TIDE {new_side}: BTC 4h tide is '
-                                  f'{_tide_now} — papered until this class proves itself')
+                            if not _is_extreme_fade:
+                                _trust_warns.append('against_tide')
+                                print(f'[{symbol}] AGAINST_TIDE {new_side}: BTC 4h tide is '
+                                      f'{_tide_now} — papered until this class proves itself')
+                            else:
+                                print(f'[{symbol}] AGAINST_TIDE EXEMPTION {new_side}: Reversal fade at S/R level — firing live')
 
                         # ── Guard G: safe mode (legacy Gate 3.5) ──────────────────
                         # After 3 consecutive global losses, raise the edge floor to
