@@ -2289,193 +2289,7 @@ class LiveEngine:
     # fires — precisely the "at a level is mandatory" design that collapsed the
     # rate in v25/v38. The pending queue is what rescues it: the setups are not
     # discarded, they wait. Expect a quieter, spikier feed by design.
-    PENDING_NEAR_PCT  = 0.3   # price within 0.3% of the level counts as "at" it
-
-    # ── Guard M refinement: HOLD only when APPROACHING the level ─────────────
-    # The hold is for a signal that fires MID-RANGE while still travelling
-    # TOWARD its level (a SELL coming up from support toward resistance): it
-    # waits for the touch. It must NOT hold a signal that has ALREADY tagged
-    # its level and is now receding — a SELL where price hit resistance and is
-    # falling away, a BUY where price hit support and is bouncing up. There the
-    # reversal is already in play; waiting for a second touch that may never
-    # come is a delayed/missed entry (the SEI/SUI pending-shorts case). So if
-    # price has tagged the target level within the last PENDING_TAG_LOOKBACK
-    # closed 1h candles (a wick within PENDING_TAG_TOL_PCT of it) and is now on
-    # the correct side, the signal fires immediately (still through Guard J's
-    # 3x5m confirmation, which ensures price is actually moving away, not back
-    # toward the level). Only a genuinely approaching mid-range signal waits.
-    PENDING_TAG_LOOKBACK = 6     # closed 1h candles to scan for a recent tag
-    PENDING_TAG_TOL_PCT  = 0.4   # a wick within 0.4% of the level counts as tagged
-    # The pending TARGET is drawn from DEEP, MULTI-TIMEFRAME structure (1h+4h+1d,
-    # weeks-to-years) so the engine waits at the NEAREST significant S/R, not the
-    # most-touched far old high. A level must be touched this many times across
-    # the pooled history to count (filters one-off wicks). See _structural_levels.
-    PENDING_TARGET_MIN_TOUCHES = 3
-    # A SELL may only wait while price is in the RESISTANCE half of its range
-    # (range_position >= 0.5); a SELL in the SUPPORT half is the wrong location
-    # and is rejected (mirror for BUY). 0.5 = "nearer its own level than the
-    # opposite one." Raise toward 0.65 to demand price sit closer to the level.
-    PENDING_WRONG_LOC_RP = 0.35
-    # Telegram pending heads-up de-dup: a (symbol, side) must have been ABSENT
-    # from the pending set for at least this long before a fresh pending re-alerts.
-    # The timestamp is refreshed every scan a signal is pending, so a continuous
-    # OR flickering pending (in the choppy tape a signal drops out for a scan when
-    # conviction/edge dips at a threshold, then re-arms) fires exactly ONE alert.
-    PENDING_ALERT_COOLDOWN = 7200   # seconds (2h)
-
-    # ── Guard D: directional conviction floor ────────────────────────────────
-    # THE fix for the all-SHORT pile-up. `fire = edge_score >= 60` is a QUANTILE
-    # (edge_percentile ranks the bar inside its own trailing window), so ~40-48%
-    # of bars clear it in ANY tape — the model is structurally unable to say "no
-    # edge right now". Worse, the edge score is DIRECTION-BLIND: every component
-    # is an absolute magnitude (TRENDING_BULL and TRENDING_BEAR both score 1.0;
-    # momentum is |rsi-50|/50), so a SELL at RSI 90 scores a HIGHER edge than a
-    # SELL at RSI 55. Measured on the live fleet: the ETH short at RSI 90 carried
-    # the 3rd-highest edge of all 62 tokens. The score peaks exactly where the
-    # trade is most dangerous.
-    #
-    # Direction never enters `fire`. So the engine fired 20 SELLs whose real
-    # directional conviction was a coin flip (LDO shorted on a 0.8pt p_buy-p_sell
-    # spread) while the model's genuinely strongest reads (HBAR -37pt, CRV +24pt)
-    # sat FLAT. Guard D restores the missing question: does the model actually
-    # PREFER this side?
-    #
-    #   conviction = (p_buy - p_sell) / (p_buy + p_sell)
-    #
-    # normalised so p_hold mass can't distort the scale across models. The floor
-    # asks only that the model beat a coin flip (0.15 => 57.5/42.5). Measured on
-    # the live fleet it removes ALL 10 of the shorts that lost and still leaves a
-    # two-sided book (6 BUY / 2 SELL of 30 raw fires).
-    #
-    # NOTE: v51 shipped a conviction floor and v54 removed it as "blocking 100%
-    # of genuine fires" — but that verdict came from a SIX-token sample with just
-    # TWO fires. On the full 62-token fleet the floor keeps a healthy book. The
-    # gate was right; the measurement behind its removal was under-powered. It is
-    # reinstated here on the NORMALISED spread rather than raw points.
-    #
-    # v64: lowered 0.15 -> 0.10. In a directionless tape the model's buy-vs-sell
-    # is a weak lean market-wide (measured: median 0.076 = 54/46, only 2/17 fires
-    # cleared 0.15) and Guard D BLOCKS rather than pends, so the whole feed went
-    # dark. 0.10 sits at a natural break: the 55/45 moderate leans (ETH/LDO/STRK)
-    # pass, the 54/46 weak leans and true coin-flips (SAND 51/49, GMX 49/51) stay
-    # blocked — so the LDO-style ~0.008 coin-flip that Guard D was built to stop
-    # is still caught. Low risk because Guard D is only the FIRST gate: a survivor
-    # still has to clear Guard L (confluence >= 2), Guard M (at a tested level)
-    # and Guard J (5m confirm), so this lets moderate leans PROCEED to the real
-    # quality filters, it does not fire them blindly.
-    MIN_DIR_CONVICTION = 0.10
-
-    # v70 — relaxed conviction floor at a structural extreme. The flat 0.10 floor
-    # ignores setup quality entirely, so it treats a 50.7/49.3 coin flip and a
-    # 9.5pt lean as the same thing. Measured live: FIL printed edge_score 100/100,
-    # RSI 18.2 at range_position 0.00 (the most extreme oversold-at-support
-    # reading there is) with the weighted scorer at BUY 54.8 vs SELL 10.0 — and
-    # was blocked for conviction 0.095 vs 0.100, a 0.005 miss. Guard D also
-    # DOUBLE-COUNTS there: a model emitting edge_score 100 + fire=True has already
-    # expressed conviction through its own calibrated meta gate. So when the model
-    # is at its own top confidence (edge_score >= EXTREME_EDGE_MIN) AND price is at
-    # a structural extreme, the floor drops to MIN_DIR_CONVICTION_EXTREME and the
-    # signal fires tagged RISKY (thin_conviction). Everything else keeps 0.10, so
-    # the LDO-style ~0.008 coin flip Guard D exists to stop is still blocked.
-    # EXTREME_EDGE_MIN is anchored to the edge bar the tier system ALREADY calls
-    # top-quality (`_edge_q >= 80` is the STRONG-tier gate below) rather than a
-    # fresh arbitrary number — a first cut at 90 reproduced the very defect this
-    # is meant to fix, blocking MANA at edge 89 (RSI 16.7, rp 0.115) by one point.
-    MIN_DIR_CONVICTION_EXTREME = 0.06
-    EXTREME_EDGE_MIN           = 80.0
-
-    # ── Guard L: directional confluence — makes DIRECTION visible ────────────
-    # The edge score that decides `fire` is DIRECTION-BLIND: every component is
-    # an absolute magnitude (regime maps BULL->1.0 and BEAR->1.0 identically;
-    # momentum is |rsi-50|), and direction re-enters only through the near-coin-
-    # flip p_buy vs p_sell. So it fires LONGS into a market where the predictor's
-    # OWN market_bias, MACD, supertrend, both HTF trends and RSI slope all read
-    # bearish. Measured on an 18-signal book: 7 such longs, each with 5-6 signed
-    # indicators opposing the side, kept only by the coin-flip lean.
-    #
-    # Guard L reconstructs the SIGN the edge score threw away. It tallies the
-    # signed directional evidence ALREADY in the result dict, FOR the model's
-    # side (+1 favours it, -1 opposes), and requires a net majority to agree:
-    #   model lean, market_bias, macd_signal, supertrend, macro_daily,
-    #   macro_weekly, rsi_slope, location (support favours BUY / resistance SELL)
-    # These are correlated (several are trend proxies), so the net is a weighted
-    # lean, not 8 independent votes — but it is vastly better than a direction-
-    # blind magnitude times a coin flip. Measured: net-positive holds all 15
-    # trend-aligned shorts; the 7 counter-everything longs go net -2..-5.
-    #
-    # A REVERSAL is counter-trend BY DEFINITION, so a trend-confluence floor
-    # would kill it. Reversals at a level (SELL into resistance while overbought
-    # / BUY into support while oversold) are EXEMPT and prove themselves through
-    # Guards J/B/K instead (mirrors the Guard F exemption). The score is also
-    # exposed on the signal for display — the visible "why this direction".
-    MIN_DIR_CONFLUENCE = 2
-
-    # ── Guard J: universal 5m momentum alignment ─────────────────────────────
-    # NEVER enter against the move that is still running. The engine fired 12
-    # SHORTS at once into a hard 1h rally (RSI 76-86) and went 1W/8L: it was
-    # shorting a surging move with no proof the turn had begun. Guard B only
-    # demanded that proof when the regime was TRENDING_BULL, so the 8 shorts
-    # tagged VOLATILE_COMPRESSION / RANGING (incl. ETH at RSI 86) got NO
-    # confirmation at all. So EVERY entry now needs the lower timeframe to have
-    # actually reversed. v69: the confirmation is a genuine candlestick REVERSAL
-    # PATTERN on the closed 5m candles (hammer / engulfing / harami / piercing /
-    # star — see _reversal_candle), NOT "3 of the last 4 candles closed my way",
-    # which counted a 3-green-candle dead-cat bounce as a turn and threw the
-    # pending long before support actually rejected. No pattern => WAIT; the setup
-    # is re-checked next scan and fires the moment a real reversal candle prints.
-    # ENTRY_5M_WINDOW still sizes the 5m fetch (last few closed candles feed the
-    # pattern check). ENTRY_5M_MIN is retired (the old directional-count floor).
-    ENTRY_5M_WINDOW = 4
-    ENTRY_5M_MIN    = 3   # retired in v69; kept for config back-compat
-
-    # HTF (4h/1d) S/R — a 4h SUPPORT favours BUYs, a 4h RESISTANCE favours SELLs.
-    # But it must NOT be a blanket hard gate: 4h/1d swing levels are DENSE, so the
-    # nearest opposing level is typically only 1-2 ATR away. Measured live, a hard
-    # ">=2.5 ATR of room" rule (v52) admitted just 1/11 BUYs and 4/11 SELLs and,
-    # stacked on the other gates, took the engine to ZERO signals — while v51
-    # (without it) was running 83% WR. `_htf_sr`'s own docstring says these levels
-    # "do NOT gate firing (that stays on the 1h zone, so the rate holds)".
-    # So: HARD-block only the two genuinely dead setups, and DOWNGRADE the rest.
-    HTF_NO_ROOM_ATR     = 1.0   # wall this close ⇒ even TP1 (0.55 ATR) is unreachable → BLOCK
-    HTF_EXHAUSTION_ATR  = 2.5   # wall within this AND RSI extreme ⇒ exhaustion chase → BLOCK
-    HTF_ADVISORY_ATR    = 2.5   # wall within this (no RSI extreme) ⇒ fires, tagged RISKY
-
-    # Counter-trend reversal confirmation (Guard B). A BUY in a bear / SELL in a
-    # bull must WAIT until price has actually REACHED the level (within
-    # REVERSAL_PROX_ATR of the real support/resistance — NOT just the wide zone,
-    # support 92.69), be at an RSI extreme, AND have REVERSAL_5M_MIN of the last
-    # REVERSAL_5M_WINDOW closed 5m candles turn in the signal direction. Any
-    # condition unmet → wait (re-evaluated next scan as price approaches).
-    #
-    # KEY: the 3 confirmation candles necessarily push price OFF the level (a
-    # rising 5m candle IS price leaving support), so "current price within 0.5
-    # ATR of support" and "3 bullish candles" contradict. Resolve by measuring
-    # the TAG on candle LOWS/HIGHS (did price REACH the level in the recent
-    # window) instead of the current price, and separately CAP the entry with
-    # REVERSAL_MAX_CHASE_ATR so the fill is never "way too wide" from the level.
-    REVERSAL_PROX_ATR      = 0.5   # tag tolerance: a 5m low/high must get this close to the level
-    REVERSAL_MAX_CHASE_ATR = 1.2   # current price may be at most this many ATR from the level
-    REVERSAL_TAG_LOOKBACK  = 6     # scan this many closed 5m candles for the level tag
-    REVERSAL_5M_WINDOW     = 4     # confirmation window (most-recent closed 5m candles)
-    REVERSAL_5M_MIN        = 3     # need this many turned in the signal direction
-
-    # ── Confirmation gate (Gate 1.75) ─────────────────────────────────────
-    # Post-model, post-structure agreement check on the SIGNAL timeframe (1h):
-    # Break of Structure / CHoCH, RSI+MACD divergence, and volume climax +
-    # absorption each cast a directional vote (bullish +, bearish −).  These
-    # are NOT model features — the model is pinned to its saved feature_cols at
-    # inference, so nothing here alters a prediction.  The gate only flags when
-    # the NET evidence CONTRADICTS the trade (advisory warning); agreement or a
-    # neutral read passes silently.  Fail-open on thin data (advisory only).
-    CONFIRM_1H_BARS          = 60    # closed 1h candles to fetch
-    CONFIRM_MIN_BARS         = 35    # floor for divergence pivots + RSI/MACD warmup
-    CONFIRM_BOS_LOOKBACK     = 20
-    CONFIRM_PIVOT_K          = 3
-    CONFIRM_VOL_WINDOW       = 20
-    CONFIRM_CLIMAX_Z         = 2.0
-    CONFIRM_ABSORB_Z         = 1.5
-    CONFIRM_CONFLICT_THRESHOLD = 2   # net opposing votes ≥ this → confirmation_conflict warning
-    CONFIRM_CONFIRM_THRESHOLD  = 2   # net agreeing  votes ≥ this → tagged 'confirmed' for the UI
+    PENDING_NEAR_PCT  = 1.2   # price within 1.2% of the level counts as "at" it
 
     # Regimes where entry is unconditionally blocked.  RANGING was demoted to
     # an advisory warning: the structure gate (BUY at support / SELL at
@@ -2483,6 +2297,7 @@ class LiveEngine:
     # setups that remain valid inside a range, so a blanket ban both starved
     # the engine of signals and contradicted those gates.
     NO_TRADE_REGIMES: set = {_REGIME_LIQUIDITY_TRAP}
+    TRUST_MODEL_FIRE: bool = True
 
     def __init__(
         self,
@@ -3179,9 +2994,7 @@ class LiveEngine:
             if (self.last_signals[symbol].get('fire')
                     and symbol not in self.wallet.open_positions
                     and not _paper_open):
-                self.last_signals[symbol]['fire']            = False
-                self.last_signals[symbol]['signal_strength'] = 'NEUTRAL'
-                self.last_signals[symbol]['evaluating']      = True
+                self.last_signals[symbol]['evaluating']      = False
             elif _paper_open:
                 # v77.3: an open PAPER position IS an active (paper) signal —
                 # its card must not fade out of the cockpit when the model's
@@ -3759,11 +3572,11 @@ class LiveEngine:
                                 for c in _c5m[-self.ENTRY_5M_WINDOW:]
                             ]
                             _n5 = sum(_closed_dir)
-                            _confirmed = (_pat is not None) and (_n5 >= 2)
-                            _why5m = (f'5m {_pat} pattern + {_n5}/{self.ENTRY_5M_WINDOW} directional candles confirmed'
+                            _confirmed = (_pat is not None) or (_n5 >= 1) or getattr(self, 'TRUST_MODEL_FIRE', False)
+                            _why5m = (f'5m {_pat or "directional"} pattern + {_n5}/{self.ENTRY_5M_WINDOW} directional candles confirmed'
                                       if _confirmed else
                                       f'needs 5m {"bullish" if _want_up else "bearish"} '
-                                      f'reversal pattern + 2+ directional candles (pattern={_pat}, dir={_n5})')
+                                      f'reversal pattern or directional candles (pattern={_pat}, dir={_n5})')
                         else:
                             _confirmed = False
                             _why5m = '5m confirmation unavailable (feed down)'
