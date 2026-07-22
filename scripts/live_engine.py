@@ -1086,7 +1086,7 @@ class SignalQualityFilter:
                     score += 10; reasons.append('htf_pullback_buy(w+/d-)')
                 elif _w_bear and _d_bear and not (is_reversal_strict or is_structural_reversal):
                     score -= 20; reasons.append('htf_both_bearish')
-                elif _w_bear and not is_reversal:
+                elif _w_bear and not (is_reversal_strict or is_structural_reversal):
                     score -= 10; reasons.append('htf_weekly_bearish')
             elif side == 'SELL':
                 if _w_bear and _d_bear:
@@ -1095,7 +1095,7 @@ class SignalQualityFilter:
                     score += 10; reasons.append('htf_bounce_sell(w-/d+)')
                 elif _w_bull and _d_bull and not (is_reversal_strict or is_structural_reversal):
                     score -= 20; reasons.append('htf_both_bullish')
-                elif _w_bull and not is_reversal:
+                elif _w_bull and not (is_reversal_strict or is_structural_reversal):
                     score -= 10; reasons.append('htf_weekly_bullish')
 
         # ── LSTM temporal intelligence bonuses / penalties ─────────────────────
@@ -3614,11 +3614,13 @@ class LiveEngine:
                                 for c in _c5m[-self.ENTRY_5M_WINDOW:]
                             ]
                             _n5 = sum(_closed_dir)
-                            _confirmed = (_pat is not None) or (_n5 >= 1) or getattr(self, 'TRUST_MODEL_FIRE', False)
+                            # Strictly require either a valid reversal pattern OR
+                            # at least 3 directional 5m closes (no TRUST_MODEL_FIRE bypass)
+                            _confirmed = (_pat is not None) or (_n5 >= 3)
                             _why5m = (f'5m {_pat or "directional"} pattern + {_n5}/{self.ENTRY_5M_WINDOW} directional candles confirmed'
                                       if _confirmed else
                                       f'needs 5m {"bullish" if _want_up else "bearish"} '
-                                      f'reversal pattern or directional candles (pattern={_pat}, dir={_n5})')
+                                      f'reversal pattern or 3+ directional candles (pattern={_pat}, dir={_n5}/{self.ENTRY_5M_WINDOW})')
                         else:
                             _confirmed = False
                             _why5m = '5m confirmation unavailable (feed down)'
