@@ -276,6 +276,21 @@
       <p style="font-size: 0.85rem; line-height: 1.7; color: var(--ae-text-3); max-width: 52ch; margin-top: var(--s-3);">
         Evaluate everything during the free 3-day trial. All paid plans include a <a href="/refund-policy" style="color: var(--ae-gold);">7-Day Money-Back Guarantee</a>. Cancel anytime to stop future renewals — no charge for periods you don't want.
       </p>
+
+      <!-- Dodo Payments Refund Action -->
+      <div id="dodoRefundBox" style="margin-top: var(--s-4); padding: var(--s-4); background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: var(--ae-radius-md); display: flex; flex-direction: column; gap: var(--s-2);">
+        <div style="font-size: 0.82rem; font-weight: 600; color: var(--ae-text-1); display: flex; align-items: center; gap: 6px;">
+          <i class="fas fa-shield-alt" style="color: var(--ae-gold);"></i> Dodo Payments Customer Refund Portal
+        </div>
+        <div style="display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap;">
+          <a id="dodoRefundBtn" href="https://customer.dodopayments.com" target="_blank" rel="noopener" class="ae-btn ae-btn-secondary ae-btn-sm" style="font-size: 0.8rem; padding: 6px 14px; text-decoration: none;">
+            <i class="fas fa-undo" style="margin-right: 6px;"></i> Request Refund on Dodo Payments
+          </a>
+          <span id="dodoRefundStatusText" style="font-size: 0.78rem; color: var(--ae-text-3);">
+            Eligible within 7 days of subscription activation.
+          </span>
+        </div>
+      </div>
     </div>
   </div>
 </section>
@@ -1073,6 +1088,47 @@
     proxyAuth('mDashProxy',    'dashboardBtn');
     proxyAuth('mSignoutProxy', 'signOutBtn');
     proxyAuth('mCtaProxy',     'createAccountBtn');
+}());
+</script>
+
+<script>
+(function checkDodoRefundEligibility() {
+    var btn = document.getElementById('dodoRefundBtn');
+    var txt = document.getElementById('dodoRefundStatusText');
+    if (!btn || !txt) return;
+
+    try {
+        var userStr = localStorage.getItem('aegis_user') || localStorage.getItem('user');
+        var subStr = localStorage.getItem('aegis_sub') || localStorage.getItem('subscription');
+        var user = userStr ? JSON.parse(userStr) : null;
+        var sub = subStr ? JSON.parse(subStr) : null;
+
+        var subActive = (user && user.subscription_active) || (sub && sub.active) || false;
+        var createdAt = (sub && (sub.created_at || sub.start_date)) || (user && (user.subscription_created_at || user.paid_at));
+
+        if (subActive && createdAt) {
+            var startTime = new Date(createdAt).getTime();
+            if (!isNaN(startTime)) {
+                var now = Date.now();
+                var daysUsed = (now - startTime) / (1000 * 60 * 60 * 24);
+                if (daysUsed > 7) {
+                    btn.classList.add('disabled');
+                    btn.style.opacity = '0.4';
+                    btn.style.pointerEvents = 'none';
+                    btn.style.cursor = 'not-allowed';
+                    btn.removeAttribute('href');
+                    txt.style.color = '#ff5555';
+                    txt.textContent = '7-Day Refund Window Expired (' + Math.floor(daysUsed) + ' days of usage)';
+                    return;
+                } else {
+                    var daysLeft = Math.ceil(7 - daysUsed);
+                    txt.style.color = '#00cc6a';
+                    txt.textContent = 'Eligible for 7-Day Refund (' + daysLeft + ' day' + (daysLeft > 1 ? 's' : '') + ' remaining)';
+                    return;
+                }
+            }
+        }
+    } catch(e) {}
 }());
 </script>
 
