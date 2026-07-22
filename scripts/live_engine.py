@@ -3655,10 +3655,12 @@ class LiveEngine:
                         _came_from_m = False
                         if _target_m is not None and not _at_level_m:
                             try:
+                                _lookback = getattr(self, 'PENDING_TAG_LOOKBACK', 6)
+                                _tol_pct  = getattr(self, 'PENDING_TAG_TOL_PCT', 1.5)
                                 _rawm = await self._fetch_candles(
-                                    symbol, '1h', self.PENDING_TAG_LOOKBACK + 2)
-                                _cm = (_rawm[:-1] if len(_rawm) >= 2 else [])[-self.PENDING_TAG_LOOKBACK:]
-                                _tol = max(self.PENDING_TAG_TOL_PCT / 100.0, 0.01)
+                                    symbol, '1h', _lookback + 2)
+                                _cm = (_rawm[:-1] if len(_rawm) >= 2 else [])[-_lookback:]
+                                _tol = max(float(_tol_pct) / 100.0, 0.015)
                                 if _cm and new_side == 'SELL':
                                     _rhigh = max(float(c[2]) for c in _cm)     # recent high
                                     _came_from_m = (_rhigh >= _target_m * (1 - _tol) and price < _target_m)
@@ -3681,7 +3683,7 @@ class LiveEngine:
                         # tag+reject fired above and are exempt (a genuine reject can
                         # sit anywhere). Fails OPEN when range_position is missing.
                         _rp_m = result.get('range_position')
-                        if _rp_m is not None and not _at_level_m:
+                        if _rp_m is not None and not _at_level_m and not _came_from_m:
                             _rp_m = float(_rp_m)
                             _wrong_loc_m = ((new_side == 'SELL' and _rp_m < self.PENDING_WRONG_LOC_RP) or
                                             (new_side == 'BUY'  and _rp_m > 1.0 - self.PENDING_WRONG_LOC_RP))
