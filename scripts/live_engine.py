@@ -3385,8 +3385,8 @@ class LiveEngine:
                         # (it proves itself through Guards J/B/K), mirroring Guard F.
                         _rsi_conf = float(result.get('rsi', result.get('rsi_14', 50)) or 50)
                         _conf_reversal = (
-                            (new_side == 'SELL' and _rp_conf >= 0.65 and _rsi_conf >= 68) or
-                            (new_side == 'BUY'  and _rp_conf <= 0.35 and _rsi_conf <= 32))
+                            (new_side == 'SELL' and _rp_conf >= 0.65) or
+                            (new_side == 'BUY'  and _rp_conf <= 0.35))
                         if not _conf_reversal and _dir_net < self.MIN_DIR_CONFLUENCE:
                             _opp = [k for k, v in _dir_ev.items() if v < 0]
                             if self.TRUST_MODEL_FIRE:
@@ -3729,8 +3729,8 @@ class LiveEngine:
                         _htf_rp  = _range_pos(result)
                         _htf_rsi = float(result.get('rsi', result.get('rsi_14', 50)) or 50)
                         _htf_reversal = (
-                            (new_side == 'SELL' and _htf_rp >= 0.65 and _htf_rsi >= 68) or
-                            (new_side == 'BUY'  and _htf_rp <= 0.35 and _htf_rsi <= 32))
+                            (new_side == 'SELL' and _htf_rp >= 0.65) or
+                            (new_side == 'BUY'  and _htf_rp <= 0.35))
                         if (_htf_w != 0.0 or _htf_d != 0.0) and not _htf_reversal and (
                                 (new_side == 'BUY'  and _htf_w < -0.5 and _htf_d < -0.5) or
                                 (new_side == 'SELL' and _htf_w >  0.5 and _htf_d >  0.5)):

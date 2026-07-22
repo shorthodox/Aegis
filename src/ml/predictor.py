@@ -916,6 +916,41 @@ class Predictor:
 
         fire = edge_score >= thr
 
+        # ── Rule 1 & 2: Support/Resistance Structural Location & Counter-Trend Reversal Firing Override ──
+        # In market mechanics, when price is at Support (range_position <= 0.35 or is_at_support),
+        # a lagging ML model trained on trend history often outputs P(sell) > P(buy) (e.g. ATOM P(buy)=19.7%).
+        # We override this and fire a BUY signal at Support when confirmed by momentum & liquidity.
+        last_row = df_features.iloc[-1]
+        rp = float(last_row.get('range_position', last_row.get('range_position_score', 0.5)) or 0.5)
+        at_sup = bool(last_row.get('is_at_support', False)) or (rp <= 0.35)
+        at_res = bool(last_row.get('is_at_resistance', False)) or (rp >= 0.65)
+
+        reg_val = str(last_row.get('trend_regime', last_row.get('hmm_regime', ''))).upper()
+        rsi_val = float(last_row.get('rsi_14', last_row.get('rsi', 50.0)) or 50.0)
+        macd_hist = float(last_row.get('macd_hist', last_row.get('macd_signal', 0.0)) or 0.0)
+        funding = float(last_row.get('funding_rate', 0.0) or 0.0)
+        vol_z = float(last_row.get('volume_zscore', last_row.get('vol_zscore', 0.0)) or 0.0)
+
+        # BUY at Support Confirmation (Rule 1 & Rule 2 Exception)
+        if at_sup:
+            mom_confirm_buy = (macd_hist > -0.05) or (rsi_val <= 45.0)
+            liq_confirm_buy = (funding <= 0.0005) or (vol_z >= -1.5)
+            if mom_confirm_buy and liq_confirm_buy:
+                side = 2
+                side_name = "BUY"
+                fire = True
+                edge_score = max(edge_score, 65.0)
+
+        # SELL at Resistance Confirmation (Rule 1 & Rule 2 Exception)
+        elif at_res:
+            mom_confirm_sell = (macd_hist < 0.05) or (rsi_val >= 55.0)
+            liq_confirm_sell = (funding >= -0.0005) or (vol_z >= -1.5)
+            if mom_confirm_sell and liq_confirm_sell:
+                side = 0
+                side_name = "SELL"
+                fire = True
+                edge_score = max(edge_score, 65.0)
+
         if side == 2 and (not tradeable_buy or not regime_ok):
             fire = False
         elif side == 0 and (not tradeable_sell or not regime_ok):
