@@ -2409,6 +2409,25 @@ def prepare_features(df: pd.DataFrame,
     except Exception:
         pass
 
+    # ----- Aegis Philosophy: Volume Absorption & Liquidity Sweep Features -----
+    vol_24_avg = df['volume'].rolling(24, min_periods=1).mean()
+    df['rel_vol_24h'] = (df['volume'] / (vol_24_avg + 1e-9)).fillna(1.0)
+    high_px, low_px, open_px, close_px = df['high'], df['low'], df['open'], df['close']
+    bar_rng = (high_px - low_px).clip(lower=1e-9)
+    u_wick = high_px - np.maximum(open_px, close_px)
+    l_wick = np.minimum(open_px, close_px) - low_px
+    df['sweep_wick_ratio'] = (np.maximum(u_wick, l_wick) / bar_rng).fillna(0.0)
+
+    # ----- Aegis Philosophy: EMA 21 / 50 Confluence & Slope Features -----
+    if 'ema_21' in df.columns and 'ema_50' in df.columns:
+        atr_14 = compute_atr(df, 14)
+        df['ema_21_slope_3'] = ((df['ema_21'] - df['ema_21'].shift(3)) / (atr_14 + 1e-9)).fillna(0.0)
+        df['dist_ema_21_50'] = ((df['ema_21'] - df['ema_50']) / (close_px + 1e-9)).fillna(0.0)
+        df['ema_stack_bullish'] = ((close_px > df['ema_21']) & (df['ema_21'] > df['ema_50'])).astype(float)
+        df['ema_stack_bearish'] = ((close_px < df['ema_21']) & (df['ema_21'] < df['ema_50'])).astype(float)
+    else:
+        df[['ema_21_slope_3', 'dist_ema_21_50', 'ema_stack_bullish', 'ema_stack_bearish']] = 0.0
+
     # ----- Regime Classification -----
     df['trend_regime'] = classify_trend_regime(df['adx_14'], threshold_trend=25, threshold_weak=20)
     df['volume_regime'] = classify_volume_regime(df['volume_zscore'], high_threshold=2.0, low_threshold=-1.0)
