@@ -898,6 +898,11 @@ class SignalQualityFilter:
 
     MIN_QUALITY_SCORE = 60.0  # v43: edge floor 55->60 — cut the coin-flip signals (biggest WR lever) without gutting count
 
+    # Normalised range-position boundaries used by score_signal() when
+    # identifying structural support and resistance reversals.
+    STRUCT_SUPPORT_ZONE = 0.35
+    STRUCT_RESISTANCE_ZONE = 0.65
+
     def score_signal(
         self,
         result: Dict[str, Any],
@@ -2152,8 +2157,14 @@ class LiveEngine:
     MAX_CONCURRENT        = 8
     HOURS_CONTEXT         = 300
     MIN_HOLD_SECONDS      = 3_600    # 1 h minimum hold before model-reversal exit
+    MAX_HOLD_SECONDS      = 24 * 3_600  # 24 h zombie guard for open positions
     COOLDOWN_SECONDS      = 300    # 5 min post-close cooldown (any outcome)
     FLIP_COOLDOWN_SECONDS = 600    # 10 min cooldown when the new signal flips direction
+    LOSS_COOLDOWN_SECONDS = 4 * 3_600  # 4 h post-loss cooldown before re-entry
+    SIGNAL_STABILITY_WINDOW = 3    # directional samples required by the stability gate
+    # Edge threshold for bypassing the consecutive-direction stability check.
+    # Keep this on LiveEngine because the gate reads it through ``self``.
+    SIGNAL_BYPASS_EDGE = 85.0
     GATE_VERSION = 'model-first-v80 (NEAREST S/R TARGET SELECTION & SUPPORT REVERSAL IMMEDIATE FIRING — (1) Target Support/Resistance now ALWAYS selects the nearest support below price for BUY/LONG and nearest resistance above price for SELL/SHORT from all pooled structure, swing, and HTF S/R levels. Far HTF override removed. (2) Support tag-and-reject/reversal for LONG setups immediately marks _came_from_m=True so bouncing off nearest support fires the signal without waiting.)'
 
     # ── Structure gate (Gate 1.6) ─────────────────────────────────────────
@@ -2177,6 +2188,24 @@ class LiveEngine:
     STRUCT_15M_MIN    = 2
     # Break-and-retest scan depth (closed 5m candles ≈ one hour)
     STRUCT_RETEST_LOOKBACK = 12
+    # Closed 1h bars used by the BOS/CHoCH confirmation gate below.  This is
+    # an engine setting because the gate uses it for both candle retrieval and
+    # the detector's lookback argument.
+    CONFIRM_BOS_LOOKBACK = 20
+    # Parameters for the divergence and volume-event detectors used by the
+    # confirmation gate.  Keep these as class attributes because the gate reads
+    # its tunable settings through ``self``.
+    CONFIRM_PIVOT_K    = 3
+    CONFIRM_VOL_WINDOW = 20
+    CONFIRM_CLIMAX_Z   = 2.0
+    CONFIRM_ABSORB_Z   = 1.5
+    # Minimum number of closed 1h bars required before confirmation analysis.
+    # This is read through ``self`` by _confirmation_gate.
+    CONFIRM_MIN_BARS = 20
+    # Agreement thresholds used by _confirmation_gate.  These are class
+    # attributes because that method reads them through ``self``.
+    CONFIRM_CONFLICT_THRESHOLD = 2.0
+    CONFIRM_CONFIRM_THRESHOLD = 2.0
     # Confirmed breakout CONTINUATION (a break that runs and never retests):
     #   last N closed 5m candles must ALL hold beyond the broken level, and price
     #   must not have run more than MAX_EXT ATRs past it (no late chase).
@@ -2201,6 +2230,21 @@ class LiveEngine:
     # reversal needs RSI <= LONG floor; short reversal needs RSI >= SHORT ceiling.
     REVERSAL_RSI_LONG  = 42.0
     REVERSAL_RSI_SHORT = 58.0
+    # Counter-trend reversal candle settings used by Guard B.  Keep the tag
+    # lookback wider than the confirmation window so a prior wick touch remains
+    # valid while the latest closed candles confirm the turn.
+    REVERSAL_TAG_LOOKBACK = 12
+    REVERSAL_5M_WINDOW    = 4
+    REVERSAL_5M_MIN       = 3
+    # ATR tolerance used when checking whether a closed 5m candle tagged the
+    # counter-trend reversal level.  This is distinct from the maximum chase
+    # distance allowed for the eventual entry.
+    REVERSAL_PROX_ATR     = 0.9
+    # Maximum distance from the tagged support/resistance level at which a
+    # counter-trend reversal may still enter. This is separate from the tag
+    # tolerance because price may touch a level and then move away before the
+    # confirmation candles complete.
+    REVERSAL_MAX_CHASE_ATR = 2.0
 
     # v72 — TRUST THE MODEL (user decision 2026-07-19). The retrained models are
     # reversal-focused and holdout-validated (dir_prec lower bound >= 60% on
@@ -2228,6 +2272,18 @@ class LiveEngine:
     HTF_ZONE_CONFIRM_ATR = 1.0
     OFF_LEVEL_MAX_ATR    = 1.5
 
+    # Distance from the opposing higher-timeframe level at which an RSI-extreme
+    # entry is considered an exhaustion chase.  Keep this separate from the
+    # absolute no-room threshold: a trade may have enough space for TP1 while
+    # still being too close to the wall to enter on stretched momentum.
+    HTF_EXHAUSTION_ATR = 1.0
+
+    # Guard I thresholds for the opposing 4h/1d support or resistance.
+    # Entries with less than TP1's projected distance to that wall are hard
+    # blocked; entries inside the wider advisory band are tagged RISKY.
+    HTF_NO_ROOM_ATR  = 0.55
+    HTF_ADVISORY_ATR = 1.50
+
     # Model-first hard floor: below this ATR% the market is too flat to trade
     # (stops sit inside 1h tick noise). 0.5% matches the legacy Gate 2 value.
     MIN_FIRE_ATR_PCT = 0.5
@@ -2253,6 +2309,10 @@ class LiveEngine:
     EXTREME_RP_SELL  = 0.75   # top quarter of the range    → SELL exhaustion
     EXTREME_RSI_BUY  = 35.0
     EXTREME_RSI_SELL = 65.0
+    # Minimum model edge percentile required before the directional-conviction
+    # floor is relaxed at a structural extreme.  ``edge_score`` is normalised
+    # to the model's 0-100 percentile scale before Guard D reaches this check.
+    EXTREME_EDGE_MIN = 80.0
 
     # RETIRED (v54): a raw p_buy−p_sell conviction floor is incompatible with how
     # these models express confidence. edge_score is a PERCENTILE RANK of the
@@ -2263,6 +2323,19 @@ class LiveEngine:
     # carried the big spreads (SOL 32.8pt, AVAX 35.0pt). The model's own
     # edge>=threshold IS the conviction check. Kept only for reference.
     MIN_MODEL_CONVICTION = 0.0   # unused — see Guard D REMOVED in _process_symbol
+
+    # Guard D directional-conviction thresholds.  These are class settings
+    # because the gate reads them through ``self`` in _process_symbol.
+    MIN_DIR_CONVICTION         = 0.10
+    MIN_DIR_CONVICTION_EXTREME = 0.05
+
+    # Guard L directional-confluence floor. Evidence is signed for the model's
+    # selected side, so non-reversal entries need a net positive consensus.
+    MIN_DIR_CONFLUENCE         = 1
+
+    # Maximum number of advisory warnings allowed before a signal becomes
+    # HIGH risk and is held.  This is read by _process_symbol via self.
+    ADVISORY_WARNING_BUDGET    = 3
 
     # Guard E advisory: UWGS score_hold has a structural floor, so it edges out the
     # model's side on almost every signal. Only flag RISKY when the composite
@@ -2303,6 +2376,11 @@ class LiveEngine:
     # rate in v25/v38. The pending queue is what rescues it: the setups are not
     # discarded, they wait. Expect a quieter, spikier feed by design.
     PENDING_NEAR_PCT  = 1.2   # price within 1.2% of the level counts as "at" it
+
+    # Minimum time a pending setup must be absent before its notification can
+    # be emitted again.  Keep this on LiveEngine because the notifier uses it
+    # as an instance attribute during each scan.
+    PENDING_ALERT_COOLDOWN = 4 * 60 * 60
 
     # Regimes where entry is unconditionally blocked.  RANGING was demoted to
     # an advisory warning: the structure gate (BUY at support / SELL at
@@ -2592,6 +2670,7 @@ class LiveEngine:
 
             # Always save local JSON fallback state for REST API endpoints
             try:
+                import json as _json
                 state_path = _ROOT / 'data' / 'trader_signals_state.json'
                 state_path.parent.mkdir(parents=True, exist_ok=True)
                 state_path.write_text(_json.dumps(self.last_signals, indent=2, default=str))
@@ -5134,8 +5213,13 @@ class LiveEngine:
                     merged[-1] = [(lvl * n + p) / (n + 1), n + 1]
                 else:
                     merged.append([p, 1])
+            # Important levels use the same minimum-touch threshold as the
+            # rest of the structure gate.  PENDING_TARGET_MIN_TOUCHES was
+            # never defined on LiveEngine; using LEVEL_MIN_TOUCHES keeps the
+            # pending-target filter consistent and avoids dropping all level
+            # discovery behind an attribute error.
             return [(lvl, int(n)) for lvl, n in merged
-                    if n >= self.PENDING_TARGET_MIN_TOUCHES]
+                    if n >= self.LEVEL_MIN_TOUCHES]
         except Exception:
             return []
 
@@ -5525,7 +5609,8 @@ class LiveEngine:
         add an advisory objection, never a silent block.
         """
         bullish = (side == 'BUY')
-        raw = await self._fetch_candles(symbol, '1h', self.CONFIRM_1H_BARS + 2)
+        raw = await self._fetch_candles(
+            symbol, '1h', self.CONFIRM_BOS_LOOKBACK + 5)
         closed = raw[:-1] if len(raw) >= 2 else []
         if len(closed) < self.CONFIRM_MIN_BARS:
             return {'verdict': 'NEUTRAL', 'score': 0.0,
