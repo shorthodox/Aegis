@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 live_engine.py — Aegis-1 Live Signal Engine  (Glass-Box Adaptive)
 ============================================================================
@@ -3750,9 +3750,11 @@ class LiveEngine:
                         _rp_k = _range_pos(result)
                         _at_support_zone = (_rp_k <= self.STRUCT_SUPPORT_ZONE)
                         _at_resist_zone = (_rp_k >= self.STRUCT_RESISTANCE_ZONE)
+                        _res_val_k = float(result.get('resistance', 0) or 0)
+                        _sup_val_k = float(result.get('support', 0) or 0)
                         _wrong_zone = (
-                            (new_side == 'BUY'  and _at_resist_zone and not bool(result.get('resistance_broken_recent'))) or
-                            (new_side == 'SELL' and _at_support_zone and not bool(result.get('support_broken_recent')))
+                            (new_side == 'BUY'  and _at_resist_zone and (_res_val_k <= 0 or price <= _res_val_k)) or
+                            (new_side == 'SELL' and _at_support_zone and (_sup_val_k <= 0 or price >= _sup_val_k))
                         )
                         if _wrong_zone:
                             _opp_role = 'resistance' if new_side == 'BUY' else 'support'
@@ -5485,7 +5487,7 @@ class LiveEngine:
         _lname    = 'support' if bullish else 'resistance'
 
         # ── CASE 1: CORRECT LEVEL (BUY at support / SELL at resistance) ────────
-        # Primary setup — fire immediately at/near the level.
+        # Primary setup — fire at/near the level ONLY with 5m 3-candle reversal confirmation.
         if correct_level:
             level = support if bullish else resistance
             dist  = abs(price - level)
@@ -5494,8 +5496,7 @@ class LiveEngine:
             # back off it: a SELL >10% BELOW the resistance it hit, a BUY >10% ABOVE
             # the support it hit. The rejection itself IS the confirmation, so it
             # fires immediately — bypassing the counter-trend 2-candle wait and the
-            # "far from level" pending. (User: sell once price has come back >10% off
-            # a resistance it reached; buy the mirror off support.)
+            # "far from level" pending.
             _rng  = resistance - support
             _tag  = (any((float(c[2]) >= resistance - tolerance) if not bullish
                          else (float(c[3]) <= support + tolerance) for c in recent)
@@ -5510,23 +5511,18 @@ class LiveEngine:
             prox = (atr_g * self.STRUCT_LEVEL_PROXIMITY_ATR) if atr_g else price * 0.01
             near = dist <= prox
             if tested or near:
+                _pat = _reversal_candle(closed_5m, want_bullish=bullish) if closed_5m else None
                 if confirmed:
-                    return 'PASS', f'{_lname}_reversal confirmed (5m {n5}/{self.STRUCT_5M_WINDOW}, 15m {n15}/{self.STRUCT_15M_WINDOW}) @ {level:.6g}'
-                if partly_confirmed:
-                    return 'PASS', f'{_lname}_reversal 5m-confirmed (5m {n5}/{self.STRUCT_5M_WINDOW}) @ {level:.6g}'
-                # v44: counter-trend reversal needs >=2 5m candles turned — else WAIT
-                # (pending) so we don't short a rising candle / buy a falling one.
-                if counter_trend and n5 < 2:
-                    return 'WAIT', (f'counter-trend {_lname}_reversal @ {level:.6g} — '
-                                    f'waiting for 2+ 5m candles to turn ({n5}/2)')
-                return 'WARN', f'{_lname}_reversal unconfirmed @ {level:.6g} — tighter SL'
-            # v43: still far from the level -> PENDING (wait for a closer entry)
-            # instead of firing an early entry with a wide stop. Pending keeps the
-            # signal and fires it when price reaches the level (better fill, higher WR).
+                    return 'PASS', f'{_lname}_reversal confirmed ({_pat or f"5m {n5}/{self.STRUCT_5M_WINDOW}"}, 15m {n15}/{self.STRUCT_15M_WINDOW}) @ {level:.6g}'
+                if partly_confirmed or _pat is not None:
+                    return 'PASS', f'{_lname}_reversal 5m-confirmed ({_pat or f"5m {n5}/{self.STRUCT_5M_WINDOW}"}) @ {level:.6g}'
+                # Require proper 5m 3-candle reversal confirmation before firing
+                return 'WAIT', f'{_lname}_reversal unconfirmed @ {level:.6g} — waiting for 5m 3-candle reversal confirmation ({n5}/3 turned)'
+            # Still far from the level -> PENDING (wait for a closer entry)
             return 'WAIT', f'{_lname}_reversal far (dist {dist:.6g}) — waiting for a closer entry'
 
         # ── CASE 2: BREAKOUT LEVEL (BUY at resistance / SELL at support) ───────
-        # Fire on retest, sustained momentum, or pre-break; else fire tagged weak.
+        # Fire on retest or sustained momentum past level; do NOT buy below resistance
         if breakout_level:
             level  = resistance if bullish else support
             beyond = (price > level) if bullish else (price < level)
@@ -5539,15 +5535,10 @@ class LiveEngine:
             _overext = atr_g > 0 and _ext > atr_g * self.STRUCT_BREAKOUT_MAX_EXT_ATR
             if _held and not _overext:
                 return 'PASS', f'breakout_continuation {"confirmed" if confirmed else "momentum"} @ {level:.6g}'
-            if abs(level - price) <= atr_g * 0.5:
-                return 'PASS', f'pre_breakout (dist {abs(level - price):.6g} to {level:.6g}) — early entry, wide stop'
-            # v43: an UNCONFIRMED wrong-side breakout (no retest-hold, no sustained
-            # momentum, not a pre-break) -> PENDING, not a blind fire into the level.
-            # Pending waits for the correct level (support for a BUY / resistance for
-            # a SELL), so it converts to a clean reversal entry instead of a knife.
+            # An unconfirmed wrong-side entry below resistance / above support must wait
             if beyond:
                 return 'WAIT', f'post_break @ {level:.6g} — waiting for a retest-hold'
-            return 'WAIT', f'breakout_unconfirmed @ {level:.6g} — waiting for retest/momentum'
+            return 'WAIT', f'breakout_unconfirmed @ {level:.6g} — approaching {_lname} without breakout confirmation'
 
         # ── CASE 3: MID-RANGE — fire with a WIDER stop (model conviction) ──────
         target = resistance if bullish else support
