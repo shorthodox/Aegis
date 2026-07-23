@@ -4075,7 +4075,7 @@ class LiveEngine:
                                     _why = (f'5m reversal unconfirmed '
                                             f'({_n5}/{self.REVERSAL_5M_MIN} of last '
                                             f'{self.REVERSAL_5M_WINDOW} bars turned)')
-                                if self.TRUST_MODEL_FIRE:
+                                if self.TRUST_MODEL_FIRE and _tagged:
                                     _trust_warns.append('reversal_unconfirmed')
                                     print(f'[{symbol}] TRUST_MODEL {new_side}: counter-trend in '
                                           f'{_reg} — {_why} — firing tagged RISKY')
@@ -4085,7 +4085,8 @@ class LiveEngine:
                                     if symbol in self.last_signals:
                                         self.last_signals[symbol]['fire']            = False
                                         self.last_signals[symbol]['signal']          = 'HOLD'
-                                        self.last_signals[symbol]['regime_blocked']  = True
+                                        self.last_signals[symbol]['evaluating']      = True
+                                        self.last_signals[symbol]['pending_entry']     = True
                                         self.last_signals[symbol]['structure_reason'] = (
                                             f'counter-trend {new_side} in {_reg}: {_why}')
                                     self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
