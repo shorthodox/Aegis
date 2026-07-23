@@ -2172,6 +2172,7 @@ class LiveEngine:
     # into resistance / selling into support.
     STRUCT_5M_WINDOW  = 4
     STRUCT_5M_MIN     = 3
+    ENTRY_5M_WINDOW   = 4  # v81: alias for Guard M/J 5m confirmation window (same as STRUCT_5M_WINDOW)
     STRUCT_15M_WINDOW = 2
     STRUCT_15M_MIN    = 2
     # Break-and-retest scan depth (closed 5m candles ≈ one hour)
@@ -3503,39 +3504,34 @@ class LiveEngine:
                             except Exception:
                                 _came_from_m = False
 
-                        # WRONG LOCATION → REJECT, don't wait. A SELL belongs AT
-                        # resistance / a BUY at support, so a signal only waits while
-                        # it is on its OWN side of the range. range_position (0 = at
-                        # support, 1 = at resistance) is the chart's own read: a SELL
-                        # in the SUPPORT half (rp < mid — "sell at support") or a BUY
-                        # in the RESISTANCE half (rp > mid) is on the wrong side,
-                        # waiting for a level it is far from and may never reach — so
-                        # block it outright. Uses range_position (always present, the
-                        # displayed Sup/Res) rather than _important_levels, which
-                        # often has no opposite level to compare. at-level and
-                        # tag+reject fired above and are exempt (a genuine reject can
-                        # sit anywhere). Fails OPEN when range_position is missing.
+                        # ZONE AWARENESS: v81 relaxation — allow fires at S/R zones even
+                        # if not exactly at the tested level. A BUY in the STRUCT_SUPPORT_ZONE
+                        # or a SELL in the STRUCT_RESISTANCE_ZONE can proceed if 5m momentum
+                        # confirms the reversal. Only block if in the OPPOSITE zone (e.g. BUY
+                        # in resistance zone without a break) — the true wrong-side entry.
                         _rp_m = result.get('range_position')
-                        if _rp_m is not None and not _at_level_m and not _came_from_m:
+                        _in_correct_zone = False
+                        if _rp_m is not None:
                             _rp_m = float(_rp_m)
-                            _wrong_loc_m = ((new_side == 'SELL' and _rp_m < self.PENDING_WRONG_LOC_RP) or
-                                            (new_side == 'BUY'  and _rp_m > 1.0 - self.PENDING_WRONG_LOC_RP))
-                            if _wrong_loc_m:
-                                # v73: HARD again by user decision — the S/R location
-                                # gate is doctrine even under trust-model.
-                                _opp_role = 'support' if new_side == 'SELL' else 'resistance'
-                                print(f'[{symbol}] MODEL BLOCK {new_side}: WRONG_LOCATION — '
-                                      f'range_position {_rp_m:.2f} is in the {_opp_role} half; '
-                                      f'a {new_side} belongs at {_role_m}, not down here')
-                                if symbol in self.last_signals:
-                                    self.last_signals[symbol]['fire']             = False
-                                    self.last_signals[symbol]['signal']           = 'HOLD'
-                                    self.last_signals[symbol]['location_blocked']  = True
-                                    self.last_signals[symbol]['pending_entry']     = False
-                                    self.last_signals[symbol]['structure_reason']  = (
-                                        f'{new_side} in the {_opp_role} half (rp {_rp_m:.2f})')
-                                self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
-                                return
+                            _in_correct_zone = ((new_side == 'BUY' and _rp_m <= self.STRUCT_SUPPORT_ZONE) or
+                                               (new_side == 'SELL' and _rp_m >= self.STRUCT_RESISTANCE_ZONE))
+                        
+                        # Only hard-block if NOT at level AND NOT coming from level AND in opposite zone
+                        if (_rp_m is not None and not _at_level_m and not _came_from_m 
+                                and not _in_correct_zone):
+                            _opp_role = 'support' if new_side == 'SELL' else 'resistance'
+                            print(f'[{symbol}] MODEL BLOCK {new_side}: WRONG_ZONE — '
+                                  f'range_position {_rp_m:.2f} is in the {_opp_role} zone; '
+                                  f'a {new_side} must be in the {_role_m} zone (rp <= 0.35 for BUY, >= 0.65 for SELL)')
+                            if symbol in self.last_signals:
+                                self.last_signals[symbol]['fire']             = False
+                                self.last_signals[symbol]['signal']           = 'HOLD'
+                                self.last_signals[symbol]['location_blocked']  = True
+                                self.last_signals[symbol]['pending_entry']     = False
+                                self.last_signals[symbol]['structure_reason']  = (
+                                    f'{new_side} in the {_opp_role} zone (rp {_rp_m:.2f})')
+                            self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                            return
 
                         # Before placing into pending, check if short-term 5m
                         # reversal momentum has already printed — if 3 of the
@@ -3559,7 +3555,16 @@ class LiveEngine:
                         except Exception:
                             _has_5m_reversal = False
 
-                        if _target_m is None or (not _at_level_m and not _came_from_m and not _has_5m_reversal):
+                        # v81: RELAXED PENDING LOGIC — fire at zone with 5m confirmation
+                        # If price is in the CORRECT S/R ZONE and 5m momentum confirms, fire now.
+                        # Only go pending if NOT at level AND NOT in zone AND NOT coming from level.
+                        _price_in_zone = ((new_side == 'BUY' and _rp_m <= self.STRUCT_SUPPORT_ZONE) or
+                                         (new_side == 'SELL' and _rp_m >= self.STRUCT_RESISTANCE_ZONE)) if _rp_m is not None else False
+                        
+                        _should_wait = (_target_m is None or 
+                                       (not _at_level_m and not _came_from_m and not _has_5m_reversal and not _price_in_zone))
+                        
+                        if _should_wait:
                             _why_m = (f'no tested {_role_m} to wait for'
                                       if _target_m is None else
                                       f'approaching {_role_m} {_target_m:.6g} '
@@ -3661,24 +3666,26 @@ class LiveEngine:
                         except Exception:
                             _lvl_ctx = None
 
-                        # Strict S/R Location Veto: BUY belongs at SUPPORT (rp <= 0.35),
-                        # SELL belongs at RESISTANCE (rp >= 0.65). Block wrong location entries.
+                        # v81: ZONE-BASED LOCATION GATE — allow fires at S/R zones,
+                        # block only opposite-zone entries (e.g. BUY in RESISTANCE_ZONE without a break).
                         _rp_k = _range_pos(result)
-                        _wrong_range = (
-                            (new_side == 'BUY'  and _rp_k > self.PENDING_WRONG_LOC_RP) or
-                            (new_side == 'SELL' and _rp_k < 1.0 - self.PENDING_WRONG_LOC_RP)
+                        _at_support_zone = (_rp_k <= self.STRUCT_SUPPORT_ZONE)
+                        _at_resist_zone = (_rp_k >= self.STRUCT_RESISTANCE_ZONE)
+                        _wrong_zone = (
+                            (new_side == 'BUY'  and _at_resist_zone and not bool(result.get('resistance_broken_recent'))) or
+                            (new_side == 'SELL' and _at_support_zone and not bool(result.get('support_broken_recent')))
                         )
-                        if _wrong_range:
+                        if _wrong_zone:
                             _opp_role = 'resistance' if new_side == 'BUY' else 'support'
-                            print(f'[{symbol}] MODEL BLOCK {new_side}: WRONG_LOCATION — '
-                                  f'range_position {_rp_k:.2f} is in the {_opp_role} half; '
-                                  f'a {new_side} belongs at {"support" if new_side == "BUY" else "resistance"} (rp={_rp_k:.2f})')
+                            print(f'[{symbol}] MODEL BLOCK {new_side}: WRONG_ZONE — '
+                                  f'range_position {_rp_k:.2f} is in the {_opp_role} zone and NOT broken; '
+                                  f'a {new_side} at this zone without a break is a bad entry (rp={_rp_k:.2f})')
                             if symbol in self.last_signals:
                                 self.last_signals[symbol]['fire']             = False
                                 self.last_signals[symbol]['signal']           = 'HOLD'
                                 self.last_signals[symbol]['location_blocked']  = True
                                 self.last_signals[symbol]['pending_entry']     = False
-                                self.last_signals[symbol]['structure_reason']  = f'{new_side} in the {_opp_role} half (rp {_rp_k:.2f})'
+                                self.last_signals[symbol]['structure_reason']  = f'{new_side} at {_opp_role} zone without break (rp {_rp_k:.2f})'
                             self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                             return
 
