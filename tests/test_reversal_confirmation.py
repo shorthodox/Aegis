@@ -44,7 +44,7 @@ def test_reversal_confirmation_logic():
 
     verdict, detail = asyncio.run(engine._structure_gate('ARB/USDT', 'BUY', 0.0895, result_near_res))
     assert verdict == 'WAIT', f"Expected WAIT for BUY near resistance, got {verdict}: {detail}"
-    assert 'approaching' in detail or 'breakout' in detail
+    assert 'approaching' in detail or 'breakout' in detail or 'insufficient RR headroom' in detail
 
     # 2. Test _structure_gate: BUY at support WITHOUT 5m 3-candle reversal confirmation
     result_at_sup = {
@@ -59,7 +59,7 @@ def test_reversal_confirmation_logic():
         return [
             [0, 0.0825, 0.0826, 0.0821, 0.0822, 100],
             [0, 0.0822, 0.0823, 0.0818, 0.0819, 100],
-            [0, 0.0819, 0.0820, 0.0816, 0.0817, 100],
+            [0, 0.0819, 0.0820, 0.0817, 0.0817, 100],
             [0, 0.0817, 0.0818, 0.0815, 0.0816, 100],
             [0, 0.0816, 0.0817, 0.0814, 0.0815, 100],
         ]

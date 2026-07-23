@@ -5486,11 +5486,50 @@ class LiveEngine:
         recent    = closed_5m[-self.STRUCT_RETEST_LOOKBACK:] if closed_5m else []
         _lname    = 'support' if bullish else 'resistance'
 
+        # Volume Absorption & Liquidity Sweep Detection
+        _vol_absorption = True
+        _rel_vol5 = 1.0
+        if closed_5m and len(closed_5m) >= 5:
+            _vols = [float(c[5]) for c in closed_5m if len(c) > 5]
+            if len(_vols) >= 5:
+                _avg_v = sum(_vols[:-1]) / max(1, len(_vols) - 1)
+                _rel_vol5 = (_vols[-1] / _avg_v) if _avg_v > 0 else 1.0
+                _vol_absorption = (_rel_vol5 >= 1.10)
+
+        _liq_sweep = False
+        if recent and (0 < support < resistance):
+            if bullish:
+                _liq_sweep = any(float(c[3]) < support and float(c[4]) >= support for c in recent)
+            else:
+                _liq_sweep = any(float(c[2]) > resistance and float(c[4]) <= resistance for c in recent)
+        if _liq_sweep:
+            result['liquidity_sweep'] = True
+
+        # Minimum Risk-to-Reward (RR) Headroom Check (Min 1.4:1)
+        if 0 < support < resistance:
+            _sl_est_dist = (0.5 * atr_g) + (abs(price - support) if bullish else abs(resistance - price))
+            _sl_est_dist = max(0.7 * atr_g, min(_sl_est_dist, 1.8 * atr_g))
+            if bullish:
+                _headroom = (resistance - price) / max(1e-6, _sl_est_dist)
+            else:
+                _headroom = (price - support) / max(1e-6, _sl_est_dist)
+            result['rr_headroom'] = round(_headroom, 2)
+            if _headroom < 1.4:
+                return 'WAIT', f'insufficient RR headroom ({_headroom:.2f}:1 < 1.40:1) to opposing level'
+
         # ── CASE 1: CORRECT LEVEL (BUY at support / SELL at resistance) ────────
         # Primary setup — fire at/near the level ONLY with 5m 3-candle reversal confirmation.
         if correct_level:
             level = support if bullish else resistance
             dist  = abs(price - level)
+            
+            # Counter-trend RSI & volume absorption gate
+            _rsi_val = float(result.get('rsi', 50) or 50)
+            if counter_trend:
+                _rsi_ok = (_rsi_val <= 35) if bullish else (_rsi_val >= 65)
+                if not _rsi_ok and not _vol_absorption:
+                    return 'WAIT', f'counter-trend {_lname}_reversal requires RSI extreme (RSI {_rsi_val:.1f}) or volume absorption'
+
             # v46: REJECTION FAST-PATH — price TAGGED the level (a recent wick reached
             # it) and has now moved MORE than STRUCT_REJECTION_PCT (10%) of the range
             # back off it: a SELL >10% BELOW the resistance it hit, a BUY >10% ABOVE
@@ -5512,8 +5551,8 @@ class LiveEngine:
             near = dist <= prox
             if tested or near:
                 _pat = _reversal_candle(closed_5m, want_bullish=bullish) if closed_5m else None
-                if confirmed:
-                    return 'PASS', f'{_lname}_reversal confirmed ({_pat or f"5m {n5}/{self.STRUCT_5M_WINDOW}"}, 15m {n15}/{self.STRUCT_15M_WINDOW}) @ {level:.6g}'
+                if confirmed or _liq_sweep:
+                    return 'PASS', f'{_lname}_reversal confirmed ({"sweep+" if _liq_sweep else ""}{_pat or f"5m {n5}/{self.STRUCT_5M_WINDOW}"}, 15m {n15}/{self.STRUCT_15M_WINDOW}) @ {level:.6g}'
                 if partly_confirmed or _pat is not None:
                     return 'PASS', f'{_lname}_reversal 5m-confirmed ({_pat or f"5m {n5}/{self.STRUCT_5M_WINDOW}"}) @ {level:.6g}'
                 # Require proper 5m 3-candle reversal confirmation before firing
@@ -6962,6 +7001,24 @@ def _build_terminal_dashboard(engine: 'LiveEngine') -> None:
             if sig.get('pending_entry'):
                 _ps = str(sig.get('pending_side', '') or '')
                 return f'[yellow]⏳ ARMED {_ps}[/]'.rstrip()
+            
+            _qual = float(sig.get('quality_score', 0) or 0)
+            _reason = str(sig.get('structure_reason') or sig.get('pending_reason') or sig.get('vetoes') or '').strip()
+            
+            if _qual >= 60 or sig.get('location_blocked') or sig.get('structure_blocked') or sig.get('rr_blocked') or sig.get('momentum_blocked'):
+                if 'WRONG_ZONE' in _reason or 'wrong zone' in _reason.lower():
+                    return '[dim yellow]✋ WRONG_ZONE[/]'
+                if 'headroom' in _reason.lower() or 'rr' in _reason.lower() or sig.get('rr_blocked'):
+                    return '[dim yellow]✋ LOW_RR[/]'
+                if 'unconfirmed' in _reason.lower() or '5m' in _reason.lower() or sig.get('momentum_blocked'):
+                    return '[dim yellow]⏳ UNCONF_5M[/]'
+                if 'far' in _reason.lower() or 'waiting' in _reason.lower():
+                    return '[dim yellow]⏳ PENDING[/]'
+                if _reason:
+                    _short_r = _reason.replace('MODEL BLOCK', '').replace('STRUCTURE_GATE', '').replace('blocked', '').strip()[:14]
+                    return f'[dim yellow]✋ {_short_r.upper()}[/]'
+                return '[dim yellow]✋ GATED[/]'
+
             return '[dim]·[/]'
         _p = ' [dim](paper)[/]' if sig.get('paper_only') else ''
         if 'STRONG' in strength:
