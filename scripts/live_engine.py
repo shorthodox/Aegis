@@ -1384,6 +1384,8 @@ class DynamicRiskEngine:
             risk = ((price - support) + buf) if (0 < support < price) else cap
             risk = max(floor, min(risk, cap))
             sl   = price - risk
+            if 0 < support < price:
+                sl = min(sl, support - 0.2 * atr)
             # Structural strong target = the major resistance (else an R-multiple).
             tp3  = resistance if resistance > price else price + 3.5 * risk
             rng  = (resistance - support) if (0 < support < resistance) else (tp3 - price)
@@ -1403,6 +1405,8 @@ class DynamicRiskEngine:
             risk = ((resistance - price) + buf) if (resistance > price) else cap
             risk = max(floor, min(risk, cap))
             sl   = price + risk
+            if resistance > price:
+                sl = max(sl, resistance + 0.2 * atr)
             tp3  = support if 0 < support < price else price - 3.5 * risk
             rng  = (resistance - support) if (0 < support < resistance) else (price - tp3)
             tp1  = price - 1.0 * risk
@@ -2212,9 +2216,8 @@ class LiveEngine:
     STRUCT_BREAKOUT_MIN_HOLD    = 3
     STRUCT_BREAKOUT_MAX_EXT_ATR = 2.5
     # Reversal entries fire close to the level: allowed when a wick has TAGGED the
-    # level OR price is within this many ATRs of it. Back to 0.9 (0.5 was too tight
-    # and muted most S/R reversals — the PRIMARY setup — leaving the fire rate low).
-    STRUCT_LEVEL_PROXIMITY_ATR = 1.5
+    # level OR price is within this many ATRs of it (0.35 ATR = thin, precise entry gap).
+    STRUCT_LEVEL_PROXIMITY_ATR = 0.35
     # Rejection fast-path: once price has TAGGED a level and moved back more than
     # this fraction of the S/R range off it (a SELL >10% below resistance it hit /
     # a BUY >10% above support it hit), the reversal fires immediately — the
@@ -2239,7 +2242,7 @@ class LiveEngine:
     # ATR tolerance used when checking whether a closed 5m candle tagged the
     # counter-trend reversal level.  This is distinct from the maximum chase
     # distance allowed for the eventual entry.
-    REVERSAL_PROX_ATR     = 0.9
+    REVERSAL_PROX_ATR     = 0.35
     # Maximum distance from the tagged support/resistance level at which a
     # counter-trend reversal may still enter. This is separate from the tag
     # tolerance because price may touch a level and then move away before the
@@ -2357,25 +2360,14 @@ class LiveEngine:
     LEVEL_MERGE_ATR   = 0.5   # pivots within 0.5 ATR are the SAME level
     LEVEL_MIN_TOUCHES = 2     # touched once is not a level, it is an accident
     LEVEL_TOP_K       = 4     # keep ONLY the strongest levels — the whole point
-    AT_LEVEL_ATR      = 0.6   # price is "at" a level within this many ATR
+    AT_LEVEL_ATR      = 0.35  # price is "at" a level within this many ATR (thin entry gap)
 
     # ── Guard M: hold every signal until price is AT the level ───────────────
     # A signal no longer fires mid-range. It is HELD (pending) until price is
     # within PENDING_NEAR_PCT of the level it should reverse at — a BUY at the
     # nearest important SUPPORT below, a SELL at the nearest important RESISTANCE
-    # above — measured in PRICE, not ATR (the user's spec: "wait for that price
-    # to be reached as near as possible"). Only then does the 3x5m confirmation
-    # (Guard J) run and the held signal fire. If there is no tested level on the
-    # correct side (price at the extreme of its range), it stays pending rather
-    # than firing into open air. The scan re-evaluates every cycle, so a pending
-    # signal fires the moment price reaches its level and confirms.
-    #
-    # MEASURED WARNING: on a 28-signal book only ~5 sit within 0.3% of their
-    # level; the other ~23 go pending. This is a deliberate ~80% cut in immediate
-    # fires — precisely the "at a level is mandatory" design that collapsed the
-    # rate in v25/v38. The pending queue is what rescues it: the setups are not
-    # discarded, they wait. Expect a quieter, spikier feed by design.
-    PENDING_NEAR_PCT  = 1.2   # price within 1.2% of the level counts as "at" it
+    # above — measured in PRICE, not ATR.
+    PENDING_NEAR_PCT  = 0.35  # price within 0.35% of the level counts as "at" it
 
     # Minimum time a pending setup must be absent before its notification can
     # be emitted again.  Keep this on LiveEngine because the notifier uses it
