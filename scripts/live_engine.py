@@ -2804,6 +2804,15 @@ class LiveEngine:
                 sig['pending_reason'] = armed.get('reason', 'waiting for level / 5m turn')
                 sig['structure_reason'] = f"pending — {sig['pending_reason']}"
 
+    def _register_armed_pending_setup(self, symbol: str, side: str, target: Optional[float], reason: str) -> None:
+        """Register or refresh a persistent armed setup for a waiting signal."""
+        self._armed_pending_setups[symbol] = {
+            'side':        side,
+            'target':      round(target, 10) if target else None,
+            'reason':      reason,
+            'armed_time':  time.time(),
+        }
+
     def _notify_new_pending(self) -> None:
         """Telegram heads-up when a symbol NEWLY enters PENDING — ONE alert per
         pending episode, flickers tolerated.
@@ -3712,12 +3721,7 @@ class LiveEngine:
                                       f'or a tag+reject or 3x5m reversal)')
                             print(f'[{symbol}] MODEL PENDING {new_side}: {_why_m} — '
                                   f'holding for price to reach the {_role_m} level')
-                            self._armed_pending_setups[symbol] = {
-                                'side': new_side,
-                                'target': round(_target_m, 10) if _target_m else None,
-                                'reason': _why_m,
-                                'armed_time': time.time(),
-                            }
+                            self._register_armed_pending_setup(symbol, new_side, _target_m, _why_m)
                             if symbol in self.last_signals:
                                 self.last_signals[symbol]['fire']            = False
                                 self.last_signals[symbol]['signal']          = 'HOLD'
@@ -3773,6 +3777,7 @@ class LiveEngine:
                         if not _confirmed:
                             print(f'[{symbol}] MODEL WAIT {new_side}: {_why5m} — '
                                   f'not entering without a confirmed reversal candle + 5m momentum')
+                            self._register_armed_pending_setup(symbol, new_side, _target_m, _why5m)
                             if symbol in self.last_signals:
                                 self.last_signals[symbol]['fire']            = False
                                 self.last_signals[symbol]['signal']          = 'HOLD'
@@ -4481,15 +4486,17 @@ class LiveEngine:
                         # confirmation. Marked pending (not blocked) so it surfaces as
                         # "waiting for <level>" rather than being thrown away.
                         print(f'[{symbol}] STRUCTURE_GATE pending {new_side}: {_sg_detail}')
+                        _sg_target = (
+                            float(result.get('resistance', 0) or 0) if new_side == 'SELL'
+                            else float(result.get('support', 0) or 0))
+                        self._register_armed_pending_setup(symbol, new_side, _sg_target, _sg_detail)
                         if symbol in self.last_signals:
                             self.last_signals[symbol]['fire']            = False
                             self.last_signals[symbol]['signal']          = 'HOLD'
                             self.last_signals[symbol]['pending_entry']   = True
                             self.last_signals[symbol]['pending_side']    = new_side
                             self.last_signals[symbol]['pending_reason']  = _sg_detail
-                            self.last_signals[symbol]['pending_target']  = (
-                                float(result.get('resistance', 0) or 0) if new_side == 'SELL'
-                                else float(result.get('support', 0) or 0))
+                            self.last_signals[symbol]['pending_target']  = _sg_target
                             self.last_signals[symbol]['structure_blocked'] = False
                         self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                         return
