@@ -2904,6 +2904,76 @@ class LiveEngine:
             except Exception:
                 pass
 
+    def _handle_benched_symbol(self, symbol: str) -> bool:
+        """Check if symbol is benched and update signals. Returns True if benched."""
+        if symbol not in getattr(self, '_benched', ()):
+            return False
+        self.last_signals.setdefault(symbol, {}).update({
+            'symbol':  symbol,
+            'signal':  'HOLD',
+            'fire':    False,
+            'benched': True,
+            'price':   self.live_prices.get(symbol, 0.0),
+        })
+        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+        return True
+
+    def _resolve_price(self, result: Dict[str, Any], symbol: str) -> float:
+        """Resolve price: prefer WS tick over stale model price."""
+        _model_price = float(result.get('price', 0) or 0)
+        _ws_price = float(self.live_prices.get(symbol, 0) or 0)
+        price = _ws_price if _ws_price > 0 else _model_price
+        if _model_price > 0 and _ws_price == 0:
+            self.live_prices[symbol] = _model_price
+        return price
+
+    def _extract_hmm_fields(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract HMM regime fields from prediction result."""
+        return {
+            'regime':        result.get('hmm_regime', 'UNKNOWN'),
+            'available':     bool(result.get('hmm_available', False)),
+            'conf_adj':      float(result.get('hmm_conf_adjustment', 0.0)),
+            'atr_mult':      float(result.get('hmm_atr_mult', 1.0)),
+            'pos_scale':     float(result.get('hmm_position_scale', 1.0)),
+            'trade_ok':      bool(result.get('hmm_trade_allowed', True)),
+            'trans_risk':    float(result.get('hmm_transition_risk', 0.0)),
+        }
+
+    def _check_hmm_trade_veto(self, symbol: str, hmm: Dict[str, Any]) -> bool:
+        """Check if HMM blocks trading. Returns True if blocked."""
+        if not hmm['available'] or hmm['trade_ok']:
+            return False
+        if symbol in self.last_signals:
+            self.last_signals[symbol]['fire']         = False
+            self.last_signals[symbol]['signal']       = 'HOLD'
+            self.last_signals[symbol]['hmm_blocked']  = True
+        self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+        return True
+
+    def _update_regime_from_hmm(self, regime, result: Dict[str, Any], hmm: Dict[str, Any]):
+        """Update regime based on HMM confidence."""
+        if not hmm['available'] or float(result.get('hmm_confidence', 0)) <= 0.5:
+            return regime
+        _HMM_TO_INTERNAL = {
+            'TRENDING_BULL':      _REGIME_TRENDING_BULL,
+            'TRENDING_BEAR':      _REGIME_TRENDING_BEAR,
+            'CHOPPY':             _REGIME_RANGING,
+            'VOLATILE_EXPANSION': _REGIME_VOLATILE_EXPANSION,
+            'COMPRESSION':        _REGIME_VOLATILE_COMPRESS,
+            'ACCUMULATION':       _REGIME_ACCUMULATION,
+            'DISTRIBUTION':       _REGIME_DISTRIBUTION,
+        }
+        _internal = _HMM_TO_INTERNAL.get(hmm['regime'])
+        if _internal:
+            return RegimeState(
+                regime               = _internal,
+                confidence           = float(result.get('hmm_confidence', 0.5)),
+                trade_allowed        = hmm['trade_ok'],
+                preferred_strategies = regime.preferred_strategies,
+                max_position_pct     = regime.max_position_pct * hmm['pos_scale'],
+            )
+        return regime
+
     async def _process_symbol(
         self, symbol: str, predictor: Any, sem: asyncio.Semaphore
     ) -> None:
@@ -2911,15 +2981,7 @@ class LiveEngine:
         # predict_signal() would early-return fire=False / edge=0 anyway. Skip
         # the call entirely — it costs a full 350h feature build per scan for a
         # result that can never fire. Still surfaced as a monitor-only token.
-        if symbol in getattr(self, '_benched', ()):
-            self.last_signals.setdefault(symbol, {}).update({
-                'symbol':  symbol,
-                'signal':  'HOLD',
-                'fire':    False,
-                'benched': True,
-                'price':   self.live_prices.get(symbol, 0.0),
-            })
-            self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+        if self._handle_benched_symbol(symbol):
             return
 
         async with sem:
@@ -2938,62 +3000,23 @@ class LiveEngine:
             if not isinstance(result, dict):
                 return
 
-            _model_price = float(result.get('price', 0) or 0)
-            # Prefer the live WebSocket tick for both display and entry pricing.
-            # The WS ticker updates self.live_prices every second; the model price
-            # is a 1h candle close that can be stale by minutes, causing an instant
-            # phantom loss at entry. Only fall back to the model price if WS is unavailable.
-            _ws_price = float(self.live_prices.get(symbol, 0) or 0)
-            price = _ws_price if _ws_price > 0 else _model_price
-            if _model_price > 0 and _ws_price == 0:
-                # WS not yet seeded for this symbol — seed it with the model price
-                self.live_prices[symbol] = _model_price
+            price = self._resolve_price(result, symbol)
 
             # ── Adaptive intelligence layer ───────────────────────────────────
             # Step 1: HMM regime (probabilistic, from predictor's result dict)
             # The HMM ran inside predict_realtime() and attached hmm_* fields.
             # We extract them here and let them sharpen the MarketRegimeDetector.
-            _hmm_regime     = result.get('hmm_regime', 'UNKNOWN')
-            _hmm_available  = bool(result.get('hmm_available', False))
-            _hmm_conf_adj   = float(result.get('hmm_conf_adjustment', 0.0))
-            _hmm_atr_mult   = float(result.get('hmm_atr_mult', 1.0))
-            _hmm_pos_scale  = float(result.get('hmm_position_scale', 1.0))
-            _hmm_trade_ok   = bool(result.get('hmm_trade_allowed', True))
-            _hmm_trans_risk = float(result.get('hmm_transition_risk', 0.0))
+            hmm = self._extract_hmm_fields(result)
 
             # If HMM says no-trade (e.g. COMPRESSION pre-breakout or DISTRIBUTION)
             # suppress the signal immediately — don't waste the quality scoring pass.
-            if _hmm_available and not _hmm_trade_ok:
-                if symbol in self.last_signals:
-                    self.last_signals[symbol]['fire']         = False
-                    self.last_signals[symbol]['signal']       = 'HOLD'
-                    self.last_signals[symbol]['hmm_blocked']  = True
-                self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+            if self._check_hmm_trade_veto(symbol, hmm):
                 return
 
             # Step 2: Rule-based regime classifier (existing, now HMM-informed)
             # If HMM has a confident read, override the heuristic detector's label.
             regime = self.regime_detector.detect(result)
-            if _hmm_available and float(result.get('hmm_confidence', 0)) > 0.5:
-                # Map HMM label to the existing RegimeState taxonomy
-                _HMM_TO_INTERNAL = {
-                    'TRENDING_BULL':      _REGIME_TRENDING_BULL,
-                    'TRENDING_BEAR':      _REGIME_TRENDING_BEAR,
-                    'CHOPPY':             _REGIME_RANGING,
-                    'VOLATILE_EXPANSION': _REGIME_VOLATILE_EXPANSION,
-                    'COMPRESSION':        _REGIME_VOLATILE_COMPRESS,
-                    'ACCUMULATION':       _REGIME_ACCUMULATION,
-                    'DISTRIBUTION':       _REGIME_DISTRIBUTION,
-                }
-                _internal = _HMM_TO_INTERNAL.get(_hmm_regime)
-                if _internal:
-                    regime = RegimeState(
-                        regime               = _internal,
-                        confidence           = float(result.get('hmm_confidence', 0.5)),
-                        trade_allowed        = _hmm_trade_ok,
-                        preferred_strategies = regime.preferred_strategies,
-                        max_position_pct     = regime.max_position_pct * _hmm_pos_scale,
-                    )
+            regime = self._update_regime_from_hmm(regime, result, hmm)
 
             new_side      = result.get('side', 'FLAT')
 
@@ -3676,8 +3699,10 @@ class LiveEngine:
                         _price_in_zone = ((new_side == 'BUY' and _rp_m <= self.STRUCT_SUPPORT_ZONE) or
                                          (new_side == 'SELL' and _rp_m >= self.STRUCT_RESISTANCE_ZONE)) if _rp_m is not None else False
                         
-                        _should_wait = (_target_m is None or 
-                                       (not _at_level_m and not _came_from_m and not _has_5m_reversal and not _price_in_zone))
+                        _should_wait = (
+                            (_target_m is None and not _price_in_zone) or
+                            (not _at_level_m and not _came_from_m and not _has_5m_reversal and not _price_in_zone)
+                        )
                         
                         if _should_wait:
                             _why_m = (f'no tested {_role_m} to wait for'
@@ -4716,6 +4741,8 @@ class LiveEngine:
                     # bias, RANGING penalty (-15), low-volume penalty (-10), macro
                     # conflict penalty (-15), candlestick reversal alignment.
                     _CONTEXT_FLOOR = 70.0
+                    _hmm_trans_risk = float(result.get('hmm_trans_risk') or 0.0)
+                    _hmm_available = result.get('hmm_trans_risk') is not None
                     # When HMM detects elevated regime-transition risk, raise the
                     # context floor proportionally.  A transition risk > 0.50 means
                     # the current regime may flip mid-trade; entries at these points
