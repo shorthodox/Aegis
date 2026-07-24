@@ -3759,12 +3759,13 @@ class LiveEngine:
                         # v81: RELAXED PENDING LOGIC — fire at zone with 5m confirmation
                         # If price is in the CORRECT S/R ZONE and 5m momentum confirms, fire now.
                         # Only go pending if NOT at level AND NOT in zone AND NOT coming from level.
+                        # Also: do not let a 5m reversal alone force an off-zone fire.
                         _price_in_zone = ((new_side == 'BUY' and _rp_m <= self.STRUCT_SUPPORT_ZONE) or
                                          (new_side == 'SELL' and _rp_m >= self.STRUCT_RESISTANCE_ZONE)) if _rp_m is not None else False
                         
                         _should_wait = (
                             (_target_m is None and not _price_in_zone) or
-                            (not _at_level_m and not _came_from_m and not _has_5m_reversal and not _price_in_zone)
+                            (not _at_level_m and not _came_from_m and not _price_in_zone)
                         )
                         
                         if _should_wait:
@@ -3772,7 +3773,7 @@ class LiveEngine:
                                       if _target_m is None else
                                       f'approaching {_role_m} {_target_m:.6g} '
                                       f'({_near_pct_m:.2f}% away, needs <= {self.PENDING_NEAR_PCT}% '
-                                      f'or a tag+reject or 3x5m reversal)')
+                                      f'or a tag+reject or 3x5m reversal in the correct zone)')
                             print(f'[{symbol}] MODEL PENDING {new_side}: {_why_m} — '
                                   f'holding for price to reach the {_role_m} level')
                             self._register_armed_pending_setup(symbol, new_side, _target_m, _why_m)
