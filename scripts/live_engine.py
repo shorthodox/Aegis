@@ -4155,15 +4155,21 @@ class LiveEngine:
                                     print(f'[{symbol}] TRUST_MODEL {new_side}: counter-trend in '
                                           f'{_reg} — {_why} — firing tagged RISKY')
                                 else:
+                                    _pending_target = _lvl if _lvl > 0 else None
+                                    _pending_reason = f'counter-trend {new_side} in {_reg}: {_why}'
                                     print(f'[{symbol}] MODEL WAIT {new_side}: counter-trend in '
                                           f'{_reg} — {_why}')
                                     if symbol in self.last_signals:
                                         self.last_signals[symbol]['fire']            = False
                                         self.last_signals[symbol]['signal']          = 'HOLD'
                                         self.last_signals[symbol]['evaluating']      = True
-                                        self.last_signals[symbol]['pending_entry']     = True
-                                        self.last_signals[symbol]['structure_reason'] = (
-                                            f'counter-trend {new_side} in {_reg}: {_why}')
+                                        self.last_signals[symbol]['pending_entry']   = True
+                                        self.last_signals[symbol]['pending_side']    = new_side
+                                        self.last_signals[symbol]['pending_target']  = _pending_target
+                                        self.last_signals[symbol]['pending_reason']  = _pending_reason
+                                        self.last_signals[symbol]['structure_reason'] = _pending_reason
+                                    self._register_armed_pending_setup(
+                                        symbol, new_side, _pending_target, _pending_reason)
                                     self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
                                     return
 

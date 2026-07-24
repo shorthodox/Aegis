@@ -3878,7 +3878,8 @@ async def live_signal_state(user_id: str = Depends(get_current_user)):
                 "paper":     bool(_e.get("paper_only")),
                 "risk_tier": _e.get("risk_tier", ""),
             })
-        elif _e.get("pending_entry"):
+        elif (_e.get("pending_entry")
+              and str(_e.get("pending_side") or "").upper() in ("BUY", "SELL")):
             armed.append({
                 "symbol": _sym,
                 "side":   _e.get("pending_side"),
@@ -4035,7 +4036,9 @@ async def track_record_endpoint(source: str = None,
             if not isinstance(_sig, dict) or not _sig.get("pending_entry"):
                 continue
             _pside = str(_sig.get("pending_side") or _sig.get("side") or "").upper()
-            _pdir  = "LONG" if _pside == "BUY" else "SHORT" if _pside == "SELL" else ""
+            if _pside not in ("BUY", "SELL"):
+                continue
+            _pdir  = "LONG" if _pside == "BUY" else "SHORT"
             _pending_rows.append({
                 "signal_id":       None,
                 "symbol":          _sym if _authed else "HIDDEN",
