@@ -61,6 +61,32 @@ def test_market_regime_detector_bearish_drop():
     assert state.regime == _REGIME_TRENDING_BEAR, f"Expected TRENDING_BEAR for bearish drop, got {state.regime}"
 
 
+def test_market_regime_detector_conflicting_signals_uses_trend_direction():
+    detector = MarketRegimeDetector()
+
+    # Conflicting momentum: marginally bullish RSI, bearish MACD, and a downtrend.
+    # The detector should respect the trend direction instead of defaulting to
+    # TRENDING_BULL.
+    result = {
+        'adx': 35.0,
+        'rsi': 53.0,
+        'macd_signal': 'BEARISH',
+        'trend_regime': 'TRENDING_DOWN',
+        'market_bias': 'NEUTRAL',
+        'volatility_regime': 'MEDIUM',
+        'atr_pct': 1.5,
+        'volume_zscore': 0.2,
+        'volume_strength': 'AVERAGE',
+        'funding_bias': 'NEUTRAL',
+        'oi_trend': 'STABLE',
+    }
+
+    state = detector.detect(result)
+    assert state.regime == _REGIME_TRENDING_BEAR, (
+        f"Expected TRENDING_BEAR for conflicting downtrend signals, got {state.regime}"
+    )
+
+
 if __name__ == '__main__':
     test_market_regime_detector_bullish_rally()
     test_market_regime_detector_bearish_drop()

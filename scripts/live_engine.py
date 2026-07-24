@@ -779,11 +779,33 @@ class MarketRegimeDetector:
         is_ranging   = adx < 20
         is_volatile  = (vol_regime == 'HIGH' or atr_pct > 3.0)
         is_quiet     = (vol_regime == 'LOW'  and atr_pct < 1.2)
-        is_bull_momentum = (rsi > 52) or (macd_signal == 'BULLISH') or ('UP' in trend_regime) or (market_bias == 'BULLISH')
-        is_bear_momentum = (rsi < 48) or (macd_signal == 'BEARISH') or ('DOWN' in trend_regime) or (market_bias == 'BEARISH')
+        bull_score = (
+            int(rsi > 52)
+            + int(macd_signal == 'BULLISH')
+            + int('UP' in trend_regime)
+            + int(market_bias == 'BULLISH')
+        )
+        bear_score = (
+            int(rsi < 48)
+            + int(macd_signal == 'BEARISH')
+            + int('DOWN' in trend_regime)
+            + int(market_bias == 'BEARISH')
+        )
 
-        is_bullish   = is_bull_momentum and not (rsi < 45 and market_bias == 'BEARISH')
-        is_bearish   = is_bear_momentum and not (rsi > 55 and market_bias == 'BULLISH')
+        is_bullish = bull_score > bear_score
+        is_bearish = bear_score > bull_score
+
+        if bull_score == bear_score:
+            is_bullish = 'UP' in trend_regime and 'DOWN' not in trend_regime
+            is_bearish = 'DOWN' in trend_regime and 'UP' not in trend_regime
+
+        # Avoid flipping the regime when the opposing directional signal is
+        # strong and the other side is only weakly present.
+        if rsi < 45 and market_bias == 'BEARISH':
+            is_bullish = False
+        if rsi > 55 and market_bias == 'BULLISH':
+            is_bearish = False
+
         low_volume   = (volume_strength == 'BELOW_AVERAGE' or vol_zscore < -0.5)
         high_oi      = oi_trend == 'INCREASING'
         low_oi       = oi_trend == 'DECREASING'
@@ -1347,7 +1369,7 @@ class DynamicRiskEngine:
 
         Take Profit ladder (R = risk leg; Range = resistance−support)
         ------------------------------------------------------------
-          TP1  = 1R                              (1:1, quick partial)
+          TP1  = 0.7R                            (tighter first bank, early lock)
           TP2  = 2R                              (1:2, first significant objective)
           TP3  = the major structural level      (resistance for a LONG / support
                  for a SHORT) — the HTF target / liquidity pool
@@ -1389,7 +1411,7 @@ class DynamicRiskEngine:
             # Structural strong target = the major resistance (else an R-multiple).
             tp3  = resistance if resistance > price else price + 3.5 * risk
             rng  = (resistance - support) if (0 < support < resistance) else (tp3 - price)
-            tp1  = price + 1.0 * risk
+            tp1  = price + self.TP1_MULTIPLIER * risk
             tp2  = price + 2.0 * risk
             tp4  = (support + 1.618 * rng) if support > 0 else price + 5.0 * risk
             tp5  = (support + 2.618 * rng) if support > 0 else price + 7.0 * risk
@@ -1409,7 +1431,7 @@ class DynamicRiskEngine:
                 sl = max(sl, resistance + 0.2 * atr)
             tp3  = support if 0 < support < price else price - 3.5 * risk
             rng  = (resistance - support) if (0 < support < resistance) else (price - tp3)
-            tp1  = price - 1.0 * risk
+            tp1  = price - self.TP1_MULTIPLIER * risk
             tp2  = price - 2.0 * risk
             tp4  = (resistance - 1.618 * rng) if resistance > 0 else price - 5.0 * risk
             tp5  = (resistance - 2.618 * rng) if resistance > 0 else price - 7.0 * risk
@@ -3049,6 +3071,27 @@ class LiveEngine:
                              or 'NO_VALID_SR' in _uwgs['vetoes'])
                 result['vetoes']      = _hard
                 result['sr_loc_poor'] = _loc_poor
+                
+                # ── 3rd-Party Arbiter: Reversal vs. Conflicting Model Check ─────────────
+                _rp_arbiter = _range_pos(result)
+                _cdl_bull = bool(result.get('cdl_bull_reversal'))
+                _cdl_bear = bool(result.get('cdl_bear_reversal'))
+                
+                # Model says SELL, but price is in Support Zone (rp <= 0.35) and technicals confirm bullish bounce
+                if _model_side == 'SELL' and _rp_arbiter <= self.STRUCT_SUPPORT_ZONE and not bool(result.get('support_broken_recent')):
+                    if _cdl_bull or float(result.get('rsi', 50) or 50) < 42:
+                        _model_side = 'BUY'
+                        _model_fire = True
+                        result['reversal_override'] = True
+                        print(f'[{symbol}] 3RD-PARTY ARBITER: Model predicted SELL at Support zone, but technicals confirm Bullish Reversal — Overriding to BUY')
+                # Model says BUY, but price is in Resistance Zone (rp >= 0.65) and technicals confirm bearish rejection
+                elif _model_side == 'BUY' and _rp_arbiter >= self.STRUCT_RESISTANCE_ZONE and not bool(result.get('resistance_broken_recent')):
+                    if _cdl_bear or float(result.get('rsi', 50) or 50) > 58:
+                        _model_side = 'SELL'
+                        _model_fire = True
+                        result['reversal_override'] = True
+                        print(f'[{symbol}] 3RD-PARTY ARBITER: Model predicted BUY at Resistance zone, but technicals confirm Bearish Reversal — Overriding to SELL')
+
                 # MODEL decides; a hard veto can only SUPPRESS its fire.
                 if _hard:
                     result['side'] = 'FLAT'
@@ -3745,9 +3788,11 @@ class LiveEngine:
                         _at_resist_zone = (_rp_k >= self.STRUCT_RESISTANCE_ZONE)
                         _res_val_k = float(result.get('resistance', 0) or 0)
                         _sup_val_k = float(result.get('support', 0) or 0)
+                        _res_broken = bool(result.get('resistance_broken_recent'))
+                        _sup_broken = bool(result.get('support_broken_recent'))
                         _wrong_zone = (
-                            (new_side == 'BUY'  and _at_resist_zone and (_res_val_k <= 0 or price <= _res_val_k)) or
-                            (new_side == 'SELL' and _at_support_zone and (_sup_val_k <= 0 or price >= _sup_val_k))
+                            (new_side == 'BUY'  and _at_resist_zone and not _res_broken) or
+                            (new_side == 'SELL' and _at_support_zone and not _sup_broken)
                         )
                         if _wrong_zone:
                             _opp_role = 'resistance' if new_side == 'BUY' else 'support'
@@ -6322,6 +6367,9 @@ class LiveEngine:
         for k in _CONTEXT_KEYS:
             if k in result:
                 entry[k] = result[k]
+
+        entry['target_support']    = float(result.get('target_support') or result.get('support') or result.get('s1') or 0)
+        entry['target_resistance'] = float(result.get('target_resistance') or result.get('resistance') or result.get('r1') or 0)
 
         return entry
 

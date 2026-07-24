@@ -9,6 +9,7 @@ tests/test_profit_enhancements.py — Unit test verifying:
 from __future__ import annotations
 
 import asyncio
+import math
 import sys
 from pathlib import Path
 
@@ -83,6 +84,11 @@ def test_profit_enhancements_logic():
     )
     assert stops['sl'] < 0.0850, f"Stop Loss should be below support cushion, got {stops['sl']}"
     assert stops['valid_rr'] is True, "Valid RR expected with roomy resistance"
+    assert math.isclose(
+        stops['tp1'] - 0.0855,
+        stops['risk'] * engine.risk_engine.TP1_MULTIPLIER,
+        rel_tol=1e-6,
+    ), f"TP1 should be a tighter first bank at {engine.risk_engine.TP1_MULTIPLIER}x risk, got {stops['tp1']}"
 
     print("ALL PROFIT ENHANCEMENT UNIT TESTS PASSED SUCCESSFULLY!")
 
