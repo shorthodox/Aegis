@@ -2227,7 +2227,7 @@ class LiveEngine:
     CONFIRM_ABSORB_Z   = 1.5
     # Minimum number of closed 1h bars required before confirmation analysis.
     # This is read through ``self`` by _confirmation_gate.
-    CONFIRM_MIN_BARS = 20
+    CONFIRM_MIN_BARS = CONFIRM_BOS_LOOKBACK + 2
     # Agreement thresholds used by _confirmation_gate.  These are class
     # attributes because that method reads them through ``self``.
     CONFIRM_CONFLICT_THRESHOLD = 2.0
@@ -2358,6 +2358,12 @@ class LiveEngine:
     # Guard L directional-confluence floor. Evidence is signed for the model's
     # selected side, so non-reversal entries need a net positive consensus.
     MIN_DIR_CONFLUENCE         = 1
+
+    # Minimum number of core technical indicators that must agree with the
+    # model's side (macd, supertrend, market_bias, htf_daily, htf_weekly).
+    # If fewer indicators support the side, block the model fire unless the
+    # setup is a confirmed reversal at a level or TRUST_MODEL_FIRE is enabled.
+    MIN_INDICATOR_SUPPORT      = 2
 
     # Maximum number of advisory warnings allowed before a signal becomes
     # HIGH risk and is held.  This is read by _process_symbol via self.
@@ -3408,7 +3414,9 @@ class LiveEngine:
                             _c1h_bos = await self._fetch_candles(symbol, '1h', self.CONFIRM_BOS_LOOKBACK + 5)
                             _closed1h_bos = _c1h_bos[:-1] if len(_c1h_bos) >= 2 else []
                             if _closed1h_bos:
-                                _bos_info = _detect_bos_choch(_closed1h_bos, lookback=self.CONFIRM_BOS_LOOKBACK)
+                                # use a dynamic lookback bounded by available history
+                                _lb = min(self.CONFIRM_BOS_LOOKBACK, max(1, len(_closed1h_bos) - 2))
+                                _bos_info = _detect_bos_choch(_closed1h_bos, lookback=_lb)
                                 _bos_sig = float(_bos_info.get('signal', 0.0) or 0.0)
                         except Exception:
                             _bos_sig = 0.0
@@ -3555,6 +3563,38 @@ class LiveEngine:
                         _conf_reversal = (
                             (new_side == 'SELL' and _rp_conf >= 0.65) or
                             (new_side == 'BUY'  and _rp_conf <= 0.35))
+                        # ── Strict Indicator Support: require core indicators to
+                        # align with the model's side (macd, supertrend, market_bias,
+                        # htf_daily, htf_weekly). This prevents firing SELLs in a
+                        # bullish market (and vice versa) when indicators broadly
+                        # disagree. Reversals at level are exempt.
+                        _ind_votes = [
+                            _dir_ev.get('macd', 0),
+                            _dir_ev.get('supertrend', 0),
+                            _dir_ev.get('bias', 0),
+                            _dir_ev.get('htf_daily', 0),
+                            _dir_ev.get('htf_weekly', 0),
+                        ]
+                        _ind_support = sum(1 for v in _ind_votes if v > 0)
+                        if not _conf_reversal and _ind_support < self.MIN_INDICATOR_SUPPORT:
+                            if self.TRUST_MODEL_FIRE:
+                                _trust_warns.append('weak_indicator_support')
+                                print(f'[{symbol}] TRUST_MODEL {new_side}: weak indicator support '
+                                      f'({_ind_support} < {self.MIN_INDICATOR_SUPPORT}) — firing tagged RISKY')
+                            else:
+                                print(f'[{symbol}] MODEL BLOCK {new_side}: weak indicator support '
+                                      f'({_ind_support} < {self.MIN_INDICATOR_SUPPORT}) — indicators '
+                                      f'macd={_dir_ev.get("macd")}, supertrend={_dir_ev.get("supertrend")}, '
+                                      f'bias={_dir_ev.get("bias")}, htf_daily={_dir_ev.get("htf_daily")}, '
+                                      f'htf_weekly={_dir_ev.get("htf_weekly")}')
+                                if symbol in self.last_signals:
+                                    self.last_signals[symbol]['fire'] = False
+                                    self.last_signals[symbol]['signal'] = 'HOLD'
+                                    self.last_signals[symbol]['indicator_blocked'] = True
+                                    self.last_signals[symbol]['structure_reason'] = (
+                                        f'weak indicator support ({_ind_support}/{self.MIN_INDICATOR_SUPPORT})')
+                                self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                                return
                         if not _conf_reversal and _dir_net < self.MIN_DIR_CONFLUENCE:
                             _opp = [k for k, v in _dir_ev.items() if v < 0]
                             if self.TRUST_MODEL_FIRE:
@@ -5726,7 +5766,9 @@ class LiveEngine:
                     'reason': f'insufficient 1h data ({len(closed)} bars)',
                     'signals': {}}
 
-        bos = _detect_bos_choch(closed, lookback=self.CONFIRM_BOS_LOOKBACK)
+        # Use a dynamic lookback so BOS/CHoCH can be detected with available history
+        _dyn_lb = min(self.CONFIRM_BOS_LOOKBACK, max(1, len(closed) - 2))
+        bos = _detect_bos_choch(closed, lookback=_dyn_lb)
         div = _detect_divergence(closed, k=self.CONFIRM_PIVOT_K)
         vol = _detect_volume_events(closed, window=self.CONFIRM_VOL_WINDOW,
                                     climax_z=self.CONFIRM_CLIMAX_Z,

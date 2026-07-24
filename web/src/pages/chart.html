@@ -1137,11 +1137,13 @@ async function renderChart(sig) {
     // swing level already sits essentially on top of it (avoids a double line).
     const _srNear = (p) => Array.isArray(sig.sr_levels) &&
       sig.sr_levels.some(lv => p > 0 && Math.abs(lv.price - p) / p < 0.0015);
-    if (sig.resistance > 0 && !_srNear(sig.resistance))
-      addLine(sig.resistance, 'rgba(255,0,85,0.7)', 'Res');
-    if (sig.support > 0 && !_srNear(sig.support))
-      addLine(sig.support, 'rgba(74,124,104,0.7)', 'Sup');
-    addLine(sig.pivot,      'rgba(184,150,106,0.35)', 'Pvt');
+    const _targetRes = sig.target_resistance || sig.resistance;
+    const _targetSup = sig.target_support || sig.support;
+    if (_targetRes > 0 && !_srNear(_targetRes))
+      addLine(_targetRes, 'rgba(255,0,85,0.85)', 'Target Res');
+    if (_targetSup > 0 && !_srNear(_targetSup))
+      addLine(_targetSup, 'rgba(74,124,104,0.85)', 'Target Sup');
+    if (sig.pivot > 0) addLine(sig.pivot, 'rgba(184,150,106,0.35)', 'Pvt');
 
     // ── Trendline & Trend Channel (additive HTF structure) ───────────────────
     // Diagonal lines from the engine's Trendline detector. Solid = primary
@@ -1461,7 +1463,11 @@ function renderOverview(sig) {
       </div>
       <div class="level-row">
         <div class="level-label">Support</div>
-        <div class="level-val" style="color:var(--green)">${fmt(sig.support, 6)}</div>
+        <div class="level-val" style="color:var(--green)">${fmt(sig.target_support || sig.support, 6)}</div>
+      </div>
+      <div class="level-row">
+        <div class="level-label">Resistance</div>
+        <div class="level-val" style="color:var(--red)">${fmt(sig.target_resistance || sig.resistance, 6)}</div>
       </div>
     </div>
 
