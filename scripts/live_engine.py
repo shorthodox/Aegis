@@ -3115,20 +3115,34 @@ class LiveEngine:
                 _cdl_bull = bool(result.get('cdl_bull_reversal'))
                 _cdl_bear = bool(result.get('cdl_bear_reversal'))
                 
-                # Model says SELL, but price is in Support Zone (rp <= 0.35) and technicals confirm bullish bounce
+                # Model says SELL, but price is in Support Zone and technicals *might*
+                # confirm a bullish bounce. Only override the model if the reversal
+                # candle/pattern AND core indicators (MACD + trend bias) ALSO agree.
+                macd_sig = str(result.get('macd_signal', 'NEUTRAL') or 'NEUTRAL').upper()
+                supertrend = str(result.get('supertrend', '') or '').upper()
+                market_bias = str(result.get('market_bias', '') or '').upper()
+
                 if _model_side == 'SELL' and _rp_arbiter <= self.STRUCT_SUPPORT_ZONE and not bool(result.get('support_broken_recent')):
-                    if _cdl_bull or float(result.get('rsi', 50) or 50) < 42:
+                    # require both a reversal signal AND MACD+trend confirmation
+                    if (_cdl_bull or float(result.get('rsi', 50) or 50) < 42) and macd_sig == 'BULLISH' and (('BULL' in supertrend) or (market_bias == 'BULLISH')):
                         _model_side = 'BUY'
                         _model_fire = True
                         result['reversal_override'] = True
-                        print(f'[{symbol}] 3RD-PARTY ARBITER: Model predicted SELL at Support zone, but technicals confirm Bullish Reversal — Overriding to BUY')
-                # Model says BUY, but price is in Resistance Zone (rp >= 0.65) and technicals confirm bearish rejection
+                        print(f'[{symbol}] 3RD-PARTY ARBITER: Overriding SELL→BUY at support: reversal + MACD/trend confirm')
+                    else:
+                        # Do not aggressively flip the model on weak or isolated patterns
+                        if (_cdl_bull or float(result.get('rsi', 50) or 50) < 42):
+                            print(f'[{symbol}] ARBITER SKIP: bullish pattern present but MACD/trend not confirming (macd={macd_sig}, supertrend={supertrend}, bias={market_bias})')
+                # Model says BUY, but price is in Resistance Zone and technicals confirm bearish rejection
                 elif _model_side == 'BUY' and _rp_arbiter >= self.STRUCT_RESISTANCE_ZONE and not bool(result.get('resistance_broken_recent')):
-                    if _cdl_bear or float(result.get('rsi', 50) or 50) > 58:
+                    if (_cdl_bear or float(result.get('rsi', 50) or 50) > 58) and macd_sig == 'BEARISH' and (('BEAR' in supertrend) or (market_bias == 'BEARISH')):
                         _model_side = 'SELL'
                         _model_fire = True
                         result['reversal_override'] = True
-                        print(f'[{symbol}] 3RD-PARTY ARBITER: Model predicted BUY at Resistance zone, but technicals confirm Bearish Reversal — Overriding to SELL')
+                        print(f'[{symbol}] 3RD-PARTY ARBITER: Overriding BUY→SELL at resistance: reversal + MACD/trend confirm')
+                    else:
+                        if (_cdl_bear or float(result.get('rsi', 50) or 50) > 58):
+                            print(f'[{symbol}] ARBITER SKIP: bearish pattern present but MACD/trend not confirming (macd={macd_sig}, supertrend={supertrend}, bias={market_bias})')
 
                 # MODEL decides; a hard veto can only SUPPRESS its fire.
                 if _hard:
