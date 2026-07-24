@@ -6031,10 +6031,15 @@ class LiveEngine:
                 # between reversal cycles, clearing _signal_history each time).
                 # Instead, require the reversal signal to meet the same quality floor
                 # used for entry (edge_score >= MIN_QUALITY_SCORE = 70).
-                # After TP1 (SL at break-even, profit secured): close immediately.
+                # After TP1 (SL at break-even, profit secured): close immediately at
+                # the secured TP1 level to lock in the gain instead of waiting for
+                # a later market fill.
                 _tp1_secured = self._tp1_hit.get(symbol, False)
                 _rev_edge    = float(result.get('edge_score', 0.0))
-                if _tp1_secured or _rev_edge >= SignalQualityFilter.MIN_QUALITY_SCORE:
+                if _tp1_secured:
+                    _close('MODEL_REVERSAL_TP', exit_px=pos.take_profit_1)
+                    return
+                if _rev_edge >= SignalQualityFilter.MIN_QUALITY_SCORE:
                     _close('MODEL_REVERSAL_TP')
                     return
                 print(f'[{symbol}] REVERSAL_GATE deferred {pos.direction}→{side}: '
