@@ -1480,6 +1480,71 @@ async def api_signals(credentials: HTTPAuthorizationCredentials = Depends(securi
     signals = numpy_to_native(LIVE_STATE.data.get('signals', {}))
     return JSONResponse(content=signals)
 
+
+class CreateOrderRequest(BaseModel):
+    amount: int  # in paise
+    currency: Optional[str] = 'INR'
+    receipt: Optional[str] = None
+
+
+@app.post("/api/create-order")
+async def api_create_order(req: CreateOrderRequest):
+    """Create a Razorpay order. Expects amount in paise (int)."""
+    if not RAZORPAY_ENABLED:
+        raise HTTPException(status_code=503, detail="Razorpay not configured on server")
+    amt = int(req.amount or 0)
+    if amt < 100:
+        raise HTTPException(status_code=400, detail="Minimum amount is 100 paise")
+    payload = {
+        "amount": amt,
+        "currency": req.currency or "INR",
+        "receipt": req.receipt or f"rcpt_{int(time.time())}",
+    }
+    try:
+        resp = await _rzp_post("/orders", payload)
+        return JSONResponse({
+            "order_id": resp.get("id"),
+            "amount": resp.get("amount"),
+            "currency": resp.get("currency"),
+            "receipt": resp.get("receipt"),
+        })
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 401:
+            raise HTTPException(status_code=401, detail="Razorpay authentication failed")
+        raise HTTPException(status_code=500, detail=f"Razorpay error: {e.response.text}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Razorpay error: {e}")
+
+
+class VerifyPaymentRequest(BaseModel):
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
+
+
+@app.post("/api/verify-payment")
+async def api_verify_payment(req: VerifyPaymentRequest):
+    """Verify Razorpay payment signature using HMAC-SHA256"""
+    if not RAZORPAY_ENABLED:
+        raise HTTPException(status_code=503, detail="Razorpay not configured on server")
+    if not (req.razorpay_order_id and req.razorpay_payment_id and req.razorpay_signature):
+        raise HTTPException(status_code=400, detail="Missing fields")
+    import hmac, hashlib
+    payload = f"{req.razorpay_order_id}|{req.razorpay_payment_id}".encode('utf-8')
+    secret = (RAZORPAY_KEY_SECRET or "").encode('utf-8')
+    generated = hmac.new(secret, payload, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(generated, req.razorpay_signature):
+        raise HTTPException(status_code=400, detail="Signature mismatch")
+    return JSONResponse({"status": "ok"})
+
+
+@app.get("/api/razorpay-key")
+async def api_razorpay_key():
+    """Return only the public Razorpay Key ID for frontend usage."""
+    if not RAZORPAY_KEY_ID:
+        raise HTTPException(status_code=503, detail="Razorpay key not set")
+    return JSONResponse({"key_id": RAZORPAY_KEY_ID})
+
 from fastapi import Header
 
 @app.get("/api/public/signals")
