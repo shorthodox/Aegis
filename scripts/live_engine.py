@@ -803,49 +803,77 @@ class MarketRegimeDetector:
         # strong and the other side is only weakly present.
         if rsi < 45 and market_bias == 'BEARISH':
             is_bullish = False
-        if rsi > 55 and market_bias == 'BULLISH':
-            is_bearish = False
-
-        low_volume   = (volume_strength == 'BELOW_AVERAGE' or vol_zscore < -0.5)
-        high_oi      = oi_trend == 'INCREASING'
-        low_oi       = oi_trend == 'DECREASING'
-        longs_paying = funding_bias == 'LONGS_PAYING'
-        shorts_paying= funding_bias == 'SHORTS_PAYING'
-
-        # ── 1. Liquidity trap: low volume, choppy, no trending structure ─────
-        if low_volume and is_ranging and is_quiet:
-            return RegimeState(
-                regime               = _REGIME_LIQUIDITY_TRAP,
-                confidence           = 0.75,
-                trade_allowed        = False,
-                preferred_strategies = [],
-                max_position_pct     = 0.0,
+        # ── 7. TP1 hit — 20 % partial close, move SL to break-even ──────────
+        # Break-even: update pos.stop_loss to entry price so that if price
+        # reverses all the way back, we exit at entry (no loss on the position).
+        if pos.take_profit_1 > 0 and not self._tp1_hit.get(symbol, False):
+            tp1_hit = (
+                (pos.direction == 'LONG'  and check_price >= pos.take_profit_1) or
+                (pos.direction == 'SHORT' and check_price <= pos.take_profit_1)
             )
-
-        # ── 2. Volatile expansion ─────────────────────────────────────────────
-        if is_volatile and atr_pct > 4.0:
-            conf = min(0.9, 0.6 + (atr_pct - 4.0) * 0.05)
-            return RegimeState(
-                regime               = _REGIME_VOLATILE_EXPANSION,
-                confidence           = round(conf, 3),
-                trade_allowed        = True,
-                preferred_strategies = ['BREAKOUT', 'MOMENTUM'],
-                max_position_pct     = 0.06,  # reduced size in expansion
+            # v78 fix: use peak-based detection to catch TP1 hits even when price
+            # spikes through and reverses rapidly. Break-even: update pos.stop_loss
+            # to entry price so that if price reverses all the way back, we exit
+            # at entry (no loss on the position).
+            tp1_via_peak = (
+                (pos.direction == 'LONG'  and peak >= pos.take_profit_1) or
+                (pos.direction == 'SHORT' and peak <= pos.take_profit_1)
             )
+            if tp1_hit or tp1_via_peak:
+                _partial('TP1_PARTIAL', self.risk_engine.TP_CLOSE_PCTS[0])
+                self._tp1_hit[symbol]    = True
+                self._peak_price[symbol] = check_price   # reset peak tracking from TP1
+                # Break-even: SL moves to entry — guarantees no loss on remaining position
+                pos.stop_loss = pos.entry_price
+                print(f'[{symbol}] TP1_HIT @ {check_price:.6g} — '
+                      f'SL moved to break-even ({pos.entry_price:.6g})')
 
-        # ── 3. Volatile compression: quiet market after expansion ─────────────
-        if is_quiet and not is_trending:
-            return RegimeState(
-                regime               = _REGIME_VOLATILE_COMPRESS,
-                confidence           = 0.65,
-                trade_allowed        = True,
-                preferred_strategies = ['RANGE_TRADE', 'MEAN_REVERT'],
-                max_position_pct     = 0.07,
+        # ── 7b. TP recross exits — protect profit after a TP has been booked ─
+        # After any TP_n has been hit (partial closed), if price returns to that
+        # TP level in the adverse direction, immediately close the remaining
+        # position at the TP level to lock in the banked profit. Applies to TP1-4.
+        # TP2/3/4 recross checks are only active if the next higher TP hasn't
+        # already been hit (so we don't race an in-flight higher TP).
+
+        # TP4 recross -> close remaining at TP4
+        if (self._tp4_hit.get(symbol, False) and not self._tp5_hit.get(symbol, False)):
+            _tp4_recross = (
+                (pos.direction == 'LONG'  and check_price < pos.take_profit_4) or
+                (pos.direction == 'SHORT' and check_price > pos.take_profit_4)
             )
+            if _tp4_recross:
+                _close('TP4_RECROSS', exit_px=pos.take_profit_4)
+                return
 
-        # ── 4. Accumulation: ranging + increasing OI + shorts paying ─────────
-        if is_ranging and high_oi and shorts_paying and not is_bearish:
-            conf = 0.55 + (0.15 if rsi < 55 else 0.0) + (0.10 if vol_zscore > 0.5 else 0.0)
+        # TP3 recross -> close remaining at TP3
+        if (self._tp3_hit.get(symbol, False) and not self._tp4_hit.get(symbol, False)):
+            _tp3_recross = (
+                (pos.direction == 'LONG'  and check_price < pos.take_profit_3) or
+                (pos.direction == 'SHORT' and check_price > pos.take_profit_3)
+            )
+            if _tp3_recross:
+                _close('TP3_RECROSS', exit_px=pos.take_profit_3)
+                return
+
+        # TP2 recross -> close remaining at TP2
+        if (self._tp2_hit.get(symbol, False) and not self._tp3_hit.get(symbol, False)):
+            _tp2_recross = (
+                (pos.direction == 'LONG'  and check_price < pos.take_profit_2) or
+                (pos.direction == 'SHORT' and check_price > pos.take_profit_2)
+            )
+            if _tp2_recross:
+                _close('TP2_RECROSS', exit_px=pos.take_profit_2)
+                return
+
+        # TP1 recross -> close remaining at TP1 (no model-side requirement)
+        if (self._tp1_hit.get(symbol, False) and not self._tp2_hit.get(symbol, False)):
+            _tp1_recross = (
+                (pos.direction == 'LONG'  and check_price < pos.take_profit_1) or
+                (pos.direction == 'SHORT' and check_price > pos.take_profit_1)
+            )
+            if _tp1_recross:
+                _close('TP1_RECROSS', exit_px=pos.take_profit_1)
+                return
             return RegimeState(
                 regime               = _REGIME_ACCUMULATION,
                 confidence           = round(min(conf, 0.85), 3),
@@ -3812,19 +3840,32 @@ class LiveEngine:
                         _want_up = (new_side == 'BUY')
                         _pat = None
                         if len(_c5m) >= self.ENTRY_5M_WINDOW:
-                            _pat = _reversal_candle(_c5m, want_bullish=_want_up)
+                            # Require a reversal pattern PLUS a confirming candle AFTER it.
+                            # Detect a pattern on the SECOND-LAST closed 5m candle and
+                            # require the most-recent closed 5m candle to close in the
+                            # signal direction (confirming candle). This avoids
+                            # entering on a lone pattern that hasn't been confirmed.
+                            _last = _c5m[-1]
+                            _pat_at_prev = None
+                            if len(_c5m) >= 2:
+                                _pat_at_prev = _reversal_candle(_c5m[-2:], want_bullish=_want_up)
+                            # last closed candle confirmation (bullish/bearish)
+                            _last_confirms = ((float(_last[4]) > float(_last[1])) if _want_up else (float(_last[4]) < float(_last[1])))
+                            # pattern confirmed only when pattern exists on previous bar
+                            # AND the last bar confirms direction
+                            _pattern_confirmed = (_pat_at_prev is not None and _last_confirms)
+                            # directional closes count (as fallback)
                             _closed_dir = [
                                 (float(c[4]) > float(c[1])) if _want_up else (float(c[4]) < float(c[1]))
                                 for c in _c5m[-self.ENTRY_5M_WINDOW:]
                             ]
                             _n5 = sum(_closed_dir)
-                            # Strictly require either a valid reversal pattern OR
-                            # at least 3 directional 5m closes (no TRUST_MODEL_FIRE bypass)
-                            _confirmed = (_pat is not None) or (_n5 >= 3)
-                            _why5m = (f'5m {_pat or "directional"} pattern + {_n5}/{self.ENTRY_5M_WINDOW} directional candles confirmed'
+                            # Confirm when either pattern+confirming candle OR 3 directional closes
+                            _confirmed = _pattern_confirmed or (_n5 >= 3)
+                            _pat = _pat_at_prev if _pattern_confirmed else None
+                            _why5m = (f'5m {( _pat or "directional") } confirmed + {_n5}/{self.ENTRY_5M_WINDOW} directional candles'
                                       if _confirmed else
-                                      f'needs 5m {"bullish" if _want_up else "bearish"} '
-                                      f'reversal pattern or 3+ directional candles (pattern={_pat}, dir={_n5}/{self.ENTRY_5M_WINDOW})')
+                                      f'needs 5m reversal pattern on prior bar + confirming candle, or 3+ directional candles (pattern={_pat_at_prev}, dir={_n5}/{self.ENTRY_5M_WINDOW})')
                         else:
                             _confirmed = False
                             _why5m = '5m confirmation unavailable (feed down)'
@@ -5984,7 +6025,9 @@ class LiveEngine:
                 (pos.direction == 'LONG'  and check_price >= pos.take_profit_4) or
                 (pos.direction == 'SHORT' and check_price <= pos.take_profit_4)
             )
-            tp4_via_peak = self._tp3_hit.get(symbol, False) and (
+            # v78 fix: detect TP hits via peak from start (not just after previous TP)
+            # This prevents missing TP levels when price spikes through them and reverses
+            tp4_via_peak = (
                 (pos.direction == 'LONG'  and peak >= pos.take_profit_4) or
                 (pos.direction == 'SHORT' and peak <= pos.take_profit_4)
             )
@@ -5999,7 +6042,9 @@ class LiveEngine:
                 (pos.direction == 'LONG'  and check_price >= pos.take_profit_3) or
                 (pos.direction == 'SHORT' and check_price <= pos.take_profit_3)
             )
-            tp3_via_peak = self._tp2_hit.get(symbol, False) and (
+            # v78 fix: detect TP hits via peak from start (not just after TP2)
+            # Ensures TP3 closes even if price rapidly moves through it
+            tp3_via_peak = (
                 (pos.direction == 'LONG'  and peak >= pos.take_profit_3) or
                 (pos.direction == 'SHORT' and peak <= pos.take_profit_3)
             )
@@ -6009,13 +6054,16 @@ class LiveEngine:
                 self._tp3_hit[symbol] = True
 
         # ── 5. TP2 hit — 20 % partial close, activate trailing stop ──────────
-        # Peak-based detection applies only after TP1 is confirmed (real move).
+        # Peak-based detection now applies from the start (v78 fix) to catch TP hits
+        # even when price spikes and reverses between scan cycles.
         if pos.take_profit_2 > 0 and not self._tp2_hit.get(symbol, False):
             tp2_hit = (
                 (pos.direction == 'LONG'  and check_price >= pos.take_profit_2) or
                 (pos.direction == 'SHORT' and check_price <= pos.take_profit_2)
             )
-            tp2_via_peak = self._tp1_hit.get(symbol, False) and (
+            # v78: Always use peak-based detection, not just after TP1.
+            # This catches rapid TP hits that would otherwise be missed.
+            tp2_via_peak = (
                 (pos.direction == 'LONG'  and peak >= pos.take_profit_2) or
                 (pos.direction == 'SHORT' and peak <= pos.take_profit_2)
             )
@@ -6044,14 +6092,21 @@ class LiveEngine:
                     return
 
         # ── 7. TP1 hit — 20 % partial close, move SL to break-even ──────────
-        # Break-even: update pos.stop_loss to entry price so that if price
-        # reverses all the way back, we exit at entry (no loss on the position).
+        # v78 fix: use peak-based detection to catch TP1 hits even when price
+        # spikes through and reverses rapidly. Break-even: update pos.stop_loss
+        # to entry price so that if price reverses all the way back, we exit
+        # at entry (no loss on the position).
         if pos.take_profit_1 > 0 and not self._tp1_hit.get(symbol, False):
             tp1_hit = (
                 (pos.direction == 'LONG'  and check_price >= pos.take_profit_1) or
                 (pos.direction == 'SHORT' and check_price <= pos.take_profit_1)
             )
-            if tp1_hit:
+            # v78: Always use peak-based detection to catch rapid TP hits
+            tp1_via_peak = (
+                (pos.direction == 'LONG'  and peak >= pos.take_profit_1) or
+                (pos.direction == 'SHORT' and peak <= pos.take_profit_1)
+            )
+            if tp1_hit or tp1_via_peak:
                 _partial('TP1_PARTIAL', self.risk_engine.TP_CLOSE_PCTS[0])
                 self._tp1_hit[symbol]    = True
                 self._peak_price[symbol] = check_price   # reset peak tracking from TP1
@@ -6061,21 +6116,51 @@ class LiveEngine:
                       f'SL moved to break-even ({pos.entry_price:.6g})')
 
         # ── 7b. TP1 re-cross exit — protect profit after TP1 is secured ─────
-        # After TP1 hit (SL at break-even), if price crosses back below TP1
-        # (LONG) or above TP1 (SHORT) AND the model is no longer confirming the
-        # original direction, close at the TP1 level.  This locks in the partial
-        # TP1 gain instead of waiting for price to grind all the way to break-even.
+        # After TP1 hit (SL moved to break-even), if price crosses back below
+        # TP1 (LONG) or above TP1 (SHORT), close immediately at the TP1 level.
+        # This locks in the partial TP1 gain instead of waiting for a later fill.
         # Inactive after TP2 — the trailing stop manages profit protection then.
         if (self._tp1_hit.get(symbol, False) and
                 not self._tp2_hit.get(symbol, False)):
-            _model_side  = str(result.get('side', 'FLAT') or 'FLAT').upper()
-            _orig_dir_sig = 'BUY' if pos.direction == 'LONG' else 'SELL'
             _tp1_recross = (
                 (pos.direction == 'LONG'  and check_price < pos.take_profit_1) or
                 (pos.direction == 'SHORT' and check_price > pos.take_profit_1)
             )
-            if _tp1_recross and _model_side != _orig_dir_sig:
+            if _tp1_recross:
                 _close('TP1_RECROSS', exit_px=pos.take_profit_1)
+                return
+
+        # ── 7c. TP2 re-cross exit — immediate close after TP2 was banked ─────
+        # If TP2 was already taken (trailing activated) and price falls back
+        # below TP2 (LONG) or above TP2 (SHORT), close remaining position at
+        # the TP2 level to lock in profit.
+        if self._tp2_hit.get(symbol, False) and not self._tp3_hit.get(symbol, False):
+            _tp2_recross = (
+                (pos.direction == 'LONG'  and check_price < pos.take_profit_2) or
+                (pos.direction == 'SHORT' and check_price > pos.take_profit_2)
+            )
+            if _tp2_recross:
+                _close('TP2_RECROSS', exit_px=pos.take_profit_2)
+                return
+
+        # ── 7d. TP3 re-cross exit — immediate close after TP3 was banked ─────
+        if self._tp3_hit.get(symbol, False) and not self._tp4_hit.get(symbol, False):
+            _tp3_recross = (
+                (pos.direction == 'LONG'  and check_price < pos.take_profit_3) or
+                (pos.direction == 'SHORT' and check_price > pos.take_profit_3)
+            )
+            if _tp3_recross:
+                _close('TP3_RECROSS', exit_px=pos.take_profit_3)
+                return
+
+        # ── 7e. TP4 re-cross exit — immediate close after TP4 was banked ─────
+        if self._tp4_hit.get(symbol, False) and pos.take_profit_4 > 0:
+            _tp4_recross = (
+                (pos.direction == 'LONG'  and check_price < pos.take_profit_4) or
+                (pos.direction == 'SHORT' and check_price > pos.take_profit_4)
+            )
+            if _tp4_recross:
+                _close('TP4_RECROSS', exit_px=pos.take_profit_4)
                 return
 
         # ── 8. Model-reversal exit (dynamic exit on opposing signal) ─────────
