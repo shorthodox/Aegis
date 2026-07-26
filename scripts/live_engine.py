@@ -3792,12 +3792,15 @@ class LiveEngine:
                         # Also: do not let a 5m reversal alone force an off-zone fire.
                         _price_in_zone = ((new_side == 'BUY' and _rp_m <= self.STRUCT_SUPPORT_ZONE) or
                                          (new_side == 'SELL' and _rp_m >= self.STRUCT_RESISTANCE_ZONE)) if _rp_m is not None else False
-                        
+                        _zone_entry_ok = (_price_in_zone and _near_pct_m is not None
+                                          and _near_pct_m <= self.PENDING_NEAR_PCT
+                                          and _has_5m_reversal)
+
                         _should_wait = (
                             (_target_m is None and not _price_in_zone) or
-                            (not _at_level_m and not _came_from_m and not _price_in_zone)
+                            (not _at_level_m and not _came_from_m and not _zone_entry_ok)
                         )
-                        
+
                         if _should_wait:
                             _why_m = (f'no tested {_role_m} to wait for'
                                       if _target_m is None else
