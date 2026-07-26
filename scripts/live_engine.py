@@ -3691,6 +3691,8 @@ class LiveEngine:
                                 if isinstance(_srlv, dict) and _srlv.get('price'):
                                     _all_candidates.append(float(_srlv['price']))
 
+                        _htf_sup = None
+                        _htf_res = None
                         try:
                             _htf_m = await self._htf_sr(symbol, price, _atr_m)
                             if _htf_m:
@@ -3700,13 +3702,22 @@ class LiveEngine:
                         except Exception:
                             pass
 
+                        # 4h/1d HTF levels are the primary pivot points. Only if
+                        # a higher-timeframe BUY/SELL pivot is unavailable do
+                        # we fall back to secondary structural and raw S/R levels.
                         if new_side == 'BUY':
-                            _sups = [l for l in _all_candidates if l < price]
-                            _target_m = max(_sups) if _sups else (_sup_raw if 0 < _sup_raw < price else None)
+                            if _htf_sup and _htf_sup < price:
+                                _target_m = _htf_sup
+                            else:
+                                _sups = [l for l in _all_candidates if l < price]
+                                _target_m = max(_sups) if _sups else (_sup_raw if 0 < _sup_raw < price else None)
                             _role_m   = 'support'      # BUY waits at nearest SUPPORT below
                         else:
-                            _reses = [l for l in _all_candidates if l > price]
-                            _target_m = min(_reses) if _reses else (_res_raw if _res_raw > price else None)
+                            if _htf_res and _htf_res > price:
+                                _target_m = _htf_res
+                            else:
+                                _reses = [l for l in _all_candidates if l > price]
+                                _target_m = min(_reses) if _reses else (_res_raw if _res_raw > price else None)
                             _role_m   = 'resistance'   # SELL waits at nearest RESISTANCE above
 
                         _near_pct_m = (abs(price - _target_m) / price * 100.0
