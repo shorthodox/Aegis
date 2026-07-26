@@ -2437,7 +2437,9 @@ class LiveEngine:
     # setups that remain valid inside a range, so a blanket ban both starved
     # the engine of signals and contradicted those gates.
     NO_TRADE_REGIMES: set = {_REGIME_LIQUIDITY_TRAP}
-    TRUST_MODEL_FIRE: bool = True
+    # Temporary strict deployment mode: disable trust-model relaxations so
+    # structure/indicator guards hard-block weak or contradictory model fires.
+    TRUST_MODEL_FIRE: bool = False
 
     def __init__(
         self,
