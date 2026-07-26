@@ -240,6 +240,7 @@ class TraderSignal:
     mode:             str          # scalping / intraday / swing
     risk_profile:     str          # conservative / balanced / aggressive
     direction:        str          # BUY / SELL
+    status:           str          # PENDING / OPEN
     confidence:       float        # 0.0–1.0  (ML model probability for winning direction)
     confluence_score: float        # 0.0–1.0  (fraction of 25 strategies agreeing)
     current_price:    float
@@ -248,6 +249,9 @@ class TraderSignal:
     guidance:         Dict[str, Any]
     timestamp:        str
     timeframe:        str
+    pending_since:    Optional[str] = None
+    pending_count:    int = 0
+    pending_reason:   str = ''
     p_buy:            float = 0.0  # independent BUY probability
     p_sell:           float = 0.0  # independent SELL probability
     p_hold:           float = 0.0  # residual HOLD probability
@@ -401,11 +405,17 @@ class TraderEngine:
     Results are cached in self._active_signals for the API to serve.
     """
 
+    PENDING_CONFIRM_SCANS = 3
+    PENDING_MAX_SECONDS = 60 * 30
+    PENDING_CONF_DROP_ALLOWANCE = 0.05
+    PENDING_MAX_CHASE_PCT = 0.35
+
     def __init__(self):
         self.model_store    = TraderModelStore()
         self.wallet         = TraderWallet()
         self._active_signals: List[Dict[str, Any]] = []
         self._token_status:   Dict[str, Dict[str, Any]] = {}   # all 60 tokens, every scan
+        self._pending_entries: Dict[str, Dict[str, Any]] = {}
         self._last_scan_time: Optional[str] = None
         self._scan_lock     = threading.Lock()
 
@@ -457,6 +467,66 @@ class TraderEngine:
     def token_status(self) -> Dict[str, Dict[str, Any]]:
         with self._scan_lock:
             return dict(self._token_status)
+
+    def _pending_key(self, symbol: str, mode: str) -> str:
+        return f"{symbol}__{mode}"
+
+    def _clear_pending(self, key: str) -> None:
+        self._pending_entries.pop(key, None)
+
+    def _should_execute_pending(self, pending: Dict[str, Any], signal: Dict[str, Any]) -> bool:
+        if pending.get('direction') != signal.get('direction'):
+            return False
+        if pending.get('stable_scans', 0) < self.PENDING_CONFIRM_SCANS:
+            return False
+        if signal.get('confidence', 0.0) < pending.get('max_confidence', 0.0) - self.PENDING_CONF_DROP_ALLOWANCE:
+            return False
+        price = signal.get('current_price', 0.0)
+        entry_price = pending.get('entry_price', price)
+        if signal.get('direction') == 'BUY':
+            return price <= entry_price * (1.0 + self.PENDING_MAX_CHASE_PCT / 100.0)
+        return price >= entry_price * (1.0 - self.PENDING_MAX_CHASE_PCT / 100.0)
+
+    def _execute_signal(self, sig_dict: Dict[str, Any]) -> None:
+        key = self._pending_key(sig_dict['symbol'], sig_dict['mode'])
+        self.wallet.open_trade(sig_dict)
+        self.wallet._save()
+        record_signal(sig_dict['symbol'], sig_dict['mode'])
+        self._pending_entries.pop(key, None)
+
+    def _create_pending(self, key: str, sig_dict: Dict[str, Any]) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        self._pending_entries[key] = {
+            'signal_id':     sig_dict['signal_id'],
+            'symbol':        sig_dict['symbol'],
+            'mode':          sig_dict['mode'],
+            'direction':     sig_dict['direction'],
+            'entry_price':   sig_dict['current_price'],
+            'max_confidence': sig_dict['confidence'],
+            'stable_scans':  1,
+            'created_at':    time.time(),
+            'updated_at':    time.time(),
+            'pending_since': now,
+            'pending_reason': 'awaiting confirmation',
+            'signal':        sig_dict,
+        }
+
+    def _refresh_pending(self, key: str, sig_dict: Dict[str, Any]) -> None:
+        pending = self._pending_entries.get(key)
+        if not pending:
+            self._create_pending(key, sig_dict)
+            return
+        pending['stable_scans'] = pending.get('stable_scans', 0) + 1
+        pending['max_confidence'] = max(pending.get('max_confidence', 0.0), sig_dict.get('confidence', 0.0))
+        pending['updated_at'] = time.time()
+        pending['signal'] = sig_dict
+        pending['pending_reason'] = 'awaiting repeated confirmation'
+
+    def _expire_pending(self) -> None:
+        now = time.time()
+        for key, pending in list(self._pending_entries.items()):
+            if now - pending.get('created_at', now) >= self.PENDING_MAX_SECONDS:
+                self._pending_entries.pop(key, None)
 
     def scan_all_tokens(
         self,
@@ -700,29 +770,76 @@ class TraderEngine:
                 )
 
                 sig_dict = asdict(signal)
+                sig_key = self._pending_key(symbol, mode_name)
+
+                if sig_key in self.wallet.open_positions:
+                    sig_dict['status'] = 'OPEN'
+                    sig_dict['pending_entry'] = False
+                    new_signals.append(sig_dict)
+                    continue
+
+                pending = self._pending_entries.get(sig_key)
+                if pending is not None and pending.get('direction') != direction:
+                    # New direction invalidates the existing pending arm.
+                    self._clear_pending(sig_key)
+                    pending = None
+
+                if pending is not None:
+                    if self._should_execute_pending(pending, sig_dict):
+                        sig_dict['status'] = 'OPEN'
+                        sig_dict['pending_entry'] = False
+                        self._execute_signal(sig_dict)
+                        new_signals.append(sig_dict)
+                        try:
+                            from scripts.notifications.dispatcher import get_notifier
+                            get_notifier().send_entry(sig_dict)
+                        except Exception:
+                            pass
+                        log.info(
+                            f"[TRADER] EXECUTE {direction} {symbol} | {mode_name} | "
+                            f"conf={conf:.2%} | confl={n_agree}/25 | {top_strats[0] if top_strats else '?'}"
+                        )
+                        continue
+                    self._refresh_pending(sig_key, sig_dict)
+                    pending = self._pending_entries[sig_key]
+                    sig_dict['status'] = 'PENDING'
+                    sig_dict['pending_entry'] = True
+                    sig_dict['pending_since'] = pending.get('pending_since')
+                    sig_dict['pending_count'] = pending.get('stable_scans', 0)
+                    sig_dict['pending_reason'] = pending.get('pending_reason', '')
+                    new_signals.append(sig_dict)
+                    continue
+
+                self._create_pending(sig_key, sig_dict)
+                pending = self._pending_entries[sig_key]
+                sig_dict['status'] = 'PENDING'
+                sig_dict['pending_entry'] = True
+                sig_dict['pending_since'] = pending.get('pending_since')
+                sig_dict['pending_count'] = pending.get('stable_scans', 0)
+                sig_dict['pending_reason'] = pending.get('pending_reason', '')
                 new_signals.append(sig_dict)
 
-                # Open virtual position and save to track record
-                self.wallet.open_trade(sig_dict)
-                self.wallet._save()
-
-                record_signal(symbol, mode_name)
-
-                # Fire entry notification (non-blocking, best-effort)
-                try:
-                    from scripts.notifications.dispatcher import get_notifier
-                    get_notifier().send_entry(sig_dict)
-                except Exception:
-                    pass
-
-                log.info(
-                    f"[TRADER] {direction} {symbol} | {mode_name} | "
-                    f"conf={conf:.2%} | confl={n_agree}/25 | {top_strats[0] if top_strats else '?'}"
-                )
-
         # Sort by confidence descending and cap
-        new_signals.sort(key=lambda s: s['confidence'], reverse=True)
-        new_signals = new_signals[:max_sig]
+        self._expire_pending()
+
+        # Preserve any still-active pending arms that weren't refreshed by the current scan.
+        existing_pending_ids = {s.get('signal_id') for s in new_signals if s.get('status') == 'PENDING'}
+        for pending in self._pending_entries.values():
+            if pending.get('signal', {}).get('signal_id') not in existing_pending_ids:
+                pending_signal = dict(pending.get('signal', {}))
+                pending_signal['status'] = 'PENDING'
+                pending_signal['pending_entry'] = True
+                pending_signal['pending_since'] = pending.get('pending_since')
+                pending_signal['pending_count'] = pending.get('stable_scans', 0)
+                pending_signal['pending_reason'] = pending.get('pending_reason', '')
+                new_signals.append(pending_signal)
+
+        # Sort by confidence descending and cap open/active signals, but keep pending
+        pending_signals = [s for s in new_signals if s.get('status') == 'PENDING']
+        active_signals = [s for s in new_signals if s.get('status') != 'PENDING']
+        active_signals.sort(key=lambda s: s['confidence'], reverse=True)
+        active_signals = active_signals[:max_sig]
+        new_signals = active_signals + pending_signals
 
         with self._scan_lock:
             self._active_signals = new_signals
