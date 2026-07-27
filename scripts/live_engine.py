@@ -3847,15 +3847,15 @@ class LiveEngine:
                         # support. This lets valid off-level resistance rejections
                         # fire immediately when there are clear confirmations.
                         _zone_entry_ok = (
-                            (_price_in_zone and _near_pct_m is not None
+                            (_price_in_zone and _target_m is not None and _near_pct_m is not None
                              and _near_pct_m <= self.PENDING_NEAR_PCT
                              and _has_5m_reversal)
-                            or (_price_in_zone and _recent_lower_high
+                            or (_price_in_zone and _target_m is not None and _recent_lower_high
                                 and _ind_support >= max(2, self.MIN_INDICATOR_SUPPORT))
                         )
 
                         _should_wait = (
-                            (_target_m is None and not _price_in_zone) or
+                            _target_m is None or
                             (not _at_level_m and not _came_from_m and not _zone_entry_ok)
                         )
 
