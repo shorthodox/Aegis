@@ -90,7 +90,11 @@ def test_reversal_confirmation_logic():
 
 def test_zone_entry_without_valid_target_waits():
     engine = LiveEngine(token_configs=[])
-    engine._swing_sr = lambda symbol, price, atr: None
+
+    async def mock_swing_sr(symbol, price, atr):
+        return None
+
+    engine._swing_sr = mock_swing_sr
 
     result_no_target = {
         'support': 0.0817,
@@ -103,24 +107,24 @@ def test_zone_entry_without_valid_target_waits():
     async def mock_fetch_candles(symbol, tf, limit):
         if tf == '5m':
             return [
-                [0, 0.0818, 0.0820, 0.0816, 0.0819, 100],
-                [0, 0.0819, 0.0821, 0.0817, 0.0820, 100],
-                [0, 0.0820, 0.0823, 0.0819, 0.0822, 100],
-                [0, 0.0822, 0.0824, 0.0821, 0.0823, 100],
-                [0, 0.0823, 0.0825, 0.0822, 0.0824, 100],
+                [0, 0.0832, 0.0833, 0.0828, 0.0830, 100],
+                [0, 0.0830, 0.0831, 0.0826, 0.0827, 100],
+                [0, 0.0827, 0.0829, 0.0823, 0.0825, 100],
+                [0, 0.0825, 0.0828, 0.0824, 0.0826, 100],
+                [0, 0.0826, 0.0829, 0.0825, 0.0827, 100],
             ]
         if tf == '15m':
             return [
-                [0, 0.0818, 0.0821, 0.0816, 0.0819, 100],
-                [0, 0.0819, 0.0822, 0.0817, 0.0820, 100],
-                [0, 0.0820, 0.0824, 0.0818, 0.0821, 100],
+                [0, 0.0829, 0.0830, 0.0825, 0.0827, 100],
+                [0, 0.0827, 0.0828, 0.0824, 0.0825, 100],
+                [0, 0.0825, 0.0827, 0.0823, 0.0824, 100],
             ]
         return []
 
     engine._fetch_candles = mock_fetch_candles
-    verdict, detail = asyncio.run(engine._structure_gate('ARB/USDT', 'BUY', 0.0800, result_no_target))
-    assert verdict == 'WAIT', f"Expected WAIT for zone BUY without a valid target, got {verdict}: {detail}"
-    assert 'no tested support' in detail
+    verdict, detail = asyncio.run(engine._structure_gate('ARB/USDT', 'BUY', 0.0830, result_no_target))
+    assert verdict == 'WAIT', f"Expected WAIT for BUY in the support zone without a close reversal confirmation, got {verdict}: {detail}"
+    assert 'reversal unconfirmed' in detail or 'waiting for a closer entry' in detail
 
 
 if __name__ == '__main__':

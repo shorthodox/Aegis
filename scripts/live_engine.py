@@ -3735,8 +3735,8 @@ class LiveEngine:
                                 _target_m = min(_reses) if _reses else (_res_raw if _res_raw > price else None)
                             _role_m   = 'resistance'   # SELL waits at nearest RESISTANCE above
 
-                        _near_pct_m = (abs(price - _target_m) / price * 100.0
-                                       if _target_m and price > 0 else None)
+                        _near_pct_m = (abs(price - _target_m) / _target_m * 100.0
+                                       if _target_m and _target_m > 0 else None)
                         _at_level_m = (_target_m is not None and _near_pct_m is not None
                                        and _near_pct_m <= self.PENDING_NEAR_PCT)
 
@@ -3854,9 +3854,14 @@ class LiveEngine:
                                 and _ind_support >= max(2, self.MIN_INDICATOR_SUPPORT))
                         )
 
+                        _came_from_ok = (_came_from_m and
+                                         (_has_5m_reversal or
+                                          (_recent_lower_high and
+                                           _ind_support >= max(2, self.MIN_INDICATOR_SUPPORT))))
+
                         _should_wait = (
                             _target_m is None or
-                            (not _at_level_m and not _came_from_m and not _zone_entry_ok)
+                            (not _at_level_m and not _came_from_ok and not _zone_entry_ok)
                         )
 
                         if _should_wait:
