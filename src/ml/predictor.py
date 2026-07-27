@@ -67,8 +67,10 @@ class Predictor:
         self.model: Optional[xgb.Booster] = None          # primary BUY binary Booster
         self.model_sell: Optional[xgb.Booster] = None     # primary SELL binary Booster
         self.meta_model: Optional[xgb.Booster] = None      # meta gate (Booster)
+        self.meta_model_light: Optional[Any] = None
         self.meta: Dict[str, Any] = {}                     # sidecar contents
         self._token_params: Optional[Dict[str, Any]] = None  # optimizer output
+        self.aegis_state: Optional[Dict[str, Any]] = None
         self.load_model()
         self._token_params = self._load_token_params()
 
@@ -164,6 +166,7 @@ class Predictor:
         # inference when primary_only_mode=True to suppress HOLD timeouts.
         self.hold_calibrator      = None
         self.hold_disc_cols: list = []
+        self.adaptive_orchestrator: Optional[Any] = None
         _hold_cal_file = self.meta.get("primary_calibrator_file")
         if _hold_cal_file:
             _hold_cal_path = model_store / _hold_cal_file
@@ -178,6 +181,21 @@ class Predictor:
                                 f"(features={self.hold_disc_cols})")
                 except Exception as e:
                     logger.warning(f"Could not load HOLD calibrator: {e}")
+
+    def attach_adaptive_orchestrator(self, orchestrator: Any) -> None:
+        self.adaptive_orchestrator = orchestrator
+
+    def annotate_with_adaptive(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Attach adaptive evaluation metadata if an orchestrator is present."""
+        if not isinstance(result, dict):
+            return result
+        orchestrator = getattr(self, 'adaptive_orchestrator', None)
+        if orchestrator is None:
+            return result
+        try:
+            return orchestrator.evaluate_signal(result)
+        except Exception:
+            return result
 
     def _load_token_params(self) -> Optional[Dict[str, Any]]:
         """Load per-token optimizer output from data/token_params/ if present."""
@@ -545,7 +563,9 @@ class Predictor:
             'LOW_VOL': 0.75,
             'RANGE': 0.60,
         }
-        return float(mapping.get(regime, 0.60))
+        if isinstance(regime, str):
+            return float(mapping.get(regime, 0.60))
+        return 0.60
 
     def _compute_edge_score(self, probability: float, base_rate: float, confidence: float, regime_confidence: float, df_features=None) -> float:
         """Compute a base edge score and augment with regime quality and feature stability when available.
@@ -714,9 +734,10 @@ class Predictor:
         ).astype(float)
         
         # AEGIS calibration & confidence adjustment
-        if getattr(self, 'aegis_state', None) is not None:
-            mcf = self.aegis_state.get('mcf')
-            cre = self.aegis_state.get('cre')
+        aegis_state = getattr(self, 'aegis_state', None)
+        if isinstance(aegis_state, dict):
+            mcf = aegis_state.get('mcf')
+            cre = aegis_state.get('cre')
             if mcf:
                 meta_conf = mcf.calibrate(meta_conf)
             if cre:
@@ -812,7 +833,7 @@ class Predictor:
             if mcols:
                 base = base.reindex(columns=mcols, fill_value=0)
 
-            if getattr(self, 'meta_model_light', None) is not None:
+            if self.meta_model_light is not None:
                 try:
                     if hasattr(self.meta_model_light, 'predict_proba'):
                         meta_conf = float(self.meta_model_light.predict_proba(base)[:, 1][0])
@@ -825,10 +846,11 @@ class Predictor:
                     xgb.DMatrix(base, feature_names=list(base.columns)))[0])
 
             # AEGIS calibration & confidence adjustment
-            if getattr(self, 'aegis_state', None) is not None:
-                mcf = self.aegis_state.get('mcf')
-                cre = self.aegis_state.get('cre')
-                rcm = self.aegis_state.get('rcm')
+            aegis_state = self.aegis_state
+            if isinstance(aegis_state, dict):
+                mcf = aegis_state.get('mcf')
+                cre = aegis_state.get('cre')
+                rcm = aegis_state.get('rcm')
                 if mcf:
                     meta_conf = float(mcf.calibrate(np.array([meta_conf]))[0])
                 if cre:
@@ -1219,7 +1241,7 @@ class Predictor:
             result['lstm_exhaustion_prob']    = 0.5
             result['lstm_available']          = False
 
-        return result
+        return self.annotate_with_adaptive(result)
 
     @staticmethod
     def _extract_market_context(df: pd.DataFrame, price: float, atr: float, atr_mult: float) -> dict:

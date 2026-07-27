@@ -51,6 +51,7 @@ if str(_ROOT) not in sys.path:
 from src.trading.gate_scorer import WeightedGateScorer
 from src.trading import econ_calendar
 from src.trading.trendline_channel import TrendlineChannelDetector
+from src.ml.adaptive import AdaptiveOrchestrator
 
 # ── Decision architecture: MODEL-FIRST, UWGS as confirmation ──────────────────
 # The ML model (predictor.predict_realtime) is the SOLE authority for signal
@@ -2510,6 +2511,7 @@ class LiveEngine:
         self.perf_tracker    = PerformanceTracker()
         self.drift_monitor   = DriftMonitor()
         self.portfolio_guard = PortfolioGuard()
+        self.adaptive_orchestrator = AdaptiveOrchestrator()
 
         # Restore persisted state so protection survives server restarts
         self.perf_tracker.load_state()
@@ -2573,6 +2575,8 @@ class LiveEngine:
                     p.meta['tradeable']      = True
                     p.meta['tradeable_buy']  = True
                     p.meta['tradeable_sell'] = True
+                    if getattr(self, 'adaptive_orchestrator', None) is not None:
+                        p.attach_adaptive_orchestrator(self.adaptive_orchestrator)
                     self.predictors[sym] = p
                     loaded += 1
                     tradeable += 1
@@ -2585,6 +2589,8 @@ class LiveEngine:
                 _benched = bool(_tiers) and not bool(_tiers.get(self.risk_tier, False))
                 if _benched:
                     self._benched.add(sym)
+                    if getattr(self, 'adaptive_orchestrator', None) is not None:
+                        p.attach_adaptive_orchestrator(self.adaptive_orchestrator)
                     self.predictors[sym] = p
                     loaded += 1
                     print(f'[LiveEngine] BENCHED {sym} — meta risk_tier disables '
@@ -2593,6 +2599,8 @@ class LiveEngine:
 
                 # Fallback: legacy single-direction model
                 if p.model is not None:
+                    if getattr(self, 'adaptive_orchestrator', None) is not None:
+                        p.attach_adaptive_orchestrator(self.adaptive_orchestrator)
                     self.predictors[sym] = p
                     loaded += 1
                     _is_tradeable = p.meta.get('tradeable', False)
@@ -3197,6 +3205,13 @@ class LiveEngine:
             self.last_signals[symbol] = self._build_signal_entry(
                 symbol, result, price, regime=regime,
                 quality_score=quality_score, fake_breakout=fake_breakout)
+
+            try:
+                self.adaptive_orchestrator.record_signal(self.last_signals[symbol])
+                self.last_signals[symbol] = self.adaptive_orchestrator.evaluate_signal(
+                    self.last_signals[symbol])
+            except Exception:
+                pass
 
             # ── v76: the cockpit shows COMMITTED fires only ───────────────────
             # _build_signal_entry publishes the model's RAW intent, but the
@@ -5978,6 +5993,10 @@ class LiveEngine:
                           f'live_wr={live_wr:.1%} benchmark={benchmark:.1%} '
                           f'(drop={((benchmark - (live_wr or 0)) * 100):.1f}pp)')
                 self._save_track_record()
+                try:
+                    self.adaptive_orchestrator.record_trade(asdict(rec))
+                except Exception:
+                    pass
                 try:
                     from scripts.notifications.dispatcher import get_notifier
                     _hold = int(time.time() - self._open_time.get(symbol, time.time()))

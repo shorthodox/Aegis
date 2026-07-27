@@ -38,6 +38,7 @@ from scripts.trader_model.strategy_features import (
 from scripts.trader_model.signal_manager import (
     generate_beginner_guidance, is_on_cooldown, record_signal,
 )
+from src.ml.adaptive import AdaptiveOrchestrator
 
 log = logging.getLogger(__name__)
 
@@ -413,6 +414,7 @@ class TraderEngine:
     def __init__(self):
         self.model_store    = TraderModelStore()
         self.wallet         = TraderWallet()
+        self.adaptive_orchestrator = AdaptiveOrchestrator()
         self._active_signals: List[Dict[str, Any]] = []
         self._token_status:   Dict[str, Dict[str, Any]] = {}   # all 60 tokens, every scan
         self._pending_entries: Dict[str, Dict[str, Any]] = {}
@@ -489,6 +491,11 @@ class TraderEngine:
 
     def _execute_signal(self, sig_dict: Dict[str, Any]) -> None:
         key = self._pending_key(sig_dict['symbol'], sig_dict['mode'])
+        try:
+            self.adaptive_orchestrator.record_signal(sig_dict)
+            sig_dict = self.adaptive_orchestrator.evaluate_signal(sig_dict)
+        except Exception:
+            pass
         self.wallet.open_trade(sig_dict)
         self.wallet._save()
         record_signal(sig_dict['symbol'], sig_dict['mode'])
@@ -579,7 +586,12 @@ class TraderEngine:
                 # Check exits for any open virtual positions on this symbol
                 if df is not None and len(df) > 0:
                     current_px = float(df['close'].iloc[-1])
-                    self.wallet.check_exits(symbol, current_px)
+                    closed_trades = self.wallet.check_exits(symbol, current_px)
+                    for closed in closed_trades:
+                        try:
+                            self.adaptive_orchestrator.record_trade(closed)
+                        except Exception:
+                            pass
 
                 if df is None or len(df) < 100:
                     self._update_token_status(symbol, mode_name, 'HOLD', 0.0, [], tf, on_cooldown)
