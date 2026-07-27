@@ -3812,15 +3812,47 @@ class LiveEngine:
                         except Exception:
                             _has_5m_reversal = False
 
+                        # Detect recent lower-high (SELL) / higher-low (BUY) on 1h
+                        # A simple pattern check: compare the last two 1h candles'
+                        # highs (for SELL) or lows (for BUY). This is a lightweight
+                        # heuristic to capture short structural rejection without
+                        # requiring an exact S/R tag. If true and indicators agree,
+                        # allow immediate firing in the zone.
+                        _recent_lower_high = False
+                        try:
+                            _raw1h = await self._fetch_candles(symbol, '1h', 3)
+                            if _raw1h and len(_raw1h) >= 2:
+                                _prev = _raw1h[-2]
+                                _last = _raw1h[-1]
+                                _prev_high = float(_prev[2])
+                                _last_high = float(_last[2])
+                                _prev_low = float(_prev[3])
+                                _last_low = float(_last[3])
+                                if new_side == 'SELL':
+                                    _recent_lower_high = (_last_high < _prev_high)
+                                else:
+                                    _recent_lower_high = (_last_low > _prev_low)
+                        except Exception:
+                            _recent_lower_high = False
+
                         # v81: RELAXED PENDING LOGIC — fire at zone with 5m confirmation
                         # If price is in the CORRECT S/R ZONE and 5m momentum confirms, fire now.
                         # Only go pending if NOT at level AND NOT in zone AND NOT coming from level.
                         # Also: do not let a 5m reversal alone force an off-zone fire.
                         _price_in_zone = ((new_side == 'BUY' and _rp_m <= self.STRUCT_SUPPORT_ZONE) or
                                          (new_side == 'SELL' and _rp_m >= self.STRUCT_RESISTANCE_ZONE)) if _rp_m is not None else False
-                        _zone_entry_ok = (_price_in_zone and _near_pct_m is not None
-                                          and _near_pct_m <= self.PENDING_NEAR_PCT
-                                          and _has_5m_reversal)
+                        # Allow zone-entry either by 5m confirmation at/near level
+                        # or by a lightweight structural rejection (recent lower-high
+                        # for SELL / higher-low for BUY) combined with indicator
+                        # support. This lets valid off-level resistance rejections
+                        # fire immediately when there are clear confirmations.
+                        _zone_entry_ok = (
+                            (_price_in_zone and _near_pct_m is not None
+                             and _near_pct_m <= self.PENDING_NEAR_PCT
+                             and _has_5m_reversal)
+                            or (_price_in_zone and _recent_lower_high
+                                and _ind_support >= max(2, self.MIN_INDICATOR_SUPPORT))
+                        )
 
                         _should_wait = (
                             (_target_m is None and not _price_in_zone) or
