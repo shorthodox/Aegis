@@ -1289,7 +1289,15 @@ class DynamicRiskEngine:
     # gave them. Risk less on the least-certain trades. Tradeoff: a tighter stop
     # is hit more often, but on a low-quality setup a quick small loss beats a big
     # one. STRONG/NORMAL keep the normal/structural cap (they earned the room).
-    RISKY_SL_CAP_ATR     = 1.2   # SL cap in ATR for RISKY-tier signals
+    # v82: 1.2 -> 1.8, i.e. RISKY no longer gets a TIGHTER stop than anything
+    # else.  The training label is a symmetric first-touch barrier at roughly
+    # ±1.8×ATR over 12–18 h (retrain_model.py:1229), so a 1.2×ATR stop sits
+    # INSIDE the band the label lets price wander through: the model can be
+    # right about the barrier and still be stopped out en route.  Since almost
+    # every live signal is tagged RISKY, that tight cap was the dominant path.
+    # Tight-stop-and-near-target is the one combination to never run; the stop
+    # now matches the geometry the model was actually trained on.
+    RISKY_SL_CAP_ATR     = 1.8   # SL cap in ATR for RISKY-tier signals
 
     # TP ladder — COMPRESSED into a reachable region (2026-07-04).  The old
     # ladder (2.8 / 4.5 / 6.5 / 9.5) left a huge TP2→TP3 gap and put TP3-TP5 so
@@ -6171,12 +6179,9 @@ class LiveEngine:
                 exit_px = pos.take_profit_2 if tp2_via_peak else None
                 _partial('TP2_PARTIAL', self.risk_engine.TP_CLOSE_PCTS[1], exit_px)
                 self._tp2_hit[symbol] = True
-                # v82: break-even moves HERE (it used to fire at TP1).  Moving
-                # the stop to entry at 1R meant ordinary retracement flattened
-                # the runner for zero; at 2R the trade has earned the protection.
-                pos.stop_loss = pos.entry_price
-                print(f'[{symbol}] TP2_HIT — SL to break-even '
-                      f'({pos.entry_price:.6g}); TRAILING on '
+                # Stop is already at break-even from TP1; the trail takes over
+                # here and can only ratchet above it.
+                print(f'[{symbol}] TP2_HIT — TRAILING on '
                       f'(dist=ATR×{self.risk_engine.TRAIL_MULTIPLIER}, '
                       f'floor=TP1 {pos.take_profit_1:.6g})')
 
@@ -6201,13 +6206,20 @@ class LiveEngine:
                     _close('TRAILING_STOP', exit_px=trail_stop)
                     return
 
-        # ── 7. TP1 hit — partial close; the stop is left ALONE ───────────────
+        # ── 7. TP1 hit — partial close, move SL to break-even ────────────────
         # v78 fix: peak-based detection catches TP1 hits even when price spikes
         # through and reverses rapidly between scan cycles.
         #
-        # v82: the break-even move that used to live here now happens at TP2.
-        # Together with the deletion of TP1_RECROSS (below) this is the change
-        # that allows a winner to be larger than a loser.
+        # Break-even at TP1 is a deliberate WIN-RATE choice, not an expectancy
+        # one: it converts a would-be full loss into a scratch that still keeps
+        # the TP1 slice, which is what holds the published win rate in a range
+        # subscribers find credible.  It costs expectancy on trades that dip to
+        # entry and then recover — an acceptable price while the model's live
+        # edge is being re-measured after the regime-detector repair.
+        #
+        # This is NOT the deleted TP1_RECROSS.  Break-even exits at ENTRY if the
+        # move fully reverses; the re-cross exited the whole position at TP1 on
+        # any tick back through it, capping every winner.  Keep this, never that.
         if pos.take_profit_1 > 0 and not self._tp1_hit.get(symbol, False):
             tp1_hit = (
                 (pos.direction == 'LONG'  and check_price >= pos.take_profit_1) or
@@ -6222,9 +6234,10 @@ class LiveEngine:
                 _partial('TP1_PARTIAL', self.risk_engine.TP_CLOSE_PCTS[0])
                 self._tp1_hit[symbol]    = True
                 self._peak_price[symbol] = check_price   # reset peak tracking from TP1
+                pos.stop_loss = pos.entry_price          # break-even
                 print(f'[{symbol}] TP1_HIT @ {check_price:.6g} — banked '
                       f'{self.risk_engine.TP_CLOSE_PCTS[0]*100:.0f}%, '
-                      f'stop stays at {pos.stop_loss:.6g}')
+                      f'SL to break-even ({pos.entry_price:.6g})')
 
         # ── 7b–7e. TP re-cross exits — DELETED in v82 ────────────────────────
         # There used to be four blocks here (TP1/TP2/TP3/TP4_RECROSS) that

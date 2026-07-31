@@ -96,18 +96,28 @@ def test_tp1_tag_then_pullback_keeps_position_open(engine):
     assert still_open.position_value == pytest.approx(850.0, abs=1.0)
 
 
-def test_stop_is_not_moved_to_breakeven_at_tp1(engine):
-    """Break-even at 1R used to flatten runners on ordinary retracement."""
-    pos = _position()
-    _drive(engine, pos, [101.3])
-    assert pos.stop_loss == 99.0, 'SL moved to break-even at TP1'
+def test_breakeven_moves_at_tp1(engine):
+    """Deliberate win-rate choice: a reversal after TP1 scratches, not loses.
 
-
-def test_breakeven_moves_at_tp2(engine):
+    Distinct from the deleted TP1_RECROSS — break-even exits at ENTRY on a full
+    reversal, it does not close the position at TP1 on any tick back through it.
+    """
     pos = _position()
-    _drive(engine, pos, [101.3, 102.4])
-    assert engine._tp2_hit['TEST/USDT'] is True
+    still_open = _drive(engine, pos, [101.3])
+    assert still_open is not None
     assert pos.stop_loss == pos.entry_price
+
+
+def test_reversal_after_tp1_scratches_instead_of_losing(engine):
+    """The win-rate mechanic: TP1 banked, remainder out at entry -> net green."""
+    pos = _position()
+    _drive(engine, pos, [101.3, 100.0, 99.5])
+    total = sum(t.pnl_usdt for t in engine.wallet.trade_history)
+    assert engine.wallet.trade_history[-1].exit_reason == 'STOP_HIT'
+    assert engine.wallet.trade_history[-1].exit_price == pytest.approx(100.0)
+    assert total > -pos.initial_value * 0.005, (
+        f'a TP1-then-reverse should be a scratch, not a full loss: {total}'
+    )
 
 
 def test_short_side_tp1_pullback_also_holds(engine):
@@ -220,6 +230,21 @@ def test_tp1_is_one_R_not_zero_seven_R():
     risk = 100.0 - s['sl']
     assert (s['tp1'] - 100.0) / risk == pytest.approx(1.0, abs=1e-6)
     assert re_.TP1_MULTIPLIER == 1.0
+
+
+def test_risky_stop_is_not_tighter_than_the_label_barrier():
+    """A 1.2xATR stop sat inside the +/-1.8xATR band the model trains on."""
+    re_ = DynamicRiskEngine()
+    assert re_.RISKY_SL_CAP_ATR >= 1.8
+
+
+def test_risky_tier_stop_matches_the_normal_cap():
+    """Almost every live signal is RISKY, so this is the dominant path."""
+    re_ = DynamicRiskEngine()
+    risky  = re_.calculate_stops(price=100.0, side='BUY', atr=1.0,
+                                 sl_cap_atr=re_.RISKY_SL_CAP_ATR)
+    normal = re_.calculate_stops(price=100.0, side='BUY', atr=1.0)
+    assert risky['sl'] == pytest.approx(normal['sl'])
 
 
 # ── 6. the regime detector repair ────────────────────────────────────────────
