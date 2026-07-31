@@ -28,6 +28,7 @@ from fastapi import FastAPI, HTTPException, Depends, status, WebSocket, WebSocke
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import RedirectResponse, JSONResponse, FileResponse, Response
 from fastapi.encoders import jsonable_encoder
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
@@ -811,8 +812,18 @@ async def run_engine_background():
 
     backtest_dir = Path(__file__).parent / "logs" / "backtests"
 
+    # Both automated_setup() and the LiveEngine constructor are heavy SYNCHRONOUS
+    # calls — the constructor loads an XGBoost model pair per token and measured
+    # 29.6s for 60 tokens on top of ~0.9s of setup.  Run directly on the event
+    # loop (as they were) they block every HTTP request for ~30s after boot, so
+    # the site appears to hang on the first visit after any restart or cold
+    # start.  Offload both to a worker thread; the loop stays free to serve.
+    _loop = asyncio.get_running_loop()
+
     try:
-        configs, capital, max_pos, scan_seconds, proxy = automated_setup(backtest_dir, args)
+        configs, capital, max_pos, scan_seconds, proxy = await _loop.run_in_executor(
+            None, partial(automated_setup, backtest_dir, args)
+        )
     except Exception as e:
         print(f"automated_setup failed: {e}")
         await asyncio.sleep(1)
@@ -827,14 +838,20 @@ async def run_engine_background():
         _tier = "balanced"
     print(f"[Engine] Signal risk tier: {_tier.upper()}")
 
-    engine = LiveEngine(
-        token_configs         = configs,
-        capital               = capital,
-        max_position_usdt     = max_pos,
-        scan_interval_seconds = scan_seconds,
-        risk_tier             = _tier,
-        proxy_url             = proxy,
+    _t0 = time.time()
+    engine = await _loop.run_in_executor(
+        None,
+        lambda: LiveEngine(
+            token_configs         = configs,
+            capital               = capital,
+            max_position_usdt     = max_pos,
+            scan_interval_seconds = scan_seconds,
+            risk_tier             = _tier,
+            proxy_url             = proxy,
+        ),
     )
+    print(f"[Engine] Predictors loaded in {time.time() - _t0:.1f}s "
+          f"(off the event loop — HTTP stayed responsive)")
     LIVE_STATE.engine = engine
 
     _last_tr_mtime: float = 0.0
@@ -1335,6 +1352,13 @@ async def websocket_track_record(websocket: WebSocket):
 
 
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
+
+# Compress text responses. The pages are served uncompressed otherwise:
+# dashboard.html is 196 KB, chart.html 145 KB, index.html 75 KB, and the
+# trader track record another ~97 KB of JSON — all of which gzip to roughly a
+# fifth of that. minimum_size skips tiny payloads where the CPU is not worth it.
+# Only affects HTTP; WebSocket frames are untouched.
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 # CORS â€” read allowed origins from env so production is locked to the real domain.
 # ALLOWED_ORIGINS env var: comma-separated list, e.g. "https://aegis.example.com,http://localhost:8000"
