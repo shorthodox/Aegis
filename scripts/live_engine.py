@@ -666,11 +666,14 @@ class Position:
     meta_confidence: float
     atr_multiplier:  float
     atr:             float = 0.0   # ATR at entry (used for trailing stop distance)
-    take_profit_1:   float = 0.0   # TP1: 0.7× ATR from entry — 20% partial close
-    take_profit_2:   float = 0.0   # TP2: 1.6× ATR from entry — 20% partial + trailing-stop floor
-    take_profit_3:   float = 0.0   # TP3: 2.2× ATR from entry — 20% partial close
-    take_profit_4:   float = 0.0   # TP4: 3.3× ATR from entry — 20% partial close
-    take_profit_5:   float = 0.0   # TP5: 4.5× ATR from entry — close remainder (RR anchor)
+    initial_value:   float = 0.0   # v82: allocation AT ENTRY.  position_value shrinks
+                                   # as TP rungs bank, so partial sizing must be a
+                                   # fraction of THIS, not of the remainder.
+    take_profit_1:   float = 0.0   # TP1: 1.0R from entry — 15% partial close
+    take_profit_2:   float = 0.0   # TP2: 2.0R from entry — 25% partial + break-even + trail on
+    take_profit_3:   float = 0.0   # TP3: structural target — 25% partial close
+    take_profit_4:   float = 0.0   # TP4: 1.618 fib extension — 15% partial close
+    take_profit_5:   float = 0.0   # TP5: 2.618 fib extension — close remainder (RR anchor)
     signal_strength: str   = ''    # risk tier at entry: STRONG | NORMAL | RISKY
     entry_mode:      str   = ''    # structure-gate verdict detail at entry
                                    # (support_reversal / breakout_* / GATE_SKIPPED: …)
@@ -804,77 +807,57 @@ class MarketRegimeDetector:
         # strong and the other side is only weakly present.
         if rsi < 45 and market_bias == 'BEARISH':
             is_bullish = False
-        # ── 7. TP1 hit — 20 % partial close, move SL to break-even ──────────
-        # Break-even: update pos.stop_loss to entry price so that if price
-        # reverses all the way back, we exit at entry (no loss on the position).
-        if pos.take_profit_1 > 0 and not self._tp1_hit.get(symbol, False):
-            tp1_hit = (
-                (pos.direction == 'LONG'  and check_price >= pos.take_profit_1) or
-                (pos.direction == 'SHORT' and check_price <= pos.take_profit_1)
-            )
-            # v78 fix: use peak-based detection to catch TP1 hits even when price
-            # spikes through and reverses rapidly. Break-even: update pos.stop_loss
-            # to entry price so that if price reverses all the way back, we exit
-            # at entry (no loss on the position).
-            tp1_via_peak = (
-                (pos.direction == 'LONG'  and peak >= pos.take_profit_1) or
-                (pos.direction == 'SHORT' and peak <= pos.take_profit_1)
-            )
-            if tp1_hit or tp1_via_peak:
-                _partial('TP1_PARTIAL', self.risk_engine.TP_CLOSE_PCTS[0])
-                self._tp1_hit[symbol]    = True
-                self._peak_price[symbol] = check_price   # reset peak tracking from TP1
-                # Break-even: SL moves to entry — guarantees no loss on remaining position
-                pos.stop_loss = pos.entry_price
-                print(f'[{symbol}] TP1_HIT @ {check_price:.6g} — '
-                      f'SL moved to break-even ({pos.entry_price:.6g})')
+        if rsi > 55 and market_bias == 'BULLISH':
+            is_bearish = False
 
-        # ── 7b. TP recross exits — protect profit after a TP has been booked ─
-        # After any TP_n has been hit (partial closed), if price returns to that
-        # TP level in the adverse direction, immediately close the remaining
-        # position at the TP level to lock in the banked profit. Applies to TP1-4.
-        # TP2/3/4 recross checks are only active if the next higher TP hasn't
-        # already been hit (so we don't race an in-flight higher TP).
+        # v82 REPAIR: commit 0f1e3e32 ("hotfix: immediate TP recross closures")
+        # pasted a copy of the _manage_exit TP-recross ladder into the middle of
+        # this method, overwriting the five flag assignments below.  Those names
+        # are read further down, and `pos`/`check_price`/`_close` do not exist in
+        # this scope, so _detect() raised NameError on EVERY call and detect()'s
+        # fail-safe swallowed it — the engine has been running with a hardcoded
+        # RANGING / conf 0.4 / max_position_pct 0.08 regime for every symbol on
+        # every scan since 2026-07-25.  Restored from 0f1e3e32~1.
+        low_volume   = (volume_strength == 'BELOW_AVERAGE' or vol_zscore < -0.5)
+        high_oi      = oi_trend == 'INCREASING'
+        low_oi       = oi_trend == 'DECREASING'
+        longs_paying = funding_bias == 'LONGS_PAYING'
+        shorts_paying= funding_bias == 'SHORTS_PAYING'
 
-        # TP4 recross -> close remaining at TP4
-        if (self._tp4_hit.get(symbol, False) and not self._tp5_hit.get(symbol, False)):
-            _tp4_recross = (
-                (pos.direction == 'LONG'  and check_price < pos.take_profit_4) or
-                (pos.direction == 'SHORT' and check_price > pos.take_profit_4)
+        # ── 1. Liquidity trap: low volume, choppy, no trending structure ─────
+        if low_volume and is_ranging and is_quiet:
+            return RegimeState(
+                regime               = _REGIME_LIQUIDITY_TRAP,
+                confidence           = 0.75,
+                trade_allowed        = False,
+                preferred_strategies = [],
+                max_position_pct     = 0.0,
             )
-            if _tp4_recross:
-                _close('TP4_RECROSS', exit_px=pos.take_profit_4)
-                return
 
-        # TP3 recross -> close remaining at TP3
-        if (self._tp3_hit.get(symbol, False) and not self._tp4_hit.get(symbol, False)):
-            _tp3_recross = (
-                (pos.direction == 'LONG'  and check_price < pos.take_profit_3) or
-                (pos.direction == 'SHORT' and check_price > pos.take_profit_3)
+        # ── 2. Volatile expansion ─────────────────────────────────────────────
+        if is_volatile and atr_pct > 4.0:
+            conf = min(0.9, 0.6 + (atr_pct - 4.0) * 0.05)
+            return RegimeState(
+                regime               = _REGIME_VOLATILE_EXPANSION,
+                confidence           = round(conf, 3),
+                trade_allowed        = True,
+                preferred_strategies = ['BREAKOUT', 'MOMENTUM'],
+                max_position_pct     = 0.06,  # reduced size in expansion
             )
-            if _tp3_recross:
-                _close('TP3_RECROSS', exit_px=pos.take_profit_3)
-                return
 
-        # TP2 recross -> close remaining at TP2
-        if (self._tp2_hit.get(symbol, False) and not self._tp3_hit.get(symbol, False)):
-            _tp2_recross = (
-                (pos.direction == 'LONG'  and check_price < pos.take_profit_2) or
-                (pos.direction == 'SHORT' and check_price > pos.take_profit_2)
+        # ── 3. Volatile compression: quiet market after expansion ─────────────
+        if is_quiet and not is_trending:
+            return RegimeState(
+                regime               = _REGIME_VOLATILE_COMPRESS,
+                confidence           = 0.65,
+                trade_allowed        = True,
+                preferred_strategies = ['RANGE_TRADE', 'MEAN_REVERT'],
+                max_position_pct     = 0.07,
             )
-            if _tp2_recross:
-                _close('TP2_RECROSS', exit_px=pos.take_profit_2)
-                return
 
-        # TP1 recross -> close remaining at TP1 (no model-side requirement)
-        if (self._tp1_hit.get(symbol, False) and not self._tp2_hit.get(symbol, False)):
-            _tp1_recross = (
-                (pos.direction == 'LONG'  and check_price < pos.take_profit_1) or
-                (pos.direction == 'SHORT' and check_price > pos.take_profit_1)
-            )
-            if _tp1_recross:
-                _close('TP1_RECROSS', exit_px=pos.take_profit_1)
-                return
+        # ── 4. Accumulation: ranging + increasing OI + shorts paying ─────────
+        if is_ranging and high_oi and shorts_paying and not is_bearish:
+            conf = 0.55 + (0.15 if rsi < 55 else 0.0) + (0.10 if vol_zscore > 0.5 else 0.0)
             return RegimeState(
                 regime               = _REGIME_ACCUMULATION,
                 confidence           = round(min(conf, 0.85), 3),
@@ -1315,7 +1298,12 @@ class DynamicRiskEngine:
     # partials actually bank at each level.  SL stays 1.8×ATR; RR is validated to
     # TP5 (4.5/1.8 = 2.5) so trade acceptance is unchanged — only the interior
     # rungs moved closer.
-    TP1_MULTIPLIER    = 0.7    # 20 % partial close — early lock, nudged up from 0.55 so the first bank isn't tiny
+    # v82: TP1 raised 0.7R -> 1.0R.  At 0.7R the ONLY reachable win was +0.7R
+    # against a -1.0R stop, so break-even WR was 1/1.7 = 58.8 % — the engine ran
+    # at 60 % and therefore made nothing before fees.  Measured on the live log:
+    # mean win 0.556 % / mean loss 0.788 % = 0.705, i.e. exactly TP1_MULTIPLIER.
+    # TP1 is now a 1:1 rung; the payoff comes from TP2+ riding the trail.
+    TP1_MULTIPLIER    = 1.0    # 15 % partial close — first bank at 1R, no longer the de-facto exit
     TP2_MULTIPLIER    = 1.6    # 20 % partial close + activate trailing stop; also the trail FLOOR, so a higher TP2 locks more on every runner (up from 1.3)
     TP3_MULTIPLIER    = 2.2    # 20 % partial close — small step past TP2 (was 4.5, a near-unreachable gap)
     TP4_MULTIPLIER    = 3.3    # 20 % partial close — reachable stretch target
@@ -1332,8 +1320,10 @@ class DynamicRiskEngine:
     TRAIL_MULTIPLIER  = 1.0    # trailing stop distance = ATR × this (widened to match wider SL)
 
     # ── Partial-close percentages (must sum to 1.0) ───────────────────────────
-    # Front-loaded onto the two "significant objective" targets (TP2/TP3), 20 %
-    # runner rides TP5's trailing exit.
+    # Fractions of the ORIGINAL allocation (v82 — see partial_close_trade; they
+    # used to be applied to the shrinking remainder, so each rung silently
+    # banked less than its nominal share).  Front-loaded onto the two
+    # "significant objective" targets (TP2/TP3); the 20 % runner rides the trail.
     TP_CLOSE_PCTS = (0.15, 0.25, 0.25, 0.15, 0.20)  # TP1 … TP5
 
     def calculate_position_size(
@@ -1398,7 +1388,7 @@ class DynamicRiskEngine:
 
         Take Profit ladder (R = risk leg; Range = resistance−support)
         ------------------------------------------------------------
-          TP1  = 0.7R                            (tighter first bank, early lock)
+          TP1  = 1.0R                            (1:1 first bank — v82, was 0.7R)
           TP2  = 2R                              (1:2, first significant objective)
           TP3  = the major structural level      (resistance for a LONG / support
                  for a SHORT) — the HTF target / liquidity pool
@@ -1951,6 +1941,24 @@ class PortfolioGuard:
 class VirtualWallet:
     """Risk 10 % of balance per trade, capped at max_position_usdt."""
 
+    # ── Execution costs (v82) ────────────────────────────────────────────────
+    # Until v82 the wallet charged NOTHING and every exit booked at its exact
+    # theoretical level (`exit_px=pos.take_profit_1`, `exit_px=trail_stop`, the
+    # whole *_via_peak family), so the reported track record was strictly better
+    # than anything reachable on a real venue.  With a gross edge of ~0.02R that
+    # omission was the difference between "flat" and "losing".
+    #
+    # 0.04 % taker + 0.01 % slippage per side = 0.10 % round trip, which is the
+    # same FEE_ROUNDTRIP the training pipeline already assumes
+    # (retrain_model.py:204) — keep the two in step.
+    TAKER_FEE_PCT = 0.04   # per side, % of notional
+    SLIPPAGE_PCT  = 0.01   # per side, % — adverse fill vs the trigger level
+
+    @classmethod
+    def round_trip_cost_pct(cls) -> float:
+        """Total cost charged against a slice's gross PnL %, entry + exit."""
+        return 2.0 * (cls.TAKER_FEE_PCT + cls.SLIPPAGE_PCT)
+
     def __init__(self, initial_capital: float, max_position_usdt: float = 1_000.0,
                  track_record_path: Optional[Path] = None):
         self.initial_capital    = initial_capital
@@ -2028,6 +2036,11 @@ class VirtualWallet:
                         side            = side,
                         entry_price     = float(s.get('entry_price', 0)),
                         position_value  = float(s.get('position_value', 0)),
+                        # v82: pre-v82 records have no initial_value — fall back to
+                        # the surviving size so a restored position still sizes its
+                        # remaining TP rungs off a fixed base rather than drifting.
+                        initial_value   = float(s.get('initial_value', 0)
+                                                or s.get('position_value', 0)),
                         stop_loss       = float(s.get('stop_loss', 0)),
                         signal_id       = s.get('signal_id', ''),
                         entry_time      = s.get('entry_time', ''),
@@ -2068,6 +2081,9 @@ class VirtualWallet:
             pnl_pct = (exit_price - pos.entry_price) / pos.entry_price * 100
         else:
             pnl_pct = (pos.entry_price - exit_price) / pos.entry_price * 100
+
+        # v82: charge round-trip execution cost on this slice's notional.
+        pnl_pct -= self.round_trip_cost_pct()
 
         pnl_usdt = round(pos.position_value * pnl_pct / 100, 2)
         self.balance += pnl_usdt
@@ -2119,15 +2135,23 @@ class VirtualWallet:
         """Partial close — reduces position_value, books PnL on the closed slice.
 
         The position stays open in open_positions so subsequent TP levels can
-        still fire.  close_pct is applied to the *current* position_value (which
-        shrinks each time this is called) so each call correctly closes the
-        intended fraction of the original allocation.
+        still fire.
+
+        v82: close_pct is a fraction of the ORIGINAL allocation
+        (`pos.initial_value`), not of the shrinking remainder.  The old code
+        applied it to the current position_value while its docstring claimed
+        otherwise, so a nominal 15/25/25/15 ladder actually banked
+        15.0/21.3/16.0/7.2 % — every rung after the first quietly under-banked
+        and the tail rode far more size than the design intended.
         """
         pos = self.open_positions.get(symbol)
         if pos is None:
             return None
 
-        close_value = round(pos.position_value * close_pct, 2)
+        base = pos.initial_value if pos.initial_value > 0 else pos.position_value
+        close_value = round(base * close_pct, 2)
+        # Never close more than is still open (guards a re-entrant TP cascade).
+        close_value = min(close_value, pos.position_value)
         if close_value <= 0:
             return None
 
@@ -2135,6 +2159,9 @@ class VirtualWallet:
             pnl_pct = (exit_price - pos.entry_price) / pos.entry_price * 100
         else:
             pnl_pct = (pos.entry_price - exit_price) / pos.entry_price * 100
+
+        # v82: same round-trip cost as a full close, on the slice notional.
+        pnl_pct -= self.round_trip_cost_pct()
 
         pnl_usdt = round(close_value * pnl_pct / 100, 2)
         self.balance  += pnl_usdt
@@ -3204,7 +3231,8 @@ class LiveEngine:
             # Build signal entry with enriched fields
             self.last_signals[symbol] = self._build_signal_entry(
                 symbol, result, price, regime=regime,
-                quality_score=quality_score, fake_breakout=fake_breakout)
+                quality_score=quality_score, fake_breakout=fake_breakout,
+                open_pos=self.wallet.open_positions.get(symbol))
 
             try:
                 self.adaptive_orchestrator.record_signal(self.last_signals[symbol])
@@ -6143,31 +6171,43 @@ class LiveEngine:
                 exit_px = pos.take_profit_2 if tp2_via_peak else None
                 _partial('TP2_PARTIAL', self.risk_engine.TP_CLOSE_PCTS[1], exit_px)
                 self._tp2_hit[symbol] = True
-                print(f'[{symbol}] TRAILING activated @ TP2 — '
-                      f'trail distance = ATR×{self.risk_engine.TRAIL_MULTIPLIER}')
+                # v82: break-even moves HERE (it used to fire at TP1).  Moving
+                # the stop to entry at 1R meant ordinary retracement flattened
+                # the runner for zero; at 2R the trade has earned the protection.
+                pos.stop_loss = pos.entry_price
+                print(f'[{symbol}] TP2_HIT — SL to break-even '
+                      f'({pos.entry_price:.6g}); TRAILING on '
+                      f'(dist=ATR×{self.risk_engine.TRAIL_MULTIPLIER}, '
+                      f'floor=TP1 {pos.take_profit_1:.6g})')
 
         # ── 6. Trailing stop — active after TP2 is hit ───────────────────────
-        # Trail distance = ATR × TRAIL_MULTIPLIER.
-        # Floor = TP2 price so the stop never gives back more than one ATR of
-        # TP2 profit once the trailing level is above TP2.
+        # Trail distance = ATR × TRAIL_MULTIPLIER, floor = TP1.
+        #
+        # v82: the floor used to be TP2, which made this block a no-op — the
+        # stop sat exactly at TP2 until price ran a full ATR beyond it, so any
+        # dip right after TP2 exited there and no runner ever reached TP3.
+        # Flooring at TP1 keeps ≥1R locked on the remainder while giving it the
+        # room to actually get to the structural target.
         if self._tp2_hit.get(symbol, False):
             trail_dist = self.risk_engine.TRAIL_MULTIPLIER * atr
             if pos.direction == 'LONG':
-                trail_stop = max(pos.take_profit_2, peak - trail_dist)
+                trail_stop = max(pos.take_profit_1, peak - trail_dist)
                 if check_price <= trail_stop:
                     _close('TRAILING_STOP', exit_px=trail_stop)
                     return
             else:  # SHORT
-                trail_stop = min(pos.take_profit_2, peak + trail_dist)
+                trail_stop = min(pos.take_profit_1, peak + trail_dist)
                 if check_price >= trail_stop:
                     _close('TRAILING_STOP', exit_px=trail_stop)
                     return
 
-        # ── 7. TP1 hit — 20 % partial close, move SL to break-even ──────────
-        # v78 fix: use peak-based detection to catch TP1 hits even when price
-        # spikes through and reverses rapidly. Break-even: update pos.stop_loss
-        # to entry price so that if price reverses all the way back, we exit
-        # at entry (no loss on the position).
+        # ── 7. TP1 hit — partial close; the stop is left ALONE ───────────────
+        # v78 fix: peak-based detection catches TP1 hits even when price spikes
+        # through and reverses rapidly between scan cycles.
+        #
+        # v82: the break-even move that used to live here now happens at TP2.
+        # Together with the deletion of TP1_RECROSS (below) this is the change
+        # that allows a winner to be larger than a loser.
         if pos.take_profit_1 > 0 and not self._tp1_hit.get(symbol, False):
             tp1_hit = (
                 (pos.direction == 'LONG'  and check_price >= pos.take_profit_1) or
@@ -6182,58 +6222,28 @@ class LiveEngine:
                 _partial('TP1_PARTIAL', self.risk_engine.TP_CLOSE_PCTS[0])
                 self._tp1_hit[symbol]    = True
                 self._peak_price[symbol] = check_price   # reset peak tracking from TP1
-                # Break-even: SL moves to entry — guarantees no loss on remaining position
-                pos.stop_loss = pos.entry_price
-                print(f'[{symbol}] TP1_HIT @ {check_price:.6g} — '
-                      f'SL moved to break-even ({pos.entry_price:.6g})')
+                print(f'[{symbol}] TP1_HIT @ {check_price:.6g} — banked '
+                      f'{self.risk_engine.TP_CLOSE_PCTS[0]*100:.0f}%, '
+                      f'stop stays at {pos.stop_loss:.6g}')
 
-        # ── 7b. TP1 re-cross exit — protect profit after TP1 is secured ─────
-        # After TP1 hit (SL moved to break-even), if price crosses back below
-        # TP1 (LONG) or above TP1 (SHORT), close immediately at the TP1 level.
-        # This locks in the partial TP1 gain instead of waiting for a later fill.
-        # Inactive after TP2 — the trailing stop manages profit protection then.
-        if (self._tp1_hit.get(symbol, False) and
-                not self._tp2_hit.get(symbol, False)):
-            _tp1_recross = (
-                (pos.direction == 'LONG'  and check_price < pos.take_profit_1) or
-                (pos.direction == 'SHORT' and check_price > pos.take_profit_1)
-            )
-            if _tp1_recross:
-                _close('TP1_RECROSS', exit_px=pos.take_profit_1)
-                return
-
-        # ── 7c. TP2 re-cross exit — immediate close after TP2 was banked ─────
-        # If TP2 was already taken (trailing activated) and price falls back
-        # below TP2 (LONG) or above TP2 (SHORT), close remaining position at
-        # the TP2 level to lock in profit.
-        if self._tp2_hit.get(symbol, False) and not self._tp3_hit.get(symbol, False):
-            _tp2_recross = (
-                (pos.direction == 'LONG'  and check_price < pos.take_profit_2) or
-                (pos.direction == 'SHORT' and check_price > pos.take_profit_2)
-            )
-            if _tp2_recross:
-                _close('TP2_RECROSS', exit_px=pos.take_profit_2)
-                return
-
-        # ── 7d. TP3 re-cross exit — immediate close after TP3 was banked ─────
-        if self._tp3_hit.get(symbol, False) and not self._tp4_hit.get(symbol, False):
-            _tp3_recross = (
-                (pos.direction == 'LONG'  and check_price < pos.take_profit_3) or
-                (pos.direction == 'SHORT' and check_price > pos.take_profit_3)
-            )
-            if _tp3_recross:
-                _close('TP3_RECROSS', exit_px=pos.take_profit_3)
-                return
-
-        # ── 7e. TP4 re-cross exit — immediate close after TP4 was banked ─────
-        if self._tp4_hit.get(symbol, False) and pos.take_profit_4 > 0:
-            _tp4_recross = (
-                (pos.direction == 'LONG'  and check_price < pos.take_profit_4) or
-                (pos.direction == 'SHORT' and check_price > pos.take_profit_4)
-            )
-            if _tp4_recross:
-                _close('TP4_RECROSS', exit_px=pos.take_profit_4)
-                return
+        # ── 7b–7e. TP re-cross exits — DELETED in v82 ────────────────────────
+        # There used to be four blocks here (TP1/TP2/TP3/TP4_RECROSS) that
+        # closed 100 % of the remaining position the instant price ticked back
+        # through a TP level it had already tagged.  TP1_RECROSS was the single
+        # most expensive line in this engine:
+        #
+        #   TP1 was 0.7R, so reaching TP1 and then ticking back — which is
+        #   almost every trade on a 1h chart — closed the whole position at
+        #   +0.7R.  The stop was a full -1.0R.  Break-even win rate was
+        #   1/1.7 = 58.8 % and the engine ran at 60 %, i.e. an edge of +0.02R,
+        #   which fees then buried.  It also made TP2-TP5 unreachable: the live
+        #   log shows only ever two exit reasons, SL_HIT and TP1.
+        #
+        # Profit protection after TP2 is the trailing stop's job (section 6),
+        # which ratchets instead of capping.  Between TP1 and TP2 the original
+        # structural stop stands — a trade is allowed to breathe there.
+        #
+        # Do not reintroduce these without re-running the payoff arithmetic.
 
         # ── 8. Model-reversal exit (dynamic exit on opposing signal) ─────────
         side = result.get('side', 'FLAT')
@@ -6251,13 +6261,15 @@ class LiveEngine:
                 # between reversal cycles, clearing _signal_history each time).
                 # Instead, require the reversal signal to meet the same quality floor
                 # used for entry (edge_score >= MIN_QUALITY_SCORE = 70).
-                # After TP1 (SL at break-even, profit secured): close immediately at
-                # the secured TP1 level to lock in the gain instead of waiting for
-                # a later market fill.
+                #
+                # v82: a reversal after TP1 used to book at `pos.take_profit_1`
+                # regardless of where price actually was — a free fill at a level
+                # the market had already left.  It now exits at the live price
+                # like any other market exit; the TP1 slice is already banked.
                 _tp1_secured = self._tp1_hit.get(symbol, False)
                 _rev_edge    = float(result.get('edge_score', 0.0))
                 if _tp1_secured:
-                    _close('MODEL_REVERSAL_TP', exit_px=pos.take_profit_1)
+                    _close('MODEL_REVERSAL_TP')
                     return
                 if _rev_edge >= SignalQualityFilter.MIN_QUALITY_SCORE:
                     _close('MODEL_REVERSAL_TP')
@@ -6267,8 +6279,9 @@ class LiveEngine:
                       f'{SignalQualityFilter.MIN_QUALITY_SCORE:.0f} (tp1_secured=False)')
 
         # ── 9. Stop loss / break-even SL ─────────────────────────────────────
-        # Before TP1: uses the original ATR-based SL.
-        # After  TP1: pos.stop_loss was moved to entry_price (break-even).
+        # Before TP2: uses the original ATR-based structural SL.
+        # After  TP2: pos.stop_loss was moved to entry_price (break-even), and
+        #             the trailing stop in section 6 is usually tighter still.
         if pos.stop_loss > 0:
             sl_hit = (
                 (pos.direction == 'LONG'  and check_price <= pos.stop_loss) or
@@ -6417,6 +6430,7 @@ class LiveEngine:
             side            = side,
             entry_price     = round(price, 8),
             position_value  = round(pos_value, 2),
+            initial_value   = round(pos_value, 2),   # v82: fixed base for TP partial sizing
             stop_loss       = round(stop_loss, 8),
             signal_id       = str(uuid.uuid4()),
             entry_time      = datetime.now(timezone.utc).isoformat(),
@@ -6488,6 +6502,7 @@ class LiveEngine:
         regime:        Optional[RegimeState] = None,
         quality_score: float                 = 0.0,
         fake_breakout: bool                  = False,
+        open_pos:      Optional[Position]    = None,   # v82: publish frozen levels
     ) -> Dict[str, Any]:
         side     = result.get('side', 'FLAT')
         conf     = float(result.get('edge_score', result.get('meta_confidence', 0)))
@@ -6555,6 +6570,27 @@ class LiveEngine:
             else {}
         )
 
+        # v82: when a position is actually OPEN on this symbol, publish ITS
+        # frozen levels rather than a fresh re-computation off the live price.
+        # The recomputed set drifted with price and skipped the RISKY sl_cap
+        # override, so the dashboard showed a materially different trade from
+        # the one being tracked (observed: position bar entry 6.19 / TP1 6.2662
+        # against a signal panel reading entry 6.12 / TP1 6.1733 on one symbol).
+        if open_pos is not None and open_pos.entry_price > 0:
+            entry['entry_price']    = open_pos.entry_price
+            entry['position_entry'] = open_pos.entry_price
+            entry['levels_frozen']  = True
+            _stops = {
+                'sl':  open_pos.stop_loss,
+                'tp1': open_pos.take_profit_1, 'tp2': open_pos.take_profit_2,
+                'tp3': open_pos.take_profit_3, 'tp4': open_pos.take_profit_4,
+                'tp5': open_pos.take_profit_5,
+            }
+            side = open_pos.side          # levels belong to the live direction
+            price = open_pos.entry_price  # RR below must measure from the real entry
+        else:
+            entry['levels_frozen'] = False
+
         if side == 'BUY':
             entry['suggested_sl'] = _stops.get('sl') if _stops else None
             entry['suggested_tp'] = _stops.get('tp1') if _stops else None
@@ -6580,16 +6616,24 @@ class LiveEngine:
         _conf_raw   = abs(_conf_total - 5.0) / 5.0
         entry['expected_move_pct'] = round(_conf_raw * atr_pct * 3.0, 2)
 
-        # Risk/Reward ratio: reward measured to TP5 (full-trend target), matching
-        # the MIN_RISK_REWARD gate in _open_position() / calculate_stops().
+        # Risk/Reward ratio.
+        #
+        # v82: the headline number was measured to TP5 and advertised figures
+        # like "1 : 15.17" — against a TP5 the UI's own probability panel prices
+        # at 6 % and which has never once filled in recorded history.  It also
+        # did NOT match the MIN_RISK_REWARD gate despite the old comment saying
+        # so (calculate_stops measures reward to the structural target).
+        # `risk_reward` is now quoted to TP2, the first objective the position
+        # is actually managed toward; the stretch figure is kept alongside it
+        # and clearly named.
         sl_val  = entry.get('suggested_sl') or 0
+        tp2_val = entry.get('tp2') or 0
         tp5_val = entry.get('tp5') or 0
-        if price > 0 and sl_val and tp5_val:
-            _risk   = abs(price - sl_val)
-            _reward = abs(price - tp5_val)
-            entry['risk_reward'] = round(_reward / _risk, 2) if _risk > 0 else 0
-        else:
-            entry['risk_reward'] = 0
+        _risk   = abs(price - sl_val) if (price > 0 and sl_val) else 0
+        entry['risk_reward'] = (
+            round(abs(price - tp2_val) / _risk, 2) if (_risk > 0 and tp2_val) else 0)
+        entry['risk_reward_tp5'] = (
+            round(abs(price - tp5_val) / _risk, 2) if (_risk > 0 and tp5_val) else 0)
         entry['atr_sl_multiplier'] = _re.ATR_SL_MULTIPLIER
         entry['min_risk_reward']   = _re.MIN_RISK_REWARD
 
@@ -6696,14 +6740,15 @@ class LiveEngine:
                 return
 
             regime = self.regime_detector.detect(result)
+            key    = f'{symbol}|{tf}'
             sig = self._build_signal_entry(
                 symbol, result, price, regime=regime,
                 quality_score=min(float(result.get('edge_score', 0.0)), 100.0),
+                open_pos=self.alpha_wallet.open_positions.get(key),
             )
             sig['timeframe'] = tf
             sig['pair']      = symbol
 
-            key = f'{symbol}|{tf}'
             self.alpha_signals[key] = sig
 
             existing = self.alpha_wallet.open_positions.get(key)
@@ -6762,6 +6807,7 @@ class LiveEngine:
                     'exit_reason':    None,
                     'meta_confidence': p.meta_confidence,
                     'position_value': p.position_value,
+                    'initial_value':  p.initial_value,   # v82: TP partial-sizing base
                     'stop_loss':      p.stop_loss,
                     'take_profit_1':  p.take_profit_1,
                     'take_profit_2':  p.take_profit_2,
