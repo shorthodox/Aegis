@@ -3062,6 +3062,107 @@ class LiveEngine:
             )
         return regime
 
+    def _record_signal_direction(self, symbol: str, new_side: str) -> None:
+        """Append a directional read to the stability-gate history.
+
+        Only BUY/SELL accumulate; FLAT/HOLD is ignored so BUY->FLAT->BUY does
+        not erase the counter (volatile markets produce intermittent FLAT
+        cycles). A genuine flip needs no explicit clear — the stability check
+        is all(s == new_side), which fails once the deque holds the other side.
+        """
+        if new_side not in ('BUY', 'SELL'):
+            return
+        if symbol not in self._signal_history:
+            self._signal_history[symbol] = deque(maxlen=self.SIGNAL_STABILITY_WINDOW)
+        self._signal_history[symbol].append(new_side)
+
+    async def _apply_htf_macro_bias(self, symbol: str, result: Dict[str, Any]) -> None:
+        """Recompute and inject the daily/weekly trend bias.
+
+        macro_daily / macro_weekly arrive 0.0 from the model (a swallowed
+        KeyError zeroes them at the source — see _daily_bias). They are
+        recomputed from daily candles and injected BEFORE scoring so the HTF
+        tiers in score_signal() (+15/+10 aligned, -20/-10 against) and Guard F
+        (hard-block when BOTH daily and weekly oppose) come alive. Trade WITH
+        the higher-timeframe trend; a genuine reversal at a level stays exempt
+        via score_signal's `is_reversal` branch.
+        """
+        result['macro_daily'], result['macro_weekly'] = await self._daily_bias(symbol)
+
+    def _manage_paper_position(
+        self, symbol: str, result: Dict[str, Any], price: float
+    ) -> None:
+        """v74: manage the RISKY paper book (alpha wallet, SYMBOL|risky).
+
+        RISKY-tier fires trade on paper until the tagged population proves
+        itself (see the fire path). Exits mirror the alpha scanner's rules: SL,
+        TP3 full take, an opposing model fire, and the 24h zombie guard.
+        """
+        key = f'{symbol}|risky'
+        pos = self.alpha_wallet.open_positions.get(key)
+        if pos is None:
+            return
+        px = float(self.live_prices.get(symbol, 0) or price or 0)
+        if px <= 0:
+            return
+
+        is_long = pos.direction == 'LONG'
+        hit_sl  = (px <= pos.stop_loss) if is_long else (px >= pos.stop_loss)
+        hit_tp  = (pos.take_profit_3 > 0 and
+                   ((px >= pos.take_profit_3) if is_long
+                    else (px <= pos.take_profit_3)))
+        reversed_ = (bool(result.get('fire'))
+                     and result.get('side') in ('BUY', 'SELL')
+                     and result.get('side') != pos.side)
+        expired = (time.time() - self._alpha_open_time.get(key, time.time())
+                   >= self.MAX_HOLD_SECONDS)
+
+        why = ('SL_HIT' if hit_sl else 'TP3_HIT' if hit_tp else
+               'SIGNAL_REVERSAL' if reversed_ else
+               'MAX_HOLD_EXPIRED' if expired else '')
+        if not why:
+            return
+        self.alpha_wallet.close_trade(key, px, why)
+        self._alpha_last_close_time[key] = time.time()
+        self._save_alpha_track_record()
+        print(f'[{symbol}] RISKY-PAPER {why} @ {px:.6g}')
+
+    async def _resolve_market_context(
+        self, symbol: str, result: Dict[str, Any]
+    ) -> Optional[Tuple[float, Any, Dict[str, Any], str, float, bool]]:
+        """Turn a raw prediction into the context every downstream gate reads.
+
+        Returns (price, regime, hmm, new_side, quality_score, fake_breakout),
+        or None when the HMM vetoes the symbol outright and the scan should
+        stop here.
+        """
+        price = self._resolve_price(result, symbol)
+
+        # ── Adaptive intelligence layer ───────────────────────────────────
+        # Step 1: HMM regime (probabilistic, from predictor's result dict).
+        # The HMM ran inside predict_realtime() and attached hmm_* fields;
+        # they are extracted here and used to sharpen MarketRegimeDetector.
+        hmm = self._extract_hmm_fields(result)
+
+        # If HMM says no-trade (e.g. COMPRESSION pre-breakout or DISTRIBUTION)
+        # suppress immediately — don't spend the quality-scoring pass.
+        if self._check_hmm_trade_veto(symbol, hmm):
+            return None
+
+        # Step 2: rule-based regime classifier, then let a confident HMM read
+        # override the heuristic label.
+        regime = self.regime_detector.detect(result)
+        regime = self._update_regime_from_hmm(regime, result, hmm)
+
+        new_side = result.get('side', 'FLAT')
+        self._record_signal_direction(symbol, new_side)
+        await self._apply_htf_macro_bias(symbol, result)
+
+        quality_score, _reasons = self.quality_filter.score_signal(
+            result, regime, new_side)
+        fake_breakout = self.quality_filter.is_fake_breakout(result, new_side)
+        return price, regime, hmm, new_side, quality_score, fake_breakout
+
     async def _process_symbol(
         self, symbol: str, predictor: Any, sem: asyncio.Semaphore
     ) -> None:
@@ -3088,54 +3189,10 @@ class LiveEngine:
             if not isinstance(result, dict):
                 return
 
-            price = self._resolve_price(result, symbol)
-
-            # ── Adaptive intelligence layer ───────────────────────────────────
-            # Step 1: HMM regime (probabilistic, from predictor's result dict)
-            # The HMM ran inside predict_realtime() and attached hmm_* fields.
-            # We extract them here and let them sharpen the MarketRegimeDetector.
-            hmm = self._extract_hmm_fields(result)
-
-            # If HMM says no-trade (e.g. COMPRESSION pre-breakout or DISTRIBUTION)
-            # suppress the signal immediately — don't waste the quality scoring pass.
-            if self._check_hmm_trade_veto(symbol, hmm):
+            _ctx = await self._resolve_market_context(symbol, result)
+            if _ctx is None:            # HMM no-trade veto
                 return
-
-            # Step 2: Rule-based regime classifier (existing, now HMM-informed)
-            # If HMM has a confident read, override the heuristic detector's label.
-            regime = self.regime_detector.detect(result)
-            regime = self._update_regime_from_hmm(regime, result, hmm)
-
-            new_side      = result.get('side', 'FLAT')
-
-            # Track signal direction history for the stability gate.
-            # Only directional signals accumulate; FLAT/HOLD is ignored so that
-            # BUY→FLAT→BUY doesn't reset the counter (volatile markets produce
-            # intermittent FLAT cycles that previously erased valid setups).
-            # A genuine direction flip (BUY→SELL) is handled by the stability
-            # check itself: all(s == new_side) will fail if the deque has the
-            # opposite side, so no explicit clear is needed.
-            if new_side in ('BUY', 'SELL'):
-                if symbol not in self._signal_history:
-                    self._signal_history[symbol] = deque(maxlen=self.SIGNAL_STABILITY_WINDOW)
-                self._signal_history[symbol].append(new_side)
-
-            # ── Revive the HTF daily/weekly trend bias ────────────────────────────
-            # macro_daily / macro_weekly arrive 0.0 from the model (a swallowed
-            # KeyError zeroes them at the source — see _daily_bias). Recompute them
-            # from daily candles and inject BEFORE scoring, so the existing HTF-bias
-            # tiers in score_signal() (+15/+10 aligned, -20/-10 against) and Guard F
-            # (hard-block when BOTH daily AND weekly oppose) come alive. This is the
-            # directional focus the engine was always meant to have: trade WITH the
-            # higher-timeframe trend; a genuine reversal at a level stays exempt from
-            # the penalty (score_signal's `is_reversal` branch).
-            _macro_d, _macro_w = await self._daily_bias(symbol)
-            result['macro_daily']  = _macro_d
-            result['macro_weekly'] = _macro_w
-
-            quality_score, _quality_reasons = self.quality_filter.score_signal(
-                result, regime, new_side)
-            fake_breakout = self.quality_filter.is_fake_breakout(result, new_side)
+            price, regime, hmm, new_side, quality_score, fake_breakout = _ctx
 
             # ── MODEL-FIRST decision: the ML model picks side + fire ──────────────
             # The model's side/fire (from predict_realtime) is the authority — the
@@ -3279,34 +3336,7 @@ class LiveEngine:
 
             existing = self.wallet.open_positions.get(symbol)
 
-            # ── v74: manage the RISKY paper book (alpha wallet, SYMBOL|risky) ──
-            # RISKY-tier fires trade on paper until the tagged population proves
-            # itself (see the fire path). Exits mirror the alpha scanner's rules:
-            # SL, TP3 full take, opposing model fire, and the 24h zombie guard.
-            _rk_key = f'{symbol}|risky'
-            _rk_pos = self.alpha_wallet.open_positions.get(_rk_key)
-            if _rk_pos is not None:
-                _rk_px = float(self.live_prices.get(symbol, 0) or price or 0)
-                if _rk_px > 0:
-                    _rk_long = _rk_pos.direction == 'LONG'
-                    _rk_sl   = ((_rk_px <= _rk_pos.stop_loss) if _rk_long
-                                else (_rk_px >= _rk_pos.stop_loss))
-                    _rk_tp   = (_rk_pos.take_profit_3 > 0 and
-                                ((_rk_px >= _rk_pos.take_profit_3) if _rk_long
-                                 else (_rk_px <= _rk_pos.take_profit_3)))
-                    _rk_rev  = (bool(result.get('fire'))
-                                and result.get('side') in ('BUY', 'SELL')
-                                and result.get('side') != _rk_pos.side)
-                    _rk_old  = (time.time() - self._alpha_open_time.get(_rk_key, time.time())
-                                >= self.MAX_HOLD_SECONDS)
-                    _rk_why  = ('SL_HIT' if _rk_sl else 'TP3_HIT' if _rk_tp else
-                                'SIGNAL_REVERSAL' if _rk_rev else
-                                'MAX_HOLD_EXPIRED' if _rk_old else '')
-                    if _rk_why:
-                        self.alpha_wallet.close_trade(_rk_key, _rk_px, _rk_why)
-                        self._alpha_last_close_time[_rk_key] = time.time()
-                        self._save_alpha_track_record()
-                        print(f'[{symbol}] RISKY-PAPER {_rk_why} @ {_rk_px:.6g}')
+            self._manage_paper_position(symbol, result, price)
 
             # Labelled S/R levels + Break->Retest->Confirmation states for the chart.
             # ONLY for symbols a user actually views on the chart — a firing signal

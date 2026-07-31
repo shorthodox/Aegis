@@ -272,7 +272,37 @@ CASES: Dict[str, Any] = {
     'buy_overbought':       (_long(rsi=82.0, range_position=0.95),            1.0,  1.0),
     'sell_oversold':        (_short(rsi=18.0, range_position=0.05),          -1.0, -1.0),
     'buy_wide_atr':         (_long(atr=3.0, atr_pct=3.0),                     1.0,  1.0),
+
+    # ── pre-existing paper book (alpha wallet) — covers _manage_paper_position.
+    # Without these the RISKY paper exits are never executed by any case.
+    'paper_long_sl_hit':    (_long(rsi=45.0),  1.0,  1.0,
+                             lambda e: _seed_paper(e, 'BUY', sl=101.0)),
+    'paper_long_tp3_hit':   (_long(rsi=45.0),  1.0,  1.0,
+                             lambda e: _seed_paper(e, 'BUY', tp3=99.0)),
+    'paper_long_reversal':  (_short(rsi=55.0), -1.0, -1.0,
+                             lambda e: _seed_paper(e, 'BUY')),
+    'paper_long_expired':   (_long(rsi=45.0),  1.0,  1.0,
+                             lambda e: _seed_paper(e, 'BUY', age=99_999.0)),
+    'paper_long_held':      (_long(rsi=45.0),  1.0,  1.0,
+                             lambda e: _seed_paper(e, 'BUY')),
 }
+
+
+def _seed_paper(eng: LiveEngine, side: str, sl: float = 90.0,
+                tp3: float = 130.0, age: float = 0.0) -> None:
+    """Open a RISKY paper position so the alpha-book exit rules are exercised."""
+    import time as _t
+    from scripts.live_engine import Position
+    key = f'{SYMBOL}|risky'
+    eng.alpha_wallet.open_positions[key] = Position(
+        symbol=key, direction='LONG' if side == 'BUY' else 'SHORT', side=side,
+        entry_price=100.0, position_value=1_000.0, initial_value=1_000.0,
+        stop_loss=sl, signal_id='paper-1', entry_time='2026-07-31T00:00:00+00:00',
+        meta_confidence=0.8, atr_multiplier=1.8, atr=1.0,
+        take_profit_1=101.0, take_profit_2=102.0, take_profit_3=tp3,
+        take_profit_4=104.0, take_profit_5=105.0, signal_strength='RISKY',
+    )
+    eng._alpha_open_time[key] = _t.time() - age
 
 
 # ── snapshot ─────────────────────────────────────────────────────────────────
@@ -311,9 +341,12 @@ def _observable(eng: LiveEngine, out: str) -> Dict[str, Any]:
 
 
 async def _run_case(name: str, spec: Any, tmp: Path) -> Dict[str, Any]:
-    result, _md, _mw = spec
+    result, _md, _mw = spec[0], spec[1], spec[2]
+    pre = spec[3] if len(spec) > 3 else None
     eng = _build_engine(tmp, macro=(_md, _mw),
                         bullish_reversal=(result.get('side') != 'SELL'))
+    if pre is not None:
+        pre(eng)
     pred = _StubPredictor(result)
     sem = asyncio.Semaphore(1)
 
