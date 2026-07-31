@@ -48,14 +48,24 @@ def _save_state(state: Dict[str, Any]) -> None:
 
 
 def is_on_cooldown(symbol: str, mode: str) -> bool:
-    """Return True if the token is still in cooldown for the given mode."""
+    """Return True if the token is still in cooldown for the given mode.
+
+    v82c: the window now escalates with the consecutive-loss streak, and a
+    streak of LOSS_STREAK_BLOCK trips a hard block — see the notes on
+    record_loss() for the trade sequence that motivated this.
+    """
     state = _load_state()
+    if is_loss_blocked(symbol, mode, state):
+        return True
     key   = f"{symbol}_{mode}"
     last  = state.get(key)
     if last is None:
         return False
-    last_time     = datetime.fromisoformat(last)
-    cooldown_mins = MODES[mode]['cooldown_minutes']
+    try:
+        last_time = datetime.fromisoformat(str(last))
+    except Exception:
+        return False
+    cooldown_mins = _effective_cooldown_minutes(symbol, mode, state)
     elapsed_mins  = (datetime.now(timezone.utc) - last_time).total_seconds() / 60
     return elapsed_mins < cooldown_mins
 
@@ -75,10 +85,92 @@ def cooldown_remaining_minutes(symbol: str, mode: str) -> int:
     if last is None:
         return 0
     last_time     = datetime.fromisoformat(last)
-    cooldown_mins = MODES[mode]['cooldown_minutes']
+    cooldown_mins = _effective_cooldown_minutes(symbol, mode, state)
     elapsed_mins  = (datetime.now(timezone.utc) - last_time).total_seconds() / 60
     remaining     = max(0, cooldown_mins - elapsed_mins)
     return int(remaining)
+
+
+# ── Post-loss cooldown / circuit breaker (v82c) ───────────────────────────────
+# The scalp record for 2026-07-23 shows ZIL/USDT shorted eight consecutive times
+# in nine minutes, every one stopped out, while the token rallied 8.6 %.  A
+# per-signal cooldown alone cannot stop that: it restarts the same fixed clock
+# whether the previous trade won or lost, so the engine keeps re-arming into a
+# move that is repeatedly proving it wrong.  Losses now lengthen the cooldown,
+# and a streak trips a hard block.
+LOSS_STREAK_BLOCK    = 3      # consecutive losses on a symbol+mode -> hard block
+LOSS_BLOCK_MINUTES   = 240    # how long that block lasts
+LOSS_COOLDOWN_FACTOR = 2.0    # each consecutive loss multiplies the base cooldown
+LOSS_COOLDOWN_CAP    = 180    # ceiling on the escalated cooldown, minutes
+
+
+def _loss_key(symbol: str, mode: str) -> str:
+    return f"loss::{symbol}_{mode}"
+
+
+def _base_cooldown_minutes(mode: str) -> float:
+    return float(MODES.get(mode, {}).get('cooldown_minutes', 10))
+
+
+def get_loss_streak(symbol: str, mode: str, state: Optional[Dict[str, Any]] = None) -> int:
+    """Consecutive losing trades on this symbol+mode (0 after any win)."""
+    st  = _load_state() if state is None else state
+    rec = st.get(_loss_key(symbol, mode))
+    if not isinstance(rec, dict):
+        return 0
+    try:
+        return int(rec.get('streak', 0))
+    except Exception:
+        return 0
+
+
+def _effective_cooldown_minutes(
+    symbol: str, mode: str, state: Optional[Dict[str, Any]] = None
+) -> float:
+    """Base cooldown, escalated by the current consecutive-loss streak."""
+    base   = _base_cooldown_minutes(mode)
+    streak = get_loss_streak(symbol, mode, state)
+    if streak <= 0:
+        return base
+    return min(base * (LOSS_COOLDOWN_FACTOR ** streak), float(LOSS_COOLDOWN_CAP))
+
+
+def record_loss(symbol: str, mode: str) -> int:
+    """Register a losing trade; returns the new consecutive-loss streak."""
+    state  = _load_state()
+    streak = get_loss_streak(symbol, mode, state) + 1
+    state[_loss_key(symbol, mode)] = {
+        'streak': streak,
+        'at':     datetime.now(timezone.utc).isoformat(),
+    }
+    # Restart the signal clock too, so the escalated cooldown runs from the loss
+    # rather than from whenever the entry happened.
+    state[f"{symbol}_{mode}"] = datetime.now(timezone.utc).isoformat()
+    _save_state(state)
+    return streak
+
+
+def record_win(symbol: str, mode: str) -> None:
+    """Clear the loss streak after a winning trade."""
+    state = _load_state()
+    if state.pop(_loss_key(symbol, mode), None) is not None:
+        _save_state(state)
+
+
+def is_loss_blocked(symbol: str, mode: str, state: Optional[Dict[str, Any]] = None) -> bool:
+    """True while a symbol+mode is hard-blocked for a consecutive-loss streak."""
+    st  = _load_state() if state is None else state
+    rec = st.get(_loss_key(symbol, mode))
+    if not isinstance(rec, dict):
+        return False
+    if int(rec.get('streak', 0) or 0) < LOSS_STREAK_BLOCK:
+        return False
+    try:
+        at = datetime.fromisoformat(str(rec.get('at')))
+    except Exception:
+        return False
+    elapsed = (datetime.now(timezone.utc) - at).total_seconds() / 60
+    return elapsed < LOSS_BLOCK_MINUTES
 
 
 # ── Confidence Gate ────────────────────────────────────────────────────────────

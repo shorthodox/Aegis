@@ -662,90 +662,119 @@ class TraderEngine:
                 # ── Signal gates ──────────────────────────────────────────────────
                 if direction == 'HOLD':
                     continue
-                if not force_fire:
-                    if on_cooldown:
-                        continue
-                    if conf < _eff_min:
-                        continue
-                    if confluence_score < _MIN_CONFLUENCE:
-                        log.debug(
-                            f"[SKIP] {symbol} {mode_name} {direction} conf={conf:.2%} "
-                            f"— confluence={n_agree}/25 ({confluence_score:.2f}) < {_MIN_CONFLUENCE}"
-                        )
-                        continue
+                # v82c: `force_fire` may ONLY waive the cooldown.  It used to wrap
+                # this entire block, so one caller passing force_fire=True
+                # (ScalpBot) silently disabled the confidence floor, confluence,
+                # ATR floor, volume floor and RSI-extreme checks as well.  That is
+                # what produced eight consecutive ZIL shorts into an 8.6 % rally at
+                # 9-14 % confidence on 2026-07-23.  The quality gates below are now
+                # unconditional and no flag can turn them off.
+                if on_cooldown and not force_fire:
+                    continue
+                if conf < _eff_min:
+                    continue
+                if confluence_score < _MIN_CONFLUENCE:
+                    log.debug(
+                        f"[SKIP] {symbol} {mode_name} {direction} conf={conf:.2%} "
+                        f"— confluence={n_agree}/25 ({confluence_score:.2f}) < {_MIN_CONFLUENCE}"
+                    )
+                    continue
 
-                    # ── Feature-engine parity gates ───────────────────────────────
-                    # Mirror the quality assumptions baked into training so live
-                    # signals arrive in the same market regime the models were
-                    # optimised for. raw_features uses raw (unnormalised) values.
-                    _fe_last = raw_features.iloc[-1]
+                # ── Feature-engine parity gates ───────────────────────────────
+                # Mirror the quality assumptions baked into training so live
+                # signals arrive in the same market regime the models were
+                # optimised for. raw_features uses raw (unnormalised) values.
+                _fe_last = raw_features.iloc[-1]
 
-                    # ATR floor: training used ATR > 0.8% of price
-                    # fe_atr_pct is normalised as (atr/close).clip(0,0.1)/0.1
-                    # → raw 0.08 corresponds to 0.8% ATR
-                    _fe_atr = float(_fe_last.get('fe_atr_pct', 0.0))
-                    if _fe_atr < 0.08:
+                # ATR floor: training used ATR > 0.8% of price
+                # fe_atr_pct is normalised as (atr/close).clip(0,0.1)/0.1
+                # → raw 0.08 corresponds to 0.8% ATR
+                _fe_atr = float(_fe_last.get('fe_atr_pct', 0.0))
+                if _fe_atr < 0.08:
+                    log.debug(
+                        f"[SKIP] {symbol} {mode_name} {direction} "
+                        f"— ATR_TOO_LOW fe_atr_pct={_fe_atr:.4f} (<0.08 = 0.8%)"
+                    )
+                    continue
+
+                # Volume floor: skip when volume < 50% of rolling average
+                # fe_vol_ratio = (vol/vol_ma).clip(0,5)/5 → raw 0.10 = 50%
+                _fe_vol = float(_fe_last.get('fe_vol_ratio', 1.0))
+                if _fe_vol < 0.10:
+                    log.debug(
+                        f"[SKIP] {symbol} {mode_name} {direction} "
+                        f"— LOW_VOLUME fe_vol_ratio={_fe_vol:.4f} (<0.10 = 50% avg)"
+                    )
+                    continue
+
+                # RSI extreme: avoid chasing overbought/oversold entries
+                # fe_rsi_14 = rsi/100 → raw 0.75 = RSI 75, 0.25 = RSI 25
+                _fe_rsi = float(_fe_last.get('fe_rsi_14', 0.5))
+                if direction == 'BUY' and _fe_rsi > 0.75:
+                    log.debug(
+                        f"[SKIP] {symbol} {mode_name} BUY "
+                        f"— RSI_OVERBOUGHT fe_rsi_14={_fe_rsi:.3f} (>0.75 = RSI 75)"
+                    )
+                    continue
+                if direction == 'SELL' and _fe_rsi < 0.25:
+                    log.debug(
+                        f"[SKIP] {symbol} {mode_name} SELL "
+                        f"— RSI_OVERSOLD fe_rsi_14={_fe_rsi:.3f} (<0.25 = RSI 25)"
+                    )
+                    continue
+
+                # ── Counter-trend guard for SCALPING (v82c) ───────────────────
+                # Scalping intentionally has no trend filter: its edge is the
+                # directional-edge override, which is a RANGING-market tool.  But
+                # nothing checked whether the market was actually ranging, so the
+                # engine happily faded vertical trends — the ZIL sequence above is
+                # exactly that failure.  This blocks counter-trend scalps ONLY
+                # when the tape is decisively trending (ADX > 30), leaving the
+                # ranging regime the mode is built for untouched.
+                if mode_name in ('scalping', 'scalping_15m'):
+                    _fe_adx = float(_fe_last.get('fe_adx_14', 0.0))
+                    if _fe_adx > 0.30:
+                        _slope = float(ranked.iloc[-1].get('fe_ema20_slope', 0.5))
+                        if direction == 'SELL' and _slope > 0.70:
+                            log.debug(
+                                f"[SKIP] {symbol} {mode_name} SELL — SCALP_COUNTER_TREND "
+                                f"adx={_fe_adx*100:.0f} slope_rank={_slope:.2f} (>0.70)"
+                            )
+                            continue
+                        if direction == 'BUY' and _slope < 0.30:
+                            log.debug(
+                                f"[SKIP] {symbol} {mode_name} BUY — SCALP_COUNTER_TREND "
+                                f"adx={_fe_adx*100:.0f} slope_rank={_slope:.2f} (<0.30)"
+                            )
+                            continue
+
+                # Trend alignment + ADX regime: only for intraday/swing modes.
+                if mode_name in ('intraday', 'swing'):
+                    # ADX < 20 → no directional trend; skip intraday/swing signals
+                    # fe_adx_14 = adx/100 → raw 0.20 = ADX 20
+                    _fe_adx = float(_fe_last.get('fe_adx_14', 0.5))
+                    if _fe_adx < 0.20:
                         log.debug(
                             f"[SKIP] {symbol} {mode_name} {direction} "
-                            f"— ATR_TOO_LOW fe_atr_pct={_fe_atr:.4f} (<0.08 = 0.8%)"
+                            f"— RANGING_MARKET fe_adx_14={_fe_adx:.3f} (<0.20 = ADX 20)"
                         )
                         continue
 
-                    # Volume floor: skip when volume < 50% of rolling average
-                    # fe_vol_ratio = (vol/vol_ma).clip(0,5)/5 → raw 0.10 = 50%
-                    _fe_vol = float(_fe_last.get('fe_vol_ratio', 1.0))
-                    if _fe_vol < 0.10:
-                        log.debug(
-                            f"[SKIP] {symbol} {mode_name} {direction} "
-                            f"— LOW_VOLUME fe_vol_ratio={_fe_vol:.4f} (<0.10 = 50% avg)"
-                        )
-                        continue
-
-                    # RSI extreme: avoid chasing overbought/oversold entries
-                    # fe_rsi_14 = rsi/100 → raw 0.75 = RSI 75, 0.25 = RSI 25
-                    _fe_rsi = float(_fe_last.get('fe_rsi_14', 0.5))
-                    if direction == 'BUY' and _fe_rsi > 0.75:
+                    # Counter-trend: block entries against strong trend
+                    # fe_ema20_slope is already ranked (percentile 0-1)
+                    _fe_slope = float(ranked.iloc[-1].get('fe_ema20_slope', 0.5))
+                    if direction == 'BUY' and _fe_slope < 0.30:
                         log.debug(
                             f"[SKIP] {symbol} {mode_name} BUY "
-                            f"— RSI_OVERBOUGHT fe_rsi_14={_fe_rsi:.3f} (>0.75 = RSI 75)"
+                            f"— COUNTER_TREND fe_ema20_slope_rank={_fe_slope:.3f} (<0.30)"
                         )
                         continue
-                    if direction == 'SELL' and _fe_rsi < 0.25:
+                    if direction == 'SELL' and _fe_slope > 0.70:
                         log.debug(
                             f"[SKIP] {symbol} {mode_name} SELL "
-                            f"— RSI_OVERSOLD fe_rsi_14={_fe_rsi:.3f} (<0.25 = RSI 25)"
+                            f"— COUNTER_TREND fe_ema20_slope_rank={_fe_slope:.3f} (>0.70)"
                         )
                         continue
-
-                    # Trend alignment + ADX regime: only for intraday/swing modes.
-                    # Scalping relies on the directional-edge override and works in
-                    # ranging markets; applying trend/ADX gates would kill its edge.
-                    if mode_name in ('intraday', 'swing'):
-                        # ADX < 20 → no directional trend; skip intraday/swing signals
-                        # fe_adx_14 = adx/100 → raw 0.20 = ADX 20
-                        _fe_adx = float(_fe_last.get('fe_adx_14', 0.5))
-                        if _fe_adx < 0.20:
-                            log.debug(
-                                f"[SKIP] {symbol} {mode_name} {direction} "
-                                f"— RANGING_MARKET fe_adx_14={_fe_adx:.3f} (<0.20 = ADX 20)"
-                            )
-                            continue
-
-                        # Counter-trend: block entries against strong trend
-                        # fe_ema20_slope is already ranked (percentile 0-1)
-                        _fe_slope = float(ranked.iloc[-1].get('fe_ema20_slope', 0.5))
-                        if direction == 'BUY' and _fe_slope < 0.30:
-                            log.debug(
-                                f"[SKIP] {symbol} {mode_name} BUY "
-                                f"— COUNTER_TREND fe_ema20_slope_rank={_fe_slope:.3f} (<0.30)"
-                            )
-                            continue
-                        if direction == 'SELL' and _fe_slope > 0.70:
-                            log.debug(
-                                f"[SKIP] {symbol} {mode_name} SELL "
-                                f"— COUNTER_TREND fe_ema20_slope_rank={_fe_slope:.3f} (>0.70)"
-                            )
-                            continue
 
                 # Beginner guidance (only for gated signals)
                 guidance = generate_beginner_guidance(

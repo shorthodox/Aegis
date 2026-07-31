@@ -7164,6 +7164,23 @@ class ScalpBot:
                 self._history.append(closed)
                 closed_keys.append(key)
                 print(f'[ScalpBot] {outcome} {direction} {sym} {pnl_pct:+.2f}% ({closed["exit_reason"]})')
+                # v82c: feed the outcome back into the cooldown tracker so a
+                # losing symbol cools off progressively instead of re-arming on
+                # the same fixed clock it would use after a win.
+                try:
+                    from scripts.trader_model.signal_manager import (
+                        record_loss, record_win, LOSS_STREAK_BLOCK,
+                    )
+                    _mode = pos.get('mode', 'scalping')
+                    if outcome == 'LOSS':
+                        _streak = record_loss(sym, _mode)
+                        if _streak >= LOSS_STREAK_BLOCK:
+                            print(f'[ScalpBot] LOSS_STREAK {sym} {_mode}: '
+                                  f'{_streak} in a row — blocked')
+                    else:
+                        record_win(sym, _mode)
+                except Exception as _e:
+                    print(f'[ScalpBot] cooldown update failed for {sym}: {_e}')
         for k in closed_keys:
             del self._open[k]
         if closed_keys:
@@ -7185,10 +7202,18 @@ class ScalpBot:
             return
 
         try:
+            # v82c: force_fire was True here, which disabled EVERY safety gate in
+            # the trader engine at once — cooldown, confidence floor, confluence,
+            # ATR floor, volume floor and the RSI-extreme check.  The scalp record
+            # shows what that produced: on 2026-07-23 ZIL/USDT was shorted eight
+            # consecutive times in nine minutes at 9-14 % model confidence, each
+            # entry higher than the last, all eight stopped out, while the token
+            # rallied 8.6 %.  Re-entry gaps got as short as 32 seconds against a
+            # nominal 10/15-minute cooldown.  17 of the 18 recorded losses were
+            # shorts taken this way.
             signals = engine.scan_all_tokens(
                 modes=['scalping', 'scalping_15m'],
                 risk_profile='aggressive',
-                force_fire=True,
             )
         except Exception as e:
             print(f'[ScalpBot] scan error: {e}')
