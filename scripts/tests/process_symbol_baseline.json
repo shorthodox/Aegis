@@ -1,0 +1,705 @@
+{
+  "buy_aligned": {
+    "bootstrap": 1,
+    "decisions": [
+      "[TEST/USDT] MODEL BLOCK BUY: WRONG_ZONE \u2014 range_position 0.50 is in the resistance zone; a BUY must be in the support zone (rp <= 0.35 for BUY, >= 0.65 for SELL)"
+    ],
+    "paper": null,
+    "position": null,
+    "signal": {
+      "direction": "LONG",
+      "entry_price": 100.0,
+      "evaluating": false,
+      "fire": false,
+      "levels_frozen": false,
+      "paper_only": false,
+      "pending_entry": false,
+      "quality_score": 85.0,
+      "regime": "RANGING",
+      "risk_reward": 1.12,
+      "signal": "HOLD",
+      "signal_strength": "STRONG_BUY",
+      "suggested_sl": 96.8,
+      "suggested_tp": 101.8,
+      "tp2": 103.6,
+      "tp3": 106.0,
+      "tp4": 111.562,
+      "tp5": 120.562
+    }
+  },
+  "buy_at_support": {
+    "bootstrap": 1,
+    "decisions": [
+      "[TEST/USDT] MODEL PENDING BUY: approaching support 97 (3.09% away, needs <= 0.35% or a tag+reject or 3x5m reversal in the correct zone) \u2014 holding for price to reach the support level"
+    ],
+    "paper": null,
+    "position": null,
+    "signal": {
+      "direction": "LONG",
+      "entry_price": 100.0,
+      "evaluating": false,
+      "fire": false,
+      "levels_frozen": false,
+      "paper_only": false,
+      "pending_entry": true,
+      "quality_score": 85.0,
+      "regime": "RANGING",
+      "risk_reward": 1.12,
+      "signal": "HOLD",
+      "signal_strength": "STRONG_BUY",
+      "suggested_sl": 96.8,
+      "suggested_tp": 101.8,
+      "tp2": 103.6,
+      "tp3": 106.0,
+      "tp4": 111.562,
+      "tp5": 120.562
+    }
+  },
+  "buy_atr_below_soft": {
+    "bootstrap": 1,
+    "decisions": [
+      "[TEST/USDT] MODEL BLOCK BUY: ATR_FLOOR atr=0.40% < 0.5% and not at a structural extreme (rp=0.50 rsi=50.0)"
+    ],
+    "paper": null,
+    "position": null,
+    "signal": {
+      "direction": "LONG",
+      "entry_price": 100.0,
+      "evaluating": false,
+      "fire": false,
+      "levels_frozen": false,
+      "paper_only": false,
+      "pending_entry": false,
+      "quality_score": 85.0,
+      "regime": "RANGING",
+      "risk_reward": 1.12,
+      "signal": "HOLD",
+      "signal_strength": "STRONG_BUY",
+      "suggested_sl": 96.8,
+      "suggested_tp": 101.8,
+      "tp2": 103.6,
+      "tp3": 106.0,
+      "tp4": 111.562,
+      "tp5": 120.562
+    }
+  },
+  "buy_htf_conflict": {
+    "bootstrap": 1,
+    "decisions": [
+      "[TEST/USDT] MODEL BLOCK BUY: WRONG_ZONE \u2014 range_position 0.50 is in the resistance zone; a BUY must be in the support zone (rp <= 0.35 for BUY, >= 0.65 for SELL)"
+    ],
+    "paper": null,
+    "position": null,
+    "signal": {
+      "direction": "LONG",
+      "entry_price": 100.0,
+      "evaluating": false,
+      "fire": false,
+      "levels_frozen": false,
+      "paper_only": false,
+      "pending_entry": false,
+      "quality_score": 85.0,
+      "regime": "RANGING",
+      "risk_reward": 1.12,
+      "signal": "HOLD",
+      "signal_strength": "STRONG_BUY",
+      "suggested_sl": 96.8,
+      "suggested_tp": 101.8,
+      "tp2": 103.6,
+      "tp3": 106.0,
+      "tp4": 111.562,
+      "tp5": 120.562
+    }
+  },
+  "buy_liquidity_trap": {
+    "bootstrap": 1,
+    "decisions": [
+      "[TEST/USDT] MODEL BLOCK BUY: ATR_FLOOR atr=0.40% < 0.5% and not at a structural extreme (rp=0.50 rsi=50.0)"
+    ],
+    "paper": null,
+    "position": null,
+    "signal": {
+      "direction": "LONG",
+      "entry_price": 100.0,
+      "evaluating": false,
+      "fire": false,
+      "levels_frozen": false,
+      "paper_only": false,
+      "pending_entry": false,
+      "quality_score": 85.0,
+      "regime": "LIQUIDITY_TRAP",
+      "risk_reward": 1.12,
+      "signal": "HOLD",
+      "signal_strength": "STRONG_BUY",
+      "suggested_sl": 96.8,
+      "suggested_tp": 101.8,
+      "tp2": 103.6,
+      "tp3": 106.0,
+      "tp4": 111.562,
+      "tp5": 120.562
+    }
+  },
+  "buy_low_atr": {
+    "bootstrap": 1,
+    "decisions": [
+      "[TEST/USDT] MODEL BLOCK BUY: ATR_FLOOR atr=0.20% below the 0.35% hard floor \u2014 dead market"
+    ],
+    "paper": null,
+    "position": null,
+    "signal": {
+      "direction": "LONG",
+      "entry_price": 100.0,
+      "evaluating": false,
+      "fire": false,
+      "levels_frozen": false,
+      "paper_only": false,
+      "pending_entry": false,
+      "quality_score": 85.0,
+      "regime": "RANGING",
+      "risk_reward": 1.12,
+      "signal": "HOLD",
+      "signal_strength": "STRONG_BUY",
+      "suggested_sl": 96.8,
+      "suggested_tp": 101.8,
+      "tp2": 103.6,
+      "tp3": 106.0,
+      "tp4": 111.562,
+      "tp5": 120.562
+    }
+  },
+  "buy_low_edge": {
+    "bootstrap": 1,
+    "decisions": [
+      "[TEST/USDT] MODEL BLOCK BUY: WRONG_ZONE \u2014 range_position 0.50 is in the resistance zone; a BUY must be in the support zone (rp <= 0.35 for BUY, >= 0.65 for SELL)"
+    ],
+    "paper": null,
+    "position": null,
+    "signal": {
+      "direction": "LONG",
+      "entry_price": 100.0,
+      "evaluating": false,
+      "fire": false,
+      "levels_frozen": false,
+      "paper_only": false,
+      "pending_entry": false,
+      "quality_score": 30.0,
+      "regime": "RANGING",
+      "risk_reward": 1.12,
+      "signal": "HOLD",
+      "signal_strength": "BUY",
+      "suggested_sl": 96.8,
+      "suggested_tp": 101.8,
+      "tp2": 103.6,
+      "tp3": 106.0,
+      "tp4": 111.562,
+      "tp5": 120.562
+    }
+  },
+  "buy_no_conviction": {
+    "bootstrap": 1,
+    "decisions": [
+      "[TEST/USDT] MODEL BLOCK BUY: directional conviction +0.000 < 0.10 (p_buy 20.0 vs p_sell 20.0) \u2014 the model does not prefer this side, the edge percentile does"
+    ],
+    "paper": null,
+    "position": null,
+    "signal": {
+      "direction": "LONG",
+      "entry_price": 100.0,
+      "evaluating": false,
+      "fire": false,
+      "levels_frozen": false,
+      "paper_only": false,
+      "pending_entry": false,
+      "quality_score": 85.0,
+      "regime": "RANGING",
+      "risk_reward": 1.12,
+      "signal": "HOLD",
+      "signal_strength": "STRONG_BUY",
+      "suggested_sl": 96.8,
+      "suggested_tp": 101.8,
+      "tp2": 103.6,
+      "tp3": 106.0,
+      "tp4": 111.562,
+      "tp5": 120.562
+    }
+  },
+  "buy_overbought": {
+    "bootstrap": 1,
+    "decisions": [
+      "[TEST/USDT] ARBITER SKIP: bearish pattern present but MACD/trend not confirming (macd=BULLISH, supertrend=BULLISH, bias=BULLISH)",
+      "[TEST/USDT] MODEL BLOCK BUY: EXHAUSTION_CHASE \u2014 BUY at RSI 82 chases a blow-off; the fade of this bar is the SELL"
+    ],
+    "paper": null,
+    "position": null,
+    "signal": {
+      "direction": "LONG",
+      "entry_price": 100.0,
+      "evaluating": false,
+      "fire": false,
+      "levels_frozen": false,
+      "paper_only": false,
+      "pending_entry": false,
+      "quality_score": 85.0,
+      "regime": "RANGING",
+      "risk_reward": 1.12,
+      "signal": "HOLD",
+      "signal_strength": "STRONG_BUY",
+      "suggested_sl": 96.8,
+      "suggested_tp": 101.8,
+      "tp2": 103.6,
+      "tp3": 106.0,
+      "tp4": 111.562,
+      "tp5": 120.562
+    }
+  },
+  "buy_tagging_htf_conf": {
+    "bootstrap": 1,
+    "decisions": [
+      "[TEST/USDT] MODEL FIRE BUY tier=NORMAL edge=85 srq=0.71 mode=model_at_level scores={'buy': 58.3, 'sell': 10.0, 'hold': 34.5}",
+      "[TEST/USDT] OPEN LONG @ 100 | conf=85.000 quality=85 regime=RANGING mode=model_at_level"
+    ],
+    "paper": null,
+    "position": {
+      "entry": 100.0,
+      "side": "BUY",
+      "sl": 99.3,
+      "tier": "NORMAL",
+      "tp1": 100.7,
+      "tp5": 126.5036,
+      "value": 1000.0
+    },
+    "signal": {
+      "direction": "LONG",
+      "entry_mode": "model_at_level",
+      "entry_price": 100.0,
+      "evaluating": false,
+      "fire": true,
+      "levels_frozen": false,
+      "paper_only": false,
+      "pending_entry": false,
+      "quality_score": 85.0,
+      "regime": "RANGING",
+      "risk_reward": 2.0,
+      "risk_tier": "NORMAL",
+      "signal": "BUY",
+      "signal_strength": "STRONG_BUY",
+      "suggested_sl": 99.3,
+      "suggested_tp": 100.7,
+      "tp2": 101.4,
+      "tp3": 110.0,
+      "tp4": 116.3036,
+      "tp5": 126.5036
+    }
+  },
+  "buy_tagging_support": {
+    "bootstrap": 1,
+    "decisions": [
+      "[TEST/USDT] MODEL FIRE BUY tier=NORMAL edge=85 srq=0.71 mode=model_at_level scores={'buy': 74.1, 'sell': 0.0, 'hold': 21.7}",
+      "[TEST/USDT] OPEN LONG @ 100 | conf=85.000 quality=85 regime=RANGING mode=model_at_level"
+    ],
+    "paper": null,
+    "position": {
+      "entry": 100.0,
+      "side": "BUY",
+      "sl": 99.3,
+      "tier": "NORMAL",
+      "tp1": 100.7,
+      "tp5": 126.5036,
+      "value": 1000.0
+    },
+    "signal": {
+      "direction": "LONG",
+      "entry_mode": "model_at_level",
+      "entry_price": 100.0,
+      "evaluating": false,
+      "fire": true,
+      "levels_frozen": false,
+      "paper_only": false,
+      "pending_entry": false,
+      "quality_score": 85.0,
+      "regime": "RANGING",
+      "risk_reward": 2.0,
+      "risk_tier": "NORMAL",
+      "signal": "BUY",
+      "signal_strength": "STRONG_BUY",
+      "suggested_sl": 99.3,
+      "suggested_tp": 100.7,
+      "tp2": 101.4,
+      "tp3": 110.0,
+      "tp4": 116.3036,
+      "tp5": 126.5036
+    }
+  },
+  "buy_tagging_wide_atr": {
+    "bootstrap": 1,
+    "decisions": [
+      "[TEST/USDT] MODEL FIRE BUY tier=NORMAL edge=85 srq=0.71 mode=model_at_level scores={'buy': 78.1, 'sell': 0.0, 'hold': 17.6}",
+      "[TEST/USDT] OPEN LONG @ 100 | conf=85.000 quality=85 regime=RANGING mode=model_at_level"
+    ],
+    "paper": null,
+    "position": {
+      "entry": 100.0,
+      "side": "BUY",
+      "sl": 97.9,
+      "tier": "NORMAL",
+      "tp1": 102.1,
+      "tp5": 139.5936,
+      "value": 1000.0
+    },
+    "signal": {
+      "direction": "LONG",
+      "entry_mode": "model_at_level",
+      "entry_price": 100.0,
+      "evaluating": false,
+      "fire": true,
+      "levels_frozen": false,
+      "paper_only": false,
+      "pending_entry": false,
+      "quality_score": 85.0,
+      "regime": "RANGING",
+      "risk_reward": 2.0,
+      "risk_tier": "NORMAL",
+      "signal": "BUY",
+      "signal_strength": "STRONG_BUY",
+      "suggested_sl": 97.9,
+      "suggested_tp": 102.1,
+      "tp2": 104.2,
+      "tp3": 115.0,
+      "tp4": 124.3936,
+      "tp5": 139.5936
+    }
+  },
+  "buy_trend_bear": {
+    "bootstrap": 1,
+    "decisions": [
+      "[TEST/USDT] MODEL BLOCK BUY: WRONG_ZONE \u2014 range_position 0.50 is in the resistance zone; a BUY must be in the support zone (rp <= 0.35 for BUY, >= 0.65 for SELL)"
+    ],
+    "paper": null,
+    "position": null,
+    "signal": {
+      "direction": "LONG",
+      "entry_price": 100.0,
+      "evaluating": false,
+      "fire": false,
+      "levels_frozen": false,
+      "paper_only": false,
+      "pending_entry": false,
+      "quality_score": 85.0,
+      "regime": "TRENDING_BEAR",
+      "risk_reward": 1.12,
+      "signal": "HOLD",
+      "signal_strength": "STRONG_BUY",
+      "suggested_sl": 96.8,
+      "suggested_tp": 101.8,
+      "tp2": 103.6,
+      "tp3": 106.0,
+      "tp4": 111.562,
+      "tp5": 120.562
+    }
+  },
+  "buy_vol_expansion": {
+    "bootstrap": 1,
+    "decisions": [],
+    "paper": null,
+    "position": null,
+    "signal": {
+      "direction": "NEUTRAL",
+      "entry_price": 100.0,
+      "evaluating": false,
+      "fire": false,
+      "levels_frozen": false,
+      "paper_only": false,
+      "pending_entry": false,
+      "quality_score": 85.0,
+      "regime": "VOLATILE_EXPANSION",
+      "risk_reward": 0,
+      "signal": "FLAT",
+      "signal_strength": "NEUTRAL",
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "tp2": null,
+      "tp3": null,
+      "tp4": null,
+      "tp5": null
+    }
+  },
+  "buy_weak_indicators": {
+    "bootstrap": 1,
+    "decisions": [
+      "[TEST/USDT] MODEL BLOCK BUY: weak indicator support (0 < 2) \u2014 indicators macd=0, supertrend=0, bias=0, htf_daily=0, htf_weekly=0"
+    ],
+    "paper": null,
+    "position": null,
+    "signal": {
+      "direction": "LONG",
+      "entry_price": 100.0,
+      "evaluating": false,
+      "fire": false,
+      "levels_frozen": false,
+      "paper_only": false,
+      "pending_entry": false,
+      "quality_score": 85.0,
+      "regime": "RANGING",
+      "risk_reward": 1.12,
+      "signal": "HOLD",
+      "signal_strength": "STRONG_BUY",
+      "suggested_sl": 96.8,
+      "suggested_tp": 101.8,
+      "tp2": 103.6,
+      "tp3": 106.0,
+      "tp4": 111.562,
+      "tp5": 120.562
+    }
+  },
+  "buy_wide_atr": {
+    "bootstrap": 1,
+    "decisions": [
+      "[TEST/USDT] MODEL BLOCK BUY: WRONG_ZONE \u2014 range_position 0.50 is in the resistance zone; a BUY must be in the support zone (rp <= 0.35 for BUY, >= 0.65 for SELL)"
+    ],
+    "paper": null,
+    "position": null,
+    "signal": {
+      "direction": "LONG",
+      "entry_price": 100.0,
+      "evaluating": false,
+      "fire": false,
+      "levels_frozen": false,
+      "paper_only": false,
+      "pending_entry": false,
+      "quality_score": 85.0,
+      "regime": "RANGING",
+      "risk_reward": 2.0,
+      "signal": "HOLD",
+      "signal_strength": "STRONG_BUY",
+      "suggested_sl": 95.5,
+      "suggested_tp": 104.5,
+      "tp2": 109.0,
+      "tp3": 110.35,
+      "tp4": 111.7,
+      "tp5": 120.562
+    }
+  },
+  "flat_no_fire": {
+    "bootstrap": 1,
+    "decisions": [],
+    "paper": null,
+    "position": null,
+    "signal": {
+      "direction": "NEUTRAL",
+      "entry_price": 100.0,
+      "evaluating": false,
+      "fire": false,
+      "levels_frozen": false,
+      "paper_only": false,
+      "pending_entry": false,
+      "quality_score": 0.0,
+      "regime": "RANGING",
+      "risk_reward": 0,
+      "signal": "FLAT",
+      "signal_strength": "NEUTRAL",
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "tp2": null,
+      "tp3": null,
+      "tp4": null,
+      "tp5": null
+    }
+  },
+  "sell_aligned": {
+    "bootstrap": 1,
+    "decisions": [
+      "[TEST/USDT] MODEL BLOCK SELL: WRONG_ZONE \u2014 range_position 0.50 is in the support zone; a SELL must be in the resistance zone (rp <= 0.35 for BUY, >= 0.65 for SELL)"
+    ],
+    "paper": null,
+    "position": null,
+    "signal": {
+      "direction": "SHORT",
+      "entry_price": 100.0,
+      "evaluating": false,
+      "fire": false,
+      "levels_frozen": false,
+      "paper_only": false,
+      "pending_entry": false,
+      "quality_score": 85.0,
+      "regime": "RANGING",
+      "risk_reward": 0.58,
+      "signal": "HOLD",
+      "signal_strength": "STRONG_SELL",
+      "suggested_sl": 106.2,
+      "suggested_tp": 98.2,
+      "tp2": 96.4,
+      "tp3": 95.86,
+      "tp4": 91.438,
+      "tp5": 82.438
+    }
+  },
+  "sell_at_resistance": {
+    "bootstrap": 1,
+    "decisions": [
+      "[TEST/USDT] MODEL PENDING SELL: approaching resistance 106 (5.66% away, needs <= 0.35% or a tag+reject or 3x5m reversal in the correct zone) \u2014 holding for price to reach the resistance level"
+    ],
+    "paper": null,
+    "position": null,
+    "signal": {
+      "direction": "SHORT",
+      "entry_price": 100.0,
+      "evaluating": false,
+      "fire": false,
+      "levels_frozen": false,
+      "paper_only": false,
+      "pending_entry": true,
+      "quality_score": 85.0,
+      "regime": "RANGING",
+      "risk_reward": 0.58,
+      "signal": "HOLD",
+      "signal_strength": "STRONG_SELL",
+      "suggested_sl": 106.2,
+      "suggested_tp": 98.2,
+      "tp2": 96.4,
+      "tp3": 95.86,
+      "tp4": 91.438,
+      "tp5": 82.438
+    }
+  },
+  "sell_htf_conflict": {
+    "bootstrap": 1,
+    "decisions": [
+      "[TEST/USDT] MODEL BLOCK SELL: WRONG_ZONE \u2014 range_position 0.50 is in the support zone; a SELL must be in the resistance zone (rp <= 0.35 for BUY, >= 0.65 for SELL)"
+    ],
+    "paper": null,
+    "position": null,
+    "signal": {
+      "direction": "SHORT",
+      "entry_price": 100.0,
+      "evaluating": false,
+      "fire": false,
+      "levels_frozen": false,
+      "paper_only": false,
+      "pending_entry": false,
+      "quality_score": 85.0,
+      "regime": "RANGING",
+      "risk_reward": 0.58,
+      "signal": "HOLD",
+      "signal_strength": "STRONG_SELL",
+      "suggested_sl": 106.2,
+      "suggested_tp": 98.2,
+      "tp2": 96.4,
+      "tp3": 95.86,
+      "tp4": 91.438,
+      "tp5": 82.438
+    }
+  },
+  "sell_low_quality": {
+    "bootstrap": 1,
+    "decisions": [
+      "[TEST/USDT] MODEL BLOCK SELL: WRONG_ZONE \u2014 range_position 0.50 is in the support zone; a SELL must be in the resistance zone (rp <= 0.35 for BUY, >= 0.65 for SELL)"
+    ],
+    "paper": null,
+    "position": null,
+    "signal": {
+      "direction": "SHORT",
+      "entry_price": 100.0,
+      "evaluating": false,
+      "fire": false,
+      "levels_frozen": false,
+      "paper_only": false,
+      "pending_entry": false,
+      "quality_score": 72.0,
+      "regime": "RANGING",
+      "risk_reward": 0.58,
+      "signal": "HOLD",
+      "signal_strength": "STRONG_SELL",
+      "suggested_sl": 106.2,
+      "suggested_tp": 98.2,
+      "tp2": 96.4,
+      "tp3": 95.86,
+      "tp4": 91.438,
+      "tp5": 82.438
+    }
+  },
+  "sell_oversold": {
+    "bootstrap": 1,
+    "decisions": [
+      "[TEST/USDT] ARBITER SKIP: bullish pattern present but MACD/trend not confirming (macd=BEARISH, supertrend=BEARISH, bias=BEARISH)",
+      "[TEST/USDT] MODEL BLOCK SELL: EXHAUSTION_CHASE \u2014 SELL at RSI 18 chases capitulation; the fade of this bar is the BUY"
+    ],
+    "paper": null,
+    "position": null,
+    "signal": {
+      "direction": "SHORT",
+      "entry_price": 100.0,
+      "evaluating": false,
+      "fire": false,
+      "levels_frozen": false,
+      "paper_only": false,
+      "pending_entry": false,
+      "quality_score": 85.0,
+      "regime": "RANGING",
+      "risk_reward": 0.58,
+      "signal": "HOLD",
+      "signal_strength": "STRONG_SELL",
+      "suggested_sl": 106.2,
+      "suggested_tp": 98.2,
+      "tp2": 96.4,
+      "tp3": 95.86,
+      "tp4": 91.438,
+      "tp5": 82.438
+    }
+  },
+  "sell_tagging_res": {
+    "bootstrap": 1,
+    "decisions": [
+      "[TEST/USDT] MODEL WAIT SELL: needs 5m reversal pattern on prior bar + confirming candle, or 3+ directional candles (pattern=None, dir=0/4) \u2014 not entering without a confirmed reversal candle + 5m momentum"
+    ],
+    "paper": null,
+    "position": null,
+    "signal": {
+      "direction": "SHORT",
+      "entry_price": 100.0,
+      "evaluating": false,
+      "fire": false,
+      "levels_frozen": false,
+      "paper_only": false,
+      "pending_entry": false,
+      "quality_score": 85.0,
+      "regime": "RANGING",
+      "risk_reward": 2.0,
+      "signal": "HOLD",
+      "signal_strength": "STRONG_SELL",
+      "suggested_sl": 100.7,
+      "suggested_tp": 99.3,
+      "tp2": 98.6,
+      "tp3": 90.0,
+      "tp4": 83.6964,
+      "tp5": 73.4964
+    }
+  },
+  "sell_trend_bull": {
+    "bootstrap": 1,
+    "decisions": [
+      "[TEST/USDT] MODEL BLOCK SELL: WRONG_ZONE \u2014 range_position 0.50 is in the support zone; a SELL must be in the resistance zone (rp <= 0.35 for BUY, >= 0.65 for SELL)"
+    ],
+    "paper": null,
+    "position": null,
+    "signal": {
+      "direction": "SHORT",
+      "entry_price": 100.0,
+      "evaluating": false,
+      "fire": false,
+      "levels_frozen": false,
+      "paper_only": false,
+      "pending_entry": false,
+      "quality_score": 85.0,
+      "regime": "TRENDING_BULL",
+      "risk_reward": 0.58,
+      "signal": "HOLD",
+      "signal_strength": "STRONG_SELL",
+      "suggested_sl": 106.2,
+      "suggested_tp": 98.2,
+      "tp2": 96.4,
+      "tp3": 95.86,
+      "tp4": 91.438,
+      "tp5": 82.438
+    }
+  }
+}
