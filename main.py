@@ -1624,61 +1624,28 @@ async def api_signals(credentials: HTTPAuthorizationCredentials = Depends(securi
     return JSONResponse(content=signals)
 
 
-class CreateOrderRequest(BaseModel):
-    amount: int  # in paise
-    currency: Optional[str] = 'INR'
-    receipt: Optional[str] = None
-
-
-@app.post("/api/create-order")
-async def api_create_order(req: CreateOrderRequest):
-    """Create a Razorpay order. Expects amount in paise (int)."""
-    if not RAZORPAY_ENABLED:
-        raise HTTPException(status_code=503, detail="Razorpay not configured on server")
-    amt = int(req.amount or 0)
-    if amt < 100:
-        raise HTTPException(status_code=400, detail="Minimum amount is 100 paise")
-    payload = {
-        "amount": amt,
-        "currency": req.currency or "INR",
-        "receipt": req.receipt or f"rcpt_{int(time.time())}",
-    }
-    try:
-        resp = await _rzp_post("/orders", payload)
-        return JSONResponse({
-            "order_id": resp.get("id"),
-            "amount": resp.get("amount"),
-            "currency": resp.get("currency"),
-            "receipt": resp.get("receipt"),
-        })
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 401:
-            raise HTTPException(status_code=401, detail="Razorpay authentication failed")
-        raise HTTPException(status_code=500, detail=f"Razorpay error: {e.response.text}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Razorpay error: {e}")
-
-
-class VerifyPaymentRequest(BaseModel):
-    razorpay_order_id: str
-    razorpay_payment_id: str
-    razorpay_signature: str
-
-
-@app.post("/api/verify-payment")
-async def api_verify_payment(req: VerifyPaymentRequest):
-    """Verify Razorpay payment signature using HMAC-SHA256"""
-    if not RAZORPAY_ENABLED:
-        raise HTTPException(status_code=503, detail="Razorpay not configured on server")
-    if not (req.razorpay_order_id and req.razorpay_payment_id and req.razorpay_signature):
-        raise HTTPException(status_code=400, detail="Missing fields")
-    import hmac, hashlib
-    payload = f"{req.razorpay_order_id}|{req.razorpay_payment_id}".encode('utf-8')
-    secret = (RAZORPAY_KEY_SECRET or "").encode('utf-8')
-    generated = hmac.new(secret, payload, hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(generated, req.razorpay_signature):
-        raise HTTPException(status_code=400, detail="Signature mismatch")
-    return JSONResponse({"status": "ok"})
+# ── REMOVED v82f: two Razorpay-only endpoints used to live here ──────────────
+#
+#   @app.post("/api/create-order")   async def api_create_order(...)
+#   @app.post("/api/verify-payment") async def api_verify_payment(...)
+#
+# They were registered BEFORE the provider-aware versions further down, and
+# FastAPI serves the FIRST route matching a path+method. So these shadowed the
+# real ones and were the endpoints actually answering in production:
+#
+#   * create-order took {amount} in paise. Every real caller
+#     (gatekeeper.js, simple-auth-client.js) sends {plan, currency}, so live
+#     checkout returned 422 "Field required: amount" — nobody could subscribe,
+#     on ANY gateway. Verified against the running app.
+#   * verify-payment checked a Razorpay signature and returned {"status":"ok"}
+#     WITHOUT upgrading the user's plan. The upgrade lives in the shadowed
+#     verify_payment, so a settled payment granted nothing except via webhook.
+#
+# Deleting them un-shadows the provider-aware create_order / verify_payment,
+# which carry the full Paddle -> DODO -> Razorpay chain, require auth, and
+# actually apply the plan. Their request models were also named
+# CreateOrderRequest / VerifyPaymentRequest, colliding with the plan-based
+# models defined later — that duplicate is gone with them.
 
 
 @app.get("/api/razorpay-key")

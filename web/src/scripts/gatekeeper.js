@@ -2504,7 +2504,9 @@ window.AegisDashboard = {
       // 1. Get payment gateway config from backend
       const configResp = await fetch(`${API_BASE_URL}/payment/config`);
       const config = await configResp.json().catch(() => ({}));
-      const isDodo = config?.provider === 'dodopayments' || config?.dodopayments?.enabled;
+      // v82f: any hosted-checkout gateway redirects — Paddle and DODO both do.
+      const _redirectGateway = ['paddle', 'dodopayments'].includes(config?.provider)
+        || config?.paddle?.enabled || config?.dodopayments?.enabled;
 
       // 2. Detect currency from timezone
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -2529,16 +2531,20 @@ window.AegisDashboard = {
       }
       const orderData = await orderResp.json();
 
-      // 4. Handle DODO Payments Checkout Redirect
-      if (isDodo || orderData.checkout_url || orderData.provider === 'dodopayments') {
+      // 4. Hosted-checkout redirect (Paddle / DODO)
+      if (_redirectGateway || orderData.checkout_url) {
         _hidePaymentLoader();
         if (orderData.checkout_url) {
           window.location.href = orderData.checkout_url;
           return;
         }
+        // No URL from a redirect gateway: do NOT fall through to Razorpay —
+        // that would charge on a different gateway than the order was made on.
+        alert('Checkout could not be started. Please try again or contact support.');
+        return;
       }
 
-      // 5. Fallback to Razorpay if DODO is disabled
+      // 5. Fallback to Razorpay when no redirect gateway is active
       const keyId = config?.razorpay?.key_id;
       if (!keyId) {
         _hidePaymentLoader();

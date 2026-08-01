@@ -271,7 +271,7 @@
         Transparent pricing.<br>No dark patterns.
       </h1>
       <p style="font-size: 1rem; line-height: 1.8; color: var(--ae-text-2); max-width: 52ch;">
-        Three tiers built on top of a free trial. Every plan starts with the full 63-token signal feed. Secured Checkout via DODO Payments &amp; Razorpay.
+        Three tiers built on top of a free trial. Every plan starts with the full 63-token signal feed. Secure checkout.
       </p>
       <p style="font-size: 0.85rem; line-height: 1.7; color: var(--ae-text-3); max-width: 52ch; margin-top: var(--s-3);">
         Evaluate everything during the free 3-day trial. All paid plans include a <a href="/refund-policy" style="color: var(--ae-gold);">7-Day Money-Back Guarantee</a>. Cancel anytime to stop future renewals — no charge for periods you don't want.
@@ -1132,9 +1132,15 @@
 }());
 </script>
 
-<!-- Razorpay Checkout script -->
-<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-<script type="module" src="/web/src/scripts/razorpay-checkout.js"></script>
+<!-- v82f: razorpay-checkout.js removed.
+     It bound a SECOND document-level click handler to the same [data-plan]
+     buttons this page already wires to subscribeToPlan(), so one click ran two
+     checkouts — and it carried hardcoded paise amounts (2400 / 4000) that were
+     the OLD prices. subscribeToPlan() in simple-auth-client.js is the single
+     path now: it asks the backend which gateway is live, redirects to the
+     hosted checkout URL (Paddle / DODO), and only falls back to the Razorpay
+     SDK — which it loads on demand — when no redirect URL is offered. That is
+     why the Razorpay SDK tag is gone from here too. -->
 </body>
 </html>
 

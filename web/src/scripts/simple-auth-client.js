@@ -223,7 +223,11 @@ async function subscribeToPlan(planType) {
     const configResp = await fetch('/payment/config');
     const config = await configResp.json().catch(() => ({}));
 
-    const isDodo = config?.provider === 'dodopayments' || config?.dodopayments?.enabled;
+    // v82f: any hosted-checkout gateway redirects; Paddle and DODO both do.
+    // This used to test only for DODO, so Paddle worked by accident via the
+    // checkout_url fallback below rather than by intent.
+    const _redirectGateway = ['paddle', 'dodopayments'].includes(config?.provider)
+      || config?.paddle?.enabled || config?.dodopayments?.enabled;
 
     // 2. Create payment order/checkout session on backend
     const orderResp = await fetch('/api/create-order', {
@@ -245,12 +249,17 @@ async function subscribeToPlan(planType) {
     const orderData = await orderResp.json();
 
     // 3. Handle DODO Payments Checkout Redirect
-    if (isDodo || orderData.checkout_url || orderData.provider === 'dodopayments') {
+    if (_redirectGateway || orderData.checkout_url) {
       hidePaymentLoader();
       if (orderData.checkout_url) {
         window.location.href = orderData.checkout_url;
         return;
       }
+      // A redirect gateway that returned no URL cannot be recovered by falling
+      // through to Razorpay — that would charge on a different gateway than the
+      // one the backend just created an order on.
+      _showPaymentError('Checkout could not be started. Please try again or contact support.');
+      return;
     }
 
     // 4. Fallback to Razorpay if DODO is disabled and Razorpay is enabled
