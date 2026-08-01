@@ -1621,9 +1621,22 @@ function generateStoryPoints(sig) {
   else if (sig.volume_zscore < -0.5)
     pts.push(`Volume is <strong>below average</strong> (${fmt(sig.volume_zscore,1)}σ) — the move lacks full conviction. Wait for volume expansion.`);
 
-  // MACD
-  if (sig.macd_signal)
-    pts.push(`MACD signal is <strong>${sig.macd_signal}</strong> — ${sig.macd_signal === 'BEARISH' ? 'momentum has crossed below signal line, confirming downside pressure.' : 'momentum crossed above signal line, supporting continuation.'}`);
+  // MACD — described RELATIVE TO THE TRADE, not to itself.
+  // This used to read "momentum crossed above signal line, supporting
+  // continuation" whenever MACD was not BEARISH — including on a SHORT, where
+  // bullish momentum opposes the entry. Observed on INJ/USDT 2026-08-01: a
+  // short whose own story claimed MACD was supporting it.
+  if (sig.macd_signal) {
+    const _mBull = sig.macd_signal === 'BULLISH', _mBear = sig.macd_signal === 'BEARISH';
+    let _mNote;
+    if (!dir || (!_mBull && !_mBear))
+      _mNote = 'momentum is flat — no clear directional pressure.';
+    else if ((dir === 'bearish' && _mBear) || (dir === 'bullish' && _mBull))
+      _mNote = `momentum agrees with this ${dir === 'bearish' ? 'short' : 'long'}, confirming ${oDir} pressure.`;
+    else
+      _mNote = `momentum runs <strong>against</strong> this ${dir === 'bearish' ? 'short' : 'long'} — the entry is a fade, not a continuation.`;
+    pts.push(`MACD signal is <strong>${sig.macd_signal}</strong> — ${_mNote}`);
+  }
 
   // RSI
   if (sig.rsi != null) {
@@ -1635,11 +1648,15 @@ function generateStoryPoints(sig) {
       pts.push(`RSI at <strong>${fmt(sig.rsi,1)}</strong> — in neutral zone with room to move in the signal direction.`);
   }
 
-  // ADX
+  // ADX — AEGIS blocks trend-following outright (live_engine _trend_follow:
+  // "fade-only strategy"), so every published signal is a counter-trend fade or
+  // a ranging entry. A strong trend is therefore a HEADWIND here, not an
+  // endorsement. The old copy read "trend-following entries have higher edge
+  // here", which recommended the one thing the engine refuses to do.
   if (sig.adx > 35)
-    pts.push(`ADX at <strong>${fmt(sig.adx,0)}</strong> confirms a <strong>strong trending move</strong> — trend-following entries have higher edge here.`);
+    pts.push(`ADX at <strong>${fmt(sig.adx,0)}</strong> confirms a <strong>strong trending move</strong> — AEGIS fades extremes rather than following trends, so a trend this strong is a headwind for this entry.`);
   else if (sig.adx < 20)
-    pts.push(`ADX at <strong>${fmt(sig.adx,0)}</strong> indicates a <strong>weak trend</strong> — be cautious with position size.`);
+    pts.push(`ADX at <strong>${fmt(sig.adx,0)}</strong> indicates a <strong>weak trend</strong> — range conditions, which is where this fade strategy works best.`);
 
   // Funding / OI — sig.funding_rate is already a PERCENTAGE (predictor × 100)
   if (sig.funding_rate != null) {
@@ -2251,7 +2268,17 @@ function renderSignalGenesis(sig) {
   const driftBlocked = sig.drift_blocked === true;
   const _mw = Number(sig.macro_weekly) || 0, _md = Number(sig.macro_daily) || 0;
   const _htfBias = b => b > 0.0001 ? 'BULL' : b < -0.0001 ? 'BEAR' : 'NEUTRAL';
-  const htfOppose = isShort ? (_mw > 0 && _md > 0) : (_mw < 0 && _md < 0);
+  // How many of the two higher timeframes point AGAINST this trade.
+  // A bullish HTF opposes a short; a bearish HTF opposes a long.
+  const _htfAgainst = [_mw, _md].filter(b => isShort ? b > 0.0001 : b < -0.0001).length;
+  // htfOppose (BOTH against) is what Guard F hard-blocks on, so it still drives
+  // the pass/fail styling. But the VERDICT is three-state: reporting "1 of 2
+  // against" as ALIGNED told the subscriber both higher timeframes agreed with
+  // the trade while one actively opposed it (observed on INJ/USDT 2026-08-01 —
+  // Weekly BULL, Daily BEAR, on a SHORT, labelled ALIGNED).
+  const htfOppose = _htfAgainst === 2;
+  const htfMixed  = _htfAgainst === 1;
+  const _htfVerdict = htfOppose ? 'CONFLICT' : htfMixed ? 'MIXED' : 'ALIGNED';
   const edgeVal = Number(sig.edge_score) || 0;
   const edgeOk  = edgeVal >= 60;   // engine edge floor is 60 (MIN_QUALITY_SCORE, v43)
   const fbDetected = sig.is_fake_breakout === true;
@@ -2368,9 +2395,10 @@ function renderSignalGenesis(sig) {
         _isReversal ? 'REVERSAL' : (_trendFollow ? 'BLOCKED' : (dirOk ? 'ALIGNED' : 'CONFLICT')),
         _trendFollow || !dirOk)}
     ${structRow}
-    ${gate('', !htfOppose, 'Gate 1.7 · HTF Macro',
-        `Higher-timeframe bias — Weekly ${_htfBias(_mw)} · Daily ${_htfBias(_md)}`,
-        htfOppose ? 'CONFLICT' : 'ALIGNED', htfOppose && !fired)}
+    ${gate('', !htfOppose && !htfMixed, 'Gate 1.7 · HTF Macro',
+        `Higher-timeframe bias — Weekly ${_htfBias(_mw)} · Daily ${_htfBias(_md)}`
+        + (htfMixed ? ` — 1 of 2 opposes this ${isShort ? 'short' : 'long'} (advisory)` : ''),
+        _htfVerdict, htfMixed || (htfOppose && !fired))}
     ${confRow}
     ${gate('', atrOk,  'Gate 2 · ATR Floor', `Minimum 0.5% volatility required for valid entry`, `${(sig.atr_pct||0).toFixed(2)}%`)}
     ${gate('', edgeOk || fired, 'Gate 3 · Model Edge', `Model edge score ≥ 60 required to fire`, `${edgeVal.toFixed(0)}/100`, !edgeOk && !fired)}

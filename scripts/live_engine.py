@@ -69,7 +69,24 @@ USE_WEIGHTED_SCORER = True
 # tier downgrade so the model's signal still fires (flagged), never silenced;
 # MODEL_DISAGREES is ignored outright (meaningless once the model decides).
 # The scheduled-news lock is handled separately (its label is dynamic).
-_HARD_VETOES = frozenset({'MODEL_DRIFT_CRITICAL', 'DEAD_MARKET', 'EXTREME_VOLATILITY'})
+# v82e: FAR_FROM_SR promoted from "tier downgrade" to HARD veto.
+#
+# gate_scorer measures, correctly and in ATR, whether price is actually at the
+# level the trade leans on, and raises FAR_FROM_SR past AT_LEVEL_ATR (1.0).
+# That veto did not block — it only tagged the signal RISKY and fired anyway.
+#
+# Measured on 8,484 1h bars across 12 tokens: 58.7% sit MORE than 1 ATR from
+# the nearest level (median gap 1.17 ATR), and only 15.6% are within 0.35 ATR.
+# So the majority of fires were entries taken nowhere near their own structure,
+# and the RISKY tag was not a risk rating — it was the engine reporting that
+# the setup's premise was absent, then taking the trade regardless. On the
+# 2026-08-01 book that was 6 of 7 signals.
+#
+# NO_VALID_SR is deliberately NOT promoted: it is a weaker, differently-shaped
+# condition (srq below floor, dead-centre range position, or cramped RR) and
+# still downgrades the tier rather than blocking.
+_HARD_VETOES = frozenset({'MODEL_DRIFT_CRITICAL', 'DEAD_MARKET',
+                          'EXTREME_VOLATILITY', 'FAR_FROM_SR'})
 
 MODEL_STORE       = _ROOT / 'src' / 'ml' / 'model_store'
 
@@ -2245,6 +2262,10 @@ class LiveEngine:
     """
 
     MAX_CONCURRENT        = 8
+    # How often the exit monitor re-prices open positions. This is the real
+    # granularity of every stop and TP in the engine; the scan interval (300s)
+    # governs ENTRIES only. Cheap loop — no inference, no network.
+    EXIT_CHECK_SECONDS    = 3
     HOURS_CONTEXT         = 300
     MIN_HOLD_SECONDS      = 3_600    # 1 h minimum hold before model-reversal exit
     MAX_HOLD_SECONDS      = 24 * 3_600  # 24 h zombie guard for open positions
@@ -2677,10 +2698,54 @@ class LiveEngine:
         if to_purge:
             self._save_track_record()
 
+    async def _exit_monitor_loop(self) -> None:
+        """Check stops/TPs against the live feed, independent of the scan cycle.
+
+        Until v82d the ONLY call to _manage_exit was inside _process_symbol, so
+        an open position's stop was evaluated once per scan_interval_seconds
+        (300s) and only after that symbol's turn through a semaphore of
+        MAX_CONCURRENT predict_realtime() calls — each a 350h feature build —
+        across every tradeable token.  Prices meanwhile stream in continuously
+        from _ws_price_ticker, which writes live_prices and checks nothing.
+
+        The result was that a stop was a suggestion: price ran past it, and
+        _close('STOP_HIT') then filled at whatever the market was doing minutes
+        later.  Measured on the four closed trades of 2026-08-01, every loss
+        overshot its own stop — by 0.02, 0.14, 0.85 and 0.28 percentage points,
+        1.28pp of avoidable loss across four trades, on stops of 1.1-2.3%.
+
+        This loop closes that window.  It is deliberately cheap: no inference,
+        no network, no feature build — just the arithmetic already in
+        _manage_exit against the newest price.
+        """
+        while True:
+            try:
+                await asyncio.sleep(self.EXIT_CHECK_SECONDS)
+                if not self.wallet.open_positions:
+                    continue
+                # snapshot: _manage_exit mutates open_positions on a close
+                for sym, pos in list(self.wallet.open_positions.items()):
+                    px = float(self.live_prices.get(sym, 0.0) or 0.0)
+                    if px <= 0:
+                        continue
+                    # last_signals supplies ATR only; the reversal branch is
+                    # suppressed by price_only so a stale entry cannot act.
+                    ctx = self.last_signals.get(sym) or {}
+                    if not isinstance(ctx, dict):
+                        ctx = {}
+                    self._manage_exit(sym, pos, ctx, px, price_only=True)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                # Never let a bad tick kill the monitor — an unsupervised book
+                # is strictly worse than a logged error.
+                print(f'[LiveEngine] exit monitor error (loop stays alive): {e!r}')
+
     async def run(self) -> None:
         print(f'[LiveEngine] Starting — interval={self.scan_interval_seconds}s '
               f'symbols={len(self.predictors)} | {self.GATE_VERSION}')
         asyncio.create_task(self._ws_price_ticker())
+        asyncio.create_task(self._exit_monitor_loop())
         await asyncio.sleep(2)   # let WebSocket populate live_prices first
         self._purge_subquality_positions()
         self._save_track_record()   # push restored positions to web immediately
@@ -3062,6 +3127,134 @@ class LiveEngine:
             )
         return regime
 
+    def _record_signal_direction(self, symbol: str, new_side: str) -> None:
+        """Append a directional read to the stability-gate history.
+
+        Only BUY/SELL accumulate; FLAT/HOLD is ignored so BUY->FLAT->BUY does
+        not erase the counter (volatile markets produce intermittent FLAT
+        cycles). A genuine flip needs no explicit clear — the stability check
+        is all(s == new_side), which fails once the deque holds the other side.
+        """
+        if new_side not in ('BUY', 'SELL'):
+            return
+        if symbol not in self._signal_history:
+            self._signal_history[symbol] = deque(maxlen=self.SIGNAL_STABILITY_WINDOW)
+        self._signal_history[symbol].append(new_side)
+
+    async def _apply_htf_macro_bias(self, symbol: str, result: Dict[str, Any]) -> None:
+        """Recompute and inject the daily/weekly trend bias.
+
+        macro_daily / macro_weekly arrive 0.0 from the model (a swallowed
+        KeyError zeroes them at the source — see _daily_bias). They are
+        recomputed from daily candles and injected BEFORE scoring so the HTF
+        tiers in score_signal() (+15/+10 aligned, -20/-10 against) and Guard F
+        (hard-block when BOTH daily and weekly oppose) come alive. Trade WITH
+        the higher-timeframe trend; a genuine reversal at a level stays exempt
+        via score_signal's `is_reversal` branch.
+        """
+        result['macro_daily'], result['macro_weekly'] = await self._daily_bias(symbol)
+
+    @staticmethod
+    def _level_gap_atr(result: Dict[str, Any], side: str) -> Optional[float]:
+        """Distance from price to the level this side leans on, in ATR.
+
+        BUY leans on support, SELL on resistance. Returns None when price, ATR
+        or the level is missing, so callers can fall back rather than treat an
+        unknown as "at the level". A NEGATIVE value means price has already
+        traded through the level — the setup's premise is gone.
+        """
+        try:
+            px = float(result.get('price') or result.get('entry_price') or 0.0)
+            atr = float(result.get('atr') or 0.0)
+            if atr <= 0:
+                atr_pct = float(result.get('atr_pct') or 0.0)
+                atr = px * atr_pct / 100.0
+            if px <= 0 or atr <= 0:
+                return None
+            if side == 'BUY':
+                lvl = float(result.get('support') or 0.0)
+                return (px - lvl) / atr if lvl > 0 else None
+            if side == 'SELL':
+                lvl = float(result.get('resistance') or 0.0)
+                return (lvl - px) / atr if lvl > 0 else None
+        except (TypeError, ValueError):
+            return None
+        return None
+
+    def _manage_paper_position(
+        self, symbol: str, result: Dict[str, Any], price: float
+    ) -> None:
+        """v74: manage the RISKY paper book (alpha wallet, SYMBOL|risky).
+
+        RISKY-tier fires trade on paper until the tagged population proves
+        itself (see the fire path). Exits mirror the alpha scanner's rules: SL,
+        TP3 full take, an opposing model fire, and the 24h zombie guard.
+        """
+        key = f'{symbol}|risky'
+        pos = self.alpha_wallet.open_positions.get(key)
+        if pos is None:
+            return
+        px = float(self.live_prices.get(symbol, 0) or price or 0)
+        if px <= 0:
+            return
+
+        is_long = pos.direction == 'LONG'
+        hit_sl  = (px <= pos.stop_loss) if is_long else (px >= pos.stop_loss)
+        hit_tp  = (pos.take_profit_3 > 0 and
+                   ((px >= pos.take_profit_3) if is_long
+                    else (px <= pos.take_profit_3)))
+        reversed_ = (bool(result.get('fire'))
+                     and result.get('side') in ('BUY', 'SELL')
+                     and result.get('side') != pos.side)
+        expired = (time.time() - self._alpha_open_time.get(key, time.time())
+                   >= self.MAX_HOLD_SECONDS)
+
+        why = ('SL_HIT' if hit_sl else 'TP3_HIT' if hit_tp else
+               'SIGNAL_REVERSAL' if reversed_ else
+               'MAX_HOLD_EXPIRED' if expired else '')
+        if not why:
+            return
+        self.alpha_wallet.close_trade(key, px, why)
+        self._alpha_last_close_time[key] = time.time()
+        self._save_alpha_track_record()
+        print(f'[{symbol}] RISKY-PAPER {why} @ {px:.6g}')
+
+    async def _resolve_market_context(
+        self, symbol: str, result: Dict[str, Any]
+    ) -> Optional[Tuple[float, Any, Dict[str, Any], str, float, bool]]:
+        """Turn a raw prediction into the context every downstream gate reads.
+
+        Returns (price, regime, hmm, new_side, quality_score, fake_breakout),
+        or None when the HMM vetoes the symbol outright and the scan should
+        stop here.
+        """
+        price = self._resolve_price(result, symbol)
+
+        # ── Adaptive intelligence layer ───────────────────────────────────
+        # Step 1: HMM regime (probabilistic, from predictor's result dict).
+        # The HMM ran inside predict_realtime() and attached hmm_* fields;
+        # they are extracted here and used to sharpen MarketRegimeDetector.
+        hmm = self._extract_hmm_fields(result)
+
+        # If HMM says no-trade (e.g. COMPRESSION pre-breakout or DISTRIBUTION)
+        # suppress immediately — don't spend the quality-scoring pass.
+        if self._check_hmm_trade_veto(symbol, hmm):
+            return None
+
+        # Step 2: rule-based regime classifier, then let a confident HMM read
+        # override the heuristic label.
+        regime = self.regime_detector.detect(result)
+        regime = self._update_regime_from_hmm(regime, result, hmm)
+
+        new_side = result.get('side', 'FLAT')
+        self._record_signal_direction(symbol, new_side)
+        await self._apply_htf_macro_bias(symbol, result)
+
+        quality_score, _reasons = self.quality_filter.score_signal(
+            result, regime, new_side)
+        fake_breakout = self.quality_filter.is_fake_breakout(result, new_side)
+        return price, regime, hmm, new_side, quality_score, fake_breakout
+
     async def _process_symbol(
         self, symbol: str, predictor: Any, sem: asyncio.Semaphore
     ) -> None:
@@ -3088,54 +3281,10 @@ class LiveEngine:
             if not isinstance(result, dict):
                 return
 
-            price = self._resolve_price(result, symbol)
-
-            # ── Adaptive intelligence layer ───────────────────────────────────
-            # Step 1: HMM regime (probabilistic, from predictor's result dict)
-            # The HMM ran inside predict_realtime() and attached hmm_* fields.
-            # We extract them here and let them sharpen the MarketRegimeDetector.
-            hmm = self._extract_hmm_fields(result)
-
-            # If HMM says no-trade (e.g. COMPRESSION pre-breakout or DISTRIBUTION)
-            # suppress the signal immediately — don't waste the quality scoring pass.
-            if self._check_hmm_trade_veto(symbol, hmm):
+            _ctx = await self._resolve_market_context(symbol, result)
+            if _ctx is None:            # HMM no-trade veto
                 return
-
-            # Step 2: Rule-based regime classifier (existing, now HMM-informed)
-            # If HMM has a confident read, override the heuristic detector's label.
-            regime = self.regime_detector.detect(result)
-            regime = self._update_regime_from_hmm(regime, result, hmm)
-
-            new_side      = result.get('side', 'FLAT')
-
-            # Track signal direction history for the stability gate.
-            # Only directional signals accumulate; FLAT/HOLD is ignored so that
-            # BUY→FLAT→BUY doesn't reset the counter (volatile markets produce
-            # intermittent FLAT cycles that previously erased valid setups).
-            # A genuine direction flip (BUY→SELL) is handled by the stability
-            # check itself: all(s == new_side) will fail if the deque has the
-            # opposite side, so no explicit clear is needed.
-            if new_side in ('BUY', 'SELL'):
-                if symbol not in self._signal_history:
-                    self._signal_history[symbol] = deque(maxlen=self.SIGNAL_STABILITY_WINDOW)
-                self._signal_history[symbol].append(new_side)
-
-            # ── Revive the HTF daily/weekly trend bias ────────────────────────────
-            # macro_daily / macro_weekly arrive 0.0 from the model (a swallowed
-            # KeyError zeroes them at the source — see _daily_bias). Recompute them
-            # from daily candles and inject BEFORE scoring, so the existing HTF-bias
-            # tiers in score_signal() (+15/+10 aligned, -20/-10 against) and Guard F
-            # (hard-block when BOTH daily AND weekly oppose) come alive. This is the
-            # directional focus the engine was always meant to have: trade WITH the
-            # higher-timeframe trend; a genuine reversal at a level stays exempt from
-            # the penalty (score_signal's `is_reversal` branch).
-            _macro_d, _macro_w = await self._daily_bias(symbol)
-            result['macro_daily']  = _macro_d
-            result['macro_weekly'] = _macro_w
-
-            quality_score, _quality_reasons = self.quality_filter.score_signal(
-                result, regime, new_side)
-            fake_breakout = self.quality_filter.is_fake_breakout(result, new_side)
+            price, regime, hmm, new_side, quality_score, fake_breakout = _ctx
 
             # ── MODEL-FIRST decision: the ML model picks side + fire ──────────────
             # The model's side/fire (from predict_realtime) is the authority — the
@@ -3279,34 +3428,7 @@ class LiveEngine:
 
             existing = self.wallet.open_positions.get(symbol)
 
-            # ── v74: manage the RISKY paper book (alpha wallet, SYMBOL|risky) ──
-            # RISKY-tier fires trade on paper until the tagged population proves
-            # itself (see the fire path). Exits mirror the alpha scanner's rules:
-            # SL, TP3 full take, opposing model fire, and the 24h zombie guard.
-            _rk_key = f'{symbol}|risky'
-            _rk_pos = self.alpha_wallet.open_positions.get(_rk_key)
-            if _rk_pos is not None:
-                _rk_px = float(self.live_prices.get(symbol, 0) or price or 0)
-                if _rk_px > 0:
-                    _rk_long = _rk_pos.direction == 'LONG'
-                    _rk_sl   = ((_rk_px <= _rk_pos.stop_loss) if _rk_long
-                                else (_rk_px >= _rk_pos.stop_loss))
-                    _rk_tp   = (_rk_pos.take_profit_3 > 0 and
-                                ((_rk_px >= _rk_pos.take_profit_3) if _rk_long
-                                 else (_rk_px <= _rk_pos.take_profit_3)))
-                    _rk_rev  = (bool(result.get('fire'))
-                                and result.get('side') in ('BUY', 'SELL')
-                                and result.get('side') != _rk_pos.side)
-                    _rk_old  = (time.time() - self._alpha_open_time.get(_rk_key, time.time())
-                                >= self.MAX_HOLD_SECONDS)
-                    _rk_why  = ('SL_HIT' if _rk_sl else 'TP3_HIT' if _rk_tp else
-                                'SIGNAL_REVERSAL' if _rk_rev else
-                                'MAX_HOLD_EXPIRED' if _rk_old else '')
-                    if _rk_why:
-                        self.alpha_wallet.close_trade(_rk_key, _rk_px, _rk_why)
-                        self._alpha_last_close_time[_rk_key] = time.time()
-                        self._save_alpha_track_record()
-                        print(f'[{symbol}] RISKY-PAPER {_rk_why} @ {_rk_px:.6g}')
+            self._manage_paper_position(symbol, result, price)
 
             # Labelled S/R levels + Break->Retest->Confirmation states for the chart.
             # ONLY for symbols a user actually views on the chart — a firing signal
@@ -4446,11 +4568,27 @@ class LiveEngine:
 
                         # entry_mode: audit trail + SL cap. A signal far from its
                         # level or mid-range gets a wider stop; at-level is tight.
+                        # v82e: measured in ATR distance, not range_position.
+                        #
+                        # This used to be `abs(_rp_now - 0.5) >= 0.3`, the exact
+                        # proxy gate_scorer rejects in its own comment ("range
+                        # position alone is a poor proxy: 25% of a WIDE range
+                        # can still be 1.5 ATR from the level"). Measured over
+                        # 3,852 bars it called "at level": median distance 0.50
+                        # ATR, p90 1.02 ATR, 61% beyond the 0.35 ATR tolerance,
+                        # and p10 at -0.37 ATR — price already THROUGH the level,
+                        # i.e. fading a fresh breakout. It also flipped verdict
+                        # roughly every other bar, so the stop width it selects
+                        # was noise.
+                        _lvl_gap_atr = self._level_gap_atr(result, new_side)
                         if result.get('off_level_fire'):
                             _entry_mode = 'model_off_level_reversal'   # v75: candle fired it, not the level
                         elif _poor:
                             _entry_mode = 'model_far_from_level'
-                        elif abs(_rp_now - 0.5) >= 0.3:
+                        elif _lvl_gap_atr is not None and _lvl_gap_atr <= self.AT_LEVEL_ATR:
+                            _entry_mode = 'model_at_level'
+                        elif _lvl_gap_atr is None and abs(_rp_now - 0.5) >= 0.3:
+                            # only when price/ATR/level are unavailable
                             _entry_mode = 'model_at_level'
                         else:
                             _entry_mode = 'model_mid_range'
@@ -5999,7 +6137,18 @@ class LiveEngine:
     # ── trade management ──────────────────────────────────────────────────────
 
     def _manage_exit(self, symbol: str, pos: Position,
-                     result: Dict[str, Any], price: float) -> None:
+                     result: Dict[str, Any], price: float,
+                     price_only: bool = False) -> None:
+        """Evaluate every exit rule for one open position.
+
+        price_only=True skips the model-reversal branch (section 8). The fast
+        exit monitor passes it: reversal is a MODEL decision that belongs to the
+        scan cycle, and re-evaluating it against a stale last_signals entry
+        every few seconds would fire it on data the scan already acted on.
+        Everything else — the TP ladder, the trail, break-even and the stop —
+        is purely price-driven and is exactly what the monitor exists to catch
+        between scans.
+        """
         live_px     = self.live_prices.get(symbol, 0.0)
         check_price = live_px if live_px > 0 else price
 
@@ -6260,7 +6409,7 @@ class LiveEngine:
 
         # ── 8. Model-reversal exit (dynamic exit on opposing signal) ─────────
         side = result.get('side', 'FLAT')
-        fire = bool(result.get('fire', False))
+        fire = bool(result.get('fire', False)) and not price_only
         opposite = (
             (pos.direction == 'LONG'  and side == 'SELL' and fire) or
             (pos.direction == 'SHORT' and side == 'BUY'  and fire)

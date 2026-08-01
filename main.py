@@ -125,6 +125,125 @@ async def _dodo_get(path: str) -> dict:
         resp.raise_for_status()
         return resp.json()
 
+
+# -------------------------------------------------------------------
+# Paddle Billing
+# -------------------------------------------------------------------
+# Paddle BILLING (the current product), not Paddle Classic. Checkout follows
+# the same shape as DODO: create a transaction server-side, hand the customer
+# the returned checkout URL. A transaction containing a RECURRING price makes
+# Paddle create the subscription itself once payment completes.
+#
+# Precedence is Paddle -> DODO -> Razorpay, decided purely by which env vars
+# are set, so switching over is a config change and rolling back is unsetting
+# PADDLE_API_KEY. Nothing is deleted here.
+PADDLE_API_KEY = os.getenv("PADDLE_API_KEY")
+PADDLE_WEBHOOK_SECRET = os.getenv("PADDLE_WEBHOOK_SECRET")   # 'pdl_ntfset_...'
+PADDLE_MODE = os.getenv("PADDLE_MODE", "sandbox").lower()
+# Paddle bills against a PRICE, not a product — a product can carry several
+# prices (monthly/annual, per currency). These must be price IDs ('pri_...').
+PADDLE_PRICE_IDS = {
+    "basic":        os.getenv("PADDLE_PRICE_ID_BASIC"),
+    "intermediate": os.getenv("PADDLE_PRICE_ID_INTERMEDIATE"),
+    "pro":          os.getenv("PADDLE_PRICE_ID_PRO"),
+}
+PADDLE_ENABLED = bool(PADDLE_API_KEY)
+_PADDLE_BASE = ("https://api.paddle.com" if PADDLE_MODE == "live"
+                else "https://sandbox-api.paddle.com")
+# Replay window for webhooks. Paddle's own SDKs default to 5s, which is only
+# safe when the host clock is tightly synced — a few seconds of drift silently
+# rejects every event. Paddle retries failed deliveries, so a wider window
+# costs nothing in reliability terms; 300s matches the common industry default.
+PADDLE_WEBHOOK_TOLERANCE_SECONDS = int(
+    os.getenv("PADDLE_WEBHOOK_TOLERANCE_SECONDS", "300"))
+
+if PADDLE_ENABLED:
+    print(f"Paddle Billing configured in {PADDLE_MODE.upper()} mode")
+    if not PADDLE_WEBHOOK_SECRET:
+        print("[WARN] PADDLE_WEBHOOK_SECRET is not set — Paddle webhooks will be "
+              "REJECTED. Subscriptions would activate at checkout but never renew "
+              "or cancel. Set it before taking live payments.")
+    _missing_prices = [k for k, v in PADDLE_PRICE_IDS.items() if not v]
+    if _missing_prices:
+        print(f"[WARN] Paddle price IDs missing for: {', '.join(_missing_prices)} "
+              f"— those plans cannot be checked out.")
+
+
+async def _paddle_post(path: str, payload: dict) -> dict:
+    """POST to the Paddle Billing REST API."""
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.post(
+            f"{_PADDLE_BASE}{path}",
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {PADDLE_API_KEY}",
+                "Content-Type": "application/json",
+            },
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+
+async def _paddle_get(path: str) -> dict:
+    """GET from the Paddle Billing REST API."""
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.get(
+            f"{_PADDLE_BASE}{path}",
+            headers={
+                "Authorization": f"Bearer {PADDLE_API_KEY}",
+                "Content-Type": "application/json",
+            },
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+
+def paddle_verify_signature(raw_body: bytes, signature_header: str,
+                            secret: Optional[str] = None,
+                            tolerance_seconds: Optional[int] = None) -> bool:
+    """Verify a Paddle Billing webhook signature.
+
+    Header format is `ts=<unix>;h1=<hex>`. The signed payload is the timestamp,
+    a colon, then the RAW request body — unmodified, no re-serialising, no
+    whitespace changes — HMAC-SHA256'd with the notification-setting secret.
+
+    Returns True only for a well-formed, in-window, matching signature. A
+    caller that cannot verify must reject the request: an unverified payment
+    webhook is an unauthenticated "upgrade this user" endpoint.
+    """
+    import hmac as _hmac
+    import hashlib as _hashlib
+
+    key = secret if secret is not None else PADDLE_WEBHOOK_SECRET
+    tol = (tolerance_seconds if tolerance_seconds is not None
+           else PADDLE_WEBHOOK_TOLERANCE_SECONDS)
+    if not key or not signature_header:
+        return False
+
+    ts_raw = ""
+    h1 = ""
+    for part in signature_header.split(";"):
+        name, _, value = part.partition("=")
+        if name.strip() == "ts":
+            ts_raw = value.strip()
+        elif name.strip() == "h1":
+            h1 = value.strip()
+    if not ts_raw or not h1:
+        return False
+
+    try:
+        ts_int = int(ts_raw)
+    except ValueError:
+        return False
+    # Reject stale AND future-dated timestamps (clock-skew replay both ways).
+    if abs(time.time() - ts_int) > tol:
+        return False
+
+    signed_payload = ts_raw.encode("utf-8") + b":" + raw_body
+    expected = _hmac.new(key.encode("utf-8"), signed_payload,
+                         _hashlib.sha256).hexdigest()
+    return _hmac.compare_digest(expected, h1)
+
 RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
 RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET")
 RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET")
@@ -1505,61 +1624,28 @@ async def api_signals(credentials: HTTPAuthorizationCredentials = Depends(securi
     return JSONResponse(content=signals)
 
 
-class CreateOrderRequest(BaseModel):
-    amount: int  # in paise
-    currency: Optional[str] = 'INR'
-    receipt: Optional[str] = None
-
-
-@app.post("/api/create-order")
-async def api_create_order(req: CreateOrderRequest):
-    """Create a Razorpay order. Expects amount in paise (int)."""
-    if not RAZORPAY_ENABLED:
-        raise HTTPException(status_code=503, detail="Razorpay not configured on server")
-    amt = int(req.amount or 0)
-    if amt < 100:
-        raise HTTPException(status_code=400, detail="Minimum amount is 100 paise")
-    payload = {
-        "amount": amt,
-        "currency": req.currency or "INR",
-        "receipt": req.receipt or f"rcpt_{int(time.time())}",
-    }
-    try:
-        resp = await _rzp_post("/orders", payload)
-        return JSONResponse({
-            "order_id": resp.get("id"),
-            "amount": resp.get("amount"),
-            "currency": resp.get("currency"),
-            "receipt": resp.get("receipt"),
-        })
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 401:
-            raise HTTPException(status_code=401, detail="Razorpay authentication failed")
-        raise HTTPException(status_code=500, detail=f"Razorpay error: {e.response.text}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Razorpay error: {e}")
-
-
-class VerifyPaymentRequest(BaseModel):
-    razorpay_order_id: str
-    razorpay_payment_id: str
-    razorpay_signature: str
-
-
-@app.post("/api/verify-payment")
-async def api_verify_payment(req: VerifyPaymentRequest):
-    """Verify Razorpay payment signature using HMAC-SHA256"""
-    if not RAZORPAY_ENABLED:
-        raise HTTPException(status_code=503, detail="Razorpay not configured on server")
-    if not (req.razorpay_order_id and req.razorpay_payment_id and req.razorpay_signature):
-        raise HTTPException(status_code=400, detail="Missing fields")
-    import hmac, hashlib
-    payload = f"{req.razorpay_order_id}|{req.razorpay_payment_id}".encode('utf-8')
-    secret = (RAZORPAY_KEY_SECRET or "").encode('utf-8')
-    generated = hmac.new(secret, payload, hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(generated, req.razorpay_signature):
-        raise HTTPException(status_code=400, detail="Signature mismatch")
-    return JSONResponse({"status": "ok"})
+# ── REMOVED v82f: two Razorpay-only endpoints used to live here ──────────────
+#
+#   @app.post("/api/create-order")   async def api_create_order(...)
+#   @app.post("/api/verify-payment") async def api_verify_payment(...)
+#
+# They were registered BEFORE the provider-aware versions further down, and
+# FastAPI serves the FIRST route matching a path+method. So these shadowed the
+# real ones and were the endpoints actually answering in production:
+#
+#   * create-order took {amount} in paise. Every real caller
+#     (gatekeeper.js, simple-auth-client.js) sends {plan, currency}, so live
+#     checkout returned 422 "Field required: amount" — nobody could subscribe,
+#     on ANY gateway. Verified against the running app.
+#   * verify-payment checked a Razorpay signature and returned {"status":"ok"}
+#     WITHOUT upgrading the user's plan. The upgrade lives in the shadowed
+#     verify_payment, so a settled payment granted nothing except via webhook.
+#
+# Deleting them un-shadows the provider-aware create_order / verify_payment,
+# which carry the full Paddle -> DODO -> Razorpay chain, require auth, and
+# actually apply the plan. Their request models were also named
+# CreateOrderRequest / VerifyPaymentRequest, colliding with the plan-based
+# models defined later — that duplicate is gone with them.
 
 
 @app.get("/api/razorpay-key")
@@ -3850,10 +3936,33 @@ async def alpha_track_record(user_id: str = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=f"Could not read alpha track record: {e}")
 
 
+def _active_payment_provider() -> str:
+    """Single source of truth for which gateway is live.
+
+    Precedence Paddle -> DODO -> Razorpay, driven only by which credentials are
+    present, so the cutover is a config change and the rollback is unsetting
+    PADDLE_API_KEY.
+    """
+    if PADDLE_ENABLED:
+        return "paddle"
+    if DODO_PAYMENTS_ENABLED:
+        return "dodopayments"
+    if RAZORPAY_ENABLED:
+        return "razorpay"
+    return "none"
+
+
 @app.get("/payment/config")
 async def payment_config():
     return {
-        "provider": "dodopayments" if DODO_PAYMENTS_ENABLED else ("razorpay" if RAZORPAY_ENABLED else "none"),
+        "provider": _active_payment_provider(),
+        "paddle": {
+            "enabled": PADDLE_ENABLED,
+            "mode": PADDLE_MODE,
+            # never expose the API key; the frontend only needs to know the
+            # flow is a hosted redirect, not an in-page SDK handoff
+            "checkout": "redirect",
+        },
         "dodopayments": {
             "enabled": DODO_PAYMENTS_ENABLED,
             "mode": DODO_PAYMENTS_MODE,
@@ -3894,10 +4003,30 @@ async def initialize_subscription(
 
 
 # Base prices in USD â€” source of truth for all plans
+# Internal tier keys are NOT renamed: they are written into every Firestore
+# user document and read by the plan gates, so renaming needs a data migration.
+# The customer-facing names changed instead — and note the collision, because
+# it is a genuine footgun when reading logs or the database:
+#
+#   customer sees   internal key    price
+#   Starter         basic           $5.90
+#   Pro             intermediate    $14.00   <- "Pro" is the MIDDLE tier
+#   Advanced        pro             $30.00   <- internal 'pro' is the TOP tier
+#
+# Prices are also the source of truth for DODO/Razorpay only. Under Paddle the
+# amount lives on the Paddle price; this table drives display and the other
+# gateways, so the two must be kept in step by hand.
 USD_PLAN_PRICES: Dict[str, float] = {
     "basic": 5.90,
-    "intermediate": 24.00,
-    "pro": 40.00,
+    "intermediate": 14.00,
+    "pro": 30.00,
+}
+
+# Customer-facing label for each internal tier.
+PLAN_DISPLAY_NAMES: Dict[str, str] = {
+    "basic": "Starter",
+    "intermediate": "Pro",
+    "pro": "Advanced",
 }
 
 # Currencies whose smallest unit is the unit itself (no multiply by 100)
@@ -4184,7 +4313,13 @@ async def track_record_endpoint(source: str = None,
 async def exchange_rates_endpoint():
     """Return live USD-based exchange rates plus USD plan prices for the frontend."""
     rates = await _get_fx_rates()
-    return {"base": "USD", "rates": rates, "plan_prices_usd": USD_PLAN_PRICES}
+    return {
+        "base": "USD",
+        "rates": rates,
+        "plan_prices_usd": USD_PLAN_PRICES,
+        # so the frontend can label tiers without hardcoding the mapping
+        "plan_display_names": PLAN_DISPLAY_NAMES,
+    }
 
 
 def _to_subunits(amount_float: float, currency: str) -> int:
@@ -4198,10 +4333,61 @@ def _to_subunits(amount_float: float, currency: str) -> int:
 
 @app.post("/api/create-order")
 async def create_order(req: CreateOrderRequest, user_id: str = Depends(get_current_user)):
-    """Create a payment checkout session with DODO Payments (or fallback to Razorpay)."""
+    """Create a checkout session with the active gateway.
+
+    Precedence: Paddle -> DODO -> Razorpay (see _active_payment_provider).
+    """
     usd_price = USD_PLAN_PRICES.get(req.plan)
     if usd_price is None:
         raise HTTPException(status_code=400, detail=f"Unknown plan: {req.plan}")
+
+    if PADDLE_ENABLED:
+        price_id = PADDLE_PRICE_IDS.get(req.plan)
+        if not price_id:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Paddle price ID not configured for plan '{req.plan}' "
+                       f"(set PADDLE_PRICE_ID_{req.plan.upper()})")
+        try:
+            # A transaction carrying a RECURRING price makes Paddle create the
+            # subscription itself on completion — we do not create one directly.
+            # Price and currency live in Paddle, not here: USD_PLAN_PRICES is
+            # only used for display and for the other gateways.
+            paddle_res = await _paddle_post("/transactions", {
+                "items": [{"price_id": price_id, "quantity": 1}],
+                # custom_data comes back on every webhook for this transaction
+                # and its subscription — this is how the webhook knows which
+                # user to upgrade without trusting anything client-supplied.
+                "custom_data": {"user_id": user_id, "plan": req.plan},
+            })
+            data = paddle_res.get("data") or {}
+            checkout_url = (data.get("checkout") or {}).get("url")
+            if not checkout_url:
+                # Happens when the seller has no default payment link set in
+                # Paddle > Checkout settings; the transaction exists but there
+                # is nowhere to send the customer.
+                raise HTTPException(
+                    status_code=500,
+                    detail="Paddle returned no checkout URL — set a default "
+                           "payment link under Paddle > Checkout settings.")
+            return {
+                "provider": "paddle",
+                "checkout_url": checkout_url,
+                "payment_id": data.get("id"),
+                "plan": req.plan,
+                "mode": PADDLE_MODE,
+            }
+        except HTTPException:
+            raise
+        except httpx.HTTPStatusError as e:
+            print(f"[Paddle] Checkout creation failed: "
+                  f"{e.response.status_code} {e.response.text}")
+            raise HTTPException(status_code=502,
+                                detail="Paddle checkout creation failed")
+        except Exception as e:
+            print(f"[Paddle] Checkout error: {e!r}")
+            raise HTTPException(status_code=502,
+                                detail="Paddle checkout creation failed")
 
     if DODO_PAYMENTS_ENABLED:
         try:
@@ -4360,6 +4546,112 @@ async def verify_payment(req: VerifyPaymentRequest, user_id: str = Depends(get_c
 # -------------------------------------------------------------------
 # DODO Payments & Razorpay Webhook
 # -------------------------------------------------------------------
+# Paddle events that grant or extend access, and those that revoke it.
+_PADDLE_GRANT_EVENTS = {
+    "transaction.completed",
+    "subscription.created",
+    "subscription.activated",
+    "subscription.resumed",
+}
+_PADDLE_REVOKE_EVENTS = {
+    "subscription.canceled",
+    "subscription.paused",
+}
+
+
+async def _handle_paddle_webhook(raw_body: bytes) -> dict:
+    """Apply a VERIFIED Paddle Billing event to the user's plan.
+
+    Only ever called after paddle_verify_signature passes.
+
+    The user and plan come from custom_data, which we set when creating the
+    transaction — so identity is server-supplied, never taken from anything the
+    customer could influence. On a subscription event Paddle echoes the
+    transaction's custom_data onto the subscription, so both shapes carry it.
+    """
+    try:
+        data = json.loads(raw_body)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+
+    event = str(data.get("event_type") or "")
+    payload = data.get("data") or {}
+    custom = payload.get("custom_data") or {}
+    user_id = custom.get("user_id")
+    plan = custom.get("plan")
+
+    print(f"[Paddle] Verified event: {event} (user={user_id} plan={plan})")
+
+    if not user_id:
+        # Nothing actionable, but the signature was valid — 200 so Paddle stops
+        # retrying. Retrying cannot supply a user_id that was never attached.
+        print(f"[Paddle] {event} carried no custom_data.user_id — ignoring")
+        return {"status": "ignored", "reason": "no user_id in custom_data"}
+
+    if plan not in ("basic", "intermediate", "pro"):
+        # Fall back to the price ID rather than silently granting a tier the
+        # customer did not buy (the DODO path defaults to 'intermediate').
+        price_map = {v: k for k, v in PADDLE_PRICE_IDS.items() if v}
+        for item in (payload.get("items") or []):
+            pid = ((item.get("price") or {}).get("id")) or item.get("price_id")
+            if pid in price_map:
+                plan = price_map[pid]
+                break
+    if plan not in ("basic", "intermediate", "pro"):
+        print(f"[Paddle] {event}: could not resolve plan for user {user_id} — ignoring")
+        return {"status": "ignored", "reason": "unresolved plan"}
+
+    user_ref = db.collection("users").document(user_id)
+
+    if event in _PADDLE_GRANT_EVENTS:
+        # Prefer Paddle's own period end so access tracks real billing rather
+        # than a rolling 30 days guessed at webhook time.
+        sub_end = (payload.get("current_billing_period") or {}).get("ends_at")
+        if not sub_end:
+            sub_end = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        try:
+            res = user_ref.update({
+                "plan": plan,
+                "subscription": {
+                    "status": "active",
+                    "payment_id": payload.get("id"),
+                    "subscription_id": payload.get("subscription_id") or payload.get("id"),
+                    "provider": "paddle",
+                    "activated_at": datetime.now(timezone.utc).isoformat(),
+                    "plan_type": plan,
+                },
+                "subscription_end": sub_end,
+                "trial_active": False,
+            })
+            if inspect.isawaitable(res):
+                await res
+            print(f"[Paddle] User {user_id} -> {plan} (until {sub_end})")
+        except Exception as e:
+            # 500 so Paddle retries — the payment succeeded, so silently
+            # dropping the grant would leave a paying customer without access.
+            print(f"[Paddle] Failed to upgrade {user_id}: {e}")
+            raise HTTPException(status_code=500, detail="Could not apply subscription")
+
+    elif event in _PADDLE_REVOKE_EVENTS:
+        try:
+            # Do NOT downgrade `plan` here. A cancellation in Paddle means "will
+            # not renew"; the customer keeps access until the paid period ends,
+            # and subscription_end already governs that.
+            res = user_ref.update({
+                "subscription.status": ("canceled" if event == "subscription.canceled"
+                                        else "paused"),
+                "subscription.canceled_at": datetime.now(timezone.utc).isoformat(),
+            })
+            if inspect.isawaitable(res):
+                await res
+            print(f"[Paddle] User {user_id} subscription {event.split('.')[-1]}")
+        except Exception as e:
+            print(f"[Paddle] Failed to mark {event} for {user_id}: {e}")
+            raise HTTPException(status_code=500, detail="Could not apply subscription")
+
+    return {"status": "ok", "event": event}
+
+
 @app.post("/api/v1/payments/webhook")
 async def payments_webhook(request: Request):
     """
@@ -4371,6 +4663,22 @@ async def payments_webhook(request: Request):
     body = await request.body()
     dodo_sig = request.headers.get("Webhook-Signature") or request.headers.get("X-Dodo-Signature", "")
     rzp_sig = request.headers.get("X-Razorpay-Signature", "")
+    paddle_sig = request.headers.get("Paddle-Signature", "")
+
+    # ── Paddle: verify or REJECT ─────────────────────────────────────────────
+    # Unlike the DODO branch below (which only warns on mismatch), a Paddle
+    # event that fails verification is refused outright. This endpoint grants
+    # paid plans; accepting an unverified body makes it an unauthenticated
+    # "upgrade this user" API. Paddle retries rejected deliveries, so a genuine
+    # event is not lost.
+    if paddle_sig:
+        if not PADDLE_WEBHOOK_SECRET:
+            print("[Paddle] Webhook received but PADDLE_WEBHOOK_SECRET is unset — rejected")
+            raise HTTPException(status_code=503, detail="Webhook secret not configured")
+        if not paddle_verify_signature(body, paddle_sig):
+            print("[Paddle] Webhook signature verification FAILED — rejected")
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+        return await _handle_paddle_webhook(body)
 
     if DODO_PAYMENTS_WEBHOOK_SECRET and dodo_sig:
         expected = hmac.new(
