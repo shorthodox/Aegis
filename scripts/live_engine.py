@@ -2245,6 +2245,10 @@ class LiveEngine:
     """
 
     MAX_CONCURRENT        = 8
+    # How often the exit monitor re-prices open positions. This is the real
+    # granularity of every stop and TP in the engine; the scan interval (300s)
+    # governs ENTRIES only. Cheap loop — no inference, no network.
+    EXIT_CHECK_SECONDS    = 3
     HOURS_CONTEXT         = 300
     MIN_HOLD_SECONDS      = 3_600    # 1 h minimum hold before model-reversal exit
     MAX_HOLD_SECONDS      = 24 * 3_600  # 24 h zombie guard for open positions
@@ -2677,10 +2681,54 @@ class LiveEngine:
         if to_purge:
             self._save_track_record()
 
+    async def _exit_monitor_loop(self) -> None:
+        """Check stops/TPs against the live feed, independent of the scan cycle.
+
+        Until v82d the ONLY call to _manage_exit was inside _process_symbol, so
+        an open position's stop was evaluated once per scan_interval_seconds
+        (300s) and only after that symbol's turn through a semaphore of
+        MAX_CONCURRENT predict_realtime() calls — each a 350h feature build —
+        across every tradeable token.  Prices meanwhile stream in continuously
+        from _ws_price_ticker, which writes live_prices and checks nothing.
+
+        The result was that a stop was a suggestion: price ran past it, and
+        _close('STOP_HIT') then filled at whatever the market was doing minutes
+        later.  Measured on the four closed trades of 2026-08-01, every loss
+        overshot its own stop — by 0.02, 0.14, 0.85 and 0.28 percentage points,
+        1.28pp of avoidable loss across four trades, on stops of 1.1-2.3%.
+
+        This loop closes that window.  It is deliberately cheap: no inference,
+        no network, no feature build — just the arithmetic already in
+        _manage_exit against the newest price.
+        """
+        while True:
+            try:
+                await asyncio.sleep(self.EXIT_CHECK_SECONDS)
+                if not self.wallet.open_positions:
+                    continue
+                # snapshot: _manage_exit mutates open_positions on a close
+                for sym, pos in list(self.wallet.open_positions.items()):
+                    px = float(self.live_prices.get(sym, 0.0) or 0.0)
+                    if px <= 0:
+                        continue
+                    # last_signals supplies ATR only; the reversal branch is
+                    # suppressed by price_only so a stale entry cannot act.
+                    ctx = self.last_signals.get(sym) or {}
+                    if not isinstance(ctx, dict):
+                        ctx = {}
+                    self._manage_exit(sym, pos, ctx, px, price_only=True)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                # Never let a bad tick kill the monitor — an unsupervised book
+                # is strictly worse than a logged error.
+                print(f'[LiveEngine] exit monitor error (loop stays alive): {e!r}')
+
     async def run(self) -> None:
         print(f'[LiveEngine] Starting — interval={self.scan_interval_seconds}s '
               f'symbols={len(self.predictors)} | {self.GATE_VERSION}')
         asyncio.create_task(self._ws_price_ticker())
+        asyncio.create_task(self._exit_monitor_loop())
         await asyncio.sleep(2)   # let WebSocket populate live_prices first
         self._purge_subquality_positions()
         self._save_track_record()   # push restored positions to web immediately
@@ -6029,7 +6077,18 @@ class LiveEngine:
     # ── trade management ──────────────────────────────────────────────────────
 
     def _manage_exit(self, symbol: str, pos: Position,
-                     result: Dict[str, Any], price: float) -> None:
+                     result: Dict[str, Any], price: float,
+                     price_only: bool = False) -> None:
+        """Evaluate every exit rule for one open position.
+
+        price_only=True skips the model-reversal branch (section 8). The fast
+        exit monitor passes it: reversal is a MODEL decision that belongs to the
+        scan cycle, and re-evaluating it against a stale last_signals entry
+        every few seconds would fire it on data the scan already acted on.
+        Everything else — the TP ladder, the trail, break-even and the stop —
+        is purely price-driven and is exactly what the monitor exists to catch
+        between scans.
+        """
         live_px     = self.live_prices.get(symbol, 0.0)
         check_price = live_px if live_px > 0 else price
 
@@ -6290,7 +6349,7 @@ class LiveEngine:
 
         # ── 8. Model-reversal exit (dynamic exit on opposing signal) ─────────
         side = result.get('side', 'FLAT')
-        fire = bool(result.get('fire', False))
+        fire = bool(result.get('fire', False)) and not price_only
         opposite = (
             (pos.direction == 'LONG'  and side == 'SELL' and fire) or
             (pos.direction == 'SHORT' and side == 'BUY'  and fire)
