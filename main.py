@@ -4036,10 +4036,30 @@ async def initialize_subscription(
 
 
 # Base prices in USD â€” source of truth for all plans
+# Internal tier keys are NOT renamed: they are written into every Firestore
+# user document and read by the plan gates, so renaming needs a data migration.
+# The customer-facing names changed instead — and note the collision, because
+# it is a genuine footgun when reading logs or the database:
+#
+#   customer sees   internal key    price
+#   Starter         basic           $5.90
+#   Pro             intermediate    $14.00   <- "Pro" is the MIDDLE tier
+#   Advanced        pro             $30.00   <- internal 'pro' is the TOP tier
+#
+# Prices are also the source of truth for DODO/Razorpay only. Under Paddle the
+# amount lives on the Paddle price; this table drives display and the other
+# gateways, so the two must be kept in step by hand.
 USD_PLAN_PRICES: Dict[str, float] = {
     "basic": 5.90,
-    "intermediate": 24.00,
-    "pro": 40.00,
+    "intermediate": 14.00,
+    "pro": 30.00,
+}
+
+# Customer-facing label for each internal tier.
+PLAN_DISPLAY_NAMES: Dict[str, str] = {
+    "basic": "Starter",
+    "intermediate": "Pro",
+    "pro": "Advanced",
 }
 
 # Currencies whose smallest unit is the unit itself (no multiply by 100)
@@ -4326,7 +4346,13 @@ async def track_record_endpoint(source: str = None,
 async def exchange_rates_endpoint():
     """Return live USD-based exchange rates plus USD plan prices for the frontend."""
     rates = await _get_fx_rates()
-    return {"base": "USD", "rates": rates, "plan_prices_usd": USD_PLAN_PRICES}
+    return {
+        "base": "USD",
+        "rates": rates,
+        "plan_prices_usd": USD_PLAN_PRICES,
+        # so the frontend can label tiers without hardcoding the mapping
+        "plan_display_names": PLAN_DISPLAY_NAMES,
+    }
 
 
 def _to_subunits(amount_float: float, currency: str) -> int:
