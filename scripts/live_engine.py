@@ -69,7 +69,24 @@ USE_WEIGHTED_SCORER = True
 # tier downgrade so the model's signal still fires (flagged), never silenced;
 # MODEL_DISAGREES is ignored outright (meaningless once the model decides).
 # The scheduled-news lock is handled separately (its label is dynamic).
-_HARD_VETOES = frozenset({'MODEL_DRIFT_CRITICAL', 'DEAD_MARKET', 'EXTREME_VOLATILITY'})
+# v82e: FAR_FROM_SR promoted from "tier downgrade" to HARD veto.
+#
+# gate_scorer measures, correctly and in ATR, whether price is actually at the
+# level the trade leans on, and raises FAR_FROM_SR past AT_LEVEL_ATR (1.0).
+# That veto did not block — it only tagged the signal RISKY and fired anyway.
+#
+# Measured on 8,484 1h bars across 12 tokens: 58.7% sit MORE than 1 ATR from
+# the nearest level (median gap 1.17 ATR), and only 15.6% are within 0.35 ATR.
+# So the majority of fires were entries taken nowhere near their own structure,
+# and the RISKY tag was not a risk rating — it was the engine reporting that
+# the setup's premise was absent, then taking the trade regardless. On the
+# 2026-08-01 book that was 6 of 7 signals.
+#
+# NO_VALID_SR is deliberately NOT promoted: it is a weaker, differently-shaped
+# condition (srq below floor, dead-centre range position, or cramped RR) and
+# still downgrades the tier rather than blocking.
+_HARD_VETOES = frozenset({'MODEL_DRIFT_CRITICAL', 'DEAD_MARKET',
+                          'EXTREME_VOLATILITY', 'FAR_FROM_SR'})
 
 MODEL_STORE       = _ROOT / 'src' / 'ml' / 'model_store'
 
@@ -3137,6 +3154,33 @@ class LiveEngine:
         """
         result['macro_daily'], result['macro_weekly'] = await self._daily_bias(symbol)
 
+    @staticmethod
+    def _level_gap_atr(result: Dict[str, Any], side: str) -> Optional[float]:
+        """Distance from price to the level this side leans on, in ATR.
+
+        BUY leans on support, SELL on resistance. Returns None when price, ATR
+        or the level is missing, so callers can fall back rather than treat an
+        unknown as "at the level". A NEGATIVE value means price has already
+        traded through the level — the setup's premise is gone.
+        """
+        try:
+            px = float(result.get('price') or result.get('entry_price') or 0.0)
+            atr = float(result.get('atr') or 0.0)
+            if atr <= 0:
+                atr_pct = float(result.get('atr_pct') or 0.0)
+                atr = px * atr_pct / 100.0
+            if px <= 0 or atr <= 0:
+                return None
+            if side == 'BUY':
+                lvl = float(result.get('support') or 0.0)
+                return (px - lvl) / atr if lvl > 0 else None
+            if side == 'SELL':
+                lvl = float(result.get('resistance') or 0.0)
+                return (lvl - px) / atr if lvl > 0 else None
+        except (TypeError, ValueError):
+            return None
+        return None
+
     def _manage_paper_position(
         self, symbol: str, result: Dict[str, Any], price: float
     ) -> None:
@@ -4524,11 +4568,27 @@ class LiveEngine:
 
                         # entry_mode: audit trail + SL cap. A signal far from its
                         # level or mid-range gets a wider stop; at-level is tight.
+                        # v82e: measured in ATR distance, not range_position.
+                        #
+                        # This used to be `abs(_rp_now - 0.5) >= 0.3`, the exact
+                        # proxy gate_scorer rejects in its own comment ("range
+                        # position alone is a poor proxy: 25% of a WIDE range
+                        # can still be 1.5 ATR from the level"). Measured over
+                        # 3,852 bars it called "at level": median distance 0.50
+                        # ATR, p90 1.02 ATR, 61% beyond the 0.35 ATR tolerance,
+                        # and p10 at -0.37 ATR — price already THROUGH the level,
+                        # i.e. fading a fresh breakout. It also flipped verdict
+                        # roughly every other bar, so the stop width it selects
+                        # was noise.
+                        _lvl_gap_atr = self._level_gap_atr(result, new_side)
                         if result.get('off_level_fire'):
                             _entry_mode = 'model_off_level_reversal'   # v75: candle fired it, not the level
                         elif _poor:
                             _entry_mode = 'model_far_from_level'
-                        elif abs(_rp_now - 0.5) >= 0.3:
+                        elif _lvl_gap_atr is not None and _lvl_gap_atr <= self.AT_LEVEL_ATR:
+                            _entry_mode = 'model_at_level'
+                        elif _lvl_gap_atr is None and abs(_rp_now - 0.5) >= 0.3:
+                            # only when price/ATR/level are unavailable
                             _entry_mode = 'model_at_level'
                         else:
                             _entry_mode = 'model_mid_range'

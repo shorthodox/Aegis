@@ -29,30 +29,28 @@
   },
   "buy_at_support": {
     "bootstrap": 1,
-    "decisions": [
-      "[TEST/USDT] MODEL PENDING BUY: approaching support 97 (3.09% away, needs <= 0.35% or a tag+reject or 3x5m reversal in the correct zone) \u2014 holding for price to reach the support level"
-    ],
+    "decisions": [],
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "LONG",
+      "direction": "NEUTRAL",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
       "levels_frozen": false,
       "paper_only": false,
-      "pending_entry": true,
+      "pending_entry": false,
       "quality_score": 85.0,
       "regime": "RANGING",
-      "risk_reward": 1.12,
-      "signal": "HOLD",
-      "signal_strength": "STRONG_BUY",
-      "suggested_sl": 96.8,
-      "suggested_tp": 101.8,
-      "tp2": 103.6,
-      "tp3": 106.0,
-      "tp4": 111.562,
-      "tp5": 120.562
+      "risk_reward": 0,
+      "signal": "FLAT",
+      "signal_strength": "NEUTRAL",
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "tp2": null,
+      "tp3": null,
+      "tp4": null,
+      "tp5": null
     }
   },
   "buy_atr_below_soft": {
@@ -371,13 +369,11 @@
   },
   "buy_trend_bear": {
     "bootstrap": 1,
-    "decisions": [
-      "[TEST/USDT] MODEL BLOCK BUY: WRONG_ZONE \u2014 range_position 0.50 is in the resistance zone; a BUY must be in the support zone (rp <= 0.35 for BUY, >= 0.65 for SELL)"
-    ],
+    "decisions": [],
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "LONG",
+      "direction": "NEUTRAL",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -386,15 +382,15 @@
       "pending_entry": false,
       "quality_score": 85.0,
       "regime": "TRENDING_BEAR",
-      "risk_reward": 1.12,
-      "signal": "HOLD",
-      "signal_strength": "STRONG_BUY",
-      "suggested_sl": 96.8,
-      "suggested_tp": 101.8,
-      "tp2": 103.6,
-      "tp3": 106.0,
-      "tp4": 111.562,
-      "tp5": 120.562
+      "risk_reward": 0,
+      "signal": "FLAT",
+      "signal_strength": "NEUTRAL",
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "tp2": null,
+      "tp3": null,
+      "tp4": null,
+      "tp5": null
     }
   },
   "buy_vol_expansion": {
@@ -687,30 +683,28 @@
   },
   "sell_at_resistance": {
     "bootstrap": 1,
-    "decisions": [
-      "[TEST/USDT] MODEL PENDING SELL: approaching resistance 106 (5.66% away, needs <= 0.35% or a tag+reject or 3x5m reversal in the correct zone) \u2014 holding for price to reach the resistance level"
-    ],
+    "decisions": [],
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "SHORT",
+      "direction": "NEUTRAL",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
       "levels_frozen": false,
       "paper_only": false,
-      "pending_entry": true,
+      "pending_entry": false,
       "quality_score": 85.0,
       "regime": "RANGING",
-      "risk_reward": 0.58,
-      "signal": "HOLD",
-      "signal_strength": "STRONG_SELL",
-      "suggested_sl": 106.2,
-      "suggested_tp": 98.2,
-      "tp2": 96.4,
-      "tp3": 95.86,
-      "tp4": 91.438,
-      "tp5": 82.438
+      "risk_reward": 0,
+      "signal": "FLAT",
+      "signal_strength": "NEUTRAL",
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "tp2": null,
+      "tp3": null,
+      "tp4": null,
+      "tp5": null
     }
   },
   "sell_htf_conflict": {
@@ -828,13 +822,11 @@
   },
   "sell_trend_bull": {
     "bootstrap": 1,
-    "decisions": [
-      "[TEST/USDT] MODEL BLOCK SELL: WRONG_ZONE \u2014 range_position 0.50 is in the support zone; a SELL must be in the resistance zone (rp <= 0.35 for BUY, >= 0.65 for SELL)"
-    ],
+    "decisions": [],
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "SHORT",
+      "direction": "NEUTRAL",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -843,15 +835,15 @@
       "pending_entry": false,
       "quality_score": 85.0,
       "regime": "TRENDING_BULL",
-      "risk_reward": 0.58,
-      "signal": "HOLD",
-      "signal_strength": "STRONG_SELL",
-      "suggested_sl": 106.2,
-      "suggested_tp": 98.2,
-      "tp2": 96.4,
-      "tp3": 95.86,
-      "tp4": 91.438,
-      "tp5": 82.438
+      "risk_reward": 0,
+      "signal": "FLAT",
+      "signal_strength": "NEUTRAL",
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "tp2": null,
+      "tp3": null,
+      "tp4": null,
+      "tp5": null
     }
   }
 }
