@@ -49,9 +49,29 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from src.trading.gate_scorer import WeightedGateScorer
+from src.trading.trader_gate import ACTION_ENTER, ACTION_WORK, TraderGate, TradePlan
 from src.trading import econ_calendar
 from src.trading.trendline_channel import TrendlineChannelDetector
 from src.ml.adaptive import AdaptiveOrchestrator
+
+# ── v83: the desk replaces the Guard A..T veto pile ───────────────────────────
+# `src/trading/trader_gate.py` runs one ordered playbook — fitness, setup,
+# invalidation, payoff, trigger, allocation — and returns a PLAN rather than a
+# boolean.  It supersedes everything from "Guard A: ATR floor" through
+# "Guard H: portfolio guard", including the PENDING queue (Guards M + J), which
+# becomes a resting order with a hard invalidation and an 8-bar expiry.
+#
+# What forced the rewrite: on 2026-07-20 the old chain opened eight alt SHORTs
+# inside one 55-minute window; every closed one hit its stop, and the model
+# confidence on the losers ran from 17.9 to 100.0.  No guard in the chain asked
+# whether the trade paid, or whether it was the same bet for the eighth time —
+# the two questions a trader asks first.  Sixteen vetoes that each said "no" for
+# their own reason, with later patches selectively disabling earlier ones, could
+# not be tuned into asking them.
+#
+# Set False to fall back to the v80..v82 model-first guard chain, which is left
+# intact below for rollback.
+USE_TRADER_GATE = True
 
 # ── Decision architecture: MODEL-FIRST, UWGS as confirmation ──────────────────
 # The ML model (predictor.predict_realtime) is the SOLE authority for signal
@@ -1399,6 +1419,7 @@ class DynamicRiskEngine:
         support:    float = 0.0,   # invalidation level for a LONG / downside target for a SHORT
         resistance: float = 0.0,   # invalidation level for a SHORT / upside target for a LONG
         sl_cap_atr: float   = 0.0,   # v42: SL-cap override in ATR (0 -> ATR_SL_MULTIPLIER)
+        sl_override: float  = 0.0,   # v83: TraderGate's structural stop — used verbatim
         **_kwargs,      # absorbs legacy keyword args for backward compatibility
     ) -> Dict[str, float]:
         """
@@ -1446,12 +1467,21 @@ class DynamicRiskEngine:
         cap   = (sl_cap_atr if sl_cap_atr and sl_cap_atr > 0 else self.ATR_SL_MULTIPLIER) * atr
 
         if side == 'BUY':
-            # Hybrid SL: just below support + buffer, clamped to [floor, cap].
-            risk = ((price - support) + buf) if (0 < support < price) else cap
-            risk = max(floor, min(risk, cap))
-            sl   = price - risk
-            if 0 < support < price:
-                sl = min(sl, support - 0.2 * atr)
+            if sl_override and 0 < sl_override < price:
+                # v83: TraderGate already placed this stop beyond the level the
+                # setup leans on and bounded it to [MIN_STOP_ATR, MAX_STOP_ATR].
+                # Take it verbatim — re-deriving it here would mean the R:R the
+                # gate approved the trade on is not the R:R the trade actually
+                # has, which is the one number the payoff stage must not lie about.
+                sl   = sl_override
+                risk = price - sl
+            else:
+                # Hybrid SL: just below support + buffer, clamped to [floor, cap].
+                risk = ((price - support) + buf) if (0 < support < price) else cap
+                risk = max(floor, min(risk, cap))
+                sl   = price - risk
+                if 0 < support < price:
+                    sl = min(sl, support - 0.2 * atr)
             # Structural strong target = the major resistance (else an R-multiple).
             tp3  = resistance if resistance > price else price + 3.5 * risk
             rng  = (resistance - support) if (0 < support < resistance) else (tp3 - price)
@@ -1468,11 +1498,15 @@ class DynamicRiskEngine:
             # cramped setup whose resistance is too close is honestly rejected.
             reward = (resistance - price) if resistance > price else 3.5 * risk
         else:  # SELL / SHORT
-            risk = ((resistance - price) + buf) if (resistance > price) else cap
-            risk = max(floor, min(risk, cap))
-            sl   = price + risk
-            if resistance > price:
-                sl = max(sl, resistance + 0.2 * atr)
+            if sl_override and sl_override > price:
+                sl   = sl_override          # v83 — see the BUY branch above
+                risk = sl - price
+            else:
+                risk = ((resistance - price) + buf) if (resistance > price) else cap
+                risk = max(floor, min(risk, cap))
+                sl   = price + risk
+                if resistance > price:
+                    sl = max(sl, resistance + 0.2 * atr)
             tp3  = support if 0 < support < price else price - 3.5 * risk
             rng  = (resistance - support) if (0 < support < resistance) else (price - tp3)
             tp1  = price - self.TP1_MULTIPLIER * risk
@@ -2527,6 +2561,11 @@ class LiveEngine:
         self._pending_alert: Dict[str, float]    = {}      # 'SYM|SIDE' -> last time it was PENDING (Telegram dedup)
         self._blocked_alert: Dict[str, float]    = {}      # 'SYM|SIDE' -> last time it was BLOCKED (Telegram dedup)
         self._armed_pending_setups: Dict[str, Dict[str, Any]] = {}  # Persistent queue of ARMED signals waiting for level / 5m turn
+        # v83 working orders (TraderGate): 'SYMBOL|SIDE|LEVEL' -> first time this
+        # exact resting order was offered. A setup the market ignores for
+        # WORK_EXPIRY_BARS is a dead thesis, not a queue entry — this is the
+        # clock that PENDING never had.
+        self._working_orders: Dict[str, float] = {}
         self._last_close_reason: Dict[str, str]  = {}   # reason of the most recent close (for reversal-flip throw)
         self._spreads:          Dict[str, float] = {}   # symbol → book spread % (UWGS dead-market veto)
         self._news_lock:        Tuple[bool, str] = (False, '')   # (locked?, label) — scheduled macro event
@@ -2555,6 +2594,7 @@ class LiveEngine:
         self.alpha_wallet  = VirtualWallet(10_000.0, 1_000.0, ALPHA_TRACK_RECORD_PATH)
         self._alpha_open_time:       Dict[str, float] = {}
         self._tide_val: str   = ''    # cached BTC 4h tide ('UP'/'DOWN'), see _btc_tide
+        self._tide_strength: float = 0.0   # 0..1, how hard that tide runs (v83)
         self._tide_ts:  float = 0.0
         self._alpha_last_close_time: Dict[str, float] = {}
         self._alpha_last_close_side: Dict[str, str]   = {}
@@ -2914,6 +2954,13 @@ class LiveEngine:
 
     def _sync_armed_pending_state(self, symbol: str) -> None:
         """Ensure persistent armed setup state is preserved in last_signals unless fired/expired/invalidated."""
+        if USE_TRADER_GATE:
+            # v83: `_armed_pending_setups` is legacy PENDING state that the desk
+            # never populates, and the desk republishes the working-order fields
+            # authoritatively on every scan. Leaving this running would give two
+            # writers to the same display keys — exactly the class of coupling
+            # that made the old chain unreadable.
+            return
         if symbol not in self.last_signals:
             return
         sig = self.last_signals[symbol]
@@ -3255,6 +3302,216 @@ class LiveEngine:
         fake_breakout = self.quality_filter.is_fake_breakout(result, new_side)
         return price, regime, hmm, new_side, quality_score, fake_breakout
 
+    async def _ltf_confirmation(self, symbol: str) -> Dict[str, bool]:
+        """Has the 5m tape turned?  {'ltf_bull': ..., 'ltf_bear': ...}.
+
+        One of the independent prints TraderGate's trigger stage counts. Reuses
+        the ENTRY_5M_WINDOW the old Guard J used, so 'the 5m turned' means the
+        same thing it always did — but it now contributes evidence rather than
+        holding a veto.
+        """
+        out = {'ltf_bull': False, 'ltf_bear': False}
+        try:
+            raw = await self._fetch_candles(symbol, '5m', self.ENTRY_5M_WINDOW + 2)
+            closed = raw[:-1] if len(raw) >= 2 else raw
+            window = closed[-self.ENTRY_5M_WINDOW:]
+            if len(window) < self.ENTRY_5M_WINDOW:
+                return out
+            ups = sum(1 for c in window if float(c[4]) > float(c[1]))
+            need = max(3, self.ENTRY_5M_WINDOW - 1)
+            out['ltf_bull'] = ups >= need
+            out['ltf_bear'] = (len(window) - ups) >= need
+        except Exception:
+            pass
+        return out
+
+    def _cluster_exposure(self, symbol: str) -> Tuple[int, int]:
+        """(longs, shorts) already open in THIS symbol's correlation cluster.
+
+        Counted across the real book AND the paper book: eight correlated shorts
+        are one bet however they are accounted for, and the 2026-07-20 basket
+        was booked to paper.
+        """
+        pg = self.portfolio_guard
+        cluster = pg._sym_to_cluster.get(symbol)
+        if not cluster:
+            return 0, 0
+        members = set(pg._CLUSTERS.get(cluster, []))
+        longs = shorts = 0
+        for sym, pos in self.wallet.open_positions.items():
+            if sym in members:
+                longs += pos.direction == 'LONG'
+                shorts += pos.direction == 'SHORT'
+        for key, pos in self.alpha_wallet.open_positions.items():
+            if key.split('|')[0] in members:
+                longs += pos.direction == 'LONG'
+                shorts += pos.direction == 'SHORT'
+        return longs, shorts
+
+    async def _run_trader_gate(
+        self, symbol: str, result: Dict[str, Any], price: float,
+        regime: Any, ctx_quality: float,
+    ) -> bool:
+        """v83 · run the desk playbook. Returns True once the symbol is handled.
+
+        This is the whole decision path when USE_TRADER_GATE is on: it replaces
+        Guards A..T and the PENDING queue. The gate itself is pure; everything
+        async or stateful (structure, tide, book, the working-order clock) is
+        assembled here and handed in.
+        """
+        atr = float(result.get('atr', 0) or 0)
+
+        # A token that just lost is benched — the failed thesis is usually still
+        # in play, and re-firing it is the revenge trade. Kept from the old chain
+        # because it is a trader's rule, not a guard's.
+        now = time.time()
+        if now - self._last_loss_time.get(symbol, 0) < self.LOSS_COOLDOWN_SECONDS:
+            self._publish_no_trade(symbol, 'benched — lost on this token within the last '
+                                           f'{self.LOSS_COOLDOWN_SECONDS // 3600}h')
+            return True
+        if now - self._last_close_time.get(symbol, 0) < self.COOLDOWN_SECONDS:
+            self._publish_no_trade(symbol, 'cooling off after the last close')
+            return True
+
+        try:
+            levels = await self._structural_levels(symbol, price, atr)
+        except Exception:
+            levels = []
+        tide = await self._btc_tide()
+        confirm = await self._ltf_confirmation(symbol)
+        longs, shorts = self._cluster_exposure(symbol)
+
+        result['price'] = price
+        plan = TraderGate.evaluate(
+            result, regime,
+            market={
+                'drift_blocked':   self.drift_monitor.is_blocked(symbol),
+                'drift_severity':  self.drift_monitor.severity(symbol),
+                'news_locked':     self._news_lock[0],
+                'news_label':      self._news_lock[1],
+                'spread_pct':      self._spreads.get(symbol, 0.0),
+                'tide_dir':        tide,
+                'tide_strength':   self._tide_strength,
+            },
+            book={
+                'open_total':      len(self.wallet.open_positions),
+                'max_open':        self.portfolio_guard.MAX_OPEN_TOTAL,
+                'cluster_long':    longs,
+                'cluster_short':   shorts,
+                'max_per_cluster': self.portfolio_guard.MAX_PER_CLUSTER,
+            },
+            levels=levels,
+            confirm=confirm,
+        )
+
+        sig = self.last_signals.get(symbol)
+        if isinstance(sig, dict):
+            sig['trade_plan']       = plan.as_dict()
+            sig['structure_reason'] = plan.reason
+            sig['gate_stage']       = plan.stage
+            sig['setup_type']       = plan.setup
+
+        # ── REJECT ───────────────────────────────────────────────────────────
+        if plan.action not in (ACTION_ENTER, ACTION_WORK):
+            self._working_orders.pop(f'{symbol}|{plan.side}', None)
+            self._publish_no_trade(symbol, plan.reason)
+            print(f'[{symbol}] NO TRADE ({plan.stage}): {plan.reason}')
+            return True
+
+        # ── WORK · a resting order, with a clock ─────────────────────────────
+        # The clock is the entire difference from PENDING. A setup the market
+        # has ignored for WORK_EXPIRY_BARS is a thesis that did not happen, and
+        # it is retired rather than re-offered every scan forever.
+        if plan.action == ACTION_WORK:
+            key = f'{symbol}|{plan.side}'
+            first_seen = self._working_orders.setdefault(key, now)
+            age_bars = (now - first_seen) / 3600.0        # 1h engine timeframe
+            if age_bars > plan.expiry_bars:
+                self._working_orders.pop(key, None)
+                self._publish_no_trade(
+                    symbol, f'setup expired — {plan.setup} {plan.side} at '
+                            f'{plan.level:.8g} went untriggered for {plan.expiry_bars} bars')
+                print(f'[{symbol}] SETUP EXPIRED: {plan.setup} {plan.side} '
+                      f'after {age_bars:.1f} bars')
+                return True
+            if isinstance(sig, dict):
+                sig['fire']           = False
+                sig['signal']         = 'HOLD'
+                sig['working_order']  = True
+                sig['pending_entry']  = True     # UI compatibility: same card slot
+                sig['pending_side']   = plan.side
+                sig['pending_target'] = plan.level
+                sig['pending_reason'] = plan.reason
+                sig['expires_in_bars'] = round(plan.expiry_bars - age_bars, 1)
+                # `_build_signal_entry` drew these off the MODEL's side earlier
+                # in the scan. The desk can choose the other side, and a card
+                # showing a long's stop under a short setup is worse than no
+                # card — republish from the plan the user is actually being told
+                # about.
+                sig['suggested_sl'] = round(plan.stop, 8)
+                sig['suggested_tp'] = round(plan.target, 8)
+                sig['direction']    = 'LONG' if plan.side == 'BUY' else 'SHORT'
+            print(f'[{symbol}] WORKING {plan.side} @ {plan.level:.8g} — {plan.reason} '
+                  f'({plan.expiry_bars - age_bars:.1f} bars left)')
+            return True
+
+        # ── ENTER ────────────────────────────────────────────────────────────
+        self._working_orders.pop(f'{symbol}|{plan.side}', None)
+        result['side']      = plan.side
+        result['fire']      = True
+        result['btc_tide']  = tide
+        # The plan's own level is the invalidation the stop was built from; hand
+        # it to _open_position so the frozen record shows the real thesis.
+        result['at_pending_level'] = {'level': plan.level, 'role': plan.setup}
+
+        tier = ('STRONG' if plan.r_net >= 2.5 and plan.size_factor >= 0.85
+                else 'NORMAL' if plan.r_net >= 2.0 or plan.size_factor >= 0.7
+                else 'RISKY')
+        print(f'[{symbol}] PLAN ENTER {plan.side} {plan.setup} @ {price:.8g} '
+              f'stop {plan.stop:.8g} target {plan.target:.8g} '
+              f'{plan.r_net:.2f}R net size x{plan.size_factor:.2f} tier={tier}')
+
+        self._open_position(symbol, result, price, regime, ctx_quality,
+                            risk_tier=tier, entry_mode=plan.setup.lower(),
+                            gate_warnings=[], plan=plan)
+
+        _pos = self.wallet.open_positions.get(symbol)
+        if _pos is not None and isinstance(sig, dict):
+            sig['fire']            = True
+            sig['signal']          = plan.side
+            sig['direction']       = 'LONG' if plan.side == 'BUY' else 'SHORT'
+            sig['signal_strength'] = plan.side
+            sig['evaluating']      = False
+            sig['risk_tier']       = tier
+            sig['entry_mode']      = plan.setup.lower()
+            sig['working_order']   = False
+            sig['pending_entry']   = False
+            # Publish the levels the POSITION actually holds, not the ones
+            # _build_signal_entry derived from the model's side earlier in this
+            # same scan — those can belong to the opposite direction entirely.
+            sig['entry_price']     = _pos.entry_price
+            sig['suggested_sl']    = _pos.stop_loss
+            sig['suggested_tp']    = _pos.take_profit_1
+            sig['tp2'], sig['tp3'] = _pos.take_profit_2, _pos.take_profit_3
+            sig['tp4'], sig['tp5'] = _pos.take_profit_4, _pos.take_profit_5
+            sig['levels_frozen']   = True
+        return True
+
+    def _publish_no_trade(self, symbol: str, reason: str) -> None:
+        """Mark a symbol as not trading, with the desk's reason attached.
+
+        Every refusal carries its own explanation — the old chain's `HOLD` with
+        no attribution is what made 16 interacting guards impossible to debug.
+        """
+        sig = self.last_signals.get(symbol)
+        if isinstance(sig, dict):
+            sig['fire']             = False
+            sig['signal']           = 'HOLD'
+            sig['evaluating']       = False
+            sig['working_order']    = False
+            sig['pending_entry']    = False
+            sig['structure_reason'] = reason
+
     async def _process_symbol(
         self, symbol: str, predictor: Any, sem: asyncio.Semaphore
     ) -> None:
@@ -3522,6 +3779,24 @@ class LiveEngine:
                     if _live_sr:
                         self.last_signals[symbol]['support']    = _live_sr[0]
                         self.last_signals[symbol]['resistance'] = _live_sr[1]
+            # ── v83 · the desk decides ────────────────────────────────────────
+            # Deliberately NOT conditioned on result['fire']. Under the playbook
+            # the SETUP picks the side and the model may only object (see
+            # MODEL_OPPOSE_MARGIN in trader_gate.py) — requiring the model to
+            # fire first would restore exactly the permission-by-conviction that
+            # produced the 2026-07-20 basket, where the losers' confidence ran
+            # from 17.9 to 100.0. Flip REQUIRE_MODEL_FIRE in trader_gate.py to
+            # restore model-first permissioning without touching this path.
+            if USE_TRADER_GATE:
+                if (not existing or _reversal_flip) and price > 0 \
+                        and result.get('tradeable', False):
+                    await self._run_trader_gate(symbol, result, price,
+                                                regime, quality_score)
+                # Counted exactly once per symbol, on every path through the
+                # playbook — the desk's own helpers deliberately do not touch it.
+                self.bootstrap_done = min(self.bootstrap_done + 1, self.bootstrap_total)
+                return
+
             if (not existing or _reversal_flip) and result.get('fire') \
                     and result.get('tradeable', False) and price > 0:
                 now               = time.time()
@@ -5689,6 +5964,14 @@ class LiveEngine:
                 ema = c * k + ema * (1 - k)
             self._tide_val = 'UP' if closes[-1] > ema else 'DOWN'
             self._tide_ts  = now
+            # v83: how HARD the tide runs, for TraderGate's allocation stage.
+            # Direction alone cannot distinguish "BTC is 0.2% over its EMA"
+            # (noise — a counter-tide trade is fine) from "BTC is 4% over and
+            # climbing" (the tape that drowned the 8-short basket). Distance
+            # from the EMA in %, saturating at 3%, which on BTC 4h is a
+            # decisively one-way market. Direction semantics are unchanged, so
+            # the legacy Guard T path behaves exactly as before.
+            self._tide_strength = min(1.0, abs(closes[-1] - ema) / ema * 100.0 / 3.0)
         except Exception:
             return self._tide_val or 'FLAT'
         return self._tide_val
@@ -6462,6 +6745,7 @@ class LiveEngine:
         risk_tier:     str                   = '',
         entry_mode:    str                   = '',
         gate_warnings: Optional[list]        = None,
+        plan:          Optional[TradePlan]   = None,   # v83 TraderGate
     ) -> None:
         side = result.get('side', 'FLAT')
         if side not in ('BUY', 'SELL'):
@@ -6506,9 +6790,20 @@ class LiveEngine:
         # BTC leads the alt tape intraday; a position against the 4h tide is
         # statistically half the trade it looks like, so it gets half the size.
         _tide = str(result.get('btc_tide', 'FLAT') or 'FLAT')
-        if (side == 'SELL' and _tide == 'UP') or (side == 'BUY' and _tide == 'DOWN'):
+        if plan is None and ((side == 'SELL' and _tide == 'UP')
+                             or (side == 'BUY' and _tide == 'DOWN')):
+            # v83: when a plan is present its allocation stage has ALREADY priced
+            # the tide (and correlation, and setup class) into size_factor below.
+            # Applying this legacy halving on top would charge for the tide twice.
             pos_value = round(pos_value * 0.5, 2)
             print(f'[{symbol}] TIDE_HALF {side}: BTC 4h tide is {_tide} — half size')
+
+        # v83: the desk's allocation stage is the single sizing authority when a
+        # plan exists — setup class, tide and correlation are already folded in.
+        if plan is not None and plan.size_factor > 0:
+            pos_value = max(1.0, round(pos_value * plan.size_factor, 2))
+            print(f'[{symbol}] PLAN SIZE {side}: {plan.setup} x{plan.size_factor:.2f} '
+                  f'-> {pos_value:.0f} USDT')
 
         # ── ATR + Structure hybrid stop/TP calculation ───────────────────────
         # SL anchored to the gate's invalidation level (support for a LONG,
@@ -6550,6 +6845,7 @@ class LiveEngine:
             support    = _sl_support,
             resistance = _sl_resistance,
             sl_cap_atr = _sl_cap,
+            sl_override = (plan.stop if plan is not None else 0.0),
         )
 
         stop_loss = stops['sl']
