@@ -230,6 +230,35 @@ def test_a_stop_inside_the_noise_band_is_widened_not_accepted():
     assert plan.risk_atr >= MIN_STOP_ATR - 1e-9
 
 
+def test_the_stop_clears_a_second_level_it_was_not_derived_from():
+    """The real ETC/USDT short: SL 6.6692 under a 6.670 resistance.
+
+    `_pick_level` took the nearer 6.645 shelf, the noise-band floor then re-derived
+    the stop from price alone, and it landed 0.0008 UNDER the heavier level — the
+    one price was always going to overshoot on a reversal or retest from above on a
+    break.  The stop has to finish on the far side of BOTH.
+    """
+    r = mk(price=6.63, atr=0.0438, support=6.41, resistance=6.67, rsi=70.6,
+           **TURNED_DOWN)
+    plan = run(r, regime='RANGING', levels=[(6.645, 3), (6.67, 4), (6.41, 4)])
+    assert plan.action in (ACTION_ENTER, ACTION_WORK)
+    assert plan.stop > 6.67, f'stop {plan.stop:.4f} is parked under the 6.67 resistance'
+
+
+def test_a_far_level_does_not_drag_the_stop_out():
+    """Clearing is bounded — only levels the stop actually leans on move it.
+
+    Otherwise a resistance 3 ATR overhead would blow every short's stop past
+    MAX_STOP_ATR and the setup would be rejected for structure it never used.
+    """
+    plan = run(mk(price=100.0, atr=1.0, support=90.0, resistance=103.0, rsi=72.0,
+                  **TURNED_DOWN),
+               regime='RANGING', levels=[(100.2, 3), (103.0, 4), (90.0, 4)])
+    assert plan.action in (ACTION_ENTER, ACTION_WORK)
+    assert plan.stop < 103.0, 'a level 3 ATR away should not anchor the stop'
+    assert plan.risk_atr <= MAX_STOP_ATR
+
+
 def test_an_absurdly_distant_invalidation_is_refused():
     plan = run(mk(price=100.0, atr=0.2, support=99.0, resistance=110.0),
                regime='RANGING', levels=[(99.0, 4), (110.0, 4)])

@@ -338,6 +338,42 @@ class TraderGate:
         return min(below_res) if below_res else 0.0
 
     @staticmethod
+    def _clear_levels(side: str, price: float, stop: float, atr: float,
+                      levels: Sequence[Tuple[float, int]],
+                      result: Dict[str, Any]) -> float:
+        """Push the stop past any level it has NOT cleared.
+
+        `_pick_level` returns the NEAREST structure, and the noise-band floor
+        below re-derives the stop from price alone — either can leave the stop
+        parked a hair short of a second, heavier level.  That is the worst place
+        on the chart to stand: price routinely overshoots a level by a wick and
+        turns (the stop is collected on a move that proved the thesis right), or
+        breaks it clean and flips it to the other side (the stop is collected on
+        the retest).  Both outcomes are the trade being wrong about WHERE, not
+        about WHAT.
+
+        Only levels genuinely in the way are considered — on the stop's side of
+        price, and at or inside the stop plus one buffer.  A level further out
+        than that is not something this stop leans on, so it can never drag a
+        bounded stop into the MAX_STOP_ATR reject.
+        """
+        buf = STOP_BUFFER_ATR * atr
+        tol = AT_LEVEL_ATR * atr
+        cands = [lv for lv, _t in (levels or []) if lv > 0]
+        for _key in ('support', 'resistance'):
+            lv = _f(result, _key)
+            if lv > 0:
+                cands.append(lv)
+
+        if side == 'BUY':
+            # Levels at or below price that sit at/above the stop, or within one
+            # buffer beneath it.  Clearing the LOWEST clears every one above it.
+            blocking = [lv for lv in cands if lv <= price + tol and lv >= stop - buf]
+            return min(stop, min(blocking) - buf) if blocking else stop
+        blocking = [lv for lv in cands if lv >= price - tol and lv <= stop + buf]
+        return max(stop, max(blocking) + buf) if blocking else stop
+
+    @staticmethod
     def _pick_target(side: str, price: float, atr: float,
                      levels: Sequence[Tuple[float, int]],
                      result: Dict[str, Any]) -> float:
@@ -472,18 +508,26 @@ class TraderGate:
 
         buf = STOP_BUFFER_ATR * atr
         stop = (level - buf) if side == 'BUY' else (level + buf)
-        risk = abs(price - stop)
-        risk_atr = risk / atr if atr > 0 else 0.0
 
-        if risk_atr < MIN_STOP_ATR:
+        if abs(price - stop) < MIN_STOP_ATR * atr:
             # Tighten-to-fit is how the old system produced stops inside the noise
             # band; push the stop out to the floor instead and let stage 3 decide
             # whether the trade still pays with an honest stop.
-            risk = MIN_STOP_ATR * atr
-            stop = (price - risk) if side == 'BUY' else (price + risk)
-            risk_atr = MIN_STOP_ATR
+            stop = (price - MIN_STOP_ATR * atr) if side == 'BUY' else (price + MIN_STOP_ATR * atr)
             notes.append(f'invalidation: level {level:.8g} is inside the noise band — '
                          f'stop widened to the {MIN_STOP_ATR} ATR floor')
+
+        # Whichever of the two placements won, it must still stand clear of every
+        # level between it and price — see `_clear_levels`.  This runs last so the
+        # noise-band floor cannot re-park a widened stop underneath a level.
+        cleared = cls._clear_levels(side, price, stop, atr, levels or [], result)
+        if abs(cleared - stop) > 1e-12:
+            notes.append(f'invalidation: stop moved {stop:.8g} -> {cleared:.8g} to stand '
+                         f'clear of the level it was sitting {"under" if side == "SELL" else "on top of"}')
+            stop = cleared
+
+        risk = abs(price - stop)
+        risk_atr = risk / atr if atr > 0 else 0.0
         if risk_atr > MAX_STOP_ATR:
             return _reject('invalidation',
                            f'invalidation is {risk_atr:.1f} ATR away (> {MAX_STOP_ATR}) — '
