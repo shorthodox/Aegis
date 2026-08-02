@@ -137,6 +137,8 @@ def _build_engine(tmp: Path, macro: tuple = (0.0, 0.0),
     eng._signal_history = {}
     eng._spreads = {}
     eng._armed_pending_setups = {}
+    eng._working_orders = {}           # v83 TraderGate resting-order clock
+    eng._tide_strength = 0.0           # v83 — set by the real _btc_tide, stubbed here
     eng._last_close_time = {}
     eng._last_close_side = {}
     eng._last_close_reason = {}
@@ -374,10 +376,24 @@ async def _run_case(name: str, spec: Any, tmp: Path) -> Dict[str, Any]:
 
 
 async def capture(tmp: Path) -> Dict[str, Any]:
-    snap: Dict[str, Any] = {}
-    for name, res in CASES.items():
-        snap[name] = await _run_case(name, res, tmp)
-    return snap
+    """Replay the case matrix against the LEGACY (v80..v82) guard chain.
+
+    v83 routes `_process_symbol` through TraderGate, which is a deliberate
+    behaviour change and would invalidate every case here.  This matrix keeps
+    its original job: proving the legacy chain — the rollback path behind
+    USE_TRADER_GATE=False — still behaves exactly as recorded.  The new
+    playbook has its own cover in test_trader_gate.py.
+    """
+    import scripts.live_engine as _le
+    _prev = _le.USE_TRADER_GATE
+    _le.USE_TRADER_GATE = False
+    try:
+        snap: Dict[str, Any] = {}
+        for name, res in CASES.items():
+            snap[name] = await _run_case(name, res, tmp)
+        return snap
+    finally:
+        _le.USE_TRADER_GATE = _prev
 
 
 def main() -> int:

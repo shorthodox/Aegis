@@ -16,10 +16,17 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+import scripts.live_engine as live_engine
 from scripts.live_engine import LiveEngine
 
 
-def test_armed_pending_setup_lifecycle():
+def test_armed_pending_setup_lifecycle(monkeypatch):
+    # v83 replaced PENDING with TraderGate's working orders, and
+    # `_sync_armed_pending_state` is inert while USE_TRADER_GATE is on. This
+    # test covers the LEGACY queue — the rollback path — so it pins the flag
+    # off. The working-order lifecycle that supersedes it is covered by
+    # scripts/tests/test_trader_gate_wiring.py.
+    monkeypatch.setattr(live_engine, 'USE_TRADER_GATE', False)
     engine = LiveEngine(token_configs={})
 
     # 1. Register an armed pending setup
