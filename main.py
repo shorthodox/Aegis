@@ -757,6 +757,24 @@ def generate_otp() -> str:
     return ''.join(random.choices(string.digits, k=6))
 
 
+def otp_email_key(email: str) -> str:
+    """Canonical Firestore document key for an OTP record.
+
+    /auth/send-otp-for-registration writes the record under the address
+    email_validator returns (which lower-cases the domain), while the verify and
+    complete-registration endpoints looked it up under the raw string the form
+    posted. Anyone who typed their domain with a capital -- Foo@GMAIL.com --
+    stored under one key and was read back under another, so a perfectly valid
+    code came back as "No OTP request found". Both ends go through here now.
+    """
+    if not email:
+        return ""
+    try:
+        return validate_email(email, check_deliverability=False).normalized
+    except Exception:
+        return email.strip()
+
+
 def normalize_phone_number(phone: Optional[str]) -> Optional[str]:
     """Normalize phone numbers to E.164 format for signup and backend enforcement."""
     if not phone:
@@ -3085,32 +3103,87 @@ _RESEND_API_KEY  = os.getenv("RESEND_API_KEY", "")
 _RESEND_FROM_ADDR = os.getenv("MAIL_FROM", "animeshkukreti@aegisignal.pro")
 _RESEND_FROM_NAME = os.getenv("MAIL_FROM_NAME", "AEGIS v1.0")
 
+def _smtp_mailer(addr: str, name: str, ssl: bool) -> Optional[FastMail]:
+    """FastMail for this sender, or None when no SMTP credentials are configured.
+
+    Reuses the module-level singletons for the default sender (the common case)
+    and only builds a per-call config when a caller overrides the From line --
+    /auth/send-password-reset does, and the old code silently dropped it on the
+    SMTP path so those mails went out under the wrong sender.
+    """
+    if not _mail_user or not _mail_pass:
+        return None
+    if (addr or _mail_from) == _mail_from and (name or _mail_name) == _mail_name:
+        return fastmail_ssl if ssl else fastmail
+    try:
+        return FastMail(ConnectionConfig(
+            MAIL_USERNAME=_mail_user,
+            MAIL_PASSWORD=SecretStr(_mail_pass),
+            MAIL_FROM=addr or _mail_from,
+            MAIL_FROM_NAME=name or _mail_name,
+            MAIL_PORT=465 if ssl else int(os.getenv("MAIL_PORT", "587")),
+            MAIL_SERVER=_mail_server,
+            MAIL_STARTTLS=not ssl,
+            MAIL_SSL_TLS=ssl,
+        ))
+    except Exception as cfg_err:
+        print(f"[email] Could not build SMTP config for {addr!r}: {cfg_err}")
+        return fastmail_ssl if ssl else fastmail
+
+
 async def _send_email(to: str, subject: str, html: str, from_addr: str = "", from_name: str = "") -> None:
-    """Send transactional email via Resend API (when RESEND_API_KEY is set) or SMTP fallback."""
+    """Send transactional email, trying EVERY configured provider in turn.
+
+    Order: Resend HTTP API (works where Railway blocks outbound SMTP ports),
+    then SMTP STARTTLS/587, then SMTP SSL/465.
+
+    This used to `return` straight after the Resend branch, which made the two
+    SMTP paths unreachable in production -- the comment called them a "fallback"
+    but nothing could ever reach them once RESEND_API_KEY was set. Any Resend
+    rejection (unverified sender domain, exhausted quota, rotated key) therefore
+    killed BOTH signup OTPs and password resets outright, with no second chance
+    and a generic 500 that named no cause. A provider outage has to degrade
+    signup, not black it out, so every provider is now tried and the errors from
+    all of them are reported together.
+    """
     _addr = from_addr or _RESEND_FROM_ADDR
     _name = from_name or _RESEND_FROM_NAME
+    failures: List[str] = []
 
     if _RESEND_API_KEY:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(
-                "https://api.resend.com/emails",
-                headers={"Authorization": f"Bearer {_RESEND_API_KEY}", "Content-Type": "application/json"},
-                json={"from": f"{_name} <{_addr}>", "to": [to], "subject": subject, "html": html},
-            )
-        if resp.status_code not in (200, 201):
-            raise RuntimeError(f"Resend API error {resp.status_code}: {resp.text}")
-        print(f"[email] Sent via Resend âœ“ â†’ {to}")
-        return
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.post(
+                    "https://api.resend.com/emails",
+                    headers={"Authorization": f"Bearer {_RESEND_API_KEY}", "Content-Type": "application/json"},
+                    json={"from": f"{_name} <{_addr}>", "to": [to], "subject": subject, "html": html},
+                )
+            if resp.status_code in (200, 201):
+                print(f"[email] Sent via Resend -> {to}")
+                return
+            failures.append(f"Resend HTTP {resp.status_code}: {resp.text[:300]}")
+            print(f"[email] Resend rejected ({resp.status_code}): {resp.text[:300]} -- trying SMTP")
+        except Exception as exc:
+            failures.append(f"Resend {type(exc).__name__}: {exc}")
+            print(f"[email] Resend call failed ({type(exc).__name__}): {exc} -- trying SMTP")
 
-    # SMTP fallback (local dev where SMTP is not blocked)
     msg = MessageSchema(recipients=[to], subject=subject, body=html, subtype=MessageType.html)
-    try:
-        await asyncio.wait_for(fastmail.send_message(msg), timeout=12.0)
-        print(f"[email] Sent via SMTP/587 âœ“ â†’ {to}")
-    except Exception as e1:
-        print(f"[email] SMTP/587 failed: {e1} â€” trying SSL/465")
-        await asyncio.wait_for(fastmail_ssl.send_message(msg), timeout=12.0)
-        print(f"[email] Sent via SMTP/465 âœ“ â†’ {to}")
+    for label, ssl in (("SMTP/587", False), ("SMTP/465", True)):
+        mailer = _smtp_mailer(_addr, _name, ssl)
+        if mailer is None:
+            continue
+        try:
+            await asyncio.wait_for(mailer.send_message(msg), timeout=12.0)
+            print(f"[email] Sent via {label} -> {to}")
+            return
+        except Exception as exc:
+            failures.append(f"{label} {type(exc).__name__}: {exc}")
+            print(f"[email] {label} failed ({type(exc).__name__}): {exc}")
+
+    raise RuntimeError(
+        ("every email provider failed: " + " | ".join(failures)) if failures
+        else "no email provider configured (set RESEND_API_KEY, or MAIL_USERNAME + MAIL_PASSWORD for SMTP)"
+    )
 
 # -------------------------------------------------------------------
 # 3-Step Onboarding with OTP
@@ -3146,7 +3219,14 @@ async def _send_sms_otp(phone_number: str, otp: str) -> bool:
                     },
                 )
             data = resp.json()
-            if data.get("type") == "success" or resp.status_code in (200, 201):
+            # MSG91 answers HTTP 200 with {"type":"error","message":...} for an
+            # unapproved DLT template, an exhausted balance or a bad number, so
+            # the old `or resp.status_code in (200, 201)` marked EVERY reachable
+            # response as delivered. That reported "code sent" for an SMS that
+            # was never sent, and -- worse -- returning True here skips the email
+            # fallback below, so the user received nothing on either channel and
+            # saw no error explaining why. Only an explicit success counts.
+            if str(data.get("type", "")).lower() == "success":
                 print(f"[MSG91] OTP dispatched to {phone_number}")
                 return True
             print(f"[MSG91] Non-success response {resp.status_code}: {data}")
@@ -3264,14 +3344,17 @@ async def send_otp_for_registration(request: OTPSendRequest, req: Request):
         await _send_email(email, "AEGIS â€“ Your Phone Verification Code", html)
     except Exception as e:
         _otp_delete(email)
-        print(f"Email OTP fallback failed: {e}")
+        # Greppable in the Railway log, and _send_email now names every provider
+        # it tried and why each one refused -- the old one-liner said only that
+        # "sending failed", which is why a dead sender took days to spot.
+        print(f"[send-otp] DELIVERY FAILED to {email}: {e}")
         raise HTTPException(status_code=500, detail="Failed to deliver verification code. Please try again.")
 
     return {"success": True, "message": f"Verification code sent to {email}.", "via": "email"}
 
 @app.post("/auth/verify-otp-for-registration")
 async def verify_otp_for_registration(request: OTPVerifyRequest, req: Request):
-    email = request.email
+    email = otp_email_key(request.email)
     otp = request.otp
     phone_number = normalize_phone_number(request.phone)
     # Rate limit: 10 verify attempts per email per 15 minutes (prevents OTP brute-force)
@@ -3628,7 +3711,7 @@ async def msg91_webhook(req: Request):
     return {"received": True}
 @app.post("/auth/complete-registration")
 async def complete_registration(profile: UserProfileComplete):
-    email = profile.email
+    email = otp_email_key(profile.email)
     record = _otp_get(email)
     if not record or not record.get("verified"):
         raise HTTPException(status_code=400, detail="Please verify OTP first before completing registration.")
@@ -4143,7 +4226,17 @@ async def track_record_endpoint(source: str = None,
             "signal_type":     sig_type,
             "signal_status":   "ACTIVE" if s.get("outcome") == "OPEN" else "CLOSED",
             "entry_price":     s.get("entry_price"),
-            "take_profit":     s.get("take_profit_1") or s.get("take_profit"),
+            # v85: the headline TP is the STRUCTURAL objective the trade was
+            # approved on (take_profit_3 — TraderGate's target since v85), not
+            # take_profit_1.  TP1 sits at exactly 1.0 x risk, so publishing it
+            # advertised a 1:1 trade; measured on 14.3k 1h barrier races a 1:1
+            # resolves ~50/50, and after the 0.10% round trip a 1:1 needs a
+            # 57.4% win rate just to break even.  TP1 is still a real rung (15%
+            # banks there and the stop goes to break-even) so it is published
+            # alongside rather than dropped.
+            "take_profit":     (s.get("take_profit_3") or s.get("take_profit_1")
+                                or s.get("take_profit")),
+            "take_profit_1":   s.get("take_profit_1"),
             "stop_loss":       s.get("stop_loss"),
             "position_value":  s.get("position_value"),
             "exit_price":      s.get("exit_price"),

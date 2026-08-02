@@ -1420,6 +1420,7 @@ class DynamicRiskEngine:
         resistance: float = 0.0,   # invalidation level for a SHORT / upside target for a LONG
         sl_cap_atr: float   = 0.0,   # v42: SL-cap override in ATR (0 -> ATR_SL_MULTIPLIER)
         sl_override: float  = 0.0,   # v83: TraderGate's structural stop — used verbatim
+        tp_override: float  = 0.0,   # v85: TraderGate's structural TARGET — used verbatim
         **_kwargs,      # absorbs legacy keyword args for backward compatibility
     ) -> Dict[str, float]:
         """
@@ -1500,7 +1501,13 @@ class DynamicRiskEngine:
                 if 0 < support < price:
                     sl = min(sl, support - buf)
             # Structural strong target = the major resistance (else an R-multiple).
-            tp3  = resistance if resistance > price else price + 3.5 * risk
+            # v85: when TraderGate supplied the objective it priced the trade on,
+            # that objective IS the target — same reasoning as sl_override above.
+            # The payoff stage rejects anything under MIN_NET_R measured to THIS
+            # level, so deriving tp3 from a different structure set meant the R:R
+            # the trade was approved on was not the R:R it was given.
+            _tgt = tp_override if tp_override > price else 0.0
+            tp3  = _tgt or (resistance if resistance > price else price + 3.5 * risk)
             rng  = (resistance - support) if (0 < support < resistance) else (tp3 - price)
             tp1  = price + self.TP1_MULTIPLIER * risk
             tp2  = price + 2.0 * risk
@@ -1508,12 +1515,26 @@ class DynamicRiskEngine:
             tp5  = (support + 2.618 * rng) if support > 0 else price + 7.0 * risk
             # Force strictly ascending, ≥0.3R apart.
             tp2 = max(tp2, tp1 + 0.3 * risk)
-            tp3 = max(tp3, tp2 + 0.3 * risk)
+            if _tgt:
+                # The objective is FIXED — it is the level the payoff floor
+                # cleared.  The gate approves setups from 1.6R gross, so the
+                # fixed 2.0R rung routinely lands PAST the target; letting the
+                # monotonic clamp push tp3 out to clear it would re-invent the
+                # "target too far to be real" that stage 3 exists to reject.
+                # Compress the banking rungs inside the objective instead.
+                _span = tp3 - price
+                if tp2 >= tp3:
+                    tp2 = price + (2.0 / 3.0) * _span
+                if tp1 >= tp2:
+                    tp1 = price + (1.0 / 3.0) * _span
+            else:
+                tp3 = max(tp3, tp2 + 0.3 * risk)
             tp4 = max(tp4, tp3 + 0.3 * risk)
             tp5 = max(tp5, tp4 + 0.3 * risk)
             # RR to the REAL structural target (not the guard-extended tp3), so a
             # cramped setup whose resistance is too close is honestly rejected.
-            reward = (resistance - price) if resistance > price else 3.5 * risk
+            reward = _tgt - price if _tgt else (
+                (resistance - price) if resistance > price else 3.5 * risk)
         else:  # SELL / SHORT
             if sl_override and sl_override > price:
                 sl = sl_override            # v83 — see the BUY branch above
@@ -1526,7 +1547,8 @@ class DynamicRiskEngine:
                 sl   = price + risk
                 if resistance > price:
                     sl = max(sl, resistance + buf)
-            tp3  = support if 0 < support < price else price - 3.5 * risk
+            _tgt = tp_override if 0 < tp_override < price else 0.0   # v85 — see BUY
+            tp3  = _tgt or (support if 0 < support < price else price - 3.5 * risk)
             rng  = (resistance - support) if (0 < support < resistance) else (price - tp3)
             tp1  = price - self.TP1_MULTIPLIER * risk
             tp2  = price - 2.0 * risk
@@ -1534,11 +1556,19 @@ class DynamicRiskEngine:
             tp5  = (resistance - 2.618 * rng) if resistance > 0 else price - 7.0 * risk
             # Force strictly descending, ≥0.3R apart.
             tp2 = min(tp2, tp1 - 0.3 * risk)
-            tp3 = min(tp3, tp2 - 0.3 * risk)
+            if _tgt:
+                _span = price - tp3          # v85 — see the BUY branch above
+                if tp2 <= tp3:
+                    tp2 = price - (2.0 / 3.0) * _span
+                if tp1 <= tp2:
+                    tp1 = price - (1.0 / 3.0) * _span
+            else:
+                tp3 = min(tp3, tp2 - 0.3 * risk)
             tp4 = min(tp4, tp3 - 0.3 * risk)
             tp5 = min(tp5, tp4 - 0.3 * risk)
             # RR to the REAL structural target (not the guard-extended tp3).
-            reward = (price - support) if 0 < support < price else 3.5 * risk
+            reward = price - _tgt if _tgt else (
+                (price - support) if 0 < support < price else 3.5 * risk)
 
         rr       = round(reward / risk, 3) if risk > 0 else 0.0
         valid_rr = rr >= self.MIN_RISK_REWARD
@@ -3510,7 +3540,12 @@ class LiveEngine:
             # same scan — those can belong to the opposite direction entirely.
             sig['entry_price']     = _pos.entry_price
             sig['suggested_sl']    = _pos.stop_loss
-            sig['suggested_tp']    = _pos.take_profit_1
+            # v85: the headline TP is the objective the plan was priced on
+            # (take_profit_3), not the 1.0R first-bank rung — publishing TP1 here
+            # re-advertised the 1:1 that the track-record fix removed, and it is
+            # the number a subscriber acts on.  TP1 stays visible as `tp1`.
+            sig['suggested_tp']    = _pos.take_profit_3 or _pos.take_profit_1
+            sig['tp1']             = _pos.take_profit_1
             sig['tp2'], sig['tp3'] = _pos.take_profit_2, _pos.take_profit_3
             sig['tp4'], sig['tp5'] = _pos.take_profit_4, _pos.take_profit_5
             sig['levels_frozen']   = True
@@ -6865,6 +6900,7 @@ class LiveEngine:
             resistance = _sl_resistance,
             sl_cap_atr = _sl_cap,
             sl_override = (plan.stop if plan is not None else 0.0),
+            tp_override = (plan.target if plan is not None else 0.0),
         )
 
         stop_loss = stops['sl']

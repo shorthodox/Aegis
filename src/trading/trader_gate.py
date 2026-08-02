@@ -93,8 +93,17 @@ _DEAD_REGIMES  = {'LIQUIDITY_TRAP'}
 # ── Stage 2 · invalidation geometry ───────────────────────────────────────────
 STOP_BUFFER_ATR = 0.55   # the stop sits this far BEYOND the level — outside the wick noise
                          # that repeatedly took out stops parked exactly on it
-MIN_STOP_ATR    = 0.90   # a stop nearer than this to entry is inside one bar's noise; the
+MIN_STOP_ATR    = 1.50   # a stop nearer than this to entry is inside one bar's noise; the
                          # 8-short basket died on ~1.1% stops in ~1% ATR tape
+                         # v85: was 0.90.  The floor is really a COST decision, not just a
+                         # noise one: the round trip is a fixed % of price, so it lands as
+                         # ROUND_TRIP_COST_PCT / risk_pct in R.  At 0.90 ATR on 1h tape
+                         # (median ATR 0.91% of price) every trade paid 0.147R in fees
+                         # before the market moved.  Measured over 28,650 zero-edge 1h
+                         # entries the live ladder returned -0.174R/trade at 0.90 and
+                         # -0.110R at 1.50 — the floor was the largest single leak in the
+                         # exit geometry.  It buys fewer fires: clearing MIN_NET_R now
+                         # needs an objective ~2.7 ATR out rather than ~1.7.
 MAX_STOP_ATR    = 3.00   # beyond this the payoff maths can never clear the floor
 
 # ── Stage 3 · payoff ──────────────────────────────────────────────────────────
