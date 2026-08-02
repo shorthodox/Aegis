@@ -4226,7 +4226,17 @@ async def track_record_endpoint(source: str = None,
             "signal_type":     sig_type,
             "signal_status":   "ACTIVE" if s.get("outcome") == "OPEN" else "CLOSED",
             "entry_price":     s.get("entry_price"),
-            "take_profit":     s.get("take_profit_1") or s.get("take_profit"),
+            # v85: the headline TP is the STRUCTURAL objective the trade was
+            # approved on (take_profit_3 — TraderGate's target since v85), not
+            # take_profit_1.  TP1 sits at exactly 1.0 x risk, so publishing it
+            # advertised a 1:1 trade; measured on 14.3k 1h barrier races a 1:1
+            # resolves ~50/50, and after the 0.10% round trip a 1:1 needs a
+            # 57.4% win rate just to break even.  TP1 is still a real rung (15%
+            # banks there and the stop goes to break-even) so it is published
+            # alongside rather than dropped.
+            "take_profit":     (s.get("take_profit_3") or s.get("take_profit_1")
+                                or s.get("take_profit")),
+            "take_profit_1":   s.get("take_profit_1"),
             "stop_loss":       s.get("stop_loss"),
             "position_value":  s.get("position_value"),
             "exit_price":      s.get("exit_price"),
