@@ -1432,6 +1432,13 @@ class DynamicRiskEngine:
         leg is clamped to [SL_FLOOR_ATR, ATR_SL_MULTIPLIER]×ATR.  Falls back to a
         pure ATR_SL_MULTIPLIER×ATR stop when the level is missing/degenerate.
 
+        The wick buffer is a FLOOR, not an average: the stop always finishes at
+        least STRUCT_SL_BUFFER_ATR×ATR beyond the level, even when the clamp
+        would have pulled it back inside, and even when it arrived as an
+        `sl_override`.  A stop resting on the level is taken out both when price
+        overshoots and reverses and when it breaks through and retests — the two
+        most common things a level does.
+
         Take Profit ladder (R = risk leg; Range = resistance−support)
         ------------------------------------------------------------
           TP1  = 1.0R                            (1:1 first bank — v82, was 0.7R)
@@ -1473,7 +1480,17 @@ class DynamicRiskEngine:
                 # Take it verbatim — re-deriving it here would mean the R:R the
                 # gate approved the trade on is not the R:R the trade actually
                 # has, which is the one number the payoff stage must not lie about.
-                sl   = sl_override
+                sl = sl_override
+                # ...with one exception: the gate leans on the structure IT was
+                # handed, which is not always the rolling S/R published here. A
+                # stop parked at or just above the support is the one place the
+                # market reliably collects it — price undercuts the level by a
+                # wick and turns, or breaks it and retests from below. Clear it.
+                # Bounded to levels actually in the way (at/inside the stop, or
+                # within one buffer of it), so a distant support can never blow
+                # out the stop the gate priced the trade on.
+                if 0 < support < price and sl >= support - buf:
+                    sl = min(sl, support - buf)
                 risk = price - sl
             else:
                 # Hybrid SL: just below support + buffer, clamped to [floor, cap].
@@ -1481,7 +1498,7 @@ class DynamicRiskEngine:
                 risk = max(floor, min(risk, cap))
                 sl   = price - risk
                 if 0 < support < price:
-                    sl = min(sl, support - 0.2 * atr)
+                    sl = min(sl, support - buf)
             # Structural strong target = the major resistance (else an R-multiple).
             tp3  = resistance if resistance > price else price + 3.5 * risk
             rng  = (resistance - support) if (0 < support < resistance) else (tp3 - price)
@@ -1499,14 +1516,16 @@ class DynamicRiskEngine:
             reward = (resistance - price) if resistance > price else 3.5 * risk
         else:  # SELL / SHORT
             if sl_override and sl_override > price:
-                sl   = sl_override          # v83 — see the BUY branch above
+                sl = sl_override            # v83 — see the BUY branch above
+                if resistance > price and sl <= resistance + buf:
+                    sl = max(sl, resistance + buf)
                 risk = sl - price
             else:
                 risk = ((resistance - price) + buf) if (resistance > price) else cap
                 risk = max(floor, min(risk, cap))
                 sl   = price + risk
                 if resistance > price:
-                    sl = max(sl, resistance + 0.2 * atr)
+                    sl = max(sl, resistance + buf)
             tp3  = support if 0 < support < price else price - 3.5 * risk
             rng  = (resistance - support) if (0 < support < resistance) else (price - tp3)
             tp1  = price - self.TP1_MULTIPLIER * risk
