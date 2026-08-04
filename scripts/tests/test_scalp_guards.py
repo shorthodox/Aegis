@@ -37,8 +37,12 @@ def _age_last_signal(symbol, mode, minutes):
 # ── the force_fire blast radius ──────────────────────────────────────────────
 
 def test_scalpbot_does_not_force_fire():
-    """The single line that disabled every gate at once."""
-    src = (sm._ROOT / 'scripts' / 'live_engine.py').read_text(encoding='utf-8')
+    """The single line that disabled every gate at once.
+
+    ScalpBot moved from live_engine.py to scripts/engine/scalp.py when the
+    engine was split; the guard is unchanged, only its address.
+    """
+    src = (sm._ROOT / 'scripts' / 'engine' / 'scalp.py').read_text(encoding='utf-8')
     scan = src[src.index('class ScalpBot'):]
     assert 'force_fire=True' not in scan, (
         'ScalpBot is passing force_fire=True again — that disables the '

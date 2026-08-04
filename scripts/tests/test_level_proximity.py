@@ -99,11 +99,32 @@ def test_the_two_thresholds_are_ordered():
 
 # ── the proxy that used to decide stop width ─────────────────────────────────
 
-def test_entry_mode_no_longer_keys_off_range_position_alone():
+def test_stop_width_is_not_chosen_from_range_position():
+    """Risk distance must come from measured ATR geometry, not a proxy.
+
+    This used to assert that `_entry_mode = 'model_at_level'` in _process_symbol
+    was preceded by a `_level_gap_atr` call. Both the assignment and the
+    surrounding legacy chain are gone — under v83 the stop is the PLAN's stop,
+    placed by trader_gate.py beyond the level the setup leans on and bounded in
+    ATR, then honoured verbatim by DynamicRiskEngine.calculate_stops
+    (sl_override). The property this test protects is unchanged; only its home
+    moved, so it now checks the two places that actually decide risk.
+    """
     import inspect
-    src = inspect.getsource(LiveEngine._process_symbol)
-    i = src.index("_entry_mode = 'model_at_level'")
-    window = src[max(0, i - 700):i]
-    assert '_level_gap_atr' in window, (
-        'entry_mode is choosing the stop width from range_position again'
+
+    from scripts.engine.risk import DynamicRiskEngine
+    from src.trading import trader_gate as TG
+
+    # 1. The gate bounds its stop in ATR, not in range-position units.
+    assert hasattr(TG, 'MIN_STOP_ATR') and hasattr(TG, 'MAX_STOP_ATR'), (
+        'trader_gate no longer bounds the stop in ATR'
+    )
+
+    # 2. calculate_stops takes the plan's stop verbatim rather than re-deriving
+    #    it, so the R:R the gate approved is the R:R the trade gets.
+    src = inspect.getsource(DynamicRiskEngine.calculate_stops)
+    assert 'sl_override' in src
+    assert 'range_position' not in src, (
+        'stop geometry is reading range_position again — it is a proxy, and '
+        'using it is what put stops inside the sweep zone'
     )

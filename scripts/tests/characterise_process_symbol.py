@@ -1,10 +1,12 @@
 """Characterisation harness for LiveEngine._process_symbol.
 
-_process_symbol is 2,059 lines — 27 % of live_engine.py, 211 `if`s, 43 `return`s,
-14 levels of nesting. It is being extracted into phases, and this module is the
-safety net: it drives the function over a matrix of predictor outputs and
-snapshots everything observable, so any behavioural drift during the refactor
-shows up as a diff rather than as a silent change in live trading.
+_process_symbol was 2,023 lines. 1,736 of them (86 %) were the v80..v82 guard
+chain behind `if USE_TRADER_GATE:` — unreachable in production since v83, and
+deleted. What remains is ~290 lines that resolve context and hand the decision
+to TraderGate. This module is the safety net for the extraction still in
+progress: it drives the function over a matrix of predictor outputs and
+snapshots everything observable, so any behavioural drift shows up as a diff
+rather than as a silent change in live trading.
 
 This is deliberately NOT a unit test of the gates. Collaborators that touch the
 network or heavy feature builds (_fetch_candles, _daily_bias, _structure_gate,
@@ -376,24 +378,24 @@ async def _run_case(name: str, spec: Any, tmp: Path) -> Dict[str, Any]:
 
 
 async def capture(tmp: Path) -> Dict[str, Any]:
-    """Replay the case matrix against the LEGACY (v80..v82) guard chain.
+    """Replay the case matrix against the LIVE decision path.
 
-    v83 routes `_process_symbol` through TraderGate, which is a deliberate
-    behaviour change and would invalidate every case here.  This matrix keeps
-    its original job: proving the legacy chain — the rollback path behind
-    USE_TRADER_GATE=False — still behaves exactly as recorded.  The new
-    playbook has its own cover in test_trader_gate.py.
+    This used to pin the LEGACY (v80..v82) guard chain by forcing
+    USE_TRADER_GATE=False, on the reasoning that the chain was the rollback
+    path and deserved cover. That reasoning quietly stopped holding: the chain
+    had been unreachable in production since v83 (the USE_TRADER_GATE branch
+    returns before it), so the baseline was pinning 1,736 lines that never ran
+    while the path that DID run was covered only by test_trader_gate.py. The
+    chain has since been deleted; this matrix now records the real thing.
+
+    Cases are unchanged, so a case that used to describe a legacy verdict now
+    describes the desk's. That is the point — the baseline is a record of what
+    the engine does, and what it does is the playbook.
     """
-    import scripts.live_engine as _le
-    _prev = _le.USE_TRADER_GATE
-    _le.USE_TRADER_GATE = False
-    try:
-        snap: Dict[str, Any] = {}
-        for name, res in CASES.items():
-            snap[name] = await _run_case(name, res, tmp)
-        return snap
-    finally:
-        _le.USE_TRADER_GATE = _prev
+    snap: Dict[str, Any] = {}
+    for name, res in CASES.items():
+        snap[name] = await _run_case(name, res, tmp)
+    return snap
 
 
 def main() -> int:

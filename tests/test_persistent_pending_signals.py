@@ -16,7 +16,7 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-import scripts.live_engine as live_engine
+from scripts.engine import config as engine_config
 from scripts.live_engine import LiveEngine
 
 
@@ -26,7 +26,11 @@ def test_armed_pending_setup_lifecycle(monkeypatch):
     # test covers the LEGACY queue — the rollback path — so it pins the flag
     # off. The working-order lifecycle that supersedes it is covered by
     # scripts/tests/test_trader_gate_wiring.py.
-    monkeypatch.setattr(live_engine, 'USE_TRADER_GATE', False)
+    #
+    # Patch scripts.engine.config, NOT scripts.live_engine: the latter
+    # re-exports the flag as a value, so rebinding it there changes a name the
+    # engine never reads. config is the single mutable source of truth.
+    monkeypatch.setattr(engine_config, 'USE_TRADER_GATE', False)
     engine = LiveEngine(token_configs={})
 
     # 1. Register an armed pending setup

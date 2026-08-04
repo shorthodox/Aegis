@@ -75,8 +75,19 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if root_dir not in sys.path:
     sys.path.insert(0, root_dir)
 
-from src.ml.feature_engine import prepare_features, compute_atr
+from src.ml.feature_engine import (
+    prepare_features, compute_atr, build_model_frame,
+    # Re-exported: this used to be defined in THIS module. It now lives in
+    # feature_engine so training and the live predictor share one definition.
+    # Importing it here keeps `from scripts.retrain_model import
+    # compute_soft_confluence_features` working for meta_gate_optimizer,
+    # threshold_optimizer, leakage_audit, run_simulations, run_fleet_funnel
+    # and aegis_forensics.
+    compute_soft_confluence_features,
+    SOFT_CONFLUENCE_COLS,
+)
 from src.ml.predictor import Predictor
+from scripts.engine.contract import validate_for_training
 
 _RETRAIN_ROOT   = Path(__file__).resolve().parent.parent
 _TOKEN_PARAMS_DIR = _RETRAIN_ROOT / "data" / "token_params"
@@ -543,106 +554,17 @@ FEATURE_ADDONS = [
 # ============================================================
 # SOFT CONFLUENCE FEATURES  (percentile-rank based)
 # ============================================================
-def compute_soft_confluence_features(df: pd.DataFrame, window: int = 120) -> pd.DataFrame:
-    """
-    Compute soft confluences using rolling percentile rank instead of sign().
-
-    sign() saturates: RSI-51 and RSI-80 both map to +1, so the model cannot
-    distinguish a marginal edge from a strong one.  Rolling pct-rank preserves
-    the gradient — RSI at the 85th pct of recent history gets a score near 0.85
-    whereas RSI at the 52nd pct gets ~0.52.
-
-    All outputs are in [0, 1]:  0.5 = neutral, >0.5 = bullish, <0.5 = bearish.
-    A separate macro_confluence_score column is derived and mapped to [-1, +1]
-    for use in the triple-barrier label cancellation logic.
-
-    Window of 120 bars ~ 5 days on 1h data - long enough to be meaningful,
-    short enough to track regime changes within the training set.
-    """
-    result = pd.DataFrame(index=df.index)
-
-    def _pr(col: str, higher_bullish: bool = True) -> pd.Series:
-        """Rolling percentile rank of `col`, 0.5 if column missing."""
-        if col not in df.columns:
-            return pd.Series(0.5, index=df.index, dtype=float)
-        s = df[col].ffill().fillna(0.0)
-        rank = s.rolling(window, min_periods=max(20, window // 4)).rank(pct=True)
-        rank = rank.fillna(0.5)
-        return rank if higher_bullish else (1.0 - rank)
-
-    def _cat(*entries) -> pd.Series:
-        """Mean of rolling pct-ranks for indicator group."""
-        parts = [_pr(c, b) for c, b in entries if c in df.columns]
-        if not parts:
-            return pd.Series(0.5, index=df.index, dtype=float)
-        return pd.concat(parts, axis=1).mean(axis=1).clip(0.0, 1.0)
-
-    # ── Trend ─────────────────────────────────────────────────────
-    result['prc_trend'] = _cat(
-        ('dist_ema_50',       True),  ('dist_ema_200',     True),
-        ('dist_ema_100',      True),  ('dist_hma20',       True),
-        ('dist_kama',         True),  ('dist_rolling_vwap',True),
-        ('dist_vwap',         True),  ('supertrend_dist',  True),
-        ('sar_dist',          True),  ('linreg_slope_14',  True),
-        ('structure_bias',    True),  ('macro_trend_1d',   True),
-        ('macro_trend_1w',    True),
-    )
-
-    # ── Momentum ──────────────────────────────────────────────────
-    result['prc_momentum'] = _cat(
-        ('rsi_14',     True),  ('rsi_7',       True),  ('rsi_21',  True),
-        ('stoch_k',    True),  ('williams_r',  False),
-        ('macd_hist',  True),  ('cci_20',      True),
-        ('tsi',        True),  ('cmo_14',      True),
-        ('awesome_osc',True),  ('bop',         True),
-        ('roc_14',     True),  ('ppo',         True),
-        ('fisher',     True),
-    )
-
-    # ── Volume / Flow ─────────────────────────────────────────────
-    result['prc_volume'] = _cat(
-        ('volume_delta',    True),  ('volume_delta_14', True),
-        ('cmf_20',          True),  ('mfi_14',          True),
-        ('eom_14',          True),  ('relative_volume', True),
-        ('vol_velocity',    True),  ('kvo',             True),
-    )
-
-    # ── Price Position / Bands ────────────────────────────────────
-    result['prc_bands'] = _cat(
-        ('bb_pct_b',          True),  ('atr_band_position', True),
-        ('donchian_position', True),  ('close_position',    True),
-        ('quantile_position', True),  ('se_position',       True),
-        ('starc_position',    True),  ('gaussian_position', True),
-    )
-
-    # ── Smart Money ───────────────────────────────────────────────
-    result['prc_smart_money'] = _cat(
-        ('structure_bias',      True),
-        ('range_position_score',True),
-        ('bos_up',              True),  ('bos_down',   False),
-        ('choch_bull',          True),  ('choch_bear', False),
-        ('is_at_support',       True),  ('is_at_resistance', False),
-    )
-
-    # ── Weighted total (matches display weights in predictor.py) ──
-    W = {
-        'prc_trend':        2.0,
-        'prc_momentum':     1.5,
-        'prc_volume':       1.5,
-        'prc_smart_money':  1.5,
-        'prc_bands':        1.0,
-    }
-    Wsum = sum(W.values())   # 7.5
-    total = pd.concat([result[c] * w for c, w in W.items()], axis=1).sum(axis=1) / Wsum
-    result['prc_total'] = total.clip(0.0, 1.0)
-
-    # macro_confluence_score in [-1, +1]: used by create_triple_barrier_labels()
-    # to cancel barrier hits that contradict a strong confluence consensus.
-    # 0.5 (neutral) → 0.0; 0.8 (strong bullish) → +0.6; 0.2 (strong bearish) → -0.6
-    result['macro_confluence_score'] = ((result['prc_total'] - 0.5) * 2.0).clip(-1.0, 1.0)
-
-    return result.fillna(0.0)
-
+# compute_soft_confluence_features() MOVED to src/ml/feature_engine.py.
+#
+# It lived here while only training used it. The live predictor called
+# prepare_features() alone, so the prc_* columns listed in feature_cols above
+# were absent at inference and Predictor._align() reindexed them to 0.0 -- an
+# out-of-distribution value, since training centres them near 0.5. Sharing one
+# definition is what stops that from recurring.
+#
+# The name is re-exported from the feature_engine import at the top of this
+# module, so `from scripts.retrain_model import compute_soft_confluence_features`
+# still resolves for the forensics and optimizer scripts.
 
 # ============================================================
 # FUTURES DATA FETCH (funding rate + open interest)
@@ -2430,47 +2352,28 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
         else:
             print("   Fear & Greed unavailable -- continuing without")
 
-        df = prepare_features(df, btc_df=btc_df, news_df=news_df,
-                              add_target_flag=False, df_1d=df_1d, df_1w=None,
-                              funding_df=funding_df, oi_df=oi_df, fg_df=fg_df)
+        # Build the model-ready frame through the SHARED contract so the
+        # training matrix and the live inference row are produced by one
+        # function. build_model_frame() = prepare_features() + soft confluence.
+        # Do not call prepare_features() directly here again: the prc_* columns
+        # are part of feature_cols, and omitting them is silent at predict time.
+        df = build_model_frame(df, btc_df=btc_df, news_df=news_df,
+                               add_target_flag=False, df_1d=df_1d, df_1w=None,
+                               funding_df=funding_df, oi_df=oi_df, fg_df=fg_df)
         if df is None or df.empty:
             print(f"Feature engineering failed for {symbol}")
             return None
 
         df = df.reset_index(drop=True).copy()
 
-        # ── Soft (percentile-rank) confluence features ─────────────────────
-        # Added AFTER prepare_features so all indicator columns are available.
-        # These give XGBoost richer gradient information than the sign-based
-        # xxx_confluence columns (RSI-51 = RSI-80 = +1 in sign; prc_momentum
-        # distinguishes them as 0.52 vs 0.85).
-        # macro_confluence_score is derived here and passed to the labeler.
-        print("   Computing soft (percentile-rank) confluence features...")
-        _REQUIRED_SOFT_COLS = [
-            'prc_trend', 'prc_momentum', 'prc_volume', 'prc_bands',
-            'prc_smart_money', 'prc_total', 'macro_confluence_score',
-        ]
-        try:
-            soft_conf = compute_soft_confluence_features(df)
-            for col in soft_conf.columns:
-                df[col] = soft_conf[col].values
-            # Verify all required columns are present
-            _missing_soft = [c for c in _REQUIRED_SOFT_COLS if c not in df.columns]
-            if _missing_soft:
-                raise RuntimeError(
-                    f"compute_soft_confluence_features() did not produce required columns: {_missing_soft}. "
-                    f"Check that prepare_features() ran successfully and all indicator columns are present."
-                )
-            _conf_sample = float(df['prc_total'].iloc[-1])
-            print(f"   prc_total sample (last bar): {_conf_sample:.3f}  "
-                  f"macro_conf_score: {float(df['macro_confluence_score'].iloc[-1]):.3f}")
-        except RuntimeError:
-            raise
-        except Exception as _sc_err:
-            print(f"   Soft confluence computation failed ({_sc_err}) — using sign-based fallback")
-            for col in _REQUIRED_SOFT_COLS:
-                if col not in df.columns:
-                    df[col] = 0.5 if col != 'macro_confluence_score' else 0.0
+        _missing_soft = [c for c in SOFT_CONFLUENCE_COLS if c not in df.columns]
+        if _missing_soft:
+            raise RuntimeError(
+                f"build_model_frame() did not produce required soft-confluence "
+                f"columns: {_missing_soft}."
+            )
+        print(f"   prc_total sample (last bar): {float(df['prc_total'].iloc[-1]):.3f}  "
+              f"macro_conf_score: {float(df['macro_confluence_score'].iloc[-1]):.3f}")
 
         for col in ['volatility_regime', 'efficiency_ratio_10', 'trend_regime']:
             if col not in df.columns:
@@ -4198,245 +4101,252 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
                              'hold_disc_cols': _cal_po_cols}, f)
         else:
             _cal_po_path = None
-        with open(sidecar, "w") as f:
-            json.dump({
-                "symbol": symbol,
-                "regime_policies": regime_policies,
-                "aegis_state_path": str(aegis_state_path.name),
-                "disabled_filters": {
-                    "sr": bool(disable_sr_veto),
-                    "trend": bool(disable_trend_veto),
-                    "confluence": bool(disable_confluence_veto)
-                },
-                "model_format": "booster",          # predictor loads with xgb.Booster()
-                "primary_model_type": "binary_dual",
-                "primary_model_buy_file": buy_path.name,
-                "primary_model_sell_file": sell_path.name,
-                "num_class": NUM_CLASS,
-                "feature_cols": feature_cols,        # exact order the Booster expects
-                "meta_feature_cols": meta_model_cols if 'meta_model_cols' in locals() else feature_cols,
-                "calibration_temperature": T,
-                "buy_rate": float(buy_rate) if 'buy_rate' in locals() else 0.0,
-                "sell_rate": float(sell_rate) if 'sell_rate' in locals() else 0.0,
-                "recommended_calibrator": selected_cal,
-                "calibration_selector": cal_choice,
-                "meta_calibration_method": meta_calibration_method,
-                "meta_threshold": thr,               # combined gate (both sides)
-                "production_confidence_floor": thr,  # backward-compat alias
-                "edge_rank_mode": meta_gate_profile.get('edge_rank_mode') if meta_gate_profile else 'raw',
-                # Per-side gates: predictor uses these when it knows which
-                # direction it is proposing. Allows one side to trade even
-                # if the combined precision fails the target.
-                # Per-side thresholds: use individual side threshold when that side
-                # qualified independently; fall back to the combined gate threshold
-                # when combined gate succeeded but the per-side gate had too few
-                # trades (e.g. JUP: 89.7% combined holdout but 0 per-side trades).
-                "meta_threshold_buy":  thr_buy if hit_buy else thr,
-                "meta_threshold_sell": thr_sell if hit_sell else thr,
-                # Aggressive-mode thresholds: always store the per-side best threshold
-                # even when that side didn't meet the quality bar. The predictor uses
-                # these in aggressive mode instead of falling back to the combined thr.
-                "meta_threshold_buy_aggressive":  thr_buy,
-                "meta_threshold_sell_aggressive": thr_sell,
-                # Per-side tradeability. When combined gate earned tradeable_final=True
-                # but neither per-side individually qualified (e.g. min_fires split),
-                # distribute the combined approval to both sides so the live engine
-                # can actually fire signals using the combined threshold above.
-                "tradeable_buy":  bool(tradeable_buy_holdout or
-                                       (tradeable_final and not per_side_approved)),
-                "tradeable_sell": bool(tradeable_sell_holdout or
-                                       (tradeable_final and not per_side_approved)),
-                # Top-25% confidence cutoff of fired signals on the holdout.
-                # The live predictor uses this to replicate S&R and trend filters:
-                # only suppress a signal when meta_conf < this value.
-                "meta_override_confidence": override_conf_thr,
-                # Decoupled metrics: dev OOF estimate (what justified shipping) vs
-                # the single honest holdout result at the pre-committed floor.
-                "metrics_summary": {
-                    "dev_oof_precision_estimate": dev_prec,
-                    "honest_holdout_precision_result": fired_prec,
-                    "holdout_coverage_pct": coverage,
-                    "dev_oof_meta_gate_lift": float(_oof_meta_gate_lift) if '_oof_meta_gate_lift' in locals() else None,
-                    "dev_oof_meta_gate_fires": int(dev_n),
-                },
-                "gate_coverage": dev_cov,
-                # ── Risk tiers ────────────────────────────────────────────────
-                # The live predictor checks these to respect the user's chosen
-                # risk appetite without retraining.
-                "risk_tier": {
-                    "conservative": tier_conservative,  # per-side holdout ≥ breakeven
-                    "balanced":     tier_balanced,       # combined holdout ≥ breakeven
-                    "aggressive":   tier_aggressive,     # positive EV on dev, exp ≥ 0.05%
-                },
-                "meta_model_file": meta_path.name if meta_path else None,  # .pkl (sklearn LR)
-                "meta_model_light_file": meta_light_path.name if (meta_light_path is not None) else None,
-                "atr_multiplier": atr_mult,
-                # tradeable=False means the predictor emits NO signals for this token.
-                # Requires: OOF target met AND (holdout unreliable OR holdout ≥ breakeven).
-                # A holdout below fee breakeven with ≥ MIN_HOLDOUT_FIRES trades overrides
-                # the OOF optimism and silences the token.
-                "tradeable": bool(tradeable_final),
-                "profitability_bypass": bool(_via_profitability_bypass),
-                "primary_only_mode": True,
-                "primary_confidence_threshold": float(_primary_conf_thr) if _primary_only_gate else None,
-                "primary_calibrator_exists": bool(_po_use_calibrator) if _primary_only_gate else False,
-                "primary_calibrator_file": _cal_po_path.name if _cal_po_path else None,
-                "calibrator_hold_disc_cols": list(_cal_po_cols),
-                "token_breakeven": float(token_breakeven),
-                "target_precision": float(token_precision_target),
-                # DEV estimate = how the gate scored on out-of-fold data (this is
-                # what justified shipping the token). Pre-committed, not peeked.
-                "dev_estimate": {"precision": dev_prec, "coverage": dev_cov, "trades": dev_n},
-                # HOLDOUT = the same pre-committed gate applied once to untouched
-                # data. This is the honest out-of-sample number; expect it near the
-                # dev estimate, not above it.
-                "holdout_trading": {
-                    "fired":                fired_n,
-                    "coverage":             coverage,
-                    "signal_precision":     fired_prec,
-                    "directional_precision":round(_dir_fired_prec2, 4),
-                    # Overlap-adjusted evidence: raw counts overstate independence
-                    # because barrier windows overlap. These are what the enable
-                    # gate actually uses — a live monitor should trust them, not
-                    # the raw point estimate above.
-                    "dir_independent_events": int(locals().get('_dir_eff_n', 0)),
-                    "dir_precision_lower_bound": round(float(locals().get('_dir_prec_lb', 0.0)), 4),
-                    "signal_independent_events": int(locals().get('_sig_eff_n', 0)),
-                    "label_lookahead_hours": int(token_lookahead),
-                    "dir_fired_n":          _dir_fired_n2,
-                    "dir_coverage":         round(_dir_coverage2, 4),
-                    "dir_buy_precision":    round(_dir_buy_prec,  4),
-                    "dir_sell_precision":   round(_dir_sell_prec, 4),
-                    "dir_buy_n":            _dir_buy_n,
-                    "dir_sell_n":           _dir_sell_n,
-                    "expectancy_pct":       bt["expectancy_pct"],
-                    "total_return_pct": bt["total_return_pct"],
-                    "win_rate":         bt["win_rate"],
-                    "sharpe":           bt["sharpe"],
-                    "max_drawdown_pct": bt["max_drawdown_pct"],
-                    "profit_factor":    bt["profit_factor"],
-                    "kelly_pct":        bt["kelly_pct"],
-                    "buy_n":            bt["buy_n"],
-                    "buy_win_rate":     bt["buy_win_rate"],
-                    "sell_n":           bt["sell_n"],
-                    "sell_win_rate":    bt["sell_win_rate"],
-                    "target_met":       bool(hit_target),
-                },
-                "meta_gate_ranking_audit": {
-                    "selected_n":          selected_n,
-                    "rejected_n":          rejected_n,
-                    "selected_precision":  round(selected_prec, 4),
-                    "rejected_precision":  round(rejected_prec, 4),
-                    "meta_gate_lift_prec": round(meta_gate_lift, 4),
-                    "selected_expectancy": round(selected_exp_pct, 4),
-                    "rejected_expectancy": round(rejected_exp_pct, 4),
-                    "meta_gate_lift_exp":  round(meta_gate_lift_exp, 4),
-                    "selected_sharpe":     round(selected_sharpe, 4),
-                    "rejected_sharpe":     round(rejected_sharpe, 4),
-                    "gate_is_helpful":     bool(meta_gate_lift >= 0.01),
-                },
-                # AEGIS META GATE V2 — PHASE 1: Gate Lift Metrics
-                "aegis_v2_gate_lift": {
-                    "gate_lift_pp": round(meta_gate_lift, 4),
-                    "gate_lift_expectancy": round(meta_gate_lift_exp, 4),
-                    "selected_n": selected_n,
-                    "rejected_n": rejected_n,
-                },
-                # AEGIS META GATE V2 — PHASE 2: Gate Self-Preservation Status
-                "aegis_v2_gate_status": {
-                    "gate_status": (
-                        "HARMFUL" if meta_gate_lift < -0.20 else
-                        "DEGRADED" if meta_gate_lift < -0.10 else
-                        "NEUTRAL" if meta_gate_lift < 0.01 else
-                        "HELPFUL"
-                    ),
-                    "gate_trust_score": min(100, max(0, 50 + int(meta_gate_lift * 100))),  # 0-100 scale
-                    "gate_action": (
-                        "BYPASS_META_GATE" if meta_gate_lift < -0.20 else
-                        "REDUCE_META_INFLUENCE_50PCT" if meta_gate_lift < -0.10 else
-                        "SOFTEN_THRESHOLDS_15PCT" if meta_gate_lift < 0.01 else
-                        "USE_META_GATE"
-                    ),
-                },
-                # AEGIS META GATE V2 — PHASE 5: Hold Pollution Strategy Audit
-                "aegis_v2_hold_pollution": {
-                    "strategy_selected": hold_strategy_selected,
-                    "strategy_scores": {k: round(v.get("score", -999), 3) for k, v in hold_strategy_audit.items()},
-                    "strategy_details": {
-                        k: {
-                            "brier": round(v.get("brier", 0), 4),
-                            "sharpe": round(v.get("sharpe", 0), 4),
-                            "pf": round(v.get("pf", 0), 2),
-                            "precision": round(v.get("prec", 0), 4),
-                            "gate_lift": round(v.get("lift", 0), 4),
-                        }
-                        for k, v in hold_strategy_audit.items()
-                    }
-                },
-                # AEGIS META GATE V2 — PHASE 3: Token-Specific Profiles
-                "aegis_v2_token_profile": {
-                    "precision_target": float(token_precision_target),
-                    "coverage_target": float(dev_cov),
-                    "actual_precision": fired_prec,
-                    "actual_coverage": coverage,
-                    "atr_multiplier": atr_mult,
-                    "gate_trust_score": min(100, max(0, 50 + int(meta_gate_lift * 100))),
-                    "strategy": "ADAPTIVE_PER_REGIME" if regime_policies else "GLOBAL_THRESHOLD",
-                },
-                # AEGIS META GATE V2 — PHASE 4: Regime-Sensitive Gating Modifiers
-                "aegis_v2_regime_modifiers": {
-                    regime_name: {
-                        "base_buy_thr": float(policy.get("buy_thr", thr_buy)),
-                        "base_sell_thr": float(policy.get("sell_thr", thr_sell)),
-                        "buy_ok": bool(policy.get("buy_ok", True)),
-                        "sell_ok": bool(policy.get("sell_ok", True)),
-                        "modifier": (
-                            0.85 if (policy.get("buy_ok") or policy.get("sell_ok")) else 1.15
-                        ),
-                        "regime_quality": "GOOD" if policy.get("buy_ok") or policy.get("sell_ok") else "POOR",
-                    }
-                    for regime_name, policy in regime_policies.items()
-                },
-                # Bayes prior correction params — live predictor applies the same
-                # SPW→true-rate correction before computing proposed_side() and
-                # meta_prob inference (see _bayes_correct in retrain_model.py).
-                "bayes_prior_correction": {
-                    "type": "spw_prior_to_true_rate",
-                    "true_buy_rate":  float(_true_buy_rate),
-                    "true_sell_rate": float(_true_sell_rate),
-                    "spw_prior_buy":  float(_spw_prior_buy),
-                    "spw_prior_sell": float(_spw_prior_sell),
-                },
-                "trained_at": datetime.now().isoformat(),
-                # ── Optimizer regime data (from threshold_optimizer.py) ────────
-                # Embedded here so predictor.py needs only this one file at
-                # inference time. Re-run threshold_optimizer.py after retraining
-                # to refresh these values; retrain then picks them up on the next
-                # training cycle.
-                "regime_thresholds":  (rcm.regime_thresholds if rcm is not None else (_opt or {}).get("regimes", {})),
-                "regime_threshold_modifier":  (
-                    (rcm.regime_modifiers if rcm is not None and (regime_modifier_profile is not False) else {})
-                    if regime_modifier_profile is not None else
-                    (rcm.regime_modifiers if rcm is not None else {})
+        _sidecar_payload = {
+            "symbol": symbol,
+            "regime_policies": regime_policies,
+            "aegis_state_path": str(aegis_state_path.name),
+            "disabled_filters": {
+                "sr": bool(disable_sr_veto),
+                "trend": bool(disable_trend_veto),
+                "confluence": bool(disable_confluence_veto)
+            },
+            "model_format": "booster",          # predictor loads with xgb.Booster()
+            "primary_model_type": "binary_dual",
+            "primary_model_buy_file": buy_path.name,
+            "primary_model_sell_file": sell_path.name,
+            "num_class": NUM_CLASS,
+            "feature_cols": feature_cols,        # exact order the Booster expects
+            "meta_feature_cols": meta_model_cols if 'meta_model_cols' in locals() else feature_cols,
+            "calibration_temperature": T,
+            "buy_rate": float(buy_rate) if 'buy_rate' in locals() else 0.0,
+            "sell_rate": float(sell_rate) if 'sell_rate' in locals() else 0.0,
+            "recommended_calibrator": selected_cal,
+            "calibration_selector": cal_choice,
+            "meta_calibration_method": meta_calibration_method,
+            "meta_threshold": thr,               # combined gate (both sides)
+            "production_confidence_floor": thr,  # backward-compat alias
+            "edge_rank_mode": meta_gate_profile.get('edge_rank_mode') if meta_gate_profile else 'raw',
+            # Per-side gates: predictor uses these when it knows which
+            # direction it is proposing. Allows one side to trade even
+            # if the combined precision fails the target.
+            # Per-side thresholds: use individual side threshold when that side
+            # qualified independently; fall back to the combined gate threshold
+            # when combined gate succeeded but the per-side gate had too few
+            # trades (e.g. JUP: 89.7% combined holdout but 0 per-side trades).
+            "meta_threshold_buy":  thr_buy if hit_buy else thr,
+            "meta_threshold_sell": thr_sell if hit_sell else thr,
+            # Aggressive-mode thresholds: always store the per-side best threshold
+            # even when that side didn't meet the quality bar. The predictor uses
+            # these in aggressive mode instead of falling back to the combined thr.
+            "meta_threshold_buy_aggressive":  thr_buy,
+            "meta_threshold_sell_aggressive": thr_sell,
+            # Per-side tradeability. When combined gate earned tradeable_final=True
+            # but neither per-side individually qualified (e.g. min_fires split),
+            # distribute the combined approval to both sides so the live engine
+            # can actually fire signals using the combined threshold above.
+            "tradeable_buy":  bool(tradeable_buy_holdout or
+                                   (tradeable_final and not per_side_approved)),
+            "tradeable_sell": bool(tradeable_sell_holdout or
+                                   (tradeable_final and not per_side_approved)),
+            # Top-25% confidence cutoff of fired signals on the holdout.
+            # The live predictor uses this to replicate S&R and trend filters:
+            # only suppress a signal when meta_conf < this value.
+            "meta_override_confidence": override_conf_thr,
+            # Decoupled metrics: dev OOF estimate (what justified shipping) vs
+            # the single honest holdout result at the pre-committed floor.
+            "metrics_summary": {
+                "dev_oof_precision_estimate": dev_prec,
+                "honest_holdout_precision_result": fired_prec,
+                "holdout_coverage_pct": coverage,
+                "dev_oof_meta_gate_lift": float(_oof_meta_gate_lift) if '_oof_meta_gate_lift' in locals() else None,
+                "dev_oof_meta_gate_fires": int(dev_n),
+            },
+            "gate_coverage": dev_cov,
+            # ── Risk tiers ────────────────────────────────────────────────
+            # The live predictor checks these to respect the user's chosen
+            # risk appetite without retraining.
+            "risk_tier": {
+                "conservative": tier_conservative,  # per-side holdout ≥ breakeven
+                "balanced":     tier_balanced,       # combined holdout ≥ breakeven
+                "aggressive":   tier_aggressive,     # positive EV on dev, exp ≥ 0.05%
+            },
+            "meta_model_file": meta_path.name if meta_path else None,  # .pkl (sklearn LR)
+            "meta_model_light_file": meta_light_path.name if (meta_light_path is not None) else None,
+            "atr_multiplier": atr_mult,
+            # tradeable=False means the predictor emits NO signals for this token.
+            # Requires: OOF target met AND (holdout unreliable OR holdout ≥ breakeven).
+            # A holdout below fee breakeven with ≥ MIN_HOLDOUT_FIRES trades overrides
+            # the OOF optimism and silences the token.
+            "tradeable": bool(tradeable_final),
+            "profitability_bypass": bool(_via_profitability_bypass),
+            "primary_only_mode": True,
+            "primary_confidence_threshold": float(_primary_conf_thr) if _primary_only_gate else None,
+            "primary_calibrator_exists": bool(_po_use_calibrator) if _primary_only_gate else False,
+            "primary_calibrator_file": _cal_po_path.name if _cal_po_path else None,
+            "calibrator_hold_disc_cols": list(_cal_po_cols),
+            "token_breakeven": float(token_breakeven),
+            "target_precision": float(token_precision_target),
+            # DEV estimate = how the gate scored on out-of-fold data (this is
+            # what justified shipping the token). Pre-committed, not peeked.
+            "dev_estimate": {"precision": dev_prec, "coverage": dev_cov, "trades": dev_n},
+            # HOLDOUT = the same pre-committed gate applied once to untouched
+            # data. This is the honest out-of-sample number; expect it near the
+            # dev estimate, not above it.
+            "holdout_trading": {
+                "fired":                fired_n,
+                "coverage":             coverage,
+                "signal_precision":     fired_prec,
+                "directional_precision":round(_dir_fired_prec2, 4),
+                # Overlap-adjusted evidence: raw counts overstate independence
+                # because barrier windows overlap. These are what the enable
+                # gate actually uses — a live monitor should trust them, not
+                # the raw point estimate above.
+                "dir_independent_events": int(locals().get('_dir_eff_n', 0)),
+                "dir_precision_lower_bound": round(float(locals().get('_dir_prec_lb', 0.0)), 4),
+                "signal_independent_events": int(locals().get('_sig_eff_n', 0)),
+                "label_lookahead_hours": int(token_lookahead),
+                "dir_fired_n":          _dir_fired_n2,
+                "dir_coverage":         round(_dir_coverage2, 4),
+                "dir_buy_precision":    round(_dir_buy_prec,  4),
+                "dir_sell_precision":   round(_dir_sell_prec, 4),
+                "dir_buy_n":            _dir_buy_n,
+                "dir_sell_n":           _dir_sell_n,
+                "expectancy_pct":       bt["expectancy_pct"],
+                "total_return_pct": bt["total_return_pct"],
+                "win_rate":         bt["win_rate"],
+                "sharpe":           bt["sharpe"],
+                "max_drawdown_pct": bt["max_drawdown_pct"],
+                "profit_factor":    bt["profit_factor"],
+                "kelly_pct":        bt["kelly_pct"],
+                "buy_n":            bt["buy_n"],
+                "buy_win_rate":     bt["buy_win_rate"],
+                "sell_n":           bt["sell_n"],
+                "sell_win_rate":    bt["sell_win_rate"],
+                "target_met":       bool(hit_target),
+            },
+            "meta_gate_ranking_audit": {
+                "selected_n":          selected_n,
+                "rejected_n":          rejected_n,
+                "selected_precision":  round(selected_prec, 4),
+                "rejected_precision":  round(rejected_prec, 4),
+                "meta_gate_lift_prec": round(meta_gate_lift, 4),
+                "selected_expectancy": round(selected_exp_pct, 4),
+                "rejected_expectancy": round(rejected_exp_pct, 4),
+                "meta_gate_lift_exp":  round(meta_gate_lift_exp, 4),
+                "selected_sharpe":     round(selected_sharpe, 4),
+                "rejected_sharpe":     round(rejected_sharpe, 4),
+                "gate_is_helpful":     bool(meta_gate_lift >= 0.01),
+            },
+            # AEGIS META GATE V2 — PHASE 1: Gate Lift Metrics
+            "aegis_v2_gate_lift": {
+                "gate_lift_pp": round(meta_gate_lift, 4),
+                "gate_lift_expectancy": round(meta_gate_lift_exp, 4),
+                "selected_n": selected_n,
+                "rejected_n": rejected_n,
+            },
+            # AEGIS META GATE V2 — PHASE 2: Gate Self-Preservation Status
+            "aegis_v2_gate_status": {
+                "gate_status": (
+                    "HARMFUL" if meta_gate_lift < -0.20 else
+                    "DEGRADED" if meta_gate_lift < -0.10 else
+                    "NEUTRAL" if meta_gate_lift < 0.01 else
+                    "HELPFUL"
                 ),
-                "meta_gate_profile": {
-                    "gate_type": gate_type,
-                    "threshold_quantile": float(meta_gate_profile.get("threshold_quantile")) if meta_gate_profile else None,
-                    "thresholds": meta_gate_profile.get("thresholds") if meta_gate_profile else {},
-                    "side_specific": bool(meta_gate_profile.get("side_specific", True)) if meta_gate_profile else True,
-                    "signal_vetoes": signal_vetoes if signal_vetoes is not None else [],
-                    "regime_modifier": regime_modifier_profile,
-                    "edge_rank_mode": meta_gate_profile.get("edge_rank_mode") if meta_gate_profile else None,
-                    "calibration": meta_gate_profile.get("calibration") if meta_gate_profile else {},
-                    "disabled_reason": meta_gate_profile.get("disabled_reason") if meta_gate_profile else None,
-                },
-                "disabled_filters": {
-                    "sr": bool(disable_sr_veto),
-                    "trend": bool(disable_trend_veto),
-                    "confluence": bool(disable_confluence_veto),
-                },
-                "optimizer_updated_at": (_opt or {}).get("updated_at"),
-            }, f, indent=2)
+                "gate_trust_score": min(100, max(0, 50 + int(meta_gate_lift * 100))),  # 0-100 scale
+                "gate_action": (
+                    "BYPASS_META_GATE" if meta_gate_lift < -0.20 else
+                    "REDUCE_META_INFLUENCE_50PCT" if meta_gate_lift < -0.10 else
+                    "SOFTEN_THRESHOLDS_15PCT" if meta_gate_lift < 0.01 else
+                    "USE_META_GATE"
+                ),
+            },
+            # AEGIS META GATE V2 — PHASE 5: Hold Pollution Strategy Audit
+            "aegis_v2_hold_pollution": {
+                "strategy_selected": hold_strategy_selected,
+                "strategy_scores": {k: round(v.get("score", -999), 3) for k, v in hold_strategy_audit.items()},
+                "strategy_details": {
+                    k: {
+                        "brier": round(v.get("brier", 0), 4),
+                        "sharpe": round(v.get("sharpe", 0), 4),
+                        "pf": round(v.get("pf", 0), 2),
+                        "precision": round(v.get("prec", 0), 4),
+                        "gate_lift": round(v.get("lift", 0), 4),
+                    }
+                    for k, v in hold_strategy_audit.items()
+                }
+            },
+            # AEGIS META GATE V2 — PHASE 3: Token-Specific Profiles
+            "aegis_v2_token_profile": {
+                "precision_target": float(token_precision_target),
+                "coverage_target": float(dev_cov),
+                "actual_precision": fired_prec,
+                "actual_coverage": coverage,
+                "atr_multiplier": atr_mult,
+                "gate_trust_score": min(100, max(0, 50 + int(meta_gate_lift * 100))),
+                "strategy": "ADAPTIVE_PER_REGIME" if regime_policies else "GLOBAL_THRESHOLD",
+            },
+            # AEGIS META GATE V2 — PHASE 4: Regime-Sensitive Gating Modifiers
+            "aegis_v2_regime_modifiers": {
+                regime_name: {
+                    "base_buy_thr": float(policy.get("buy_thr", thr_buy)),
+                    "base_sell_thr": float(policy.get("sell_thr", thr_sell)),
+                    "buy_ok": bool(policy.get("buy_ok", True)),
+                    "sell_ok": bool(policy.get("sell_ok", True)),
+                    "modifier": (
+                        0.85 if (policy.get("buy_ok") or policy.get("sell_ok")) else 1.15
+                    ),
+                    "regime_quality": "GOOD" if policy.get("buy_ok") or policy.get("sell_ok") else "POOR",
+                }
+                for regime_name, policy in regime_policies.items()
+            },
+            # Bayes prior correction params — live predictor applies the same
+            # SPW→true-rate correction before computing proposed_side() and
+            # meta_prob inference (see _bayes_correct in retrain_model.py).
+            "bayes_prior_correction": {
+                "type": "spw_prior_to_true_rate",
+                "true_buy_rate":  float(_true_buy_rate),
+                "true_sell_rate": float(_true_sell_rate),
+                "spw_prior_buy":  float(_spw_prior_buy),
+                "spw_prior_sell": float(_spw_prior_sell),
+            },
+            "trained_at": datetime.now().isoformat(),
+            # ── Optimizer regime data (from threshold_optimizer.py) ────────
+            # Embedded here so predictor.py needs only this one file at
+            # inference time. Re-run threshold_optimizer.py after retraining
+            # to refresh these values; retrain then picks them up on the next
+            # training cycle.
+            "regime_thresholds":  (rcm.regime_thresholds if rcm is not None else (_opt or {}).get("regimes", {})),
+            "regime_threshold_modifier":  (
+                (rcm.regime_modifiers if rcm is not None and (regime_modifier_profile is not False) else {})
+                if regime_modifier_profile is not None else
+                (rcm.regime_modifiers if rcm is not None else {})
+            ),
+            "meta_gate_profile": {
+                "gate_type": gate_type,
+                "threshold_quantile": float(meta_gate_profile.get("threshold_quantile")) if meta_gate_profile else None,
+                "thresholds": meta_gate_profile.get("thresholds") if meta_gate_profile else {},
+                "side_specific": bool(meta_gate_profile.get("side_specific", True)) if meta_gate_profile else True,
+                "signal_vetoes": signal_vetoes if signal_vetoes is not None else [],
+                "regime_modifier": regime_modifier_profile,
+                "edge_rank_mode": meta_gate_profile.get("edge_rank_mode") if meta_gate_profile else None,
+                "calibration": meta_gate_profile.get("calibration") if meta_gate_profile else {},
+                "disabled_reason": meta_gate_profile.get("disabled_reason") if meta_gate_profile else None,
+            },
+            "disabled_filters": {
+                "sr": bool(disable_sr_veto),
+                "trend": bool(disable_trend_veto),
+                "confluence": bool(disable_confluence_veto),
+            },
+            "optimizer_updated_at": (_opt or {}).get("updated_at"),
+        }
+        # The sidecar is the contract the live engine reads: which side may
+        # trade, above which probability, with what ATR geometry. Check it here,
+        # in the run that produced it — a missing key discovered at scan time is
+        # a defaulted threshold nobody notices. scripts/engine/contract.py owns
+        # the required-key list and the typed reader on the other side.
+        validate_for_training(_sidecar_payload)
+        with open(sidecar, "w") as f:
+            json.dump(_sidecar_payload, f, indent=2)
 
         # Feature importance + stability recording
         importance_dict = log_feature_importance(deploy_buy, feature_cols, symbol)

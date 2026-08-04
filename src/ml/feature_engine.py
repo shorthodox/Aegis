@@ -2576,3 +2576,223 @@ def prepare_features(df: pd.DataFrame,
     df = clean_infinite_values(df, max_value=1e6, fill_method='zero')
 
     return df
+
+
+# ============================================================
+# SOFT CONFLUENCE FEATURES  (percentile-rank based)
+# ============================================================
+# Moved here from scripts/retrain_model.py so that TRAINING and INFERENCE
+# build the model input from one definition. Previously training called
+# prepare_features() + compute_soft_confluence_features() while the live
+# predictor called prepare_features() alone; Predictor._align() then
+# reindexed to the sidecar's feature_cols with fill_value=0, so every live
+# prediction fed the Booster prc_* = 0.0 while training had seen values
+# centred near 0.5. That skew was silent -- reindex does not raise.
+#
+# Anything that changes the model's input vector belongs in
+# build_model_frame() below, never in one caller only.
+
+SOFT_CONFLUENCE_COLS: List[str] = [
+    'prc_trend', 'prc_momentum', 'prc_volume', 'prc_bands',
+    'prc_smart_money', 'prc_total', 'macro_confluence_score',
+]
+
+# Neutral values used when soft confluence cannot be computed. These match the
+# training-side fallback: 0.5 is "neutral" on a [0,1] percentile rank, whereas
+# 0.0 means "most bearish value ever observed".
+SOFT_CONFLUENCE_NEUTRAL: Dict[str, float] = {
+    c: (0.0 if c == 'macro_confluence_score' else 0.5)
+    for c in SOFT_CONFLUENCE_COLS
+}
+
+# Features that are legitimately absent for some tokens and are SAFE to
+# zero-fill at inference: perp-only data for spot-only listings (e.g. PEPE,
+# SHIB have no USD-M perp). Training zero-fills these for the same tokens, so
+# train and serve agree. Any OTHER missing column is a genuine skew and the
+# parity check treats it as an error.
+ZERO_FILL_OK: List[str] = [
+    'funding_rate', 'funding_rate_ma8', 'funding_rate_zscore',
+    'open_interest', 'oi_change_1h', 'oi_change_4h', 'oi_zscore',
+    'funding_slope_3', 'funding_slope_8',
+    'funding_extreme_long', 'funding_extreme_short', 'funding_neutral',
+    'funding_cum_8',
+    'oi_chg_8h', 'oi_chg_24h', 'oi_px_agreement',
+]
+
+
+def compute_soft_confluence_features(df: pd.DataFrame, window: int = 120) -> pd.DataFrame:
+    """
+    Compute soft confluences using rolling percentile rank instead of sign().
+
+    sign() saturates: RSI-51 and RSI-80 both map to +1, so the model cannot
+    distinguish a marginal edge from a strong one.  Rolling pct-rank preserves
+    the gradient -- RSI at the 85th pct of recent history gets a score near 0.85
+    whereas RSI at the 52nd pct gets ~0.52.
+
+    All outputs are in [0, 1]:  0.5 = neutral, >0.5 = bullish, <0.5 = bearish.
+    A separate macro_confluence_score column is derived and mapped to [-1, +1]
+    for use in the triple-barrier label cancellation logic.
+
+    Window of 120 bars ~ 5 days on 1h data - long enough to be meaningful,
+    short enough to track regime changes within the training set.
+
+    The rank is ROLLING and therefore causal: bar i sees only bars i-window..i.
+    Do not switch this to an expanding/full-window rank -- that would let the
+    end of the series inform its own past.
+    """
+    result = pd.DataFrame(index=df.index)
+
+    def _pr(col: str, higher_bullish: bool = True) -> pd.Series:
+        """Rolling percentile rank of `col`, 0.5 if column missing."""
+        if col not in df.columns:
+            return pd.Series(0.5, index=df.index, dtype=float)
+        s = df[col].ffill().fillna(0.0)
+        rank = s.rolling(window, min_periods=max(20, window // 4)).rank(pct=True)
+        rank = rank.fillna(0.5)
+        return rank if higher_bullish else (1.0 - rank)
+
+    def _cat(*entries) -> pd.Series:
+        """Mean of rolling pct-ranks for indicator group."""
+        parts = [_pr(c, b) for c, b in entries if c in df.columns]
+        if not parts:
+            return pd.Series(0.5, index=df.index, dtype=float)
+        return pd.concat(parts, axis=1).mean(axis=1).clip(0.0, 1.0)
+
+    # -- Trend --------------------------------------------------------
+    result['prc_trend'] = _cat(
+        ('dist_ema_50',       True),  ('dist_ema_200',     True),
+        ('dist_ema_100',      True),  ('dist_hma20',       True),
+        ('dist_kama',         True),  ('dist_rolling_vwap',True),
+        ('dist_vwap',         True),  ('supertrend_dist',  True),
+        ('sar_dist',          True),  ('linreg_slope_14',  True),
+        ('structure_bias',    True),  ('macro_trend_1d',   True),
+        ('macro_trend_1w',    True),
+    )
+
+    # -- Momentum -----------------------------------------------------
+    result['prc_momentum'] = _cat(
+        ('rsi_14',     True),  ('rsi_7',       True),  ('rsi_21',  True),
+        ('stoch_k',    True),  ('williams_r',  False),
+        ('macd_hist',  True),  ('cci_20',      True),
+        ('tsi',        True),  ('cmo_14',      True),
+        ('awesome_osc',True),  ('bop',         True),
+        ('roc_14',     True),  ('ppo',         True),
+        ('fisher',     True),
+    )
+
+    # -- Volume / Flow ------------------------------------------------
+    result['prc_volume'] = _cat(
+        ('volume_delta',    True),  ('volume_delta_14', True),
+        ('cmf_20',          True),  ('mfi_14',          True),
+        ('eom_14',          True),  ('relative_volume', True),
+        ('vol_velocity',    True),  ('kvo',             True),
+    )
+
+    # -- Price Position / Bands ---------------------------------------
+    result['prc_bands'] = _cat(
+        ('bb_pct_b',          True),  ('atr_band_position', True),
+        ('donchian_position', True),  ('close_position',    True),
+        ('quantile_position', True),  ('se_position',       True),
+        ('starc_position',    True),  ('gaussian_position', True),
+    )
+
+    # -- Smart Money --------------------------------------------------
+    result['prc_smart_money'] = _cat(
+        ('structure_bias',      True),
+        ('range_position_score',True),
+        ('bos_up',              True),  ('bos_down',   False),
+        ('choch_bull',          True),  ('choch_bear', False),
+        ('is_at_support',       True),  ('is_at_resistance', False),
+    )
+
+    # -- Weighted total (matches display weights in predictor.py) -----
+    W = {
+        'prc_trend':        2.0,
+        'prc_momentum':     1.5,
+        'prc_volume':       1.5,
+        'prc_smart_money':  1.5,
+        'prc_bands':        1.0,
+    }
+    Wsum = sum(W.values())   # 7.5
+    total = pd.concat([result[c] * w for c, w in W.items()], axis=1).sum(axis=1) / Wsum
+    result['prc_total'] = total.clip(0.0, 1.0)
+
+    # macro_confluence_score in [-1, +1]: used by create_triple_barrier_labels()
+    # to cancel barrier hits that contradict a strong confluence consensus.
+    # 0.5 (neutral) -> 0.0; 0.8 (strong bullish) -> +0.6; 0.2 (strong bearish) -> -0.6
+    result['macro_confluence_score'] = ((result['prc_total'] - 0.5) * 2.0).clip(-1.0, 1.0)
+
+    return result.fillna(0.0)
+
+
+def attach_soft_confluence(df: pd.DataFrame, window: int = 120) -> pd.DataFrame:
+    """Add the prc_* / macro_confluence_score columns to `df` in place-ish.
+
+    Mirrors the training-side contract exactly, including the neutral fallback:
+    if the computation fails we fill 0.5 (neutral), never 0.0.
+    """
+    if df is None or df.empty:
+        return df
+    try:
+        soft = compute_soft_confluence_features(df, window=window)
+        for col in soft.columns:
+            df[col] = soft[col].values
+        missing = [c for c in SOFT_CONFLUENCE_COLS if c not in df.columns]
+        if missing:
+            raise RuntimeError(
+                f"compute_soft_confluence_features() did not produce required "
+                f"columns: {missing}. Check that prepare_features() ran "
+                f"successfully and all indicator columns are present."
+            )
+    except RuntimeError:
+        raise
+    except Exception as err:  # noqa: BLE001 - fall back to neutral, never to 0.0
+        print(f"   Soft confluence computation failed ({err}) -- using neutral fallback")
+        for col, neutral in SOFT_CONFLUENCE_NEUTRAL.items():
+            if col not in df.columns:
+                df[col] = neutral
+    return df
+
+
+def build_model_frame(df: pd.DataFrame,
+                      btc_df: Optional[pd.DataFrame] = None,
+                      news_df: Optional[pd.DataFrame] = None,
+                      add_target_flag: bool = False,
+                      forward_hours: int = 1,
+                      df_1d: Optional[pd.DataFrame] = None,
+                      df_1w: Optional[pd.DataFrame] = None,
+                      macro_state: Optional[Dict[str, Any]] = None,
+                      funding_df: Optional[pd.DataFrame] = None,
+                      oi_df: Optional[pd.DataFrame] = None,
+                      fg_df: Optional[pd.DataFrame] = None,
+                      soft_window: int = 120) -> pd.DataFrame:
+    """THE definition of a model-ready frame. Training and inference both call this.
+
+    prepare_features() alone is NOT a model input -- it omits the soft
+    confluence block that the sidecar's feature_cols expects. Call this
+    instead of prepare_features() anywhere a frame is destined for a Booster,
+    so the two paths cannot drift apart again.
+    """
+    out = prepare_features(
+        df, btc_df=btc_df, news_df=news_df, add_target_flag=add_target_flag,
+        forward_hours=forward_hours, df_1d=df_1d, df_1w=df_1w,
+        macro_state=macro_state, funding_df=funding_df, oi_df=oi_df, fg_df=fg_df,
+    )
+    if out is None or out.empty:
+        return out
+    out = out.reset_index(drop=True).copy()
+    return attach_soft_confluence(out, window=soft_window)
+
+
+def check_feature_parity(available: List[str],
+                         expected: List[str]) -> Tuple[List[str], List[str]]:
+    """Split the columns a model expects but the live frame lacks.
+
+    Returns (fatal, benign). `benign` is the perp-only set that training also
+    zero-fills for spot-only tokens. `fatal` is everything else -- a column the
+    model was trained on that inference would silently hand over as 0.0.
+    """
+    have = set(available)
+    ok = set(ZERO_FILL_OK)
+    missing = [c for c in expected if c not in have]
+    return [c for c in missing if c not in ok], [c for c in missing if c in ok]
