@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 import xgboost as xgb
 import json
+import os
 import time
 import logging
 import threading
@@ -33,6 +34,16 @@ def map_timeframe_to_ccxt(tf: str) -> str:
         return mapping[tf]
     logger.warning(f"Unsupported timeframe '{tf}'. Defaulting to '1h'.")
     return '1h'
+
+
+class FeatureParityError(RuntimeError):
+    """The live frame is missing a column the model was trained on.
+
+    Raised instead of letting DataFrame.reindex(fill_value=0) hand the Booster a
+    silent 0.0 for a feature that carried real signal during training. Set
+    AEGIS_ALLOW_FEATURE_SKEW=1 to downgrade to an error log if a token must keep
+    trading while the frame builder is being fixed.
+    """
 
 
 class Predictor:
@@ -71,6 +82,10 @@ class Predictor:
         self.meta: Dict[str, Any] = {}                     # sidecar contents
         self._token_params: Optional[Dict[str, Any]] = None  # optimizer output
         self.aegis_state: Optional[Dict[str, Any]] = None
+        # Parity reporting is deduped per symbol so a break is logged once, not
+        # once per scan across a 63-token fleet.
+        self._parity_reported: list = []
+        self._parity_benign_reported: list = []
         self.load_model()
         self._token_params = self._load_token_params()
 
@@ -490,15 +505,51 @@ class Predictor:
             df_1d = None
         funding_df, oi_df = self._fetch_futures_data(df)
         fg_df = self._fetch_fear_greed()
-        from src.ml.feature_engine import prepare_features
-        return prepare_features(df, btc_df=btc_df, news_df=news_df, df_1d=df_1d, df_1w=None,
-                                funding_df=funding_df, oi_df=oi_df, fg_df=fg_df)
+        # build_model_frame() -- NOT prepare_features(). The sidecar's
+        # feature_cols include the soft-confluence block (prc_trend, prc_momentum,
+        # prc_volume, prc_bands, prc_smart_money, prc_total), which
+        # prepare_features() alone does not produce. Calling prepare_features()
+        # here left those six columns absent, and _align()'s reindex silently
+        # handed the Booster 0.0 for each on every live prediction while training
+        # had centred them near 0.5. Training and inference now build the frame
+        # from the same function.
+        from src.ml.feature_engine import build_model_frame
+        return build_model_frame(df, btc_df=btc_df, news_df=news_df, df_1d=df_1d, df_1w=None,
+                                 funding_df=funding_df, oi_df=oi_df, fg_df=fg_df)
 
     # -------------------------------------------------------------
     # Prediction with the meta gate
     # -------------------------------------------------------------
     def _align(self, df_features: pd.DataFrame, cols) -> pd.DataFrame:
         X = df_features.drop(columns=['timestamp', 'target'], errors='ignore')
+
+        # ── Train/serve parity guard ──────────────────────────────────────
+        # The reindex below fills any column the model expects but the live
+        # frame lacks with 0.0, and raises nothing. That is how the prc_*
+        # skew went unnoticed: six trained-on features arrived as 0.0 on every
+        # prediction. Check BEFORE reindexing, while the absence is still
+        # visible, and fail closed -- a silently wrong signal is worse than no
+        # signal. Perp-only columns are exempt (training zero-fills those for
+        # spot-only tokens too, so both sides agree).
+        from src.ml.feature_engine import check_feature_parity
+        fatal, benign = check_feature_parity(list(X.columns), list(cols))
+        if fatal and fatal != self._parity_reported:
+            self._parity_reported = fatal
+            msg = (f"[{self.symbol}] feature parity break: {len(fatal)} column(s) "
+                   f"the model was trained on are missing from the live frame and "
+                   f"would be silently zero-filled: {fatal[:12]}"
+                   f"{' ...' if len(fatal) > 12 else ''}. Build the inference frame "
+                   f"with feature_engine.build_model_frame().")
+            if os.getenv("AEGIS_ALLOW_FEATURE_SKEW", "").strip() in ("1", "true", "TRUE"):
+                logger.error(msg + "  [AEGIS_ALLOW_FEATURE_SKEW set — continuing anyway]")
+            else:
+                raise FeatureParityError(msg)
+        if benign and benign != self._parity_benign_reported:
+            self._parity_benign_reported = benign
+            logger.info(f"[{self.symbol}] {len(benign)} perp-only feature(s) "
+                        f"zero-filled (spot-only token): {benign[:6]}"
+                        f"{' ...' if len(benign) > 6 else ''}")
+
         X = X.reindex(columns=list(cols), fill_value=0).copy()
         
         # Apply feature transforms saved in the sidecar
