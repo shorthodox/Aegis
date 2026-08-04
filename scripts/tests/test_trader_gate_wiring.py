@@ -42,8 +42,12 @@ def build(levels, ltf=('bull',), **over):
 
 async def drive(eng, result):
     """Run one symbol through _process_symbol with the desk enabled."""
-    prev = le.USE_TRADER_GATE
-    le.USE_TRADER_GATE = True
+    # scripts.engine.config is the single mutable source of truth for the flag;
+    # scripts.live_engine only re-exports its value, so setting it there would
+    # rebind a name the engine does not read.
+    from scripts.engine import config as _cfg
+    prev = _cfg.USE_TRADER_GATE
+    _cfg.USE_TRADER_GATE = True
     loop = asyncio.get_running_loop()
     real = loop.run_in_executor
 
@@ -62,7 +66,7 @@ async def drive(eng, result):
             await eng._process_symbol(SYMBOL, _StubPredictor(result), asyncio.Semaphore(1))
     finally:
         loop.run_in_executor = real      # type: ignore[assignment]
-        le.USE_TRADER_GATE = prev
+        _cfg.USE_TRADER_GATE = prev
     return eng.last_signals.get(SYMBOL, {}), eng.wallet.open_positions.get(SYMBOL), buf.getvalue()
 
 

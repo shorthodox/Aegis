@@ -75,13 +75,41 @@ def test_adx_frames_a_strong_trend_as_a_headwind(src):
     assert 'headwind' in adx.lower()
 
 
-# ── the engine really is fade-only, so the copy above is correct ─────────────
+# ── the engine is setup-typed, NOT fade-only ─────────────────────────────────
 
-def test_engine_blocks_trend_following(src):
-    """If this ever changes, the ADX copy must change back."""
+def test_engine_no_longer_blocks_trend_following():
+    """The engine takes trend-following trades, and pays them the most.
+
+    This test used to assert the opposite — that live_engine.py contained
+    'fade-only strategy' and a `_trend_follow = (` veto — and it passed right up
+    until the v80..v82 guard chain was deleted. It was passing on dead code: the
+    chain sat behind `if USE_TRADER_GATE:` and had been unreachable since v83,
+    so the strings were present but the veto never ran.
+
+    What actually runs is trader_gate.py's setup-typed playbook, where
+    TREND_PULLBACK carries the LARGEST risk weight of any setup and
+    EXHAUSTION_REVERSAL the smallest — the opposite ordering to fade-only, and
+    deliberately so (measured +0.069R vs -0.064R per trade).
+
+    NOTE: chart.html still frames a strong ADX as a headwind on the reasoning
+    that the engine fades trends. That copy and this engine now disagree; the
+    wording is a product decision, which is why this test asserts the engine's
+    behaviour rather than quietly rewriting the page.
+    """
+    from src.trading import trader_gate as TG
+
+    weights = TG.SETUP_RISK_WEIGHT
+    assert TG.SETUP_TREND_PULLBACK in weights, 'trend-following setup is gone'
+    assert weights[TG.SETUP_TREND_PULLBACK] == max(weights.values()), (
+        'TREND_PULLBACK is no longer the highest-weighted setup — if the engine '
+        'has gone back to fading, the ADX copy on chart.html becomes correct '
+        'again and this test should be inverted'
+    )
+    assert weights[TG.SETUP_TREND_PULLBACK] > weights[TG.SETUP_EXHAUSTION_REVERSAL]
+
     engine = (Path(__file__).resolve().parents[1] / 'live_engine.py').read_text(
         encoding='utf-8')
-    assert 'fade-only strategy' in engine
-    assert re.search(r"_trend_follow\s*=\s*\(", engine), (
-        'trend-following block is gone — revisit the ADX narrative'
+    assert 'fade-only strategy' not in engine, (
+        'a fade-only veto is back in live_engine.py — it would now contradict '
+        'trader_gate.py, which sizes trend-pullbacks largest'
     )

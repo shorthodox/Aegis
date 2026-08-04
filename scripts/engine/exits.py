@@ -1,0 +1,341 @@
+"""Position management: the TP ladder, break-even shift, trailing stop and
+reversal flip.
+
+v85 lives here in spirit: the ladder banks against levels the plan
+actually priced, so what is published as the target is what the trade is
+managed to.
+
+Extracted verbatim from the single-file live_engine.py; the bodies are
+unchanged, only the class they hang off moved. LiveEngine composes this
+mixin, so `self` is the full engine.
+"""
+from __future__ import annotations
+
+from dataclasses import asdict
+from typing import Any
+from typing import Dict
+from typing import Optional
+import time
+
+from scripts.engine.models import Position
+from scripts.engine.quality import SignalQualityFilter
+
+
+class ExitsMixin:
+    """_manage_exit .. _manage_exit — see module docstring."""
+
+    def _manage_exit(self, symbol: str, pos: Position,
+                     result: Dict[str, Any], price: float,
+                     price_only: bool = False) -> None:
+        """Evaluate every exit rule for one open position.
+
+        price_only=True skips the model-reversal branch (section 8). The fast
+        exit monitor passes it: reversal is a MODEL decision that belongs to the
+        scan cycle, and re-evaluating it against a stale last_signals entry
+        every few seconds would fire it on data the scan already acted on.
+        Everything else — the TP ladder, the trail, break-even and the stop —
+        is purely price-driven and is exactly what the monitor exists to catch
+        between scans.
+        """
+        live_px     = self.live_prices.get(symbol, 0.0)
+        check_price = live_px if live_px > 0 else price
+
+        now  = time.time()
+        held = now - self._open_time.get(symbol, 0)
+
+        # Current ATR: use live result first, then fall back to the ATR stored at
+        # entry (pos.atr), then a price-based estimate.
+        atr = (float(result.get('atr') or 0)
+               or pos.atr
+               or pos.entry_price * 0.015)
+
+        # ── Update peak price for trailing-stop tracking ──────────────────────
+        # LONG: track the highest price; SHORT: track the lowest price (trough).
+        if pos.direction == 'LONG':
+            self._peak_price[symbol] = max(
+                self._peak_price.get(symbol, pos.entry_price), check_price)
+        else:
+            self._peak_price[symbol] = min(
+                self._peak_price.get(symbol, pos.entry_price), check_price)
+
+        peak = self._peak_price[symbol]
+
+        # ── Helper: full close (removes position, cleans all TP-hit state) ────
+        def _close(reason: str, exit_px: Optional[float] = None) -> None:
+            rec = self.wallet.close_trade(
+                symbol, exit_px if exit_px is not None else check_price, reason)
+            if rec:
+                self._last_close_time[symbol]   = now
+                self._last_close_side[symbol]   = pos.side
+                self._last_close_reason[symbol] = reason
+                for d in (self._tp1_hit, self._tp2_hit,
+                          self._tp3_hit, self._tp4_hit, self._peak_price):
+                    d.pop(symbol, None)
+                # Whole-trade view: rec.outcome already accounts for banked
+                # TP partials (close_trade); aggregate PnL across all slices
+                # of this signal_id so logs/alerts report the REAL result.
+                _slices   = [t for t in self.wallet.trade_history
+                             if t.signal_id == rec.signal_id]
+                _tot_usdt = sum(t.pnl_usdt for t in _slices)
+                _tot_val  = sum(t.position_value for t in _slices)
+                if _tot_usdt < 0:                       # whole trade lost -> bench the token
+                    self._last_loss_time[symbol] = now
+                _tot_pct  = (_tot_usdt / _tot_val * 100) if _tot_val > 0 else rec.pnl_pct
+                tag = rec.outcome
+                _slice_note = (f' (final slice {rec.pnl_pct:+.2f}%)'
+                               if len(_slices) > 1 else '')
+                print(f'[{symbol}] {reason} {tag} {_tot_pct:+.2f}%{_slice_note} @ '
+                      f'{(exit_px or check_price):.6g}')
+                self.perf_tracker.record_outcome(
+                    symbol        = symbol,
+                    regime        = self.last_signals.get(symbol, {}).get('regime', 'UNKNOWN'),
+                    outcome       = rec.outcome,
+                    pnl_pct       = round(_tot_pct, 3),
+                    quality_score = float(self.last_signals.get(symbol, {}).get('quality_score', 0)),
+                )
+                self.drift_monitor.record(symbol, rec.outcome)
+                self.drift_monitor.save_state()
+                drift_sev = self.drift_monitor.severity(symbol)
+                if drift_sev in ('WARNING', 'CRITICAL'):
+                    live_wr   = self.drift_monitor._live_win_rate(symbol)
+                    benchmark = self.drift_monitor._benchmarks.get(symbol, 0.60)
+                    print(f'[{symbol}] DRIFT {drift_sev}: '
+                          f'live_wr={live_wr:.1%} benchmark={benchmark:.1%} '
+                          f'(drop={((benchmark - (live_wr or 0)) * 100):.1f}pp)')
+                self._save_track_record()
+                try:
+                    self.adaptive_orchestrator.record_trade(asdict(rec))
+                except Exception:
+                    pass
+                try:
+                    from scripts.notifications.dispatcher import get_notifier
+                    _hold = int(time.time() - self._open_time.get(symbol, time.time()))
+                    get_notifier().send_exit(
+                        symbol=symbol, direction=pos.side, outcome=tag,
+                        pnl_pct=round(_tot_pct, 3), hold_seconds=_hold,
+                        exit_reason=reason,
+                    )
+                except Exception:
+                    pass
+
+        # ── Helper: partial close (keeps position open for next TP levels) ────
+        def _partial(reason: str, pct: float, exit_px: Optional[float] = None) -> None:
+            px  = exit_px if exit_px is not None else check_price
+            rec = self.wallet.partial_close_trade(symbol, px, reason, pct)
+            if rec:
+                print(f'[{symbol}] {reason} {rec.pnl_pct:+.2f}% '
+                      f'(closed {pct*100:.0f}% @ {px:.6g}) '
+                      f'remaining≈{pos.position_value:.0f} USDT')
+                self._save_track_record()
+                # TP hits are outcome events — keep subscribers' Telegram in
+                # sync with the position as profit is banked, not just at the
+                # final close.
+                try:
+                    from scripts.notifications.dispatcher import get_notifier
+                    _hold = int(time.time() - self._open_time.get(symbol, time.time()))
+                    get_notifier().send_exit(
+                        symbol=symbol, direction=pos.side, outcome=rec.outcome,
+                        pnl_pct=rec.pnl_pct, hold_seconds=_hold,
+                        exit_reason=f'{reason} ({pct*100:.0f}% closed, position still open)',
+                    )
+                except Exception:
+                    pass
+
+        # ── 1. Maximum hold time (zombie guard) ──────────────────────────────
+        if held >= self.MAX_HOLD_SECONDS:
+            _close('MAX_HOLD_EXPIRED')
+            return
+
+        # ── 2. TP5 hit — close all remaining size ────────────────────────────
+        # By this point TPs 1-4 have already taken 80 %; this closes the last 20 %.
+        if pos.take_profit_5 > 0:
+            tp5_hit = (
+                (pos.direction == 'LONG'  and check_price >= pos.take_profit_5) or
+                (pos.direction == 'SHORT' and check_price <= pos.take_profit_5)
+            )
+            tp5_via_peak = self._tp4_hit.get(symbol, False) and (
+                (pos.direction == 'LONG'  and peak >= pos.take_profit_5) or
+                (pos.direction == 'SHORT' and peak <= pos.take_profit_5)
+            )
+            if tp5_hit:
+                _close('TP5_HIT')
+                return
+            if tp5_via_peak:
+                _close('TP5_HIT', exit_px=pos.take_profit_5)
+                return
+
+        # ── 3. TP4 hit — 20 % partial close ──────────────────────────────────
+        if pos.take_profit_4 > 0 and not self._tp4_hit.get(symbol, False):
+            tp4_hit = (
+                (pos.direction == 'LONG'  and check_price >= pos.take_profit_4) or
+                (pos.direction == 'SHORT' and check_price <= pos.take_profit_4)
+            )
+            # v78 fix: detect TP hits via peak from start (not just after previous TP)
+            # This prevents missing TP levels when price spikes through them and reverses
+            tp4_via_peak = (
+                (pos.direction == 'LONG'  and peak >= pos.take_profit_4) or
+                (pos.direction == 'SHORT' and peak <= pos.take_profit_4)
+            )
+            if tp4_hit or tp4_via_peak:
+                exit_px = pos.take_profit_4 if tp4_via_peak else None
+                _partial('TP4_PARTIAL', self.risk_engine.TP_CLOSE_PCTS[3], exit_px)
+                self._tp4_hit[symbol] = True
+
+        # ── 4. TP3 hit — 20 % partial close ──────────────────────────────────
+        if pos.take_profit_3 > 0 and not self._tp3_hit.get(symbol, False):
+            tp3_hit = (
+                (pos.direction == 'LONG'  and check_price >= pos.take_profit_3) or
+                (pos.direction == 'SHORT' and check_price <= pos.take_profit_3)
+            )
+            # v78 fix: detect TP hits via peak from start (not just after TP2)
+            # Ensures TP3 closes even if price rapidly moves through it
+            tp3_via_peak = (
+                (pos.direction == 'LONG'  and peak >= pos.take_profit_3) or
+                (pos.direction == 'SHORT' and peak <= pos.take_profit_3)
+            )
+            if tp3_hit or tp3_via_peak:
+                exit_px = pos.take_profit_3 if tp3_via_peak else None
+                _partial('TP3_PARTIAL', self.risk_engine.TP_CLOSE_PCTS[2], exit_px)
+                self._tp3_hit[symbol] = True
+
+        # ── 5. TP2 hit — 20 % partial close, activate trailing stop ──────────
+        # Peak-based detection now applies from the start (v78 fix) to catch TP hits
+        # even when price spikes and reverses between scan cycles.
+        if pos.take_profit_2 > 0 and not self._tp2_hit.get(symbol, False):
+            tp2_hit = (
+                (pos.direction == 'LONG'  and check_price >= pos.take_profit_2) or
+                (pos.direction == 'SHORT' and check_price <= pos.take_profit_2)
+            )
+            # v78: Always use peak-based detection, not just after TP1.
+            # This catches rapid TP hits that would otherwise be missed.
+            tp2_via_peak = (
+                (pos.direction == 'LONG'  and peak >= pos.take_profit_2) or
+                (pos.direction == 'SHORT' and peak <= pos.take_profit_2)
+            )
+            if tp2_hit or tp2_via_peak:
+                exit_px = pos.take_profit_2 if tp2_via_peak else None
+                _partial('TP2_PARTIAL', self.risk_engine.TP_CLOSE_PCTS[1], exit_px)
+                self._tp2_hit[symbol] = True
+                # Stop is already at break-even from TP1; the trail takes over
+                # here and can only ratchet above it.
+                print(f'[{symbol}] TP2_HIT — TRAILING on '
+                      f'(dist=ATR×{self.risk_engine.TRAIL_MULTIPLIER}, '
+                      f'floor=TP1 {pos.take_profit_1:.6g})')
+
+        # ── 6. Trailing stop — active after TP2 is hit ───────────────────────
+        # Trail distance = ATR × TRAIL_MULTIPLIER, floor = TP1.
+        #
+        # v82: the floor used to be TP2, which made this block a no-op — the
+        # stop sat exactly at TP2 until price ran a full ATR beyond it, so any
+        # dip right after TP2 exited there and no runner ever reached TP3.
+        # Flooring at TP1 keeps ≥1R locked on the remainder while giving it the
+        # room to actually get to the structural target.
+        if self._tp2_hit.get(symbol, False):
+            trail_dist = self.risk_engine.TRAIL_MULTIPLIER * atr
+            if pos.direction == 'LONG':
+                trail_stop = max(pos.take_profit_1, peak - trail_dist)
+                if check_price <= trail_stop:
+                    _close('TRAILING_STOP', exit_px=trail_stop)
+                    return
+            else:  # SHORT
+                trail_stop = min(pos.take_profit_1, peak + trail_dist)
+                if check_price >= trail_stop:
+                    _close('TRAILING_STOP', exit_px=trail_stop)
+                    return
+
+        # ── 7. TP1 hit — partial close, move SL to break-even ────────────────
+        # v78 fix: peak-based detection catches TP1 hits even when price spikes
+        # through and reverses rapidly between scan cycles.
+        #
+        # Break-even at TP1 is a deliberate WIN-RATE choice, not an expectancy
+        # one: it converts a would-be full loss into a scratch that still keeps
+        # the TP1 slice, which is what holds the published win rate in a range
+        # subscribers find credible.  It costs expectancy on trades that dip to
+        # entry and then recover — an acceptable price while the model's live
+        # edge is being re-measured after the regime-detector repair.
+        #
+        # This is NOT the deleted TP1_RECROSS.  Break-even exits at ENTRY if the
+        # move fully reverses; the re-cross exited the whole position at TP1 on
+        # any tick back through it, capping every winner.  Keep this, never that.
+        if pos.take_profit_1 > 0 and not self._tp1_hit.get(symbol, False):
+            tp1_hit = (
+                (pos.direction == 'LONG'  and check_price >= pos.take_profit_1) or
+                (pos.direction == 'SHORT' and check_price <= pos.take_profit_1)
+            )
+            # v78: Always use peak-based detection to catch rapid TP hits
+            tp1_via_peak = (
+                (pos.direction == 'LONG'  and peak >= pos.take_profit_1) or
+                (pos.direction == 'SHORT' and peak <= pos.take_profit_1)
+            )
+            if tp1_hit or tp1_via_peak:
+                _partial('TP1_PARTIAL', self.risk_engine.TP_CLOSE_PCTS[0])
+                self._tp1_hit[symbol]    = True
+                self._peak_price[symbol] = check_price   # reset peak tracking from TP1
+                pos.stop_loss = pos.entry_price          # break-even
+                print(f'[{symbol}] TP1_HIT @ {check_price:.6g} — banked '
+                      f'{self.risk_engine.TP_CLOSE_PCTS[0]*100:.0f}%, '
+                      f'SL to break-even ({pos.entry_price:.6g})')
+
+        # ── 7b–7e. TP re-cross exits — DELETED in v82 ────────────────────────
+        # There used to be four blocks here (TP1/TP2/TP3/TP4_RECROSS) that
+        # closed 100 % of the remaining position the instant price ticked back
+        # through a TP level it had already tagged.  TP1_RECROSS was the single
+        # most expensive line in this engine:
+        #
+        #   TP1 was 0.7R, so reaching TP1 and then ticking back — which is
+        #   almost every trade on a 1h chart — closed the whole position at
+        #   +0.7R.  The stop was a full -1.0R.  Break-even win rate was
+        #   1/1.7 = 58.8 % and the engine ran at 60 %, i.e. an edge of +0.02R,
+        #   which fees then buried.  It also made TP2-TP5 unreachable: the live
+        #   log shows only ever two exit reasons, SL_HIT and TP1.
+        #
+        # Profit protection after TP2 is the trailing stop's job (section 6),
+        # which ratchets instead of capping.  Between TP1 and TP2 the original
+        # structural stop stands — a trade is allowed to breathe there.
+        #
+        # Do not reintroduce these without re-running the payoff arithmetic.
+
+        # ── 8. Model-reversal exit (dynamic exit on opposing signal) ─────────
+        side = result.get('side', 'FLAT')
+        fire = bool(result.get('fire', False)) and not price_only
+        opposite = (
+            (pos.direction == 'LONG'  and side == 'SELL' and fire) or
+            (pos.direction == 'SHORT' and side == 'BUY'  and fire)
+        )
+        if opposite:
+            # Require minimum hold unless TP1 is already secured.
+            _reversal_min = 0 if self._tp1_hit.get(symbol, False) else self.MIN_HOLD_SECONDS
+            if held >= _reversal_min:
+                # Guard against low-conviction one-candle noise without depending on
+                # consecutive-cycle counting (which breaks when the model outputs FLAT
+                # between reversal cycles, clearing _signal_history each time).
+                # Instead, require the reversal signal to meet the same quality floor
+                # used for entry (edge_score >= MIN_QUALITY_SCORE = 70).
+                #
+                # v82: a reversal after TP1 used to book at `pos.take_profit_1`
+                # regardless of where price actually was — a free fill at a level
+                # the market had already left.  It now exits at the live price
+                # like any other market exit; the TP1 slice is already banked.
+                _tp1_secured = self._tp1_hit.get(symbol, False)
+                _rev_edge    = float(result.get('edge_score', 0.0))
+                if _tp1_secured:
+                    _close('MODEL_REVERSAL_TP')
+                    return
+                if _rev_edge >= SignalQualityFilter.MIN_QUALITY_SCORE:
+                    _close('MODEL_REVERSAL_TP')
+                    return
+                print(f'[{symbol}] REVERSAL_GATE deferred {pos.direction}→{side}: '
+                      f'reversal edge={_rev_edge:.1f} < '
+                      f'{SignalQualityFilter.MIN_QUALITY_SCORE:.0f} (tp1_secured=False)')
+
+        # ── 9. Stop loss / break-even SL ─────────────────────────────────────
+        # Before TP2: uses the original ATR-based structural SL.
+        # After  TP2: pos.stop_loss was moved to entry_price (break-even), and
+        #             the trailing stop in section 6 is usually tighter still.
+        if pos.stop_loss > 0:
+            sl_hit = (
+                (pos.direction == 'LONG'  and check_price <= pos.stop_loss) or
+                (pos.direction == 'SHORT' and check_price >= pos.stop_loss)
+            )
+            if sl_hit:
+                _close('STOP_HIT')

@@ -2,7 +2,7 @@
   "buy_aligned": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] MODEL BLOCK BUY: WRONG_ZONE \u2014 range_position 0.50 is in the resistance zone; a BUY must be in the support zone (rp <= 0.35 for BUY, >= 0.65 for SELL)"
+      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
     ],
     "paper": null,
     "position": null,
@@ -29,7 +29,9 @@
   },
   "buy_at_support": {
     "bootstrap": 1,
-    "decisions": [],
+    "decisions": [
+      "[TEST/USDT] NO TRADE (invalidation): invalidation is 3.5 ATR away (> 3.0) \u2014 too far behind the level to be worth defending"
+    ],
     "paper": null,
     "position": null,
     "signal": {
@@ -43,7 +45,7 @@
       "quality_score": 85.0,
       "regime": "RANGING",
       "risk_reward": 0,
-      "signal": "FLAT",
+      "signal": "HOLD",
       "signal_strength": "NEUTRAL",
       "suggested_sl": null,
       "suggested_tp": null,
@@ -56,7 +58,7 @@
   "buy_atr_below_soft": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] MODEL BLOCK BUY: ATR_FLOOR atr=0.40% < 0.5% and not at a structural extreme (rp=0.50 rsi=50.0)"
+      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
     ],
     "paper": null,
     "position": null,
@@ -84,7 +86,7 @@
   "buy_htf_conflict": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] MODEL BLOCK BUY: WRONG_ZONE \u2014 range_position 0.50 is in the resistance zone; a BUY must be in the support zone (rp <= 0.35 for BUY, >= 0.65 for SELL)"
+      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
     ],
     "paper": null,
     "position": null,
@@ -112,7 +114,7 @@
   "buy_liquidity_trap": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] MODEL BLOCK BUY: ATR_FLOOR atr=0.40% < 0.5% and not at a structural extreme (rp=0.50 rsi=50.0)"
+      "[TEST/USDT] NO TRADE (fitness): LIQUIDITY_TRAP \u2014 no reliable structure to trade against"
     ],
     "paper": null,
     "position": null,
@@ -140,7 +142,7 @@
   "buy_low_atr": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] MODEL BLOCK BUY: ATR_FLOOR atr=0.20% below the 0.35% hard floor \u2014 dead market"
+      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
     ],
     "paper": null,
     "position": null,
@@ -168,7 +170,7 @@
   "buy_low_edge": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] MODEL BLOCK BUY: WRONG_ZONE \u2014 range_position 0.50 is in the resistance zone; a BUY must be in the support zone (rp <= 0.35 for BUY, >= 0.65 for SELL)"
+      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
     ],
     "paper": null,
     "position": null,
@@ -196,7 +198,7 @@
   "buy_no_conviction": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] MODEL BLOCK BUY: directional conviction +0.000 < 0.10 (p_buy 20.0 vs p_sell 20.0) \u2014 the model does not prefer this side, the edge percentile does"
+      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
     ],
     "paper": null,
     "position": null,
@@ -225,7 +227,7 @@
     "bootstrap": 1,
     "decisions": [
       "[TEST/USDT] ARBITER SKIP: bearish pattern present but MACD/trend not confirming (macd=BULLISH, supertrend=BULLISH, bias=BULLISH)",
-      "[TEST/USDT] MODEL BLOCK BUY: EXHAUSTION_CHASE \u2014 BUY at RSI 82 chases a blow-off; the fade of this bar is the SELL"
+      "[TEST/USDT] NO TRADE (setup): model leans the other way by 0.62 (> 0.12) \u2014 structure and model disagree"
     ],
     "paper": null,
     "position": null,
@@ -253,26 +255,27 @@
   "buy_tagging_htf_conf": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] MODEL FIRE BUY tier=NORMAL edge=85 srq=0.71 mode=model_at_level scores={'buy': 58.3, 'sell': 10.0, 'hold': 34.5}",
-      "[TEST/USDT] OPEN LONG @ 100 | conf=85.000 quality=85 regime=RANGING mode=model_at_level"
+      "[TEST/USDT] PLAN ENTER BUY RANGE_FADE @ 100 stop 98.5 target 110 6.19R net size x0.70 tier=NORMAL",
+      "[TEST/USDT] PLAN SIZE BUY: RANGE_FADE x0.70 -> 416 USDT",
+      "[TEST/USDT] OPEN LONG @ 100 | conf=85.000 quality=85 regime=RANGING mode=range_fade"
     ],
     "paper": null,
     "position": {
       "entry": 100.0,
       "side": "BUY",
-      "sl": 99.3,
+      "sl": 98.5,
       "tier": "NORMAL",
-      "tp1": 100.7,
+      "tp1": 101.5,
       "tp5": 126.5036,
-      "value": 1000.0
+      "value": 499.8
     },
     "signal": {
       "direction": "LONG",
-      "entry_mode": "model_at_level",
+      "entry_mode": "range_fade",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": true,
-      "levels_frozen": false,
+      "levels_frozen": true,
       "paper_only": false,
       "pending_entry": false,
       "quality_score": 85.0,
@@ -280,10 +283,10 @@
       "risk_reward": 2.0,
       "risk_tier": "NORMAL",
       "signal": "BUY",
-      "signal_strength": "STRONG_BUY",
-      "suggested_sl": 99.3,
-      "suggested_tp": 100.7,
-      "tp2": 101.4,
+      "signal_strength": "BUY",
+      "suggested_sl": 98.5,
+      "suggested_tp": 110.0,
+      "tp2": 103.0,
       "tp3": 110.0,
       "tp4": 116.3036,
       "tp5": 126.5036
@@ -292,26 +295,27 @@
   "buy_tagging_support": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] MODEL FIRE BUY tier=NORMAL edge=85 srq=0.71 mode=model_at_level scores={'buy': 74.1, 'sell': 0.0, 'hold': 21.7}",
-      "[TEST/USDT] OPEN LONG @ 100 | conf=85.000 quality=85 regime=RANGING mode=model_at_level"
+      "[TEST/USDT] PLAN ENTER BUY RANGE_FADE @ 100 stop 98.5 target 110 6.19R net size x0.70 tier=NORMAL",
+      "[TEST/USDT] PLAN SIZE BUY: RANGE_FADE x0.70 -> 416 USDT",
+      "[TEST/USDT] OPEN LONG @ 100 | conf=85.000 quality=85 regime=RANGING mode=range_fade"
     ],
     "paper": null,
     "position": {
       "entry": 100.0,
       "side": "BUY",
-      "sl": 99.3,
+      "sl": 98.5,
       "tier": "NORMAL",
-      "tp1": 100.7,
+      "tp1": 101.5,
       "tp5": 126.5036,
-      "value": 1000.0
+      "value": 499.8
     },
     "signal": {
       "direction": "LONG",
-      "entry_mode": "model_at_level",
+      "entry_mode": "range_fade",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": true,
-      "levels_frozen": false,
+      "levels_frozen": true,
       "paper_only": false,
       "pending_entry": false,
       "quality_score": 85.0,
@@ -319,10 +323,10 @@
       "risk_reward": 2.0,
       "risk_tier": "NORMAL",
       "signal": "BUY",
-      "signal_strength": "STRONG_BUY",
-      "suggested_sl": 99.3,
-      "suggested_tp": 100.7,
-      "tp2": 101.4,
+      "signal_strength": "BUY",
+      "suggested_sl": 98.5,
+      "suggested_tp": 110.0,
+      "tp2": 103.0,
       "tp3": 110.0,
       "tp4": 116.3036,
       "tp5": 126.5036
@@ -331,26 +335,27 @@
   "buy_tagging_wide_atr": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] MODEL FIRE BUY tier=NORMAL edge=85 srq=0.71 mode=model_at_level scores={'buy': 78.1, 'sell': 0.0, 'hold': 17.6}",
-      "[TEST/USDT] OPEN LONG @ 100 | conf=85.000 quality=85 regime=RANGING mode=model_at_level"
+      "[TEST/USDT] PLAN ENTER BUY RANGE_FADE @ 100 stop 95.5 target 115 3.24R net size x0.70 tier=NORMAL",
+      "[TEST/USDT] PLAN SIZE BUY: RANGE_FADE x0.70 -> 416 USDT",
+      "[TEST/USDT] OPEN LONG @ 100 | conf=85.000 quality=85 regime=RANGING mode=range_fade"
     ],
     "paper": null,
     "position": {
       "entry": 100.0,
       "side": "BUY",
-      "sl": 97.9,
+      "sl": 95.5,
       "tier": "NORMAL",
-      "tp1": 102.1,
+      "tp1": 104.5,
       "tp5": 139.5936,
-      "value": 1000.0
+      "value": 499.8
     },
     "signal": {
       "direction": "LONG",
-      "entry_mode": "model_at_level",
+      "entry_mode": "range_fade",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": true,
-      "levels_frozen": false,
+      "levels_frozen": true,
       "paper_only": false,
       "pending_entry": false,
       "quality_score": 85.0,
@@ -358,10 +363,10 @@
       "risk_reward": 2.0,
       "risk_tier": "NORMAL",
       "signal": "BUY",
-      "signal_strength": "STRONG_BUY",
-      "suggested_sl": 97.9,
-      "suggested_tp": 102.1,
-      "tp2": 104.2,
+      "signal_strength": "BUY",
+      "suggested_sl": 95.5,
+      "suggested_tp": 115.0,
+      "tp2": 109.0,
       "tp3": 115.0,
       "tp4": 124.3936,
       "tp5": 139.5936
@@ -369,7 +374,9 @@
   },
   "buy_trend_bear": {
     "bootstrap": 1,
-    "decisions": [],
+    "decisions": [
+      "[TEST/USDT] NO TRADE (setup): downtrend mid-range (rp 0.50) \u2014 no edge here, chasing or fading blind"
+    ],
     "paper": null,
     "position": null,
     "signal": {
@@ -383,7 +390,7 @@
       "quality_score": 85.0,
       "regime": "TRENDING_BEAR",
       "risk_reward": 0,
-      "signal": "FLAT",
+      "signal": "HOLD",
       "signal_strength": "NEUTRAL",
       "suggested_sl": null,
       "suggested_tp": null,
@@ -395,7 +402,9 @@
   },
   "buy_vol_expansion": {
     "bootstrap": 1,
-    "decisions": [],
+    "decisions": [
+      "[TEST/USDT] NO TRADE (fitness): volatility shock (ATR 6.00%)"
+    ],
     "paper": null,
     "position": null,
     "signal": {
@@ -409,7 +418,7 @@
       "quality_score": 85.0,
       "regime": "VOLATILE_EXPANSION",
       "risk_reward": 0,
-      "signal": "FLAT",
+      "signal": "HOLD",
       "signal_strength": "NEUTRAL",
       "suggested_sl": null,
       "suggested_tp": null,
@@ -422,7 +431,7 @@
   "buy_weak_indicators": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] MODEL BLOCK BUY: weak indicator support (0 < 2) \u2014 indicators macd=0, supertrend=0, bias=0, htf_daily=0, htf_weekly=0"
+      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
     ],
     "paper": null,
     "position": null,
@@ -450,7 +459,7 @@
   "buy_wide_atr": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] MODEL BLOCK BUY: WRONG_ZONE \u2014 range_position 0.50 is in the resistance zone; a BUY must be in the support zone (rp <= 0.35 for BUY, >= 0.65 for SELL)"
+      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
     ],
     "paper": null,
     "position": null,
@@ -477,7 +486,9 @@
   },
   "flat_no_fire": {
     "bootstrap": 1,
-    "decisions": [],
+    "decisions": [
+      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
+    ],
     "paper": null,
     "position": null,
     "signal": {
@@ -491,7 +502,7 @@
       "quality_score": 0.0,
       "regime": "RANGING",
       "risk_reward": 0,
-      "signal": "FLAT",
+      "signal": "HOLD",
       "signal_strength": "NEUTRAL",
       "suggested_sl": null,
       "suggested_tp": null,
@@ -505,7 +516,7 @@
     "bootstrap": 1,
     "decisions": [
       "[TEST/USDT] RISKY-PAPER MAX_HOLD_EXPIRED @ 100",
-      "[TEST/USDT] MODEL BLOCK BUY: WRONG_ZONE \u2014 range_position 0.50 is in the resistance zone; a BUY must be in the support zone (rp <= 0.35 for BUY, >= 0.65 for SELL)"
+      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
     ],
     "paper": null,
     "position": null,
@@ -533,7 +544,7 @@
   "paper_long_held": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] MODEL BLOCK BUY: WRONG_ZONE \u2014 range_position 0.50 is in the resistance zone; a BUY must be in the support zone (rp <= 0.35 for BUY, >= 0.65 for SELL)"
+      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
     ],
     "paper": {
       "entry": 100.0,
@@ -570,7 +581,7 @@
     "bootstrap": 1,
     "decisions": [
       "[TEST/USDT] RISKY-PAPER SIGNAL_REVERSAL @ 100",
-      "[TEST/USDT] MODEL BLOCK SELL: WRONG_ZONE \u2014 range_position 0.50 is in the support zone; a SELL must be in the resistance zone (rp <= 0.35 for BUY, >= 0.65 for SELL)"
+      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
     ],
     "paper": null,
     "position": null,
@@ -599,7 +610,7 @@
     "bootstrap": 1,
     "decisions": [
       "[TEST/USDT] RISKY-PAPER SL_HIT @ 100",
-      "[TEST/USDT] MODEL BLOCK BUY: WRONG_ZONE \u2014 range_position 0.50 is in the resistance zone; a BUY must be in the support zone (rp <= 0.35 for BUY, >= 0.65 for SELL)"
+      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
     ],
     "paper": null,
     "position": null,
@@ -628,7 +639,7 @@
     "bootstrap": 1,
     "decisions": [
       "[TEST/USDT] RISKY-PAPER TP3_HIT @ 100",
-      "[TEST/USDT] MODEL BLOCK BUY: WRONG_ZONE \u2014 range_position 0.50 is in the resistance zone; a BUY must be in the support zone (rp <= 0.35 for BUY, >= 0.65 for SELL)"
+      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
     ],
     "paper": null,
     "position": null,
@@ -656,7 +667,7 @@
   "sell_aligned": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] MODEL BLOCK SELL: WRONG_ZONE \u2014 range_position 0.50 is in the support zone; a SELL must be in the resistance zone (rp <= 0.35 for BUY, >= 0.65 for SELL)"
+      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
     ],
     "paper": null,
     "position": null,
@@ -683,7 +694,9 @@
   },
   "sell_at_resistance": {
     "bootstrap": 1,
-    "decisions": [],
+    "decisions": [
+      "[TEST/USDT] NO TRADE (invalidation): invalidation is 6.5 ATR away (> 3.0) \u2014 too far behind the level to be worth defending"
+    ],
     "paper": null,
     "position": null,
     "signal": {
@@ -697,7 +710,7 @@
       "quality_score": 85.0,
       "regime": "RANGING",
       "risk_reward": 0,
-      "signal": "FLAT",
+      "signal": "HOLD",
       "signal_strength": "NEUTRAL",
       "suggested_sl": null,
       "suggested_tp": null,
@@ -710,7 +723,7 @@
   "sell_htf_conflict": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] MODEL BLOCK SELL: WRONG_ZONE \u2014 range_position 0.50 is in the support zone; a SELL must be in the resistance zone (rp <= 0.35 for BUY, >= 0.65 for SELL)"
+      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
     ],
     "paper": null,
     "position": null,
@@ -738,7 +751,7 @@
   "sell_low_quality": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] MODEL BLOCK SELL: WRONG_ZONE \u2014 range_position 0.50 is in the support zone; a SELL must be in the resistance zone (rp <= 0.35 for BUY, >= 0.65 for SELL)"
+      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
     ],
     "paper": null,
     "position": null,
@@ -767,7 +780,7 @@
     "bootstrap": 1,
     "decisions": [
       "[TEST/USDT] ARBITER SKIP: bullish pattern present but MACD/trend not confirming (macd=BEARISH, supertrend=BEARISH, bias=BEARISH)",
-      "[TEST/USDT] MODEL BLOCK SELL: EXHAUSTION_CHASE \u2014 SELL at RSI 18 chases capitulation; the fade of this bar is the BUY"
+      "[TEST/USDT] NO TRADE (setup): model leans the other way by 0.62 (> 0.12) \u2014 structure and model disagree"
     ],
     "paper": null,
     "position": null,
@@ -795,7 +808,7 @@
   "sell_tagging_res": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] MODEL WAIT SELL: needs 5m reversal pattern on prior bar + confirming candle, or 3+ directional candles (pattern=None, dir=0/4) \u2014 not entering without a confirmed reversal candle + 5m momentum"
+      "[TEST/USDT] WORKING SELL @ 100.2 \u2014 RANGE_FADE SELL @ 100.2 \u2014 6.19R net, size 0.70 (8.0 bars left)"
     ],
     "paper": null,
     "position": null,
@@ -806,14 +819,14 @@
       "fire": false,
       "levels_frozen": false,
       "paper_only": false,
-      "pending_entry": false,
+      "pending_entry": true,
       "quality_score": 85.0,
       "regime": "RANGING",
       "risk_reward": 2.0,
       "signal": "HOLD",
       "signal_strength": "STRONG_SELL",
-      "suggested_sl": 100.7,
-      "suggested_tp": 99.3,
+      "suggested_sl": 101.5,
+      "suggested_tp": 90.0,
       "tp2": 98.6,
       "tp3": 90.0,
       "tp4": 83.6964,
@@ -822,7 +835,9 @@
   },
   "sell_trend_bull": {
     "bootstrap": 1,
-    "decisions": [],
+    "decisions": [
+      "[TEST/USDT] NO TRADE (setup): uptrend mid-range (rp 0.50) \u2014 no edge here, chasing or fading blind"
+    ],
     "paper": null,
     "position": null,
     "signal": {
@@ -836,7 +851,7 @@
       "quality_score": 85.0,
       "regime": "TRENDING_BULL",
       "risk_reward": 0,
-      "signal": "FLAT",
+      "signal": "HOLD",
       "signal_strength": "NEUTRAL",
       "suggested_sl": null,
       "suggested_tp": null,
