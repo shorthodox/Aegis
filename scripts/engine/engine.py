@@ -1440,10 +1440,18 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
                 # Sizing / tier conviction = the MODEL's edge (its own 0-100
                 # quality), not the UWGS composite. edge_score is 0-100;
                 # meta_confidence is 0-1 — normalise.
-                _edge = float(result.get('edge_score',
-                                         result.get('meta_confidence', 0)) or 0)
-                if _edge <= 1.0:
-                    _edge *= 100.0
+                # Pick the scale from WHICH field supplied the number, not from
+                # its value. `if _edge <= 1.0: _edge *= 100` guessed, and it
+                # guesses wrong in the one direction that matters: edge_score is
+                # a 0-100 percentile, so a genuine bottom-percentile bar of 0.8
+                # was inflated to 80 and sized as high conviction, while a true
+                # 0.0 stayed 0. meta_confidence is the 0-1 field and is the only
+                # one that needs scaling.
+                if result.get('edge_score') is not None:
+                    _edge = float(result.get('edge_score') or 0.0)      # already 0-100
+                else:
+                    _edge = float(result.get('meta_confidence') or 0.0) * 100.0
+                _edge = max(0.0, min(_edge, 100.0))
                 result['quality_score'] = round(_edge, 1)
                 new_side      = result['side']
                 quality_score = result['quality_score']
