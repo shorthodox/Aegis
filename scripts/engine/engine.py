@@ -1300,6 +1300,34 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
             sig['tp1']             = _pos.take_profit_1
             sig['tp2'], sig['tp3'] = _pos.take_profit_2, _pos.take_profit_3
             sig['tp4'], sig['tp5'] = _pos.take_profit_4, _pos.take_profit_5
+            # The headline R:R is the number the trade was APPROVED on.
+            #
+            # It was being left at whatever _build_signal_entry computed earlier
+            # in this scan — from the model's own side and levels, which the note
+            # above says can belong to the opposite direction entirely. Every
+            # other level in this block is republished from the position; this
+            # one was missed.
+            #
+            # It was also structurally uninformative. _build_signal_entry quotes
+            # |price - tp2| / risk, and calculate_stops sets tp2 = price + 2.0R,
+            # so the ratio is 2.00 by construction whenever the ladder is not
+            # compressed. When the plan's objective sits between 1.6R and 2.0R
+            # the compression branch pulls tp2 back to 2/3 of the span, and the
+            # published figure drops BELOW the MIN_NET_R floor the gate just
+            # enforced — a trade approved at 2.5R net could advertise 1.18.
+            #
+            # plan.r_net is the figure stage 3 actually cleared: reward and risk
+            # measured to the real objective, with the round trip taken off the
+            # win and added to the loss. Quote that, and keep the ladder ratios
+            # alongside it under names that say what they are.
+            sig['risk_reward']       = round(plan.r_net, 2)
+            sig['risk_reward_gross'] = round(plan.r_gross, 2)
+            _risk_leg = abs(_pos.entry_price - _pos.stop_loss)
+            if _risk_leg > 0:
+                sig['rr_to_tp2'] = round(
+                    abs(_pos.take_profit_2 - _pos.entry_price) / _risk_leg, 2)
+                sig['rr_to_tp5'] = round(
+                    abs(_pos.take_profit_5 - _pos.entry_price) / _risk_leg, 2)
             sig['levels_frozen']   = True
         return True
 
