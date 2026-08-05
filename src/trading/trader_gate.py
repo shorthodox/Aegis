@@ -82,6 +82,25 @@ RANGE_EDGE_LOW     = 0.30   # a range fade needs the edge, not "the lower half"
 RANGE_EDGE_HIGH    = 0.70
 EXHAUSTION_RSI_HI  = 68.0   # fading a bull needs the move actually stretched
 EXHAUSTION_RSI_LO  = 32.0
+
+# ── Stage 1b · location vs the higher timeframe ───────────────────────────────
+# Location says which side is ON OFFER; the weekly and daily say whether a side
+# that fights its own location is PERMITTED at all.
+#
+# Every setup except BREAK_RETEST already agrees with its location — the fades
+# sell highs and buy lows, the pullbacks buy dips in a bull and sell rallies in a
+# bear. BREAK_RETEST is the one that deliberately does the opposite: it buys at
+# the top of the range on the argument that broken resistance is now support.
+# That argument is only good while the higher timeframe agrees. When it does
+# not, the same picture is just a long into resistance underneath a bearish
+# weekly — which is the trade this desk kept taking and losing.
+#
+# Measured case, ADA/USDT 2026-08-05: resistance_broken_recent with rp 0.85 and
+# a VOLATILE_COMPRESSION label (so `bear` was False) returned BREAK_RETEST BUY.
+# Weekly BEAR, daily BULL, RSI 62. The HTF check existed but was advisory and
+# printed "1 of 2 opposes this long" while the long went on anyway.
+HTF_MIN_BIAS = 0.5   # |macro_weekly| / |macro_daily| above this is a real lean,
+                     # not noise; the fields are +1.0 above EMA50, -1.0 below
 MIN_REGIME_CONF    = 0.45   # below this the regime label is a guess; treat as rangebound
 
 TRENDING_BULL = 'TRENDING_BULL'
@@ -316,6 +335,61 @@ class TraderGate:
 
         return (SETUP_NONE, 'FLAT', f'{regime_name} offers no recognised setup')
 
+    # ── Stage 1b ──────────────────────────────────────────────────────────────
+    @staticmethod
+    def _htf_opposes(side: str, result: Dict[str, Any]) -> str:
+        """Which higher timeframes lean against `side`. '' when none do.
+
+        Either timeframe is enough. A weekly that disagrees is not outvoted by a
+        daily that agrees — the weekly is the slower, more expensive thing to be
+        wrong about, and the daily flips inside it all the time.
+        """
+        w = _f(result, 'macro_weekly', 0.0)
+        d = _f(result, 'macro_daily', 0.0)
+        opposing = []
+        if side == 'BUY':
+            if w <= -HTF_MIN_BIAS:
+                opposing.append('weekly')
+            if d <= -HTF_MIN_BIAS:
+                opposing.append('daily')
+        else:
+            if w >= HTF_MIN_BIAS:
+                opposing.append('weekly')
+            if d >= HTF_MIN_BIAS:
+                opposing.append('daily')
+        return ' and '.join(opposing)
+
+    @classmethod
+    def _counter_location_refusal(cls, side: str, rp: float, rsi: float,
+                                  result: Dict[str, Any]) -> Optional[str]:
+        """Refuse a side that fights BOTH its location and the higher timeframe.
+
+        Only fires when price is at the structural extreme that opposes `side`.
+        A long in the lower half or a short in the upper half is never touched
+        here — those agree with their location and are somebody else's problem.
+        """
+        if side == 'BUY' and rp >= RANGE_EDGE_HIGH:
+            opposed_by = cls._htf_opposes('BUY', result)
+            if opposed_by:
+                return (f'long into the top of the range (rp {rp:.2f}) while the '
+                        f'{opposed_by} lean bearish — at resistance against the '
+                        f'higher timeframe the only trade on offer is the short')
+            if rsi >= EXHAUSTION_RSI_HI:
+                return (f'long into the top of the range (rp {rp:.2f}) with RSI '
+                        f'{rsi:.0f} already stretched — that is buying an '
+                        f'overbought high, not a retest')
+        if side == 'SELL' and rp <= RANGE_EDGE_LOW:
+            opposed_by = cls._htf_opposes('SELL', result)
+            if opposed_by:
+                return (f'short into the bottom of the range (rp {rp:.2f}) while '
+                        f'the {opposed_by} lean bullish — at support against the '
+                        f'higher timeframe the only trade on offer is the long')
+            if rsi <= EXHAUSTION_RSI_LO:
+                return (f'short into the bottom of the range (rp {rp:.2f}) with RSI '
+                        f'{rsi:.0f} already washed out — that is selling an '
+                        f'oversold low, not a retest')
+        return None
+
     # ── Stage 2 ───────────────────────────────────────────────────────────────
     @staticmethod
     def _pick_level(side: str, setup: str, price: float, atr: float,
@@ -493,6 +567,19 @@ class TraderGate:
         if setup == SETUP_NONE or side == 'FLAT':
             return _reject('setup', why, notes)
         notes.append(f'setup: {setup} {side} — {why}')
+
+        # ── Stage 1b · does the higher timeframe permit this side here? ──────
+        # Applied to the OUTPUT of _classify rather than inside it, so a setup
+        # added later cannot route around it. In practice only BREAK_RETEST can
+        # trip this — every other setup already trades with its location.
+        _rp  = _f(result, 'range_position', 0.5)
+        _rsi = _f(result, 'rsi', _f(result, 'rsi_14', 50.0))
+        _loc_refusal = cls._counter_location_refusal(side, _rp, _rsi, result)
+        if _loc_refusal:
+            return _reject('location', _loc_refusal, notes, side, setup)
+        notes.append(f'location: {side} permitted at rp {_rp:.2f} '
+                     f'(weekly {_f(result, "macro_weekly", 0.0):+.0f}, '
+                     f'daily {_f(result, "macro_daily", 0.0):+.0f})')
 
         # The model does not grant permission; it may only object.  A model
         # leaning hard the other way is real information, so it vetoes; a
