@@ -1004,25 +1004,55 @@ class Predictor:
         funding = float(last_row.get('funding_rate', 0.0) or 0.0)
         vol_z = float(last_row.get('volume_zscore', last_row.get('vol_zscore', 0.0)) or 0.0)
 
+        # The momentum test must be SCALE-FREE. macd_hist is `macd - macd_signal`
+        # computed on raw close (feature_engine.compute_macd), so it carries the
+        # units of the asset's price. Comparing it to a bare -0.05 asked "is the
+        # MACD histogram shallower than five cents", which on a sub-dollar token
+        # is every bar that has ever printed:
+        #
+        #     STRK  @ $0.0259   macd_hist in [-0.0004, +0.0004]   -> true 100% of bars
+        #     SAND  @ $0.30     macd_hist in [-0.003,  +0.005 ]   -> true 100% of bars
+        #     ATOM  @ $4.50     macd_hist in [-0.11,   +0.11  ]   -> true  94% of bars
+        #     ETH   @ $3000     macd_hist in [-49,     +30    ]   -> true  52% of bars
+        #
+        # So on exactly the tokens this fleet trades most, "momentum confirms"
+        # was a constant, and the override below fired on structural location
+        # alone. Normalising by ATR restores the intent — "the histogram is not
+        # leaning hard against us" — and makes the threshold mean the same thing
+        # on BTC and on SHIB.
+        _atr_ref = float(last_row.get('atr_14', 0.0) or 0.0)
+        if _atr_ref <= 0:
+            _close_ref = float(last_row.get('close', 0.0) or 0.0)
+            _atr_ref = _close_ref * 0.01 if _close_ref > 0 else 0.0
+        macd_hist_atr = (macd_hist / _atr_ref) if _atr_ref > 0 else 0.0
+
         # BUY at Support Confirmation (Rule 1 & Rule 2 Exception)
         if at_sup:
-            mom_confirm_buy = (macd_hist > -0.05) or (rsi_val <= 45.0)
+            mom_confirm_buy = (macd_hist_atr > -0.05) or (rsi_val <= 45.0)
             liq_confirm_buy = (funding <= 0.0005) or (vol_z >= -1.5)
             if mom_confirm_buy and liq_confirm_buy:
                 side = 2
                 side_name = "BUY"
                 fire = True
-                edge_score = max(edge_score, 65.0)
+                # edge_score is NOT floored here. It used to be raised to 65,
+                # which invented a measurement: edge_score is a percentile rank
+                # of this bar against its own lookback, and the engine spends it
+                # as conviction — _process_symbol copies it onto quality_score,
+                # which is what calculate_position_size() sizes from. Writing 65
+                # over a measured 0 sized a bottom-percentile bar like a
+                # mid-conviction one. If the structural fade deserves size, that
+                # belongs in trader_gate's SETUP_RISK_WEIGHT, where it is
+                # visible and measured, not synthesised here.
 
         # SELL at Resistance Confirmation (Rule 1 & Rule 2 Exception)
         elif at_res:
-            mom_confirm_sell = (macd_hist < 0.05) or (rsi_val >= 55.0)
+            mom_confirm_sell = (macd_hist_atr < 0.05) or (rsi_val >= 55.0)
             liq_confirm_sell = (funding >= -0.0005) or (vol_z >= -1.5)
             if mom_confirm_sell and liq_confirm_sell:
                 side = 0
                 side_name = "SELL"
                 fire = True
-                edge_score = max(edge_score, 65.0)
+                # see the BUY branch: no fabricated edge floor
 
         if side == 2 and (not tradeable_buy or not regime_ok):
             fire = False
