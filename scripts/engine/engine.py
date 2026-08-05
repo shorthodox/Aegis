@@ -1268,6 +1268,40 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
         tier = ('STRONG' if plan.r_net >= 2.5 and plan.size_factor >= 0.85
                 else 'NORMAL' if plan.r_net >= 2.0 or plan.size_factor >= 0.7
                 else 'RISKY')
+
+        # ── the conviction meter gets its vote back ──────────────────────────
+        # Two documented downgrades existed only as prose. config.py says UWGS
+        # runs "for the chart breakdown, the risk tier, and the four genuinely
+        # protective HARD vetoes", chart.html tells the subscriber outright that
+        # "when this meter disagrees, the signal is tagged RISKY", and
+        # _process_symbol notes that the location flags "become a tier downgrade
+        # below (not a block)". None of it was wired: v83 derives the tier from
+        # plan.r_net and plan.size_factor alone, so the meter and the S/R flags
+        # were computed, published to the chart, and then ignored.
+        #
+        # Measured case, ADA/USDT 2026-08-05: the meter read BUY 0.3, SELL 29.5,
+        # HOLD 56.5 — hold decided, against a BUY — and the signal still went out
+        # as STRONG / LOW RISK.
+        #
+        # The plan still decides WHETHER to trade; this only decides how loudly
+        # the trade is announced. A setup the context meter will not endorse is
+        # not a low-risk one, whatever its payoff geometry says.
+        _tier_notes: List[str] = []
+        _scores = result.get('signal_scores') or {}
+        if _scores:
+            _top = max(_scores, key=lambda k: float(_scores.get(k) or 0.0))
+            if _top != plan.side.lower():
+                if tier != 'RISKY':
+                    _tier_notes.append(
+                        f'meter says {_top.upper()} '
+                        f'({float(_scores.get(_top) or 0):.1f}/100) not {plan.side}')
+                tier = 'RISKY'
+        if result.get('sr_loc_poor') and tier != 'RISKY':
+            _demote = {'STRONG': 'NORMAL', 'NORMAL': 'RISKY'}
+            _tier_notes.append('S/R location poor')
+            tier = _demote.get(tier, tier)
+        if _tier_notes:
+            print(f'[{symbol}] TIER DOWNGRADE -> {tier}: {"; ".join(_tier_notes)}')
         print(f'[{symbol}] PLAN ENTER {plan.side} {plan.setup} @ {price:.8g} '
               f'stop {plan.stop:.8g} target {plan.target:.8g} '
               f'{plan.r_net:.2f}R net size x{plan.size_factor:.2f} tier={tier}')

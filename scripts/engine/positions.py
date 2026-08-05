@@ -383,7 +383,20 @@ class PositionsMixin:
             entry['suggested_sl'] = None
             entry['tp2'] = entry['tp3'] = entry['tp4'] = entry['tp5'] = None
 
-        # Expected move projection
+        # Expected MOVE projection — a magnitude, not an expectancy.
+        #
+        # It is |confluence - neutral| scaled by ATR: "how far this tape tends to
+        # travel when confluence leans this hard", in percent of price. Three
+        # things it is NOT, all of which it has been read as:
+        #   * not an expected value — there is no probability and no cost term,
+        #     so it must never be compared against the round trip;
+        #   * not directional — the abs() means it is always >= 0, for a short
+        #     as much as a long. Anything colouring it by sign is dead code;
+        #   * not a gate — nothing reads it. The number that decides whether a
+        #     trade pays is TradePlan.r_net, computed in trader_gate's payoff
+        #     stage against MIN_NET_R with the round trip priced in.
+        # Published as `expected_move_pct` and labelled "Exp. Move" on the chart
+        # for exactly that reason.
         _conf_data  = result.get('confluence') or {}
         _conf_total = float(_conf_data.get('total', 5.0))
         _conf_raw   = abs(_conf_total - 5.0) / 5.0

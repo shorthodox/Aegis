@@ -1485,9 +1485,16 @@ function renderOverview(sig) {
         <div class="metric-val">${fmt(sig.rsi, 1)}</div>
         <div class="metric-lbl">RSI</div>
       </div>
+      <!-- expected_move_pct is a MOVE MAGNITUDE, not an expectancy: it is
+           |confluence - neutral| scaled by ATR, with no probability and no cost
+           term, and the abs() makes it >= 0 for a short as much as a long. The
+           label read "Expected", which invited reading it as expected value —
+           next to a 0.10% round trip that comparison is actively misleading.
+           The sign-based colouring was dead code for the same reason: the value
+           can never be negative, so it always rendered as text-buy. -->
       <div class="metric-box">
-        <div class="metric-val ${fmtPct(sig.expected_move_pct).startsWith('-') ? 'text-sell' : 'text-buy'}">${fmtPct(sig.expected_move_pct)}</div>
-        <div class="metric-lbl">Expected</div>
+        <div class="metric-val">${fmtPct(sig.expected_move_pct)}</div>
+        <div class="metric-lbl">Exp. Move</div>
       </div>
     </div>
   `;
@@ -1648,15 +1655,34 @@ function generateStoryPoints(sig) {
       pts.push(`RSI at <strong>${fmt(sig.rsi,1)}</strong> — in neutral zone with room to move in the signal direction.`);
   }
 
-  // ADX — AEGIS blocks trend-following outright (live_engine _trend_follow:
-  // "fade-only strategy"), so every published signal is a counter-trend fade or
-  // a ranging entry. A strong trend is therefore a HEADWIND here, not an
-  // endorsement. The old copy read "trend-following entries have higher edge
-  // here", which recommended the one thing the engine refuses to do.
-  if (sig.adx > 35)
-    pts.push(`ADX at <strong>${fmt(sig.adx,0)}</strong> confirms a <strong>strong trending move</strong> — AEGIS fades extremes rather than following trends, so a trend this strong is a headwind for this entry.`);
-  else if (sig.adx < 20)
-    pts.push(`ADX at <strong>${fmt(sig.adx,0)}</strong> indicates a <strong>weak trend</strong> — range conditions, which is where this fade strategy works best.`);
+  // ADX — whether a strong trend helps or hurts depends on WHICH setup fired.
+  //
+  // This copy used to say a strong trend is always a headwind, on the grounds
+  // that the engine "fades extremes rather than following trends". That was
+  // true of the pre-v83 chain, which carried a `_trend_follow` veto and called
+  // itself a fade-only strategy. v83 replaced it with a setup-typed playbook in
+  // which TREND_PULLBACK carries the LARGEST risk weight of any setup and
+  // EXHAUSTION_REVERSAL the smallest — measured at +0.069R and -0.064R per
+  // trade respectively. Telling a subscriber their trend-pullback long is
+  // fighting a headwind describes the opposite engine to the one that fired it.
+  const _setup = String(sig.setup_type || sig.entry_mode || '').toUpperCase();
+  const _withTrend = _setup.includes('PULLBACK') || _setup.includes('BREAK_RETEST');
+  const _fade = _setup.includes('FADE') || _setup.includes('REVERSAL');
+  if (sig.adx > 35) {
+    if (_withTrend)
+      pts.push(`ADX at <strong>${fmt(sig.adx,0)}</strong> confirms a <strong>strong trending move</strong> — this entry trades <strong>with</strong> that trend, so the strength is working for it.`);
+    else if (_fade)
+      pts.push(`ADX at <strong>${fmt(sig.adx,0)}</strong> confirms a <strong>strong trending move</strong> — this entry is a counter-trend fade, so the strength is a headwind and the setup is sized down accordingly.`);
+    else
+      pts.push(`ADX at <strong>${fmt(sig.adx,0)}</strong> confirms a <strong>strong trending move</strong>.`);
+  } else if (sig.adx < 20) {
+    if (_fade)
+      pts.push(`ADX at <strong>${fmt(sig.adx,0)}</strong> indicates a <strong>weak trend</strong> — range conditions, which is where a fade works best.`);
+    else if (_withTrend)
+      pts.push(`ADX at <strong>${fmt(sig.adx,0)}</strong> indicates a <strong>weak trend</strong> — there is little momentum behind this continuation, so the follow-through is less reliable.`);
+    else
+      pts.push(`ADX at <strong>${fmt(sig.adx,0)}</strong> indicates a <strong>weak trend</strong> — range conditions.`);
+  }
 
   // Funding / OI — sig.funding_rate is already a PERCENTAGE (predictor × 100)
   if (sig.funding_rate != null) {
