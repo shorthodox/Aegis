@@ -64,7 +64,23 @@ class PositionsMixin:
         atr_mult  = round(atr_mult * _hmm_atr, 3)
 
         # ── Dynamic position sizing (replaces fixed wallet.position_size()) ───
-        if regime is not None and quality_score > 0:
+        # The `quality_score > 0` condition used to sit in this test, and it
+        # inverted the sizing curve at exactly the wrong end. A zero-conviction
+        # signal did not take the floor — it fell through to
+        # wallet.position_size(), which is min(balance * 10 %, max_position),
+        # i.e. the MAXIMUM default allocation:
+        #
+        #     quality  5 -> 200 USDT      (dynamic, quality-scaled)
+        #     quality 45 -> 315 USDT
+        #     quality 65 -> 455 USDT
+        #     quality  0 -> 1000 USDT     <- the largest position of the set
+        #
+        # so the worst-scoring setups were sized five times the merely-weak
+        # ones. calculate_position_size() already clamps to
+        # [MIN_POSITION_PCT, MAX_POSITION_PCT] and returns the floor for a
+        # quality of 0, which is the behaviour that was wanted; it just was not
+        # being reached. Only a missing regime justifies the flat fallback now.
+        if regime is not None:
             pos_value = self.risk_engine.calculate_position_size(
                 balance       = self.wallet.balance,
                 quality_score = quality_score,

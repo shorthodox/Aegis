@@ -1480,7 +1480,42 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
                 else:
                     _edge = float(result.get('meta_confidence') or 0.0) * 100.0
                 _edge = max(0.0, min(_edge, 100.0))
-                result['quality_score'] = round(_edge, 1)
+                result['edge_score'] = round(_edge, 1)
+
+                # ── what conviction is spent on size ─────────────────────────
+                # `quality_score` used to be overwritten with `_edge` here, and
+                # the comment justifying it said the intent was to size on the
+                # model's edge "not the UWGS composite". But the value being
+                # overwritten was never UWGS — it is SignalQualityFilter.
+                # score_signal(), which UWGS takes as an INPUT (see
+                # _ctx_quality above). So the stated intent was met while the
+                # designed conviction measure was discarded.
+                #
+                # edge_score is the wrong quantity for this job twice over:
+                #
+                #   * it is a PERCENTILE RANK of the bar against its own
+                #     lookback, so it carries no absolute information. In a
+                #     window where every bar is poor, the least-poor bar ranks
+                #     100 and takes full size; in a strong window a good bar
+                #     ranks 0 and takes the floor. Size tracked the neighbours,
+                #     not the setup.
+                #   * it is already the FIRE decision (`fire = edge_score >= thr`
+                #     in predict_signal), so spending it again on size
+                #     double-counts one number and adds nothing new.
+                #
+                # score_signal() is built for exactly this: ADX, volume
+                # conviction, regime confidence, RSI zone, funding and OI
+                # alignment, HTF macro, candlestick agreement, MACD agreement,
+                # with the reversal exemptions that stop a legitimate fade being
+                # penalised twice. It stays the sizing input; the model's edge
+                # stays published in its own field, where it is a diagnostic
+                # rather than an allocation.
+                #
+                # Setup-level conviction is NOT lost by this: TraderGate's
+                # allocation stage still multiplies by plan.size_factor
+                # (SETUP_RISK_WEIGHT x tide x cluster), so the measured
+                # per-setup edge is applied on top of contextual quality.
+                result['quality_score'] = round(quality_score, 1)
                 new_side      = result['side']
                 quality_score = result['quality_score']
 
