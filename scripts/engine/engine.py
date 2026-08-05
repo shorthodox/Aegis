@@ -1268,6 +1268,40 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
         tier = ('STRONG' if plan.r_net >= 2.5 and plan.size_factor >= 0.85
                 else 'NORMAL' if plan.r_net >= 2.0 or plan.size_factor >= 0.7
                 else 'RISKY')
+
+        # ── the conviction meter gets its vote back ──────────────────────────
+        # Two documented downgrades existed only as prose. config.py says UWGS
+        # runs "for the chart breakdown, the risk tier, and the four genuinely
+        # protective HARD vetoes", chart.html tells the subscriber outright that
+        # "when this meter disagrees, the signal is tagged RISKY", and
+        # _process_symbol notes that the location flags "become a tier downgrade
+        # below (not a block)". None of it was wired: v83 derives the tier from
+        # plan.r_net and plan.size_factor alone, so the meter and the S/R flags
+        # were computed, published to the chart, and then ignored.
+        #
+        # Measured case, ADA/USDT 2026-08-05: the meter read BUY 0.3, SELL 29.5,
+        # HOLD 56.5 — hold decided, against a BUY — and the signal still went out
+        # as STRONG / LOW RISK.
+        #
+        # The plan still decides WHETHER to trade; this only decides how loudly
+        # the trade is announced. A setup the context meter will not endorse is
+        # not a low-risk one, whatever its payoff geometry says.
+        _tier_notes: List[str] = []
+        _scores = result.get('signal_scores') or {}
+        if _scores:
+            _top = max(_scores, key=lambda k: float(_scores.get(k) or 0.0))
+            if _top != plan.side.lower():
+                if tier != 'RISKY':
+                    _tier_notes.append(
+                        f'meter says {_top.upper()} '
+                        f'({float(_scores.get(_top) or 0):.1f}/100) not {plan.side}')
+                tier = 'RISKY'
+        if result.get('sr_loc_poor') and tier != 'RISKY':
+            _demote = {'STRONG': 'NORMAL', 'NORMAL': 'RISKY'}
+            _tier_notes.append('S/R location poor')
+            tier = _demote.get(tier, tier)
+        if _tier_notes:
+            print(f'[{symbol}] TIER DOWNGRADE -> {tier}: {"; ".join(_tier_notes)}')
         print(f'[{symbol}] PLAN ENTER {plan.side} {plan.setup} @ {price:.8g} '
               f'stop {plan.stop:.8g} target {plan.target:.8g} '
               f'{plan.r_net:.2f}R net size x{plan.size_factor:.2f} tier={tier}')
@@ -1300,6 +1334,34 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
             sig['tp1']             = _pos.take_profit_1
             sig['tp2'], sig['tp3'] = _pos.take_profit_2, _pos.take_profit_3
             sig['tp4'], sig['tp5'] = _pos.take_profit_4, _pos.take_profit_5
+            # The headline R:R is the number the trade was APPROVED on.
+            #
+            # It was being left at whatever _build_signal_entry computed earlier
+            # in this scan — from the model's own side and levels, which the note
+            # above says can belong to the opposite direction entirely. Every
+            # other level in this block is republished from the position; this
+            # one was missed.
+            #
+            # It was also structurally uninformative. _build_signal_entry quotes
+            # |price - tp2| / risk, and calculate_stops sets tp2 = price + 2.0R,
+            # so the ratio is 2.00 by construction whenever the ladder is not
+            # compressed. When the plan's objective sits between 1.6R and 2.0R
+            # the compression branch pulls tp2 back to 2/3 of the span, and the
+            # published figure drops BELOW the MIN_NET_R floor the gate just
+            # enforced — a trade approved at 2.5R net could advertise 1.18.
+            #
+            # plan.r_net is the figure stage 3 actually cleared: reward and risk
+            # measured to the real objective, with the round trip taken off the
+            # win and added to the loss. Quote that, and keep the ladder ratios
+            # alongside it under names that say what they are.
+            sig['risk_reward']       = round(plan.r_net, 2)
+            sig['risk_reward_gross'] = round(plan.r_gross, 2)
+            _risk_leg = abs(_pos.entry_price - _pos.stop_loss)
+            if _risk_leg > 0:
+                sig['rr_to_tp2'] = round(
+                    abs(_pos.take_profit_2 - _pos.entry_price) / _risk_leg, 2)
+                sig['rr_to_tp5'] = round(
+                    abs(_pos.take_profit_5 - _pos.entry_price) / _risk_leg, 2)
             sig['levels_frozen']   = True
         return True
 
@@ -1452,7 +1514,42 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
                 else:
                     _edge = float(result.get('meta_confidence') or 0.0) * 100.0
                 _edge = max(0.0, min(_edge, 100.0))
-                result['quality_score'] = round(_edge, 1)
+                result['edge_score'] = round(_edge, 1)
+
+                # ── what conviction is spent on size ─────────────────────────
+                # `quality_score` used to be overwritten with `_edge` here, and
+                # the comment justifying it said the intent was to size on the
+                # model's edge "not the UWGS composite". But the value being
+                # overwritten was never UWGS — it is SignalQualityFilter.
+                # score_signal(), which UWGS takes as an INPUT (see
+                # _ctx_quality above). So the stated intent was met while the
+                # designed conviction measure was discarded.
+                #
+                # edge_score is the wrong quantity for this job twice over:
+                #
+                #   * it is a PERCENTILE RANK of the bar against its own
+                #     lookback, so it carries no absolute information. In a
+                #     window where every bar is poor, the least-poor bar ranks
+                #     100 and takes full size; in a strong window a good bar
+                #     ranks 0 and takes the floor. Size tracked the neighbours,
+                #     not the setup.
+                #   * it is already the FIRE decision (`fire = edge_score >= thr`
+                #     in predict_signal), so spending it again on size
+                #     double-counts one number and adds nothing new.
+                #
+                # score_signal() is built for exactly this: ADX, volume
+                # conviction, regime confidence, RSI zone, funding and OI
+                # alignment, HTF macro, candlestick agreement, MACD agreement,
+                # with the reversal exemptions that stop a legitimate fade being
+                # penalised twice. It stays the sizing input; the model's edge
+                # stays published in its own field, where it is a diagnostic
+                # rather than an allocation.
+                #
+                # Setup-level conviction is NOT lost by this: TraderGate's
+                # allocation stage still multiplies by plan.size_factor
+                # (SETUP_RISK_WEIGHT x tide x cluster), so the measured
+                # per-setup edge is applied on top of contextual quality.
+                result['quality_score'] = round(quality_score, 1)
                 new_side      = result['side']
                 quality_score = result['quality_score']
 

@@ -64,7 +64,23 @@ class PositionsMixin:
         atr_mult  = round(atr_mult * _hmm_atr, 3)
 
         # ── Dynamic position sizing (replaces fixed wallet.position_size()) ───
-        if regime is not None and quality_score > 0:
+        # The `quality_score > 0` condition used to sit in this test, and it
+        # inverted the sizing curve at exactly the wrong end. A zero-conviction
+        # signal did not take the floor — it fell through to
+        # wallet.position_size(), which is min(balance * 10 %, max_position),
+        # i.e. the MAXIMUM default allocation:
+        #
+        #     quality  5 -> 200 USDT      (dynamic, quality-scaled)
+        #     quality 45 -> 315 USDT
+        #     quality 65 -> 455 USDT
+        #     quality  0 -> 1000 USDT     <- the largest position of the set
+        #
+        # so the worst-scoring setups were sized five times the merely-weak
+        # ones. calculate_position_size() already clamps to
+        # [MIN_POSITION_PCT, MAX_POSITION_PCT] and returns the floor for a
+        # quality of 0, which is the behaviour that was wanted; it just was not
+        # being reached. Only a missing regime justifies the flat fallback now.
+        if regime is not None:
             pos_value = self.risk_engine.calculate_position_size(
                 balance       = self.wallet.balance,
                 quality_score = quality_score,
@@ -367,7 +383,20 @@ class PositionsMixin:
             entry['suggested_sl'] = None
             entry['tp2'] = entry['tp3'] = entry['tp4'] = entry['tp5'] = None
 
-        # Expected move projection
+        # Expected MOVE projection — a magnitude, not an expectancy.
+        #
+        # It is |confluence - neutral| scaled by ATR: "how far this tape tends to
+        # travel when confluence leans this hard", in percent of price. Three
+        # things it is NOT, all of which it has been read as:
+        #   * not an expected value — there is no probability and no cost term,
+        #     so it must never be compared against the round trip;
+        #   * not directional — the abs() means it is always >= 0, for a short
+        #     as much as a long. Anything colouring it by sign is dead code;
+        #   * not a gate — nothing reads it. The number that decides whether a
+        #     trade pays is TradePlan.r_net, computed in trader_gate's payoff
+        #     stage against MIN_NET_R with the round trip priced in.
+        # Published as `expected_move_pct` and labelled "Exp. Move" on the chart
+        # for exactly that reason.
         _conf_data  = result.get('confluence') or {}
         _conf_total = float(_conf_data.get('total', 5.0))
         _conf_raw   = abs(_conf_total - 5.0) / 5.0
