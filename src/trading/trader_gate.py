@@ -459,12 +459,33 @@ class TraderGate:
     @staticmethod
     def _pick_target(side: str, price: float, atr: float,
                      levels: Sequence[Tuple[float, int]],
-                     result: Dict[str, Any]) -> float:
-        """The first REAL objective in the trade's direction.
+                     result: Dict[str, Any], risk: float = 0.0) -> float:
+        """The first objective in the trade's direction that can actually PAY.
 
         "Real" = at least MIN_TARGET_ATR away.  A level 0.3 ATR ahead is noise
         the trade cannot be paid out of, and counting it as the target is how a
         losing setup passes an R:R test on paper.
+
+        But "real" is not sufficient, and taking the NEAREST real level was
+        closing the funnel completely. MIN_TARGET_ATR (1.5) and MIN_NET_R (1.6)
+        are not consistent with each other: with a stop at the MIN_STOP_ATR
+        floor of 1.5 ATR, clearing 1.6R net after the round trip needs an
+        objective roughly 2.7 ATR out. Every level between 1.5 and 2.7 ATR is
+        therefore selectable and then guaranteed to fail stage 3 — the gate
+        would pick the 2 ATR level, price the trade at ~1.2R, reject it, and
+        never look at the 3 ATR level sitting right behind it that would have
+        paid. Measured over a 35,640-scenario sweep of the conditions this
+        fleet sees, that rejected 45% of everything at payoff and contributed
+        to a 0% fire rate.
+        (v85 spotted the arithmetic — "clearing MIN_NET_R now needs an objective
+        ~2.7 ATR out rather than ~1.7" — but only the floors were moved; the
+        selector kept taking the nearest.)
+
+        So: skip past the objectives that cannot pay and take the first one that
+        can. It is still the NEAREST qualifying level, so this does not reach
+        for a fib fantasy — it reaches for the first level the trade could
+        actually be paid out of. When `risk` is unknown (0) the old
+        distance-only behaviour is kept.
         """
         floor_dist = MIN_TARGET_ATR * atr
         cands = [lv for lv, _t in (levels or []) if lv > 0]
@@ -476,10 +497,25 @@ class TraderGate:
             cands.append(res)
 
         if side == 'BUY':
-            ahead = [lv for lv in cands if lv >= price + floor_dist]
-            return min(ahead) if ahead else 0.0
-        ahead = [lv for lv in cands if lv <= price - floor_dist]
-        return max(ahead) if ahead else 0.0
+            ahead = sorted(lv for lv in cands if lv >= price + floor_dist)
+        else:
+            ahead = sorted((lv for lv in cands if lv <= price - floor_dist),
+                           reverse=True)
+        if not ahead:
+            return 0.0
+        if risk <= 0 or price <= 0:
+            return ahead[0]
+
+        risk_pct = risk / price * 100.0
+        for lv in ahead:
+            reward_pct = abs(lv - price) / price * 100.0
+            r_net = ((reward_pct - ROUND_TRIP_COST_PCT) /
+                     (risk_pct + ROUND_TRIP_COST_PCT)) if risk_pct > 0 else 0.0
+            if r_net >= MIN_NET_R:
+                return lv
+        # Nothing ahead pays. Return the nearest anyway so stage 3 rejects with
+        # the real numbers attached rather than "no structural objective".
+        return ahead[0]
 
     # ── Stage 4 helper ────────────────────────────────────────────────────────
     @staticmethod
@@ -492,8 +528,16 @@ class TraderGate:
         cheaper to confirm because the trend is already the evidence; they need
         momentum to stop going against them, not to reverse outright.
         """
-        bull_cdl = bool(result.get('cdl_bull_reversal'))
-        bear_cdl = bool(result.get('cdl_bear_reversal'))
+        # cdl_bull/bear_reversal use -1.0 for "data unavailable" and 0.0 for
+        # "looked, found nothing" (feature_engine, and score_signal guards it
+        # with `if _cdl_bull >= 0.0 and _cdl_bear >= 0.0`). bool(-1.0) is True,
+        # so an unavailable read was counting as a rejection candle — and since
+        # both fields go to -1.0 together, as a BULLISH and a BEARISH one at the
+        # same time. That handed every setup a free confirmation precisely when
+        # the engine could see least, which is the opposite of what the two-print
+        # requirement below exists for.
+        bull_cdl = _f(result, 'cdl_bull_reversal', -1.0) > 0.0
+        bear_cdl = _f(result, 'cdl_bear_reversal', -1.0) > 0.0
         ltf_up   = bool(confirm.get('ltf_bull'))     # engine's 5m alignment check
         ltf_down = bool(confirm.get('ltf_bear'))
         slope    = _f(result, 'rsi_slope', 0.0)
@@ -633,7 +677,10 @@ class TraderGate:
                      f'({risk_atr:.2f} ATR beyond it)')
 
         # ── Stage 3 · does it pay ────────────────────────────────────────────
-        target = cls._pick_target(side, price, atr, levels or [], result)
+        # `risk` is already known here (stage 2 placed the stop), so the target
+        # can be chosen against the floor it has to clear instead of a fixed
+        # distance that is inconsistent with it.
+        target = cls._pick_target(side, price, atr, levels or [], result, risk)
         if target <= 0:
             return _reject('payoff',
                            f'no structural objective at least {MIN_TARGET_ATR} ATR ahead — '
