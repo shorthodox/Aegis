@@ -2467,8 +2467,8 @@ function getUpgradeModal() {
         </ul>
         <div class="pricing-options" style="display:flex; flex-direction:column; gap:0.5rem; margin-bottom:1rem;">
           <button onclick="window.AegisDashboard?.subscribeToPlan('basic')" class="btn-outline" style="padding: 0.6rem; font-size: 0.85rem;">Basic ($3.60/mo)</button>
-          <button onclick="window.AegisDashboard?.subscribeToPlan('intermediate')" class="btn-outline" style="padding: 0.6rem; font-size: 0.85rem; border-color: var(--primary-cyan);">Intermediate ($24/mo)</button>
-          <button onclick="window.AegisDashboard?.subscribeToPlan('pro')" class="btn-pro" style="padding: 0.6rem; font-size: 0.85rem;">Pro ($40/mo)</button>
+          <button onclick="window.AegisDashboard?.subscribeToPlan('intermediate')" class="btn-outline" style="padding: 0.6rem; font-size: 0.85rem; border-color: var(--primary-cyan);">Intermediate ($14/mo)</button>
+          <button onclick="window.AegisDashboard?.subscribeToPlan('pro')" class="btn-pro" style="padding: 0.6rem; font-size: 0.85rem;">Pro ($30/mo)</button>
         </div>
         <button id="closeUpgradeModalBtn" class="btn-secondary">Maybe Later</button>
       </div>
@@ -2504,9 +2504,12 @@ window.AegisDashboard = {
       // 1. Get payment gateway config from backend
       const configResp = await fetch(`${API_BASE_URL}/payment/config`);
       const config = await configResp.json().catch(() => ({}));
-      // v82f: any hosted-checkout gateway redirects — Paddle and DODO both do.
-      const _redirectGateway = ['paddle', 'dodopayments'].includes(config?.provider)
-        || config?.paddle?.enabled || config?.dodopayments?.enabled;
+      // v82f: any hosted-checkout gateway redirects — Whop, Paddle and DODO all
+      // do. Whop returns a checkout-configuration purchase_url of the form
+      // /checkout/plan_xxx?session=ch_xxx, so it takes the same path as the
+      // others and needs no separate frontend flow.
+      const _redirectGateway = ['whop', 'paddle', 'dodopayments'].includes(config?.provider)
+        || config?.whop?.enabled || config?.paddle?.enabled || config?.dodopayments?.enabled;
 
       // 2. Detect currency from timezone
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;

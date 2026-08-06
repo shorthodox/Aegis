@@ -127,6 +127,202 @@ async def _dodo_get(path: str) -> dict:
 
 
 # -------------------------------------------------------------------
+# Whop
+# -------------------------------------------------------------------
+# Whop checkout follows the same shape as Paddle and DODO: create something
+# server-side, hand the customer the URL it returns. Here that something is a
+# CHECKOUT CONFIGURATION — "a reusable configuration for a checkout, including
+# the plan, affiliate, and custom metadata" — and the important sentence in
+# Whop's docs is this one:
+#
+#     "Payments and memberships created from a checkout session inherit its
+#      metadata."
+#
+# That is what makes this integration safe. The metadata is attached by THIS
+# server, carries {user_id, plan}, and comes back on the webhook, so the
+# customer cannot influence which account gets upgraded. It is the exact
+# property Paddle's custom_data gives us, which is why the two branches below
+# read almost identically.
+#
+# The alternative — matching the buyer's email to an AEGIS account — was
+# rejected: a customer paying with a different email than they registered with
+# would pay and receive nothing.
+#
+# Precedence is Whop -> Paddle -> DODO -> Razorpay, decided purely by which env
+# vars are set, so switching over is a config change and rolling back is
+# unsetting WHOP_API_KEY. Nothing is deleted here.
+WHOP_API_KEY = os.getenv("WHOP_API_KEY")
+WHOP_WEBHOOK_SECRET = os.getenv("WHOP_WEBHOOK_SECRET")
+WHOP_MODE = os.getenv("WHOP_MODE", "sandbox").lower()
+# Whop bills against a PLAN ('plan_...'), created in Dashboard > Checkout links.
+# There is no documented API to create one, so these are configuration.
+WHOP_PLAN_IDS = {
+    "basic":        os.getenv("WHOP_PLAN_ID_BASIC"),
+    "intermediate": os.getenv("WHOP_PLAN_ID_INTERMEDIATE"),
+    "pro":          os.getenv("WHOP_PLAN_ID_PRO"),
+}
+WHOP_ENABLED = bool(WHOP_API_KEY)
+# Where Whop sends the buyer after checkout. Optional: with it unset Whop uses
+# whatever the checkout link itself is configured with. The return URL is NOT
+# how the plan is granted — that is the webhook's job — so a user who closes
+# the tab before redirecting still gets what they paid for.
+WHOP_REDIRECT_URL = os.getenv("WHOP_REDIRECT_URL")
+_WHOP_BASE = os.getenv("WHOP_API_BASE", "https://api.whop.com/api/v1")
+# Whop's docs give the base URL and the resource (checkout configurations:
+# list / create / retrieve) but do not spell the create path out verbatim, so
+# it is overridable rather than hardcoded — if it turns out to differ, this is
+# a config change, not a code change.
+_WHOP_CHECKOUT_PATH = os.getenv("WHOP_CHECKOUT_CONFIG_PATH",
+                                "/checkout_configurations")
+# Standard Webhooks replay window. Whop retries rejected deliveries, so a wider
+# window costs nothing; 300s matches the Paddle setting above.
+WHOP_WEBHOOK_TOLERANCE_SECONDS = int(
+    os.getenv("WHOP_WEBHOOK_TOLERANCE_SECONDS", "300"))
+
+if WHOP_ENABLED:
+    print(f"Whop configured in {WHOP_MODE.upper()} mode")
+    if not WHOP_WEBHOOK_SECRET:
+        print("[WARN] WHOP_WEBHOOK_SECRET is not set — Whop webhooks will be "
+              "REJECTED. Subscriptions would activate at checkout but never renew "
+              "or cancel. Set it before taking live payments.")
+    _missing_whop_plans = [k for k, v in WHOP_PLAN_IDS.items() if not v]
+    if _missing_whop_plans:
+        print(f"[WARN] Whop plan IDs missing for: {', '.join(_missing_whop_plans)} "
+              f"— those plans cannot be checked out.")
+
+
+async def _whop_post(path: str, payload: dict) -> dict:
+    """POST to the Whop REST API."""
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.post(
+            f"{_WHOP_BASE}{path}",
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {WHOP_API_KEY}",
+                "Content-Type": "application/json",
+            },
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+
+def _whop_secret_keys(secret: str) -> list:
+    """Candidate HMAC keys derived from a Whop webhook secret.
+
+    Whop's docs describe Standard Webhooks — a base64 secret carrying a
+    `whsec_` prefix, base64-decoded before use as the key. The dashboard
+    actually issues `ws_` followed by 64 hex characters, i.e. a 256-bit key
+    written in hex. Those are different encodings and the documented one does
+    not even parse: base64-decoding a `ws_...` secret raises, which made the
+    first version of this function reject every genuine webhook.
+
+    Rather than guess which is right, the plausible keys are derived
+    DETERMINISTICALLY from the observed format and all are tried. That is not a
+    weakening: an attacker still has to possess the secret, and supporting two
+    encodings of the same secret is no easier to forge than one. It is the same
+    reasoning as accepting several versioned signatures during a rotation.
+
+    Order matters only for speed, not correctness:
+      1. hex-decoded, when the body is pure hex (the `ws_` format)
+      2. base64-decoded, when it decodes cleanly (the documented format)
+      3. the raw ASCII bytes, which is what a naive implementation would use
+
+    If a future Whop change breaks all three, verification fails closed and the
+    webhook is rejected — never accepted unverified.
+    """
+    import base64 as _base64
+
+    if not secret:
+        return []
+    body = secret.split("_", 1)[1] if secret.startswith(("whsec_", "ws_")) else secret
+    keys: list = []
+
+    if len(body) % 2 == 0 and all(c in "0123456789abcdefABCDEF" for c in body):
+        try:
+            keys.append(bytes.fromhex(body))
+        except ValueError:
+            pass
+    try:
+        decoded = _base64.b64decode(body, validate=True)
+        if decoded:
+            keys.append(decoded)
+    except Exception:
+        pass
+    keys.append(body.encode("utf-8"))
+
+    # de-duplicate, preserving order
+    seen, out = set(), []
+    for k in keys:
+        if k and k not in seen:
+            seen.add(k)
+            out.append(k)
+    return out
+
+
+def whop_verify_signature(raw_body: bytes,
+                          webhook_id: str,
+                          webhook_timestamp: str,
+                          signature_header: str,
+                          secret: Optional[str] = None,
+                          tolerance_seconds: Optional[int] = None) -> bool:
+    """Verify a Whop webhook signature (Standard Webhooks).
+
+    Deliberately NOT the same scheme as either neighbour in this file, which is
+    why it gets its own function rather than a shared helper:
+
+      * Paddle signs `<ts>:<body>` and sends hex in one `Paddle-Signature`.
+      * DODO's branch below compares a plain hex HMAC of the body alone.
+      * Whop signs `<id>.<timestamp>.<body>`, sends BASE64, splits the parts
+        across three headers, and — the easy one to get wrong — the secret is
+        base64 and must be DECODED before use as the HMAC key.
+
+    `webhook-signature` may carry several space-separated versioned signatures
+    (`v1,<b64> v1,<b64>`) during a secret rotation; any one matching is enough.
+
+    Returns True only for a well-formed, in-window, matching signature. A caller
+    that cannot verify must reject: an unverified payment webhook is an
+    unauthenticated "upgrade this user" endpoint.
+    """
+    import hmac as _hmac
+    import hashlib as _hashlib
+    import base64 as _base64
+
+    key_b64 = secret if secret is not None else WHOP_WEBHOOK_SECRET
+    tol = (tolerance_seconds if tolerance_seconds is not None
+           else WHOP_WEBHOOK_TOLERANCE_SECONDS)
+    if not key_b64 or not signature_header or not webhook_id or not webhook_timestamp:
+        return False
+
+    try:
+        ts_int = int(webhook_timestamp)
+    except (TypeError, ValueError):
+        return False
+    # Reject stale AND future-dated timestamps (clock-skew replay both ways).
+    if abs(time.time() - ts_int) > tol:
+        return False
+
+    keys = _whop_secret_keys(key_b64)
+    if not keys:
+        return False
+
+    signed = f"{webhook_id}.{webhook_timestamp}.".encode("utf-8") + raw_body
+    candidates = [c.strip() for c in
+                  (p.partition(",")[2] for p in signature_header.split(" ")) if c.strip()]
+    if not candidates:
+        return False
+
+    for key in keys:
+        digest = _hmac.new(key, signed, _hashlib.sha256).digest()
+        # Whop's docs specify base64; hex is checked too because the secret
+        # format already turned out to differ from the documented one.
+        for expected in (_base64.b64encode(digest).decode("utf-8"), digest.hex()):
+            for candidate in candidates:
+                if _hmac.compare_digest(expected, candidate):
+                    return True
+    return False
+
+
+# -------------------------------------------------------------------
 # Paddle Billing
 # -------------------------------------------------------------------
 # Paddle BILLING (the current product), not Paddle Classic. Checkout follows
@@ -3100,7 +3296,7 @@ fastmail_ssl = FastMail(conf_ssl)
 # Set RESEND_API_KEY in Railway env to enable. Falls back to SMTP.
 # -------------------------------------------------------------------
 _RESEND_API_KEY  = os.getenv("RESEND_API_KEY", "")
-_RESEND_FROM_ADDR = os.getenv("MAIL_FROM", "animeshkukreti@aegisignal.pro")
+_RESEND_FROM_ADDR = os.getenv("MAIL_FROM", "aegisofficial@aegisignal.pro")
 _RESEND_FROM_NAME = os.getenv("MAIL_FROM_NAME", "AEGIS v1.0")
 
 def _smtp_mailer(addr: str, name: str, ssl: bool) -> Optional[FastMail]:
@@ -4022,10 +4218,12 @@ async def alpha_track_record(user_id: str = Depends(get_current_user)):
 def _active_payment_provider() -> str:
     """Single source of truth for which gateway is live.
 
-    Precedence Paddle -> DODO -> Razorpay, driven only by which credentials are
-    present, so the cutover is a config change and the rollback is unsetting
-    PADDLE_API_KEY.
+    Precedence Whop -> Paddle -> DODO -> Razorpay, driven only by which
+    credentials are present, so the cutover is a config change and the rollback
+    is unsetting WHOP_API_KEY.
     """
+    if WHOP_ENABLED:
+        return "whop"
     if PADDLE_ENABLED:
         return "paddle"
     if DODO_PAYMENTS_ENABLED:
@@ -4039,6 +4237,13 @@ def _active_payment_provider() -> str:
 async def payment_config():
     return {
         "provider": _active_payment_provider(),
+        "whop": {
+            "enabled": WHOP_ENABLED,
+            "mode": WHOP_MODE,
+            # same contract as Paddle: never expose the API key, the frontend
+            # only needs to know this is a hosted redirect
+            "checkout": "redirect",
+        },
         "paddle": {
             "enabled": PADDLE_ENABLED,
             "mode": PADDLE_MODE,
@@ -4100,7 +4305,7 @@ async def initialize_subscription(
 # amount lives on the Paddle price; this table drives display and the other
 # gateways, so the two must be kept in step by hand.
 USD_PLAN_PRICES: Dict[str, float] = {
-    "basic": 5.90,
+    "basic": 8.00,
     "intermediate": 14.00,
     "pro": 30.00,
 }
@@ -4428,11 +4633,58 @@ def _to_subunits(amount_float: float, currency: str) -> int:
 async def create_order(req: CreateOrderRequest, user_id: str = Depends(get_current_user)):
     """Create a checkout session with the active gateway.
 
-    Precedence: Paddle -> DODO -> Razorpay (see _active_payment_provider).
+    Precedence: Whop -> Paddle -> DODO -> Razorpay (see _active_payment_provider).
     """
     usd_price = USD_PLAN_PRICES.get(req.plan)
     if usd_price is None:
         raise HTTPException(status_code=400, detail=f"Unknown plan: {req.plan}")
+
+    if WHOP_ENABLED:
+        plan_id = WHOP_PLAN_IDS.get(req.plan)
+        if not plan_id:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Whop plan ID not configured for plan '{req.plan}' "
+                       f"(set WHOP_PLAN_ID_{req.plan.upper()})")
+        try:
+            # A checkout configuration is the unit that carries metadata, and
+            # Whop's docs are explicit that "payments and memberships created
+            # from a checkout session inherit its metadata". That inheritance is
+            # the whole reason this endpoint exists server-side: the webhook
+            # later reads user_id back out and upgrades exactly that account,
+            # with nothing client-supplied in the path.
+            whop_res = await _whop_post(_WHOP_CHECKOUT_PATH, {
+                "plan_id": plan_id,
+                "metadata": {"user_id": user_id, "plan": req.plan},
+                "redirect_url": WHOP_REDIRECT_URL or None,
+            })
+            # The API may answer bare or wrapped in `data`, as Paddle's does.
+            data = whop_res.get("data") if isinstance(
+                whop_res.get("data"), dict) else whop_res
+            checkout_url = data.get("purchase_url")
+            if not checkout_url:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Whop returned no purchase_url — check the plan is "
+                           "published and the checkout link is active.")
+            return {
+                "provider": "whop",
+                "checkout_url": checkout_url,
+                "payment_id": data.get("id"),
+                "plan": req.plan,
+                "mode": WHOP_MODE,
+            }
+        except HTTPException:
+            raise
+        except httpx.HTTPStatusError as e:
+            print(f"[Whop] Checkout creation failed: "
+                  f"{e.response.status_code} {e.response.text}")
+            raise HTTPException(status_code=502,
+                                detail="Whop checkout creation failed")
+        except Exception as e:
+            print(f"[Whop] Checkout error: {e!r}")
+            raise HTTPException(status_code=502,
+                                detail="Whop checkout creation failed")
 
     if PADDLE_ENABLED:
         price_id = PADDLE_PRICE_IDS.get(req.plan)
@@ -4652,6 +4904,119 @@ _PADDLE_REVOKE_EVENTS = {
 }
 
 
+_WHOP_GRANT_EVENTS = {"payment.succeeded", "membership.activated",
+                      "membership.went_valid"}
+_WHOP_REVOKE_EVENTS = {"membership.cancelled", "membership.canceled",
+                       "membership.went_invalid", "membership.deactivated"}
+
+
+async def _handle_whop_webhook(raw_body: bytes) -> dict:
+    """Apply a VERIFIED Whop event to the user's plan.
+
+    Only ever called after whop_verify_signature passes.
+
+    The user and plan come from metadata attached by /api/create-order when it
+    built the checkout configuration — Whop's docs guarantee that "payments and
+    memberships created from a checkout session inherit its metadata", so both
+    the payment and the membership shapes carry it. Identity is therefore
+    server-supplied and never taken from anything the customer could influence.
+
+    Both payment.succeeded and membership.activated can arrive for one purchase.
+    That is fine: the grant is idempotent — it writes the same plan and the same
+    period end, so whichever lands second is a no-op rather than a double grant.
+    """
+    try:
+        data = json.loads(raw_body)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+
+    event = str(data.get("type") or data.get("event") or "")
+    payload = data.get("data") or {}
+    meta = payload.get("metadata") or {}
+    # A payment nests the membership; a membership event is the membership.
+    membership = payload.get("membership") if isinstance(
+        payload.get("membership"), dict) else payload
+    if not meta:
+        meta = membership.get("metadata") or {}
+    user_id = meta.get("user_id")
+    plan = meta.get("plan")
+
+    print(f"[Whop] Verified event: {event} (user={user_id} plan={plan})")
+
+    if not user_id:
+        # Nothing actionable, but the signature was valid — 200 so Whop stops
+        # retrying. Retrying cannot supply a user_id that was never attached.
+        print(f"[Whop] {event} carried no metadata.user_id — ignoring")
+        return {"status": "ignored", "reason": "no user_id in metadata"}
+
+    if plan not in ("basic", "intermediate", "pro"):
+        # Fall back to the plan ID rather than silently granting a tier the
+        # customer did not buy.
+        plan_map = {v: k for k, v in WHOP_PLAN_IDS.items() if v}
+        pid = ((membership.get("plan") or {}).get("id")
+               if isinstance(membership.get("plan"), dict)
+               else membership.get("plan_id") or payload.get("plan_id"))
+        if pid in plan_map:
+            plan = plan_map[pid]
+    if plan not in ("basic", "intermediate", "pro"):
+        print(f"[Whop] {event}: could not resolve plan for user {user_id} — ignoring")
+        return {"status": "ignored", "reason": "unresolved plan"}
+
+    user_ref = db.collection("users").document(user_id)
+
+    if event in _WHOP_GRANT_EVENTS:
+        # Prefer Whop's own period end so access tracks real billing rather than
+        # a rolling 30 days guessed at webhook time.
+        sub_end = (membership.get("renewal_period_end")
+                   or membership.get("expires_at")
+                   or membership.get("valid_until"))
+        if isinstance(sub_end, (int, float)):
+            sub_end = datetime.fromtimestamp(
+                sub_end, tz=timezone.utc).isoformat()
+        if not sub_end:
+            sub_end = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        try:
+            res = user_ref.update({
+                "plan": plan,
+                "subscription": {
+                    "status": "active",
+                    "payment_id": payload.get("id"),
+                    "subscription_id": membership.get("id") or payload.get("id"),
+                    "provider": "whop",
+                    "activated_at": datetime.now(timezone.utc).isoformat(),
+                    "plan_type": plan,
+                },
+                "subscription_end": sub_end,
+                "trial_active": False,
+            })
+            if inspect.isawaitable(res):
+                await res
+            print(f"[Whop] User {user_id} -> {plan} (until {sub_end})")
+        except Exception as e:
+            # 500 so Whop retries — the payment succeeded, so silently dropping
+            # the grant would leave a paying customer without access.
+            print(f"[Whop] Failed to upgrade {user_id}: {e}")
+            raise HTTPException(status_code=500, detail="Could not apply subscription")
+
+    elif event in _WHOP_REVOKE_EVENTS:
+        try:
+            # Do NOT downgrade `plan` here. A cancellation means "will not
+            # renew"; the customer keeps access until the paid period ends, and
+            # subscription_end already governs that.
+            res = user_ref.update({
+                "subscription.status": "canceled",
+                "subscription.canceled_at": datetime.now(timezone.utc).isoformat(),
+            })
+            if inspect.isawaitable(res):
+                await res
+            print(f"[Whop] User {user_id} subscription canceled")
+        except Exception as e:
+            print(f"[Whop] Failed to mark {event} for {user_id}: {e}")
+            raise HTTPException(status_code=500, detail="Could not apply subscription")
+
+    return {"status": "ok", "event": event}
+
+
 async def _handle_paddle_webhook(raw_body: bytes) -> dict:
     """Apply a VERIFIED Paddle Billing event to the user's plan.
 
@@ -4757,6 +5122,26 @@ async def payments_webhook(request: Request):
     dodo_sig = request.headers.get("Webhook-Signature") or request.headers.get("X-Dodo-Signature", "")
     rzp_sig = request.headers.get("X-Razorpay-Signature", "")
     paddle_sig = request.headers.get("Paddle-Signature", "")
+    # Whop uses Standard Webhooks: the signature is split across three headers.
+    # `webhook-id` is what distinguishes it from DODO, which also sends a header
+    # called `Webhook-Signature` but signs the body alone with a hex HMAC.
+    whop_id = request.headers.get("webhook-id", "")
+    whop_ts = request.headers.get("webhook-timestamp", "")
+    whop_sig = request.headers.get("webhook-signature", "")
+
+    # ── Whop: verify or REJECT ───────────────────────────────────────────────
+    # Same posture as Paddle below, for the same reason: this endpoint grants
+    # paid plans, so accepting an unverified body makes it an unauthenticated
+    # "upgrade this user" API. Whop retries rejected deliveries, so a genuine
+    # event is not lost.
+    if whop_id and whop_sig:
+        if not WHOP_WEBHOOK_SECRET:
+            print("[Whop] Webhook received but WHOP_WEBHOOK_SECRET is unset — rejected")
+            raise HTTPException(status_code=503, detail="Webhook secret not configured")
+        if not whop_verify_signature(body, whop_id, whop_ts, whop_sig):
+            print("[Whop] Webhook signature verification FAILED — rejected")
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+        return await _handle_whop_webhook(body)
 
     # ── Paddle: verify or REJECT ─────────────────────────────────────────────
     # Unlike the DODO branch below (which only warns on mismatch), a Paddle
@@ -6195,7 +6580,7 @@ async def submit_review(review: Review):
     #    "review sent".  It also went to the personal gmail, not the Neo work
     #    mailbox.  Now it always fires, to REVIEW_NOTIFY_EMAIL (defaulting to the
     #    Neo-hosted work address), via the robust Resend/SMTP helper.
-    notify_to = os.getenv("REVIEW_NOTIFY_EMAIL", "animeshkukreti@aegisignal.pro")
+    notify_to = os.getenv("REVIEW_NOTIFY_EMAIL", "aegisofficial@aegisignal.pro")
     _msg_html = (review.message or "").replace("\n", "<br>") or "â€”"
     emailed = False
     try:
@@ -6326,7 +6711,7 @@ async def send_otp(request: OTPSendRequest):
         <tr>
           <td style="padding:20px 40px 28px;border-top:1px solid rgba(255,255,255,0.05);text-align:center;">
             <p style="color:#4b5563;font-size:12px;margin:0;">
-              Sent by <a href="mailto:animeshkukreti@aegisignal.pro" style="color:#B8966A;text-decoration:none;">animeshkukreti@aegisignal.pro</a>
+              Sent by <a href="mailto:aegisofficial@aegisignal.pro" style="color:#B8966A;text-decoration:none;">aegisofficial@aegisignal.pro</a>
               &nbsp;Â·&nbsp;
               <a href="https://aegisignal.pro" style="color:#B8966A;text-decoration:none;">aegisignal.pro</a>
             </p>

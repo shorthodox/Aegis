@@ -135,6 +135,11 @@ def test_defaults_to_sandbox_not_live():
 
 
 def test_provider_precedence_prefers_paddle_when_enabled(monkeypatch):
+    # Whop now sits above Paddle in the chain, so it has to be pinned off for
+    # this test to be about Paddle at all. Without this the test passed only
+    # while WHOP_API_KEY was unset — i.e. it would have started failing the
+    # moment real Whop credentials reached .env, which is exactly what happened.
+    monkeypatch.setattr(main, 'WHOP_ENABLED', False)
     monkeypatch.setattr(main, 'PADDLE_ENABLED', True)
     assert main._active_payment_provider() == 'paddle'
     monkeypatch.setattr(main, 'PADDLE_ENABLED', False)
