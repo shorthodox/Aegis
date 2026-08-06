@@ -81,12 +81,55 @@ def test_checkout_rejects_an_unknown_plan(client):
 
 def test_paddle_takes_precedence_and_reports_its_missing_price_id(client, monkeypatch):
     """With Paddle on, checkout must route there — and say what is missing."""
+    monkeypatch.setattr(main, 'WHOP_ENABLED', False)
     monkeypatch.setattr(main, 'PADDLE_ENABLED', True)
     monkeypatch.setattr(main, 'PADDLE_PRICE_IDS',
                         {'basic': None, 'intermediate': None, 'pro': None})
     r = client.post('/api/create-order', json={'plan': 'pro', 'currency': 'USD'})
     assert r.status_code == 500
     assert 'PADDLE_PRICE_ID_PRO' in r.json().get('detail', '')
+
+
+def test_whop_takes_precedence_and_reports_its_missing_plan_id(client, monkeypatch):
+    """Whop outranks Paddle, and says which env var to set."""
+    monkeypatch.setattr(main, 'WHOP_ENABLED', True)
+    monkeypatch.setattr(main, 'PADDLE_ENABLED', True)      # still on underneath
+    monkeypatch.setattr(main, 'WHOP_PLAN_IDS',
+                        {'basic': None, 'intermediate': None, 'pro': None})
+    r = client.post('/api/create-order', json={'plan': 'pro', 'currency': 'USD'})
+    assert r.status_code == 500
+    detail = r.json().get('detail', '')
+    assert 'WHOP_PLAN_ID_PRO' in detail, detail
+    assert 'PADDLE' not in detail, 'Paddle handled the request despite Whop being on'
+
+
+@pytest.mark.parametrize('flags,expected', [
+    ({'WHOP_ENABLED': True,  'PADDLE_ENABLED': True},  'whop'),
+    ({'WHOP_ENABLED': False, 'PADDLE_ENABLED': True},  'paddle'),
+    ({'WHOP_ENABLED': False, 'PADDLE_ENABLED': False,
+      'DODO_PAYMENTS_ENABLED': False, 'RAZORPAY_ENABLED': False}, 'none'),
+])
+def test_provider_precedence(monkeypatch, flags, expected):
+    """Whop -> Paddle -> DODO -> Razorpay, decided only by which creds exist.
+
+    The rollback story depends on this: unsetting WHOP_API_KEY must fall
+    straight back to Paddle with no code change.
+    """
+    for name, value in flags.items():
+        monkeypatch.setattr(main, name, value)
+    assert main._active_payment_provider() == expected
+
+
+def test_payment_config_advertises_whop(client, monkeypatch):
+    """gatekeeper.js keys its redirect flow off this payload."""
+    monkeypatch.setattr(main, 'WHOP_ENABLED', True)
+    cfg = client.get('/payment/config').json()
+    assert cfg['provider'] == 'whop'
+    assert cfg['whop']['enabled'] is True
+    assert cfg['whop']['checkout'] == 'redirect'
+    # the API key must never reach the browser
+    assert 'api_key' not in str(cfg).lower()
+    assert not (main.WHOP_API_KEY and main.WHOP_API_KEY in str(cfg))
 
 
 # ── the duplicate request models are gone ────────────────────────────────────
