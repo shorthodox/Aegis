@@ -81,19 +81,45 @@ def _drive(engine, pos, prices, side='BUY'):
 
 # ── 1. the deleted TP1_RECROSS ───────────────────────────────────────────────
 
-def test_tp1_tag_then_pullback_keeps_position_open(engine):
-    """The core v82 fix: tagging TP1 and falling back must not flatten."""
+def test_tp1_tag_then_shallow_pullback_keeps_position_open(engine):
+    """Tagging TP1 and wobbling must not flatten — the v82 fix, re-scoped.
+
+    This used to drive a pullback to 100.4, which hands back 60 % of the
+    entry->TP1 rung. Under the give-back ratchet (TP_GIVEBACK_PCT) that is now a
+    deliberate exit, not a survivable wobble: the protective level for this
+    geometry sits at 101.0 - 0.35 * 1.0 = 100.65.
+
+    What the test still protects is the thing that mattered — a ZERO-width
+    recross. Price may come back off the rung without the position being
+    flattened; it just may not come back most of the way.
+    """
     pos = _position()
-    still_open = _drive(engine, pos, [100.2, 101.3, 100.4])
+    still_open = _drive(engine, pos, [100.2, 101.3, 100.8])
 
     assert still_open is not None, (
-        'position was flattened on a TP1 pullback — TP1_RECROSS is back'
+        'position was flattened on a shallow TP1 pullback — TP1_RECROSS is back'
     )
     assert engine._tp1_hit['TEST/USDT'] is True
     reasons = [t.exit_reason for t in engine.wallet.trade_history]
     assert reasons == ['TP1_PARTIAL'], reasons
     # only the TP1 slice was banked; the rest still rides
     assert still_open.position_value == pytest.approx(850.0, abs=1.0)
+
+
+def test_tp1_tag_then_deep_pullback_banks_the_rung(engine):
+    """The other half of the same rule, and the reason it exists.
+
+    BCH/USDT 2026-08-06: short from 214.70, TP1 tagged at 212.09, price back to
+    213.40 — over half the rung handed back — with the stop still at break-even
+    214.70 and nothing in between. That runner is now closed instead.
+    """
+    pos = _position()
+    still_open = _drive(engine, pos, [100.2, 101.3, 100.4])
+
+    assert still_open is None, 'a deep give-back after TP1 should close the runner'
+    reasons = [t.exit_reason for t in engine.wallet.trade_history]
+    assert 'TP1_PARTIAL' in reasons
+    assert reasons[-1] == 'TP_GIVEBACK', reasons
 
 
 def test_breakeven_moves_at_tp1(engine):
@@ -108,40 +134,80 @@ def test_breakeven_moves_at_tp1(engine):
     assert pos.stop_loss == pos.entry_price
 
 
-def test_reversal_after_tp1_scratches_instead_of_losing(engine):
-    """The win-rate mechanic: TP1 banked, remainder out at entry -> net green."""
+def test_reversal_after_tp1_is_still_net_green(engine):
+    """The win-rate mechanic, now served by the ratchet rather than break-even.
+
+    A full reversal after TP1 used to ride all the way back to entry and exit
+    STOP_HIT at 100.0. It now closes earlier, at the give-back level — the
+    outcome the test cares about is unchanged and slightly better: TP1 is banked
+    and the remainder does not give the move back.
+    """
     pos = _position()
     _drive(engine, pos, [101.3, 100.0, 99.5])
     total = sum(t.pnl_usdt for t in engine.wallet.trade_history)
-    assert engine.wallet.trade_history[-1].exit_reason == 'STOP_HIT'
-    assert engine.wallet.trade_history[-1].exit_price == pytest.approx(100.0)
+    last = engine.wallet.trade_history[-1]
+    assert last.exit_reason in ('TP_GIVEBACK', 'STOP_HIT'), last.exit_reason
+    # exits at or above break-even, never below it
+    assert last.exit_price >= 100.0 - 1e-9, last.exit_price
     assert total > -pos.initial_value * 0.005, (
         f'a TP1-then-reverse should be a scratch, not a full loss: {total}'
     )
 
 
-def test_short_side_tp1_pullback_also_holds(engine):
+def test_short_side_shallow_pullback_also_holds(engine):
+    """Mirror of the long case: the SHORT rung is 100 -> 99, level 99.35."""
     pos = _position(direction='SHORT', side='SELL', stop_loss=101.0,
                     take_profit_1=99.0, take_profit_2=98.0, take_profit_3=95.0,
                     take_profit_4=92.0, take_profit_5=88.0)
-    still_open = _drive(engine, pos, [99.8, 98.9, 99.4], side='SELL')
+    still_open = _drive(engine, pos, [99.8, 98.9, 99.2], side='SELL')
     assert still_open is not None
     assert [t.exit_reason for t in engine.wallet.trade_history] == ['TP1_PARTIAL']
 
 
+def test_short_side_deep_pullback_banks_the_rung(engine):
+    pos = _position(direction='SHORT', side='SELL', stop_loss=101.0,
+                    take_profit_1=99.0, take_profit_2=98.0, take_profit_3=95.0,
+                    take_profit_4=92.0, take_profit_5=88.0)
+    still_open = _drive(engine, pos, [99.8, 98.9, 99.6], side='SELL')
+    assert still_open is None
+    assert engine.wallet.trade_history[-1].exit_reason == 'TP_GIVEBACK'
+
+
 # ── 2. the winner can now actually run ───────────────────────────────────────
 
-def test_runner_reaches_tp3_instead_of_capping_at_tp1(engine):
-    """Under the old ladder this path exited at TP1 for +1R on the whole size.
+def test_runner_still_reaches_tp3(engine):
+    """The winner must still be able to run — the point of deleting the recross.
 
-    Pullbacks here stay inside the ATR x TRAIL_MULTIPLIER band, so the runner
-    survives to the structural target.
+    Under the old ladder this path exited at TP1 for +1R on the whole size. The
+    pullbacks here stay inside BOTH bands that can now close a runner: the
+    trailing stop (ATR x TRAIL_MULTIPLIER = 0.5) and the give-back leash
+    (TP_GIVEBACK_PCT of the rung — 0.35 off TP1, so a floor at 100.65, and 0.35
+    off TP2, so 101.65).
+
+    That is the trade this ladder makes: a runner survives noise, but it no
+    longer survives handing back a third of the rung it just banked.
     """
     pos = _position()                      # atr 0.5 -> trail distance 0.5
-    _drive(engine, pos, [101.2, 100.6, 102.3, 102.0, 105.4])
+    _drive(engine, pos, [101.2, 100.9, 102.3, 102.0, 105.4])
     reasons = [t.exit_reason for t in engine.wallet.trade_history]
     assert 'TP1_PARTIAL' in reasons and 'TP2_PARTIAL' in reasons
     assert 'TP3_PARTIAL' in reasons, f'runner never reached TP3: {reasons}'
+
+
+def test_a_zero_width_recross_is_still_forbidden(engine):
+    """The guard the four rewritten tests were really protecting.
+
+    TP1_RECROSS closed on ANY tick back through a tagged TP. Whatever the leash
+    is set to, it must leave room for price to come off the rung at all —
+    otherwise every winner is capped at exactly TP1 again, which is the measured
+    mistake this ladder exists to avoid.
+    """
+    from scripts.engine.risk import DynamicRiskEngine as R
+    assert R.TP_GIVEBACK_PCT > 0.0, 'a zero leash is TP1_RECROSS by another name'
+    pos = _position()
+    # a tick barely off the rung must NOT close
+    still_open = _drive(engine, pos, [101.3, 100.99])
+    assert still_open is not None, 'closed on a tick back through TP1'
 
 
 def test_trailing_stop_exits_on_a_pullback_wider_than_the_trail(engine):

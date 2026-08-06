@@ -60,6 +60,13 @@ class ExitsMixin:
 
         peak = self._peak_price[symbol]
 
+        # The give-back ratchet's state, initialised defensively. LiveEngine is
+        # routinely built with __new__ and hand-set attributes (the
+        # characterisation harness and several exit tests do exactly that), so a
+        # mixin that assumes __init__ ran breaks callers that never asked it to.
+        if getattr(self, '_giveback_stop', None) is None:
+            self._giveback_stop = {}
+
         # ── Helper: full close (removes position, cleans all TP-hit state) ────
         def _close(reason: str, exit_px: Optional[float] = None) -> None:
             rec = self.wallet.close_trade(
@@ -69,7 +76,8 @@ class ExitsMixin:
                 self._last_close_side[symbol]   = pos.side
                 self._last_close_reason[symbol] = reason
                 for d in (self._tp1_hit, self._tp2_hit,
-                          self._tp3_hit, self._tp4_hit, self._peak_price):
+                          self._tp3_hit, self._tp4_hit, self._peak_price,
+                          self._giveback_stop):
                     d.pop(symbol, None)
                 # Whole-trade view: rec.outcome already accounts for banked
                 # TP partials (close_trade); aggregate PnL across all slices
@@ -275,6 +283,60 @@ class ExitsMixin:
                 print(f'[{symbol}] TP1_HIT @ {check_price:.6g} — banked '
                       f'{self.risk_engine.TP_CLOSE_PCTS[0]*100:.0f}%, '
                       f'SL to break-even ({pos.entry_price:.6g})')
+
+        # ── 7a. Give-back ratchet — protect a rung that has been banked ──────
+        # Once a rung is tagged, the remainder may hand back only part of THAT
+        # RUNG'S SPAN before it is closed: entry→TP1 for the first, TP1→TP2 for
+        # the second, and so on. The level ratchets — it only ever moves in the
+        # trade's favour, so a later rung tightens it and nothing loosens it.
+        #
+        # This fills a real hole. Break-even goes on at TP1 and the trail only
+        # starts at TP2, so a position that banked TP1 and reversed handed the
+        # entire move back to entry with nothing in between. Observed on
+        # BCH/USDT 2026-08-06: short from 214.70, TP1 212.09 tagged, price back
+        # to 213.40 with the stop still sitting at break-even 214.70.
+        #
+        # It is NOT the deleted TP1_RECROSS, which closed on any tick back
+        # through a tagged TP — a zero-width buffer — when TP1 was 0.7R against
+        # a 1.0R stop, capping every winner at +0.7R. TP1 is 1.0R now, and the
+        # buffer is configurable. See DynamicRiskEngine.TP_GIVEBACK_PCT for why
+        # the width matters more than the mechanism.
+        _rungs = (
+            (self._tp4_hit.get(symbol, False), pos.take_profit_4, pos.take_profit_3),
+            (self._tp3_hit.get(symbol, False), pos.take_profit_3, pos.take_profit_2),
+            (self._tp2_hit.get(symbol, False), pos.take_profit_2, pos.take_profit_1),
+            (self._tp1_hit.get(symbol, False), pos.take_profit_1, pos.entry_price),
+        )
+        _gb_pct = self.risk_engine.TP_GIVEBACK_PCT
+        _gb_min = self.risk_engine.TP_GIVEBACK_MIN_ATR * atr
+        for _hit, _tp, _prev in _rungs:
+            if not _hit or _tp <= 0 or _prev <= 0:
+                continue
+            _span = abs(_tp - _prev)
+            if _span <= 0:
+                continue
+            _leash = max(_span * _gb_pct, _gb_min)
+            # back from the rung, toward the previous one
+            _level = _tp - _leash if pos.direction == 'LONG' else _tp + _leash
+            _cur = self._giveback_stop.get(symbol)
+            if _cur is None:
+                self._giveback_stop[symbol] = _level
+            elif pos.direction == 'LONG':
+                self._giveback_stop[symbol] = max(_cur, _level)
+            else:
+                self._giveback_stop[symbol] = min(_cur, _level)
+            break                      # highest rung tagged wins; it is the tightest
+
+        _gb = self._giveback_stop.get(symbol)
+        if _gb is not None:
+            _breached = ((pos.direction == 'LONG'  and check_price <= _gb) or
+                         (pos.direction == 'SHORT' and check_price >= _gb))
+            if _breached:
+                print(f'[{symbol}] TP_GIVEBACK — handed back '
+                      f'{_gb_pct*100:.0f}% of the last rung (level {_gb:.6g}), '
+                      f'closing the remainder')
+                _close('TP_GIVEBACK', exit_px=_gb)
+                return
 
         # ── 7b–7e. TP re-cross exits — DELETED in v82 ────────────────────────
         # There used to be four blocks here (TP1/TP2/TP3/TP4_RECROSS) that

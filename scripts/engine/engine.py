@@ -377,6 +377,9 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
         self._tp3_hit:    Dict[str, bool]  = {}
         self._tp4_hit:    Dict[str, bool]  = {}
         self._peak_price: Dict[str, float] = {}   # highest (LONG) or lowest (SHORT) seen since entry
+        # Give-back ratchet: the protective level set behind the last TP rung
+        # that was tagged. Ratchets one way only — see ExitsMixin section 7a.
+        self._giveback_stop: Dict[str, float] = {}
 
         self.bootstrap_done  = 0
         self.bootstrap_total = len(token_configs)

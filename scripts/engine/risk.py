@@ -95,6 +95,36 @@ class DynamicRiskEngine:
 
     TRAIL_MULTIPLIER  = 1.0    # trailing stop distance = ATR × this (widened to match wider SL)
 
+    # ── Give-back ratchet ─────────────────────────────────────────────────────
+    # Once a TP rung is tagged, how much of THAT RUNG'S SPAN the remainder may
+    # hand back before it is closed. The span is measured rung-to-rung:
+    # entry→TP1 for the first, TP1→TP2 for the second, and so on.
+    #
+    # This is not the deleted TP1_RECROSS. That closed on any tick back through
+    # a tagged TP — a zero-width buffer — and with TP1 at 0.7R against a 1.0R
+    # stop it capped every winner at +0.7R. Two things changed: TP1 is 1.0R now
+    # (v82), so a give-back exit books a full 1R rather than 0.7R, and the
+    # buffer is no longer zero.
+    #
+    # Sizing it IS the question, and it was chosen by measurement rather than
+    # taste. An entry→TP1 span runs ~1.9 ATR, so the leash in ATR is roughly
+    # 1.9 × TP_GIVEBACK_PCT:
+    #
+    #     0.05 -> 0.09 ATR   ~8 % of one 1h bar. Noise tags it; TP3-TP5 stop
+    #                        being reachable, which is the capped-runner problem
+    #                        the recross was deleted for.
+    #     0.35 -> 0.66 ATR   wide enough to sit outside ordinary bar noise, far
+    #                        tighter than break-even. <- chosen
+    #     0.50 -> 0.95 ATR   about a full bar; fires only on a real reversal.
+    #     0.65 -> 1.23 ATR   wider than the BCH reversal that prompted this, so
+    #                        it would not have closed it.
+    #
+    # No value both protects the rung and preserves v82's "runner reaches TP3"
+    # behaviour — they are genuinely in conflict, and 0.35 is where the trade is
+    # struck: keep the banked rung, accept a slightly lower TP3+ hit rate.
+    TP_GIVEBACK_PCT     = 0.35  # fraction of the rung span the runner may hand back
+    TP_GIVEBACK_MIN_ATR = 0.0   # optional noise floor in ATR; 0 = percentage alone
+
     # ── Partial-close percentages (must sum to 1.0) ───────────────────────────
     # Fractions of the ORIGINAL allocation (v82 — see partial_close_trade; they
     # used to be applied to the shrinking remainder, so each rung silently
