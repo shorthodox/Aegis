@@ -383,6 +383,48 @@ class ExitsMixin:
                 if _tp1_secured:
                     _close('MODEL_REVERSAL_TP')
                     return
+
+                # ── a winner below TP1 is not closed here ────────────────────
+                # This branch used to close on any opposing signal clearing the
+                # SAME edge floor required to ENTER (60), at any PnL. Measured
+                # over the closed book that is what produced the payoff ratio:
+                #
+                #     winners realised  +0.19R .. +0.40R   (6-28 % of target)
+                #     losers  realised  -1.08R .. -1.11R   (the full stop)
+                #
+                #     payoff 0.39 : 1  ->  needs a 72 % win rate to break even
+                #     actual win rate 60 %  ->  -0.32 % per trade after costs
+                #
+                # The asymmetry is structural, not bad luck. The stop sits ~1R
+                # away and gets hit in a bar or two, while a reversal needs a
+                # full re-score — so losers reach the stop and winners get
+                # reversed out early. The engine was cutting winners and letting
+                # losers run, which is the one arrangement that cannot be fixed
+                # by a better model.
+                #
+                # So the reversal keeps its real job — abandoning a dead thesis
+                # BEFORE the stop — and loses the job it was doing badly. A
+                # position already in profit has not yet earned its risk if it
+                # is short of TP1 (1R); closing it there books a fraction of R
+                # against full-R losses. It is protected instead: the stop comes
+                # to break-even, so the bad case is a scratch rather than a
+                # small win, and the good case is still open.
+                _pnl_pct = ((check_price - pos.entry_price) / pos.entry_price * 100.0
+                            if pos.direction == 'LONG'
+                            else (pos.entry_price - check_price) / pos.entry_price * 100.0)
+                _cost = self.wallet.round_trip_cost_pct()
+                if _pnl_pct > _cost:
+                    _moved = False
+                    if pos.direction == 'LONG' and pos.stop_loss < pos.entry_price:
+                        pos.stop_loss, _moved = pos.entry_price, True
+                    elif pos.direction == 'SHORT' and pos.stop_loss > pos.entry_price:
+                        pos.stop_loss, _moved = pos.entry_price, True
+                    print(f'[{symbol}] REVERSAL_PROTECT {pos.direction}→{side}: '
+                          f'+{_pnl_pct:.2f}% but TP1 not reached — '
+                          f'{"stop to break-even" if _moved else "stop already at/above break-even"}, '
+                          f'holding for the first target')
+                    return
+
                 if _rev_edge >= SignalQualityFilter.MIN_QUALITY_SCORE:
                     _close('MODEL_REVERSAL_TP')
                     return

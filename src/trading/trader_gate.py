@@ -74,8 +74,16 @@ ACTION_REJECT = 'REJECT'   # no trade, with a reason
 
 # ── Stage 1 · where each setup is allowed to exist ────────────────────────────
 # range_position: 0.0 = at support, 1.0 = at resistance.
-PULLBACK_RP_LONG   = 0.45   # a bull pullback must give back at least this much of the range
-PULLBACK_RP_SHORT  = 0.55   # mirror for a bear rally
+PULLBACK_RP_LONG   = 0.35   # a bull pullback must give back at least this much of the range
+PULLBACK_RP_SHORT  = 0.65   # mirror for a bear rally
+# 0.45/0.55 put a "pullback" entry within a hair of dead centre — a BUY could
+# fire at rp 0.44, which is not near support by any reading, and UNI/USDT
+# 2026-08-07 entered at rp 0.43, 1.23 ATR above its support (3.5x the
+# AT_LEVEL_ATR tolerance the trigger is supposed to enforce). The two halves of
+# the range then overlapped at the middle, so the same tape could justify either
+# direction. A long now needs the lower third and a short the upper third, which
+# is what "buy near support, sell near resistance" means in range terms and
+# leaves a third of the range in the middle where neither side is on offer.
 EXTREME_RP_LOW     = 0.20   # counter-trend reversals live only in the outer fifth
 EXTREME_RP_HIGH    = 0.80
 RANGE_EDGE_LOW     = 0.30   # a range fade needs the edge, not "the lower half"

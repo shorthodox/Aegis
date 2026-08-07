@@ -1255,7 +1255,7 @@ window.showSignalDetailsModal = function (signal) {
       </div>
       <div class="flex-1 min-w-0">
         <div class="text-[11px] font-bold text-white uppercase tracking-wider">API / JSON Data Export</div>
-        <div class="text-[10px] text-gray-500 font-mono mt-0.5 truncate">aegis_live_&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;  &rarr;  /api/v1/signals/live</div>
+        <div class="text-[10px] text-gray-500 font-mono mt-0.5 truncate">aegis_live_&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;  &rarr;  /api/v1/signals/fleet</div>
       </div>
       <span class="text-[9px] text-gray-500 group-hover:text-blue-400 transition-colors flex-shrink-0">
         Dev Portal <i class="fas fa-arrow-right"></i>
@@ -2136,9 +2136,14 @@ function _renderFpApi(body, signal, tier) {
           <div class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-3">Available Endpoints</div>
           <div class="space-y-2">
             ${[
-              { path: '/api/v1/signals/live', desc: 'All live signals JSON' },
-              { path: `/api/v1/signals/${encodeURIComponent(signal.symbol)}`, desc: `${signal.symbol} signal data` },
-              { path: '/api/v1/tickers', desc: 'Live price tickers' },
+              // These are advertised to a PAYING Pro subscriber, so they have
+              // to be endpoints that exist. This list previously offered
+              // /api/v1/signals/live, /api/v1/signals/{symbol} and
+              // /api/v1/tickers — none of which are registered; all three 404.
+              // Only the fleet endpoint is real, so it is the only one shown.
+              // If the others get built, add them back here at the same time.
+              { path: '/api/v1/signals/fleet', desc: 'All live signals JSON' },
+              { path: `/api/token-insight/${encodeURIComponent(signal.symbol)}`, desc: `${signal.symbol} signal data` },
             ].map(ep => `
               <div class="flex items-center gap-3 bg-black/40 p-2.5 rounded-lg border border-white/5">
                 <code class="text-cyan text-[11px] font-mono flex-1">${ep.path}</code>
@@ -2160,7 +2165,7 @@ API_KEY <span class="text-white">=</span> <span class="text-amber-300">"aegis_li
 HEADERS <span class="text-white">=</span> {<span class="text-amber-300">"X-API-Key"</span>: API_KEY}
 
 resp <span class="text-white">=</span> requests.<span class="text-cyan">get</span>(
-    <span class="text-amber-300">"https://aegisignal.pro/api/v1/signals/live"</span>,
+    <span class="text-amber-300">"https://aegisignal.pro/api/v1/signals/fleet"</span>,
     headers<span class="text-white">=</span>HEADERS
 )
 data <span class="text-white">=</span> resp.<span class="text-cyan">json</span>()

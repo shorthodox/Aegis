@@ -4312,9 +4312,17 @@ USD_PLAN_PRICES: Dict[str, float] = {
 
 # Customer-facing label for each internal tier.
 PLAN_DISPLAY_NAMES: Dict[str, str] = {
-    "basic": "Starter",
-    "intermediate": "Pro",
-    "pro": "Advanced",
+    # These MUST match what pricing.html sells, because this map is served to
+    # the browser by /payment/config and is what a subscriber would be shown.
+    #
+    # It previously read Starter / Pro / Advanced against a page selling
+    # Basic / Sentinel / AEGIS Pro — three tiers, three different names, and the
+    # middle one called "Pro" while the internal top tier is literally `pro`.
+    # A Sentinel subscriber would have been told they were on "Pro", and the
+    # actual top tier shown as "Advanced".
+    "basic": "Basic",
+    "intermediate": "Sentinel",
+    "pro": "AEGIS Pro",
 }
 
 # Currencies whose smallest unit is the unit itself (no multiply by 100)
@@ -6748,48 +6756,13 @@ async def verify_otp(request: OTPVerifyRequest):
 # -------------------------------------------------------------------
 # FIRESTORE SIGNALS API â€“ Get all active signals
 # -------------------------------------------------------------------
-@app.get("/api/signals")
-async def get_signals(
-    request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))
-):
-    """
-    Get all active signals from Firestore.
-    Signals are readable by all authenticated users.
-    Trial users get limited access to specific tokens only.
-    """
-    try:
-        # Get signals collection
-        signals_ref = db.collection("signals")
-        signals_docs = signals_ref.stream()
-        
-        signals = []
-        for doc in signals_docs:
-            signal_data = doc.to_dict() if hasattr(doc, "to_dict") else {}
-            
-            if not isinstance(signal_data, dict):
-                continue
-                
-            # Safe access to document ID - handle None values properly
-            doc_id = getattr(doc, "id", None)
-            if doc_id is None:
-                doc_id = getattr(doc, "name", None) or (str(doc.reference.path).split("/")[-1] if hasattr(doc, "reference") else f"doc_{datetime.now().timestamp()}")
-            
-            signal_data["id"] = str(doc_id)  # Convert to string for type compatibility
-            signals.append(signal_data)
-        
-        # Sort by timestamp (newest first)
-        signals.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
-        
-        return {
-            "success": True,
-            "count": len(signals),
-            "signals": signals,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
-    except Exception as e:
-        print(f"âŒ Error fetching signals: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to fetch signals")
+# NOTE: a second `@app.get("/api/signals")` used to live here — an unauthed
+# Firestore dump. It took HTTPBearer(auto_error=False) and never looked at the
+# plan, so it would have served the entire paid signal feed to anybody at all.
+# It was unreachable only because FastAPI matches in registration order and the
+# gated api_signals() above registers 74 routes earlier. That is not a control,
+# it is a coincidence, and one file reshuffle away from being a full product
+# leak. Deleted. The gated route is the only /api/signals.
 
 # -------------------------------------------------------------------
 # FIRESTORE SIGNALS API â€“ Get specific signal
@@ -6913,35 +6886,10 @@ async def get_dashboard(
 # -------------------------------------------------------------------
 # FIRESTORE PUBLIC SIGNALS â€“ No authentication required
 # -------------------------------------------------------------------
-@app.get("/api/public/signals")
-async def get_public_signals():
-    """
-    Get public signals for non-logged-in users.
-    Shows a limited set of signals to encourage signup.
-    """
-    try:
-        signals_ref = db.collection("signals")
-        # Get only top 3-4 signals
-        signals_docs = signals_ref.limit(4).stream()
-        
-        signals = []
-        for doc in signals_docs:
-            signal_data = doc.to_dict()
-            if signal_data is None:
-                continue
-            signal_data["id"] = doc.id
-            signals.append(signal_data)
-        
-        return {
-            "success": True,
-            "count": len(signals),
-            "signals": signals,
-            "message": "Sign up to access all signals",
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
-    except Exception as e:
-        print(f"âŒ Error fetching public signals: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to fetch signals")
+# NOTE: a second `@app.get("/api/public/signals")` used to live here, returning
+# 4 Firestore signals with no auth handling. Same story — shadowed by the
+# auth-aware api_public_signals() above and therefore dead. Deleted rather than
+# left as a trap for whoever next moves code in this file.
 
 # -------------------------------------------------------------------
 # FIRESTORE SIGNAL UPDATE â€“ Backend trigger (admin only)

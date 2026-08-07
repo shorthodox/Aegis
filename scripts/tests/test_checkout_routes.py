@@ -142,8 +142,18 @@ def test_create_order_model_is_plan_based_not_amount_based():
 
 # ── visibility on the two shadowed routes NOT fixed here ─────────────────────
 
-def test_known_remaining_shadowed_routes_are_only_the_signals_pair():
-    """Documents scope. If a new one appears, this fails and asks why."""
+def test_no_route_is_shadowed():
+    """No path may be registered twice.
+
+    This used to permit one known pair — a second /api/signals and
+    /api/public/signals — on the grounds that they were unreachable. They were,
+    but only because FastAPI matches in registration order and the gated
+    versions happened to come first. The shadowed /api/signals took
+    HTTPBearer(auto_error=False) and never checked the plan, so it would have
+    served the entire paid signal feed to anyone, authenticated or not, the
+    moment anything reordered this file. Both are deleted; the allowance is
+    gone with them.
+    """
     seen = collections.defaultdict(list)
     for r in main.app.routes:
         p, m = getattr(r, 'path', None), getattr(r, 'methods', None)
@@ -151,7 +161,19 @@ def test_known_remaining_shadowed_routes_are_only_the_signals_pair():
             for meth in m:
                 if meth in ('GET', 'POST', 'PUT', 'DELETE'):
                     seen[(meth, p)].append(r.endpoint.__name__)
-    dups = {k for k, v in seen.items() if len(v) > 1}
-    assert dups == {('GET', '/api/signals'), ('GET', '/api/public/signals')}, (
-        f'route shadowing changed: {sorted(dups)}'
+    dups = {k: v for k, v in seen.items() if len(v) > 1}
+    assert not dups, (
+        f'route shadowing reintroduced: {dups}. Whichever registers FIRST wins '
+        f'— never rely on that for access control.'
+    )
+
+
+def test_the_surviving_signals_route_is_the_gated_one():
+    """The paid feed must require a plan, not merely a token."""
+    import inspect
+    handlers = [r.endpoint for r in main.app.routes if r.path == '/api/signals']
+    assert len(handlers) == 1
+    src = inspect.getsource(handlers[0])
+    assert "plan != 'pro'" in src or 'plan not in' in src, (
+        '/api/signals no longer gates on the plan'
     )
