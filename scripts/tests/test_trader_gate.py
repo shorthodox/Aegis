@@ -175,12 +175,24 @@ def test_exhaustion_reversal_needs_the_rsi_stretch_not_just_the_location():
     assert stretched.side == 'SELL'
 
 
-def test_broken_resistance_retested_is_a_long():
+def test_broken_resistance_retested_is_no_longer_a_long():
+    """BREAK_RETEST is retired — it was counter-location by construction.
+
+    This used to assert the retest of a broken resistance produced a BUY. The
+    geometry here is rp ~0.90, i.e. a long at the top of its range, which is the
+    trade this desk does not take. The setup bought at rp >= 0.70 and sold at
+    rp <= 0.30 in every case, and conditioning it on the higher timeframe did
+    not help: in a TRENDING_BEAR the weekly agrees WITH a short, so OP/USDT and
+    SUI/USDT were still sold at the BOTTOM of their range on 2026-08-07.
+
+    A long is taken at support, a short at resistance. See
+    scripts/tests/test_location_vs_htf.py.
+    """
     plan = run(mk(price=109.0, support=99.8, resistance=110.0,
                   resistance_broken_recent=True),
                regime='RANGING', levels=[(108.9, 5), (120.0, 3)])
-    assert plan.setup == SETUP_BREAK_RETEST
-    assert plan.side == 'BUY'
+    assert plan.setup != SETUP_BREAK_RETEST
+    assert plan.side != 'BUY', 'a long at the top of the range is back'
 
 
 def test_a_low_confidence_trend_label_is_treated_as_a_range():

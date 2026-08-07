@@ -285,17 +285,33 @@ class TraderGate:
         bull = trending and regime_name == TRENDING_BULL
         bear = trending and regime_name == TRENDING_BEAR
 
-        # --- BREAK_RETEST · highest quality when it is genuinely present -------
-        # A level broke recently and price has come back to it.  Polarity flip:
-        # broken resistance is support, broken support is resistance.  It ranks
-        # first because it is the one setup where the level has just PROVEN
-        # itself, and it is valid in any regime.
-        if bool(result.get('resistance_broken_recent')) and rp >= RANGE_EDGE_HIGH and not bear:
-            return (SETUP_BREAK_RETEST, 'BUY',
-                    'resistance broke and price returned to it — broken resistance is support')
-        if bool(result.get('support_broken_recent')) and rp <= RANGE_EDGE_LOW and not bull:
-            return (SETUP_BREAK_RETEST, 'SELL',
-                    'support broke and price returned to it — broken support is resistance')
+        # --- BREAK_RETEST · RETIRED --------------------------------------------
+        # It used to rank first here: a level broke, price came back to it, and
+        # the polarity flip made broken resistance into support. The argument is
+        # sound in the abstract and wrong in practice for this desk, because the
+        # setup is counter-location BY CONSTRUCTION — it bought at rp >= 0.70 and
+        # sold at rp <= 0.30, i.e. it bought at resistance and sold at support,
+        # which is the one thing this strategy is not.
+        #
+        # It was first conditioned on the higher timeframe agreeing. That was the
+        # wrong control: in a TRENDING_BEAR the weekly agrees WITH a short, so
+        # the condition passed and the trade was taken at the bottom of the
+        # range anyway. Measured 2026-08-07:
+        #
+        #     OP/USDT  SHORT at rp -0.03 (below its own support),
+        #                    4.25 ATR from the resistance it should have sold
+        #     SUI/USDT SHORT at rp  0.20, 2.63 ATR from that resistance
+        #
+        # Both were late — price had already made the move, and the entry was
+        # the retest of a level it had just fallen through.
+        #
+        # Location is now absolute: a long is taken at support, a short at
+        # resistance, and no higher-timeframe agreement buys an exception.
+        # _counter_location_refusal enforces it on the output of this method, so
+        # any BREAK_RETEST returned here would be rejected at stage 1b — dead
+        # code that reads as live. Removed rather than left to mislead.
+        # SETUP_BREAK_RETEST and its risk weight are kept so historical records
+        # and the weights table still resolve.
 
         # --- Trending market ---------------------------------------------------
         if bull:
@@ -377,25 +393,17 @@ class TraderGate:
         here — those agree with their location and are somebody else's problem.
         """
         if side == 'BUY' and rp >= RANGE_EDGE_HIGH:
-            opposed_by = cls._htf_opposes('BUY', result)
-            if opposed_by:
-                return (f'long into the top of the range (rp {rp:.2f}) while the '
-                        f'{opposed_by} lean bearish — at resistance against the '
-                        f'higher timeframe the only trade on offer is the short')
-            if rsi >= EXHAUSTION_RSI_HI:
-                return (f'long into the top of the range (rp {rp:.2f}) with RSI '
-                        f'{rsi:.0f} already stretched — that is buying an '
-                        f'overbought high, not a retest')
+            why = cls._htf_opposes('BUY', result)
+            extra = (f'; the {why} lean bearish too' if why else
+                     f'; RSI {rsi:.0f} is stretched' if rsi >= EXHAUSTION_RSI_HI else '')
+            return (f'long into the top of the range (rp {rp:.2f}) — a long is '
+                    f'taken at support, not at resistance{extra}')
         if side == 'SELL' and rp <= RANGE_EDGE_LOW:
-            opposed_by = cls._htf_opposes('SELL', result)
-            if opposed_by:
-                return (f'short into the bottom of the range (rp {rp:.2f}) while '
-                        f'the {opposed_by} lean bullish — at support against the '
-                        f'higher timeframe the only trade on offer is the long')
-            if rsi <= EXHAUSTION_RSI_LO:
-                return (f'short into the bottom of the range (rp {rp:.2f}) with RSI '
-                        f'{rsi:.0f} already washed out — that is selling an '
-                        f'oversold low, not a retest')
+            why = cls._htf_opposes('SELL', result)
+            extra = (f'; the {why} lean bullish too' if why else
+                     f'; RSI {rsi:.0f} is washed out' if rsi <= EXHAUSTION_RSI_LO else '')
+            return (f'short into the bottom of the range (rp {rp:.2f}) — a short is '
+                    f'taken at resistance, not at support{extra}')
         return None
 
     # ── Stage 2 ───────────────────────────────────────────────────────────────

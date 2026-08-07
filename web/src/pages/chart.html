@@ -1529,10 +1529,17 @@ function renderExplanation(sig) {
   if (sig.volume_zscore < -0.8) factors.push({ icon: '⚠️', text: `Low volume (-${fmt(Math.abs(sig.volume_zscore),1)}σ) — weak confirmation` });
   if (sig.oi_trend === 'INCREASING')  factors.push({ icon: '✅', text: 'Open interest increasing — new money entering' });
   if (sig.funding_rate > 0.005 && isShort) factors.push({ icon: '✅', text: `Funding rate ${parseFloat(sig.funding_rate).toFixed(3)}% — longs overextended` });
-  if (sig.regime === 'TRENDING_BULL' && isShort) factors.push({ icon: '✅', text: 'Confirmed ↑BULL regime — counter-trend SELL fade at resistance' });
-  if (sig.regime === 'TRENDING_BEAR' && !isShort) factors.push({ icon: '✅', text: 'Confirmed ↓BEAR regime — counter-trend BUY fade at support' });
-  if (sig.regime === 'TRENDING_BEAR' && isShort) factors.push({ icon: '🚫', text: 'TRENDING_BEAR regime — SELL prohibited (fade-only strategy)' });
-  if (sig.regime === 'TRENDING_BULL' && !isShort) factors.push({ icon: '🚫', text: 'TRENDING_BULL regime — BUY prohibited (fade-only strategy)' });
+  // Regime + direction. These two lines used to claim a SELL in TRENDING_BEAR
+  // and a BUY in TRENDING_BULL were "prohibited (fade-only strategy)" — and
+  // they rendered that 🚫 on signals the engine had just fired, so the page
+  // told the subscriber their live trade was forbidden. The prohibition
+  // belonged to the pre-v83 chain; the playbook now takes trend-pullback
+  // entries deliberately and weights them highest. What the direction actually
+  // means is which setup class it is, so that is what is said.
+  if (sig.regime === 'TRENDING_BULL' && isShort) factors.push({ icon: '✅', text: 'Counter-trend SELL — fading a bull at resistance' });
+  if (sig.regime === 'TRENDING_BEAR' && !isShort) factors.push({ icon: '✅', text: 'Counter-trend BUY — fading a bear at support' });
+  if (sig.regime === 'TRENDING_BEAR' && isShort) factors.push({ icon: '✅', text: 'With-trend SELL — selling a bear rally into resistance' });
+  if (sig.regime === 'TRENDING_BULL' && !isShort) factors.push({ icon: '✅', text: 'With-trend BUY — buying a bull pullback into support' });
   if (sig.regime_confidence > 0.7) factors.push({ icon: '✅', text: `Regime confidence ${(sig.regime_confidence*100).toFixed(0)}% — high certainty` });
   if (sig.fear_greed) factors.push({ icon: '📊', text: `Fear & Greed ${sig.fear_greed.value} (${sig.fear_greed.label})` });
 
