@@ -133,14 +133,39 @@ def test_price_only_suppresses_the_model_reversal_exit(engine):
 
 
 def test_scan_path_still_takes_the_model_reversal(engine):
-    """The scan cycle keeps its behaviour — price_only defaults to False."""
+    """The scan cycle keeps its behaviour — price_only defaults to False.
+
+    Driven at a LOSS (99.5, not 100.2). This test is about the price_only flag,
+    not about PnL, and a reversal while in profit but short of TP1 no longer
+    closes — it protects instead, because closing there is what produced
+    +0.19R winners against -1.08R losers. The losing case is the reversal's
+    real job and exercises the same code path.
+    See scripts/tests/test_reversal_protect.py for the profit side.
+    """
     _open(engine, _position())
     engine._open_time[SYM] = time.time() - 7200
-    engine.live_prices[SYM] = 100.2
+    engine.live_prices[SYM] = 99.5
     live = {'side': 'SELL', 'fire': True, 'edge_score': 99.0, 'atr': 0.5}
-    engine._manage_exit(SYM, engine.wallet.open_positions[SYM], live, 100.2)
+    engine._manage_exit(SYM, engine.wallet.open_positions[SYM], live, 99.5)
     assert SYM not in engine.wallet.open_positions
     assert engine.wallet.trade_history[-1].exit_reason == 'MODEL_REVERSAL_TP'
+
+
+def test_price_only_suppresses_the_reversal_protect_path_too(engine):
+    """price_only must not act on a stale signal in EITHER direction.
+
+    The protect branch mutates the stop, so a stale opposing signal reaching it
+    would silently tighten a live position from the price monitor.
+    """
+    _open(engine, _position())
+    engine._open_time[SYM] = time.time() - 7200
+    engine.live_prices[SYM] = 100.4
+    pos = engine.wallet.open_positions[SYM]
+    before = pos.stop_loss
+    stale = {'side': 'SELL', 'fire': True, 'edge_score': 99.0, 'atr': 0.5}
+    engine._manage_exit(SYM, pos, stale, 100.4, price_only=True)
+    assert SYM in engine.wallet.open_positions
+    assert pos.stop_loss == before, 'a stale signal moved the stop'
 
 
 # ── the overshoot this was built to remove ───────────────────────────────────
