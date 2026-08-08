@@ -316,6 +316,13 @@ class ExitsMixin:
             if _span <= 0:
                 continue
             _leash = max(_span * _gb_pct, _gb_min)
+            # A leash that reaches its own span would put the protective level
+            # at or past the PREVIOUS rung — for the first rung that is the entry
+            # itself, i.e. worse than the break-even stop already sitting there.
+            # Skip and let break-even handle it; the ratchet is for the wider
+            # rungs further up.
+            if _leash >= _span:
+                continue
             # back from the rung, toward the previous one
             _level = _tp - _leash if pos.direction == 'LONG' else _tp + _leash
             _cur = self._giveback_stop.get(symbol)

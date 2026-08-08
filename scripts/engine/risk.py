@@ -149,7 +149,26 @@ class DynamicRiskEngine:
     # behaviour — they are genuinely in conflict, and 0.35 is where the trade is
     # struck: keep the banked rung, accept a slightly lower TP3+ hit rate.
     TP_GIVEBACK_PCT     = 0.35  # fraction of the rung span the runner may hand back
-    TP_GIVEBACK_MIN_ATR = 0.0   # optional noise floor in ATR; 0 = percentage alone
+    TP_GIVEBACK_MIN_ATR = 0.50  # ...but never a leash tighter than this in ATR
+    #
+    # The floor is not optional. The leash is a fraction of the RUNG SPAN, and
+    # moving the ladder to percentages shrank every span by two to three times,
+    # so the leash collapsed with it:
+    #
+    #     TP1 ~1R (1.0-1.65 % of price)  ->  leash 0.35-0.58 %  = 0.35-0.55 ATR
+    #     TP1 0.5 % of price             ->  leash 0.175 %      = 0.16 ATR
+    #
+    # A sixth of one bar is noise. OP/USDT 2026-08-08 tagged TP1, banked its
+    # 15 %, and had the remaining 85 % closed immediately after for +0.18 % net —
+    # the capped-runner failure the recross was deleted for, reintroduced by a
+    # change made two commits away from this constant.
+    #
+    # A floor alone is not enough either: on a 0.5 % rung, 0.5 ATR can be WIDER
+    # than the whole span, which would put the give-back level past the entry —
+    # worse than the break-even stop that is already there. _manage_exit
+    # therefore skips any rung whose leash would reach its own span, and lets
+    # break-even do the job for that rung. The ratchet earns its keep on the
+    # later, wider rungs.
 
     # ── Partial-close percentages (must sum to 1.0) ───────────────────────────
     # Fractions of the ORIGINAL allocation (v82 — see partial_close_trade; they

@@ -82,8 +82,53 @@ def test_a_later_rung_tightens_the_leash(direction):
 
 
 def test_a_zero_width_span_is_ignored_not_divided_by():
-    lvl = _level(105.0, 105.0, 'LONG')
+    """A degenerate rung must not divide by zero, and must not be protected.
+
+    _level() is the raw maths; _manage_exit additionally SKIPS any rung whose
+    leash reaches its own span, which is what a zero span always does. See
+    test_a_rung_narrower_than_the_leash_defers_to_break_even.
+    """
+    lvl = _level(105.0, 105.0, 'LONG', min_atr=0.0)
     assert lvl == pytest.approx(105.0)
+
+
+def test_a_rung_narrower_than_the_leash_defers_to_break_even():
+    """The regression that produced OP/USDT's early close.
+
+    The leash is a fraction of the rung span, and moving the ladder to
+    percentages shrank every span 2-3x — so the leash collapsed to 0.16 ATR, a
+    sixth of a bar, and closed the runner immediately after TP1. The ATR floor
+    fixes the width; this fixes what happens when the floor is WIDER than the
+    rung, where a protective level would land past the entry and be worse than
+    the break-even stop already there.
+    """
+    import inspect
+    from scripts.live_engine import LiveEngine
+    src = inspect.getsource(LiveEngine._manage_exit)
+    assert '_leash >= _span' in src, (
+        'a leash wider than its rung would place the give-back past the '
+        'previous rung — for TP1 that is past the entry'
+    )
+    assert DynamicRiskEngine.TP_GIVEBACK_MIN_ATR > 0, (
+        'the ATR floor is off again; the leash will collapse with the rung span'
+    )
+
+
+def test_the_first_rung_defers_but_a_wider_rung_still_protects():
+    """The ratchet must still do its job somewhere, or it is dead weight."""
+    atr = 0.0894 * 1.07 / 100
+    pcts = DynamicRiskEngine.TP_LADDER_PCT
+    entry = 0.0894
+    lvls = [entry * (1 - p / 100) for p in pcts]
+    prev = [entry] + lvls[:-1]
+    applies = []
+    for tp, pv in zip(lvls, prev):
+        span = abs(tp - pv)
+        leash = max(span * DynamicRiskEngine.TP_GIVEBACK_PCT,
+                    DynamicRiskEngine.TP_GIVEBACK_MIN_ATR * atr)
+        applies.append(leash < span)
+    assert not applies[0], 'the TP1 rung should defer to break-even'
+    assert any(applies), 'no rung protects at all — the ratchet is dead weight'
 
 
 def test_min_atr_floor_can_widen_a_narrow_rung():
