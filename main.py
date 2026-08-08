@@ -7,6 +7,24 @@ import os
 # MUST BE FIRST LINE OF EXECUTION - loads all env vars before any other code
 load_dotenv()
 
+# -------------------------------------------------------------------
+# Native thread caps — MUST be set before numpy/xgboost/sklearn import
+# -------------------------------------------------------------------
+# The engine runs MAX_CONCURRENT predict_realtime() calls in its own thread
+# pool, inside the SAME process as the web server. Every one of those threads
+# builds a 350-bar feature frame and runs XGBoost inference. Left uncapped,
+# each thread spawns its own OpenMP/BLAS pool sized to the machine, so an
+# 8-thread scan can ask for 8x more CPU than exists.
+#
+# Production is one shared vCPU (fly.toml: cpus = 1) serving BOTH the web app
+# and the engine. Oversubscribing it pegs the core for the length of a scan and
+# starves the event loop, which is what made every page slow to open. One
+# native thread per worker keeps the parallelism where we manage it — in the
+# executor — instead of multiplying underneath it.
+for _v in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS",
+           "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"):
+    os.environ.setdefault(_v, "1")
+
 # Now safe to import libraries that might use environment variables
 import asyncio
 import json
@@ -1732,14 +1750,36 @@ _LEGACY_HTML_REDIRECTS = {
     "/web/src/pages/pitch.html":           "/pitch",
 }
 
+_PRIVATE_WEB_PREFIXES = (
+    "/web/node_modules", "/web/package.json", "/web/package-lock.json",
+    "/web/tailwind.config", "/web/postcss.config",
+)
+
+
 @app.middleware("http")
 async def redirect_legacy_html_paths(request: Request, call_next):
     """301-redirect old /web/src/pages/*.html URLs to clean SEO-friendly paths.
     Runs before the static-files mount so the mount never serves raw page HTML."""
-    clean = _LEGACY_HTML_REDIRECTS.get(request.url.path)
+    path = request.url.path
+    clean = _LEGACY_HTML_REDIRECTS.get(path)
     if clean:
         return RedirectResponse(url=clean, status_code=301)
+    # The mount below is rooted at web/, which also contains the npm tree and
+    # the build config. None of that is meant to be public.
+    if path.startswith(_PRIVATE_WEB_PREFIXES):
+        return JSONResponse({"detail": "Not Found"}, status_code=404)
     return await call_next(request)
+
+# Hoisted out of the request path — this was being rebuilt on every response.
+_CLEAN_PAGE_ROUTES = frozenset({
+    "/", "/pricing", "/signals", "/dashboard", "/contact", "/terms",
+    "/privacy", "/privacy-policy", "/risk-disclosure", "/refund-policy",
+    "/conditions", "/reset-password", "/track-record", "/bot-record",
+    "/trader-record", "/reviews", "/review", "/chart", "/logic", "/pitch",
+})
+_CACHEABLE_ASSETS = (".js", ".css", ".woff2", ".woff", ".ttf", ".svg",
+                     ".png", ".jpg", ".jpeg", ".webp", ".ico")
+
 
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
@@ -1768,16 +1808,25 @@ async def add_security_headers(request: Request, call_next):
     # Permissions: explicitly deny unused browser features
     response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
 
-    # Prevent stale JS/HTML from disk cache after deploys
+    # Caching. HTML must never be cached — a stale page pins the whole asset
+    # graph to an old deploy. Assets are the opposite: a dashboard load pulls
+    # ~340 KB across half a dozen files, and forcing every one of them to
+    # revalidate cost a round trip per asset on every navigation.
+    #
+    # The split is the version query the pages already carry
+    # (gatekeeper.js?v=80.0, main.css?v=2): a versioned URL names one immutable
+    # build, so it can be cached for a year and a deploy invalidates it by
+    # changing the number. Unversioned assets keep revalidating, because
+    # nothing else would tell the browser they changed.
     path = request.url.path
-    _CLEAN_PAGE_ROUTES = {
-        "/", "/pricing", "/signals", "/dashboard", "/contact", "/terms",
-        "/privacy", "/privacy-policy", "/risk-disclosure", "/refund-policy",
-        "/conditions", "/reset-password", "/track-record", "/bot-record",
-        "/trader-record", "/reviews", "/review", "/chart", "/logic", "/pitch",
-    }
-    if (path.endswith((".js", ".html")) and "/web/" in path) or path in _CLEAN_PAGE_ROUTES:
+    if path in _CLEAN_PAGE_ROUTES or (path.endswith(".html") and "/web/" in path):
         response.headers["Cache-Control"] = "no-cache, must-revalidate"
+    elif path.startswith("/web/") and path.endswith(_CACHEABLE_ASSETS):
+        response.headers["Cache-Control"] = (
+            "public, max-age=31536000, immutable" if request.url.query.startswith("v=")
+            else "no-cache, must-revalidate" if path.endswith(".js")
+            else "public, max-age=3600"
+        )
 
     return response
 
@@ -1822,7 +1871,7 @@ async def dashboard_page():
 security = HTTPBearer()
 
 @app.get("/api/signals")
-async def api_signals(credentials: HTTPAuthorizationCredentials = Depends(security)):
+def api_signals(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Return latest live signals to subscribed users only (plan == 'pro')."""
     email = get_current_user(credentials)
     user_doc = get_user_doc(email)
@@ -1872,7 +1921,7 @@ async def api_razorpay_key():
 from fastapi import Header
 
 @app.get("/api/public/signals")
-async def api_public_signals(authorization: Optional[str] = Header(None)):
+def api_public_signals(authorization: Optional[str] = Header(None)):
     """Return latest live signals publicly (for dashboard display)."""
     subscription_active = False
     trial_end = None
@@ -1967,7 +2016,7 @@ def _build_insight_payload(sig: dict, plan: str) -> dict:
 
 
 @app.get("/api/token-insight/{symbol:path}")
-async def token_insight(symbol: str, authorization: Optional[str] = Header(None)):
+def token_insight(symbol: str, authorization: Optional[str] = Header(None)):
     """
     Per-token market insight available to all authenticated users.
 
@@ -2642,7 +2691,7 @@ def _generate_token_analysis(sig: dict) -> dict:
 
 
 @app.get("/api/token-analysis/{symbol:path}")
-async def token_analysis(symbol: str, authorization: Optional[str] = Header(None)):
+def token_analysis(symbol: str, authorization: Optional[str] = Header(None)):
     """
     Professional market analysis for one token â€” accessible to all authenticated users.
     Returns plain-English breakdown of indicators, why the signal fired or didn't,
@@ -2983,7 +3032,7 @@ def is_trial_expired(email: str) -> bool:
 BASE_URL = os.getenv("BASE_URL", "http://localhost:8000").rstrip('/')
 
 @app.get("/auth/me")
-async def get_me(credentials: HTTPAuthorizationCredentials = Depends(security)):
+def get_me(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """
     Get current user's information including trial/subscription status.
     Returns user details with trial_end timestamp for frontend countdown.
@@ -3573,7 +3622,7 @@ async def verify_otp_for_registration(request: OTPVerifyRequest, req: Request):
     return {"success": True, "message": "OTP verified successfully. Please complete your profile.", "signup_token": signup_token}
 
 @app.post("/auth/check-phone")
-async def check_phone_unique(request: PhoneCheckRequest, req: Request):
+def check_phone_unique(request: PhoneCheckRequest, req: Request):
     """Pre-signup phone uniqueness check. No auth required."""
     # Rate limit: 15 checks per IP per 5 minutes (enumeration protection)
     if not _rate_limit(f"phone_check:{get_client_ip(req)}", max_calls=15, window_seconds=300):
@@ -3906,7 +3955,7 @@ async def msg91_webhook(req: Request):
 
     return {"received": True}
 @app.post("/auth/complete-registration")
-async def complete_registration(profile: UserProfileComplete):
+def complete_registration(profile: UserProfileComplete):
     email = otp_email_key(profile.email)
     record = _otp_get(email)
     if not record or not record.get("verified"):
@@ -3926,7 +3975,7 @@ async def complete_registration(profile: UserProfileComplete):
 # Authentication endpoints
 # -------------------------------------------------------------------
 @app.post("/auth/login")
-async def login(user: UserLogin, req: Request):
+def login(user: UserLogin, req: Request):
     # Rate limit: 10 login attempts per email per 15 minutes (brute-force protection)
     if not _rate_limit(f"login:{user.email}", max_calls=10, window_seconds=900):
         raise HTTPException(status_code=429, detail="Too many login attempts. Please wait 15 minutes.")
@@ -4018,7 +4067,7 @@ def get_allowed_timeframes(email: str) -> List[str]:
         return BASIC_TIMEFRAMES
 
 @app.get("/user/limits")
-async def get_user_limits(email: str = Depends(get_current_user)):
+def get_user_limits(email: str = Depends(get_current_user)):
     try:
         user_doc = get_user_doc(email)
         plan = user_doc.get("plan", "trial") if user_doc else "trial"
@@ -4038,7 +4087,7 @@ async def get_user_limits(email: str = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=f"Failed to load user limits: {type(e).__name__}")
 
 @app.post("/upgrade")
-async def upgrade_plan(email: str = Depends(get_current_user)):
+def upgrade_plan(email: str = Depends(get_current_user)):
     db.collection("users").document(email).update({
         "plan": "pro",
         "trial_active": False,
@@ -4052,7 +4101,7 @@ async def upgrade_plan(email: str = Depends(get_current_user)):
 # -------------------------------------------------------------------
 
 @app.post("/api/v1/trial/start")
-async def start_free_trial(user_id: str = Depends(get_current_user)):
+def start_free_trial(user_id: str = Depends(get_current_user)):
     """
     Register the start of a 3-day free trial for the authenticated user.
     Idempotent: if an active trial or paid plan already exists, returns current state.
@@ -4124,7 +4173,7 @@ async def start_free_trial(user_id: str = Depends(get_current_user)):
 
 
 @app.get("/api/v1/trial/status")
-async def get_trial_status(user_id: str = Depends(get_current_user)):
+def get_trial_status(user_id: str = Depends(get_current_user)):
     """
     Returns backend-authoritative trial/subscription status.
     Frontend countdown calls this instead of reading localStorage to prevent drift.
@@ -6151,7 +6200,7 @@ async def _require_admin(x_admin_key: Optional[str] = Header(None)) -> None:
         raise HTTPException(status_code=403, detail="Admin access required")
 
 @app.delete("/api/admin/clear-users")
-async def clear_users(_: None = Depends(_require_admin)):
+def clear_users(_: None = Depends(_require_admin)):
     """Delete all documents in the users collection. Admin only."""
     users_ref = db.collection("users")
     docs = users_ref.stream()
@@ -6287,7 +6336,7 @@ class GenerateDevCodeRequest(BaseModel):
     label: str = "beta"
 
 @app.post("/admin/dev-codes/generate")
-async def admin_generate_dev_codes(
+def admin_generate_dev_codes(
     req: GenerateDevCodeRequest,
     _admin: None = Depends(_require_admin),
 ):
@@ -6319,7 +6368,7 @@ async def admin_generate_dev_codes(
 
 
 @app.get("/admin/dev-codes")
-async def admin_list_dev_codes(
+def admin_list_dev_codes(
     include_used: bool = False,
     _admin: None = Depends(_require_admin),
 ):
@@ -6447,7 +6496,7 @@ class ValidateDevKeyRequest(BaseModel):
     dev_key: str
 
 @app.post("/auth/validate-devkey")
-async def validate_dev_key(req: ValidateDevKeyRequest, request: Request):
+def validate_dev_key(req: ValidateDevKeyRequest, request: Request):
     """
     Validate a developer key against the /dev_keys Firestore collection.
     Returns plan info and features if valid; logs usage for audit.
@@ -6629,7 +6678,7 @@ class TradeExecuteRequest(BaseModel):
     userId: Optional[str] = None
 
 @app.post("/api/trades/execute")
-async def execute_trade(request: TradeExecuteRequest, user_id: str = Depends(get_firebase_uid)):
+def execute_trade(request: TradeExecuteRequest, user_id: str = Depends(get_firebase_uid)):
     trade_data = request.dict()
     trade_data["openTime"] = datetime.now(timezone.utc).isoformat()
     # Ensure it's saved under the user who made the request
@@ -6652,7 +6701,7 @@ async def execute_trade(request: TradeExecuteRequest, user_id: str = Depends(get
         raise HTTPException(status_code=500, detail="Failed to execute trade")
 
 @app.post("/api/trades/{trade_id}/close")
-async def close_trade(trade_id: str, user_id: str = Depends(get_firebase_uid)):
+def close_trade(trade_id: str, user_id: str = Depends(get_firebase_uid)):
     try:
         trade_ref = db.collection("users").document(user_id).collection("trades").document(trade_id)
         trade_doc = trade_ref.get()
@@ -6768,7 +6817,7 @@ async def verify_otp(request: OTPVerifyRequest):
 # FIRESTORE SIGNALS API â€“ Get specific signal
 # -------------------------------------------------------------------
 @app.get("/api/signals/{symbol}")
-async def get_signal(symbol: str):
+def get_signal(symbol: str):
     """
     Get a specific signal by symbol.
     Example: /api/signals/BTC
@@ -6801,7 +6850,7 @@ async def get_signal(symbol: str):
 # FIRESTORE DASHBOARD API â€“ Get dashboard data for user
 # -------------------------------------------------------------------
 @app.get("/api/dashboard")
-async def get_dashboard(
+def get_dashboard(
     request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))
 ):
@@ -6895,7 +6944,7 @@ async def get_dashboard(
 # FIRESTORE SIGNAL UPDATE â€“ Backend trigger (admin only)
 # -------------------------------------------------------------------
 @app.post("/api/admin/signals/update")
-async def update_signal(
+def update_signal(
     symbol: str,
     signal_data: Dict[str, Any],
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))
@@ -6962,7 +7011,7 @@ async def verify_api_key(request: Request):
     return user_doc
 
 @app.get("/api/v1/signals/fleet")
-async def get_signals_fleet(symbol: Optional[str] = None, _user: dict = Depends(verify_api_key)):
+def get_signals_fleet(symbol: Optional[str] = None, _user: dict = Depends(verify_api_key)):
     """
     Programmatic data portability endpoint for Pro users.
     Returns structured JSON array of live signals.
@@ -7038,7 +7087,7 @@ class UserSettingsUpdate(BaseModel):
     risk_pct: float
 
 @app.post("/user/settings")
-async def save_user_settings(
+def save_user_settings(
     payload: UserSettingsUpdate,
     user_id: str = Depends(get_current_user)
 ):
