@@ -309,19 +309,20 @@ class ExitsMixin:
         )
         _gb_pct = self.risk_engine.TP_GIVEBACK_PCT
         _gb_min = self.risk_engine.TP_GIVEBACK_MIN_ATR * atr
+        _gb_max = self.risk_engine.TP_GIVEBACK_MAX_FRAC
         for _hit, _tp, _prev in _rungs:
             if not _hit or _tp <= 0 or _prev <= 0:
                 continue
             _span = abs(_tp - _prev)
             if _span <= 0:
                 continue
-            _leash = max(_span * _gb_pct, _gb_min)
-            # A leash that reaches its own span would put the protective level
-            # at or past the PREVIOUS rung — for the first rung that is the entry
-            # itself, i.e. worse than the break-even stop already sitting there.
-            # Skip and let break-even handle it; the ratchet is for the wider
-            # rungs further up.
-            if _leash >= _span:
+            # The ATR floor may not exceed the rung it is protecting. It used to,
+            # and the rung was then SKIPPED — which handed the whole move back to
+            # break-even, the IMX/USDT +0.02% on a trade that had covered +0.50%.
+            # Capping instead of skipping keeps the level strictly inside the
+            # rung, so a banked rung is always worth more than a scratch.
+            _leash = min(max(_span * _gb_pct, _gb_min), _span * _gb_max)
+            if _leash <= 0:
                 continue
             # back from the rung, toward the previous one
             _level = _tp - _leash if pos.direction == 'LONG' else _tp + _leash
@@ -339,8 +340,10 @@ class ExitsMixin:
             _breached = ((pos.direction == 'LONG'  and check_price <= _gb) or
                          (pos.direction == 'SHORT' and check_price >= _gb))
             if _breached:
-                print(f'[{symbol}] TP_GIVEBACK — handed back '
-                      f'{_gb_pct*100:.0f}% of the last rung (level {_gb:.6g}), '
+                _bp = (abs(_gb - pos.entry_price) / pos.entry_price * 100.0
+                       if pos.entry_price else 0.0)
+                print(f'[{symbol}] TP_GIVEBACK — recrossed the banked rung '
+                      f'(level {_gb:.6g}, {_bp:+.2f}% from entry), '
                       f'closing the remainder')
                 _close('TP_GIVEBACK', exit_px=_gb)
                 return

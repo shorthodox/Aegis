@@ -145,11 +145,23 @@ def test_a_profit_smaller_than_the_round_trip_is_not_protected(engine):
 # ── after TP1 the old behaviour stands ───────────────────────────────────────
 
 def test_reversal_after_tp1_still_closes(engine):
-    """Once the risk is earned, a reversal is a legitimate exit."""
+    """Once the risk is earned, a reversal is a legitimate exit.
+
+    Which mechanism books it is not the point, and it changed: with TP1 at 101
+    and the position back to 100.8, a fifth of the rung has already been handed
+    back, so the give-back ratchet now closes it before the reversal branch is
+    reached — at its own level rather than at market. That is the better of the
+    two exits, so this asserts the position closed in profit rather than
+    pinning the label.
+    """
     pos = _pos('LONG')
     engine._tp1_hit[SYM] = True
     assert _reverse(engine, pos, 100.8) is None
-    assert engine.wallet.trade_history[-1].exit_reason == 'MODEL_REVERSAL_TP'
+    closed = engine.wallet.trade_history[-1]
+    assert closed.exit_reason in ('MODEL_REVERSAL_TP', 'TP_GIVEBACK'), closed.exit_reason
+    assert closed.exit_price > pos.entry_price, (
+        'a reversal after TP1 booked at or below entry — the banked rung was '
+        'handed all the way back, which is the IMX +0.02% defect')
 
 
 # ── the payoff arithmetic this exists to fix ─────────────────────────────────

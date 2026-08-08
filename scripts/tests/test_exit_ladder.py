@@ -82,19 +82,21 @@ def _drive(engine, pos, prices, side='BUY'):
 # ── 1. the deleted TP1_RECROSS ───────────────────────────────────────────────
 
 def test_tp1_tag_then_shallow_pullback_keeps_position_open(engine):
-    """Tagging TP1 and wobbling must not flatten — the v82 fix, re-scoped.
+    """Tagging TP1 and wobbling must not flatten — the v82 fix, re-scoped twice.
 
-    This used to drive a pullback to 100.4, which hands back 60 % of the
-    entry->TP1 rung. Under the give-back ratchet (TP_GIVEBACK_PCT) that is now a
-    deliberate exit, not a survivable wobble: the protective level for this
-    geometry sits at 101.0 - 0.35 * 1.0 = 100.65.
+    It first drove a pullback to 100.4 (60 % of the entry->TP1 rung), then to
+    100.8 (20 %). Both are now deliberate exits rather than survivable wobbles:
+    IMX/USDT booked +0.02 % on a trade that had covered +0.50 %, because the ATR
+    floor exceeded the first rung and voided the ratchet entirely. The leash is
+    capped at TP_GIVEBACK_MAX_FRAC of the rung now, so for this geometry the
+    protective level sits at 101.0 - 0.20 * 1.0 = 100.80.
 
-    What the test still protects is the thing that mattered — a ZERO-width
-    recross. Price may come back off the rung without the position being
-    flattened; it just may not come back most of the way.
+    What this test protects is the thing that always mattered — a ZERO-width
+    recross, where any tick off the rung flattens the position. Price may still
+    come back off TP1; it just may not hand back a fifth of the rung.
     """
     pos = _position()
-    still_open = _drive(engine, pos, [100.2, 101.3, 100.8])
+    still_open = _drive(engine, pos, [100.2, 101.3, 100.9])
 
     assert still_open is not None, (
         'position was flattened on a shallow TP1 pullback — TP1_RECROSS is back'
@@ -155,11 +157,11 @@ def test_reversal_after_tp1_is_still_net_green(engine):
 
 
 def test_short_side_shallow_pullback_also_holds(engine):
-    """Mirror of the long case: the SHORT rung is 100 -> 99, level 99.35."""
+    """Mirror of the long case: the SHORT rung is 100 -> 99, level 99.20."""
     pos = _position(direction='SHORT', side='SELL', stop_loss=101.0,
                     take_profit_1=99.0, take_profit_2=98.0, take_profit_3=95.0,
                     take_profit_4=92.0, take_profit_5=88.0)
-    still_open = _drive(engine, pos, [99.8, 98.9, 99.2], side='SELL')
+    still_open = _drive(engine, pos, [99.8, 98.9, 99.1], side='SELL')
     assert still_open is not None
     assert [t.exit_reason for t in engine.wallet.trade_history] == ['TP1_PARTIAL']
 

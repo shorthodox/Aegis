@@ -148,8 +148,30 @@ class DynamicRiskEngine:
     # No value both protects the rung and preserves v82's "runner reaches TP3"
     # behaviour — they are genuinely in conflict, and 0.35 is where the trade is
     # struck: keep the banked rung, accept a slightly lower TP3+ hit rate.
-    TP_GIVEBACK_PCT     = 0.35  # fraction of the rung span the runner may hand back
-    TP_GIVEBACK_MIN_ATR = 0.50  # ...but never a leash tighter than this in ATR
+    # The ATR floor above was added so a narrow rung could not produce a
+    # noise-width stop. It did that, and it also quietly switched the TP1 rung
+    # OFF for most of the fleet: entry→TP1 is 0.5% of price, so 0.50 ATR
+    # exceeds the whole span for any token with ATR% above ~1%, and a leash
+    # wider than its rung was skipped. IMX/USDT 2026-08-08 is the bill —
+    # short 0.1124, TP1 0.11184 tagged at +0.50%, no ratchet, price walked back
+    # to break-even and it booked +0.02%.
+    #
+    # So the floor is a floor, not a licence to exceed the rung. A banked rung
+    # is banked: once TP1 is tagged the runner may hand back at most
+    # TP_GIVEBACK_MAX_FRAC of it and is then closed AT that level, which is
+    # always inside the rung and therefore always better than the break-even
+    # stop sitting at entry. On the IMX geometry that books ~+0.40% instead of
+    # +0.02%. The cost is a lower TP3+ hit rate, which is the same trade struck
+    # above — this just stops the trade being silently voided by the floor.
+    # The three interact as: clamp the ATR floor between a small proportional
+    # buffer and a hard fraction of the rung. On the current 0.5% first rung the
+    # CAP is what binds for essentially every token, which is the intent — a
+    # banked rung is given back by about a fifth and no more. The other two stay
+    # live for wider rungs and very low-ATR tokens, and matter again if the
+    # ladder is ever re-spaced.
+    TP_GIVEBACK_PCT      = 0.10  # normally hand back a tenth of the rung span
+    TP_GIVEBACK_MIN_ATR  = 0.50  # ...never a leash tighter than this in ATR...
+    TP_GIVEBACK_MAX_FRAC = 0.20  # ...and never wider than a fifth of the rung
     #
     # The floor is not optional. The leash is a fraction of the RUNG SPAN, and
     # moving the ladder to percentages shrank every span by two to three times,

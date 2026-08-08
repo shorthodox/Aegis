@@ -28,12 +28,13 @@ TP2   = 209.482286
 ATR   = ENTRY * 0.0064          # ATR% 0.64 from the dashboard
 
 
-def _level(tp, prev, direction, pct=None, min_atr=None, atr=ATR):
+def _level(tp, prev, direction, pct=None, min_atr=None, atr=ATR, max_frac=None):
     """Mirror of the ratchet's level maths, so the policy is testable alone."""
     pct = DynamicRiskEngine.TP_GIVEBACK_PCT if pct is None else pct
     min_atr = (DynamicRiskEngine.TP_GIVEBACK_MIN_ATR if min_atr is None else min_atr)
+    max_frac = (DynamicRiskEngine.TP_GIVEBACK_MAX_FRAC if max_frac is None else max_frac)
     span = abs(tp - prev)
-    leash = max(span * pct, min_atr * atr)
+    leash = min(max(span * pct, min_atr * atr), span * max_frac)
     return tp - leash if direction == 'LONG' else tp + leash
 
 
@@ -84,51 +85,83 @@ def test_a_later_rung_tightens_the_leash(direction):
 def test_a_zero_width_span_is_ignored_not_divided_by():
     """A degenerate rung must not divide by zero, and must not be protected.
 
-    _level() is the raw maths; _manage_exit additionally SKIPS any rung whose
-    leash reaches its own span, which is what a zero span always does. See
-    test_a_rung_narrower_than_the_leash_defers_to_break_even.
+    _level() is the raw maths; _manage_exit additionally skips any rung whose
+    leash comes out non-positive, which is what a zero span always does.
     """
     lvl = _level(105.0, 105.0, 'LONG', min_atr=0.0)
     assert lvl == pytest.approx(105.0)
 
 
-def test_a_rung_narrower_than_the_leash_defers_to_break_even():
-    """The regression that produced OP/USDT's early close.
+def test_the_atr_floor_may_not_exceed_the_rung_it_protects():
+    """IMX/USDT 2026-08-08 — the floor voided the rung it was meant to widen.
 
-    The leash is a fraction of the rung span, and moving the ladder to
-    percentages shrank every span 2-3x — so the leash collapsed to 0.16 ATR, a
-    sixth of a bar, and closed the runner immediately after TP1. The ATR floor
-    fixes the width; this fixes what happens when the floor is WIDER than the
-    rung, where a protective level would land past the entry and be worse than
-    the break-even stop already there.
+    The floor was added because moving the ladder to percentages shrank every
+    span 2-3x and collapsed the leash to 0.16 ATR. It fixed that and introduced
+    the opposite failure: entry→TP1 is 0.5% of price, so 0.50 ATR is WIDER than
+    the whole first rung for any token above ~1% ATR, and the code skipped any
+    rung whose leash reached its own span. Most of the fleet therefore had no
+    give-back protection on TP1 at all — it fell through to the break-even stop.
+
+    IMX short 0.1124: TP1 0.11184 tagged at +0.50%, price walked back to entry,
+    booked +0.02%. Capping instead of skipping keeps the level inside the rung.
     """
     import inspect
     from scripts.live_engine import LiveEngine
     src = inspect.getsource(LiveEngine._manage_exit)
-    assert '_leash >= _span' in src, (
-        'a leash wider than its rung would place the give-back past the '
-        'previous rung — for TP1 that is past the entry'
+    assert '_leash >= _span' not in src, (
+        'the skip is back — a rung whose ATR floor exceeds its span is being '
+        'abandoned to break-even instead of having its leash capped'
     )
-    assert DynamicRiskEngine.TP_GIVEBACK_MIN_ATR > 0, (
-        'the ATR floor is off again; the leash will collapse with the rung span'
-    )
+    assert '_gb_max' in src, 'the leash is no longer capped to the rung'
+    assert 0 < DynamicRiskEngine.TP_GIVEBACK_MAX_FRAC < 1, (
+        'the cap must hand back some but not all of the rung')
+
+    # the IMX geometry, across the ATR range where the floor used to win
+    entry = 0.1124
+    tp1 = entry * (1 - DynamicRiskEngine.TP_LADDER_PCT[0] / 100)
+    for atr_pct in (0.8, 1.2, 2.0, 3.0):
+        lvl = _level(tp1, entry, 'SHORT', atr=entry * atr_pct / 100)
+        assert tp1 < lvl < entry, (
+            f'at ATR {atr_pct}% the give-back level {lvl:.6f} is outside the '
+            f'rung — TP1 {tp1:.6f}, entry {entry}')
+        booked = (entry - lvl) / entry * 100
+        assert booked > 0.3, (
+            f'at ATR {atr_pct}% a tagged TP1 books only {booked:.2f}% — the '
+            f'rung is being handed back, which is the +0.02% defect')
 
 
-def test_the_first_rung_defers_but_a_wider_rung_still_protects():
-    """The ratchet must still do its job somewhere, or it is dead weight."""
+def test_every_rung_of_the_live_ladder_is_protected():
+    """The ratchet must do its job on the FIRST rung, not just the wide ones.
+
+    This assertion is inverted from what it used to be. It previously required
+    the TP1 rung to defer to break-even, which is exactly the behaviour that
+    booked IMX at +0.02% after it had covered +0.50%.
+    """
     atr = 0.0894 * 1.07 / 100
-    pcts = DynamicRiskEngine.TP_LADDER_PCT
     entry = 0.0894
-    lvls = [entry * (1 - p / 100) for p in pcts]
+    lvls = [entry * (1 - p / 100) for p in DynamicRiskEngine.TP_LADDER_PCT]
     prev = [entry] + lvls[:-1]
-    applies = []
-    for tp, pv in zip(lvls, prev):
+    for i, (tp, pv) in enumerate(zip(lvls, prev), start=1):
         span = abs(tp - pv)
-        leash = max(span * DynamicRiskEngine.TP_GIVEBACK_PCT,
-                    DynamicRiskEngine.TP_GIVEBACK_MIN_ATR * atr)
-        applies.append(leash < span)
-    assert not applies[0], 'the TP1 rung should defer to break-even'
-    assert any(applies), 'no rung protects at all — the ratchet is dead weight'
+        leash = min(max(span * DynamicRiskEngine.TP_GIVEBACK_PCT,
+                        DynamicRiskEngine.TP_GIVEBACK_MIN_ATR * atr),
+                    span * DynamicRiskEngine.TP_GIVEBACK_MAX_FRAC)
+        assert 0 < leash < span, f'TP{i} rung is unprotected (leash {leash}, span {span})'
+
+
+def test_a_banked_rung_always_beats_a_scratch():
+    """The point of the whole mechanism, stated once.
+
+    Whatever the ATR, closing on a give-back after TP1 must return more than
+    the break-even stop would have.
+    """
+    entry = 0.1124
+    tp1 = entry * (1 - DynamicRiskEngine.TP_LADDER_PCT[0] / 100)
+    for atr_pct in (0.5, 1.0, 2.0, 5.0):
+        lvl = _level(tp1, entry, 'SHORT', atr=entry * atr_pct / 100)
+        assert lvl < entry, (
+            f'at ATR {atr_pct}% the give-back sits at or past entry — it would '
+            f'never fire before the break-even stop, so TP1 protects nothing')
 
 
 def test_min_atr_floor_can_widen_a_narrow_rung():
