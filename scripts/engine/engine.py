@@ -25,6 +25,7 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 import asyncio
+import os
 import time
 
 from scripts.engine.config import ALPHA_TIMEFRAMES as _ALPHA_TIMEFRAMES
@@ -88,7 +89,15 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
     9. After every cycle → write data/track_record.json
     """
 
-    MAX_CONCURRENT        = 8
+    # Sized to the CPU we actually have, not to a number that reads fast.
+    # Each slot is a 350-bar feature build plus XGBoost inference, and the web
+    # server shares this core — 8 fixed slots on the 1-vCPU production box
+    # pegged it for the whole scan and starved the event loop, so pages took
+    # seconds to open. Two per core keeps the core busy across the I/O waits
+    # without queueing CPU work behind itself. AEGIS_MAX_CONCURRENT overrides.
+    MAX_CONCURRENT        = max(
+        2, min(8, int(os.getenv('AEGIS_MAX_CONCURRENT') or 0)
+                  or (os.cpu_count() or 1) * 2))
     # How often the exit monitor re-prices open positions. This is the real
     # granularity of every stop and TP in the engine; the scan interval (300s)
     # governs ENTRIES only. Cheap loop — no inference, no network.
