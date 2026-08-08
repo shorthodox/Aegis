@@ -85,6 +85,32 @@ class DynamicRiskEngine:
     TP4_MULTIPLIER    = 3.3    # 20 % partial close — reachable stretch target
     TP5_MULTIPLIER    = 4.5    # close remaining position — full-trend target + RR anchor (4.5/1.8 = 2.5)
 
+    # ── The ladder is priced in PERCENT OF ENTRY, not in R ────────────────────
+    # The R-multiple ladder above is kept for reference and for anything that
+    # still reads the multipliers; the rungs the engine actually places come
+    # from TP_LADDER_PCT.
+    #
+    # Why: the rungs were derived from the stop, and the stop is ATR-derived, so
+    # a wide-stop trade got a first objective a long way off in the only unit the
+    # market pays in. Measured over the closed book, every loss had its first
+    # real target 2.3-3.5 % away against a stop of 1.0-1.65 %:
+    #
+    #     SUI  risk 1.01 %   target 2.56 %      DOGE risk 1.11 %   target 2.33 %
+    #     ONDO risk 1.65 %   target 3.33 %      ARB  risk 1.60 %   target 3.49 %
+    #
+    # The trade had to travel two to three times further to win than to lose, so
+    # a reversal anywhere between entry and the first bank turned a position that
+    # had been in profit into a full stop.
+    #
+    # KNOWN TRADE-OFF, deliberately accepted: a fixed percentage against an
+    # ATR-derived stop means each rung lands at a DIFFERENT R per token — TP1 is
+    # 0.50R on SUI but 0.30R on ONDO. v82 records that a TP1 at 0.7R made the
+    # break-even win rate 58.8 %. Two things keep that from repeating: TP1 closes
+    # only 15 % and its real job is arming break-even early, and the ladder still
+    # ends at 2.1-3.5R where the trade is actually paid.
+    TP_LADDER_PCT = (0.5, 1.5, 2.0, 3.0, 3.5)   # TP1 … TP5, percent of entry
+    TP_MIN_GAP_PCT = 0.05                        # rungs must stay strictly apart
+
     # RETIRED: the TP2 % cap was for the former wide TP2 (2.8×ATR); with the
     # compressed ladder TP2 is only 1.3×ATR (modest at any volatility), so the
     # cap only kinked the ladder in high vol and was removed from calculate_stops.
@@ -131,6 +157,42 @@ class DynamicRiskEngine:
     # banked less than its nominal share).  Front-loaded onto the two
     # "significant objective" targets (TP2/TP3); the 20 % runner rides the trail.
     TP_CLOSE_PCTS = (0.15, 0.25, 0.25, 0.15, 0.20)  # TP1 … TP5
+
+    @classmethod
+    def _ladder(cls, price: float, side: str, target: float = 0.0) -> tuple:
+        """The five take-profit rungs, as percentages of entry.
+
+        Returns (tp1..tp5) ordered away from `price` in the trade's direction.
+        Percentages come from TP_LADDER_PCT and are held strictly monotonic by
+        TP_MIN_GAP_PCT, so a mis-edited table cannot put two rungs at the same
+        price — that would make one partial close a no-op and silently change
+        the size of the runner.
+
+        `target` is the STRUCTURAL objective the gate cleared the trade on
+        (plan.target). When it is nearer than the top rung the whole ladder is
+        scaled to land on it. That is v85's rule surviving the move to
+        percentages: the payoff stage rejects a setup whose objective is too far
+        to be real, so placing a rung BEYOND that objective would re-invent the
+        thing the floor exists to reject, and would advertise a target the gate
+        never vouched for. When the objective is further than the top rung
+        nothing is scaled — banking earlier than the objective is conservative,
+        and it is the whole point of a percentage ladder.
+        """
+        pcts = [float(p) for p in cls.TP_LADDER_PCT]
+        if target > 0 and price > 0:
+            tgt_pct = abs(target - price) / price * 100.0
+            top = pcts[-1]
+            if 0 < tgt_pct < top:
+                scale = tgt_pct / top
+                pcts = [p * scale for p in pcts]
+
+        out, last = [], 0.0
+        for p in pcts:
+            p = max(p, last + cls.TP_MIN_GAP_PCT)
+            last = p
+            out.append(price * (1.0 + p / 100.0) if side == 'BUY'
+                       else price * (1.0 - p / 100.0))
+        return tuple(out)
 
     def calculate_position_size(
         self,
@@ -261,39 +323,14 @@ class DynamicRiskEngine:
                 sl   = price - risk
                 if 0 < support < price:
                     sl = min(sl, support - buf)
-            # Structural strong target = the major resistance (else an R-multiple).
-            # v85: when TraderGate supplied the objective it priced the trade on,
-            # that objective IS the target — same reasoning as sl_override above.
-            # The payoff stage rejects anything under MIN_NET_R measured to THIS
-            # level, so deriving tp3 from a different structure set meant the R:R
-            # the trade was approved on was not the R:R it was given.
+            # Rungs are percentages of entry — see TP_LADDER_PCT.
+            # The objective still governs: it CAPS the ladder (see _ladder) and
+            # it remains the number R:R is quoted against, so the gate's payoff
+            # test and the published figure keep meaning the same thing. Banking
+            # earlier than the objective does not invalidate the approval — it
+            # just takes the money on the way.
             _tgt = tp_override if tp_override > price else 0.0
-            tp3  = _tgt or (resistance if resistance > price else price + 3.5 * risk)
-            rng  = (resistance - support) if (0 < support < resistance) else (tp3 - price)
-            tp1  = price + self.TP1_MULTIPLIER * risk
-            tp2  = price + 2.0 * risk
-            tp4  = (support + 1.618 * rng) if support > 0 else price + 5.0 * risk
-            tp5  = (support + 2.618 * rng) if support > 0 else price + 7.0 * risk
-            # Force strictly ascending, ≥0.3R apart.
-            tp2 = max(tp2, tp1 + 0.3 * risk)
-            if _tgt:
-                # The objective is FIXED — it is the level the payoff floor
-                # cleared.  The gate approves setups from 1.6R gross, so the
-                # fixed 2.0R rung routinely lands PAST the target; letting the
-                # monotonic clamp push tp3 out to clear it would re-invent the
-                # "target too far to be real" that stage 3 exists to reject.
-                # Compress the banking rungs inside the objective instead.
-                _span = tp3 - price
-                if tp2 >= tp3:
-                    tp2 = price + (2.0 / 3.0) * _span
-                if tp1 >= tp2:
-                    tp1 = price + (1.0 / 3.0) * _span
-            else:
-                tp3 = max(tp3, tp2 + 0.3 * risk)
-            tp4 = max(tp4, tp3 + 0.3 * risk)
-            tp5 = max(tp5, tp4 + 0.3 * risk)
-            # RR to the REAL structural target (not the guard-extended tp3), so a
-            # cramped setup whose resistance is too close is honestly rejected.
+            tp1, tp2, tp3, tp4, tp5 = self._ladder(price, 'BUY', _tgt)
             reward = _tgt - price if _tgt else (
                 (resistance - price) if resistance > price else 3.5 * risk)
         else:  # SELL / SHORT
@@ -308,26 +345,8 @@ class DynamicRiskEngine:
                 sl   = price + risk
                 if resistance > price:
                     sl = max(sl, resistance + buf)
-            _tgt = tp_override if 0 < tp_override < price else 0.0   # v85 — see BUY
-            tp3  = _tgt or (support if 0 < support < price else price - 3.5 * risk)
-            rng  = (resistance - support) if (0 < support < resistance) else (price - tp3)
-            tp1  = price - self.TP1_MULTIPLIER * risk
-            tp2  = price - 2.0 * risk
-            tp4  = (resistance - 1.618 * rng) if resistance > 0 else price - 5.0 * risk
-            tp5  = (resistance - 2.618 * rng) if resistance > 0 else price - 7.0 * risk
-            # Force strictly descending, ≥0.3R apart.
-            tp2 = min(tp2, tp1 - 0.3 * risk)
-            if _tgt:
-                _span = price - tp3          # v85 — see the BUY branch above
-                if tp2 <= tp3:
-                    tp2 = price - (2.0 / 3.0) * _span
-                if tp1 <= tp2:
-                    tp1 = price - (1.0 / 3.0) * _span
-            else:
-                tp3 = min(tp3, tp2 - 0.3 * risk)
-            tp4 = min(tp4, tp3 - 0.3 * risk)
-            tp5 = min(tp5, tp4 - 0.3 * risk)
-            # RR to the REAL structural target (not the guard-extended tp3).
+            _tgt = tp_override if 0 < tp_override < price else 0.0   # see BUY branch
+            tp1, tp2, tp3, tp4, tp5 = self._ladder(price, 'SELL', _tgt)
             reward = price - _tgt if _tgt else (
                 (price - support) if 0 < support < price else 3.5 * risk)
 

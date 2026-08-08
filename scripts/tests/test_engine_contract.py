@@ -164,21 +164,25 @@ def test_stop_clears_the_level_it_defends():
 
 
 def test_plan_target_is_honoured_verbatim():
-    """v85: the objective the payoff stage cleared IS the target.
+    """v85: no rung may sit beyond the objective the payoff stage cleared.
 
-    Deriving tp3 from a different structure set is how the published R:R stopped
-    matching the R:R the gate approved.
+    The ladder is priced in percent of entry now, so the objective CAPS it
+    rather than placing tp3: nearer than the top rung, the ladder scales onto
+    it; further, the percentages stand and the trade banks on the way. What must
+    never happen is a rung past the level the floor vouched for — that is how
+    the published R:R stopped matching the R:R the gate approved.
     """
     r = LE.DynamicRiskEngine()
     out = r.calculate_stops(100.0, 'BUY', 1.0, support=97.0, resistance=130.0,
                             tp_override=104.0)
-    assert out['tp3'] == pytest.approx(104.0), 'plan target was re-derived'
-    # the banking rungs compress INSIDE the objective rather than overshooting it
+    assert max(out[f'tp{i}'] for i in range(1, 6)) <= 104.0 + 1e-9, (
+        'a rung was placed beyond the plan target')
     assert out['tp1'] < out['tp2'] <= out['tp3']
 
     short = r.calculate_stops(100.0, 'SELL', 1.0, support=70.0, resistance=103.0,
                               tp_override=96.0)
-    assert short['tp3'] == pytest.approx(96.0)
+    assert min(short[f'tp{i}'] for i in range(1, 6)) >= 96.0 - 1e-9, (
+        'a rung was placed beyond the plan target')
     assert short['tp1'] > short['tp2'] >= short['tp3']
 
 

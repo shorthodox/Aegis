@@ -16,15 +16,15 @@
       "pending_entry": false,
       "quality_score": 71.0,
       "regime": "RANGING",
-      "risk_reward": 1.03,
+      "risk_reward": 0.43,
       "signal": "HOLD",
       "signal_strength": "STRONG_BUY",
       "suggested_sl": 96.5,
-      "suggested_tp": 101.8,
-      "tp2": 103.6,
-      "tp3": 106.0,
-      "tp4": 111.562,
-      "tp5": 120.562
+      "suggested_tp": 100.5,
+      "tp2": 101.5,
+      "tp3": 102.0,
+      "tp4": 103.0,
+      "tp5": 103.5
     }
   },
   "buy_at_support": {
@@ -72,15 +72,15 @@
       "pending_entry": false,
       "quality_score": 71.0,
       "regime": "RANGING",
-      "risk_reward": 1.03,
+      "risk_reward": 0.43,
       "signal": "HOLD",
       "signal_strength": "STRONG_BUY",
       "suggested_sl": 96.5,
-      "suggested_tp": 101.8,
-      "tp2": 103.6,
-      "tp3": 106.0,
-      "tp4": 111.562,
-      "tp5": 120.562
+      "suggested_tp": 100.5,
+      "tp2": 101.5,
+      "tp3": 102.0,
+      "tp4": 103.0,
+      "tp5": 103.5
     }
   },
   "buy_htf_conflict": {
@@ -100,15 +100,15 @@
       "pending_entry": false,
       "quality_score": 56.0,
       "regime": "RANGING",
-      "risk_reward": 1.03,
+      "risk_reward": 0.43,
       "signal": "HOLD",
       "signal_strength": "BUY",
       "suggested_sl": 96.5,
-      "suggested_tp": 101.8,
-      "tp2": 103.6,
-      "tp3": 106.0,
-      "tp4": 111.562,
-      "tp5": 120.562
+      "suggested_tp": 100.5,
+      "tp2": 101.5,
+      "tp3": 102.0,
+      "tp4": 103.0,
+      "tp5": 103.5
     }
   },
   "buy_liquidity_trap": {
@@ -128,15 +128,15 @@
       "pending_entry": false,
       "quality_score": 51.0,
       "regime": "LIQUIDITY_TRAP",
-      "risk_reward": 1.03,
+      "risk_reward": 0.43,
       "signal": "HOLD",
       "signal_strength": "BUY",
       "suggested_sl": 96.5,
-      "suggested_tp": 101.8,
-      "tp2": 103.6,
-      "tp3": 106.0,
-      "tp4": 111.562,
-      "tp5": 120.562
+      "suggested_tp": 100.5,
+      "tp2": 101.5,
+      "tp3": 102.0,
+      "tp4": 103.0,
+      "tp5": 103.5
     }
   },
   "buy_low_atr": {
@@ -156,15 +156,15 @@
       "pending_entry": false,
       "quality_score": 71.0,
       "regime": "RANGING",
-      "risk_reward": 1.03,
+      "risk_reward": 0.43,
       "signal": "HOLD",
       "signal_strength": "STRONG_BUY",
       "suggested_sl": 96.5,
-      "suggested_tp": 101.8,
-      "tp2": 103.6,
-      "tp3": 106.0,
-      "tp4": 111.562,
-      "tp5": 120.562
+      "suggested_tp": 100.5,
+      "tp2": 101.5,
+      "tp3": 102.0,
+      "tp4": 103.0,
+      "tp5": 103.5
     }
   },
   "buy_low_edge": {
@@ -184,15 +184,15 @@
       "pending_entry": false,
       "quality_score": 61.0,
       "regime": "RANGING",
-      "risk_reward": 1.03,
+      "risk_reward": 0.43,
       "signal": "HOLD",
       "signal_strength": "BUY",
       "suggested_sl": 96.5,
-      "suggested_tp": 101.8,
-      "tp2": 103.6,
-      "tp3": 106.0,
-      "tp4": 111.562,
-      "tp5": 120.562
+      "suggested_tp": 100.5,
+      "tp2": 101.5,
+      "tp3": 102.0,
+      "tp4": 103.0,
+      "tp5": 103.5
     }
   },
   "buy_no_conviction": {
@@ -212,15 +212,15 @@
       "pending_entry": false,
       "quality_score": 58.0,
       "regime": "RANGING",
-      "risk_reward": 1.03,
+      "risk_reward": 0.43,
       "signal": "HOLD",
       "signal_strength": "BUY",
       "suggested_sl": 96.5,
-      "suggested_tp": 101.8,
-      "tp2": 103.6,
-      "tp3": 106.0,
-      "tp4": 111.562,
-      "tp5": 120.562
+      "suggested_tp": 100.5,
+      "tp2": 101.5,
+      "tp3": 102.0,
+      "tp4": 103.0,
+      "tp5": 103.5
     }
   },
   "buy_overbought": {
@@ -241,15 +241,15 @@
       "pending_entry": false,
       "quality_score": 53.0,
       "regime": "RANGING",
-      "risk_reward": 1.03,
+      "risk_reward": 0.43,
       "signal": "HOLD",
       "signal_strength": "BUY",
       "suggested_sl": 96.5,
-      "suggested_tp": 101.8,
-      "tp2": 103.6,
-      "tp3": 106.0,
-      "tp4": 111.562,
-      "tp5": 120.562
+      "suggested_tp": 100.5,
+      "tp2": 101.5,
+      "tp3": 102.0,
+      "tp4": 103.0,
+      "tp5": 103.5
     }
   },
   "buy_tagging_htf_conf": {
@@ -265,8 +265,8 @@
       "side": "BUY",
       "sl": 98.5,
       "tier": "NORMAL",
-      "tp1": 101.5,
-      "tp5": 126.5036,
+      "tp1": 100.5,
+      "tp5": 103.5,
       "value": 388.08
     },
     "signal": {
@@ -285,11 +285,11 @@
       "signal": "BUY",
       "signal_strength": "BUY",
       "suggested_sl": 98.5,
-      "suggested_tp": 110.0,
-      "tp2": 103.0,
-      "tp3": 110.0,
-      "tp4": 116.3036,
-      "tp5": 126.5036
+      "suggested_tp": 102.0,
+      "tp2": 101.5,
+      "tp3": 102.0,
+      "tp4": 103.0,
+      "tp5": 103.5
     }
   },
   "buy_tagging_support": {
@@ -305,8 +305,8 @@
       "side": "BUY",
       "sl": 98.5,
       "tier": "NORMAL",
-      "tp1": 101.5,
-      "tp5": 126.5036,
+      "tp1": 100.5,
+      "tp5": 103.5,
       "value": 476.28
     },
     "signal": {
@@ -325,11 +325,11 @@
       "signal": "BUY",
       "signal_strength": "BUY",
       "suggested_sl": 98.5,
-      "suggested_tp": 110.0,
-      "tp2": 103.0,
-      "tp3": 110.0,
-      "tp4": 116.3036,
-      "tp5": 126.5036
+      "suggested_tp": 102.0,
+      "tp2": 101.5,
+      "tp3": 102.0,
+      "tp4": 103.0,
+      "tp5": 103.5
     }
   },
   "buy_tagging_wide_atr": {
@@ -345,8 +345,8 @@
       "side": "BUY",
       "sl": 95.5,
       "tier": "NORMAL",
-      "tp1": 104.5,
-      "tp5": 139.5936,
+      "tp1": 100.5,
+      "tp5": 103.5,
       "value": 476.28
     },
     "signal": {
@@ -365,11 +365,11 @@
       "signal": "BUY",
       "signal_strength": "BUY",
       "suggested_sl": 95.5,
-      "suggested_tp": 115.0,
-      "tp2": 109.0,
-      "tp3": 115.0,
-      "tp4": 124.3936,
-      "tp5": 139.5936
+      "suggested_tp": 102.0,
+      "tp2": 101.5,
+      "tp3": 102.0,
+      "tp4": 103.0,
+      "tp5": 103.5
     }
   },
   "buy_trend_bear": {
@@ -445,15 +445,15 @@
       "pending_entry": false,
       "quality_score": 43.0,
       "regime": "RANGING",
-      "risk_reward": 1.03,
+      "risk_reward": 0.43,
       "signal": "HOLD",
       "signal_strength": "BUY",
       "suggested_sl": 96.5,
-      "suggested_tp": 101.8,
-      "tp2": 103.6,
-      "tp3": 106.0,
-      "tp4": 111.562,
-      "tp5": 120.562
+      "suggested_tp": 100.5,
+      "tp2": 101.5,
+      "tp3": 102.0,
+      "tp4": 103.0,
+      "tp5": 103.5
     }
   },
   "buy_wide_atr": {
@@ -473,15 +473,15 @@
       "pending_entry": false,
       "quality_score": 71.0,
       "regime": "RANGING",
-      "risk_reward": 2.0,
+      "risk_reward": 0.33,
       "signal": "HOLD",
       "signal_strength": "STRONG_BUY",
       "suggested_sl": 95.5,
-      "suggested_tp": 104.5,
-      "tp2": 109.0,
-      "tp3": 110.35,
-      "tp4": 111.7,
-      "tp5": 120.562
+      "suggested_tp": 100.5,
+      "tp2": 101.5,
+      "tp3": 102.0,
+      "tp4": 103.0,
+      "tp5": 103.5
     }
   },
   "flat_no_fire": {
@@ -530,15 +530,15 @@
       "pending_entry": false,
       "quality_score": 71.0,
       "regime": "RANGING",
-      "risk_reward": 1.03,
+      "risk_reward": 0.43,
       "signal": "HOLD",
       "signal_strength": "BUY",
       "suggested_sl": 96.5,
-      "suggested_tp": 101.8,
-      "tp2": 103.6,
-      "tp3": 106.0,
-      "tp4": 111.562,
-      "tp5": 120.562
+      "suggested_tp": 100.5,
+      "tp2": 101.5,
+      "tp3": 102.0,
+      "tp4": 103.0,
+      "tp5": 103.5
     }
   },
   "paper_long_held": {
@@ -566,15 +566,15 @@
       "pending_entry": false,
       "quality_score": 71.0,
       "regime": "RANGING",
-      "risk_reward": 1.03,
+      "risk_reward": 0.43,
       "signal": "HOLD",
       "signal_strength": "BUY",
       "suggested_sl": 96.5,
-      "suggested_tp": 101.8,
-      "tp2": 103.6,
-      "tp3": 106.0,
-      "tp4": 111.562,
-      "tp5": 120.562
+      "suggested_tp": 100.5,
+      "tp2": 101.5,
+      "tp3": 102.0,
+      "tp4": 103.0,
+      "tp5": 103.5
     }
   },
   "paper_long_reversal": {
@@ -595,15 +595,15 @@
       "pending_entry": false,
       "quality_score": 48.0,
       "regime": "RANGING",
-      "risk_reward": 0.55,
+      "risk_reward": 0.23,
       "signal": "HOLD",
       "signal_strength": "BUY",
       "suggested_sl": 106.5,
-      "suggested_tp": 98.2,
-      "tp2": 96.4,
-      "tp3": 95.86,
-      "tp4": 91.438,
-      "tp5": 82.438
+      "suggested_tp": 99.5,
+      "tp2": 98.5,
+      "tp3": 98.0,
+      "tp4": 97.0,
+      "tp5": 96.5
     }
   },
   "paper_long_sl_hit": {
@@ -624,15 +624,15 @@
       "pending_entry": false,
       "quality_score": 71.0,
       "regime": "RANGING",
-      "risk_reward": 1.03,
+      "risk_reward": 0.43,
       "signal": "HOLD",
       "signal_strength": "BUY",
       "suggested_sl": 96.5,
-      "suggested_tp": 101.8,
-      "tp2": 103.6,
-      "tp3": 106.0,
-      "tp4": 111.562,
-      "tp5": 120.562
+      "suggested_tp": 100.5,
+      "tp2": 101.5,
+      "tp3": 102.0,
+      "tp4": 103.0,
+      "tp5": 103.5
     }
   },
   "paper_long_tp3_hit": {
@@ -653,15 +653,15 @@
       "pending_entry": false,
       "quality_score": 71.0,
       "regime": "RANGING",
-      "risk_reward": 1.03,
+      "risk_reward": 0.43,
       "signal": "HOLD",
       "signal_strength": "BUY",
       "suggested_sl": 96.5,
-      "suggested_tp": 101.8,
-      "tp2": 103.6,
-      "tp3": 106.0,
-      "tp4": 111.562,
-      "tp5": 120.562
+      "suggested_tp": 100.5,
+      "tp2": 101.5,
+      "tp3": 102.0,
+      "tp4": 103.0,
+      "tp5": 103.5
     }
   },
   "sell_aligned": {
@@ -681,15 +681,15 @@
       "pending_entry": false,
       "quality_score": 48.0,
       "regime": "RANGING",
-      "risk_reward": 0.55,
+      "risk_reward": 0.23,
       "signal": "HOLD",
       "signal_strength": "SELL",
       "suggested_sl": 106.5,
-      "suggested_tp": 98.2,
-      "tp2": 96.4,
-      "tp3": 95.86,
-      "tp4": 91.438,
-      "tp5": 82.438
+      "suggested_tp": 99.5,
+      "tp2": 98.5,
+      "tp3": 98.0,
+      "tp4": 97.0,
+      "tp5": 96.5
     }
   },
   "sell_at_resistance": {
@@ -737,15 +737,15 @@
       "pending_entry": false,
       "quality_score": 13.0,
       "regime": "RANGING",
-      "risk_reward": 0.55,
+      "risk_reward": 0.23,
       "signal": "HOLD",
       "signal_strength": "SELL",
       "suggested_sl": 106.5,
-      "suggested_tp": 98.2,
-      "tp2": 96.4,
-      "tp3": 95.86,
-      "tp4": 91.438,
-      "tp5": 82.438
+      "suggested_tp": 99.5,
+      "tp2": 98.5,
+      "tp3": 98.0,
+      "tp4": 97.0,
+      "tp5": 96.5
     }
   },
   "sell_low_quality": {
@@ -765,15 +765,15 @@
       "pending_entry": false,
       "quality_score": 28.0,
       "regime": "RANGING",
-      "risk_reward": 0.55,
+      "risk_reward": 0.23,
       "signal": "HOLD",
       "signal_strength": "SELL",
       "suggested_sl": 106.5,
-      "suggested_tp": 98.2,
-      "tp2": 96.4,
-      "tp3": 95.86,
-      "tp4": 91.438,
-      "tp5": 82.438
+      "suggested_tp": 99.5,
+      "tp2": 98.5,
+      "tp3": 98.0,
+      "tp4": 97.0,
+      "tp5": 96.5
     }
   },
   "sell_oversold": {
@@ -794,15 +794,15 @@
       "pending_entry": false,
       "quality_score": 30.0,
       "regime": "RANGING",
-      "risk_reward": 0.55,
+      "risk_reward": 0.23,
       "signal": "HOLD",
       "signal_strength": "SELL",
       "suggested_sl": 106.5,
-      "suggested_tp": 98.2,
-      "tp2": 96.4,
-      "tp3": 95.86,
-      "tp4": 91.438,
-      "tp5": 82.438
+      "suggested_tp": 99.5,
+      "tp2": 98.5,
+      "tp3": 98.0,
+      "tp4": 97.0,
+      "tp5": 96.5
     }
   },
   "sell_tagging_res": {
@@ -822,15 +822,15 @@
       "pending_entry": true,
       "quality_score": 81.0,
       "regime": "RANGING",
-      "risk_reward": 2.0,
+      "risk_reward": 2.14,
       "signal": "HOLD",
       "signal_strength": "STRONG_SELL",
       "suggested_sl": 101.5,
       "suggested_tp": 90.0,
-      "tp2": 98.6,
-      "tp3": 90.0,
-      "tp4": 83.6964,
-      "tp5": 73.4964
+      "tp2": 98.5,
+      "tp3": 98.0,
+      "tp4": 97.0,
+      "tp5": 96.5
     }
   },
   "sell_trend_bull": {

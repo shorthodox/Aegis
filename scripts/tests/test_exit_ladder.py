@@ -289,13 +289,26 @@ def test_partial_never_closes_more_than_remains(tmp_path):
 
 # ── 5. payoff geometry ───────────────────────────────────────────────────────
 
-def test_tp1_is_one_R_not_zero_seven_R():
-    """0.7R against a 1.0R stop needed a 58.8 % win rate just to break even."""
+def test_tp1_is_the_configured_percentage():
+    """The ladder is priced in percent of entry, not in R.
+
+    This used to assert TP1 == 1.0R, the v82 fix for a 0.7R rung that needed a
+    58.8 % win rate to break even. The rungs moved to percentages because
+    R-derived ones put the first objective 2-3x further away than the stop, so a
+    reversal in between turned profitable positions into full losses.
+
+    The v82 hazard has NOT gone away — a percentage rung lands at a different R
+    on every token, and on a wide stop TP1 can be well under 1R. What contains
+    it is that TP1 closes only 15 % and its job is arming break-even early,
+    while the ladder still ends where the trade is paid. The guard that survives
+    is the one below: TP1 must never be the de-facto exit.
+    """
     re_ = DynamicRiskEngine()
     s = re_.calculate_stops(price=100.0, side='BUY', atr=1.0)
-    risk = 100.0 - s['sl']
-    assert (s['tp1'] - 100.0) / risk == pytest.approx(1.0, abs=1e-6)
-    assert re_.TP1_MULTIPLIER == 1.0
+    assert (s['tp1'] - 100.0) / 100.0 * 100.0 == pytest.approx(
+        re_.TP_LADDER_PCT[0], abs=1e-6)
+    assert re_.TP_CLOSE_PCTS[0] <= 0.20, 'TP1 must stay a partial, not an exit'
+    assert re_.TP_LADDER_PCT[-1] > re_.TP_LADDER_PCT[0] * 3,         'the ladder must still reach a payable distance'
 
 
 def test_risky_stop_is_not_tighter_than_the_label_barrier():

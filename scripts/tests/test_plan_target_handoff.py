@@ -8,6 +8,15 @@ from the rolling S/R — a different structure set.  `plan.target` only reached
 `sig['suggested_tp']`, a display field, so the payoff floor was decoration on
 the side it was actually floor-ing.  `tp_override` closes it; these tests hold
 it shut.
+
+The ladder is now priced in PERCENT of entry rather than in R, because the
+R-derived rungs put the first objective 2-3x further away than the stop and a
+reversal in between turned profitable positions into full losses. That changes
+HOW the objective binds, not WHETHER it does: `plan.target` no longer places a
+rung, it CAPS the ladder. When the objective is nearer than the top rung the
+whole ladder scales to land exactly on it, so no rung is ever placed beyond the
+level the payoff floor cleared. When it is further, the percentages stand and
+the trade simply banks on the way — which is conservative, and the point.
 """
 
 import os
@@ -29,14 +38,17 @@ def test_long_target_override_is_used_verbatim(eng):
     out = eng.calculate_stops(price=100.0, side='BUY', atr=1.0,
                               support=99.0, resistance=101.0,
                               sl_override=99.1, tp_override=104.0)
-    assert out['tp3'] == pytest.approx(104.0)
+    # 104.0 is 4 % away, further than the 3.5 % top rung, so the ladder keeps
+    # its percentages and simply banks on the way. What must hold is that no
+    # rung is placed BEYOND the objective the payoff floor cleared.
+    assert max(out[f'tp{i}'] for i in range(1, 6)) <= 104.0 + 1e-9
 
 
 def test_short_target_override_is_used_verbatim(eng):
     out = eng.calculate_stops(price=100.0, side='SELL', atr=1.0,
                               support=99.0, resistance=101.0,
                               sl_override=100.9, tp_override=96.0)
-    assert out['tp3'] == pytest.approx(96.0)
+    assert min(out[f'tp{i}'] for i in range(1, 6)) >= 96.0 - 1e-9
 
 
 def test_reported_rr_is_measured_to_the_plans_target(eng):
@@ -69,11 +81,14 @@ def test_a_near_target_is_not_pushed_out_by_the_monotonic_clamp(eng, side, targe
                               support=99.0, resistance=101.0,
                               sl_override=(99.0 if side == 'BUY' else 101.0),
                               tp_override=target)
-    assert out['tp3'] == pytest.approx(target)
+    tps = [out[f'tp{i}'] for i in range(1, 6)]
+    assert tps[-1] == pytest.approx(target), 'the ladder must land ON the objective'
     if side == 'BUY':
-        assert 100.0 < out['tp1'] < out['tp2'] < out['tp3']
+        assert 100.0 < tps[0] < tps[1] < tps[2] < tps[3] < tps[4]
+        assert max(tps) <= target + 1e-9, 'a rung was placed past the objective'
     else:
-        assert 100.0 > out['tp1'] > out['tp2'] > out['tp3']
+        assert 100.0 > tps[0] > tps[1] > tps[2] > tps[3] > tps[4]
+        assert min(tps) >= target - 1e-9, 'a rung was placed past the objective'
 
 
 def test_a_target_override_does_not_move_the_stop(eng):

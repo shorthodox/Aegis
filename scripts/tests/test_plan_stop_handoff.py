@@ -39,12 +39,20 @@ def test_short_stop_override_is_used_verbatim(eng):
 
 
 def test_the_tp_ladder_derives_from_the_overridden_risk(eng):
-    """TP1 is 1R off the REAL stop, not off a stop the engine invented."""
+    """The REAL stop must drive risk and R:R, even though the rungs no longer
+    derive from it.
+
+    The ladder is priced in percent of entry now, so TP1 is no longer 1R off the
+    stop. What this test still protects is the thing the override exists for:
+    `risk` is measured from the stop the gate supplied, not from one the engine
+    invented, so the reported R:R is the trade's real R:R.
+    """
     out = eng.calculate_stops(price=100.0, side='BUY', atr=1.0,
                               support=99.8, resistance=110.0,
                               sl_override=98.9)
-    risk = out['risk']
-    assert out['tp1'] == pytest.approx(100.0 + eng.TP1_MULTIPLIER * risk)
+    assert out['sl'] == pytest.approx(98.9), 'the plan stop was re-derived'
+    assert out['risk'] == pytest.approx(100.0 - 98.9)
+    assert out['tp1'] == pytest.approx(100.0 * (1 + eng.TP_LADDER_PCT[0] / 100.0))
     assert out['tp2'] > out['tp1'] and out['tp3'] > out['tp2']
 
 

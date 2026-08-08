@@ -84,11 +84,15 @@ def test_profit_enhancements_logic():
     )
     assert stops['sl'] < 0.0850, f"Stop Loss should be below support cushion, got {stops['sl']}"
     assert stops['valid_rr'] is True, "Valid RR expected with roomy resistance"
+    # The ladder is priced in PERCENT of entry now, not in R. R-derived rungs put
+    # the first objective 2-3x further away than the stop, so a reversal between
+    # entry and the first bank turned profitable positions into full losses.
     assert math.isclose(
-        stops['tp1'] - 0.0855,
-        stops['risk'] * engine.risk_engine.TP1_MULTIPLIER,
+        (stops['tp1'] - 0.0855) / 0.0855 * 100.0,
+        engine.risk_engine.TP_LADDER_PCT[0],
         rel_tol=1e-6,
-    ), f"TP1 should be a tighter first bank at {engine.risk_engine.TP1_MULTIPLIER}x risk, got {stops['tp1']}"
+    ), (f"TP1 should be the first ladder rung "
+        f"({engine.risk_engine.TP_LADDER_PCT[0]}% of entry), got {stops['tp1']}")
 
     print("ALL PROFIT ENHANCEMENT UNIT TESTS PASSED SUCCESSFULLY!")
 

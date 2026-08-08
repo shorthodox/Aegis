@@ -29,8 +29,16 @@ from src.trading import trader_gate as TG
 
 # ── the defect: a rung ratio is not a measurement ────────────────────────────
 
-def test_tp2_ratio_is_constant_by_construction():
-    """Whenever the ladder is not compressed, |price-tp2|/risk is exactly 2."""
+def test_tp2_ratio_is_no_longer_a_constant_but_is_still_not_the_approved_payoff():
+    """The rung ratio was a constant; now it is arbitrary. Neither is the R:R.
+
+    It used to be exactly 2.0 by construction, because tp2 was price + 2.0R — a
+    constant wearing the costume of a measurement. The ladder is priced in
+    percent of entry now, so the ratio varies with whatever the stop happens to
+    be, which is not an improvement for reporting: it still is not the number
+    the gate approved the trade on. Either way the headline R:R must come from
+    plan.r_net, which is what the tests below assert.
+    """
     r = DynamicRiskEngine()
     rng = random.Random(5)
     seen = set()
@@ -43,9 +51,13 @@ def test_tp2_ratio_is_constant_by_construction():
             if out['risk'] <= 0 or not out['tp2']:
                 continue
             seen.add(round(abs(price - out['tp2']) / out['risk'], 6))
-    assert seen == {2.0}, (
-        f'expected the TP2 ratio to be the constant 2.0; got {sorted(seen)[:5]} — '
-        f'if this changed, the reasoning below needs rechecking'
+    assert len(seen) > 1, 'the rung ratio is a constant again'
+    # It now varies with the stop, which is the point: the same rung reports a
+    # different "R:R" per token, so it can never be the figure a subscriber
+    # judges the trade by. plan.r_net is.
+    assert max(seen) - min(seen) > 0.1, (
+        f'the rung ratio barely moves ({sorted(seen)[:3]}) — if it has become '
+        f'stable again, check whether it is being published as the R:R'
     )
 
 
