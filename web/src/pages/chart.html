@@ -2010,7 +2010,7 @@ function renderHistorical(symbol) {
     <div class="tp-acc-row"><span class="tp-acc-label">TP1 Accuracy</span><span class="tp-acc-val text-green">${tp1acc}%</span></div>
     <div class="tp-acc-row"><span class="tp-acc-label">TP2 Accuracy</span><span class="tp-acc-val">${tp2acc}%</span></div>
     <div class="tp-acc-row"><span class="tp-acc-label">TP3 Accuracy</span><span class="tp-acc-val">${tp3acc}%</span></div>
-    <div class="tp-acc-row"><span class="tp-acc-label">Avg PnL (gross)</span>
+    <div class="tp-acc-row"><span class="tp-acc-label">Avg PnL (net of costs)</span>
       <span class="tp-acc-val ${parseFloat(avgPnl)>=0?'text-buy':'text-sell'}">${avgPnl}%</span>
     </div>
     <div class="tp-acc-row"><span class="tp-acc-label">Total Closed</span><span class="tp-acc-val">${closed.length}</span></div>
@@ -2235,6 +2235,33 @@ function renderSignalGenesis(sig) {
   const dominant = confItems.slice().sort((a,b) => Math.abs(b.v-50) - Math.abs(a.v-50))[0];
   const agreeing = confItems.filter(i => isShort ? i.v < 45 : i.v > 55).length;
 
+  // ── Flag / pennant continuation geometry ───────────────────────────────────
+  // Measured over 58,646 1h bars: the FORMATION direction carries a small
+  // two-sided edge, so a trade taken against a flag is taken against a
+  // measurable drift — enough to tag the signal, not enough to block it.
+  // Trading the breakout itself loses (40.6% win rate), so this is never an
+  // entry trigger and the panel must not imply that it is.
+  const flagAvail   = sig.flag_available === true;
+  const flagBias    = Number(sig.flag_bias || 0);
+  const flagWant    = isShort ? -1 : 1;
+  const flagOpposes = flagAvail && flagBias !== 0 && flagBias !== flagWant;
+  const flagAgrees  = flagAvail && flagBias === flagWant;
+  const flagName    = String(sig.flag_pattern || '').replace(/_/g, ' ') || 'flag';
+  const flagDesc    = !flagAvail
+    ? 'Continuation geometry not computed on this frame'
+    : flagOpposes
+      ? `${isShort ? 'SELL' : 'BUY'} into a ${flagName} — continuation geometry points the other way, so the signal is tagged RISKY`
+      : flagAgrees
+        ? `A ${flagName} points the same way as this ${isShort ? 'short' : 'long'} — no downgrade (agreement is never a promotion)`
+        : 'No flag or pennant forming';
+  const flagVal = !flagAvail ? 'N/A' : flagOpposes ? 'OPPOSES' : flagAgrees ? 'ALIGNED' : 'NONE';
+
+  // ── Candle confirmation ────────────────────────────────────────────────────
+  // -1 is the engine's "pattern library unavailable" sentinel, not a score.
+  const cdlRaw    = isShort ? sig.cdl_bear_reversal : sig.cdl_bull_reversal;
+  const cdlScored = cdlRaw !== undefined && cdlRaw !== null && Number(cdlRaw) >= 0;
+  const cdlOk     = !cdlScored || Number(cdlRaw) > 0;
+
   const gate = (icon, pass, name, desc, val, warn=false) => `
     <div class="gate-row ${pass ? 'gate-pass' : warn ? 'gate-warn' : 'gate-fail'}">
       <span class="gate-icon">${pass ? '✅' : warn ? '⚠️' : '❌'}</span>
@@ -2437,6 +2464,14 @@ function renderSignalGenesis(sig) {
     ${gate('', edgeOk || fired, 'Gate 3 · Model Edge', `Model edge score ≥ 60 required to fire`, `${edgeVal.toFixed(0)}/100`, !edgeOk && !fired)}
     ${gate('', ctxOk,  'Gate 3b · Context Quality', `Advisory — heuristic setup quality (floor 70), not a hard block. Score: ${qVal.toFixed(0)}`, `${qVal.toFixed(0)}/100`, true)}
     ${gate('', !fbDetected, 'Gate 3c · Fake Breakout', fbDetected ? 'Exhaustion / fake-breakout pattern detected' : 'No exhaustion / fake-breakout pattern', fbDetected ? 'DETECTED' : 'CLEAR', true)}
+    ${gate('', !flagOpposes, 'Gate 3d · Flag / Pennant', flagDesc, flagVal, true)}
+    ${gate('', cdlOk, 'Gate 3e · Candle Confirmation',
+        !cdlScored
+          ? 'Candlestick pattern library unavailable on this frame — advisory skipped'
+          : cdlOk
+            ? `A ${isShort ? 'bearish' : 'bullish'} reversal candle confirms the entry (score ${Number(cdlRaw).toFixed(2)})`
+            : `No ${isShort ? 'bearish' : 'bullish'} reversal candle in the last 3 bars — the signal is tagged RISKY`,
+        !cdlScored ? 'N/A' : cdlOk ? 'CONFIRMED' : 'NONE', true)}
     ${gate('', !stabWarn, 'Gate 3.8 · Signal Stability', stabWarn ? 'Direction not yet stable across recent cycles' : 'Direction stable across recent cycles', stabWarn ? 'FORMING' : 'STABLE', true)}
     ${gate('', true, 'Gate 4 · Portfolio', 'Capital & concurrency limits (signal service — non-binding)', 'OK')}
     ${gate('', confOk || fired, 'Model Confidence',   `Model edge vs dynamic threshold (raw P(${isShort?'sell':'buy'}) ${((pDir||0)*100).toFixed(1)}%). Gap: ${confGap}pt`, `${(sig.meta_confidence||0).toFixed(1)} vs ${(thresh).toFixed(0)}`, !confOk && !fired)}

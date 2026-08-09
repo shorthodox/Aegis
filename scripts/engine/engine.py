@@ -63,6 +63,7 @@ from scripts.engine.positions import PositionsMixin
 from scripts.engine.quality import SignalQualityFilter
 from scripts.engine.regime import MarketRegimeDetector
 from scripts.engine.risk import DynamicRiskEngine
+from scripts.engine.shadow_exits import ShadowBook
 from scripts.engine.state import _hydrate_track_record_from_firestore
 from scripts.engine.tracking import DriftMonitor
 from scripts.engine.tracking import PerformanceTracker
@@ -351,6 +352,9 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
         self.wallet    = VirtualWallet(capital, max_position_usdt)
         self._executor = ThreadPoolExecutor(
             max_workers=self.MAX_CONCURRENT, thread_name_prefix='aegis_pred')
+        # Reads the price stream, writes data/shadow_exits.json, and is wired to
+        # nothing that can place an order. See scripts/engine/shadow_exits.py.
+        self.shadow_book = ShadowBook(cost_pct=VirtualWallet.round_trip_cost_pct())
 
         self.predictors:   Dict[str, Any]   = {}
         self.last_signals: Dict[str, Any]   = {}
@@ -566,6 +570,15 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
         while True:
             try:
                 await asyncio.sleep(self.EXIT_CHECK_SECONDS)
+                # Shadows outlive the live position on purpose — that is the
+                # whole point, so this runs before the open-book early return.
+                # Guarded separately from the loop's own catch: a failure in the
+                # study sits UPSTREAM of the exit work, so an unguarded raise
+                # here would stop real stops and TPs from being evaluated.
+                try:
+                    self.shadow_book.tick(self.live_prices)
+                except Exception as _e:
+                    print(f'[ShadowBook] tick skipped: {_e!r}')
                 if not self.wallet.open_positions:
                     continue
                 # snapshot: _manage_exit mutates open_positions on a close

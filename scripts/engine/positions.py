@@ -225,6 +225,16 @@ class PositionsMixin:
             entry_resistance= float(result.get('resistance', 0) or 0),
         )
         self.wallet.open_trade(pos)
+        # Shadow accounting — observation only, and deliberately wrapped: a bug
+        # in the study must never be able to stop a real position from opening.
+        try:
+            self.shadow_book.open(
+                trade_id=pos.signal_id, symbol=symbol, direction=pos.direction,
+                entry=pos.entry_price, stop_loss=pos.stop_loss,
+                take_profits=[pos.take_profit_1, pos.take_profit_2, pos.take_profit_3,
+                              pos.take_profit_4, pos.take_profit_5])
+        except Exception as _e:
+            print(f'[ShadowBook] open hook failed for {symbol}: {_e!r}')
         self._open_time[symbol]    = time.time()
         self._tp1_hit[symbol]      = False
         self._tp2_hit[symbol]      = False
@@ -324,6 +334,19 @@ class PositionsMixin:
             'regime_confidence':   regime.confidence    if regime else 0.0,
             'quality_score':       round(quality_score, 1),
             'is_fake_breakout':    fake_breakout,
+            # Tier inputs the chart explains to the subscriber. This dict is a
+            # whitelist, not a copy of `result` — a field omitted here simply
+            # never reaches the panel, however faithfully the engine computed it.
+            'flag_available':         bool(result.get('flag_available', False)),
+            'flag_bias':              float(result.get('flag_bias') or 0.0),
+            'flag_pattern':           str(result.get('flag_pattern') or ''),
+            'flag_breakout_dist_atr': float(result.get('flag_breakout_dist_atr') or 0.0),
+            # -1.0 is the predictor's "pattern library unavailable" sentinel and
+            # must survive as-is; 0.0 would read as "scored, and found nothing".
+            'cdl_bull_reversal':   float(result.get('cdl_bull_reversal', -1.0)
+                                         if result.get('cdl_bull_reversal') is not None else -1.0),
+            'cdl_bear_reversal':   float(result.get('cdl_bear_reversal', -1.0)
+                                         if result.get('cdl_bear_reversal') is not None else -1.0),
             'risk_score':          round(max(0.0, 100.0 - quality_score), 1),
             'volatility_score':    round(min(atr_pct / 5.0 * 100.0, 100.0), 1),
         }
