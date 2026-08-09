@@ -1688,6 +1688,145 @@ def compute_candlestick_patterns(df: pd.DataFrame) -> pd.DataFrame:
     }, index=df.index)
 
 
+# ------------------------------------------------------------------
+# Flags and pennants — continuation patterns
+# ------------------------------------------------------------------
+# A flag is an impulse (the pole) followed by a shallow consolidation that
+# drifts AGAINST the impulse; a pennant is the same impulse followed by a
+# consolidation whose boundaries CONVERGE. Both resolve, more often than not,
+# in the direction of the pole — which is why they say something about a trade
+# taken against them.
+#
+# The geometry is deliberately strict. Loose flag detection fires on any
+# pause after any move, which is most bars; the constants below require a
+# real impulse, a consolidation that neither erases it nor sprawls wider than
+# it, and boundaries that actually slope.
+FLAG_POLE_BARS       = 8      # impulse lookback
+FLAG_CONSOL_BARS     = 6      # consolidation window, ending at the current bar
+FLAG_POLE_MIN_ATR    = 2.0    # the pole must be a real move, not a drift
+FLAG_POLE_MIN_EFF    = 0.50   # ...and directional: |net| / path travelled
+FLAG_MAX_RETRACE     = 0.50   # a consolidation past half the pole is a reversal
+FLAG_MAX_WIDTH_FRAC  = 0.60   # ...and one wider than the pole is not a flag
+FLAG_MIN_SLOPE_ATR   = 0.02   # per-bar boundary slope, in ATR, to count as sloping
+
+FLAG_COLS: List[str] = [
+    'bull_flag', 'bear_flag', 'bull_pennant', 'bear_pennant',
+    'flag_bias', 'flag_breakout_dist_atr',
+]
+
+
+def _rolling_ols_slope(s: pd.Series, window: int) -> pd.Series:
+    """Least-squares slope of `s` over a trailing window, per bar.
+
+    rolling().apply() with a polyfit would be correct and unusably slow over a
+    150k-bar training frame. Centring x makes sum(x) zero, so the slope reduces
+    to a fixed weighted sum of shifts — `window` vectorised ops, no Python loop
+    over rows.
+    """
+    xs = np.arange(window, dtype=float) - (window - 1) / 2.0
+    denom = float((xs ** 2).sum())
+    num = None
+    for i in range(window):
+        term = s.shift(window - 1 - i) * xs[i]
+        num = term if num is None else num + term
+    return num / denom
+
+
+def compute_flag_patterns(df: pd.DataFrame,
+                          pole_bars: int = FLAG_POLE_BARS,
+                          consol_bars: int = FLAG_CONSOL_BARS) -> pd.DataFrame:
+    """Bull/bear flags and pennants, as 0/1 columns plus a signed bias.
+
+    Everything is measured on CLOSED bars up to and including the current one,
+    so there is no lookahead: the pole ends where the consolidation begins, and
+    the consolidation is the last `consol_bars` bars.
+
+    Columns:
+      bull_flag / bear_flag        parallel channel drifting against the pole
+      bull_pennant / bear_pennant  converging boundaries after the same pole
+      flag_bias                    +1 bullish continuation, -1 bearish, 0 none
+      flag_breakout_dist_atr       distance to the trigger (the consolidation
+                                   boundary the pattern breaks), in ATR. This is
+                                   the "where", not just the "whether" — a flag
+                                   is traded on the break of its boundary, never
+                                   inside it.
+    """
+    out = pd.DataFrame(index=df.index)
+    need = {'open', 'high', 'low', 'close'}
+    if not need.issubset(df.columns) or len(df) < pole_bars + consol_bars + 2:
+        for c in FLAG_COLS:
+            out[c] = 0.0
+        return out
+
+    high, low, close = df['high'], df['low'], df['close']
+    atr = compute_atr(df, 14).replace(0, np.nan)
+
+    # ── the consolidation: the last `consol_bars` bars ───────────────────────
+    c_high  = high.rolling(consol_bars).max()
+    c_low   = low.rolling(consol_bars).min()
+    c_width = c_high - c_low
+
+    # ── the pole: `pole_bars` ending where the consolidation starts ──────────
+    pole_end    = close.shift(consol_bars)
+    pole_start  = close.shift(consol_bars + pole_bars)
+    pole_move   = pole_end - pole_start
+    pole_height = pole_move.abs()
+
+    # Directional purity: a pole is a move, not a round trip. |net| over the
+    # distance actually travelled separates an impulse from chop of equal range.
+    path = close.diff().abs().shift(consol_bars).rolling(pole_bars).sum()
+    efficiency = pole_height / path.replace(0, np.nan)
+
+    strong_pole = (
+        (pole_height >= FLAG_POLE_MIN_ATR * atr.shift(consol_bars))
+        & (efficiency >= FLAG_POLE_MIN_EFF)
+    )
+
+    # A consolidation wider than the pole is not a pause, it is a range.
+    contained = c_width <= FLAG_MAX_WIDTH_FRAC * pole_height
+
+    # ...and one that gives back more than half the pole is a reversal.
+    retrace_bull = (pole_end - c_low) / pole_height
+    retrace_bear = (c_high - pole_end) / pole_height
+
+    # ── boundary slopes, normalised so the threshold means the same per token ─
+    slope_high = _rolling_ols_slope(high, consol_bars) / atr
+    slope_low  = _rolling_ols_slope(low,  consol_bars) / atr
+    eps = FLAG_MIN_SLOPE_ATR
+
+    up_pole, down_pole = pole_move > 0, pole_move < 0
+    base_bull = strong_pole & up_pole   & contained & (retrace_bull <= FLAG_MAX_RETRACE)
+    base_bear = strong_pole & down_pole & contained & (retrace_bear <= FLAG_MAX_RETRACE)
+
+    # FLAG — both boundaries drift against the pole, roughly parallel.
+    bull_flag = base_bull & (slope_high < -eps) & (slope_low < -eps)
+    bear_flag = base_bear & (slope_high > eps)  & (slope_low > eps)
+
+    # PENNANT — boundaries converge: highs falling into rising lows. Mutually
+    # exclusive with the flag case by the sign of slope_low.
+    converging   = (slope_high < -eps) & (slope_low > eps)
+    bull_pennant = base_bull & converging
+    bear_pennant = base_bear & converging
+
+    bullish = bull_flag | bull_pennant
+    bearish = bear_flag | bear_pennant
+
+    # The trigger sits at the boundary the pattern breaks: the consolidation
+    # high for a bullish continuation, its low for a bearish one.
+    dist = pd.Series(0.0, index=df.index)
+    dist = dist.mask(bullish, (c_high - close) / atr)
+    dist = dist.mask(bearish, (close - c_low) / atr)
+
+    out['bull_flag']     = bull_flag.fillna(False).astype(int)
+    out['bear_flag']     = bear_flag.fillna(False).astype(int)
+    out['bull_pennant']  = bull_pennant.fillna(False).astype(int)
+    out['bear_pennant']  = bear_pennant.fillna(False).astype(int)
+    out['flag_bias']     = (bullish.fillna(False).astype(float)
+                            - bearish.fillna(False).astype(float))
+    out['flag_breakout_dist_atr'] = dist.replace([np.inf, -np.inf], 0.0).fillna(0.0)
+    return out
+
+
 def add_macro_regime_features(df: pd.DataFrame, df_1d: Optional[pd.DataFrame], df_1w: Optional[pd.DataFrame], macro_state: Optional[Dict[str, Any]] = None) -> pd.DataFrame:
     """
     Map 1d and 1w macro directional anchors down to the base dataframe `df`.
@@ -2189,6 +2328,17 @@ def prepare_features(df: pd.DataFrame,
     cdl_patterns = compute_candlestick_patterns(df[['open', 'high', 'low', 'close']])
     for col in cdl_patterns.columns:
         compiled_features[col] = cdl_patterns[col]
+
+    # Flags and pennants. Continuation geometry, so they carry a direction the
+    # trade can agree or disagree with — see compute_flag_patterns.
+    try:
+        flag_patterns = compute_flag_patterns(df)
+        for col in flag_patterns.columns:
+            compiled_features[col] = flag_patterns[col]
+    except Exception as e:
+        print(f"[FeatureEngine] flag patterns unavailable: {e}")
+        for col in FLAG_COLS:
+            compiled_features[col] = 0.0
 
     # ==================== EXTENDED INDICATOR LIBRARY ====================
 

@@ -1551,6 +1551,26 @@ class Predictor:
             if col.startswith('CDL_') and _f(col, 0.0) > 0
         ]
 
+        # ── Flags and pennants ───────────────────────────────────────────────
+        # A pattern is read off the CURRENT bar only. Unlike the candlestick
+        # aggregates above there is no lookback window: a flag is a live shape,
+        # and one that resolved two bars ago has already broken one way or the
+        # other. `flag_available` is False when the feature build predates the
+        # pattern library, so the tier rule can tell "no flag" from "no data" —
+        # the cdl_* fields signal that with -1.0, which every truthiness test
+        # then reads as a reversal.
+        flag_available = 'flag_bias' in df.columns
+        if flag_available:
+            flag_bias = float(df['flag_bias'].iloc[-1])
+            flag_breakout_dist = float(df.get(
+                'flag_breakout_dist_atr', pd.Series([0.0])).iloc[-1] or 0.0)
+            flag_pattern = next(
+                (name for name in ('bull_flag', 'bear_flag',
+                                   'bull_pennant', 'bear_pennant')
+                 if name in df.columns and float(df[name].iloc[-1]) > 0), '')
+        else:
+            flag_bias, flag_breakout_dist, flag_pattern = 0.0, 0.0, ''
+
         # ── Price targets (ATR-projected) ─────────────────────────────────────
         step = atr * atr_mult
         bull_tp1 = round(price + 1.0 * step, 8)
@@ -1683,6 +1703,14 @@ class Predictor:
             "cdl_bull_reversal":   round(cdl_bull_reversal, 2),
             "cdl_bear_reversal":   round(cdl_bear_reversal, 2),
             "cdl_patterns_active": cdl_patterns_active,
+
+            # Flags and pennants — continuation geometry the trade can disagree
+            # with. flag_available distinguishes "no pattern" from "could not be
+            # computed"; the tier rule must not read the second as the first.
+            "flag_available":       flag_available,
+            "flag_pattern":         flag_pattern,
+            "flag_bias":            flag_bias,
+            "flag_breakout_dist_atr": round(flag_breakout_dist, 2),
 
             # Price targets
             "bull_tp1": bull_tp1, "bull_tp2": bull_tp2, "bull_tp3": bull_tp3,

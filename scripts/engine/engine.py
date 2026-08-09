@@ -1312,6 +1312,42 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
             _demote = {'STRONG': 'NORMAL', 'NORMAL': 'RISKY'}
             _tier_notes.append('S/R location poor')
             tier = _demote.get(tier, tier)
+
+        # ── criterion 1: the entry candle has to agree ───────────────────────
+        # The 150k-bar study that measured the fade edge found candle
+        # confirmation is one of the few things that reliably helps. The scores
+        # were computed, published to the chart, and read by the reversal
+        # arbiter — but never allowed to speak about the tier, so a fire with no
+        # confirming candle went out looking identical to one with three.
+        #
+        # -1.0 is the predictor's "feature build predates the pattern library"
+        # sentinel, and bool(-1.0) is True. Fail open on it rather than tagging
+        # every signal on a stale frame.
+        _cdl_key = ('cdl_bull_reversal' if plan.side == 'BUY' else 'cdl_bear_reversal')
+        _cdl = result.get(_cdl_key)
+        _cdl_scored = _cdl is not None and float(_cdl) >= 0.0   # -1.0 == unavailable
+        if _cdl_scored and float(_cdl) == 0.0 and tier != 'RISKY':
+            _demote = {'STRONG': 'NORMAL', 'NORMAL': 'RISKY'}
+            _tier_notes.append(f'no {plan.side.lower()}-side candle confirmation')
+            tier = _demote.get(tier, tier)
+
+        # ── criterion 2: flags and pennants are continuation geometry ────────
+        # A bull flag resolves upward more often than not. Selling into one is
+        # taking the other side of the pattern, and the same for a buy into a
+        # bear flag. That is not a block — the plan still decides whether to
+        # trade — but it is not a low-risk trade either.
+        #
+        # An AGREEING flag is deliberately not a promotion. These fire with the
+        # trend, and trend-following fires are already tagged; letting a flag
+        # upgrade one would undo that in a second place.
+        if result.get('flag_available') and tier != 'RISKY':
+            _fbias = float(result.get('flag_bias') or 0.0)
+            _want = 1.0 if plan.side == 'BUY' else -1.0
+            if _fbias and _fbias != _want:
+                _pat = str(result.get('flag_pattern') or 'flag').replace('_', ' ')
+                _demote = {'STRONG': 'NORMAL', 'NORMAL': 'RISKY'}
+                _tier_notes.append(f'{plan.side} into a {_pat}')
+                tier = _demote.get(tier, tier)
         if _tier_notes:
             print(f'[{symbol}] TIER DOWNGRADE -> {tier}: {"; ".join(_tier_notes)}')
         print(f'[{symbol}] PLAN ENTER {plan.side} {plan.setup} @ {price:.8g} '
