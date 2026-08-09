@@ -352,7 +352,7 @@
                     <div class="founder-name">Animesh Kukreti</div>
                     <div class="founder-role">Co-Founder &middot; Lead Engineer</div>
                     <p class="founder-bio">
-                        Designed and built the entire AEGIS signal engine: XGBoost training pipeline, meta-labeling architecture, 8-layer signal filter, edge-score quality gate, regime-adaptive thresholds, beginner onboarding layer, FastAPI backend, Firestore integration, and WebSocket real-time delivery. Full-stack from ML to frontend.
+                        Designed and built the entire AEGIS signal engine: XGBoost training pipeline, meta-labeling architecture, the staged TraderGate playbook, the weighted per-direction gate score, regime-adaptive thresholds, beginner onboarding layer, FastAPI backend, Firestore integration, and WebSocket real-time delivery. Full-stack from ML to frontend.
                     </p>
                     <p style="margin-top:0.6rem; font-size:0.78rem;">
                         <a href="mailto:animeshkukreti60@gmail.com" style="color:var(--cyan); text-decoration:none;">animeshkukreti60@gmail.com</a>
@@ -531,7 +531,7 @@
                 <div class="pipe-num">06</div>
                 <div class="pipe-body">
                     <h4>8-Layer Signal Filter <span class="pipe-tag">Signal Gate</span></h4>
-                    <p>Even after meta gate clearance, 8 structural filters run: <strong style="color:#e2e8f0;">(1)</strong> AI probability &amp; class gap, <strong style="color:#e2e8f0;">(2)</strong> S/R proximity gate, <strong style="color:#e2e8f0;">(3)</strong> Reversal pattern scoring, <strong style="color:#e2e8f0;">(4)</strong> 3-candle confirmation, <strong style="color:#e2e8f0;">(5)</strong> Confluence vote, <strong style="color:#e2e8f0;">(6)</strong> Positive expected value required, <strong style="color:#e2e8f0;">(7)</strong> Macro regime filter, <strong style="color:#e2e8f0;">(8)</strong> BTC correlation brake.</p>
+                    <p>Even after meta gate clearance the trade goes through a staged playbook, and any stage can refuse it: <strong style="color:#e2e8f0;">(0)</strong> fitness &mdash; is this market tradeable at all, <strong style="color:#e2e8f0;">(1)</strong> what is the trade &mdash; the setup is typed, not assumed, <strong style="color:#e2e8f0;">(1b)</strong> does the higher timeframe permit this side at this location, <strong style="color:#e2e8f0;">(2)</strong> where am I wrong &mdash; the invalidation level sets the stop, <strong style="color:#e2e8f0;">(3)</strong> does it pay &mdash; at least 1.60R net of the round-trip cost, to a real objective, <strong style="color:#e2e8f0;">(4)</strong> is it time &mdash; otherwise a working order with an expiry, <strong style="color:#e2e8f0;">(5)</strong> how much. Four hard vetoes sit above all of it: critical model drift, dead market, extreme volatility, and no valid structure nearby.</p>
                 </div>
             </div>
             <div class="pipe-step">
@@ -668,12 +668,12 @@
                 <p style="margin-bottom:0.8rem;">
                     Early versions capped at 6 concurrent virtual positions with a 48-hour hold, limiting closed trade throughput to ~3 per day.
                 </p>
-                <p style="color:var(--green); font-size:0.82rem;"><strong>Done:</strong> Portfolio guard expanded to 12 concurrent positions (3 per correlation cluster), max hold reduced to 24h, and per-trade position size reduced to 7% base (from 10%) so more positions fit within the 60% capital cap. Expected throughput: 8&ndash;12 closed trades per day.</p>
+                <p style="color:var(--green); font-size:0.82rem;"><strong>Done:</strong> Portfolio guard holds the five best setups at once, at most two per correlation cluster, so one thesis cannot be expressed five times over. RISKY-tier signals are routed to a paper book instead of the live one until the tagged population proves itself.</p>
             </div>
             <div class="card card-green">
                 <h3 style="color:var(--green);">&#10003; Signal Quality Gate &mdash; Fixed</h3>
                 <p style="margin-bottom:0.8rem;">Meta-threshold values in meta files (0.6) were calibrated on the old 0&ndash;1 confidence scale, but edge scores are now computed on a 0&ndash;100 scale &mdash; meaning the predictor's fire gate was effectively never blocking anything.</p>
-                <p style="color:var(--green); font-size:0.82rem;"><strong>Done:</strong> A hard edge-score quality gate (minimum 55/100) is now enforced at the live engine level before any virtual position opens. Low-confidence misfires (e.g. edge=3.0) are blocked regardless of the predictor's fire=True output.</p>
+                <p style="color:var(--green); font-size:0.82rem;"><strong>Done:</strong> Direction and fire are decided by a weighted per-direction gate score &mdash; buy, sell and hold are scored separately and the winning side must reach 45/100. When that meter disagrees with the trade the signal is tagged RISKY rather than published as a confident one, and four hard vetoes can still refuse it outright.</p>
             </div>
             <div class="card card-orange">
                 <h3>&#9888; Small Live Track Record</h3>
