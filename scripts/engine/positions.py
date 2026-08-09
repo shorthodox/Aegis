@@ -225,6 +225,16 @@ class PositionsMixin:
             entry_resistance= float(result.get('resistance', 0) or 0),
         )
         self.wallet.open_trade(pos)
+        # Shadow accounting — observation only, and deliberately wrapped: a bug
+        # in the study must never be able to stop a real position from opening.
+        try:
+            self.shadow_book.open(
+                trade_id=pos.signal_id, symbol=symbol, direction=pos.direction,
+                entry=pos.entry_price, stop_loss=pos.stop_loss,
+                take_profits=[pos.take_profit_1, pos.take_profit_2, pos.take_profit_3,
+                              pos.take_profit_4, pos.take_profit_5])
+        except Exception as _e:
+            print(f'[ShadowBook] open hook failed for {symbol}: {_e!r}')
         self._open_time[symbol]    = time.time()
         self._tp1_hit[symbol]      = False
         self._tp2_hit[symbol]      = False

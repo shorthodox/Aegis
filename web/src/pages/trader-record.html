@@ -409,7 +409,7 @@
             <div class="td-stat">
                 <span class="td-stat-value" id="tdAvgPnlVal">—</span>
                 <div class="td-stat-label">Avg PnL</div>
-                <div class="td-stat-sub">closed · gross, no fees</div>
+                <div class="td-stat-sub">closed · net of fees &amp; slippage</div>
             </div>
         </div>
 
@@ -626,7 +626,7 @@
                 note.style.display = '';
                 var tdClosed = _allSignals.filter(function(s){ return s.outcome === 'WIN' || s.outcome === 'LOSS'; }).length;
                 var lowTag = tdClosed > 0 && tdClosed < 30 ? ' ⚠ Low sample (n=' + tdClosed + ') — not statistically reliable yet.' : '';
-                note.textContent = 'Showing ' + visible.length + ' of ' + _allSignals.length + ' signals. Win rate computed from closed signals only. PnL is gross — no fees or slippage deducted.' + lowTag;
+                note.textContent = 'Showing ' + visible.length + ' of ' + _allSignals.length + ' signals. Win rate computed from closed signals only. PnL is net of a 0.10% round-trip cost (0.04% taker fee + 0.01% slippage per side).' + lowTag;
             }
         }
 

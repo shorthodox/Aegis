@@ -4400,6 +4400,31 @@ async def _get_fx_rates() -> Dict[str, float]:
     return _fx["rates"]
 
 
+@app.get("/api/shadow-exits")
+def shadow_exits_endpoint():
+    """The exit-policy study, as it stands.
+
+    Observation only — nothing here has ever placed an order. Read `vs_control`,
+    which compares each policy against the SIMULATED live rule rather than
+    against what the engine booked, and ignore the whole thing until `n` is in
+    the hundreds. `control_tracks_reality` is the honesty check: if the
+    simulated live rule has drifted from the real one, the comparison is void.
+    """
+    path = Path(__file__).parent / 'data' / 'shadow_exits.json'
+    if not path.exists():
+        return JSONResponse({'n': 0, 'note': 'no shadow trades recorded yet'})
+    try:
+        payload = json.loads(path.read_text(encoding='utf-8'))
+    except Exception as e:
+        return JSONResponse({'error': f'could not read the study: {e}'}, status_code=500)
+    return JSONResponse({
+        'summary':  payload.get('summary', {}),
+        'note':     payload.get('note', ''),
+        'updated_at': payload.get('updated_at'),
+        'recent':   payload.get('trades', [])[-25:],
+    })
+
+
 @app.get("/api/engine-track-record")
 async def engine_track_record_endpoint():
     """Serve the live engine's raw track_record.json for chart display.

@@ -199,7 +199,7 @@ function renderStats(summary) {
         noteEl.style.display = 'block';
         if (summary.win_rate_pct != null) {
             const lowSampleTag = closed < 30 ? ` ⚠ Low sample (n=${closed}) — not statistically reliable yet.` : '';
-            noteEl.textContent = `Win rate of ${summary.win_rate_pct}% is computed from ${closed} closed signal${closed !== 1 ? 's' : ''} since ${since ? since.slice(0, 10) : 'launch'}. Both wins and losses are included. PnL is gross — no fees or slippage are deducted. This is not a marketing claim.${lowSampleTag}`;
+            noteEl.textContent = `Win rate of ${summary.win_rate_pct}% is computed from ${closed} closed signal${closed !== 1 ? 's' : ''} since ${since ? since.slice(0, 10) : 'launch'}. Both wins and losses are included. PnL is net — a 0.04% taker fee and 0.01% slippage are charged on each side, so 0.10% round trip comes off every trade. This is not a marketing claim.${lowSampleTag}`;
         } else {
             noteEl.textContent = `Win rate will be displayed once signals close. Currently showing ${summary.total_signals ?? 0} tracked signal${(summary.total_signals ?? 0) !== 1 ? 's' : ''}. Check back as signals close.`;
         }

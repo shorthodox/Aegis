@@ -94,6 +94,13 @@ class ExitsMixin:
                                if len(_slices) > 1 else '')
                 print(f'[{symbol}] {reason} {tag} {_tot_pct:+.2f}%{_slice_note} @ '
                       f'{(exit_px or check_price):.6g}')
+                # Hand the whole-trade result to the shadow study. The shadows
+                # do NOT close here — they run on to their own exits, which is
+                # what makes "the live rule banked early" measurable.
+                try:
+                    self.shadow_book.record_live(rec.signal_id, _tot_pct, reason)
+                except Exception as _e:
+                    print(f'[ShadowBook] close hook failed for {symbol}: {_e!r}')
                 self.perf_tracker.record_outcome(
                     symbol        = symbol,
                     regime        = self.last_signals.get(symbol, {}).get('regime', 'UNKNOWN'),
