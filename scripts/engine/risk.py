@@ -210,22 +210,47 @@ class DynamicRiskEngine:
         the size of the runner.
 
         `target` is the STRUCTURAL objective the gate cleared the trade on
-        (plan.target). When it is nearer than the top rung the whole ladder is
-        scaled to land on it. That is v85's rule surviving the move to
-        percentages: the payoff stage rejects a setup whose objective is too far
-        to be real, so placing a rung BEYOND that objective would re-invent the
-        thing the floor exists to reject, and would advertise a target the gate
-        never vouched for. When the objective is further than the top rung
-        nothing is scaled — banking earlier than the objective is conservative,
-        and it is the whole point of a percentage ladder.
+        (plan.target). No rung may sit beyond it — the payoff stage rejects a
+        setup whose objective is too far to be real, so a rung past that
+        objective would re-invent the thing the floor exists to reject and would
+        advertise a target the gate never vouched for.
+
+        It used to enforce that by scaling ALL FIVE rungs onto the objective,
+        which quietly moved the one rung that must not move. TP1 exists to bank
+        something before a reversal can take the trade back to entry; at 0.5%
+        that is its whole job. A 1.6% objective scaled the ladder by 0.47 and
+        put TP1 at 0.23%, so the engine was banking a fifth of a percent and
+        calling it the first rung. Measured over 2026-08-08/09: 11 of 13 closed
+        signals ran a compressed ladder, TP1 landing between 0.23% and 0.48%.
+
+        So the cap truncates instead of scaling. Every rung that fits keeps its
+        published percentage, and only the rungs that do NOT fit are distributed
+        between the last one that does and the objective. TP1 is 0.5% and TP2 is
+        1.5% on any trade whose objective reaches them — which was all 13.
         """
         pcts = [float(p) for p in cls.TP_LADDER_PCT]
         if target > 0 and price > 0:
             tgt_pct = abs(target - price) / price * 100.0
-            top = pcts[-1]
-            if 0 < tgt_pct < top:
-                scale = tgt_pct / top
-                pcts = [p * scale for p in pcts]
+            if 0 < tgt_pct < pcts[-1]:
+                fits = [p for p in pcts if p < tgt_pct]
+                # Hold only as many rungs fixed as leave room to space the rest
+                # at TP_MIN_GAP_PCT. Without this the spare rungs are packed
+                # tighter than the gap, and the monotonic clamp below then walks
+                # the top rung PAST the objective — the very thing this cap is
+                # here to prevent (see test_plan_target_handoff).
+                while fits and (tgt_pct - fits[-1]) < (len(pcts) - len(fits)) * cls.TP_MIN_GAP_PCT:
+                    fits.pop()
+                if fits:
+                    # what fits keeps its published percentage; the remainder is
+                    # spread evenly from the last fitting rung to the objective
+                    spare = len(pcts) - len(fits)
+                    lo = fits[-1]
+                    step = (tgt_pct - lo) / spare
+                    pcts = fits + [lo + step * (i + 1) for i in range(spare)]
+                else:
+                    # the objective does not even reach TP1 — nothing to hold
+                    # fixed, so fall back to scaling the whole ladder onto it
+                    pcts = [p * (tgt_pct / pcts[-1]) for p in pcts]
 
         out, last = [], 0.0
         for p in pcts:
