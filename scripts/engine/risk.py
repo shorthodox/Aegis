@@ -148,8 +148,30 @@ class DynamicRiskEngine:
     # No value both protects the rung and preserves v82's "runner reaches TP3"
     # behaviour — they are genuinely in conflict, and 0.35 is where the trade is
     # struck: keep the banked rung, accept a slightly lower TP3+ hit rate.
-    TP_GIVEBACK_PCT     = 0.35  # fraction of the rung span the runner may hand back
-    TP_GIVEBACK_MIN_ATR = 0.50  # ...but never a leash tighter than this in ATR
+    # The ATR floor above was added so a narrow rung could not produce a
+    # noise-width stop. It did that, and it also quietly switched the TP1 rung
+    # OFF for most of the fleet: entry→TP1 is 0.5% of price, so 0.50 ATR
+    # exceeds the whole span for any token with ATR% above ~1%, and a leash
+    # wider than its rung was skipped. IMX/USDT 2026-08-08 is the bill —
+    # short 0.1124, TP1 0.11184 tagged at +0.50%, no ratchet, price walked back
+    # to break-even and it booked +0.02%.
+    #
+    # So the floor is a floor, not a licence to exceed the rung. A banked rung
+    # is banked: once TP1 is tagged the runner may hand back at most
+    # TP_GIVEBACK_MAX_FRAC of it and is then closed AT that level, which is
+    # always inside the rung and therefore always better than the break-even
+    # stop sitting at entry. On the IMX geometry that books ~+0.40% instead of
+    # +0.02%. The cost is a lower TP3+ hit rate, which is the same trade struck
+    # above — this just stops the trade being silently voided by the floor.
+    # The three interact as: clamp the ATR floor between a small proportional
+    # buffer and a hard fraction of the rung. On the current 0.5% first rung the
+    # CAP is what binds for essentially every token, which is the intent — a
+    # banked rung is given back by about a fifth and no more. The other two stay
+    # live for wider rungs and very low-ATR tokens, and matter again if the
+    # ladder is ever re-spaced.
+    TP_GIVEBACK_PCT      = 0.10  # normally hand back a tenth of the rung span
+    TP_GIVEBACK_MIN_ATR  = 0.50  # ...never a leash tighter than this in ATR...
+    TP_GIVEBACK_MAX_FRAC = 0.20  # ...and never wider than a fifth of the rung
     #
     # The floor is not optional. The leash is a fraction of the RUNG SPAN, and
     # moving the ladder to percentages shrank every span by two to three times,
@@ -188,22 +210,47 @@ class DynamicRiskEngine:
         the size of the runner.
 
         `target` is the STRUCTURAL objective the gate cleared the trade on
-        (plan.target). When it is nearer than the top rung the whole ladder is
-        scaled to land on it. That is v85's rule surviving the move to
-        percentages: the payoff stage rejects a setup whose objective is too far
-        to be real, so placing a rung BEYOND that objective would re-invent the
-        thing the floor exists to reject, and would advertise a target the gate
-        never vouched for. When the objective is further than the top rung
-        nothing is scaled — banking earlier than the objective is conservative,
-        and it is the whole point of a percentage ladder.
+        (plan.target). No rung may sit beyond it — the payoff stage rejects a
+        setup whose objective is too far to be real, so a rung past that
+        objective would re-invent the thing the floor exists to reject and would
+        advertise a target the gate never vouched for.
+
+        It used to enforce that by scaling ALL FIVE rungs onto the objective,
+        which quietly moved the one rung that must not move. TP1 exists to bank
+        something before a reversal can take the trade back to entry; at 0.5%
+        that is its whole job. A 1.6% objective scaled the ladder by 0.47 and
+        put TP1 at 0.23%, so the engine was banking a fifth of a percent and
+        calling it the first rung. Measured over 2026-08-08/09: 11 of 13 closed
+        signals ran a compressed ladder, TP1 landing between 0.23% and 0.48%.
+
+        So the cap truncates instead of scaling. Every rung that fits keeps its
+        published percentage, and only the rungs that do NOT fit are distributed
+        between the last one that does and the objective. TP1 is 0.5% and TP2 is
+        1.5% on any trade whose objective reaches them — which was all 13.
         """
         pcts = [float(p) for p in cls.TP_LADDER_PCT]
         if target > 0 and price > 0:
             tgt_pct = abs(target - price) / price * 100.0
-            top = pcts[-1]
-            if 0 < tgt_pct < top:
-                scale = tgt_pct / top
-                pcts = [p * scale for p in pcts]
+            if 0 < tgt_pct < pcts[-1]:
+                fits = [p for p in pcts if p < tgt_pct]
+                # Hold only as many rungs fixed as leave room to space the rest
+                # at TP_MIN_GAP_PCT. Without this the spare rungs are packed
+                # tighter than the gap, and the monotonic clamp below then walks
+                # the top rung PAST the objective — the very thing this cap is
+                # here to prevent (see test_plan_target_handoff).
+                while fits and (tgt_pct - fits[-1]) < (len(pcts) - len(fits)) * cls.TP_MIN_GAP_PCT:
+                    fits.pop()
+                if fits:
+                    # what fits keeps its published percentage; the remainder is
+                    # spread evenly from the last fitting rung to the objective
+                    spare = len(pcts) - len(fits)
+                    lo = fits[-1]
+                    step = (tgt_pct - lo) / spare
+                    pcts = fits + [lo + step * (i + 1) for i in range(spare)]
+                else:
+                    # the objective does not even reach TP1 — nothing to hold
+                    # fixed, so fall back to scaling the whole ladder onto it
+                    pcts = [p * (tgt_pct / pcts[-1]) for p in pcts]
 
         out, last = [], 0.0
         for p in pcts:
