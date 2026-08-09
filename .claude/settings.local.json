@@ -14,7 +14,8 @@
       "Bash(tail -100 logs/news_sync.log)",
       "Bash(git add *)",
       "Bash(python patch_ws.py)",
-      "Bash(rm \"d:/Content/Animesh/bots/ai_signal_bot/patch_ws.py\")"
+      "Bash(rm \"d:/Content/Animesh/bots/ai_signal_bot/patch_ws.py\")",
+      "Bash(python -)"
     ]
   }
 }
