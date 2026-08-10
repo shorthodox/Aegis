@@ -32,6 +32,21 @@ from scripts.engine.state import _fs_save_track_record
 from src.trading.trader_gate import TradePlan
 
 
+class _NoShadow:
+    """Stand-in for an engine built without a ShadowBook (tests, tools)."""
+    def open(self, *a, **k):
+        return None
+
+    def record_live(self, *a, **k):
+        return None
+
+    def tick(self, *a, **k):
+        return None
+
+
+_NO_SHADOW = _NoShadow()
+
+
 class PositionsMixin:
     """_open_position .. _save_track_record — see module docstring."""
 

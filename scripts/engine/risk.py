@@ -108,7 +108,17 @@ class DynamicRiskEngine:
     # break-even win rate 58.8 %. Two things keep that from repeating: TP1 closes
     # only 15 % and its real job is arming break-even early, and the ladder still
     # ends at 2.1-3.5R where the trade is actually paid.
-    TP_LADDER_PCT = (0.5, 1.5, 2.0, 3.0, 3.5)   # TP1 … TP5, percent of entry
+    # v86: TP1 1.0 / TP2 2.0. The upper rungs keep the old spacing (+1.0, +0.5,
+    # +1.0, +0.5) so only the first two moved.
+    #
+    # This is a payoff-ratio change, not a profit-taking one, and it is paid
+    # for in win rate. Measured over 14,280 paths on a 1.3% stop: 71.5% of
+    # trades reach +0.5% before stopping out, 56.2% reach +1.0%. So the first
+    # rung is hit on roughly four trades in five as often. What it buys is the
+    # size of the win — median booked result goes from +0.40% to +0.90% against
+    # losses that run 1.1-1.9%, which is the ratio that made a 75% win rate
+    # lose money.
+    TP_LADDER_PCT = (1.0, 2.0, 2.5, 3.5, 4.0)   # TP1 … TP5, percent of entry
     TP_MIN_GAP_PCT = 0.05                        # rungs must stay strictly apart
 
     # RETIRED: the TP2 % cap was for the former wide TP2 (2.8×ATR); with the
@@ -169,9 +179,18 @@ class DynamicRiskEngine:
     # banked rung is given back by about a fifth and no more. The other two stay
     # live for wider rungs and very low-ATR tokens, and matter again if the
     # ladder is ever re-spaced.
-    TP_GIVEBACK_PCT      = 0.10  # normally hand back a tenth of the rung span
-    TP_GIVEBACK_MIN_ATR  = 0.50  # ...never a leash tighter than this in ATR...
-    TP_GIVEBACK_MAX_FRAC = 0.20  # ...and never wider than a fifth of the rung
+    # v86: the cap is ZERO — a banked rung is handed back at the rung itself,
+    # not below it. The fifth-of-a-rung leash was measurable in the live book:
+    # against a 0.5% first rung, wins clustered at +0.31-0.33% while losses ran
+    # -1.13% to -1.85%. A 75% win rate lost money on that geometry.
+    #
+    # With the cap at zero the other two constants no longer bind, and they are
+    # kept rather than deleted because they are the dials that come back if the
+    # re-cross proves too tight — raise MAX_FRAC first, it is the one that
+    # decides how much of a rung may be returned.
+    TP_GIVEBACK_PCT      = 0.10  # (inactive while MAX_FRAC is 0)
+    TP_GIVEBACK_MIN_ATR  = 0.50  # (inactive while MAX_FRAC is 0)
+    TP_GIVEBACK_MAX_FRAC = 0.00  # book the remainder AT the rung
     #
     # The floor is not optional. The leash is a fraction of the RUNG SPAN, and
     # moving the ladder to percentages shrank every span by two to three times,
