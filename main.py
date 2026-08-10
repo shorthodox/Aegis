@@ -4400,6 +4400,28 @@ async def _get_fx_rates() -> Dict[str, float]:
     return _fx["rates"]
 
 
+@app.get("/api/edge")
+def edge_endpoint():
+    """Edge over geometry — the part of the win rate the signals earned.
+
+    The headline win rate is a report on the stop distance: measured over
+    13,560 real paths, the hit rate tracks stop/(target+stop) to within about a
+    point at every target/stop pair. A 0.5% target against a 1.4% stop predicts
+    73.7%, which is where the live book sat while losing money.
+
+        edge_pp = measured hit rate - mean(stop / (target + stop))
+
+    is what rises when the model improves and stays flat when the stop moves.
+    Read `by_symbol` to find which tokens are carrying the book and which are
+    only being flattered by a wide stop.
+    """
+    try:
+        from scripts.engine.edge_metric import from_track_record
+        return JSONResponse(from_track_record())
+    except Exception as e:
+        return JSONResponse({'error': f'could not compute edge: {e}'}, status_code=500)
+
+
 @app.get("/api/shadow-exits")
 def shadow_exits_endpoint():
     """The exit-policy study, as it stands.
