@@ -1,4 +1,15 @@
-"""A banked rung must not be handed all the way back.
+"""A banked rung must not be handed back at all.
+
+v86 set TP_GIVEBACK_MAX_FRAC to zero: the protective level IS the rung, so a
+re-cross books the remainder at the level rather than somewhere under it. The
+invariant these tests pin is therefore `previous rung < level <= rung` — the
+level may sit ON the rung, but never past it and never back at the previous one.
+The leash constants are kept and still clamp correctly if the cap is raised.
+
+The original note follows, because the hole it describes is still the reason
+the mechanism exists.
+
+A banked rung must not be handed all the way back.
 
 Break-even goes on at TP1 and the trailing stop only starts at TP2, so a
 position that tagged TP1 and reversed gave the entire move back to entry with
@@ -42,7 +53,7 @@ def _level(tp, prev, direction, pct=None, min_atr=None, atr=ATR, max_frac=None):
 
 def test_bch_would_now_close_instead_of_returning_to_break_even():
     lvl = _level(TP1, ENTRY, 'SHORT')
-    assert lvl > TP1, 'the protective level must sit behind the rung'
+    assert lvl >= TP1, 'the protective level must sit at or behind the rung'
     assert lvl < ENTRY, 'and well in front of break-even'
     # price came back to 213.40 — that is past the give-back level
     assert 213.40 >= lvl, (
@@ -64,8 +75,13 @@ def test_the_gap_this_fills_is_real():
 def test_level_sits_between_the_rung_and_the_previous_one(direction):
     entry, tp1 = (100.0, 105.0) if direction == 'LONG' else (100.0, 95.0)
     lvl = _level(tp1, entry, direction)
-    lo, hi = sorted((entry, tp1))
-    assert lo < lvl < hi
+    # Inclusive on the RUNG side, exclusive on the previous one. At a zero cap
+    # the level IS the rung, which is the v86 policy; what must never happen is
+    # the level passing the rung, or falling back to where it came from.
+    if direction == 'LONG':
+        assert entry < lvl <= tp1
+    else:
+        assert tp1 <= lvl < entry
 
 
 @pytest.mark.parametrize('direction', ['LONG', 'SHORT'])
@@ -97,10 +113,10 @@ def test_the_atr_floor_may_not_exceed_the_rung_it_protects():
 
     The floor was added because moving the ladder to percentages shrank every
     span 2-3x and collapsed the leash to 0.16 ATR. It fixed that and introduced
-    the opposite failure: entry→TP1 is 0.5% of price, so 0.50 ATR is WIDER than
-    the whole first rung for any token above ~1% ATR, and the code skipped any
-    rung whose leash reached its own span. Most of the fleet therefore had no
-    give-back protection on TP1 at all — it fell through to the break-even stop.
+    the opposite failure: the first rung is a small percentage of price, so
+    0.50 ATR was WIDER than the whole rung for most of the fleet, and the code
+    skipped any rung whose leash reached its own span. Those tokens therefore
+    had no give-back protection on TP1 at all — it fell through to break-even.
 
     IMX short 0.1124: TP1 0.11184 tagged at +0.50%, price walked back to entry,
     booked +0.02%. Capping instead of skipping keeps the level inside the rung.
@@ -113,21 +129,23 @@ def test_the_atr_floor_may_not_exceed_the_rung_it_protects():
         'abandoned to break-even instead of having its leash capped'
     )
     assert '_gb_max' in src, 'the leash is no longer capped to the rung'
-    assert 0 < DynamicRiskEngine.TP_GIVEBACK_MAX_FRAC < 1, (
-        'the cap must hand back some but not all of the rung')
+    assert 0 <= DynamicRiskEngine.TP_GIVEBACK_MAX_FRAC < 1, (
+        'the cap may hand back none of the rung (v86) but never all of it')
 
     # the IMX geometry, across the ATR range where the floor used to win
     entry = 0.1124
     tp1 = entry * (1 - DynamicRiskEngine.TP_LADDER_PCT[0] / 100)
     for atr_pct in (0.8, 1.2, 2.0, 3.0):
         lvl = _level(tp1, entry, 'SHORT', atr=entry * atr_pct / 100)
-        assert tp1 < lvl < entry, (
+        assert tp1 <= lvl < entry, (
             f'at ATR {atr_pct}% the give-back level {lvl:.6f} is outside the '
             f'rung — TP1 {tp1:.6f}, entry {entry}')
         booked = (entry - lvl) / entry * 100
-        assert booked > 0.3, (
-            f'at ATR {atr_pct}% a tagged TP1 books only {booked:.2f}% — the '
-            f'rung is being handed back, which is the +0.02% defect')
+        floor = DynamicRiskEngine.TP_LADDER_PCT[0] * (
+            1 - DynamicRiskEngine.TP_GIVEBACK_MAX_FRAC) - 1e-9
+        assert booked >= floor, (
+            f'at ATR {atr_pct}% a tagged TP1 books only {booked:.2f}% against a '
+            f'{floor:.2f}% floor — the rung is being handed back')
 
 
 def test_every_rung_of_the_live_ladder_is_protected():
@@ -143,10 +161,10 @@ def test_every_rung_of_the_live_ladder_is_protected():
     prev = [entry] + lvls[:-1]
     for i, (tp, pv) in enumerate(zip(lvls, prev), start=1):
         span = abs(tp - pv)
-        leash = min(max(span * DynamicRiskEngine.TP_GIVEBACK_PCT,
-                        DynamicRiskEngine.TP_GIVEBACK_MIN_ATR * atr),
-                    span * DynamicRiskEngine.TP_GIVEBACK_MAX_FRAC)
-        assert 0 < leash < span, f'TP{i} rung is unprotected (leash {leash}, span {span})'
+        leash = max(0.0, min(max(span * DynamicRiskEngine.TP_GIVEBACK_PCT,
+                                 DynamicRiskEngine.TP_GIVEBACK_MIN_ATR * atr),
+                             span * DynamicRiskEngine.TP_GIVEBACK_MAX_FRAC))
+        assert 0 <= leash < span, f'TP{i} leash {leash} exceeds its span {span}'
 
 
 def test_a_banked_rung_always_beats_a_scratch():
@@ -165,9 +183,15 @@ def test_a_banked_rung_always_beats_a_scratch():
 
 
 def test_min_atr_floor_can_widen_a_narrow_rung():
-    """The dial that stops a tight rung producing a noise-width stop."""
-    narrow = _level(100.5, 100.0, 'LONG', pct=0.05, min_atr=0.0, atr=1.0)
-    floored = _level(100.5, 100.0, 'LONG', pct=0.05, min_atr=0.25, atr=1.0)
+    """The dial that stops a tight rung producing a noise-width stop.
+
+    Dormant while the cap is zero, so the cap is passed explicitly here — the
+    point is that the floor still works when it is allowed to.
+    """
+    narrow = _level(100.5, 100.0, 'LONG', pct=0.05, min_atr=0.0, atr=1.0,
+                    max_frac=0.5)
+    floored = _level(100.5, 100.0, 'LONG', pct=0.05, min_atr=0.25, atr=1.0,
+                     max_frac=0.5)
     assert abs(100.5 - floored) > abs(100.5 - narrow)
 
 
@@ -181,9 +205,12 @@ def test_the_configured_leash_is_reported_in_atr():
     test just fails loudly if someone sets a value that is effectively zero.
     """
     span = abs(TP1 - ENTRY)
-    leash = max(span * DynamicRiskEngine.TP_GIVEBACK_PCT,
-                DynamicRiskEngine.TP_GIVEBACK_MIN_ATR * ATR)
-    assert leash > 0, 'a zero leash is the deleted TP1_RECROSS'
+    leash = max(0.0, min(max(span * DynamicRiskEngine.TP_GIVEBACK_PCT,
+                             DynamicRiskEngine.TP_GIVEBACK_MIN_ATR * ATR),
+                         span * DynamicRiskEngine.TP_GIVEBACK_MAX_FRAC))
+    # v86 sets the cap to zero deliberately — see the module docstring and
+    # test_the_recross_is_back_deliberately_and_this_is_the_bill.
+    assert leash >= 0
     assert leash < span, 'a leash wider than the rung protects nothing'
 
 

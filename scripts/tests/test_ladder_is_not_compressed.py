@@ -1,6 +1,7 @@
-"""TP1 is 0.5% of entry. The objective cap was quietly moving it.
+"""TP1 is a fixed percentage of entry. The objective cap was quietly moving it.
 
-The ladder is priced in percent of entry — 0.5, 1.5, 2, 3, 3.5 — because
+The ladder is priced in percent of entry — 1.0, 2.0, 2.5, 3.5, 4.0 since v86 —
+because
 pricing it in R put the first objective two to three times further away than
 the stop, so a reversal between entry and the first bank turned a profitable
 position into a full loss.
@@ -51,8 +52,8 @@ def _pcts(objective_pct, side='BUY', price=100.0):
 
 @pytest.mark.parametrize('objective', REAL_OBJECTIVES)
 @pytest.mark.parametrize('side', ['BUY', 'SELL'])
-def test_tp1_is_half_a_percent_on_every_real_trade(objective, side):
-    """Not one of the thirteen may open with a first rung below 0.5%."""
+def test_tp1_is_the_published_percentage_on_every_real_trade(objective, side):
+    """Not one of the thirteen may open with a first rung below TP1_PCT."""
     assert _pcts(objective, side)[0] == pytest.approx(TP1_PCT), (
         f'objective {objective}% moved TP1 — the ladder is being scaled again')
 
@@ -69,11 +70,11 @@ def test_tp2_holds_too_when_the_objective_leaves_room_above_it(objective):
 
 
 def test_tp1_still_holds_where_tp2_cannot():
-    """ALGO's 1.64% objective is just under the floor — TP1 must survive anyway."""
-    p = _pcts(1.64)
+    """An objective just under the TP2 floor — TP1 must survive it anyway."""
+    p = _pcts(TP2_FLOOR - 0.01)
     assert p[0] == pytest.approx(TP1_PCT)
     assert p[1] < TP2_PCT          # TP2 yielded, as it must
-    assert max(p) <= 1.64 + 1e-9
+    assert max(p) <= TP2_FLOOR - 0.01 + 1e-9
 
 
 def test_the_specific_trades_that_could_not_reach_their_own_tp1():
@@ -112,11 +113,12 @@ def test_a_far_objective_leaves_the_published_ladder_untouched():
 
 
 def test_an_objective_tighter_than_tp1_falls_back_rather_than_lying():
-    """Nothing can hold TP1 at 0.5% inside a 0.6% objective — but the cap must
-    still hold, and the rungs must still be ordered."""
-    p = _pcts(0.6)
+    """Nothing can hold the full TP1 inside an objective smaller than it — but
+    the cap must still hold, and the rungs must still be ordered."""
+    tight = TP1_PCT * 0.6
+    p = _pcts(tight)
     assert p[0] < TP1_PCT
-    assert max(p) <= 0.6 + 1e-9
+    assert max(p) <= tight + 1e-9
     assert all(b > a for a, b in zip(p, p[1:]))
 
 
@@ -125,14 +127,14 @@ def test_an_objective_tighter_than_tp1_falls_back_rather_than_lying():
 def test_a_tagged_tp1_now_books_more_than_the_old_rung_was_worth():
     """The ladder fix and the give-back fix have to compound, not cancel.
 
-    ALGO's compressed TP1 was 0.23%. With the rung back at 0.5% and the
-    give-back capped at a fifth of it, a reversal off TP1 books ~0.40% — more
-    than the entire old rung.
+    ALGO's compressed TP1 was 0.23%. With the rung uncompressed and the
+    give-back booking AT it, a reversal off TP1 books the whole rung — several
+    times what the compressed one was worth.
     """
     R = DynamicRiskEngine
     entry = 100.0
-    tp1 = _pcts(1.64)[0]
-    assert tp1 == pytest.approx(0.5)
+    tp1 = _pcts(3.0)[0]
+    assert tp1 == pytest.approx(TP1_PCT)
     span = entry * tp1 / 100
     leash = min(max(span * R.TP_GIVEBACK_PCT, R.TP_GIVEBACK_MIN_ATR * entry * 0.012),
                 span * R.TP_GIVEBACK_MAX_FRAC)

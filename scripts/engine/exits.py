@@ -283,7 +283,16 @@ class ExitsMixin:
                 (pos.direction == 'SHORT' and peak <= pos.take_profit_1)
             )
             if tp1_hit or tp1_via_peak:
-                _partial('TP1_PARTIAL', self.risk_engine.TP_CLOSE_PCTS[0])
+                # Fill AT the rung, as TP2-TP4 already do. Without the exit_px
+                # the partial books at check_price, and tp1_via_peak fires
+                # precisely when price has ALREADY come back off the rung — so
+                # a trade that touched +0.5% and reversed banked its "TP1" a
+                # long way below TP1. Measured on the live book: wins clustered
+                # at +0.31-0.33% against a 0.5% first rung. A resting limit at
+                # take_profit_1 fills when price trades through it, which is
+                # what the peak having reached it means.
+                _partial('TP1_PARTIAL', self.risk_engine.TP_CLOSE_PCTS[0],
+                         pos.take_profit_1)
                 self._tp1_hit[symbol]    = True
                 self._peak_price[symbol] = check_price   # reset peak tracking from TP1
                 pos.stop_loss = pos.entry_price          # break-even
@@ -328,9 +337,13 @@ class ExitsMixin:
             # break-even, the IMX/USDT +0.02% on a trade that had covered +0.50%.
             # Capping instead of skipping keeps the level strictly inside the
             # rung, so a banked rung is always worth more than a scratch.
-            _leash = min(max(_span * _gb_pct, _gb_min), _span * _gb_max)
-            if _leash <= 0:
-                continue
+            # A banked rung is banked AT the rung. With TP_GIVEBACK_MAX_FRAC at
+            # zero the leash collapses to nothing and the protective level IS
+            # the rung, so a re-cross books the remainder at the level rather
+            # than somewhere under it. A zero leash is allowed here — what must
+            # never happen is a NEGATIVE one, which would place the level past
+            # the rung and exit above it.
+            _leash = max(0.0, min(max(_span * _gb_pct, _gb_min), _span * _gb_max))
             # back from the rung, toward the previous one
             _level = _tp - _leash if pos.direction == 'LONG' else _tp + _leash
             _cur = self._giveback_stop.get(symbol)

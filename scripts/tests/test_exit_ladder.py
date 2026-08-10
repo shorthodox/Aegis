@@ -81,31 +81,24 @@ def _drive(engine, pos, prices, side='BUY'):
 
 # ── 1. the deleted TP1_RECROSS ───────────────────────────────────────────────
 
-def test_tp1_tag_then_shallow_pullback_keeps_position_open(engine):
-    """Tagging TP1 and wobbling must not flatten — the v82 fix, re-scoped twice.
+def test_a_pullback_through_tp1_now_books_at_the_rung(engine):
+    """Reversed in v86, and the reversal is the whole point.
 
-    It first drove a pullback to 100.4 (60 % of the entry->TP1 rung), then to
-    100.8 (20 %). Both are now deliberate exits rather than survivable wobbles:
-    IMX/USDT booked +0.02 % on a trade that had covered +0.50 %, because the ATR
-    floor exceeded the first rung and voided the ratchet entirely. The leash is
-    capped at TP_GIVEBACK_MAX_FRAC of the rung now, so for this geometry the
-    protective level sits at 101.0 - 0.20 * 1.0 = 100.80.
-
-    What this test protects is the thing that always mattered — a ZERO-width
-    recross, where any tick off the rung flattens the position. Price may still
-    come back off TP1; it just may not hand back a fifth of the rung.
+    This asserted for three revisions that a wobble off TP1 must NOT flatten the
+    position. The live book priced that policy: against a 0.5% first rung, wins
+    landed at +0.31-0.33% while losses ran 1.1-1.9%, and a 75% win rate turned
+    -$1.28. The remainder is booked AT the rung now.
     """
     pos = _position()
     still_open = _drive(engine, pos, [100.2, 101.3, 100.9])
 
-    assert still_open is not None, (
-        'position was flattened on a shallow TP1 pullback — TP1_RECROSS is back'
-    )
-    assert engine._tp1_hit['TEST/USDT'] is True
+    assert still_open is None, 'a pullback through TP1 no longer books at the rung'
     reasons = [t.exit_reason for t in engine.wallet.trade_history]
-    assert reasons == ['TP1_PARTIAL'], reasons
-    # only the TP1 slice was banked; the rest still rides
-    assert still_open.position_value == pytest.approx(850.0, abs=1.0)
+    assert reasons[0] == 'TP1_PARTIAL' and reasons[-1] == 'TP_GIVEBACK', reasons
+    for t in engine.wallet.trade_history:
+        assert t.exit_price == pytest.approx(pos.take_profit_1), (
+            f'{t.exit_reason} filled at {t.exit_price}, not at TP1 '
+            f'{pos.take_profit_1} — the fill bug is back')
 
 
 def test_tp1_tag_then_deep_pullback_banks_the_rung(engine):
@@ -156,14 +149,15 @@ def test_reversal_after_tp1_is_still_net_green(engine):
     )
 
 
-def test_short_side_shallow_pullback_also_holds(engine):
-    """Mirror of the long case: the SHORT rung is 100 -> 99, level 99.20."""
+def test_the_short_side_books_at_its_rung_too(engine):
+    """Mirror of the long case: the SHORT rung is 100 -> 99."""
     pos = _position(direction='SHORT', side='SELL', stop_loss=101.0,
                     take_profit_1=99.0, take_profit_2=98.0, take_profit_3=95.0,
                     take_profit_4=92.0, take_profit_5=88.0)
     still_open = _drive(engine, pos, [99.8, 98.9, 99.1], side='SELL')
-    assert still_open is not None
-    assert [t.exit_reason for t in engine.wallet.trade_history] == ['TP1_PARTIAL']
+    assert still_open is None
+    for t in engine.wallet.trade_history:
+        assert t.exit_price == pytest.approx(pos.take_profit_1)
 
 
 def test_short_side_deep_pullback_banks_the_rung(engine):
@@ -177,39 +171,66 @@ def test_short_side_deep_pullback_banks_the_rung(engine):
 
 # ── 2. the winner can now actually run ───────────────────────────────────────
 
-def test_runner_still_reaches_tp3(engine):
-    """The winner must still be able to run — the point of deleting the recross.
+def test_a_monotonic_run_still_climbs_the_ladder(engine):
+    """The rungs above TP1 are dormant, not deleted.
 
-    Under the old ladder this path exited at TP1 for +1R on the whole size. The
-    pullbacks here stay inside BOTH bands that can now close a runner: the
-    trailing stop (ATR x TRAIL_MULTIPLIER = 0.5) and the give-back leash
-    (TP_GIVEBACK_PCT of the rung — 0.35 off TP1, so a floor at 100.65, and 0.35
-    off TP2, so 101.65).
-
-    That is the trade this ladder makes: a runner survives noise, but it no
-    longer survives handing back a third of the rung it just banked.
+    While TP_GIVEBACK_MAX_FRAC is zero a runner cannot survive a dip through a
+    tagged rung, so TP2+ are only reached by a move that does not look back.
+    This pins that such a move still walks the whole ladder — if it stopped
+    doing that, the ladder would be broken rather than merely tight.
     """
-    pos = _position()                      # atr 0.5 -> trail distance 0.5
-    _drive(engine, pos, [101.2, 100.9, 102.3, 102.0, 105.4])
+    pos = _position()
+    _drive(engine, pos, [101.2, 102.3, 105.4])
     reasons = [t.exit_reason for t in engine.wallet.trade_history]
-    assert 'TP1_PARTIAL' in reasons and 'TP2_PARTIAL' in reasons
-    assert 'TP3_PARTIAL' in reasons, f'runner never reached TP3: {reasons}'
+    assert 'TP1_PARTIAL' in reasons, reasons
+    assert 'TP2_PARTIAL' in reasons, f'the ladder stops at TP1 even on a clean run: {reasons}'
 
 
-def test_a_zero_width_recross_is_still_forbidden(engine):
-    """The guard the four rewritten tests were really protecting.
+def test_the_recross_is_back_deliberately_and_this_is_the_bill(engine):
+    """v82 deleted TP1_RECROSS for capping every winner. v86 reinstates it.
 
-    TP1_RECROSS closed on ANY tick back through a tagged TP. Whatever the leash
-    is set to, it must leave room for price to come off the rung at all —
-    otherwise every winner is capped at exactly TP1 again, which is the measured
-    mistake this ladder exists to avoid.
+    Not by accident and not by another name — with TP_GIVEBACK_MAX_FRAC at zero
+    the remainder is booked AT the rung, so any tick back through TP1 closes the
+    whole position there. That is the deleted mechanism.
+
+    What changed is the geometry it runs on. The recross was deleted when TP1
+    sat at 0.7R against a 1.0R stop, so capping there booked +0.7R. TP1 is 1.0%
+    of entry now and the live book measured its losses at 1.1-1.9%, with wins
+    landing at +0.31-0.33% because the leash and the fill bug together booked
+    the rung from underneath. A 75% win rate lost money on that. Capping at the
+    rung books +0.90% net instead.
+
+    The cost is real and is stated here so it is not discovered later: TP2-TP5
+    are effectively unreachable while the leash is zero, because the 15% partial
+    at TP1 is followed immediately by the remainder at the same level. The
+    ladder above TP1 is dormant, not dead — raise TP_GIVEBACK_MAX_FRAC and it
+    comes back.
     """
     from scripts.engine.risk import DynamicRiskEngine as R
-    assert R.TP_GIVEBACK_PCT > 0.0, 'a zero leash is TP1_RECROSS by another name'
     pos = _position()
-    # a tick barely off the rung must NOT close
     still_open = _drive(engine, pos, [101.3, 100.99])
-    assert still_open is not None, 'closed on a tick back through TP1'
+    if R.TP_GIVEBACK_MAX_FRAC == 0.0:
+        assert still_open is None, (
+            'the leash is zero but a tick back through TP1 did not close the '
+            'position — the give-back is not booking at the rung')
+        last = engine.wallet.trade_history[-1]
+        assert last.exit_price == pytest.approx(pos.take_profit_1), (
+            f'booked at {last.exit_price} rather than at TP1 '
+            f'{pos.take_profit_1} — this is the defect the change was for')
+    else:
+        assert still_open is not None, (
+            'a non-zero leash must leave room for price to come off the rung')
+
+
+def test_the_dial_that_brings_the_runner_back_is_still_wired(engine):
+    """The zero is a setting, not a deletion. Prove the mechanism survives."""
+    from scripts.engine.risk import DynamicRiskEngine as R
+    entry, tp1, tp2 = 100.0, 101.0, 102.0
+    for frac in (0.0, 0.2, 0.5):
+        span = tp1 - entry
+        leash = max(0.0, min(max(span * R.TP_GIVEBACK_PCT, 0.0), span * frac))
+        assert tp1 - leash >= entry, 'the level fell past the entry'
+        assert leash == pytest.approx(span * min(R.TP_GIVEBACK_PCT, frac))
 
 
 def test_trailing_stop_exits_on_a_pullback_wider_than_the_trail(engine):
