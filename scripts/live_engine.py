@@ -50,7 +50,23 @@ randomised inputs and requires identical output.
 from __future__ import annotations
 
 import asyncio
+import sys
 from pathlib import Path
+
+# ── import bootstrap ─────────────────────────────────────────────────────────
+# Run as `python scripts/live_engine.py`, sys.path[0] is scripts/ and the repo
+# root is absent, so `import scripts.*` cannot resolve from here. It does not
+# fail cleanly: pywin32.pth puts site-packages/win32 on the path, that directory
+# holds a `scripts/` folder with no __init__.py, and Python binds the name to
+# that namespace package. The error then reads "No module named 'scripts.engine'"
+# — the parent resolved, just not to this repo.
+#
+# engine/config.py does the same insert, but too late to matter: resolution of
+# `scripts.engine.config` fails before its body ever runs. The root has to be on
+# the path before the first `scripts.*` import below, which means here.
+_BOOTSTRAP_ROOT = Path(__file__).resolve().parent.parent
+if str(_BOOTSTRAP_ROOT) not in sys.path:
+    sys.path.insert(0, str(_BOOTSTRAP_ROOT))
 
 # ── configuration, paths and feature flags ───────────────────────────────────
 # The underscore-prefixed aliases are the names this module has always exported.
