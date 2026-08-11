@@ -23,6 +23,10 @@ from src.trading.trader_gate import (  # noqa: E402
     MAX_STOP_ATR, MIN_NET_R, MIN_STOP_ATR, WORK_EXPIRY_BARS,
     TraderGate,
 )
+from src.trading import trader_gate as TG  # noqa: E402
+
+# v87 percent budget band — read the switch, do not assume it
+_BAND_ON = TG.MIN_STOP_PCT > 0 and TG.MAX_STOP_PCT > 0
 
 
 class Regime:
@@ -235,11 +239,30 @@ def test_stop_sits_beyond_the_level_never_on_it():
 
 
 def test_a_stop_inside_the_noise_band_is_widened_not_accepted():
-    """The basket died on ~1.1% stops in ~1% ATR tape — one bar of noise."""
+    """The basket died on ~1.1% stops in ~1% ATR tape — one bar of noise.
+
+    v87: MIN_STOP_ATR still governs the INVALIDATION, which is what stage 3 prices
+    the trade on, so the widening it performs is asserted here as before. What it
+    no longer governs is the stop actually placed: the percent budget band is
+    applied last and, by the user's explicit choice, is allowed to pull that stop
+    back inside the noise band this floor exists to escape. The two numbers are
+    asserted separately because they now answer different questions.
+    """
     plan = run(mk(price=100.0, atr=1.0, support=99.95, resistance=110.0, **TURNED_UP),
                regime='RANGING', levels=[(99.95, 4), (110.0, 4)])
     assert plan.action == ACTION_ENTER
-    assert plan.risk_atr >= MIN_STOP_ATR - 1e-9
+    # the invalidation is still pushed out to the noise floor
+    assert abs(plan.entry - plan.invalidation) / 1.0 >= MIN_STOP_ATR - 1e-9
+
+    if _BAND_ON:
+        # ...and the placed stop is the budget, which here is INSIDE that floor
+        risk_pct = abs(plan.entry - plan.stop) / plan.entry * 100.0
+        assert TG.MIN_STOP_PCT - 1e-9 <= risk_pct <= TG.MAX_STOP_PCT + 1e-9
+        assert plan.risk_atr < MIN_STOP_ATR, (
+            'the band is on but the placed stop still sits outside the noise '
+            'floor — check MAX_STOP_PCT against the fleet ATR')
+    else:
+        assert plan.risk_atr >= MIN_STOP_ATR - 1e-9
 
 
 def test_the_stop_clears_a_second_level_it_was_not_derived_from():

@@ -133,6 +133,42 @@ MIN_STOP_ATR    = 1.50   # a stop nearer than this to entry is inside one bar's 
                          # needs an objective ~2.7 ATR out rather than ~1.7.
 MAX_STOP_ATR    = 3.00   # beyond this the payoff maths can never clear the floor
 
+# ── Stage 2b · risk-budget band ───────────────────────────────────────────────
+# v87, the user's explicit instruction after being shown the measurement below.
+# The stop is clamped into this band as a PERCENT OF PRICE, applied after the
+# structural screen above. Set MIN/MAX to 0 to disable and return to a purely
+# structural, ATR-bounded stop.
+#
+# READ THIS BEFORE WIDENING OR NARROWING IT. The band changes what the stop IS.
+# Above, the stop marks invalidation: it sits STOP_BUFFER_ATR beyond the level
+# the setup leans on, and MIN_STOP_ATR keeps it outside one bar's noise. The
+# fleet's median 1h ATR is 0.82% of price, so the 1.50 ATR floor is ~1.23% —
+# every trade's structural stop is wider than this band, which means the band
+# binds on essentially all of them. The stop is therefore no longer the level;
+# it is a risk budget, and it sits INSIDE the noise band that MIN_STOP_ATR was
+# raised (0.90 -> 1.50 in v85) to escape.
+#
+# Measured cost, 19,140 trades over 30k real 1h bars, drift calibrated to the
+# observed live win rate, against the v87 1.5% TP1:
+#
+#     stop 1.31% (1.60 ATR, prior)   exp +0.237%/trade   WR 55.0%   avg loss -1.34%
+#     stop 0.70% (0.86 ATR)          exp +0.111%/trade   WR 38.3%   avg loss -0.79%
+#     stop 0.60% (0.73 ATR)          exp +0.089%/trade   WR 34.5%   avg loss -0.70%
+#     stop 0.50% (0.61 ATR)          exp +0.070%/trade   WR 30.5%   avg loss -0.60%
+#
+# Sizing up on the smaller stop does not recover it: per unit of RISK the wider
+# stop still wins (0.181R at 1.31% vs 0.148R at 0.60%), because the fixed
+# ROUND_TRIP_COST_PCT is 0.20R against a 0.5% stop and 0.076R against a 1.31%
+# one. That cost-in-R term is the same one that drove the v85 floor decision.
+#
+# UNMEASURED SIDE EFFECT — WATCH THE FIRE RATE. Stage 3 clears trades on
+# MIN_NET_R, and r_net is quoted against `risk`. Halving the risk leg roughly
+# doubles r_net, so setups previously rejected for a near objective now pass.
+# The band is applied AFTER stage 2's MAX_STOP_ATR reject deliberately, so
+# structure still screens the setup, but nothing here holds the fire rate down.
+MIN_STOP_PCT    = 0.50   # floor, percent of price
+MAX_STOP_PCT    = 0.70   # cap,   percent of price
+
 # ── Stage 3 · payoff ──────────────────────────────────────────────────────────
 MIN_NET_R          = 1.60  # net of costs, to the FIRST real objective — not to a fib fantasy
 MIN_TARGET_ATR     = 1.50  # a level closer than this is noise, not an objective
@@ -716,6 +752,7 @@ class TraderGate:
                            notes, side, setup)
         notes.append(f'payoff: target {target:.8g}, {r_gross:.2f}R gross / {r_net:.2f}R net')
 
+
         # ── Stage 4 · is it time ─────────────────────────────────────────────
         dist_atr = abs(price - level) / atr
         # NB: no "price is already through the stop" check here — `_pick_level`
@@ -778,10 +815,54 @@ class TraderGate:
                            f'risk allocation fell to {size:.2f} (< {MIN_SIZE_FACTOR}) — '
                            f'too small to be worth its costs', notes, side, setup)
 
+        # `invalidation` stays the STRUCTURAL stop: it is where the thesis dies,
+        # which is a fact about the level and not about how much is risked on it.
+        # A working order is killed by price going beyond the level, whatever the
+        # budget band below decides to put behind the fill.
         invalidation = stop
+        entry_px     = price if action == ACTION_ENTER else level
+
+        # ── Stage 5b · clamp the placed stop into the risk-budget band ───────
+        # Three things about the placement of this block are load-bearing.
+        #
+        # It runs AFTER stage 3 because r_net is quoted against `risk`. Banding
+        # first halves the risk leg and roughly doubles every setup's R:R, which
+        # silently defeats the cramped-setup reject — measured on the gate's own
+        # fixture, the 99.4/102.0 RANGE_FADE that stage 3 exists to refuse came
+        # back as WORK. Stage 3 asks "is the objective far enough from where the
+        # thesis is WRONG", a question about structure; the band asks "how much
+        # stands behind it", a question about budget. Only the budget is placed.
+        # r_gross/r_net therefore stay quoted against the structural invalidation
+        # and are CONSERVATIVE — the placed stop is tighter, so the trade's own
+        # ratio is better than the one it was approved on. The reverse direction,
+        # approving on a ratio the trade does not have, is the v85 plan.target
+        # defect and must never happen.
+        #
+        # It runs AFTER stage 4 because a WORK order fills at the LEVEL, not at
+        # today's price. Banding around `price` put the stop on the wrong side of
+        # the entry outright: price 99.0 working an order at 97.5 produced a BUY
+        # with entry 97.5 and stop 98.307 — a long stopped out above its own fill.
+        #
+        # And it re-derives from `entry_px` rather than adjusting `stop`, so the
+        # band means the same thing on a resting order as on a market entry.
+        if MIN_STOP_PCT > 0 and MAX_STOP_PCT > 0 and entry_px > 0:
+            _structural = abs(entry_px - stop)
+            _lo, _hi    = entry_px * MIN_STOP_PCT / 100.0, entry_px * MAX_STOP_PCT / 100.0
+            _banded     = min(max(_structural, _lo), _hi)
+            if abs(_banded - _structural) > 1e-12:
+                stop = (entry_px - _banded) if side == 'BUY' else (entry_px + _banded)
+                notes.append(
+                    f'budget: structural risk {_structural / entry_px * 100:.2f}% of entry '
+                    f'{"tightened" if _banded < _structural else "widened"} to the '
+                    f'{MIN_STOP_PCT}-{MAX_STOP_PCT}% band '
+                    f'({_banded / entry_px * 100:.2f}%, {_banded / atr if atr > 0 else 0:.2f} ATR) '
+                    f'— placed stop is a budget, not the invalidation; R:R is '
+                    f'quoted against the invalidation at {invalidation:.8g}')
+                risk_atr = _banded / atr if atr > 0 else 0.0
+
         plan = TradePlan(
             action=action, side=side, setup=setup,
-            entry=(price if action == ACTION_ENTER else level),
+            entry=entry_px,
             stop=stop, target=target, level=level, invalidation=invalidation,
             risk_atr=risk_atr, r_gross=r_gross, r_net=r_net,
             size_factor=round(size, 3), expiry_bars=expiry,

@@ -32,6 +32,17 @@ from scripts.engine.state import _fs_save_track_record
 from src.trading.trader_gate import TradePlan
 
 
+def _edge_over_geometry(records):
+    """Never let the study break the write that persists the book."""
+    try:
+        from scripts.engine.edge_metric import by_group, measure
+        out = measure(records)
+        out['by_symbol'] = by_group(records, 'symbol')
+        return out
+    except Exception as e:                       # pragma: no cover - defensive
+        return {'n': 0, 'error': repr(e)}
+
+
 class _NoShadow:
     """Stand-in for an engine built without a ShadowBook (tests, tools)."""
     def open(self, *a, **k):
@@ -813,6 +824,11 @@ class PositionsMixin:
                 'performance':       self.perf_tracker.get_performance_summary(),
                 'drift':             self.drift_monitor.get_summary(),
                 'portfolio':         self.portfolio_guard.get_summary(),
+                # Edge over geometry — see scripts/engine/edge_metric.py. The
+                # win rate above is a report on the stop distance; this is the
+                # part of it the signals earned. Written alongside rather than
+                # replacing it, because the win rate is what subscribers read.
+                'edge':              _edge_over_geometry(all_records),
             }
 
             tmp = TRACK_RECORD_PATH.with_suffix('.tmp')

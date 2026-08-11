@@ -1704,6 +1704,12 @@ class Predictor:
             "cdl_bear_reversal":   round(cdl_bear_reversal, 2),
             "cdl_patterns_active": cdl_patterns_active,
 
+            # Bollinger %B — where price sits inside its own 20/2 bands. The
+            # entry-stretch veto reads it: 0.5 is the mean, 0.0 the lower band,
+            # 1.0 the upper. Published because the gate needs the LOCATION, and
+            # the confluence block only ever consumed it as a score.
+            "bb_pct_b":             _f('bb_pct_b', 0.5),
+
             # Flags and pennants — continuation geometry the trade can disagree
             # with. flag_available distinguishes "no pattern" from "could not be
             # computed"; the tier rule must not read the second as the first.

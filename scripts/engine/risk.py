@@ -22,6 +22,18 @@ from typing import Dict
 
 from scripts.engine.models import RegimeState
 
+# v87 risk-budget band. Read from TraderGate rather than restated here: the gate
+# places the stop and this module consumes it, so a second copy of the numbers is
+# a copy that can drift out of step — which is exactly how the shadow book ended
+# up scoring against a give-back leash production had already abandoned.
+#
+# The MODULE is imported, not the two names. `from ... import MIN_STOP_PCT` binds
+# a VALUE COPY at import time, so rebinding trader_gate.MIN_STOP_PCT afterwards
+# would leave this module reading the old number — the same trap live_engine.py
+# documents at its own import block. Reading the attribute per call keeps one
+# switch rather than two.
+from src.trading import trader_gate as _trader_gate
+
 __all__ = ["DynamicRiskEngine"]
 
 
@@ -118,7 +130,32 @@ class DynamicRiskEngine:
     # size of the win — median booked result goes from +0.40% to +0.90% against
     # losses that run 1.1-1.9%, which is the ratio that made a 75% win rate
     # lose money.
-    TP_LADDER_PCT = (1.0, 2.0, 2.5, 3.5, 4.0)   # TP1 … TP5, percent of entry
+    #
+    # v87: TP1 1.0 -> 1.5, the ladder scaled with it. TP1 was the ONLY reachable
+    # win: with TP_GIVEBACK_MAX_FRAC at zero the whole remainder books at the
+    # first rung on any tick back through it, so every winner on the public book
+    # closed at +0.90% (1.00% rung less the 0.10% round trip) against losses of
+    # 1.1-1.6%. Measured on 19,140 trades over 30k real 1h bars, drift calibrated
+    # so the current geometry reproduces the observed 63.6% live win rate:
+    #
+    #     TP1 1.0%  exp +0.222%/trade  WR 63.6%  avg win 0.90%  avg loss -1.34%
+    #     TP1 1.25% exp +0.241%/trade  WR 58.9%  avg win 1.34%  avg loss -1.34%
+    #     TP1 1.5%  exp +0.265%/trade  WR 55.4%  avg win 1.55%  avg loss -1.34%
+    #     TP1 2.0%  exp +0.280%/trade  WR 50.2%  avg win 1.88%  avg loss -1.34%
+    #
+    # KNOWN CONDITIONAL, accepted by the user on the measured menu: this is a bet
+    # that the live edge is real. The same sweep at ZERO drift ranks the old
+    # ladder first (TP1 1.0% +0.034 vs 1.5% -0.006), because with no edge a
+    # nearer rung simply banks more often. The edge over the geometric break-even
+    # win rate held at +8.6 to +9.6pp across every rung tested, which is what
+    # makes the ranking hold — but it rests on a 22-trade sample. If the live win
+    # rate settles below ~52% the arithmetic flips back; watch it.
+    #
+    # Two things NOT changed, both measured worse at every setting tested:
+    # widening TP_GIVEBACK_MAX_FRAC (0.35 -> exp +0.152, 1.00 -> +0.125) and
+    # tightening the stop (1.1 ATR -> +0.143, 0.7 ATR -> +0.078; the fixed
+    # round-trip cost is a larger share of a smaller risk leg).
+    TP_LADDER_PCT = (1.5, 3.0, 3.75, 5.25, 6.0)   # TP1 … TP5, percent of entry
     TP_MIN_GAP_PCT = 0.05                        # rungs must stay strictly apart
 
     # RETIRED: the TP2 % cap was for the former wide TP2 (2.8×ATR); with the
@@ -218,6 +255,26 @@ class DynamicRiskEngine:
     # "significant objective" targets (TP2/TP3); the 20 % runner rides the trail.
     TP_CLOSE_PCTS = (0.15, 0.25, 0.25, 0.15, 0.20)  # TP1 … TP5
 
+    @staticmethod
+    def _budget_band(price: float, risk: float) -> float:
+        """Clamp a stop distance into the v87 risk-budget band.
+
+        The band is a percent of price, not a multiple of ATR, because that is
+        how it was specified. Both bounds must be positive for it to apply, so
+        setting either to 0 in TraderGate disables it here too and the stop
+        returns to being purely structural — there is one switch, not two.
+
+        Returns the risk unchanged when the band is off or the inputs are
+        degenerate; callers re-derive `sl` from the value they get back.
+        """
+        if price <= 0 or risk <= 0:
+            return risk
+        lo_pct = float(getattr(_trader_gate, 'MIN_STOP_PCT', 0.0) or 0.0)
+        hi_pct = float(getattr(_trader_gate, 'MAX_STOP_PCT', 0.0) or 0.0)
+        if not (lo_pct > 0 and hi_pct > 0):
+            return risk
+        return min(max(risk, price * lo_pct / 100.0), price * hi_pct / 100.0)
+
     @classmethod
     def _ladder(cls, price: float, side: str, target: float = 0.0) -> tuple:
         """The five take-profit rungs, as percentages of entry.
@@ -267,9 +324,26 @@ class DynamicRiskEngine:
                     step = (tgt_pct - lo) / spare
                     pcts = fits + [lo + step * (i + 1) for i in range(spare)]
                 else:
-                    # the objective does not even reach TP1 — nothing to hold
-                    # fixed, so fall back to scaling the whole ladder onto it
-                    pcts = [p * (tgt_pct / pcts[-1]) for p in pcts]
+                    # The objective does not reach even TP1. Scaling the whole
+                    # ladder onto it — what this did — is the same defect the
+                    # truncating cap above was written to end, just relocated: a
+                    # 1.2% objective against a 1.5% TP1 scales by 0.2 and puts
+                    # TP1 at 0.30%, which is once again banking a fifth of a
+                    # percent and calling it the first rung. Moving TP1 out to
+                    # 1.5% widens the band of objectives that land in this branch,
+                    # so it can no longer be the loose end it was at 0.5%.
+                    #
+                    # Anchor TP1 as far out as the objective can carry it —
+                    # leaving exactly enough room to space the rest at the
+                    # minimum gap — and spread the remaining rungs to the
+                    # objective. On that 1.2% objective TP1 is 1.00% rather than
+                    # 0.30%, and no rung sits beyond the target the gate vouched
+                    # for, which is the invariant this cap exists to hold.
+                    _n   = len(pcts)
+                    _gap = cls.TP_MIN_GAP_PCT
+                    _lo  = max(_gap, min(pcts[0], tgt_pct - (_n - 1) * _gap))
+                    _step = (tgt_pct - _lo) / (_n - 1) if _n > 1 else 0.0
+                    pcts = [_lo + _step * i for i in range(_n)]
 
         out, last = [], 0.0
         for p in pcts:
@@ -408,6 +482,15 @@ class DynamicRiskEngine:
                 sl   = price - risk
                 if 0 < support < price:
                     sl = min(sl, support - buf)
+                # v87 budget band — on THIS path only. The override path above is
+                # still taken verbatim: TraderGate bands its own stop at stage 3b
+                # and prices r_net against it, so re-banding here would be a
+                # second opinion on a number that has already been decided, and
+                # the support-clearing exception is deliberately allowed to widen
+                # past the band. A stop sitting ON the level is the one place the
+                # market reliably collects it, which is worse than a wide stop.
+                risk = self._budget_band(price, price - sl)
+                sl   = price - risk
             # Rungs are percentages of entry — see TP_LADDER_PCT.
             # The objective still governs: it CAPS the ladder (see _ladder) and
             # it remains the number R:R is quoted against, so the gate's payoff
@@ -430,6 +513,8 @@ class DynamicRiskEngine:
                 sl   = price + risk
                 if resistance > price:
                     sl = max(sl, resistance + buf)
+                risk = self._budget_band(price, sl - price)  # see the BUY branch
+                sl   = price + risk
             _tgt = tp_override if 0 < tp_override < price else 0.0   # see BUY branch
             tp1, tp2, tp3, tp4, tp5 = self._ladder(price, 'SELL', _tgt)
             reward = price - _tgt if _tgt else (

@@ -26,6 +26,24 @@ import inspect
 import pytest
 
 import scripts.live_engine as LE
+from contextlib import contextmanager
+
+from src.trading import trader_gate as TG
+
+# v87 percent budget band. Read the switch instead of assuming it, so these
+# contracts keep their meaning whichever way it is set.
+_BAND_ON = TG.MIN_STOP_PCT > 0 and TG.MAX_STOP_PCT > 0
+
+
+@contextmanager
+def _band_off():
+    """Assert a structural invariant on the placement the band clamps."""
+    lo, hi = TG.MIN_STOP_PCT, TG.MAX_STOP_PCT
+    TG.MIN_STOP_PCT = TG.MAX_STOP_PCT = 0.0
+    try:
+        yield
+    finally:
+        TG.MIN_STOP_PCT, TG.MAX_STOP_PCT = lo, hi
 
 
 # ── 1. the import surface ────────────────────────────────────────────────────
@@ -155,12 +173,42 @@ def test_tp_ladder_is_monotonic_and_ordered():
 
 
 def test_stop_clears_the_level_it_defends():
-    """v84: a stop resting ON the level is the one place it reliably gets taken."""
+    """v84: a stop resting ON the level is the one place it reliably gets taken.
+
+    v87 qualifies this and the qualification is the important part. With the
+    percent budget band on, a stop is capped at MAX_STOP_PCT of entry, and the
+    levels this strategy leans on are routinely FURTHER than that — so the stop
+    lands between price and the level rather than beyond it. It is then taken out
+    by the very move that tests the level, before the thesis has been tested at
+    all. The structural placement is still what the band clamps, so this asserts
+    the invariant on that placement, and pins the consequence separately.
+    """
+    r = LE.DynamicRiskEngine()
+    with _band_off():
+        long = r.calculate_stops(100.0, 'BUY', 1.0, support=99.0, resistance=110.0)
+        assert long['sl'] < 99.0, 'LONG stop is not below the support it leans on'
+        short = r.calculate_stops(100.0, 'SELL', 1.0, support=90.0, resistance=101.0)
+        assert short['sl'] > 101.0, 'SHORT stop is not above the resistance it leans on'
+
+
+def test_the_budget_band_is_what_stops_the_stop_clearing_the_level():
+    """Names the cost of the band so it cannot be paid by accident.
+
+    A support 1.0% away cannot be cleared by a stop capped at MAX_STOP_PCT when
+    that cap is under 1.0%. This test does not judge the trade-off — it fails
+    loudly if someone tightens the band without knowing they are buying it.
+    """
+    if not _BAND_ON:
+        pytest.skip('budget band disabled')
     r = LE.DynamicRiskEngine()
     long = r.calculate_stops(100.0, 'BUY', 1.0, support=99.0, resistance=110.0)
-    assert long['sl'] < 99.0, 'LONG stop is not below the support it leans on'
-    short = r.calculate_stops(100.0, 'SELL', 1.0, support=90.0, resistance=101.0)
-    assert short['sl'] > 101.0, 'SHORT stop is not above the resistance it leans on'
+    risk_pct = (100.0 - long['sl'])
+    assert risk_pct <= TG.MAX_STOP_PCT + 1e-9, 'the band did not bind'
+    if TG.MAX_STOP_PCT < 1.0:
+        assert long['sl'] > 99.0, (
+            'a sub-1% cap is expected to leave the stop IN FRONT of a support '
+            '1% away — if this now passes, the geometry changed and the '
+            'level-clearing guarantee above may be recoverable')
 
 
 def test_plan_target_is_honoured_verbatim():

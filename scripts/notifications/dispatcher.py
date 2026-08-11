@@ -201,10 +201,34 @@ class NotificationDispatcher:
         conn_path = _ROOT / "data" / "telegram_connections.json"
         if conn_path.exists():
             try:
-                connections: Dict[str, str] = _json.loads(conn_path.read_text())
-                for _email, cid in connections.items():
+                from datetime import datetime as _dt, timezone as _tz
+                connections: Dict[str, Any] = _json.loads(conn_path.read_text())
+                _now = _dt.now(_tz.utc)
+                for _email, _entry in connections.items():
+                    # Entitlement is checked HERE, at send time, against the
+                    # timestamp main.py stores beside the chat_id. It used to be
+                    # checked nowhere: this fanned out to every connected chat_id
+                    # and relied entirely on an hourly sweep that slept before its
+                    # first pass, so a lapsed subscriber kept receiving signals
+                    # until the sweep next ran. A paid plan with no end date
+                    # stores '' and is treated as open-ended, which is why an
+                    # ABSENT stamp must not be read as "expired".
+                    if isinstance(_entry, dict):
+                        cid   = str(_entry.get("chat_id") or "").strip()
+                        until = str(_entry.get("access_until") or "").strip()
+                        if until:
+                            try:
+                                _end = _dt.fromisoformat(until.replace("Z", "+00:00"))
+                                if _end.tzinfo is None:
+                                    _end = _end.replace(tzinfo=_tz.utc)
+                                if _now > _end:
+                                    continue          # access has lapsed
+                            except (ValueError, TypeError):
+                                pass                  # unparseable — let the sweep decide
+                    else:
+                        cid = str(_entry or "").strip()   # legacy flat {email: chat_id}
                     if cid:
-                        chat_ids.add(str(cid).strip())
+                        chat_ids.add(cid)
             except Exception:
                 pass
         for chat_id in chat_ids:

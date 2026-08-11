@@ -25,19 +25,34 @@ import pytest
 
 from scripts.engine.risk import DynamicRiskEngine
 from src.trading import trader_gate as TG
+from src.trading.trader_gate import MAX_STOP_PCT, MIN_STOP_PCT
+
+# v87: the stop is clamped to a percent-of-entry band. Read the switch rather
+# than assuming it, so these tests keep their meaning whichever way it is set.
+_BAND_ON = MIN_STOP_PCT > 0 and MAX_STOP_PCT > 0
 
 
 # ── the defect: a rung ratio is not a measurement ────────────────────────────
 
-def test_tp2_ratio_is_no_longer_a_constant_but_is_still_not_the_approved_payoff():
-    """The rung ratio was a constant; now it is arbitrary. Neither is the R:R.
+def test_tp2_ratio_is_a_constant_again_and_still_is_not_the_approved_payoff():
+    """The rung ratio has been a constant, then arbitrary, and is now constant
+    again for a THIRD reason. None of the three is the R:R.
 
-    It used to be exactly 2.0 by construction, because tp2 was price + 2.0R — a
-    constant wearing the costume of a measurement. The ladder is priced in
-    percent of entry now, so the ratio varies with whatever the stop happens to
-    be, which is not an improvement for reporting: it still is not the number
-    the gate approved the trade on. Either way the headline R:R must come from
-    plan.r_net, which is what the tests below assert.
+    It was exactly 2.0 by construction when tp2 was price + 2.0R — a constant
+    wearing the costume of a measurement. Pricing the ladder in percent of entry
+    made it vary with whatever the stop happened to be. v87 then priced the STOP
+    in percent too (TraderGate.MIN_STOP_PCT), and a fixed percent rung over a
+    fixed percent stop is once again a pure constant: TP2 / MAX_STOP_PCT, the
+    same number on every token at every price.
+
+    That is worth knowing for a reason beyond reporting. It means the geometry no
+    longer adapts to a token's volatility at all — BTC at 0.4% ATR and a
+    small-cap at 2% ATR now get the identical stop in percent, which is ~1.75 ATR
+    for one and ~0.35 ATR for the other. The ratio being stable is the visible
+    symptom; the lost ATR adaptation is the thing to weigh.
+
+    What the test still guards is unchanged: whatever this number is, it is not
+    the figure a subscriber judges the trade by. plan.r_net is.
     """
     r = DynamicRiskEngine()
     rng = random.Random(5)
@@ -51,13 +66,16 @@ def test_tp2_ratio_is_no_longer_a_constant_but_is_still_not_the_approved_payoff(
             if out['risk'] <= 0 or not out['tp2']:
                 continue
             seen.add(round(abs(price - out['tp2']) / out['risk'], 6))
-    assert len(seen) > 1, 'the rung ratio is a constant again'
-    # It now varies with the stop, which is the point: the same rung reports a
-    # different "R:R" per token, so it can never be the figure a subscriber
-    # judges the trade by. plan.r_net is.
-    assert max(seen) - min(seen) > 0.1, (
-        f'the rung ratio barely moves ({sorted(seen)[:3]}) — if it has become '
-        f'stable again, check whether it is being published as the R:R'
+    if _BAND_ON:
+        expect = DynamicRiskEngine.TP_LADDER_PCT[1] / MAX_STOP_PCT
+        assert seen == {round(expect, 6)}, (
+            f'with a percent stop the rung ratio must be exactly TP2/MAX_STOP_PCT '
+            f'= {expect:.6f}; got {sorted(seen)[:4]}')
+    else:
+        assert len(seen) > 1, 'the rung ratio is a constant again'
+        assert max(seen) - min(seen) > 0.1, (
+            f'the rung ratio barely moves ({sorted(seen)[:3]}) — if it has become '
+            f'stable again, check whether it is being published as the R:R'
     )
 
 
