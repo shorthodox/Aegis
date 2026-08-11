@@ -1482,6 +1482,44 @@ _tg_connections: dict = {}
 _TG_CONNECTIONS_PATH = Path("data/telegram_connections.json")
 
 
+def _tg_chat_id(entry) -> str:
+    """chat_id out of either registry shape.
+
+    The file was {email: chat_id} and is now {email: {chat_id, access_until}} so
+    the SENDER can refuse an expired user without waiting for a sweep. Old files
+    are read as-is rather than migrated on load, because a half-written migration
+    on a crashed boot would silently drop everyone's Telegram.
+    """
+    if isinstance(entry, dict):
+        return str(entry.get("chat_id") or "")
+    return str(entry or "")
+
+
+def _tg_access_until(email: str) -> str:
+    """ISO instant this user's access ends, or '' if it cannot be determined.
+
+    Written next to the chat_id so delivery is gated by a TIMESTAMP the sender
+    can check itself. The hourly sweep is a cleanup, not the entitlement check —
+    it sleeps before its first pass, so after every restart there was a full hour
+    in which expired users still received signals.
+    """
+    try:
+        user_doc = get_user_doc(email) or {}
+        plan = (user_doc.get("plan") or "").lower()
+        sub  = user_doc.get("subscription") or {}
+        if plan in {"pro", "premium", "intermediate", "basic"} and \
+                isinstance(sub, dict) and sub.get("status") == "active":
+            # A paid, active subscription: prefer its own end date when present.
+            for key in ("current_period_end", "expires_at", "end_date"):
+                if sub.get(key):
+                    return str(sub[key])
+            return ""          # active with no end date — no timestamp gate
+        return str(user_doc.get("trial_end") or "")
+    except Exception as exc:
+        print(f"[TG] access lookup failed for {email}: {exc!r}")
+        return ""
+
+
 def _tg_load_connections() -> None:
     global _tg_connections
     if _TG_CONNECTIONS_PATH.exists():
@@ -1523,7 +1561,10 @@ def _tg_start_poller() -> None:
                             code  = parts[1].strip() if len(parts) > 1 else ""
                             if code and code in _tg_pending:
                                 email = _tg_pending.pop(code)
-                                _tg_connections[email] = chat_id
+                                _tg_connections[email] = {
+                                    "chat_id":      chat_id,
+                                    "access_until": _tg_access_until(email),
+                                }
                                 _tg_save_connections()
                                 logger.info(f"[Telegram] Connected {email} â†’ chat_id {chat_id}")
                                 # Send confirmation to user
@@ -1632,21 +1673,47 @@ async def _otp_cleanup_loop():
 
 
 async def _telegram_cleanup_loop():
-    """Disconnect Telegram for users whose trial has ended or plan has lapsed â€” runs hourly."""
+    """Disconnect Telegram for users whose trial has ended or plan has lapsed.
+
+    Three things were wrong with the old version and all three let an expired
+    user keep receiving signals:
+
+      * it slept an hour BEFORE its first pass, so every restart reopened a
+        full hour of free access;
+      * one user whose lookup raised aborted the whole sweep for that hour,
+        because the try wrapped the entire comprehension rather than each user;
+      * it was the ONLY gate. Delivery now also checks `access_until` at send
+        time (see dispatcher._tg_send_all), so this loop is cleanup rather
+        than enforcement, and a late pass no longer means leaked signals.
+
+    It also refreshes `access_until` on the survivors, which is what keeps the
+    send-time gate honest after someone upgrades or renews.
+    """
     while True:
-        await asyncio.sleep(3600)
         try:
-            to_remove = [
-                email for email in list(_tg_connections)
-                if is_trial_expired(email)
-            ]
-            if to_remove:
-                for email in to_remove:
-                    _tg_connections.pop(email, None)
+            to_remove = []
+            for email in list(_tg_connections):
+                try:
+                    if is_trial_expired(email):
+                        to_remove.append(email)
+                    else:
+                        entry = _tg_connections.get(email)
+                        _tg_connections[email] = {
+                            "chat_id":      _tg_chat_id(entry),
+                            "access_until": _tg_access_until(email),
+                        }
+                except Exception as exc:
+                    # One bad user must not save the rest from being swept.
+                    print(f"[TG cleanup] skipped {email}: {exc!r}")
+            for email in to_remove:
+                _tg_connections.pop(email, None)
+            if to_remove or _tg_connections:
                 _tg_save_connections()
+            if to_remove:
                 print(f"[TG cleanup] Disconnected {len(to_remove)} expired user(s): {to_remove}")
         except Exception as exc:
             print(f"[TG cleanup] Error: {exc}")
+        await asyncio.sleep(900)
 
 
 @asynccontextmanager
@@ -4144,7 +4211,23 @@ def start_free_trial(user_id: str = Depends(get_current_user)):
         except (ValueError, TypeError):
             pass  # Corrupted date â€” fall through to fresh start
 
-    # Start a new (or restart an expired) trial
+    # One trial per account. `trial_used` was written here and read NOWHERE, so
+    # the block below cheerfully restarted an expired trial every time it was
+    # called — three more days of full access, repeatable indefinitely from the
+    # pricing page's own button. The field's comment at signup already called
+    # this "the one 3-day trial"; this is the line that makes that true.
+    if user_doc.get("trial_used"):
+        return {
+            "status": "expired",
+            "plan": plan,
+            "trial_active": False,
+            "trial_start": user_doc.get("trial_start"),
+            "trial_end": user_doc.get("trial_end"),
+            "seconds_remaining": 0,
+            "message": "Your free trial has already been used. Choose a plan to continue.",
+        }
+
+    # Start the trial
     now = datetime.now(timezone.utc)
     trial_start_iso = now.isoformat()
     trial_end_dt = now + timedelta(days=3)
@@ -7422,7 +7505,7 @@ async def telegram_connect(_user: str = Depends(get_current_user)):
 @app.get("/api/notifications/telegram/status")
 async def telegram_status(_user: str = Depends(get_current_user)):
     """Check whether this user has connected their Telegram."""
-    chat_id = _tg_connections.get(_user, "")
+    chat_id = _tg_chat_id(_tg_connections.get(_user, ""))
     return {"connected": bool(chat_id), "chat_id": chat_id}
 
 
