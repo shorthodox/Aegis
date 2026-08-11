@@ -14,8 +14,17 @@ import json
 
 import pytest
 
-from scripts.engine.shadow_exits import POLICIES, ShadowBook
+from scripts.engine.shadow_exits import GIVEBACK_FRAC, POLICIES, ShadowBook
 
+
+# Where the live rule parks the runner's stop once TP1 (+0.5%) is tagged. Derived
+# from the constant rather than written out, because a hardcoded copy is exactly
+# how the control drifted away from production in the first place: it read 0.20
+# here and in shadow_exits while DynamicRiskEngine had moved to 0.00.
+TP1_PCT       = 0.5
+GIVEBACK_EXIT = TP1_PCT - TP1_PCT * GIVEBACK_FRAC
+# the dip must breach that level without reaching the trade's stop
+DIP_PCT       = GIVEBACK_EXIT - 0.10
 
 ENTRY = 100.0
 # a 0.5 / 1.5 / 2 / 3 / 3.5 percent ladder on a long, and a 1.5% stop
@@ -82,15 +91,22 @@ def test_a_straight_run_to_the_top_pays_every_policy(book):
 
 
 def test_the_giveback_policy_closes_the_runner_where_the_live_rule_does(book):
-    """TP1 at +0.5%, give-back a fifth of the rung -> the remainder exits +0.40%."""
+    """TP1 at +0.5%, then a hand-back -> the remainder exits at the live level.
+
+    With TP_GIVEBACK_MAX_FRAC at 0.00 that level IS the rung, so the whole trade
+    books +0.5%: the runner is not permitted to give back any of a banked rung.
+    That is the production rule, and this control has to reproduce it or the
+    alternatives are being scored against a policy nobody is running.
+    """
     _open(book)
-    _walk(book, [100.6, 100.40])          # tag TP1, then hand back to the level
+    _walk(book, [100.6, ENTRY * (1 + DIP_PCT / 100)])   # tag TP1, then hand back
     # The row is not written yet, and must not be: the runner policies are
     # still holding, which is the disagreement being measured. Read the sim.
     live_sim = book._open['t1'].sims['live_rule']
     assert live_sim.done and live_sim.exit_reason == 'STOP'
-    # 15% banked at +0.5%, 85% handed back at +0.40% (cost is charged on write)
-    assert live_sim.exit_pct == pytest.approx(0.15 * 0.5 + 0.85 * 0.40, abs=1e-6)
+    # 15% banked at TP1, 85% closed at the give-back level (cost charged on write)
+    assert live_sim.exit_pct == pytest.approx(
+        0.15 * TP1_PCT + 0.85 * GIVEBACK_EXIT, abs=1e-6)
 
 
 def test_a_runner_policy_survives_the_dip_the_giveback_closes_on(book):
@@ -140,9 +156,11 @@ def test_both_directions_measure_the_same_geometry(book, direction, mult):
     tps = [ENTRY * (1 + mult * p / 100) for p in (0.5, 1.5, 2.0, 3.0, 3.5)]
     sl = ENTRY * (1 - mult * 1.5 / 100)
     _open(book, direction=direction, sl=sl, tps=tps)
-    _walk(book, [ENTRY * (1 + mult * 0.6 / 100), ENTRY * (1 + mult * 0.40 / 100)])
+    _walk(book, [ENTRY * (1 + mult * 0.6 / 100),
+                 ENTRY * (1 + mult * DIP_PCT / 100)])
     live = book._open['t1'].sims['live_rule']
-    assert live.done and live.exit_pct == pytest.approx(0.15 * 0.5 + 0.85 * 0.40, abs=1e-6)
+    assert live.done and live.exit_pct == pytest.approx(
+        0.15 * TP1_PCT + 0.85 * GIVEBACK_EXIT, abs=1e-6)
 
 
 # ── policy parameters scale with the trade ───────────────────────────────────

@@ -56,7 +56,18 @@ POLICIES: Dict[str, Dict[str, Any]] = {
 }
 
 _EPS = 1e-9                   # see _advance: percentages are derived, not exact
-GIVEBACK_FRAC = 0.20          # matches DynamicRiskEngine.TP_GIVEBACK_MAX_FRAC
+
+# The control has to be the rule PRODUCTION runs, or every comparison against it
+# is measured off the wrong baseline. This was hardcoded to 0.20 with a comment
+# claiming it matched DynamicRiskEngine.TP_GIVEBACK_MAX_FRAC; that constant had
+# since gone to 0.00 ("book the remainder AT the rung") and the copy did not
+# follow. The control was therefore giving its runner a fifth of the rung span
+# as cushion that the live book does not give — it survived dips production
+# closes on, and booked under the rung when it did exit. Read the constant
+# rather than restating it, so it cannot drift again.
+from scripts.engine.risk import DynamicRiskEngine as _RiskEngine
+
+GIVEBACK_FRAC = _RiskEngine.TP_GIVEBACK_MAX_FRAC
 MAX_SHADOW_SECONDS = 24 * 3600
 _STORE = Path(__file__).resolve().parents[2] / 'data' / 'shadow_exits.json'
 

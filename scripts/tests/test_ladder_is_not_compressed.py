@@ -1,6 +1,6 @@
 """TP1 is a fixed percentage of entry. The objective cap was quietly moving it.
 
-The ladder is priced in percent of entry — 1.0, 2.0, 2.5, 3.5, 4.0 since v86 —
+The ladder is priced in percent of entry — 1.5, 3.0, 3.75, 5.25, 6.0 since v87 —
 because
 pricing it in R put the first objective two to three times further away than
 the stop, so a reversal between entry and the first bank turned a profitable
@@ -37,6 +37,15 @@ from scripts.engine.risk import DynamicRiskEngine
 
 
 TP1_PCT, TP2_PCT = DynamicRiskEngine.TP_LADDER_PCT[0], DynamicRiskEngine.TP_LADDER_PCT[1]
+_N   = len(DynamicRiskEngine.TP_LADDER_PCT)
+_GAP = DynamicRiskEngine.TP_MIN_GAP_PCT
+
+# The objective needed to carry the full first rung AND still space the four
+# above it. Below this TP1 has to yield — five ordered rungs simply do not fit
+# inside a smaller objective — but it must yield by the gap arithmetic and not
+# by scaling. v87 moved TP1 1.0 -> 1.5, which lifted this floor from 1.2 to 1.7
+# and so widened the band of real objectives that land in the fallback.
+TP1_FLOOR = TP1_PCT + (_N - 1) * _GAP
 
 # every objective reconstructed from the 2026-08-08/09 track record
 REAL_OBJECTIVES = [1.64, 1.72, 1.79, 2.04, 2.18, 2.28, 2.84, 2.84, 3.03, 3.09, 3.36, 3.50, 3.51]
@@ -50,12 +59,30 @@ def _pcts(objective_pct, side='BUY', price=100.0):
 
 # ── the defect ───────────────────────────────────────────────────────────────
 
-@pytest.mark.parametrize('objective', REAL_OBJECTIVES)
+@pytest.mark.parametrize('objective', [o for o in REAL_OBJECTIVES if o >= TP1_FLOOR])
 @pytest.mark.parametrize('side', ['BUY', 'SELL'])
 def test_tp1_is_the_published_percentage_on_every_real_trade(objective, side):
-    """Not one of the thirteen may open with a first rung below TP1_PCT."""
+    """No trade with room for the rung may open with a first rung below it."""
     assert _pcts(objective, side)[0] == pytest.approx(TP1_PCT), (
         f'objective {objective}% moved TP1 — the ladder is being scaled again')
+
+
+@pytest.mark.parametrize('objective', [o for o in REAL_OBJECTIVES if o < TP1_FLOOR])
+@pytest.mark.parametrize('side', ['BUY', 'SELL'])
+def test_a_tight_objective_yields_tp1_by_the_gap_and_never_by_scaling(objective, side):
+    """The rung that will not fit must give up the minimum, not a proportion.
+
+    This is the branch v87 had to rewrite. Scaling the ladder onto the objective
+    put a 1.64% trade's TP1 at 0.41% — the same "banking a fifth of a percent"
+    failure the truncating cap was written to end, reached by the other door once
+    TP1 moved out to 1.5%. Anchored to the gap it lands at 1.44%.
+    """
+    p = _pcts(objective, side)
+    assert p[0] == pytest.approx(objective - (_N - 1) * _GAP), (
+        f'objective {objective}% put TP1 at {p[0]:.3f}%, which is not the most '
+        f'the objective can carry — the ladder is being scaled again')
+    assert p[0] > TP1_PCT * (objective / DynamicRiskEngine.TP_LADDER_PCT[-1]) , (
+        'TP1 is no better than the proportional scaling this replaced')
 
 
 # TP2 survives only while the three rungs above it still fit at the minimum
@@ -82,7 +109,10 @@ def test_the_specific_trades_that_could_not_reach_their_own_tp1():
     for objective, was in ((1.64, 0.23), (1.79, 0.26), (2.04, 0.29), (3.03, 0.43)):
         now = _pcts(objective)[0]
         assert now > was, f'objective {objective}%: TP1 still at {now:.2f}%'
-        assert now == pytest.approx(TP1_PCT)
+        # 1.64% cannot carry the full 1.5% rung and four spaced above it, so it
+        # takes the gap-anchored value; every wider objective keeps the rung.
+        expect = TP1_PCT if objective >= TP1_FLOOR else objective - (_N - 1) * _GAP
+        assert now == pytest.approx(expect)
 
 
 # ── the cap it must not break ────────────────────────────────────────────────
@@ -108,8 +138,15 @@ def test_rungs_stay_strictly_ordered(objective, side):
 
 
 def test_a_far_objective_leaves_the_published_ladder_untouched():
-    """Banking earlier than the objective is the point of a percent ladder."""
-    assert _pcts(5.0) == pytest.approx(list(DynamicRiskEngine.TP_LADDER_PCT))
+    """Banking earlier than the objective is the point of a percent ladder.
+
+    "Far" is derived from the top rung rather than written as a number: this
+    test read 5.0 against a ladder that ended at 4.0, and v87 moved the top rung
+    to 6.0 — which made the objective a CAPPING one and the assertion a
+    statement about the cap instead of about the published ladder.
+    """
+    far = DynamicRiskEngine.TP_LADDER_PCT[-1] + 1.0
+    assert _pcts(far) == pytest.approx(list(DynamicRiskEngine.TP_LADDER_PCT))
 
 
 def test_an_objective_tighter_than_tp1_falls_back_rather_than_lying():
