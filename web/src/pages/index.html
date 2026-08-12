@@ -1026,7 +1026,7 @@
           </li>
           <li style="font-size:0.85rem; color:var(--ae-text-2); line-height:1.65; padding-left: var(--s-4); position:relative;">
             <span style="position:absolute; left:0; color:var(--ae-buy);">–</span>
-            Model-first architecture — the model picks the side, hard gates enforce the timing (at a tested level, with a reversal candle), and every remaining doubt is tagged on the signal instead of hidden
+            Structure-first architecture — the setup picks the side from where price sits against its own range, the model can veto but not grant permission, and every remaining doubt is tagged on the signal instead of hidden
           </li>
           <li style="font-size:0.85rem; color:var(--ae-text-2); line-height:1.65; padding-left: var(--s-4); position:relative;">
             <span style="position:absolute; left:0; color:var(--ae-buy);">–</span>
@@ -1038,7 +1038,7 @@
           </li>
           <li style="font-size:0.85rem; color:var(--ae-text-2); line-height:1.65; padding-left: var(--s-4); position:relative;">
             <span style="position:absolute; left:0; color:var(--ae-buy);">–</span>
-            ATR-adaptive targets — exits are calibrated to actual current volatility
+            Published invalidation — every signal ships with the stop and the five take-profit rungs it was approved on, and the level the thesis leans on is shown alongside them
           </li>
         </ul>
       </div>
@@ -1065,6 +1065,14 @@
           <li style="font-size:0.85rem; color:var(--ae-text-2); line-height:1.65; padding-left: var(--s-4); position:relative;">
             <span style="position:absolute; left:0; color:var(--ae-text-3);">–</span>
             Exchange fees and slippage erode edge on small positions — size appropriately
+          </li>
+          <li style="font-size:0.85rem; color:var(--ae-text-2); line-height:1.65; padding-left: var(--s-4); position:relative;">
+            <span style="position:absolute; left:0; color:var(--ae-text-3);">–</span>
+            Stops are currently a fixed 0.50–0.70% of price rather than scaled to each coin's volatility, so a quiet coin and a violent one get the same distance — we are measuring the replacement, and the work is public
+          </li>
+          <li style="font-size:0.85rem; color:var(--ae-text-2); line-height:1.65; padding-left: var(--s-4); position:relative;">
+            <span style="position:absolute; left:0; color:var(--ae-text-3);">–</span>
+            Position size is set before the stop is known, so two signals of equal size can carry different risk — comparing their percentage results to each other is not yet apples to apples
           </li>
         </ul>
       </div>
