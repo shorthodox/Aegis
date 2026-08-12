@@ -21,6 +21,23 @@ The reversal keeps its real job (abandon a dead thesis BEFORE the stop) and
 loses the one it did badly. In profit but short of TP1, the position is
 protected instead of closed: stop to break-even, so the bad case is a scratch
 rather than a small win and the good case is still open.
+
+v88 — THE LOSING HALF IS NOW HELD TOO, and this reverses the decision above.
+=========================================================================
+The measurement in this docstring still stands: cutting a loser on a reversal
+books a SMALLER loss than letting it run to the stop, so this change costs
+expectancy. It was made anyway, for a reason that is not about expectancy.
+
+A signal ships with an entry and a stop, and a subscriber holds to that stop.
+When the engine cut a losing position early it recorded a LOSS the subscriber
+did not take, at a price they were never shown. The public loss count was
+therefore higher than the strategy as published produces, and no one reading the
+board could reconcile the two. For a product whose whole claim is that the
+record is honest, a result the customer structurally cannot reproduce is worse
+than a slightly larger average loss.
+
+So the published stop is now the only level allowed to close a losing position.
+See exits.STOP_OWNS_THE_LOSS_SIDE, which is the single switch back.
 """
 import time
 from datetime import datetime, timezone
@@ -120,26 +137,37 @@ def test_protection_never_loosens_an_already_tighter_stop(engine):
 # ── a loser is still cut ─────────────────────────────────────────────────────
 
 @pytest.mark.parametrize('direction,price', [('LONG', 99.5), ('SHORT', 100.5)])
-def test_reversal_at_a_loss_still_closes(engine, direction, price):
-    """The reversal's real job: abandon a dead thesis BEFORE the stop."""
+def test_reversal_at_a_loss_now_holds_to_the_stop(engine, direction, price):
+    """v88: a losing position is held to its published stop, not cut here.
+
+    This asserts the OPPOSITE of what it used to. The old behaviour booked a
+    loss inside the stop — a result no subscriber holding the published stop
+    would have taken — and that is what inflated the loss count on the board.
+    """
     pos = _pos(direction)
     still_open = _reverse(engine, pos, price)
-    assert still_open is None, 'a losing position was not cut on a reversal'
-    assert engine.wallet.trade_history[-1].exit_reason == 'MODEL_REVERSAL_TP'
+    assert still_open is not None, (
+        'a losing position was cut before its stop; the loss count on the '
+        'public record will not match what a subscriber experiences'
+    )
+    assert still_open.stop_loss == pos.stop_loss, 'the stop must not move here'
+    assert not engine.wallet.trade_history, 'nothing should have been booked'
 
 
-def test_reversal_at_break_even_still_closes(engine):
-    """Flat is not profit; there is nothing to protect."""
+def test_reversal_at_break_even_now_holds(engine):
+    """Flat is not profit — and it is not a loss the stop has reached either."""
     pos = _pos('LONG')
-    assert _reverse(engine, pos, 100.0) is None
+    assert _reverse(engine, pos, 100.0) is not None
 
 
-def test_a_profit_smaller_than_the_round_trip_is_not_protected(engine):
-    """Below the cost of trading, the 'profit' is not real."""
+def test_a_profit_smaller_than_the_round_trip_is_still_not_a_win(engine):
+    """Below the cost of trading the 'profit' is not real, so it is not
+    protected by the break-even branch — but under v88 it is not closed
+    either. It is held, like any other position inside its stop."""
     pos = _pos('LONG')
     cost = engine.wallet.round_trip_cost_pct()          # 0.10 %
     price = 100.0 * (1 + cost / 100.0 * 0.5)            # half the round trip
-    assert _reverse(engine, pos, price) is None
+    assert _reverse(engine, pos, price) is not None
 
 
 # ── after TP1 the old behaviour stands ───────────────────────────────────────

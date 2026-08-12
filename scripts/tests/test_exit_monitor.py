@@ -135,18 +135,21 @@ def test_price_only_suppresses_the_model_reversal_exit(engine):
 def test_scan_path_still_takes_the_model_reversal(engine):
     """The scan cycle keeps its behaviour — price_only defaults to False.
 
-    Driven at a LOSS (99.5, not 100.2). This test is about the price_only flag,
-    not about PnL, and a reversal while in profit but short of TP1 no longer
-    closes — it protects instead, because closing there is what produced
-    +0.19R winners against -1.08R losers. The losing case is the reversal's
-    real job and exercises the same code path.
-    See scripts/tests/test_reversal_protect.py for the profit side.
+    This test is about the price_only flag, not about PnL, so it needs a
+    scenario the reversal is still allowed to close. v88 gave the published stop
+    sole ownership of the loss side, so the losing case this used to drive now
+    HOLDS (see test_reversal_protect.py). Driven TP1-secured and in profit
+    instead — the one state where a reversal still books an exit — and priced
+    above TP1 so the give-back ratchet does not close it first.
     """
     _open(engine, _position())
     engine._open_time[SYM] = time.time() - 7200
-    engine.live_prices[SYM] = 99.5
+    pos = engine.wallet.open_positions[SYM]
+    engine._tp1_hit[SYM] = True                 # risk already earned
+    px = pos.take_profit_1 * 1.005              # above TP1: give-back not breached
+    engine.live_prices[SYM] = px
     live = {'side': 'SELL', 'fire': True, 'edge_score': 99.0, 'atr': 0.5}
-    engine._manage_exit(SYM, engine.wallet.open_positions[SYM], live, 99.5)
+    engine._manage_exit(SYM, pos, live, px)
     assert SYM not in engine.wallet.open_positions
     assert engine.wallet.trade_history[-1].exit_reason == 'MODEL_REVERSAL_TP'
 
