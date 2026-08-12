@@ -480,6 +480,30 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
                           f'served from SPOT, so it can never fire (monitor-only)')
                     continue
 
+                # A model that fired NOTHING on its own holdout is not a
+                # conservative model, it is a failed training run, and the
+                # override below would enable it anyway because the side files
+                # exist. Observed on BTC/USDT 2026-08-11: 64.7% directional
+                # precision, then 0 of 1676 holdout bars fired because the
+                # confidence threshold fell back to its 0.85 initialiser. The
+                # token would have loaded as tradeable and silently never
+                # traded, which reads as a quiet market rather than a bug.
+                #
+                # Deliberately narrow. This does NOT make the override respect
+                # `tradeable` in general — that flag is stale on many sidecars
+                # and honouring it would bench a large part of the fleet on old
+                # information. Zero fires is the one verdict that needs no
+                # interpretation.
+                _ht = (p.meta or {}).get('holdout_trading') or {}
+                if _ht and float(_ht.get('coverage') or 0.0) <= 0.0 \
+                        and int(_ht.get('fired') or 0) <= 0:
+                    self._benched.add(sym)
+                    self.predictors[sym] = p
+                    loaded += 1
+                    print(f'[LiveEngine] BENCHED {sym} — its last training run fired '
+                          f'0 signals on the holdout; retrain before it can trade')
+                    continue
+
                 # Binary dual-model pair: check BEFORE risk_tier benching so a
                 # dual-direction retrained token isn't permanently benched by
                 # an older meta.json tier flag. If both side models exist, mark
@@ -535,14 +559,30 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
     # ── main loop ─────────────────────────────────────────────────────────────
 
     def _purge_subquality_positions(self) -> None:
-        """Close any restored open positions whose edge score is below MIN_QUALITY_SCORE.
+        """Close restored positions that PRE-DATE the gate, at startup only.
 
-        These positions pre-date the quality gate and should not occupy wallet slots.
-        Closed at the current live price (or entry price if live price unavailable).
+        v88: this was closing current-generation positions at market on every
+        restart. The test was `meta_confidence < MIN_QUALITY_SCORE` (60), which
+        was a valid proxy for "pre-gate" only while the model's edge granted
+        permission to trade. Under the desk playbook it does not:
+        REQUIRE_MODEL_FIRE is False, so TraderGate opens a position on structure
+        and the model's edge may legitimately sit anywhere. A perfectly valid
+        position with edge 45 was therefore liquidated at whatever price the
+        market happened to be at, every time the process restarted — recording a
+        loss inside the stop that no subscriber took, and freeing a book slot
+        that was doing its job.
+
+        The correct test is whether the position carries this generation's entry
+        markers at all. `signal_strength` (risk tier) and `entry_mode` are both
+        written by _open_position for every position the desk opens, so a
+        position with NEITHER genuinely pre-dates it and is what this cleanup
+        was written for.
         """
         to_purge = [
             sym for sym, pos in list(self.wallet.open_positions.items())
-            if pos.meta_confidence < SignalQualityFilter.MIN_QUALITY_SCORE
+            if not (pos.signal_strength or '').strip()
+            and not (pos.entry_mode or '').strip()
+            and pos.meta_confidence < SignalQualityFilter.MIN_QUALITY_SCORE
         ]
         for sym in to_purge:
             pos   = self.wallet.open_positions[sym]

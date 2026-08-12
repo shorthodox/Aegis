@@ -21,6 +21,45 @@ from scripts.engine.models import Position
 from scripts.engine.quality import SignalQualityFilter
 
 
+# ── v88: the stop owns the loss side ─────────────────────────────────────────
+# The published stop is the ONLY level allowed to close a position that is
+# under water. Every other exit may still take profit; none of them may book a
+# loss at a price the subscriber was never told about.
+#
+# This is a track-record integrity rule before it is a trading rule. A signal
+# ships with an entry and a stop, and a subscriber holds to that stop. When the
+# engine closed a losing position early it recorded a LOSS the subscriber did
+# not take, at a price they never saw — so the published loss count was higher
+# than the strategy as published actually produces, and the two could not be
+# reconciled by anyone reading the board.
+#
+# Two paths were doing this, both while price was still inside the stop:
+#
+#   * the model-reversal exit, which closed a position that was flat or losing
+#     on an opposing signal (section 8). A trade in PROFIT was protected and
+#     held; a trade under water was cut. So the rule ran the wrong way round —
+#     it converted recoverable positions into booked losses while letting the
+#     winners it protected keep running.
+#   * MAX_HOLD_EXPIRED, which closed at market at the 24h mark regardless of
+#     where price was relative to the stop.
+#
+# Set to False to restore the old behaviour. Note the cost of True: a losing
+# position now holds until its stop, so a book slot can stay occupied longer
+# than 24h. With the stop inside 1% that is usually short, but MAX_OPEN_TOTAL
+# is 5 and this is the pressure it puts on the book.
+STOP_OWNS_THE_LOSS_SIDE = True
+
+
+def _is_underwater(pos: Position, price: float, cost_pct: float = 0.0) -> bool:
+    """True when closing at `price` would book a loss (costs included)."""
+    if price <= 0 or pos.entry_price <= 0:
+        return False
+    pnl_pct = ((price - pos.entry_price) / pos.entry_price * 100.0
+               if pos.direction == 'LONG'
+               else (pos.entry_price - price) / pos.entry_price * 100.0)
+    return pnl_pct <= cost_pct
+
+
 class ExitsMixin:
     """_manage_exit .. _manage_exit — see module docstring."""
 
@@ -158,8 +197,17 @@ class ExitsMixin:
 
         # ── 1. Maximum hold time (zombie guard) ──────────────────────────────
         if held >= self.MAX_HOLD_SECONDS:
-            _close('MAX_HOLD_EXPIRED')
-            return
+            # v88: the timeout may retire a trade that is flat or winning, but it
+            # may not book a loss the stop has not reached. Left to fire here, it
+            # closed under-water positions at market at the 24h mark and recorded
+            # a loss at a price no subscriber was ever shown.
+            if STOP_OWNS_THE_LOSS_SIDE and _is_underwater(
+                    pos, check_price, self.wallet.round_trip_cost_pct()):
+                print(f'[{symbol}] MAX_HOLD reached but price is inside the stop — '
+                      f'holding to {pos.stop_loss:.6g} (the stop owns the loss side)')
+            else:
+                _close('MAX_HOLD_EXPIRED')
+                return
 
         # ── 2. TP5 hit — close all remaining size ────────────────────────────
         # By this point TPs 1-4 have already taken 80 %; this closes the last 20 %.
@@ -455,6 +503,18 @@ class ExitsMixin:
                           f'holding for the first target')
                     return
 
+                # v88: reaching here means the position is flat or LOSING — the
+                # profitable branch above already returned. Closing now books a
+                # loss inside the stop, which is the exact behaviour that
+                # inflated the loss count on the public board. The thesis may
+                # well be dead, but the published stop is where this trade is
+                # allowed to die, and the stop is already at break-even by the
+                # branch above whenever the trade ever went green.
+                if STOP_OWNS_THE_LOSS_SIDE:
+                    print(f'[{symbol}] REVERSAL_HOLD {pos.direction}→{side}: '
+                          f'opposing signal (edge={_rev_edge:.1f}) but price is '
+                          f'inside the stop — holding to {pos.stop_loss:.6g}')
+                    return
                 if _rev_edge >= SignalQualityFilter.MIN_QUALITY_SCORE:
                     _close('MODEL_REVERSAL_TP')
                     return
