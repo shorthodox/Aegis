@@ -342,8 +342,13 @@ const TrialManager = (() => {
             }
             if (!userDoc.exists()) { resolve(null); return; }
             const data = userDoc.data();
-            // Try explicit start-date fields first
-            const trialStart = data?.trial?.startDate || data?.trial_start || data?.trialStart || data?.joinDate;
+            // Server-authoritative field FIRST. `trial_start` is protected by
+            // firestore.rules; `trial.startDate` and `trialStart` are not, and
+            // consulting them first let an unprotected field outrank a
+            // protected one (same defect as authManager.setUser). The rest of
+            // the chain is kept in its original order, so documents carrying
+            // only the legacy shapes still resolve.
+            const trialStart = data?.trial_start || data?.trial?.startDate || data?.trialStart || data?.joinDate;
             if (trialStart) {
               resolve(trialStart.toDate ? trialStart.toDate() : new Date(trialStart));
               return;
@@ -577,20 +582,22 @@ const TrialManager = (() => {
         const trialEnd = new Date(explicitTrialStart.getTime() + 3 * 24 * 60 * 60 * 1000);
         localStorage.setItem('trial_end_timestamp', trialEnd.toISOString());
         
-        try {
-          const { setDoc } = await import("https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js");
-          const { getAuth } = await import("https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js");
-          const auth = getAuth();
-          const docKey = auth.currentUser?.email || userId;
-          setDoc(doc(db, 'users', docKey), {
-            trial_start: explicitTrialStart.toISOString(),
-            trial_end: trialEnd.toISOString(),
-            trial: {
-              startDate: explicitTrialStart.toISOString(),
-              endDate: trialEnd.toISOString()
-            }
-          }, { merge: true }).catch(e => console.log('Silent update of trial data failed', e));
-        } catch(e) {}
+        // Trial windows are SERVER-AUTHORITATIVE. This block used to write
+        // trial_start / trial_end / trial.* back to the user document from the
+        // browser. That is the root cause of the create-path escalation: a
+        // setDoc(merge) against the email-keyed doc is a CREATE when only the
+        // uid-keyed doc exists, so the update-path guard never ran and the
+        // client could name its own expiry. The rules now reject these fields
+        // on both paths; the write is removed here so the client is not
+        // attempting something it is forbidden to do.
+        //
+        // The values above are still cached in localStorage for display. The
+        // backend owns the authoritative dates and the client reads them.
+        //
+        // The removed call ended in
+        //     .catch(e => console.log('Silent update of trial data failed', e))
+        // wrapped in `catch(e) {}` — which is why permission denials on this
+        // path went unnoticed. Do not reintroduce a swallowed rejection here.
       }
     }
 

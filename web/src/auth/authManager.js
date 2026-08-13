@@ -101,13 +101,26 @@ export class AuthManager {
         localStorage.setItem('user_profile', JSON.stringify(userData));
         if (!userData) return;
 
+        // Order matters. `trial_end` is SERVER-AUTHORITATIVE and is the field
+        // firestore.rules protects on both the create and update paths; it is
+        // also what is_trial_expired() reads (main.py:3129). The `trial` map is
+        // NOT protected — rules cannot distinguish subfields of a map in
+        // affectedKeys(), and locking the whole map would break signup and
+        // trial.expiryNotified. So a client can still write trial.endDate.
+        //
+        // This chain used to consult trial.endDate FIRST, which handed the
+        // unprotected field authority over the protected one: writing
+        // trial:{endDate:'2099-01-01'} extended your own trial as far as this
+        // gate was concerned, and _signTrialEnd() below happily signed the
+        // forged value. Protected field first now; the map is a legacy
+        // fallback, so documents carrying only trial.endDate still resolve.
         let endDate = null;
-        if (userData.trial?.endDate != null) {
-            endDate = userData.trial.endDate;
-        } else if (userData.trial_end != null) {
+        if (userData.trial_end != null) {
             endDate = userData.trial_end;
         } else if (userData.trialEnd != null) {
             endDate = userData.trialEnd;
+        } else if (userData.trial?.endDate != null) {
+            endDate = userData.trial.endDate;
         }
 
         if (endDate && String(endDate) !== 'null') {
