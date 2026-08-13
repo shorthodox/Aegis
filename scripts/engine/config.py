@@ -101,6 +101,61 @@ try:
 except Exception:
     STATE_DIR = _ROOT / 'data'
 
+
+def _assert_state_dir_is_persistent() -> None:
+    """Refuse to boot in production if state would land on an ephemeral disk.
+
+    This is the guard that should have existed from the start. On 2026-08-13 the
+    published track record was found empty: no Railway volume had ever been
+    attached, AEGIS_STATE_DIR was unset, and STATE_DIR silently resolved to
+    /app/data on the container overlay — wiped by every one of the five
+    redeploys that week. The Firestore mirror below was the supposed safety net
+    and had never written a single document, because it targets a database that
+    does not exist. Both mechanisms were broken at once and nothing said so.
+
+    Nothing above this line can detect that: mkdir(exist_ok=True) CREATES the
+    missing directory, so an unmounted path looks identical to a mounted one,
+    and the `except` clause quietly falls back to the in-repo data/ dir. A
+    writable path is not a persistent path, and only is_mount() tells them
+    apart.
+
+    Local dev and CI are unaffected — the check only runs where RAILWAY_ENVIRONMENT
+    is set, and in-repo data/ is the correct target everywhere else.
+    """
+    if not os.environ.get('RAILWAY_ENVIRONMENT'):
+        return
+
+    # Deliberate, documented escape hatch: lets the service boot without a
+    # volume during an incident. It is loud on purpose — if this is set in
+    # steady state, the guard is off and the track record is unprotected.
+    if os.environ.get('AEGIS_ALLOW_EPHEMERAL_STATE') == '1':
+        print('[state] WARNING: AEGIS_ALLOW_EPHEMERAL_STATE=1 — mount guard '
+              'DISABLED. Runtime state will be destroyed on the next redeploy.',
+              flush=True)
+        return
+
+    if not os.environ.get('AEGIS_STATE_DIR'):
+        raise RuntimeError(
+            'AEGIS_STATE_DIR is not set in a Railway environment, so runtime '
+            f'state would be written to {STATE_DIR} on the ephemeral container '
+            'filesystem and destroyed on the next redeploy. Attach a volume and '
+            'set AEGIS_STATE_DIR to its mount path (see docs/MIGRATION_PLAN.md). '
+            'To boot anyway and accept the data loss, set '
+            'AEGIS_ALLOW_EPHEMERAL_STATE=1.'
+        )
+
+    if not STATE_DIR.is_mount():
+        raise RuntimeError(
+            f'AEGIS_STATE_DIR={STATE_DIR} exists but is NOT a mount point — it '
+            'is a plain directory on the container overlay, and everything '
+            'written to it is destroyed on the next redeploy. Attach a Railway '
+            'volume at this exact path. To boot anyway and accept the data '
+            'loss, set AEGIS_ALLOW_EPHEMERAL_STATE=1.'
+        )
+
+
+_assert_state_dir_is_persistent()
+
 TRACK_RECORD_PATH       = STATE_DIR / 'track_record.json'
 ALPHA_TRACK_RECORD_PATH = STATE_DIR / 'alpha_track_record.json'
 ALPHA_TIMEFRAMES        = ['15m', '30m', '4h', '1d']
