@@ -1043,10 +1043,21 @@ def is_cooldown_active(email: str) -> bool:
 # -------------------------------------------------------------------
 # Institutional Analytics Engine
 # -------------------------------------------------------------------
-async def compute_system_analytics():
+def _compute_system_analytics_pass():
     """
-    Background task to compute win rate, mathematical expectancy, 
-    profit factor, and max drawdown from historical signals.
+    Compute win rate, mathematical expectancy, profit factor, and max drawdown
+    from historical signals.
+
+    MUST NOT run on the event loop — see the caller. Despite having been an
+    `async def`, there was never an await in this body: every line below is a
+    BLOCKING Firestore round trip. The .stream() scan pulls every closed signal
+    in the collection, and the .set() at the end is a write. Awaiting it from
+    analytics_loop froze the loop for as long as Firestore took to answer.
+
+    That is cheap when Firestore is healthy and ruinous when it is not. Measured
+    on a project whose free-tier daily write quota was exhausted, the client
+    retried the 429 until its own 60s deadline and the loop sat blocked for 45s
+    straight, with the app bound to its port and answering nothing.
     """
     try:
         if not db:
@@ -1141,8 +1152,23 @@ async def compute_system_analytics():
         print(f"âŒ Error computing analytics: {e}")
 
 async def analytics_loop():
+    """Recompute the global performance card every hour.
+
+    THE PASS RUNS IN A WORKER THREAD, AND THAT IS NOT OPTIONAL — its body is
+    blocking Firestore I/O from the first line to the last. This was the one
+    startup loop missed when the Telegram sweep and the two reminder scans were
+    moved off the event loop; it ran first, with no grace period, and stalled
+    every request uvicorn was trying to answer.
+
+    Nothing depends on this being prompt. It feeds a dashboard card and it runs
+    hourly, so it can afford to start last, after the engine has warmed up.
+    """
+    await asyncio.sleep(120)
     while True:
-        await compute_system_analytics()
+        try:
+            await asyncio.to_thread(_compute_system_analytics_pass)
+        except Exception as exc:
+            print(f"[Analytics] Error: {exc}")
         await asyncio.sleep(3600)  # Run every hour
 
 # -------------------------------------------------------------------
@@ -1658,16 +1684,39 @@ async def _trader_scan_loop():
         await asyncio.sleep(_TRADER_SCAN_INTERVAL)
 
 
+def _otp_cleanup_pass() -> None:
+    """One sweep. MUST NOT run on the event loop — see the caller.
+
+    Both halves are blocking Firestore calls: the .stream() scan, and then one
+    DELETE per expired document with no await between them. A backlog of expired
+    OTPs therefore costs one blocking round trip each, and deletes are writes —
+    the first thing to fail, and to retry slowly, when a project is over quota.
+    """
+    now = datetime.now(timezone.utc)
+    expired = db.collection(_OTP_COL).where("expires_at", "<", now).stream()
+    count = 0
+    for doc in expired:
+        try:
+            doc.reference.delete()
+            count += 1
+        except Exception as exc:
+            # One undeletable document must not abandon the rest of the sweep.
+            print(f"[OTP cleanup] skipped {doc.id}: {exc!r}")
+    if count:
+        print(f"[OTP cleanup] Purged {count} expired OTP document(s)")
+
+
 async def _otp_cleanup_loop():
-    """Delete expired OTP documents from Firestore every 5 minutes."""
+    """Delete expired OTP documents from Firestore every 5 minutes.
+
+    The sweep runs in a worker thread. Run on the loop, as it was, this froze
+    the whole site for the length of the scan plus one delete per expired
+    document — every five minutes, forever, not just at boot.
+    """
     while True:
         await asyncio.sleep(300)
         try:
-            now = datetime.now(timezone.utc)
-            expired = db.collection(_OTP_COL).where("expires_at", "<", now).stream()
-            count = sum(1 for doc in expired if not doc.reference.delete())
-            if count:
-                print(f"[OTP cleanup] Purged {count} expired OTP document(s)")
+            await asyncio.to_thread(_otp_cleanup_pass)
         except Exception as exc:
             print(f"[OTP cleanup] Error: {exc}")
 
@@ -6340,16 +6389,24 @@ async def dev_key_display_loop():
 
         # Write to dev_codes (document ID = the code itself) so /api/redeem-dev-code
         # can look it up via _get_dev_code_doc() which does .document(code).get()
-        db.collection("dev_codes").document(new_key).set({
-            "source": "backend",
-            "plan": "pro",
-            "label": "startup_key",
-            "created_at": now_dt.isoformat(),
-            "expires_at": expires_dt.isoformat(),
-            "features": features,
-            "created_by": "system_startup",
-            "used_by": None,
-        })
+        #
+        # Off-loop: .set() is a blocking Firestore WRITE and this task fires three
+        # seconds into boot. On a project that is over its write quota the client
+        # retries the 429 up to its 60s deadline, and on the event loop that is 60s
+        # in which the site is bound to its port and answering nothing.
+        await asyncio.to_thread(
+            db.collection("dev_codes").document(new_key).set,
+            {
+                "source": "backend",
+                "plan": "pro",
+                "label": "startup_key",
+                "created_at": now_dt.isoformat(),
+                "expires_at": expires_dt.isoformat(),
+                "features": features,
+                "created_by": "system_startup",
+                "used_by": None,
+            },
+        )
 
     except Exception as e:
         print(f"[dev_key_display_loop ERROR] {e}", flush=True)
