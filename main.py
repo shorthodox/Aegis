@@ -1672,45 +1672,59 @@ async def _otp_cleanup_loop():
             print(f"[OTP cleanup] Error: {exc}")
 
 
+def _telegram_cleanup_pass() -> None:
+    """One sweep. MUST NOT run on the event loop — see the caller.
+
+    Every lookup in here is a BLOCKING Firestore round trip: is_trial_expired()
+    and _tg_access_until() both call get_user_doc(), which is a plain `def`
+    ending in `doc_ref.get()`. That is two network calls per connected user,
+    with no await between them.
+    """
+    to_remove = []
+    for email in list(_tg_connections):
+        try:
+            if is_trial_expired(email):
+                to_remove.append(email)
+            else:
+                entry = _tg_connections.get(email)
+                _tg_connections[email] = {
+                    "chat_id":      _tg_chat_id(entry),
+                    "access_until": _tg_access_until(email),
+                }
+        except Exception as exc:
+            # One bad user must not save the rest from being swept.
+            print(f"[TG cleanup] skipped {email}: {exc!r}")
+    for email in to_remove:
+        _tg_connections.pop(email, None)
+    if to_remove:
+        _tg_save_connections()
+        print(f"[TG cleanup] Disconnected {len(to_remove)} expired user(s): {to_remove}")
+
+
 async def _telegram_cleanup_loop():
     """Disconnect Telegram for users whose trial has ended or plan has lapsed.
 
-    Three things were wrong with the old version and all three let an expired
-    user keep receiving signals:
+    Delivery does NOT depend on this loop. dispatcher._tg_send_all checks
+    `access_until` on every send, so entitlement is enforced at send time and
+    this is cleanup — a late pass cannot leak signals. That is what makes the
+    startup grace period below safe.
 
-      * it slept an hour BEFORE its first pass, so every restart reopened a
-        full hour of free access;
-      * one user whose lookup raised aborted the whole sweep for that hour,
-        because the try wrapped the entire comprehension rather than each user;
-      * it was the ONLY gate. Delivery now also checks `access_until` at send
-        time (see dispatcher._tg_send_all), so this loop is cleanup rather
-        than enforcement, and a late pass no longer means leaked signals.
+    THE SWEEP RUNS IN A WORKER THREAD, AND THAT IS NOT OPTIONAL. Its body is two
+    blocking Firestore calls per connected user. An earlier version of this fix
+    moved the sweep ahead of the sleep so a restart could not reopen an hour of
+    free access — correct intent, but it put that blocking I/O directly on the
+    event loop at startup, which stalled every request uvicorn was trying to
+    answer. The site buffered and never opened. Off-loop via to_thread keeps the
+    prompt first pass without holding the loop.
 
-    It also refreshes `access_until` on the survivors, which is what keeps the
-    send-time gate honest after someone upgrades or renews.
+    One bad user is caught per user rather than per pass, so a single failed
+    lookup cannot abort the sweep for everyone else.
     """
+    # Let the app bind and start serving before touching the network at all.
+    await asyncio.sleep(30)
     while True:
         try:
-            to_remove = []
-            for email in list(_tg_connections):
-                try:
-                    if is_trial_expired(email):
-                        to_remove.append(email)
-                    else:
-                        entry = _tg_connections.get(email)
-                        _tg_connections[email] = {
-                            "chat_id":      _tg_chat_id(entry),
-                            "access_until": _tg_access_until(email),
-                        }
-                except Exception as exc:
-                    # One bad user must not save the rest from being swept.
-                    print(f"[TG cleanup] skipped {email}: {exc!r}")
-            for email in to_remove:
-                _tg_connections.pop(email, None)
-            if to_remove or _tg_connections:
-                _tg_save_connections()
-            if to_remove:
-                print(f"[TG cleanup] Disconnected {len(to_remove)} expired user(s): {to_remove}")
+            await asyncio.to_thread(_telegram_cleanup_pass)
         except Exception as exc:
             print(f"[TG cleanup] Error: {exc}")
         await asyncio.sleep(900)
@@ -5528,66 +5542,90 @@ async def send_subscription_expiry_reminder(email: str, expiry_date: datetime, d
 # -------------------------------------------------------------------
 # Background Tasks for Reminders
 # -------------------------------------------------------------------
+def _due_trial_reminders(now):
+    """BLOCKING Firestore scan, isolated so it can be run off the event loop.
+
+    `.stream()` and the iteration over it are network calls. Run inline on the
+    loop they hold every request the server is trying to answer for as long as
+    the scan takes — and if Firestore is slow or unreachable, indefinitely.
+    Returns plain data; the caller does the awaiting.
+    """
+    due = []
+    for user_doc in db.collection("users").where("plan", "==", "trial").stream():
+        d = user_doc.to_dict() or {}
+        raw = d.get("trial_end")
+        if not raw:
+            continue
+        try:
+            end = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            continue
+        if end.tzinfo is None:
+            end = end.replace(tzinfo=timezone.utc)
+        hrs = (end - now).total_seconds() / 3600
+        if 23 <= hrs <= 25 and not d.get("reminder_24h_sent"):
+            due.append((user_doc.reference, user_doc.id, end, 24, "reminder_24h_sent"))
+        elif 0.5 <= hrs <= 1.5 and not d.get("reminder_1h_sent"):
+            due.append((user_doc.reference, user_doc.id, end, 1, "reminder_1h_sent"))
+    return due
+
+
 async def check_and_send_trial_reminders():
+    # Startup grace, then never on the loop again. See _due_trial_reminders.
+    await asyncio.sleep(45)
     while True:
         try:
             now = datetime.now(timezone.utc)
-            users_ref = db.collection("users")
-            query = users_ref.where("plan", "==", "trial").stream()
-            
-            for user_doc in query:
-                user_data = user_doc.to_dict() or {}
-                trial_end = user_data.get("trial_end")
-                
-                if trial_end:
-                    trial_end_date = datetime.fromisoformat(trial_end)
-                    if trial_end_date.tzinfo is None:
-                        trial_end_date = trial_end_date.replace(tzinfo=timezone.utc)
-                    hours_until_expiry = (trial_end_date - now).total_seconds() / 3600
-                    
-                    if 23 <= hours_until_expiry <= 25 and not user_data.get("reminder_24h_sent"):
-                        await send_trial_expiry_reminder(user_doc.id, trial_end_date, hours_until=24)
-                        user_doc.reference.update({"reminder_24h_sent": True})
-                    elif 0.5 <= hours_until_expiry <= 1.5 and not user_data.get("reminder_1h_sent"):
-                        await send_trial_expiry_reminder(user_doc.id, trial_end_date, hours_until=1)
-                        user_doc.reference.update({"reminder_1h_sent": True})
-            
-            await asyncio.sleep(3600)
+            for ref, uid, end, hrs, flag in await asyncio.to_thread(_due_trial_reminders, now):
+                try:
+                    await send_trial_expiry_reminder(uid, end, hours_until=hrs)
+                    await asyncio.to_thread(ref.update, {flag: True})
+                except Exception as e:
+                    print(f"Trial reminder failed for {uid}: {e}")
         except Exception as e:
             print(f"Trial reminder check error: {e}")
-            await asyncio.sleep(3600)
+        await asyncio.sleep(3600)
+
+def _due_subscription_reminders(now):
+    """BLOCKING Firestore scan — see _due_trial_reminders for why it is split out."""
+    due = []
+    for user_doc in db.collection("users").where(
+            "subscription.status", "==", "active").stream():
+        d = user_doc.to_dict() or {}
+        raw = d.get("subscription_end")
+        if not raw:
+            continue
+        try:
+            end = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            continue
+        if end.tzinfo is None:
+            end = end.replace(tzinfo=timezone.utc)
+        days = (end - now).days
+        for n, flag in ((7, "reminder_7d_sent"), (3, "reminder_3d_sent"),
+                        (1, "reminder_1d_sent")):
+            if days == n and not d.get(flag):
+                due.append((user_doc.reference, user_doc.id, end, n, flag))
+                break
+    return due
+
 
 async def check_and_send_subscription_reminders():
+    # Startup grace, staggered behind the trial sweep.
+    await asyncio.sleep(90)
     while True:
         try:
             now = datetime.now(timezone.utc)
-            users_ref = db.collection("users")
-            query = users_ref.where("subscription.status", "==", "active").stream()
-            
-            for user_doc in query:
-                user_data = user_doc.to_dict() or {}
-                sub_end = user_data.get("subscription_end")
-                
-                if sub_end:
-                    sub_end_date = datetime.fromisoformat(sub_end)
-                    if sub_end_date.tzinfo is None:
-                        sub_end_date = sub_end_date.replace(tzinfo=timezone.utc)
-                    days_until_expiry = (sub_end_date - now).days
-                    
-                    if days_until_expiry == 7 and not user_data.get("reminder_7d_sent"):
-                        await send_subscription_expiry_reminder(user_doc.id, sub_end_date, days_until=7)
-                        user_doc.reference.update({"reminder_7d_sent": True})
-                    elif days_until_expiry == 3 and not user_data.get("reminder_3d_sent"):
-                        await send_subscription_expiry_reminder(user_doc.id, sub_end_date, days_until=3)
-                        user_doc.reference.update({"reminder_3d_sent": True})
-                    elif days_until_expiry == 1 and not user_data.get("reminder_1d_sent"):
-                        await send_subscription_expiry_reminder(user_doc.id, sub_end_date, days_until=1)
-                        user_doc.reference.update({"reminder_1d_sent": True})
-            
-            await asyncio.sleep(86400)
+            for ref, uid, end, days, flag in await asyncio.to_thread(
+                    _due_subscription_reminders, now):
+                try:
+                    await send_subscription_expiry_reminder(uid, end, days_until=days)
+                    await asyncio.to_thread(ref.update, {flag: True})
+                except Exception as e:
+                    print(f"Subscription reminder failed for {uid}: {e}")
         except Exception as e:
             print(f"Subscription reminder check error: {e}")
-            await asyncio.sleep(86400)
+        await asyncio.sleep(86400)
 
 # -------------------------------------------------------------------
 # WebSocket signal field filtering by plan tier
