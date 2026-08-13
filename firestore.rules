@@ -45,13 +45,41 @@ service cloud.firestore {
           || plan == 'basic';
     }
 
-    // Prevent users from escalating their own plan or touching
-    // subscription/trial fields — only the Admin SDK may write these.
+    // Fields only the Admin SDK may ever write. Trial windows are
+    // SERVER-AUTHORITATIVE: trial_end is what is_trial_expired() reads
+    // (main.py:3129), and trial_used gates one-trial-per-account
+    // (main.py:4282). A client that can write its own expiry has no expiry.
+    function adminOnlyFields() {
+      return ['tier', 'trial_end', 'trialEnd', 'trial_start', 'trial_used',
+              'subscription_active'];
+    }
+
+    // UPDATE: neither plan, nor the subscription map, nor any admin-only
+    // field may change. Unchanged from the original guard except for the
+    // two fields added above.
     function planFieldsUnchanged() {
-      let protected = ['plan', 'tier', 'trial_end', 'trialEnd',
-                       'subscription_active', 'subscription'];
-      return !request.resource.data.diff(resource.data)
-                .affectedKeys().hasAny(protected);
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return !changed.hasAny(adminOnlyFields())
+          && !changed.hasAny(['plan', 'subscription']);
+    }
+
+    // CREATE: the same fields must be absent entirely. This guard did not
+    // exist before — planFieldsUnchanged() was only applied to update, and
+    // it reads resource.data, which does not exist on a create. A client
+    // could therefore set an arbitrary trial_end at document creation and
+    // hold a trial that never expires. Reachable via a setDoc(merge) on the
+    // email-keyed doc when only the uid-keyed doc existed, because that is
+    // a create, not an update.
+    //
+    // `subscription` is NOT in adminOnlyFields because legitimate signup
+    // (auth.js:82) writes {status:'none', startDate:null, ...} as part of the
+    // initial document. Forbidding it outright would reject every new account.
+    // It is permitted here only in that benign shape: a forged
+    // status == 'active' is rejected. It remains fully locked on update.
+    function createFieldsSafe() {
+      return !request.resource.data.keys().hasAny(adminOnlyFields())
+          && (!('subscription' in request.resource.data)
+              || request.resource.data.subscription.get('status', '') != 'active');
     }
 
     // ----------------------------------------------------------------
@@ -62,13 +90,13 @@ service cloud.firestore {
       // Owner reads their own doc (uid-keyed or email-keyed)
       allow read: if isAuthed() && ownsDoc(userId);
 
-      // Initial doc creation: only allow plan == 'trial' (or no plan field).
-      // Prevents a user from self-assigning a paid plan at signup.
+      // Initial doc creation: only allow plan == 'trial' (or no plan field),
+      // and no admin-only field may be present at all.
       allow create: if isAuthed()
         && ownsDoc(userId)
         && (!('plan' in request.resource.data)
             || request.resource.data.plan == 'trial')
-        && !('subscription_active' in request.resource.data);
+        && createFieldsSafe();
 
       // Updates allowed only when plan/subscription fields are untouched.
       allow update: if isAuthed()
@@ -114,33 +142,12 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // ----------------------------------------------------------------
-    // Root-level trades — owner read; backend writes only
-    // ----------------------------------------------------------------
-    match /trades/{tradeId} {
-      allow read:  if isAuthed()
-        && resource.data.get('userId', '') == request.auth.uid;
-      allow write: if false;
-    }
-
-    // ----------------------------------------------------------------
-    // Subscriptions — owner read; backend writes only
-    // ----------------------------------------------------------------
-    match /subscriptions/{userId} {
-      allow read:  if isAuthed() && request.auth.uid == userId;
-      allow write: if false;
-    }
-
-    // ----------------------------------------------------------------
-    // Transactions / audit log — owner read; owner create (no uid spoof)
-    // ----------------------------------------------------------------
-    match /transactions/{transactionId} {
-      allow read: if isAuthed()
-        && resource.data.get('userId', '') == request.auth.uid;
-      allow create: if isAuthed()
-        && request.resource.data.get('userId', '') == request.auth.uid;
-      allow update, delete: if false;
-    }
+    // Removed 2026-08-13: rules for /trades, /subscriptions, and /transactions.
+    // All three collections were verified EMPTY via the Firestore REST API
+    // (0 documents, database 'default'), and no backend or frontend code reads
+    // or writes them. An unused permissive rule is pure attack surface — the
+    // /transactions rule in particular allowed owner-create on a collection
+    // nothing validates. The catch-all deny below now covers these paths.
 
     // ----------------------------------------------------------------
     // Deny everything else
