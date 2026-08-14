@@ -1,0 +1,585 @@
+{
+  "AJXC4jLowFexRzXgd577lSAcKAj1": {
+    "displayName": "Animesh Kukreti",
+    "email": "user3@example.test",
+    "joinDate": {
+      "__ts__": "2026-06-28T10:58:49.951Z"
+    },
+    "lastLogin": {
+      "__ts__": "2026-08-05T07:45:40.285Z"
+    },
+    "loginMethods": [
+      "google"
+    ],
+    "phone": "+916395220548",
+    "photoURL": "https://lh3.googleusercontent.com/a/ACg8ocJ9c7USAMXQ09UtCxG3JStAIpu4WW6jUT_pyHJKEuZOx3tifeg1=s96-c",
+    "plan": "trial",
+    "preferences": {
+      "capital": 10000,
+      "notifications": true,
+      "riskPct": 2,
+      "theme": "dark"
+    },
+    "subscription": {
+      "endDate": null,
+      "renewalDate": null,
+      "startDate": null,
+      "status": "none"
+    },
+    "trial": {
+      "active": true,
+      "allowedTimeframes": [
+        "30m",
+        "1h"
+      ],
+      "allowedTokens": [
+        "BTC",
+        "ETH",
+        "SOL",
+        "ARB",
+        "AAVE"
+      ],
+      "endDate": "2026-07-01T10:58:49.697Z",
+      "expiryNotified": false,
+      "startDate": {
+        "__ts__": "2026-06-28T10:58:49.951Z"
+      }
+    },
+    "uid": "AJXC4jLowFexRzXgd577lSAcKAj1",
+    "usage": {
+      "lastSignalTime": null,
+      "signalCount": 0,
+      "totalSignalsToday": 0
+    }
+  },
+  "AN2VR6y5aBTRjDrfGhn17TPqC4E3": {
+    "displayName": "Aman Juyal",
+    "email": "user8@example.test",
+    "joinDate": {
+      "__ts__": "2026-07-02T07:49:23.431Z"
+    },
+    "lastLogin": {
+      "__ts__": "2026-07-02T07:49:23.431Z"
+    },
+    "loginMethods": [
+      "email"
+    ],
+    "phone": "",
+    "photoURL": "https://ui-avatars.com/api/?name=Aman%20Juyal&background=00f2ff&color=000",
+    "plan": "trial",
+    "preferences": {
+      "capital": 10000,
+      "notifications": true,
+      "riskPct": 2,
+      "theme": "dark"
+    },
+    "subscription": {
+      "endDate": null,
+      "renewalDate": null,
+      "startDate": null,
+      "status": "none"
+    },
+    "trial": {
+      "active": true,
+      "allowedTimeframes": [
+        "30m",
+        "1h"
+      ],
+      "allowedTokens": [
+        "BTC",
+        "ETH",
+        "SOL",
+        "ARB",
+        "AAVE"
+      ],
+      "endDate": "2026-07-05T07:53:09.524Z",
+      "expiryNotified": false,
+      "startDate": {
+        "__ts__": "2026-07-02T07:49:23.431Z"
+      }
+    },
+    "uid": "AN2VR6y5aBTRjDrfGhn17TPqC4E3",
+    "usage": {
+      "lastSignalTime": null,
+      "signalCount": 0,
+      "totalSignalsToday": 0
+    }
+  },
+  "WIvYpPLeuJPVXST2p86OjX1De8G2": {
+    "displayName": "Jane Das",
+    "email": "user5@example.test",
+    "joinDate": {
+      "__ts__": "2026-07-22T12:59:31.302Z"
+    },
+    "lastLogin": {
+      "__ts__": "2026-07-22T12:59:31.302Z"
+    },
+    "loginMethods": [
+      "email"
+    ],
+    "phone": "",
+    "photoURL": "https://ui-avatars.com/api/?name=Jane%20Das&background=00f2ff&color=000",
+    "plan": "trial",
+    "preferences": {
+      "capital": 10000,
+      "notifications": true,
+      "riskPct": 2,
+      "theme": "dark"
+    },
+    "subscription": {
+      "endDate": null,
+      "renewalDate": null,
+      "startDate": null,
+      "status": "none"
+    },
+    "trial": {
+      "active": true,
+      "allowedTimeframes": [
+        "30m",
+        "1h"
+      ],
+      "allowedTokens": [
+        "BTC",
+        "ETH",
+        "SOL",
+        "ARB",
+        "AAVE"
+      ],
+      "endDate": "2026-07-25T12:59:30.826Z",
+      "expiryNotified": false,
+      "startDate": {
+        "__ts__": "2026-07-22T12:59:31.302Z"
+      }
+    },
+    "uid": "WIvYpPLeuJPVXST2p86OjX1De8G2",
+    "usage": {
+      "lastSignalTime": null,
+      "signalCount": 0,
+      "totalSignalsToday": 0
+    }
+  },
+  "aL6HoXqkDUOiw31A6GMrUpj5jSg2": {
+    "displayName": "UK HILLS & VILLAGES",
+    "email": "user6@example.test",
+    "joinDate": {
+      "__ts__": "2026-07-04T05:31:15.315Z"
+    },
+    "lastLogin": {
+      "__ts__": "2026-07-04T05:31:15.315Z"
+    },
+    "loginMethods": [
+      "google"
+    ],
+    "phone": "+918193924444",
+    "photoURL": "https://lh3.googleusercontent.com/a/ACg8ocJBsC3AaG3KrldEtcO2agEBJp0XXYxnkTr0yD0pYYRClhzjvsNrOA=s96-c",
+    "plan": "trial",
+    "preferences": {
+      "capital": 10000,
+      "notifications": true,
+      "riskPct": 2,
+      "theme": "dark"
+    },
+    "subscription": {
+      "endDate": null,
+      "renewalDate": null,
+      "startDate": null,
+      "status": "none"
+    },
+    "trial": {
+      "active": true,
+      "allowedTimeframes": [
+        "30m",
+        "1h"
+      ],
+      "allowedTokens": [
+        "BTC",
+        "ETH",
+        "SOL",
+        "ARB",
+        "AAVE"
+      ],
+      "endDate": "2026-07-07T05:31:14.494Z",
+      "expiryNotified": false,
+      "startDate": {
+        "__ts__": "2026-07-04T05:31:15.315Z"
+      }
+    },
+    "uid": "aL6HoXqkDUOiw31A6GMrUpj5jSg2",
+    "usage": {
+      "lastSignalTime": null,
+      "signalCount": 0,
+      "totalSignalsToday": 0
+    }
+  },
+  "icjcvPB73tfiHtvM6TrQs3aKUG93": {
+    "displayName": "Babita Kukreti",
+    "email": "user4@example.test",
+    "joinDate": {
+      "__ts__": "2026-07-05T05:03:34.463Z"
+    },
+    "lastLogin": {
+      "__ts__": "2026-07-05T05:03:34.463Z"
+    },
+    "loginMethods": [
+      "google"
+    ],
+    "phone": "+916395228548",
+    "photoURL": "https://lh3.googleusercontent.com/a/ACg8ocJjajEc7ZSPQuHwFpFmymC1imFSUCtbkm6eWgcovByKZy17uxxu=s96-c",
+    "plan": "trial",
+    "preferences": {
+      "capital": 10000,
+      "notifications": true,
+      "riskPct": 2,
+      "theme": "dark"
+    },
+    "subscription": {
+      "endDate": null,
+      "renewalDate": null,
+      "startDate": null,
+      "status": "none"
+    },
+    "trial": {
+      "active": true,
+      "allowedTimeframes": [
+        "30m",
+        "1h"
+      ],
+      "allowedTokens": [
+        "BTC",
+        "ETH",
+        "SOL",
+        "ARB",
+        "AAVE"
+      ],
+      "endDate": "2026-07-08T05:03:34.219Z",
+      "expiryNotified": false,
+      "startDate": {
+        "__ts__": "2026-07-05T05:03:34.463Z"
+      }
+    },
+    "uid": "icjcvPB73tfiHtvM6TrQs3aKUG93",
+    "usage": {
+      "lastSignalTime": null,
+      "signalCount": 0,
+      "totalSignalsToday": 0
+    }
+  },
+  "qxKii1jQn0ebOs9pm1qqr2TfSxd2": {
+    "displayName": "Animesh Kukreti",
+    "email": "user2@example.test",
+    "joinDate": {
+      "__ts__": "2026-06-30T06:42:17.966Z"
+    },
+    "lastLogin": {
+      "__ts__": "2026-07-21T18:26:10.466Z"
+    },
+    "loginMethods": [
+      "google"
+    ],
+    "phone": "+916395220548",
+    "photoURL": "https://lh3.googleusercontent.com/a/ACg8ocLUS7f2Y4L6bLRJiTrNQUt9pcfbKYjbSDCEm_DxDrbd7pweOQ=s96-c",
+    "plan": "trial",
+    "preferences": {
+      "capital": 10000,
+      "notifications": true,
+      "riskPct": 2,
+      "theme": "dark"
+    },
+    "subscription": {
+      "endDate": null,
+      "renewalDate": null,
+      "startDate": null,
+      "status": "none"
+    },
+    "trial": {
+      "active": true,
+      "allowedTimeframes": [
+        "30m",
+        "1h"
+      ],
+      "allowedTokens": [
+        "BTC",
+        "ETH",
+        "SOL",
+        "ARB",
+        "AAVE"
+      ],
+      "endDate": "2026-07-03T06:42:15.362Z",
+      "expiryNotified": false,
+      "startDate": {
+        "__ts__": "2026-06-30T06:42:17.966Z"
+      }
+    },
+    "uid": "qxKii1jQn0ebOs9pm1qqr2TfSxd2",
+    "usage": {
+      "lastSignalTime": null,
+      "signalCount": 0,
+      "totalSignalsToday": 0
+    }
+  },
+  "user1@example.test": {
+    "created_at": "2026-07-21T14:29:19.703836+00:00",
+    "email": "user1@example.test",
+    "full_name": "Andrews David",
+    "last_login": "2026-07-21T14:29:19.703836+00:00",
+    "otp_verified": true,
+    "phone_number": "+917012824147",
+    "plan": "trial",
+    "provider": "firebase",
+    "reminder_1h_sent": true,
+    "reminder_24h_sent": true,
+    "social_id": "wKRMnYLuREbFLiwYcjoTMvXbgU02",
+    "subscription": {
+      "status": "inactive"
+    },
+    "trial": {
+      "endDate": "2026-07-24T14:29:20.463Z",
+      "startDate": "2026-07-21T14:29:20.463Z"
+    },
+    "trial_active": true,
+    "trial_end": "2026-07-24T14:29:20.463Z",
+    "trial_start": "2026-07-21T14:29:20.463Z",
+    "trial_used": true
+  },
+  "user3@example.test": {
+    "dev_code_used": "AEGIS-S77A-2NMT-PMFZ",
+    "last_login": "2026-06-29T17:43:17.258502+00:00",
+    "otp_verified": true,
+    "plan": "pro",
+    "subscription": {
+      "activated_at": "2026-07-01T10:52:06.469403+00:00",
+      "expires_at": "2026-07-06T05:34:59.878717+00:00",
+      "order_id": "devcode_AEGIS-S77A-2NMT-PMFZ",
+      "payment_id": "devcode_AEGIS-S77A-2NMT-PMFZ",
+      "plan_type": "pro",
+      "status": "active"
+    },
+    "trial": {
+      "endDate": "2026-07-01T10:58:49.951Z",
+      "startDate": "2026-06-28T10:58:49.951Z"
+    },
+    "trial_active": false,
+    "trial_end": "2026-07-01T10:58:49.951Z",
+    "trial_start": "2026-06-28T10:58:49.951Z"
+  },
+  "user4@example.test": {
+    "created_at": "2026-07-05T05:03:34.782975+00:00",
+    "email": "user4@example.test",
+    "full_name": "Babita Kukreti",
+    "last_login": "2026-07-05T05:03:34.782975+00:00",
+    "otp_verified": true,
+    "phone_number": "+916395228548",
+    "plan": "trial",
+    "provider": "firebase",
+    "reminder_1h_sent": true,
+    "reminder_24h_sent": true,
+    "social_id": "icjcvPB73tfiHtvM6TrQs3aKUG93",
+    "subscription": {
+      "status": "inactive"
+    },
+    "trial": {
+      "endDate": "2026-07-08T05:03:35.698Z",
+      "startDate": "2026-07-05T05:03:35.698Z"
+    },
+    "trial_active": true,
+    "trial_end": "2026-07-25T10:52:57.635793+00:00",
+    "trial_start": "2026-07-22T10:52:57.635793+00:00",
+    "trial_used": true
+  },
+  "user5@example.test": {
+    "created_at": "2026-07-22T12:59:33.505299+00:00",
+    "email": "user5@example.test",
+    "full_name": "Jane Das",
+    "last_login": "2026-07-22T12:59:33.505299+00:00",
+    "otp_verified": true,
+    "phone_number": "+919606783762",
+    "plan": "trial",
+    "provider": "firebase",
+    "reminder_1h_sent": true,
+    "reminder_24h_sent": true,
+    "social_id": "WIvYpPLeuJPVXST2p86OjX1De8G2",
+    "subscription": {
+      "status": "inactive"
+    },
+    "trial": {
+      "endDate": "2026-07-25T12:59:34.976Z",
+      "startDate": "2026-07-22T12:59:34.976Z"
+    },
+    "trial_active": true,
+    "trial_end": "2026-07-25T12:59:34.976Z",
+    "trial_start": "2026-07-22T12:59:34.976Z",
+    "trial_used": true
+  },
+  "user6@example.test": {
+    "created_at": "2026-07-04T05:31:15.661453+00:00",
+    "email": "user6@example.test",
+    "full_name": "UK HILLS & VILLAGES",
+    "last_login": "2026-07-04T05:31:15.661453+00:00",
+    "otp_verified": true,
+    "phone_number": "+918193924444",
+    "plan": "trial",
+    "provider": "firebase",
+    "reminder_1h_sent": true,
+    "reminder_24h_sent": true,
+    "social_id": "aL6HoXqkDUOiw31A6GMrUpj5jSg2",
+    "subscription": {
+      "status": "inactive"
+    },
+    "trial": {
+      "endDate": "2026-07-07T05:31:15.661Z",
+      "startDate": "2026-07-04T05:31:15.661Z"
+    },
+    "trial_active": true,
+    "trial_end": "2026-07-07T05:31:15.661Z",
+    "trial_start": "2026-07-04T05:31:15.661Z"
+  },
+  "user7@example.test": {
+    "created_at": "2026-08-06T09:31:51.299294+00:00",
+    "email": "user7@example.test",
+    "full_name": "parth kotnala",
+    "last_login": "2026-08-06T09:31:51.299294+00:00",
+    "otp_verified": true,
+    "phone_number": "+917983582371",
+    "plan": "trial",
+    "provider": "firebase",
+    "reminder_1h_sent": true,
+    "reminder_24h_sent": true,
+    "social_id": "yS2N0mNDWyd50G6RLdCj76JwIpf1",
+    "subscription": {
+      "status": "inactive"
+    },
+    "trial_active": true,
+    "trial_end": "2026-08-09T09:32:06.947923+00:00",
+    "trial_start": "2026-08-06T09:32:06.947923+00:00",
+    "trial_used": true
+  },
+  "user8@example.test": {
+    "created_at": "2026-07-02T07:49:24.654917+00:00",
+    "email": "user8@example.test",
+    "full_name": "Aman Juyal",
+    "last_login": "2026-07-02T07:49:24.654917+00:00",
+    "otp_verified": true,
+    "phone_number": "+917018412868",
+    "plan": "trial",
+    "provider": "firebase",
+    "reminder_1h_sent": true,
+    "reminder_24h_sent": true,
+    "social_id": "AN2VR6y5aBTRjDrfGhn17TPqC4E3",
+    "subscription": {
+      "status": "inactive"
+    },
+    "trial": {
+      "endDate": "2026-07-05T07:49:24.654Z",
+      "startDate": "2026-07-02T07:49:24.654Z"
+    },
+    "trial_active": true,
+    "trial_end": "2026-07-05T07:49:24.654Z",
+    "trial_start": "2026-07-02T07:49:24.654Z"
+  },
+  "wKRMnYLuREbFLiwYcjoTMvXbgU02": {
+    "displayName": "Andrews David",
+    "email": "user1@example.test",
+    "joinDate": {
+      "__ts__": "2026-07-21T14:29:19.317Z"
+    },
+    "lastLogin": {
+      "__ts__": "2026-07-21T14:29:19.317Z"
+    },
+    "loginMethods": [
+      "google"
+    ],
+    "phone": "+917012824147",
+    "photoURL": "https://lh3.googleusercontent.com/a/ACg8ocIGjl_j57CdoJoXWjMHfcuSgpqV_N8qkRUpjsKMIgoY-0h3NA=s96-c",
+    "plan": "trial",
+    "preferences": {
+      "capital": 10000,
+      "notifications": true,
+      "riskPct": 2,
+      "theme": "dark"
+    },
+    "subscription": {
+      "endDate": null,
+      "renewalDate": null,
+      "startDate": null,
+      "status": "none"
+    },
+    "trial": {
+      "active": true,
+      "allowedTimeframes": [
+        "30m",
+        "1h"
+      ],
+      "allowedTokens": [
+        "BTC",
+        "ETH",
+        "SOL",
+        "ARB",
+        "AAVE"
+      ],
+      "endDate": "2026-07-24T14:29:21.248Z",
+      "expiryNotified": false,
+      "startDate": {
+        "__ts__": "2026-07-21T14:29:19.317Z"
+      }
+    },
+    "uid": "wKRMnYLuREbFLiwYcjoTMvXbgU02",
+    "usage": {
+      "lastSignalTime": null,
+      "signalCount": 0,
+      "totalSignalsToday": 0
+    }
+  },
+  "yS2N0mNDWyd50G6RLdCj76JwIpf1": {
+    "displayName": "parth kotnala",
+    "email": "user7@example.test",
+    "joinDate": {
+      "__ts__": "2026-08-06T09:31:49.573Z"
+    },
+    "lastLogin": {
+      "__ts__": "2026-08-06T09:31:49.573Z"
+    },
+    "loginMethods": [
+      "google"
+    ],
+    "phone": "+917983582371",
+    "photoURL": "https://lh3.googleusercontent.com/a/ACg8ocJL9kmY9OK3UikzOUQ3_EhbsTE8eI96EHQ3_D4kc6LXAGBSXg=s96-c",
+    "plan": "trial",
+    "preferences": {
+      "capital": 10000,
+      "notifications": true,
+      "riskPct": 2,
+      "theme": "dark"
+    },
+    "subscription": {
+      "endDate": null,
+      "renewalDate": null,
+      "startDate": null,
+      "status": "none"
+    },
+    "trial": {
+      "active": true,
+      "allowedTimeframes": [
+        "30m",
+        "1h"
+      ],
+      "allowedTokens": [
+        "BTC",
+        "ETH",
+        "SOL",
+        "ARB",
+        "AAVE"
+      ],
+      "endDate": "2026-08-09T09:30:04.436Z",
+      "expiryNotified": false,
+      "startDate": {
+        "__ts__": "2026-08-06T09:31:49.573Z"
+      }
+    },
+    "uid": "yS2N0mNDWyd50G6RLdCj76JwIpf1",
+    "usage": {
+      "lastSignalTime": null,
+      "signalCount": 0,
+      "totalSignalsToday": 0
+    }
+  }
+}
