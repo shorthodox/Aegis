@@ -1,0 +1,13 @@
+{
+  "name": "aegis-rules-tests",
+  "private": true,
+  "type": "module",
+  "description": "Executes firestore.rules against the emulator, seeded from real document shapes.",
+  "scripts": {
+    "test": "firebase emulators:exec --only firestore --project aegis-rules-test \"node --test rules.test.mjs\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "firebase": "^11.0.0"
+  }
+}
