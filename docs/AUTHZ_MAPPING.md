@@ -1,5 +1,55 @@
 # Task 0 — Authorisation Translation Report
 
+> ## ⛔ SHELVED — 2026-08-14
+>
+> **Premise invalidated by Step 1 of the rules remediation: there are 15 user documents.**
+> Firestore's Spark free tier allows 50,000 reads and 20,000 writes per day — three orders of
+> magnitude above actual consumption, and more so now that every engine write is known to have
+> always failed against a database that does not exist.
+>
+> This migration was premised on Firestore cost. That premise is measurably false. Moving 15
+> documents off managed, replicated, backed-up infrastructure onto the single Railway volume
+> that destroyed the track record on 2026-08-13 would make the system strictly worse.
+>
+> The audit work below is real and stays useful if the threshold is ever crossed. Read it as a
+> record, not a plan.
+
+
+> ## ⚠️ CORRECTION — §1 BELOW IS NOT PRODUCTION (2026-08-14)
+>
+> §1 reproduces `firestore.rules` **from the repo** and treats it as the deployed authority. It
+> is not. The Firebase Rules API was queried directly: the live release `default` points at
+> ruleset `40d739b2-379f-4f97-9b73-f8ed001e6ec0`, last updated **2026-05-22**. The repo file has
+> never been deployed. Probing the live source for the functions §1 analyses:
+>
+> ```
+> planFieldsUnchanged   ABSENT      createFieldsSafe   ABSENT
+> adminOnlyFields       ABSENT      trial_used         ABSENT
+> ```
+>
+> What is actually live on `users` is a single line with no field protection at all:
+>
+> ```javascript
+> allow read, write: if request.auth != null
+>                    && (request.auth.uid == userId || request.auth.token.email == userId);
+> ```
+>
+> **`plan` is therefore client-writable in production**, and `/api/signals` gates on exactly
+> that field (`main.py:1963`). The live `signals` rule is `allow read: if request.auth != null`
+> — no subscription check whatsoever. Both are full bypasses, and both are more severe than the
+> trial-expiry create-path hole §3.2 describes.
+>
+> Two specific claims in this report are wrong as a result:
+>
+> - §5.4 says `app.js:155`'s client trade-close "fails in production today". It does not — the
+>   live rules permit `write` on the `trades` subcollection.
+> - §4's `getUserData()` coupling assumes `isSubscriptionActive()` is live. It is not; the
+>   deployed `signals` rule never calls it. The coupling becomes real only once the repo rules
+>   ship.
+>
+> Everything below is retained for audit trail. Read it as an analysis of the *intended* rules,
+> and treat the live ruleset above as the current state until the deploy lands.
+
 **Status:** awaiting approval. No code written.
 **Scope:** the `users` collection and its subcollections only, per the Phase 1 scope decision.
 
