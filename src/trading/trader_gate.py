@@ -166,8 +166,30 @@ MAX_STOP_ATR    = 3.00   # beyond this the payoff maths can never clear the floo
 # doubles r_net, so setups previously rejected for a near objective now pass.
 # The band is applied AFTER stage 2's MAX_STOP_ATR reject deliberately, so
 # structure still screens the setup, but nothing here holds the fire rate down.
+# v88 — CAP RAISED 0.70 -> 1.30. The table above was the argument for it and was
+# already in the tree; live trading supplied the confirmation. On 2026-08-14 the
+# two closed losses on the public record were NEAR (1.61200 -> 1.60072) and INJ
+# (4.55400 -> 4.52212): both stopped at 0.700% of entry to three decimals, on
+# different tokens, which is the band binding and not a level being tested. Both
+# read as "the stop did not reach support" from outside, because it did not — at
+# 0.70% the placed stop was a budget sitting between price and the level the
+# setup leaned on, and the move that tested the level took it out first. Measured
+# avg loss for that row is -0.79%; the two live losses came in at -0.84% and
+# -0.85%, so the model of this was accurate and the geometry was the problem.
+#
+# 1.30 is chosen over disabling the band (MAX_STOP_PCT = 0) deliberately. It sits
+# just under the 1.31% structural row, so it recovers essentially all of the
+# measured expectancy while keeping a cap in place for the tail case where
+# structure is pathologically far. One constant to revert.
+#
+# EXPECT THE FIRE RATE TO FALL, and do not read that as a regression. The note
+# above runs in reverse here: r_net is quoted against `risk`, so roughly doubling
+# the risk leg roughly halves r_net, and Stage 3's MIN_NET_R = 1.60 will now
+# reject setups whose objective is too near to pay for the wider stop. Fewer
+# trades, each with a stop at the invalidation instead of in front of it. That is
+# the trade being made.
 MIN_STOP_PCT    = 0.50   # floor, percent of price
-MAX_STOP_PCT    = 0.70   # cap,   percent of price
+MAX_STOP_PCT    = 1.30   # cap,   percent of price
 
 # ── Stage 3 · payoff ──────────────────────────────────────────────────────────
 MIN_NET_R          = 1.60  # net of costs, to the FIRST real objective — not to a fib fantasy
