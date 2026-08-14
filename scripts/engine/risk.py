@@ -156,6 +156,40 @@ class DynamicRiskEngine:
     # tightening the stop (1.1 ATR -> +0.143, 0.7 ATR -> +0.078; the fixed
     # round-trip cost is a larger share of a smaller risk leg).
     TP_LADDER_PCT = (1.5, 3.0, 3.75, 5.25, 6.0)   # TP1 … TP5, percent of entry
+
+    # ── SHADOW: volatility-scaled TP1 (NOT APPLIED) ──────────────────────────
+    # The ladder above is a fixed percent of entry, which makes TP1 a constant
+    # distance and therefore a WILDLY varying difficulty. Measured across the
+    # 2026-08-14 book, TP1 at 1.5% ranged from 1.23 ATR (CRV, ATR 1.219%) to
+    # 5.85 ATR (BNB, ATR 0.256%) — a 4.8x spread in how hard the same target is
+    # to reach. The observable consequence: every win in that book paid exactly
+    # +1.4000%, because the one rung anything reaches is the first one, so TP1
+    # behaves as a ceiling rather than an objective.
+    #
+    # K is set so the MEDIAN token's TP1 is unchanged (median fleet ATR% 0.678,
+    # 1.5 / 0.678 = 2.21). This is therefore not a disguised loosening — it
+    # redistributes difficulty rather than reducing it, compressing the spread
+    # from 4.8x to ~1.9x. The bounds stop both failure modes: without the floor
+    # a very quiet token gets a target inside the spread, without the cap a very
+    # volatile one gets the 2.3-3.5% objectives the percent ladder was
+    # introduced to eliminate.
+    #
+    # Recorded on every trade and applied to none. The question it settles from
+    # the next ~25 trades: for trades whose fixed TP1 was never reached, did MFE
+    # reach the hybrid rung?
+    TP1_HYBRID_K       = 2.21   # x ATR
+    TP1_HYBRID_MIN_PCT = 0.90
+    TP1_HYBRID_MAX_PCT = 2.20
+
+    @classmethod
+    def tp1_hybrid(cls, price: float, atr: float) -> tuple:
+        """Shadow only. Returns (pct_of_entry, distance_in_ATR)."""
+        if price <= 0 or atr <= 0:
+            return 0.0, 0.0
+        atr_pct = atr / price * 100.0
+        pct = min(max(cls.TP1_HYBRID_K * atr_pct,
+                      cls.TP1_HYBRID_MIN_PCT), cls.TP1_HYBRID_MAX_PCT)
+        return round(pct, 6), round(pct / atr_pct, 6)
     TP_MIN_GAP_PCT = 0.05                        # rungs must stay strictly apart
 
     # RETIRED: the TP2 % cap was for the former wide TP2 (2.8×ATR); with the
@@ -402,6 +436,7 @@ class DynamicRiskEngine:
         resistance: float = 0.0,   # invalidation level for a SHORT / upside target for a LONG
         sl_cap_atr: float   = 0.0,   # v42: SL-cap override in ATR (0 -> ATR_SL_MULTIPLIER)
         sl_override: float  = 0.0,   # v83: TraderGate's structural stop — used verbatim
+        gate_stop_source: str = '',  # provenance from TraderGate when overriding
         tp_override: float  = 0.0,   # v85: TraderGate's structural TARGET — used verbatim
         **_kwargs,      # absorbs legacy keyword args for backward compatibility
     ) -> Dict[str, float]:
@@ -452,6 +487,18 @@ class DynamicRiskEngine:
 
         support    = float(support or 0.0)
         resistance = float(resistance or 0.0)
+        _shadow_structural = 0.0      # see the SHADOW block below
+        _shadow_capped     = False
+        # Which mechanism placed the shipped stop. Never left ambiguous: on the
+        # override path the gate already decided, so its value is inherited
+        # rather than guessed at.
+        _stop_source       = 'unknown'
+        # SIDE-AWARE on purpose. The support-clearing guard for a LONG consumes
+        # `support`; `resistance` being present tells you nothing about whether
+        # that guard had its input. An OR here would have recorded "support was
+        # available" on exactly the trades where it was not — the same class of
+        # ambiguity stop_source exists to remove.
+        _support_seen      = bool((support if str(side).upper() == 'BUY' else resistance) or 0)                              and float(support if str(side).upper() == 'BUY' else resistance) > 0
         buf   = self.STRUCT_SL_BUFFER_ATR * atr
         floor = self.SL_FLOOR_ATR * atr
         cap   = (sl_cap_atr if sl_cap_atr and sl_cap_atr > 0 else self.ATR_SL_MULTIPLIER) * atr
@@ -464,6 +511,7 @@ class DynamicRiskEngine:
                 # gate approved the trade on is not the R:R the trade actually
                 # has, which is the one number the payoff stage must not lie about.
                 sl = sl_override
+                _stop_source = gate_stop_source or 'unknown'
                 # ...with one exception: the gate leans on the structure IT was
                 # handed, which is not always the rolling S/R published here. A
                 # stop parked at or just above the support is the one place the
@@ -474,6 +522,7 @@ class DynamicRiskEngine:
                 # out the stop the gate priced the trade on.
                 if 0 < support < price and sl >= support - buf:
                     sl = min(sl, support - buf)
+                    _stop_source = 'structure'   # the level cleared it after all
                 risk = price - sl
             else:
                 # Hybrid SL: just below support + buffer, clamped to [floor, cap].
@@ -485,12 +534,36 @@ class DynamicRiskEngine:
                 # v87 budget band — on THIS path only. The override path above is
                 # still taken verbatim: TraderGate bands its own stop at stage 3b
                 # and prices r_net against it, so re-banding here would be a
-                # second opinion on a number that has already been decided, and
-                # the support-clearing exception is deliberately allowed to widen
-                # past the band. A stop sitting ON the level is the one place the
-                # market reliably collects it, which is worse than a wide stop.
+                # second opinion on a number that has already been decided.
+                #
+                # CORRECTED 2026-08-14. This comment previously claimed "the
+                # support-clearing exception is deliberately allowed to widen past
+                # the band". IT IS NOT. The band runs AFTER the support-clearing
+                # min() above and overrides it, so a stop that was just moved below
+                # the level is pulled straight back inside it. TAO/USDT: structural
+                # stop 192.9679 (below support 193.70) became 196.2156 (1.30% cap),
+                # and price bottomed at 194.80 — through the shipped stop, never
+                # reaching the structural one.
+                #
+                # The behaviour is NOT being changed here, because sizing partly
+                # compensates (positions.py:208-211 rescales inversely with risk)
+                # and the two available harness measurements disagree on whether a
+                # wider stop is better per unit of risk. The shadow fields below
+                # record what the structural stop would have been so the next ~25
+                # trades can settle it. See docs/ENTRY_AND_STOP_ANALYSIS.md.
+                # SHADOW (v88): record what the support-cleared stop WOULD have
+                # been before the band overrides it. Observation only — the
+                # banded stop below still ships and behaviour is unchanged.
+                # Exists because the band-vs-structure question cannot be settled
+                # from history: no archived record kept the level, so the only
+                # way to price the decision is to instrument it going forward.
+                _shadow_structural = sl
+                _stop_source = 'structure' if (0 < support < price) else 'atr_floor'
                 risk = self._budget_band(price, price - sl)
                 sl   = price - risk
+                _shadow_capped = abs(sl - _shadow_structural) > 1e-9
+                if _shadow_capped:
+                    _stop_source = 'risk_band'
             # Rungs are percentages of entry — see TP_LADDER_PCT.
             # The objective still governs: it CAPS the ladder (see _ladder) and
             # it remains the number R:R is quoted against, so the gate's payoff
@@ -513,8 +586,13 @@ class DynamicRiskEngine:
                 sl   = price + risk
                 if resistance > price:
                     sl = max(sl, resistance + buf)
+                _shadow_structural = sl                      # SHADOW — see BUY branch
+                _stop_source = 'structure' if resistance > price else 'atr_floor'
                 risk = self._budget_band(price, sl - price)  # see the BUY branch
                 sl   = price + risk
+                _shadow_capped = abs(sl - _shadow_structural) > 1e-9
+                if _shadow_capped:
+                    _stop_source = 'risk_band'
             _tgt = tp_override if 0 < tp_override < price else 0.0   # see BUY branch
             tp1, tp2, tp3, tp4, tp5 = self._ladder(price, 'SELL', _tgt)
             reward = price - _tgt if _tgt else (
@@ -535,4 +613,17 @@ class DynamicRiskEngine:
             'risk_reward': rr,
             'valid_rr':    valid_rr,
             'atr':         round(atr, 8),
+            # SHADOW — observation only, never consumed by sizing or exits.
+            # 0.0 / False means "the band was not in play on this path" (the
+            # gate-override branch bands upstream), NOT "structure agreed".
+            'structural_stop':     round(_shadow_structural, 8),
+            'structural_stop_pct': (round(abs(price - _shadow_structural) / price * 100.0, 6)
+                                    if (_shadow_structural and price > 0) else 0.0),
+            'band_capped':         bool(_shadow_capped),
+            # Explicit provenance. band_capped alone is ambiguous across paths —
+            # False can mean "structure agreed" OR "the band was not in play
+            # here" — and a comment explaining that difference is exactly the
+            # pattern that let TRACK_RECORD_PATH mean two files.
+            'stop_source':         _stop_source,
+            'support_seen':        bool(_support_seen),
         }

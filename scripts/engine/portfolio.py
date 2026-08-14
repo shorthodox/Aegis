@@ -254,6 +254,8 @@ class VirtualWallet:
                         # open position would then never report R at all.
                         entry_stop      = float(s.get('entry_stop', 0)
                                                 or s.get('stop_loss', 0)),
+                        entry_support   = float(s.get('entry_support', 0) or 0),
+                        entry_resistance= float(s.get('entry_resistance', 0) or 0),
                         signal_id       = s.get('signal_id', ''),
                         entry_time      = s.get('entry_time', ''),
                         meta_confidence = float(s.get('meta_confidence', 0)),
@@ -328,6 +330,18 @@ class VirtualWallet:
             signal_strength = pos.signal_strength,
             stop_loss       = pos.stop_loss,   # ratcheted; display only
             entry_stop      = pos.entry_stop,   # immutable; the R denominator
+            entry_support   = pos.entry_support,     # the level it leaned on
+            entry_resistance= pos.entry_resistance,
+            structural_stop     = pos.structural_stop,      # SHADOW
+            structural_stop_pct = pos.structural_stop_pct,
+            band_capped         = pos.band_capped,
+            mfe_pct             = pos.mfe_pct,
+            mae_pct             = pos.mae_pct,
+            tp1_hybrid_pct      = pos.tp1_hybrid_pct,
+            tp1_hybrid_atr      = pos.tp1_hybrid_atr,
+            stop_source         = pos.stop_source,
+            pre_band_stop       = pos.pre_band_stop,
+            support_present     = pos.support_present,
             take_profit_1   = pos.take_profit_1,
             take_profit_2   = pos.take_profit_2,
             take_profit_3   = pos.take_profit_3,
@@ -398,6 +412,18 @@ class VirtualWallet:
             signal_strength = pos.signal_strength,
             stop_loss       = pos.stop_loss,   # ratcheted; display only
             entry_stop      = pos.entry_stop,   # immutable; the R denominator
+            entry_support   = pos.entry_support,     # the level it leaned on
+            entry_resistance= pos.entry_resistance,
+            structural_stop     = pos.structural_stop,      # SHADOW
+            structural_stop_pct = pos.structural_stop_pct,
+            band_capped         = pos.band_capped,
+            mfe_pct             = pos.mfe_pct,
+            mae_pct             = pos.mae_pct,
+            tp1_hybrid_pct      = pos.tp1_hybrid_pct,
+            tp1_hybrid_atr      = pos.tp1_hybrid_atr,
+            stop_source         = pos.stop_source,
+            pre_band_stop       = pos.pre_band_stop,
+            support_present     = pos.support_present,
             take_profit_1   = pos.take_profit_1,
             take_profit_2   = pos.take_profit_2,
             take_profit_3   = pos.take_profit_3,
