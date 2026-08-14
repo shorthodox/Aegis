@@ -246,6 +246,14 @@ class VirtualWallet:
                         initial_value   = float(s.get('initial_value', 0)
                                                 or s.get('position_value', 0)),
                         stop_loss       = float(s.get('stop_loss', 0)),
+                        # Pre-existing records have no entry_stop. Falling back to
+                        # stop_loss is the best available guess, and it is WRONG for
+                        # any position already ratcheted to break-even — those restore
+                        # with entry_stop == entry_price. Accepted: the alternative is
+                        # 0.0, which consumers must treat as unknown, and a restored
+                        # open position would then never report R at all.
+                        entry_stop      = float(s.get('entry_stop', 0)
+                                                or s.get('stop_loss', 0)),
                         signal_id       = s.get('signal_id', ''),
                         entry_time      = s.get('entry_time', ''),
                         meta_confidence = float(s.get('meta_confidence', 0)),
@@ -318,7 +326,8 @@ class VirtualWallet:
             meta_confidence = pos.meta_confidence,
             position_value  = pos.position_value,
             signal_strength = pos.signal_strength,
-            stop_loss       = pos.stop_loss,
+            stop_loss       = pos.stop_loss,   # ratcheted; display only
+            entry_stop      = pos.entry_stop,   # immutable; the R denominator
             take_profit_1   = pos.take_profit_1,
             take_profit_2   = pos.take_profit_2,
             take_profit_3   = pos.take_profit_3,
@@ -387,7 +396,8 @@ class VirtualWallet:
             meta_confidence = pos.meta_confidence,
             position_value  = close_value,
             signal_strength = pos.signal_strength,
-            stop_loss       = pos.stop_loss,
+            stop_loss       = pos.stop_loss,   # ratcheted; display only
+            entry_stop      = pos.entry_stop,   # immutable; the R denominator
             take_profit_1   = pos.take_profit_1,
             take_profit_2   = pos.take_profit_2,
             take_profit_3   = pos.take_profit_3,

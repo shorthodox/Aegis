@@ -30,11 +30,27 @@ class Position:
     side:            str    # BUY  | SELL
     entry_price:     float
     position_value:  float  # USDT allocated
-    stop_loss:       float
+    stop_loss:       float  # LIVE stop. Mutated by the break-even ratchet and
+                            # the trailing logic. NEVER use this to compute R.
     signal_id:       str
     entry_time:      str
     meta_confidence: float
     atr_multiplier:  float
+    # The risk the trade was ACTUALLY taken with. Set once at open, never
+    # mutated — unlike stop_loss, which the break-even ratchet rewrites to
+    # entry_price the moment TP1 is tagged (exits.py:346).
+    #
+    # Every R-multiple, R:R and expectancy figure must derive from THIS. Using
+    # stop_loss silently produced infinite-R for any trade that reached TP1:
+    # CRV/USDT on 2026-08-14 closed a real +1.40% win and published
+    # entry 0.2513 / stop 0.2513, a zero-risk trade. The win rate survives that
+    # error; expectancy does not, and expectancy is the metric the published
+    # record is moving toward.
+    #
+    # Defaults to 0.0 for records written before this field existed. Consumers
+    # must treat 0.0 as "unknown" and decline to compute R rather than dividing
+    # by it.
+    entry_stop:      float = 0.0
     atr:             float = 0.0   # ATR at entry (used for trailing stop distance)
     initial_value:   float = 0.0   # v82: allocation AT ENTRY.  position_value shrinks
                                    # as TP rungs bank, so partial sizing must be a
@@ -76,7 +92,8 @@ class TradeRecord:
     meta_confidence: float
     position_value:  float
     signal_strength: str   = ''
-    stop_loss:       float = 0.0
+    stop_loss:       float = 0.0   # stop AT EXIT — ratcheted, not the risk taken
+    entry_stop:      float = 0.0   # stop AT ENTRY — the only valid R denominator
     take_profit_1:   float = 0.0
     take_profit_2:   float = 0.0
     take_profit_3:   float = 0.0

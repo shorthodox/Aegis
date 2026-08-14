@@ -2773,7 +2773,11 @@ class Section11_RiskForensics:
         r_multiples = []
         for s in wins:
             entry = float(s.get("entry_price", 0) or 0)
-            sl    = float(s.get("stop_loss", 0)   or 0)
+            # entry_stop, not stop_loss — this loop iterates WINS, which are
+            # exactly the trades whose stop_loss the break-even ratchet has
+            # overwritten with entry_price. Using stop_loss here inflates
+            # reward/risk without bound as risk approaches zero.
+            sl    = float(s.get("entry_stop", 0) or s.get("stop_loss", 0) or 0)
             tp1   = float(s.get("tp1", 0)          or 0)
             if entry > 0 and sl > 0 and tp1 > 0:
                 risk   = abs(entry - sl)
