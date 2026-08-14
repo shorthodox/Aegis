@@ -1237,6 +1237,56 @@ async def run_engine_background():
     _FIRESTORE_MIN_INTERVAL = 290.0   # push at most once per ~5 min (matches scan cycle)
     _stale_sweep_done: bool = False   # one-time Firestore neutralise after restart
 
+    def _push_signal_docs(_pairs) -> int:
+        """Write the signal docs. MUST NOT run on the event loop — see the caller.
+
+        This is the biggest Firestore writer in the app: one document per symbol,
+        ~60 of them per push. Every call here is blocking, and when the project is
+        over its write quota the client retries each one until its own 60s
+        deadline. Run on the loop, as this was, a single quota-blocked push froze
+        the whole site for 60s for the batch and then another 60s PER DOCUMENT in
+        the fallback below — measured at ~17 minutes of dead event loop per cycle,
+        which is exactly how the site came to time out while the container was
+        healthy and the deploy green.
+
+        The fallback exists because ONE NaN used to fail a whole batch silently
+        (v80), so per-doc writes name the offending symbol. That is worth 60s when
+        one document is malformed. It is worth nothing when the batch failed
+        because the project is out of quota — every retry is guaranteed to fail
+        the same way, so the whole point of the fallback is gone. Quota errors
+        therefore skip it.
+        """
+        from google.api_core import exceptions as _gexc
+
+        try:
+            batch = db.batch()
+            _n = 0
+            for _ref, _doc in _pairs:
+                batch.set(_ref, _doc, merge=True)
+                _n += 1
+                if _n % 450 == 0:
+                    batch.commit()
+                    batch = db.batch()
+            if _n % 450:
+                batch.commit()
+            return _n
+        except Exception as _bt_e:
+            _quota_hit = isinstance(_bt_e, (_gexc.ResourceExhausted, _gexc.RetryError)) \
+                or 'Quota' in str(_bt_e) or '429' in str(_bt_e)
+            if _quota_hit:
+                print(f"[PRODUCER] batch push failed on QUOTA ({type(_bt_e).__name__}) "
+                      f"— skipping per-doc fallback; {len(_pairs)} doc(s) dropped this cycle")
+                return 0
+            print(f"[PRODUCER] batch push failed ({_bt_e}) — per-doc fallback")
+            _pushed = 0
+            for _ref, _doc in _pairs:
+                try:
+                    _ref.set(_doc, merge=True)
+                    _pushed += 1
+                except Exception as _doc_e:
+                    print(f"[PRODUCER] doc push FAILED {_doc.get('symbol')}: {_doc_e}")
+            return _pushed
+
     async def update_state():
         nonlocal _last_tr_mtime, _last_signals_hash, _last_firestore_push, _stale_sweep_done
         while True:
@@ -1443,29 +1493,7 @@ async def run_engine_background():
                         compact['fire']      = bool(sig.get('fire', False))
                         _pairs.append((sig_ref, compact))
 
-                    _pushed = 0
-                    try:
-                        batch = db.batch()
-                        _n = 0
-                        for _ref, _doc in _pairs:
-                            batch.set(_ref, _doc, merge=True)
-                            _n += 1
-                            if _n % 450 == 0:
-                                batch.commit()
-                                batch = db.batch()
-                        if _n % 450:
-                            batch.commit()
-                        _pushed = _n
-                    except Exception as _bt_e:
-                        print(f"[PRODUCER] batch push failed ({_bt_e}) â€” per-doc fallback")
-                        _pushed = 0
-                        for _ref, _doc in _pairs:
-                            try:
-                                _ref.set(_doc, merge=True)
-                                _pushed += 1
-                            except Exception as _doc_e:
-                                print(f"[PRODUCER] doc push FAILED "
-                                      f"{_doc.get('symbol')}: {_doc_e}")
+                    _pushed = await asyncio.to_thread(_push_signal_docs, _pairs)
                     if _pairs:
                         print(f"[PRODUCER] Firestore: {_pushed}/{len(_pairs)} signals "
                               f"({len(fired)} fired) @ {now_str}")
