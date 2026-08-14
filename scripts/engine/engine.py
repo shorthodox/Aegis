@@ -65,6 +65,7 @@ from scripts.engine.regime import MarketRegimeDetector
 from scripts.engine.risk import DynamicRiskEngine
 from scripts.engine.shadow_exits import ShadowBook
 from scripts.engine.state import _hydrate_track_record_from_firestore
+from scripts.engine.state import is_firestore_down
 from scripts.engine.tracking import DriftMonitor
 from scripts.engine.tracking import PerformanceTracker
 from src.ml.adaptive import AdaptiveOrchestrator
@@ -74,6 +75,15 @@ from src.trading.trader_gate import ACTION_ENTER
 from src.trading.trader_gate import ACTION_WORK
 from src.trading.trader_gate import TraderGate
 from src.trading.trendline_channel import TrendlineChannelDetector
+
+# Circuit breaker for THIS module's signal push. _push_signals_sync trips it with
+# `global _FS_DOWN` on any push error, but nothing ever defined it, so the read in
+# _push_signals_to_firestore raised NameError on every scan cycle until the first
+# trip happened to create it. It is deliberately separate from state.py's breaker
+# (that one guards the track-record mirror); the check below consults both, since
+# either failing means this datastore is not worth another 60s timeout.
+_FS_DOWN = False
+
 
 class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
     """
@@ -693,7 +703,13 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
         Runs the SYNCHRONOUS Firestore work in a worker thread so a slow/broken
         datastore can never block the scan loop, and is skipped once the circuit
         breaker trips (e.g. the project has no Firestore database)."""
-        if self.bootstrap_done < self.bootstrap_total or _FS_DOWN:
+        # is_firestore_down() is CALLED, not imported as a value: _FS_DOWN is a
+        # module global in state.py that flips at runtime when the breaker trips,
+        # so a `from ... import _FS_DOWN` would snapshot False at import time and
+        # never see the change. It was in fact not imported at all, and this line
+        # raised NameError on every scan cycle — caught by the outer handler, so
+        # the engine stayed alive and the push silently never ran.
+        if self.bootstrap_done < self.bootstrap_total or _FS_DOWN or is_firestore_down():
             return  # skip during warmup, or if Firestore is known-down
         await asyncio.get_event_loop().run_in_executor(self._executor, self._push_signals_sync)
 
