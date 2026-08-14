@@ -233,6 +233,9 @@ class PositionsMixin:
             position_value  = round(pos_value, 2),
             initial_value   = round(pos_value, 2),   # v82: fixed base for TP partial sizing
             stop_loss       = round(stop_loss, 8),
+            # Same value as stop_loss at open, and that is the point: from here
+            # the ratchet moves stop_loss and this stays put, so R stays honest.
+            entry_stop      = round(stop_loss, 8),
             signal_id       = str(uuid.uuid4()),
             entry_time      = datetime.now(timezone.utc).isoformat(),
             meta_confidence = round(meta_conf, 4),
@@ -536,6 +539,7 @@ class PositionsMixin:
             entry_price     = price,
             position_value  = self.alpha_wallet.position_size(),
             stop_loss       = stop_loss,
+            entry_stop      = stop_loss,   # immutable R denominator — see models.py
             signal_id       = str(uuid.uuid4()),
             entry_time      = datetime.now(timezone.utc).isoformat(),
             meta_confidence = float(result.get('edge_score', result.get('meta_confidence', 0))),

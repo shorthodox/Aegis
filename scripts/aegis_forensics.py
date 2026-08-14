@@ -1601,10 +1601,20 @@ class AEGISForensicEngine:
         kelly    = _kelly(win_rate, avg_win, avg_loss)
         ror      = _risk_of_ruin(win_rate, avg_win / 100.0, avg_loss / 100.0)
 
+        # R must come from entry_stop, NOT stop_loss. stop_loss is the stop at
+        # EXIT, and the break-even ratchet (exits.py:346) rewrites it to
+        # entry_price the moment TP1 is tagged. The `abs(ep - sl) > 1e-9` guard
+        # below then silently DROPPED every such trade from the sample rather
+        # than dividing by zero — and every dropped trade is a winner, because
+        # only winners reach TP1. avg_r was therefore computed over losers and
+        # unratcheted winners only, biased downward by construction.
+        #
+        # entry_stop is 0.0 on records written before it existed; those are
+        # skipped rather than guessed at, same as before.
         r_multiples = []
         for s in closed:
             ep  = _safe(s.get("entry_price", 0))
-            sl  = _safe(s.get("stop_loss", 0))
+            sl  = _safe(s.get("entry_stop", 0)) or _safe(s.get("stop_loss", 0))
             pnl = _safe(s.get("pnl_pct", 0))
             if ep > 0 and sl > 0 and abs(ep - sl) > 1e-9:
                 risk_r = abs(ep - sl) / ep
