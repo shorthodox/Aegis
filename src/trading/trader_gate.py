@@ -68,6 +68,15 @@ SETUP_EXHAUSTION_REVERSAL = 'EXHAUSTION_REVERSAL'  # counter-trend, only at a st
 SETUP_NONE                = 'NONE'
 
 # ── Plan actions ──────────────────────────────────────────────────────────────
+# What placed the shipped stop. Explicit so `band_capped == False` can never be
+# read as "structure agreed" when it really means "not measured on this path".
+STOP_SOURCE_STRUCTURE  = 'structure'    # the level cleared and survived
+STOP_SOURCE_ATR_FLOOR  = 'atr_floor'    # MIN_STOP_ATR widened it off the level
+STOP_SOURCE_GATE_BAND  = 'gate_band'    # trader_gate stage 3b percent band capped it
+STOP_SOURCE_RISK_BAND  = 'risk_band'    # risk.py _budget_band capped it
+STOP_SOURCE_ATR_REJECT = 'atr_reject'   # MAX_STOP_ATR refused the setup
+STOP_SOURCE_UNKNOWN    = 'unknown'      # not recorded (archived rows predate this)
+
 ACTION_ENTER  = 'ENTER'    # take it now, at market
 ACTION_WORK   = 'WORK'     # resting order at the level; expires
 ACTION_REJECT = 'REJECT'   # no trade, with a reason
@@ -250,6 +259,21 @@ class TradePlan:
     stage:        str = ''                # stage that produced the verdict
     reason:       str = ''                # one-line human summary
     notes:        List[str] = field(default_factory=list)   # full audit trail
+
+    # ── SHADOW / provenance (observation only, nothing reads these) ──────────
+    # WHICH MECHANISM actually placed `stop`, as a value rather than something a
+    # reader has to infer. A boolean "was it capped" means different things on
+    # the gate path and the risk.py path, and a comment explaining the
+    # difference is precisely how TRACK_RECORD_PATH came to mean two files.
+    # See STOP_SOURCE_* below.
+    stop_source:      str   = 'unknown'
+    # The stop as structure placed it, BEFORE stage 3b's percent band. 0.0 means
+    # not computed on this path, never "no stop".
+    pre_band_stop:    float = 0.0
+    # Was a rolling support/resistance actually available to lean on? Defect 2
+    # (BCH/USDT, 2026-08-14) was the support-clearing guard silently no-opping
+    # because this was absent, so its frequency has to be measured, not guessed.
+    support_present:  bool  = False
 
     @property
     def fired(self) -> bool:
@@ -720,14 +744,28 @@ class TraderGate:
                            f'no structural level on the {"support" if side == "BUY" else "resistance"} '
                            f'side to lean on', notes, side, setup)
 
+        # Was a ROLLING support/resistance available on this trade's side? This
+        # is the input the support-clearing guard in risk.py depends on, and
+        # Defect 2 (BCH/USDT, 2026-08-14) was that guard silently doing nothing
+        # because the field was absent. Recorded per signal so the frequency is
+        # measured rather than extrapolated from one trade. `_pick_level` can
+        # still succeed without it, from deeper structure — so this is NOT
+        # "did we find a level", it is specifically "did the rolling S/R exist".
+        _support_present = bool(
+            _f(result, 'support') > 0 if side == 'BUY' else _f(result, 'resistance') > 0
+        )
+
         buf = STOP_BUFFER_ATR * atr
         stop = (level - buf) if side == 'BUY' else (level + buf)
+        _stop_source  = STOP_SOURCE_STRUCTURE   # provenance; observation only
+        _pre_band_stop = stop                   # before stage 3b's percent band
 
         if abs(price - stop) < MIN_STOP_ATR * atr:
             # Tighten-to-fit is how the old system produced stops inside the noise
             # band; push the stop out to the floor instead and let stage 3 decide
             # whether the trade still pays with an honest stop.
             stop = (price - MIN_STOP_ATR * atr) if side == 'BUY' else (price + MIN_STOP_ATR * atr)
+            _stop_source, _pre_band_stop = STOP_SOURCE_ATR_FLOOR, stop
             notes.append(f'invalidation: level {level:.8g} is inside the noise band — '
                          f'stop widened to the {MIN_STOP_ATR} ATR floor')
 
@@ -873,6 +911,7 @@ class TraderGate:
             _banded     = min(max(_structural, _lo), _hi)
             if abs(_banded - _structural) > 1e-12:
                 stop = (entry_px - _banded) if side == 'BUY' else (entry_px + _banded)
+                _stop_source = STOP_SOURCE_GATE_BAND
                 notes.append(
                     f'budget: structural risk {_structural / entry_px * 100:.2f}% of entry '
                     f'{"tightened" if _banded < _structural else "widened"} to the '
@@ -889,6 +928,9 @@ class TraderGate:
             risk_atr=risk_atr, r_gross=r_gross, r_net=r_net,
             size_factor=round(size, 3), expiry_bars=expiry,
             stage='allocation',
+            stop_source=_stop_source,
+            pre_band_stop=round(_pre_band_stop, 8),
+            support_present=_support_present,
             reason=f'{setup} {side} @ {level:.8g} — {r_net:.2f}R net, size {size:.2f}',
             notes=notes,
         )

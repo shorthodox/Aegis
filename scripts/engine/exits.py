@@ -97,6 +97,27 @@ class ExitsMixin:
             self._peak_price[symbol] = min(
                 self._peak_price.get(symbol, pos.entry_price), check_price)
 
+        # ── SHADOW: true excursions, on the POSITION and never reset ─────────
+        # _peak_price above is a TRAILING-STOP working value: it is reset at TP1
+        # (see the TP1 block below) and lives in a dict keyed by symbol, so it
+        # neither survives the trade nor describes the whole of it.
+        #
+        # These two do. They are the enabling measurement for both open shadow
+        # questions, and without them each records an alternative without
+        # recording whether price ever reached it:
+        #   MAE — did price trade through the BANDED stop but respect the
+        #         structural one? (docs/ENTRY_AND_STOP_ANALYSIS.md defect 1)
+        #   MFE — would a volatility-scaled TP1 have been reached where the
+        #         fixed 1.5% rung was not?
+        # Observation only; nothing below reads them.
+        _sgn = 1.0 if pos.direction == 'LONG' else -1.0
+        if pos.entry_price > 0:
+            _exc = _sgn * (check_price - pos.entry_price) / pos.entry_price * 100.0
+            if _exc > pos.mfe_pct:
+                pos.mfe_pct = round(_exc, 6)
+            if _exc < pos.mae_pct:
+                pos.mae_pct = round(_exc, 6)
+
         peak = self._peak_price[symbol]
 
         # The give-back ratchet's state, initialised defensively. LiveEngine is

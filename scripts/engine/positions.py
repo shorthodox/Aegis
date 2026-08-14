@@ -189,6 +189,7 @@ class PositionsMixin:
             sl_cap_atr = _sl_cap,
             sl_override = (plan.stop if plan is not None else 0.0),
             tp_override = (plan.target if plan is not None else 0.0),
+            gate_stop_source = (plan.stop_source if plan is not None else ''),
         )
 
         stop_loss = stops['sl']
@@ -225,6 +226,9 @@ class PositionsMixin:
                 self.last_signals[symbol]['rr_blocked'] = True
             return
 
+        # SHADOW — recorded, never applied. See RiskEngine.tp1_hybrid.
+        _tp1h_pct, _tp1h_atr = self.risk_engine.tp1_hybrid(price, atr)
+
         pos = Position(
             symbol          = symbol,
             direction       = direction,
@@ -252,6 +256,14 @@ class PositionsMixin:
             gate_warnings   = list(gate_warnings or []),
             entry_support   = float(result.get('support', 0) or 0),
             entry_resistance= float(result.get('resistance', 0) or 0),
+            structural_stop     = float(stops.get('structural_stop', 0) or 0),
+            structural_stop_pct = float(stops.get('structural_stop_pct', 0) or 0),
+            band_capped         = bool(stops.get('band_capped', False)),
+            tp1_hybrid_pct      = _tp1h_pct,
+            tp1_hybrid_atr      = _tp1h_atr,
+            stop_source         = str(stops.get('stop_source', 'unknown')),
+            pre_band_stop       = float(getattr(plan, 'pre_band_stop', 0.0) or 0.0),
+            support_present     = bool(stops.get('support_seen', False)),
         )
         self.wallet.open_trade(pos)
         # Shadow accounting — observation only, and deliberately wrapped: a bug
@@ -540,6 +552,8 @@ class PositionsMixin:
             position_value  = self.alpha_wallet.position_size(),
             stop_loss       = stop_loss,
             entry_stop      = stop_loss,   # immutable R denominator — see models.py
+            entry_support   = float(result.get('support', 0) or 0),
+            entry_resistance= float(result.get('resistance', 0) or 0),
             signal_id       = str(uuid.uuid4()),
             entry_time      = datetime.now(timezone.utc).isoformat(),
             meta_confidence = float(result.get('edge_score', result.get('meta_confidence', 0))),
