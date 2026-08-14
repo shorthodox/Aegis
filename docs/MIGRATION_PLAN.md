@@ -1,5 +1,20 @@
 # Firestore → SQLite Migration Plan (Phase 0 output)
 
+> ## ⛔ SHELVED — 2026-08-14
+>
+> **Premise invalidated by Step 1 of the rules remediation: there are 15 user documents.**
+> Firestore's Spark free tier allows 50,000 reads and 20,000 writes per day — three orders of
+> magnitude above actual consumption, and more so now that every engine write is known to have
+> always failed against a database that does not exist.
+>
+> This migration was premised on Firestore cost. That premise is measurably false. Moving 15
+> documents off managed, replicated, backed-up infrastructure onto the single Railway volume
+> that destroyed the track record on 2026-08-13 would make the system strictly worse.
+>
+> The audit work below is real and stays useful if the threshold is ever crossed. Read it as a
+> record, not a plan.
+
+
 **Status:** awaiting approval. No code written yet.
 **Target:** SQLite on a Railway volume (confirmed — the Supabase project provisioned on
 2026-08-13 will go unused).

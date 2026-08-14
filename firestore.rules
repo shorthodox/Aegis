@@ -18,17 +18,37 @@ service cloud.firestore {
           || request.auth.token.email == userId;
     }
 
-    // Fetch user data — try uid-keyed doc first (client-created),
-    // fall back to email-keyed doc (backend-created via Admin SDK).
-    // Returns null when neither exists.
+    // Fetch user data. EMAIL-KEYED DOC FIRST, uid-keyed as the fallback.
+    //
+    // The order is the whole point. Measured across all 15 documents on
+    // 2026-08-14: 7 humans hold a document under BOTH key spaces, and in 7 of 7
+    // pairs the email-keyed doc carries the real entitlement while the uid-keyed
+    // twin is a stub the client SDK writes once at signup and never updates —
+    // always plan='trial', subscription.status='none'. Checking uid first, as
+    // this did, meant the rule read the stub and never saw the real state: the
+    // one 'pro' account evaluated as a trial user, and would have been DENIED
+    // outright the moment isSubscriptionActive() was tightened to require a paid
+    // plan. The 8th human has no email-keyed doc and falls through to the uid
+    // path, resolving exactly as before.
+    //
+    // An OR over both documents was considered and rejected. Because the stub is
+    // permanently plan='trial', "either document qualifies" would let every
+    // account satisfy this rule forever, regardless of the real record and
+    // regardless of expiry — turning today's accidental pass into a permanent
+    // paywall bypass that survives any later tightening. An OR between a stale
+    // stub and a live record always resolves to the stale one.
+    //
+    // Same shape as the trial-date precedence fix in authManager.setUser:
+    // authoritative source first, legacy path as fallback. Keep them consistent.
+    //
+    // Costs at most one extra document read per evaluation when the email doc is
+    // absent. Irrelevant at 15 documents; revisit if the user count grows.
     function getUserData() {
       let uidPath   = /databases/$(database)/documents/users/$(request.auth.uid);
       let emailPath = /databases/$(database)/documents/users/$(request.auth.token.email);
-      return exists(uidPath)
-        ? get(uidPath).data
-        : (request.auth.token.email != null && exists(emailPath)
-            ? get(emailPath).data
-            : null);
+      return (request.auth.token.email != null && exists(emailPath))
+        ? get(emailPath).data
+        : (exists(uidPath) ? get(uidPath).data : null);
     }
 
     // True when the user has any active plan (trial or paid).
@@ -49,9 +69,21 @@ service cloud.firestore {
     // SERVER-AUTHORITATIVE: trial_end is what is_trial_expired() reads
     // (main.py:3129), and trial_used gates one-trial-per-account
     // (main.py:4282). A client that can write its own expiry has no expiry.
+    //
+    // `comped*` is a MARKER, not a second entitlement path. Entitlement still
+    // flows through `plan` exactly as before — a comped account is simply a
+    // plan='pro' account that carries a reason. Deliberately NOT a new way to
+    // become entitled: a second authorization path is a second place to get
+    // authorization wrong, and this codebase produced three such holes in two
+    // days. Nothing in the read path consults these fields.
+    //
+    // They are admin-only for the obvious reason: a client that can write
+    // `comped: true` can launder a self-granted plan into something that looks
+    // audited.
     function adminOnlyFields() {
       return ['tier', 'trial_end', 'trialEnd', 'trial_start', 'trial_used',
-              'subscription_active'];
+              'subscription_active',
+              'comped', 'comped_reason', 'comped_by'];
     }
 
     // UPDATE: neither plan, nor the subscription map, nor any admin-only

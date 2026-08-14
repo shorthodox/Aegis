@@ -3,7 +3,9 @@ import {
     getCurrentUserToken, logout, getUpgradeModal
 } from './gatekeeper.js?v=80.0';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
-import { collection, addDoc, onSnapshot, doc, updateDoc, query, where } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js";
+// `doc` and `updateDoc` dropped with the dead closeTrade() below — they were
+// used only by it. (`addDoc` was already unused before that; left as found.)
+import { collection, addDoc, onSnapshot, query, where } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js";
 
 import { AuthManager } from '../auth/authManager.js';
 import { SignalStore } from '../stores/signalStore.js';
@@ -149,11 +151,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // Note: Rendering of #positionsContainer and #trades-tbody is handled 
     // by renderTrades() in gatekeeper.js to avoid duplicate execution cards.
 
-    async function closeTrade(tradeId) {
-        if (!currentUser) return;
-        const tradeRef = doc(db, 'users', currentUser.uid, 'trades', tradeId);
-        await updateDoc(tradeRef, { status: 'closed', closeTime: new Date() });
-    }
+    // closeTrade() removed 2026-08-14. It wrote directly to
+    // users/{uid}/trades/{id} from the browser, which firestore.rules sets to
+    // `allow write: if false` — so it would have started failing the moment the
+    // repo rules were deployed. It never needed repointing, because it was
+    // already dead: not exported, never attached to window, and never called.
+    //
+    // The live path is closeTrade() in trading-rooms.js, bound to
+    // window.closeTrade, which the trade buttons actually invoke. That one
+    // already POSTs to /api/trades/{id}/close with a Firebase ID token and
+    // surfaces failures through _toast() — server-side, rules-compliant, and
+    // correct. Reimplementing it here would have produced a second copy of a
+    // working flow.
 
     function subscribeToTrades(userId) {
         const tradesRef = collection(db, 'users', userId, 'trades');
