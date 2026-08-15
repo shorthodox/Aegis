@@ -135,6 +135,33 @@ This is the priority section.
 | 3 | Engine Firestore writes | Mirrors the track record to `engine_state` | Wrote to database `(default)`, which **has never existed**. Every write failed |
 | 4 | `stop_policies.py` | Stop placement behind one measurable interface | Never imported. A downstream clamp in `trader_gate.py` decided every stop |
 
+### Instances 5, 6 and 7 (added 2026-08-15)
+
+The pattern kept producing after the review was written. Three more, same shape:
+
+**5. `TRACK_RECORD_PATH` means two files.** `main.py:708` binds it to
+`web/track_record.json`; `config.py:159` binds it to `STATE_DIR/track_record.json`.
+`POST /api/admin/reset-track-record` writes the first *twice* and never touches the
+volume, so the engine's orphan-preservation restored all 10 signals from the file the
+reset never cleared. The endpoint reported success.
+
+**6. A counter that under-counted the condition it existed to measure.** The first
+`support_seen` was `support > 0 OR resistance > 0`, so a LONG with **no support** reported
+`support_seen=True` — the Task 2 frequency counter would have returned a confident low
+number and closed the investigation. Caught in the act rather than in the archaeology,
+which is the only instance so far found before it shipped.
+
+**7. "The level" means two different levels.** The entry logic validates against the
+gate's `_pick_level` (within `AT_LEVEL_ATR` = 0.35 ATR ≈ 0.24% of entry); the stop logic
+computes from `result['support']`, which is routinely further. A correctly-matched setup
+always fits the risk budget (~0.96% at median ATR), so the affordability gate written to
+catch unaffordable setups could only ever fire on the *mismatch*. It was a guard that
+refuses a trade rather than resolving a disagreement — and it was held off for exactly
+that reason.
+
+Instance 7 is the sharpest illustration of the review's own conclusion: the fix was not a
+seventh guard. It was noticing that two components disagreed about what a word meant.
+
 ### The common mechanism
 
 All four are the same error: **an artefact existing in the repository was treated as evidence

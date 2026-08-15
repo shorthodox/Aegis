@@ -214,6 +214,38 @@ MODEL_OPPOSE_MARGIN = 0.12  # model may veto the structure only when it leans th
                             # other way (raw p_buy/p_sell); a neutral model does not block
 
 # ── Stage 5 · allocation ──────────────────────────────────────────────────────
+# ── Item 4 (2026-08-15): EXHAUSTION_REVERSAL is refused, not sized down ──────
+# "Buy oversold / sell overbought". The desk has measured it at -0.064R/trade
+# fleet-wide against +0.069R for TREND_PULLBACK, and has been expressing that
+# by giving it the smallest allocation rather than declining it. Sizing a
+# negative-expectancy setup smaller makes it lose more slowly; it does not make
+# it pay.
+#
+# Live corroboration, 17 closed trades to 2026-08-15: 2 wins, 15 losses, and
+# every single loss exited at STOP_HIT. P(<=2 wins | n=17, p=0.383) = 1.74%, so
+# this is no longer comfortably variance.
+#
+# Set False to restore the old behaviour (fires at 0.50 size).
+ALLOW_EXHAUSTION_REVERSAL = False
+
+# How many signals this refusal has cost, since process start. A 20-30 signal
+# observation window on a system that already fires rarely stretches from weeks
+# to months if this setup was a meaningful share of volume — and the -0.064R
+# justifying the refusal is in-sample, like everything else in that harness.
+# Good enough to act on, not good enough to stop measuring.
+EXHAUSTION_REFUSED_COUNT: Dict[str, int] = {'count': 0}
+
+
+def _refuse_exhaustion(side: str) -> Tuple[str, str, str]:
+    """Decline the fade, and keep a running tally of what it cost."""
+    EXHAUSTION_REFUSED_COUNT['count'] += 1
+    n = EXHAUSTION_REFUSED_COUNT['count']
+    print(f'[TraderGate] EXHAUSTION_REFUSED {side} — counter-trend fade '
+          f'(-0.064R/trade measured); refused {n} signal(s) this run')
+    return (SETUP_NONE, 'FLAT',
+            'exhaustion reversal refused — counter-trend fade '
+            'measured -0.064R/trade fleet-wide')
+
 SETUP_RISK_WEIGHT: Dict[str, float] = {
     SETUP_TREND_PULLBACK:      1.00,  # measured +0.069R/trade — the paid setup
     SETUP_BREAK_RETEST:        0.85,
@@ -402,6 +434,8 @@ class TraderGate:
                         f'uptrend pulled back into support (rp {rp:.2f}) — buying the dip in a bull')
             if rp >= EXTREME_RP_HIGH:
                 if rsi >= EXHAUSTION_RSI_HI:
+                    if not ALLOW_EXHAUSTION_REVERSAL:
+                        return _refuse_exhaustion('SELL')
                     return (SETUP_EXHAUSTION_REVERSAL, 'SELL',
                             f'uptrend stretched at the top of its range (rp {rp:.2f}, RSI {rsi:.0f})')
                 # At the highs but not stretched: an uptrend at its own highs is
@@ -419,6 +453,8 @@ class TraderGate:
                         f'downtrend rallied into resistance (rp {rp:.2f}) — selling the bounce in a bear')
             if rp <= EXTREME_RP_LOW:
                 if rsi <= EXHAUSTION_RSI_LO:
+                    if not ALLOW_EXHAUSTION_REVERSAL:
+                        return _refuse_exhaustion('BUY')
                     return (SETUP_EXHAUSTION_REVERSAL, 'BUY',
                             f'downtrend stretched at the bottom of its range (rp {rp:.2f}, RSI {rsi:.0f})')
                 return (SETUP_NONE, 'FLAT',

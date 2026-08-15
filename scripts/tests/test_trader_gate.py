@@ -101,7 +101,29 @@ def test_the_losing_basket_is_refused_as_a_setup():
     assert 'not stretched' in high.reason
 
 
-def test_the_losing_basket_is_refused_by_the_tide_even_when_stretched():
+@pytest.fixture
+def allow_fade(monkeypatch):
+    """Re-enable EXHAUSTION_REVERSAL for tests that exercise LATER stages.
+
+    The setup is refused at stage 1 from 2026-08-15 (ALLOW_EXHAUSTION_REVERSAL
+    = False) because it measured -0.064R/trade fleet-wide. The tests below do
+    not exist to assert the fade is permitted — they assert that the TIDE and
+    CORRELATION guards refuse a basket, and that the RSI stretch is required.
+    Those guards must keep working if the flag is ever flipped back, so the
+    tests re-enable it rather than being retargeted or deleted.
+
+    test_exhaustion_reversal_is_refused_by_default covers the new behaviour.
+    """
+    monkeypatch.setattr(TG, 'ALLOW_EXHAUSTION_REVERSAL', True)
+
+
+def test_exhaustion_reversal_is_refused_by_default():
+    """The fade does not fire at all now, at stage 1, before sizing."""
+    assert TG.ALLOW_EXHAUSTION_REVERSAL is False, (
+        'the counter-trend fade is refused by default — measured -0.064R/trade'
+    )
+
+def test_the_losing_basket_is_refused_by_the_tide_even_when_stretched(allow_fade):
     """Even a textbook-stretched short is refused against a strong BTC tide.
 
     This is the second, independent stop: the basket's defining feature was that
@@ -116,7 +138,7 @@ def test_the_losing_basket_is_refused_by_the_tide_even_when_stretched():
     assert 'tide' in plan.reason
 
 
-def test_the_losing_basket_is_refused_by_correlation():
+def test_the_losing_basket_is_refused_by_correlation(allow_fade):
     """The third stop: two correlated shorts already open ends the cluster."""
     plan = run(mk(price=109.5, support=99.8, resistance=110.0, rsi=75.0),
                regime='TRENDING_BULL',
@@ -164,7 +186,7 @@ def test_range_edge_is_a_fade_only_at_the_edge():
     assert mid.stage == 'setup'
 
 
-def test_exhaustion_reversal_needs_the_rsi_stretch_not_just_the_location():
+def test_exhaustion_reversal_needs_the_rsi_stretch_not_just_the_location(allow_fade):
     loc_only = run(mk(price=109.5, support=99.8, resistance=110.0, rsi=55.0),
                    regime='TRENDING_BULL')
     assert loc_only.setup == SETUP_NONE, 'faded a bull without exhaustion'

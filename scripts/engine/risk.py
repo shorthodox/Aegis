@@ -177,9 +177,37 @@ class DynamicRiskEngine:
     # Recorded on every trade and applied to none. The question it settles from
     # the next ~25 trades: for trades whose fixed TP1 was never reached, did MFE
     # reach the hybrid rung?
+    # Item 3 (2026-08-15): HELD OFF, deliberately, and shadowed instead.
+    #
+    # The gate enters within AT_LEVEL_ATR (0.35 ATR ~ 0.24% at median ATR) of
+    # ITS level, while the affordability bar is ~0.96% at the same ATR. A
+    # correctly-matched setup therefore ALWAYS fits, which means this gate never
+    # fires on one — every refusal it produces comes from risk.py reaching for a
+    # `result['support']` the gate never leaned on.
+    #
+    # So it is not an affordability problem with a gate as its fix. It is two
+    # components disagreeing about which level the trade is about, and a guard
+    # that refuses the trade rather than resolving the disagreement. That is the
+    # seventh instance of this week's pattern — TRACK_RECORD_PATH meaning two
+    # files, (default) vs default, band_capped meaning two things on two paths,
+    # and now "the level" meaning one thing to the entry logic and another to
+    # the stop logic.
+    #
+    # The real fix is making the gate and risk.py agree on one level. Genuinely
+    # unaffordable setups may still exist, but they are invisible until the
+    # mismatch is gone. Shadowed as would_refuse_unaffordable so the next ~25
+    # signals show the refusal rate AND, via stop_source/support_present,
+    # whether each case is a mismatch or a real one.
+    REFUSE_UNAFFORDABLE_INVALIDATION = False
+
     TP1_HYBRID_K       = 2.21   # x ATR
     TP1_HYBRID_MIN_PCT = 0.90
     TP1_HYBRID_MAX_PCT = 2.20
+
+    @staticmethod
+    def budget_cap_pct() -> float:
+        """The percent-of-entry ceiling the budget band enforces, for messages."""
+        return float(getattr(_trader_gate, 'MAX_STOP_PCT', 0.0) or 0.0)
 
     @classmethod
     def tp1_hybrid(cls, price: float, atr: float) -> tuple:
