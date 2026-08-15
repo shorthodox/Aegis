@@ -213,6 +213,38 @@ class PositionsMixin:
         pos_value    = min(pos_value, self.wallet.max_position_usdt)
         pos_value    = max(pos_value, 1.0)
 
+        # ── Affordability gate (item 3, 2026-08-15) ──────────────────────────
+        # If clearing the level costs more than the risk budget allows, the trade
+        # is not affordable — refuse it, rather than taking it with a stop we
+        # already know is in the wrong place.
+        #
+        # This is the defect behind 15 losses out of 15 exiting at STOP_HIT. The
+        # stop was placed by the budget band, not by structure, so it sat BETWEEN
+        # entry and the level the thesis leaned on: TAO/USDT stopped at 1.30%
+        # with support 2.57% away, price bottomed at 194.80 (never reaching
+        # support) and reversed. The trade was right about direction and was
+        # taken out by the move that tested its own level.
+        #
+        # Deliberately NOT fixed by widening the stop past the band. Sizing only
+        # partly compensates (the 0.5x floor binds), and the two available
+        # harness measurements disagree on whether a wider stop pays per unit of
+        # risk. Refusing is the option that does not bet on that disagreement:
+        # it takes fewer trades rather than taking the same trades with more
+        # risk. band_capped/support_seen come from the shadow instrumentation,
+        # so this reads the same signal the analysis was built on.
+        _would_refuse = bool(stops.get('band_capped') and stops.get('support_seen'))
+        if _would_refuse:
+            print(f'[{symbol}] BUDGET_SHADOW {side} — clearing the level needs '
+                  f'{stops.get("structural_stop_pct", 0):.2f}% vs a {self.risk_engine.budget_cap_pct():.2f}% '
+                  f'budget; TAKING THE TRADE (item 3 held off, see risk.py)')
+        if (self.risk_engine.REFUSE_UNAFFORDABLE_INVALIDATION and _would_refuse):
+            print(f'[{symbol}] BUDGET_REJECTED {side}')
+            if symbol in self.last_signals:
+                self.last_signals[symbol]['fire']            = False
+                self.last_signals[symbol]['signal']          = 'HOLD'
+                self.last_signals[symbol]['budget_blocked']  = True
+            return
+
         # ── Risk/Reward gate ─────────────────────────────────────────────────
         # Reward is measured to TP3 (first full-trend target).
         # Trades below the minimum RR are rejected to protect track record quality.
@@ -264,6 +296,7 @@ class PositionsMixin:
             stop_source         = str(stops.get('stop_source', 'unknown')),
             pre_band_stop       = float(getattr(plan, 'pre_band_stop', 0.0) or 0.0),
             support_present     = bool(stops.get('support_seen', False)),
+            would_refuse_unaffordable = _would_refuse,
         )
         self.wallet.open_trade(pos)
         # Shadow accounting — observation only, and deliberately wrapped: a bug

@@ -92,6 +92,10 @@ class Position:
     stop_source:         str   = 'unknown'
     pre_band_stop:       float = 0.0
     support_present:     bool  = False
+    # Item 3 shadow: would the affordability gate have refused this trade?
+    # Recorded while the gate is OFF, so the refusal rate — and whether each
+    # case is a level-mismatch or genuinely unaffordable — is measurable.
+    would_refuse_unaffordable: bool = False
     entry_support:    float = 0.0  # S/R the STRUCTURE GATE judged AT ENTRY — shown
     entry_resistance: float = 0.0  # for open positions so the chart's S/R lines
                                    # reflect the entry structure, not a live re-score
@@ -158,6 +162,10 @@ class TradeRecord:
     stop_source:         str   = 'unknown'
     pre_band_stop:       float = 0.0
     support_present:     bool  = False
+    # Item 3 shadow: would the affordability gate have refused this trade?
+    # Recorded while the gate is OFF, so the refusal rate — and whether each
+    # case is a level-mismatch or genuinely unaffordable — is measurable.
+    would_refuse_unaffordable: bool = False
     take_profit_1:   float = 0.0
     take_profit_2:   float = 0.0
     take_profit_3:   float = 0.0
