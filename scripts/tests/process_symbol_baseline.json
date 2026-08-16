@@ -86,7 +86,7 @@
   "buy_htf_conflict": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] LOW_QUALITY_REFUSED \u2014 quality 56 < 60; refused 4 signal(s) this run"
+      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
     ],
     "paper": null,
     "position": null,
@@ -114,7 +114,7 @@
   "buy_liquidity_trap": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] LOW_QUALITY_REFUSED \u2014 quality 51 < 60; refused 9 signal(s) this run"
+      "[TEST/USDT] NO TRADE (fitness): LIQUIDITY_TRAP \u2014 no reliable structure to trade against"
     ],
     "paper": null,
     "position": null,
@@ -198,7 +198,7 @@
   "buy_no_conviction": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] LOW_QUALITY_REFUSED \u2014 quality 58 < 60; refused 6 signal(s) this run"
+      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
     ],
     "paper": null,
     "position": null,
@@ -227,7 +227,7 @@
     "bootstrap": 1,
     "decisions": [
       "[TEST/USDT] ARBITER SKIP: bearish pattern present but MACD/trend not confirming (macd=BULLISH, supertrend=BULLISH, bias=BULLISH)",
-      "[TEST/USDT] LOW_QUALITY_REFUSED \u2014 quality 53 < 60; refused 11 signal(s) this run"
+      "[TEST/USDT] NO TRADE (setup): model leans the other way by 0.62 (> 0.12) \u2014 structure and model disagree"
     ],
     "paper": null,
     "position": null,
@@ -431,7 +431,7 @@
   "buy_weak_indicators": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] LOW_QUALITY_REFUSED \u2014 quality 43 < 60; refused 7 signal(s) this run"
+      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
     ],
     "paper": null,
     "position": null,
@@ -487,7 +487,7 @@
   "flat_no_fire": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] LOW_QUALITY_REFUSED \u2014 quality 0 < 60; refused 1 signal(s) this run"
+      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
     ],
     "paper": null,
     "position": null,
@@ -580,7 +580,7 @@
   "paper_long_reversal": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] LOW_QUALITY_REFUSED \u2014 quality 48 < 60; refused 13 signal(s) this run"
+      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
     ],
     "paper": {
       "entry": 100.0,
@@ -674,7 +674,7 @@
   "sell_aligned": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] LOW_QUALITY_REFUSED \u2014 quality 48 < 60; refused 2 signal(s) this run"
+      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
     ],
     "paper": null,
     "position": null,
@@ -702,7 +702,7 @@
   "sell_at_resistance": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] LOW_QUALITY_REFUSED \u2014 quality 48 < 60; refused 3 signal(s) this run"
+      "[TEST/USDT] NO TRADE (invalidation): invalidation is 6.5 ATR away (> 3.0) \u2014 too far behind the level to be worth defending"
     ],
     "paper": null,
     "position": null,
@@ -730,7 +730,7 @@
   "sell_htf_conflict": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] LOW_QUALITY_REFUSED \u2014 quality 13 < 60; refused 5 signal(s) this run"
+      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
     ],
     "paper": null,
     "position": null,
@@ -758,7 +758,7 @@
   "sell_low_quality": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] LOW_QUALITY_REFUSED \u2014 quality 28 < 60; refused 10 signal(s) this run"
+      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
     ],
     "paper": null,
     "position": null,
@@ -787,7 +787,7 @@
     "bootstrap": 1,
     "decisions": [
       "[TEST/USDT] ARBITER SKIP: bullish pattern present but MACD/trend not confirming (macd=BEARISH, supertrend=BEARISH, bias=BEARISH)",
-      "[TEST/USDT] LOW_QUALITY_REFUSED \u2014 quality 30 < 60; refused 12 signal(s) this run"
+      "[TEST/USDT] NO TRADE (setup): model leans the other way by 0.62 (> 0.12) \u2014 structure and model disagree"
     ],
     "paper": null,
     "position": null,
@@ -843,7 +843,7 @@
   "sell_trend_bull": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] LOW_QUALITY_REFUSED \u2014 quality 53 < 60; refused 8 signal(s) this run"
+      "[TEST/USDT] NO TRADE (setup): uptrend mid-range (rp 0.50) \u2014 no edge here, chasing or fading blind"
     ],
     "paper": null,
     "position": null,
