@@ -6569,8 +6569,33 @@ async def reset_track_record(_: None = Depends(_require_admin)):
         "signals": [],
     }
 
-    # Persist empty files
-    for path in (TRACK_RECORD_PATH, WEB_ROOT_PATH / "track_record.json"):
+    # Persist empty files — BOTH stores, which is the whole reason the previous
+    # two resets did not stick.
+    #
+    # main.py:708 binds TRACK_RECORD_PATH to web/track_record.json, so the old
+    # tuple (TRACK_RECORD_PATH, WEB_ROOT_PATH / "track_record.json") named the
+    # SAME file twice and never touched the volume. The engine binds its own
+    # TRACK_RECORD_PATH to STATE_DIR/track_record.json (scripts/engine/config.py
+    # :199) — a different file behind the same NAME — and GET /api/track-record
+    # merges the two. So the reset cleared one of the two sources, returned
+    # success, and the record reappeared as soon as anything read it.
+    #
+    # Derived exactly the way the read path derives it (see the _ENGINE_RECORD
+    # line in track_record_endpoint) so the two cannot drift apart again. If that
+    # expression ever changes, change it in both places or this silently breaks
+    # in the same way.
+    _engine_record = Path(
+        os.environ.get('AEGIS_STATE_DIR') or (Path(BASE_DIR) / "data")
+    ) / "track_record.json"
+
+    # dict.fromkeys de-duplicates while preserving order: on a local dev box with
+    # no AEGIS_STATE_DIR these can legitimately resolve to the same file, and
+    # writing it twice is harmless but pointless.
+    for path in dict.fromkeys((
+        TRACK_RECORD_PATH,
+        WEB_ROOT_PATH / "track_record.json",
+        _engine_record,
+    )):
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             tmp = path.with_suffix(".tmp")
