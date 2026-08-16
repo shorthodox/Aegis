@@ -2870,14 +2870,29 @@ export async function ensureUserDocument(user) {
   const userDocRef = doc(db, 'users', user.uid);
   const docSnap = await getDoc(userDocRef);
   if (!docSnap.exists()) {
-    await setDoc(userDocRef, {
-      uid: user.uid,
-      email: user.email || '',
-      joinDate: serverTimestamp(),
-      lastLogin: serverTimestamp()
-    });
+    // Creating the profile IS a precondition, so it stays awaited — but bounded.
+    // An unbounded await here is the same trap as below: the Firestore SDK
+    // retries resource-exhausted at maximum backoff, so without a deadline a
+    // quota-exhausted project turns "sign up" into a permanent spinner. Failing
+    // in 8s produces an error the UI can show; failing never does not.
+    await Promise.race([
+      setDoc(userDocRef, {
+        uid: user.uid,
+        email: user.email || '',
+        joinDate: serverTimestamp(),
+        lastLogin: serverTimestamp()
+      }),
+      new Promise((_, rej) =>
+        setTimeout(() => rej(new Error('firestore-write-timeout')), 8000)),
+    ]);
   } else {
-    await updateDoc(userDocRef, { lastLogin: serverTimestamp() });
+    // Bookkeeping, NOT a precondition of signing in — never await it.
+    // 2026-08-16: the free-tier daily WRITE quota was exhausted, this write
+    // returned resource-exhausted, the SDK retried at maximum backoff, and the
+    // await never resolved. Sign-in hung forever on a valid credential with a
+    // readable profile. Nothing on this path reads lastLogin.
+    updateDoc(userDocRef, { lastLogin: serverTimestamp() })
+      .catch(e => console.warn('lastLogin stamp skipped:', e?.code || e));
   }
 }
 

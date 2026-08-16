@@ -120,7 +120,15 @@ export async function ensureUserDocumentV2(user, authMethod = 'email', phone = '
       }
     };
     
-    await setDoc(userDocRef, userData);
+    // Creating the profile IS a precondition of signup, so it stays awaited —
+    // but bounded. The SDK retries resource-exhausted at maximum backoff, so an
+    // unbounded await turns a quota-exhausted project into a permanent spinner.
+    // An 8s failure surfaces an error the UI can render; a hang never does.
+    await Promise.race([
+      setDoc(userDocRef, userData),
+      new Promise((_, rej) =>
+        setTimeout(() => rej(new Error('firestore-write-timeout')), 8000)),
+    ]);
     console.log('âœ… New user document created');
     return { ...userData, isNewUser: true };
   } else {
@@ -131,11 +139,18 @@ export async function ensureUserDocumentV2(user, authMethod = 'email', phone = '
     const loginMethods = new Set(existingData.loginMethods || []);
     loginMethods.add(authMethod);
     
-    await updateDoc(userDocRef, {
+    // Bookkeeping, NOT a precondition of signing in — so it must never be
+    // awaited. On 2026-08-16 the Firestore free-tier daily WRITE quota was
+    // exhausted; this write returned resource-exhausted, the SDK retried at
+    // maximum backoff, and the await never resolved. Sign-in hung on the
+    // "Signing in..." spinner with a valid credential and a readable profile.
+    // Nothing on this path reads lastLogin, so a lost stamp costs nothing and
+    // a blocked await costs the whole session.
+    updateDoc(userDocRef, {
       loginMethods: Array.from(loginMethods),
       lastLogin: serverTimestamp()
-    });
-    
+    }).catch(e => console.warn('lastLogin stamp skipped:', e?.code || e));
+
     console.log('âœ… Existing user login updated');
     return { ...existingData, isNewUser: false };
   }
@@ -155,7 +170,10 @@ async function _resolveGoogleUser(user) {
     const existingData = docSnap.data();
     const loginMethods = new Set(existingData.loginMethods || []);
     loginMethods.add('google');
-    await updateDoc(userDocRef, { loginMethods: Array.from(loginMethods), lastLogin: serverTimestamp() });
+    // Fire-and-forget: see the note in the email path above. A quota-exhausted
+    // project made this await hang Google sign-in indefinitely.
+    updateDoc(userDocRef, { loginMethods: Array.from(loginMethods), lastLogin: serverTimestamp() })
+      .catch(e => console.warn('lastLogin stamp skipped:', e?.code || e));
     const idToken = await user.getIdToken();
 
     // Gate: confirm the backend has a fully-provisioned record for this user.
