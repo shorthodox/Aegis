@@ -251,8 +251,15 @@ class SignalQualityFilter:
             if lstm_cont > 0.65:
                 score += 10; reasons.append(f'lstm_continuation({lstm_cont:.2f})')
 
-            # -8: LSTM detects sequence exhaustion (momentum likely decaying)
-            elif lstm_cont < 0.32:
+            # -8: LSTM detects sequence exhaustion (momentum likely decaying).
+            #
+            # Skipped for a reversal at the extreme, and this one is not merely
+            # double-counting — it is INVERTED. Decaying momentum is a defect in
+            # a continuation trade and the entire thesis of a mean-reversion one.
+            # Scoring "the move is running out of steam" as a fault on a trade
+            # taken BECAUSE the move is running out of steam penalises the setup
+            # for containing its own premise.
+            elif lstm_cont < 0.32 and not (is_reversal_strict or is_structural_reversal):
                 score -= 8; reasons.append(f'lstm_exhaustion({lstm_exh:.2f})')
 
             # +8: Volatility expansion expected — good for breakout trades
@@ -290,9 +297,19 @@ class SignalQualityFilter:
             if (side == 'BUY'  and macd_sig == 'BULLISH') or \
                (side == 'SELL' and macd_sig == 'BEARISH'):
                 score += 8;  reasons.append(f'macd_aligned({macd_sig})')
-            elif (side == 'BUY'  and macd_sig == 'BEARISH') or \
-                 (side == 'SELL' and macd_sig == 'BULLISH'):
-                score -= 12; reasons.append(f'macd_conflict({macd_sig})')
+            elif ((side == 'BUY'  and macd_sig == 'BEARISH') or
+                  (side == 'SELL' and macd_sig == 'BULLISH')):
+                # Halved rather than skipped for a reversal at the extreme.
+                #
+                # Unlike the ranging, HTF and exhaustion penalties, this one is
+                # not purely double-counting. An opposing MACD is EXPECTED when
+                # fading — you are trading against momentum by construction, so
+                # charging the full -12 penalises the setup for its own premise.
+                # But it also carries real information a fade cannot dismiss:
+                # being early. The distinction the other exemptions can ignore,
+                # this one cannot, so it is reduced, not removed.
+                _pen = 6 if (is_reversal_strict or is_structural_reversal) else 12
+                score -= _pen; reasons.append(f'macd_conflict({macd_sig})')
 
         return round(max(0.0, min(score, 100.0)), 1), reasons
 
