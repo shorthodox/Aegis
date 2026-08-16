@@ -114,16 +114,39 @@ HARD_VETOES = frozenset({'MODEL_DRIFT_CRITICAL', 'DEAD_MARKET',
 # refused — not on merit, but because the book cap is arrival-ordered (see the
 # allocation stage in trader_gate.py). Quality was anti-correlated with firing.
 #
-# 60.0 is the value SignalQualityFilter already carries, chosen in v43 by moving
-# it 55 -> 60 and measuring. It is kept rather than re-derived: fleet quality is
-# median 30 / p75 40, so 60 retains ~11% of scored symbols — about five at any
-# moment, which is exactly MAX_OPEN. Raising it further starves a book of five.
+# Lowered 60 -> 45 on 2026-08-17, by decision, and the measurement supports it.
+#
+# 60 was inherited from SignalQualityFilter.MIN_QUALITY_SCORE, chosen in v43 by
+# moving 55 -> 60. It was calibrated against a fleet whose quality ran median 30
+# / p75 40 / max 100, where it retained ~11% — about five symbols, exactly
+# MAX_OPEN. That fleet no longer exists. After the reversal-penalty exemptions
+# the distribution moved to median 40 / p75 50 / **max 68**, and a floor of 60
+# retained 3 of 44 symbols (6.8%) — a book of five that cannot fill. A floor the
+# funnel cannot clear is not conservative, it is just off.
+#
+#     >= 40   23/44  (52.3%)        >= 55    7/44  (15.9%)
+#     >= 45   15/44  (34.1%)        >= 60    3/44  ( 6.8%)
+#     >= 50   13/44  (29.5%)
+#
+# 45 retains ~34% — comfortably above MAX_OPEN without admitting the median bar.
+#
+# Know what this admits. It is a real loosening, not a rounding: the 45-59 band
+# is 12 symbols (TRX 58, ETC 56, ADA 55, ENA 55, HBAR 54, DOT/ICP/PENDLE/SOL/VET
+# 50, SUI 48, TRB 45). ATOM at 56 — one of the positions whose entry geometry
+# started this whole investigation — now clears. So does a thin-evidence fade at
+# 57, which the previous floor deliberately refused (see
+# test_quality_fade_parity). Those are the trades this number buys.
+#
+# This is the SECOND loosening inside a day: PR #41 raised fade scores by 15-29
+# points, and this drops the bar underneath them. If the win rate falls, suspect
+# these two together and raise this back to 55 first — do not reach for a new
+# veto, and do not touch the scorer again until this has been measured on its own.
 #
 # This is a THRESHOLD ON A LIVE FUNNEL, so it is counted, not just applied:
 # LOW_QUALITY_REFUSED tallies every fire it blocks and the engine logs each one.
 # If the fire rate collapses, that counter is the evidence — lower the floor
 # rather than removing it, and never stack it with a new veto in the same change.
-MIN_FIRE_QUALITY = 60.0
+MIN_FIRE_QUALITY = 45.0
 
 MODEL_STORE = _ROOT / 'src' / 'ml' / 'model_store'
 

@@ -40,8 +40,14 @@ def test_the_floor_exists_and_is_a_real_bar():
 
 
 def test_the_floor_is_above_the_fleet_median():
-    """Fleet quality measured median 30 / p75 40. A floor at or below the median
-    is not a floor, it is decoration."""
+    """A floor at or below the median is not a floor, it is decoration.
+
+    The median is not a constant. Measured 2026-08-16 it was 30; after the
+    reversal-penalty exemptions it moved to 40 (p75 50, max 68), which is why
+    60 stopped being a bar and became a wall — it retained 3 of 44 symbols for a
+    book of five. Re-measure before moving this again; do not assume the
+    distribution the last calibration saw.
+    """
     assert _cfg.MIN_FIRE_QUALITY > 40
 
 
@@ -67,10 +73,27 @@ def _fires(quality, model_fire=True, side='BUY', hard=()):
     return model_fire and side in ('BUY', 'SELL')
 
 
-def test_the_five_signals_that_held_the_book_would_all_be_refused():
-    for sym, q in (('COMP', 0.0), ('DOGE', 18.0), ('LINK', 35.0),
-                   ('TAO', 38.7), ('ATOM', 56.0)):
+def test_the_worst_of_the_book_is_still_refused():
+    """Four of the five that held the book on 2026-08-16 stay out.
+
+    ATOM is deliberately NOT in this list any more. At quality 56 it cleared the
+    floor when it dropped 60 -> 45 on 2026-08-17, and pretending otherwise would
+    make this file describe a system that does not exist. ATOM is the price of
+    that decision, named in config.py and asserted below so the trade-off stays
+    visible instead of dissolving into a number.
+    """
+    for sym, q in (('COMP', 0.0), ('DOGE', 18.0), ('LINK', 35.0), ('TAO', 38.7)):
         assert not _fires(q), f'{sym} at quality {q} fired again'
+
+
+def test_atom_at_56_is_knowingly_admitted_by_the_lower_floor():
+    """The trade the 60 -> 45 drop buys. ATOM's entry geometry — 1.69 ATR from
+    the level it leaned on — is what started this investigation, and at 45 its
+    context score no longer stops it. The location veto is a separate control
+    and is what should catch it; this asserts only that the QUALITY floor does
+    not, so nobody later reads the drop as free."""
+    assert _fires(56.0)
+    assert _cfg.MIN_FIRE_QUALITY <= 56.0
 
 
 def test_the_five_that_were_turned_away_all_clear_the_floor():
