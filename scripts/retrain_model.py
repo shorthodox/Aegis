@@ -222,6 +222,34 @@ EXPECTANCY_FLOOR = 0.20          # 0.20% minimum expectancy floor for override
 BARRIER_UP_SKEW = 1.0    # symmetric: prevents SELL-label dominance across all tokens
 BARRIER_DOWN_SKEW = 1.0
 
+# ── Which race the model is graded on ────────────────────────────────────────
+# 'atr' places the barriers at +/- k x ATR. That is the historical behaviour and
+# it grades the model on a race the engine does not trade: the live ladder puts
+# its first rung at a fixed PERCENT of entry, so on a 2%-ATR token the training
+# barriers sit three times further out than the objective the money rides on. A
+# model can be genuinely skilful at its own barrier race and contribute almost
+# nothing to that one.
+#
+# 'pct' places them at +/- LABEL_BARRIER_PCT percent of entry, which is the
+# distance the trade actually needs. Same units, same scale, same question.
+#
+# Deliberately SYMMETRIC even though the trade is not (+1.0% target against a
+# ~1.3% stop). Asymmetric barriers would skew the label distribution toward
+# whichever side sits nearer and hand the model a directional bias that has
+# nothing to do with the market. Direction is the prediction problem; the
+# target/stop ratio is a risk decision, and it belongs to the gate's payoff
+# stage where it already lives.
+#
+# Switching this changes what every model learns, so it takes effect only on
+# the next retrain and the sidecar records which mode produced it. Existing
+# models are unaffected.
+LABEL_BARRIER_MODE = os.getenv('AEGIS_LABEL_BARRIER_MODE', 'atr').strip().lower()
+try:                                    # keep in step with the live first rung
+    from scripts.engine.risk import DynamicRiskEngine as _RE
+    LABEL_BARRIER_PCT = float(_RE.TP_LADDER_PCT[0])
+except Exception:                       # pragma: no cover - import-order safety
+    LABEL_BARRIER_PCT = 1.0
+
 NEWS_FILE = Path(root_dir) / "data" / "news_data.json"
 NEWS_MAX_AGE_SECONDS = 30 * 60
 
@@ -1060,7 +1088,9 @@ def create_triple_barrier_labels(df: pd.DataFrame, atr_multiplier: float,
                                   regime_atr_mult: Optional[Dict[str, float]] = None,
                                   barrier_up_skew: Optional[float] = None,
                                   barrier_down_skew: Optional[float] = None,
-                                  return_hit_bars: bool = False) -> Any:
+                                  return_hit_bars: bool = False,
+                                  barrier_mode: Optional[str] = None,
+                                  barrier_pct: Optional[float] = None) -> Any:
     """3-class labels: 0=SELL, 1=HOLD, 2=BUY, -1=CENSORED (dropped upstream).
 
     return_hit_bars: when True, also return a parallel float Series holding the
@@ -1083,6 +1113,14 @@ def create_triple_barrier_labels(df: pd.DataFrame, atr_multiplier: float,
 
     _up_skew   = float(barrier_up_skew)   if barrier_up_skew   is not None else BARRIER_UP_SKEW
     _down_skew = float(barrier_down_skew) if barrier_down_skew is not None else BARRIER_DOWN_SKEW
+    # See LABEL_BARRIER_MODE: 'atr' grades the model on a race the engine does
+    # not trade; 'pct' grades it on the one the ladder actually runs.
+    _barrier_mode = (barrier_mode or LABEL_BARRIER_MODE or 'atr').strip().lower()
+    _barrier_pct  = float(barrier_pct if barrier_pct is not None else LABEL_BARRIER_PCT)
+    if _barrier_mode not in ('atr', 'pct'):
+        raise ValueError(f'unknown barrier_mode {_barrier_mode!r}; use "atr" or "pct"')
+    if _barrier_mode == 'pct' and _barrier_pct <= 0:
+        raise ValueError('barrier_pct must be a positive percentage')
 
     labels = pd.Series(1, index=df.index, dtype=int)
     hit_bars = pd.Series(np.nan, index=df.index, dtype=float)
@@ -1148,8 +1186,17 @@ def create_triple_barrier_labels(df: pd.DataFrame, atr_multiplier: float,
             elif er_i > 0.6:
                 reg_barrier_adj = 0.9
 
-        upper = entry_price + (dynamic_mult * reg_barrier_adj * _up_skew) * atr_val
-        lower = entry_price - (dynamic_mult * reg_barrier_adj * _down_skew) * atr_val
+        if _barrier_mode == 'pct':
+            # The distance the live trade actually needs, in the units it uses.
+            # reg_barrier_adj and the skews still apply, so regime widening and
+            # any deliberate asymmetry behave exactly as they do in ATR mode —
+            # only the unit changes.
+            _half = entry_price * (_barrier_pct / 100.0) * reg_barrier_adj
+            upper = entry_price + _half * _up_skew
+            lower = entry_price - _half * _down_skew
+        else:
+            upper = entry_price + (dynamic_mult * reg_barrier_adj * _up_skew) * atr_val
+            lower = entry_price - (dynamic_mult * reg_barrier_adj * _down_skew) * atr_val
 
         window_avail = min(max_lookahead, n - 1 - i)
         hit = None
@@ -3279,7 +3326,41 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
             else:
                 _cal_conf_dir_val = _conf_dir_val
 
-            _best_thr_po  = 0.85  # conservative default (used when sweep finds nothing)
+            def _threshold_from_training_pool(_why: str) -> float:
+                """Read the threshold off the distribution the gate will see.
+
+                Used whenever the validation sweep cannot produce one, for
+                either reason. It is scale-agnostic by construction: a
+                percentile of the actual confidences works the same whether
+                they are raw scores or calibrated probabilities, which is
+                exactly what the fixed 0.60-0.70 sweep floor is not.
+                """
+                if _po_use_calibrator and _calibrator_po is not None:
+                    _tp_conf_base = _conf_tp[_dir_tp_cal].reshape(-1, 1)
+                    _multi = (_hold_disc_cols
+                              and hasattr(_calibrator_po, 'coef_')
+                              and _calibrator_po.coef_.shape[1] > 1)
+                    if _multi:
+                        _idx  = np.where(_dir_tp_cal)[0]
+                        _disc = Xtp.iloc[_idx][_hold_disc_cols].fillna(0.0).to_numpy()
+                        _x    = np.column_stack([_tp_conf_base, _disc])
+                    else:
+                        _x = _tp_conf_base
+                    _conf = _calibrator_po.predict_proba(_x)[:, 1]
+                    _label = 'cal training'
+                else:
+                    _conf = _conf_tp[_dir_tp] if _dir_tp.sum() > 0 else _conf_tp
+                    _label = 'raw training'
+                if len(_conf) == 0:
+                    print(f"   [{_why}] no directional training bars — thr=0.60")
+                    return 0.60
+                _thr = float(np.percentile(_conf, 60))
+                print(f"   [{_why}] {_label} 60th-pct thr={_thr:.3f} "
+                      f"(val_n={_n_dir_val}, pool_n={len(_conf)}, "
+                      f"pool range {float(np.min(_conf)):.3f}-{float(np.max(_conf)):.3f})")
+                return _thr
+
+            _best_thr_po  = 0.85  # replaced below on every path; see the fallback
             _best_prec_po = 0.0
             _best_n_po    = 0
             _best_cov_po  = 0.0
@@ -3317,29 +3398,25 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
                     print(f"   [THR-SWEEP] thr={_best_thr_po:.3f} prec={_best_prec_po:.1%} "
                           f"n={_best_n_po} cov={_best_cov_po:.1%} wilson_lb={_sel[4]:.3f} | "
                           f"{len(_rows_po)} rows, {len(_passing_rows)} with LB>=60%")
-            else:
-                # Small val set (<100 directional bars): derive threshold from training pool.
-                # Calibrated training confidence is more reliable than a noisy val sweep.
-                if _po_use_calibrator and _calibrator_po is not None:
-                    _tp_dir_conf_base = _conf_tp[_dir_tp_cal].reshape(-1, 1)
-                    _use_multi_cal_tp = (
-                        _hold_disc_cols
-                        and hasattr(_calibrator_po, 'coef_')
-                        and _calibrator_po.coef_.shape[1] > 1
-                    )
-                    if _use_multi_cal_tp:
-                        _tp_dir_idx  = np.where(_dir_tp_cal)[0]
-                        _tp_dir_disc = Xtp.iloc[_tp_dir_idx][_hold_disc_cols].fillna(0.0).to_numpy()
-                        _tp_cal_x    = np.column_stack([_tp_dir_conf_base, _tp_dir_disc])
-                    else:
-                        _tp_cal_x = _tp_dir_conf_base
-                    _cal_conf_tp_dir = _calibrator_po.predict_proba(_tp_cal_x)[:, 1]
-                    _best_thr_po = float(np.percentile(_cal_conf_tp_dir, 60)) if len(_cal_conf_tp_dir) > 0 else 0.60
-                    print(f"   [SMALL VAL] Cal training 60th-pct thr={_best_thr_po:.3f} (val_n={_n_dir_val})")
                 else:
-                    _dir_conf_all = _conf_tp[_dir_tp] if _dir_tp.sum() > 0 else _conf_tp
-                    _best_thr_po  = float(np.percentile(_dir_conf_all, 60)) if len(_dir_conf_all) > 0 else 0.60
-                    print(f"   [SMALL VAL] Raw training 60th-pct thr={_best_thr_po:.3f} (val_n={_n_dir_val})")
+                    # The sweep ran and every row was rejected. Falling through
+                    # to the 0.85 initialiser ships a model that cannot fire:
+                    # BTC/USDT 2026-08-11 trained to 64.7% directional precision
+                    # and then fired 0 of 1676 holdout bars, because the sweep's
+                    # floor (0.60-0.70) is on the RAW confidence scale while
+                    # _cal_conf_dir_val is a calibrated P(direction correct)
+                    # centred near its base rate of 0.386. Nothing reached the
+                    # lowest rung, so no row had the 50 fires the sweep needs.
+                    #
+                    # The training-pool percentile below is the right instrument
+                    # for exactly this: it reads the threshold off the same
+                    # distribution the gate will see, whatever scale that is on.
+                    _best_thr_po = _threshold_from_training_pool('EMPTY-SWEEP')
+            else:
+                # Small val set (<100 directional bars): derive threshold from
+                # training pool. Calibrated training confidence is more reliable
+                # than a noisy val sweep.
+                _best_thr_po = _threshold_from_training_pool('SMALL-VAL')
 
             _primary_conf_thr = _best_thr_po
             _primary_only_gate = True
@@ -3984,6 +4061,18 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
             tradeable_sell_holdout = False
             reason = "dev precision floor not met" if not hit_target else "no holdout signals survived rank gate"
             print(f"      No signals fired ({reason})")
+            # Zero fires is a failed run, not a cautious model, and it is easy
+            # to scroll past in a 100-token sweep. Say so where it will be seen,
+            # and say what to look at: a model with real directional precision
+            # that fires nothing is a THRESHOLD fault, not a model fault.
+            print(f"   !! {symbol}: TRAINING FAILED — 0 of {len(y_test)} holdout "
+                  f"bars fired. The model is NOT deployable and the engine will "
+                  f"bench it.")
+            if float(locals().get('_primary_dir_prec', 0.0) or 0.0) >= 0.55:
+                print(f"   !! directional precision without the gate was "
+                      f"{float(locals().get('_primary_dir_prec', 0.0)):.1%} — the model "
+                      f"has edge and the CONFIDENCE THRESHOLD is rejecting it. "
+                      f"Check the [THR-SWEEP] / [EMPTY-SWEEP] line above.")
         print(f"   -- reference only -- all-bar acc {test_acc:.3f} | "
               f"SELL/HOLD/BUY prec {prec[0]:.2f}/{prec[1]:.2f}/{prec[2]:.2f}")
 
@@ -4103,6 +4192,15 @@ def train_token(symbol: str, hours: int = 5000) -> dict[str, Any] | None:  # pyr
             _cal_po_path = None
         _sidecar_payload = {
             "symbol": symbol,
+            # Which race this model was graded on. 'atr' models were trained
+            # against +/- k x ATR barriers, which is NOT the race the live
+            # ladder runs; 'pct' models were trained against the ladder's own
+            # first rung. Recorded because the two are not comparable — a
+            # precision figure from one says nothing about the other, and a
+            # mixed fleet would otherwise be indistinguishable.
+            "label_barrier_mode": LABEL_BARRIER_MODE,
+            "label_barrier_pct": (LABEL_BARRIER_PCT
+                                  if LABEL_BARRIER_MODE == 'pct' else None),
             "regime_policies": regime_policies,
             "aegis_state_path": str(aegis_state_path.name),
             "disabled_filters": {
