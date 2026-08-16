@@ -84,6 +84,13 @@ from src.trading.trendline_channel import TrendlineChannelDetector
 # either failing means this datastore is not worth another 60s timeout.
 _FS_DOWN = False
 
+# What MIN_FIRE_QUALITY costs, in signals. A floor on a live funnel has to be
+# measurable or it cannot be tuned — the repo has form here: a 35,640-scenario
+# sweep once found stacked floors rejecting 45% of everything at payoff and
+# contributing to a 0% fire rate, and nothing counted it at the time. Mirrors the
+# shape of trader_gate.EXHAUSTION_REFUSED_COUNT deliberately.
+LOW_QUALITY_REFUSED: Dict[str, int] = {'count': 0}
+
 
 class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
     """
@@ -1263,6 +1270,34 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
             self._publish_no_trade(symbol, 'cooling off after the last close')
             return True
 
+        # ── the quality floor, enforced where positions actually open ────────
+        # It has to be HERE and not only at the fire flag. Suppressing
+        # `result['fire']`/`result['side']` upstream does not stop this path:
+        # `result['tradeable']` is set True unconditionally, the call site checks
+        # only tradeable/price/existing, `_classify` picks the side from
+        # range_position and the regime without ever reading `result['side']`,
+        # and REQUIRE_MODEL_FIRE is False. So under v83 a "hard veto" blanks the
+        # published card while the desk opens the position anyway — the same way
+        # the v83 rewrite dropped the entry quality floor it inherited.
+        #
+        # Quality is the one thing the desk has no notion of. Its stages ask what
+        # the trade is, where it is wrong, whether it pays, and whether it is
+        # time — all structural. Nothing asks whether the context is any good,
+        # which is why a signal scoring 0/100 could hold a slot in a book of five.
+        # This is deliberately a doctrinal ADDITION to "structure leads": the
+        # structure still picks the side, but a setup the engine itself scores
+        # below the floor is not taken.
+        _qf = float(getattr(_cfg, 'MIN_FIRE_QUALITY', 0.0) or 0.0)
+        if _qf > 0 and float(ctx_quality or 0.0) < _qf:
+            LOW_QUALITY_REFUSED['count'] += 1
+            self._publish_no_trade(
+                symbol, f'signal quality {float(ctx_quality or 0.0):.0f}/100 is below the '
+                        f'{_qf:.0f} floor — not a setup worth the risk')
+            print(f'[{symbol}] LOW_QUALITY_REFUSED — quality '
+                  f'{float(ctx_quality or 0.0):.0f} < {_qf:.0f}; refused '
+                  f'{LOW_QUALITY_REFUSED["count"]} signal(s) this run')
+            return True
+
         try:
             levels = await self._structural_levels(symbol, price, atr)
         except Exception:
@@ -1660,9 +1695,28 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
                             print(f'[{symbol}] ARBITER SKIP: bearish pattern present but MACD/trend not confirming (macd={macd_sig}, supertrend={supertrend}, bias={market_bias})')
 
                 # MODEL decides; a hard veto can only SUPPRESS its fire.
+                #
+                # ...as can the quality floor. `fire` arrives here as
+                # `edge_score >= thr`, a PERCENTILE test that carries no absolute
+                # information about the setup (see the edge_score note below).
+                # MIN_FIRE_QUALITY is the absolute bar, and it is applied at the
+                # commit point rather than inside the model so the refusal is
+                # attributable — the thing 16 interacting guards never were.
+                _q_floor = float(getattr(_cfg, 'MIN_FIRE_QUALITY', 0.0) or 0.0)
+                _q_low = (_q_floor > 0 and _model_fire
+                          and _model_side in ('BUY', 'SELL')
+                          and float(_ctx_quality or 0.0) < _q_floor)
                 if _hard:
                     result['side'] = 'FLAT'
                     result['fire'] = False
+                elif _q_low:
+                    LOW_QUALITY_REFUSED['count'] += 1
+                    result['side'] = 'FLAT'
+                    result['fire'] = False
+                    result['quality_refused'] = True
+                    print(f'[{symbol}] LOW_QUALITY_REFUSED {_model_side} — quality '
+                          f'{float(_ctx_quality or 0.0):.0f} < {_q_floor:.0f} floor; '
+                          f'refused {LOW_QUALITY_REFUSED["count"]} signal(s) this run')
                 else:
                     result['side'] = _model_side
                     result['fire'] = _model_fire and _model_side in ('BUY', 'SELL')

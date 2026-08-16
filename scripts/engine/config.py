@@ -85,6 +85,46 @@ USE_WEIGHTED_SCORER = True
 HARD_VETOES = frozenset({'MODEL_DRIFT_CRITICAL', 'DEAD_MARKET',
                          'EXTREME_VOLATILITY', 'FAR_FROM_SR'})
 
+# ── Minimum signal quality to FIRE ────────────────────────────────────────────
+# An absolute floor on SignalQualityFilter.score_signal() — the 0-100 number the
+# UI prints as "Signal Quality Score". Below it the signal is not taken.
+#
+# Nothing enforced this on the live entry path. `fire` is decided by
+# `edge_score >= thr` (src/ml/predictor.py:990), and engine.py's own comment
+# explains why that cannot stand in for quality: edge_score is a PERCENTILE RANK
+# of the bar against its own lookback, so in a window where every bar is poor the
+# least-poor bar ranks 100. quality_score is the absolute measure — ADX, volume
+# conviction, regime confidence, RSI zone, funding and OI alignment, HTF macro,
+# candles, MACD — and it was computed, published, and spent only on POSITION SIZE.
+#
+# A floor did exist and was lost rather than retired. The pre-v83 guard chain ran
+# G3_MIN_QUALITY (see scripts/backtest_forensic.py:378 and the 2026-07-01 forensic
+# audits, which log "edge=62.5 < MIN_QUALITY_SCORE=70.0"). The v83 TraderGate
+# rewrite replaced Guards A..T wholesale and no stage picked the floor back up.
+# SignalQualityFilter.MIN_QUALITY_SCORE = 60.0 survived as a constant — described
+# in-line as "cut the coin-flip signals (biggest WR lever)" — but the only live
+# readers left are an exit check and a pre-gate position check. Nothing on entry.
+#
+# What that cost, measured on the live fleet 2026-08-16 (44 scored symbols):
+#
+#     book HELD by        COMP 0, DOGE 18, LINK 35, TAO 38.7, ATOM 56
+#     turned away         TRX 100, INJ 76, PENDLE 71, UNI 66, AAVE 61
+#
+# The five worst signals on the board held every slot while the five best were
+# refused — not on merit, but because the book cap is arrival-ordered (see the
+# allocation stage in trader_gate.py). Quality was anti-correlated with firing.
+#
+# 60.0 is the value SignalQualityFilter already carries, chosen in v43 by moving
+# it 55 -> 60 and measuring. It is kept rather than re-derived: fleet quality is
+# median 30 / p75 40, so 60 retains ~11% of scored symbols — about five at any
+# moment, which is exactly MAX_OPEN. Raising it further starves a book of five.
+#
+# This is a THRESHOLD ON A LIVE FUNNEL, so it is counted, not just applied:
+# LOW_QUALITY_REFUSED tallies every fire it blocks and the engine logs each one.
+# If the fire rate collapses, that counter is the evidence — lower the floor
+# rather than removing it, and never stack it with a new veto in the same change.
+MIN_FIRE_QUALITY = 60.0
+
 MODEL_STORE = _ROOT / 'src' / 'ml' / 'model_store'
 
 # ── Persistent runtime STATE directory ────────────────────────────────────────

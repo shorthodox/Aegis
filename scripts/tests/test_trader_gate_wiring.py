@@ -40,13 +40,25 @@ def build(levels, ltf=('bull',), **over):
     return eng
 
 
-async def drive(eng, result):
-    """Run one symbol through _process_symbol with the desk enabled."""
+async def drive(eng, result, min_quality=0.0):
+    """Run one symbol through _process_symbol with the desk enabled.
+
+    `min_quality` neutralises MIN_FIRE_QUALITY by default. These fixtures exist
+    to pin the WIRING — plan becomes position, the plan's own stop is honoured,
+    away-from-level rests instead of entering — and they do not set the fields
+    SignalQualityFilter scores (adx, volume_zscore, confluence, funding, OI), so
+    they score far below the live floor. Leaving the floor on would make every
+    case here refuse for a reason none of them is about, and the wiring would go
+    untested. The floor's own behaviour on this path is pinned separately, by
+    test_the_quality_floor_blocks_the_desk_path below.
+    """
     # scripts.engine.config is the single mutable source of truth for the flag;
     # scripts.live_engine only re-exports its value, so setting it there would
     # rebind a name the engine does not read.
     from scripts.engine import config as _cfg
     prev = _cfg.USE_TRADER_GATE
+    prev_q = getattr(_cfg, 'MIN_FIRE_QUALITY', 0.0)
+    _cfg.MIN_FIRE_QUALITY = min_quality
     _cfg.USE_TRADER_GATE = True
     loop = asyncio.get_running_loop()
     real = loop.run_in_executor
@@ -67,6 +79,7 @@ async def drive(eng, result):
     finally:
         loop.run_in_executor = real      # type: ignore[assignment]
         _cfg.USE_TRADER_GATE = prev
+        _cfg.MIN_FIRE_QUALITY = prev_q
     return eng.last_signals.get(SYMBOL, {}), eng.wallet.open_positions.get(SYMBOL), buf.getvalue()
 
 
@@ -97,6 +110,36 @@ def test_an_approved_plan_opens_a_position_with_the_plans_own_stop():
         'the engine placed a different stop from the one the payoff was approved on'
     assert sig['fire'] is True
     assert sig['setup_type']
+
+
+def test_the_quality_floor_blocks_the_desk_path():
+    """The setup the desk APPROVES is refused when quality is below the floor.
+
+    This is the pairing that matters: GOOD_LONG opens a position in the test
+    above, so anything that stops it here is the floor and nothing else.
+
+    It has to be pinned on THIS path specifically. Suppressing result['fire'] and
+    result['side'] upstream does not reach the book — result['tradeable'] is set
+    True unconditionally, the call site checks only tradeable/price/existing,
+    _classify never reads result['side'], and REQUIRE_MODEL_FIRE is False. A
+    floor applied only at the fire flag would blank the published card and let
+    the desk open the position regardless, which is exactly how the v83 rewrite
+    left the hard vetoes.
+    """
+    sig, pos, out = asyncio.run(
+        drive(build(GOOD_LEVELS), _base_result(**GOOD_LONG), min_quality=100.0))
+    assert pos is None, f'a sub-floor signal opened a position:\n{out}'
+    assert sig.get('fire') is False
+    assert 'LOW_QUALITY_REFUSED' in out, 'the refusal was not attributed'
+    assert 'quality' in (sig.get('structure_reason') or '').lower()
+
+
+def test_the_floor_is_what_blocked_it_and_not_the_desk():
+    """Guards the test above from rotting into a tautology: with the floor off,
+    the identical fixture must still open a position."""
+    _, pos, _ = asyncio.run(
+        drive(build(GOOD_LEVELS), _base_result(**GOOD_LONG), min_quality=0.0))
+    assert pos is not None, 'the fixture stopped opening a position for some other reason'
 
 
 def test_a_refusal_opens_nothing_and_says_why():
