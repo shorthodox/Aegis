@@ -287,9 +287,38 @@ class DynamicRiskEngine:
     # kept rather than deleted because they are the dials that come back if the
     # re-cross proves too tight — raise MAX_FRAC first, it is the one that
     # decides how much of a rung may be returned.
-    TP_GIVEBACK_PCT      = 0.10  # (inactive while MAX_FRAC is 0)
-    TP_GIVEBACK_MIN_ATR  = 0.50  # (inactive while MAX_FRAC is 0)
-    TP_GIVEBACK_MAX_FRAC = 0.00  # book the remainder AT the rung
+    # v88 (2026-08-15): THE CAP IS NO LONGER ZERO. Raised 0.00 -> 0.35.
+    #
+    # A zero cap collapses the leash to nothing, which puts the protective level
+    # exactly ON the rung — so the first tick back through TP1 books the whole
+    # remainder at TP1. The ladder above TP1 is then unreachable BY CONSTRUCTION,
+    # and every winner pays the same number. Measured on the live book:
+    #
+    #     TIA/USDT  exit 0.3046605  == take_profit_1 0.3046605   +1.3997%
+    #     CRV/USDT                                               +1.4023%
+    #     ATOM/USDT                                              +1.4000%
+    #
+    # Three tokens, three identical results, all exit_reason=TP_GIVEBACK. That is
+    # a mechanism, not a market. The v86 note above is the same finding one
+    # iteration earlier ("wins clustered at +0.31-0.33%") and the v87 note in
+    # trader_gate records it again ("a ZERO leash made TP1 the only reachable
+    # win, every win exactly +0.90%"). Zeroing the cap has now produced this
+    # pathology three times; the correct reading is that the cap must not be
+    # zero, not that the number needs another tune.
+    #
+    # THE MEASUREMENT DISAGREES, AND THAT IS UNDERSTOOD. The harness ranked
+    # widening this worse (0.35 -> exp +0.152, 1.00 -> +0.125) against a zero
+    # cap. But that sweep was run in a world where TP1 was the only rung ever
+    # reached, so it compared "always bank TP1" with "sometimes bank TP1,
+    # sometimes give it back" — it never priced the outcome this change exists
+    # to allow, which is the remainder RUNNING to TP2+. mfe_pct now records how
+    # far past TP1 price actually travelled, so the next ~25 trades settle it on
+    # evidence rather than on a sweep that could not see the alternative.
+    #
+    # Restore the old behaviour with MAX_FRAC = 0.00.
+    TP_GIVEBACK_PCT      = 0.10  # proportional buffer, live again
+    TP_GIVEBACK_MIN_ATR  = 0.50  # ATR floor, live again
+    TP_GIVEBACK_MAX_FRAC = 0.35  # a banked rung may be given back by at most a third
     #
     # The floor is not optional. The leash is a fraction of the RUNG SPAN, and
     # moving the ladder to percentages shrank every span by two to three times,

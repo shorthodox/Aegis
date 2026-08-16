@@ -81,24 +81,42 @@ def _drive(engine, pos, prices, side='BUY'):
 
 # ── 1. the deleted TP1_RECROSS ───────────────────────────────────────────────
 
-def test_a_pullback_through_tp1_now_books_at_the_rung(engine):
-    """Reversed in v86, and the reversal is the whole point.
+def test_a_shallow_pullback_through_tp1_no_longer_flattens_the_runner(engine):
+    """Reversed AGAIN in v88, and this time the live book settled it.
 
-    This asserted for three revisions that a wobble off TP1 must NOT flatten the
-    position. The live book priced that policy: against a 0.5% first rung, wins
-    landed at +0.31-0.33% while losses ran 1.1-1.9%, and a 75% win rate turned
-    -$1.28. The remainder is booked AT the rung now.
+    v86 zeroed TP_GIVEBACK_MAX_FRAC so the remainder booked AT the rung, because
+    against a 0.5% first rung wins landed at +0.31-0.33% while losses ran
+    1.1-1.9%. That fixed the give-back and created a worse problem: with a zero
+    leash the protective level IS the rung, so the first tick back through TP1
+    closes everything and TP2+ becomes unreachable by construction.
+
+    The book showed it unambiguously — three tokens, three identical wins, every
+    one exit_reason=TP_GIVEBACK filled at exactly take_profit_1:
+
+        TIA/USDT   exit 0.3046605 == take_profit_1   +1.3997%
+        CRV/USDT                                     +1.4023%
+        ATOM/USDT                                    +1.4000%
+
+    A leash of 0.35 restores the distinction the mechanism was built for: a
+    SHALLOW wobble is survived, a DEEP give-back is still banked. This test
+    covers the first half; test_tp1_tag_then_deep_pullback_banks_the_rung
+    covers the second, and it must keep passing — that is the guarantee v86 was
+    protecting and it is not being given up.
+
+    Geometry: entry 100, TP1 101, atr 0.5 -> span 1.0, leash 0.25, level 100.75.
+    100.9 sits above the level, so the runner lives.
     """
     pos = _position()
     still_open = _drive(engine, pos, [100.2, 101.3, 100.9])
 
-    assert still_open is None, 'a pullback through TP1 no longer books at the rung'
+    assert still_open is not None, (
+        'a shallow wobble off TP1 flattened the runner — the leash is back to zero'
+    )
     reasons = [t.exit_reason for t in engine.wallet.trade_history]
-    assert reasons[0] == 'TP1_PARTIAL' and reasons[-1] == 'TP_GIVEBACK', reasons
-    for t in engine.wallet.trade_history:
-        assert t.exit_price == pytest.approx(pos.take_profit_1), (
-            f'{t.exit_reason} filled at {t.exit_price}, not at TP1 '
-            f'{pos.take_profit_1} — the fill bug is back')
+    assert reasons == ['TP1_PARTIAL'], (
+        f'the TP1 partial should be banked and nothing else closed yet: {reasons}'
+    )
+    assert 'TP_GIVEBACK' not in reasons
 
 
 def test_tp1_tag_then_deep_pullback_banks_the_rung(engine):
@@ -149,15 +167,19 @@ def test_reversal_after_tp1_is_still_net_green(engine):
     )
 
 
-def test_the_short_side_books_at_its_rung_too(engine):
-    """Mirror of the long case: the SHORT rung is 100 -> 99."""
+def test_the_short_side_survives_a_shallow_wobble_too(engine):
+    """Mirror of the long case: the SHORT rung is 100 -> 99.
+
+    Leash 0.25 puts the level at 99.25; 99.1 is still inside it, so the runner
+    lives. test_short_side_deep_pullback_banks_the_rung drives 99.6, which is
+    beyond the level, and must keep closing.
+    """
     pos = _position(direction='SHORT', side='SELL', stop_loss=101.0,
                     take_profit_1=99.0, take_profit_2=98.0, take_profit_3=95.0,
                     take_profit_4=92.0, take_profit_5=88.0)
     still_open = _drive(engine, pos, [99.8, 98.9, 99.1], side='SELL')
-    assert still_open is None
-    for t in engine.wallet.trade_history:
-        assert t.exit_price == pytest.approx(pos.take_profit_1)
+    assert still_open is not None, 'the short runner was flattened by a shallow wobble'
+    assert [t.exit_reason for t in engine.wallet.trade_history] == ['TP1_PARTIAL']
 
 
 def test_short_side_deep_pullback_banks_the_rung(engine):

@@ -803,6 +803,28 @@ function applyTierGates(tier) {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
 const fmt = (n, d=4) => n == null ? '—' : parseFloat(n).toFixed(d);
+
+// Price levels get their OWN formatter. `fmt` is shared with the indicator
+// readouts (adx, rsi, volume_zscore), so widening it there would render ADX
+// 37.6 as 37.6000 — the fix must not leak outside prices.
+//
+// VET/USDT 2026-08-15: stop 0.00453535 rendered at 6dp as 0.004535. Price
+// stopped the trade at 0.004536 and the chart looked like it never reached the
+// line, because the two digits that decided it were not on screen. The engine
+// was right and the display was not. Same class as stop_loss showing the
+// ratcheted value: the number shown was not the number used.
+function fmtPrice(n) {
+  if (n == null) return '—';
+  const v = parseFloat(n);
+  if (!isFinite(v)) return '—';
+  const a = Math.abs(v);
+  const d = a === 0 ? 4
+          : a >= 100  ? 2
+          : a >= 1    ? 4
+          : a >= 0.01 ? 6
+          : 8;                  // sub-cent: VET, SHIB, PEPE and friends
+  return v.toFixed(d);
+}
 const fmtPct = n => n == null ? '—' : `${parseFloat(n).toFixed(2)}%`;
 const fmtK = n => Math.abs(n) >= 1e6 ? `$${(n/1e6).toFixed(1)}M` : Math.abs(n) >= 1e3 ? `$${(n/1e3).toFixed(1)}K` : `$${n.toFixed(2)}`;
 const clr = (v, good='text-buy', bad='text-sell') => v > 0 ? good : v < 0 ? bad : 'text-hold';
@@ -1435,39 +1457,39 @@ function renderOverview(sig) {
     <div class="levels-grid">
       <div class="level-row">
         <div class="level-label">Entry</div>
-        <div class="level-val level-entry">${fmt(entry, 6)}</div>
+        <div class="level-val level-entry">${fmtPrice(entry)}</div>
       </div>
       <div class="level-row">
         <div class="level-label">Stop Loss</div>
-        <div class="level-val level-sl">${fmt(sl, 6)}</div>
+        <div class="level-val level-sl">${fmtPrice(sl)}</div>
       </div>
       <div class="level-row">
         <div class="level-label">TP1</div>
-        <div class="level-val level-tp1">${fmt(tp1, 6)}</div>
+        <div class="level-val level-tp1">${fmtPrice(tp1)}</div>
       </div>
       <div class="level-row">
         <div class="level-label">TP2</div>
-        <div class="level-val level-tp2">${fmt(tp2, 6)}</div>
+        <div class="level-val level-tp2">${fmtPrice(tp2)}</div>
       </div>
       <div class="level-row">
         <div class="level-label">TP3</div>
-        <div class="level-val level-tp3">${fmt(tp3, 6)}</div>
+        <div class="level-val level-tp3">${fmtPrice(tp3)}</div>
       </div>
       <div class="level-row">
         <div class="level-label">TP4</div>
-        <div class="level-val level-tp4">${fmt(tp4, 6)}</div>
+        <div class="level-val level-tp4">${fmtPrice(tp4)}</div>
       </div>
       <div class="level-row">
         <div class="level-label">TP5</div>
-        <div class="level-val level-tp5">${fmt(tp5, 6)}</div>
+        <div class="level-val level-tp5">${fmtPrice(tp5)}</div>
       </div>
       <div class="level-row">
         <div class="level-label">Support</div>
-        <div class="level-val" style="color:var(--green)">${fmt(sig.target_support || sig.support, 6)}</div>
+        <div class="level-val" style="color:var(--green)">${fmtPrice(sig.target_support || sig.support)}</div>
       </div>
       <div class="level-row">
         <div class="level-label">Resistance</div>
-        <div class="level-val" style="color:var(--red)">${fmt(sig.target_resistance || sig.resistance, 6)}</div>
+        <div class="level-val" style="color:var(--red)">${fmtPrice(sig.target_resistance || sig.resistance)}</div>
       </div>
     </div>
 
@@ -1624,9 +1646,9 @@ function generateStoryPoints(sig) {
   // Price action — direction-aware: describe the level this entry is built on
   if (sig.entry_price && (sig.support || sig.resistance)) {
     if (dir === 'bearish' && sig.resistance)
-      pts.push(`Price is trading into the <strong>resistance zone at ${fmt(sig.resistance, 6)}</strong> — rejection here is what the short entry is built on.`);
+      pts.push(`Price is trading into the <strong>resistance zone at ${fmtPrice(sig.resistance)}</strong> — rejection here is what the short entry is built on.`);
     else if (dir === 'bullish' && sig.support)
-      pts.push(`Price is holding above the <strong>support zone at ${fmt(sig.support, 6)}</strong> — the long entry is built on this level continuing to hold.`);
+      pts.push(`Price is holding above the <strong>support zone at ${fmtPrice(sig.support)}</strong> — the long entry is built on this level continuing to hold.`);
   }
 
   // Volume
@@ -1720,7 +1742,7 @@ function generateStoryPoints(sig) {
   if (dir) {
     const tp1 = dir === 'bearish' ? sig.bear_tp1 : sig.bull_tp1;
     if (tp1)
-      pts.push(`AEGIS projects ${oDir} continuation toward <strong>${fmt(tp1,6)}</strong> (TP1) based on ATR extension and market structure.`);
+      pts.push(`AEGIS projects ${oDir} continuation toward <strong>${fmtPrice(tp1)}</strong> (TP1) based on ATR extension and market structure.`);
   }
 
   return pts;
