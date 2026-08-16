@@ -120,22 +120,39 @@ def test_a_textbook_fade_can_reach_the_fire_floor():
 
 
 def test_the_remaining_gap_is_evidence_not_direction():
-    """The honest boundary, and the reason this file does not simply lower the
-    floor for fades.
+    """Evidence, not direction, is what separates these two fades.
 
-    Drop ADX below the trending threshold and the same setup scores 57 — refused.
-    That is NOT the counter-trend penalty reappearing; it is the floor declining a
-    setup with thin evidence, which is exactly its job. A fade of a REAL trend
-    picks up adx_trending (+15) and clears at 72, because a trend worth fading
-    registers as a trend.
+    Drop ADX below the trending threshold and the same setup loses adx_trending
+    (+15) and scores 57 instead of 72. That gap is NOT the counter-trend penalty
+    reappearing — both are fades, scored by the same rules — it is thin evidence
+    costing points. A trend worth fading registers as a trend.
 
-    Both numbers are measured, not asserted from theory.
+    These are the durable facts, so they are asserted as absolute scores rather
+    than against MIN_FIRE_QUALITY. The floor moved 60 -> 45 the day after this
+    file was written, which flipped the thin-evidence case from refused to
+    admitted; pinning scores to the floor would have made this test silently
+    change meaning instead of failing loudly. Where the floor currently sits is
+    asserted separately, below.
     """
     weak_adx, _ = _score(_fade(adx=22.0, volume_zscore=0.2, edge_score=55.0))
     real_trend, _ = _score(_fade())
     assert weak_adx == pytest.approx(57.0)
     assert real_trend == pytest.approx(72.0)
-    assert weak_adx < MIN_FIRE_QUALITY <= real_trend
+    assert weak_adx < real_trend
+
+
+def test_the_lower_floor_now_admits_the_thin_evidence_fade():
+    """Consequence of the 60 -> 45 drop, stated rather than left implicit.
+
+    At 60 this setup was refused and that refusal was described as the floor
+    working correctly. At 45 it fires. That may well be right — 60 retained only
+    3 of 44 symbols — but it is a behaviour change, and it should be visible here
+    rather than inferred from a constant.
+    """
+    thin, _ = _score(_fade(adx=22.0, volume_zscore=0.2, edge_score=55.0))
+    assert thin >= MIN_FIRE_QUALITY, (
+        f'thin-evidence fade scores {thin}; floor is {MIN_FIRE_QUALITY}'
+    )
 
 
 def test_the_floor_still_refuses_a_weak_fade():
