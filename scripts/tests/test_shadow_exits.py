@@ -23,7 +23,13 @@ from scripts.engine.shadow_exits import GIVEBACK_FRAC, POLICIES, ShadowBook
 # here and in shadow_exits while DynamicRiskEngine had moved to 0.00.
 TP1_PCT       = 0.5
 GIVEBACK_EXIT = TP1_PCT - TP1_PCT * GIVEBACK_FRAC
-# the dip must breach that level without reaching the trade's stop
+# the dip must breach that level without reaching the trade's stop.
+# ALWAYS derive the walk price from this — never hardcode it. On 2026-08-15
+# TP_GIVEBACK_MAX_FRAC moved 0.00 -> 0.35, GIVEBACK_EXIT moved +0.500% ->
+# +0.325%, and four walks still hardcoded 100.40 (+0.40%). That price no longer
+# breaches the level, so the "live rule is out" precondition silently stopped
+# holding — the same drift this block's comment was written to prevent, one
+# constant later.
 DIP_PCT       = GIVEBACK_EXIT - 0.10
 
 ENTRY = 100.0
@@ -112,7 +118,7 @@ def test_the_giveback_policy_closes_the_runner_where_the_live_rule_does(book):
 def test_a_runner_policy_survives_the_dip_the_giveback_closes_on(book):
     """The disagreement the whole study exists to price."""
     _open(book)
-    _walk(book, [100.6, 100.40])
+    _walk(book, [100.6, ENTRY * (1 + DIP_PCT / 100)])
     row_before = len(book.rows)
     # live rule is out; the wide-trail runner is still holding
     assert book._open['t1'].sims['live_rule'].done
@@ -123,7 +129,7 @@ def test_a_runner_policy_survives_the_dip_the_giveback_closes_on(book):
 def test_shadows_outlive_the_live_close(book):
     """Marking a shadow flat at the live exit would assume the answer."""
     _open(book)
-    _walk(book, [100.6, 100.40])
+    _walk(book, [100.6, ENTRY * (1 + DIP_PCT / 100)])
     book.record_live('t1', 0.40, 'TP_GIVEBACK')
     assert 't1' in book._open, 'the trade was finalised while a policy was still open'
     _walk(book, [101.6, 102.1, 103.1, 103.6])      # the run the live rule missed
@@ -184,7 +190,7 @@ def test_the_live_rule_is_simulated_too_as_a_control():
 
 def test_the_summary_reports_each_policy_against_live(book, tmp_path):
     _open(book)
-    _walk(book, [100.6, 100.40])
+    _walk(book, [100.6, ENTRY * (1 + DIP_PCT / 100)])
     book.record_live('t1', 0.40, 'TP_GIVEBACK')
     _walk(book, [101.6, 102.1, 103.1, 103.6])
     s = book.summary()
@@ -201,7 +207,7 @@ def test_the_summary_reports_each_policy_against_live(book, tmp_path):
 
 def test_results_survive_a_restart(book, tmp_path):
     _open(book)
-    _walk(book, [100.6, 100.40])
+    _walk(book, [100.6, ENTRY * (1 + DIP_PCT / 100)])
     book.record_live('t1', 0.40, 'TP_GIVEBACK')
     _walk(book, [101.6, 102.1, 103.1, 103.6])
     again = ShadowBook(cost_pct=0.10, store=tmp_path / 'shadow.json')
