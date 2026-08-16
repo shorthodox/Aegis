@@ -7,7 +7,7 @@
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "LONG",
+      "direction": "NEUTRAL",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -16,15 +16,15 @@
       "pending_entry": false,
       "quality_score": 71.0,
       "regime": "RANGING",
-      "risk_reward": 2.31,
+      "risk_reward": 0,
       "signal": "HOLD",
-      "signal_strength": "STRONG_BUY",
-      "suggested_sl": 98.7,
-      "suggested_tp": 101.5,
-      "tp2": 103.0,
-      "tp3": 103.75,
-      "tp4": 105.25,
-      "tp5": 106.0
+      "signal_strength": "NEUTRAL",
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "tp2": null,
+      "tp3": null,
+      "tp4": null,
+      "tp5": null
     }
   },
   "buy_at_support": {
@@ -63,7 +63,7 @@
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "LONG",
+      "direction": "NEUTRAL",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -72,26 +72,26 @@
       "pending_entry": false,
       "quality_score": 71.0,
       "regime": "RANGING",
-      "risk_reward": 2.31,
+      "risk_reward": 0,
       "signal": "HOLD",
-      "signal_strength": "STRONG_BUY",
-      "suggested_sl": 98.7,
-      "suggested_tp": 101.5,
-      "tp2": 103.0,
-      "tp3": 103.75,
-      "tp4": 105.25,
-      "tp5": 106.0
+      "signal_strength": "NEUTRAL",
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "tp2": null,
+      "tp3": null,
+      "tp4": null,
+      "tp5": null
     }
   },
   "buy_htf_conflict": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
+      "[TEST/USDT] LOW_QUALITY_REFUSED \u2014 quality 56 < 60; refused 4 signal(s) this run"
     ],
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "LONG",
+      "direction": "NEUTRAL",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -100,26 +100,26 @@
       "pending_entry": false,
       "quality_score": 56.0,
       "regime": "RANGING",
-      "risk_reward": 2.31,
+      "risk_reward": 0,
       "signal": "HOLD",
-      "signal_strength": "BUY",
-      "suggested_sl": 98.7,
-      "suggested_tp": 101.5,
-      "tp2": 103.0,
-      "tp3": 103.75,
-      "tp4": 105.25,
-      "tp5": 106.0
+      "signal_strength": "NEUTRAL",
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "tp2": null,
+      "tp3": null,
+      "tp4": null,
+      "tp5": null
     }
   },
   "buy_liquidity_trap": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] NO TRADE (fitness): LIQUIDITY_TRAP \u2014 no reliable structure to trade against"
+      "[TEST/USDT] LOW_QUALITY_REFUSED \u2014 quality 51 < 60; refused 9 signal(s) this run"
     ],
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "LONG",
+      "direction": "NEUTRAL",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -128,15 +128,15 @@
       "pending_entry": false,
       "quality_score": 51.0,
       "regime": "LIQUIDITY_TRAP",
-      "risk_reward": 2.31,
+      "risk_reward": 0,
       "signal": "HOLD",
-      "signal_strength": "BUY",
-      "suggested_sl": 98.7,
-      "suggested_tp": 101.5,
-      "tp2": 103.0,
-      "tp3": 103.75,
-      "tp4": 105.25,
-      "tp5": 106.0
+      "signal_strength": "NEUTRAL",
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "tp2": null,
+      "tp3": null,
+      "tp4": null,
+      "tp5": null
     }
   },
   "buy_low_atr": {
@@ -147,7 +147,7 @@
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "LONG",
+      "direction": "NEUTRAL",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -156,15 +156,15 @@
       "pending_entry": false,
       "quality_score": 71.0,
       "regime": "RANGING",
-      "risk_reward": 2.31,
+      "risk_reward": 0,
       "signal": "HOLD",
-      "signal_strength": "STRONG_BUY",
-      "suggested_sl": 98.7,
-      "suggested_tp": 101.5,
-      "tp2": 103.0,
-      "tp3": 103.75,
-      "tp4": 105.25,
-      "tp5": 106.0
+      "signal_strength": "NEUTRAL",
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "tp2": null,
+      "tp3": null,
+      "tp4": null,
+      "tp5": null
     }
   },
   "buy_low_edge": {
@@ -175,7 +175,7 @@
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "LONG",
+      "direction": "NEUTRAL",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -184,26 +184,26 @@
       "pending_entry": false,
       "quality_score": 61.0,
       "regime": "RANGING",
-      "risk_reward": 2.31,
+      "risk_reward": 0,
       "signal": "HOLD",
-      "signal_strength": "BUY",
-      "suggested_sl": 98.7,
-      "suggested_tp": 101.5,
-      "tp2": 103.0,
-      "tp3": 103.75,
-      "tp4": 105.25,
-      "tp5": 106.0
+      "signal_strength": "NEUTRAL",
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "tp2": null,
+      "tp3": null,
+      "tp4": null,
+      "tp5": null
     }
   },
   "buy_no_conviction": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
+      "[TEST/USDT] LOW_QUALITY_REFUSED \u2014 quality 58 < 60; refused 6 signal(s) this run"
     ],
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "LONG",
+      "direction": "NEUTRAL",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -212,27 +212,27 @@
       "pending_entry": false,
       "quality_score": 58.0,
       "regime": "RANGING",
-      "risk_reward": 2.31,
+      "risk_reward": 0,
       "signal": "HOLD",
-      "signal_strength": "BUY",
-      "suggested_sl": 98.7,
-      "suggested_tp": 101.5,
-      "tp2": 103.0,
-      "tp3": 103.75,
-      "tp4": 105.25,
-      "tp5": 106.0
+      "signal_strength": "NEUTRAL",
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "tp2": null,
+      "tp3": null,
+      "tp4": null,
+      "tp5": null
     }
   },
   "buy_overbought": {
     "bootstrap": 1,
     "decisions": [
       "[TEST/USDT] ARBITER SKIP: bearish pattern present but MACD/trend not confirming (macd=BULLISH, supertrend=BULLISH, bias=BULLISH)",
-      "[TEST/USDT] NO TRADE (setup): model leans the other way by 0.62 (> 0.12) \u2014 structure and model disagree"
+      "[TEST/USDT] LOW_QUALITY_REFUSED \u2014 quality 53 < 60; refused 11 signal(s) this run"
     ],
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "LONG",
+      "direction": "NEUTRAL",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -241,15 +241,15 @@
       "pending_entry": false,
       "quality_score": 53.0,
       "regime": "RANGING",
-      "risk_reward": 2.31,
+      "risk_reward": 0,
       "signal": "HOLD",
-      "signal_strength": "BUY",
-      "suggested_sl": 98.7,
-      "suggested_tp": 101.5,
-      "tp2": 103.0,
-      "tp3": 103.75,
-      "tp4": 105.25,
-      "tp5": 106.0
+      "signal_strength": "NEUTRAL",
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "tp2": null,
+      "tp3": null,
+      "tp4": null,
+      "tp5": null
     }
   },
   "buy_tagging_htf_conf": {
@@ -431,12 +431,12 @@
   "buy_weak_indicators": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
+      "[TEST/USDT] LOW_QUALITY_REFUSED \u2014 quality 43 < 60; refused 7 signal(s) this run"
     ],
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "LONG",
+      "direction": "NEUTRAL",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -445,15 +445,15 @@
       "pending_entry": false,
       "quality_score": 43.0,
       "regime": "RANGING",
-      "risk_reward": 2.31,
+      "risk_reward": 0,
       "signal": "HOLD",
-      "signal_strength": "BUY",
-      "suggested_sl": 98.7,
-      "suggested_tp": 101.5,
-      "tp2": 103.0,
-      "tp3": 103.75,
-      "tp4": 105.25,
-      "tp5": 106.0
+      "signal_strength": "NEUTRAL",
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "tp2": null,
+      "tp3": null,
+      "tp4": null,
+      "tp5": null
     }
   },
   "buy_wide_atr": {
@@ -487,7 +487,7 @@
   "flat_no_fire": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
+      "[TEST/USDT] LOW_QUALITY_REFUSED \u2014 quality 0 < 60; refused 1 signal(s) this run"
     ],
     "paper": null,
     "position": null,
@@ -530,15 +530,15 @@
       "pending_entry": false,
       "quality_score": 71.0,
       "regime": "RANGING",
-      "risk_reward": 2.31,
+      "risk_reward": 0,
       "signal": "HOLD",
       "signal_strength": "BUY",
-      "suggested_sl": 98.7,
-      "suggested_tp": 101.5,
-      "tp2": 103.0,
-      "tp3": 103.75,
-      "tp4": 105.25,
-      "tp5": 106.0
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "tp2": null,
+      "tp3": null,
+      "tp4": null,
+      "tp5": null
     }
   },
   "paper_long_held": {
@@ -566,24 +566,31 @@
       "pending_entry": false,
       "quality_score": 71.0,
       "regime": "RANGING",
-      "risk_reward": 2.31,
+      "risk_reward": 0,
       "signal": "HOLD",
       "signal_strength": "BUY",
-      "suggested_sl": 98.7,
-      "suggested_tp": 101.5,
-      "tp2": 103.0,
-      "tp3": 103.75,
-      "tp4": 105.25,
-      "tp5": 106.0
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "tp2": null,
+      "tp3": null,
+      "tp4": null,
+      "tp5": null
     }
   },
   "paper_long_reversal": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] RISKY-PAPER SIGNAL_REVERSAL @ 100",
-      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
+      "[TEST/USDT] LOW_QUALITY_REFUSED \u2014 quality 48 < 60; refused 13 signal(s) this run"
     ],
-    "paper": null,
+    "paper": {
+      "entry": 100.0,
+      "side": "BUY",
+      "sl": 90.0,
+      "tier": "RISKY",
+      "tp1": 101.0,
+      "tp5": 105.0,
+      "value": 1000.0
+    },
     "position": null,
     "signal": {
       "direction": "LONG",
@@ -595,15 +602,15 @@
       "pending_entry": false,
       "quality_score": 48.0,
       "regime": "RANGING",
-      "risk_reward": 2.31,
+      "risk_reward": 0,
       "signal": "HOLD",
       "signal_strength": "BUY",
-      "suggested_sl": 101.3,
-      "suggested_tp": 98.5,
-      "tp2": 97.0,
-      "tp3": 96.25,
-      "tp4": 94.75,
-      "tp5": 94.0
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "tp2": null,
+      "tp3": null,
+      "tp4": null,
+      "tp5": null
     }
   },
   "paper_long_sl_hit": {
@@ -624,15 +631,15 @@
       "pending_entry": false,
       "quality_score": 71.0,
       "regime": "RANGING",
-      "risk_reward": 2.31,
+      "risk_reward": 0,
       "signal": "HOLD",
       "signal_strength": "BUY",
-      "suggested_sl": 98.7,
-      "suggested_tp": 101.5,
-      "tp2": 103.0,
-      "tp3": 103.75,
-      "tp4": 105.25,
-      "tp5": 106.0
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "tp2": null,
+      "tp3": null,
+      "tp4": null,
+      "tp5": null
     }
   },
   "paper_long_tp3_hit": {
@@ -653,26 +660,26 @@
       "pending_entry": false,
       "quality_score": 71.0,
       "regime": "RANGING",
-      "risk_reward": 2.31,
+      "risk_reward": 0,
       "signal": "HOLD",
       "signal_strength": "BUY",
-      "suggested_sl": 98.7,
-      "suggested_tp": 101.5,
-      "tp2": 103.0,
-      "tp3": 103.75,
-      "tp4": 105.25,
-      "tp5": 106.0
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "tp2": null,
+      "tp3": null,
+      "tp4": null,
+      "tp5": null
     }
   },
   "sell_aligned": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
+      "[TEST/USDT] LOW_QUALITY_REFUSED \u2014 quality 48 < 60; refused 2 signal(s) this run"
     ],
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "SHORT",
+      "direction": "NEUTRAL",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -681,21 +688,21 @@
       "pending_entry": false,
       "quality_score": 48.0,
       "regime": "RANGING",
-      "risk_reward": 2.31,
+      "risk_reward": 0,
       "signal": "HOLD",
-      "signal_strength": "SELL",
-      "suggested_sl": 101.3,
-      "suggested_tp": 98.5,
-      "tp2": 97.0,
-      "tp3": 96.25,
-      "tp4": 94.75,
-      "tp5": 94.0
+      "signal_strength": "NEUTRAL",
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "tp2": null,
+      "tp3": null,
+      "tp4": null,
+      "tp5": null
     }
   },
   "sell_at_resistance": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] NO TRADE (invalidation): invalidation is 6.5 ATR away (> 3.0) \u2014 too far behind the level to be worth defending"
+      "[TEST/USDT] LOW_QUALITY_REFUSED \u2014 quality 48 < 60; refused 3 signal(s) this run"
     ],
     "paper": null,
     "position": null,
@@ -723,12 +730,12 @@
   "sell_htf_conflict": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
+      "[TEST/USDT] LOW_QUALITY_REFUSED \u2014 quality 13 < 60; refused 5 signal(s) this run"
     ],
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "SHORT",
+      "direction": "NEUTRAL",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -737,26 +744,26 @@
       "pending_entry": false,
       "quality_score": 13.0,
       "regime": "RANGING",
-      "risk_reward": 2.31,
+      "risk_reward": 0,
       "signal": "HOLD",
-      "signal_strength": "SELL",
-      "suggested_sl": 101.3,
-      "suggested_tp": 98.5,
-      "tp2": 97.0,
-      "tp3": 96.25,
-      "tp4": 94.75,
-      "tp5": 94.0
+      "signal_strength": "NEUTRAL",
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "tp2": null,
+      "tp3": null,
+      "tp4": null,
+      "tp5": null
     }
   },
   "sell_low_quality": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] NO TRADE (setup): mid-range (rp 0.50) with no trend \u2014 nothing to lean on"
+      "[TEST/USDT] LOW_QUALITY_REFUSED \u2014 quality 28 < 60; refused 10 signal(s) this run"
     ],
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "SHORT",
+      "direction": "NEUTRAL",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -765,27 +772,27 @@
       "pending_entry": false,
       "quality_score": 28.0,
       "regime": "RANGING",
-      "risk_reward": 2.31,
+      "risk_reward": 0,
       "signal": "HOLD",
-      "signal_strength": "SELL",
-      "suggested_sl": 101.3,
-      "suggested_tp": 98.5,
-      "tp2": 97.0,
-      "tp3": 96.25,
-      "tp4": 94.75,
-      "tp5": 94.0
+      "signal_strength": "NEUTRAL",
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "tp2": null,
+      "tp3": null,
+      "tp4": null,
+      "tp5": null
     }
   },
   "sell_oversold": {
     "bootstrap": 1,
     "decisions": [
       "[TEST/USDT] ARBITER SKIP: bullish pattern present but MACD/trend not confirming (macd=BEARISH, supertrend=BEARISH, bias=BEARISH)",
-      "[TEST/USDT] NO TRADE (setup): model leans the other way by 0.62 (> 0.12) \u2014 structure and model disagree"
+      "[TEST/USDT] LOW_QUALITY_REFUSED \u2014 quality 30 < 60; refused 12 signal(s) this run"
     ],
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "SHORT",
+      "direction": "NEUTRAL",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -794,15 +801,15 @@
       "pending_entry": false,
       "quality_score": 30.0,
       "regime": "RANGING",
-      "risk_reward": 2.31,
+      "risk_reward": 0,
       "signal": "HOLD",
-      "signal_strength": "SELL",
-      "suggested_sl": 101.3,
-      "suggested_tp": 98.5,
-      "tp2": 97.0,
-      "tp3": 96.25,
-      "tp4": 94.75,
-      "tp5": 94.0
+      "signal_strength": "NEUTRAL",
+      "suggested_sl": null,
+      "suggested_tp": null,
+      "tp2": null,
+      "tp3": null,
+      "tp4": null,
+      "tp5": null
     }
   },
   "sell_tagging_res": {
@@ -836,7 +843,7 @@
   "sell_trend_bull": {
     "bootstrap": 1,
     "decisions": [
-      "[TEST/USDT] NO TRADE (setup): uptrend mid-range (rp 0.50) \u2014 no edge here, chasing or fading blind"
+      "[TEST/USDT] LOW_QUALITY_REFUSED \u2014 quality 53 < 60; refused 8 signal(s) this run"
     ],
     "paper": null,
     "position": null,

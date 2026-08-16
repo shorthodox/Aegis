@@ -338,8 +338,20 @@ def _f(d: Any, k: str, default: float = 0.0) -> float:
 
 
 def _reject(stage: str, reason: str, notes: List[str],
-            side: str = 'FLAT', setup: str = SETUP_NONE) -> TradePlan:
-    return TradePlan(action=ACTION_REJECT, side=side, setup=setup,
+            side: str = 'FLAT', setup: str = SETUP_NONE,
+            level: float = 0.0) -> TradePlan:
+    """`level` is optional because stages 0-1 reject before one is chosen.
+
+    Once stage 2 HAS picked a level, carrying it into the rejection is what makes
+    the funnel diagnosable: `trade_plan.level` was 0 on all 44 live symbols, so
+    "how far was price from the level the gate actually leaned on" could not be
+    answered from the published payload at all — only from the prose in `notes`.
+    The published `support`/`resistance` are the engine's rolling S/R, which is a
+    DIFFERENT level from the one `_pick_level` returns (it can select deeper
+    structure, and takes the nearest candidate on the correct side). Comparing an
+    entry against the published pair therefore measures the wrong gap.
+    """
+    return TradePlan(action=ACTION_REJECT, side=side, setup=setup, level=level,
                      stage=stage, reason=reason, notes=notes + [f'{stage}: {reason}'])
 
 
@@ -820,7 +832,7 @@ class TraderGate:
             return _reject('invalidation',
                            f'invalidation is {risk_atr:.1f} ATR away (> {MAX_STOP_ATR}) — '
                            f'too far behind the level to be worth defending',
-                           notes, side, setup)
+                           notes, side, setup, level=level)
         notes.append(f'invalidation: level {level:.8g}, stop {stop:.8g} '
                      f'({risk_atr:.2f} ATR beyond it)')
 
@@ -832,7 +844,7 @@ class TraderGate:
         if target <= 0:
             return _reject('payoff',
                            f'no structural objective at least {MIN_TARGET_ATR} ATR ahead — '
-                           f'nowhere to be paid', notes, side, setup)
+                           f'nowhere to be paid', notes, side, setup, level=level)
 
         reward_pct = abs(target - price) / price * 100.0
         risk_pct   = risk / price * 100.0
@@ -845,7 +857,7 @@ class TraderGate:
                            f'net R:R {r_net:.2f} below the {MIN_NET_R} floor '
                            f'(risk {risk_pct:.2f}%, reward {reward_pct:.2f}%, costs '
                            f'{ROUND_TRIP_COST_PCT}%) — the trade does not pay',
-                           notes, side, setup)
+                           notes, side, setup, level=level)
         notes.append(f'payoff: target {target:.8g}, {r_gross:.2f}R gross / {r_net:.2f}R net')
 
 
@@ -871,7 +883,7 @@ class TraderGate:
         else:
             return _reject('trigger',
                            f'level is {dist_atr:.1f} ATR away (> {REACH_ATR}) — not a trade yet',
-                           notes, side, setup)
+                           notes, side, setup, level=level)
 
         # ── Stage 5 · how much ───────────────────────────────────────────────
         size = SETUP_RISK_WEIGHT.get(setup, 0.5)
@@ -885,14 +897,28 @@ class TraderGate:
                 return _reject('allocation',
                                f'{side} against a strong BTC {tide_dir} tide '
                                f'({tide_str:.0%}) — this is the basket trade that bled',
-                               notes, side, setup)
+                               notes, side, setup, level=level)
             size *= COUNTER_TIDE_FACTOR
             notes.append(f'allocation: against the BTC {tide_dir} tide — halved')
 
         max_open = int(book.get('max_open', 5) or 5)
         if int(book.get('open_total', 0) or 0) >= max_open:
-            return _reject('allocation', f'book already holds {max_open} positions — '
-                                         f'this is not one of the best {max_open}', notes, side, setup)
+            # Say what this does. It used to read "this is not one of the best N",
+            # which describes a ranking that does not exist — there is no
+            # comparison against the open book here, no score, no ordering. The
+            # cap is arrival-ordered: whoever got there first keeps the slot.
+            #
+            # That wording hid a real cost. On the live fleet 2026-08-16 the book
+            # was held by quality 0/18/35/38.7/56 while quality 100/76/71/66/61
+            # were refused at this line, and the message asserted the opposite had
+            # been checked. MIN_FIRE_QUALITY now keeps the low-quality signals from
+            # taking the slots in the first place, which is the non-invasive half
+            # of the fix; genuine replacement ranking would mean closing a live
+            # position to make room, and that is not decided here.
+            return _reject('allocation',
+                           f'book already holds {max_open} positions and the cap is '
+                           f'first-come — no slot free for this setup',
+                           notes, side, setup, level=level)
 
         max_cluster = int(book.get('max_per_cluster', 2) or 2)
         # Counted per side, because the caller cannot know which side the
@@ -901,7 +927,7 @@ class TraderGate:
         if same_dir >= max_cluster:
             return _reject('allocation',
                            f'{same_dir} correlated {side} positions already open in this cluster — '
-                           f'one thesis, not {same_dir + 1} bets', notes, side, setup)
+                           f'one thesis, not {same_dir + 1} bets', notes, side, setup, level=level)
         if same_dir >= 1:
             size *= CLUSTER_SECOND_FACTOR
             notes.append(f'allocation: {same_dir} correlated {side} already open — scaled down')
@@ -909,7 +935,7 @@ class TraderGate:
         if size < MIN_SIZE_FACTOR:
             return _reject('allocation',
                            f'risk allocation fell to {size:.2f} (< {MIN_SIZE_FACTOR}) — '
-                           f'too small to be worth its costs', notes, side, setup)
+                           f'too small to be worth its costs', notes, side, setup, level=level)
 
         # `invalidation` stays the STRUCTURAL stop: it is where the thesis dies,
         # which is a fact about the level and not about how much is risked on it.

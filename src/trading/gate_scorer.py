@@ -320,17 +320,40 @@ class WeightedGateScorer:
         win_score = scores[winner]
         other_dir = score_sell if winner == 'BUY' else score_buy
 
-        # The winning DIRECTION must be AT its level, measured in ATR distance — a BUY
+        # The TRADED direction must be AT its level, measured in ATR distance — a BUY
         # within AT_LEVEL_ATR of support, a SELL within AT_LEVEL_ATR of resistance.
         # range_position alone is a poor proxy: 25% of a WIDE range can still be 1.5
         # ATR from the level, which is why pullbacks kept firing "not at support".
+        #
+        # WHICH side gets checked is load-bearing, and checking `winner` was a hole
+        # that disabled this veto on most of the fleet. The engine is MODEL-FIRST
+        # (scripts/engine/config.py): `result['side']` is the model's decision and is
+        # the side that actually gets traded, while `winner` here only picks the
+        # dashboard card. score_hold carries a structural floor — engine.py says so
+        # at COMPOSITE_HOLD_MARGIN, "it edges out the model's side on almost every
+        # signal" — so `winner` is HOLD in the common case, the old `else` branch set
+        # `_far = False`, and the location veto was never evaluated on precisely the
+        # signals that had a tradeable side.
+        #
+        # Measured on the live fleet, 2026-08-16: 11 of 44 scored symbols sat more
+        # than AT_LEVEL_ATR from the level their own side leans on, and 8 of those 11
+        # carried NO veto because UWGS had settled on HOLD — including two positions
+        # that were open at the time (ATOM 1.69 ATR, DOGE 1.05 ATR) and four more at
+        # 2.5 ATR or worse (STX 3.01, XRP 2.70, GMX 2.57, ETC 2.50).
+        #
+        # So config.py's "v82e: FAR_FROM_SR promoted from tier downgrade to HARD
+        # veto" was true of the veto and false of the fleet: it blocked only when
+        # UWGS independently picked a direction, which is when it was least needed.
+        _traded = str(result.get('side') or '').upper()
+        if _traded not in ('BUY', 'SELL'):
+            _traded = winner
         _px  = _f(result, 'price') or _f(result, 'entry_price')
         _atr = (atr_pct / 100.0) * _px
         _sup = _f(result, 'support')
         _res = _f(result, 'resistance')
-        if winner == 'BUY':
+        if _traded == 'BUY':
             _far = ((_px - _sup) / _atr > AT_LEVEL_ATR) if (_atr > 0 and _sup > 0) else (rp > AT_LEVEL_RP)
-        elif winner == 'SELL':
+        elif _traded == 'SELL':
             _far = ((_res - _px) / _atr > AT_LEVEL_ATR) if (_atr > 0 and _res > 0) else (rp < 1.0 - AT_LEVEL_RP)
         else:
             _far = False
