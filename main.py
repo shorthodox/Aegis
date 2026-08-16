@@ -1235,6 +1235,10 @@ async def run_engine_background():
     _last_signals_hash: int = 0       # hash of last signals pushed to Firestore
     _last_firestore_push: float = 0.0 # epoch of last Firestore write
     _FIRESTORE_MIN_INTERVAL = 290.0   # push at most once per ~5 min (matches scan cycle)
+    # Per-symbol payload hashes — the diff that keeps this inside the free tier.
+    _doc_sig_hash: Dict[str, int] = {}
+    _last_full_push: float = 0.0
+    _FIRESTORE_FULL_REFRESH_S = 3600.0   # heal drift hourly (60 writes/day)
     _stale_sweep_done: bool = False   # one-time Firestore neutralise after restart
 
     def _push_signal_docs(_pairs) -> int:
@@ -1289,6 +1293,7 @@ async def run_engine_background():
 
     async def update_state():
         nonlocal _last_tr_mtime, _last_signals_hash, _last_firestore_push, _stale_sweep_done
+        nonlocal _last_full_push
         while True:
             try:
                 LIVE_STATE.data["tickers"]       = engine.live_prices.copy()
@@ -1478,7 +1483,30 @@ async def run_engine_background():
                             return [_fs_safe(x) for x in v]
                         return v
 
+                    # ── Per-symbol diffing — write only what CHANGED ─────────
+                    # This loop was 99% of the project's entire Firestore spend:
+                    # 60 documents x ~298 pushes/day = 17,876 writes, against a
+                    # Spark free-tier cap of 20,000. Everything else the product
+                    # does — every login, trial, OTP, analytics pass and trade,
+                    # for all 15 users — came to 114 writes/day combined.
+                    #
+                    # The cause was a GLOBAL fingerprint: if any single symbol
+                    # changed, all 60 documents were rewritten, including the ~55
+                    # byte-identical ones. Hashing each symbol's own payload and
+                    # skipping the unchanged ones takes this to roughly 1,000
+                    # writes/day (~5% of the cap) on a typical scan.
+                    #
+                    # `timestamp` is deliberately EXCLUDED from the hash. It is
+                    # rewritten every push by definition, so including it would
+                    # make every document differ every time and the diff would
+                    # save nothing at all.
+                    #
+                    # A periodic FULL push heals drift — a document deleted or
+                    # edited outside this loop would otherwise stay stale forever,
+                    # because our hash says we already wrote it.
                     _pairs = []
+                    _skipped = 0
+                    _full_push = (_now - _last_full_push) >= _FIRESTORE_FULL_REFRESH_S
                     for sym, sig in push_target.items():
                         if not isinstance(sig, dict):
                             continue
@@ -1489,14 +1517,23 @@ async def run_engine_background():
                             if k not in _PRICE_CONTEXT_KEYS
                         }
                         compact['symbol']    = sym
-                        compact['timestamp'] = now_str
                         compact['fire']      = bool(sig.get('fire', False))
+                        # hash BEFORE stamping the time, for the reason above
+                        _doc_hash = hash(json.dumps(compact, sort_keys=True, default=str))
+                        compact['timestamp'] = now_str
+                        if not _full_push and _doc_sig_hash.get(sym) == _doc_hash:
+                            _skipped += 1
+                            continue
+                        _doc_sig_hash[sym] = _doc_hash
                         _pairs.append((sig_ref, compact))
+                    if _full_push:
+                        _last_full_push = _now
 
                     _pushed = await asyncio.to_thread(_push_signal_docs, _pairs)
-                    if _pairs:
-                        print(f"[PRODUCER] Firestore: {_pushed}/{len(_pairs)} signals "
-                              f"({len(fired)} fired) @ {now_str}")
+                    if _pairs or _skipped:
+                        print(f"[PRODUCER] Firestore: {_pushed}/{len(_pairs)} written, "
+                              f"{_skipped} unchanged skipped "
+                              f"({len(fired)} fired){' [FULL REFRESH]' if _full_push else ''} @ {now_str}")
 
                 except StopIteration:
                     pass  # nothing to push this tick
