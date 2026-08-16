@@ -1270,34 +1270,6 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
             self._publish_no_trade(symbol, 'cooling off after the last close')
             return True
 
-        # ── the quality floor, enforced where positions actually open ────────
-        # It has to be HERE and not only at the fire flag. Suppressing
-        # `result['fire']`/`result['side']` upstream does not stop this path:
-        # `result['tradeable']` is set True unconditionally, the call site checks
-        # only tradeable/price/existing, `_classify` picks the side from
-        # range_position and the regime without ever reading `result['side']`,
-        # and REQUIRE_MODEL_FIRE is False. So under v83 a "hard veto" blanks the
-        # published card while the desk opens the position anyway — the same way
-        # the v83 rewrite dropped the entry quality floor it inherited.
-        #
-        # Quality is the one thing the desk has no notion of. Its stages ask what
-        # the trade is, where it is wrong, whether it pays, and whether it is
-        # time — all structural. Nothing asks whether the context is any good,
-        # which is why a signal scoring 0/100 could hold a slot in a book of five.
-        # This is deliberately a doctrinal ADDITION to "structure leads": the
-        # structure still picks the side, but a setup the engine itself scores
-        # below the floor is not taken.
-        _qf = float(getattr(_cfg, 'MIN_FIRE_QUALITY', 0.0) or 0.0)
-        if _qf > 0 and float(ctx_quality or 0.0) < _qf:
-            LOW_QUALITY_REFUSED['count'] += 1
-            self._publish_no_trade(
-                symbol, f'signal quality {float(ctx_quality or 0.0):.0f}/100 is below the '
-                        f'{_qf:.0f} floor — not a setup worth the risk')
-            print(f'[{symbol}] LOW_QUALITY_REFUSED — quality '
-                  f'{float(ctx_quality or 0.0):.0f} < {_qf:.0f}; refused '
-                  f'{LOW_QUALITY_REFUSED["count"]} signal(s) this run')
-            return True
-
         try:
             levels = await self._structural_levels(symbol, price, atr)
         except Exception:
@@ -1422,6 +1394,46 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
                       f'{_stretch:+.2f}σ into the trade, needs '
                       f'{_z_max:+.2f} or less')
                 return False
+
+        # ── the quality floor ────────────────────────────────────────────────
+        # An absolute bar on the context score, checked HERE — on the ENTER path,
+        # after the desk has approved a plan — rather than on the way in.
+        #
+        # Two reasons, and the second is the one that matters.
+        #
+        # It has to be past the fire flag: suppressing result['fire'] and
+        # result['side'] upstream does not reach the book. `tradeable` is set True
+        # unconditionally, the call site checks only tradeable/price/existing,
+        # `_classify` picks the side from range_position and the regime without
+        # ever reading result['side'], and REQUIRE_MODEL_FIRE is False. That is
+        # how the v83 rewrite left the HARD_VETOES policy: it blanks the published
+        # card while the desk opens the position anyway.
+        #
+        # And it has to be past the GATE, or the counter lies. Checked on entry to
+        # _run_trader_gate this refused ~39 of 44 symbols per scan — roughly 11,000
+        # a day — nearly all of which the desk was going to reject anyway for
+        # having no setup at all (29 of 44 die at stage 1). LOW_QUALITY_REFUSED
+        # would have reported a five-figure daily cost for a filter whose real
+        # cost is a handful of trades, and the number is meant to be the evidence
+        # for lowering the floor. A threshold instrumented so badly that its own
+        # tally is off by an order of magnitude is worse than an uncounted one.
+        # Here it increments only when a trade that WOULD have opened does not.
+        #
+        # Quality is the one thing the desk has no notion of: its stages ask what
+        # the trade is, where it is wrong, whether it pays and whether it is time,
+        # all structural. This is a deliberate doctrinal ADDITION to "structure
+        # leads" — the structure still picks the side, but a setup the engine
+        # itself scores below the floor is not taken.
+        _qf = float(getattr(_cfg, 'MIN_FIRE_QUALITY', 0.0) or 0.0)
+        if _qf > 0 and float(ctx_quality or 0.0) < _qf:
+            LOW_QUALITY_REFUSED['count'] += 1
+            self._publish_no_trade(
+                symbol, f'signal quality {float(ctx_quality or 0.0):.0f}/100 is below the '
+                        f'{_qf:.0f} floor — the setup is sound but the context is not')
+            print(f'[{symbol}] LOW_QUALITY_REFUSED {plan.side} {plan.setup} — quality '
+                  f'{float(ctx_quality or 0.0):.0f} < {_qf:.0f}; refused '
+                  f'{LOW_QUALITY_REFUSED["count"]} approved plan(s) this run')
+            return True
 
         # ── ENTER ────────────────────────────────────────────────────────────
         self._working_orders.pop(f'{symbol}|{plan.side}', None)
