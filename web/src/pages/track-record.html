@@ -313,6 +313,18 @@
         @keyframes tr-pulse { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
 
         /* ── Win rate note ── */
+        .tr-risky-note {
+            margin: 0 0 0.75rem 0;
+            padding: 0.6rem 0.85rem;
+            border: 1px solid rgba(251,191,36,0.40);
+            border-left: 3px solid #fbbf24;
+            border-radius: 6px;
+            background: rgba(251,191,36,0.07);
+            color: #d8c9a8;
+            font-size: 0.82rem;
+            line-height: 1.5;
+        }
+        .tr-risky-note strong { color: #fbbf24; }
         .tr-winrate-note {
             font-size: 0.66rem;
             color: var(--ae-text-3);
@@ -513,6 +525,16 @@
                 <a href="#" onclick="window.refreshAegisTrackRecord && window.refreshAegisTrackRecord();return false;" class="ae-btn ae-btn-outline ae-btn-md">↻ Refresh</a>
             </div>
         </div>
+
+                <!-- Risk posture. Shown ALWAYS, including before any signal has
+                     closed — the warning matters most when there is no record to
+                     judge the signals by. -->
+                <p class="tr-risky-note" id="trRiskyNote">
+                    <strong>&#9888; This portfolio trades RISKY-tier signals.</strong>
+                    They are published for transparency, not as advice. Do your own
+                    analysis on every signal, and paper trade first before risking
+                    real capital.
+                </p>
 
                 <!-- Win-rate attribution note -->
                 <p class="tr-winrate-note" id="trWinrateNote" style="display:none;"></p>
