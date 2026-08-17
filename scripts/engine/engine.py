@@ -1150,10 +1150,35 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
                'MAX_HOLD_EXPIRED' if expired else '')
         if not why:
             return
-        self.alpha_wallet.close_trade(key, px, why)
+        _rec = self.alpha_wallet.close_trade(key, px, why)
         self._alpha_last_close_time[key] = time.time()
         self._save_alpha_track_record()
         print(f'[{symbol}] RISKY-PAPER {why} @ {px:.6g}')
+
+        # Tell subscribers. This close was SILENT on Telegram: send_exit is called
+        # only from exits.py (the real wallet) and trader_engine.py, so a RISKY /
+        # paper position could open with an alert and then close without one — the
+        # outcome half of the accountability these notifications exist for simply
+        # never fired. Reported as "signal closed and no notification".
+        #
+        # Tagged PAPER in the reason so nobody reads a paper outcome as a booked
+        # one; the public track record already discloses that the published
+        # portfolio trades RISKY-tier signals, and this keeps the alert honest
+        # about which book it came from.
+        try:
+            from scripts.notifications.dispatcher import get_notifier
+            _hold = int(time.time() - self._alpha_open_time.get(key, time.time()))
+            _pnl = float(getattr(_rec, 'pnl_pct', 0.0) or 0.0) if _rec is not None else 0.0
+            get_notifier().send_exit(
+                symbol=symbol,
+                direction=getattr(pos, 'side', '') or '',
+                outcome=(getattr(_rec, 'outcome', None) or why),
+                pnl_pct=round(_pnl, 3),
+                hold_seconds=_hold,
+                exit_reason=f'{why} (PAPER · RISKY tier)',
+            )
+        except Exception as _exc:
+            print(f'[{symbol}] RISKY-PAPER exit alert failed: {_exc!r}')
 
     async def _resolve_market_context(
         self, symbol: str, result: Dict[str, Any]
