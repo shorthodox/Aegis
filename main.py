@@ -1570,7 +1570,41 @@ _tg_pending: dict = {}
 
 # user_email â†’ chat_id (persisted)
 _tg_connections: dict = {}
-_TG_CONNECTIONS_PATH = Path("data/telegram_connections.json")
+
+# ── Where Telegram connections live ───────────────────────────────────────────
+# On the VOLUME, and imported from one place so the writer and the reader cannot
+# disagree.
+#
+# This was `Path("data/telegram_connections.json")` — relative to the process CWD
+# — while scripts/notifications/dispatcher.py read `_ROOT / "data" / ...`. On
+# Railway both land on /app/data, which is the container overlay and is WIPED ON
+# EVERY DEPLOY. So a user connected Telegram, it worked, and the next deploy
+# silently unsubscribed them: the file was gone, the dispatcher found no chat_ids,
+# and _tg_send_all returned without sending or logging anything. Four deploys on
+# 2026-08-17 erased it four times.
+#
+# Everything else durable already moved to STATE_DIR when the volume was attached
+# (scripts/engine/config.py) — this file was simply missed, which is why the track
+# record survives redeploys and Telegram connections did not.
+#
+# The relative path was a second, quieter hazard: any process started from a
+# different CWD would read and write different files.
+from scripts.engine.config import STATE_DIR as _STATE_DIR
+_TG_CONNECTIONS_PATH = _STATE_DIR / "telegram_connections.json"
+
+# One-time migration off the ephemeral path. Copied only when the volume has no
+# file yet, so this can never overwrite good data with a stale container copy;
+# after a deploy has already wiped /app/data it finds nothing and does nothing,
+# which is the honest outcome rather than a silent failure.
+try:
+    _tg_legacy = Path("data/telegram_connections.json")
+    if _tg_legacy.exists() and not _TG_CONNECTIONS_PATH.exists():
+        _TG_CONNECTIONS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _TG_CONNECTIONS_PATH.write_text(_tg_legacy.read_text(encoding="utf-8"),
+                                        encoding="utf-8")
+        print(f"[Telegram] migrated connections {_tg_legacy} -> {_TG_CONNECTIONS_PATH}")
+except Exception as _exc:
+    print(f"[Telegram] connection migration skipped: {_exc}")
 
 
 def _tg_chat_id(entry) -> str:
