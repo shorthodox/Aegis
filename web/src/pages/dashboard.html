@@ -436,8 +436,17 @@
                     </div>
                 </a>
 
-                <a href="/signals"
-                    class="nav-room block glass-panel px-3 py-2.5 rounded-xl text-gray-400 hover:text-white transition-all group min-h-[44px]">
+                <!-- Was <a href="/signals">, which left the dashboard for a
+                     standalone page carrying the marketing nav and footer and NO
+                     sidebar — so the navigation vanished mid-session and the only
+                     way back was the browser button. It is now a ROOM, like Buy
+                     and Sell Setups, which are already filtered views of the same
+                     card set. /signals still works for direct links; nothing in
+                     the sidebar sends you there. The ↗ badge is gone because it
+                     promised an external view and there is no longer one. -->
+                <a href="javascript:void(0)" onclick="switchRoom('cockpit')"
+                    class="nav-room block glass-panel px-3 py-2.5 rounded-xl text-gray-400 hover:text-white transition-all group min-h-[44px]"
+                    data-room="cockpit">
                     <div class="flex items-center gap-2.5">
                         <div class="icon-container w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center transition-colors flex-shrink-0">
                             <i class="fas fa-bolt text-xs" style="color:#B8966A;"></i>
@@ -446,7 +455,7 @@
                             <div class="font-bold uppercase tracking-wide text-xs">Signals Cockpit</div>
                             <div class="text-[10px] text-gray-500 truncate">Fired signals only</div>
                         </div>
-                        <span class="ml-auto text-[9px] px-1.5 py-0.5 rounded flex-shrink-0" style="background:rgba(184,150,106,0.1);color:rgba(184,150,106,0.6);border:1px solid rgba(184,150,106,0.15);">↗</span>
+                        <span id="cockpit-count" class="ml-auto text-[10px] font-mono flex-shrink-0" style="color:rgba(184,150,106,0.7);"></span>
                     </div>
                 </a>
 
@@ -1031,6 +1040,33 @@
                                 <tr><td colspan="9" class="p-6 text-center text-gray-500">No signal history available</td></tr>
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ROOM: SIGNALS COCKPIT ─────────────────────────────────────────
+                 Replaces the /signals page as the sidebar destination. Same
+                 pattern as the BUY/SELL rooms below: a filtered view of the cards
+                 already rendered into #signalsContainer, so there is one renderer
+                 and one source of truth rather than a second page that had to be
+                 kept in step by hand. Filter is data-fired, which BUY/SELL cannot
+                 use — data-dir maps fired AND armed setups to buy/sell alike. -->
+            <div id="room-cockpit" class="room-section hidden">
+                <div class="room-header" style="--room-accent:rgba(184,150,106,0.5);">
+                    <div class="room-header-row">
+                        <h2><i class="fas fa-bolt" style="color:#B8966A;"></i> Signals Cockpit <span id="cockpit-room-count" class="text-sm font-mono font-normal normal-case tracking-normal ml-1" style="color:rgba(184,150,106,0.6);"></span></h2>
+                    </div>
+                    <div class="room-subtitle">Every signal the engine has actually FIRED — armed setups still waiting for their level are excluded</div>
+                    <div class="beginner-tip" style="border-color:rgba(184,150,106,0.18);background:rgba(184,150,106,0.04);">
+                        <i class="fas fa-lightbulb" style="color:#B8966A;"></i>
+                        <span><strong>Fired means committed.</strong> These are the trades the engine took, in both directions — a card only appears here once a position is actually open, so nothing on this screen is a maybe. Setups tagged <strong style="color:#fbbf24">ARMED · WAITING FOR LEVEL</strong> are resting orders and live in Live Signals instead, because the price they need has not traded yet.</span>
+                    </div>
+                </div>
+                <div id="cockpitSignalsContainer"
+                    class="signals-grid grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
+                    <div class="no-signals" style="grid-column:1/-1">
+                        <i class="fas fa-bolt" style="color:#B8966A;opacity:0.35"></i>
+                        <p>No fired signals right now</p>
                     </div>
                 </div>
             </div>
@@ -2108,8 +2144,11 @@
                 window.forceTradesRefresh();
             }
 
-            // Sync directional rooms on activation
-            if ((roomName === 'buys' || roomName === 'sells') && typeof window.syncDirectionalRooms === 'function') {
+            // Sync filtered rooms on activation. 'cockpit' is included because it
+            // is the same kind of view — a filter over #signalsContainer — and was
+            // previously a separate page that left the dashboard shell entirely.
+            if ((roomName === 'buys' || roomName === 'sells' || roomName === 'cockpit')
+                && typeof window.syncDirectionalRooms === 'function') {
                 window.syncDirectionalRooms();
             }
 

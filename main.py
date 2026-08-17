@@ -1630,15 +1630,17 @@ def _tg_access_until(email: str) -> str:
     """
     try:
         user_doc = get_user_doc(email) or {}
-        plan = (user_doc.get("plan") or "").lower()
         sub  = user_doc.get("subscription") or {}
-        if plan in {"pro", "premium", "intermediate", "basic"} and \
-                isinstance(sub, dict) and sub.get("status") == "active":
-            # A paid, active subscription: prefer its own end date when present.
-            for key in ("current_period_end", "expires_at", "end_date"):
-                if sub.get(key):
-                    return str(sub[key])
-            return ""          # active with no end date — no timestamp gate
+        # A PAID plan is gated by the subscription's own end date, never by
+        # trial_end. Falling through to trial_end here is what wrote an elapsed
+        # timestamp beside a paying subscriber's chat_id and made the sender skip
+        # them on every signal — see has_paid_access() for the whole story.
+        if has_paid_access(user_doc):
+            if isinstance(sub, dict):
+                for key in ("current_period_end", "expires_at", "end_date"):
+                    if sub.get(key):
+                        return str(sub[key])
+            return ""          # paid, no end date — no timestamp gate
         return str(user_doc.get("trial_end") or "")
     except Exception as exc:
         print(f"[TG] access lookup failed for {email}: {exc!r}")
@@ -3225,17 +3227,54 @@ def get_or_create_user_from_oauth(email: str, name: str, provider: str, social_i
         update_last_login(email)
     return {"email": email, "plan": user["plan"], "trial_end": user["trial_end"]}
 
+# ── Paid access, defined ONCE ─────────────────────────────────────────────────
+# This test lived in five places in this file, each slightly different (one of
+# them counted "active" as a PLAN name). Two of those copies sit in the Telegram
+# delivery path and between them they stopped a paying subscriber receiving any
+# signal at all:
+#
+#   * _tg_access_until() fell through to trial_end for a paid user, writing an
+#     already-elapsed timestamp beside their chat_id. dispatcher._tg_send_all then
+#     silently `continue`d past them on every send.
+#   * the hourly sweep called is_trial_expired(), which returned True for the same
+#     reason, and DELETED the connection outright.
+#
+# The bot itself was fine — the /start confirmation is posted directly to the
+# Telegram API and never passes either gate, which is why "connected" arrived and
+# nothing else ever did.
+#
+# The cause in both was requiring `subscription.status == "active"` on top of a
+# paid plan, then treating anything else as an expired trial. Missing bookkeeping
+# is not a cancellation, and the send-site comment already said as much ("an
+# ABSENT stamp must not be read as expired") while the code did the opposite.
+#
+# So: a paid plan grants access unless the subscription carries a status that
+# positively says otherwise. Enumerating the DEAD states rather than requiring one
+# live state is what makes an absent or unrecognised status fail open for someone
+# who has paid, while a genuine cancellation still fails closed.
+PAID_PLANS = frozenset({"pro", "premium", "intermediate", "basic", "pro-dev"})
+_DEAD_SUB_STATUS = frozenset({
+    "cancelled", "canceled", "expired", "past_due", "unpaid", "halted", "paused",
+})
+
+
+def has_paid_access(user_doc: Optional[Dict[str, Any]]) -> bool:
+    """True when this user holds a paid plan that has not been cancelled."""
+    plan = str((user_doc or {}).get("plan") or "").lower()
+    if plan not in PAID_PLANS:
+        return False
+    sub = (user_doc or {}).get("subscription") or {}
+    status = str(sub.get("status") or "").lower() if isinstance(sub, dict) else ""
+    return status not in _DEAD_SUB_STATUS
+
+
 def is_trial_expired(email: str) -> bool:
     user_doc = get_user_doc(email)
     if not user_doc:
         return True
+    if has_paid_access(user_doc):
+        return False
     plan = user_doc.get("plan", "trial")
-    if plan in ("pro", "premium", "intermediate", "basic"):
-        # Only bypass expiry if there is an active subscription record
-        subscription = user_doc.get("subscription", {})
-        if isinstance(subscription, dict) and subscription.get("status") == "active":
-            return False
-        # No active subscription â€” fall through to trial date check
     trial_end_raw = user_doc.get("trial_end")
     if trial_end_raw:
         if isinstance(trial_end_raw, datetime):

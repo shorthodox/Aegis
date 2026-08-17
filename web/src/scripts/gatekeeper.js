@@ -1925,7 +1925,7 @@ function renderSignals(signals) {
     }
 
     return `
-      <div class="signal-card ${cardTypeClass}${statusIndicator} cursor-pointer hover:shadow-[0_0_15px_rgba(184,150,106,0.2)] transition-all transform hover:-translate-y-1 overflow-hidden ${matchClasses}" onclick="window.openSignalDetails('${symbol}', '${timeframe}')" data-symbol="${symbol}" data-status="${signalStatus}" data-dir="${dirAttr}">
+      <div class="signal-card ${cardTypeClass}${statusIndicator} cursor-pointer hover:shadow-[0_0_15px_rgba(184,150,106,0.2)] transition-all transform hover:-translate-y-1 overflow-hidden ${matchClasses}" onclick="window.openSignalDetails('${symbol}', '${timeframe}')" data-symbol="${symbol}" data-status="${signalStatus}" data-dir="${dirAttr}" data-fired="${_fired ? '1' : '0'}">
         <div class="signal-header flex justify-between items-center">
           <div class="flex items-center gap-1.5 flex-wrap">
             <span class="signal-symbol font-bold">${symbol}</span>
