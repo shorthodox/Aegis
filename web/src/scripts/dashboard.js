@@ -2341,9 +2341,47 @@ function _syncDirectionalRooms() {
     navSell.textContent = sellCards.length;
     navSell.classList.toggle('hidden', sellCards.length === 0);
   }
+
+  _syncCockpitRoom(cards);
+}
+
+/** Fired-only view, formerly the standalone /signals page.
+ *
+ * Filters on data-fired rather than data-dir: data-dir maps a FIRED long and an
+ * ARMED long to the same 'buy' value, so it cannot separate committed trades from
+ * resting orders — which is the entire distinction this room exists to draw.
+ *
+ * Takes `cards` from the caller so both rooms read one snapshot of the DOM.
+ */
+function _syncCockpitRoom(cards) {
+  const container = document.getElementById('cockpitSignalsContainer');
+  if (!container) return;
+  const fired = (cards || Array.from(
+    document.getElementById('signalsContainer')?.querySelectorAll('.signal-card[data-dir]') || []
+  )).filter(c => c.dataset.fired === '1');
+
+  if (fired.length > 0) {
+    container.innerHTML = '';
+    fired.forEach(card => container.appendChild(card.cloneNode(true)));
+  } else {
+    container.innerHTML = `
+      <div class="no-signals" style="grid-column:1/-1">
+        <i class="fas fa-bolt" style="color:#B8966A;opacity:0.35;font-size:2.5rem;margin-bottom:1rem"></i>
+        <p>No fired signals right now</p>
+      </div>`;
+  }
+
+  const roomCount = document.getElementById('cockpit-room-count');
+  if (roomCount) {
+    roomCount.textContent = fired.length > 0
+      ? `— ${fired.length} signal${fired.length !== 1 ? 's' : ''}` : '';
+  }
+  const navCount = document.getElementById('cockpit-count');
+  if (navCount) navCount.textContent = fired.length > 0 ? String(fired.length) : '';
 }
 
 window.syncDirectionalRooms = _syncDirectionalRooms;
+window.syncCockpitRoom = _syncCockpitRoom;
 
 // Keep directional rooms in sync whenever signalsContainer updates
 (function _initDirectionalRoomsSync() {
@@ -2359,10 +2397,15 @@ window.syncDirectionalRooms = _syncDirectionalRooms;
       const navSell = document.getElementById('nav-sell-count');
       if (navBuy)  { navBuy.textContent  = buyCount;  navBuy.classList.toggle('hidden',  buyCount  === 0); }
       if (navSell) { navSell.textContent = sellCount; navSell.classList.toggle('hidden', sellCount === 0); }
-      // Sync room content only if a directional room is currently visible
-      const buysActive  = document.getElementById('room-buys')?.classList.contains('active');
-      const sellsActive = document.getElementById('room-sells')?.classList.contains('active');
-      if (buysActive || sellsActive) _syncDirectionalRooms();
+      // The cockpit nav badge is a count of FIRED cards, so it has to update on
+      // every mutation regardless of which room is open — same reasoning as the
+      // buy/sell badges above.
+      _syncCockpitRoom(cards);
+      // Sync room content only if a filtered room is currently visible
+      const buysActive    = document.getElementById('room-buys')?.classList.contains('active');
+      const sellsActive   = document.getElementById('room-sells')?.classList.contains('active');
+      const cockpitActive = document.getElementById('room-cockpit')?.classList.contains('active');
+      if (buysActive || sellsActive || cockpitActive) _syncDirectionalRooms();
     }).observe(source, { childList: true });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attach);

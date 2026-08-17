@@ -235,9 +235,20 @@ class NotificationDispatcher:
                                 if _end.tzinfo is None:
                                     _end = _end.replace(tzinfo=_tz.utc)
                                 if _now > _end:
+                                    # SAY SO. This bare `continue` is why a paying
+                                    # subscriber's missing signals were undiagnosable:
+                                    # the bot was reachable, the connection existed,
+                                    # the engine fired, and every send was dropped
+                                    # here without a word. main.py wrote an elapsed
+                                    # trial_end into access_until for paid plans.
+                                    print(f"[Telegram] SKIPPED {_email} — access_until "
+                                          f"{until} is in the past. If this user has "
+                                          f"paid, their plan is not being recognised: "
+                                          f"see has_paid_access() in main.py")
                                     continue          # access has lapsed
                             except (ValueError, TypeError):
-                                pass                  # unparseable — let the sweep decide
+                                print(f"[Telegram] {_email}: access_until {until!r} "
+                                      f"is unparseable — sending anyway, sweep decides")
                     else:
                         cid = str(_entry or "").strip()   # legacy flat {email: chat_id}
                     if cid:
