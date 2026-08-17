@@ -4692,15 +4692,21 @@ async def initialize_subscription(
 #
 # ⚠ THIS TABLE DOES NOT SET WHAT ANYONE IS CHARGED.
 #
-# POST /api/v1/payments/subscription/initialize sends ONLY {"plan_id": ...} to
-# Razorpay. The amount lives on the Razorpay PLAN object, created in their
-# dashboard, and Razorpay plans are immutable — an amount cannot be edited, a new
-# plan has to be created. Paddle is the same: the amount lives on the Paddle
-# price. So this dict drives DISPLAY and the DODO path, and nothing else.
+# WHOP is the live gateway (see _active_payment_provider — precedence is
+# Whop -> Paddle -> DODO -> Razorpay, and Whop wins whenever WHOP_API_KEY is
+# set). The checkout call sends {"plan_id", "metadata", "redirect_url"} and NO
+# amount, so the price a customer actually pays is whatever the three Whop plans
+# behind WHOP_PLAN_ID_BASIC / _INTERMEDIATE / _PRO are configured at.
 #
-# Lowering the numbers here without creating new gateway plans and repointing
-# RAZORPAY_PLAN_ID_* / PADDLE_PRICE_ID_* makes the site advertise one price and
-# charge another. Keep them in step by hand, in the same change.
+# Every other gateway here works the same way: Razorpay bills against its plan_id
+# (and its plans are immutable — a new plan is required to change an amount),
+# Paddle against PADDLE_PRICE_ID_*. So this dict drives DISPLAY and the DODO path
+# and nothing else, on every provider.
+#
+# Changing the numbers here alone makes the site advertise one price and charge
+# another. Update the gateway plans in the SAME change, then confirm with a real
+# checkout — the displayed price and the amount on the Whop page are two separate
+# systems and only a test purchase proves they agree.
 #
 # Prices lowered to 6 / 12 / 18 on 2026-08-17.
 USD_PLAN_PRICES: Dict[str, float] = {
