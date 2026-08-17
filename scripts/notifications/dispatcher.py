@@ -192,13 +192,26 @@ class NotificationDispatcher:
         """Send to every connected Telegram chat_id using server-side bot token."""
         import os as _os, json as _json
         token = _os.getenv("TELEGRAM_BOT_TOKEN", "")
-        if not token or not tg_text:
+        if not tg_text:
+            return
+        if not token:
+            # Say so. A revoked token is the other way this goes quiet: BotFather
+            # /revoke invalidates the old value instantly, and if Railway still
+            # holds it every send returns 401 with the reason in the response —
+            # which send_telegram logs. A MISSING token used to log nothing at all.
+            print("[Telegram] TELEGRAM_BOT_TOKEN is not set — no signals will be sent")
             return
         chat_ids = set()
         env_chat = default_chat_id or _os.getenv("TELEGRAM_CHAT_ID", "")
         if env_chat:
             chat_ids.add(str(env_chat).strip())
-        conn_path = _ROOT / "data" / "telegram_connections.json"
+        # The VOLUME copy — same file main.py writes. This used to be
+        # `_ROOT / "data" / ...`, the container overlay, which every deploy wipes;
+        # the reader then found no connections and this method returned having
+        # sent nothing and logged nothing. Imported rather than re-derived so the
+        # two halves cannot drift apart again, which is exactly how they broke.
+        from scripts.engine.config import STATE_DIR as _SD
+        conn_path = _SD / "telegram_connections.json"
         if conn_path.exists():
             try:
                 from datetime import datetime as _dt, timezone as _tz
@@ -231,9 +244,23 @@ class NotificationDispatcher:
                         chat_ids.add(cid)
             except Exception:
                 pass
+        # Report the outcome. Both failure modes here were silent: no chat_ids at
+        # all (the connections file had been wiped by a deploy) and per-chat send
+        # failures (the return value was discarded). Either way the engine looked
+        # healthy while no subscriber received anything.
+        if not chat_ids:
+            print(f"[Telegram] no connected chat_ids — nothing sent. "
+                  f"Checked TELEGRAM_CHAT_ID and {conn_path} "
+                  f"(exists={conn_path.exists()})")
+            return
+        _ok = 0
         for chat_id in chat_ids:
-            if chat_id:
-                send_telegram(token, chat_id, tg_text)
+            if chat_id and send_telegram(token, chat_id, tg_text):
+                _ok += 1
+        if _ok < len(chat_ids):
+            print(f"[Telegram] delivered {_ok}/{len(chat_ids)} — see the API error "
+                  f"logged above for each failure (401 = token revoked or stale, "
+                  f"403 = bot blocked or removed from the channel)")
 
     def _do_send(
         self,
