@@ -942,21 +942,31 @@
       </p>
     </div>
 
-    <!-- // REVIEW: pricing conflicts with brief — site displays ₹1,999/₹3,299 (INR); brief quotes $3.60/$7.20/$14 (USD). Confirm which set is live before updating displayed numbers. -->
+    <!-- PRICING PREVIEW — must mirror /pricing exactly.
+         This section previously showed Free Trial / Intermediate / Pro at
+         ₹0 / ₹1,999 / ₹3,299 while /pricing and the Terms sold Basic / Sentinel /
+         AEGIS Pro in USD: a different currency, different tier names, and only
+         two paid tiers instead of three. A visitor comparing the landing page to
+         the checkout saw two different products. (The REVIEW comment that used to
+         sit here flagged the conflict and was never resolved.)
+         Now three cards, same names, order, currency and amounts as /pricing.
+         The free trial is carried by the hero CTA and this section's own subhead
+         rather than a fourth card, because the grid is repeat(3, 1fr).
+         Prices track USD_PLAN_PRICES in main.py — change both together. -->
     <div class="pricing-grid">
 
       <div class="ae-price-card">
         <div>
-          <div class="ae-price-tier">Free Trial</div>
-          <div class="ae-price-value" style="margin-top: var(--s-3);">₹0 <span>/ 3 days</span></div>
+          <div class="ae-price-tier">Basic</div>
+          <div class="ae-price-value" style="margin-top: var(--s-3);">$6.00 <span>/ month</span></div>
         </div>
-        <div class="ae-price-desc">Full access to every feature. No card required. Designed to let you evaluate the signal quality before spending anything.</div>
+        <div class="ae-price-desc">Starts with a free 3-day trial — full Basic access, no card required. Evaluate the signal quality before spending anything.</div>
         <ul class="ae-feature-list">
-          <li>All 60 tokens live</li>
-          <li>Live signal cockpit</li>
-          <li>Signal genesis report</li>
-          <li>Live candlestick charts</li>
-          <li>No credit card needed</li>
+          <li>All 63 live tokens</li>
+          <li>Market bias, trend regime &amp; volatility context</li>
+          <li>S/R zones, pivot &amp; price targets</li>
+          <li>RSI, MACD, ADX, Supertrend, confluence</li>
+          <li>Signal history archive</li>
         </ul>
         <button id="pricingTrialBtn" class="ae-btn ae-btn-outline ae-btn-md" style="width:100%; justify-content:center;" onclick="location.href='/pricing'">
           Start Free Trial
@@ -965,39 +975,39 @@
 
       <div class="ae-price-card featured">
         <div>
-          <div class="ae-price-tier">Intermediate</div>
-          <div class="ae-price-value" style="margin-top: var(--s-3);">₹1,999 <span>/ month</span></div>
+          <div class="ae-price-tier">Sentinel</div>
+          <div class="ae-price-value" style="margin-top: var(--s-3);">$12.00 <span>/ month</span></div>
         </div>
-        <div class="ae-price-desc">For traders who treat this seriously. Full analytical suite including SHAP feature importance, confluence scorecards, and 90-day signal history.</div>
+        <div class="ae-price-desc">AI conviction label per signal, all 8 chart timeframes, and a full noise-filtering layer — know exactly which setups to act on.</div>
         <ul class="ae-feature-list">
-          <li>Everything in Trial</li>
-          <li>SHAP feature explainability</li>
-          <li>Confluence scorecards</li>
-          <li>Expectancy & max DD matrix</li>
-          <li>Multi-timeframe analysis</li>
-          <li>Token win-rate badges</li>
+          <li>Everything in Basic</li>
+          <li>Deep Chart Analysis — gate-by-gate breakdown</li>
+          <li>AI Conviction Label — HIGH / MEDIUM / LOW</li>
+          <li>Quality Score badge &amp; warning chips</li>
+          <li>DON'T TRADE composite risk banner</li>
+          <li>Capital at Risk calculator</li>
         </ul>
         <a href="/pricing" class="ae-btn ae-btn-primary ae-btn-md" style="width:100%; justify-content:center; text-decoration:none;">
-          Get Intermediate
+          Get Sentinel
         </a>
       </div>
 
       <div class="ae-price-card">
         <div>
-          <div class="ae-price-tier">Pro</div>
-          <div class="ae-price-value" style="margin-top: var(--s-3);">₹3,299 <span>/ month</span></div>
+          <div class="ae-price-tier">AEGIS Pro</div>
+          <div class="ae-price-value" style="margin-top: var(--s-3);">$18.00 <span>/ month</span></div>
         </div>
-        <div class="ae-price-desc">Priority access, alpha multi-timeframe scanner, and Telegram alert delivery the moment a signal fires.</div>
+        <div class="ae-price-desc">The full model signal with exact entry, TP and stop — plus LSTM and HMM deep panels with raw probabilities. Trade the model, not just the signal.</div>
         <ul class="ae-feature-list">
-          <li>Everything in Intermediate</li>
-          <li>Priority signal delivery</li>
-          <li>Alpha scanner access</li>
-          <li>Telegram alerts</li>
-          <li>Advanced portfolio tracking</li>
-          <li class="locked">API access</li>
+          <li>Everything in Sentinel</li>
+          <li>Full fire signal — exact Entry, TP &amp; Stop-Loss</li>
+          <li>LSTM predictions panel</li>
+          <li>HMM deep regime panel</li>
+          <li>Telegram alerts the moment a signal fires</li>
+          <li>Raw model probabilities &amp; SHAP importance</li>
         </ul>
         <a href="/pricing" class="ae-btn ae-btn-outline ae-btn-md" style="width:100%; justify-content:center; text-decoration:none;">
-          Get Pro
+          Get AEGIS Pro
         </a>
       </div>
 
