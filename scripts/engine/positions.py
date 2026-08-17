@@ -645,21 +645,49 @@ class PositionsMixin:
                          (existing.direction == 'SHORT' and cur >= existing.stop_loss)
                 reversal = fire and ((existing.side == 'BUY' and side == 'SELL') or
                                      (existing.side == 'SELL' and side == 'BUY'))
-                if sl_hit:
-                    self.alpha_wallet.close_trade(key, cur, 'SL_HIT')
+                if sl_hit or reversal:
+                    _why = 'SL_HIT' if sl_hit else 'SIGNAL_REVERSAL'
+                    _rec = self.alpha_wallet.close_trade(key, cur, _why)
                     self._alpha_last_close_time[key] = time.time()
                     self._alpha_last_close_side[key] = existing.side
                     self._save_alpha_track_record()
-                elif reversal:
-                    self.alpha_wallet.close_trade(key, cur, 'SIGNAL_REVERSAL')
-                    self._alpha_last_close_time[key] = time.time()
-                    self._alpha_last_close_side[key] = existing.side
-                    self._save_alpha_track_record()
-                    self._alpha_open_position(key, symbol, result, price, tf)
+                    # Both closes were silent on Telegram — see the matching note in
+                    # engine._manage_paper_position. An alert on the way in and
+                    # nothing on the way out is the half that actually matters.
+                    self._notify_alpha_exit(key, symbol, existing, _rec, _why, tf)
+                    if reversal:
+                        self._alpha_open_position(key, symbol, result, price, tf)
             elif fire and price > 0:
                 cooldown = time.time() - self._alpha_last_close_time.get(key, 0)
                 if cooldown >= 1800:
                     self._alpha_open_position(key, symbol, result, price, tf)
+
+    def _notify_alpha_exit(self, key: str, symbol: str, pos: Any,
+                           rec: Any, why: str, tf: str = '') -> None:
+        """Telegram alert for a PAPER / RISKY close.
+
+        Kept as one helper rather than inlined at each close so the two alpha exit
+        paths cannot drift — which is exactly how the real-wallet path ended up
+        being the only one that notified anybody.
+
+        Tagged PAPER in the reason so a paper outcome is never mistaken for a
+        booked one. Never raises: a failed alert must not abort the close that has
+        already been written to the track record.
+        """
+        try:
+            from scripts.notifications.dispatcher import get_notifier
+            hold = int(time.time() - self._alpha_open_time.get(key, time.time()))
+            pnl = float(getattr(rec, 'pnl_pct', 0.0) or 0.0) if rec is not None else 0.0
+            get_notifier().send_exit(
+                symbol=symbol,
+                direction=getattr(pos, 'side', '') or '',
+                outcome=(getattr(rec, 'outcome', None) or why),
+                pnl_pct=round(pnl, 3),
+                hold_seconds=hold,
+                exit_reason=f'{why} (PAPER · RISKY tier{(" · " + tf) if tf else ""})',
+            )
+        except Exception as exc:
+            print(f'[{symbol}] RISKY-PAPER exit alert failed: {exc!r}')
 
     def _save_alpha_track_record(self) -> None:
         try:

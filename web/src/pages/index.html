@@ -464,8 +464,14 @@
             <div style="font-family:var(--ae-font-mono); font-size:1.5rem; font-weight:700; color:var(--ae-buy);">3</div>
             <div style="font-size:0.68rem; color:var(--ae-text-3); text-transform:uppercase; letter-spacing:0.08em; margin-top:3px;">Active Signals</div>
           </div>
+          <!-- Min Quality tracks scripts/engine/config.py MIN_FIRE_QUALITY. It read 70
+               — a floor from the pre-v83 guard chain that no live code has enforced
+               for months. The real value is 45 (lowered from 60 on 2026-08-17 after
+               60 retained only 3 of 44 tokens). Unlike the illustrative signal card
+               below, this panel is presented as a live engine fact, so a stale number
+               here is a false claim. Change it whenever MIN_FIRE_QUALITY changes. -->
           <div style="background:var(--ae-surface); border:1px solid var(--ae-border); border-radius:var(--ae-radius-md); padding:var(--s-4); text-align:center;">
-            <div style="font-family:var(--ae-font-mono); font-size:1.5rem; font-weight:700; color:var(--ae-gold);">70</div>
+            <div style="font-family:var(--ae-font-mono); font-size:1.5rem; font-weight:700; color:var(--ae-gold);">45</div>
             <div style="font-size:0.68rem; color:var(--ae-text-3); text-transform:uppercase; letter-spacing:0.08em; margin-top:3px;">Min Quality</div>
           </div>
           <div style="background:var(--ae-surface); border:1px solid var(--ae-border); border-radius:var(--ae-radius-md); padding:var(--s-4); text-align:center;">
