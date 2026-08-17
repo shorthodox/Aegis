@@ -13,6 +13,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>AEGIS v1.0 | Sovereign Terminal</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/web/assets/logo/aegis-logo-32.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/web/assets/logo/aegis-logo-192.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="/web/assets/logo/aegis-logo-192.png">
+  <link rel="shortcut icon" href="/favicon.ico">
     <!-- Preconnect to external origins so DNS+TLS happens in parallel with HTML parse -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -298,7 +302,11 @@
                     aria-label="Back to AEGIS home page"
                     class="aegis-home-link group flex items-center gap-2 rounded-lg px-2 py-1 -ml-2 transition-all"
                     style="color:#B8966A">
-                    <i class="fas fa-bolt transition-transform group-hover:-translate-x-0.5" style="color:#B8966A"></i>
+                    <img src="/web/assets/logo/aegis-logo-96.png"
+                        srcset="/web/assets/logo/aegis-logo-48.png 1x, /web/assets/logo/aegis-logo-96.png 2x, /web/assets/logo/aegis-logo-192.png 4x"
+                        alt="" width="26" height="26" decoding="async"
+                        class="transition-transform group-hover:-translate-x-0.5"
+                        style="display:block;width:1.6rem;height:1.6rem;object-fit:contain;flex-shrink:0;">
                     <span
                         class="font-black tracking-tight text-xl bg-clip-text text-transparent" style="background:linear-gradient(to right,#EAE6DF,#B8966A);-webkit-background-clip:text">AEGIS</span>
                     <span class="aegis-home-hint hidden sm:inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider">
