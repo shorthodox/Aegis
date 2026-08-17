@@ -116,6 +116,26 @@ let userPlan = 'trial';
 let trialEnd = null;
 let trialActive = true;
 
+// ── Who has access, defined ONCE ──────────────────────────────────────────────
+// This list existed in three places (checkAuthAndLoad and applyUserData had it,
+// the 'trial-status-updated' listener did not) and the copy that was missing is
+// what showed "trial expired" to paying subscribers. That listener asked only
+// AuthManager.isTrialValid(), which knows nothing about a paid plan — and a paid
+// subscriber has no active trial by definition, so it returned false and the
+// overlay fired over a perfectly valid subscription. It vanished on refresh
+// because the reload takes the cached-token fast path, which never emits
+// 'trial-status-updated'. Hence "appears on login, gone after F5".
+const PAID_PLANS = ['pro', 'premium', 'intermediate', 'basic', 'pro-dev'];
+
+function isPaidPlan(plan = userPlan) {
+  return PAID_PLANS.includes(String(plan || '').toLowerCase());
+}
+
+/** A paid plan OR a live trial. Both are access; either alone is enough. */
+function hasActiveAccess() {
+  return isPaidPlan() || trialActive === true;
+}
+
 // Listen for trial expiration from dashboard countdown
 document.addEventListener('trialExpired', () => {
   trialActive = false;
@@ -129,7 +149,9 @@ document.addEventListener('trialExpired', () => {
 window.addEventListener('trial-status-updated', () => {
   if (typeof AuthManager !== 'undefined') {
     trialActive = AuthManager.isTrialValid();
-    if (!trialActive && typeof showSubscriptionExpiredOverlay === 'function') {
+    // hasActiveAccess(), NOT !trialActive. A paid subscriber has no live trial,
+    // so the old test locked them out of a subscription they had just paid for.
+    if (!hasActiveAccess() && typeof showSubscriptionExpiredOverlay === 'function') {
       showSubscriptionExpiredOverlay();
     }
     updateUI();
@@ -238,7 +260,35 @@ function getSignalStatus(signal) {
 // -------------------------------------------------------------------
 // Subscription & Trial Locking
 // -------------------------------------------------------------------
+/** Rewrite the overlay copy for WHO is looking at it.
+ *
+ * The markup is hardcoded "Subscription Expired / Your trial period has ended",
+ * which is wrong for a paying subscriber whose 30-day plan lapsed — they never
+ * had a trial to end, and being told they did reads as the product having lost
+ * their payment. A lapsed plan and an ended trial need different words and
+ * different next steps: renew vs subscribe.
+ */
+function _applyExpiredCopy() {
+  const paid = isPaidPlan();
+  const card = document.getElementById('subscriptionExpiredOverlay');
+  if (!card) return;
+  const h = card.querySelector('h2');
+  const p = card.querySelector('p');
+  if (h) h.textContent = paid ? 'Plan Expired' : 'Trial Expired';
+  if (p) {
+    p.textContent = paid
+      ? 'Your 30-day plan has ended. Renew to continue receiving live signals, '
+        + 'analytics, and Telegram alerts. Your history and settings are kept.'
+      : 'Your free trial has ended. Subscribe to continue accessing live signals, '
+        + 'advanced analytics, and unlimited trading features.';
+  }
+  const cta = card.querySelector('a[href="/pricing"]');
+  if (cta) cta.textContent = paid ? 'Renew Plan' : 'Subscribe Now';
+}
+
 function showSubscriptionExpiredOverlay() {
+  _applyExpiredCopy();
+
   // Delegate to dashboard.js if available
   if (typeof window.setExpiredView === 'function') {
     window.setExpiredView();
@@ -623,10 +673,10 @@ async function checkAuthAndLoad() {
 
   await loadUserFromBackend(token);
 
-  // Check for trial expiration after loading user data.
-  // Catches all non-paid plan states: 'trial' with expired date, 'none', 'expired', etc.
-  const _PAID_PLANS = ['pro', 'premium', 'intermediate', 'basic', 'pro-dev'];
-  if (!_PAID_PLANS.includes(userPlan) && !trialActive) {
+  // Check for expiry after loading user data. Catches every non-paid state:
+  // 'trial' with an elapsed date, 'none', 'expired'. Uses the shared helper so
+  // this cannot drift from the other two call sites again.
+  if (!hasActiveAccess()) {
     showSubscriptionExpiredOverlay();
   }
 }
@@ -696,10 +746,9 @@ function applyUserData(userData, token) {
   const isActive = userData.trial_active ?? true;
   trialActive = typeof AuthManager !== 'undefined' ? AuthManager.isTrialValid() : isActive;
 
-  // Show subscription expired overlay for any user without an active paid plan or trial.
-  // This covers plan values like 'none', 'expired', 'trial' (with elapsed date), etc.
-  const _PAID = ['pro', 'premium', 'intermediate', 'basic', 'pro-dev'];
-  if (!_PAID.includes(userPlan) && !trialActive) {
+  // Show the expired overlay for any user without an active paid plan or trial.
+  // Covers plan values like 'none', 'expired', 'trial' (with elapsed date).
+  if (!hasActiveAccess()) {
     showSubscriptionExpiredOverlay();
     return;
   }
@@ -1026,7 +1075,12 @@ function updateUI() {
       planBadge.innerHTML = '<i class="fas fa-flask"></i> TRIAL ACTIVE';
       planBadge.classList.add('text-cyan');
     } else {
-      planBadge.innerHTML = '<i class="fas fa-clock"></i> TRIAL EXPIRED';
+      // A lapsed PAID plan is not an expired trial. This is the badge equivalent
+      // of the overlay copy fix — a subscriber who never had a trial must not be
+      // told their trial ended.
+      planBadge.innerHTML = isPaidPlan(p)
+        ? '<i class="fas fa-clock"></i> PLAN EXPIRED'
+        : '<i class="fas fa-clock"></i> TRIAL EXPIRED';
       planBadge.classList.add('text-red-500');
     }
   }
@@ -2833,6 +2887,25 @@ async function handleLogout() {
 }
 
 function redirectToLogin() {
+  // Already home? Then this is a RELOAD, not a redirect — and a reload here
+  // destroys whatever the sign-in modal was trying to tell the user.
+  //
+  // The reported symptom: "no account found" flashed for about a second and
+  // vanished. Cause was a race, not a timeout. handleEmailLogin signs the user
+  // back out when Firebase authenticates them but their Firestore profile is
+  // missing (auth.js — the needsSignup path). That signOut fires
+  // onAuthStateChanged(null), which lands here, and `href = '/'` reloaded the
+  // landing page out from under the modal that had just rendered the message.
+  //
+  // Nothing needs redirecting when we are already on the login page: the visitor
+  // is looking at it. Bailing out keeps the modal, the error, and the "Create an
+  // account →" link the message is useless without.
+  const p = window.location.pathname;
+  if (p === '/' || p === '/index.html') {
+    console.warn('gatekeeper: already on the login page — not reloading '
+                 + '(would discard any sign-in error on screen)');
+    return;
+  }
   window.location.href = '/';
 }
 
