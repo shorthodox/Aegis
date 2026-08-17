@@ -136,6 +136,89 @@ def test_the_sweep_no_longer_deletes_a_paid_connection(monkeypatch):
     )
 
 
+# ── access must END when the plan's term ends ────────────────────────────────
+# Requirement, stated 2026-08-17: Telegram works for trial users too, and BOTH a
+# finished trial and a finished paid plan must disconnect automatically.
+#
+# The first half already worked — /connect has no paywall and _tg_access_until
+# returns trial_end for a trial user, so the sender gates them on it.
+#
+# The second half was a hole introduced BY the paid-access fix above: checking
+# plan and status but not the subscription's own end date meant a lapsed plan
+# whose status was never updated kept access forever, and the hourly sweep never
+# removed it. Hence the asymmetry now documented on has_paid_access: a missing
+# status fails open, an elapsed end date fails closed.
+
+_PAST = '2020-01-01T00:00:00Z'
+_FUTURE = '2099-01-01T00:00:00Z'
+
+
+@pytest.mark.parametrize('key', ['current_period_end', 'expires_at', 'end_date'])
+def test_an_elapsed_paid_term_ends_access(key):
+    doc = {'plan': 'pro', 'subscription': {'status': 'active', key: _PAST}}
+    assert main.has_paid_access(doc) is False, (
+        f'a paid plan whose {key} has passed still had access — the sweep would '
+        f'never disconnect it'
+    )
+
+
+@pytest.mark.parametrize('key', ['current_period_end', 'expires_at', 'end_date'])
+def test_a_running_paid_term_keeps_access(key):
+    doc = {'plan': 'pro', 'subscription': {'status': 'active', key: _FUTURE}}
+    assert main.has_paid_access(doc) is True
+
+
+def test_an_unparseable_end_date_does_not_revoke_access():
+    """Malformed bookkeeping is missing information, not evidence of expiry."""
+    doc = {'plan': 'pro', 'subscription': {'status': 'active',
+                                           'current_period_end': 'not-a-date'}}
+    assert main.has_paid_access(doc) is True
+
+
+def test_naive_timestamps_are_treated_as_utc():
+    assert main.has_paid_access(
+        {'plan': 'pro', 'subscription': {'current_period_end': '2020-01-01T00:00:00'}}) is False
+    assert main.has_paid_access(
+        {'plan': 'pro', 'subscription': {'current_period_end': '2099-01-01T00:00:00'}}) is True
+
+
+def test_the_sweep_disconnects_a_lapsed_paid_plan(monkeypatch):
+    """The user-facing requirement: a finished PAID plan disconnects Telegram."""
+    monkeypatch.setattr(main, 'get_user_doc', lambda e: {
+        'plan': 'pro',
+        'subscription': {'status': 'active', 'current_period_end': _PAST},
+        'trial_end': _PAST,
+    })
+    assert main.is_trial_expired('lapsed@example.test') is True
+
+
+def test_the_sweep_disconnects_a_finished_trial(monkeypatch):
+    """And a finished TRIAL disconnects too — the other half of the requirement."""
+    monkeypatch.setattr(main, 'get_user_doc', lambda e: {
+        'plan': 'trial', 'trial_end': _PAST,
+    })
+    assert main.is_trial_expired('lapsed-trial@example.test') is True
+
+
+def test_a_live_trial_user_still_receives_signals(monkeypatch):
+    """Trial users are first-class here: connected, gated on trial_end, delivered
+    while it is in the future."""
+    monkeypatch.setattr(main, 'get_user_doc', lambda e: {
+        'plan': 'trial', 'trial_end': _FUTURE,
+    })
+    assert main.is_trial_expired('live-trial@example.test') is False
+    assert main._tg_access_until('live-trial@example.test') == _FUTURE
+
+
+def test_the_sweep_keeps_a_live_paid_plan(monkeypatch):
+    monkeypatch.setattr(main, 'get_user_doc', lambda e: {
+        'plan': 'pro',
+        'subscription': {'status': 'active', 'current_period_end': _FUTURE},
+        'trial_end': _PAST,
+    })
+    assert main.is_trial_expired('paid@example.test') is False
+
+
 def test_the_skip_is_no_longer_silent():
     """A dropped send that logs nothing is indistinguishable from no signal."""
     from pathlib import Path

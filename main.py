@@ -1834,6 +1834,15 @@ def _telegram_cleanup_pass() -> None:
     for email in list(_tg_connections):
         try:
             if is_trial_expired(email):
+                # Both endings land here, and the log says which. A TRIAL running
+                # out and a PAID TERM running out are the same outcome for delivery
+                # but very different things to see in a log when a subscriber says
+                # "my Telegram stopped".
+                _doc = get_user_doc(email) or {}
+                _plan = str(_doc.get("plan") or "?")
+                _why = ('paid plan ended' if _plan.lower() in PAID_PLANS
+                        else f'{_plan} access ended')
+                print(f"[TG cleanup] {email}: {_why} — disconnecting Telegram")
                 to_remove.append(email)
             else:
                 entry = _tg_connections.get(email)
@@ -3258,14 +3267,56 @@ _DEAD_SUB_STATUS = frozenset({
 })
 
 
+def _parse_ts(raw: Any) -> Optional[datetime]:
+    """ISO string or datetime -> tz-aware UTC datetime; None when unusable."""
+    if not raw:
+        return None
+    if isinstance(raw, datetime):
+        return raw if raw.tzinfo else raw.replace(tzinfo=timezone.utc)
+    try:
+        d = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
+    return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+
+
+def _sub_end_ts(sub: Any) -> Optional[datetime]:
+    """When this subscription's paid term ends, if it says."""
+    if not isinstance(sub, dict):
+        return None
+    for key in ("current_period_end", "expires_at", "end_date"):
+        ts = _parse_ts(sub.get(key))
+        if ts:
+            return ts
+    return None
+
+
 def has_paid_access(user_doc: Optional[Dict[str, Any]]) -> bool:
-    """True when this user holds a paid plan that has not been cancelled."""
+    """True when this user holds a paid plan whose term is still running.
+
+    Note the deliberate asymmetry between the two ways access can end:
+
+      * a MISSING or unrecognised `subscription.status` fails OPEN. Absent
+        bookkeeping is not a cancellation, and reading it as one is what stopped a
+        paying subscriber's Telegram entirely.
+      * an ELAPSED end date fails CLOSED. That is not missing information — it is
+        the subscription stating when it ends, and that date passing is exactly
+        what "the plan ended" means.
+
+    Without the second check a lapsed plan whose status field was never updated
+    would keep access forever, and the hourly sweep would never disconnect it.
+    """
     plan = str((user_doc or {}).get("plan") or "").lower()
     if plan not in PAID_PLANS:
         return False
     sub = (user_doc or {}).get("subscription") or {}
     status = str(sub.get("status") or "").lower() if isinstance(sub, dict) else ""
-    return status not in _DEAD_SUB_STATUS
+    if status in _DEAD_SUB_STATUS:
+        return False
+    end = _sub_end_ts(sub)
+    if end is not None and datetime.now(timezone.utc) > end:
+        return False        # the plan's own term has run out
+    return True
 
 
 def is_trial_expired(email: str) -> bool:
