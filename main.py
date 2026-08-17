@@ -4681,17 +4681,32 @@ async def initialize_subscription(
 # it is a genuine footgun when reading logs or the database:
 #
 #   customer sees   internal key    price
-#   Starter         basic           $5.90
-#   Pro             intermediate    $14.00   <- "Pro" is the MIDDLE tier
-#   Advanced        pro             $30.00   <- internal 'pro' is the TOP tier
+#   Basic           basic           $6.00
+#   Sentinel        intermediate    $12.00   <- the MIDDLE tier
+#   AEGIS Pro       pro             $18.00   <- internal 'pro' is the TOP tier
 #
-# Prices are also the source of truth for DODO/Razorpay only. Under Paddle the
-# amount lives on the Paddle price; this table drives display and the other
-# gateways, so the two must be kept in step by hand.
+# (The names above were stale too: this block read Starter / Pro / Advanced at
+# $5.90 / $14 / $30 while PLAN_DISPLAY_NAMES and pricing.html sold Basic /
+# Sentinel / AEGIS Pro at $8 / $14 / $30 — three prices and three names, none of
+# which agreed with the dict directly beneath them.)
+#
+# ⚠ THIS TABLE DOES NOT SET WHAT ANYONE IS CHARGED.
+#
+# POST /api/v1/payments/subscription/initialize sends ONLY {"plan_id": ...} to
+# Razorpay. The amount lives on the Razorpay PLAN object, created in their
+# dashboard, and Razorpay plans are immutable — an amount cannot be edited, a new
+# plan has to be created. Paddle is the same: the amount lives on the Paddle
+# price. So this dict drives DISPLAY and the DODO path, and nothing else.
+#
+# Lowering the numbers here without creating new gateway plans and repointing
+# RAZORPAY_PLAN_ID_* / PADDLE_PRICE_ID_* makes the site advertise one price and
+# charge another. Keep them in step by hand, in the same change.
+#
+# Prices lowered to 6 / 12 / 18 on 2026-08-17.
 USD_PLAN_PRICES: Dict[str, float] = {
-    "basic": 8.00,
-    "intermediate": 14.00,
-    "pro": 30.00,
+    "basic": 6.00,
+    "intermediate": 12.00,
+    "pro": 18.00,
 }
 
 # Customer-facing label for each internal tier.
