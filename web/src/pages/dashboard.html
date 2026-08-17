@@ -90,6 +90,52 @@
             margin-top: 0.3rem;
             line-height: 1.4;
         }
+
+        /* ── The logo is the way home, and it has to look like it ──────────────
+           It navigated correctly before but read as decoration: no cursor, no
+           hover, no tooltip. The affordance is deliberately quiet at rest — this
+           is a brand mark, not a nav button — and becomes unmistakable on hover:
+           a panel lifts behind it, the bolt nudges left (backwards = going back),
+           and a HOME chip fades in. */
+        .aegis-home-link {
+            cursor: pointer;
+            border: 1px solid transparent;
+            text-decoration: none;
+        }
+        .aegis-home-link:hover {
+            background: rgba(184, 150, 106, 0.10);
+            border-color: rgba(184, 150, 106, 0.35);
+        }
+        .aegis-home-link:focus-visible {
+            outline: 2px solid rgba(184, 150, 106, 0.75);
+            outline-offset: 2px;
+        }
+        .aegis-home-hint {
+            color: #B8966A;
+            opacity: 0;
+            max-width: 0;
+            overflow: hidden;
+            white-space: nowrap;
+            transform: translateX(-4px);
+            transition: opacity .18s ease, max-width .22s ease, transform .18s ease;
+        }
+        .aegis-home-link:hover .aegis-home-hint,
+        .aegis-home-link:focus-visible .aegis-home-hint {
+            opacity: .95;
+            max-width: 5rem;
+            transform: translateX(0);
+        }
+        /* Touch devices get no hover, so the hint would never appear. Show it
+           permanently there instead of leaving the affordance invisible — which
+           is the state that caused the confusion in the first place. */
+        @media (hover: none) {
+            .aegis-home-hint { opacity: .8; max-width: 5rem; transform: none; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .aegis-home-link, .aegis-home-link *, .aegis-home-hint {
+                transition: none !important;
+            }
+        }
         .beginner-tip {
             margin-top: 0.75rem;
             padding: 0.6rem 0.875rem;
@@ -242,12 +288,23 @@
             </button>
 
             <div class="flex items-center gap-2">
-                <button id="aegis-logo-btn" onclick="window.location.href='/'"
-                    class="flex items-center gap-2 transition-colors" style="color:#B8966A">
-                    <i class="fas fa-bolt" style="color:#B8966A"></i>
+                <!-- Home link. Was a <button onclick=...> that navigated correctly but
+                     looked inert: no cursor change, no hover state, no tooltip, and no
+                     href for the browser to preview in the status bar. Users could not
+                     tell it was the way back to the landing page. Now a real anchor, so
+                     it gets link semantics for free (middle-click, open-in-new-tab,
+                     keyboard focus, screen-reader "link") on top of the visual cues. -->
+                <a id="aegis-logo-btn" href="/" title="Back to AEGIS home"
+                    aria-label="Back to AEGIS home page"
+                    class="aegis-home-link group flex items-center gap-2 rounded-lg px-2 py-1 -ml-2 transition-all"
+                    style="color:#B8966A">
+                    <i class="fas fa-bolt transition-transform group-hover:-translate-x-0.5" style="color:#B8966A"></i>
                     <span
                         class="font-black tracking-tight text-xl bg-clip-text text-transparent" style="background:linear-gradient(to right,#EAE6DF,#B8966A);-webkit-background-clip:text">AEGIS</span>
-                </button>
+                    <span class="aegis-home-hint hidden sm:inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider">
+                        <i class="fas fa-house text-[9px]"></i>Home
+                    </span>
+                </a>
                 <span
                     class="hidden sm:inline-block text-xs px-2 py-0.5 rounded-full ml-2" style="background:rgba(184,150,106,0.12);color:#B8966A;border:1px solid rgba(184,150,106,0.3);">v1.0</span><span class="hidden sm:inline-block text-xs px-2 py-0.5 rounded-full ml-1" style="background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.3);">BETA</span>
             </div>
@@ -1341,6 +1398,172 @@
                             <div class="text-[11px] text-gray-400 leading-tight">Daily drawdown limit — stop trading for the day</div>
                         </div>
                     </div>
+                </div>
+
+                <!-- ── WHAT THE ENGINE REFUSES (v88) ───────────────────────────
+                     The five rules above are yours to apply by hand. This panel is
+                     what the engine now enforces before a signal ever reaches you,
+                     so subscribers can tell which guardrails are automatic and
+                     which are still their own job. Every number here is read from
+                     the live config — if you change MIN_FIRE_QUALITY, MAX_STOP_PCT,
+                     MIN_NET_R or the book caps, update this panel in the same
+                     commit or it becomes a promise the engine no longer keeps. -->
+                <div class="glass-panel p-5 rounded-xl border border-cyan-500/20 bg-cyan-500/[0.02]">
+                    <h3 class="text-xs uppercase tracking-widest text-cyan-400/80 font-bold mb-1 flex items-center gap-2">
+                        <i class="fas fa-shield-halved"></i> What AEGIS Refuses To Trade — Automatic Guardrails
+                    </h3>
+                    <p class="text-[11px] text-gray-500 mb-4 leading-relaxed">
+                        These are enforced by the engine <em>before</em> a signal is published — you do not
+                        have to check them. They exist because each one was measured against real losing
+                        trades. Knowing what is already filtered tells you what is left for you to judge.
+                    </p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div class="bg-black/30 rounded-xl p-3.5 border border-white/5">
+                            <div class="flex items-baseline gap-2 mb-1">
+                                <span class="text-lg font-black text-cyan-300">45<span class="text-xs text-gray-500">/100</span></span>
+                                <span class="text-[11px] font-bold text-gray-300 uppercase tracking-wide">Signal quality floor</span>
+                            </div>
+                            <p class="text-[11px] text-gray-400 leading-relaxed">
+                                A setup scoring below <strong>45</strong> is not traded, however confident the
+                                model is. The score weighs trend, momentum, volume, regime confidence, funding,
+                                open interest, higher-timeframe context and candle structure. Previously nothing
+                                enforced this and a signal scoring <strong>0/100</strong> could hold a slot.
+                            </p>
+                        </div>
+
+                        <div class="bg-black/30 rounded-xl p-3.5 border border-white/5">
+                            <div class="flex items-baseline gap-2 mb-1">
+                                <span class="text-lg font-black text-cyan-300">1 ATR</span>
+                                <span class="text-[11px] font-bold text-gray-300 uppercase tracking-wide">Must be at its level</span>
+                            </div>
+                            <p class="text-[11px] text-gray-400 leading-relaxed">
+                                A BUY must sit within 1 ATR of the support it leans on, a SELL within 1 ATR of
+                                its resistance. Entries taken mid-range — where the setup's own premise is
+                                absent — are refused. If price is further out but still in reach, the signal
+                                becomes a <strong>working order at the level</strong> that expires after 8 bars
+                                rather than chasing.
+                            </p>
+                        </div>
+
+                        <div class="bg-black/30 rounded-xl p-3.5 border border-white/5">
+                            <div class="flex items-baseline gap-2 mb-1">
+                                <span class="text-lg font-black text-cyan-300">0.50–1.30%</span>
+                                <span class="text-[11px] font-bold text-gray-300 uppercase tracking-wide">Stop distance band</span>
+                            </div>
+                            <p class="text-[11px] text-gray-400 leading-relaxed">
+                                Every stop is placed beyond the level that invalidates the trade, then bounded
+                                to this band as a risk budget. A stop tighter than 0.50% sits inside normal
+                                noise and gets taken out by a wick; wider than 1.30% and the loss is too large
+                                for the ladder to pay back.
+                            </p>
+                        </div>
+
+                        <div class="bg-black/30 rounded-xl p-3.5 border border-white/5">
+                            <div class="flex items-baseline gap-2 mb-1">
+                                <span class="text-lg font-black text-cyan-300">1:1.6</span>
+                                <span class="text-[11px] font-bold text-gray-300 uppercase tracking-wide">Net R:R after costs</span>
+                            </div>
+                            <p class="text-[11px] text-gray-400 leading-relaxed">
+                                Measured <em>net</em> — fees and spread come off the win and are added to the
+                                loss, the way they actually land. The objective must be a real structural level
+                                at least 1.5 ATR away, not a projection. A setup that only pays on paper is
+                                rejected at this stage.
+                            </p>
+                        </div>
+
+                        <div class="bg-black/30 rounded-xl p-3.5 border border-white/5">
+                            <div class="flex items-baseline gap-2 mb-1">
+                                <span class="text-lg font-black text-cyan-300">5 &middot; 2</span>
+                                <span class="text-[11px] font-bold text-gray-300 uppercase tracking-wide">Book &amp; cluster caps</span>
+                            </div>
+                            <p class="text-[11px] text-gray-400 leading-relaxed">
+                                At most <strong>5</strong> positions open at once, and at most <strong>2</strong>
+                                in the same correlated group. Eight alt shorts opened in one hour is one bet
+                                wearing eight tickets — that basket is exactly what this cap exists to stop.
+                                Counter-tide trades are also sized down by half.
+                            </p>
+                        </div>
+
+                        <div class="bg-black/30 rounded-xl p-3.5 border border-white/5">
+                            <div class="flex items-baseline gap-2 mb-1">
+                                <span class="text-lg font-black text-cyan-300">TP1 &rarr; BE</span>
+                                <span class="text-[11px] font-bold text-gray-300 uppercase tracking-wide">Break-even ratchet</span>
+                            </div>
+                            <p class="text-[11px] text-gray-400 leading-relaxed">
+                                The moment TP1 (1.5%) is tagged, a partial is banked and the stop moves to your
+                                entry price. From that point the trade cannot lose. If you are following signals
+                                manually, <strong>move your stop to entry when TP1 fills</strong> — this is the
+                                single highest-value habit on this page.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── THE TWO SCORES ──────────────────────────────────────────
+                     Cards show Signal Quality and AI Confidence side by side and
+                     they routinely disagree (measured live: quality 61 with
+                     confidence 44). Subscribers read that as a contradiction. It
+                     is not — they answer different questions. -->
+                <div class="glass-panel p-5 rounded-xl border border-purple-500/20 bg-purple-500/[0.02]">
+                    <h3 class="text-xs uppercase tracking-widest text-purple-400/80 font-bold mb-1 flex items-center gap-2">
+                        <i class="fas fa-circle-question"></i> Signal Quality vs AI Confidence — They Are Not The Same Number
+                    </h3>
+                    <p class="text-[11px] text-gray-500 mb-4 leading-relaxed">
+                        Every card shows both, and they often disagree. That is not a bug — they answer
+                        different questions, and knowing which is which changes how you size.
+                    </p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div class="bg-black/30 rounded-xl p-3.5 border border-white/5">
+                            <div class="text-[11px] font-bold text-cyan-300 uppercase tracking-wide mb-1.5">Signal Quality /100</div>
+                            <p class="text-[11px] text-gray-400 leading-relaxed">
+                                <strong>How good is the setup?</strong> An absolute reading of the market context
+                                — trend, volume, regime, funding, higher timeframes, candles. Comparable across
+                                tokens and across days. <strong class="text-gray-300">This is the one with a
+                                hard floor at 45.</strong>
+                            </p>
+                        </div>
+                        <div class="bg-black/30 rounded-xl p-3.5 border border-white/5">
+                            <div class="text-[11px] font-bold text-amber-300 uppercase tracking-wide mb-1.5">AI Confidence %</div>
+                            <p class="text-[11px] text-gray-400 leading-relaxed">
+                                <strong>How unusual is this bar for this token?</strong> A percentile rank of the
+                                model's edge against its own recent history. It is <em>relative</em>: in a quiet
+                                stretch an ordinary bar can rank high. Useful for timing, but it says nothing
+                                absolute about setup quality — which is why it is not the floor.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="beginner-tip mt-3" style="border-color:rgba(168,85,247,0.2);background:rgba(168,85,247,0.04);">
+                        <i class="fas fa-lightbulb" style="color:rgba(168,85,247,0.6);"></i>
+                        <span>Rule 3 above — <strong>70%+ AI confidence for real money</strong> — is still
+                        <em>your</em> bar, on top of the engine's. The engine will publish a quality-50 signal;
+                        whether you take it with real capital is your call, and holding out for both a high
+                        quality score and high confidence is the conservative choice.</span>
+                    </div>
+                </div>
+
+                <!-- ── RISKY TIER ──────────────────────────────────────────────
+                     Same disclosure as the public track record, repeated where a
+                     subscriber is about to size a position. The published
+                     portfolio does trade RISKY-tagged signals. -->
+                <div class="glass-panel p-5 rounded-xl border border-red-500/25 bg-red-500/[0.03]">
+                    <h3 class="text-xs uppercase tracking-widest text-red-400/90 font-bold mb-2 flex items-center gap-2">
+                        <i class="fas fa-triangle-exclamation"></i> About Signals Tagged <span class="px-1.5 py-0.5 rounded bg-red-500/15 border border-red-500/30">RISKY</span>
+                    </h3>
+                    <p class="text-[11px] text-gray-400 leading-relaxed">
+                        A <strong>RISKY</strong> tag means the engine took the trade but flagged it — thinner
+                        payoff, a weaker location, or a counter-trend thesis. <strong class="text-red-300">The
+                        portfolio published on our track record does include RISKY-tier signals.</strong> Treat
+                        them with your own analysis and trade them on <strong>paper first</strong>. They are not
+                        a lower-conviction version of the same trade; they are a different risk profile, and
+                        sizing them like a STRONG signal is how a good month turns into a bad one.
+                    </p>
+                    <p class="text-[11px] text-gray-500 leading-relaxed mt-2">
+                        Mean-reversion setups — fading a move back into a level — are scored on their own merits
+                        rather than penalised for being counter-trend, so a genuine reversal at a level can now
+                        clear the quality floor. Counter-trend trades remain the harder half of the book: size
+                        them smaller than trend-following entries.
+                    </p>
                 </div>
 
                 <!-- ── CAPITAL TIERS ───────────────────────────────────────── -->
