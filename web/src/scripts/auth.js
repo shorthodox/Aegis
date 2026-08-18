@@ -302,17 +302,38 @@ export async function completeGoogleSignupWithPhone(user, phone) {
 // OTP helpers â€” call backend before creating Firebase account
 // ============================================================
 export async function sendOTPForSignup(email, phone = null) {
+  // Bounded at 20s. `fetch` has NO default timeout, so a server that stops
+  // answering leaves this promise pending forever — and signup-ui awaits it
+  // before calling setLoading(false), which is why "Sending verification code…"
+  // span the spinner indefinitely instead of failing. The server-side cause was a
+  // blocking Firestore write against an exhausted quota; this is the half that
+  // guarantees the user always gets an answer regardless of the cause.
+  //
+  // 20s is deliberately longer than every server-side deadline on this path
+  // (8s reads, 6s write, 12s SMS) so a real backend error message wins the race
+  // and the user sees THAT rather than a generic timeout.
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 20000);
   try {
     const res = await fetch('/auth/send-otp-for-registration', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, phone })
+      body: JSON.stringify({ email, phone }),
+      signal: ctl.signal,
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) return { success: false, message: data.detail || 'Failed to send OTP' };
     return { success: true, message: data.message, via: data.via || 'email' };
-  } catch {
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      return {
+        success: false,
+        message: 'That took too long — the code was not sent. Please try again in a minute.',
+      };
+    }
     return { success: false, message: 'Network error. Please try again.' };
+  } finally {
+    clearTimeout(timer);
   }
 }
 
