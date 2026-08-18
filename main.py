@@ -957,6 +957,36 @@ def _otp_find_by_signup_token(token: str) -> Optional[str]:
         return doc.id
     return None
 
+async def _fs_await(fn, *args, timeout: float = 8.0, what: str = "datastore"):
+    """Run a BLOCKING Firestore call off the event loop, with a deadline.
+
+    Every helper in this file (get_user_doc, _otp_get, _otp_set, ...) ends in a
+    synchronous google-cloud-firestore call. Called directly from an `async def`
+    handler they block the whole event loop, not just their own request — so one
+    slow write stalls every other user's page as well.
+
+    That is exactly what "Sending verification code…" hanging forever was. With
+    the daily write quota exhausted, _otp_set retried with backoff for up to a
+    minute while holding the loop, and the browser had no timeout of its own, so
+    the spinner never resolved and the rest of the site went sticky at the same
+    time.
+
+    NOTE on cancellation: wait_for cancels the AWAIT, not the thread. A timed-out
+    Firestore call keeps running in the executor until it gives up on its own.
+    That is acceptable here — the point is to free the request and answer the user
+    honestly — but it means a timeout is not a rollback, and a write that reports
+    a timeout may still land.
+    """
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(fn, *args), timeout=timeout)
+    except asyncio.TimeoutError:
+        print(f"[Firestore] {what} exceeded {timeout:.0f}s — quota exhausted or unreachable")
+        raise HTTPException(
+            status_code=503,
+            detail="Our datastore is not responding right now. Please try again in a few minutes.",
+        )
+
+
 def _otp_find_by_phone(phone: str) -> Optional[str]:
     """Return the email (doc ID) whose phone_number matches, or None."""
     docs = db.collection(_OTP_COL).where("phone_number", "==", phone).limit(1).stream()
@@ -3866,22 +3896,26 @@ async def send_otp_for_registration(request: OTPSendRequest, req: Request):
     except Exception as exc:
         raise HTTPException(status_code=422, detail=f"Invalid email format: {str(exc)}")
 
-    existing_user = get_user_doc(email)
+    # All three of these end in a blocking Firestore round trip — see _fs_await.
+    existing_user = await _fs_await(get_user_doc, email, what="user lookup")
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered. Please sign in.")
-    if is_cooldown_active(email):
+    if await _fs_await(is_cooldown_active, email, what="OTP cooldown check"):
         raise HTTPException(status_code=429, detail="Too many requests. Please wait before requesting another OTP.")
     otp = generate_otp()
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
     cooldown_until = datetime.now(timezone.utc) + timedelta(seconds=60)
-    _otp_set(email, {
+    # The WRITE is the one that hung. Bounded tighter than the reads because the
+    # user is watching a spinner, and an OTP we cannot store is an OTP we could
+    # never verify — better to say so in 6 seconds than stall for a minute.
+    await _fs_await(_otp_set, email, {
         "otp": otp,
         "expires_at": expires_at,
         "cooldown_until": cooldown_until,
         "phone_number": phone_number,
         "email": email,
         "verified": False,
-    })
+    }, timeout=6.0, what="OTP write")
     sms_sent = False
     try:
         sms_sent = await _send_sms_otp(phone_number, otp)
