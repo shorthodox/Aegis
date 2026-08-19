@@ -567,7 +567,49 @@ export async function handleEmailSignup(email, password, displayName, signupToke
     console.error('âŒ Email signup error:', error.code, error.message);
     let message = 'Signup failed. Please try again.';
     if (error.code === 'auth/email-already-in-use') {
-      return { success: false, needsSignin: true, message: 'This email is already registered. Sign in to your account instead.' };
+      // ADOPT A HALF-CREATED ACCOUNT INSTEAD OF DEAD-ENDING ON IT.
+      //
+      // createUserWithEmailAndPassword creates a PERMANENT Firebase Auth account.
+      // If anything after it fails — the profile write, the backend provision —
+      // the email is burned: every retry lands here and the user is told to
+      // "sign in" to an account that has no profile, which then reports "No
+      // account found". They are locked out of their own address by a failure
+      // that had nothing to do with them.
+      //
+      // Recovery is safe here, and only here, because both proofs are already in
+      // hand: they proved they own the address by entering the emailed OTP
+      // moments ago, and they are about to prove they know the password by
+      // signing in with it. If the password does not match, this is somebody
+      // else's account and we fall through to the original message unchanged —
+      // so this cannot be used to take over an account.
+      try {
+        const recovered = await signInWithEmailAndPassword(auth, email, password);
+        const rUser = recovered.user;
+        console.warn('[signup] adopting an existing account for', email,
+                     '— a previous attempt created it but did not finish');
+        try { await ensureUserDocumentV2(rUser, 'email'); } catch (_) {}
+        const rToken = await rUser.getIdToken();
+        try {
+          await fetch('/api/users/provision', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${rToken}` },
+            body: JSON.stringify({
+              uid: rUser.uid, email: rUser.email, display_name: displayName,
+              provider: 'password', signup_token: signupToken,
+              phone_number: mobile || null,
+            }),
+          });
+        } catch (_) {}
+        AuthManager.setToken(rToken);
+        AuthManager.setUser({ uid: rUser.uid, email: rUser.email,
+                              displayName: displayName, plan: 'trial' });
+        localStorage.setItem('authenticated', 'true');
+        return { success: true, user: rUser, message: 'Account created successfully!' };
+      } catch (recoverErr) {
+        // Wrong password — a genuine duplicate belonging to someone else.
+        console.warn('[signup] existing account not recoverable:', recoverErr?.code);
+        return { success: false, needsSignin: true, message: 'This email is already registered. Sign in to your account instead.' };
+      }
     } else if (error.code === 'auth/invalid-email') {
       message = 'Invalid email address. Please check and try again.';
     } else if (error.code === 'auth/weak-password') {
