@@ -107,13 +107,58 @@ def _fs_load_track_record() -> Optional[dict]:
         return None
 
 
+def _write_empty_track_record() -> None:
+    """Empty the local record, stamped with the CURRENT generation.
+
+    Stamping matters: an empty file written without a generation would read as
+    generation 1 on the next boot and trip the wipe again every restart.
+    """
+    from datetime import datetime, timezone
+    TRACK_RECORD_PATH.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        'generated_at': datetime.now(timezone.utc).isoformat(),
+        'generation':   STATE_GENERATION,
+        'summary':      {},
+        'signals':      [],
+    }
+    tmp = TRACK_RECORD_PATH.with_suffix('.tmp')
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(payload, f, indent=2)
+    tmp.replace(TRACK_RECORD_PATH)
+
+
 def _hydrate_track_record_from_firestore() -> None:
     """On boot, if the local track record is missing/empty (ephemeral FS after a
     redeploy), restore it from Firestore so history is never lost.  Writes the
     same file VirtualWallet._load_history reads, so restore is transparent."""
     try:
         if TRACK_RECORD_PATH.exists() and TRACK_RECORD_PATH.stat().st_size > 2:
-            return  # local state already present — nothing to restore
+            # A STATE_GENERATION bump is the deploy-triggered wipe, and it has to
+            # be able to reach THIS file. Previously the generation was only ever
+            # compared against the Firestore copy — which this early return meant
+            # we never even loaded whenever a populated local record existed. So a
+            # bump could not clear the one file that was keeping stale history
+            # alive, and _save_track_record's orphan-preservation (positions.py:
+            # "records are never lost due to restarts or wallet resets") wrote
+            # every one of them straight back on the next save.
+            try:
+                with open(TRACK_RECORD_PATH, 'r', encoding='utf-8') as _f:
+                    _local = json.load(_f)
+            except Exception:
+                _local = {}
+            if int(_local.get('generation', 1) or 1) != STATE_GENERATION:
+                _n = len(_local.get('signals') or [])
+                print(f'[state] local track record is generation '
+                      f'{_local.get("generation", 1)} != {STATE_GENERATION} — '
+                      f'wiping {_n} stale entries (one-time)')
+                _write_empty_track_record()
+                try:
+                    _fs_clear_track_record()
+                except Exception as _e:
+                    print(f'[state] Firestore copy not cleared ({_e}) — '
+                          f'the local wipe still stands')
+                return
+            return  # current generation, local state present — nothing to restore
         data = _fs_load_track_record()
         if not data or not data.get('signals'):
             return
