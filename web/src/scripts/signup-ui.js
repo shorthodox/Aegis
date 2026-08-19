@@ -874,8 +874,54 @@ export function closeSignUpModal() {
   }
 }
 
+/** Verify an account that already exists but never completed verification.
+ *
+ * Sign-in used to dead-end these: "Your account setup is incomplete. Please sign
+ * up and complete phone verification", with a link that reopened a BLANK signup
+ * form. The user then retyped everything they had just typed, to create an
+ * account that already existed. Nothing about that asked them for the one thing
+ * actually missing — the code.
+ *
+ * This opens the modal straight at the OTP step for the address they just tried
+ * to sign in with. On verify, handleStep2Verify runs the normal completion path;
+ * createUserWithEmailAndPassword returns auth/email-already-in-use and the
+ * recovery branch in auth.js adopts the existing account, rebuilds its profile
+ * and backend record, and signs them in.
+ *
+ * The password comes from the sign-in attempt that just succeeded against
+ * Firebase Auth, so it is known-good — which is exactly what the recovery branch
+ * needs to prove ownership before adopting.
+ */
+export async function openVerifyExistingAccount({ email, password, mobile = '', name = '' } = {}) {
+  if (!email) return;
+  const modal = document.getElementById('signupModal');
+  if (modal) {
+    modal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  }
+  _flow = 'email';
+  _pending = { name: name || email.split('@')[0], email, password, mobile };
+  _otpEmail = email;
+
+  showStep1();
+  setLoading(true, 'Sending verification code…');
+  const result = await sendOTPForSignup(email, mobile || null);
+  setLoading(false);
+
+  if (!result.success) {
+    showError('signupFormError', result.message || 'Could not send a verification code. Please try again.');
+    return;
+  }
+  _otpVia = result.via || 'email';
+  showStep2(_otpVia, mobile, email);
+  startResendCountdown(60);
+}
+
 function listenForSignupEvent() {
   window.addEventListener('openSignup', openSignUpModal);
+  window.addEventListener('verifyExistingAccount', (ev) => {
+    openVerifyExistingAccount(ev.detail || {});
+  });
 }
 
 // ============================================================

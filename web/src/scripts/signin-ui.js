@@ -217,11 +217,15 @@ async function performEmailSignin(e) {
         }
       }, 1000);
     } else if (result.needsVerification) {
-      showError('signinFormError', result.message || 'Account setup is incomplete. Please sign up again and complete phone verification.');
-      _appendActionLink('signinFormError', 'Complete Sign Up →', () => {
-        closeSignInModal();
-        window.dispatchEvent(new CustomEvent('openSignup'));
-      });
+      // Send them straight to the OTP step for THIS address instead of a blank
+      // signup form. The password they just entered authenticated against
+      // Firebase Auth, so it is known-good and is what the recovery branch in
+      // handleEmailSignup needs to adopt the existing account.
+      showError('signinFormError', result.message || 'Your account was never verified — sending a code now.');
+      closeSignInModal();
+      window.dispatchEvent(new CustomEvent('verifyExistingAccount', {
+        detail: { email, password },
+      }));
     } else if (result.needsSignup) {
       showError('signinFormError', result.message);
       _appendActionLink('signinFormError', 'Create an account →', () => {
