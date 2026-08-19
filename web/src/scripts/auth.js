@@ -481,8 +481,29 @@ export async function handleEmailSignup(email, password, displayName, signupToke
       photoURL: `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=00f2ff&color=000`
     });
 
-    // Create Firestore document immediately (email was verified via OTP)
-    const userData = await ensureUserDocumentV2(user, 'email');
+    // Create the Firestore profile — BEST EFFORT, never fatal.
+    //
+    // createUserWithEmailAndPassword has already succeeded above, so the Firebase
+    // Auth account exists from this line onward. Throwing here therefore does not
+    // "cancel" the signup: it strands the user with an Auth account and no
+    // profile, which is precisely the state that produces "No account found for
+    // this email" on their next sign-in attempt. The failure mode was worse than
+    // the failure.
+    //
+    // It is also unnecessary. The authoritative record is users/{email}, written
+    // by /api/users/provision below, and gatekeeper.js provisions lazily from the
+    // Firebase user on the next dashboard load if that record is missing. Two
+    // independent paths already rebuild what this write does.
+    //
+    // Note the inversion this fixes: the backend provision below was explicitly
+    // marked non-fatal ("console.warn") while this client-side write was fatal —
+    // the less important of the two was the one that could fail a signup.
+    let userData = null;
+    try {
+      userData = await ensureUserDocumentV2(user, 'email');
+    } catch (docErr) {
+      console.warn('[signup] Firestore profile write failed (non-fatal):', docErr?.message);
+    }
 
     const idToken = await user.getIdToken();
 
@@ -529,7 +550,15 @@ export async function handleEmailSignup(email, password, displayName, signupToke
     }
 
     AuthManager.setToken(idToken);
-    AuthManager.setUser(userData);
+    // Fall back to what we already hold when the profile write did not land.
+    // A null here leaves the session with no email or plan, and the dashboard
+    // reads that as a broken account.
+    AuthManager.setUser(userData || {
+      uid: user.uid,
+      email: user.email,
+      displayName: displayName,
+      plan: 'trial',
+    });
     localStorage.setItem('authenticated', 'true');
 
     console.log('âœ… Email signup successful');
@@ -543,7 +572,11 @@ export async function handleEmailSignup(email, password, displayName, signupToke
       message = 'Invalid email address. Please check and try again.';
     } else if (error.code === 'auth/weak-password') {
       message = 'Password must be at least 8 characters.';
-    } else if (error.message) {
+    } else if (error.message && !/^[a-z0-9-]+$/.test(error.message)) {
+      // Only surface a message written for a human. `firestore-write-timeout`
+      // reached the signup form verbatim because every non-Firebase Error fell
+      // through to error.message — an internal identifier tells the user nothing
+      // and reads as a crash. The console keeps the detail for us.
       message = error.message;
     }
     return { success: false, message };
