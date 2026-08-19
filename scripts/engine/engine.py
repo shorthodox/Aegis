@@ -1743,19 +1743,41 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
                 _q_low = (_q_floor > 0 and _model_fire
                           and _model_side in ('BUY', 'SELL')
                           and float(_ctx_quality or 0.0) < _q_floor)
+                # NOT TRADEABLE IS NOT THE SAME AS NOTHING TO SAY.
+                #
+                # Both branches below used to set result['side'] = 'FLAT', which
+                # renders the card as NEUTRAL with no direction, no levels and no
+                # reasoning. Measured on the live fleet 2026-08-19: 43 of 44
+                # symbols showed NEUTRAL while the engine had a full read on
+                # nearly all of them. On a product whose whole promise is that
+                # every decision is explained, that is the glass box going dark
+                # precisely when it has something to explain.
+                #
+                # Blanking the side was never load-bearing either. The desk does
+                # not read result['side'] — _classify picks the side from
+                # range_position and the regime, and REQUIRE_MODEL_FIRE is False
+                # — and the single caller of _open_position sets
+                # result['side'] = plan.side immediately before opening. So the
+                # side is display state here, and clearing it only destroyed
+                # information.
+                #
+                # `fire` is what actually gates anything, and it still goes False
+                # in both branches. The reason is published so the card can say
+                # WHY rather than showing an empty NEUTRAL.
+                result['side'] = _model_side
                 if _hard:
-                    result['side'] = 'FLAT'
                     result['fire'] = False
+                    result['not_tradeable'] = ', '.join(_hard)
                 elif _q_low:
                     LOW_QUALITY_REFUSED['count'] += 1
-                    result['side'] = 'FLAT'
                     result['fire'] = False
                     result['quality_refused'] = True
+                    result['not_tradeable'] = (
+                        f'quality {float(_ctx_quality or 0.0):.0f} < {_q_floor:.0f} floor')
                     print(f'[{symbol}] LOW_QUALITY_REFUSED {_model_side} — quality '
                           f'{float(_ctx_quality or 0.0):.0f} < {_q_floor:.0f} floor; '
                           f'refused {LOW_QUALITY_REFUSED["count"]} signal(s) this run')
                 else:
-                    result['side'] = _model_side
                     result['fire'] = _model_fire and _model_side in ('BUY', 'SELL')
                 result['tradeable'] = True
                 # Sizing / tier conviction = the MODEL's edge (its own 0-100
