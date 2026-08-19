@@ -642,11 +642,19 @@ export async function handleEmailLogin(email, password) {
     const userDocRef = doc(db, 'users', user.uid);
     const docSnap = await getDoc(userDocRef);
     if (!docSnap.exists()) {
+      // The Auth account EXISTS and the password just worked — only the profile
+      // is missing. That is an unfinished signup, not a missing account, and
+      // calling it needsSignup sent the user to a blank registration form to
+      // re-create something they already own. It is the same state a timed-out
+      // profile write leaves behind.
+      //
+      // Reported as: "No account found for this email" on an address that
+      // demonstrably has an account.
       await signOut(auth);
       return {
         success: false,
-        needsSignup: true,
-        message: 'No account found for this email. Please create an account first.'
+        needsVerification: true,
+        message: 'Your account was never verified. Enter the code we just sent to finish setting it up.'
       };
     }
 
