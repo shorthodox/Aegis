@@ -7,7 +7,7 @@
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "NEUTRAL",
+      "direction": "LONG",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -16,15 +16,15 @@
       "pending_entry": false,
       "quality_score": 71.0,
       "regime": "RANGING",
-      "risk_reward": 0,
+      "risk_reward": 2.31,
       "signal": "HOLD",
       "signal_strength": "NEUTRAL",
-      "suggested_sl": null,
-      "suggested_tp": null,
-      "tp2": null,
-      "tp3": null,
-      "tp4": null,
-      "tp5": null
+      "suggested_sl": 98.7,
+      "suggested_tp": 101.5,
+      "tp2": 103.0,
+      "tp3": 103.75,
+      "tp4": 105.25,
+      "tp5": 106.0
     }
   },
   "buy_at_support": {
@@ -35,7 +35,7 @@
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "NEUTRAL",
+      "direction": "LONG",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -44,15 +44,15 @@
       "pending_entry": false,
       "quality_score": 81.0,
       "regime": "RANGING",
-      "risk_reward": 0,
+      "risk_reward": 2.31,
       "signal": "HOLD",
       "signal_strength": "NEUTRAL",
-      "suggested_sl": null,
-      "suggested_tp": null,
-      "tp2": null,
-      "tp3": null,
-      "tp4": null,
-      "tp5": null
+      "suggested_sl": 98.7,
+      "suggested_tp": 101.5,
+      "tp2": 103.0,
+      "tp3": 103.75,
+      "tp4": 105.25,
+      "tp5": 106.0
     }
   },
   "buy_atr_below_soft": {
@@ -63,7 +63,7 @@
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "NEUTRAL",
+      "direction": "LONG",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -72,15 +72,15 @@
       "pending_entry": false,
       "quality_score": 71.0,
       "regime": "RANGING",
-      "risk_reward": 0,
+      "risk_reward": 2.31,
       "signal": "HOLD",
       "signal_strength": "NEUTRAL",
-      "suggested_sl": null,
-      "suggested_tp": null,
-      "tp2": null,
-      "tp3": null,
-      "tp4": null,
-      "tp5": null
+      "suggested_sl": 98.7,
+      "suggested_tp": 101.5,
+      "tp2": 103.0,
+      "tp3": 103.75,
+      "tp4": 105.25,
+      "tp5": 106.0
     }
   },
   "buy_htf_conflict": {
@@ -91,7 +91,7 @@
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "NEUTRAL",
+      "direction": "LONG",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -100,15 +100,15 @@
       "pending_entry": false,
       "quality_score": 56.0,
       "regime": "RANGING",
-      "risk_reward": 0,
+      "risk_reward": 2.31,
       "signal": "HOLD",
       "signal_strength": "NEUTRAL",
-      "suggested_sl": null,
-      "suggested_tp": null,
-      "tp2": null,
-      "tp3": null,
-      "tp4": null,
-      "tp5": null
+      "suggested_sl": 98.7,
+      "suggested_tp": 101.5,
+      "tp2": 103.0,
+      "tp3": 103.75,
+      "tp4": 105.25,
+      "tp5": 106.0
     }
   },
   "buy_liquidity_trap": {
@@ -119,7 +119,7 @@
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "NEUTRAL",
+      "direction": "LONG",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -128,15 +128,15 @@
       "pending_entry": false,
       "quality_score": 51.0,
       "regime": "LIQUIDITY_TRAP",
-      "risk_reward": 0,
+      "risk_reward": 2.31,
       "signal": "HOLD",
       "signal_strength": "NEUTRAL",
-      "suggested_sl": null,
-      "suggested_tp": null,
-      "tp2": null,
-      "tp3": null,
-      "tp4": null,
-      "tp5": null
+      "suggested_sl": 98.7,
+      "suggested_tp": 101.5,
+      "tp2": 103.0,
+      "tp3": 103.75,
+      "tp4": 105.25,
+      "tp5": 106.0
     }
   },
   "buy_low_atr": {
@@ -147,7 +147,7 @@
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "NEUTRAL",
+      "direction": "LONG",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -156,15 +156,15 @@
       "pending_entry": false,
       "quality_score": 71.0,
       "regime": "RANGING",
-      "risk_reward": 0,
+      "risk_reward": 2.31,
       "signal": "HOLD",
       "signal_strength": "NEUTRAL",
-      "suggested_sl": null,
-      "suggested_tp": null,
-      "tp2": null,
-      "tp3": null,
-      "tp4": null,
-      "tp5": null
+      "suggested_sl": 98.7,
+      "suggested_tp": 101.5,
+      "tp2": 103.0,
+      "tp3": 103.75,
+      "tp4": 105.25,
+      "tp5": 106.0
     }
   },
   "buy_low_edge": {
@@ -175,7 +175,7 @@
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "NEUTRAL",
+      "direction": "LONG",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -184,15 +184,15 @@
       "pending_entry": false,
       "quality_score": 61.0,
       "regime": "RANGING",
-      "risk_reward": 0,
+      "risk_reward": 2.31,
       "signal": "HOLD",
       "signal_strength": "NEUTRAL",
-      "suggested_sl": null,
-      "suggested_tp": null,
-      "tp2": null,
-      "tp3": null,
-      "tp4": null,
-      "tp5": null
+      "suggested_sl": 98.7,
+      "suggested_tp": 101.5,
+      "tp2": 103.0,
+      "tp3": 103.75,
+      "tp4": 105.25,
+      "tp5": 106.0
     }
   },
   "buy_no_conviction": {
@@ -203,7 +203,7 @@
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "NEUTRAL",
+      "direction": "LONG",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -212,15 +212,15 @@
       "pending_entry": false,
       "quality_score": 58.0,
       "regime": "RANGING",
-      "risk_reward": 0,
+      "risk_reward": 2.31,
       "signal": "HOLD",
       "signal_strength": "NEUTRAL",
-      "suggested_sl": null,
-      "suggested_tp": null,
-      "tp2": null,
-      "tp3": null,
-      "tp4": null,
-      "tp5": null
+      "suggested_sl": 98.7,
+      "suggested_tp": 101.5,
+      "tp2": 103.0,
+      "tp3": 103.75,
+      "tp4": 105.25,
+      "tp5": 106.0
     }
   },
   "buy_overbought": {
@@ -232,7 +232,7 @@
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "NEUTRAL",
+      "direction": "LONG",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -241,15 +241,15 @@
       "pending_entry": false,
       "quality_score": 53.0,
       "regime": "RANGING",
-      "risk_reward": 0,
+      "risk_reward": 2.31,
       "signal": "HOLD",
       "signal_strength": "NEUTRAL",
-      "suggested_sl": null,
-      "suggested_tp": null,
-      "tp2": null,
-      "tp3": null,
-      "tp4": null,
-      "tp5": null
+      "suggested_sl": 98.7,
+      "suggested_tp": 101.5,
+      "tp2": 103.0,
+      "tp3": 103.75,
+      "tp4": 105.25,
+      "tp5": 106.0
     }
   },
   "buy_tagging_htf_conf": {
@@ -380,7 +380,7 @@
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "NEUTRAL",
+      "direction": "LONG",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -389,15 +389,15 @@
       "pending_entry": false,
       "quality_score": 91.0,
       "regime": "TRENDING_BEAR",
-      "risk_reward": 0,
+      "risk_reward": 2.31,
       "signal": "HOLD",
       "signal_strength": "NEUTRAL",
-      "suggested_sl": null,
-      "suggested_tp": null,
-      "tp2": null,
-      "tp3": null,
-      "tp4": null,
-      "tp5": null
+      "suggested_sl": 98.7,
+      "suggested_tp": 101.5,
+      "tp2": 103.0,
+      "tp3": 103.75,
+      "tp4": 105.25,
+      "tp5": 106.0
     }
   },
   "buy_vol_expansion": {
@@ -408,7 +408,7 @@
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "NEUTRAL",
+      "direction": "LONG",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -417,15 +417,15 @@
       "pending_entry": false,
       "quality_score": 71.0,
       "regime": "VOLATILE_EXPANSION",
-      "risk_reward": 0,
+      "risk_reward": 2.31,
       "signal": "HOLD",
       "signal_strength": "NEUTRAL",
-      "suggested_sl": null,
-      "suggested_tp": null,
-      "tp2": null,
-      "tp3": null,
-      "tp4": null,
-      "tp5": null
+      "suggested_sl": 98.7,
+      "suggested_tp": 101.5,
+      "tp2": 103.0,
+      "tp3": 103.75,
+      "tp4": 105.25,
+      "tp5": 106.0
     }
   },
   "buy_weak_indicators": {
@@ -436,7 +436,7 @@
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "NEUTRAL",
+      "direction": "LONG",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -445,15 +445,15 @@
       "pending_entry": false,
       "quality_score": 43.0,
       "regime": "RANGING",
-      "risk_reward": 0,
+      "risk_reward": 2.31,
       "signal": "HOLD",
       "signal_strength": "NEUTRAL",
-      "suggested_sl": null,
-      "suggested_tp": null,
-      "tp2": null,
-      "tp3": null,
-      "tp4": null,
-      "tp5": null
+      "suggested_sl": 98.7,
+      "suggested_tp": 101.5,
+      "tp2": 103.0,
+      "tp3": 103.75,
+      "tp4": 105.25,
+      "tp5": 106.0
     }
   },
   "buy_wide_atr": {
@@ -530,15 +530,15 @@
       "pending_entry": false,
       "quality_score": 71.0,
       "regime": "RANGING",
-      "risk_reward": 0,
+      "risk_reward": 2.31,
       "signal": "HOLD",
       "signal_strength": "BUY",
-      "suggested_sl": null,
-      "suggested_tp": null,
-      "tp2": null,
-      "tp3": null,
-      "tp4": null,
-      "tp5": null
+      "suggested_sl": 98.7,
+      "suggested_tp": 101.5,
+      "tp2": 103.0,
+      "tp3": 103.75,
+      "tp4": 105.25,
+      "tp5": 106.0
     }
   },
   "paper_long_held": {
@@ -566,15 +566,15 @@
       "pending_entry": false,
       "quality_score": 71.0,
       "regime": "RANGING",
-      "risk_reward": 0,
+      "risk_reward": 2.31,
       "signal": "HOLD",
       "signal_strength": "BUY",
-      "suggested_sl": null,
-      "suggested_tp": null,
-      "tp2": null,
-      "tp3": null,
-      "tp4": null,
-      "tp5": null
+      "suggested_sl": 98.7,
+      "suggested_tp": 101.5,
+      "tp2": 103.0,
+      "tp3": 103.75,
+      "tp4": 105.25,
+      "tp5": 106.0
     }
   },
   "paper_long_reversal": {
@@ -602,15 +602,15 @@
       "pending_entry": false,
       "quality_score": 48.0,
       "regime": "RANGING",
-      "risk_reward": 0,
+      "risk_reward": 2.31,
       "signal": "HOLD",
       "signal_strength": "BUY",
-      "suggested_sl": null,
-      "suggested_tp": null,
-      "tp2": null,
-      "tp3": null,
-      "tp4": null,
-      "tp5": null
+      "suggested_sl": 101.3,
+      "suggested_tp": 98.5,
+      "tp2": 97.0,
+      "tp3": 96.25,
+      "tp4": 94.75,
+      "tp5": 94.0
     }
   },
   "paper_long_sl_hit": {
@@ -631,15 +631,15 @@
       "pending_entry": false,
       "quality_score": 71.0,
       "regime": "RANGING",
-      "risk_reward": 0,
+      "risk_reward": 2.31,
       "signal": "HOLD",
       "signal_strength": "BUY",
-      "suggested_sl": null,
-      "suggested_tp": null,
-      "tp2": null,
-      "tp3": null,
-      "tp4": null,
-      "tp5": null
+      "suggested_sl": 98.7,
+      "suggested_tp": 101.5,
+      "tp2": 103.0,
+      "tp3": 103.75,
+      "tp4": 105.25,
+      "tp5": 106.0
     }
   },
   "paper_long_tp3_hit": {
@@ -660,15 +660,15 @@
       "pending_entry": false,
       "quality_score": 71.0,
       "regime": "RANGING",
-      "risk_reward": 0,
+      "risk_reward": 2.31,
       "signal": "HOLD",
       "signal_strength": "BUY",
-      "suggested_sl": null,
-      "suggested_tp": null,
-      "tp2": null,
-      "tp3": null,
-      "tp4": null,
-      "tp5": null
+      "suggested_sl": 98.7,
+      "suggested_tp": 101.5,
+      "tp2": 103.0,
+      "tp3": 103.75,
+      "tp4": 105.25,
+      "tp5": 106.0
     }
   },
   "sell_aligned": {
@@ -679,7 +679,7 @@
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "NEUTRAL",
+      "direction": "SHORT",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -688,15 +688,15 @@
       "pending_entry": false,
       "quality_score": 48.0,
       "regime": "RANGING",
-      "risk_reward": 0,
+      "risk_reward": 2.31,
       "signal": "HOLD",
       "signal_strength": "NEUTRAL",
-      "suggested_sl": null,
-      "suggested_tp": null,
-      "tp2": null,
-      "tp3": null,
-      "tp4": null,
-      "tp5": null
+      "suggested_sl": 101.3,
+      "suggested_tp": 98.5,
+      "tp2": 97.0,
+      "tp3": 96.25,
+      "tp4": 94.75,
+      "tp5": 94.0
     }
   },
   "sell_at_resistance": {
@@ -707,7 +707,7 @@
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "NEUTRAL",
+      "direction": "SHORT",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -716,15 +716,15 @@
       "pending_entry": false,
       "quality_score": 48.0,
       "regime": "RANGING",
-      "risk_reward": 0,
+      "risk_reward": 2.31,
       "signal": "HOLD",
       "signal_strength": "NEUTRAL",
-      "suggested_sl": null,
-      "suggested_tp": null,
-      "tp2": null,
-      "tp3": null,
-      "tp4": null,
-      "tp5": null
+      "suggested_sl": 101.3,
+      "suggested_tp": 98.5,
+      "tp2": 97.0,
+      "tp3": 96.25,
+      "tp4": 94.75,
+      "tp5": 94.0
     }
   },
   "sell_htf_conflict": {
@@ -735,7 +735,7 @@
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "NEUTRAL",
+      "direction": "SHORT",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -744,15 +744,15 @@
       "pending_entry": false,
       "quality_score": 13.0,
       "regime": "RANGING",
-      "risk_reward": 0,
+      "risk_reward": 2.31,
       "signal": "HOLD",
       "signal_strength": "NEUTRAL",
-      "suggested_sl": null,
-      "suggested_tp": null,
-      "tp2": null,
-      "tp3": null,
-      "tp4": null,
-      "tp5": null
+      "suggested_sl": 101.3,
+      "suggested_tp": 98.5,
+      "tp2": 97.0,
+      "tp3": 96.25,
+      "tp4": 94.75,
+      "tp5": 94.0
     }
   },
   "sell_low_quality": {
@@ -763,7 +763,7 @@
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "NEUTRAL",
+      "direction": "SHORT",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -772,15 +772,15 @@
       "pending_entry": false,
       "quality_score": 28.0,
       "regime": "RANGING",
-      "risk_reward": 0,
+      "risk_reward": 2.31,
       "signal": "HOLD",
       "signal_strength": "NEUTRAL",
-      "suggested_sl": null,
-      "suggested_tp": null,
-      "tp2": null,
-      "tp3": null,
-      "tp4": null,
-      "tp5": null
+      "suggested_sl": 101.3,
+      "suggested_tp": 98.5,
+      "tp2": 97.0,
+      "tp3": 96.25,
+      "tp4": 94.75,
+      "tp5": 94.0
     }
   },
   "sell_oversold": {
@@ -792,7 +792,7 @@
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "NEUTRAL",
+      "direction": "SHORT",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -801,15 +801,15 @@
       "pending_entry": false,
       "quality_score": 30.0,
       "regime": "RANGING",
-      "risk_reward": 0,
+      "risk_reward": 2.31,
       "signal": "HOLD",
       "signal_strength": "NEUTRAL",
-      "suggested_sl": null,
-      "suggested_tp": null,
-      "tp2": null,
-      "tp3": null,
-      "tp4": null,
-      "tp5": null
+      "suggested_sl": 101.3,
+      "suggested_tp": 98.5,
+      "tp2": 97.0,
+      "tp3": 96.25,
+      "tp4": 94.75,
+      "tp5": 94.0
     }
   },
   "sell_tagging_res": {
@@ -848,7 +848,7 @@
     "paper": null,
     "position": null,
     "signal": {
-      "direction": "NEUTRAL",
+      "direction": "SHORT",
       "entry_price": 100.0,
       "evaluating": false,
       "fire": false,
@@ -857,15 +857,15 @@
       "pending_entry": false,
       "quality_score": 53.0,
       "regime": "TRENDING_BULL",
-      "risk_reward": 0,
+      "risk_reward": 2.31,
       "signal": "HOLD",
       "signal_strength": "NEUTRAL",
-      "suggested_sl": null,
-      "suggested_tp": null,
-      "tp2": null,
-      "tp3": null,
-      "tp4": null,
-      "tp5": null
+      "suggested_sl": 101.3,
+      "suggested_tp": 98.5,
+      "tp2": 97.0,
+      "tp3": 96.25,
+      "tp4": 94.75,
+      "tp5": 94.0
     }
   }
 }
