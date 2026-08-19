@@ -137,16 +137,32 @@ HARD_VETOES = frozenset({'MODEL_DRIFT_CRITICAL', 'DEAD_MARKET',
 # 57, which the previous floor deliberately refused (see
 # test_quality_fade_parity). Those are the trades this number buys.
 #
-# This is the SECOND loosening inside a day: PR #41 raised fade scores by 15-29
-# points, and this drops the bar underneath them. If the win rate falls, suspect
-# these two together and raise this back to 55 first — do not reach for a new
-# veto, and do not touch the scorer again until this has been measured on its own.
+# REVERTED TO 60 ON 2026-08-19. The 45 experiment was measured and it lost money.
+#
+#     before the drop   n=14   WR 78.6%   avg +0.901%   total +12.62%
+#     after the drop    n=26   WR 38.5%   avg -0.342%   total  -8.89%
+#     Fisher exact two-sided p = 0.0219 — not a bad run, a real regression.
+#
+# The book also went 85% short (22 of 26) and most losses closed near the 1.30%
+# stop, i.e. a flood of marginal shorts that got stopped out.
+#
+# The reason given for dropping to 45 does not survive re-measurement. It was
+# "60 retains only 3 of 44 tokens, a book of five cannot fill" — but that reading
+# was taken minutes after the reversal-penalty exemptions merged, before the new
+# scores had propagated across the fleet. Measured again on 2026-08-19 the same
+# floor of 60 retains 10 of 44 (22.7%), against MAX_OPEN of 5. The funnel was
+# never starved; the measurement was premature.
+#
+# Only ONE variable moved in this revert. The scorer exemptions stay exactly as
+# they are, so if the win rate does not recover, the exemptions are the remaining
+# suspect and can be tested on their own. Changing both at once would tell us
+# nothing, which is the whole reason the note below existed.
 #
 # This is a THRESHOLD ON A LIVE FUNNEL, so it is counted, not just applied:
 # LOW_QUALITY_REFUSED tallies every fire it blocks and the engine logs each one.
 # If the fire rate collapses, that counter is the evidence — lower the floor
 # rather than removing it, and never stack it with a new veto in the same change.
-MIN_FIRE_QUALITY = 45.0
+MIN_FIRE_QUALITY = 60.0
 
 MODEL_STORE = _ROOT / 'src' / 'ml' / 'model_store'
 

@@ -76,24 +76,30 @@ def _fires(quality, model_fire=True, side='BUY', hard=()):
 def test_the_worst_of_the_book_is_still_refused():
     """Four of the five that held the book on 2026-08-16 stay out.
 
-    ATOM is deliberately NOT in this list any more. At quality 56 it cleared the
-    floor when it dropped 60 -> 45 on 2026-08-17, and pretending otherwise would
-    make this file describe a system that does not exist. ATOM is the price of
-    that decision, named in config.py and asserted below so the trade-off stays
-    visible instead of dissolving into a number.
+    ATOM sits in its own test below rather than here. It was the one signal in
+    this group whose admission flipped with the floor — refused at 60, admitted at
+    45, refused again after the 45 experiment was measured and reverted. Keeping
+    it separate means this list stays true across all three states instead of
+    needing an edit every time the floor moves.
     """
     for sym, q in (('COMP', 0.0), ('DOGE', 18.0), ('LINK', 35.0), ('TAO', 38.7)):
         assert not _fires(q), f'{sym} at quality {q} fired again'
 
 
-def test_atom_at_56_is_knowingly_admitted_by_the_lower_floor():
-    """The trade the 60 -> 45 drop buys. ATOM's entry geometry — 1.69 ATR from
-    the level it leaned on — is what started this investigation, and at 45 its
-    context score no longer stops it. The location veto is a separate control
-    and is what should catch it; this asserts only that the QUALITY floor does
-    not, so nobody later reads the drop as free."""
-    assert _fires(56.0)
-    assert _cfg.MIN_FIRE_QUALITY <= 56.0
+def test_atom_at_56_is_refused_again_after_the_revert():
+    """This test previously asserted the OPPOSITE, and the flip is the point.
+
+    At the 45 floor ATOM (quality 56) was knowingly admitted — documented here as
+    "the trade the drop buys". The drop was then measured over 26 closed trades:
+    38.5% win rate against 78.6% at 60, p=0.0219. So the trade it bought was not
+    worth buying, the floor went back to 60, and ATOM-class signals are refused
+    again.
+
+    Kept rather than deleted because the pair of assertions is the record of a
+    decision being made, measured, and reversed on evidence.
+    """
+    assert not _fires(56.0)
+    assert _cfg.MIN_FIRE_QUALITY > 56.0
 
 
 def test_the_five_that_were_turned_away_all_clear_the_floor():
