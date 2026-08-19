@@ -2222,7 +2222,7 @@ function renderSignalGenesis(sig) {
   const _openPos = TRACK_DATA.signals.find(p => p.symbol === sig.symbol && p.outcome === 'OPEN');
   const isShort  = _openPos ? _openPos.direction === 'SHORT' : sig.direction === 'SHORT';
   const fired    = _openPos ? true : Boolean(sig.fire);
-  const qualOk   = (sig.quality_score || 0) >= 55;
+  const qualOk   = (sig.quality_score || 0) >= 60;   // config.MIN_FIRE_QUALITY
   const atrOk    = (sig.atr_pct || 0) >= 0.5;   // engine MIN_FIRE_ATR_PCT = 0.5%
   const regOk    = !['LIQUIDITY_TRAP', 'UNKNOWN'].includes(sig.regime);
   // Gate 1.5 mirrors the engine's REVERSAL-AWARE direction veto: a counter-trend
@@ -2238,6 +2238,17 @@ function renderSignalGenesis(sig) {
   const _trendFollow  = (isShort && sig.regime === 'TRENDING_BEAR') ||
                         (!isShort && sig.regime === 'TRENDING_BULL');
   const _isReversal   = _fadeReversal && (_atRevExtreme || fired);
+  // A FIRED signal passed every real gate by definition, so nothing below may
+  // paint it as blocked. The comment above already stated this invariant; only
+  // the reversal branch honoured it, so a trend-following entry that the engine
+  // had actually taken still rendered "BLOCKED · trend-following prohibited"
+  // beside its own open position (FIL/USDT, 2026-08-19).
+  // There is no such veto in the engine. `fade-only` was REMOVED from
+  // live_engine.py — scripts/tests/test_signal_narrative.py asserts it stays
+  // removed, because the desk is setup-typed and TREND_PULLBACK carries the
+  // HIGHEST weight of any setup (SETUP_RISK_WEIGHT = 1.00). Trend-following is
+  // the engine's best-paid setup, not a prohibited one.
+  const _trendFollowBlocked = _trendFollow && !fired;
   const dirOk         = !_trendFollow && (_fadeReversal || sig.regime === 'RANGING' || sig.regime === 'VOLATILE_COMPRESSION' || sig.regime === 'ACCUMULATION' || sig.regime === 'DISTRIBUTION');
   const confOk   = (sig.meta_confidence || 0) > (sig.threshold || 55);
   const hmOk     = !sig.hmm_transition_risk || sig.hmm_stability > 0.5;
@@ -2472,14 +2483,14 @@ function renderSignalGenesis(sig) {
                      : 'Model performing within its benchmark win-rate',
         driftBlocked ? 'BLOCKED' : 'HEALTHY', driftBlocked && !fired)}
     ${gate('', regOk,  'Gate 1 · Regime',    `Market regime: ${(sig.regime||'').replace('_',' ')}`, sig.regime || '—')}
-    ${gate('', dirOk && !_trendFollow, 'Gate 1.5 · Direction',
+    ${gate('', (dirOk && !_trendFollowBlocked) || fired, 'Gate 1.5 · Direction',
         _isReversal
           ? `${isShort ? 'SELL at resistance' : 'BUY at support'} in ${(sig.regime||'').replace('_',' ')} — counter-trend REVERSAL fade`
           : _trendFollow
-            ? `${isShort ? 'SELL in TRENDING_BEAR' : 'BUY in TRENDING_BULL'} — BLOCKED (trend-following prohibited; fade-only engine)`
+            ? `${isShort ? 'SELL in TRENDING_BEAR' : 'BUY in TRENDING_BULL'} — with-trend entry (TREND_PULLBACK, the desk's highest-weighted setup)`
             : `${isShort ? 'SELL' : 'BUY'} in ${(sig.regime||'').replace('_',' ')} — direction-regime location check`,
-        _isReversal ? 'REVERSAL' : (_trendFollow ? 'BLOCKED' : (dirOk ? 'ALIGNED' : 'CONFLICT')),
-        _trendFollow || !dirOk)}
+        _isReversal ? 'REVERSAL' : (_trendFollow ? 'WITH TREND' : (dirOk ? 'ALIGNED' : 'CONFLICT')),
+        _trendFollowBlocked || (!dirOk && !fired))}
     ${structRow}
     ${gate('', !htfOppose && !htfMixed, 'Gate 1.7 · HTF Macro',
         `Higher-timeframe bias — Weekly ${_htfBias(_mw)} · Daily ${_htfBias(_md)}`
@@ -2488,7 +2499,7 @@ function renderSignalGenesis(sig) {
     ${confRow}
     ${gate('', atrOk,  'Gate 2 · ATR Floor', `Minimum 0.5% volatility required for valid entry`, `${(sig.atr_pct||0).toFixed(2)}%`)}
     ${gate('', edgeOk || fired, 'Gate 3 · Model Edge', `Model edge score ≥ 60 required to fire`, `${edgeVal.toFixed(0)}/100`, !edgeOk && !fired)}
-    ${gate('', ctxOk,  'Gate 3b · Context Quality', `Advisory — heuristic setup quality (floor 70), not a hard block. Score: ${qVal.toFixed(0)}`, `${qVal.toFixed(0)}/100`, true)}
+    ${gate('', ctxOk,  'Gate 3b · Context Quality', `Setup quality — the engine's hard fire floor is 60/100. Score: ${qVal.toFixed(0)}`, `${qVal.toFixed(0)}/100`, true)}
     ${gate('', !fbDetected, 'Gate 3c · Fake Breakout', fbDetected ? 'Exhaustion / fake-breakout pattern detected' : 'No exhaustion / fake-breakout pattern', fbDetected ? 'DETECTED' : 'CLEAR', true)}
     ${gate('', !flagOpposes, 'Gate 3d · Flag / Pennant', flagDesc, flagVal, true)}
     ${gate('', cdlOk, 'Gate 3e · Candle Confirmation',
@@ -2531,9 +2542,9 @@ function renderSignalGenesis(sig) {
       <div style="margin-top:10px;padding:10px 12px;background:rgba(184,150,106,0.08);border:1px solid rgba(184,150,106,0.28);border-radius:8px;font-size:12px;color:#B8966A">
         ↩ Counter-trend REVERSAL: ${isShort ? 'SELL at resistance in TRENDING_BULL' : 'BUY at support in TRENDING_BEAR'} — the engine allows a fade turn at the structural extreme (rated MODERATE risk, never STRONG).
       </div>
-    ` : (!dirOk || _trendFollow ? `
+    ` : ((!dirOk || _trendFollow) && !fired ? `
       <div style="margin-top:10px;padding:10px 12px;background:rgba(255,0,85,0.08);border:1px solid rgba(255,0,85,0.25);border-radius:8px;font-size:12px;color:var(--red)">
-        🚫 Gate 1.5 VETO: ${isShort ? 'SELL blocked in TRENDING_BEAR' : 'BUY blocked in TRENDING_BULL'} — trend-following entry prohibited (fade-only engine)
+        ⚠ Direction note: ${isShort ? 'SELL in TRENDING_BEAR' : 'BUY in TRENDING_BULL'} is a WITH-TREND entry. The desk takes these as TREND_PULLBACK setups and weights them highest — this is context, not a veto. No signal is refused for trading with the trend.
       </div>
     ` : '')}
   `;

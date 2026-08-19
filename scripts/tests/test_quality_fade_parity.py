@@ -141,17 +141,24 @@ def test_the_remaining_gap_is_evidence_not_direction():
     assert weak_adx < real_trend
 
 
-def test_the_lower_floor_now_admits_the_thin_evidence_fade():
-    """Consequence of the 60 -> 45 drop, stated rather than left implicit.
+def test_the_thin_evidence_fade_is_refused_again_after_the_revert():
+    """This assertion was inverted on 2026-08-19, and the history matters.
 
-    At 60 this setup was refused and that refusal was described as the floor
-    working correctly. At 45 it fires. That may well be right — 60 retained only
-    3 of 44 symbols — but it is a behaviour change, and it should be visible here
-    rather than inferred from a constant.
+    At the 45 floor this thin-evidence fade fired. The floor is back at 60 —
+    measured, because 45 produced 38.5% wins against 78.6% (p=0.0219) — so it is
+    refused again, which is what the original design intended.
+
+    The exemptions themselves are UNTOUCHED: a fade with real evidence still
+    scores 72 and still clears 60. That separation is the whole reason only the
+    floor was reverted — if the win rate does not recover, the exemptions are the
+    remaining suspect and can be tested alone.
     """
     thin, _ = _score(_fade(adx=22.0, volume_zscore=0.2, edge_score=55.0))
-    assert thin >= MIN_FIRE_QUALITY, (
-        f'thin-evidence fade scores {thin}; floor is {MIN_FIRE_QUALITY}'
+    real, _ = _score(_fade())
+    assert thin == pytest.approx(57.0)
+    assert thin < MIN_FIRE_QUALITY, 'a thin-evidence fade fires again'
+    assert real >= MIN_FIRE_QUALITY, (
+        'the exemptions were reverted too — a genuine fade must still clear'
     )
 
 
