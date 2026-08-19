@@ -259,7 +259,12 @@ FS_STATE_DOC        = 'track_record'
 # whose generation != this, starting fresh — regardless of what an older engine
 # wrote to Firestore in the meantime. gen 2: wipe records produced by the pre-v14
 # (sell-into-support / loose-reversal) gates.
-STATE_GENERATION = 2
+# Bumped 2 -> 3 on 2026-08-19 to wipe the track record on deploy.
+# A bump is now a real one-time wipe: _hydrate_track_record_from_firestore
+# compares this against the generation stamped in the LOCAL file and empties it,
+# which is what finally defeats _save_track_record's orphan-preservation. Bump
+# this again whenever the record must be cleared without an admin key.
+STATE_GENERATION = 3
 
 # ── Regime labels ─────────────────────────────────────────────────────────────
 REGIME_TRENDING_BULL      = 'TRENDING_BULL'

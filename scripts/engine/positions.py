@@ -24,6 +24,7 @@ import uuid
 from scripts.engine.config import ALPHA_TIMEFRAMES as _ALPHA_TIMEFRAMES
 from scripts.engine.config import ALPHA_TRACK_RECORD_PATH
 from scripts.engine.config import ROOT as _ROOT
+from scripts.engine.config import STATE_GENERATION
 from scripts.engine.config import TRACK_RECORD_PATH
 from scripts.engine.models import Position
 from scripts.engine.models import RegimeState
@@ -897,6 +898,11 @@ class PositionsMixin:
             self.portfolio_guard.sync_from_wallet(self.wallet.open_positions)
             payload: Dict[str, Any] = {
                 'generated_at':      datetime.now(timezone.utc).isoformat(),
+                # Stamped so a STATE_GENERATION bump can identify — and wipe — a
+                # stale LOCAL record. Without it the generation guard could only
+                # inspect Firestore, and never the on-disk file that
+                # orphan-preservation keeps rewriting back into existence.
+                'generation':        STATE_GENERATION,
                 'engine_version':    self.GATE_VERSION,
                 'summary':           self.wallet.summary,
                 'signals':           all_records,
