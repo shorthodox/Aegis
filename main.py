@@ -32,6 +32,7 @@ import re
 import uuid
 import random
 import string
+import threading
 import time
 import urllib.parse
 from datetime import datetime, timedelta, timezone
@@ -711,6 +712,55 @@ _track_store: list = []       # in-memory list of signal records
 _tr_seen_ids: set = set()     # signal_ids already in store
 _tr_last_save: float = 0.0   # epoch of last disk write
 
+def _enforce_track_generation() -> None:
+    """One-time purge of main.py's OWN track store when STATE_GENERATION bumps.
+
+    The engine-side wipe (scripts/engine/state.py) empties the VOLUME record, and
+    it worked — /api/engine-track-record reported generation 3 with 0 signals.
+    But GET /api/track-record merges THREE sources, and the third is this
+    module's in-memory `_track_store`, which the engine cannot reach. So the
+    public page still showed 40 closed trades tagged `source: None` — the
+    signature of this store — while the engine's own record was empty.
+
+    That is the same "two stores behind one name" defect as TRACK_RECORD_PATH and
+    the Telegram connections path, for the third time. Here it is closed by
+    giving main.py the same generation contract the engine already honours.
+
+    The marker lives on the VOLUME, not beside the web record, because
+    web/track_record.json sits on the container filesystem and is wiped on every
+    deploy — a marker there would read "never purged" after each redeploy and the
+    wipe would fire forever instead of once.
+    """
+    global _track_store, _tr_seen_ids
+    marker = _STATE_DIR / ".track_generation"
+    try:
+        seen = int(marker.read_text(encoding="utf-8").strip())
+    except Exception:
+        seen = 0
+    if seen == STATE_GENERATION:
+        return
+    n = len(_track_store)
+    _track_store = []
+    _tr_seen_ids = set()
+    for path in {TRACK_RECORD_PATH, WEB_ROOT_PATH / "track_record.json"}:
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({"generated_at": datetime.now(timezone.utc).isoformat(),
+                           "generation": STATE_GENERATION,
+                           "summary": {}, "signals": []}, f)
+        except Exception as exc:
+            print(f"[TrackRecord] could not empty {path}: {exc!r}")
+    try:
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text(str(STATE_GENERATION), encoding="utf-8")
+    except Exception as exc:
+        print(f"[TrackRecord] generation marker not written ({exc!r}) — "
+              f"the purge will repeat on the next boot")
+    print(f"[TrackRecord] generation {seen} -> {STATE_GENERATION}: "
+          f"purged {n} in-memory records (one-time)")
+
+
 def _load_track_record() -> None:
     global _track_store, _tr_seen_ids
     if TRACK_RECORD_PATH.exists():
@@ -930,31 +980,101 @@ def _update_track_record(signals_data: dict, live_prices: dict) -> None:
 # -------------------------------------------------------------------
 _OTP_COL = "phone_verifications"
 
+# ── OTP store: MEMORY IS AUTHORITATIVE, Firestore is a best-effort mirror ─────
+# An OTP is a six-digit, single-use token that lives five minutes. Storing it in
+# Firestore made a quota-limited datastore a hard dependency of signup: when the
+# daily write quota was exhausted, _otp_set blocked, and no new user could
+# register at all. The failure surfaced as "Our datastore is not responding right
+# now" on the signup form — an honest message about a dependency that should
+# never have existed.
+#
+# This process runs SINGLE-WORKER (start.sh: `uvicorn main:app` with no
+# --workers), so send and verify always land in the same process and a dict is a
+# correct store. If that ever changes, the Firestore mirror below is what keeps
+# this working — reads fall back to it — but the --workers flag must be added
+# deliberately, not by accident.
+#
+# The mirror is written on a daemon thread and never awaited, so Firestore being
+# slow, broken or out of quota cannot delay or fail a signup. Losing it costs one
+# thing only: an OTP issued before a restart can no longer be verified after it,
+# and the user resends. That is a far smaller failure than "nobody can sign up".
+_OTP_MEM: Dict[str, Dict] = {}
+
+
 def _otp_ref(email: str):
     return db.collection(_OTP_COL).document(email)
 
+
+def _otp_mirror(fn, *args) -> None:
+    """Best-effort Firestore write. Never blocks, never raises."""
+    def _run():
+        try:
+            fn(*args)
+        except Exception as exc:
+            print(f"[OTP] Firestore mirror skipped: {exc!r}")
+    threading.Thread(target=_run, daemon=True).start()
+
+
+def _otp_prune() -> None:
+    """Drop records well past expiry so the dict cannot grow without bound."""
+    now = datetime.now(timezone.utc)
+    for k, v in list(_OTP_MEM.items()):
+        exp = v.get("expires_at")
+        if isinstance(exp, datetime) and now - exp > timedelta(hours=1):
+            _OTP_MEM.pop(k, None)
+
+
 def _otp_get(email: str) -> Optional[Dict]:
-    snap = _otp_ref(email).get()
-    if not snap.exists:
-        return None
-    data = snap.to_dict() or {}
-    # Firestore returns DatetimeWithNanoseconds (tz-aware datetime subclass) â€” no conversion needed
-    return data
+    rec = _OTP_MEM.get(email)
+    if rec is not None:
+        return rec
+    # Not in memory — this process may have restarted mid-signup. Try the mirror,
+    # but never let a slow datastore stall a verify: on any failure the caller
+    # simply sees "no record", which reads to the user as "request a new code".
+    try:
+        snap = _otp_ref(email).get()
+        if snap.exists:
+            data = snap.to_dict() or {}
+            _OTP_MEM[email] = data
+            return data
+    except Exception as exc:
+        print(f"[OTP] Firestore read skipped for {email}: {exc!r}")
+    return None
+
 
 def _otp_set(email: str, data: Dict):
-    _otp_ref(email).set(data)
+    _otp_prune()
+    _OTP_MEM[email] = dict(data)
+    _otp_mirror(lambda: _otp_ref(email).set(data))
+
 
 def _otp_update(email: str, updates: Dict):
-    _otp_ref(email).update(updates)
+    rec = _OTP_MEM.get(email)
+    if rec is None:
+        rec = _otp_get(email) or {}
+    rec.update(updates)
+    _OTP_MEM[email] = rec
+    _otp_mirror(lambda: _otp_ref(email).update(updates))
+
 
 def _otp_delete(email: str):
-    _otp_ref(email).delete()
+    _OTP_MEM.pop(email, None)
+    _otp_mirror(lambda: _otp_ref(email).delete())
 
 def _otp_find_by_signup_token(token: str) -> Optional[str]:
-    """Return the email (doc ID) whose signup_token matches, or None."""
-    docs = db.collection(_OTP_COL).where("signup_token", "==", token).limit(1).stream()
-    for doc in docs:
-        return doc.id
+    """Return the email (doc ID) whose signup_token matches, or None.
+
+    Memory first — the OTP store is memory-authoritative, so a token issued by
+    this process would otherwise be invisible to its own verify step.
+    """
+    for email, rec in _OTP_MEM.items():
+        if rec.get("signup_token") == token:
+            return email
+    try:
+        for doc in db.collection(_OTP_COL).where("signup_token", "==", token).limit(1).stream():
+            return doc.id
+    except Exception as exc:
+        print(f"[OTP] token lookup skipped: {exc!r}")
     return None
 
 async def _fs_await(fn, *args, timeout: float = 8.0, what: str = "datastore"):
@@ -988,10 +1108,15 @@ async def _fs_await(fn, *args, timeout: float = 8.0, what: str = "datastore"):
 
 
 def _otp_find_by_phone(phone: str) -> Optional[str]:
-    """Return the email (doc ID) whose phone_number matches, or None."""
-    docs = db.collection(_OTP_COL).where("phone_number", "==", phone).limit(1).stream()
-    for doc in docs:
-        return doc.id
+    """Return the email (doc ID) whose phone_number matches, or None. Memory first."""
+    for email, rec in _OTP_MEM.items():
+        if rec.get("phone_number") == phone:
+            return email
+    try:
+        for doc in db.collection(_OTP_COL).where("phone_number", "==", phone).limit(1).stream():
+            return doc.id
+    except Exception as exc:
+        print(f"[OTP] phone lookup skipped: {exc!r}")
     return None
 
 # Keep a module-level alias for old code paths not yet migrated
@@ -1620,6 +1745,7 @@ _tg_connections: dict = {}
 # The relative path was a second, quieter hazard: any process started from a
 # different CWD would read and write different files.
 from scripts.engine.config import STATE_DIR as _STATE_DIR
+from scripts.engine.config import STATE_GENERATION
 _TG_CONNECTIONS_PATH = _STATE_DIR / "telegram_connections.json"
 
 # One-time migration off the ephemeral path. Copied only when the volume has no
@@ -1922,6 +2048,7 @@ async def _telegram_cleanup_loop():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _load_track_record()
+    _enforce_track_generation()      # must run AFTER the load it purges
     _tg_load_connections()
     _tg_start_poller()
     engine_task       = asyncio.create_task(run_engine_background())
@@ -3896,26 +4023,46 @@ async def send_otp_for_registration(request: OTPSendRequest, req: Request):
     except Exception as exc:
         raise HTTPException(status_code=422, detail=f"Invalid email format: {str(exc)}")
 
-    # All three of these end in a blocking Firestore round trip — see _fs_await.
-    existing_user = await _fs_await(get_user_doc, email, what="user lookup")
+    # The last Firestore dependency in signup, and it FAILS OPEN.
+    #
+    # This is a courtesy check that produces a friendlier "already registered"
+    # message. It is not the uniqueness guarantee — Firebase Auth is, and
+    # createUserWithEmailAndPassword rejects a duplicate email regardless of what
+    # this returns. Blocking every new signup because a courtesy lookup timed out
+    # is the wrong trade, and it is what produced "Our datastore is not
+    # responding" on the form. Degraded now means: no friendly pre-warning, and
+    # Firebase reports the duplicate at account creation instead.
+    try:
+        existing_user = await _fs_await(get_user_doc, email, what="user lookup")
+    except HTTPException:
+        print(f"[signup] duplicate-email pre-check unavailable for {email} — "
+              f"continuing; Firebase Auth still enforces uniqueness")
+        existing_user = None
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered. Please sign in.")
-    if await _fs_await(is_cooldown_active, email, what="OTP cooldown check"):
+    # Also fails open. Abuse is already bounded by the two _rate_limit calls at
+    # the top of this handler, which are pure in-memory counters — this check only
+    # adds a friendlier 60-second message, and it is not worth blocking signup for.
+    try:
+        _cooling = await _fs_await(is_cooldown_active, email, what="OTP cooldown check")
+    except HTTPException:
+        _cooling = False
+    if _cooling:
         raise HTTPException(status_code=429, detail="Too many requests. Please wait before requesting another OTP.")
     otp = generate_otp()
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
     cooldown_until = datetime.now(timezone.utc) + timedelta(seconds=60)
-    # The WRITE is the one that hung. Bounded tighter than the reads because the
-    # user is watching a spinner, and an OTP we cannot store is an OTP we could
-    # never verify — better to say so in 6 seconds than stall for a minute.
-    await _fs_await(_otp_set, email, {
+    # No longer a Firestore round trip: _otp_set writes memory and mirrors to
+    # Firestore on a daemon thread. This is now an in-process dict assignment, so
+    # it cannot hang, cannot fail on quota, and needs no deadline.
+    _otp_set(email, {
         "otp": otp,
         "expires_at": expires_at,
         "cooldown_until": cooldown_until,
         "phone_number": phone_number,
         "email": email,
         "verified": False,
-    }, timeout=6.0, what="OTP write")
+    })
     sms_sent = False
     try:
         sms_sent = await _send_sms_otp(phone_number, otp)
