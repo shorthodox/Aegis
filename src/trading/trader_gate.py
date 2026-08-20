@@ -253,7 +253,35 @@ SETUP_RISK_WEIGHT: Dict[str, float] = {
     SETUP_EXHAUSTION_REVERSAL: 0.50,  # measured -0.064R fleet-wide — smallest size it can have
 }
 COUNTER_TIDE_FACTOR = 0.50   # against the BTC tide is half the trade it looks like
-STRONG_TIDE         = 0.65   # tide this strong refuses counter-tide trades outright
+STRONG_TIDE         = 0.65   # tide this strong cuts counter-tide size to STRONG_TIDE_FACTOR
+# A strong counter-tide SIZES DOWN HARD rather than refusing outright (2026-08-20).
+#
+# It used to reject. Measured on the live fleet that day: 12 of 17 bear-regime
+# symbols classified as TREND_PULLBACK SELL — the setup with the best measured
+# edge, +0.069R — and 7 were refused solely because BTC's tide read 100% UP. A
+# token in its own downtrend was being declined for what BTC was doing, and the
+# fleet fired one signal overnight.
+#
+# The refusal existed for the 2026-07-20 basket: eight alt SHORTs inside one
+# 55-minute window. But three independent protections against that basket have
+# been added since, and they are all still here — max 2 per correlated cluster,
+# max 5 open, and this size cut. The outright veto was the fourth and bluntest,
+# and it was the only one that could not distinguish one good trade from eight
+# correlated ones.
+#
+# 0.25 is not arbitrary: it is exactly MIN_SIZE_FACTOR, so the existing floor
+# decides what survives and no new veto is needed —
+#
+#     TREND_PULLBACK      1.00 x 0.25 = 0.2500  fires (at quarter size)
+#     BREAK_RETEST        0.85 x 0.25 = 0.2125  refused by MIN_SIZE_FACTOR
+#     RANGE_FADE          0.70 x 0.25 = 0.1750  refused
+#     EXHAUSTION_REVERSAL 0.50 x 0.25 = 0.1250  refused
+#     a SECOND correlated pullback     = 0.1500  refused
+#
+# So into a strong tide only the single best-measured setup trades, only one per
+# cluster, and only at a quarter of normal size. Raise this back to a hard reject
+# by setting STRONG_TIDE_FACTOR = 0.0.
+STRONG_TIDE_FACTOR  = 0.25
 CLUSTER_SECOND_FACTOR = 0.60 # the second expression of one cluster thesis is not a fresh bet
 MIN_SIZE_FACTOR     = 0.25   # below this the trade is not worth its execution cost
 
@@ -894,12 +922,18 @@ class TraderGate:
         against_tide = (side == 'SELL' and tide_dir == 'UP') or (side == 'BUY' and tide_dir == 'DOWN')
         if against_tide:
             if tide_str >= STRONG_TIDE:
-                return _reject('allocation',
-                               f'{side} against a strong BTC {tide_dir} tide '
-                               f'({tide_str:.0%}) — this is the basket trade that bled',
-                               notes, side, setup, level=level)
-            size *= COUNTER_TIDE_FACTOR
-            notes.append(f'allocation: against the BTC {tide_dir} tide — halved')
+                if STRONG_TIDE_FACTOR <= 0:
+                    return _reject('allocation',
+                                   f'{side} against a strong BTC {tide_dir} tide '
+                                   f'({tide_str:.0%}) — this is the basket trade that bled',
+                                   notes, side, setup, level=level)
+                size *= STRONG_TIDE_FACTOR
+                notes.append(f'allocation: against a STRONG BTC {tide_dir} tide '
+                             f'({tide_str:.0%}) — size cut to {STRONG_TIDE_FACTOR:.0%}; '
+                             f'only a setup weighted 1.00 clears MIN_SIZE_FACTOR from here')
+            else:
+                size *= COUNTER_TIDE_FACTOR
+                notes.append(f'allocation: against the BTC {tide_dir} tide — halved')
 
         max_open = int(book.get('max_open', 5) or 5)
         if int(book.get('open_total', 0) or 0) >= max_open:
