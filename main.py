@@ -3317,15 +3317,143 @@ def get_firebase_uid(credentials: HTTPAuthorizationCredentials = Depends(securit
 # -------------------------------------------------------------------
 # Firestore user helpers
 # -------------------------------------------------------------------
+# ── Entitlements: the paid grant, on the VOLUME ───────────────────────────────
+# Every record of who has paid lived in Firestore and nowhere else, which made a
+# datastore outage indistinguishable from a cancelled subscription. Both grant
+# paths wrote Firestore only:
+#
+#   * the payment-verify path answered "Payment verified but account update
+#     failed" — money taken, no access, and nothing anywhere recording the grant
+#   * the Whop webhook returned 500 so Whop would retry, but a retry window can
+#     expire against a quota that resets daily
+#
+# So a paid subscriber silently reverted to `plan: trial`, which is exactly the
+# cascade behind the "trial expired" overlay and the missing Telegram signals.
+#
+# This file is the durable record of a payment that HAPPENED. It lives on the
+# Railway volume beside telegram_connections.json, so it survives redeploys and
+# does not depend on Firestore being reachable, in quota, or correctly
+# credentialled. Firestore stays the system of record for everything else and is
+# still written; it is simply no longer the only place a grant exists.
+#
+# Two rules keep this safe:
+#   1. It may only ever GRANT. It is never consulted to take access away, so a
+#      stale or corrupt file cannot lock a paying customer out.
+#   2. It respects its own expiry. An entry past subscription_end grants nothing,
+#      so a lapsed plan does not become permanent access through this back door.
+_ENTITLEMENTS_PATH = _STATE_DIR / "entitlements.json"
+
+
+def _ent_load() -> Dict[str, Any]:
+    try:
+        if _ENTITLEMENTS_PATH.exists():
+            return json.loads(_ENTITLEMENTS_PATH.read_text(encoding="utf-8")) or {}
+    except Exception as exc:
+        print(f"[entitlements] load failed ({exc!r}) — treating as empty")
+    return {}
+
+
+def _ent_save(data: Dict[str, Any]) -> None:
+    """Atomic write: a half-written entitlements file is worse than none."""
+    _ENTITLEMENTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = _ENTITLEMENTS_PATH.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
+    tmp.replace(_ENTITLEMENTS_PATH)
+
+
+def _ent_grant(user_key: str, plan: str, sub_end: Any, provider: str,
+               payment_id: str = "") -> None:
+    """Record a paid grant on the volume. Called BEFORE the Firestore write."""
+    if not user_key or not plan:
+        return
+    try:
+        data = _ent_load()
+        data[str(user_key).lower()] = {
+            "plan": plan,
+            "status": "active",
+            "subscription_end": str(sub_end) if sub_end else "",
+            "provider": provider,
+            "payment_id": payment_id,
+            "granted_at": datetime.now(timezone.utc).isoformat(),
+        }
+        _ent_save(data)
+        print(f"[entitlements] {user_key} -> {plan} until {sub_end or 'open-ended'} ({provider})")
+    except Exception as exc:
+        print(f"[entitlements] grant NOT recorded for {user_key}: {exc!r}")
+
+
+def _ent_revoke(user_key: str) -> None:
+    """Mark cancelled. Access still runs to subscription_end — a cancellation
+    means 'will not renew', not 'ends now'."""
+    if not user_key:
+        return
+    try:
+        data = _ent_load()
+        rec = data.get(str(user_key).lower())
+        if rec:
+            rec["status"] = "canceled"
+            rec["canceled_at"] = datetime.now(timezone.utc).isoformat()
+            _ent_save(data)
+            print(f"[entitlements] {user_key} marked canceled")
+    except Exception as exc:
+        print(f"[entitlements] revoke failed for {user_key}: {exc!r}")
+
+
+def _ent_overlay(user_key: str, doc: Optional[Dict]) -> Optional[Dict]:
+    """Merge a volume grant into a Firestore doc, upgrade-only.
+
+    Applied at the READ boundary in get_user_doc so every consumer — /auth/me,
+    has_paid_access, is_trial_expired, the Telegram entitlement check — honours
+    the grant without each needing to know this file exists.
+    """
+    try:
+        rec = _ent_load().get(str(user_key or "").lower())
+        if not rec:
+            return doc
+        end = _parse_ts(rec.get("subscription_end"))
+        if end is not None and datetime.now(timezone.utc) > end:
+            return doc                      # the paid term ran out; grant nothing
+        merged = dict(doc or {})
+        if has_paid_access(merged):
+            return doc                      # Firestore already grants it
+        merged["plan"] = rec.get("plan")
+        sub = dict(merged.get("subscription") or {})
+        sub.setdefault("status", rec.get("status") or "active")
+        if rec.get("subscription_end"):
+            sub.setdefault("current_period_end", rec["subscription_end"])
+        sub.setdefault("provider", rec.get("provider") or "")
+        merged["subscription"] = sub
+        if rec.get("subscription_end"):
+            merged.setdefault("subscription_end", rec["subscription_end"])
+        print(f"[entitlements] serving {user_key} from the volume record "
+              f"(Firestore shows {(doc or {}).get('plan')!r})")
+        return merged
+    except Exception as exc:
+        print(f"[entitlements] overlay skipped for {user_key}: {exc!r}")
+        return doc
+
+
 def get_user_doc(email: str) -> Optional[Dict]:
-    doc_ref = db.collection("users").document(email)
-    doc = doc_ref.get()
-    to_dict = getattr(doc, "to_dict", None)
-    exists = getattr(doc, "exists", False)
-    if callable(to_dict) and exists:
-        result = to_dict()
-        return result if isinstance(result, dict) else {}
-    return None
+    # The volume entitlement is overlaid HERE, at the single read boundary, so
+    # every consumer honours a paid grant without knowing the file exists —
+    # /auth/me, has_paid_access, is_trial_expired and the Telegram send-time
+    # check all read through this function.
+    #
+    # The Firestore read is also wrapped: a paid user whose datastore is
+    # unreachable must get their plan back from the volume rather than silently
+    # becoming a trial user, which is the cascade this whole file exists to stop.
+    try:
+        doc_ref = db.collection("users").document(email)
+        doc = doc_ref.get()
+        to_dict = getattr(doc, "to_dict", None)
+        exists = getattr(doc, "exists", False)
+        base = (to_dict() if callable(to_dict) and exists else None)
+        if not isinstance(base, dict):
+            base = {} if exists else None
+    except Exception as exc:
+        print(f"[users] Firestore read failed for {email}: {exc!r}")
+        base = None
+    return _ent_overlay(email, base)
 
 def phone_is_unique(phone: str, exclude_email: Optional[str] = None) -> bool:
     """Return True if phone number is not already stored in any user document."""
@@ -3422,6 +3550,16 @@ PAID_PLANS = frozenset({"pro", "premium", "intermediate", "basic", "pro-dev"})
 _DEAD_SUB_STATUS = frozenset({
     "cancelled", "canceled", "expired", "past_due", "unpaid", "halted", "paused",
 })
+# "Cancelled" is not "over". It means WILL NOT RENEW, and the customer keeps what
+# they already paid for until the period ends — which is exactly what the Whop
+# revoke handler says it is doing ("Do NOT downgrade plan here ... the customer
+# keeps access until the paid period ends"). has_paid_access disagreed with that
+# comment and denied the moment the status flipped, so cancelling ended access
+# instantly and took away time already bought.
+#
+# Only these two are treated that way. "expired" is genuinely over, and
+# past_due / unpaid / halted mean money is owed — none of those buy remaining time.
+_CANCELLED_STATUS = frozenset({"cancelled", "canceled"})
 
 
 def _parse_ts(raw: Any) -> Optional[datetime]:
@@ -3468,10 +3606,13 @@ def has_paid_access(user_doc: Optional[Dict[str, Any]]) -> bool:
         return False
     sub = (user_doc or {}).get("subscription") or {}
     status = str(sub.get("status") or "").lower() if isinstance(sub, dict) else ""
-    if status in _DEAD_SUB_STATUS:
-        return False
     end = _sub_end_ts(sub)
-    if end is not None and datetime.now(timezone.utc) > end:
+    now = datetime.now(timezone.utc)
+    if status in _DEAD_SUB_STATUS:
+        # A CANCELLED plan still runs to the end of the period already paid for.
+        # Everything else in the dead set is over or owes money.
+        return bool(status in _CANCELLED_STATUS and end is not None and now <= end)
+    if end is not None and now > end:
         return False        # the plan's own term has run out
     return True
 
@@ -5506,6 +5647,12 @@ async def verify_payment(req: VerifyPaymentRequest, user_id: str = Depends(get_c
 
     user_ref = db.collection("users").document(user_id)
     sub_end = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+    # Volume FIRST. The payment is already verified here, so the entitlement is a
+    # fact; this is what stops a customer paying and receiving nothing when the
+    # Firestore write below fails.
+    _ent_grant(user_id, plan, sub_end,
+               "dodopayments" if DODO_PAYMENTS_ENABLED else "razorpay",
+               payment_id=str(payment_id or ""))
     try:
         update_result = user_ref.update({
             "plan": plan,
@@ -5616,6 +5763,12 @@ async def _handle_whop_webhook(raw_body: bytes) -> dict:
                 sub_end, tz=timezone.utc).isoformat()
         if not sub_end:
             sub_end = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        # Volume FIRST, same reason: the money has moved, so the grant is a
+        # fact that must not depend on a Firestore write succeeding. The 500
+        # below still asks the provider to retry so Firestore catches up, but
+        # the subscriber already has access in the meantime.
+        _ent_grant(user_id, plan, sub_end, "whop",
+                   payment_id=str(payload.get("id") or ""))
         try:
             res = user_ref.update({
                 "plan": plan,
@@ -5640,6 +5793,9 @@ async def _handle_whop_webhook(raw_body: bytes) -> dict:
             raise HTTPException(status_code=500, detail="Could not apply subscription")
 
     elif event in _WHOP_REVOKE_EVENTS:
+        # Mirror the cancellation. Access still runs to subscription_end — the
+        # overlay honours that date, so nobody is cut off early.
+        _ent_revoke(user_id)
         try:
             # Do NOT downgrade `plan` here. A cancellation means "will not
             # renew"; the customer keeps access until the paid period ends, and
@@ -5708,6 +5864,12 @@ async def _handle_paddle_webhook(raw_body: bytes) -> dict:
         sub_end = (payload.get("current_billing_period") or {}).get("ends_at")
         if not sub_end:
             sub_end = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        # Volume FIRST, same reason: the money has moved, so the grant is a
+        # fact that must not depend on a Firestore write succeeding. The 500
+        # below still asks the provider to retry so Firestore catches up, but
+        # the subscriber already has access in the meantime.
+        _ent_grant(user_id, plan, sub_end, "paddle",
+                   payment_id=str(payload.get("id") or ""))
         try:
             res = user_ref.update({
                 "plan": plan,
