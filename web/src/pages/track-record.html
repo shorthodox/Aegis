@@ -145,6 +145,11 @@
         .tr-panel-header {
             display: flex;
             align-items: center;
+            /* Must wrap: the status group cannot fit beside the title on a narrow
+               screen, and an unwrapped flex row either overflows or forces the
+               sticky header taller than its offset accounts for. */
+            flex-wrap: wrap;
+            row-gap: 0.5rem;
             gap: 0.75rem;
             padding: var(--s-4) var(--s-5);
             background: var(--ae-raised);
@@ -318,7 +323,12 @@
 
         /* ── Win rate note ── */
         .tr-risky-note {
-            margin: 0 0 0.75rem 0;
+            /* Sits in the centred hero, so it needs the disclaimer's own width
+               and left-aligned text — centred prose in a warning box is hard to
+               scan and reads as decoration. */
+            max-width: 800px;
+            margin: 0.75rem auto 0;
+            text-align: left;
             padding: 0.6rem 0.85rem;
             border: 1px solid rgba(251,191,36,0.40);
             border-left: 3px solid #fbbf24;
@@ -337,11 +347,45 @@
             line-height: 1.7;
         }
 
+        /* The panel header is a flex row that never wrapped. On a narrow screen
+           the status group (live dot, refreshed time, refresh link) cannot fit
+           beside the title, so the header grows taller than its sticky offset
+           accounts for — and because it is `position: sticky; top: 60px`, it
+           then sits ON TOP of the body text instead of pushing it down. That is
+           the overlap: a sticky element that got taller than the layout expected.
+
+           Two fixes, both needed. Wrapping lets the header lay itself out
+           honestly at any width; dropping sticky below 600px means a header of
+           any height can no longer cover anything, which is the guarantee the
+           wrap alone does not give. */
+        @media (max-width: 700px) {
+            .tr-panel-header {
+                position: static;          /* cannot overlay what it cannot pin */
+                top: auto;
+            }
+            /* Let the status group take its own line rather than being squeezed
+               against the title by margin-left:auto. */
+            .tr-panel-header > div[style*="margin-left:auto"] {
+                margin-left: 0 !important;
+                width: 100%;
+                flex-wrap: wrap;
+            }
+        }
+
         @media (max-width: 600px) {
             .tr-title { font-size: 1.8rem; }
             .tr-table th, .tr-table td { padding: 0.6rem 0.6rem; font-size: 0.72rem; }
             .tr-summary { grid-template-columns: repeat(2, 1fr); }
             .tr-panel-body { padding: var(--s-4); }
+            .tr-risky-note { font-size: 0.78rem; padding: 0.55rem 0.7rem; }
+        }
+
+        /* Very narrow Android widths (~360px and below). The summary tiles at two
+           columns start clipping their labels here, so give them the full width
+           rather than truncating numbers the page exists to show. */
+        @media (max-width: 380px) {
+            .tr-summary { grid-template-columns: 1fr; }
+            .tr-panel-header { padding: var(--s-3) var(--s-4); }
         }
     </style>
 </head>
@@ -396,6 +440,20 @@
             <i class="fas fa-triangle-exclamation"></i>
             <span><strong>Not financial advice.</strong> Past performance does not guarantee future results. Crypto markets carry significant risk. Never trade more than you can afford to lose.</span>
         </div>
+        <!-- Risk posture, moved into the HERO on 2026-08-20.
+             It used to sit inside the left panel body, below the summary tiles and
+             the history note — so on a phone a reader met the win rate, the
+             signal table and the engine status before learning the book is
+             RISKY-tier. A disclosure that arrives after the numbers it qualifies
+             has already failed. It is the first thing under "not financial
+             advice" now, above every statistic, and it renders unconditionally:
+             the warning matters MOST before there is any record to judge. -->
+        <p class="tr-risky-note" id="trRiskyNote">
+            <strong>&#9888; This portfolio trades RISKY-tier signals.</strong>
+            They are published for transparency, not as advice. Do your own
+            analysis on every signal, and paper trade first before risking
+            real capital.
+        </p>
     </div>
 
     <!-- ===== SIDE-BY-SIDE LAYOUT ===== -->
@@ -529,16 +587,6 @@
                 <a href="#" onclick="window.refreshAegisTrackRecord && window.refreshAegisTrackRecord();return false;" class="ae-btn ae-btn-outline ae-btn-md">↻ Refresh</a>
             </div>
         </div>
-
-                <!-- Risk posture. Shown ALWAYS, including before any signal has
-                     closed — the warning matters most when there is no record to
-                     judge the signals by. -->
-                <p class="tr-risky-note" id="trRiskyNote">
-                    <strong>&#9888; This portfolio trades RISKY-tier signals.</strong>
-                    They are published for transparency, not as advice. Do your own
-                    analysis on every signal, and paper trade first before risking
-                    real capital.
-                </p>
 
                 <!-- Win-rate attribution note -->
                 <p class="tr-winrate-note" id="trWinrateNote" style="display:none;"></p>
