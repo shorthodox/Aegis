@@ -128,6 +128,14 @@ def test_the_losing_basket_is_refused_by_the_tide_even_when_stretched(allow_fade
 
     This is the second, independent stop: the basket's defining feature was that
     every one of them fought the same rising tape.
+
+    The MECHANISM changed on 2026-08-20 and the protection did not. A strong tide
+    now cuts size to STRONG_TIDE_FACTOR instead of rejecting outright, so this
+    EXHAUSTION_REVERSAL (weight 0.50) sizes to 0.50 x 0.25 = 0.125 and is refused
+    by MIN_SIZE_FACTOR one check later. The reason string moved from the tide to
+    the size floor; the trade is just as refused, and the tide is still recorded
+    in the notes. Asserting the outcome and the reasoning rather than which of the
+    two consecutive checks caught it.
     """
     plan = run(mk(price=109.5, support=99.8, resistance=110.0, rsi=75.0),
                regime='TRENDING_BULL',
@@ -135,7 +143,9 @@ def test_the_losing_basket_is_refused_by_the_tide_even_when_stretched(allow_fade
                levels=[(110.0, 4), (99.8, 3), (95.0, 3)])
     assert plan.action == ACTION_REJECT
     assert plan.stage == 'allocation'
-    assert 'tide' in plan.reason
+    assert any('tide' in n for n in plan.notes), (
+        'the tide is no longer part of the reasoning at all'
+    )
 
 
 def test_the_losing_basket_is_refused_by_correlation(allow_fade):
