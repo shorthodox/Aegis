@@ -37,7 +37,7 @@ import time
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, Any, Optional, List, TYPE_CHECKING, Union
+from typing import Dict, Any, Optional, List, Set, TYPE_CHECKING, Union
 from contextlib import asynccontextmanager
 import inspect
 
@@ -708,6 +708,67 @@ _tr_ws_manager = _TrackRecordManager()
 # -------------------------------------------------------------------
 TRACK_RECORD_PATH        = WEB_ROOT_PATH / "track_record.json"
 TRADER_TRACK_RECORD_PATH = WEB_ROOT_PATH / "trader_track_record.json"
+
+
+def _engine_record_path() -> Path:
+    """live_engine's own track record — on the Railway VOLUME when one is mounted.
+
+    This is the file the public endpoint reads FIRST, so it is the file that
+    decides what the track-record page shows. Deleting a record anywhere else
+    and leaving this one alone is why earlier wipes appeared to do nothing.
+    """
+    return Path(os.environ.get('AEGIS_STATE_DIR') or (Path(BASE_DIR) / "data")) / "track_record.json"
+
+
+def _web_record_path() -> Path:
+    """The container-filesystem copy. Wiped on every deploy, but live between them."""
+    return Path(BASE_DIR) / "web" / "track_record.json"
+
+
+def _purge_ids_from_disk(signal_ids: Set[str]) -> Dict[str, int]:
+    """Remove signal_ids from every on-disk track record and re-derive summaries.
+
+    A record can sit in three places (engine volume, web copy, main.py's store)
+    and the public view merges all three. Removing it from one leaves it on the
+    page, which reads as the delete having silently failed.
+    """
+    removed: Dict[str, int] = {}
+    for path in {_engine_record_path(), _web_record_path(), TRACK_RECORD_PATH}:
+        try:
+            if not path.exists():
+                continue
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            sigs = data.get("signals") or []
+            kept = [r for r in sigs if r.get("signal_id") not in signal_ids]
+            n = len(sigs) - len(kept)
+            if n == 0:
+                continue
+            data["signals"] = kept
+            # The stored summary is what the wallet figures are read from, so it
+            # must not keep counting trades that are no longer in the file.
+            if isinstance(data.get("summary"), dict):
+                w = sum(1 for r in kept if r.get("outcome") == "WIN")
+                l = sum(1 for r in kept if r.get("outcome") == "LOSS")
+                pnls = [float(r.get("pnl_pct") or 0) for r in kept
+                        if r.get("outcome") in ("WIN", "LOSS")]
+                data["summary"].update({
+                    "total_signals": len(kept),
+                    "wins": w, "losses": l,
+                    "open": sum(1 for r in kept if r.get("outcome") == "OPEN"),
+                    "win_rate_pct": round(w / (w + l) * 100, 1) if (w + l) else None,
+                    "avg_pnl_pct": round(sum(pnls) / len(pnls), 3) if pnls else None,
+                    "total_pnl_pct": round(sum(pnls), 3) if pnls else 0.0,
+                })
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(".tmp")
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(data, f, default=str)
+            os.replace(tmp, path)
+            removed[str(path)] = n
+        except Exception as exc:
+            print(f"[TrackRecord] purge failed for {path}: {exc!r}")
+    return removed
 _track_store: list = []       # in-memory list of signal records
 _tr_seen_ids: set = set()     # signal_ids already in store
 _tr_last_save: float = 0.0   # epoch of last disk write
@@ -5328,8 +5389,8 @@ async def track_record_endpoint(source: str = None,
     except Exception:
         _authed = False
 
-    _ENGINE_RECORD = Path(os.environ.get('AEGIS_STATE_DIR') or (Path(BASE_DIR) / "data")) / "track_record.json"
-    _WEB_RECORD    = Path(BASE_DIR) / "web"  / "track_record.json"
+    _ENGINE_RECORD = _engine_record_path()
+    _WEB_RECORD    = _web_record_path()
 
     def _norm(s: dict, src: str) -> dict:
         direction = s.get("direction", "")
@@ -7155,16 +7216,27 @@ async def smtp_test(_: None = Depends(_require_admin)):
 
 @app.delete("/api/admin/track-record/{signal_id}")
 async def delete_track_record_entry(signal_id: str, _: None = Depends(_require_admin)):
-    """Remove one signal from the in-memory track record and persist to disk."""
+    """Remove one signal from EVERY track-record store.
+
+    The public endpoint merges live_engine's record (the Railway volume), the
+    web copy and this process's in-memory store. Until 2026-08-20 this handler
+    only touched the in-memory store, so deleting a record that the engine owned
+    returned 404 while the row stayed on the page — indistinguishable from the
+    delete being ignored.
+    """
     global _track_store, _tr_seen_ids
     before = len(_track_store)
     _track_store = [r for r in _track_store if r.get("signal_id") != signal_id]
     _tr_seen_ids.discard(signal_id)
-    removed = before - len(_track_store)
-    if removed == 0:
+    mem_removed = before - len(_track_store)
+    if mem_removed:
+        _save_track_record()
+    disk_removed = _purge_ids_from_disk({signal_id})
+    total = mem_removed + sum(disk_removed.values())
+    if total == 0:
         raise HTTPException(status_code=404, detail=f"signal_id '{signal_id}' not found")
-    _save_track_record()
-    return {"success": True, "removed": removed, "signal_id": signal_id,
+    return {"success": True, "removed": total, "signal_id": signal_id,
+            "stores": {"memory": mem_removed, **disk_removed},
             "remaining": len(_track_store)}
 
 
