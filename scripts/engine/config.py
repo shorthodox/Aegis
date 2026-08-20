@@ -164,6 +164,18 @@ HARD_VETOES = frozenset({'MODEL_DRIFT_CRITICAL', 'DEAD_MARKET',
 # rather than removing it, and never stack it with a new veto in the same change.
 MIN_FIRE_QUALITY = 60.0
 
+# ── Kill switch ───────────────────────────────────────────────────────────────
+# When True the desk opens nothing new. Existing positions are still MANAGED —
+# stops, take-profits and exits all keep running — because pausing entries and
+# abandoning open risk are completely different things, and only the first is
+# ever what someone means by "pause".
+#
+# Checked in _run_trader_gate, the single path that opens a position. Settable at
+# runtime from /control, so a bad tape can be stopped from a phone without a
+# deploy. It is deliberately NOT persisted as a code change: if the process
+# restarts, the saved runtime override re-applies it.
+TRADING_PAUSED = False
+
 MODEL_STORE = _ROOT / 'src' / 'ml' / 'model_store'
 
 # ── Persistent runtime STATE directory ────────────────────────────────────────

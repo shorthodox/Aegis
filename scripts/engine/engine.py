@@ -1286,6 +1286,14 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
         # A token that just lost is benched — the failed thesis is usually still
         # in play, and re-firing it is the revenge trade. Kept from the old chain
         # because it is a trader's rule, not a guard's.
+        # Kill switch, checked before anything else. This is the single path that
+        # opens a position, so one early return here stops all new entries while
+        # leaving exits, stops and take-profits running on whatever is open.
+        if getattr(_cfg, 'TRADING_PAUSED', False):
+            self._publish_no_trade(symbol, 'trading paused by operator — '
+                                           'existing positions still managed')
+            return True
+
         now = time.time()
         if now - self._last_loss_time.get(symbol, 0) < self.LOSS_COOLDOWN_SECONDS:
             self._publish_no_trade(symbol, 'benched — lost on this token within the last '
