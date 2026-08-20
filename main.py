@@ -1746,6 +1746,7 @@ _tg_connections: dict = {}
 # different CWD would read and write different files.
 from scripts.engine.config import STATE_DIR as _STATE_DIR
 from scripts.engine.config import STATE_GENERATION
+from scripts.engine import config as _cfg_mod
 _TG_CONNECTIONS_PATH = _STATE_DIR / "telegram_connections.json"
 
 # One-time migration off the ephemeral path. Copied only when the volume has no
@@ -2049,6 +2050,7 @@ async def _telegram_cleanup_loop():
 async def lifespan(app: FastAPI):
     _load_track_record()
     _enforce_track_generation()      # must run AFTER the load it purges
+    _rt_load_at_startup()            # re-apply operator dials saved on the volume
     _tg_load_connections()
     _tg_start_poller()
     engine_task       = asyncio.create_task(run_engine_background())
@@ -3317,6 +3319,136 @@ def get_firebase_uid(credentials: HTTPAuthorizationCredentials = Depends(securit
 # -------------------------------------------------------------------
 # Firestore user helpers
 # -------------------------------------------------------------------
+# ── Runtime controls: tune the desk without a deploy ──────────────────────────
+# Six times in one day these constants were changed by editing code, running the
+# suite and redeploying: MIN_FIRE_QUALITY twice, STRONG_TIDE_FACTOR, the tide
+# policy, and a pause that did not exist. Each round trip needed a computer.
+#
+# These are OPERATING dials, not code. A floor and a size factor are decisions a
+# desk makes against a live tape, and requiring a deploy to change one means the
+# tape has moved by the time it lands.
+#
+# Every knob here is read at CALL time by its owner — engine.py reads
+# MIN_FIRE_QUALITY through the config MODULE, trader_gate reads its own globals
+# inside evaluate()/_classify() — so assigning the module attribute takes effect
+# on the very next scan. That property is verified by a test; a knob captured at
+# import would silently do nothing.
+#
+# Bounds are not decoration. An unbounded floor of 900 silently stops all trading
+# and looks like a dead engine, so every knob declares the range it is allowed to
+# take and anything outside is refused with the reason.
+_RUNTIME_PATH = _STATE_DIR / "runtime_overrides.json"
+
+# name -> (module, attribute, kind, low, high, human description)
+_TUNABLES: Dict[str, Any] = {
+    "min_fire_quality": ("scripts.engine.config", "MIN_FIRE_QUALITY", "float", 0.0, 100.0,
+                         "Minimum signal quality to fire (0-100)"),
+    "strong_tide_factor": ("src.trading.trader_gate", "STRONG_TIDE_FACTOR", "float", 0.0, 1.0,
+                           "Size multiplier into a strong counter-tide. 0 = refuse outright"),
+    "allow_exhaustion_reversal": ("src.trading.trader_gate", "ALLOW_EXHAUSTION_REVERSAL", "bool", 0, 1,
+                                  "Allow counter-trend exhaustion fades (measured -0.064R)"),
+    "trading_paused": ("scripts.engine.config", "TRADING_PAUSED", "bool", 0, 1,
+                       "Stop opening new positions. Exits keep running"),
+}
+
+_RUNTIME_DEFAULTS: Dict[str, Any] = {}      # captured at import, for "reset"
+
+
+def _rt_module(path: str):
+    import importlib
+    return importlib.import_module(path)
+
+
+def _rt_capture_defaults() -> None:
+    """Remember the code values ONCE, so 'reset' means the committed value and
+    not merely the previous override."""
+    if _RUNTIME_DEFAULTS:
+        return
+    for key, (mod, attr, *_rest) in _TUNABLES.items():
+        try:
+            _RUNTIME_DEFAULTS[key] = getattr(_rt_module(mod), attr)
+        except Exception:
+            pass
+
+
+def _rt_read() -> Dict[str, Any]:
+    """Current LIVE value of every knob, straight from the owning module."""
+    _rt_capture_defaults()
+    out = {}
+    for key, (mod, attr, kind, lo, hi, desc) in _TUNABLES.items():
+        try:
+            val = getattr(_rt_module(mod), attr)
+        except Exception:
+            continue
+        out[key] = {
+            "value": bool(val) if kind == "bool" else float(val),
+            "default": (bool(_RUNTIME_DEFAULTS.get(key)) if kind == "bool"
+                        else float(_RUNTIME_DEFAULTS.get(key, val))),
+            "kind": kind, "min": lo, "max": hi, "description": desc,
+        }
+    return out
+
+
+def _rt_coerce(key: str, raw: Any) -> Any:
+    mod, attr, kind, lo, hi, desc = _TUNABLES[key]
+    if kind == "bool":
+        if isinstance(raw, str):
+            return raw.strip().lower() in ("1", "true", "yes", "on")
+        return bool(raw)
+    try:
+        val = float(raw)
+    except (TypeError, ValueError):
+        raise ValueError(f"{key} must be a number")
+    if val < lo or val > hi:
+        raise ValueError(f"{key} must be between {lo} and {hi} (got {val})")
+    return val
+
+
+def _rt_apply(values: Dict[str, Any], *, persist: bool = True) -> Dict[str, Any]:
+    """Set knobs live, then persist so a restart keeps them."""
+    _rt_capture_defaults()
+    applied = {}
+    for key, raw in (values or {}).items():
+        if key not in _TUNABLES:
+            raise ValueError(f"unknown control: {key}")
+        val = _rt_coerce(key, raw)
+        mod, attr, *_ = _TUNABLES[key]
+        before = getattr(_rt_module(mod), attr, None)
+        setattr(_rt_module(mod), attr, val)
+        applied[key] = val
+        print(f"[control] {key}: {before!r} -> {val!r}")
+    if persist and applied:
+        try:
+            saved = {}
+            if _RUNTIME_PATH.exists():
+                saved = json.loads(_RUNTIME_PATH.read_text(encoding="utf-8")) or {}
+            saved.update(applied)
+            saved["_updated_at"] = datetime.now(timezone.utc).isoformat()
+            _RUNTIME_PATH.parent.mkdir(parents=True, exist_ok=True)
+            tmp = _RUNTIME_PATH.with_suffix(".tmp")
+            tmp.write_text(json.dumps(saved, indent=2, default=str), encoding="utf-8")
+            tmp.replace(_RUNTIME_PATH)
+        except Exception as exc:
+            print(f"[control] applied but NOT persisted: {exc!r}")
+    return applied
+
+
+def _rt_load_at_startup() -> None:
+    """Re-apply saved overrides after a restart, or they last until the next
+    deploy and then quietly revert — which is worse than not having them."""
+    _rt_capture_defaults()
+    try:
+        if not _RUNTIME_PATH.exists():
+            return
+        saved = json.loads(_RUNTIME_PATH.read_text(encoding="utf-8")) or {}
+        vals = {k: v for k, v in saved.items() if k in _TUNABLES}
+        if vals:
+            _rt_apply(vals, persist=False)
+            print(f"[control] restored {len(vals)} runtime override(s) from the volume")
+    except Exception as exc:
+        print(f"[control] could not restore overrides: {exc!r}")
+
+
 # ── Entitlements: the paid grant, on the VOLUME ───────────────────────────────
 # Every record of who has paid lived in Firestore and nowhere else, which made a
 # datastore outage indistinguishable from a cancelled subscription. Both grant
@@ -7034,6 +7166,42 @@ async def delete_track_record_entry(signal_id: str, _: None = Depends(_require_a
     _save_track_record()
     return {"success": True, "removed": removed, "signal_id": signal_id,
             "remaining": len(_track_store)}
+
+
+@app.get("/api/admin/runtime")
+async def runtime_controls_get(_: None = Depends(_require_admin)):
+    """Current live value of every tunable, with its bounds and code default."""
+    return {"controls": _rt_read(), "paused": bool(getattr(_cfg_mod, "TRADING_PAUSED", False))}
+
+
+@app.post("/api/admin/runtime")
+async def runtime_controls_set(payload: Dict[str, Any], _: None = Depends(_require_admin)):
+    """Set one or more controls live. Takes effect on the next scan.
+
+    `reset: true` restores the values committed in code, which is the escape
+    hatch if a dial is left somewhere harmful — it never depends on remembering
+    what the previous value was.
+    """
+    if payload.get("reset"):
+        _rt_capture_defaults()
+        applied = _rt_apply(dict(_RUNTIME_DEFAULTS), persist=True)
+        return {"status": "reset", "applied": applied, "controls": _rt_read()}
+    values = {k: v for k, v in (payload or {}).items() if k in _TUNABLES}
+    if not values:
+        raise HTTPException(status_code=422,
+                            detail=f"no known controls in request. Valid: {sorted(_TUNABLES)}")
+    try:
+        applied = _rt_apply(values)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return {"status": "ok", "applied": applied, "controls": _rt_read()}
+
+
+@app.get("/control")
+async def control_panel():
+    """Mobile control panel. The PAGE is public; every action on it requires the
+    admin key, which is held only in the browser and sent per request."""
+    return FileResponse(WEB_ROOT_PATH / "src" / "pages" / "control.html")
 
 
 @app.post("/api/admin/reset-track-record")
