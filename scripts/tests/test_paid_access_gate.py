@@ -227,3 +227,44 @@ def test_the_skip_is_no_longer_silent():
     body = src.split('_tg_send_all')[1]
     body = body[:body.find('\n    def ')] if '\n    def ' in body else body
     assert 'SKIPPED' in body, 'the entitlement skip is a bare `continue` again'
+
+
+# ── cancellation keeps the time already paid for ─────────────────────────────
+# Found 2026-08-20 while adding the volume entitlement record. The Whop revoke
+# handler states outright: "Do NOT downgrade `plan` here. A cancellation means
+# 'will not renew'; the customer keeps access until the paid period ends." It
+# then writes subscription.status = "canceled" — and has_paid_access denied on
+# that status immediately, taking away time the customer had already bought.
+# The comment and the code disagreed, and the code was the one users felt.
+
+@pytest.mark.parametrize('status', ['cancelled', 'canceled'])
+def test_a_cancelled_plan_runs_to_the_end_of_its_paid_period(status):
+    doc = {'plan': 'pro', 'subscription': {'status': status,
+                                           'current_period_end': _FUTURE}}
+    assert main.has_paid_access(doc) is True, (
+        'cancelling ends access instantly again — the customer loses days they '
+        'have already paid for'
+    )
+
+
+@pytest.mark.parametrize('status', ['cancelled', 'canceled'])
+def test_a_cancelled_plan_ends_once_the_period_is_over(status):
+    doc = {'plan': 'pro', 'subscription': {'status': status,
+                                           'current_period_end': _PAST}}
+    assert main.has_paid_access(doc) is False
+
+
+def test_a_cancelled_plan_with_no_end_date_confers_nothing():
+    """Without a date there is no period to honour, and guessing would grant
+    open-ended access to a cancelled plan."""
+    assert main.has_paid_access(
+        {'plan': 'pro', 'subscription': {'status': 'canceled'}}) is False
+
+
+@pytest.mark.parametrize('status', ['expired', 'past_due', 'unpaid', 'halted'])
+def test_the_other_dead_statuses_get_no_grace(status):
+    """Only CANCELLED buys remaining time. 'expired' is over, and past_due /
+    unpaid / halted mean money is owed."""
+    doc = {'plan': 'pro', 'subscription': {'status': status,
+                                           'current_period_end': _FUTURE}}
+    assert main.has_paid_access(doc) is False
