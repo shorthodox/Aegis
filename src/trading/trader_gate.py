@@ -631,6 +631,32 @@ class TraderGate:
         return max(stop, max(blocking) + buf) if blocking else stop
 
     @staticmethod
+    def _level_between(side: str, tight_stop: float, structural_stop: float,
+                       levels: Sequence[Tuple[float, int]],
+                       result: Dict[str, Any]) -> float:
+        """The level a TIGHTENED stop would end up standing under.
+
+        _clear_levels pushes the stop beyond every level in its way. The risk
+        budget in stage 5b then pulls it back toward price — and if it crosses
+        one of those levels on the way, the stop is once again parked exactly
+        where the market goes to test structure.
+
+        Returns the nearest level that would be left unprotected, or 0.0.
+        """
+        cands = [lv for lv, _t in (levels or []) if lv > 0]
+        for _key in ('support', 'resistance'):
+            lv = _f(result, _key)
+            if lv > 0:
+                cands.append(lv)
+        if side == 'BUY':
+            # Stop sits BELOW price; tightening raises it. Any level at or above
+            # the structural stop but below the tightened one loses its cover.
+            hit = [lv for lv in cands if structural_stop <= lv < tight_stop]
+            return max(hit) if hit else 0.0
+        hit = [lv for lv in cands if tight_stop < lv <= structural_stop]
+        return min(hit) if hit else 0.0
+
+    @staticmethod
     def _pick_target(side: str, price: float, atr: float,
                      levels: Sequence[Tuple[float, int]],
                      result: Dict[str, Any], risk: float = 0.0) -> float:
@@ -1005,6 +1031,47 @@ class TraderGate:
             _structural = abs(entry_px - stop)
             _lo, _hi    = entry_px * MIN_STOP_PCT / 100.0, entry_px * MAX_STOP_PCT / 100.0
             _banded     = min(max(_structural, _lo), _hi)
+
+            # ── Never tighten a stop back UNDER a level it was pushed past ────
+            # AAVE/USDT 2026-08-20 is the whole argument. Two resistances sat
+            # nearby: 98.69 (entered against) and 100.46. _clear_levels correctly
+            # placed the stop at 101.07, beyond the far one. This band then pulled
+            # it to exactly 100.07 — the 1.30% cap, to four decimals — which is
+            # 0.39 BELOW the 100.46 level. Price ran up to test that level, took
+            # the stop, and then fell as the setup said it would.
+            #
+            # The comment above used to argue a tightened stop makes the trade's
+            # ratio "better". It does not. It makes the loss smaller and far more
+            # likely, which is a worse trade at a flattering number.
+            #
+            # Risk is size x distance, so when structure needs a wider stop the
+            # honest lever is SIZE. Keep the stop where the thesis actually dies
+            # and scale the position down by exactly the ratio the budget was
+            # exceeded by — identical dollar risk, stop out of the traffic. If
+            # that scaling drops below MIN_SIZE_FACTOR the setup is genuinely
+            # unaffordable and is refused rather than fitted with a decorative stop.
+            if _banded < _structural - 1e-12:
+                _tight = (entry_px - _banded) if side == 'BUY' else (entry_px + _banded)
+                _exposed = cls._level_between(side, _tight, stop, levels or [], result)
+                if _exposed:
+                    _scale = _banded / _structural if _structural > 0 else 1.0
+                    size *= _scale
+                    notes.append(
+                        f'budget: NOT tightening — a {MAX_STOP_PCT}% stop would sit at '
+                        f'{_tight:.8g}, under the {_exposed:.8g} level the stop was '
+                        f'placed beyond. Keeping the structural stop at {stop:.8g} and '
+                        f'scaling size x{_scale:.2f} instead, so the dollar risk is '
+                        f'unchanged and the stop is not standing in front of structure')
+                    if size < MIN_SIZE_FACTOR:
+                        return _reject('allocation',
+                                       f'stop must clear {_exposed:.8g} '
+                                       f'({_structural / entry_px * 100:.2f}% of entry), and '
+                                       f'sizing that down to the {MAX_STOP_PCT}% budget '
+                                       f'leaves {size:.2f} (< {MIN_SIZE_FACTOR}) — the setup '
+                                       f'is not affordable at a safe stop',
+                                       notes, side, setup, level=level)
+                    _banded = _structural          # keep the structural stop
+
             if abs(_banded - _structural) > 1e-12:
                 stop = (entry_px - _banded) if side == 'BUY' else (entry_px + _banded)
                 _stop_source = STOP_SOURCE_GATE_BAND
