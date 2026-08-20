@@ -297,7 +297,23 @@
       color: var(--dim); padding: 8px 10px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.06);
     }
     .sig-table td { padding: 9px 10px; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 12px; vertical-align: middle; }
-    .sig-table tr:hover td { background: rgba(255,255,255,0.02); cursor: pointer; }
+    /* The row is the tap target, so it must LOOK and BEHAVE interactive without
+       a mouse. `cursor: pointer` used to live inside `:hover` only — which never
+       matches on a touch screen. That is not just a missing pointer: iOS
+       synthesises a click on a non-interactive element largely off the back of
+       that same signal, so rows silently did nothing when tapped on a phone.
+       Declared on the row itself, hover keeps only the highlight it owns. */
+    .sig-table tbody tr {
+      cursor: pointer;
+      touch-action: manipulation;              /* no 300ms tap delay */
+      -webkit-tap-highlight-color: rgba(184,150,106,0.18);
+    }
+    .sig-table tbody tr:hover td { background: rgba(255,255,255,0.02); }
+    .sig-table tbody tr:active td { background: rgba(184,150,106,0.10); }
+    .sig-table tbody tr:focus-visible {
+      outline: 2px solid var(--gold, #B8966A);
+      outline-offset: -2px;
+    }
     .sig-table tr:last-child td { border-bottom: none; }
     .sig-sym { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 13px; }
     .sig-dir-buy  { color: var(--green); font-weight: 700; }
@@ -2643,7 +2659,11 @@ function renderActiveSignals() {
             const sigLabelStr = pos ? 'OPEN POSITION' : (isPending ? `ARMED (${pendSide || 'WAITING'})` : (sig.signal_strength || sig.signal || 'HOLD').replace('_', ' '));
 
             return `
-              <tr onclick="window.location.href='/chart?symbol=${encodeURIComponent(sig.symbol)}&tf=${currentTf}'" title="Open chart for ${sig.symbol}">
+              <tr role="link" tabindex="0"
+                  onclick="window.location.href='/chart?symbol=${encodeURIComponent(sig.symbol)}&tf=${currentTf}'"
+                  onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}"
+                  aria-label="Open deep chart analysis for ${sig.symbol}"
+                  title="Open chart for ${sig.symbol}">
                 <td>
                   ${hasDot}<span class="sig-sym">${sig.symbol.replace('/USDT','')}</span>
                   <div style="font-size:9px;color:var(--dim)">/USDT</div>
