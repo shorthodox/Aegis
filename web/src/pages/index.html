@@ -195,6 +195,15 @@
       align-items: start;
     }
 
+    /* The track-record hook: text left, a single unmissable CTA right. */
+    .record-hook-grid {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: var(--s-9);
+      align-items: center;
+    }
+    .record-hook-cta { width: 260px; }
+
     @media (max-width: 1000px) {
       .hero-demo-grid { grid-template-columns: 1fr; gap: var(--s-7); }
       .feature-grid { grid-template-columns: 1fr 1fr; }
@@ -202,6 +211,8 @@
       .honest-grid { grid-template-columns: 1fr; }
       .method-label-grid { grid-template-columns: 1fr; gap: var(--s-6); }
       .method-label-grid > div:first-child { position: static !important; }
+      .record-hook-grid { grid-template-columns: 1fr; gap: var(--s-6); }
+      .record-hook-cta { width: 100%; }
     }
     @media (max-width: 700px) {
       .stats-strip-grid { grid-template-columns: 1fr 1fr; }
@@ -435,12 +446,18 @@
           <button id="heroMathBtn" class="ae-btn ae-btn-primary ae-btn-lg">
             Start 3-Day Free Trial
           </button>
-          <a href="/track-record" class="ae-btn ae-btn-ghost ae-btn-lg" style="color: var(--ae-text-2);">
-            Live Track Record &nbsp;→
+          <a href="/track-record" class="ae-btn ae-btn-lg"
+             style="background: transparent; color: var(--ae-gold); border: 1px solid var(--ae-gold);">
+            Visit the Track Record &nbsp;→
           </a>
         </div>
 
-        <p style="font-size: 0.75rem; color: var(--ae-text-3); margin-top: var(--s-4);">
+        <p style="font-size: 0.8rem; line-height: 1.7; color: var(--ae-text-2); margin-top: var(--s-4); max-width: 52ch;">
+          <strong style="color: var(--ae-text-1); font-weight: 600;">Start there, not here.</strong>
+          The record is the product &mdash; no account, no card, nothing to sign.
+        </p>
+
+        <p style="font-size: 0.75rem; color: var(--ae-text-3); margin-top: var(--s-3);">
           No credit card required &nbsp;·&nbsp; Full access from day one &nbsp;·&nbsp; Cancel anytime
         </p>
         <div id="trialCountdown"></div>
@@ -548,6 +565,47 @@
         </div>
 
       </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════
+     THE HOOK — the track record is the whole point
+     ═══════════════════════════════════════ -->
+<section id="the-record" style="border-top: 1px solid var(--ae-gold); background: var(--ae-surface);">
+  <div class="ae-container" style="padding-top: var(--s-8); padding-bottom: var(--s-8);">
+    <div class="record-hook-grid">
+
+      <div>
+        <div class="ae-eyebrow" style="color: var(--ae-gold);">Why AEGIS exists</div>
+
+        <h2 class="ae-h2" style="margin-bottom: var(--s-5); max-width: 20ch;">
+          Judge the record,<br>not the pitch.
+        </h2>
+
+        <p style="font-size: 1rem; line-height: 1.8; color: var(--ae-text-2); max-width: 58ch; margin-bottom: var(--s-4);">
+          Every AEGIS signal publishes its entry, its stop, its target and its full reasoning
+          <em style="color: var(--ae-text-1); font-style: normal; border-bottom: 1px solid var(--ae-gold);">before
+          the outcome is known</em> &mdash; then the result is posted to a page anyone can read.
+          No account. No card. No sales call.
+        </p>
+
+        <p style="font-size: 0.9rem; line-height: 1.75; color: var(--ae-text-3); max-width: 58ch;">
+          That page is the entire pitch. If a signal service won&rsquo;t show you one,
+          you already know why.
+        </p>
+      </div>
+
+      <div class="record-hook-cta">
+        <a href="/track-record" class="ae-btn ae-btn-primary ae-btn-lg" style="width: 100%; justify-content: center;">
+          Visit the Track Record &nbsp;→
+        </a>
+        <p style="font-size: 0.75rem; line-height: 1.7; color: var(--ae-text-3); margin: var(--s-3) 0 0; text-align: center;">
+          Live outcomes, entry and stop on every closed trade.<br>Open positions tracked in real time.
+        </p>
+      </div>
+
     </div>
   </div>
 </section>
