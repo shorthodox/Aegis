@@ -210,6 +210,33 @@ ROUND_TRIP_COST_PCT = 0.10 # 0.04% taker + 0.01% slippage per side; keep in step
 AT_LEVEL_ATR     = 0.35   # price is "at" the level within this many ATR
 REACH_ATR        = 2.50   # further than this and it is not a trade yet — drop it, do not queue
 WORK_EXPIRY_BARS = 8      # a resting order the market ignores for 8 bars is a dead thesis
+
+# ── a resting order the market never comes back to is not a trade ────────────
+# Reported 2026-08-21 with ZK/USDT on screen: "if it won't hit target resistance,
+# trade won't open... this is resulting in no signals anymore". Confirmed live —
+# 2 armed, 0 open, both TREND_PULLBACK SELLs resting at a resistance price never
+# rallied into, expiring after WORK_EXPIRY_BARS and never becoming trades.
+#
+# So: when the 5m tape has already TURNED our way, take the trade at the market
+# instead of waiting for a touch that may not come. _ltf_confirmation already
+# computes exactly the print this needs — ltf_bull/ltf_bear are true when at
+# least 3 of the last ENTRY_5M_WINDOW 5m candles closed our way (need = max(3,
+# window - 1)), which is the "3 x 5m reversal candles" the desk asked for.
+#
+# The entry is worse than the level by construction — a short fills below the
+# resistance instead of at it — and that is PAID FOR, not waved through:
+#
+#   * the stop is anchored to the LEVEL (`stop = level ± buf`, then _clear_levels),
+#     never to price, so it still sits beyond the resistance exactly as before;
+#   * `risk = abs(price - stop)` is already measured from price, so entering
+#     early widens the measured risk rather than hiding it;
+#   * MAX_STOP_ATR still caps that risk, and stage 3's MIN_NET_R floor still has
+#     to clear on the worse entry. A trade that only paid at the level is
+#     rejected here rather than taken at a price that does not pay.
+#
+# The full confirmation test must ALSO pass, so a counter-trend setup still needs
+# its two independent prints; the 5m turn is a requirement on top, not a bypass.
+EARLY_ENTRY_ON_LTF = True
 MODEL_OPPOSE_MARGIN = 0.12  # model may veto the structure only when it leans this hard the
                             # other way (raw p_buy/p_sell); a neutral model does not block
 
@@ -947,16 +974,27 @@ class TraderGate:
         # A market that has genuinely lost its level surfaces as either the NEXT
         # level down being chosen, or no level at all — both handled in stage 2.
         ok, cwhy = cls._confirmation(result, side, setup, confirm)
+        _ltf_turned = bool((confirm or {}).get('ltf_bear' if side == 'SELL' else 'ltf_bull'))
         if dist_atr <= AT_LEVEL_ATR and ok:
             action, expiry = ACTION_ENTER, 0
             notes.append(f'trigger: at the level ({dist_atr:.2f} ATR) and confirmed — {cwhy}')
         elif dist_atr <= REACH_ATR:
-            # A resting order, not a queue entry: it has a price, an invalidation
-            # and a clock.  This is what replaces PENDING.
-            action, expiry = ACTION_WORK, WORK_EXPIRY_BARS
-            notes.append(f'trigger: working an order at {level:.8g} ({dist_atr:.2f} ATR away), '
-                         f'expires in {WORK_EXPIRY_BARS} bars'
-                         + ('' if ok else f' — {cwhy}'))
+            if EARLY_ENTRY_ON_LTF and ok and _ltf_turned:
+                # The 5m has already turned. Take it at the market rather than
+                # wait for a touch that may never come — the stop is anchored to
+                # the level either way, and the worse entry has already been
+                # priced into `risk` and cleared MIN_NET_R above.
+                action, expiry = ACTION_ENTER, 0
+                notes.append(f'trigger: {dist_atr:.2f} ATR short of {level:.8g}, but the 5m '
+                             f'tape turned — entering at the market rather than resting on a '
+                             f'touch that may not come ({cwhy})')
+            else:
+                # A resting order, not a queue entry: it has a price, an invalidation
+                # and a clock.  This is what replaces PENDING.
+                action, expiry = ACTION_WORK, WORK_EXPIRY_BARS
+                notes.append(f'trigger: working an order at {level:.8g} ({dist_atr:.2f} ATR away), '
+                             f'expires in {WORK_EXPIRY_BARS} bars'
+                             + ('' if ok else f' — {cwhy}'))
         else:
             return _reject('trigger',
                            f'level is {dist_atr:.1f} ATR away (> {REACH_ATR}) — not a trade yet',

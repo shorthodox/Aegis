@@ -154,7 +154,12 @@ def test_a_refusal_opens_nothing_and_says_why():
 
 
 def test_a_setup_away_from_its_level_becomes_a_working_order_not_a_position():
-    sig, pos, out = asyncio.run(drive(build(AWAY_LEVELS), _base_result(**AWAY_LONG)))
+    # ltf=() — a QUIET 5m tape. Since EARLY_ENTRY_ON_LTF a turned tape fills at
+    # the market instead of resting (see test_early_entry_on_a_turned_tape.py),
+    # and this test is about the resting-order path, which is what a quiet tape
+    # still takes.
+    sig, pos, out = asyncio.run(drive(build(AWAY_LEVELS, ltf=()),
+                                      _base_result(**AWAY_LONG)))
     assert pos is None, f'a working order opened a position:\n{out}'
     assert sig.get('working_order') is True
     assert sig.get('pending_target') == pytest.approx(98.5)
@@ -164,7 +169,7 @@ def test_a_setup_away_from_its_level_becomes_a_working_order_not_a_position():
 def test_a_working_order_expires_instead_of_queueing_forever():
     """The single behaviour PENDING never had."""
     import time
-    eng = build(AWAY_LEVELS)
+    eng = build(AWAY_LEVELS, ltf=())      # quiet tape — see the test above
     away = _base_result(**AWAY_LONG)
 
     sig, _, _ = asyncio.run(drive(eng, away))
