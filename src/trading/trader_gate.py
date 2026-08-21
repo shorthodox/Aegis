@@ -278,6 +278,36 @@ ALLOW_EXHAUSTION_REVERSAL = False
 # /control for that reason, and the counter below keeps measuring.
 ALLOW_EXHAUSTION_REVERSAL_BUY = True
 
+# ── and the SELL half has a slice that pays ──────────────────────────────────
+# 2026-08-21, second look, prompted by a full day with zero signals. Production
+# over 55 minutes: 492 decisions, 0 fires, 96% dying at setup — and ONE reason
+# was 57% of everything, this refusal, every instance a SELL.
+#
+# Re-measured with the conditions this branch ACTUALLY uses (uptrend, rp >= 0.80
+# on the rolling 24h range, RSI >= 68) rather than the looser proxy behind the
+# -0.075R quoted above (72h range, RSI > 70, no trend filter — a different
+# population). Through the real 5-rung ladder, 9,846 bars:
+#
+#     the whole refused branch      48.9% win  -0.008R   held out -0.002R
+#
+# Breakeven, not a disaster. So the blanket refusal was spending 57% of the
+# desk's decisions to avoid a setup that costs roughly nothing — which is a bad
+# trade when the product's output is zero.
+#
+# One slice is positive in BOTH time halves: genuinely stretched AND at the very
+# top of the range.
+#
+#     RSI >= 75 AND rp >= 0.95      1,242 bars  49.2% win
+#                                   +0.023R all / +0.009R fit / +0.045R held out
+#
+# Honest about its weight: eleven variants were tested and this is the one that
+# survived both halves, so some of it may be selection. The effect is small. It
+# is allowed at the unchanged 0.50 allocation, and it is killable from /control.
+# Anything less stretched than this stays refused.
+ALLOW_EXHAUSTION_SELL_STRETCHED = True
+EXHAUSTION_SELL_RSI = 75.0   # "stretched" means stretched, not merely overbought
+EXHAUSTION_SELL_RP  = 0.95   # and at the very top of the range, not just near it
+
 # How many signals this refusal has cost, since process start. A 20-30 signal
 # observation window on a system that already fires rarely stretches from weeks
 # to months if this setup was a meaningful share of volume — and the -0.064R
@@ -524,7 +554,10 @@ class TraderGate:
                         f'uptrend pulled back into support (rp {rp:.2f}) — buying the dip in a bull')
             if rp >= EXTREME_RP_HIGH:
                 if rsi >= EXHAUSTION_RSI_HI:
-                    if not ALLOW_EXHAUSTION_REVERSAL:
+                    _stretched = (ALLOW_EXHAUSTION_SELL_STRETCHED
+                                  and rsi >= EXHAUSTION_SELL_RSI
+                                  and rp >= EXHAUSTION_SELL_RP)
+                    if not (ALLOW_EXHAUSTION_REVERSAL or _stretched):
                         return _refuse_exhaustion('SELL')
                     return (SETUP_EXHAUSTION_REVERSAL, 'SELL',
                             f'uptrend stretched at the top of its range (rp {rp:.2f}, RSI {rsi:.0f})')
