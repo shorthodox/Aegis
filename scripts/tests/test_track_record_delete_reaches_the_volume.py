@@ -198,3 +198,124 @@ def test_the_response_says_which_store_it_came_from(stores, monkeypatch):
         "e35c5a3c-7a0d-4b71-a1da-438224c62aea", None))
     assert str(engine) in out["stores"]
     assert out["stores"][str(engine)] == 1
+
+
+# -- the wallet is the real source of truth -----------------------------------
+# 2026-08-21: the three losses were deleted from memory and from the volume, the
+# public record went to 3W/0L, and minutes later all three were BACK with the
+# same signal_ids.
+#
+# PositionManager._save_track_record rebuilds STATE_DIR/track_record.json from
+# `wallet.trade_history` every cycle, and re-preserves any on-disk record the
+# wallet does not know about. So a disk-only delete is overwritten by the wallet,
+# and a wallet-only delete is resurrected from the disk orphans. Both have to go.
+#
+# The money has to move too: `balance` is a running total (`balance += pnl_usdt`
+# per close), so a row deleted from the record while its PnL stays in the wallet
+# leaves published capital and profit reporting a trade that is no longer there.
+# Reported as: "SHOULDNT CAP AND PROFIT SHOULD RAISE ACCORDINGLY? THEY ARE SAME
+# AS BEFORE".
+
+class _Trade:
+    def __init__(self, signal_id, pnl_usdt):
+        self.signal_id = signal_id
+        self.pnl_usdt = pnl_usdt
+
+
+class _Wallet:
+    def __init__(self, trades, balance, initial_capital=10000.0):
+        self.trade_history = list(trades)
+        self.balance = balance
+        self.initial_capital = initial_capital
+
+
+class _Engine:
+    def __init__(self, wallet):
+        self.wallet = wallet
+        self.saved = 0
+
+    def _save_track_record(self):
+        self.saved += 1
+
+
+@pytest.fixture
+def wallet_engine(monkeypatch):
+    """The live book as it stood: 3 wins and the 3 losses, balance 10,008.55."""
+    trades = [
+        _Trade("win-inj", 9.53), _Trade("win-storj", 42.88), _Trade("win-trx", 10.70),
+        _Trade("ee759ce5-b111-4c47-bf1e-1b5d340a0726", -16.10),
+        _Trade("e35c5a3c-7a0d-4b71-a1da-438224c62aea", -14.38),
+        _Trade("c8f45500-73a3-4e36-ba02-e613151b4fdf", -14.45),
+    ]
+    eng = _Engine(_Wallet(trades, balance=10018.18))
+    monkeypatch.setattr(main.LIVE_STATE, "engine", eng, raising=False)
+    return eng
+
+
+def test_the_trade_is_removed_from_the_wallet(wallet_engine):
+    out = main._purge_ids_from_wallet(LOSS_IDS)
+    assert out["slices"] == 3
+    left = {t.signal_id for t in wallet_engine.wallet.trade_history}
+    assert left == {"win-inj", "win-storj", "win-trx"}
+
+
+def test_deleting_a_loss_raises_the_balance(wallet_engine):
+    """The reported symptom: the row went, the money did not."""
+    before = wallet_engine.wallet.balance
+    out = main._purge_ids_from_wallet(LOSS_IDS)
+    after = wallet_engine.wallet.balance
+    assert after > before, 'deleting three losing trades left the balance unchanged'
+    assert after == pytest.approx(before + 16.10 + 14.38 + 14.45, abs=1e-6)
+    assert out["pnl_reversed"] == pytest.approx(-44.93, abs=1e-6)
+
+
+def test_deleting_a_win_lowers_the_balance(wallet_engine):
+    """Symmetry — the reversal is not a one-way ratchet that only ever adds."""
+    before = wallet_engine.wallet.balance
+    main._purge_ids_from_wallet({"win-storj"})
+    assert wallet_engine.wallet.balance == pytest.approx(before - 42.88, abs=1e-6)
+
+
+def test_an_unknown_id_leaves_the_wallet_alone(wallet_engine):
+    before = wallet_engine.wallet.balance
+    n = len(wallet_engine.wallet.trade_history)
+    out = main._purge_ids_from_wallet({"nope"})
+    assert out["slices"] == 0
+    assert wallet_engine.wallet.balance == before
+    assert len(wallet_engine.wallet.trade_history) == n
+
+
+def test_no_engine_running_is_not_an_error(monkeypatch):
+    monkeypatch.setattr(main.LIVE_STATE, "engine", None, raising=False)
+    assert main._purge_ids_from_wallet(LOSS_IDS)["slices"] == 0
+
+
+def test_every_slice_of_a_partialled_trade_goes(monkeypatch):
+    """Partial TPs append several TradeRecords under ONE signal_id. Leaving any
+    behind keeps the trade in the rebuilt record and its money in the wallet."""
+    sid = "ee759ce5-b111-4c47-bf1e-1b5d340a0726"
+    eng = _Engine(_Wallet([_Trade(sid, 3.0), _Trade(sid, 5.0), _Trade(sid, -20.0),
+                           _Trade("other", 1.0)], balance=10000.0))
+    monkeypatch.setattr(main.LIVE_STATE, "engine", eng, raising=False)
+    out = main._purge_ids_from_wallet({sid})
+    assert out["slices"] == 3
+    assert [t.signal_id for t in eng.wallet.trade_history] == ["other"]
+    assert eng.wallet.balance == pytest.approx(10000.0 + 12.0, abs=1e-6)
+
+
+def test_the_endpoint_purges_the_wallet_and_re_saves(stores, wallet_engine, monkeypatch):
+    """Disk must be purged BEFORE the engine rewrites, or orphan-preservation
+    reads the row straight back off the volume."""
+    engine_file, _web, _mem = stores
+    _write(engine_file, _payload())
+    monkeypatch.setattr(main, "_track_store", [], raising=False)
+    monkeypatch.setattr(main, "_tr_seen_ids", set(), raising=False)
+    monkeypatch.setattr(main, "_save_track_record", lambda: None)
+
+    sid = "ee759ce5-b111-4c47-bf1e-1b5d340a0726"
+    out = asyncio.run(main.delete_track_record_entry(sid, None))
+    assert out["stores"]["wallet_slices"] == 1
+    assert out["pnl_reversed_usdt"] == pytest.approx(-16.10, abs=1e-6)
+    assert wallet_engine.saved == 1, 'the engine was not asked to rewrite the file'
+    assert sid not in {t.signal_id for t in wallet_engine.wallet.trade_history}
+    assert sid not in {r["signal_id"] for r in _read(engine_file)["signals"]}
