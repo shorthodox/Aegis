@@ -123,26 +123,39 @@ def test_exhaustion_reversal_is_refused_by_default():
         'the counter-trend fade is refused by default — measured -0.064R/trade'
     )
 
-def test_the_losing_basket_is_refused_by_the_tide_even_when_stretched(allow_fade):
-    """Even a textbook-stretched short is refused against a strong BTC tide.
+def test_the_losing_basket_is_cut_to_an_eighth_by_the_tide(allow_fade):
+    """A textbook-stretched short against a strong BTC tide is CUT, not refused.
 
-    This is the second, independent stop: the basket's defining feature was that
-    every one of them fought the same rising tape.
+    The basket's defining feature was that eight of them fought the same rising
+    tape at full size, ~8.0 units of correlated short.
 
-    The MECHANISM changed on 2026-08-20 and the protection did not. A strong tide
-    now cuts size to STRONG_TIDE_FACTOR instead of rejecting outright, so this
-    EXHAUSTION_REVERSAL (weight 0.50) sizes to 0.50 x 0.25 = 0.125 and is refused
-    by MIN_SIZE_FACTOR one check later. The reason string moved from the tide to
-    the size floor; the trade is just as refused, and the tide is still recorded
-    in the notes. Asserting the outcome and the reasoning rather than which of the
-    two consecutive checks caught it.
+    The mechanism has moved twice and the protection has not:
+
+      * 2026-08-20 the tide stopped rejecting and started cutting size to
+        STRONG_TIDE_FACTOR. This setup (weight 0.50) sized to 0.125 and was then
+        refused by MIN_SIZE_FACTOR, which was also 0.25 — so the cut was a veto
+        wearing different clothes.
+      * 2026-08-21 MIN_SIZE_FACTOR dropped to 0.12 because that identity was
+        silencing the desk for whole days in a rally. This trade is now ALLOWED,
+        at an eighth of normal size.
+
+    What actually bounds the basket now, and is asserted below: it rests rather
+    than fires, it is 0.125 of a position, and it needs a second confirmation to
+    fill. With max 2 per cluster and max 5 open the ceiling is 1.25 units against
+    the basket's ~8.0.
     """
     plan = run(mk(price=109.5, support=99.8, resistance=110.0, rsi=75.0),
                regime='TRENDING_BULL',
                market={'tide_dir': 'UP', 'tide_strength': 0.8},
                levels=[(110.0, 4), (99.8, 3), (95.0, 3)])
-    assert plan.action == ACTION_REJECT
-    assert plan.stage == 'allocation'
+    assert plan.action != ACTION_ENTER, (
+        'a stretched counter-tide short fires IMMEDIATELY at full conviction — '
+        'that is the basket'
+    )
+    assert plan.size_factor == pytest.approx(0.125, abs=1e-9), (
+        f'size {plan.size_factor} — a counter-tide fade must be an eighth of a '
+        f'position, not a whole one'
+    )
     assert any('tide' in n for n in plan.notes), (
         'the tide is no longer part of the reasoning at all'
     )
