@@ -228,6 +228,29 @@ MODEL_OPPOSE_MARGIN = 0.12  # model may veto the structure only when it leans th
 # Set False to restore the old behaviour (fires at 0.50 size).
 ALLOW_EXHAUSTION_REVERSAL = False
 
+# ── the two halves have OPPOSITE signs ───────────────────────────────────────
+# The flag above refuses "buy oversold / sell overbought" as one thing, on a
+# -0.064R that POOLED both directions. Re-measured 2026-08-21 on 345,209 entries
+# run through the desk's real 5-rung ladder (TP_LADDER_PCT, TP_CLOSE_PCTS,
+# break-even at TP1, ATR trail from TP2, giveback ratchet), split 60/40 by time:
+#
+#     BUY  oversold  RSI<25          51.4% win  +0.044R   held out +0.139R
+#     BUY  oversold  RSI<30          49.9% win  +0.020R   held out +0.080R
+#     SELL overbought at resistance  46.1% win  -0.075R   fit      -0.143R
+#
+# The BUY half is the best setup measured anywhere on this desk; the SELL half is
+# the worst. Pooling them produced a number that described neither, and refusing
+# on it threw away the good half to be rid of the bad one. 37 of 59 tokens are
+# net positive on the BUY half.
+#
+# CAVEAT, and it is a real one: the live corroboration cited above (17 closed,
+# 2W/15L, every loss a STOP_HIT) is not broken out by direction anywhere that
+# survives, and the fleet was overwhelmingly bear-labelled over that period —
+# which is exactly when the BUY half fires. So live experience may be arguing
+# against the backtest here rather than alongside it. It ships killable from
+# /control for that reason, and the counter below keeps measuring.
+ALLOW_EXHAUSTION_REVERSAL_BUY = True
+
 # How many signals this refusal has cost, since process start. A 20-30 signal
 # observation window on a system that already fires rarely stretches from weeks
 # to months if this setup was a meaningful share of volume — and the -0.064R
@@ -493,7 +516,7 @@ class TraderGate:
                         f'downtrend rallied into resistance (rp {rp:.2f}) — selling the bounce in a bear')
             if rp <= EXTREME_RP_LOW:
                 if rsi <= EXHAUSTION_RSI_LO:
-                    if not ALLOW_EXHAUSTION_REVERSAL:
+                    if not (ALLOW_EXHAUSTION_REVERSAL or ALLOW_EXHAUSTION_REVERSAL_BUY):
                         return _refuse_exhaustion('BUY')
                     return (SETUP_EXHAUSTION_REVERSAL, 'BUY',
                             f'downtrend stretched at the bottom of its range (rp {rp:.2f}, RSI {rsi:.0f})')

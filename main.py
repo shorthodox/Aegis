@@ -3451,6 +3451,10 @@ _TUNABLES: Dict[str, Any] = {
                            "Size multiplier into a strong counter-tide. 0 = refuse outright"),
     "allow_exhaustion_reversal": ("src.trading.trader_gate", "ALLOW_EXHAUSTION_REVERSAL", "bool", 0, 1,
                                   "Allow counter-trend exhaustion fades (measured -0.064R)"),
+    "allow_exhaustion_reversal_buy": ("src.trading.trader_gate",
+                                      "ALLOW_EXHAUSTION_REVERSAL_BUY", "bool", 0, 1,
+                                      "Allow the BUY half of the fade (buy oversold). "
+                                      "Measured +0.044R; the SELL half stays refused"),
     "trading_paused": ("scripts.engine.config", "TRADING_PAUSED", "bool", 0, 1,
                        "Stop opening new positions. Exits keep running"),
 }
