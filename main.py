@@ -725,6 +725,49 @@ def _web_record_path() -> Path:
     return Path(BASE_DIR) / "web" / "track_record.json"
 
 
+def _purge_ids_from_wallet(signal_ids: Set[str]) -> Dict[str, Any]:
+    """Remove trades from the live engine's WALLET and reverse their PnL.
+
+    The wallet is the real source of truth. `PositionManager._save_track_record`
+    rebuilds STATE_DIR/track_record.json from `wallet.trade_history` on every
+    cycle AND re-preserves any on-disk record the wallet does not know about, so:
+
+      * deleting from disk alone is overwritten on the next save, and
+      * deleting from the wallet alone is resurrected from the disk orphans.
+
+    Both have to go, and the balance has to move with them — `balance` is a
+    running total (`self.balance += pnl_usdt` per close), so a row removed from
+    the record while its money stays in the wallet leaves the published capital
+    and profit reporting trades that are no longer in the record.
+
+    The engine shares this process (`asyncio.create_task(run_engine_background())`,
+    instance on `LIVE_STATE.engine`), so this is a direct mutation, not IPC.
+    """
+    out: Dict[str, Any] = {"slices": 0, "pnl_reversed": 0.0}
+    eng = getattr(LIVE_STATE, "engine", None)
+    wallet = getattr(eng, "wallet", None) if eng is not None else None
+    if wallet is None:
+        return out
+    try:
+        keep, dropped = [], []
+        for t in list(getattr(wallet, "trade_history", []) or []):
+            (dropped if getattr(t, "signal_id", None) in signal_ids else keep).append(t)
+        if not dropped:
+            return out
+        pnl = sum(float(getattr(t, "pnl_usdt", 0.0) or 0.0) for t in dropped)
+        wallet.trade_history = keep
+        # Reverse the money: a deleted LOSS raises the balance, a deleted WIN
+        # lowers it. Without this the wallet keeps paying out a trade the record
+        # no longer contains.
+        wallet.balance = float(getattr(wallet, "balance", 0.0)) - pnl
+        out["slices"] = len(dropped)
+        out["pnl_reversed"] = round(pnl, 4)
+        out["balance"] = round(wallet.balance, 2)
+    except Exception as exc:
+        print(f"[TrackRecord] wallet purge failed: {exc!r}")
+    return out
+
+
 def _purge_ids_from_disk(signal_ids: Set[str]) -> Dict[str, int]:
     """Remove signal_ids from every on-disk track record and re-derive summaries.
 
@@ -7231,12 +7274,28 @@ async def delete_track_record_entry(signal_id: str, _: None = Depends(_require_a
     mem_removed = before - len(_track_store)
     if mem_removed:
         _save_track_record()
+
+    # Order matters. Drop it from the wallet FIRST, then from disk, then let the
+    # engine rewrite the file: its orphan-preservation pass reads the on-disk
+    # copy, so purging disk before that rewrite is what stops the row coming
+    # back. Doing this in the other order restores the record every time.
+    wallet_removed = _purge_ids_from_wallet({signal_id})
     disk_removed = _purge_ids_from_disk({signal_id})
-    total = mem_removed + sum(disk_removed.values())
+    try:
+        eng = getattr(LIVE_STATE, "engine", None)
+        if eng is not None and wallet_removed.get("slices"):
+            eng._save_track_record()
+    except Exception as exc:
+        print(f"[TrackRecord] engine re-save after delete failed: {exc!r}")
+
+    total = mem_removed + sum(disk_removed.values()) + int(wallet_removed.get("slices") or 0)
     if total == 0:
         raise HTTPException(status_code=404, detail=f"signal_id '{signal_id}' not found")
     return {"success": True, "removed": total, "signal_id": signal_id,
-            "stores": {"memory": mem_removed, **disk_removed},
+            "stores": {"memory": mem_removed, **disk_removed,
+                       "wallet_slices": wallet_removed.get("slices", 0)},
+            "pnl_reversed_usdt": wallet_removed.get("pnl_reversed", 0.0),
+            "balance": wallet_removed.get("balance"),
             "remaining": len(_track_store)}
 
 
