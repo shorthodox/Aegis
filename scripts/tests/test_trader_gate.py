@@ -442,13 +442,33 @@ def test_a_fade_needs_two_confirmations_a_pullback_needs_one():
 # Stage 5 · allocation
 # ═══════════════════════════════════════════════════════════════════════════
 
+def _base_weight(plan):
+    """The base weight the allocation stage recorded, before every later
+    adjustment. Reading plan.size_factor instead conflates the setup class with
+    the tide cut, the cluster cut and the stop-budget scaling.
+    """
+    for n in (plan.notes or []):
+        if 'base weight' in n:
+            return float(n.rsplit(' ', 1)[1])
+    raise AssertionError(f'no base weight recorded: {plan.notes}')
+
+
 def test_setup_class_sets_the_base_size():
+    """The measured-negative setup starts below the measured-positive one.
+
+    Asserted on the BASE weight, not the final size. Since STOP_SHADOW_ATR the
+    pullback here has a level in its stop's shadow, so its stop widens and stage
+    5b scales its size to pay for it — a correct outcome that has nothing to do
+    with what this test is about.
+    """
     pull = run(mk(price=102.0, support=99.8, resistance=110.0), regime='TRENDING_BULL',
                levels=[(101.9, 4), (110.0, 4)])
     fade = run(mk(price=100.0, support=99.8, resistance=110.0), regime='RANGING',
                levels=[(99.8, 4), (110.0, 4)])
-    assert pull.size_factor > fade.size_factor, \
+    assert _base_weight(pull) > _base_weight(fade), \
         'the measured-negative setup was not sized below the measured-positive one'
+    assert _base_weight(pull) == TG.SETUP_RISK_WEIGHT[SETUP_TREND_PULLBACK]
+    assert _base_weight(fade) == TG.SETUP_RISK_WEIGHT[SETUP_RANGE_FADE]
 
 
 def test_a_full_book_refuses_the_sixth_setup():

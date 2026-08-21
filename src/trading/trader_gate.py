@@ -128,6 +128,33 @@ _DEAD_REGIMES  = {'LIQUIDITY_TRAP'}
 
 # ── Stage 2 · invalidation geometry ───────────────────────────────────────────
 STOP_BUFFER_ATR = 0.55   # the stop sits this far BEYOND the level — outside the wick noise
+# How far PAST the stop a level still threatens it. A stop with a level just
+# overhead is standing in that level's shadow: price runs to test the level and
+# collects the stop on the way, and the trade is closed by a move that had
+# nothing to say about the thesis.
+#
+# SAND/USDT 2026-08-21, reported: short from 0.047640, stop 0.048748, and a
+# resistance at 0.049500 — 0.79 ATR ABOVE the stop. _clear_levels only reached
+# stop + STOP_BUFFER_ATR (0.55 ATR), so that level was never a candidate and the
+# stop was left parked underneath it.
+#
+# This is the same defect as the AAVE far-level case, one step further out: that
+# one was a level BETWEEN price and the stop, this one is a level just BEYOND it.
+# The cost is bounded by the machinery already here — a wider stop still has to
+# clear MAX_STOP_ATR, still has to pay MIN_NET_R at the worse risk, and stage 5b
+# scales size by the budget ratio rather than moving the stop back.
+# Set from a sweep rather than picked: the reported case needs 0.79 ATR, and the
+# cost knee sits just past 1.0 —
+#
+#     shadow 0.55   ENTER 2,074 (40.5%)   invalidation rejects 290
+#     shadow 0.85   ENTER 2,008 (39.2%)   invalidation rejects 390
+#     shadow 1.00   ENTER 1,991 (38.9%)   invalidation rejects 416   <- here
+#     shadow 1.20   ENTER 1,845 (36.0%)   invalidation rejects 636
+#     shadow 1.50   ENTER 1,811 (35.4%)   invalidation rejects 688
+#
+# 1.00 covers the reported geometry with 0.21 ATR to spare and costs 4% of
+# entries; 1.20 would cost 11% for overhead nobody reported.
+STOP_SHADOW_ATR = 1.00
                          # that repeatedly took out stops parked exactly on it
 MIN_STOP_ATR    = 1.50   # a stop nearer than this to entry is inside one bar's noise; the
                          # 8-short basket died on ~1.1% stops in ~1% ATR tape
@@ -712,11 +739,15 @@ class TraderGate:
         about WHAT.
 
         Only levels genuinely in the way are considered — on the stop's side of
-        price, and at or inside the stop plus one buffer.  A level further out
-        than that is not something this stop leans on, so it can never drag a
-        bounded stop into the MAX_STOP_ATR reject.
+        price, and at or inside the stop plus STOP_SHADOW_ATR.  That reach used
+        to be one buffer (0.55 ATR), which left a stop parked under a level
+        sitting slightly further out: price runs to test that level and collects
+        the stop on the way.  A level beyond the shadow is not something this
+        stop leans on, so it still cannot drag a bounded stop into the
+        MAX_STOP_ATR reject.
         """
         buf = STOP_BUFFER_ATR * atr
+        shadow = STOP_SHADOW_ATR * atr      # a level this close overhead still takes the stop
         tol = AT_LEVEL_ATR * atr
         cands = [lv for lv, _t in (levels or []) if lv > 0]
         for _key in ('support', 'resistance'):
@@ -727,9 +758,9 @@ class TraderGate:
         if side == 'BUY':
             # Levels at or below price that sit at/above the stop, or within one
             # buffer beneath it.  Clearing the LOWEST clears every one above it.
-            blocking = [lv for lv in cands if lv <= price + tol and lv >= stop - buf]
+            blocking = [lv for lv in cands if lv <= price + tol and lv >= stop - shadow]
             return min(stop, min(blocking) - buf) if blocking else stop
-        blocking = [lv for lv in cands if lv >= price - tol and lv <= stop + buf]
+        blocking = [lv for lv in cands if lv >= price - tol and lv <= stop + shadow]
         return max(stop, max(blocking) + buf) if blocking else stop
 
     @staticmethod
