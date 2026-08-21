@@ -3455,6 +3455,10 @@ _TUNABLES: Dict[str, Any] = {
                                       "ALLOW_EXHAUSTION_REVERSAL_BUY", "bool", 0, 1,
                                       "Allow the BUY half of the fade (buy oversold). "
                                       "Measured +0.044R; the SELL half stays refused"),
+    "allow_exhaustion_sell_stretched": ("src.trading.trader_gate",
+                                        "ALLOW_EXHAUSTION_SELL_STRETCHED", "bool", 0, 1,
+                                        "Allow the fade SELL only when genuinely stretched "
+                                        "(RSI>=75 at rp>=0.95). Measured +0.023R both halves"),
     "early_entry_on_ltf": ("src.trading.trader_gate", "EARLY_ENTRY_ON_LTF", "bool", 0, 1,
                           "Enter at the market when the 5m tape has turned, instead of "
                           "resting on a level touch that may never come"),
