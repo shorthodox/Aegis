@@ -134,3 +134,73 @@ def test_an_unaffordable_setup_is_refused_not_fudged():
         return                                           # refused: correct
     risk_pct = abs(plan.stop - plan.entry) / plan.entry * 100.0
     assert risk_pct * plan.size_factor <= TG.MAX_STOP_PCT * 1.02
+
+
+# ── the regression this fix caused, and must never cause again ───────────────
+# 2026-08-20: the branch below used to `return _reject('allocation', ...)` when
+# the structural stop could not be afforded. Structural stops WIDER than the
+# 1.30% cap turned out to be the common case, not the rare one — all three of
+# that day's losses shipped a stop at exactly the cap, so structure had asked
+# for more every time — and the reject fired constantly. Firing fell from 11.2%
+# to 9.1% of setups on a 5,120-case sweep and nothing reached the tape for the
+# two hours after it deployed.
+#
+# The rule: improving stop placement must never REMOVE a trade that fired before.
+
+def _unaffordable(**kw):
+    """A far level whose clearance cannot be paid for by size.
+
+    Geometry found by sweeping the gate, not hand-picked: price at a resistance
+    0.3% away with the next one 1.8% beyond it and ATR at 2.6%. Clearing the far
+    level needs far more than the 1.30% budget, and scaling RANGE_FADE's 0.70
+    weight down by that ratio lands under MIN_SIZE_FACTOR.
+    """
+    d = mk(price=100.0, atr=2.6, support=94.0, resistance=100.3,
+           rsi=28.0, **TURNED_DOWN)
+    d.update(kw)
+    return d
+
+
+UNAFFORDABLE_LEVELS = [(100.3, 4), (102.1054, 4), (94.0, 4), (92.308, 3)]
+
+
+def _unaff_plan():
+    plan = run(_unaffordable(), regime='RANGING', levels=UNAFFORDABLE_LEVELS)
+    assert any('Tightening instead' in n for n in (plan.notes or [])), (
+        f'fixture no longer reaches the unaffordable branch '
+        f'({plan.stage}: {plan.reason}) — these tests would stop covering it'
+    )
+    return plan
+
+
+def test_an_unaffordable_structural_stop_does_not_reject_the_trade():
+    plan = _unaff_plan()
+    assert plan.action != ACTION_REJECT, (
+        f'the unaffordable branch is rejecting again ({plan.stage}: {plan.reason}) '
+        f'— this is the change that stopped every signal firing on 2026-08-20'
+    )
+
+
+def test_an_unaffordable_stop_falls_back_to_the_budget_stop_at_full_size():
+    plan = _unaff_plan()
+    risk_pct = abs(plan.stop - plan.entry) / plan.entry * 100.0
+    assert risk_pct <= TG.MAX_STOP_PCT + 1e-6, (
+        f'fell back but kept a {risk_pct:.2f}% stop — the fallback tightens to '
+        f'the {TG.MAX_STOP_PCT}% budget'
+    )
+    assert plan.size_factor >= TG.MIN_SIZE_FACTOR, (
+        f'fell back to a tightened stop but left size at {plan.size_factor:.2f}; '
+        f'the point of tightening is that full size is affordable again'
+    )
+
+
+def test_the_fallback_is_exactly_the_old_behaviour():
+    """The guarantee: improving stop placement must never REMOVE a trade."""
+    plan = _unaff_plan()
+    assert plan.action != ACTION_REJECT
+    assert abs(abs(plan.stop - plan.entry) / plan.entry * 100.0
+               - TG.MAX_STOP_PCT) < 1e-6, 'not the pre-change banded stop'
+    assert plan.size_factor == 0.70, (
+        f'size {plan.size_factor} — the fallback must not keep the scaled-down '
+        f'value that the structural stop would have needed'
+    )
