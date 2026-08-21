@@ -33,7 +33,7 @@ import pytest
 from src.trading import trader_gate as TG
 from src.trading.trader_gate import ACTION_REJECT
 
-from scripts.tests.test_trader_gate import mk, run, TURNED_DOWN
+from scripts.tests.test_trader_gate import mk, run, TURNED_DOWN, TURNED_UP
 
 
 def _aave(**kw):
@@ -150,22 +150,27 @@ def test_an_unaffordable_setup_is_refused_not_fudged():
 def _unaffordable(**kw):
     """A far level whose clearance cannot be paid for by size.
 
-    Geometry found by sweeping the gate, not hand-picked: price at a resistance
-    0.3% away with the next one 1.8% beyond it and ATR at 2.6%. Clearing the far
-    level needs far more than the 1.30% budget, and scaling RANGE_FADE's 0.70
-    weight down by that ratio lands under MIN_SIZE_FACTOR.
+    Geometry found by sweeping the gate, not hand-picked: an oversold bear at a
+    support 0.2% away with the next level 5% beyond it and ATR at 2.6%. Clearing
+    the far level needs far more than the 1.30% budget, and scaling
+    EXHAUSTION_REVERSAL's 0.50 weight down by that ratio lands under
+    MIN_SIZE_FACTOR.
+
+    Re-picked 2026-08-21 when MIN_SIZE_FACTOR dropped 0.25 -> 0.12: the previous
+    fixture became affordable at the lower floor and stopped exercising this
+    branch at all.
     """
-    d = mk(price=100.0, atr=2.6, support=94.0, resistance=100.3,
-           rsi=28.0, **TURNED_DOWN)
+    d = mk(price=100.0, atr=2.6, support=99.8, resistance=106.0,
+           rsi=28.0, **TURNED_UP)
     d.update(kw)
     return d
 
 
-UNAFFORDABLE_LEVELS = [(100.3, 4), (102.1054, 4), (94.0, 4), (92.308, 3)]
+UNAFFORDABLE_LEVELS = [(99.8, 4), (94.81, 4), (106.0, 4), (111.3, 3)]
 
 
 def _unaff_plan():
-    plan = run(_unaffordable(), regime='RANGING', levels=UNAFFORDABLE_LEVELS)
+    plan = run(_unaffordable(), regime='TRENDING_BEAR', levels=UNAFFORDABLE_LEVELS)
     assert any('Tightening instead' in n for n in (plan.notes or [])), (
         f'fixture no longer reaches the unaffordable branch '
         f'({plan.stage}: {plan.reason}) — these tests would stop covering it'
@@ -200,7 +205,7 @@ def test_the_fallback_is_exactly_the_old_behaviour():
     assert plan.action != ACTION_REJECT
     assert abs(abs(plan.stop - plan.entry) / plan.entry * 100.0
                - TG.MAX_STOP_PCT) < 1e-6, 'not the pre-change banded stop'
-    assert plan.size_factor == 0.70, (
+    assert plan.size_factor == 0.50, (
         f'size {plan.size_factor} — the fallback must not keep the scaled-down '
         f'value that the structural stop would have needed'
     )

@@ -349,21 +349,40 @@ STRONG_TIDE         = 0.65   # tide this strong cuts counter-tide size to STRONG
 # and it was the only one that could not distinguish one good trade from eight
 # correlated ones.
 #
-# 0.25 is not arbitrary: it is exactly MIN_SIZE_FACTOR, so the existing floor
-# decides what survives and no new veto is needed —
+# 0.25 was chosen to coincide with MIN_SIZE_FACTOR so the existing floor decided
+# what survived and no new veto was needed. With the floor at 0.25 that made the
+# tide cut a VETO in disguise: only a setup weighted 1.00 could clear it.
 #
-#     TREND_PULLBACK      1.00 x 0.25 = 0.2500  fires (at quarter size)
-#     BREAK_RETEST        0.85 x 0.25 = 0.2125  refused by MIN_SIZE_FACTOR
+# 2026-08-21 showed what that costs. A day with zero signals, BTC's tide UP and
+# strong, so every SELL on a bull fleet was counter-tide and every setup below
+# weight 1.00 was refused at the floor, not on its merits:
+#
+#     TREND_PULLBACK      1.00 x 0.25 = 0.2500  fired
+#     BREAK_RETEST        0.85 x 0.25 = 0.2125  refused
 #     RANGE_FADE          0.70 x 0.25 = 0.1750  refused
-#     EXHAUSTION_REVERSAL 0.50 x 0.25 = 0.1250  refused
-#     a SECOND correlated pullback     = 0.1500  refused
+#     EXHAUSTION_REVERSAL 0.50 x 0.25 = 0.1250  refused   <- the live "0.12"
 #
-# So into a strong tide only the single best-measured setup trades, only one per
-# cluster, and only at a quarter of normal size. Raise this back to a hard reject
-# by setting STRONG_TIDE_FACTOR = 0.0.
+# and the one setup that did clear it, TREND_PULLBACK, is a BUY in a bull needing
+# rp <= 0.35 against a fleet whose minimum was 0.51. Nothing could trade.
+#
+# The floor's stated reason — "not worth its execution cost" — does not survive
+# inspection: costs are PROPORTIONAL to size, so a 0.125 trade carries the same
+# cost ratio as a 1.00 trade. The honest reason for a floor is to keep
+# negligible positions out of a 5-slot book, and that argues for a much lower
+# number than one which silently vetoes three of the four setups.
+#
+# So the floor drops to 0.12 and the tide cut goes back to being a SIZE cut. The
+# stacked cases still refuse, which is the line worth keeping:
+#
+#     strong tide, first in cluster    EXHAUSTION 0.125 ok   RANGE_FADE 0.175 ok
+#     strong tide, SECOND in cluster   EXHAUSTION 0.075 no   RANGE_FADE 0.105 no
+#
+# Raise this back to a hard reject by setting STRONG_TIDE_FACTOR = 0.0, or
+# restore the old veto-in-disguise by putting MIN_SIZE_FACTOR back to 0.25.
 STRONG_TIDE_FACTOR  = 0.25
 CLUSTER_SECOND_FACTOR = 0.60 # the second expression of one cluster thesis is not a fresh bet
-MIN_SIZE_FACTOR     = 0.25   # below this the trade is not worth its execution cost
+MIN_SIZE_FACTOR     = 0.12   # a position too small to matter in a 5-slot book. NOT a cost
+                             # test — costs scale with size, so that reasoning never held.
 
 # ── Stage 0 · fitness ─────────────────────────────────────────────────────────
 DEAD_ATR_PCT     = 0.15   # genuinely flatlined tape
@@ -1049,8 +1068,7 @@ class TraderGate:
                                    notes, side, setup, level=level)
                 size *= STRONG_TIDE_FACTOR
                 notes.append(f'allocation: against a STRONG BTC {tide_dir} tide '
-                             f'({tide_str:.0%}) — size cut to {STRONG_TIDE_FACTOR:.0%}; '
-                             f'only a setup weighted 1.00 clears MIN_SIZE_FACTOR from here')
+                             f'({tide_str:.0%}) — size cut to {STRONG_TIDE_FACTOR:.0%}')
             else:
                 size *= COUNTER_TIDE_FACTOR
                 notes.append(f'allocation: against the BTC {tide_dir} tide — halved')

@@ -3455,6 +3455,9 @@ _TUNABLES: Dict[str, Any] = {
                                       "ALLOW_EXHAUSTION_REVERSAL_BUY", "bool", 0, 1,
                                       "Allow the BUY half of the fade (buy oversold). "
                                       "Measured +0.044R; the SELL half stays refused"),
+    "min_size_factor": ("src.trading.trader_gate", "MIN_SIZE_FACTOR", "float", 0.0, 1.0,
+                        "Smallest allowed position weight. 0.25 made the counter-tide "
+                        "cut a veto; 0.12 lets it trade small instead"),
     "allow_exhaustion_sell_stretched": ("src.trading.trader_gate",
                                         "ALLOW_EXHAUSTION_SELL_STRETCHED", "bool", 0, 1,
                                         "Allow the fade SELL only when genuinely stretched "

@@ -23,41 +23,97 @@ per correlated cluster, max 5 open, and this size cut. The veto was the fourth a
 bluntest, and the only one that could not tell one good trade from eight
 correlated ones.
 
-STRONG_TIDE_FACTOR = 0.25 is exactly MIN_SIZE_FACTOR, so the EXISTING floor
-decides what survives and no new veto was added.
+STRONG_TIDE_FACTOR = 0.25 was chosen to equal MIN_SIZE_FACTOR, so the EXISTING
+floor decided what survived and no new veto was added.
+
+UPDATE 2026-08-21 — that identity turned the size cut back into a veto. With
+both at 0.25, only a setup weighted 1.00 could clear the floor, so three of the
+four setups were refused by arithmetic rather than on merit. A full day with
+zero signals: BTC's tide UP and strong, the fleet in a bull, every setup a
+counter-tide SELL, and the one setup that could clear the floor was a BUY
+needing rp <= 0.35 against a fleet whose live minimum was 0.51.
+
+    [BCH/USDT] NO TRADE (allocation): risk allocation fell to 0.12 (< 0.25)
+
+MIN_SIZE_FACTOR is now 0.12, so the cut is a SIZE cut again. The floor's old
+reason -- "not worth its execution cost" -- never held: costs are proportional
+to size, so a 0.125 position pays the same ratio as a 1.00 one.
+
+The basket protection does NOT come from the floor and is unchanged. The ceiling
+is max_open x the LARGEST allowed size, which the floor never gated:
+
+    before (floor 0.25)   1/4 setups allowed   heaviest book 1.250 units
+    after  (floor 0.12)   4/4 setups allowed   heaviest book 1.250 units
+
+against the basket's own ~8.0 units. What changed is that WEAKER setups may now
+participate at SMALLER sizes; the worst case is identical and the typical book
+is lighter.
 """
 import pytest
 
 from src.trading import trader_gate as TG
 
 
-def test_the_factor_equals_the_size_floor():
-    """The whole design rests on this identity: at 0.25 only a setup weighted
-    1.00 clears MIN_SIZE_FACTOR, so the filtering is done by machinery that was
-    already there."""
-    assert TG.STRONG_TIDE_FACTOR == TG.MIN_SIZE_FACTOR
-
-
-@pytest.mark.parametrize('setup,fires', [
-    ('TREND_PULLBACK', True),        # +0.069R — the best measured setup
-    ('BREAK_RETEST', False),
-    ('RANGE_FADE', False),
-    ('EXHAUSTION_REVERSAL', False),  # -0.064R — must stay out
-])
-def test_only_the_best_setup_survives_a_strong_counter_tide(setup, fires):
-    size = TG.SETUP_RISK_WEIGHT[setup] * TG.STRONG_TIDE_FACTOR
-    assert (size >= TG.MIN_SIZE_FACTOR) is fires, (
-        f'{setup} at {size:.4f} vs floor {TG.MIN_SIZE_FACTOR}'
+def test_the_factor_no_longer_equals_the_size_floor():
+    """The identity is deliberately BROKEN now. While the two were equal the
+    size cut silently vetoed every setup below weight 1.00, which is what
+    produced a day with no signals."""
+    assert TG.STRONG_TIDE_FACTOR > TG.MIN_SIZE_FACTOR, (
+        'the cut is a veto again — a counter-tide setup below weight 1.00 '
+        'cannot clear the floor'
     )
 
 
-def test_a_second_correlated_counter_tide_trade_is_refused():
-    """The basket protection, arithmetically. Only ONE per cluster survives."""
+@pytest.mark.parametrize('setup,expected', [
+    ('TREND_PULLBACK', 0.2500),      # +0.069R — the best measured setup
+    ('BREAK_RETEST', 0.2125),
+    ('RANGE_FADE', 0.1750),
+    ('EXHAUSTION_REVERSAL', 0.1250), # the live "0.12" that was being refused
+])
+def test_every_setup_survives_a_strong_counter_tide_at_reduced_size(setup, expected):
+    """All four now trade, each cut to a quarter. Previously three of them were
+    refused by the floor rather than on merit, which is what silenced the desk
+    for a day in a rally."""
+    size = TG.SETUP_RISK_WEIGHT[setup] * TG.STRONG_TIDE_FACTOR
+    assert size == pytest.approx(expected, abs=1e-9)
+    assert size >= TG.MIN_SIZE_FACTOR, (
+        f'{setup} at {size:.4f} is under the {TG.MIN_SIZE_FACTOR} floor'
+    )
+
+
+def test_a_second_correlated_counter_tide_trade_now_fires_but_smaller():
+    """A REAL loosening, recorded as such. The second expression of one cluster
+    thesis used to be refused by the floor; it now trades at 0.15.
+
+    What still bounds it: max 2 per correlated cluster, so there is no third,
+    and max 5 open, so the book cannot fill with them."""
     size = (TG.SETUP_RISK_WEIGHT['TREND_PULLBACK']
             * TG.STRONG_TIDE_FACTOR * TG.CLUSTER_SECOND_FACTOR)
-    assert size < TG.MIN_SIZE_FACTOR, (
-        f'a second correlated counter-tide trade sizes to {size:.4f} and would '
-        f'fire — the 2026-07-20 basket becomes possible again'
+    assert size == pytest.approx(0.15, abs=1e-9)
+    assert size >= TG.MIN_SIZE_FACTOR
+    assert size < TG.SETUP_RISK_WEIGHT['TREND_PULLBACK'] * TG.STRONG_TIDE_FACTOR, (
+        'the second correlated trade is no smaller than the first'
+    )
+
+
+def test_the_weakest_stacked_cases_are_still_refused():
+    """The floor still has to reject something or it is not a floor."""
+    for setup in ('RANGE_FADE', 'EXHAUSTION_REVERSAL'):
+        size = (TG.SETUP_RISK_WEIGHT[setup]
+                * TG.STRONG_TIDE_FACTOR * TG.CLUSTER_SECOND_FACTOR)
+        assert size < TG.MIN_SIZE_FACTOR, (
+            f'a second correlated {setup} sizes to {size:.4f} and would fire — '
+            f'the floor has been dropped too far'
+        )
+
+
+def test_the_aggregate_counter_tide_ceiling_is_unchanged():
+    """The basket protection is max_open x the LARGEST allowed size, and the
+    floor never gated that. 2026-07-20 was ~8.0 units of correlated short."""
+    heaviest = max(TG.SETUP_RISK_WEIGHT.values()) * TG.STRONG_TIDE_FACTOR
+    assert heaviest * 5 == pytest.approx(1.25, abs=1e-9), (
+        'the ceiling moved — lowering the floor was supposed to admit weaker '
+        'setups at smaller sizes, not raise the maximum exposure'
     )
 
 
