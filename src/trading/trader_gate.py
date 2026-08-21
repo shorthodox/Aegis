@@ -1055,6 +1055,7 @@ class TraderGate:
                 _exposed = cls._level_between(side, _tight, stop, levels or [], result)
                 if _exposed:
                     _scale = _banded / _structural if _structural > 0 else 1.0
+                    _size_before = size
                     size *= _scale
                     notes.append(
                         f'budget: NOT tightening — a {MAX_STOP_PCT}% stop would sit at '
@@ -1063,14 +1064,34 @@ class TraderGate:
                         f'scaling size x{_scale:.2f} instead, so the dollar risk is '
                         f'unchanged and the stop is not standing in front of structure')
                     if size < MIN_SIZE_FACTOR:
-                        return _reject('allocation',
-                                       f'stop must clear {_exposed:.8g} '
-                                       f'({_structural / entry_px * 100:.2f}% of entry), and '
-                                       f'sizing that down to the {MAX_STOP_PCT}% budget '
-                                       f'leaves {size:.2f} (< {MIN_SIZE_FACTOR}) — the setup '
-                                       f'is not affordable at a safe stop',
-                                       notes, side, setup, level=level)
-                    _banded = _structural          # keep the structural stop
+                        # Not affordable at the structural stop. Fall back to the
+                        # tightened one rather than refusing.
+                        #
+                        # This branch used to _reject. That was wrong, and it was
+                        # measured wrong live: structural stops WIDER than the
+                        # cap are the common case, not the rare one — all three
+                        # of 2026-08-20's losses shipped a stop at exactly the
+                        # 1.30% cap, meaning structure had asked for more every
+                        # time. So the reject fired constantly and firing fell
+                        # from 11.2% to 9.1% of setups on the sweep grid, with
+                        # nothing at all reaching the tape for the two hours
+                        # after it deployed.
+                        #
+                        # The rule this restores: improving stop placement must
+                        # never REMOVE a trade that previously fired. Where the
+                        # structural stop is affordable it is kept and size pays
+                        # for it; where it is not, behaviour is exactly what it
+                        # was before — a tightened stop and full size — which is
+                        # no worse than the status quo it replaced.
+                        size = _size_before
+                        notes.append(
+                            f'budget: the {_exposed:.8g} level is beyond reach — clearing it '
+                            f'needs {_structural / entry_px * 100:.2f}% of entry and sizing '
+                            f'down to the {MAX_STOP_PCT}% budget would leave '
+                            f'{size * _scale:.2f} (< {MIN_SIZE_FACTOR}). Tightening instead, '
+                            f'at full size')
+                    else:
+                        _banded = _structural      # affordable: keep the structural stop
 
             if abs(_banded - _structural) > 1e-12:
                 stop = (entry_px - _banded) if side == 'BUY' else (entry_px + _banded)
