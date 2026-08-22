@@ -282,6 +282,17 @@ WORK_EXPIRY_BARS = 8      # a resting order the market ignores for 8 bars is a d
 #
 # The full confirmation test must ALSO pass, so a counter-trend setup still needs
 # its two independent prints; the 5m turn is a requirement on top, not a bypass.
+# The 5m tape must have turned before ANY entry, not merely count as one of the
+# three interchangeable prints _confirmation tallies. See _confirmation.
+# When _clear_levels pushes the stop past a FURTHER level, that level is what the
+# trade actually leans on, so the ENTRY moves there too rather than filling at a
+# nearer one the invalidation never used. Collapsing the two is what makes the
+# entry reproducible for a subscriber and what stops the give-up between them.
+# Set False to restore the split (entry at the near level, stop at the far one).
+ENTRY_FOLLOWS_DEFENDED_LEVEL = True
+
+REQUIRE_LTF_CONFIRMATION = True
+
 EARLY_ENTRY_ON_LTF = True
 
 # ...but only from CLOSE to the level. The whole value of these setups is the
@@ -923,6 +934,25 @@ class TraderGate:
         # needs two independent prints.  This is the direct fix for the eight
         # shorts that were all "at resistance" and none of which had turned.
         need = 2 if setup in (SETUP_EXHAUSTION_REVERSAL, SETUP_RANGE_FADE) else 1
+
+        # ── the 5m tape is REQUIRED, not one vote of three ──────────────────
+        # Reported on ETH/USDT 2026-08-22: "the entry was without the
+        # confirmation of 3 5min candles". Correct — the 5m print was one of
+        # three interchangeable signals, so a trade could satisfy `need` with a
+        # rejection candle and an RSI curl while the lower timeframe was still
+        # going the other way. RSI 15.9 and falling is exactly when the other two
+        # fire on their own.
+        #
+        # ltf_bull/ltf_bear are true when at least 3 of the last
+        # ENTRY_5M_WINDOW 5m candles closed our way (need = max(3, window - 1)),
+        # which is the "3 x 5m candles" being asked for. This restores it as a
+        # hard requirement, the way Guard J held it before v83 made it advisory.
+        _ltf = ltf_up if side == 'BUY' else ltf_down
+        if REQUIRE_LTF_CONFIRMATION and not _ltf:
+            return False, ('the 5m tape has not turned — '
+                           + (' + '.join(hits) if hits else 'no prints') +
+                           ', but 3x5m is required')
+
         if len(hits) >= need:
             return True, ' + '.join(hits)
         return False, (f'needs {need} confirmation(s), has {len(hits)}'
@@ -1046,6 +1076,28 @@ class TraderGate:
             notes.append(f'invalidation: stop moved {stop:.8g} -> {cleared:.8g} to stand '
                          f'clear of the level it was sitting {"under" if side == "SELL" else "on top of"}')
             stop = cleared
+            # ── the entry follows the level the stop is actually defending ───
+            # _pick_level returns the NEAREST structure; _clear_levels then
+            # pushes the stop past a FURTHER one. That split is the root defect:
+            # the entry validates against a level the invalidation does not use,
+            # so the trade is opened a long way from the thing it is risking on
+            # and the gap is pure give-up.
+            #
+            # ETH/USDT 2026-08-22, reported: long filled at 2412.29 with its
+            # support at 2357.18 and the stop below that. 1.67 ATR of gap, and
+            # R:R 1:0.72 — a trade risking on a level it never went to.
+            #
+            # If the stop defends level L, then L is what this trade leans on.
+            # Re-derive it, so stage 4 measures the distance to L and a trade
+            # that is not there yet WORKS the order at L instead of filling here.
+            # That collapses entry and invalidation onto one level, which is also
+            # what makes the entry reproducible for a subscriber: they rest a
+            # limit at L, the engine books at L, and both agree.
+            _defended = (cleared + buf) if side == 'BUY' else (cleared - buf)
+            if ENTRY_FOLLOWS_DEFENDED_LEVEL and abs(_defended - level) > 1e-12:
+                notes.append(f'level: {level:.8g} -> {_defended:.8g} — the stop defends the '
+                             f'further level, so that is the one this trade leans on')
+                level = _defended
 
         risk = abs(price - stop)
         risk_atr = risk / atr if atr > 0 else 0.0

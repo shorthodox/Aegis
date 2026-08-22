@@ -433,7 +433,11 @@ def test_a_fade_needs_two_confirmations_a_pullback_needs_one():
                regime='RANGING', levels=[(99.8, 4), (110.0, 4)], confirm=one)
     assert fade.action == ACTION_WORK, 'a counter-trend fade entered on a single print'
 
-    pull = run(mk(price=102.0, support=99.8, resistance=110.0, rsi_slope=0.0),
+    # support AT the level being traded, so no further level pulls the stop —
+    # and therefore no relevelling. Since 2026-08-22 the entry follows the level
+    # the stop defends, which would otherwise turn this into a WORK order and
+    # stop it testing confirmation counts at all.
+    pull = run(mk(price=102.0, support=101.9, resistance=110.0, rsi_slope=0.0),
                regime='TRENDING_BULL', levels=[(101.9, 4), (110.0, 4)], confirm=one)
     assert pull.action == ACTION_ENTER
 

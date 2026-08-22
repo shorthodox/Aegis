@@ -83,22 +83,45 @@ def test_the_stop_is_not_simply_the_percent_cap():
     )
 
 
-def test_size_pays_for_the_wider_stop():
-    """Dollar risk must stay inside the budget; only the lever changes."""
+def test_the_entry_moves_to_the_level_the_stop_defends():
+    """2026-08-22 — the fix that dissolved this whole problem.
+
+    _pick_level returns the NEAREST structure and _clear_levels pushes the stop
+    past a FURTHER one, so the trade used to be opened a long way from the level
+    it was risking on. ETH/USDT: filled 2412.29 with its support at 2357.18,
+    1.67 ATR of pure give-up and R:R 1:0.72.
+
+    The entry now follows the defended level, so the two collapse onto one and
+    the stop stops being wide relative to entry — which is why the budget
+    machinery below barely has to fire any more.
+    """
     plan = _plan()
+    assert abs(plan.entry - plan.level) < 1e-9, (
+        f'entry {plan.entry:.8g} is not at the level {plan.level:.8g} the stop defends'
+    )
     risk_pct = abs(plan.stop - plan.entry) / plan.entry * 100.0
-    assert risk_pct > TG.MAX_STOP_PCT, 'precondition: this stop exceeds the budget'
-    budgeted = risk_pct * plan.size_factor
-    assert budgeted <= TG.MAX_STOP_PCT * 1.02, (
-        f'size {plan.size_factor:.3f} x risk {risk_pct:.2f}% = {budgeted:.2f}% '
-        f'exceeds the {TG.MAX_STOP_PCT}% budget — the wider stop was not paid for'
+    assert risk_pct <= TG.MAX_STOP_PCT, (
+        f'risk {risk_pct:.2f}% still exceeds the {TG.MAX_STOP_PCT}% budget even '
+        f'with the entry at the level — the collapse did not happen'
     )
 
 
-def test_the_reasoning_is_recorded():
+def test_dollar_risk_stays_inside_the_budget():
+    """Whatever route the stop took, size x risk must clear the budget."""
     plan = _plan()
-    assert any('NOT tightening' in n for n in plan.notes), (
-        'the decision to keep the structural stop is invisible in the plan'
+    risk_pct = abs(plan.stop - plan.entry) / plan.entry * 100.0
+    budgeted = risk_pct * plan.size_factor
+    assert budgeted <= TG.MAX_STOP_PCT * 1.02, (
+        f'size {plan.size_factor:.3f} x risk {risk_pct:.2f}% = {budgeted:.2f}% '
+        f'exceeds the {TG.MAX_STOP_PCT}% budget'
+    )
+
+
+def test_the_relevelling_is_recorded():
+    """Moving the entry is a material change to the trade the card advertises."""
+    plan = _plan()
+    assert any('the stop defends the further level' in n for n in plan.notes), (
+        'the entry was moved to a different level and the plan does not say so'
     )
 
 
@@ -169,6 +192,17 @@ def _unaffordable(**kw):
 UNAFFORDABLE_LEVELS = [(99.8, 4), (94.81, 4), (106.0, 4), (111.3, 3)]
 
 
+@pytest.fixture
+def _split_entry_and_stop(monkeypatch):
+    """The unaffordable branch below only exists when the entry and the stop can
+    sit on DIFFERENT levels. Since 2026-08-22 they collapse onto one, which makes
+    the structural stop the buffer width and the case unreachable on ordinary
+    geometry — the fix dissolved the problem this branch was a fallback for.
+    The branch and its switch remain, so it is exercised in the configuration
+    where it applies."""
+    monkeypatch.setattr(TG, 'ENTRY_FOLLOWS_DEFENDED_LEVEL', False)
+
+
 def _unaff_plan():
     plan = run(_unaffordable(), regime='TRENDING_BEAR', levels=UNAFFORDABLE_LEVELS)
     assert any('Tightening instead' in n for n in (plan.notes or [])), (
@@ -178,7 +212,7 @@ def _unaff_plan():
     return plan
 
 
-def test_an_unaffordable_structural_stop_does_not_reject_the_trade():
+def test_an_unaffordable_structural_stop_does_not_reject_the_trade(_split_entry_and_stop):
     plan = _unaff_plan()
     assert plan.action != ACTION_REJECT, (
         f'the unaffordable branch is rejecting again ({plan.stage}: {plan.reason}) '
@@ -186,7 +220,7 @@ def test_an_unaffordable_structural_stop_does_not_reject_the_trade():
     )
 
 
-def test_an_unaffordable_stop_falls_back_to_the_budget_stop_at_full_size():
+def test_an_unaffordable_stop_falls_back_to_the_budget_stop_at_full_size(_split_entry_and_stop):
     plan = _unaff_plan()
     risk_pct = abs(plan.stop - plan.entry) / plan.entry * 100.0
     assert risk_pct <= TG.MAX_STOP_PCT + 1e-6, (
@@ -199,7 +233,7 @@ def test_an_unaffordable_stop_falls_back_to_the_budget_stop_at_full_size():
     )
 
 
-def test_the_fallback_is_exactly_the_old_behaviour():
+def test_the_fallback_is_exactly_the_old_behaviour(_split_entry_and_stop):
     """The guarantee: improving stop placement must never REMOVE a trade."""
     plan = _unaff_plan()
     assert plan.action != ACTION_REJECT
