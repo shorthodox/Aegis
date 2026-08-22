@@ -140,6 +140,7 @@ def _build_engine(tmp: Path, macro: tuple = (0.0, 0.0),
     eng._spreads = {}
     eng._armed_pending_setups = {}
     eng._working_orders = {}           # v83 TraderGate resting-order clock
+    eng._wo_observed = {}              # working-order counterfactual (observation)
     eng._tide_strength = 0.0           # v83 — set by the real _btc_tide, stubbed here
     eng._last_close_time = {}
     eng._last_close_side = {}
