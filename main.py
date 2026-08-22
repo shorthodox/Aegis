@@ -3462,6 +3462,13 @@ _TUNABLES: Dict[str, Any] = {
                                         "ALLOW_EXHAUSTION_SELL_STRETCHED", "bool", 0, 1,
                                         "Allow the fade SELL only when genuinely stretched "
                                         "(RSI>=75 at rp>=0.95). Measured +0.023R both halves"),
+    "entry_follows_defended_level": ("src.trading.trader_gate",
+                                     "ENTRY_FOLLOWS_DEFENDED_LEVEL", "bool", 0, 1,
+                                     "Move the entry to the level the stop defends, "
+                                     "instead of filling at a nearer one"),
+    "require_ltf_confirmation": ("src.trading.trader_gate", "REQUIRE_LTF_CONFIRMATION",
+                                 "bool", 0, 1,
+                                 "Require the 3x5m tape turn before any entry"),
     "early_entry_max_atr": ("src.trading.trader_gate", "EARLY_ENTRY_MAX_ATR", "float", 0.0, 2.5,
                            "How far from the level an early fill may happen, in ATR. "
                            "Smaller = better entry price, fewer immediate fills"),

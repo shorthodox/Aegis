@@ -170,7 +170,20 @@ def test_unavailable_data_cannot_confirm_both_directions_at_once():
 
 
 def test_a_real_pattern_still_confirms():
+    """A candle and an RSI curl are two prints — but the 5m must also have
+    turned. Reported on ETH/USDT 2026-08-22: "the entry was without the
+    confirmation of 3 5min candles"; REQUIRE_LTF_CONFIRMATION makes the lower
+    timeframe a requirement rather than one interchangeable vote of three."""
+    result = {'cdl_bull_reversal': 2.0, 'cdl_bear_reversal': 0.0, 'rsi_slope': 0.4}
+    ok, why = TraderGate._confirmation(result, 'BUY', TG.SETUP_RANGE_FADE,
+                                       {'ltf_bull': True, 'ltf_bear': False})
+    assert ok is True, why
+
+
+def test_the_5m_tape_is_required_however_good_the_other_prints():
+    """The exact ETH shape: both other prints firing, 5m still against us."""
     result = {'cdl_bull_reversal': 2.0, 'cdl_bear_reversal': 0.0, 'rsi_slope': 0.4}
     ok, why = TraderGate._confirmation(result, 'BUY', TG.SETUP_RANGE_FADE,
                                        {'ltf_bull': False, 'ltf_bear': False})
-    assert ok is True, why
+    assert ok is False
+    assert '5m' in why
