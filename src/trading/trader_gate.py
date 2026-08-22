@@ -226,6 +226,25 @@ MAX_STOP_ATR    = 3.00   # beyond this the payoff maths can never clear the floo
 # the trade being made.
 MIN_STOP_PCT    = 0.50   # floor, percent of price
 MAX_STOP_PCT    = 1.30   # cap,   percent of price
+#
+# Briefly 4.00 on 2026-08-21. The measurement behind that is real and is kept
+# here because it will matter again: over 337,391 SHORT entries through the real
+# 5-rung ladder, expectancy rose monotonically with stop width in both time
+# halves (0.75 ATR -0.029R, 1.50 ATR +0.028R, 2.50 ATR +0.040R; per unit of risk
+# -0.022 -> +0.100), and positions.py normalises dollar risk by scaling notional
+# ATR_SL_MULTIPLIER / actual_risk, so a wider stop buys a smaller position at the
+# same money.
+#
+# Reverted by explicit instruction: "INSTEAD OF INCREASING THE SL LEVEL WE SHOULD
+# INCREASE THE ENTRY LEVEL... AS CLOSE TO RESISTANCE/SUPPORT AS POSSIBLE".
+#
+# That is the better trade, and the measurement does not contradict it. The sweep
+# entered at an arbitrary bar CLOSE — a random location — where a wide stop is
+# the only defence against noise. An entry AT the level is a different and
+# strictly better starting point: the stop sits just beyond the level, so risk is
+# small and the ratio to the same target improves without widening anything. Fix
+# where the trade STARTS, then re-measure the stop on level-anchored entries
+# rather than importing a number measured on random ones.
 
 # ── Stage 3 · payoff ──────────────────────────────────────────────────────────
 MIN_NET_R          = 1.60  # net of costs, to the FIRST real objective — not to a fib fantasy
@@ -264,6 +283,21 @@ WORK_EXPIRY_BARS = 8      # a resting order the market ignores for 8 bars is a d
 # The full confirmation test must ALSO pass, so a counter-trend setup still needs
 # its two independent prints; the 5m turn is a requirement on top, not a bypass.
 EARLY_ENTRY_ON_LTF = True
+
+# ...but only from CLOSE to the level. The whole value of these setups is the
+# price the level gives you, and an early fill spends exactly that.
+#
+# SAND/USDT filled 0.67 ATR short of its resistance and sat at -0.25% while the
+# level it was aiming at was +1.08% away — right about direction, losing money on
+# the gap. Reported as: "instead of increasing the SL level we should increase
+# the entry level... as close to resistance/support as possible".
+#
+# Without this the reach was REACH_ATR (2.50 ATR), so an early fill could give up
+# most of the move it was trying to sell. At 0.50 ATR the give-up is bounded to
+# less than the stop buffer itself (STOP_BUFFER_ATR 0.55): the entry can never be
+# further from the level than the invalidation sits beyond it. Anything further
+# keeps WORKING the order at the level, which is what it should be doing.
+EARLY_ENTRY_MAX_ATR = 0.50
 MODEL_OPPOSE_MARGIN = 0.12  # model may veto the structure only when it leans this hard the
                             # other way (raw p_buy/p_sell); a neutral model does not block
 
@@ -1062,15 +1096,17 @@ class TraderGate:
             action, expiry = ACTION_ENTER, 0
             notes.append(f'trigger: at the level ({dist_atr:.2f} ATR) and confirmed — {cwhy}')
         elif dist_atr <= REACH_ATR:
-            if EARLY_ENTRY_ON_LTF and ok and _ltf_turned:
+            if (EARLY_ENTRY_ON_LTF and ok and _ltf_turned
+                    and dist_atr <= EARLY_ENTRY_MAX_ATR):
                 # The 5m has already turned. Take it at the market rather than
                 # wait for a touch that may never come — the stop is anchored to
                 # the level either way, and the worse entry has already been
                 # priced into `risk` and cleared MIN_NET_R above.
                 action, expiry = ACTION_ENTER, 0
-                notes.append(f'trigger: {dist_atr:.2f} ATR short of {level:.8g}, but the 5m '
-                             f'tape turned — entering at the market rather than resting on a '
-                             f'touch that may not come ({cwhy})')
+                notes.append(f'trigger: {dist_atr:.2f} ATR short of {level:.8g} (within '
+                             f'{EARLY_ENTRY_MAX_ATR}) and the 5m tape turned — taking it at '
+                             f'the market rather than resting on a touch that may not come '
+                             f'({cwhy})')
             else:
                 # A resting order, not a queue entry: it has a price, an invalidation
                 # and a clock.  This is what replaces PENDING.
