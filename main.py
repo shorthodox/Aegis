@@ -3462,6 +3462,9 @@ _TUNABLES: Dict[str, Any] = {
                                         "ALLOW_EXHAUSTION_SELL_STRETCHED", "bool", 0, 1,
                                         "Allow the fade SELL only when genuinely stretched "
                                         "(RSI>=75 at rp>=0.95). Measured +0.023R both halves"),
+    "early_entry_max_atr": ("src.trading.trader_gate", "EARLY_ENTRY_MAX_ATR", "float", 0.0, 2.5,
+                           "How far from the level an early fill may happen, in ATR. "
+                           "Smaller = better entry price, fewer immediate fills"),
     "early_entry_on_ltf": ("src.trading.trader_gate", "EARLY_ENTRY_ON_LTF", "bool", 0, 1,
                           "Enter at the market when the 5m tape has turned, instead of "
                           "resting on a level touch that may never come"),
