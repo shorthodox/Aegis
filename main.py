@@ -1853,6 +1853,23 @@ from scripts.engine.config import STATE_GENERATION
 from scripts.engine import config as _cfg_mod
 _TG_CONNECTIONS_PATH = _STATE_DIR / "telegram_connections.json"
 
+# The PENDING store had the same defect the connections file had, one step
+# earlier in the flow, and it outlived the fix because it is never read back on
+# a happy path that anyone watches.
+#
+# `_tg_pending` was a dict in RAM. /connect puts {code: email} there and hands
+# the user a t.me deep link; the poller matches `/start CODE` against it. Any
+# restart between those two moments loses the code, and the poller then
+# SILENTLY ignores the /start — no reply to the user, no log line, and the
+# connections file stays empty. On 2026-08-22 the deploy cadence was roughly ten
+# a day, so the window that loses a connection was most of the day, and the only
+# symptom was "[Telegram] no connected chat_ids" long after the fact.
+#
+# On the volume with a TTL: a code survives a deploy, and a stale one expires
+# rather than lingering forever.
+_TG_PENDING_PATH = _STATE_DIR / "telegram_pending.json"
+_TG_PENDING_TTL_SECONDS = 24 * 3600
+
 # One-time migration off the ephemeral path. Copied only when the volume has no
 # file yet, so this can never overwrite good data with a stale container copy;
 # after a deploy has already wiped /app/data it finds nothing and does nothing,
@@ -1908,18 +1925,98 @@ def _tg_access_until(email: str) -> str:
         return ""
 
 
+# Set when a load FAILED (as opposed to finding no file). While true, saving is
+# refused: _tg_connections would be an empty dict standing in for a file we could
+# not read, and the first write would overwrite real subscribers with {}.
+_tg_load_failed: bool = False
+
+
+def _tg_atomic_write(path: Path, payload: Any) -> None:
+    """Write via a .tmp sibling and os.replace, like every other volume writer.
+    A torn write here silently unsubscribes people."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+    os.replace(tmp, path)
+
+
+TG_POLL_ERRORS: Dict[str, int] = {'count': 0}
+
+
+def _tg_notify(chat_id: str, text: str) -> None:
+    """One-shot Telegram message. Never raises."""
+    try:
+        import requests as _req
+        _req.post(f"https://api.telegram.org/bot{_tg_token()}/sendMessage",
+                  json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"},
+                  timeout=5)
+    except Exception:
+        pass
+
+
 def _tg_load_connections() -> None:
-    global _tg_connections
-    if _TG_CONNECTIONS_PATH.exists():
-        try:
-            _tg_connections = json.loads(_TG_CONNECTIONS_PATH.read_text())
-        except Exception:
-            pass
+    global _tg_connections, _tg_load_failed
+    _tg_load_failed = False
+    if not _TG_CONNECTIONS_PATH.exists():
+        print(f"[Telegram] no connections file at {_TG_CONNECTIONS_PATH} — "
+              f"starting empty (first run, or the volume is not mounted)")
+        return
+    try:
+        _tg_connections = json.loads(_TG_CONNECTIONS_PATH.read_text())
+        print(f"[Telegram] loaded {len(_tg_connections)} connection(s) from "
+              f"{_TG_CONNECTIONS_PATH}")
+    except Exception as exc:
+        # Was `except Exception: pass`. A corrupt file then left the dict empty
+        # and the NEXT save wrote {} over it — turning a recoverable parse error
+        # into permanent data loss.
+        _tg_load_failed = True
+        print(f"[Telegram] CONNECTIONS FILE UNREADABLE ({exc!r}) — refusing to "
+              f"save over it. Existing subscribers are preserved on disk; fix or "
+              f"remove {_TG_CONNECTIONS_PATH} to recover.")
 
 
 def _tg_save_connections() -> None:
-    _TG_CONNECTIONS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    _TG_CONNECTIONS_PATH.write_text(json.dumps(_tg_connections, indent=2))
+    if _tg_load_failed:
+        print("[Telegram] save refused — the connections file failed to load, "
+              "and writing now would replace it with an empty set")
+        return
+    try:
+        _tg_atomic_write(_TG_CONNECTIONS_PATH, _tg_connections)
+    except Exception as exc:
+        print(f"[Telegram] could not save connections: {exc!r}")
+
+
+def _tg_load_pending() -> None:
+    """Connect codes, off the volume, with anything expired dropped."""
+    global _tg_pending
+    try:
+        if not _TG_PENDING_PATH.exists():
+            return
+        raw = json.loads(_TG_PENDING_PATH.read_text())
+        now = time.time()
+        _tg_pending = {
+            code: entry for code, entry in raw.items()
+            if isinstance(entry, dict)
+            and float(entry.get("created", 0) or 0) > now - _TG_PENDING_TTL_SECONDS
+        }
+        if _tg_pending:
+            print(f"[Telegram] {len(_tg_pending)} pending connect code(s) restored")
+    except Exception as exc:
+        print(f"[Telegram] pending codes unreadable ({exc!r}) — starting empty")
+        _tg_pending = {}
+
+
+def _tg_save_pending() -> None:
+    try:
+        now = time.time()
+        live = {c: e for c, e in _tg_pending.items()
+                if float((e or {}).get("created", 0) or 0) > now - _TG_PENDING_TTL_SECONDS}
+        _tg_pending.clear()
+        _tg_pending.update(live)
+        _tg_atomic_write(_TG_PENDING_PATH, _tg_pending)
+    except Exception as exc:
+        print(f"[Telegram] could not save pending codes: {exc!r}")
 
 
 def _tg_start_poller() -> None:
@@ -1946,15 +2043,36 @@ def _tg_start_poller() -> None:
                         chat_id = str(msg.get("chat", {}).get("id", ""))
                         if text.startswith("/start") and chat_id:
                             parts = text.split(maxsplit=1)
-                            code  = parts[1].strip() if len(parts) > 1 else ""
-                            if code and code in _tg_pending:
-                                email = _tg_pending.pop(code)
+                            code  = parts[1].strip().upper() if len(parts) > 1 else ""
+                            entry = _tg_pending.get(code) if code else None
+                            if entry is None and code:
+                                # NEVER ignore a user. An unmatched code used to
+                                # fall through in silence: the person had done
+                                # everything right, the bot said nothing, and the
+                                # only trace was an empty connections file hours
+                                # later. Usually the code was issued before a
+                                # deploy and lost with the in-memory store.
+                                print(f"[Telegram] /start {code} matched no pending "
+                                      f"code (have {len(_tg_pending)}) — telling the user")
+                                _tg_notify(chat_id,
+                                           "\u26a0\ufe0f *That connect link has expired.*\n\n"
+                                           "Open AEGIS \u2192 Notifications \u2192 Connect Telegram "
+                                           "and tap the new link.")
+                            elif entry is None:
+                                _tg_notify(chat_id,
+                                           "\U0001f44b *AEGIS Signal Bot*\n\nTo connect, open "
+                                           "AEGIS \u2192 Notifications \u2192 Connect Telegram and "
+                                           "tap the link there.")
+                            else:
+                                email = (entry or {}).get("email", "")
+                                _tg_pending.pop(code, None)
+                                _tg_save_pending()
                                 _tg_connections[email] = {
                                     "chat_id":      chat_id,
                                     "access_until": _tg_access_until(email),
                                 }
                                 _tg_save_connections()
-                                logger.info(f"[Telegram] Connected {email} â†’ chat_id {chat_id}")
+                                logger.info(f"[Telegram] Connected {email} -> chat_id {chat_id}")
                                 # Send confirmation to user
                                 try:
                                     _req.post(
@@ -1968,8 +2086,12 @@ def _tg_start_poller() -> None:
                                     )
                                 except Exception:
                                     pass
-            except Exception:
-                pass
+            except Exception as exc:
+                # Was a bare pass. A poller that dies quietly looks exactly like
+                # a user who never tapped the link.
+                TG_POLL_ERRORS['count'] += 1
+                if TG_POLL_ERRORS['count'] in (1, 10, 100) or TG_POLL_ERRORS['count'] % 500 == 0:
+                    print(f"[Telegram] poller error #{TG_POLL_ERRORS['count']}: {exc!r}")
             time.sleep(1)
 
     import threading as _threading
@@ -2156,6 +2278,7 @@ async def lifespan(app: FastAPI):
     _enforce_track_generation()      # must run AFTER the load it purges
     _rt_load_at_startup()            # re-apply operator dials saved on the volume
     _tg_load_connections()
+    _tg_load_pending()
     _tg_start_poller()
     engine_task       = asyncio.create_task(run_engine_background())
     reminder_task     = asyncio.create_task(check_and_send_trial_reminders())
@@ -8493,7 +8616,10 @@ async def telegram_connect(_user: str = Depends(get_current_user)):
             detail="Telegram bot not configured. Ask admin to set TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_USERNAME."
         )
     code = _secrets.token_hex(4).upper()  # e.g. A3F9C2D1
-    _tg_pending[code] = _user
+    # Persisted, so a deploy between issuing this and the user tapping it does
+    # not silently drop the connection.
+    _tg_pending[code] = {"email": _user, "created": time.time()}
+    _tg_save_pending()
     deeplink = f"https://t.me/{_tg_username()}?start={code}"
     return {"deeplink": deeplink, "code": code, "bot_username": _tg_username()}
 
