@@ -92,6 +92,11 @@ _FS_DOWN = False
 LOW_QUALITY_REFUSED: Dict[str, int] = {'count': 0}
 
 
+# Instrumentation failures are counted rather than printed: a broken observer
+# must not add a line to the decision stream it is only supposed to watch.
+WO_OBSERVE_ERRORS: Dict[str, int] = {'count': 0}
+
+
 class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
     """
     Prediction loop that scores every tradeable symbol every scan_interval_seconds.
@@ -397,6 +402,11 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
         # WORK_EXPIRY_BARS is a dead thesis, not a queue entry — this is the
         # clock that PENDING never had.
         self._working_orders: Dict[str, float] = {}
+        # Counterfactual, not behaviour: for every resting order, would a limit
+        # AT the level have filled before it expired? _working_orders holds only
+        # a timestamp, so it cannot answer that. This does, and nothing reads it
+        # back into a decision.
+        self._wo_observed: Dict[str, Dict[str, Any]] = {}
         self._last_close_reason: Dict[str, str]  = {}   # reason of the most recent close (for reversal-flip throw)
         self._spreads:          Dict[str, float] = {}   # symbol → book spread % (UWGS dead-market veto)
         self._news_lock:        Tuple[bool, str] = (False, '')   # (locked?, label) — scheduled macro event
@@ -1270,6 +1280,71 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
                 shorts += pos.direction == 'SHORT'
         return longs, shorts
 
+    # ── working-order counterfactual · OBSERVATION ONLY ──────────────────
+    # The fill-rate cost of resting at the level instead of taking the market
+    # cannot be recovered from history: no archived signal kept the level it was
+    # waiting at. Only new cards can answer it, so this records them.
+    #
+    # Nothing here feeds a decision. It exists so the question "what does
+    # entry-at-level cost in fire rate, and is it adversely selected?" can be
+    # answered with numbers before working orders are actually built.
+
+    def _wo_observe(self, symbol: str, plan: Any, price: float, now: float) -> None:
+        """Track a live resting order and note if price ever reached its level."""
+        try:
+            store = getattr(self, '_wo_observed', None)
+            if store is None:
+                return
+            key = f'{symbol}|{plan.side}'
+            rec = store.get(key)
+            if rec is None or abs(rec.get('level', 0.0) - float(plan.level)) > 1e-12:
+                rec = {
+                    'symbol': symbol, 'side': plan.side, 'setup': plan.setup,
+                    'level': float(plan.level), 'stop': float(plan.stop),
+                    'target': float(plan.target), 'r_net': float(plan.r_net),
+                    'expiry_bars': float(plan.expiry_bars),
+                    'created': now, 'first_price': float(price),
+                    'touched_at': None, 'closest_atr': None, 'scans': 0,
+                }
+                store[key] = rec
+            rec['scans'] += 1
+            atr = float((self.last_signals.get(symbol) or {}).get('atr', 0) or 0)
+            if atr > 0:
+                d = abs(price - rec['level']) / atr
+                if rec['closest_atr'] is None or d < rec['closest_atr']:
+                    rec['closest_atr'] = round(d, 4)
+            # a resting limit fills when price trades THROUGH the level
+            reached = (price >= rec['level'] if plan.side == 'SELL'
+                       else price <= rec['level'])
+            if reached and rec['touched_at'] is None:
+                rec['touched_at'] = now
+                rec['bars_to_touch'] = round((now - rec['created']) / 3600.0, 2)
+        except Exception:
+            # Instrumentation must never change what the engine says or does,
+            # including on the failure path. Counted, not printed.
+            WO_OBSERVE_ERRORS['count'] += 1
+
+    def _wo_close(self, symbol: str, side: str, outcome: str, now: float) -> None:
+        """Retire the observation and append one line. Never raises."""
+        try:
+            store = getattr(self, '_wo_observed', None)
+            if store is None:
+                return
+            rec = store.pop(f'{symbol}|{side}', None)
+            if not rec:
+                return
+            rec['outcome'] = outcome            # FILLED_AT_LEVEL | EXPIRED | SUPERSEDED
+            rec['closed'] = now
+            rec['age_bars'] = round((now - rec['created']) / 3600.0, 2)
+            rec['would_have_filled'] = rec['touched_at'] is not None
+            import json as _j
+            from scripts.engine.config import WORKING_ORDER_LOG_PATH as _P
+            _P.parent.mkdir(parents=True, exist_ok=True)
+            with open(_P, 'a', encoding='utf-8') as f:
+                f.write(_j.dumps(rec, default=str) + chr(10))
+        except Exception:
+            WO_OBSERVE_ERRORS['count'] += 1
+
     async def _run_trader_gate(
         self, symbol: str, result: Dict[str, Any], price: float,
         regime: Any, ctx_quality: float,
@@ -1344,6 +1419,7 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
         # ── REJECT ───────────────────────────────────────────────────────────
         if plan.action not in (ACTION_ENTER, ACTION_WORK):
             self._working_orders.pop(f'{symbol}|{plan.side}', None)
+            self._wo_close(symbol, plan.side, 'SUPERSEDED', now)
             self._publish_no_trade(symbol, plan.reason)
             print(f'[{symbol}] NO TRADE ({plan.stage}): {plan.reason}')
             return True
@@ -1358,12 +1434,14 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
             age_bars = (now - first_seen) / 3600.0        # 1h engine timeframe
             if age_bars > plan.expiry_bars:
                 self._working_orders.pop(key, None)
+                self._wo_close(symbol, plan.side, 'EXPIRED', now)
                 self._publish_no_trade(
                     symbol, f'setup expired — {plan.setup} {plan.side} at '
                             f'{plan.level:.8g} went untriggered for {plan.expiry_bars} bars')
                 print(f'[{symbol}] SETUP EXPIRED: {plan.setup} {plan.side} '
                       f'after {age_bars:.1f} bars')
                 return True
+            self._wo_observe(symbol, plan, price, now)
             if isinstance(sig, dict):
                 sig['fire']           = False
                 sig['signal']         = 'HOLD'
@@ -1470,6 +1548,7 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
 
         # ── ENTER ────────────────────────────────────────────────────────────
         self._working_orders.pop(f'{symbol}|{plan.side}', None)
+        self._wo_close(symbol, plan.side, 'FILLED_AT_LEVEL', now)
         result['side']      = plan.side
         result['fire']      = True
         result['btc_tide']  = tide

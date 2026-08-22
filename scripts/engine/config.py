@@ -252,6 +252,10 @@ ALPHA_TRACK_RECORD_PATH = STATE_DIR / 'alpha_track_record.json'
 ALPHA_TIMEFRAMES        = ['15m', '30m', '4h', '1d']
 PERF_STATE_PATH         = STATE_DIR / 'perf_state.json'
 DRIFT_STATE_PATH        = STATE_DIR / 'drift_state.json'
+# Would a resting limit at the level have filled? Observation only — see
+# LiveEngine._wo_observe. On the VOLUME because the answer takes days to
+# accumulate and a deploy must not reset it.
+WORKING_ORDER_LOG_PATH  = STATE_DIR / 'working_order_counterfactual.jsonl'
 SCALP_RECORD_PATH       = STATE_DIR / 'scalp_trades.json'
 
 # ── Durable track record via Firestore ──────────────────────────────────────
