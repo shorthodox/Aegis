@@ -162,3 +162,85 @@ def test_the_dispatcher_reads_the_same_connections_file():
     assert 'STATE_DIR' in src, 'the dispatcher no longer resolves off STATE_DIR'
     assert 'telegram_connections.json' in src
     assert main._TG_CONNECTIONS_PATH == main._STATE_DIR / 'telegram_connections.json'
+
+
+# -- an unreadable datastore must not disconnect anyone -----------------------
+# Reported 2026-08-23: "site is getting disconnected from telegram
+# automatically". The hourly sweep is the ONLY thing that deletes a connection,
+# and it decided with is_trial_expired(), which opens:
+#
+#     user_doc = get_user_doc(email)
+#     if not user_doc:
+#         return True          # <- a FAILED READ read as "expired"
+#
+# get_user_doc() collapses "no such user" and "Firestore did not answer" into
+# the same None. That is harmless for GRANTING access — both mean no
+# entitlement — and destructive for REVOKING it. This project is on the
+# Firestore free tier and has exhausted its daily quota before, so a datastore
+# hiccup silently unsubscribed people whose plan had not changed.
+#
+# Delivery never depended on the sweep: dispatcher._tg_send_all checks
+# access_until on every send. A wrong disconnect needs the user to notice and
+# reconnect; a wrong keep costs one skipped send. So this fails OPEN.
+
+class _Boom:
+    def collection(self, *_a, **_k):
+        raise RuntimeError('quota exceeded')
+
+
+def test_a_firestore_failure_does_not_disconnect(monkeypatch):
+    monkeypatch.setattr(main, 'db', _Boom())
+    monkeypatch.setattr(main, '_ent_overlay', lambda e, base: base)
+    drop, why = main._tg_should_disconnect('u@example.test')
+    assert drop is False, (
+        'a failed datastore read disconnected a subscriber — this is the '
+        'automatic disconnection that was reported'
+    )
+    assert 'unreadable' in why
+
+
+def test_a_missing_document_does_not_disconnect(monkeypatch):
+    """No document is not evidence a plan ended — it is no evidence at all."""
+    monkeypatch.setattr(main, '_user_doc_read', lambda e: (None, True))
+    drop, why = main._tg_should_disconnect('u@example.test')
+    assert drop is False
+    assert 'no user document' in why
+
+
+def test_a_live_paid_plan_is_kept(monkeypatch):
+    monkeypatch.setattr(main, '_user_doc_read',
+                        lambda e: ({'plan': 'pro'}, True))
+    assert main._tg_should_disconnect('u@example.test')[0] is False
+
+
+def test_a_genuinely_expired_trial_is_still_disconnected(monkeypatch):
+    """Failing open must not mean never disconnecting."""
+    doc = {'plan': 'trial', 'trial_end': '2020-01-01T00:00:00Z'}
+    monkeypatch.setattr(main, '_user_doc_read', lambda e: (doc, True))
+    monkeypatch.setattr(main, 'get_user_doc', lambda e: doc)
+    drop, why = main._tg_should_disconnect('u@example.test')
+    assert drop is True
+    assert 'trial' in why
+
+
+def test_a_genuinely_lapsed_paid_plan_is_still_disconnected(monkeypatch):
+    doc = {'plan': 'pro',
+           'subscription': {'status': 'active', 'current_period_end': '2020-01-01T00:00:00Z'}}
+    monkeypatch.setattr(main, '_user_doc_read', lambda e: (doc, True))
+    monkeypatch.setattr(main, 'get_user_doc', lambda e: doc)
+    drop, why = main._tg_should_disconnect('u@example.test')
+    assert drop is True
+    assert 'paid plan ended' in why
+
+
+def test_the_sweep_leaves_the_stamp_alone_when_the_read_failed(stores, monkeypatch):
+    """Rewriting access_until from a failed lookup replaces a good stamp with a
+    guess — the same damage one layer down."""
+    monkeypatch.setattr(main, '_tg_should_disconnect',
+                        lambda e: (False, 'datastore unreadable — keeping the connection'))
+    monkeypatch.setattr(main, '_tg_access_until', lambda e: '')
+    main._tg_connections['u@example.test'] = {'chat_id': '42',
+                                              'access_until': '2099-01-01T00:00:00Z'}
+    main._telegram_cleanup_pass()
+    assert main._tg_connections['u@example.test']['access_until'] == '2099-01-01T00:00:00Z'
+    assert main._tg_connections['u@example.test']['chat_id'] == '42'

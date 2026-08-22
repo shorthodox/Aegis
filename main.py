@@ -37,7 +37,7 @@ import time
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Set, TYPE_CHECKING, Union
+from typing import Dict, Any, Optional, List, Set, Tuple, TYPE_CHECKING, Union
 from contextlib import asynccontextmanager
 import inspect
 
@@ -2205,6 +2205,66 @@ async def _otp_cleanup_loop():
             print(f"[OTP cleanup] Error: {exc}")
 
 
+def _user_doc_read(email: str) -> Tuple[Optional[Dict], bool]:
+    """(doc, read_ok). read_ok is False only when the datastore itself failed.
+
+    get_user_doc() collapses "this user has no document" and "Firestore did not
+    answer" into the same None, which is fine for granting access — both mean no
+    entitlement — but catastrophic for REVOKING it.
+    """
+    ok = True
+    try:
+        doc_ref = db.collection("users").document(email)
+        doc = doc_ref.get()
+        to_dict = getattr(doc, "to_dict", None)
+        exists = getattr(doc, "exists", False)
+        base = (to_dict() if callable(to_dict) and exists else None)
+        if not isinstance(base, dict):
+            base = {} if exists else None
+    except Exception as exc:
+        print(f"[TG cleanup] Firestore read failed for {email}: {exc!r}")
+        base, ok = None, False
+    return _ent_overlay(email, base), ok
+
+
+def _tg_should_disconnect(email: str) -> Tuple[bool, str]:
+    """Disconnect ONLY on a positively-known expiry.
+
+    The sweep is the one thing that deletes a Telegram connection, and it was
+    deciding with is_trial_expired(), which opens:
+
+        user_doc = get_user_doc(email)
+        if not user_doc:
+            return True          # <- a FAILED READ read as "expired"
+
+    So a Firestore hiccup — this project is on the free tier and has exhausted
+    its daily quota before — silently unsubscribed people whose entitlement had
+    not changed at all. Reported as "site is getting disconnected from telegram
+    automatically".
+
+    Delivery does not depend on this sweep: dispatcher._tg_send_all checks
+    access_until on every send, so a genuinely lapsed user stops receiving
+    signals whether or not this ever runs. That asymmetry is the whole argument
+    for failing OPEN here — a wrong disconnect needs the user to notice and
+    reconnect, a wrong keep costs one skipped send.
+    """
+    doc, read_ok = _user_doc_read(email)
+    if not read_ok:
+        return False, 'datastore unreadable — keeping the connection'
+    if doc is None:
+        # Genuinely no document. Could be a deleted account, could be an orphan
+        # created by a signup path that never wrote one. Not evidence a plan
+        # ended, so it is not grounds to disconnect either.
+        return False, 'no user document — not treating that as an expiry'
+    if has_paid_access(doc):
+        return False, 'paid access is live'
+    if is_trial_expired(email):
+        plan = str(doc.get('plan') or '?')
+        return True, ('paid plan ended' if plan.lower() in PAID_PLANS
+                      else f'{plan} access ended')
+    return False, 'access is live'
+
+
 def _telegram_cleanup_pass() -> None:
     """One sweep. MUST NOT run on the event loop — see the caller.
 
@@ -2216,19 +2276,22 @@ def _telegram_cleanup_pass() -> None:
     to_remove = []
     for email in list(_tg_connections):
         try:
-            if is_trial_expired(email):
+            drop, why = _tg_should_disconnect(email)
+            if drop:
                 # Both endings land here, and the log says which. A TRIAL running
                 # out and a PAID TERM running out are the same outcome for delivery
                 # but very different things to see in a log when a subscriber says
                 # "my Telegram stopped".
-                _doc = get_user_doc(email) or {}
-                _plan = str(_doc.get("plan") or "?")
-                _why = ('paid plan ended' if _plan.lower() in PAID_PLANS
-                        else f'{_plan} access ended')
-                print(f"[TG cleanup] {email}: {_why} — disconnecting Telegram")
+                print(f"[TG cleanup] {email}: {why} — disconnecting Telegram")
                 to_remove.append(email)
             else:
                 entry = _tg_connections.get(email)
+                if 'unreadable' in why or 'no user document' in why:
+                    # Leave the stored stamp alone. Rewriting it from a failed
+                    # lookup would put '' (open-ended) or a stale value in place
+                    # of a good one, which is the same class of damage one layer
+                    # down.
+                    continue
                 _tg_connections[email] = {
                     "chat_id":      _tg_chat_id(entry),
                     "access_until": _tg_access_until(email),
