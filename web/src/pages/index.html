@@ -204,6 +204,37 @@
     }
     .record-hook-cta { width: 260px; }
 
+    /* "This is our live proof" — the track record is the hook, so the CTA that
+       leads to it carries its claim on the button itself rather than in body
+       copy a visitor may never reach. Landing on the page must be enough. */
+    .proof-cta { position: relative; display: inline-flex; flex-direction: column; gap: 6px; }
+    .proof-tag {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--ae-gold);
+    }
+    .proof-tag::before {
+      content: ''; width: 6px; height: 6px; border-radius: 50%;
+      background: var(--ae-gold); box-shadow: 0 0 0 0 var(--ae-gold);
+      animation: proof-pulse 2.4s ease-out infinite;
+    }
+    @keyframes proof-pulse {
+      0%   { box-shadow: 0 0 0 0 rgba(184,150,106,0.55); }
+      70%  { box-shadow: 0 0 0 7px rgba(184,150,106,0); }
+      100% { box-shadow: 0 0 0 0 rgba(184,150,106,0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .proof-tag::before { animation: none; }
+    }
+    .proof-btn {
+      background: rgba(184,150,106,0.12) !important;
+      border: 1px solid var(--ae-gold) !important;
+      color: var(--ae-gold) !important;
+    }
+    .proof-btn:hover {
+      background: rgba(184,150,106,0.20) !important;
+    }
+
     @media (max-width: 1000px) {
       .hero-demo-grid { grid-template-columns: 1fr; gap: var(--s-7); }
       .feature-grid { grid-template-columns: 1fr 1fr; }
@@ -446,10 +477,12 @@
           <button id="heroMathBtn" class="ae-btn ae-btn-primary ae-btn-lg">
             Start 3-Day Free Trial
           </button>
-          <a href="/track-record" class="ae-btn ae-btn-lg"
-             style="background: transparent; color: var(--ae-gold); border: 1px solid var(--ae-gold);">
-            Visit the Track Record &nbsp;→
-          </a>
+          <span class="proof-cta">
+            <span class="proof-tag">This is our live proof</span>
+            <a href="/track-record" class="ae-btn ae-btn-lg proof-btn">
+              Visit the Track Record &nbsp;→
+            </a>
+          </span>
         </div>
 
         <p style="font-size: 0.8rem; line-height: 1.7; color: var(--ae-text-2); margin-top: var(--s-4); max-width: 52ch;">
@@ -598,6 +631,7 @@
       </div>
 
       <div class="record-hook-cta">
+        <div class="proof-tag" style="justify-content: center; margin-bottom: 8px;">This is our live proof</div>
         <a href="/track-record" class="ae-btn ae-btn-primary ae-btn-lg" style="width: 100%; justify-content: center;">
           Visit the Track Record &nbsp;→
         </a>
