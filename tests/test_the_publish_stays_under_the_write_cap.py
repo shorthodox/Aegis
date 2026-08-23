@@ -47,7 +47,10 @@ def _producer_src():
 
 def test_the_interval_is_a_floor_not_a_ceiling():
     body = _producer_src()
-    assert 'should_push = _fires_changed or _interval_elapsed' in body, (
+    # The switch in front of it came later (signals moved off Firestore
+    # entirely); what this guards is the OR'ing of the interval with "did
+    # anything change", which made it a ceiling rather than a floor.
+    assert '_fires_changed or _interval_elapsed' in body, (
         'routine churn still pushes the moment anything changes, so the '
         'interval only ever forces EXTRA writes'
     )
