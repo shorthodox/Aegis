@@ -97,6 +97,36 @@ EXTREME_RP_LOW     = 0.20   # counter-trend reversals live only in the outer fif
 EXTREME_RP_HIGH    = 0.80
 RANGE_EDGE_LOW     = 0.30   # a range fade needs the edge, not "the lower half"
 RANGE_EDGE_HIGH    = 0.70
+
+# ── location against the WHOLE structure, not the local band ────────────────
+# Reported 2026-08-23 with ETH/USDT on screen: "engine gave this signal when the
+# market is at the top most resistance of the chart. We need long when market is
+# at the bottom, mid or 80% zone between the top most and bottom most support.
+# Vice versa for short."
+#
+# The gate agreed the trade was low in its range and the chart disagreed, because
+# they were measuring different ranges:
+#
+#     gate   support 2372.17  resistance 2518.31  ->  rp 0.275   (a 6% band)
+#     chart  Sup 1876/1912    Res 2549           ->  rp 0.796   (a 36% range)
+#
+# rp is computed against the NEAREST support and resistance, which in a 36% range
+# is a slice of it. Inside that slice price genuinely was near the bottom; against
+# the structure the subscriber is looking at, it was near the high. Both numbers
+# are honest and only one of them is the location the trade is actually taken at.
+#
+# So location is judged against the full span of _structural_levels — the
+# top-most level down to the bottom-most, which IS "top most resistance to bottom
+# most support". A long is refused in the top fifth of that, a short in the
+# bottom fifth.
+#
+# This is not the nearest-bracketing-levels idea that was tried and reverted on
+# 2026-08-21: that took the gap between two ADJACENT levels, which is a local
+# position and turned a price at the top of its range into rp 0.009. The full
+# span cannot do that — it is the range, not a gap inside it.
+STRUCTURAL_RP_HIGH = 0.80   # no LONG above this fraction of the whole structure
+STRUCTURAL_RP_LOW  = 0.20   # no SHORT below it
+USE_STRUCTURAL_LOCATION = True
 EXHAUSTION_RSI_HI  = 68.0   # fading a bull needs the move actually stretched
 EXHAUSTION_RSI_LO  = 32.0
 
@@ -742,7 +772,7 @@ class TraderGate:
     @staticmethod
     def _pick_level(side: str, setup: str, price: float, atr: float,
                     levels: Sequence[Tuple[float, int]],
-                    result: Dict[str, Any]) -> float:
+                    result: Dict[str, Any], pinned_level: float = 0.0) -> float:
         """The level this setup leans on — the one that, if lost, means it failed.
 
         For a BUY that is the nearest structure AT OR BELOW price; for a SELL the
@@ -750,6 +780,22 @@ class TraderGate:
         sits a hair through the level, and demanding strictly-beyond discarded
         exactly the entries the setup was waiting for.
         """
+        # ── a resting order does not move ───────────────────────────────
+        # _pick_level recomputes from live structure every scan, so the level a
+        # working order was placed at drifted with price. Observed 2026-08-23,
+        # one symbol, one side, one order:
+        #
+        #     XRP/USDT WORKING BUY @ 1.378 / 1.3859913 / 1.3907263 / 1.40284
+        #                          / 1.41678 / 1.418335 / 1.4204762 / 1.4348857
+        #
+        # a 4% spread. Nothing about that is a resting order: the 8-bar expiry
+        # clock runs against a moving target, the subscriber cannot place the
+        # limit being published to them, and the counterfactual log cannot say
+        # which level it measured. Once placed, the level is frozen for the life
+        # of the order; it is only re-derived when the order is retired.
+        if pinned_level > 0:
+            return pinned_level
+
         tol = AT_LEVEL_ATR * atr
         cands = [lv for lv, _t in (levels or []) if lv > 0]
         # The engine's own rolling S/R is a valid fallback when deep structure is sparse.
@@ -767,6 +813,28 @@ class TraderGate:
             return max(below) if below else 0.0
         below_res = [lv for lv in cands if lv >= price - tol]
         return min(below_res) if below_res else 0.0
+
+    @staticmethod
+    def _structural_rp(price: float,
+                       levels: Optional[Sequence[Tuple[float, int]]],
+                       result: Dict[str, Any]) -> Optional[float]:
+        """Where price sits between the TOP-MOST and BOTTOM-MOST known levels.
+
+        The full span, not a gap inside it. Returns None when there is not
+        enough structure to define a range, in which case location is left to
+        the local checks rather than guessed at.
+        """
+        cands = [lv for lv, _t in (levels or []) if lv > 0]
+        for _key in ('support', 'resistance'):
+            lv = _f(result, _key)
+            if lv > 0:
+                cands.append(lv)
+        if len(cands) < 2:
+            return None
+        lo, hi = min(cands), max(cands)
+        if hi <= lo:
+            return None
+        return max(0.0, min(1.0, (price - lo) / (hi - lo)))
 
     @staticmethod
     def _clear_levels(side: str, price: float, stop: float, atr: float,
@@ -968,6 +1036,7 @@ class TraderGate:
         book:    Optional[Dict[str, Any]] = None,
         levels:  Optional[Sequence[Tuple[float, int]]] = None,
         confirm: Optional[Dict[str, Any]] = None,
+        pinned_levels: Optional[Dict[str, float]] = None,
     ) -> TradePlan:
         """Run the playbook and return a TradePlan.
 
@@ -1009,6 +1078,25 @@ class TraderGate:
             return _reject('setup', why, notes)
         notes.append(f'setup: {setup} {side} — {why}')
 
+        # ── Stage 1a · location against the WHOLE structure ──────────────────
+        if USE_STRUCTURAL_LOCATION:
+            _srp = cls._structural_rp(price, levels, result)
+            if _srp is not None:
+                if side == 'BUY' and _srp >= STRUCTURAL_RP_HIGH:
+                    return _reject('location',
+                                   f'long at {_srp:.0%} of the whole structure — the local '
+                                   f'range says a dip, the chart says the highs. A long is '
+                                   f'taken in the lower {STRUCTURAL_RP_HIGH:.0%}',
+                                   notes, side, setup)
+                if side == 'SELL' and _srp <= STRUCTURAL_RP_LOW:
+                    return _reject('location',
+                                   f'short at {_srp:.0%} of the whole structure — the local '
+                                   f'range says a bounce to fade, the chart says the lows. A '
+                                   f'short is taken in the upper {1 - STRUCTURAL_RP_LOW:.0%}',
+                                   notes, side, setup)
+                notes.append(f'location: {_srp:.0%} of the whole structure '
+                             f'(top-most level to bottom-most)')
+
         # ── Stage 1b · does the higher timeframe permit this side here? ──────
         # Applied to the OUTPUT of _classify rather than inside it, so a setup
         # added later cannot route around it. In practice only BREAK_RETEST can
@@ -1037,7 +1125,11 @@ class TraderGate:
         notes.append(f'model: does not object (oppose margin {oppose:+.2f})')
 
         # ── Stage 2 · where am I wrong ───────────────────────────────────────
-        level = cls._pick_level(side, setup, price, atr, levels or [], result)
+        # Resolved only now, because the SIDE is what selects it — a live BUY
+        # order's level must never be pinned onto a SELL plan.
+        pinned_level = float((pinned_levels or {}).get(side, 0.0) or 0.0)
+        level = cls._pick_level(side, setup, price, atr, levels or [], result,
+                                pinned_level=pinned_level)
         if level <= 0:
             return _reject('invalidation',
                            f'no structural level on the {"support" if side == "BUY" else "resistance"} '
@@ -1094,7 +1186,8 @@ class TraderGate:
             # what makes the entry reproducible for a subscriber: they rest a
             # limit at L, the engine books at L, and both agree.
             _defended = (cleared + buf) if side == 'BUY' else (cleared - buf)
-            if ENTRY_FOLLOWS_DEFENDED_LEVEL and abs(_defended - level) > 1e-12:
+            if (ENTRY_FOLLOWS_DEFENDED_LEVEL and pinned_level <= 0
+                    and abs(_defended - level) > 1e-12):
                 notes.append(f'level: {level:.8g} -> {_defended:.8g} — the stop defends the '
                              f'further level, so that is the one this trade leans on')
                 level = _defended
