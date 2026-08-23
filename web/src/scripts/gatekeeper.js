@@ -131,8 +131,26 @@ function isPaidPlan(plan = userPlan) {
   return PAID_PLANS.includes(String(plan || '').toLowerCase());
 }
 
-/** A paid plan OR a live trial. Both are access; either alone is enough. */
+// The server's authoritative answer, when /auth/me has been read. null until
+// then, which is why the name check below survives as a fallback.
+let serverHasAccess = null;
+window.setServerAccess = function (v) {
+  serverHasAccess = (typeof v === 'boolean') ? v : null;
+};
+
+/** A paid plan OR a live trial. Both are access; either alone is enough.
+ *
+ * isPaidPlan() alone tests the plan NAME and nothing else, so an EXPIRED paid
+ * plan still read as access. Observed 2026-08-23: plan "pro", status "active",
+ * expires_at seven weeks past — the backend correctly refused delivery
+ * (has_paid_access() false) while this said yes, so Telegram went quiet and the
+ * dashboard still showed a live Pro plan.
+ *
+ * /auth/me now returns `has_access`, computed by the same function that gates
+ * delivery. Prefer it; fall back to the old test only before it has loaded.
+ */
 function hasActiveAccess() {
+  if (serverHasAccess !== null) return serverHasAccess;
   return isPaidPlan() || trialActive === true;
 }
 
@@ -737,6 +755,10 @@ function applyUserData(userData, token) {
   currentUser = { email: userData.email, uid: userData.uid || auth.currentUser?.uid || userData.email, token };
   currentUserData = userData;
   userPlan = userData.plan || 'trial';
+  // The server computes access with the same function that gates signal
+  // delivery, so a plan whose term has ELAPSED reads as no access here too.
+  // Without this the name check alone said "pro" forever.
+  if (typeof userData.has_access === 'boolean') setServerAccess(userData.has_access);
   trialEnd = userData.trial_end ? new Date(userData.trial_end) : null;
 
   if (typeof AuthManager !== 'undefined') {
