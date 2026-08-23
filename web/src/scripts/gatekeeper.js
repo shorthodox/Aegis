@@ -2228,11 +2228,28 @@ function setupFirestoreListeners() {
   if (!window._snapPoll) { window._snapPoll = setInterval(_pollSnapshotState, 30000); }
   _pollSnapshotState();
 
-  // Listen to signals collection
+  // ── Firestore signals: OFF by default ───────────────────────────────────
+  // This listener is a THIRD copy of data the dashboard already has twice over:
+  //
+  //   1. /ws/dashboard pushes full payloads every ~0.5s and _buildSignalObj
+  //      writes them into this very same window.latestSignals store.
+  //   2. _pollSnapshotState above reads live_signals.json every 30s for state.
+  //
+  // It was also the single biggest consumer of the Firestore free-tier write
+  // cap (~8,640 writes/day of 20,000), which is what took the site silent by
+  // mid-morning each day — the engine kept arming signals nobody could see.
+  // And it was the least reliable of the three: see the v80 note above, where
+  // production carried armed signals in the snapshot file while these docs held
+  // only stale fires, because one NaN fails an entire batch silently.
+  //
+  // The handler is kept intact so setting AEGIS_FIRESTORE_SIGNALS restores it;
+  // access and upgrade gating no longer depend on it either way, they run off
+  // serverHasAccess()/accessKnown().
+  const _useFirestoreSignals = (window.AEGIS_FIRESTORE_SIGNALS === true);
   const signalsQuery = query(collection(db, 'signals'), orderBy('timestamp', 'desc'), limit(150));
 
-  window.latestSignals = {}; // Accumulate signals to prevent flickering
-  signalsUnsubscribe = onSnapshot(signalsQuery, (snapshot) => {
+  window.latestSignals = window.latestSignals || {}; // populated by the WS + poller
+  signalsUnsubscribe = !_useFirestoreSignals ? null : onSnapshot(signalsQuery, (snapshot) => {
     snapshot.docChanges().forEach(change => {
       if (change.type === 'added' || change.type === 'modified') {
         const data = change.doc.data();

@@ -1491,6 +1491,31 @@ async def run_engine_background():
     LIVE_STATE.engine = engine
 
     _last_tr_mtime: float = 0.0
+    # ── signals do not need Firestore at all ────────────────────────────────
+    # The dashboard already receives every signal by TWO other paths, both of
+    # which are same-origin and cost nothing:
+    #
+    #   1. /ws/dashboard  — full payloads every ~0.5s, authenticated, straight
+    #      from LIVE_STATE. gatekeeper.js builds the complete signal object from
+    #      it (fire, pending_entry, pending_side, pending_target, the lot) into
+    #      window.latestSignals — the SAME store the Firestore listener wrote to.
+    #   2. /web/src/data/live_signals.json — rewritten every producer tick and
+    #      polled every 30s as the state backstop.
+    #
+    # The Firestore `signals` collection was a third, duplicate copy of that same
+    # data — and the least trustworthy of the three: the v80 note on
+    # _pollSnapshotState records production carrying armed signals and fires in
+    # the snapshot file while the Firestore docs held only stale fires, because
+    # one NaN fails an entire batch silently.
+    #
+    # It was also ~8,640 writes/day against a 20,000/day free-tier cap: the
+    # dominant consumer, and the reason the site went silent by mid-morning every
+    # day. Turning it off removes the quota problem at its source rather than
+    # rationing around it.
+    #
+    # Set AEGIS_FIRESTORE_PUBLISH_SIGNALS=1 to restore the old behaviour.
+    _PUBLISH_SIGNALS_TO_FIRESTORE = os.getenv(
+        'AEGIS_FIRESTORE_PUBLISH_SIGNALS', '0').strip().lower() in ('1', 'true', 'yes', 'on')
     _last_signals_hash: int = 0       # hash of last signals pushed to Firestore
     _last_fire_set: frozenset = frozenset()  # symbols firing at the last push
     _last_firestore_push: float = 0.0 # epoch of last Firestore write
@@ -1512,6 +1537,7 @@ async def run_engine_background():
     _last_full_push: float = 0.0
     _FIRESTORE_FULL_REFRESH_S = 3600.0   # heal drift hourly (60 writes/day)
     _stale_sweep_done: bool = False   # one-time Firestore neutralise after restart
+    _signals_off_announced: bool = False  # log the OFF state once, not every tick
 
     def _push_signal_docs(_pairs) -> int:
         """Write the signal docs. MUST NOT run on the event loop — see the caller.
@@ -1565,7 +1591,7 @@ async def run_engine_background():
 
     async def update_state():
         nonlocal _last_tr_mtime, _last_signals_hash, _last_firestore_push, _stale_sweep_done
-        nonlocal _last_full_push, _last_fire_set
+        nonlocal _last_full_push, _last_fire_set, _signals_off_announced
         while True:
             try:
                 LIVE_STATE.data["tickers"]       = engine.live_prices.copy()
@@ -1634,6 +1660,14 @@ async def run_engine_background():
                     print(f"âš ï¸ Failed to write live_signals.json: {_e}")
 
                 # --- write latest signals to Firebase Firestore ---
+                # Off by default; the WebSocket and the snapshot file already
+                # carry this. See _PUBLISH_SIGNALS_TO_FIRESTORE.
+                if not _PUBLISH_SIGNALS_TO_FIRESTORE and not _signals_off_announced:
+                    _signals_off_announced = True
+                    print('[PRODUCER] Firestore signal publishing is OFF — '
+                          'the dashboard is served by /ws/dashboard and '
+                          'live_signals.json. Set '
+                          'AEGIS_FIRESTORE_PUBLISH_SIGNALS=1 to restore it.')
                 # Only push when: warmup is done AND (signals changed OR 5-min interval elapsed).
                 # Signals only change every scan_interval_seconds (~5 min), so pushing every
                 # second was burning ~2M Firestore writes/day for no benefit.
@@ -1652,7 +1686,9 @@ async def run_engine_background():
                     # (measured 2026-07-20: 4 stale SELL cards vs 0 fired / 5
                     # armed). Neutralise every doc once, immediately; scans
                     # repopulate them with real state as warmup completes.
-                    if not _stale_sweep_done:
+                    # Pointless once nothing reads those docs — and it is a
+                    # full-collection write on every restart.
+                    if not _stale_sweep_done and _PUBLISH_SIGNALS_TO_FIRESTORE:
                         _stale_sweep_done = True   # attempt once even if it fails
                         try:
                             _reset_ts = datetime.now(timezone.utc).isoformat()
@@ -1743,7 +1779,8 @@ async def run_engine_background():
                     # market monitoring data, not trade signals. Live prices are never
                     # written to Firestore; they flow only through the WebSocket ticker
                     # stream to the dashboard.
-                    should_push = _fires_changed or _interval_elapsed
+                    should_push = (_PUBLISH_SIGNALS_TO_FIRESTORE
+                                   and (_fires_changed or _interval_elapsed))
                     if not should_push:
                         raise StopIteration  # skip cleanly without nesting
 
@@ -1950,6 +1987,29 @@ def _tg_access_until(email: str) -> str:
     in which expired users still received signals.
     """
     try:
+        # ── the volume answers first ────────────────────────────────────────
+        # A paid grant is recorded on the volume by _ent_grant BEFORE the
+        # Firestore write, so for the users who actually receive Telegram
+        # signals the volume already holds the authoritative end date. Reading
+        # it here keeps delivery working when Firestore is unreachable or over
+        # quota — which is exactly when a paying subscriber must not silently
+        # stop receiving signals. Firestore stays the fallback for anyone the
+        # volume does not know about (trials, legacy records).
+        try:
+            _rec = (_ent_load() or {}).get(str(email).lower()) or {}
+            if _rec.get("plan") and str(_rec.get("plan")).lower() in PAID_PLANS:
+                _end = str(_rec.get("subscription_end") or "")
+                _cancelled = str(_rec.get("status") or "").lower() == "canceled"
+                # A cancellation means "will not renew", not "ends now" — the
+                # recorded end date still governs. Only an entitlement with no
+                # end date at all falls through to Firestore.
+                if _end:
+                    return _end
+                if not _cancelled:
+                    return ""      # paid, open-ended — no timestamp gate
+        except Exception as _ent_exc:
+            print(f"[TG] volume entitlement read failed for {email}: {_ent_exc!r}")
+
         user_doc = get_user_doc(email) or {}
         sub  = user_doc.get("subscription") or {}
         # A PAID plan is gated by the subscription's own end date, never by
