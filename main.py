@@ -4137,8 +4137,30 @@ def get_me(credentials: HTTPAuthorizationCredentials = Depends(security)):
         "email": user_doc.get("email", user_id),
         "plan": user_doc.get("plan", "trial"),
         "trial_end": user_doc.get("trial_end"),
-        "subscription_active": user_doc.get("subscription", {}).get("status") == "active",
-        "subscription_end": user_doc.get("subscription_end"),
+        # ── one source of truth for access ──────────────────────────────
+        # subscription_active used to be `subscription.status == "active"`,
+        # which ignores the END DATE. Observed 2026-08-23 on a real account:
+        #
+        #     plan "pro", status "active", expires_at 2026-07-06  (7 weeks past)
+        #     has_paid_access() -> False        <- delivery correctly stopped
+        #     subscription_active -> True       <- the site said "active"
+        #
+        # So Telegram went silent while the dashboard showed a live Pro plan, and
+        # the only way to find out was to read the volume. Three places computed
+        # access — has_paid_access(), this line, and isPaidPlan() in
+        # gatekeeper.js — and only the first was right.
+        #
+        # has_access is now the authoritative flag and the frontend reads it
+        # instead of re-deriving from the plan name.
+        "has_access": has_paid_access(user_doc) or not is_trial_expired(user_id),
+        "subscription_active": has_paid_access(user_doc),
+        # The real key is subscription.expires_at; the top-level
+        # "subscription_end" this used to read has never existed, so the
+        # frontend was always handed None and could not have checked expiry
+        # even if it wanted to.
+        "subscription_end": ((user_doc.get("subscription") or {}).get("current_period_end")
+                             or (user_doc.get("subscription") or {}).get("expires_at")
+                             or (user_doc.get("subscription") or {}).get("end_date")),
         "full_name": user_doc.get("full_name"),
         "location": user_doc.get("location"),
         "phone_number": user_doc.get("phone_number"),

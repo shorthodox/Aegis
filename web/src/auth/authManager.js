@@ -174,6 +174,10 @@ export class AuthManager {
 
         const user = this.getUser();
         if (user) {
+            // The server's own verdict, computed by the function that gates
+            // delivery. It accounts for an ELAPSED term; the plan-name test
+            // below does not, and said "pro" for a plan seven weeks expired.
+            if (typeof user.has_access === 'boolean') return user.has_access;
             const plan = (user.plan || '').toLowerCase();
             const _PAID = ['pro', 'premium', 'intermediate', 'basic', 'active', 'pro-dev'];
             if (_PAID.includes(plan) || user.subscription_active) return true;
