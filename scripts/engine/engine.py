@@ -344,6 +344,11 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
     #      6          6.0           32%              22 /  8
     #      4          4.0           27%              23 /  7
     LEVEL_MERGE_ATR   = 0.5   # pivots within 0.5 ATR are the SAME level
+    # How many CONSECUTIVE 5m candles must close the same way before an armed
+    # setup may be taken away from its level. Strictly higher than the ordinary
+    # 3-of-4 bar, because entering early gives up the price the setup was built
+    # on. See _ltf_confirmation and TraderGate's far tier.
+    ENTRY_5M_STRONG = 5
     LEVEL_MIN_TOUCHES = 2     # touched once is not a level, it is an accident
 
     # How far back the DAILY history reaches when judging LOCATION — where price
@@ -1293,9 +1298,11 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
         same thing it always did — but it now contributes evidence rather than
         holding a veto.
         """
-        out = {'ltf_bull': False, 'ltf_bear': False}
+        out = {'ltf_bull': False, 'ltf_bear': False,
+               'ltf_bull_strong': False, 'ltf_bear_strong': False}
         try:
-            raw = await self._fetch_candles(symbol, '5m', self.ENTRY_5M_WINDOW + 2)
+            raw = await self._fetch_candles(
+                symbol, '5m', max(self.ENTRY_5M_WINDOW, self.ENTRY_5M_STRONG) + 2)
             closed = raw[:-1] if len(raw) >= 2 else raw
             window = closed[-self.ENTRY_5M_WINDOW:]
             if len(window) < self.ENTRY_5M_WINDOW:
@@ -1318,6 +1325,21 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
             # let a flat tape confirm a short.
             downs = sum(1 for c in window if float(c[4]) < float(c[1]))
             out['ltf_bear'] = downs >= need
+
+            # ── the STRONG read: 5 consecutive 5m candles ──────────────────
+            # Asked 2026-08-23: fire an armed setup that reverses before ever
+            # reaching its level, "if there are 5 5 min reversal confirmation
+            # candles, they have to be strong".
+            #
+            # The ordinary read is 3 of the last 4, which is the bar for taking a
+            # trade AT its level. Entering away from the level gives up the price
+            # the whole setup was built on, so it is held to a strictly higher
+            # bar: ENTRY_5M_STRONG of the last ENTRY_5M_STRONG closed candles,
+            # all closing the same way, no exceptions. A doji breaks it.
+            _sw = closed[-self.ENTRY_5M_STRONG:]
+            if len(_sw) >= self.ENTRY_5M_STRONG:
+                out['ltf_bull_strong'] = all(float(c[4]) > float(c[1]) for c in _sw)
+                out['ltf_bear_strong'] = all(float(c[4]) < float(c[1]) for c in _sw)
         except Exception as exc:
             LTF_UNREADABLE['count'] += 1
             if LTF_UNREADABLE['count'] in (1, 10, 100):
@@ -1576,6 +1598,33 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
         # has ignored for WORK_EXPIRY_BARS is a thesis that did not happen, and
         # it is retired rather than re-offered every scan forever.
         if plan.action == ACTION_WORK:
+            # ── do not ARM what can never FIRE ──────────────────────────────
+            # Reported 2026-08-23: "why are the signals with signal quality
+            # score 5, 0, 10 ... being an armed signal".
+            #
+            # Because this branch returns BEFORE the MIN_FIRE_QUALITY floor
+            # further down, which is only reached on the ENTER path. So a setup
+            # the engine itself scored at 5/100 was armed, published as a PENDING
+            # card with a countdown, and then refused the instant price reached
+            # its level and it tried to enter. The card could never become a
+            # trade. It occupied a slot, showed a timer, and expired.
+            #
+            # The floor is not moving: at 45 the fleet measured 38.5% WR against
+            # 78.6% at 60 (p=0.022). What was wrong is arming against a bar the
+            # order could not clear, so the bar is applied here too.
+            _aq = float(getattr(_cfg, 'MIN_FIRE_QUALITY', 0.0) or 0.0)
+            if _aq > 0 and float(ctx_quality or 0.0) < _aq:
+                self._working_orders.pop(f'{symbol}|{plan.side}', None)
+                getattr(self, '_working_levels', {}).pop(f'{symbol}|{plan.side}', None)
+                getattr(self, '_working_stops', {}).pop(f'{symbol}|{plan.side}', None)
+                LOW_QUALITY_REFUSED['count'] += 1
+                self._publish_no_trade(
+                    symbol, f'signal quality {float(ctx_quality or 0.0):.0f}/100 is below '
+                            f'the {_aq:.0f} floor — not armed, because an order at this '
+                            f'quality would be refused when it reached its level')
+                print(f'[{symbol}] NOT ARMED {plan.side} {plan.setup} — quality '
+                      f'{float(ctx_quality or 0.0):.0f} < {_aq:.0f}')
+                return True
             key = f'{symbol}|{plan.side}'
             first_seen = self._working_orders.setdefault(key, now)
             getattr(self, '_working_levels', {}).setdefault(key, float(plan.level))
