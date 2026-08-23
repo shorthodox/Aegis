@@ -1077,6 +1077,7 @@ class TraderGate:
         levels:  Optional[Sequence[Tuple[float, int]]] = None,
         confirm: Optional[Dict[str, Any]] = None,
         pinned_levels: Optional[Dict[str, float]] = None,
+        location_levels: Optional[Sequence[Tuple[float, int]]] = None,
     ) -> TradePlan:
         """Run the playbook and return a TradePlan.
 
@@ -1120,7 +1121,10 @@ class TraderGate:
 
         # ── Stage 1a · location against the WHOLE structure ──────────────────
         if USE_STRUCTURAL_LOCATION:
-            _srp = cls._structural_rp(price, levels, result)
+            # Location is judged against a BOUNDED span (see day_bars in
+            # _structural_levels); `levels` stays deep for stops and targets.
+            _srp = cls._structural_rp(
+                price, location_levels if location_levels is not None else levels, result)
             if _srp is not None:
                 if side == 'BUY' and _srp >= STRUCTURAL_RP_HIGH:
                     return _reject('location',

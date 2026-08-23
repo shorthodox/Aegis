@@ -345,6 +345,29 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
     #      4          4.0           27%              23 /  7
     LEVEL_MERGE_ATR   = 0.5   # pivots within 0.5 ATR are the SAME level
     LEVEL_MIN_TOUCHES = 2     # touched once is not a level, it is an accident
+
+    # How far back the DAILY history reaches when judging LOCATION — where price
+    # sits between the top-most and bottom-most level. Stops and targets still
+    # use the full ~4-year structure; only this screen is bounded.
+    #
+    # Measured 2026-08-23 across 20 tokens, share of the fleet at each span:
+    #
+    #     span      median srp   <=0.20 (short banned)   both sides open
+    #     ~4 years      0.06          16/20                    20%
+    #     ~1 year       0.20          11/20                    45%
+    #     ~6 months     0.55           1/20                    65%
+    #     ~4 months     0.70           1/20                    60%
+    #
+    # At the full span the median token sits at 6% of "the whole structure" and
+    # the short side is refused fleet-wide for as long as price is under a cycle
+    # top from years ago — the rule stops being a location screen and becomes a
+    # standing ban on one direction. 180 days restores a real spread and lets the
+    # gate refuse BOTH sides selectively, which is what it was asked to do.
+    #
+    # This is not a claim that 180 days predicts returns better; that does not
+    # survive measurement (see the HTF range-position work). It is the span at
+    # which the screen discriminates instead of disabling half the book.
+    LOCATION_DAY_BARS = 180
     LEVEL_TOP_K       = 4     # keep ONLY the strongest levels — the whole point
     AT_LEVEL_ATR      = 0.35  # price is "at" a level within this many ATR (thin entry gap)
 
@@ -1478,6 +1501,13 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
             levels = await self._structural_levels(symbol, price, atr)
         except Exception:
             levels = []
+        try:
+            # A second, SHALLOWER read of the same cached candles, used only to
+            # judge where price sits in the structure. See LOCATION_DAY_BARS.
+            loc_levels = await self._structural_levels(
+                symbol, price, atr, day_bars=self.LOCATION_DAY_BARS)
+        except Exception:
+            loc_levels = []
         tide = await self._btc_tide()
         confirm = await self._ltf_confirmation(symbol)
         longs, shorts = self._cluster_exposure(symbol)
@@ -1495,6 +1525,7 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
             return True
         plan = TraderGate.evaluate(
             result, regime,
+            location_levels=loc_levels or None,
             pinned_levels={
                 sd: lv for sd in ('BUY', 'SELL')
                 for lv in (getattr(self, '_working_levels', {}).get(f'{symbol}|{sd}'),)

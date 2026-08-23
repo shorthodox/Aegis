@@ -360,7 +360,8 @@ class LevelsMixin:
             return []
 
     async def _structural_levels(self, symbol: str, price: float,
-                                 atr: float = 0.0) -> List[Tuple[float, int]]:
+                                 atr: float = 0.0,
+                                 day_bars: int = 0) -> List[Tuple[float, int]]:
         """The full S/R structure from DEEP, MULTI-TIMEFRAME history.
 
         `_important_levels` scans only 1h/1000 (~41 days) and keeps the 4
@@ -384,6 +385,20 @@ class LevelsMixin:
             for tf, lim, k in (('1h', 1500, 3), ('4h', 1500, 3), ('1d', 1500, 2)):
                 raw    = await self._fetch_candles(symbol, tf, lim)
                 closed = raw[:-1] if len(raw) >= 2 else raw
+                # `day_bars` bounds how far back the DAILY history reaches. It
+                # slices the candles already fetched, so the shorter view costs
+                # nothing extra and shares the same cache entry.
+                #
+                # The deep default (~4 years) is right for picking the nearest
+                # significant level to stop behind or target. It is WRONG for
+                # judging location: measured 2026-08-23 across 20 tokens, the
+                # full span put the median token at 6% of "the whole structure"
+                # and 16 of 20 at or below 20% — so the short side was refused
+                # fleet-wide, every scan, for as long as price sat under a cycle
+                # top from years ago. A gate that rejects one side on nearly
+                # every token is a side ban, not a location gate.
+                if day_bars and tf == '1d' and len(closed) > day_bars:
+                    closed = closed[-day_bars:]
                 if len(closed) < 2 * k + 5:
                     continue
                 hs = [float(c[2]) for c in closed]
