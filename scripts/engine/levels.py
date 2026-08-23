@@ -37,7 +37,13 @@ class LevelsMixin:
         cache_key = f'{symbol}|{timeframe}|{limit}'
         now = time.time()
         entry = self._candle_cache.get(cache_key)
-        if entry and (now - entry['ts']) < self._candle_cache_ttl:
+        # Lower timeframes expire faster — see _candle_cache_ttl_fast. The 5m
+        # read behind _ltf_confirmation is only worth anything while it is
+        # current.
+        _ttl = (getattr(self, '_candle_cache_ttl_fast', self._candle_cache_ttl)
+                if timeframe in getattr(self, '_fast_timeframes', ())
+                else self._candle_cache_ttl)
+        if entry and (now - entry['ts']) < _ttl:
             return entry['candles']
 
         loop = asyncio.get_event_loop()
