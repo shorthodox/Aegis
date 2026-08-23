@@ -69,7 +69,13 @@ from scripts.engine.risk import DynamicRiskEngine as _RiskEngine
 
 GIVEBACK_FRAC = _RiskEngine.TP_GIVEBACK_MAX_FRAC
 MAX_SHADOW_SECONDS = 24 * 3600
-_STORE = Path(__file__).resolve().parents[2] / 'data' / 'shadow_exits.json'
+# On the VOLUME. This was <repo>/data/shadow_exits.json — the container
+# filesystem — so every deploy silently threw away the observation history the
+# book exists to accumulate.
+try:
+    from scripts.engine.config import SHADOW_EXITS_PATH as _STORE
+except Exception:                                    # config import cycle / tests
+    _STORE = Path(__file__).resolve().parents[2] / 'data' / 'shadow_exits.json'
 
 
 @dataclass

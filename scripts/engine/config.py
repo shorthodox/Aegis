@@ -257,6 +257,11 @@ DRIFT_STATE_PATH        = STATE_DIR / 'drift_state.json'
 # accumulate and a deploy must not reset it.
 WORKING_ORDER_LOG_PATH  = STATE_DIR / 'working_order_counterfactual.jsonl'
 SCALP_RECORD_PATH       = STATE_DIR / 'scalp_trades.json'
+# The counterfactual exit book — what the LADDER would have booked. Observation
+# only, and like the working-order log its answer takes days to accumulate, so a
+# deploy must not reset it. It used to live at <repo>/data/, which is the
+# container filesystem and is wiped on every push.
+SHADOW_EXITS_PATH       = STATE_DIR / 'shadow_exits.json'
 
 # ── Durable track record via Firestore ──────────────────────────────────────
 # Railway's filesystem is EPHEMERAL: every git push rebuilds the image and the
