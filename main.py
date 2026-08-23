@@ -1492,6 +1492,7 @@ async def run_engine_background():
 
     _last_tr_mtime: float = 0.0
     _last_signals_hash: int = 0       # hash of last signals pushed to Firestore
+    _last_fire_set: frozenset = frozenset()  # symbols firing at the last push
     _last_firestore_push: float = 0.0 # epoch of last Firestore write
     _FIRESTORE_MIN_INTERVAL = 290.0   # push at most once per ~5 min (matches scan cycle)
     # Per-symbol payload hashes — the diff that keeps this inside the free tier.
@@ -1552,7 +1553,7 @@ async def run_engine_background():
 
     async def update_state():
         nonlocal _last_tr_mtime, _last_signals_hash, _last_firestore_push, _stale_sweep_done
-        nonlocal _last_full_push
+        nonlocal _last_full_push, _last_fire_set
         while True:
             try:
                 LIVE_STATE.data["tickers"]       = engine.live_prices.copy()
@@ -1689,10 +1690,40 @@ async def run_engine_background():
                 _signals_changed = (_new_hash != _last_signals_hash)
                 _interval_elapsed = (_now - _last_firestore_push >= _FIRESTORE_MIN_INTERVAL)
 
-                if not _signals_now or (not _signals_changed and not _interval_elapsed):
-                    pass  # skip â€” nothing new to push
+                # _FIRESTORE_MIN_INTERVAL has to be a FLOOR, not a ceiling.
+                #
+                # It was OR'd with _signals_changed, so any change pushed at once
+                # and the interval only ever FORCED an extra push. And
+                # _sig_fingerprint is GLOBAL across all ~60 tokens, keyed on
+                # (signal, fire, pending_entry) -- so ONE token relabelling, or one
+                # order arming, rewrote every changed doc in the fleet. With the
+                # whole fleet rescanned every ~61s at least one of those flips
+                # essentially always, so the push ran every cycle:
+                #
+                #     1,416 cycles/day x ~32 changed docs = ~45,000 writes/day
+                #
+                # against a 20,000/day free-tier cap. It ran out about ten hours
+                # in, every day -- which is what "no signals since last night"
+                # actually was. The engine was scanning and arming correctly; the
+                # PUBLISH was dead, so nothing reached the dashboard or Telegram:
+                #
+                #     [PRODUCER] batch push failed on QUOTA -- 32 doc(s) dropped
+                #     [PRODUCER] Firestore: 0/32 written
+                #
+                # Routine churn now waits for the floor. A genuine FIRE still goes
+                # out immediately -- that is the one event where latency IS the
+                # product, and fires are rare enough to cost nothing.
+                _fire_set = frozenset(
+                    sym for sym, v in _signals_now.items()
+                    if isinstance(v, dict) and v.get('fire', False)
+                )
+                _fires_changed = (_fire_set != _last_fire_set)
+
+                if not _signals_now or not (_fires_changed or _interval_elapsed):
+                    pass  # nothing worth a write yet
                 else:
                     _last_signals_hash = _new_hash
+                    _last_fire_set = _fire_set
                     _last_firestore_push = _now
 
                 try:
@@ -1700,7 +1731,7 @@ async def run_engine_background():
                     # market monitoring data, not trade signals. Live prices are never
                     # written to Firestore; they flow only through the WebSocket ticker
                     # stream to the dashboard.
-                    should_push = _signals_changed or _interval_elapsed
+                    should_push = _fires_changed or _interval_elapsed
                     if not should_push:
                         raise StopIteration  # skip cleanly without nesting
 
