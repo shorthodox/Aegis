@@ -32,6 +32,9 @@ from scripts.tests.test_trader_gate import mk, run, TURNED_DOWN
 
 
 TURNED = {'ltf_bull': False, 'ltf_bear': True}      # the 5m has turned DOWN
+# Five consecutive 5m candles down — the STRONG read the FAR tier requires from
+# 2026-08-23. The ordinary TURNED (3 of 4) still governs a fill AT the level.
+TURNED_STRONG = {'ltf_bull': False, 'ltf_bear': True, 'ltf_bear_strong': True}
 QUIET = {'ltf_bull': False, 'ltf_bear': False}      # the tape says nothing
 
 
@@ -219,7 +222,7 @@ def test_a_fill_close_to_the_level_is_taken():
 def test_all_three_prints_fire_from_beyond_the_bound():
     """The reported case: price reversed before ever reaching the level."""
     d, lv = _at(1.60, full=True)
-    plan = run(d, regime='TRENDING_BEAR', levels=lv, confirm=TURNED)
+    plan = run(d, regime='TRENDING_BEAR', levels=lv, confirm=TURNED_STRONG)
     assert plan.action == ACTION_ENTER, (
         f'a fully-confirmed reversal 1.6 ATR from its level still rested '
         f'({plan.action}: {plan.reason}) — it will expire unfilled'
@@ -228,7 +231,7 @@ def test_all_three_prints_fire_from_beyond_the_bound():
 
 def test_the_card_says_the_level_was_never_reached():
     d, lv = _at(1.60, full=True)
-    plan = run(d, regime='TRENDING_BEAR', levels=lv, confirm=TURNED)
+    plan = run(d, regime='TRENDING_BEAR', levels=lv, confirm=TURNED_STRONG)
     assert any('never reached' in n for n in (plan.notes or [])), (
         'an entry taken away from its level must say so'
     )
@@ -245,7 +248,7 @@ def test_the_five_minute_turn_plus_one_print_fires_from_far_out():
     never asked for; the 5m turn was.
     """
     d, lv = _at(1.60, full=False)      # 5m turned + RSI curling, no candle
-    plan = run(d, regime='TRENDING_BEAR', levels=lv, confirm=TURNED)
+    plan = run(d, regime='TRENDING_BEAR', levels=lv, confirm=TURNED_STRONG)
     assert plan.action == ACTION_ENTER, (
         f'a reversal 1.6 ATR from its level with the 5m turned still rested '
         f'({plan.action}: {plan.reason}) — it will expire unfilled, which is '
@@ -256,7 +259,7 @@ def test_the_five_minute_turn_plus_one_print_fires_from_far_out():
 @pytest.mark.parametrize('dist', [0.60, 1.00, 1.50])
 def test_it_fires_across_the_range_that_actually_pays(dist):
     d, lv = _at(dist, full=False)
-    plan = run(d, regime='TRENDING_BEAR', levels=lv, confirm=TURNED)
+    plan = run(d, regime='TRENDING_BEAR', levels=lv, confirm=TURNED_STRONG)
     assert plan.action == ACTION_ENTER
 
 
@@ -311,7 +314,7 @@ def test_beyond_reach_is_still_refused_even_fully_confirmed():
 def test_the_stop_still_belongs_to_the_level_on_a_far_fill():
     """The safety condition from 2026-08-21 must survive the looser distance."""
     d, lv = _at(1.60, full=True)
-    plan = run(d, regime='TRENDING_BEAR', levels=lv, confirm=TURNED)
+    plan = run(d, regime='TRENDING_BEAR', levels=lv, confirm=TURNED_STRONG)
     if plan.action != ACTION_ENTER:
         pytest.skip(f'refused earlier: {plan.reason}')
     assert plan.stop > lv[0][0], 'the stop is no longer clear of the level'

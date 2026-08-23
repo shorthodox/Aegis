@@ -1311,13 +1311,23 @@ class TraderGate:
             notes.append(f'trigger: at the level ({dist_atr:.2f} ATR) and confirmed — {cwhy}')
         elif dist_atr <= REACH_ATR:
             _prints = cls._confirmation_prints(result, side, confirm or {})
-            _full = (EARLY_ENTRY_ON_REVERSAL and ok and _ltf_turned
+            # Away from the level, the 5m read must be the STRONG one: five
+            # consecutive candles closing our way, not three of four. Asked for
+            # 2026-08-23 — "if there are 5 5 min reversal confirmation candles,
+            # they have to be strong". Entering early gives up the price the
+            # setup was built on, so it is held to a higher bar than a fill AT
+            # the level, which keeps the ordinary 3-of-4.
+            _c = confirm or {}
+            _strong = bool(_c.get('ltf_bull_strong') if side == 'BUY'
+                           else _c.get('ltf_bear_strong'))
+            _full = (EARLY_ENTRY_ON_REVERSAL and ok and _ltf_turned and _strong
                      and len(_prints) >= FULL_CONFIRM_PRINTS)
             if _full and dist_atr > EARLY_ENTRY_MAX_ATR:
                 action, expiry = ACTION_ENTER, 0
                 notes.append(f'trigger: {dist_atr:.2f} ATR short of {level:.8g} and the '
-                             f'level was never reached — but all {len(_prints)} prints '
-                             f'agree the reversal is here ({" + ".join(_prints)}), so it '
+                             f'level was never reached — but five consecutive 5m candles '
+                             f'have closed {"up" if side == "BUY" else "down"} and '
+                             f'{len(_prints)} prints agree ({" + ".join(_prints)}), so it '
                              f'is taken at the market rather than left to expire')
             elif (EARLY_ENTRY_ON_LTF and ok and _ltf_turned
                     and dist_atr <= EARLY_ENTRY_MAX_ATR):
