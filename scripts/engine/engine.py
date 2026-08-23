@@ -345,10 +345,25 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
     #      4          4.0           27%              23 /  7
     LEVEL_MERGE_ATR   = 0.5   # pivots within 0.5 ATR are the SAME level
     # How many CONSECUTIVE 5m candles must close the same way before an armed
-    # setup may be taken away from its level. Strictly higher than the ordinary
-    # 3-of-4 bar, because entering early gives up the price the setup was built
-    # on. See _ltf_confirmation and TraderGate's far tier.
-    ENTRY_5M_STRONG = 5
+    # setup may be taken away from its level.
+    #
+    # THREE, corrected 2026-08-23: "not 5 5 min candle, only 3". Still stricter
+    # than the ordinary bar, which is 3 of the last 4 and therefore tolerates one
+    # candle closing against the trade — out here every one of the three must
+    # agree, and a doji breaks it. Entering early gives up the price the setup
+    # was built on, so it is held to a higher bar, but not an unreachable one.
+    #
+    # Measured, 30 tokens x ~1000 five-minute bars, share of bars satisfying each
+    # rule in either direction:
+    #
+    #     3 of 4 (ordinary, at the level)   52.5%   ~151 per token per day
+    #     3 consecutive (this)              19.8%    ~57
+    #     4 consecutive                      9.3%    ~27
+    #     5 consecutive                      4.2%    ~12
+    #
+    # Five was measured at ~12 chances per token per day and was briefly shipped;
+    # three is the bar asked for and roughly five times as reachable.
+    ENTRY_5M_STRONG = 3
     LEVEL_MIN_TOUCHES = 2     # touched once is not a level, it is an accident
 
     # How far back the DAILY history reaches when judging LOCATION — where price

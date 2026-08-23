@@ -1311,12 +1311,14 @@ class TraderGate:
             notes.append(f'trigger: at the level ({dist_atr:.2f} ATR) and confirmed — {cwhy}')
         elif dist_atr <= REACH_ATR:
             _prints = cls._confirmation_prints(result, side, confirm or {})
-            # Away from the level, the 5m read must be the STRONG one: five
-            # consecutive candles closing our way, not three of four. Asked for
-            # 2026-08-23 — "if there are 5 5 min reversal confirmation candles,
-            # they have to be strong". Entering early gives up the price the
-            # setup was built on, so it is held to a higher bar than a fill AT
-            # the level, which keeps the ordinary 3-of-4.
+            # Away from the level the 5m read must be the STRONG one: THREE
+            # CONSECUTIVE candles closing our way, where the ordinary bar is
+            # three of the last four and so tolerates one closing against the
+            # trade. Asked for 2026-08-23 ("3 5min candle confirmation"), briefly
+            # shipped as five, corrected back to three. Entering early gives up
+            # the price the setup was built on, so it is held to a higher bar
+            # than a fill AT the level — but a reachable one: 19.8% of bars
+            # against 4.2% at five.
             _c = confirm or {}
             _strong = bool(_c.get('ltf_bull_strong') if side == 'BUY'
                            else _c.get('ltf_bear_strong'))
@@ -1325,7 +1327,7 @@ class TraderGate:
             if _full and dist_atr > EARLY_ENTRY_MAX_ATR:
                 action, expiry = ACTION_ENTER, 0
                 notes.append(f'trigger: {dist_atr:.2f} ATR short of {level:.8g} and the '
-                             f'level was never reached — but five consecutive 5m candles '
+                             f'level was never reached — but three consecutive 5m candles '
                              f'have closed {"up" if side == "BUY" else "down"} and '
                              f'{len(_prints)} prints agree ({" + ".join(_prints)}), so it '
                              f'is taken at the market rather than left to expire')
