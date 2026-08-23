@@ -442,6 +442,17 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
         # The invalidation each live order was placed with — the only thing
         # besides the clock that may retire it early.
         self._working_stops: Dict[str, float] = {}
+        # Everything the ARMED CARD needs, captured when the order is placed.
+        #
+        # The order itself survives a scan that fails to re-derive its plan
+        # (see the REJECT branch), but the CARD was only ever rebuilt inside the
+        # ACTION_WORK branch — so on any such scan the published signal lost
+        # pending_entry/pending_side/pending_target and reverted to HOLD. The
+        # order was resting correctly and the dashboard said nothing was there.
+        # That is "armed signal come and disappear": a display bug sitting on top
+        # of the lifecycle fix, and more confusing than the original, because now
+        # the book and the screen disagreed.
+        self._working_meta: Dict[str, Dict[str, Any]] = {}
         # Counterfactual, not behaviour: for every resting order, would a limit
         # AT the level have filled before it expired? _working_orders holds only
         # a timestamp, so it cannot answer that. This does, and nothing reads it
@@ -1434,6 +1445,36 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
         except Exception:
             WO_OBSERVE_ERRORS['count'] += 1
 
+    def _republish_working_card(self, symbol: str, key: str,
+                                sig: Optional[Dict[str, Any]], now: float) -> None:
+        """Re-stamp the armed card for an order that is still resting.
+
+        The gate is a per-scan snapshot and its inputs jitter — model opposition
+        flickers, regime confidence dips, rp crosses a line. None of that is news
+        about a thesis already committed to, so the ORDER survives it. This keeps
+        the CARD alive with it, from the state captured at arm time, so the desk
+        sees one continuous armed signal for the order's whole life instead of a
+        card that blinks in and out.
+        """
+        meta = (getattr(self, '_working_meta', None) or {}).get(key)
+        if not isinstance(sig, dict) or not meta:
+            return
+        first_seen = (self._working_orders or {}).get(key, now)
+        age_bars = (now - first_seen) / 3600.0
+        left = float(meta.get('expiry_bars', WORK_EXPIRY_BARS)) - age_bars
+        sig['fire']            = False
+        sig['signal']          = 'HOLD'
+        sig['working_order']   = True
+        sig['pending_entry']   = True
+        sig['pending_side']    = meta['side']
+        sig['pending_target']  = meta['level']
+        sig['pending_reason']  = meta['reason']
+        sig['expires_in_bars'] = round(left, 1)
+        sig['suggested_sl']    = round(meta['stop'], 8)
+        sig['suggested_tp']    = round(meta['target'], 8)
+        sig['direction']       = 'LONG' if meta['side'] == 'BUY' else 'SHORT'
+        sig['setup_type']      = meta.get('setup') or sig.get('setup_type')
+
     def _tend_working_orders(self, symbol: str, price: float, now: float) -> str:
         """Retire live resting orders on their OWN terms, every scan.
 
@@ -1467,6 +1508,7 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
                 self._working_orders.pop(key, None)
                 getattr(self, '_working_levels', {}).pop(key, None)
                 getattr(self, '_working_stops', {}).pop(key, None)
+                getattr(self, '_working_meta', {}).pop(key, None)
                 self._wo_close(symbol, side, 'EXPIRED', now)
                 print(f'[{symbol}] SETUP EXPIRED: {side} after {age_bars:.1f} bars')
                 return (f'setup expired — the {side} order went untriggered for '
@@ -1479,6 +1521,7 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
                     self._working_orders.pop(key, None)
                     getattr(self, '_working_levels', {}).pop(key, None)
                     (self._working_stops or {}).pop(key, None)
+                    (getattr(self, '_working_meta', None) or {}).pop(key, None)
                     self._wo_close(symbol, side, 'INVALIDATED', now)
                     print(f'[{symbol}] SETUP INVALIDATED: {side} — price {price:.8g} '
                           f'went through the {stop:.8g} stop before the level')
@@ -1587,10 +1630,19 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
             # here, at a median age of one scan, and 20 fillable setups never
             # opened because of it. The gate is a snapshot; a resting order has
             # its own clock and its own invalidation, and those retire it.
-            _live = any(f'{symbol}|{sd}' in self._working_orders for sd in ('BUY', 'SELL'))
-            if not _live:
+            _live_key = next(
+                (f'{symbol}|{sd}' for sd in ('BUY', 'SELL')
+                 if f'{symbol}|{sd}' in self._working_orders), None)
+            if _live_key is None:
                 self._publish_no_trade(symbol, plan.reason)
                 print(f'[{symbol}] NO TRADE ({plan.stage}): {plan.reason}')
+                return True
+            # The order is still resting, so the CARD must still say so. Without
+            # this the armed card vanishes on every scan the gate does not
+            # re-derive the same plan and reappears on the next one that does —
+            # reported as "armed signal come and disappear". Rebuilt from the
+            # state captured when the order was placed, with the clock ticking.
+            self._republish_working_card(symbol, _live_key, sig, now)
             return True
 
         # ── WORK · a resting order, with a clock ─────────────────────────────
@@ -1617,6 +1669,7 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
                 self._working_orders.pop(f'{symbol}|{plan.side}', None)
                 getattr(self, '_working_levels', {}).pop(f'{symbol}|{plan.side}', None)
                 getattr(self, '_working_stops', {}).pop(f'{symbol}|{plan.side}', None)
+                getattr(self, '_working_meta', {}).pop(f'{symbol}|{plan.side}', None)
                 LOW_QUALITY_REFUSED['count'] += 1
                 self._publish_no_trade(
                     symbol, f'signal quality {float(ctx_quality or 0.0):.0f}/100 is below '
@@ -1632,6 +1685,7 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
             age_bars = (now - first_seen) / 3600.0        # 1h engine timeframe
             if age_bars > plan.expiry_bars:
                 self._working_orders.pop(key, None)
+                getattr(self, '_working_meta', {}).pop(key, None)
                 self._wo_close(symbol, plan.side, 'EXPIRED', now)
                 getattr(self, '_working_levels', {}).pop(key, None)
                 self._publish_no_trade(
@@ -1641,6 +1695,17 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
                       f'after {age_bars:.1f} bars')
                 return True
             self._wo_observe(symbol, plan, price, now)
+            if not hasattr(self, '_working_meta'):
+                self._working_meta = {}
+            self._working_meta[key] = {
+                'side':    plan.side,
+                'level':   float(plan.level),
+                'stop':    float(plan.stop),
+                'target':  float(plan.target),
+                'setup':   plan.setup,
+                'reason':  plan.reason,
+                'expiry_bars': float(plan.expiry_bars),
+            }
             if isinstance(sig, dict):
                 sig['fire']           = False
                 sig['signal']         = 'HOLD'
@@ -1750,6 +1815,7 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
         self._wo_close(symbol, plan.side, 'FILLED_AT_LEVEL', now)
         getattr(self, '_working_levels', {}).pop(f'{symbol}|{plan.side}', None)
         getattr(self, '_working_stops', {}).pop(f'{symbol}|{plan.side}', None)
+        getattr(self, '_working_meta', {}).pop(f'{symbol}|{plan.side}', None)
         result['side']      = plan.side
         result['fire']      = True
         result['btc_tide']  = tide
