@@ -2032,11 +2032,15 @@ def _tg_access_until(email: str) -> str:
         # timestamp beside a paying subscriber's chat_id and made the sender skip
         # them on every signal — see has_paid_access() for the whole story.
         if has_paid_access(user_doc):
-            if isinstance(sub, dict):
-                for key in ("current_period_end", "expires_at", "end_date"):
-                    if sub.get(key):
-                        return str(sub[key])
-            return ""          # paid, no end date — no timestamp gate
+            # Through _user_sub_end, which also sees the TOP-LEVEL
+            # subscription_end the provider webhooks write. Reading only the
+            # in-subscription keys returned '' for every paid subscriber, which
+            # the sender treats as open-ended — so Telegram delivery never
+            # stopped at the due date either.
+            _end = _user_sub_end(user_doc)
+            if _end:
+                return _end.isoformat()
+            return ""          # paid, no end date anywhere — no timestamp gate
         return str(user_doc.get("trial_end") or "")
     except Exception as exc:
         print(f"[TG] access lookup failed for {email}: {exc!r}")
@@ -4252,6 +4256,32 @@ def _sub_end_ts(sub: Any) -> Optional[datetime]:
     return None
 
 
+def _user_sub_end(user_doc: Optional[Dict[str, Any]]) -> Optional[datetime]:
+    """The end of this user's paid term, wherever it was written.
+
+    The provider webhooks and the readers had drifted onto DIFFERENT KEYS. Every
+    reader — has_paid_access, _tg_access_until, /auth/me — looked inside
+    `subscription` for current_period_end / expires_at / end_date. The Whop and
+    Razorpay handlers wrote the date to a TOP-LEVEL `subscription_end` and put
+    none of those keys inside `subscription`.
+
+    So _sub_end_ts returned None for every paid subscriber, has_paid_access took
+    its "no end date, therefore open-ended" branch, and the term never ended:
+    a plan stayed live after its due date, /auth/me reported subscription_end
+    null, and the Telegram sweep had nothing to expire against. Reported as
+    "during expiry due date it should expire".
+
+    Both shapes are read here so the fix does not depend on back-filling
+    documents that were already written the old way.
+    """
+    if not isinstance(user_doc, dict):
+        return None
+    end = _sub_end_ts(user_doc.get("subscription") or {})
+    if end:
+        return end
+    return _parse_ts(user_doc.get("subscription_end"))
+
+
 def has_paid_access(user_doc: Optional[Dict[str, Any]]) -> bool:
     """True when this user holds a paid plan whose term is still running.
 
@@ -4272,7 +4302,7 @@ def has_paid_access(user_doc: Optional[Dict[str, Any]]) -> bool:
         return False
     sub = (user_doc or {}).get("subscription") or {}
     status = str(sub.get("status") or "").lower() if isinstance(sub, dict) else ""
-    end = _sub_end_ts(sub)
+    end = _user_sub_end(user_doc)
     now = datetime.now(timezone.utc)
     if status in _DEAD_SUB_STATUS:
         # A CANCELLED plan still runs to the end of the period already paid for.
@@ -4365,13 +4395,11 @@ def get_me(credentials: HTTPAuthorizationCredentials = Depends(security)):
         # instead of re-deriving from the plan name.
         "has_access": has_paid_access(user_doc) or not is_trial_expired(user_id),
         "subscription_active": has_paid_access(user_doc),
-        # The real key is subscription.expires_at; the top-level
-        # "subscription_end" this used to read has never existed, so the
-        # frontend was always handed None and could not have checked expiry
-        # even if it wanted to.
-        "subscription_end": ((user_doc.get("subscription") or {}).get("current_period_end")
-                             or (user_doc.get("subscription") or {}).get("expires_at")
-                             or (user_doc.get("subscription") or {}).get("end_date")),
+        # Read through _user_sub_end, which knows BOTH shapes: the canonical
+        # subscription.current_period_end and the top-level subscription_end the
+        # provider webhooks actually wrote. Reading only the former handed the
+        # frontend null for every paid subscriber.
+        "subscription_end": (lambda _e: _e.isoformat() if _e else None)(_user_sub_end(user_doc)),
         "full_name": user_doc.get("full_name"),
         "location": user_doc.get("location"),
         "phone_number": user_doc.get("phone_number"),
@@ -6350,6 +6378,7 @@ async def verify_payment(req: VerifyPaymentRequest, user_id: str = Depends(get_c
                 "provider": "dodopayments" if DODO_PAYMENTS_ENABLED else "razorpay",
                 "activated_at": datetime.now(timezone.utc).isoformat(),
                 "plan_type": plan,
+                "current_period_end": sub_end,
             },
             "subscription_end": sub_end,
             "trial_active": False,
@@ -6467,6 +6496,10 @@ async def _handle_whop_webhook(raw_body: bytes) -> dict:
                     "provider": "whop",
                     "activated_at": datetime.now(timezone.utc).isoformat(),
                     "plan_type": plan,
+                    # INSIDE the subscription, which is where every reader looks
+                    # first. It used to be written only at the top level, so the
+                    # term never ended — see _user_sub_end.
+                    "current_period_end": sub_end,
                 },
                 "subscription_end": sub_end,
                 "trial_active": False,
@@ -6568,6 +6601,7 @@ async def _handle_paddle_webhook(raw_body: bytes) -> dict:
                     "provider": "paddle",
                     "activated_at": datetime.now(timezone.utc).isoformat(),
                     "plan_type": plan,
+                    "current_period_end": sub_end,
                 },
                 "subscription_end": sub_end,
                 "trial_active": False,
@@ -6689,6 +6723,7 @@ async def payments_webhook(request: Request):
                     "provider": "dodopayments" if dodo_sig else "razorpay",
                     "activated_at": datetime.now(timezone.utc).isoformat(),
                     "plan_type": plan,
+                    "current_period_end": sub_end,
                 },
                 "subscription_end": sub_end,
                 "trial_active": False,
@@ -8011,6 +8046,7 @@ async def redeem_dev_code(req: DevCodeRequest, email: str = Depends(get_current_
             "order_id": f"devcode_{code}",
             "activated_at": datetime.now(timezone.utc).isoformat(),
             "plan_type": plan,
+            "current_period_end": sub_end,
             "expires_at": expires_iso,
         },
         "trial_active": False,
