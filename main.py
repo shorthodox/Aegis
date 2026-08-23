@@ -2273,6 +2273,25 @@ def _telegram_cleanup_pass() -> None:
     ending in `doc_ref.get()`. That is two network calls per connected user,
     with no await between them.
     """
+    # ── lapsed access PAUSES the link, it does not delete it ────────────────
+    # This used to pop the connection off the list entirely. Reported 2026-08-23
+    # as "the bot is disconnecting from the site by its own" and "when I close
+    # telegram, bot disconnecting": the user connected at 06:27, the sweep ran,
+    # and by 06:41 /data/telegram_connections.json was {} again —
+    #
+    #     [TG cleanup] ...: paid plan ended — disconnecting Telegram
+    #     [TG cleanup] Disconnected 1 expired user(s)
+    #
+    # — which is correct about the entitlement and wrong about what to do with
+    # it. Delivery is ALREADY refused at send time: dispatcher._tg_send_all
+    # checks access_until on every send. Deleting the chat_id is a second,
+    # destructive copy of the same rule, and the only one that costs the user
+    # anything: they must redo the whole /connect + /start flow when they renew,
+    # and until then the site simply looks broken.
+    #
+    # So the link is kept and marked paused. Delivery stays stopped by the stamp,
+    # the reason is visible to /status instead of being a silent deletion, and a
+    # renewal resumes signals with nothing to reconnect.
     to_remove = []
     for email in list(_tg_connections):
         try:
@@ -2282,8 +2301,29 @@ def _telegram_cleanup_pass() -> None:
                 # out and a PAID TERM running out are the same outcome for delivery
                 # but very different things to see in a log when a subscriber says
                 # "my Telegram stopped".
-                print(f"[TG cleanup] {email}: {why} — disconnecting Telegram")
-                to_remove.append(email)
+                entry = _tg_connections.get(email)
+                cid = _tg_chat_id(entry)
+                was_paused = bool(isinstance(entry, dict) and entry.get("paused_reason"))
+                _tg_connections[email] = {
+                    "chat_id":       cid,
+                    # Keep delivery refused. An empty stamp means open-ended, so
+                    # a paused link must never carry one.
+                    "access_until":  (_tg_access_until(email)
+                                      or "1970-01-01T00:00:00Z"),
+                    "paused_reason": why,
+                    "paused_at":     (entry.get("paused_at") if was_paused
+                                      else datetime.now(timezone.utc).isoformat()),
+                }
+                if not was_paused:
+                    print(f"[TG cleanup] {email}: {why} — PAUSING Telegram "
+                          f"(link kept; renew and signals resume)")
+                    _tg_notify(cid,
+                               "\u23f8 *AEGIS signals paused*\n\n"
+                               f"Your {why}. Your Telegram stays linked — renew on "
+                               "aegisignal.pro and signals resume here automatically, "
+                               "with nothing to reconnect.")
+                    _tg_save_connections()
+                continue
             else:
                 entry = _tg_connections.get(email)
                 if 'unreadable' in why or 'no user document' in why:
@@ -2299,11 +2339,14 @@ def _telegram_cleanup_pass() -> None:
         except Exception as exc:
             # One bad user must not save the rest from being swept.
             print(f"[TG cleanup] skipped {email}: {exc!r}")
+    # Nothing populates to_remove any more — lapsed access pauses instead. Kept
+    # so an explicit removal path (account deletion, a future revoke) has a
+    # place to go rather than being re-invented as another silent pop.
     for email in to_remove:
         _tg_connections.pop(email, None)
     if to_remove:
         _tg_save_connections()
-        print(f"[TG cleanup] Disconnected {len(to_remove)} expired user(s): {to_remove}")
+        print(f"[TG cleanup] Removed {len(to_remove)} connection(s): {to_remove}")
 
 
 async def _telegram_cleanup_loop():
@@ -8721,8 +8764,13 @@ async def telegram_connect(_user: str = Depends(get_current_user)):
 @app.get("/api/notifications/telegram/status")
 async def telegram_status(_user: str = Depends(get_current_user)):
     """Check whether this user has connected their Telegram."""
-    chat_id = _tg_chat_id(_tg_connections.get(_user, ""))
-    return {"connected": bool(chat_id), "chat_id": chat_id}
+    entry = _tg_connections.get(_user, "")
+    chat_id = _tg_chat_id(entry)
+    paused = (entry.get("paused_reason") if isinstance(entry, dict) else None) or None
+    # `connected` stays true for a paused link — it IS still linked, and telling
+    # the UI otherwise is what made a lapsed plan look like a broken integration.
+    return {"connected": bool(chat_id), "chat_id": chat_id,
+            "paused": bool(paused), "paused_reason": paused}
 
 
 @app.delete("/api/notifications/telegram/disconnect")

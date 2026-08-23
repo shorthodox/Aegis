@@ -244,3 +244,97 @@ def test_the_sweep_leaves_the_stamp_alone_when_the_read_failed(stores, monkeypat
     main._telegram_cleanup_pass()
     assert main._tg_connections['u@example.test']['access_until'] == '2099-01-01T00:00:00Z'
     assert main._tg_connections['u@example.test']['chat_id'] == '42'
+
+
+# -- lapsed access PAUSES the link, it does not delete it ---------------------
+# Reported 2026-08-23: "the bot is disconnecting from the site by its own" and
+# "when i am closing telegram, bot disconnecting". Read off the volume: the user
+# connected at 06:27 and by 06:41 the file was {} again, with the reason in the
+# log —
+#
+#     [TG cleanup] ...: paid plan ended — disconnecting Telegram
+#     [TG cleanup] Disconnected 1 expired user(s)
+#
+# — correct about the entitlement (a 5-day dev code that ended 2026-07-06) and
+# wrong about what to do with it. Delivery is ALREADY refused at send time by
+# access_until. Deleting the chat_id is a second, destructive copy of the same
+# rule and the only one that costs the user anything: a full /connect + /start
+# again on renewal, and until then a site that just looks broken.
+
+@pytest.fixture
+def lapsed(stores, monkeypatch):
+    monkeypatch.setattr(main, '_tg_should_disconnect',
+                        lambda e: (True, 'paid plan ended'))
+    monkeypatch.setattr(main, '_tg_access_until', lambda e: '2026-07-01T10:58:49Z')
+    sent = []
+    monkeypatch.setattr(main, '_tg_notify', lambda cid, text: sent.append((cid, text)))
+    main._tg_connections['u@example.test'] = {'chat_id': '6376199309',
+                                              'access_until': '2026-07-01T10:58:49Z'}
+    return sent
+
+
+def test_a_lapsed_plan_keeps_the_link(lapsed):
+    main._telegram_cleanup_pass()
+    assert 'u@example.test' in main._tg_connections, (
+        'the connection was deleted again — this is the "disconnecting by itself" '
+        'the user reported, and it forces a full reconnect on renewal'
+    )
+    assert main._tg_connections['u@example.test']['chat_id'] == '6376199309'
+
+
+def test_the_pause_is_recorded_with_its_reason(lapsed):
+    main._telegram_cleanup_pass()
+    e = main._tg_connections['u@example.test']
+    assert e['paused_reason'] == 'paid plan ended'
+    assert e['paused_at']
+
+
+def test_delivery_is_still_refused_while_paused(lapsed):
+    """Pausing must not become a way to keep receiving signals for free."""
+    main._telegram_cleanup_pass()
+    from datetime import datetime, timezone
+    until = main._tg_connections['u@example.test']['access_until']
+    end = datetime.fromisoformat(until.replace('Z', '+00:00'))
+    assert end < datetime.now(timezone.utc), (
+        'a paused link carries a live access_until — the send-time gate would '
+        'let it through'
+    )
+
+
+def test_an_empty_stamp_never_survives_a_pause(stores, monkeypatch):
+    """'' means open-ended to the dispatcher. A paused link must not carry one."""
+    monkeypatch.setattr(main, '_tg_should_disconnect', lambda e: (True, 'trial access ended'))
+    monkeypatch.setattr(main, '_tg_access_until', lambda e: '')
+    monkeypatch.setattr(main, '_tg_notify', lambda cid, text: None)
+    main._tg_connections['u@example.test'] = {'chat_id': '42', 'access_until': ''}
+    main._telegram_cleanup_pass()
+    assert main._tg_connections['u@example.test']['access_until'] not in ('', None)
+
+
+def test_the_user_is_told_once_not_every_hour(lapsed):
+    """The sweep runs hourly. Telling them each time is spam."""
+    main._telegram_cleanup_pass()
+    assert len(lapsed) == 1, 'no message sent on the first pause'
+    assert 'paused' in lapsed[0][1].lower()
+    main._telegram_cleanup_pass()
+    main._telegram_cleanup_pass()
+    assert len(lapsed) == 1, 'the pause notice repeated on a later sweep'
+
+
+def test_status_reports_paused_rather_than_disconnected(stores):
+    """Saying "not connected" for a linked-but-lapsed account is what made an
+    expired plan look like a broken integration."""
+    main._tg_connections['u@example.test'] = {
+        'chat_id': '42', 'access_until': '2026-07-01T00:00:00Z',
+        'paused_reason': 'paid plan ended', 'paused_at': '2026-08-23T06:41:00Z'}
+    entry = main._tg_connections['u@example.test']
+    assert main._tg_chat_id(entry) == '42'
+    assert entry.get('paused_reason') == 'paid plan ended'
+
+
+def test_a_live_plan_is_not_paused(stores, monkeypatch):
+    monkeypatch.setattr(main, '_tg_should_disconnect', lambda e: (False, 'paid access is live'))
+    monkeypatch.setattr(main, '_tg_access_until', lambda e: '2099-01-01T00:00:00Z')
+    main._tg_connections['u@example.test'] = {'chat_id': '42', 'access_until': ''}
+    main._telegram_cleanup_pass()
+    assert 'paused_reason' not in main._tg_connections['u@example.test']
