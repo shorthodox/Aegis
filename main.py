@@ -3707,6 +3707,12 @@ _TUNABLES: Dict[str, Any] = {
     "require_ltf_confirmation": ("src.trading.trader_gate", "REQUIRE_LTF_CONFIRMATION",
                                  "bool", 0, 1,
                                  "Require the 3x5m tape turn before any entry"),
+    "early_entry_on_reversal": ("src.trading.trader_gate", "EARLY_ENTRY_ON_REVERSAL",
+                                "bool", 0, 1,
+                                "Fire a resting order away from its level when ALL "
+                                "three prints confirm the reversal"),
+    "full_confirm_prints": ("src.trading.trader_gate", "FULL_CONFIRM_PRINTS", "float", 1, 3,
+                            "How many independent prints a far-from-level fill needs"),
     "early_entry_max_atr": ("src.trading.trader_gate", "EARLY_ENTRY_MAX_ATR", "float", 0.0, 2.5,
                            "How far from the level an early fill may happen, in ATR. "
                            "Smaller = better entry price, fewer immediate fills"),

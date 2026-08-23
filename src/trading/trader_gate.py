@@ -339,6 +339,33 @@ EARLY_ENTRY_ON_LTF = True
 # further from the level than the invalidation sits beyond it. Anything further
 # keeps WORKING the order at the level, which is what it should be doing.
 EARLY_ENTRY_MAX_ATR = 0.50
+
+# ── a genuine reversal may fire further out ─────────────────────────────────
+# Reported 2026-08-23: "whenever I am getting signals waiting for level, they are
+# not getting executed as they never touch the level and reverse before it
+# touches the level... let the engine fire that signal if it is a genuine
+# reversal by confirmation of the technicals and 3 5min candle confirmation."
+#
+# Measured the same day across the live book: 0 of 34 resting orders were within
+# EARLY_ENTRY_MAX_ATR of their level; the median sat 1.5-2.0 ATR away. So the
+# close-in tier can essentially never fire, and the orders expire unfilled at
+# exactly the moment the thesis is proving itself.
+#
+# Distance and evidence are traded against each other instead of distance alone:
+#
+#   within EARLY_ENTRY_MAX_ATR (0.50)  ->  the normal bar (_confirmation) + 5m
+#   out to REACH_ATR (2.50)            ->  ALL THREE prints, 5m included
+#
+# All three means the rejection candle AND the 5m turn AND RSI curling the right
+# way — a reversal the technicals agree on, not one print and hope. The give-up
+# is no longer bounded by distance out here, so it is bounded by proof instead.
+#
+# Everything downstream still applies: the stop stays anchored to the LEVEL, risk
+# is measured from the actual fill, and MAX_STOP_ATR and MIN_NET_R both bite on
+# the worse entry — a reversal that no longer pays from here is refused, not
+# taken because the candles looked good.
+EARLY_ENTRY_ON_REVERSAL = True
+FULL_CONFIRM_PRINTS = 3
 MODEL_OPPOSE_MARGIN = 0.12  # model may veto the structure only when it leans this hard the
                             # other way (raw p_buy/p_sell); a neutral model does not block
 
@@ -965,7 +992,32 @@ class TraderGate:
 
     # ── Stage 4 helper ────────────────────────────────────────────────────────
     @staticmethod
-    def _confirmation(result: Dict[str, Any], side: str, setup: str,
+    def _confirmation_prints(result: Dict[str, Any], side: str,
+                             confirm: Dict[str, Any]) -> List[str]:
+        """The independent prints that have actually fired, as labels.
+
+        Split out of _confirmation so the trigger stage can ask HOW MANY rather
+        than only "enough". Distance from the level and weight of evidence are
+        traded against each other there: the further price is from the level it
+        was waiting for, the more of these must be present.
+        """
+        # cdl_bull/bear_reversal use -1.0 for "data unavailable" and 0.0 for
+        # "looked, found nothing" — see the note in _confirmation.
+        bull_cdl = _f(result, 'cdl_bull_reversal', -1.0) > 0.0
+        bear_cdl = _f(result, 'cdl_bear_reversal', -1.0) > 0.0
+        slope = _f(result, 'rsi_slope', 0.0)
+        if side == 'BUY':
+            signals = [(bull_cdl, 'bullish rejection candle'),
+                       (bool(confirm.get('ltf_bull')), '5m momentum turned up'),
+                       (slope > 0, 'RSI curling up')]
+        else:
+            signals = [(bear_cdl, 'bearish rejection candle'),
+                       (bool(confirm.get('ltf_bear')), '5m momentum turned down'),
+                       (slope < 0, 'RSI curling down')]
+        return [why for ok, why in signals if ok]
+
+    @classmethod
+    def _confirmation(cls, result: Dict[str, Any], side: str, setup: str,
                       confirm: Dict[str, Any]) -> Tuple[bool, str]:
         """Has something actually TURNED, or is price merely sitting at a level?
 
@@ -982,21 +1034,9 @@ class TraderGate:
         # same time. That handed every setup a free confirmation precisely when
         # the engine could see least, which is the opposite of what the two-print
         # requirement below exists for.
-        bull_cdl = _f(result, 'cdl_bull_reversal', -1.0) > 0.0
-        bear_cdl = _f(result, 'cdl_bear_reversal', -1.0) > 0.0
-        ltf_up   = bool(confirm.get('ltf_bull'))     # engine's 5m alignment check
+        hits = cls._confirmation_prints(result, side, confirm)
+        ltf_up = bool(confirm.get('ltf_bull'))
         ltf_down = bool(confirm.get('ltf_bear'))
-        slope    = _f(result, 'rsi_slope', 0.0)
-
-        if side == 'BUY':
-            signals = [(bull_cdl, 'bullish rejection candle'),
-                       (ltf_up, '5m momentum turned up'),
-                       (slope > 0, 'RSI curling up')]
-        else:
-            signals = [(bear_cdl, 'bearish rejection candle'),
-                       (ltf_down, '5m momentum turned down'),
-                       (slope < 0, 'RSI curling down')]
-        hits = [why for ok, why in signals if ok]
 
         # A counter-trend entry is the one that must not be taken on hope: it
         # needs two independent prints.  This is the direct fix for the eight
@@ -1241,7 +1281,16 @@ class TraderGate:
             action, expiry = ACTION_ENTER, 0
             notes.append(f'trigger: at the level ({dist_atr:.2f} ATR) and confirmed — {cwhy}')
         elif dist_atr <= REACH_ATR:
-            if (EARLY_ENTRY_ON_LTF and ok and _ltf_turned
+            _prints = cls._confirmation_prints(result, side, confirm or {})
+            _full = (EARLY_ENTRY_ON_REVERSAL and ok and _ltf_turned
+                     and len(_prints) >= FULL_CONFIRM_PRINTS)
+            if _full and dist_atr > EARLY_ENTRY_MAX_ATR:
+                action, expiry = ACTION_ENTER, 0
+                notes.append(f'trigger: {dist_atr:.2f} ATR short of {level:.8g} and the '
+                             f'level was never reached — but all {len(_prints)} prints '
+                             f'agree the reversal is here ({" + ".join(_prints)}), so it '
+                             f'is taken at the market rather than left to expire')
+            elif (EARLY_ENTRY_ON_LTF and ok and _ltf_turned
                     and dist_atr <= EARLY_ENTRY_MAX_ATR):
                 # The 5m has already turned. Take it at the market rather than
                 # wait for a touch that may never come — the stop is anchored to
