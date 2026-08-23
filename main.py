@@ -1538,6 +1538,7 @@ async def run_engine_background():
     _FIRESTORE_FULL_REFRESH_S = 3600.0   # heal drift hourly (60 writes/day)
     _stale_sweep_done: bool = False   # one-time Firestore neutralise after restart
     _signals_off_announced: bool = False  # log the OFF state once, not every tick
+    _last_snapshot_hash: int = 0      # only write the volume copy when it changed
 
     def _push_signal_docs(_pairs) -> int:
         """Write the signal docs. MUST NOT run on the event loop — see the caller.
@@ -1591,7 +1592,7 @@ async def run_engine_background():
 
     async def update_state():
         nonlocal _last_tr_mtime, _last_signals_hash, _last_firestore_push, _stale_sweep_done
-        nonlocal _last_full_push, _last_fire_set, _signals_off_announced
+        nonlocal _last_full_push, _last_fire_set, _signals_off_announced, _last_snapshot_hash
         while True:
             try:
                 LIVE_STATE.data["tickers"]       = engine.live_prices.copy()
@@ -1652,12 +1653,26 @@ async def run_engine_background():
                     signals_dir.mkdir(parents=True, exist_ok=True)
                     signals_file = signals_dir / 'live_signals.json'
                     temp_file = signals_dir / 'live_signals.json.tmp'
+                    safe_signals = numpy_to_native(LIVE_STATE.data.get('signals', {}))
+                    _blob = json.dumps(safe_signals, default=str)
                     with open(temp_file, 'w', encoding='utf-8') as sf:
-                        safe_signals = numpy_to_native(LIVE_STATE.data.get('signals', {}))
-                        json.dump(safe_signals, sf, default=str)
+                        sf.write(_blob)
                     os.replace(temp_file, signals_file)
+
+                    # Mirror to the VOLUME so a restart serves last-known state
+                    # instead of nothing. This loop ticks every second while the
+                    # signals only change once a scan, so write only on a real
+                    # change: the served copy above is cheap container FS, this
+                    # one is persistent disk.
+                    _h = hash(_blob)
+                    if _h != _last_snapshot_hash:
+                        _last_snapshot_hash = _h
+                        _SIGNALS_SNAPSHOT_PATH.parent.mkdir(parents=True, exist_ok=True)
+                        _vol_tmp = _SIGNALS_SNAPSHOT_PATH.with_suffix('.tmp')
+                        _vol_tmp.write_text(_blob, encoding='utf-8')
+                        os.replace(_vol_tmp, _SIGNALS_SNAPSHOT_PATH)
                 except Exception as _e:
-                    print(f"âš ï¸ Failed to write live_signals.json: {_e}")
+                    print(f"[PRODUCER] Failed to write live_signals.json: {_e}")
 
                 # --- write latest signals to Firebase Firestore ---
                 # Off by default; the WebSocket and the snapshot file already
@@ -2486,6 +2501,7 @@ async def lifespan(app: FastAPI):
     _load_track_record()
     _enforce_track_generation()      # must run AFTER the load it purges
     _rt_load_at_startup()            # re-apply operator dials saved on the volume
+    _seed_signals_snapshot_from_volume()   # serve last-known signals immediately
     _tg_load_connections()
     _tg_load_pending()
     _tg_start_poller()
@@ -3949,6 +3965,49 @@ def _rt_load_at_startup() -> None:
 #   2. It respects its own expiry. An entry past subscription_end grants nothing,
 #      so a lapsed plan does not become permanent access through this back door.
 _ENTITLEMENTS_PATH = _STATE_DIR / "entitlements.json"
+
+# The signals snapshot, kept on the VOLUME so it survives a deploy.
+#
+# The served copy lives under WEB_ROOT (the container filesystem) because it is
+# fetched as a static asset. That copy is wiped on every deploy and only returns
+# on the next producer tick, so a freshly restarted container served an empty or
+# missing file until the engine had scanned again — the dashboard opened onto
+# nothing. This is the durable one; the served copy is seeded from it at startup.
+_SIGNALS_SNAPSHOT_PATH = _STATE_DIR / "live_signals.json"
+
+
+def _seed_signals_snapshot_from_volume() -> None:
+    """Put the last known signals back under WEB_ROOT at boot.
+
+    The container filesystem is wiped on every deploy, so without this the
+    dashboard fetches live_signals.json and gets a 404 (or the build-time file)
+    until the engine finishes warmup and the producer ticks — a minute or more of
+    an empty cockpit on every restart, which reads to a subscriber exactly like
+    the engine being down.
+
+    Seeding is best-effort and never fatal: a missing or unreadable volume copy
+    just means the old behaviour, not a failed boot.
+    """
+    try:
+        if not _SIGNALS_SNAPSHOT_PATH.exists():
+            return
+        blob = _SIGNALS_SNAPSHOT_PATH.read_text(encoding="utf-8")
+        if not blob.strip():
+            return
+        dest_dir = WEB_ROOT_PATH / "src" / "data"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        tmp = dest_dir / "live_signals.json.tmp"
+        tmp.write_text(blob, encoding="utf-8")
+        os.replace(tmp, dest_dir / "live_signals.json")
+        try:
+            _n = len(json.loads(blob) or {})
+        except Exception:
+            _n = -1
+        print(f"[signals] seeded the served snapshot from the volume "
+              f"({_n} symbols) — the dashboard has state before the first scan")
+    except Exception as exc:
+        print(f"[signals] could not seed from the volume ({exc!r}) — "
+              f"the dashboard will fill in on the first producer tick")
 
 
 def _ent_load() -> Dict[str, Any]:
