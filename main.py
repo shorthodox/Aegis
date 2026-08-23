@@ -5429,7 +5429,13 @@ def get_user_limits(email: str = Depends(get_current_user)):
         user_doc = get_user_doc(email)
         plan = user_doc.get("plan", "trial") if user_doc else "trial"
         trial_end = user_doc.get("trial_end") if user_doc else None
-        trial_expired = is_trial_expired(email) if trial_end else False
+        # NOT `if trial_end else False`. That inverted the safe default: a user
+        # with no trial_end at all was reported as NOT expired, i.e. granted an
+        # open-ended free trial, while is_trial_expired() — the single source of
+        # truth every other caller uses — correctly returns True for exactly
+        # that case. A paid plan still reports False here, because
+        # is_trial_expired short-circuits on has_paid_access.
+        trial_expired = is_trial_expired(email)
         allowed_tokens = get_allowed_tokens()
         return {
             "plan": plan,

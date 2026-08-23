@@ -275,3 +275,38 @@ def test_the_other_dead_statuses_get_no_grace(status):
     doc = {'plan': 'pro', 'subscription': {'status': status,
                                            'current_period_end': _FUTURE}}
     assert main.has_paid_access(doc) is False
+
+
+# -- /user/limits must agree with is_trial_expired ----------------------------
+# 2026-08-23: "trial countdown end's free trial should stop". /user/limits read
+# `is_trial_expired(email) if trial_end else False`, so a user with NO trial_end
+# was reported as not expired — an open-ended free trial — while
+# is_trial_expired() returns True for that case. Two answers to one question.
+
+def test_user_limits_does_not_invert_the_trial_default():
+    import inspect
+    # Strip comments first. The fix's own comment quotes the removed expression
+    # to explain it, and a raw substring scan matches that and fails — the same
+    # trap this repo has hit before.
+    src = chr(10).join(l.split('#')[0] for l in
+                       inspect.getsource(main.get_user_limits).splitlines())
+    assert 'if trial_end else False' not in src, (
+        'a user with no trial_end is reported as not expired, which is an '
+        'open-ended free trial'
+    )
+    assert 'trial_expired = is_trial_expired(email)' in src
+
+
+def test_no_trial_end_means_expired(monkeypatch):
+    monkeypatch.setattr(main, 'get_user_doc', lambda e: {'plan': 'trial'})
+    assert main.is_trial_expired('x@example.test') is True
+
+
+def test_a_paid_plan_is_not_reported_as_an_expired_trial(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    future = (datetime.now(timezone.utc) + timedelta(days=5)).isoformat()
+    monkeypatch.setattr(main, 'get_user_doc', lambda e: {
+        'plan': 'pro', 'subscription': {'status': 'active'},
+        'subscription_end': future,
+    })
+    assert main.is_trial_expired('x@example.test') is False
