@@ -100,3 +100,41 @@ def test_authmanager_prefers_the_server_flag():
     assert "typeof user.has_access === 'boolean'" in src, (
         'isTrialValid() still decides from the plan name alone'
     )
+
+
+# -- the lock screen must not flicker -----------------------------------------
+# Reported 2026-08-23: "this is coming when I am getting into dashboard, it
+# disappears when I refresh it".
+#
+# hasActiveAccess() falls back to the plan NAME plus a cached trial flag until
+# /auth/me lands. Both can disagree with the server for the first moment of a
+# load, and a user object cached BEFORE has_access existed has no such field at
+# all — so that path answers from the name forever. Two code paths reaching
+# opposite conclusions in the same second is what made the lock screen flash on
+# and off.
+#
+# The overlay is a hard, disruptive statement. It is now drawn only on a KNOWN
+# negative; an unknown answer draws nothing and waits.
+
+def test_the_overlay_waits_for_a_known_answer():
+    src = _js('web/src/scripts/gatekeeper.js')
+    assert 'function accessKnown()' in src
+    assert src.count('accessKnown() && !hasActiveAccess()') >= 3, (
+        'an overlay call site can still fire before the server has answered — '
+        'that is the flicker'
+    )
+
+
+def test_no_overlay_site_decides_on_the_fallback_alone():
+    """Any bare `!hasActiveAccess()` guarding the overlay is the bug returning."""
+    src = _js('web/src/scripts/gatekeeper.js')
+    for line in src.splitlines():
+        if 'showSubscriptionExpiredOverlay' not in line and '!hasActiveAccess()' in line:
+            assert 'accessKnown()' in line, f'unguarded overlay decision: {line.strip()}'
+
+
+def test_feature_gating_may_still_be_optimistic():
+    """Only the OVERLAY needs certainty. hasActiveAccess() keeps its permissive
+    fallback so the UI is not blank for a second on every load."""
+    src = _js('web/src/scripts/gatekeeper.js')
+    assert 'return isPaidPlan() || trialActive === true;' in src
