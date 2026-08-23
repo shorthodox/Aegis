@@ -74,6 +74,7 @@ from src.trading.gate_scorer import WeightedGateScorer
 from src.trading.trader_gate import ACTION_ENTER
 from src.trading.trader_gate import ACTION_WORK
 from src.trading.trader_gate import TraderGate
+from src.trading.trader_gate import WORK_EXPIRY_BARS
 from src.trading.trendline_channel import TrendlineChannelDetector
 
 # Circuit breaker for THIS module's signal push. _push_signals_sync trips it with
@@ -406,6 +407,9 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
         # placed. Without this _pick_level re-derives it every scan and the
         # order chases price instead of waiting for it.
         self._working_levels: Dict[str, float] = {}
+        # The invalidation each live order was placed with — the only thing
+        # besides the clock that may retire it early.
+        self._working_stops: Dict[str, float] = {}
         # Counterfactual, not behaviour: for every resting order, would a limit
         # AT the level have filled before it expired? _working_orders holds only
         # a timestamp, so it cannot answer that. This does, and nothing reads it
@@ -1349,6 +1353,58 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
         except Exception:
             WO_OBSERVE_ERRORS['count'] += 1
 
+    def _tend_working_orders(self, symbol: str, price: float, now: float) -> str:
+        """Retire live resting orders on their OWN terms, every scan.
+
+        A resting order used to be popped by any scan that failed to re-derive
+        the same plan. Measured over 571 closed orders on 2026-08-23:
+
+            SUPERSEDED 568   FILLED_AT_LEVEL 2   EXPIRED 1
+            median age 0.08 bars (one scan), 96% lived under one bar
+            1 of 571 ever reached its 8-bar clock
+            45 came within 0.50 ATR, 22 would have filled — 2 did
+
+        So the "resting order with a clock" was fiction: the order was torn down
+        and rebuilt every few minutes, which is what the desk saw as armed
+        setups "arriving and disappearing", and why 20 fillable setups never
+        opened. The gate is a per-scan snapshot and its inputs jitter — model
+        opposition flickers, regime confidence dips, rp crosses a line — none of
+        which is news about a thesis that has already been committed to.
+
+        An order now ends for its own reasons only: the clock runs out, or price
+        goes through the invalidation the order was placed with. That is what a
+        resting limit does, and it is what makes the level, the clock and the
+        counterfactual log mean anything.
+        """
+        for side in ('BUY', 'SELL'):
+            key = f'{symbol}|{side}'
+            first_seen = self._working_orders.get(key)
+            if first_seen is None:
+                continue
+            age_bars = (now - first_seen) / 3600.0
+            if age_bars > WORK_EXPIRY_BARS:
+                self._working_orders.pop(key, None)
+                getattr(self, '_working_levels', {}).pop(key, None)
+                getattr(self, '_working_stops', {}).pop(key, None)
+                self._wo_close(symbol, side, 'EXPIRED', now)
+                print(f'[{symbol}] SETUP EXPIRED: {side} after {age_bars:.1f} bars')
+                return (f'setup expired — the {side} order went untriggered for '
+                        f'{WORK_EXPIRY_BARS} bars')
+            # The invalidation is the one thing that genuinely kills it early.
+            stop = (self._working_stops or {}).get(key)
+            if stop and price > 0:
+                dead = (price >= stop) if side == 'SELL' else (price <= stop)
+                if dead:
+                    self._working_orders.pop(key, None)
+                    getattr(self, '_working_levels', {}).pop(key, None)
+                    (self._working_stops or {}).pop(key, None)
+                    self._wo_close(symbol, side, 'INVALIDATED', now)
+                    print(f'[{symbol}] SETUP INVALIDATED: {side} — price {price:.8g} '
+                          f'went through the {stop:.8g} stop before the level')
+                    return (f'setup invalidated — price went through the {stop:.8g} '
+                            f'stop before ever reaching the level')
+        return ''
+
     async def _run_trader_gate(
         self, symbol: str, result: Dict[str, Any], price: float,
         regime: Any, ctx_quality: float,
@@ -1391,6 +1447,16 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
         longs, shorts = self._cluster_exposure(symbol)
 
         result['price'] = price
+        # Retire anything that has run out of time or been invalidated, BEFORE
+        # this scan's plan is considered — so an expiry is never masked by a
+        # fresh re-derivation of the same setup.
+        _retired = self._tend_working_orders(symbol, price, now)
+        if _retired:
+            # End the scan on a retirement, as the old expiry branch did. Without
+            # this the gate re-arms the same setup in the same breath and the
+            # clock never means anything.
+            self._publish_no_trade(symbol, _retired)
+            return True
         plan = TraderGate.evaluate(
             result, regime,
             pinned_levels={
@@ -1427,11 +1493,15 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
 
         # ── REJECT ───────────────────────────────────────────────────────────
         if plan.action not in (ACTION_ENTER, ACTION_WORK):
-            self._working_orders.pop(f'{symbol}|{plan.side}', None)
-            self._wo_close(symbol, plan.side, 'SUPERSEDED', now)
-            getattr(self, '_working_levels', {}).pop(f'{symbol}|{plan.side}', None)
-            self._publish_no_trade(symbol, plan.reason)
-            print(f'[{symbol}] NO TRADE ({plan.stage}): {plan.reason}')
+            # A refusal to re-derive the plan is NOT a reason to cancel an order
+            # already resting. See _tend_working_orders: 568 of 571 orders died
+            # here, at a median age of one scan, and 20 fillable setups never
+            # opened because of it. The gate is a snapshot; a resting order has
+            # its own clock and its own invalidation, and those retire it.
+            _live = any(f'{symbol}|{sd}' in self._working_orders for sd in ('BUY', 'SELL'))
+            if not _live:
+                self._publish_no_trade(symbol, plan.reason)
+                print(f'[{symbol}] NO TRADE ({plan.stage}): {plan.reason}')
             return True
 
         # ── WORK · a resting order, with a clock ─────────────────────────────
@@ -1442,6 +1512,7 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
             key = f'{symbol}|{plan.side}'
             first_seen = self._working_orders.setdefault(key, now)
             getattr(self, '_working_levels', {}).setdefault(key, float(plan.level))
+            getattr(self, '_working_stops', {}).setdefault(key, float(plan.stop))
             age_bars = (now - first_seen) / 3600.0        # 1h engine timeframe
             if age_bars > plan.expiry_bars:
                 self._working_orders.pop(key, None)
@@ -1562,6 +1633,7 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
         self._working_orders.pop(f'{symbol}|{plan.side}', None)
         self._wo_close(symbol, plan.side, 'FILLED_AT_LEVEL', now)
         getattr(self, '_working_levels', {}).pop(f'{symbol}|{plan.side}', None)
+        getattr(self, '_working_stops', {}).pop(f'{symbol}|{plan.side}', None)
         result['side']      = plan.side
         result['fire']      = True
         result['btc_tide']  = tide
