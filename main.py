@@ -1494,7 +1494,19 @@ async def run_engine_background():
     _last_signals_hash: int = 0       # hash of last signals pushed to Firestore
     _last_fire_set: frozenset = frozenset()  # symbols firing at the last push
     _last_firestore_push: float = 0.0 # epoch of last Firestore write
-    _FIRESTORE_MIN_INTERVAL = 290.0   # push at most once per ~5 min (matches scan cycle)
+    # Push at most once per 10 min. A FIRE is exempt and goes out immediately
+    # (see the gate below), so this only paces routine card refreshes.
+    #
+    # At 290s the worst case — every one of the 60 docs differing on each push —
+    # came to 19,316 writes/day against a 20,000/day free-tier cap: 96.6%, before
+    # a single login, entitlement or track-record write. That is not headroom,
+    # and the daily blackout it caused is what "no signals since last night" was.
+    # 600s worst case is 10,080 (50.4%), typical ~6,000 (30%).
+    #
+    # What it costs: a non-fired card's REASONING text refreshes every 10 min
+    # instead of 5. Live prices are unaffected — they come over the WebSocket,
+    # never Firestore — and fires are unaffected. Cheap for staying alive.
+    _FIRESTORE_MIN_INTERVAL = 600.0
     # Per-symbol payload hashes — the diff that keeps this inside the free tier.
     _doc_sig_hash: Dict[str, int] = {}
     _last_full_push: float = 0.0

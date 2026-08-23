@@ -77,10 +77,13 @@ def test_the_daily_budget_actually_fits():
     docs_per_push = 60           # worst case: the whole fleet changed
     routine = pushes_per_day * docs_per_push
     hourly_refresh = 24 * 60     # _FIRESTORE_FULL_REFRESH_S heals drift
-    assert routine + hourly_refresh < FREE_TIER_WRITES_PER_DAY, (
-        f'{routine + hourly_refresh:,.0f} writes/day against a '
-        f'{FREE_TIER_WRITES_PER_DAY:,} cap - the publish will die partway '
-        f'through every day and the site goes silent'
+    # Real headroom, not a pass by 3%. The cap has to absorb logins,
+    # entitlement writes and track-record writes on top of this.
+    assert routine + hourly_refresh < 0.70 * FREE_TIER_WRITES_PER_DAY, (
+        f'{routine + hourly_refresh:,.0f} writes/day is {(routine + hourly_refresh) / FREE_TIER_WRITES_PER_DAY:.0%} '
+        f'of the {FREE_TIER_WRITES_PER_DAY:,} cap - too little room for user '
+        f'traffic; the publish will die partway through the day and the site '
+        f'goes silent while the engine keeps working'
     )
 
 
