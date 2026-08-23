@@ -97,6 +97,10 @@ LOW_QUALITY_REFUSED: Dict[str, int] = {'count': 0}
 # must not add a line to the decision stream it is only supposed to watch.
 WO_OBSERVE_ERRORS: Dict[str, int] = {'count': 0}
 
+# How often the 5m tape could not be read. Every entry requires that print, so a
+# persistent non-zero here means the desk is silently unable to fire at all.
+LTF_UNREADABLE: Dict[str, int] = {'count': 0}
+
 
 class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
     """
@@ -426,6 +430,22 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
         # key = "SYMBOL|timeframe" → {'candles': list, 'ts': float}
         self._candle_cache: Dict[str, Dict] = {}
         self._candle_cache_ttl = 240  # seconds; refresh every 4 min (< 5m candle period)
+        # ...except for the LOWER timeframes, where staleness is the whole
+        # problem. The scan runs about every 60s, so a 240s TTL refreshes the 5m
+        # window on one scan in four, and a cached read can straddle a candle
+        # close and miss a freshly closed candle for nearly four minutes.
+        #
+        # That read is _ltf_confirmation — "have 3 of the last 4 five-minute
+        # candles closed our way" — which is the print the desk requires before
+        # any entry and the one that decides whether a resting order fires on a
+        # reversal. Its entire value is being CURRENT: a reversal confirmed four
+        # minutes late is most of a 5m candle behind the move it is confirming.
+        #
+        # A 6-candle 5m fetch is weight 1 on Binance and the fleet is 59 tokens,
+        # so refreshing it every scan costs ~59 weight/min against a 2400/min
+        # budget. Cheap, and it is the read that has to be right.
+        self._candle_cache_ttl_fast = 55
+        self._fast_timeframes = ('1m', '3m', '5m')
 
         # Partial-TP hit tracking (one flag per level per symbol)
         self._tp1_hit:    Dict[str, bool]  = {}   # break-even triggered after TP1
@@ -1256,13 +1276,29 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
             closed = raw[:-1] if len(raw) >= 2 else raw
             window = closed[-self.ENTRY_5M_WINDOW:]
             if len(window) < self.ENTRY_5M_WINDOW:
+                # An UNREADABLE tape is not a tape that says no. Since the 5m
+                # print is REQUIRED for every entry, silently returning False
+                # here blocks the whole desk on a fetch failure and looks
+                # exactly like "no reversal" — indistinguishable from the market
+                # simply not having turned, which is the state this method is
+                # supposed to be able to tell apart. Counted so it is visible.
+                LTF_UNREADABLE['count'] += 1
+                if LTF_UNREADABLE['count'] in (1, 10, 100) or LTF_UNREADABLE['count'] % 250 == 0:
+                    print(f'[{symbol}] 5m tape unreadable ({len(window)} of '
+                          f'{self.ENTRY_5M_WINDOW} candles) — no entry can confirm '
+                          f'while this persists; {LTF_UNREADABLE["count"]} so far')
                 return out
             ups = sum(1 for c in window if float(c[4]) > float(c[1]))
             need = max(3, self.ENTRY_5M_WINDOW - 1)
             out['ltf_bull'] = ups >= need
-            out['ltf_bear'] = (len(window) - ups) >= need
-        except Exception:
-            pass
+            # close == open is a doji, not a down candle; counting it as bearish
+            # let a flat tape confirm a short.
+            downs = sum(1 for c in window if float(c[4]) < float(c[1]))
+            out['ltf_bear'] = downs >= need
+        except Exception as exc:
+            LTF_UNREADABLE['count'] += 1
+            if LTF_UNREADABLE['count'] in (1, 10, 100):
+                print(f'[{symbol}] 5m confirmation failed: {exc!r}')
         return out
 
     def _cluster_exposure(self, symbol: str) -> Tuple[int, int]:
