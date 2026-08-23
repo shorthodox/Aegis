@@ -154,6 +154,23 @@ function hasActiveAccess() {
   return isPaidPlan() || trialActive === true;
 }
 
+/** Has the SERVER actually told us yet?
+ *
+ * The expiry overlay must never be drawn from the fallback above. That test
+ * reads the plan NAME and a cached trial flag, both of which can disagree with
+ * the server for the first moment of a page load — and a cached user object
+ * saved before /auth/me returned has_access has no such field at all, so it
+ * answers from the name alone forever.
+ *
+ * Reported 2026-08-23: "this is coming when I am getting into dashboard, it
+ * disappears when I refresh". Two code paths reaching opposite conclusions in
+ * the same second, so the lock screen flashed on and off. Deciding only on a
+ * KNOWN answer removes both directions of the flicker.
+ */
+function accessKnown() {
+  return serverHasAccess !== null;
+}
+
 // Listen for trial expiration from dashboard countdown
 document.addEventListener('trialExpired', () => {
   trialActive = false;
@@ -169,7 +186,7 @@ window.addEventListener('trial-status-updated', () => {
     trialActive = AuthManager.isTrialValid();
     // hasActiveAccess(), NOT !trialActive. A paid subscriber has no live trial,
     // so the old test locked them out of a subscription they had just paid for.
-    if (!hasActiveAccess() && typeof showSubscriptionExpiredOverlay === 'function') {
+    if (accessKnown() && !hasActiveAccess() && typeof showSubscriptionExpiredOverlay === 'function') {
       showSubscriptionExpiredOverlay();
     }
     updateUI();
@@ -694,7 +711,7 @@ async function checkAuthAndLoad() {
   // Check for expiry after loading user data. Catches every non-paid state:
   // 'trial' with an elapsed date, 'none', 'expired'. Uses the shared helper so
   // this cannot drift from the other two call sites again.
-  if (!hasActiveAccess()) {
+  if (accessKnown() && !hasActiveAccess()) {
     showSubscriptionExpiredOverlay();
   }
 }
@@ -770,7 +787,7 @@ function applyUserData(userData, token) {
 
   // Show the expired overlay for any user without an active paid plan or trial.
   // Covers plan values like 'none', 'expired', 'trial' (with elapsed date).
-  if (!hasActiveAccess()) {
+  if (accessKnown() && !hasActiveAccess()) {
     showSubscriptionExpiredOverlay();
     return;
   }
