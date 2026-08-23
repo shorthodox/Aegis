@@ -31,7 +31,7 @@ a budget silently overwriting structure.
 import pytest
 
 from src.trading import trader_gate as TG
-from src.trading.trader_gate import ACTION_REJECT
+from src.trading.trader_gate import ACTION_REJECT, ACTION_WORK
 
 from scripts.tests.test_trader_gate import mk, run, TURNED_DOWN, TURNED_UP
 
@@ -55,6 +55,10 @@ def _aave(**kw):
 
 AAVE_LEVELS = [(98.69, 4), (100.46, 4), (88.09, 3)]
 FAR_RES = 100.46
+
+
+def _f_atr():
+    return 1.1064          # the AAVE fixture's ATR
 
 
 def _plan(**kw):
@@ -96,13 +100,23 @@ def test_the_entry_moves_to_the_level_the_stop_defends():
     machinery below barely has to fire any more.
     """
     plan = _plan()
-    assert abs(plan.entry - plan.level) < 1e-9, (
-        f'entry {plan.entry:.8g} is not at the level {plan.level:.8g} the stop defends'
+    # The LEVEL is what moved: _pick_level's near choice is replaced by the one
+    # the stop actually defends, so the trade leans on a single level instead of
+    # validating against one and risking on another.
+    assert abs(plan.level - FAR_RES) < 1e-9, (
+        f'level {plan.level:.8g} is not the {FAR_RES} the stop defends — the '
+        f'collapse did not happen'
     )
-    risk_pct = abs(plan.stop - plan.entry) / plan.entry * 100.0
-    assert risk_pct <= TG.MAX_STOP_PCT, (
-        f'risk {risk_pct:.2f}% still exceeds the {TG.MAX_STOP_PCT}% budget even '
-        f'with the entry at the level — the collapse did not happen'
+    # A RESTING order then waits AT that level. Since 2026-08-23 a fully
+    # confirmed reversal may instead fill at the market without ever reaching it
+    # (EARLY_ENTRY_ON_REVERSAL), which this fixture does — so entry == level is
+    # asserted for the resting case only.
+    if plan.action == ACTION_WORK:
+        assert abs(plan.entry - plan.level) < 1e-9
+    # Either way the risk is measured from the ACTUAL fill, never from the level.
+    risk_atr = abs(plan.stop - plan.entry) / _f_atr()
+    assert risk_atr <= TG.MAX_STOP_ATR + 1e-9, (
+        f'risk {risk_atr:.2f} ATR exceeds MAX_STOP_ATR on the real entry'
     )
 
 

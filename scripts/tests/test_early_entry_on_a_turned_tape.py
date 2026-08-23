@@ -183,12 +183,18 @@ def test_no_threshold_moved():
 # entry can never sit further from the level than the invalidation sits beyond
 # it. Beyond that the order goes back to WORKING at the level.
 
-def _at(dist_atr, atr=1.5):
-    """A bear rallying toward resistance, `dist_atr` short of the level."""
+def _at(dist_atr, atr=1.5, full=True):
+    """A bear rallying toward resistance, `dist_atr` short of the level.
+
+    full=True  -> all three prints (rejection candle, 5m turn, RSI curl)
+    full=False -> two of three; enough for _confirmation, not enough to fire
+                  from beyond EARLY_ENTRY_MAX_ATR
+    """
     price = 100.0
     res = price + dist_atr * atr
+    kw = dict(TURNED_DOWN) if full else {'rsi_slope': -0.4}
     d = mk(price=price, atr=atr, support=price - 6.0, resistance=res,
-           rsi=55.0, **TURNED_DOWN)
+           rsi=55.0, **kw)
     return d, [(res, 4), (price - 6.0, 4), (res + 4.0, 3)]
 
 
@@ -198,31 +204,93 @@ def test_a_fill_close_to_the_level_is_taken():
     assert plan.action == ACTION_ENTER
 
 
-def test_a_fill_far_from_the_level_goes_back_to_working_the_order():
-    """The SAND shape: 0.67 ATR short of the level is too far to buy the gap."""
-    d, lv = _at(0.67)
+# -- tier 2: a genuine reversal fires from further out ------------------------
+# 2026-08-23: "whenever I am getting signals waiting for level, they are not
+# getting executed as they never touch the level and reverse before it touches
+# the level... let the engine fire that signal if it is a genuine reversal by
+# confirmation of the technicals and 3 5min candle confirmation."
+#
+# Measured across the live book the same day: 0 of 34 resting orders were within
+# EARLY_ENTRY_MAX_ATR of their level, median 1.5-2.0 ATR. The close-in tier can
+# essentially never fire, so orders expire exactly as the thesis proves itself.
+#
+# Distance is traded against evidence: beyond the bound needs ALL THREE prints.
+
+def test_all_three_prints_fire_from_beyond_the_bound():
+    """The reported case: price reversed before ever reaching the level."""
+    d, lv = _at(1.60, full=True)
+    plan = run(d, regime='TRENDING_BEAR', levels=lv, confirm=TURNED)
+    assert plan.action == ACTION_ENTER, (
+        f'a fully-confirmed reversal 1.6 ATR from its level still rested '
+        f'({plan.action}: {plan.reason}) — it will expire unfilled'
+    )
+
+
+def test_the_card_says_the_level_was_never_reached():
+    d, lv = _at(1.60, full=True)
+    plan = run(d, regime='TRENDING_BEAR', levels=lv, confirm=TURNED)
+    assert any('never reached' in n for n in (plan.notes or [])), (
+        'an entry taken away from its level must say so'
+    )
+
+
+def test_partial_confirmation_still_rests_far_from_the_level():
+    """Two of three is enough to pass _confirmation but NOT to fire from out
+    here. This is what stops the tier becoming "enter always"."""
+    d, lv = _at(1.60, full=False)
     plan = run(d, regime='TRENDING_BEAR', levels=lv, confirm=TURNED)
     assert plan.action == ACTION_WORK, (
-        f'filled {0.67} ATR from the level ({plan.action}) — this is the gap that '
-        f'made SAND lose money while being right about direction'
+        f'fired on partial evidence from 1.6 ATR away ({plan.action}) — the '
+        f'give-up out here is only bounded by proof'
     )
 
 
 @pytest.mark.parametrize('dist', [0.60, 1.00, 1.50, 2.40])
-def test_everything_beyond_the_bound_rests_at_the_level(dist):
-    d, lv = _at(dist)
+def test_partial_confirmation_rests_at_every_distance(dist):
+    d, lv = _at(dist, full=False)
     plan = run(d, regime='TRENDING_BEAR', levels=lv, confirm=TURNED)
     assert plan.action != ACTION_ENTER
 
 
-def test_the_give_up_is_smaller_than_the_stop_buffer():
-    """The invariant worth keeping: an early entry can never sit further from
-    the level than the stop sits beyond it."""
+def test_a_quiet_5m_never_fires_however_good_the_technicals():
+    """The 5m turn is required in BOTH tiers — it is the print the request
+    named explicitly."""
+    d, lv = _at(1.60, full=True)
+    plan = run(d, regime='TRENDING_BEAR', levels=lv, confirm=QUIET)
+    assert plan.action != ACTION_ENTER
+
+
+def test_beyond_reach_is_still_refused_even_fully_confirmed():
+    """REACH_ATR is untouched: a level 4 ATR away is not a trade, however many
+    prints agree."""
+    d = mk(price=100.0, atr=1.5, support=94.0, resistance=112.0,
+           rsi=55.0, **TURNED_DOWN)
+    plan = run(d, regime='TRENDING_BEAR', confirm=TURNED,
+               levels=[(112.0, 4), (94.0, 4)])
+    assert plan.action == ACTION_REJECT
+
+
+def test_the_stop_still_belongs_to_the_level_on_a_far_fill():
+    """The safety condition from 2026-08-21 must survive the looser distance."""
+    d, lv = _at(1.60, full=True)
+    plan = run(d, regime='TRENDING_BEAR', levels=lv, confirm=TURNED)
+    if plan.action != ACTION_ENTER:
+        pytest.skip(f'refused earlier: {plan.reason}')
+    assert plan.stop > lv[0][0], 'the stop is no longer clear of the level'
+    assert abs(plan.stop - plan.entry) / 1.5 <= TG.MAX_STOP_ATR
+
+
+def test_the_tier_can_be_switched_off(monkeypatch):
+    monkeypatch.setattr(TG, 'EARLY_ENTRY_ON_REVERSAL', False)
+    d, lv = _at(1.60, full=True)
+    plan = run(d, regime='TRENDING_BEAR', levels=lv, confirm=TURNED)
+    assert plan.action == ACTION_WORK
+
+
+def test_the_give_up_bound_still_governs_the_ordinary_tier():
     assert TG.EARLY_ENTRY_MAX_ATR < TG.STOP_BUFFER_ATR
-
-
-def test_the_bound_is_well_inside_the_working_order_reach():
     assert TG.EARLY_ENTRY_MAX_ATR < TG.REACH_ATR
+    assert TG.FULL_CONFIRM_PRINTS == 3
 
 
 def test_the_stop_widening_was_reverted():
