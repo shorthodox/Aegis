@@ -234,22 +234,60 @@ def test_the_card_says_the_level_was_never_reached():
     )
 
 
-def test_partial_confirmation_still_rests_far_from_the_level():
-    """Two of three is enough to pass _confirmation but NOT to fire from out
-    here. This is what stops the tier becoming "enter always"."""
-    d, lv = _at(1.60, full=False)
+def test_the_five_minute_turn_plus_one_print_fires_from_far_out():
+    """2026-08-23: "if target resistance won't hit and market reverse from
+    here, will it not fire? ... it should fire if 5 min timeframe give 3 5min
+    candle."
+
+    It did not. The far tier demanded ALL THREE prints — rejection candle AND
+    5m turn AND RSI curling — and reversal candles are rare, so an armed setup
+    that turned before reaching its level simply expired. The 3-print bar was
+    never asked for; the 5m turn was.
+    """
+    d, lv = _at(1.60, full=False)      # 5m turned + RSI curling, no candle
     plan = run(d, regime='TRENDING_BEAR', levels=lv, confirm=TURNED)
-    assert plan.action == ACTION_WORK, (
-        f'fired on partial evidence from 1.6 ATR away ({plan.action}) — the '
-        f'give-up out here is only bounded by proof'
+    assert plan.action == ACTION_ENTER, (
+        f'a reversal 1.6 ATR from its level with the 5m turned still rested '
+        f'({plan.action}: {plan.reason}) — it will expire unfilled, which is '
+        f'the reported bug'
     )
 
 
-@pytest.mark.parametrize('dist', [0.60, 1.00, 1.50, 2.40])
-def test_partial_confirmation_rests_at_every_distance(dist):
+@pytest.mark.parametrize('dist', [0.60, 1.00, 1.50])
+def test_it_fires_across_the_range_that_actually_pays(dist):
     d, lv = _at(dist, full=False)
     plan = run(d, regime='TRENDING_BEAR', levels=lv, confirm=TURNED)
-    assert plan.action != ACTION_ENTER
+    assert plan.action == ACTION_ENTER
+
+
+def test_the_payoff_floor_is_what_bounds_it_far_out():
+    """Distance is not bounded by a hard ATR cap out here — it is bounded by
+    whether the trade still PAYS from the worse entry. The stop stays anchored
+    to the level, so the further price is from it the wider the risk, and at
+    2.0 ATR the net R:R falls under MIN_NET_R and the trade is refused.
+
+    This is the safeguard that makes lowering the print bar acceptable: a
+    reversal that no longer pays is refused, not taken on good candles."""
+    d, lv = _at(2.00, full=False)
+    plan = run(d, regime='TRENDING_BEAR', levels=lv, confirm=TURNED)
+    assert plan.action == ACTION_REJECT
+    assert plan.stage == 'payoff', f'refused for the wrong reason: {plan.reason}'
+    assert 'does not pay' in plan.reason
+
+
+def test_the_five_minute_turn_ALONE_is_still_not_enough_on_a_fade():
+    """The floor that remains. A counter-trend fade needs a second print — that
+    rule came from eight shorts all "at resistance" with nothing turned, and
+    lowering the far tier must not quietly reopen it."""
+    price, atr = 100.0, 1.5
+    res = price + 1.60 * atr
+    d = mk(price=price, atr=atr, support=price - 6.0, resistance=res,
+           rsi=55.0, rsi_slope=0.0)          # 5m only; no candle, no RSI curl
+    lv = [(res, 4), (price - 6.0, 4), (res + 4.0, 3)]
+    plan = run(d, regime='TRENDING_BEAR', levels=lv, confirm=TURNED)
+    assert plan.action != ACTION_ENTER, (
+        'a lone 5m turn fired a counter-trend fade from 1.6 ATR away'
+    )
 
 
 def test_a_quiet_5m_never_fires_however_good_the_technicals():
@@ -290,7 +328,9 @@ def test_the_tier_can_be_switched_off(monkeypatch):
 def test_the_give_up_bound_still_governs_the_ordinary_tier():
     assert TG.EARLY_ENTRY_MAX_ATR < TG.STOP_BUFFER_ATR
     assert TG.EARLY_ENTRY_MAX_ATR < TG.REACH_ATR
-    assert TG.FULL_CONFIRM_PRINTS == 3
+    # 3 -> 2 on 2026-08-23: the far tier now fires on the same bar as the near
+    # one (5m turned + _confirmation passes) instead of demanding all three.
+    assert TG.FULL_CONFIRM_PRINTS == 2
 
 
 def test_the_stop_widening_was_reverted():

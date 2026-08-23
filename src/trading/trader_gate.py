@@ -365,7 +365,32 @@ EARLY_ENTRY_MAX_ATR = 0.50
 # the worse entry — a reversal that no longer pays from here is refused, not
 # taken because the candles looked good.
 EARLY_ENTRY_ON_REVERSAL = True
-FULL_CONFIRM_PRINTS = 3
+# What the FAR tier demands. It used to be 3 — the rejection candle AND the 5m
+# turn AND RSI curling, all at once — which is why an armed setup that reversed
+# before reaching its level simply expired:
+#
+#   "if target resistance won't hit and market reverse from here, will it not
+#    fire? ... it should fire if 5 min timeframe give 3 5min candle"
+#
+# Correct, and the 3-print bar was mine, not the desk's. Reversal candles are
+# rare; requiring one on top of the 5m turn meant the far tier could almost never
+# fire, so the trigger the desk actually asked for — 3 of the last 4 five-minute
+# candles closing our way — was never sufficient on its own.
+#
+# At 2 the far tier fires on the SAME bar the near tier does: _confirmation must
+# pass and the 5m must have turned. For a counter-trend fade _confirmation
+# already means "the 5m turned AND one other print agrees" (need = 2), so this
+# removes the extra barrier without removing that rule.
+#
+# The two-print counter-trend requirement inside _confirmation is deliberately
+# left alone: it came from eight shorts that were all "at resistance" with
+# nothing actually turned. Dropping the far tier to 1 would reopen exactly that.
+#
+# Still bounded, unchanged: the level must be within REACH_ATR (2.5) or the trade
+# is refused outright; the stop stays anchored to the LEVEL; and risk is measured
+# from the real fill, so MAX_STOP_ATR and MIN_NET_R both bite on the worse entry.
+# A reversal that no longer pays from here is refused, not taken on good candles.
+FULL_CONFIRM_PRINTS = 2
 MODEL_OPPOSE_MARGIN = 0.12  # model may veto the structure only when it leans this hard the
                             # other way (raw p_buy/p_sell); a neutral model does not block
 
