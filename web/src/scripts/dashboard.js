@@ -2789,38 +2789,40 @@ window.connectTelegram = async function() {
 
     const { deeplink, code, bot_username } = await r.json();
 
-    // tg:// opens the Telegram desktop/mobile app directly.
-    // https://t.me/ only opens the web version in the browser.
-    const tgAppLink = `tg://resolve?domain=${bot_username}&start=${code}`;
-
+    // Reported 2026-08-23: "when I click connect telegram it is not redirecting
+    // to the telegram". Two mobile-specific failures were in the way.
+    //
+    // 1. The popup was filled with document.write(). Mobile browsers frequently
+    //    render nothing for a written-into about:blank popup, so the user got a
+    //    blank tab and no navigation. Setting location.href on the window we
+    //    already opened is one instruction and always navigates.
+    //
+    // 2. The popup-blocked fallback called window.open() AFTER `await fetch`.
+    //    By then the user gesture has been consumed, so it is blocked as well —
+    //    leaving only a small status link. Navigating the CURRENT tab is never
+    //    popup-blocked, which is the reliable path on a phone.
+    //
+    // https://t.me/... is used rather than tg://resolve because it works whether
+    // or not Telegram is installed: the OS hands it to the app when present and
+    // falls back to Telegram Web when not. A tg:// link that nothing handles
+    // just fails silently, which is the symptom being fixed.
     if (tgWin) {
-      // Write a proper landing page with a visible "Open in Telegram" button.
-      // A hidden anchor click triggers the tg:// protocol (opens the app).
-      // The visible button is the fallback if the protocol handler didn't fire.
-      tgWin.document.open();
-      tgWin.document.write(
-        '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Connect Telegram</title></head>' +
-        '<body style="background:#0e1621;color:#c8d1d9;font-family:sans-serif;text-align:center;padding:20vh 24px 0;margin:0">' +
-        '<p style="font-size:20px;margin:0 0 8px;font-weight:600">Opening Telegramâ€¦</p>' +
-        '<p style="font-size:13px;color:#8b949e;margin:0 0 28px">Your Telegram app should open automatically.</p>' +
-        '<a id="tg-btn" href="' + deeplink + '" ' +
-        'style="display:inline-block;background:#2ea6ff;color:#fff;padding:13px 28px;border-radius:10px;text-decoration:none;font-size:15px;font-weight:600">' +
-        'Open in Telegram</a>' +
-        '<p style="font-size:11px;color:#656d76;margin-top:20px">Tap <b>START</b> in Telegram, then return here â€” you\'ll be connected automatically.</p>' +
-        '<p style="font-size:11px;color:#656d76;margin-top:8px">You can close this tab once done.</p>' +
-        '<script>setTimeout(function(){var a=document.createElement("a");a.href="' + tgAppLink + '";document.body.appendChild(a);a.click();},200);<\/script>' +
-        '</body></html>'
-      );
-      tgWin.document.close();
-    } else {
-      // Popup was blocked â€” try opening the app link directly in current tab context,
-      // then show a clickable button in the status area.
-      window.open(tgAppLink, '_blank');
-      if (statusEl) {
-        statusEl.className   = 'text-[11px] text-center text-yellow-400';
-        statusEl.innerHTML   = `Popup blocked &mdash; <a href="${deeplink}" target="_blank" style="color:#58a6ff;text-decoration:underline">click here to open Telegram</a>`;
-        setTimeout(() => { if (statusEl) statusEl.innerHTML = ''; }, 15000);
+      try {
+        tgWin.location.href = deeplink;
+      } catch (_) {
+        tgWin.close();
+        window.location.href = deeplink;
+        return;
       }
+    } else {
+      // No popup. Go there in this tab — the connection is stored server-side,
+      // so coming back to the dashboard picks it up via _refreshTelegramStatus().
+      if (statusEl) {
+        statusEl.className   = 'text-[11px] text-center text-blue-400';
+        statusEl.innerHTML   = `Opening Telegram&hellip; if nothing happens, <a href="${deeplink}" target="_blank" rel="noopener" style="color:#58a6ff;text-decoration:underline">tap here</a>`;
+      }
+      window.location.href = deeplink;
+      return;
     }
 
     // Switch to waiting state

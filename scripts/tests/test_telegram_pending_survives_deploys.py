@@ -338,3 +338,65 @@ def test_a_live_plan_is_not_paused(stores, monkeypatch):
     main._tg_connections['u@example.test'] = {'chat_id': '42', 'access_until': ''}
     main._telegram_cleanup_pass()
     assert 'paused_reason' not in main._tg_connections['u@example.test']
+
+
+# -- the connect button must actually reach Telegram --------------------------
+# Reported 2026-08-23: "when i click connect telegram it is not redirecting to
+# the telegram". Two mobile-specific failures:
+#
+#   1. the popup was filled with document.write(), which mobile browsers
+#      frequently render as a blank tab with no navigation;
+#   2. the popup-blocked fallback called window.open() AFTER `await fetch`, by
+#      which point the user gesture is spent, so it was blocked too — leaving
+#      only a small status link.
+#
+# Navigating an already-open window, or the current tab, is never popup-blocked.
+
+def _dash():
+    return (main.Path(main.__file__).resolve().parent / 'web' / 'src' / 'scripts'
+            / 'dashboard.js').read_text(encoding='utf-8', errors='replace')
+
+
+def _connect_code():
+    """The connect handler with // comments stripped.
+
+    Scanning raw source makes a test match the comment that EXPLAINS the bug,
+    so it passes while the bug is present and fails while it is fixed.
+    """
+    src = _dash()
+    seg = src[src.index('window.connectTelegram'):]
+    seg = seg[:seg.index('window.cancelTelegramConnect')]
+    out = []
+    for line in seg.splitlines():
+        i = line.find('//')
+        out.append(line if i < 0 else line[:i])
+    return chr(10).join(out)
+
+
+def test_the_popup_is_navigated_not_written_into():
+    src = _dash()
+    assert 'tgWin.location.href = deeplink' in src, (
+        'the popup is being document.write()n into again — blank tab on mobile'
+    )
+
+
+def test_a_blocked_popup_navigates_the_current_tab():
+    assert 'window.location.href = deeplink' in _connect_code(), (
+        'no same-tab fallback — a blocked popup leaves the user with nothing '
+        'that actually opens Telegram'
+    )
+
+
+def test_no_post_await_window_open_in_the_connect_flow():
+    """window.open() after an await is blocked; that was failure mode 2."""
+    code = _connect_code()
+    after = code[code.index('await r.json()'):]
+    assert 'window.open(' not in after, (
+        'window.open() is called after the fetch again — the gesture is spent '
+        'by then and mobile blocks it'
+    )
+
+
+def test_it_uses_the_https_link_which_works_without_the_app():
+    """tg:// fails silently when nothing handles it; t.me falls back to web."""
+    assert 'tg://resolve' not in _connect_code()
