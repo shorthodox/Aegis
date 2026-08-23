@@ -402,6 +402,10 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
         # WORK_EXPIRY_BARS is a dead thesis, not a queue entry — this is the
         # clock that PENDING never had.
         self._working_orders: Dict[str, float] = {}
+        # The level each live working order is resting at, frozen when it was
+        # placed. Without this _pick_level re-derives it every scan and the
+        # order chases price instead of waiting for it.
+        self._working_levels: Dict[str, float] = {}
         # Counterfactual, not behaviour: for every resting order, would a limit
         # AT the level have filled before it expired? _working_orders holds only
         # a timestamp, so it cannot answer that. This does, and nothing reads it
@@ -1389,6 +1393,11 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
         result['price'] = price
         plan = TraderGate.evaluate(
             result, regime,
+            pinned_levels={
+                sd: lv for sd in ('BUY', 'SELL')
+                for lv in (getattr(self, '_working_levels', {}).get(f'{symbol}|{sd}'),)
+                if lv
+            },
             market={
                 'drift_blocked':   self.drift_monitor.is_blocked(symbol),
                 'drift_severity':  self.drift_monitor.severity(symbol),
@@ -1420,6 +1429,7 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
         if plan.action not in (ACTION_ENTER, ACTION_WORK):
             self._working_orders.pop(f'{symbol}|{plan.side}', None)
             self._wo_close(symbol, plan.side, 'SUPERSEDED', now)
+            getattr(self, '_working_levels', {}).pop(f'{symbol}|{plan.side}', None)
             self._publish_no_trade(symbol, plan.reason)
             print(f'[{symbol}] NO TRADE ({plan.stage}): {plan.reason}')
             return True
@@ -1431,10 +1441,12 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
         if plan.action == ACTION_WORK:
             key = f'{symbol}|{plan.side}'
             first_seen = self._working_orders.setdefault(key, now)
+            getattr(self, '_working_levels', {}).setdefault(key, float(plan.level))
             age_bars = (now - first_seen) / 3600.0        # 1h engine timeframe
             if age_bars > plan.expiry_bars:
                 self._working_orders.pop(key, None)
                 self._wo_close(symbol, plan.side, 'EXPIRED', now)
+                getattr(self, '_working_levels', {}).pop(key, None)
                 self._publish_no_trade(
                     symbol, f'setup expired — {plan.setup} {plan.side} at '
                             f'{plan.level:.8g} went untriggered for {plan.expiry_bars} bars')
@@ -1549,6 +1561,7 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
         # ── ENTER ────────────────────────────────────────────────────────────
         self._working_orders.pop(f'{symbol}|{plan.side}', None)
         self._wo_close(symbol, plan.side, 'FILLED_AT_LEVEL', now)
+        getattr(self, '_working_levels', {}).pop(f'{symbol}|{plan.side}', None)
         result['side']      = plan.side
         result['fire']      = True
         result['btc_tide']  = tide

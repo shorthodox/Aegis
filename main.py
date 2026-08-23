@@ -3648,6 +3648,15 @@ _TUNABLES: Dict[str, Any] = {
                                         "ALLOW_EXHAUSTION_SELL_STRETCHED", "bool", 0, 1,
                                         "Allow the fade SELL only when genuinely stretched "
                                         "(RSI>=75 at rp>=0.95). Measured +0.023R both halves"),
+    "structural_rp_high": ("src.trading.trader_gate", "STRUCTURAL_RP_HIGH", "float", 0.5, 1.0,
+                          "No LONG above this fraction of the whole structure "
+                          "(top-most level to bottom-most)"),
+    "structural_rp_low": ("src.trading.trader_gate", "STRUCTURAL_RP_LOW", "float", 0.0, 0.5,
+                         "No SHORT below this fraction of the whole structure"),
+    "use_structural_location": ("src.trading.trader_gate", "USE_STRUCTURAL_LOCATION",
+                                "bool", 0, 1,
+                                "Judge location against the whole structure, not the "
+                                "nearest support/resistance band"),
     "entry_follows_defended_level": ("src.trading.trader_gate",
                                      "ENTRY_FOLLOWS_DEFENDED_LEVEL", "bool", 0, 1,
                                      "Move the entry to the level the stop defends, "
