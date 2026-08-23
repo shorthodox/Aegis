@@ -59,13 +59,52 @@ def test_subscription_active_no_longer_means_the_status_string(monkeypatch):
 
 
 def test_subscription_end_reads_a_key_that_exists():
-    """It used to read a top-level "subscription_end" that has never existed, so
-    the frontend was handed None and could not have checked expiry."""
+    """/auth/me must report a real end date.
+
+    Updated 2026-08-23. The original premise here — that a top-level
+    "subscription_end" has never existed — turned out to be wrong: the Whop and
+    Razorpay handlers write exactly that, and write NONE of the in-subscription
+    keys every reader looked for. So the writers and readers were on different
+    keys and the term never ended for anyone.
+
+    Both shapes are now read through _user_sub_end, so this asserts the property
+    rather than the spelling.
+    """
     import inspect
     src = inspect.getsource(main.get_me)
-    assert 'user_doc.get("subscription_end")' not in src
-    for k in ('current_period_end', 'expires_at', 'end_date'):
-        assert k in src, k
+    assert '_user_sub_end(user_doc)' in src, (
+        '/auth/me re-derives the end date instead of using the one reader that '
+        'knows where providers actually write it'
+    )
+
+
+def test_the_end_date_is_found_in_either_shape():
+    """A document written by the provider webhooks, and one written the
+    canonical way, must both expire."""
+    from datetime import datetime, timedelta, timezone
+    past = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    future = (datetime.now(timezone.utc) + timedelta(days=5)).isoformat()
+
+    # what the Whop handler actually wrote: top level only
+    top_past = {'plan': 'pro', 'subscription': {'status': 'active'},
+                'subscription_end': past}
+    top_live = {'plan': 'pro', 'subscription': {'status': 'active'},
+                'subscription_end': future}
+    assert main._user_sub_end(top_past) is not None, (
+        'the top-level end date is invisible, so a lapsed plan never expires'
+    )
+    assert main.has_paid_access(top_past) is False
+    assert main.has_paid_access(top_live) is True
+
+    # the canonical shape
+    inner_past = {'plan': 'pro',
+                  'subscription': {'status': 'active', 'current_period_end': past}}
+    assert main.has_paid_access(inner_past) is False
+
+
+def test_a_plan_with_no_end_date_anywhere_still_fails_open():
+    """Absent bookkeeping is not a cancellation — the documented asymmetry."""
+    assert main.has_paid_access({'plan': 'pro', 'subscription': {'status': 'active'}}) is True
 
 
 @pytest.mark.parametrize('doc,expected', [

@@ -116,7 +116,14 @@ def test_a_paid_plan_uses_its_own_end_date_when_present(monkeypatch):
         'subscription': {'status': 'active', 'current_period_end': '2026-12-01T00:00:00Z'},
         'trial_end': '2020-01-01T00:00:00Z',
     })
-    assert main._tg_access_until('x@example.test') == '2026-12-01T00:00:00Z'
+    # Compare the INSTANT, not the spelling. _tg_access_until now normalises
+    # through _user_sub_end (so it also sees the top-level subscription_end the
+    # provider webhooks write), which renders '+00:00' rather than 'Z'. The
+    # sender parses both — dispatcher does .replace('Z', '+00:00') before
+    # fromisoformat — and stored values in either form still work.
+    from datetime import datetime, timezone
+    _got = main._tg_access_until('x@example.test')
+    assert datetime.fromisoformat(_got.replace('Z', '+00:00')) ==         datetime(2026, 12, 1, tzinfo=timezone.utc)
 
 
 def test_a_trial_user_is_still_gated_on_trial_end(monkeypatch):
