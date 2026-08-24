@@ -758,6 +758,30 @@
                   </button>
                 </div>
 
+                <!-- LIVE ENGINE POSITIONS ─────────────────────────────────
+                     An engine position used to be visible NOWHERE while it was
+                     open. The public track record is closed-only by design, and
+                     gatekeeper.js deliberately keeps data.open_trades out of the
+                     analytics panel because that panel is for trades the user
+                     executed themselves. So a position ran its whole life unseen
+                     and then appeared, already finished, with a PnL attached.
+                     Reported 2026-08-24 on ENA/USDT: fired 12:37, closed 13:04,
+                     never visible in between.
+
+                     This is its own section precisely so the user-trades panel
+                     keeps meaning what it meant. -->
+                <div id="enginePositionsWrap" style="display:none;" class="mb-4">
+                  <div class="flex items-center gap-2 mb-2">
+                    <span class="relative flex h-2 w-2">
+                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60"></span>
+                      <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+                    </span>
+                    <h3 class="text-xs font-bold tracking-wider text-emerald-300 uppercase">Live Engine Positions</h3>
+                    <span id="enginePositionsCount" class="text-[10px] text-emerald-300/50"></span>
+                  </div>
+                  <div id="enginePositions" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3"></div>
+                </div>
+
                 <!-- Responsive Grid: 1 col on mobile, 2 or 3 on desktop -->
                 <div id="signalsContainer"
                     class="signals-grid grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
