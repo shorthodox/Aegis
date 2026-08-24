@@ -1603,6 +1603,14 @@ function updateDashboardData(data) {
   // the user manually executed from the token card panel or signal history.
   // User-initiated real trades are synced via the Firestore users/{uid}/trades
   // listener in setupFirestoreListeners(), which is the authoritative source.
+  //
+  // They ARE rendered, in their own section. Keeping them out of renderTrades
+  // is right; showing them nowhere was not. An engine position was invisible for
+  // its entire life — the public track record is closed-only by design, and this
+  // was the only other place it could have appeared — so it surfaced only after
+  // it had closed, already finished, with a PnL attached. Reported 2026-08-24 on
+  // ENA/USDT: fired 12:37, closed 13:04, never seen open.
+  renderEnginePositions(data.open_trades);
 
   // Forward trader engine data to the cockpit handlers.
   // The trader section in dashboard.html listens for 'aegis-ws-message' on
@@ -3067,3 +3075,64 @@ export {
   currentUser, currentUserData, userPlan, trialActive, allowedTokens,
   getUpgradeModal, showUpgradeModal, handleLogout as logout
 };
+
+
+// ── Live engine positions ────────────────────────────────────────────────────
+// The engine's OWN open positions, kept deliberately separate from the user's
+// executed trades (renderTrades) so that panel keeps meaning what it meant.
+function renderEnginePositions(trades) {
+  const wrap = document.getElementById('enginePositionsWrap');
+  const host = document.getElementById('enginePositions');
+  const count = document.getElementById('enginePositionsCount');
+  if (!wrap || !host) return;
+  const rows = Array.isArray(trades) ? trades : [];
+  if (!rows.length) { wrap.style.display = 'none'; host.innerHTML = ''; return; }
+
+  wrap.style.display = '';
+  if (count) count.textContent = `(${rows.length})`;
+
+  const px = (v) => {
+    const n = Number(v);
+    if (!isFinite(n) || n === 0) return '—';
+    return n < 1 ? n.toFixed(6) : n.toFixed(4);
+  };
+  const held = (iso) => {
+    const t = Date.parse(iso || '');
+    if (!isFinite(t)) return '';
+    const m = Math.max(0, Math.round((Date.now() - t) / 60000));
+    return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`;
+  };
+
+  host.innerHTML = rows.map(t => {
+    const sym = t.symbol || t.pair || '—';
+    const side = String(t.side || t.direction || '').toUpperCase();
+    const isLong = side === 'BUY' || side === 'LONG';
+    const entry = Number(t.entry_price ?? t.entry ?? 0);
+    const live = Number(window.currentTickers?.[sym] ?? 0);
+    // Unrealised, computed here rather than trusted from a field that may be
+    // stamped only on close.
+    let pnl = null;
+    if (entry > 0 && live > 0) pnl = ((isLong ? live - entry : entry - live) / entry) * 100;
+    const pnlTxt = pnl === null ? '—' : `${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}%`;
+    const pnlCol = pnl === null ? '#94a3b8' : (pnl >= 0 ? '#34d399' : '#f87171');
+    const sideCol = isLong ? '#34d399' : '#f87171';
+    const h = held(t.entry_time || t.opened_at || t.time);
+    return `
+      <div style="background:rgba(16,185,129,0.04);border:1px solid rgba(52,211,153,0.25);border-radius:10px;padding:12px 14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <span style="font-weight:700;font-size:0.9rem;color:#e2e8f0;">${sym}</span>
+          <span style="font-size:0.68rem;font-weight:700;letter-spacing:.08em;color:${sideCol};">${isLong ? 'LONG' : 'SHORT'}</span>
+        </div>
+        <div style="display:flex;align-items:baseline;gap:10px;margin-top:8px;">
+          <span style="font-size:1.35rem;font-weight:700;color:${pnlCol};">${pnlTxt}</span>
+          ${h ? `<span style="font-size:0.7rem;color:#64748b;">held ${h}</span>` : ''}
+        </div>
+        <div style="display:flex;gap:14px;margin-top:8px;font-size:0.7rem;color:#94a3b8;">
+          <span>entry <strong style="color:#cbd5e1;">${px(entry)}</strong></span>
+          <span>SL <strong style="color:#fca5a5;">${px(t.stop_loss ?? t.sl)}</strong></span>
+          <span>TP1 <strong style="color:#86efac;">${px(t.take_profit_1 ?? t.tp1 ?? t.take_profit)}</strong></span>
+        </div>
+      </div>`;
+  }).join('');
+}
+window.renderEnginePositions = renderEnginePositions;

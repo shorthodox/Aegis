@@ -33,6 +33,19 @@ from scripts.engine.state import _fs_save_track_record
 from src.trading.trader_gate import TradePlan
 
 
+def _asdict_safe(p):
+    """Best-effort dict of a position, whatever shape it is."""
+    from dataclasses import asdict, is_dataclass
+    try:
+        if is_dataclass(p):
+            return asdict(p)
+    except Exception:
+        pass
+    if isinstance(p, dict):
+        return dict(p)
+    return {k: v for k, v in vars(p).items() if not k.startswith('_')} if hasattr(p, '__dict__') else {}
+
+
 def _edge_over_geometry(records):
     """Never let the study break the write that persists the book."""
     try:
@@ -909,6 +922,22 @@ class PositionsMixin:
                 'performance':       self.perf_tracker.get_performance_summary(),
                 'drift':             self.drift_monitor.get_summary(),
                 'portfolio':         self.portfolio_guard.get_summary(),
+                # OPEN positions, not just closed ones.
+                #
+                # 'signals' above is the CLOSED record — a trade only appears
+                # once it is over. So a position that ran for half an hour was
+                # invisible on the track record for its whole life and then
+                # materialised, already finished, with a PnL attached. Reported
+                # 2026-08-24 on ENA/USDT: fired 12:37, closed 13:04, and "i never
+                # seen this ena open in track record and in the dashboard as
+                # well" — correct, because there was nothing here to render.
+                #
+                # The live position is the most interesting thing the record has
+                # to show: it is the claim being made BEFORE the outcome is
+                # known, which is the whole pitch.
+                'open_trades':       [
+                    _asdict_safe(p) for p in self.wallet.open_positions.values()
+                ],
                 # Edge over geometry — see scripts/engine/edge_metric.py. The
                 # win rate above is a report on the stop distance; this is the
                 # part of it the signals earned. Written alongside rather than
