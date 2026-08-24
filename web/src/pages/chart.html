@@ -1144,7 +1144,16 @@ async function renderChart(sig) {
     } else if (isArmedPending) {
       // PENDING/ARMED: draw projected Entry, SL, TP ladder & target level as dashed lines
       const _pSide = (sig.pending_side || sig.direction || '').toUpperCase();
-      const entry = sig.entry_price || sig.suggested_entry || sig.pending_target || sig.price;
+      // For an ARMED order the resting LEVEL is the entry — it is the price the
+      // order is waiting for and the only one the fill depends on. It used to sit
+      // fourth in this chain behind entry_price, which on a pending card is the
+      // model's notional entry (in practice ~the current price), so the chart drew
+      // "Entry (Armed)" right under the candles and the level was never drawn at
+      // all. Reported on ENA/USDT: card showed Entry (Armed) 0.1606 against a live
+      // price of 0.1605 — looking a tick away from filling — while the order was
+      // actually resting at 0.1494, 6.9% below. The desk reasonably concluded the
+      // trigger was broken when the order simply had not been reached.
+      const entry = sig.pending_target || sig.suggested_entry || sig.entry_price || sig.price;
       const sl = sig.suggested_sl || sig.sl;
       const tp1 = sig.suggested_tp || sig.tp;
       
@@ -1423,7 +1432,14 @@ async function loadMoreHistory(symbol, interval) {
 
 // ── Signal Overview ───────────────────────────────────────────────────────────
 function renderOverview(sig) {
-  const entry = sig.entry_price || sig.price;
+  // An ARMED order's entry is the LEVEL it rests at, not the model's notional
+  // entry (which tracks the current price). Showing the latter on a pending card
+  // makes an order that is still far away look like it is about to fill — ENA/USDT
+  // read "ENTRY 0.160600" beside a live price of 0.1605 while the order was really
+  // resting at 0.1494, 6.9% below.
+  const _armed = (sig.pending_entry === true) && !sig.fire;
+  const entry = (_armed && sig.pending_target) ? sig.pending_target
+                                               : (sig.entry_price || sig.price);
   const isShort = sig.direction === 'SHORT';
   // Prefer the engine's actual ATR trade TPs (suggested_tp / tp2..tp5 — the same
   // 5-level ladder the position uses); fall back to the directional context
