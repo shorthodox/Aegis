@@ -1367,6 +1367,12 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
             if len(_sw) >= self.ENTRY_5M_STRONG:
                 out['ltf_bull_strong'] = all(float(c[4]) > float(c[1]) for c in _sw)
                 out['ltf_bear_strong'] = all(float(c[4]) < float(c[1]) for c in _sw)
+                # The reversal's OWN structure. When a resting order is filled
+                # early — on the strength of this turn rather than on price
+                # reaching its level — the stop belongs to the swing the entry is
+                # actually taken from, not to a level that may be percent away.
+                out['ltf_low'] = min(float(c[3]) for c in _sw)
+                out['ltf_high'] = max(float(c[2]) for c in _sw)
         except Exception as exc:
             LTF_UNREADABLE['count'] += 1
             if LTF_UNREADABLE['count'] in (1, 10, 100):
@@ -1547,7 +1553,7 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
         capacity rather than about re-litigating the setup.
         """
         from src.trading.trader_gate import (
-            TradePlan, ACTION_ENTER, AT_LEVEL_ATR)
+            TradePlan, ACTION_ENTER, AT_LEVEL_ATR, MAX_STOP_PCT, MIN_NET_R)
         for side in ('BUY', 'SELL'):
             key = f'{symbol}|{side}'
             if key not in (self._working_orders or {}):
@@ -1566,11 +1572,68 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
             atr_px = abs(stop - level) / atr if atr > 0 and stop > 0 else 0.0
             tol = AT_LEVEL_ATR * atr_px if atr_px > 0 else abs(level) * 0.001
             reached = (price >= level - tol) if side == 'SELL' else (price <= level + tol)
-            if not reached:
-                continue
             _c = confirm or {}
             turned = bool(_c.get('ltf_bear') if side == 'SELL' else _c.get('ltf_bull'))
-            if not turned:
+            strong = bool(_c.get('ltf_bear_strong') if side == 'SELL'
+                          else _c.get('ltf_bull_strong'))
+
+            # ── B · the reversal fires it, even away from the level ─────────
+            # "Even if market won't reach the level, and 3 strong candles are
+            # seen in 5 min chart, signal should fire immediately."
+            #
+            # It cannot be taken on the ORDER's stop. That stop is anchored to a
+            # level the market never came back to, so entering at market inherits
+            # the whole gap as risk: ENA/USDT resting at 0.1494 with a 0.14746
+            # stop, filled at 0.1605, is an 8.13% stop against a 1.30% cap. The
+            # trade would be refused on width every time and the trigger would do
+            # nothing at all.
+            #
+            # So an early fill is stopped on the REVERSAL'S OWN structure — the
+            # low of the three confirming candles, plus a buffer. That is still a
+            # structural stop, just the structure the entry is actually being
+            # taken from. The target stays the order's, and MAX_STOP_PCT and
+            # MIN_NET_R below both bite on the result, so a reversal that does
+            # not pay from here is refused rather than taken on good candles.
+            if strong and not reached:
+                try:
+                    swing = float(_c.get('ltf_low' if side == 'BUY' else 'ltf_high') or 0.0)
+                except (TypeError, ValueError):
+                    swing = 0.0
+                if swing <= 0:
+                    continue
+                buf = abs(price) * 0.0015
+                estop = swing - buf if side == 'BUY' else swing + buf
+                risk = abs(price - estop)
+                if risk <= 0:
+                    continue
+                risk_pct = risk / price * 100.0
+                tgt = float(meta.get('target') or 0.0)
+                reward = abs(tgt - price) if tgt > 0 else 0.0
+                rr = (reward - price * 0.001) / risk if risk > 0 else 0.0
+                if risk_pct > MAX_STOP_PCT or rr < MIN_NET_R:
+                    print(f'[{symbol}] EARLY REVERSAL REFUSED {side} — three 5m candles '
+                          f'confirm but it does not pay from {price:.8g}: stop '
+                          f'{risk_pct:.2f}% (cap {MAX_STOP_PCT}), net R:R {rr:.2f} '
+                          f'(floor {MIN_NET_R})')
+                    continue
+                return TradePlan(
+                    action=ACTION_ENTER, side=side, setup=meta.get('setup') or '',
+                    entry=price, stop=estop, target=tgt, level=level,
+                    invalidation=estop, risk_atr=atr,
+                    r_gross=rr, r_net=rr,
+                    size_factor=float(meta.get('size_factor') or 0.0),
+                    expiry_bars=0, stage='trigger',
+                    reason=(f'three consecutive 5m candles turned — taken at {price:.8g} '
+                            f'without waiting for the {level:.8g} level, stopped on the '
+                            f'reversal at {estop:.8g}'),
+                    notes=[f'early fill: the level was never reached; the stop is the 5m '
+                           f'swing, not the order level, so risk is {risk_pct:.2f}% '
+                           f'rather than the {abs(price - stop) / price * 100:.2f}% the '
+                           f'order stop would have inherited'],
+                )
+
+            # Trigger A — the ordinary fill — still REQUIRES the level.
+            if not (reached and turned):
                 continue
             return TradePlan(
                 action=ACTION_ENTER, side=side, setup=meta.get('setup') or '',
