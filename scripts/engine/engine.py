@@ -468,6 +468,7 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
         # of the lifecycle fix, and more confusing than the original, because now
         # the book and the screen disagreed.
         self._working_meta: Dict[str, Dict[str, Any]] = {}
+        self._load_working_orders()
         # Counterfactual, not behaviour: for every resting order, would a limit
         # AT the level have filled before it expired? _working_orders holds only
         # a timestamp, so it cannot answer that. This does, and nothing reads it
@@ -1460,6 +1461,132 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
         except Exception:
             WO_OBSERVE_ERRORS['count'] += 1
 
+    def _save_working_orders(self) -> None:
+        """Persist the armed book to the volume.
+
+        It was in memory only, so every deploy cancelled every resting order
+        outright — no expiry, no invalidation, no counterfactual row, just gone.
+        An order carries an 8-bar clock and the container does not survive eight
+        bars of deploys, which is why armed signals kept vanishing for reasons
+        the log could never account for.
+        """
+        try:
+            import json as _j
+            from scripts.engine.config import WORKING_ORDERS_PATH as _P
+            _P.parent.mkdir(parents=True, exist_ok=True)
+            tmp = _P.with_suffix('.tmp')
+            tmp.write_text(_j.dumps({
+                'orders': self._working_orders,
+                'levels': getattr(self, '_working_levels', {}),
+                'stops':  getattr(self, '_working_stops', {}),
+                'meta':   getattr(self, '_working_meta', {}),
+                'saved':  time.time(),
+            }, default=str), encoding='utf-8')
+            os.replace(tmp, _P)
+        except Exception as exc:
+            print(f'[working orders] save failed: {exc!r}')
+
+    def _load_working_orders(self) -> None:
+        """Restore the armed book, dropping anything that expired while down."""
+        try:
+            import json as _j
+            from scripts.engine.config import WORKING_ORDERS_PATH as _P
+            if not _P.exists():
+                return
+            blob = _j.loads(_P.read_text(encoding='utf-8')) or {}
+            orders = blob.get('orders') or {}
+            now = time.time()
+            keep = {k: float(v) for k, v in orders.items()
+                    if (now - float(v)) / 3600.0 <= WORK_EXPIRY_BARS}
+            dropped = len(orders) - len(keep)
+            self._working_orders = keep
+            self._working_levels = {k: float(v) for k, v in (blob.get('levels') or {}).items()
+                                    if k in keep}
+            self._working_stops = {k: float(v) for k, v in (blob.get('stops') or {}).items()
+                                   if k in keep}
+            self._working_meta = {k: v for k, v in (blob.get('meta') or {}).items()
+                                  if k in keep}
+            if keep or dropped:
+                print(f'[working orders] restored {len(keep)} resting order(s) from the '
+                      f'volume, dropped {dropped} that expired while the engine was down')
+        except Exception as exc:
+            print(f'[working orders] restore failed ({exc!r}) — starting with an empty book')
+
+    def _resting_fill_plan(self, symbol: str, price: float,
+                           confirm: Dict[str, Any], now: float):
+        """A resting order whose level price has REACHED, ready to be filled.
+
+        Returns a TradePlan with action=ENTER rebuilt from the order as it was
+        placed, or None.
+
+        WHY THIS EXISTS. A working order could only ever be filled by the gate
+        independently re-deriving ACTION_ENTER from scratch on some later scan.
+        So an order rested at its level while the gate refused the symbol for
+        reasons that have nothing to do with the order — the setup stage moving
+        on, exhaustion being refused fleet-wide, rp drifting — and it expired
+        unfilled with price sitting right on it.
+
+        Measured on the volume, TAO/USDT 2026-08-23: level 244.85, touched at
+        2.17 bars, closest approach 0.0125 ATR — essentially ON the level — 19
+        scans, outcome EXPIRED. Same night: 221 NO TRADE (setup) per scan and
+        ZERO fires. That is the whole of "a lot of armed signals, none of em
+        fired".
+
+        A resting limit does not re-ask whether the thesis is still fashionable.
+        The thesis was settled when the order was placed, and its price, stop,
+        target and payoff were frozen with it. What still has to be true at the
+        moment of filling is only:
+
+          * the invalidation has not been breached  (_tend_working_orders)
+          * price has actually reached the level
+          * the 5m tape confirms — a HARD requirement by desk decision, not
+            advisory, and the one thing that is genuinely news at fill time
+
+        Everything downstream of this — the quality floor, the entry-stretch
+        veto, the portfolio guard — still runs, because those are about risk and
+        capacity rather than about re-litigating the setup.
+        """
+        from src.trading.trader_gate import (
+            TradePlan, ACTION_ENTER, AT_LEVEL_ATR)
+        for side in ('BUY', 'SELL'):
+            key = f'{symbol}|{side}'
+            if key not in (self._working_orders or {}):
+                continue
+            meta = (getattr(self, '_working_meta', None) or {}).get(key)
+            if not meta or price <= 0:
+                continue
+            level = float(meta.get('level') or 0.0)
+            if level <= 0:
+                continue
+            atr = float(meta.get('risk_atr') or 0.0)
+            # Tolerance in PRICE. risk_atr is a stop distance in ATR, so derive
+            # the ATR itself from the stop the order was placed with rather than
+            # guessing one here.
+            stop = float(meta.get('stop') or 0.0)
+            atr_px = abs(stop - level) / atr if atr > 0 and stop > 0 else 0.0
+            tol = AT_LEVEL_ATR * atr_px if atr_px > 0 else abs(level) * 0.001
+            reached = (price >= level - tol) if side == 'SELL' else (price <= level + tol)
+            if not reached:
+                continue
+            _c = confirm or {}
+            turned = bool(_c.get('ltf_bear') if side == 'SELL' else _c.get('ltf_bull'))
+            if not turned:
+                continue
+            return TradePlan(
+                action=ACTION_ENTER, side=side, setup=meta.get('setup') or '',
+                entry=price, stop=stop, target=float(meta.get('target') or 0.0),
+                level=level, invalidation=float(meta.get('invalidation') or stop),
+                risk_atr=atr, r_gross=float(meta.get('r_gross') or 0.0),
+                r_net=float(meta.get('r_net') or 0.0),
+                size_factor=float(meta.get('size_factor') or 0.0),
+                expiry_bars=0, stage='trigger',
+                reason=(f'resting {side} order filled at its {level:.8g} level — '
+                        f'{meta.get("reason") or "the thesis it was placed on"}'),
+                notes=[f'fill: price reached {level:.8g} and the 5m tape confirms; '
+                       f'the plan was settled when the order was placed'],
+            )
+        return None
+
     def _republish_working_card(self, symbol: str, key: str,
                                 sig: Optional[Dict[str, Any]], now: float) -> None:
         """Re-stamp the armed card for an order that is still resting.
@@ -1526,6 +1653,7 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
                 getattr(self, '_working_meta', {}).pop(key, None)
                 self._wo_close(symbol, side, 'EXPIRED', now)
                 print(f'[{symbol}] SETUP EXPIRED: {side} after {age_bars:.1f} bars')
+                getattr(self, '_save_working_orders', lambda: None)()
                 return (f'setup expired — the {side} order went untriggered for '
                         f'{WORK_EXPIRY_BARS} bars')
             # The invalidation is the one thing that genuinely kills it early.
@@ -1540,6 +1668,7 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
                     self._wo_close(symbol, side, 'INVALIDATED', now)
                     print(f'[{symbol}] SETUP INVALIDATED: {side} — price {price:.8g} '
                           f'went through the {stop:.8g} stop before the level')
+                    getattr(self, '_save_working_orders', lambda: None)()
                     return (f'setup invalidated — price went through the {stop:.8g} '
                             f'stop before ever reaching the level')
         return ''
@@ -1603,7 +1732,13 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
             # clock never means anything.
             self._publish_no_trade(symbol, _retired)
             return True
-        plan = TraderGate.evaluate(
+        # A resting order whose level price has reached fills on its OWN terms,
+        # without the gate having to re-derive the thesis it was placed on.
+        plan = self._resting_fill_plan(symbol, price, confirm, now)
+        if plan is not None:
+            print(f'[{symbol}] RESTING FILL {plan.side} @ {plan.level:.8g} — '
+                  f'price reached the level and the 5m confirms')
+        plan = plan if plan is not None else TraderGate.evaluate(
             result, regime,
             location_levels=loc_levels or None,
             pinned_levels={
@@ -1692,6 +1827,7 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
                             f'quality would be refused when it reached its level')
                 print(f'[{symbol}] NOT ARMED {plan.side} {plan.setup} — quality '
                       f'{float(ctx_quality or 0.0):.0f} < {_aq:.0f}')
+                getattr(self, '_save_working_orders', lambda: None)()
                 return True
             key = f'{symbol}|{plan.side}'
             first_seen = self._working_orders.setdefault(key, now)
@@ -1720,6 +1856,14 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
                 'setup':   plan.setup,
                 'reason':  plan.reason,
                 'expiry_bars': float(plan.expiry_bars),
+                # Frozen so the order can be FILLED on its own terms later
+                # without re-deriving the thesis. See _resting_fill_plan.
+                'entry':        float(plan.entry),
+                'invalidation': float(plan.invalidation),
+                'risk_atr':     float(plan.risk_atr),
+                'r_gross':      float(plan.r_gross),
+                'r_net':        float(plan.r_net),
+                'size_factor':  float(plan.size_factor),
             }
             if isinstance(sig, dict):
                 sig['fire']           = False
@@ -1740,6 +1884,7 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
                 sig['direction']    = 'LONG' if plan.side == 'BUY' else 'SHORT'
             print(f'[{symbol}] WORKING {plan.side} @ {plan.level:.8g} — {plan.reason} '
                   f'({plan.expiry_bars - age_bars:.1f} bars left)')
+            getattr(self, '_save_working_orders', lambda: None)()
             return True
 
         # ── Entry-stretch veto — a hard requirement, not a tier vote ─────────
@@ -1831,6 +1976,7 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
         getattr(self, '_working_levels', {}).pop(f'{symbol}|{plan.side}', None)
         getattr(self, '_working_stops', {}).pop(f'{symbol}|{plan.side}', None)
         getattr(self, '_working_meta', {}).pop(f'{symbol}|{plan.side}', None)
+        getattr(self, '_save_working_orders', lambda: None)()
         result['side']      = plan.side
         result['fire']      = True
         result['btc_tide']  = tide
