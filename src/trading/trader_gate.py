@@ -65,6 +65,7 @@ SETUP_TREND_PULLBACK      = 'TREND_PULLBACK'       # with the trend, entering on
 SETUP_BREAK_RETEST        = 'BREAK_RETEST'         # broken level retested from the other side
 SETUP_RANGE_FADE          = 'RANGE_FADE'           # range extreme, no trend to fight
 SETUP_EXHAUSTION_REVERSAL = 'EXHAUSTION_REVERSAL'  # counter-trend, only at a stretched extreme
+SETUP_OVERSOLD_LONG       = 'OVERSOLD_LONG'      # deeply oversold, wherever it sits
 SETUP_NONE                = 'NONE'
 
 # ── Plan actions ──────────────────────────────────────────────────────────────
@@ -129,6 +130,37 @@ STRUCTURAL_RP_LOW  = 0.20   # no SHORT below it
 USE_STRUCTURAL_LOCATION = True
 EXHAUSTION_RSI_HI  = 68.0   # fading a bull needs the move actually stretched
 EXHAUSTION_RSI_LO  = 32.0
+
+# ── the oversold long ───────────────────────────────────────────────────────
+# The only setup this desk has measured POSITIVE through its own 5-rung ladder.
+# 345,209 simulated entries, 59 tokens, ~250 days of 1H bars, run through the
+# real exits (TP_LADDER_PCT, TP_CLOSE_PCTS, break-even at TP1, ATR trail from
+# TP2, giveback ratchet), stop 1.386%, costs 0.10% round trip:
+#
+#     setup              ALL              fit half        held out         n
+#     BUY unconditional  45.1% -0.092R    47.0% -0.051R   42.1% -0.154R    345,209
+#     BUY RSI<30         49.9% +0.020R    48.1% -0.020R   52.7% +0.080R     16,556
+#     BUY RSI<25         51.4% +0.044R    48.7% -0.019R   55.5% +0.139R      5,946
+#
+# Read honestly: RSI<25 is only ABSOLUTELY positive in the held-out half. What
+# holds in BOTH halves is that it beats unconditional longs — +0.032R in fit,
+# +0.293R held out — and every setup improves in the second half, which is a
+# regime shift rather than an improvement, so only within-period comparisons
+# mean anything. Per-token at RSI<30, 37 of 59 are net positive.
+#
+# WHY IT NEEDED A BRANCH OF ITS OWN. Every other branch in _classify keys on
+# range_position FIRST and consults RSI only inside an rp bracket, so a deeply
+# oversold token sitting mid-range matched nothing and fell through to
+# "mid-range, no edge". Measured live 2026-08-24: 5 of 43 tokens under RSI 25,
+# including PENDLE at RSI 24.0 / rp 0.44 carrying the HIGHEST quality score on
+# the fleet (78) and being refused for having no recognised setup. The measured
+# edge is on RSI ALONE, unconditional on rp, which is exactly what the existing
+# shape could not express.
+#
+# It is deliberately a FALLBACK, tried only after every existing branch has
+# declined, so it can add trades but never reclassify one the desk already had.
+OVERSOLD_LONG_RSI  = 25.0
+ALLOW_OVERSOLD_LONG = True
 
 # ── Stage 1b · location vs the higher timeframe ───────────────────────────────
 # Location says which side is ON OFFER; the weekly and daily say whether a side
@@ -484,6 +516,7 @@ SETUP_RISK_WEIGHT: Dict[str, float] = {
     SETUP_TREND_PULLBACK:      1.00,  # measured +0.069R/trade — the paid setup
     SETUP_BREAK_RETEST:        0.85,
     SETUP_RANGE_FADE:          0.70,
+    SETUP_OVERSOLD_LONG:       0.85,  # measured +0.044R (+0.139R held out) — the best measured
     SETUP_EXHAUSTION_REVERSAL: 0.50,  # measured -0.064R fleet-wide — smallest size it can have
 }
 COUNTER_TIDE_FACTOR = 0.50   # against the BTC tide is half the trade it looks like
@@ -674,6 +707,33 @@ class TraderGate:
         return None
 
     # ── Stage 1 ───────────────────────────────────────────────────────────────
+    @staticmethod
+    def _oversold_fallback(rsi: float, rp: float, why: str) -> Tuple[str, str, str]:
+        """The oversold long, offered only where nothing else claimed the bar.
+
+        A FALLBACK by design: it can add a trade the desk would otherwise have
+        passed on, and can never reclassify one it already had. See
+        OVERSOLD_LONG_RSI for the measurement and why it needs to ignore rp.
+        """
+        # Bounded by the counter-location rule, which is absolute on this desk:
+        # never buy at the top of the range, whatever else agrees. That rule came
+        # from OP/USDT and SUI/USDT on 2026-08-07 and test_location_vs_htf
+        # enforces it across every setup — it caught this fallback proposing a
+        # BUY at rp 0.75 before it shipped.
+        #
+        # It costs nothing. Measured over 29,250 hourly bars across 30 tokens,
+        # of the 402 bars with RSI < 25, ZERO sat at rp >= 0.70 (rp p50 0.02,
+        # p75 0.09, p90 0.15). Deeply oversold and at the range high is a
+        # combination that essentially does not occur, so the bound removes a
+        # synthetic risk without touching the measured population.
+        if (ALLOW_OVERSOLD_LONG and rsi <= OVERSOLD_LONG_RSI
+                and rp < RANGE_EDGE_HIGH):
+            return (SETUP_OVERSOLD_LONG, 'BUY',
+                    f'RSI {rsi:.0f} is under {OVERSOLD_LONG_RSI:.0f} (rp {rp:.2f}) — the one '
+                    f'setup measured positive through the real exit ladder, and it '
+                    f'does not need the range edge to be worth taking')
+        return (SETUP_NONE, 'FLAT', why)
+
     @classmethod
     def _classify(cls, result: Dict[str, Any], regime_name: str,
                   regime_conf: float) -> Tuple[str, str, str]:
@@ -736,11 +796,11 @@ class TraderGate:
                             f'uptrend stretched at the top of its range (rp {rp:.2f}, RSI {rsi:.0f})')
                 # At the highs but not stretched: an uptrend at its own highs is
                 # a trend working, not a reversal. Shorting it needs exhaustion.
-                return (SETUP_NONE, 'FLAT',
+                return cls._oversold_fallback(rsi, rp,
                         f'uptrend at its highs but not stretched (rp {rp:.2f}, RSI {rsi:.0f} '
                         f'< {EXHAUSTION_RSI_HI:.0f}) — a bull at the highs is a trend working, '
                         f'not a top')
-            return (SETUP_NONE, 'FLAT',
+            return cls._oversold_fallback(rsi, rp,
                     f'uptrend mid-range (rp {rp:.2f}) — no edge here, chasing or fading blind')
 
         if bear:
@@ -753,11 +813,11 @@ class TraderGate:
                         return _refuse_exhaustion('BUY')
                     return (SETUP_EXHAUSTION_REVERSAL, 'BUY',
                             f'downtrend stretched at the bottom of its range (rp {rp:.2f}, RSI {rsi:.0f})')
-                return (SETUP_NONE, 'FLAT',
+                return cls._oversold_fallback(rsi, rp,
                         f'downtrend at its lows but not stretched (rp {rp:.2f}, RSI {rsi:.0f} '
                         f'> {EXHAUSTION_RSI_LO:.0f}) — a bear at the lows is a trend working, '
                         f'not a bottom')
-            return (SETUP_NONE, 'FLAT',
+            return cls._oversold_fallback(rsi, rp,
                     f'downtrend mid-range (rp {rp:.2f}) — no edge here, chasing or fading blind')
 
         # --- Rangebound (incl. a low-confidence trend label) -------------------
@@ -768,10 +828,10 @@ class TraderGate:
             if rp >= RANGE_EDGE_HIGH:
                 return (SETUP_RANGE_FADE, 'SELL',
                         f'range high (rp {rp:.2f}) with no trend to fight — fading the edge')
-            return (SETUP_NONE, 'FLAT',
+            return cls._oversold_fallback(rsi, rp,
                     f'mid-range (rp {rp:.2f}) with no trend — nothing to lean on')
 
-        return (SETUP_NONE, 'FLAT', f'{regime_name} offers no recognised setup')
+        return cls._oversold_fallback(rsi, rp, f'{regime_name} offers no recognised setup')
 
     # ── Stage 1b ──────────────────────────────────────────────────────────────
     @staticmethod
