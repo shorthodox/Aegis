@@ -262,6 +262,12 @@ SCALP_RECORD_PATH       = STATE_DIR / 'scalp_trades.json'
 # deploy must not reset it. It used to live at <repo>/data/, which is the
 # container filesystem and is wiped on every push.
 SHADOW_EXITS_PATH       = STATE_DIR / 'shadow_exits.json'
+# The ARMED BOOK — resting orders with their level, stop, clock and frozen plan.
+# It lived only in memory, so every deploy silently cancelled every armed order
+# without so much as a counterfactual row: the desk saw armed signals vanish and
+# the log could not say why. An order has an 8-bar clock; the container does not
+# survive 8 bars of deploys.
+WORKING_ORDERS_PATH     = STATE_DIR / 'working_orders.json'
 
 # ── Durable track record via Firestore ──────────────────────────────────────
 # Railway's filesystem is EPHEMERAL: every git push rebuilds the image and the
