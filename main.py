@@ -4850,7 +4850,26 @@ async def _send_sms_otp(phone_number: str, otp: str) -> bool:
     except Exception as exc:
         print(f"[Twilio] Exception: {exc}")
 
-    print(f"[SMS OTP] No SMS provider configured â€” cannot deliver to {phone_number}")
+    # Say WHICH piece is missing. "No SMS provider configured" is false and
+    # misleading when a provider is half-configured, which is exactly the live
+    # case: MSG91_AUTH_KEY is set in Railway and MSG91_OTP_TEMPLATE_ID is not, so
+    # the `if msg91_key and msg91_tmpl` guard skips the branch in silence and the
+    # operator goes hunting for a provider they have already paid for.
+    _missing = []
+    if os.getenv("MSG91_AUTH_KEY", "").strip():
+        if not os.getenv("MSG91_OTP_TEMPLATE_ID", "").strip():
+            _missing.append("MSG91_AUTH_KEY is set but MSG91_OTP_TEMPLATE_ID is NOT "
+                            "- MSG91 needs both, so it was skipped")
+    else:
+        _missing.append("MSG91_AUTH_KEY unset")
+    if not os.getenv("FAST2SMS_API_KEY", "").strip():
+        _missing.append("FAST2SMS_API_KEY unset")
+    if not (os.getenv("TWILIO_ACCOUNT_SID", "").strip()
+            and os.getenv("TWILIO_AUTH_TOKEN", "").strip()
+            and os.getenv("TWILIO_PHONE_NUMBER", "").strip()):
+        _missing.append("Twilio incomplete")
+    print(f"[SMS OTP] No usable SMS provider for {phone_number} - "
+          f"{'; '.join(_missing)}. Falling back to EMAIL; signup is not blocked.")
     return False
 
 
