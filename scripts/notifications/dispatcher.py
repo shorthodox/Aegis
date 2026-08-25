@@ -27,6 +27,7 @@ import json
 import os
 import logging
 import threading
+import time
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -38,6 +39,8 @@ from scripts.notifications.formatter import (
     format_entry_telegram,
     format_entry_whatsapp,
     format_exit_discord,
+    format_refusal_discord,
+    format_position_open_discord,
     format_exit_telegram,
     format_exit_whatsapp,
     format_pending_telegram,
@@ -64,8 +67,10 @@ _DEFAULT_SETTINGS: Dict[str, Any] = {
     "telegram_chat_id":    "",
     # Two channels, two webhooks: fires go to #live-signals, closes go to
     # #track-record. One URL sent both to the same room.
-    "discord_webhook_url":         "",   # signals  (entries, pending)
-    "discord_webhook_records_url": "",   # records  (closes / track record)
+    "discord_webhook_url":           "",  # signals   — fires, pending
+    "discord_webhook_records_url":   "",  # records   — final closes
+    "discord_webhook_refusals_url":  "",  # refusals  — setups declined, with why
+    "discord_webhook_positions_url": "",  # positions — opens and partial closes
     "twilio_account_sid":  "",
     "twilio_auth_token":   "",
     "whatsapp_from":       "",
@@ -107,6 +112,11 @@ class NotificationDispatcher:
     • Sends Discord + WhatsApp in a background thread pool (non-blocking).
     """
 
+    # How long the same refusal reason for the same symbol stays quiet before it
+    # is worth restating. Ten minutes keeps a persistent refusal from repeating
+    # every scan while still showing it is current.
+    REFUSAL_REPEAT_S = 600.0
+
     def __init__(self) -> None:
         self._pool        = ThreadPoolExecutor(max_workers=2, thread_name_prefix="notif")
         self._lock        = threading.Lock()
@@ -114,6 +124,9 @@ class NotificationDispatcher:
         # Separate sliding-hour budget for PENDING heads-ups so they never
         # consume the entry budget above.
         self._pending_ts: Deque[float] = deque()
+        # (symbol|side) -> (reason, last_posted_at). Keeps the refusal channel a
+        # log of VERDICTS rather than a log of scans — see send_refusal.
+        self._refusal_seen: Dict[str, Any] = {}
 
     # ── Settings ──────────────────────────────────────────────────────────────
 
@@ -122,9 +135,21 @@ class NotificationDispatcher:
     # secrets before, so the URLs are read from the ENVIRONMENT and the settings
     # file is only a fallback. Nothing here should ever be written to git.
     _ENV_KEYS = {
-        "discord_webhook_url":         "AEGIS_DISCORD_WEBHOOK_SIGNALS",
-        "discord_webhook_records_url": "AEGIS_DISCORD_WEBHOOK_RECORDS",
-        "telegram_bot_token":          "TELEGRAM_BOT_TOKEN",
+        "discord_webhook_url":           "AEGIS_DISCORD_WEBHOOK_SIGNALS",
+        "discord_webhook_records_url":   "AEGIS_DISCORD_WEBHOOK_RECORDS",
+        "discord_webhook_refusals_url":  "AEGIS_DISCORD_WEBHOOK_REFUSALS",
+        "discord_webhook_positions_url": "AEGIS_DISCORD_WEBHOOK_POSITIONS",
+        "telegram_bot_token":            "TELEGRAM_BOT_TOKEN",
+    }
+
+    # Destination -> settings key. Every channel falls back to the signals
+    # webhook, so a half-configured server still posts rather than dropping
+    # events in silence.
+    _CHANNELS = {
+        "signals":   "discord_webhook_url",
+        "records":   "discord_webhook_records_url",
+        "refusals":  "discord_webhook_refusals_url",
+        "positions": "discord_webhook_positions_url",
     }
 
     def _load_settings(self) -> Dict[str, Any]:
@@ -304,7 +329,7 @@ class NotificationDispatcher:
         discord_payload: Optional[Dict[str, Any]],
         tg_text:         Optional[str],
         wa_text:         Optional[str],
-        to_records:      bool = False,
+        channel:         str = "signals",
     ) -> None:
         # Telegram — server-side bot token, all connected users
         if tg_text:
@@ -313,10 +338,8 @@ class NotificationDispatcher:
         # Falls back to the signals webhook when only one is configured, so a
         # half-set-up server still posts rather than silently dropping closes.
         if discord_payload:
-            _wh = (cfg.get("discord_webhook_records_url", "") if to_records
-                   else cfg.get("discord_webhook_url", ""))
-            if not _wh:
-                _wh = cfg.get("discord_webhook_url", "")
+            _key = self._CHANNELS.get(channel, "discord_webhook_url")
+            _wh = cfg.get(_key, "") or cfg.get("discord_webhook_url", "")
             if _wh:
                 send_discord(_wh, discord_payload)
         # WhatsApp via Twilio
@@ -387,6 +410,56 @@ class NotificationDispatcher:
         tg = format_blocked_telegram(sig)
         self._pool.submit(self._do_send, cfg, None, tg, None)
 
+    def send_refusal(self, symbol: str, side: str, reason: str,
+                     stage: str = "", setup: str = "",
+                     price: float = 0.0, quality: Optional[float] = None) -> None:
+        """Publish a setup the desk declined, with the reason it declined it.
+
+        DEDUPLICATED, and it has to be. The desk refuses roughly 200 setups per
+        scan and scans about every 60 seconds — posting each would be some
+        290,000 messages a day against a webhook limit near 30 a minute. Discord
+        would rate-limit it into uselessness inside the first minute, and the
+        channel would be unreadable even if it did not.
+
+        What is interesting is a CHANGE of verdict, not the same verdict restated
+        1,440 times: a symbol refused all day for "mid-range, no edge" is one
+        fact, not one thousand. So a refusal posts when the reason for that
+        symbol changes, and again only after REFUSAL_REPEAT_S of quiet. Every
+        distinct refusal still reaches the channel with its full reasoning.
+        """
+        try:
+            key = f"{symbol}|{(side or '').upper()}"
+            now = time.time()
+            prev_reason, prev_at = self._refusal_seen.get(key, ("", 0.0))
+            if reason == prev_reason and (now - prev_at) < self.REFUSAL_REPEAT_S:
+                return
+            self._refusal_seen[key] = (reason, now)
+            cfg = self._load_settings()
+            if not cfg.get("enabled", True):
+                return
+            dp = format_refusal_discord(symbol, side, reason, stage, setup, price, quality)
+            # Discord only. A refusal every few minutes on Telegram would be
+            # unbearable — subscribers did not ask to be told on their phone
+            # what did not happen.
+            self._pool.submit(self._do_send, cfg, dp, None, None, "refusals")
+        except Exception:
+            pass
+
+    def send_position_open(self, symbol: str, side: str, entry: float, stop: float,
+                           targets: Optional[list] = None, size_usdt: float = 0.0,
+                           reason: str = "", setup: str = "",
+                           r_net: Optional[float] = None) -> None:
+        """Publish a position the moment it opens — the claim before the outcome."""
+        try:
+            cfg = self._load_settings()
+            if not cfg.get("enabled", True):
+                return
+            dp = format_position_open_discord(symbol, side, entry, stop, targets,
+                                              size_usdt, reason, setup, r_net)
+            self._pool.submit(self._do_send, cfg, dp, None, None, "positions")
+        except Exception:
+            pass
+
     def send_exit(
         self,
         symbol:       str,
@@ -410,7 +483,12 @@ class NotificationDispatcher:
         wa = format_exit_whatsapp(symbol, direction, outcome, pnl_pct, hold_seconds, exit_reason)
         # A CLOSE is a track-record event, not a signal — it goes to the
         # records channel so #live-signals stays a feed of things to act on.
-        self._pool.submit(self._do_send, cfg, dp, tg, wa, True)
+        # A PARTIAL close leaves the position open, so it is a position update,
+        # not a track-record entry. Only the final close belongs in the record —
+        # otherwise one trade appears in it up to five times as each rung banks.
+        _partial = "position still open" in (exit_reason or "")
+        self._pool.submit(self._do_send, cfg, dp, tg, wa,
+                          "positions" if _partial else "records")
 
     def test_send(self) -> Dict[str, bool]:
         """Send a test ping to each configured channel. Returns {telegram, discord, whatsapp}."""

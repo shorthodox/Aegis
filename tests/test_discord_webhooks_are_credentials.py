@@ -97,24 +97,34 @@ def test_the_settings_file_is_on_the_volume():
 # -- closes go to the records channel ----------------------------------------
 
 def test_a_close_is_routed_to_the_records_webhook():
+    """The router took a bool when there were two channels; it takes a channel
+    name now that there are four. A FINAL close is the record — a partial leaves
+    the position open and belongs in #open-positions."""
     src = inspect.getsource(D.NotificationDispatcher.send_exit)
-    assert 'cfg, dp, tg, wa, True' in src, (
-        'a close still posts to #live-signals, so #track-record stays empty'
+    assert '"positions" if _partial else "records"' in src, (
+        'a close no longer routes to #track-record'
     )
 
 
 def test_a_fire_is_not_routed_to_records():
     src = inspect.getsource(D.NotificationDispatcher.send_entry)
-    assert 'cfg, dp, tg, wa, True' not in src
+    assert '"records"' not in src
 
 
 def test_the_router_falls_back_when_only_one_is_configured():
-    """A half-set-up server must still post rather than drop closes silently."""
+    """A half-set-up server must still post rather than drop events silently."""
     src = inspect.getsource(D.NotificationDispatcher._do_send)
-    assert 'if not _wh:' in src
-    assert 'to_records' in src
+    assert 'or cfg.get("discord_webhook_url", "")' in src
+    assert 'channel' in src
 
 
-def test_records_routing_is_off_by_default():
+def test_the_default_destination_is_signals():
     sig = inspect.signature(D.NotificationDispatcher._do_send)
-    assert sig.parameters['to_records'].default is False
+    assert sig.parameters['channel'].default == 'signals'
+
+
+def test_all_four_channels_have_a_credential():
+    """Grew from two to four on 2026-08-25."""
+    assert len(D.NotificationDispatcher._CHANNELS) == 4
+    for key in D.NotificationDispatcher._CHANNELS.values():
+        assert key in D._DEFAULT_SETTINGS

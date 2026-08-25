@@ -365,6 +365,29 @@ class PositionsMixin:
         except Exception:
             pass
 
+        # The OPEN-POSITIONS channel gets the position itself, with the desk's
+        # reasoning attached — the claim being made before the outcome is known,
+        # which is the part the pitch rests on. #live-signals answers "act now";
+        # this answers "what is on, and why".
+        try:
+            from scripts.notifications.dispatcher import get_notifier
+            _plan = (result or {}).get('trade_plan') or {}
+            get_notifier().send_position_open(
+                symbol=symbol,
+                side=side,
+                entry=float(price),
+                stop=float(stop_loss),
+                targets=[tp1, tp2, tp3, tp4, tp5],
+                size_usdt=float(pos_value),
+                reason=str((result or {}).get('structure_reason')
+                           or _plan.get('reason') or ''),
+                setup=str((result or {}).get('setup_type')
+                          or _plan.get('setup') or ''),
+                r_net=_plan.get('r_net'),
+            )
+        except Exception:
+            pass
+
     @staticmethod
     def _build_signal_entry(
         symbol:        str,

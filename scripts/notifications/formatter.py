@@ -369,3 +369,103 @@ def format_blocked_telegram(sig: Dict[str, Any]) -> str:
         f"_AEGIS AI Signal Bot_",
     ]
     return "\n".join(lines)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Refusals and position lifecycle
+#
+# The desk refuses far more than it takes — roughly 200 setups a scan — and each
+# refusal already carries the reason it was refused. Publishing those is the
+# clearest evidence the glass-box claim is real: anyone can read what was turned
+# down and why, not just the trades that worked.
+# ═══════════════════════════════════════════════════════════════════════════
+
+def format_refusal_discord(
+    symbol:    str,
+    side:      str,
+    reason:    str,
+    stage:     str = "",
+    setup:     str = "",
+    price:     float = 0.0,
+    quality:   Optional[float] = None,
+) -> Dict[str, Any]:
+    """Build a Discord embed for a setup the desk declined to take."""
+    sym_s = symbol.replace("/USDT", "")
+    side  = (side or "").upper()
+    arrow = "▲" if side == "BUY" else ("▼" if side == "SELL" else "•")
+    # Amber, not red. A refusal is not a loss — it is the system working, and
+    # colouring it like a failure teaches subscribers the wrong thing.
+    color = 0xE8A06A
+    ts    = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+    fields: list = []
+    if side in ("BUY", "SELL"):
+        fields.append({"name": "Side", "value": f"{arrow} {side}", "inline": True})
+    if setup:
+        fields.append({"name": "Setup", "value": setup.replace("_", " "), "inline": True})
+    if stage:
+        fields.append({"name": "Refused at", "value": stage, "inline": True})
+    if price:
+        fields.append({"name": "Price", "value": _px(price), "inline": True})
+    if quality is not None:
+        fields.append({"name": "Quality", "value": f"{float(quality):.0f}/100", "inline": True})
+
+    embed = {
+        "title":       f"⊘  {sym_s}/USDT NOT TAKEN",
+        "description": reason or "no reason recorded",
+        "color":       color,
+        "fields":      fields,
+        "footer":      {"text": f"AEGIS · refused  ·  {ts} UTC"},
+    }
+    return {"embeds": [embed]}
+
+
+def format_position_open_discord(
+    symbol:    str,
+    side:      str,
+    entry:     float,
+    stop:      float,
+    targets:   Optional[list] = None,
+    size_usdt: float = 0.0,
+    reason:    str = "",
+    setup:     str = "",
+    r_net:     Optional[float] = None,
+) -> Dict[str, Any]:
+    """Build a Discord embed for a position that has just opened.
+
+    This is the claim being made BEFORE the outcome is known, which is the whole
+    pitch — so it carries the reasoning, not just the numbers.
+    """
+    sym_s = symbol.replace("/USDT", "")
+    side  = (side or "").upper()
+    is_buy = side == "BUY"
+    arrow = "▲" if is_buy else "▼"
+    color = 0x3B82F6            # blue — neutral; the outcome is not known yet
+    ts    = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+    risk_pct = (abs(entry - stop) / entry * 100.0) if (entry and stop) else 0.0
+    fields: list = [
+        {"name": "Direction", "value": f"{arrow} {'LONG' if is_buy else 'SHORT'}", "inline": True},
+        {"name": "Entry",     "value": _px(entry), "inline": True},
+        {"name": "Stop",      "value": f"{_px(stop)}  ({risk_pct:.2f}%)", "inline": True},
+    ]
+    tps = [t for t in (targets or []) if t]
+    if tps:
+        fields.append({"name": "Targets",
+                       "value": " → ".join(_px(float(t)) for t in tps[:5]),
+                       "inline": False})
+    if size_usdt:
+        fields.append({"name": "Size", "value": f"{size_usdt:.0f} USDT", "inline": True})
+    if r_net is not None:
+        fields.append({"name": "Net R:R", "value": f"{float(r_net):.2f}", "inline": True})
+    if setup:
+        fields.append({"name": "Setup", "value": setup.replace("_", " "), "inline": True})
+
+    embed = {
+        "title":       f"◆  {sym_s}/USDT OPENED",
+        "description": reason or "position opened",
+        "color":       color,
+        "fields":      fields,
+        "footer":      {"text": f"AEGIS · open position  ·  {ts} UTC"},
+    }
+    return {"embeds": [embed]}

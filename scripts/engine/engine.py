@@ -2198,6 +2198,26 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
             sig['pending_entry']    = False
             sig['structure_reason'] = reason
 
+        # Publish the refusal. This is the glass box actually being glass: the
+        # desk turns down ~200 setups a scan and every one carries the reason it
+        # was turned down — the part no competing service can show. send_refusal
+        # deduplicates by (symbol, reason); see the note there for why posting
+        # every occurrence would be ~290,000 messages a day.
+        try:
+            from scripts.notifications.dispatcher import get_notifier
+            _s = sig if isinstance(sig, dict) else {}
+            get_notifier().send_refusal(
+                symbol=symbol,
+                side=str(_s.get('pending_side') or ''),
+                reason=reason,
+                stage=str(_s.get('gate_stage') or ''),
+                setup=str(_s.get('setup_type') or ''),
+                price=float(_s.get('price') or 0.0),
+                quality=_s.get('quality_score'),
+            )
+        except Exception:
+            pass
+
     async def _process_symbol(
         self, symbol: str, predictor: Any, sem: asyncio.Semaphore
     ) -> None:
