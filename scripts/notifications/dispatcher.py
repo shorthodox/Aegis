@@ -24,6 +24,7 @@ Note: quiet_hours supports overnight ranges (e.g. 23:00 → 06:00).
 from __future__ import annotations
 
 import json
+import os
 import logging
 import threading
 from collections import deque
@@ -50,13 +51,21 @@ from scripts.notifications.whatsapp_notifier import send_whatsapp
 log = logging.getLogger(__name__)
 
 _ROOT          = Path(__file__).resolve().parent.parent.parent
-_SETTINGS_PATH = _ROOT / "data" / "notification_settings.json"
+# On the VOLUME when one is mounted. This used to be _ROOT/"data", the container
+# filesystem, so anything saved through the settings API — a webhook URL, a chat
+# id — was wiped by the next deploy and the operator got to discover it silently.
+_SETTINGS_PATH = Path(
+    os.environ.get("AEGIS_STATE_DIR") or (_ROOT / "data")
+) / "notification_settings.json"
 
 _DEFAULT_SETTINGS: Dict[str, Any] = {
     "enabled":             True,
     "telegram_bot_token":  "",
     "telegram_chat_id":    "",
-    "discord_webhook_url": "",
+    # Two channels, two webhooks: fires go to #live-signals, closes go to
+    # #track-record. One URL sent both to the same room.
+    "discord_webhook_url":         "",   # signals  (entries, pending)
+    "discord_webhook_records_url": "",   # records  (closes / track record)
     "twilio_account_sid":  "",
     "twilio_auth_token":   "",
     "whatsapp_from":       "",
@@ -108,15 +117,31 @@ class NotificationDispatcher:
 
     # ── Settings ──────────────────────────────────────────────────────────────
 
+    # A Discord webhook URL is a CREDENTIAL — anyone holding one can post as the
+    # bot into that channel. This repository is public and has leaked committed
+    # secrets before, so the URLs are read from the ENVIRONMENT and the settings
+    # file is only a fallback. Nothing here should ever be written to git.
+    _ENV_KEYS = {
+        "discord_webhook_url":         "AEGIS_DISCORD_WEBHOOK_SIGNALS",
+        "discord_webhook_records_url": "AEGIS_DISCORD_WEBHOOK_RECORDS",
+        "telegram_bot_token":          "TELEGRAM_BOT_TOKEN",
+    }
+
     def _load_settings(self) -> Dict[str, Any]:
-        if not _SETTINGS_PATH.exists():
-            return dict(_DEFAULT_SETTINGS)
-        try:
-            with open(_SETTINGS_PATH) as f:
-                data = json.load(f)
-            return {**_DEFAULT_SETTINGS, **data}
-        except Exception:
-            return dict(_DEFAULT_SETTINGS)
+        cfg = dict(_DEFAULT_SETTINGS)
+        if _SETTINGS_PATH.exists():
+            try:
+                with open(_SETTINGS_PATH) as f:
+                    cfg.update(json.load(f) or {})
+            except Exception:
+                pass
+        # The environment WINS. A value set on the host is the operator's current
+        # intent; a value in the file may be a stale copy from before a rotation.
+        for key, env in self._ENV_KEYS.items():
+            val = os.environ.get(env, "").strip()
+            if val:
+                cfg[key] = val
+        return cfg
 
     @staticmethod
     def save_settings(settings: Dict[str, Any]) -> None:
@@ -279,14 +304,21 @@ class NotificationDispatcher:
         discord_payload: Optional[Dict[str, Any]],
         tg_text:         Optional[str],
         wa_text:         Optional[str],
+        to_records:      bool = False,
     ) -> None:
         # Telegram — server-side bot token, all connected users
         if tg_text:
             self._tg_send_all(tg_text, default_chat_id=cfg.get("telegram_chat_id", ""))
-        # Discord webhook
-        webhook = cfg.get("discord_webhook_url", "")
-        if webhook and discord_payload:
-            send_discord(webhook, discord_payload)
+        # Discord — closes go to the RECORDS channel, everything else to signals.
+        # Falls back to the signals webhook when only one is configured, so a
+        # half-set-up server still posts rather than silently dropping closes.
+        if discord_payload:
+            _wh = (cfg.get("discord_webhook_records_url", "") if to_records
+                   else cfg.get("discord_webhook_url", ""))
+            if not _wh:
+                _wh = cfg.get("discord_webhook_url", "")
+            if _wh:
+                send_discord(_wh, discord_payload)
         # WhatsApp via Twilio
         sid = cfg.get("twilio_account_sid", "")
         tok = cfg.get("twilio_auth_token", "")
@@ -376,7 +408,9 @@ class NotificationDispatcher:
         dp = format_exit_discord(symbol, direction, outcome, pnl_pct, hold_seconds, exit_reason)
         tg = format_exit_telegram(symbol, direction, outcome, pnl_pct, hold_seconds, exit_reason)
         wa = format_exit_whatsapp(symbol, direction, outcome, pnl_pct, hold_seconds, exit_reason)
-        self._pool.submit(self._do_send, cfg, dp, tg, wa)
+        # A CLOSE is a track-record event, not a signal — it goes to the
+        # records channel so #live-signals stays a feed of things to act on.
+        self._pool.submit(self._do_send, cfg, dp, tg, wa, True)
 
     def test_send(self) -> Dict[str, bool]:
         """Send a test ping to each configured channel. Returns {telegram, discord, whatsapp}."""
