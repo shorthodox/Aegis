@@ -136,6 +136,11 @@ function isPaidPlan(plan = userPlan) {
 let serverHasAccess = null;
 window.setServerAccess = function (v) {
   serverHasAccess = (typeof v === 'boolean') ? v : null;
+  // dashboard.js gates the expired overlay on this. It must flip the moment the
+  // server actually answers — without it the overlay could never be drawn at
+  // all, which is a far worse bug than the flicker it exists to stop: a lapsed
+  // subscriber would keep full access forever.
+  if (serverHasAccess !== null) window.__aegisAccessKnown = true;
 };
 
 /** A paid plan OR a live trial. Both are access; either alone is enough.
@@ -322,6 +327,14 @@ function _applyExpiredCopy() {
 }
 
 function showSubscriptionExpiredOverlay() {
+  // Same chokepoint guard as setExpiredView. All three call sites here are
+  // already behind accessKnown(), but this function is also reachable through
+  // the standalone branch below when dashboard.js has not loaded, and an
+  // overlay drawn on an unknown answer is a claim we cannot support.
+  if (!accessKnown() && !window.__aegisAccessKnown) {
+    console.debug('[gatekeeper] expired overlay suppressed — access not yet known');
+    return;
+  }
   _applyExpiredCopy();
 
   // Delegate to dashboard.js if available

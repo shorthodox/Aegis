@@ -81,11 +81,14 @@ def test_the_trial_status_listener_consults_the_plan(src):
 def test_every_overlay_call_site_uses_the_helper(src):
     """No call site may re-derive the condition inline."""
     for m in re.finditer(r'\n[^\n]*showSubscriptionExpiredOverlay\(\)', src):
-        window = src[max(0, m.start() - 320): m.start()]
-        if 'function showSubscriptionExpiredOverlay' in window:
-            continue                      # the definition itself
-        if '_applyExpiredCopy' in src[m.start(): m.start() + 200]:
+        line = src[m.start():src.index(chr(10), m.start() + 1)]
+        # The DEFINITION is not a call site. Recognise it from the matched
+        # line itself rather than a fixed-size window of surrounding text --
+        # the window version broke the moment a guard was added at the top of
+        # the function body, and began auditing the definition as a caller.
+        if 'function showSubscriptionExpiredOverlay' in line:
             continue
+        window = src[max(0, m.start() - 320): m.start()]
         assert ('hasActiveAccess()' in window
                 or 'window.setExpiredView' in window
                 or 'trialExpired' in window), (
