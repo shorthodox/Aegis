@@ -50,7 +50,51 @@ try {
 let initialized = false;
 
 // Returns 'paid' | 'trial' | 'expired'
+// ── Has the SERVER told us yet? ──────────────────────────────────────────────
+// /auth/me returns has_access, computed by the same function that gates delivery
+// — the single authority. gatekeeper.js reads it (setServerAccess); this file
+// never did, and instead re-derived access from Firestore on its own. That is
+// the third implementation of access in this codebase and the one still wrong.
+//
+// The visible symptom: on first load AuthManager has not yet been populated, so
+// the fast path below fails, the Firestore walk finds no `subscription.status ==
+// "active"` (a dev-token or volume-entitled user has none) and returns
+// 'expired' — the overlay flashes. A refresh finds AuthManager populated and it
+// does not. Reported 2026-08-24: "it disappear when i refresh".
+//
+// This affects PAID and TRIAL users identically, because the fast path requires
+// u.subscription_active === true and that field only exists after /auth/me has
+// answered. It is a race, not an entitlement problem.
+window.__aegisAccessKnown = window.__aegisAccessKnown || false;
+
+function _serverAccess() {
+  // true | false | null (not known yet)
+  try {
+    if (typeof AuthManager === 'undefined') return null;
+    const u = AuthManager.getUser();
+    if (!u) return null;
+    if (typeof u.has_access === 'boolean') return u.has_access;
+    if (u.subscription_active === true) return true;
+    return null;
+  } catch (_) { return null; }
+}
+
 async function checkUserSubscriptionStatus(uid) {
+  // The server's answer outranks every local derivation below it.
+  const _srv = _serverAccess();
+  if (_srv === true) {
+    window.__aegisAccessKnown = true;
+    const u = (typeof AuthManager !== 'undefined' && AuthManager.getUser()) || {};
+    const p = String(u.plan || u.tier || '').toLowerCase();
+    return (p === 'trial' || p === 'free_tier') ? 'trial' : 'paid';
+  }
+  if (_srv === false) {
+    window.__aegisAccessKnown = true;
+    return 'expired';
+  }
+  // Not known yet. Everything below is a GUESS, and a guess must never be
+  // allowed to draw the expired overlay — see setExpiredView.
+
   const now = new Date();
 
   // Fast path: AuthManager already resolved the plan on a previous auth cycle.
@@ -334,6 +378,18 @@ function handleAuthFailure() {
 }
 
 function setExpiredView() {
+  // NEVER draw this while access is merely UNKNOWN.
+  //
+  // There are eleven call sites for this function and guarding each one is how
+  // the flicker kept coming back, so the guard lives here at the chokepoint. An
+  // expired overlay is a hard claim about entitlement; showing it because an
+  // answer has not arrived yet is a lie the user then has to refresh away, and
+  // it lands on paid subscribers exactly as readily as on lapsed ones.
+  if (!window.__aegisAccessKnown) {
+    console.debug('[SubCheck] expired overlay suppressed — access not yet known');
+    return;
+  }
+
   // If Firestore already confirmed this session as paid, don't let a WS tick override it.
   if (_subState.isPremium) return;
 
