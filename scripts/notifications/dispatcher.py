@@ -103,6 +103,26 @@ _DEFAULT_SETTINGS: Dict[str, Any] = {
 }
 
 
+def _swallow(where: str, exc: BaseException) -> None:
+    """Absorb a notification failure without letting it reach the caller.
+
+    A notification must never be able to interrupt a fill or an exit, so these
+    boundaries do have to swallow. What they must NOT do is swallow in silence.
+
+    `except Exception: pass` around send_refusal hid a bare NameError — `time`
+    was never imported in this module — so the method raised on its first line
+    and posted nothing, for every refusal, with no log line anywhere. It looked
+    exactly like a channel nobody had configured.
+
+    A NameError, AttributeError or TypeError here is a BUG in this file, not a
+    flaky network, so it is logged at error with a traceback. Everything else is
+    the outside world misbehaving and is logged quietly.
+    """
+    if isinstance(exc, (NameError, AttributeError, TypeError, KeyError, ImportError)):
+        log.error(f"[notify] {where} is broken, not merely failing: {exc!r}", exc_info=True)
+    else:
+        log.warning(f"[notify] {where} failed: {exc!r}")
+
 class NotificationDispatcher:
     """Fire-and-forget notification dispatcher.
 
@@ -116,6 +136,7 @@ class NotificationDispatcher:
     # is worth restating. Ten minutes keeps a persistent refusal from repeating
     # every scan while still showing it is current.
     REFUSAL_REPEAT_S = 600.0
+
 
     def __init__(self) -> None:
         self._pool        = ThreadPoolExecutor(max_workers=2, thread_name_prefix="notif")
@@ -442,8 +463,8 @@ class NotificationDispatcher:
             # unbearable — subscribers did not ask to be told on their phone
             # what did not happen.
             self._pool.submit(self._do_send, cfg, dp, None, None, "refusals")
-        except Exception:
-            pass
+        except Exception as exc:
+            _swallow("send_refusal", exc)
 
     def send_position_open(self, symbol: str, side: str, entry: float, stop: float,
                            targets: Optional[list] = None, size_usdt: float = 0.0,
@@ -457,8 +478,8 @@ class NotificationDispatcher:
             dp = format_position_open_discord(symbol, side, entry, stop, targets,
                                               size_usdt, reason, setup, r_net)
             self._pool.submit(self._do_send, cfg, dp, None, None, "positions")
-        except Exception:
-            pass
+        except Exception as exc:
+            _swallow("send_position_open", exc)
 
     def send_exit(
         self,
