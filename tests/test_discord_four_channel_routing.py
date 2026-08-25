@@ -245,3 +245,65 @@ def test_the_manual_check_script_exists():
     assert '--send' in body, 'the script must default to a dry run'
     for ch in ('signals', 'records', 'refusals', 'positions'):
         assert ch in body
+
+
+# ── a swallowed notification must not be a silent one ────────────────────────
+# The `time` import bug: `except Exception: pass` around send_refusal hid a bare
+# NameError — time was never imported in dispatcher.py — so the method raised on
+# its first line and posted nothing, for every refusal, with no log line
+# anywhere. It was indistinguishable from a channel nobody had configured.
+
+def test_a_programming_error_is_logged_as_a_bug(caplog):
+    from scripts.notifications.dispatcher import _swallow
+    with caplog.at_level('ERROR'):
+        _swallow('send_refusal', NameError("name 'time' is not defined"))
+    assert 'is broken, not merely failing' in caplog.text
+    assert 'send_refusal' in caplog.text
+
+
+def test_an_outside_world_failure_is_only_a_warning(caplog):
+    from scripts.notifications.dispatcher import _swallow
+    with caplog.at_level('WARNING'):
+        _swallow('send_exit', ConnectionError('reset by peer'))
+    assert 'failed' in caplog.text
+    assert 'is broken' not in caplog.text
+
+
+def test_the_exact_bug_that_hid_would_now_be_reported(caplog):
+    """NameError is the one that actually bit."""
+    from scripts.notifications.dispatcher import _swallow
+    for exc in (NameError('x'), AttributeError('x'), TypeError('x'),
+                KeyError('x'), ImportError('x')):
+        caplog.clear()
+        with caplog.at_level('ERROR'):
+            _swallow('send_refusal', exc)
+        assert 'is broken' in caplog.text, type(exc).__name__
+
+
+def test_time_is_actually_imported():
+    """The bug itself, asserted directly."""
+    import scripts.notifications.dispatcher as m
+    assert hasattr(m, 'time')
+
+
+def test_the_notify_boundaries_still_swallow():
+    """They must not start raising — a notification cannot be allowed to
+    interrupt a fill or an exit."""
+    import inspect
+    from scripts.notifications.dispatcher import NotificationDispatcher as D
+    for m in (D.send_refusal, D.send_position_open):
+        src = inspect.getsource(m)
+        assert 'except Exception as exc:' in src
+        assert '_swallow(' in src
+
+
+def test_swallow_is_module_level_not_a_class_attribute():
+    """Defining it inside the class body silently ended the class and turned
+    every method after it into a module-level function."""
+    from scripts.notifications.dispatcher import NotificationDispatcher as D
+    import scripts.notifications.dispatcher as m
+    assert callable(m._swallow)
+    assert not hasattr(D, '_swallow')
+    for name in ('send_refusal', 'send_position_open', 'send_entry',
+                 'send_exit', '_do_send', '_load_settings'):
+        assert hasattr(D, name), f'{name} fell out of the class'
