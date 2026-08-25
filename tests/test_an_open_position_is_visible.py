@@ -126,3 +126,42 @@ def test_it_survives_a_missing_or_malformed_payload():
     i = js.index('function renderEnginePositions(')
     body = js[i:i + 2500]
     assert 'Array.isArray(trades) ? trades : []' in body
+
+
+# ── the Discord community invite ─────────────────────────────────────────────
+# Added 2026-08-25. There was no "join Discord" button anywhere on the site —
+# the only Discord element in Settings was the WEBHOOK URL input, which is a
+# different feature (where this user's own alerts get posted). Repurposing that
+# field would have broken notification config, so the invite got its own panel.
+
+def test_the_settings_tab_links_to_the_discord_server():
+    html = _js('web/src/pages/dashboard.html')
+    assert 'https://discord.gg/BjK4nhQZN' in html
+
+
+def test_the_invite_opens_safely_in_a_new_tab():
+    html = _js('web/src/pages/dashboard.html')
+    i = html.index('https://discord.gg/BjK4nhQZN')
+    anchor = html[max(0, i - 200): i + 200]
+    assert 'target="_blank"' in anchor
+    assert 'rel="noopener noreferrer"' in anchor, (
+        'a target=_blank link without noopener hands the opened page a handle '
+        'on this one'
+    )
+
+
+def test_the_webhook_field_is_not_repurposed():
+    """The webhook input configures where a user's OWN alerts go. It is not the
+    community invite and must keep working."""
+    html = _js('web/src/pages/dashboard.html')
+    assert 'id="notif-discord-url"' in html
+    assert 'placeholder="https://discord.com/api/webhooks/..."' in html
+
+
+def test_the_invite_is_not_a_webhook():
+    """An invite is public; a webhook is a credential. Confusing the two is how
+    a credential ends up rendered into a page."""
+    html = _js('web/src/pages/dashboard.html')
+    i = html.index('https://discord.gg/BjK4nhQZN')
+    anchor = html[max(0, i - 300): i + 300]
+    assert 'api/webhooks' not in anchor
