@@ -4988,10 +4988,33 @@ async def verify_otp_for_registration(request: OTPVerifyRequest, req: Request):
         raise HTTPException(status_code=400, detail="No OTP request found. Please request a new OTP.")
     if phone_number and record.get("phone_number") and record.get("phone_number") != phone_number:
         raise HTTPException(status_code=400, detail="Phone number mismatch. Please request a new OTP.")
-    if datetime.now(timezone.utc) > record["expires_at"]:
+
+    # `expires_at` may come back from the FIRESTORE MIRROR rather than memory —
+    # _otp_get falls back to it whenever this process restarted mid-signup, which
+    # on Railway is often. Comparing a datetime against whatever that returns
+    # (a Firestore timestamp, or an ISO string) raised TypeError and the user got
+    # a 500 instead of a verdict, holding a code that was perfectly valid.
+    _exp = record.get("expires_at")
+    _exp = _exp if isinstance(_exp, datetime) else _parse_ts(_exp)
+    if _exp is None:
+        _otp_delete(email)
+        raise HTTPException(status_code=400,
+                            detail="That code could not be checked. Please request a new one.")
+    if _exp.tzinfo is None:
+        _exp = _exp.replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) > _exp:
         _otp_delete(email)
         raise HTTPException(status_code=400, detail="OTP has expired. Please request a new one.")
-    if record["otp"] != otp:
+
+    # Compare the DIGITS, not the keystrokes.
+    #
+    # A code is usually copied out of an email, and it arrives with a trailing
+    # newline, a leading space, a non-breaking space, or typed as "123 456".
+    # Every one of those was rejected as "Invalid OTP" while being exactly
+    # right, and the user then burned an attempt and a 60s cooldown proving it.
+    _sent = re.sub(r'\D', '', str(record.get("otp") or ""))
+    _given = re.sub(r'\D', '', str(otp or ""))
+    if not _sent or not _given or not secrets.compare_digest(_sent, _given):
         raise HTTPException(status_code=400, detail="Invalid OTP. Please try again.")
     signup_token = str(uuid.uuid4())
     _otp_update(email, {"verified": True, "signup_token": signup_token})

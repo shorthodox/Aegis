@@ -567,7 +567,29 @@ async function handleStep1Submit(e) {
 // ============================================================
 // Step 2 listeners
 // ============================================================
+// Submit as soon as the sixth digit lands, from typing, pasting or the
+// one-time-code autofill. Making someone type six digits and THEN hunt for a
+// button is the kind of friction that gets blamed on the code being wrong —
+// especially here, where a wrong guess costs an attempt and a 60s cooldown.
+let _autoVerifying = false;
+function _maybeAutoVerify() {
+  if (_autoVerifying) return;
+  const otp = [0, 1, 2, 3, 4, 5]
+    .map(i => document.getElementById(`otpBox${i}`)?.value || '').join('');
+  if (!/^\d{6}$/.test(otp)) return;
+  _autoVerifying = true;
+  // Let the last keystroke paint before the button goes into its loading state.
+  setTimeout(() => {
+    Promise.resolve(handleStep2Verify()).finally(() => { _autoVerifying = false; });
+  }, 80);
+}
+
+let _step2Bound = false;
 function attachStep2Listeners() {
+  // These are DOCUMENT-level listeners, so binding them twice would fire
+  // auto-advance twice per keystroke and skip a box.
+  if (_step2Bound) return;
+  _step2Bound = true;
   // Auto-advance between digit boxes
   document.addEventListener('input', (e) => {
     if (!e.target.classList.contains('otp-box')) return;
@@ -575,6 +597,7 @@ function attachStep2Listeners() {
     const val = e.target.value.replace(/\D/g, '');
     e.target.value = val.slice(-1);
     if (val && idx < 5) document.getElementById(`otpBox${idx + 1}`)?.focus();
+    _maybeAutoVerify();
   });
 
   document.addEventListener('keydown', (e) => {
@@ -594,6 +617,7 @@ function attachStep2Listeners() {
       if (box) box.value = d;
     });
     document.getElementById(`otpBox${Math.min(digits.length, 5)}`)?.focus();
+    _maybeAutoVerify();
   });
 
   document.getElementById('verifyOtpBtn')?.addEventListener('click', handleStep2Verify);
