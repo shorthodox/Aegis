@@ -1554,6 +1554,30 @@ class LiveEngine(LevelsMixin, GatesMixin, ExitsMixin, PositionsMixin):
         """
         from src.trading.trader_gate import (
             TradePlan, ACTION_ENTER, AT_LEVEL_ATR, MAX_STOP_PCT, MIN_NET_R)
+
+        # ── EXPOSURE FIRST ───────────────────────────────────────────────────
+        # A resting fill returns a plan DIRECTLY and never calls
+        # TraderGate.evaluate, which is where the book cap (MAX_OPEN_TOTAL=5)
+        # and the cluster cap (MAX_PER_CLUSTER=2) are enforced. So every fill on
+        # this path opened with no exposure limit whatsoever.
+        #
+        # Measured 2026-08-26: eight correlated LONGs open at once against a cap
+        # of five, two per cluster. BTC fell 1.64%, alts amplified it, and the
+        # whole book stopped out together — ENA -3.58, XRP -2.96, SUI -3.71,
+        # HBAR -2.32, INJ -4.62, TRB -1.49, ENA -2.32. Eight separate positions
+        # expressing one bet, which is exactly what the cluster cap exists to
+        # stop, bypassed by a path I added.
+        #
+        # The guard is consulted here BEFORE any candidate is built, so the cap
+        # binds on this path as it does on the gate's.
+        try:
+            self.portfolio_guard.sync_from_wallet(self.wallet.open_positions)
+            _ok, _why = self.portfolio_guard.can_open(
+                symbol, float(getattr(self.wallet, 'balance', 0.0) or 0.0), 0.0)
+            if not _ok:
+                return None
+        except Exception:
+            pass
         for side in ('BUY', 'SELL'):
             key = f'{symbol}|{side}'
             if key not in (self._working_orders or {}):
