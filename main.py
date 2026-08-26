@@ -2646,6 +2646,55 @@ async def add_security_headers(request: Request, call_next):
 
     # Clickjacking protection â€” dashboard must never be embedded in a foreign frame
     response.headers["X-Frame-Options"] = "DENY"
+    # ── Content-Security-Policy ──────────────────────────────────────────────
+    # frame-ancestors alone did nothing against XSS, which is the risk that
+    # matters here: a Firebase ID token sits in localStorage, so any script that
+    # executes on this origin can read a live session.
+    #
+    # script-src is the defence, and it is enumerated from what the site
+    # ACTUALLY loads rather than guessed:
+    #   gstatic            Firebase JS SDK (module imports)
+    #   cdnjs / jsdelivr / unpkg   icon + chart libraries
+    #   tradingview        the chart widget
+    #   checkout.razorpay  legacy checkout, still referenced in-page
+    #
+    # NOT listed, deliberately: polyfill.io. It was removed from logic.html the
+    # same day — the domain was sold in June 2024 and served malware to the sites
+    # embedding it. Enumerating origins for this header is how it was found.
+    #
+    # 'unsafe-inline' is present because the pages carry inline <script> blocks
+    # (the nav auth logic is inline on every page). That materially weakens the
+    # policy and is the next thing to fix — moving those blocks to files, then
+    # dropping the keyword.
+    #
+    # REPORT-ONLY for now: this reports violations without blocking, so a missed
+    # origin cannot take checkout or the dashboard down. Flip the header name to
+    # Content-Security-Policy once a real traffic window shows nothing legitimate
+    # being flagged.
+    _CSP = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' "
+        "https://www.gstatic.com https://cdnjs.cloudflare.com "
+        "https://cdn.jsdelivr.net https://unpkg.com "
+        "https://www.tradingview.com https://s3.tradingview.com "
+        "https://checkout.razorpay.com https://apis.google.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com "
+        "https://cdnjs.cloudflare.com; "
+        "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com data:; "
+        "img-src 'self' data: blob: https:; "
+        "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com "
+        "https://*.firebasedatabase.app https://securetoken.googleapis.com "
+        "https://fapi.binance.com https://api.binance.com "
+        "wss://aegisignal.pro wss://*.up.railway.app; "
+        "frame-src 'self' https://checkout.razorpay.com https://whop.com "
+        "https://*.whop.com https://www.tradingview.com https://s.tradingview.com; "
+        "object-src 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self' https://formsubmit.co; "
+        "frame-ancestors 'none'"
+    )
+    response.headers["Content-Security-Policy-Report-Only"] = _CSP
+    # Keep the enforcing header doing the one thing it already did safely.
     response.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
 
     # MIME sniffing protection
@@ -3688,6 +3737,34 @@ async def logic_page():
 @app.get("/pitch")
 async def pitch_page():
     return FileResponse(WEB_ROOT_PATH / "src/pages/pitch.html")
+
+@app.get("/.well-known/security.txt", include_in_schema=False)
+@app.get("/security.txt", include_in_schema=False)
+async def security_txt():
+    """RFC 9116 disclosure contact.
+
+    Without one, a researcher who finds something has no route to us and the
+    next-best option is publishing it. Expires is mandatory in the RFC and is a
+    year out; it must be refreshed before then or the file is treated as stale.
+    """
+    from datetime import datetime, timezone, timedelta
+    expires = (datetime.now(timezone.utc) + timedelta(days=365)).replace(
+        microsecond=0).isoformat().replace("+00:00", "Z")
+    body = (
+        "Contact: mailto:aegisofficial@aegisignal.pro\n"
+        f"Expires: {expires}\n"
+        "Preferred-Languages: en\n"
+        "Canonical: https://aegisignal.pro/.well-known/security.txt\n"
+        "Policy: https://aegisignal.pro/terms\n"
+        "\n"
+        "# AEGIS runs a live trading-signal service. If you find\n"
+        "# something, please tell us before you tell anyone else.\n"
+        "# We will respond. Please do not run automated scanning\n"
+        "# against the live engine endpoints; ask us and we will\n"
+        "# arrange a window.\n"
+    )
+    return Response(content=body, media_type="text/plain; charset=utf-8")
+
 
 @app.get("/privacy")
 async def privacy_alias():

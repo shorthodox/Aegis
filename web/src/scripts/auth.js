@@ -890,7 +890,6 @@ export async function handleLogout() {
     localStorage.removeItem('access_token');
     localStorage.removeItem('authToken');
     localStorage.removeItem('trial_end_timestamp');
-    localStorage.removeItem('trial_end_sig');
     localStorage.removeItem('cached_uid');
     Object.keys(localStorage).forEach(k => {
       if (k.startsWith('trialStart_')) localStorage.removeItem(k);
@@ -951,14 +950,36 @@ export async function handlePasswordReset(email) {
 export function subscribeToAuthState(callback) {
   return onAuthStateChanged(auth, async (user) => {
     if (user) {
-      const userData = await getDoc(doc(db, 'users', user.uid));
-      callback({
-        authenticated: true,
-        user,
-        userData: userData.data()
-      });
+      // ANNOUNCE FIRST, ENRICH SECOND.
+      //
+      // The Firestore read used to sit in front of this callback, so the nav
+      // could not say "signed in" until a network round trip completed — while
+      // the signed-OUT path answered instantly with no await at all. That
+      // asymmetry is the whole bug: the wrong answer was always fast and the
+      // right one always slow, so the header showed "Login / Create Account"
+      // for as long as the read took, on a page where a valid session existed.
+      //
+      // Worse, an await that THROWS in an onAuthStateChanged handler rejects
+      // the callback and is not caught by Firebase, so the subscriber was never
+      // called at all. On a day when Firestore is over its quota — which
+      // happened — that is not a flicker, it is a header permanently stuck on
+      // "Login" for a paying subscriber.
+      //
+      // Identity is already known here: `user` is the verified Firebase user.
+      // The profile document is extra detail, so it must never gate the fact.
+      callback({ authenticated: true, user, userData: null });
       window.dispatchEvent(new CustomEvent('authStateChange', { detail: { authenticated: true } }));
-    } else {
+      let userData = null;
+      try {
+        const snap = await getDoc(doc(db, 'users', user.uid));
+        userData = snap.data() || null;
+      } catch (err) {
+        console.warn('[auth] profile read failed; session stands regardless:', err);
+      }
+      if (userData) callback({ authenticated: true, user, userData });
+      return;
+    }
+    if (!user) {
       callback({
         authenticated: false,
         user: null,
