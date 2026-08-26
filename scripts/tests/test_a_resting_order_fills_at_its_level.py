@@ -191,3 +191,57 @@ def test_restore_drops_what_expired_while_down():
         assert 'A/USDT|BUY' not in eng._working_levels
     finally:
         ECFG.WORKING_ORDERS_PATH.unlink(missing_ok=True)
+
+
+# ── a resting fill is still bound by the book ────────────────────────────────
+# The fill path returns a plan DIRECTLY and never calls TraderGate.evaluate,
+# which is where MAX_OPEN_TOTAL and MAX_PER_CLUSTER are enforced. So for a day
+# every fill on this path opened with no exposure limit at all.
+#
+# Measured 2026-08-26: eight correlated LONGs open at once against a cap of five
+# total and two per cluster. BTC fell 1.64%, alts amplified it, and the entire
+# book stopped together — ENA -3.58, XRP -2.96, SUI -3.71, HBAR -2.32,
+# INJ -4.62, TRB -1.49, ENA -2.32. Eight positions expressing one bet, which is
+# precisely what the cluster cap exists to prevent.
+
+def test_the_fill_path_consults_the_portfolio_guard():
+    assert 'self.portfolio_guard.can_open(' in SRC, (
+        'a resting order can still fill with the book already full, so one '
+        'market move takes out an unlimited number of correlated positions'
+    )
+
+
+def test_the_guard_runs_before_any_candidate_is_built():
+    src = inspect.getsource(E.LiveEngine._resting_fill_plan)
+    guard = src.index('can_open(')
+    build = src.index("for side in ('BUY', 'SELL')")
+    assert guard < build, 'exposure is checked after the plan is already made'
+
+
+def test_a_refused_fill_returns_none():
+    src = inspect.getsource(E.LiveEngine._resting_fill_plan)
+    i = src.index('if not _ok:')
+    assert 'return None' in src[i:i + 80]
+
+
+def test_the_wallet_is_synced_before_the_check():
+    """can_open counts from the guard's own view, which is stale unless the
+    live book is pushed into it first."""
+    src = inspect.getsource(E.LiveEngine._resting_fill_plan)
+    sync = src.index('sync_from_wallet(')
+    check = src.index('can_open(')
+    assert sync < check
+
+
+def test_a_guard_failure_does_not_block_the_fill():
+    """The guard is a risk cap, not a data dependency. If it raises, the fill
+    proceeds as before rather than the desk silently stopping."""
+    src = inspect.getsource(E.LiveEngine._resting_fill_plan)
+    i = src.index('sync_from_wallet(')
+    assert 'except Exception:' in src[i:i + 700]
+
+
+def test_the_caps_themselves_are_unchanged():
+    from scripts.engine.portfolio import PortfolioGuard
+    assert PortfolioGuard.MAX_OPEN_TOTAL == 5
+    assert PortfolioGuard.MAX_PER_CLUSTER == 2
