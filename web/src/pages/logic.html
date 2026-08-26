@@ -27,7 +27,14 @@
     <link rel="stylesheet" href="/web/src/styles/main.css?v=2">
   <link rel="stylesheet" href="/web/src/styles/aegis-redesign.css">
     <!-- MathJax for LaTeX rendering -->
-    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <!-- REMOVED 2026-08-25: polyfill.io.
+         The domain was sold in June 2024 and began serving malware to the sites
+         that embedded it — a supply-chain compromise, not a hypothetical. This
+         tag was remote script execution on our own origin from a host known to
+         be hostile, which is the concrete version of the XSS-to-token-theft risk
+         the security review raised.
+         It was also inert: it polyfilled ES6 for browsers that have shipped ES6
+         since 2015. Nothing replaces it. -->
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/bundle/tex-mml-chtml.js"></script>
   <style>
     /* -- Nav responsive / mobile drawer ----------------------------- */

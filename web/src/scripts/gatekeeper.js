@@ -217,8 +217,7 @@ document.addEventListener('visibilitychange', async () => {
     if (intact === false) {
       // Signature mismatch — clear the tampered value and re-derive from Firestore.
       localStorage.removeItem('trial_end_timestamp');
-      localStorage.removeItem('trial_end_sig');
-    }
+      }
   }
 
   try {
@@ -2945,8 +2944,7 @@ async function handleLogout() {
     localStorage.removeItem('access_token');
     localStorage.removeItem('authToken');
     localStorage.removeItem('trial_end_timestamp');
-    localStorage.removeItem('trial_end_sig');
-    localStorage.removeItem('cached_uid');
+        localStorage.removeItem('cached_uid');
     localStorage.removeItem('dev_key_active');
     Object.keys(localStorage).forEach(k => {
       if (k.startsWith('trialStart_')) localStorage.removeItem(k);
