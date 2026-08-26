@@ -474,7 +474,7 @@
                     </div>
                     <span style="color:var(--ae-border);font-size:0.7rem;">·</span>
                     <span style="font-size:0.65rem;color:var(--ae-text-3);font-family:var(--ae-font-mono);" id="trRefreshLabel">refreshed <span id="trRefreshTime">—</span> UTC</span>
-                    <a href="#" onclick="window.refreshAegisTrackRecord && window.refreshAegisTrackRecord();return false;" style="font-size:0.75rem;color:var(--ae-text-3);text-decoration:none;transition:color 120ms;" onmouseover="this.style.color='var(--ae-gold)'" onmouseout="this.style.color='var(--ae-text-3)'" title="Refresh">&#8635;</a>
+                    <button type="button" onclick="window.refreshAegisTrackRecord && window.refreshAegisTrackRecord();" style="font-size:0.75rem;color:var(--ae-text-3);background:none;border:none;padding:0;cursor:pointer;font-family:inherit;transition:color 120ms;" onmouseover="this.style.color='var(--ae-gold)'" onmouseout="this.style.color='var(--ae-text-3)'" title="Refresh">&#8635;</button>
                 </div>
             </div>
             <div class="tr-panel-body">
@@ -581,10 +581,10 @@
         <div id="trEmpty" class="tr-empty" style="display:none;">
             <i class="fas fa-satellite-dish"></i>
             <h3>The Engine Is Running — Signals Close Soon</h3>
-            <p style="max-width:520px;margin:0.5rem auto 1rem;line-height:1.75;">The bot is actively scanning <strong style="color:var(--ae-gold);"><span class="trTokenCountRef">63</span> tokens</strong> every 5 minutes. Closed outcomes appear here the moment a Take Profit or Stop Loss is hit.<br><br>Open signals are visible on the dashboard (subscribers only) — they include live entry price, TP, SL, and the AI's plain-English reasoning. <strong style="color:var(--ae-text-1);">Check back in a few hours.</strong></p>
+            <p style="max-width:520px;margin:0.5rem auto 1rem;line-height:1.75;">The bot is actively scanning <strong style="color:var(--ae-gold);"><span class="trTokenCountRef">60</span> tokens</strong> every 5 minutes. Closed outcomes appear here the moment a Take Profit or Stop Loss is hit.<br><br>Open signals are visible on the dashboard (subscribers only) — they include live entry price, TP, SL, and the AI's plain-English reasoning. <strong style="color:var(--ae-text-1);">Check back in a few hours.</strong></p>
             <div style="display:flex;gap:0.75rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;">
                 <a href="/pricing" class="ae-btn ae-btn-primary ae-btn-md">See Plans →</a>
-                <a href="#" onclick="window.refreshAegisTrackRecord && window.refreshAegisTrackRecord();return false;" class="ae-btn ae-btn-outline ae-btn-md">↻ Refresh</a>
+                <button type="button" onclick="window.refreshAegisTrackRecord && window.refreshAegisTrackRecord();" class="ae-btn ae-btn-outline ae-btn-md">↻ Refresh</button>
             </div>
         </div>
 
@@ -627,7 +627,7 @@
       <div class="ae-footer-links">
         
         <a href="https://www.instagram.com/aegisignal" target="_blank" rel="noopener noreferrer me" class="ae-footer-link" title="AEGIS on Instagram — reviews and updates" style="display:inline-flex;align-items:center;gap:0.45rem;"><i class="fab fa-instagram" aria-hidden="true"></i>@aegisignal</a>
-        <a href="/conditions" class="ae-footer-link">Terms &amp; Conditions</a>
+        <a href="/conditions" class="ae-footer-link">Risk Disclosure &amp; Conditions</a>
       </div>
     </div>
   </div>

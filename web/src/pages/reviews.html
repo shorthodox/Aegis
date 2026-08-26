@@ -259,7 +259,15 @@
         </div>
 
         <div class="rv-form-card">
+            <!-- DISABLED while the banner above says submissions are not being
+                 delivered. The form was fully interactive underneath that
+                 warning, so a review could be typed and submitted and would then
+                 vanish — the worst of both, because the user believes they were
+                 heard. A <fieldset disabled> takes out every control inside it in
+                 one move, including the submit button, and needs no JS.
+                 Remove the fieldset (and the banner) when the backend is wired. -->
             <form id="reviewForm">
+            <fieldset disabled style="border:0;margin:0;padding:0;opacity:0.55;" aria-describedby="reviewDisabledNote">
                 <div class="labeled-input">
                     <label>Name</label>
                     <input type="text" id="reviewName" class="auth-input" placeholder="Your name" required>
@@ -286,6 +294,11 @@
                     <button id="submitReview" class="auth-submit-btn" type="submit">Submit Review</button>
                 </div>
                 <div id="reviewResult"></div>
+            </fieldset>
+            <p id="reviewDisabledNote" style="margin-top:0.75rem;font-size:0.78rem;color:#94a3b8;text-align:center;">
+                Submissions are closed while this is being wired up &mdash; we would
+                rather take nothing than take yours and lose it.
+            </p>
             </form>
         </div>
 
@@ -320,7 +333,7 @@
           <div class="ae-footer-links">
             
         <a href="https://www.instagram.com/aegisignal" target="_blank" rel="noopener noreferrer me" class="ae-footer-link" title="AEGIS on Instagram — reviews and updates" style="display:inline-flex;align-items:center;gap:0.45rem;"><i class="fab fa-instagram" aria-hidden="true"></i>@aegisignal</a>
-            <a href="/conditions" class="ae-footer-link">Terms &amp; Conditions</a>
+            <a href="/conditions" class="ae-footer-link">Risk Disclosure &amp; Conditions</a>
           </div>
         </div>
       </div>

@@ -276,9 +276,22 @@ function renderTable(rows) {
         // For pending, the level cells read "at S/R" rather than •••/— so the
         // row explains itself; prices stay hidden.
         const priceCell = v => masked ? '<span style="color:#475569;">•••</span>' : fmtPrice(v);
+        // A masked row must be masked THROUGHOUT. Size and live PnL were left
+        // visible while the token, entry, TP and SL were hidden — but on an OPEN
+        // position the running PnL is the most valuable field on the row, and
+        // Size discloses the sizing model. Together with the visible direction
+        // they gave away most of what the redaction existed to gate. Redacting
+        // half a row is not redaction; it is a hint.
         const pnlCell = isPending
             ? '<span style="color:#fbbf24;font-size:0.85em;">waiting for level</span>'
-            : `<span style="${pnlColor(r.pnl_pct, r.outcome)}">${fmtPnl(r.pnl_pct, r.outcome)}</span>`;
+            : masked
+                ? '<span style="color:#475569;" title="Live P&amp;L — subscribers only">•••</span>'
+                : `<span style="${pnlColor(r.pnl_pct, r.outcome)}">${fmtPnl(r.pnl_pct, r.outcome)}</span>`;
+        const sizeCell = masked
+            ? '<span style="color:#475569;">•••</span>'
+            : (r.position_value != null
+                ? '$' + Number(r.position_value).toLocaleString('en-US', { maximumFractionDigits: 0 })
+                : '—');
         return `
         <tr>
             <td>${isPending ? '<span style="color:#fbbf24;">now · armed</span>' : fmtTs(r.close_time || r.entry_time)}</td>
@@ -289,7 +302,7 @@ function renderTable(rows) {
             <td>${priceCell(r.entry_price)}</td>
             <td style="color:rgba(0,255,136,0.7);">${priceCell(r.take_profit)}</td>
             <td style="color:rgba(255,85,85,0.7);">${priceCell(r.stop_loss)}</td>
-            <td style="color:#94a3b8;white-space:nowrap;">${r.position_value != null ? '$' + Number(r.position_value).toLocaleString('en-US', { maximumFractionDigits: 0 }) : '—'}</td>
+            <td style="color:#94a3b8;white-space:nowrap;">${sizeCell}</td>
             <td>${pnlCell}</td>
             <td>${outcomeBadge(r.outcome)}</td>
         </tr>`;
@@ -355,7 +368,13 @@ function updateScanLabel() {
     const now = new Date();
     const hh = String(now.getUTCHours()).padStart(2, '0');
     const mm = String(now.getUTCMinutes()).padStart(2, '0');
-    el.textContent = `live · refreshed ${hh}:${mm} UTC`;
+    // Two elements, two jobs. This used to write "live · refreshed HH:MM UTC"
+    // into the STATUS element while the markup carried a separate #trRefreshLabel
+    // of its own — so the header rendered "live · refreshed 17:43 UTC · refreshed
+    // — UTC", with the second stuck on an em dash because nothing ever filled it.
+    el.textContent = 'live';
+    const t = document.getElementById('trRefreshTime');
+    if (t) t.textContent = `${hh}:${mm}`;
 }
 
 // ── Auto-refresh every 60 s ───────────────────────────────────────────────────

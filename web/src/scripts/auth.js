@@ -931,7 +931,7 @@ export async function handlePasswordReset(email) {
         if (fbErr.code === 'auth/user-not-found') {
           return { success: true, message: 'If an account with this email exists, a reset link has been sent.' };
         }
-        return { success: false, message: 'Failed to send reset email. Please contact support@aegisignal.pro.' };
+        return { success: false, message: 'Failed to send reset email. Please contact aegisofficial@aegisignal.pro.' };
       }
     }
     return {
