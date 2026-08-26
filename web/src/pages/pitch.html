@@ -323,8 +323,8 @@
     </div>
 
     <div class="stats-grid">
-        <div class="stat-cell"><strong>63</strong><small>Tokens Monitored</small></div>
-        <div class="stat-cell"><strong>58</strong><small>Tradeable Models</small></div>
+        <div class="stat-cell"><strong>60</strong><small>Tokens Monitored</small></div>
+        <div class="stat-cell"><strong>44</strong><small>Live-Firing Models</small></div>
         <div class="stat-cell"><strong>55+</strong><small>Min Quality Gate Score</small></div>
         <div class="stat-cell"><strong>45–75</strong><small>Features Per Model</small></div>
         <div class="stat-cell"><strong>1h</strong><small>Candle Timeframe</small></div>
@@ -429,7 +429,7 @@
             Every metric below is live and verifiable. The track record is public, unedited, and contains both wins and losses. No cherry-picking. No simulated results.
         </p>
         <div class="proof-box">
-            <div class="proof-stat"><strong>63</strong><span>Tokens scanning live right now</span></div>
+            <div class="proof-stat"><strong>60</strong><span>Tokens scanning live right now</span></div>
             <div class="proof-stat"><strong>24/7</strong><span>Engine runtime, Railway cloud</span></div>
             <div class="proof-stat"><strong>~1s</strong><span>Live price via Binance WebSocket</span></div>
             <div class="proof-stat"><strong>Public</strong><span>Track record, every trade shown</span></div>
@@ -479,8 +479,8 @@
                 <ul>
                     <li>Retail users now trust AI-driven tools in a way they didn&rsquo;t 2 years ago</li>
                     <li>XGBoost + meta-labeling is <em>institutional methodology</em> now accessible to retail</li>
-                    <li>First-mover advantage in quantitative crypto signals at $14/mo price point</li>
-                    <li>63-token fleet with per-token models, beginner onboarding layer, and public track record already live</li>
+                    <li>First-mover advantage in quantitative crypto signals at $18/mo price point</li>
+                    <li>60-token fleet (44 live-firing) with per-token models, beginner onboarding layer, and public track record already live</li>
                 </ul>
             </div>
         </div>
@@ -500,7 +500,7 @@
                 <div class="pipe-num">01</div>
                 <div class="pipe-body">
                     <h4>Per-Token XGBoost Primary Models <span class="pipe-tag">ML Core</span></h4>
-                    <p>Each of 63 monitored tokens has its own XGBoost classifier trained on ~7,000 hours of OHLCV data + 100+ engineered features: ATR, RSI, MACD, Supertrend, Fibonacci, support/resistance, funding rate, open interest, Fear &amp; Greed index, BTC correlation, candlestick patterns, and more. Training uses purged time-series cross-validation &mdash; no lookahead leakage, strict temporal ordering with embargo windows.</p>
+                    <p>Each of 60 monitored tokens has its own XGBoost classifier trained on ~7,000 hours of OHLCV data + 100+ engineered features: ATR, RSI, MACD, Supertrend, Fibonacci, support/resistance, funding rate, open interest, Fear &amp; Greed index, BTC correlation, candlestick patterns, and more. Training uses purged time-series cross-validation &mdash; no lookahead leakage, strict temporal ordering with embargo windows.</p>
                 </div>
             </div>
             <div class="pipe-step">
@@ -549,7 +549,7 @@
                 <div class="pipe-num">08</div>
                 <div class="pipe-body">
                     <h4>Real-Time Delivery <span class="pipe-tag">Infrastructure</span></h4>
-                    <p>Engine scans all 63 tokens on 1h candles, continuously, on Railway cloud. Live prices stream via Binance&rsquo;s WebSocket mini-ticker (~1s updates), pushed to dashboard via FastAPI WebSocket. Signals written to Firestore for persistent storage and real-time sync. Frontend receives ticker updates every 100ms, full signal payloads every 500ms. Virtual paper wallet tracks open positions with TP/SL exit logic and syncs to the public track record on every close. Stack: Python 3.12, FastAPI, XGBoost, ccxt, Firebase, Railway.</p>
+                    <p>Engine scans all 60 tokens on 1h candles, continuously, on Railway cloud. Live prices stream via Binance&rsquo;s WebSocket mini-ticker (~1s updates), pushed to dashboard via FastAPI WebSocket. Signals written to Firestore for persistent storage and real-time sync. Frontend receives ticker updates every 100ms, full signal payloads every 500ms. Virtual paper wallet tracks open positions with TP/SL exit logic and syncs to the public track record on every close. Stack: Python 3.12, FastAPI, XGBoost, ccxt, Firebase, Railway.</p>
                 </div>
             </div>
         </div>
@@ -570,13 +570,13 @@
                     <tr>
                         <th>Feature</th>
                         <th class="hl">Trial (3 days)</th>
-                        <th>Basic &middot; $3.60/mo</th>
-                        <th>Intermediate &middot; $7.20/mo</th>
-                        <th>Pro &middot; $14/mo</th>
+                        <th>Basic &middot; $6.00/mo</th>
+                        <th>Sentinel &middot; $12.00/mo</th>
+                        <th>AEGIS Pro &middot; $18.00/mo</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr><td>Tokens monitored</td><td class="hl">63 (monitor)</td><td>42 live</td><td>58 live</td><td>63 (all)</td></tr>
+                    <tr><td>Tokens monitored</td><td class="hl">60 (monitor)</td><td>44 live</td><td>44 live</td><td>60 (all)</td></tr>
                     <tr><td>S/R levels &amp; price targets</td><td class="hl yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td></tr>
                     <tr><td>Plain-English analysis</td><td class="hl yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td></tr>
                     <tr><td>AI conviction label</td><td class="hl no">&mdash;</td><td class="no">&mdash;</td><td class="yes">HIGH / MED / LOW</td><td class="yes">&#10003;</td></tr>
@@ -591,8 +591,8 @@
             <div class="card card-gold">
                 <h3>Unit Economics</h3>
                 <ul>
-                    <li>Basic ARPU: $3.60/mo &rarr; $43 LTV/year</li>
-                    <li>Pro ARPU: $14/mo &rarr; $168 LTV/year</li>
+                    <li>Basic ARPU: $6.00/mo &rarr; $43 LTV/year</li>
+                    <li>AEGIS Pro ARPU: $18.00/mo &rarr; $216 LTV/year</li>
                     <li>Infrastructure: ~$30/mo fixed cost at current scale</li>
                     <li>Break-even: ~3 Pro subscribers</li>
                     <li>Zero marginal cost per additional user</li>
@@ -614,7 +614,7 @@
                     <li>Retail crypto traders (India: 20M+ active)</li>
                     <li>Swing &amp; position traders (1h&ndash;1w horizon)</li>
                     <li>Beginners wanting guided context, not raw charts</li>
-                    <li>Intermediate traders wanting a second opinion</li>
+                    <li>Sentinel traders wanting a second opinion</li>
                     <li>Global English-speaking retail market (Phase 2)</li>
                 </ul>
             </div>
@@ -644,11 +644,11 @@
             <div class="card card-cyan">
                 <h3 style="color:var(--cyan);">AEGIS</h3>
                 <ul>
-                    <li>63 individual XGBoost models &mdash; each token trained separately, 58 live</li>
+                    <li>60 individual XGBoost models &mdash; each token trained separately, 44 live-firing</li>
                     <li>Meta-labeling: institutional technique for precision over recall</li>
                     <li>62%+ holdout precision required before any model goes live</li>
                     <li>Plain-English &ldquo;Why&rdquo; analysis on every token, every scan</li>
-                    <li>Pricing: $3.60&ndash;$14/month &mdash; 3&ndash;7&times; cheaper than incumbents</li>
+                    <li>Pricing: $6.00&ndash;$18.00/month &mdash; 3&ndash;7&times; cheaper than incumbents</li>
                     <li>Positive EV required &mdash; negative-EV signals are killed</li>
                     <li>27-regime adaptive thresholds per token</li>
                     <li>All closed trades (wins + losses) publicly visible</li>
@@ -714,7 +714,7 @@
                     <span class="tl-phase ph-live">Live Now</span>
                     <div class="tl-body">
                         <h4>Core Signal Engine &mdash; 60 Tokens, 24/7</h4>
-                        <p>All 60 tokens with live prices, RSI, trend regime, funding rate, plain-English analysis. 24 tradeable models. Real-time WebSocket. Public track record.</p>
+                        <p>All 60 tokens with live prices, RSI, trend regime, funding rate, plain-English analysis. 44 live-firing models. Real-time WebSocket. Public track record.</p>
                     </div>
                 </div>
                 <div class="tl-item">
@@ -863,7 +863,7 @@
       <div class="ae-footer-links">
         
         <a href="https://www.instagram.com/aegisignal" target="_blank" rel="noopener noreferrer me" class="ae-footer-link" title="AEGIS on Instagram — reviews and updates" style="display:inline-flex;align-items:center;gap:0.45rem;"><i class="fab fa-instagram" aria-hidden="true"></i>@aegisignal</a>
-        <a href="/conditions" class="ae-footer-link">Terms &amp; Conditions</a>
+        <a href="/conditions" class="ae-footer-link">Risk Disclosure &amp; Conditions</a>
       </div>
     </div>
   </div>
