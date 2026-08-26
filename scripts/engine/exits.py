@@ -553,4 +553,42 @@ class ExitsMixin:
                 (pos.direction == 'SHORT' and check_price >= pos.stop_loss)
             )
             if sl_hit:
+                # CONFIRM AGAINST THE PERP BEFORE CLOSING.
+                #
+                # check_price comes from the live tick feed, which is Binance
+                # SPOT — the futures websocket is unreachable from this host
+                # (measured: 0 messages in 18s from the container, against 753
+                # symbols on spot). Everything ELSE about this trade is perp:
+                # the candles, the levels, and therefore this very stop, all come
+                # from binanceusdm, and the chart tells the subscriber so.
+                #
+                # A stop is a threshold, and at a threshold the basis decides the
+                # outcome. Median |perp-spot| is 0.064% and p90 is 0.150% against
+                # a ~1.30% stop — enough to fire on spot at a price the perp never
+                # printed. Reported as "signal in the loss zone, not touching SL,
+                # still closing and saying SL hit", and GMX closed 0.103% through
+                # its stop on a day its basis was 0.094%.
+                #
+                # Futures REST is fine from here, and stops are rare, so one call
+                # at the threshold removes the whole class. A price of 0 means
+                # UNKNOWN, not "no": if the perp cannot be reached we close as
+                # before, because a data failure must never hold a position open
+                # past its stop.
+                _perp = 0.0
+                try:
+                    from scripts.engine.market_data import fetch_perp_price
+                    _perp = fetch_perp_price(symbol)
+                except Exception:
+                    _perp = 0.0
+                if _perp > 0:
+                    _perp_hit = (
+                        (pos.direction == 'LONG'  and _perp <= pos.stop_loss) or
+                        (pos.direction == 'SHORT' and _perp >= pos.stop_loss)
+                    )
+                    if not _perp_hit:
+                        print(f'[{symbol}] STOP NOT CONFIRMED — spot {check_price:.6g} '
+                              f'is through the {pos.stop_loss:.6g} stop but the perp '
+                              f'is {_perp:.6g} ({(_perp - check_price) / check_price * 100:+.3f}% '
+                              f'basis); holding, the traded market has not hit it')
+                        return
                 _close('STOP_HIT')
