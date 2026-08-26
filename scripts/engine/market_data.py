@@ -168,3 +168,51 @@ def _fetch_bids_asks_all() -> Dict[str, float]:
     except Exception:
         pass
     return out
+
+
+# ── Perp price, for confirming a stop ────────────────────────────────────────
+# The live tick feed is Binance SPOT (engine._ws_price_ticker), because the
+# FUTURES websocket is not reachable from this host — measured from the Railway
+# container, fstream.binance.com delivers 0 messages in 18s while the spot stream
+# delivers 753 symbols. That is why the ticker is spot and must stay spot.
+#
+# But everything else about a trade is PERP: candles, levels and therefore the
+# stop all come from ccxt.binanceusdm, and the chart tells the subscriber these
+# are "Binance USD-M Futures — the exact market AEGIS trades".
+#
+# A stop is a THRESHOLD, and near a threshold the basis decides the outcome.
+# Measured across 20 tokens: median |perp-spot| 0.064%, p90 0.150%, max 0.196%.
+# Against a ~1.30% stop that is 5-15% of the whole distance — enough to fire a
+# stop on spot that the perp chart never printed. GMX closed 0.103% through its
+# stop on a day its basis was 0.094%.
+#
+# Futures REST is fine from here (749 rows in 0.09s), so a stop is confirmed
+# against the perp before it closes. Stops are rare, so this costs almost
+# nothing, and the short TTL collapses a burst across symbols.
+_PERP_PX: Dict[str, tuple] = {}
+_PERP_PX_TTL = 3.0
+
+
+def fetch_perp_price(symbol: str) -> float:
+    """Last PERP price for 'BASE/USDT', or 0.0 if it cannot be established.
+
+    0.0 means UNKNOWN, never "no". The caller must treat it as "could not
+    confirm" and fall back to its existing behaviour — a data failure must never
+    be able to hold a position open past its stop.
+    """
+    import time as _t
+    key = symbol.replace('/', '').upper()
+    hit = _PERP_PX.get(key)
+    now = _t.time()
+    if hit and (now - hit[1]) < _PERP_PX_TTL:
+        return hit[0]
+    try:
+        import urllib.request, json as _j
+        url = f'https://fapi.binance.com/fapi/v1/ticker/price?symbol={key}'
+        with urllib.request.urlopen(url, timeout=6) as r:
+            px = float((_j.load(r) or {}).get('price') or 0.0)
+        if px > 0:
+            _PERP_PX[key] = (px, now)
+        return px
+    except Exception:
+        return 0.0
