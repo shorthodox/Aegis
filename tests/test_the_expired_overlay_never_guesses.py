@@ -164,3 +164,64 @@ def test_the_api_gates_signals_server_side():
     body = main[i:i + 900]
     assert "plan != 'pro'" in body
     assert '403' in body
+
+
+# ── Whop Pixel ───────────────────────────────────────────────────────────────
+# Installed 2026-08-27 on all 22 pages, verbatim. It loads a third-party script
+# from https://t.whop.tw, so it interacts directly with the CSP shipped two days
+# earlier: without that host in script-src the pixel is blocked the moment the
+# policy goes from Report-Only to enforcing, and the failure is silent — the
+# dashboard simply shows no events and nothing says why.
+
+PIXEL_ID = 'biz_Pa8k1dIsPYugdt'
+
+
+def test_the_pixel_is_on_every_page():
+    import glob
+    pages = glob.glob('web/src/pages/*.html')
+    missing = [p for p in pages if PIXEL_ID not in _js(p)]
+    assert not missing, f'pages without the pixel: {missing}'
+
+
+def test_it_sits_inside_the_head():
+    js = _js('web/src/pages/index.html')
+    assert js.index(PIXEL_ID) < js.index('</head>')
+
+
+def test_the_snippet_is_unaltered():
+    """Whop's instruction was explicit: do not change a character."""
+    js = _js('web/src/pages/index.html')
+    for fragment in (
+        '!function(w,d,s,u,n,a,b){if(w[n])return;',
+        'a.q.push([+new Date].concat([].slice.call(arguments)))',
+        '"script","https://t.whop.tw","whop");',
+        f'whop.setScope("{PIXEL_ID}");whop.track("page");',
+    ):
+        assert fragment in js, fragment[:50]
+
+
+def test_it_appears_exactly_once_per_page():
+    """A duplicated pixel double-counts every page view."""
+    import glob
+    for p in glob.glob('web/src/pages/*.html'):
+        assert _js(p).count('whop.track("page")') == 1, p
+
+
+def test_the_csp_allows_the_pixel_to_load():
+    """Anchored on the DIRECTIVE, not the word. The comment above the policy
+    also contains "script-src", and matching that measured the wrong span."""
+    main_src = io.open('main.py', encoding='utf-8').read()
+    i = main_src.index(""""script-src 'self'""")
+    j = main_src.index('style-src', i)
+    assert 't.whop.tw' in main_src[i:j], (
+        'the pixel script is not in script-src, so it is blocked the moment the '
+        'CSP is enforced — silently'
+    )
+
+
+def test_the_csp_allows_the_pixel_to_report():
+    """Loading is not enough; it beacons events back."""
+    main_src = io.open('main.py', encoding='utf-8').read()
+    i = main_src.index(""""connect-src 'self'""")
+    j = main_src.index('frame-src', i)
+    assert 't.whop.tw' in main_src[i:j]
