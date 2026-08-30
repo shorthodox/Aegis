@@ -6534,6 +6534,115 @@ _PADDLE_REVOKE_EVENTS = {
 }
 
 
+# ── Refunds ──────────────────────────────────────────────────────────────────
+# OUR policy window, in days from purchase. Whop documents no maximum age of its
+# own and will happily refund a year-old payment, so this bound is ours to
+# enforce and nobody else will do it for us.
+REFUND_WINDOW_DAYS = float(os.getenv("AEGIS_REFUND_WINDOW_DAYS", "3"))
+
+# A refund is NOT a cancellation, and the difference decides when access ends.
+# A cancellation means "will not renew" and the customer keeps what they paid
+# for until the period ends — that is what _WHOP_REVOKE_EVENTS does. A refund
+# means the money went back, so access ends NOW. Treating the two the same would
+# hand a refunded customer the rest of the month for free.
+_WHOP_REFUND_EVENTS = {"refund.created", "refund.updated"}
+
+
+async def _whop_refund_payment(payment_id: str,
+                               partial_amount: Optional[float] = None) -> Dict[str, Any]:
+    """Refund a Whop payment. Returns {ok, status, detail, payment}.
+
+    POST /payments/{id}/refund, Bearer auth, `payment_id` in the pay_xxx form —
+    NOT a receipt or membership id. Omitting partial_amount refunds in full;
+    Whop allows repeated partial refunds up to the payment total.
+
+    Never raises. A refund that cannot be issued automatically has to degrade to
+    "a human does it in the dashboard", because the alternative — an exception
+    escaping into a request handler — tells the customer nothing and loses the
+    fact that a refund was attempted at all.
+    """
+    if not WHOP_API_KEY:
+        return {"ok": False, "status": "unconfigured",
+                "detail": "WHOP_API_KEY is not set; refund must be issued from the "
+                          "Whop dashboard (Payments -> the payment -> Refund)."}
+    if not str(payment_id or "").startswith("pay_"):
+        # A membership or receipt id here would 404 in a way that reads like a
+        # missing payment rather than the wrong identifier.
+        return {"ok": False, "status": "bad_identifier",
+                "detail": f"{payment_id!r} is not a Whop payment id (expected pay_...)"}
+
+    body: Dict[str, Any] = {}
+    if partial_amount is not None:
+        body["partial_amount"] = float(partial_amount)
+
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            resp = await client.post(
+                f"{_WHOP_BASE}/payments/{payment_id}/refund",
+                json=body,
+                headers={"Authorization": f"Bearer {WHOP_API_KEY}",
+                         "Content-Type": "application/json"},
+            )
+    except Exception as exc:
+        return {"ok": False, "status": "unreachable", "detail": repr(exc)}
+
+    if resp.status_code == 200:
+        try:
+            data = resp.json()
+        except Exception:
+            data = {}
+        return {"ok": True, "status": "refunded", "payment": data,
+                "refunded_amount": data.get("refunded_amount"),
+                "refunds": data.get("refunds")}
+
+    # Documented failures, each mapped to what the operator should actually do.
+    try:
+        err = (resp.json() or {}).get("error") or {}
+        msg = str(err.get("message") or resp.text)[:300]
+    except Exception:
+        msg = resp.text[:300]
+    manual = ("Issue it manually: Whop dashboard -> Payments -> the payment -> Refund.")
+    mapping = {
+        400: ("invalid_request", f"Whop rejected the request: {msg}"),
+        401: ("bad_key", "WHOP_API_KEY is missing or invalid. " + manual),
+        403: ("forbidden",
+              "The API key lacks permission — the refund endpoint needs the "
+              "`payment:manage` scope. " + manual),
+        404: ("not_found", f"Whop has no payment {payment_id}. " + manual),
+        422: ("verification_required", f"Whop requires verification: {msg}. " + manual),
+        429: ("rate_limited", "Whop rate limited the refund. Retry shortly, or " + manual),
+    }
+    status, detail = mapping.get(
+        resp.status_code,
+        ("server_error", f"Whop returned {resp.status_code}: {msg}. " + manual))
+    # A lost dispute is final — Whop will not let a refund record exist on it,
+    # and no retry or manual attempt changes that.
+    if "disputed" in msg.lower():
+        status = "disputed"
+        detail = ("This payment was disputed and charged back, so Whop will not "
+                  "let it be refunded. Nothing to do — the money already left.")
+    print(f"[Whop refund] {payment_id} -> {status}: {detail}")
+    return {"ok": False, "status": status, "detail": detail,
+            "http_status": resp.status_code}
+
+
+def _refund_window_open(purchased_at: Any) -> Tuple[bool, str]:
+    """Is this purchase still inside OUR refund window?
+
+    Whop documents no maximum age of its own, so if we do not check this nothing
+    does, and a customer could ask for a refund on a payment from any date.
+    """
+    ts = _parse_ts(purchased_at)
+    if ts is None:
+        # Unknown purchase date is not automatic approval. It goes to a human.
+        return False, "the purchase date could not be established"
+    age_days = (datetime.now(timezone.utc) - ts).total_seconds() / 86400.0
+    if age_days > REFUND_WINDOW_DAYS:
+        return False, (f"purchased {age_days:.1f} days ago; the refund window is "
+                       f"{REFUND_WINDOW_DAYS:.0f} days")
+    return True, f"{max(0.0, REFUND_WINDOW_DAYS - age_days):.1f} days left in the window"
+
+
 _WHOP_GRANT_EVENTS = {"payment.succeeded", "membership.activated",
                       "membership.went_valid"}
 _WHOP_REVOKE_EVENTS = {"membership.cancelled", "membership.canceled",
@@ -6637,6 +6746,56 @@ async def _handle_whop_webhook(raw_body: bytes) -> dict:
             # the grant would leave a paying customer without access.
             print(f"[Whop] Failed to upgrade {user_id}: {e}")
             raise HTTPException(status_code=500, detail="Could not apply subscription")
+
+    elif event in _WHOP_REFUND_EVENTS:
+        # A REFUND ENDS ACCESS NOW.
+        #
+        # This is the one place that must not reuse the cancellation path below.
+        # A cancellation means "will not renew" and the customer rightly keeps
+        # the period they paid for. A refund means the money went back, so
+        # keeping them on until period end would hand them the rest of the month
+        # for free.
+        #
+        # Driven by refund.created rather than membership.deactivated: Whop's
+        # docs do not confirm a refund is among that event's triggers, so
+        # relying on it alone would silently leave refunded customers with full
+        # access. membership.deactivated stays wired as an independent second
+        # signal, not the primary one.
+        _status = str((payload.get("status") or "")).lower()
+        if event == "refund.updated" and _status not in ("succeeded", ""):
+            # pending / requires_action / failed / canceled are not a refund yet.
+            print(f"[Whop] refund.updated for {user_id} is '{_status}' — no change")
+            return {"status": "ok", "event": event, "refund_status": _status}
+        _now = datetime.now(timezone.utc).isoformat()
+        _ent_revoke(user_id)
+        try:
+            # Volume first, then Firestore — the same order as the grant, for
+            # the same reason: the entitlement must not depend on a datastore
+            # write succeeding.
+            _data = _ent_load()
+            _rec = _data.get(str(user_id).lower())
+            if _rec:
+                _rec["status"] = "refunded"
+                _rec["subscription_end"] = _now      # ends NOW, not at period end
+                _rec["refunded_at"] = _now
+                _ent_save(_data)
+        except Exception as exc:
+            print(f"[Whop] volume refund revoke failed for {user_id}: {exc!r}")
+        try:
+            res = user_ref.update({
+                "plan": "trial",
+                "subscription.status": "refunded",
+                "subscription.refunded_at": _now,
+                "subscription.current_period_end": _now,
+                "subscription_end": _now,
+                "trial_active": False,
+            })
+            if inspect.isawaitable(res):
+                await res
+            print(f"[Whop] User {user_id} REFUNDED — access ended immediately")
+        except Exception as e:
+            print(f"[Whop] Failed to apply refund for {user_id}: {e}")
+            raise HTTPException(status_code=500, detail="Could not apply refund")
 
     elif event in _WHOP_REVOKE_EVENTS:
         # Mirror the cancellation. Access still runs to subscription_end — the
@@ -7868,6 +8027,109 @@ async def smtp_test(_: None = Depends(_require_admin)):
         result["port465"] = f"{type(e).__name__}: {e}"
 
     return result
+
+class RefundRequest(BaseModel):
+    email: EmailStr
+    partial_amount: Optional[float] = None
+    override_window: bool = False
+
+
+@app.post("/api/admin/refund")
+async def admin_refund(req: RefundRequest, _: None = Depends(_require_admin)):
+    """Refund a user's Whop payment and end their access.
+
+    The order is deliberate: check OUR window, call Whop, and only revoke access
+    once Whop confirms. Revoking first would cut a customer off on the strength
+    of a refund that may never have been issued.
+
+    Access is then ended immediately rather than at period end — see the
+    refund.created branch for why a refund and a cancellation are not the same
+    thing. The webhook will also fire and do this again; both paths are
+    idempotent, and it is deliberate that either one alone is sufficient.
+    """
+    email = str(req.email).lower()
+    doc = get_user_doc(email) or {}
+    sub = doc.get("subscription") or {}
+    payment_id = str(sub.get("payment_id") or "")
+    purchased = (sub.get("activated_at") or sub.get("created_at")
+                 or doc.get("subscription_start"))
+
+    if not payment_id:
+        raise HTTPException(
+            status_code=404,
+            detail=(f"No Whop payment recorded for {email}. If they paid, refund "
+                    f"from the Whop dashboard: Payments -> the payment -> Refund."))
+
+    ok, why = _refund_window_open(purchased)
+    if not ok and not req.override_window:
+        raise HTTPException(
+            status_code=409,
+            detail=(f"Outside the {REFUND_WINDOW_DAYS:.0f}-day refund window — {why}. "
+                    f"Pass override_window=true to refund anyway."))
+
+    result = await _whop_refund_payment(payment_id, req.partial_amount)
+    if not result.get("ok"):
+        # 502: WE are fine, the upstream refused. The detail already says what a
+        # human should do about it.
+        raise HTTPException(status_code=502, detail=result.get("detail") or "refund failed")
+
+    # Whop confirmed. End access now.
+    now_iso = datetime.now(timezone.utc).isoformat()
+    _ent_revoke(email)
+    try:
+        data = _ent_load()
+        rec = data.get(email)
+        if rec:
+            rec["status"] = "refunded"
+            rec["subscription_end"] = now_iso
+            rec["refunded_at"] = now_iso
+            _ent_save(data)
+    except Exception as exc:
+        print(f"[refund] volume revoke failed for {email}: {exc!r}")
+    try:
+        res = db.collection("users").document(email).update({
+            "plan": "trial",
+            "subscription.status": "refunded",
+            "subscription.refunded_at": now_iso,
+            "subscription_end": now_iso,
+            "trial_active": False,
+        })
+        if inspect.isawaitable(res):
+            await res
+    except Exception as exc:
+        # The money is already back. A failed bookkeeping write must not read as
+        # a failed refund, or an operator will try again and double-refund.
+        print(f"[refund] Firestore update failed for {email} AFTER a successful "
+              f"refund: {exc!r}")
+
+    return {"success": True, "email": email, "payment_id": payment_id,
+            "partial_amount": req.partial_amount,
+            "refunded_amount": result.get("refunded_amount"),
+            "window": why, "access": "ended immediately"}
+
+
+@app.get("/api/admin/refund-eligibility")
+def admin_refund_eligibility(email: EmailStr, _: None = Depends(_require_admin)):
+    """Whether a refund would be allowed, without issuing one.
+
+    Deliberately NOT `async def`. get_user_doc is a blocking Firestore round
+    trip and there is nothing here to await, so on the event loop it would
+    freeze every other request — static pages included — for the length of that
+    call. Declared `def`, FastAPI runs it in its threadpool with identical
+    semantics. test_no_async_route_blocks_the_loop_on_firestore enforces this.
+    """
+    doc = get_user_doc(str(email).lower()) or {}
+    sub = doc.get("subscription") or {}
+    purchased = (sub.get("activated_at") or sub.get("created_at")
+                 or doc.get("subscription_start"))
+    ok, why = _refund_window_open(purchased)
+    return {"email": str(email).lower(),
+            "payment_id": sub.get("payment_id") or None,
+            "purchased_at": purchased,
+            "window_days": REFUND_WINDOW_DAYS,
+            "eligible": bool(ok and sub.get("payment_id")),
+            "reason": why if not ok else f"inside the window — {why}"}
+
 
 @app.delete("/api/admin/track-record/{signal_id}")
 async def delete_track_record_entry(signal_id: str, _: None = Depends(_require_admin)):
