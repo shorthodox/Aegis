@@ -213,6 +213,10 @@
     /* ── Anchor scroll offset ──────────────────────────────── */
     section[id] { scroll-margin-top: 72px; }
   </style>
+    <!-- Whop Pixel - biz_Pa8k1dIsPYugdt. Verbatim, do not edit.
+         t.whop.tw is allow-listed in the CSP script-src / connect-src
+         in main.py; removing it there silently kills this. -->
+    <script>!function(w,d,s,u,n,a,b){if(w[n])return;a=w[n]={q:[],t:+new Date,s:[],o:u,track:function(){a.q.push([+new Date].concat([].slice.call(arguments)))},setScope:function(){a.s=[].slice.call(arguments).filter(function(x){return typeof x==="string"});a.q.push([+new Date,"setScope"].concat(a.s))},scope:function(){var c=[].slice.call(arguments);return{track:function(){a.q.push([+new Date].concat([].slice.call(arguments)).concat([{__scope:c}]))}}}};b=d.createElement(s);b.async=1;b.src=u+"/s.js";d.getElementsByTagName(s)[0].parentNode.insertBefore(b,d.getElementsByTagName(s)[0])}(window,document,"script","https://t.whop.tw","whop");whop.setScope("biz_Pa8k1dIsPYugdt");whop.track("page");</script>
 </head>
 <body>
 
@@ -282,15 +286,15 @@
       </p>
 
       <!-- Whop Refund Action -->
-      <div id="dodoRefundBox" style="margin-top: var(--s-4); padding: var(--s-4); background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: var(--ae-radius-md); display: flex; flex-direction: column; gap: var(--s-2);">
+      <div id="refundBox" style="margin-top: var(--s-4); padding: var(--s-4); background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: var(--ae-radius-md); display: flex; flex-direction: column; gap: var(--s-2);">
         <div style="font-size: 0.82rem; font-weight: 600; color: var(--ae-text-1); display: flex; align-items: center; gap: 6px;">
           <i class="fas fa-shield-alt" style="color: var(--ae-gold);"></i> Whop Order & Refund Portal
         </div>
         <div style="display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap;">
-          <a id="dodoRefundBtn" href="https://whop.com/orders" target="_blank" rel="noopener" class="ae-btn ae-btn-secondary ae-btn-sm" style="font-size: 0.8rem; padding: 6px 14px; text-decoration: none;">
+          <a id="refundBtn" href="https://whop.com/orders" target="_blank" rel="noopener" class="ae-btn ae-btn-secondary ae-btn-sm" style="font-size: 0.8rem; padding: 6px 14px; text-decoration: none;">
             <i class="fas fa-undo" style="margin-right: 6px;"></i> Request Refund on Whop
           </a>
-          <span id="dodoRefundStatusText" style="font-size: 0.78rem; color: var(--ae-text-3);">
+          <span id="refundStatusText" style="font-size: 0.78rem; color: var(--ae-text-3);">
             Eligible within 3 days of subscription activation.
           </span>
         </div>
@@ -1097,9 +1101,9 @@
 </script>
 
 <script>
-(function checkDodoRefundEligibility() {
-    var btn = document.getElementById('dodoRefundBtn');
-    var txt = document.getElementById('dodoRefundStatusText');
+(function checkRefundEligibility() {
+    var btn = document.getElementById('refundBtn');
+    var txt = document.getElementById('refundStatusText');
     if (!btn || !txt) return;
 
     try {
@@ -1143,7 +1147,7 @@
      checkouts — and it carried hardcoded paise amounts (2400 / 4000) that were
      the OLD prices. subscribeToPlan() in simple-auth-client.js is the single
      path now: it asks the backend which gateway is live, redirects to the
-     hosted checkout URL (Paddle / DODO), and only falls back to the Razorpay
+     hosted checkout URL (Whop), and only falls back to the Razorpay
      SDK — which it loads on demand — when no redirect URL is offered. That is
      why the Razorpay SDK tag is gone from here too. -->
 </body>
