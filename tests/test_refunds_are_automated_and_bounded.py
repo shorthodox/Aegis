@@ -218,3 +218,78 @@ def test_both_endpoints_are_admin_only():
 def test_the_eligibility_endpoint_does_not_block_the_event_loop():
     """It calls Firestore synchronously and awaits nothing."""
     assert not inspect.iscoroutinefunction(main.admin_refund_eligibility)
+
+
+# ── Whop must charge what the site sells ─────────────────────────────────────
+# Found 2026-08-30, days before a planned ad spend. Whop was configured as:
+#
+#   Basic     plan_type one_time, initial 0.00, renewal 0.00   (site: $6/mo)
+#   Sentinel  plan_type renewal,  initial 0.00, renewal 12.00  (site: $12/mo)
+#   Pro       plan_type renewal,  initial 0.00, renewal 18.00  (site: $18/mo)
+#
+# Basic would have given the product away permanently, with no renewal to bill
+# against. The other two had a free FIRST PERIOD of 30 days against an
+# advertised 3-day trial. None of that is visible from this repository — it
+# lives in a dashboard — so the only way to catch it is to ask Whop and compare.
+
+def test_the_trial_length_has_one_definition():
+    """It was a bare timedelta(days=3) that no other check could see."""
+    assert main.TRIAL_DAYS == 3
+    assert 'timedelta(days=TRIAL_DAYS)' in SRC
+    assert 'timedelta(days=3)' not in SRC
+
+
+def test_the_audit_catches_a_one_time_plan():
+    src = inspect.getsource(main._whop_plan_audit)
+    assert "ptype != \"renewal\"" in src
+    assert 'never' in src and 'bill again' in src
+
+
+def test_the_audit_catches_a_price_mismatch():
+    src = inspect.getsource(main._whop_plan_audit)
+    assert 'renewal - float(advertised)' in src
+    assert 'the site sells' in src
+
+
+def test_the_audit_catches_a_free_first_period():
+    """initial_price 0 is a trial by another name, and a 30-day one."""
+    src = inspect.getsource(main._whop_plan_audit)
+    assert 'initial <= 0.0' in src
+    assert 'TRIAL_DAYS' in src
+
+
+def test_it_compares_against_the_advertised_prices():
+    assert main.USD_PLAN_PRICES == {'basic': 6.00, 'intermediate': 12.00, 'pro': 18.00}
+    src = inspect.getsource(main._whop_plan_audit)
+    assert 'USD_PLAN_PRICES.items()' in src
+
+
+def test_a_missing_plan_id_is_a_finding_not_a_crash():
+    src = inspect.getsource(main._whop_plan_audit)
+    assert 'no Whop plan id configured' in src
+
+
+def test_the_audit_never_raises():
+    import ast
+    tree = ast.parse(inspect.getsource(main._whop_plan_audit).lstrip())
+    assert not [n for n in ast.walk(tree) if isinstance(n, ast.Raise)]
+
+
+def test_an_unset_key_reports_rather_than_pretending_to_pass():
+    src = inspect.getsource(main._whop_plan_audit)
+    i = src.index('if not WHOP_API_KEY')
+    assert 'out["ok"] = False' in src[i:i + 300], (
+        'a missing key must not read as a clean audit'
+    )
+
+
+def test_it_runs_on_every_boot():
+    assert '_plan_audit_on_boot()' in SRC
+    src = inspect.getsource(main._plan_audit_on_boot)
+    assert 'await asyncio.sleep' in src, 'the audit must not delay boot'
+    assert 'DOES NOT MATCH' in src
+
+
+def test_there_is_an_endpoint_to_re_check_after_fixing_whop():
+    assert hasattr(main, 'admin_plan_audit')
+    assert '_require_admin' in inspect.getsource(main.admin_plan_audit)

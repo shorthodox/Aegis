@@ -2506,6 +2506,7 @@ async def lifespan(app: FastAPI):
     _enforce_track_generation()      # must run AFTER the load it purges
     _rt_load_at_startup()            # re-apply operator dials saved on the volume
     _seed_signals_snapshot_from_volume()   # serve last-known signals immediately
+    plan_audit_task = asyncio.create_task(_plan_audit_on_boot())
     _tg_load_connections()
     _tg_load_pending()
     _tg_start_poller()
@@ -5647,7 +5648,7 @@ def start_free_trial(user_id: str = Depends(get_current_user)):
     # Start the trial
     now = datetime.now(timezone.utc)
     trial_start_iso = now.isoformat()
-    trial_end_dt = now + timedelta(days=3)
+    trial_end_dt = now + timedelta(days=TRIAL_DAYS)
     trial_end_iso = trial_end_dt.isoformat()
 
     db.collection("users").document(user_id).update({
@@ -5874,6 +5875,11 @@ async def initialize_subscription(
 # systems and only a test purchase proves they agree.
 #
 # Prices lowered to 6 / 12 / 18 on 2026-08-17.
+# How long a free trial lasts. Named because it is asserted in three different
+# places — the grant below, the refund window's sibling copy, and the plan audit
+# that checks Whop is not quietly running a 30-day free period against it.
+TRIAL_DAYS = 3
+
 USD_PLAN_PRICES: Dict[str, float] = {
     "basic": 6.00,
     "intermediate": 12.00,
@@ -6548,6 +6554,110 @@ REFUND_WINDOW_DAYS = float(os.getenv("AEGIS_REFUND_WINDOW_DAYS", "3"))
 # means the money went back, so access ends NOW. Treating the two the same would
 # hand a refunded customer the rest of the month for free.
 _WHOP_REFUND_EVENTS = {"refund.created", "refund.updated"}
+
+
+async def _whop_plan_audit() -> Dict[str, Any]:
+    """Compare what we ADVERTISE against what Whop is configured to CHARGE.
+
+    Nothing checked this before, and the gap it hid was expensive: on
+    2026-08-30, days before a planned ad spend, the Basic plan was configured in
+    Whop as
+
+        plan_type: one_time    initial_price: 0.0    renewal_price: 0.0
+
+    while the site sold it at $6.00/month. Every Basic signup would have taken
+    the product free, permanently, with no renewal to bill against. The other two
+    tiers priced correctly at renewal but carried initial_price 0.0, so the first
+    30 days were free against an advertised 3-day trial.
+
+    None of that is visible from this repository: it lives in a dashboard. So the
+    only way to catch it is to ask Whop what it will charge and compare. This is
+    that question, asked in code so it can be asked repeatedly.
+
+    Returns {ok, checked, findings[]}. Never raises — an audit that fails must
+    not be able to take down boot or an admin request.
+    """
+    out: Dict[str, Any] = {"ok": True, "checked": 0, "findings": []}
+    if not WHOP_API_KEY:
+        out["ok"] = False
+        out["findings"].append({"plan": "-", "issue": "WHOP_API_KEY is not set; "
+                                "cannot verify what Whop will charge"})
+        return out
+
+    for key, advertised in USD_PLAN_PRICES.items():
+        plan_id = WHOP_PLAN_IDS.get(key) or ""
+        label = PLAN_DISPLAY_NAMES.get(key, key)
+        if not plan_id:
+            out["ok"] = False
+            out["findings"].append({"plan": label,
+                                    "issue": f"no Whop plan id configured (WHOP_PLAN_ID_{key.upper()})"})
+            continue
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                r = await client.get(f"{_WHOP_BASE}/plans/{plan_id}",
+                                     headers={"Authorization": f"Bearer {WHOP_API_KEY}"})
+            if r.status_code != 200:
+                out["ok"] = False
+                out["findings"].append({"plan": label,
+                                        "issue": f"Whop returned {r.status_code} for {plan_id}"})
+                continue
+            d = r.json() or {}
+        except Exception as exc:
+            out["ok"] = False
+            out["findings"].append({"plan": label, "issue": f"could not read plan: {exc!r}"})
+            continue
+
+        out["checked"] += 1
+        ptype = str(d.get("plan_type") or "")
+        initial = float(d.get("initial_price") or 0.0)
+        renewal = float(d.get("renewal_price") or 0.0)
+        period = d.get("billing_period")
+
+        # A one-time plan cannot bill a subscription. This is the Basic case.
+        if ptype != "renewal":
+            out["ok"] = False
+            out["findings"].append({
+                "plan": label, "plan_id": plan_id,
+                "issue": f"plan_type is {ptype!r}, not 'renewal' — it will never "
+                         f"bill again after the first charge"})
+        # The advertised price must be what actually renews.
+        if abs(renewal - float(advertised)) > 0.005:
+            out["ok"] = False
+            out["findings"].append({
+                "plan": label, "plan_id": plan_id,
+                "issue": f"renews at ${renewal:.2f} but the site sells ${advertised:.2f}"})
+        # initial_price 0 is a FREE FIRST PERIOD, which is a trial by another
+        # name — and a 30-day one against an advertised 3-day trial.
+        if initial <= 0.0 and ptype == "renewal":
+            out["ok"] = False
+            out["findings"].append({
+                "plan": label, "plan_id": plan_id,
+                "issue": f"initial_price is $0.00, so the first {period or '?'} days "
+                         f"are free — the site advertises a {TRIAL_DAYS}-day trial"})
+        if ptype == "renewal" and period not in (30, 31):
+            out["findings"].append({
+                "plan": label, "plan_id": plan_id,
+                "issue": f"billing_period is {period}, expected 30 for a monthly plan"})
+    return out
+
+
+async def _plan_audit_on_boot() -> None:
+    """Say loudly, once per boot, if Whop would not charge what we advertise."""
+    await asyncio.sleep(20)          # let the engine and HTTP settle first
+    try:
+        res = await _whop_plan_audit()
+    except Exception as exc:
+        print(f"[plan-audit] could not run: {exc!r}")
+        return
+    if res.get("ok") and res.get("checked"):
+        print(f"[plan-audit] OK - {res['checked']} Whop plan(s) match the advertised prices")
+        return
+    print("=" * 68)
+    print("[plan-audit] WHOP DOES NOT MATCH WHAT THE SITE SELLS")
+    for f in res.get("findings", []):
+        print(f"  - {f.get('plan')}: {f.get('issue')}")
+    print("  Fix these in the Whop dashboard before sending paid traffic.")
+    print("=" * 68)
 
 
 async def _whop_refund_payment(payment_id: str,
@@ -8108,6 +8218,17 @@ async def admin_refund(req: RefundRequest, _: None = Depends(_require_admin)):
             "partial_amount": req.partial_amount,
             "refunded_amount": result.get("refunded_amount"),
             "window": why, "access": "ended immediately"}
+
+
+@app.get("/api/admin/plan-audit")
+async def admin_plan_audit(_: None = Depends(_require_admin)):
+    """Does Whop charge what the site sells? Ask before spending on ads.
+
+    Returns ok=false with a finding per divergence. See _whop_plan_audit for the
+    case that prompted it — a Basic plan configured as a free one-time purchase
+    against a page selling it at $6.00/month.
+    """
+    return await _whop_plan_audit()
 
 
 @app.get("/api/admin/refund-eligibility")
