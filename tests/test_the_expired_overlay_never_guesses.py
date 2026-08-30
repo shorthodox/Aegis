@@ -225,3 +225,76 @@ def test_the_csp_allows_the_pixel_to_report():
     i = main_src.index(""""connect-src 'self'""")
     j = main_src.index('frame-src', i)
     assert 't.whop.tw' in main_src[i:j]
+
+
+# ── Whop conversion events ───────────────────────────────────────────────────
+# Three moments, chosen 2026-08-27: the account existing, a plan being clicked,
+# and Telegram being connected. Purchases are deliberately absent — Whop records
+# those server-side — and so are page views, which the pixel already sends.
+
+def test_the_tracking_helper_can_never_break_the_page():
+    """`whop` is undefined if the pixel is blocked by an ad blocker, a CSP, or a
+    failed CDN. An uncaught ReferenceError inside a submit handler would take
+    signup or checkout down with it."""
+    js = _js('web/src/pages/pricing.html')
+    i = js.index('window.aegisTrack = function')
+    body = js[i:i + 900]
+    assert 'try {' in body and 'catch (_)' in body
+    assert "typeof window.whop.track === 'function'" in body
+
+
+def test_events_are_deduped_on_name_and_key():
+    js = _js('web/src/pages/pricing.html')
+    i = js.index('window.aegisTrack = function')
+    body = js[i:i + 900]
+    assert "var k = name + '|' + (key || '')" in body, (
+        'de-duping on name alone swallows a click on a different plan'
+    )
+
+
+def test_registration_fires_when_the_account_exists():
+    js = _js('web/src/scripts/signup-ui.js')
+    assert js.count("aegisTrack('complete_registration')") == 2, (
+        'both the email and Google signup paths must fire it'
+    )
+    # and it must sit AFTER verification, not at OTP request
+    assert 'send-otp' not in js[js.index("aegisTrack('complete_registration')") - 400:
+                                js.index("aegisTrack('complete_registration')")]
+
+
+def test_the_plan_click_fires_intent_with_a_value():
+    js = _js('web/src/pages/pricing.html')
+    assert "aegisTrack('add_to_cart'" in js
+    assert "{ basic: 6, intermediate: 12, pro: 18 }" in js
+    assert "currency: 'USD'" in js
+
+
+def test_the_plan_click_is_keyed_on_the_plan():
+    js = _js('web/src/pages/pricing.html')
+    i = js.index("aegisTrack('add_to_cart'")
+    assert 'plan)' in js[i:i + 200]
+
+
+def test_telegram_connect_fires_activation():
+    js = _js('web/src/scripts/dashboard.js')
+    assert "aegisTrack('telegram_connected')" in js
+
+
+def test_no_purchase_or_checkout_event_is_sent():
+    """Whop records those server-side; sending them here would double-count."""
+    import glob
+    banned = ('purchase', 'subscribe', 'checkout', 'initiate_checkout')
+    for f in glob.glob('web/src/pages/*.html') + glob.glob('web/src/scripts/*.js'):
+        js = _js(f)
+        for b in banned:
+            assert f"aegisTrack('{b}'" not in js, f'{b} in {f}'
+            assert f'whop.track("{b}"' not in js, f'{b} in {f}'
+
+
+def test_no_extra_page_view_event_is_sent():
+    """The pixel already records every page view; a second would double-count."""
+    import glob
+    for f in glob.glob('web/src/pages/*.html'):
+        js = _js(f)
+        assert js.count('whop.track("page")') == 1, f
+        assert "aegisTrack('page'" not in js, f

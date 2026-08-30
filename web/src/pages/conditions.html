@@ -105,6 +105,30 @@
          t.whop.tw is allow-listed in the CSP script-src / connect-src
          in main.py; removing it there silently kills this. -->
     <script>!function(w,d,s,u,n,a,b){if(w[n])return;a=w[n]={q:[],t:+new Date,s:[],o:u,track:function(){a.q.push([+new Date].concat([].slice.call(arguments)))},setScope:function(){a.s=[].slice.call(arguments).filter(function(x){return typeof x==="string"});a.q.push([+new Date,"setScope"].concat(a.s))},scope:function(){var c=[].slice.call(arguments);return{track:function(){a.q.push([+new Date].concat([].slice.call(arguments)).concat([{__scope:c}]))}}}};b=d.createElement(s);b.async=1;b.src=u+"/s.js";d.getElementsByTagName(s)[0].parentNode.insertBefore(b,d.getElementsByTagName(s)[0])}(window,document,"script","https://t.whop.tw","whop");whop.setScope("biz_Pa8k1dIsPYugdt");whop.track("page");</script>
+    <script>
+    // Guarded wrapper around the Whop Pixel. A conversion event must NEVER be
+    // able to break the funnel it measures: `whop` is undefined if the pixel is
+    // blocked by an ad blocker, a CSP, or a failed CDN, and an uncaught
+    // ReferenceError inside a submit handler would take signup or checkout down
+    // with it. It also de-dupes per page load, because the plan buttons on
+    // /pricing have had a double-bound click handler before (see the v82f note
+    // in pricing.html) and a double-counted conversion is worse than none.
+    window.aegisTrack = function (name, props, key) {
+      try {
+        // De-dupe on name + key. Name alone would swallow a click on a
+        // DIFFERENT plan, which is a real second intent; passing the plan as
+        // the key still collapses a double-bound handler on the same one.
+        var k = name + '|' + (key || '');
+        window.__aegisFired = window.__aegisFired || {};
+        if (window.__aegisFired[k]) return;
+        window.__aegisFired[k] = true;
+        if (window.whop && typeof window.whop.track === 'function') {
+          props ? window.whop.track(name, props) : window.whop.track(name);
+        }
+      } catch (_) { /* tracking never breaks the page */ }
+    };
+    </script>
+
 </head>
 <body class="ae-body">
 

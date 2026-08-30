@@ -2814,6 +2814,11 @@ async function _refreshTelegramStatus() {
 }
 
 window.connectTelegram = async function() {
+    // Activation, not acquisition. This is the moment a user starts actually
+    // receiving signals, which is the strongest leading indicator we have that
+    // a free account becomes a paying one. Custom name, kept short and stable.
+    if (window.aegisTrack) window.aegisTrack('telegram_connected');
+
   const btn     = document.querySelector('#tg-state-disconnected button');
   const statusEl = document.getElementById('notif-status');
 
