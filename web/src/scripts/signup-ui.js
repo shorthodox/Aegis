@@ -709,6 +709,11 @@ async function handleStep2Verify() {
   _flow = 'email';
   window.dispatchEvent(new CustomEvent('authStateChange', { detail: { authenticated: true } }));
   closeSignUpModal();
+  // The account now exists - OTP verified and the record created. Fired
+  // here rather than on OTP request, so an abandoned signup is never
+  // counted as a registration. Both the email and the Google path reach
+  // this; aegisTrack de-dupes by name, so it fires exactly once.
+  if (window.aegisTrack) window.aegisTrack('complete_registration');
   window.location.href = '/pricing?newUser=1';
 }
 
@@ -749,6 +754,11 @@ function showGooglePhoneStep() {
 function finishGoogleSignup() {
   window.dispatchEvent(new CustomEvent('authStateChange', { detail: { authenticated: true } }));
   closeSignUpModal();
+  // The account now exists - OTP verified and the record created. Fired
+  // here rather than on OTP request, so an abandoned signup is never
+  // counted as a registration. Both the email and the Google path reach
+  // this; aegisTrack de-dupes by name, so it fires exactly once.
+  if (window.aegisTrack) window.aegisTrack('complete_registration');
   window.location.href = '/pricing?newUser=1';
 }
 
